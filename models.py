@@ -170,6 +170,7 @@ class ProjectState:
     image_dir: str = "images"
     img_cache: str = "img.cache"
     cards: dict[str, int] = field(default_factory=dict)
+    card_sort: str = "Alphabetical (A-Z)"
     backside_enabled: bool = False
     backside_default: str = "__back.png"
     backside_offset: str = "0"
@@ -188,6 +189,7 @@ class ProjectState:
             image_dir=str(data.get("image_dir", "images")),
             img_cache=str(data.get("img_cache", "img.cache")),
             cards=_coerce_plain_dict(data.get("cards")),
+            card_sort=str(data.get("card_sort", "Alphabetical (A-Z)")),
             backside_enabled=bool(data.get("backside_enabled", False)),
             backside_default=str(data.get("backside_default", "__back.png")),
             backside_offset=str(data.get("backside_offset", "0")),
@@ -211,6 +213,7 @@ class ProjectState:
             "image_dir": self.image_dir,
             "img_cache": self.img_cache,
             "cards": dict(self.cards),
+            "card_sort": self.card_sort,
             "backside_enabled": self.backside_enabled,
             "backside_default": self.backside_default,
             "backside_offset": self.backside_offset,
@@ -269,6 +272,7 @@ class ProjectState:
         self.image_dir = replacement.image_dir
         self.img_cache = replacement.img_cache
         self.cards = replacement.cards
+        self.card_sort = replacement.card_sort
         self.backside_enabled = replacement.backside_enabled
         self.backside_default = replacement.backside_default
         self.backside_offset = replacement.backside_offset

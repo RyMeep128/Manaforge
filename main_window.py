@@ -287,7 +287,7 @@ class AppShellWindow(QMainWindow):
 
     def _build_editor_page(self, state, img_dict):
         card_grid = CardGrid(state, img_dict)
-        scroll_area = CardScrollArea(state, card_grid)
+        scroll_area = CardScrollArea(state, img_dict, card_grid)
         print_preview = PrintPreview(state, img_dict)
         tabs = CardTabs(state, img_dict, scroll_area, print_preview)
         options = OptionsWidget(self._application, state, img_dict)

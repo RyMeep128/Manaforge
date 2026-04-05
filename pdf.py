@@ -210,7 +210,22 @@ def distribute_cards_to_pages(print_dict, columns, rows):
 
     # throw all images n times into a list
     images = []
-    for img, num in state.cards.items():
+    card_sort = getattr(state, "card_sort", "Alphabetical (A-Z)")
+    card_names = list(state.cards.keys())
+    if card_sort == "Alphabetical (A-Z)":
+        card_names = sorted(
+            card_names,
+            key=lambda name: (state.get_card_metadata(name) or {}).get("name", name).casefold(),
+        )
+    elif card_sort == "Alphabetical (Z-A)":
+        card_names = sorted(
+            card_names,
+            key=lambda name: (state.get_card_metadata(name) or {}).get("name", name).casefold(),
+            reverse=True,
+        )
+
+    for img in card_names:
+        num = state.cards[img]
         is_short_edge = short_edge_dict[img] if img in short_edge_dict else False
         is_oversized = oversized_dict[img] if img in oversized_dict else False
         images.extend([(img, is_short_edge, is_oversized)] * num)

@@ -4,6 +4,8 @@ import cv2
 import json
 import numpy
 import base64
+import binascii
+import codecs
 from enum import Enum
 
 from PIL import Image, ImageFilter
@@ -103,6 +105,77 @@ def is_decoded_image_valid(image):
     if size is None:
         return True
     return size > 0
+
+
+def encode_cached_image_bytes(data):
+    if not isinstance(data, (bytes, bytearray, memoryview)):
+        raise TypeError("cached image data must be bytes-like")
+    return base64.b64encode(bytes(data)).decode("ascii")
+
+
+def _is_legacy_cached_image_literal(value):
+    if not isinstance(value, str):
+        return False
+    stripped = value.strip()
+    return (
+        len(stripped) >= 3
+        and stripped[0] in ("b", "B")
+        and stripped[1] in ("'", '"')
+        and stripped[-1] == stripped[1]
+    )
+
+
+def _decode_legacy_cached_image_literal(value):
+    stripped = value.strip()
+    if not _is_legacy_cached_image_literal(stripped):
+        raise ValueError("cached image data was not a valid legacy bytes literal")
+
+    inner = stripped[2:-1]
+    try:
+        decoded, _length_consumed = codecs.escape_decode(inner.encode("ascii"))
+    except (UnicodeEncodeError, ValueError) as exc:
+        raise ValueError("cached image data was not a valid legacy bytes literal") from exc
+    return decoded
+
+
+def decode_cached_image_bytes(value):
+    if isinstance(value, (bytes, bytearray, memoryview)):
+        return bytes(value)
+    if not isinstance(value, str):
+        raise TypeError("cached image data must be bytes-like or a string")
+
+    if _is_legacy_cached_image_literal(value):
+        return _decode_legacy_cached_image_literal(value)
+
+    normalized = value.strip()
+    try:
+        return base64.b64decode(normalized.encode("ascii"), validate=True)
+    except (UnicodeEncodeError, binascii.Error) as exc:
+        raise ValueError("cached image data was not valid base64 or a legacy bytes literal") from exc
+
+
+def _normalize_cached_image_field(container, field_name):
+    if not isinstance(container, dict) or field_name not in container:
+        return False
+    decoded = decode_cached_image_bytes(container[field_name])
+    encoded = encode_cached_image_bytes(decoded)
+    changed = container[field_name] != encoded
+    container[field_name] = encoded
+    return changed
+
+
+def normalize_cached_preview_entry(entry):
+    if not isinstance(entry, dict):
+        raise TypeError("cache entry must be a dictionary")
+
+    changed = _normalize_cached_image_field(entry, "data")
+    thumb = entry.get("thumb")
+    if isinstance(thumb, dict):
+        changed = _normalize_cached_image_field(thumb, "data") or changed
+    uncropped = entry.get("uncropped")
+    if isinstance(uncropped, dict):
+        changed = _normalize_cached_image_field(uncropped, "data") or changed
+    return changed
 
 
 def need_run_cropper(image_dir, crop_dir, bleed_edge, do_vibrance_bump):
@@ -271,20 +344,14 @@ def image_from_bytes(data):
     if not isinstance(data, (bytes, bytearray, memoryview)):
         raise TypeError("image data must be bytes-like")
 
-    img = None
     try:
-        dataBytesIO = io.BytesIO(base64.b64decode(data))
-        buffer = dataBytesIO.getbuffer()
-        if len(buffer) > 0:
-            img = cv2.imdecode(numpy.frombuffer(buffer, numpy.uint8), -1)
-    except Exception:
-        pass
-    if img is None:
         dataBytesIO = io.BytesIO(data)
         buffer = dataBytesIO.getbuffer()
         if len(buffer) == 0:
             raise ValueError("image data is empty")
         img = cv2.imdecode(numpy.frombuffer(buffer, numpy.uint8), -1)
+    except Exception as exc:
+        raise ValueError("image data could not be decoded") from exc
     return img
 
 
@@ -377,10 +444,12 @@ def cache_previews(file, image_dir, crop_dir, print_fn, data):
 
                 image_data, image_size = to_bytes(img, preview_size)
                 data[f] = {
-                    "data": str(image_data),
+                    "data": encode_cached_image_bytes(image_data),
                     "size": image_size,
                 }
                 img_dict = data[f]
+            else:
+                normalize_cached_preview_entry(img_dict)
 
             if not has_thumbnail:
                 print_fn(f"Caching thumbnail for image {f}...\n")
@@ -389,9 +458,11 @@ def cache_previews(file, image_dir, crop_dir, print_fn, data):
                     img, (preview_size[0] * 0.45, preview_size[1] * 0.45)
                 )
                 img_dict["thumb"] = {
-                    "data": str(thumb_data),
+                    "data": encode_cached_image_bytes(thumb_data),
                     "size": thumb_size,
                 }
+            elif "thumb" in img_dict:
+                normalize_cached_preview_entry(img_dict)
 
     for f in list_files(image_dir, valid_image_extensions):
         if f in data:
@@ -415,9 +486,11 @@ def cache_previews(file, image_dir, crop_dir, print_fn, data):
 
                 image_data, image_size = to_bytes(source_img, uncropped_size)
                 img_dict["uncropped"] = {
-                    "data": str(image_data),
+                    "data": encode_cached_image_bytes(image_data),
                     "size": image_size,
                 }
+            else:
+                normalize_cached_preview_entry(img_dict)
             if not has_effective_dpi:
                 if source_img is None:
                     source_img = read_image(os.path.join(image_dir, f))

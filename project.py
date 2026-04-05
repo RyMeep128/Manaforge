@@ -109,6 +109,9 @@ def init_dict(print_dict, img_dict, warn_fn=None):
         try:
             with open(img_cache, "r", encoding="utf-8") as fp:
                 loaded_img_dict = json.load(fp)
+                for value in loaded_img_dict.values():
+                    if isinstance(value, dict):
+                        image.normalize_cached_preview_entry(value)
                 img_dict.clear()
                 for key, value in loaded_img_dict.items():
                     img_dict[key] = value

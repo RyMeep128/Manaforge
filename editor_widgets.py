@@ -28,6 +28,7 @@ from PyQt6.QtWidgets import (
     QTabWidget,
     QSplitter,
     QMessageBox,
+    QComboBox,
     QListWidget,
     QListWidgetItem,
     QFileDialog,
@@ -43,6 +44,7 @@ import project_library
 import fallback_image as fallback
 from config import CFG
 from constants import (
+    cwd,
     card_ratio,
     card_size_without_bleed_inch,
     low_dpi_warning_threshold,
@@ -80,6 +82,18 @@ def project_thumbnail_pixmap(image_path, width=120, height=160):
         QtCore.Qt.AspectRatioMode.KeepAspectRatio,
         QtCore.Qt.TransformationMode.SmoothTransformation,
     )
+
+
+def cached_preview_bytes(entry, field="data"):
+    if not isinstance(entry, dict):
+        raise TypeError("cached preview entry must be a dictionary")
+    return image.decode_cached_image_bytes(entry[field])
+
+
+def _card_sort_label(state, card_name):
+    metadata = state.get_card_metadata(card_name) or {}
+    display_name = metadata.get("name")
+    return display_name if display_name else card_name
 
 
 class EditorPage(QWidget):
@@ -223,7 +237,7 @@ class CardImage(QLabel):
 class BacksideImage(CardImage):
     def __init__(self, backside_name, img_dict):
         if backside_name in img_dict:
-            backside_data = eval(img_dict[backside_name]["data"])
+            backside_data = cached_preview_bytes(img_dict[backside_name])
             backside_size = img_dict[backside_name]["size"]
         else:
             backside_data = fallback.data
@@ -347,7 +361,7 @@ class CardWidget(QWidget):
         state = as_project_state(print_dict)
 
         if card_name in img_dict:
-            img_data = eval(img_dict[card_name]["data"])
+            img_data = cached_preview_bytes(img_dict[card_name])
             img_size = img_dict[card_name]["size"]
         else:
             img_data = fallback.data
@@ -741,7 +755,21 @@ class CardGrid(QWidget):
 
         i = 0
         cols = CFG.DisplayColumns
-        for card_name, _ in state.cards.items():
+        card_sort = getattr(state, "card_sort", "Alphabetical (A-Z)")
+        card_names = list(state.cards.keys())
+        if card_sort == "Alphabetical (A-Z)":
+            card_names = sorted(
+                card_names,
+                key=lambda name: _card_sort_label(state, name).casefold(),
+            )
+        elif card_sort == "Alphabetical (Z-A)":
+            card_names = sorted(
+                card_names,
+                key=lambda name: _card_sort_label(state, name).casefold(),
+                reverse=True,
+            )
+
+        for card_name in card_names:
             if card_name.startswith("__") or card_name not in img_dict:
                 continue
 
@@ -781,7 +809,7 @@ class CardGrid(QWidget):
 
 
 class CardScrollArea(QScrollArea):
-    def __init__(self, print_dict, card_grid):
+    def __init__(self, print_dict, img_dict, card_grid):
         super().__init__()
         state = as_project_state(print_dict)
 
@@ -789,6 +817,18 @@ class CardScrollArea(QScrollArea):
         global_decrement_button = QPushButton("Remove 1")
         global_increment_button = QPushButton("Add 1")
         global_set_zero_button = QPushButton("Reset All")
+        sort_label = QLabel("Sort:")
+        sort_combo = QComboBox()
+        sort_options = [
+            "Alphabetical (A-Z)",
+            "Alphabetical (Z-A)",
+            "Import Order",
+        ]
+        sort_combo.addItems(sort_options)
+        if state.card_sort in sort_options:
+            sort_combo.setCurrentText(state.card_sort)
+        else:
+            sort_combo.setCurrentText("Alphabetical (A-Z)")
 
         global_decrement_button.setToolTip("Remove one copy from every card")
         global_increment_button.setToolTip("Add one copy to every card")
@@ -799,6 +839,9 @@ class CardScrollArea(QScrollArea):
         global_number_layout.addWidget(global_decrement_button)
         global_number_layout.addWidget(global_increment_button)
         global_number_layout.addWidget(global_set_zero_button)
+        global_number_layout.addSpacing(8)
+        global_number_layout.addWidget(sort_label)
+        global_number_layout.addWidget(sort_combo)
         global_number_layout.addStretch()
         global_number_layout.setContentsMargins(6, 0, 6, 0)
 
@@ -843,13 +886,20 @@ class CardScrollArea(QScrollArea):
             for card in card_grid._cards.values():
                 card.apply_number(state, 0)
 
+        def change_sort(t):
+            state.card_sort = t
+            self.window().refresh(state, self._img_dict)
+
         global_decrement_button.clicked.connect(dec_number)
         global_increment_button.clicked.connect(inc_number)
         global_set_zero_button.clicked.connect(reset_number)
+        sort_combo.currentTextChanged.connect(change_sort)
 
         self._card_grid = card_grid
         self._global_number_widget = global_number_widget
         self._empty_state = empty_state
+        self._img_dict = img_dict
+        self._sort_combo = sort_combo
         self._update_empty_state()
 
     def computeMinimumWidth(self):
@@ -867,6 +917,10 @@ class CardScrollArea(QScrollArea):
 
     def refresh(self, state, img_dict):
         self._card_grid.refresh(state, img_dict)
+        if self._sort_combo.findText(state.card_sort) >= 0:
+            self._sort_combo.setCurrentText(state.card_sort)
+        else:
+            self._sort_combo.setCurrentText("Alphabetical (A-Z)")
         self._update_empty_state()
         self.setMinimumWidth(self.computeMinimumWidth())
         self._card_grid.adjustSize()  # forces recomputing size
@@ -1084,12 +1138,12 @@ class PrintPreview(QScrollArea):
             if card_name in img_dict:
                 card_img = img_dict[card_name]
                 if bleed_edge > 0 and "uncropped" in card_img:
-                    uncropped_data = eval(card_img["uncropped"]["data"])
+                    uncropped_data = cached_preview_bytes(card_img["uncropped"])
                     img = image.image_from_bytes(uncropped_data)
                     img_crop = image.crop_image(img, "", bleed_edge, None)
                     img_data, img_size = image.to_bytes(img_crop)
                 else:
-                    img_data = eval(card_img["data"])
+                    img_data = cached_preview_bytes(card_img)
                     img_size = card_img["size"]
                 return img_data, img_size
             else:

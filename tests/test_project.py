@@ -140,6 +140,103 @@ def test_init_dict_loads_utf8_cache_keys_without_mojibake(monkeypatch, tmp_path)
     assert unicode_name in img_dict
 
 
+def test_init_dict_normalizes_legacy_cached_preview_payloads(monkeypatch, tmp_path):
+    image_dir = tmp_path / "images"
+    crop_dir = image_dir / "crop"
+    img_cache = tmp_path / "img.cache"
+    img_cache.write_text(
+        json.dumps(
+            {
+                "card-a.png": {
+                    "data": "b'preview-bytes'",
+                    "size": [248, 346],
+                    "thumb": {"data": "b'thumb-bytes'", "size": [112, 156]},
+                    "uncropped": {"data": "b'uncropped-bytes'", "size": [186, 260]},
+                    "effective_dpi": 300,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(project.image, "init_image_folder", lambda *_args: None)
+    monkeypatch.setattr(
+        project.image,
+        "list_image_files",
+        lambda _folder: ["card-a.png"],
+    )
+
+    print_dict = {
+        "image_dir": str(image_dir),
+        "img_cache": str(img_cache),
+        "cards": {"card-a.png": 1},
+        "backsides": {},
+        "backside_short_edge": {},
+        "oversized": {},
+        "card_metadata": {},
+        "high_res_front_overrides": {},
+        "bleed_edge": "0",
+    }
+    img_dict = {}
+
+    project.init_dict(print_dict, img_dict)
+
+    assert img_dict["card-a.png"]["data"] == project.image.encode_cached_image_bytes(b"preview-bytes")
+    assert img_dict["card-a.png"]["thumb"]["data"] == project.image.encode_cached_image_bytes(b"thumb-bytes")
+    assert img_dict["card-a.png"]["uncropped"]["data"] == project.image.encode_cached_image_bytes(b"uncropped-bytes")
+
+
+def test_init_dict_resets_cache_when_cached_preview_payload_is_invalid(monkeypatch, tmp_path):
+    image_dir = tmp_path / "images"
+    crop_dir = image_dir / "crop"
+    img_cache = tmp_path / "img.cache"
+    img_cache.write_text(
+        json.dumps(
+            {
+                "card-a.png": {
+                    "data": "not-valid-base64%%%",
+                    "size": [248, 346],
+                    "thumb": {"size": [112, 156]},
+                    "uncropped": {"size": [186, 260]},
+                    "effective_dpi": 300,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(project.image, "init_image_folder", lambda *_args: None)
+    monkeypatch.setattr(
+        project.image,
+        "list_image_files",
+        lambda _folder: ["card-a.png"],
+    )
+
+    warnings = []
+    print_dict = {
+        "image_dir": str(image_dir),
+        "img_cache": str(img_cache),
+        "cards": {"card-a.png": 1},
+        "backsides": {},
+        "backside_short_edge": {},
+        "oversized": {},
+        "card_metadata": {},
+        "high_res_front_overrides": {},
+        "bleed_edge": "0",
+    }
+    img_dict = {"old": "value"}
+
+    project.init_dict(print_dict, img_dict, lambda title, message: warnings.append((title, message)))
+
+    assert img_dict == {}
+    assert warnings == [
+        (
+            "Cache Reset",
+            "The image cache could not be loaded and was reset. Thumbnails will be rebuilt.",
+        )
+    ]
+
+
 def test_init_dict_backfills_scryfall_metadata_from_filename(monkeypatch, tmp_path):
     image_dir = tmp_path / "images"
     crop_dir = image_dir / "crop"
