@@ -684,8 +684,39 @@ class CardWidget(QWidget):
 
 class DummyCardWidget(CardWidget):
     def __init__(self, print_dict, img_dict):
-        super().__init__(print_dict, img_dict, None)
+        QWidget.__init__(self)
         self._card_name = "__dummy"
+
+        img = CardImage(fallback.data, fallback.size)
+        sp_retain = img.sizePolicy()
+        sp_retain.setRetainSizeWhenHidden(True)
+        img.setSizePolicy(sp_retain)
+        img.hide()
+
+        number_area = QWidget()
+        number_area.setFixedHeight(20)
+        number_area.hide()
+
+        thumbnail_button = QPushButton("Use as Project Cover")
+        thumbnail_button.setFixedHeight(24)
+        thumbnail_button.hide()
+
+        layout = QVBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(img)
+        layout.addWidget(number_area)
+        layout.addWidget(thumbnail_button)
+        self.setLayout(layout)
+
+        self._img_widget = img
+        self._number_area = number_area
+        self._thumbnail_button = thumbnail_button
+        self._dpi_label = None
+        self._extra_options_area = None
+        self._delete_button = None
+
+        minimum_img_width = img.minimumWidth()
+        self.setMinimumSize(minimum_img_width, self.heightForWidth(minimum_img_width))
 
     def apply_number(self, state, number):
         pass

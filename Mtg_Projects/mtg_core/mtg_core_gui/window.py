@@ -1,0 +1,586 @@
+from __future__ import annotations
+
+import json
+from io import BytesIO
+
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QPixmap
+from PyQt6.QtWidgets import (
+    QCheckBox,
+    QFormLayout,
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMainWindow,
+    QMessageBox,
+    QPushButton,
+    QPlainTextEdit,
+    QSplitter,
+    QStatusBar,
+    QTabWidget,
+    QTableWidget,
+    QTableWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
+
+from mtg_core.admin_service import CardAdminService
+from mtg_core.models import CardRecord, ImageAssetRecord, ImageManifestView, PrintRecord, SyncMetadata
+
+
+class CardsTab(QWidget):
+    HEADERS = ["Oracle ID", "Name", "Normalized", "Layout"]
+
+    def __init__(self, admin_service: CardAdminService, status_fn) -> None:
+        super().__init__()
+        self.admin_service = admin_service
+        self.status_fn = status_fn
+        self._selected_oracle_id: str | None = None
+        self._building_form = False
+        self.search_edit = QLineEdit()
+        self.search_edit.setPlaceholderText("Search cards")
+        self.search_edit.textChanged.connect(self.refresh_table)
+
+        self.table = QTableWidget(0, len(self.HEADERS))
+        self.table.setHorizontalHeaderLabels(self.HEADERS)
+        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.table.itemSelectionChanged.connect(self._load_selected_row)
+
+        self.oracle_id_edit = QLineEdit()
+        self.name_edit = QLineEdit()
+        self.normalized_name_edit = QLineEdit()
+        self.layout_edit = QLineEdit()
+
+        form = QFormLayout()
+        form.addRow("Oracle ID", self.oracle_id_edit)
+        form.addRow("Name", self.name_edit)
+        form.addRow("Normalized", self.normalized_name_edit)
+        form.addRow("Layout", self.layout_edit)
+
+        new_button = QPushButton("New")
+        save_button = QPushButton("Save")
+        delete_button = QPushButton("Delete")
+        refresh_button = QPushButton("Refresh")
+        new_button.clicked.connect(self._new_card)
+        save_button.clicked.connect(self._save_card)
+        delete_button.clicked.connect(self._delete_card)
+        refresh_button.clicked.connect(self.refresh_table)
+
+        buttons = QHBoxLayout()
+        buttons.addWidget(new_button)
+        buttons.addWidget(save_button)
+        buttons.addWidget(delete_button)
+        buttons.addWidget(refresh_button)
+        buttons.addStretch(1)
+
+        detail = QWidget()
+        detail_layout = QVBoxLayout(detail)
+        detail_layout.addLayout(form)
+        detail_layout.addLayout(buttons)
+
+        splitter = QSplitter()
+        splitter.addWidget(self.table)
+        splitter.addWidget(detail)
+        splitter.setStretchFactor(0, 2)
+        splitter.setStretchFactor(1, 1)
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(self.search_edit)
+        layout.addWidget(splitter)
+        self.refresh_table()
+
+    def refresh_table(self) -> None:
+        cards = self.admin_service.list_cards(self.search_edit.text())
+        self.table.setRowCount(len(cards))
+        for row_index, card in enumerate(cards):
+            values = [card.oracle_id, card.name, card.normalized_name, card.layout or ""]
+            for column, value in enumerate(values):
+                item = QTableWidgetItem(value)
+                item.setData(Qt.ItemDataRole.UserRole, card.oracle_id)
+                self.table.setItem(row_index, column, item)
+        self.table.resizeColumnsToContents()
+        self.status_fn(f"Cards: {len(cards)} loaded")
+
+    def _load_selected_row(self) -> None:
+        items = self.table.selectedItems()
+        if not items:
+            return
+        oracle_id = items[0].data(Qt.ItemDataRole.UserRole)
+        card = self.admin_service.get_card(oracle_id)
+        if card is None:
+            return
+        self._selected_oracle_id = card.oracle_id
+        self._building_form = True
+        self.oracle_id_edit.setText(card.oracle_id)
+        self.oracle_id_edit.setReadOnly(True)
+        self.name_edit.setText(card.name)
+        self.normalized_name_edit.setText(card.normalized_name)
+        self.layout_edit.setText(card.layout or "")
+        self._building_form = False
+        self.status_fn(f"Selected card: {card.name}")
+
+    def _new_card(self) -> None:
+        self._selected_oracle_id = None
+        self._building_form = True
+        self.oracle_id_edit.clear()
+        self.oracle_id_edit.setReadOnly(False)
+        self.name_edit.clear()
+        self.normalized_name_edit.clear()
+        self.layout_edit.clear()
+        self._building_form = False
+        self.status_fn("Creating new card")
+
+    def _save_card(self) -> None:
+        try:
+            if self._selected_oracle_id:
+                card = self.admin_service.update_card(
+                    self._selected_oracle_id,
+                    name=self.name_edit.text(),
+                    normalized_name=self.normalized_name_edit.text(),
+                    layout=self.layout_edit.text(),
+                )
+                self.status_fn(f"Updated card: {card.name}")
+            else:
+                card = self.admin_service.create_card(
+                    oracle_id=self.oracle_id_edit.text(),
+                    name=self.name_edit.text(),
+                    normalized_name=self.normalized_name_edit.text(),
+                    layout=self.layout_edit.text(),
+                )
+                self._selected_oracle_id = card.oracle_id
+                self.oracle_id_edit.setText(card.oracle_id)
+                self.oracle_id_edit.setReadOnly(True)
+                self.status_fn(f"Created card: {card.name}")
+        except Exception as exc:  # pragma: no cover - QWidget flow
+            QMessageBox.critical(self, "Save Card", str(exc))
+            return
+        self.refresh_table()
+
+    def _delete_card(self) -> None:
+        oracle_id = self._selected_oracle_id or self.oracle_id_edit.text().strip()
+        if not oracle_id:
+            return
+        if (
+            QMessageBox.question(
+                self,
+                "Delete Card",
+                f"Delete card '{oracle_id}' and its prints/manifests?",
+            )
+            != QMessageBox.StandardButton.Yes
+        ):
+            return
+        deleted = self.admin_service.delete_card(oracle_id)
+        if deleted:
+            self._new_card()
+            self.refresh_table()
+            self.status_fn(f"Deleted card: {oracle_id}")
+
+
+class PrintsTab(QWidget):
+    HEADERS = ["Card ID", "Name", "Set", "Collector #", "Oracle ID", "Released"]
+
+    def __init__(self, admin_service: CardAdminService, status_fn) -> None:
+        super().__init__()
+        self.admin_service = admin_service
+        self.status_fn = status_fn
+        self._selected_card_id: str | None = None
+
+        self.query_edit = QLineEdit()
+        self.query_edit.setPlaceholderText("Filter by card name")
+        self.set_code_edit = QLineEdit()
+        self.set_code_edit.setPlaceholderText("Set code")
+        self.oracle_filter_edit = QLineEdit()
+        self.oracle_filter_edit.setPlaceholderText("Oracle ID")
+        for widget in (self.query_edit, self.set_code_edit, self.oracle_filter_edit):
+            widget.textChanged.connect(self.refresh_table)
+
+        filter_row = QHBoxLayout()
+        filter_row.addWidget(self.query_edit)
+        filter_row.addWidget(self.set_code_edit)
+        filter_row.addWidget(self.oracle_filter_edit)
+
+        self.table = QTableWidget(0, len(self.HEADERS))
+        self.table.setHorizontalHeaderLabels(self.HEADERS)
+        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.table.itemSelectionChanged.connect(self._load_selected_row)
+
+        self.card_id_edit = QLineEdit()
+        self.oracle_id_edit = QLineEdit()
+        self.name_edit = QLineEdit()
+        self.set_code_field = QLineEdit()
+        self.set_name_edit = QLineEdit()
+        self.collector_edit = QLineEdit()
+        self.released_edit = QLineEdit()
+        self.image_url_edit = QLineEdit()
+        self.thumbnail_url_edit = QLineEdit()
+        self.preview_url_edit = QLineEdit()
+        self.double_faced_checkbox = QCheckBox("Double faced")
+        self.payload_edit = QPlainTextEdit()
+        self.payload_edit.setReadOnly(True)
+
+        form = QFormLayout()
+        form.addRow("Card ID", self.card_id_edit)
+        form.addRow("Oracle ID", self.oracle_id_edit)
+        form.addRow("Name", self.name_edit)
+        form.addRow("Set Code", self.set_code_field)
+        form.addRow("Set Name", self.set_name_edit)
+        form.addRow("Collector #", self.collector_edit)
+        form.addRow("Released", self.released_edit)
+        form.addRow("Image URL", self.image_url_edit)
+        form.addRow("Thumbnail URL", self.thumbnail_url_edit)
+        form.addRow("Preview URL", self.preview_url_edit)
+        form.addRow("", self.double_faced_checkbox)
+        form.addRow("Payload JSON", self.payload_edit)
+
+        new_button = QPushButton("New")
+        save_button = QPushButton("Save")
+        delete_button = QPushButton("Delete")
+        refresh_button = QPushButton("Refresh")
+        new_button.clicked.connect(self._new_print)
+        save_button.clicked.connect(self._save_print)
+        delete_button.clicked.connect(self._delete_print)
+        refresh_button.clicked.connect(self.refresh_table)
+
+        buttons = QHBoxLayout()
+        buttons.addWidget(new_button)
+        buttons.addWidget(save_button)
+        buttons.addWidget(delete_button)
+        buttons.addWidget(refresh_button)
+        buttons.addStretch(1)
+
+        detail = QWidget()
+        detail_layout = QVBoxLayout(detail)
+        detail_layout.addLayout(form)
+        detail_layout.addLayout(buttons)
+
+        splitter = QSplitter()
+        splitter.addWidget(self.table)
+        splitter.addWidget(detail)
+        splitter.setStretchFactor(0, 2)
+        splitter.setStretchFactor(1, 1)
+
+        layout = QVBoxLayout(self)
+        layout.addLayout(filter_row)
+        layout.addWidget(splitter)
+        self.refresh_table()
+
+    def refresh_table(self) -> None:
+        prints = self.admin_service.list_prints(
+            query=self.query_edit.text(),
+            set_code=self.set_code_edit.text(),
+            oracle_id=self.oracle_filter_edit.text(),
+        )
+        self.table.setRowCount(len(prints))
+        for row_index, print_record in enumerate(prints):
+            values = [
+                print_record.card_id,
+                print_record.name,
+                print_record.set_code or "",
+                print_record.collector_number or "",
+                print_record.oracle_id,
+                print_record.released_at or "",
+            ]
+            for column, value in enumerate(values):
+                item = QTableWidgetItem(value)
+                item.setData(Qt.ItemDataRole.UserRole, print_record.card_id)
+                self.table.setItem(row_index, column, item)
+        self.table.resizeColumnsToContents()
+        self.status_fn(f"Prints: {len(prints)} loaded")
+
+    def _load_selected_row(self) -> None:
+        items = self.table.selectedItems()
+        if not items:
+            return
+        card_id = items[0].data(Qt.ItemDataRole.UserRole)
+        print_record = self.admin_service.get_print(card_id)
+        if print_record is None:
+            return
+        self._selected_card_id = print_record.card_id
+        self.card_id_edit.setText(print_record.card_id)
+        self.card_id_edit.setReadOnly(True)
+        self.oracle_id_edit.setText(print_record.oracle_id)
+        self.name_edit.setText(print_record.name)
+        self.set_code_field.setText(print_record.set_code or "")
+        self.set_name_edit.setText(print_record.set_name or "")
+        self.collector_edit.setText(print_record.collector_number or "")
+        self.released_edit.setText(print_record.released_at or "")
+        self.image_url_edit.setText(print_record.image_url or "")
+        self.thumbnail_url_edit.setText(print_record.thumbnail_url or "")
+        self.preview_url_edit.setText(print_record.preview_url or "")
+        self.double_faced_checkbox.setChecked(print_record.is_double_faced)
+        self.payload_edit.setPlainText(json.dumps(print_record.payload, indent=2, sort_keys=True))
+        self.status_fn(f"Selected print: {print_record.name} ({print_record.card_id})")
+
+    def _new_print(self) -> None:
+        self._selected_card_id = None
+        self.card_id_edit.clear()
+        self.card_id_edit.setReadOnly(False)
+        self.oracle_id_edit.clear()
+        self.name_edit.clear()
+        self.set_code_field.clear()
+        self.set_name_edit.clear()
+        self.collector_edit.clear()
+        self.released_edit.clear()
+        self.image_url_edit.clear()
+        self.thumbnail_url_edit.clear()
+        self.preview_url_edit.clear()
+        self.double_faced_checkbox.setChecked(False)
+        self.payload_edit.clear()
+        self.status_fn("Creating new print")
+
+    def _save_print(self) -> None:
+        fields = dict(
+            oracle_id=self.oracle_id_edit.text(),
+            name=self.name_edit.text(),
+            set_code=self.set_code_field.text(),
+            set_name=self.set_name_edit.text(),
+            collector_number=self.collector_edit.text(),
+            released_at=self.released_edit.text(),
+            image_url=self.image_url_edit.text(),
+            thumbnail_url=self.thumbnail_url_edit.text(),
+            preview_url=self.preview_url_edit.text(),
+            is_double_faced=self.double_faced_checkbox.isChecked(),
+        )
+        try:
+            if self._selected_card_id:
+                print_record = self.admin_service.update_print(self._selected_card_id, **fields)
+                self.status_fn(f"Updated print: {print_record.card_id}")
+            else:
+                print_record = self.admin_service.create_print(
+                    card_id=self.card_id_edit.text(),
+                    **fields,
+                )
+                self._selected_card_id = print_record.card_id
+                self.card_id_edit.setText(print_record.card_id)
+                self.card_id_edit.setReadOnly(True)
+                self.status_fn(f"Created print: {print_record.card_id}")
+            self.payload_edit.setPlainText(json.dumps(print_record.payload, indent=2, sort_keys=True))
+        except Exception as exc:  # pragma: no cover - QWidget flow
+            QMessageBox.critical(self, "Save Print", str(exc))
+            return
+        self.refresh_table()
+
+    def _delete_print(self) -> None:
+        card_id = self._selected_card_id or self.card_id_edit.text().strip()
+        if not card_id:
+            return
+        if (
+            QMessageBox.question(
+                self,
+                "Delete Print",
+                f"Delete print '{card_id}' and related image-manifest rows?",
+            )
+            != QMessageBox.StandardButton.Yes
+        ):
+            return
+        deleted = self.admin_service.delete_print(card_id)
+        if deleted:
+            self._new_print()
+            self.refresh_table()
+            self.status_fn(f"Deleted print: {card_id}")
+
+
+class ImagesTab(QWidget):
+    MANIFEST_HEADERS = ["Card", "Variant", "Asset", "Status", "Source", "Checksum"]
+    ASSET_HEADERS = ["Asset", "Mime", "Source", "Checksum", "Bytes", "Updated"]
+
+    def __init__(self, admin_service: CardAdminService, status_fn) -> None:
+        super().__init__()
+        self.admin_service = admin_service
+        self.status_fn = status_fn
+        self._asset_records: dict[str, ImageAssetRecord] = {}
+
+        self.refresh_button = QPushButton("Refresh")
+        self.refresh_button.clicked.connect(self.refresh_views)
+
+        self.manifest_table = QTableWidget(0, len(self.MANIFEST_HEADERS))
+        self.manifest_table.setHorizontalHeaderLabels(self.MANIFEST_HEADERS)
+        self.manifest_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+
+        self.assets_table = QTableWidget(0, len(self.ASSET_HEADERS))
+        self.assets_table.setHorizontalHeaderLabels(self.ASSET_HEADERS)
+        self.assets_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.assets_table.itemSelectionChanged.connect(self._refresh_asset_preview)
+
+        self.asset_meta = QPlainTextEdit()
+        self.asset_meta.setReadOnly(True)
+        self.asset_preview = QLabel("Select an asset to preview")
+        self.asset_preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.asset_preview.setMinimumHeight(220)
+
+        preview_panel = QWidget()
+        preview_layout = QVBoxLayout(preview_panel)
+        preview_layout.addWidget(self.asset_preview)
+        preview_layout.addWidget(self.asset_meta)
+
+        tables = QSplitter(Qt.Orientation.Vertical)
+        tables.addWidget(self.manifest_table)
+        tables.addWidget(self.assets_table)
+        tables.setStretchFactor(0, 1)
+        tables.setStretchFactor(1, 1)
+
+        body = QSplitter()
+        body.addWidget(tables)
+        body.addWidget(preview_panel)
+        body.setStretchFactor(0, 2)
+        body.setStretchFactor(1, 1)
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(self.refresh_button)
+        layout.addWidget(body)
+        self.refresh_views()
+
+    def refresh_views(self) -> None:
+        manifests = self.admin_service.list_image_manifest()
+        assets = self.admin_service.list_image_assets()
+        self._asset_records = {asset.asset_id: asset for asset in assets}
+
+        self.manifest_table.setRowCount(len(manifests))
+        for row_index, manifest in enumerate(manifests):
+            values = [
+                manifest.card_name or manifest.card_id,
+                manifest.variant,
+                manifest.asset_id or "",
+                manifest.status,
+                manifest.source or "",
+                manifest.checksum or "",
+            ]
+            for column, value in enumerate(values):
+                item = QTableWidgetItem(value)
+                self.manifest_table.setItem(row_index, column, item)
+
+        self.assets_table.setRowCount(len(assets))
+        for row_index, asset in enumerate(assets):
+            values = [
+                asset.asset_id,
+                asset.mime_type or "",
+                asset.source or "",
+                asset.checksum,
+                str(len(asset.payload)),
+                str(asset.updated_at or ""),
+            ]
+            for column, value in enumerate(values):
+                item = QTableWidgetItem(value)
+                item.setData(Qt.ItemDataRole.UserRole, asset.asset_id)
+                self.assets_table.setItem(row_index, column, item)
+        self.manifest_table.resizeColumnsToContents()
+        self.assets_table.resizeColumnsToContents()
+        self.status_fn(f"Images: {len(manifests)} manifests, {len(assets)} assets")
+
+    def _refresh_asset_preview(self) -> None:
+        items = self.assets_table.selectedItems()
+        if not items:
+            return
+        asset_id = items[0].data(Qt.ItemDataRole.UserRole)
+        asset = self._asset_records.get(asset_id)
+        if asset is None:
+            return
+        pixmap = QPixmap()
+        pixmap.loadFromData(asset.payload)
+        if not pixmap.isNull():
+            scaled = pixmap.scaled(
+                280,
+                280,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+            self.asset_preview.setPixmap(scaled)
+        else:
+            self.asset_preview.setText("Preview unavailable for this asset")
+        self.asset_meta.setPlainText(
+            json.dumps(
+                {
+                    "asset_id": asset.asset_id,
+                    "checksum": asset.checksum,
+                    "extension": asset.extension,
+                    "mime_type": asset.mime_type,
+                    "source": asset.source,
+                    "source_url": asset.source_url,
+                    "payload_bytes": len(asset.payload),
+                    "created_at": asset.created_at,
+                    "updated_at": asset.updated_at,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        self.status_fn(f"Selected asset: {asset.asset_id}")
+
+
+class SyncTab(QWidget):
+    HEADERS = ["Source", "Version", "Last Sync"]
+
+    def __init__(self, admin_service: CardAdminService, status_fn) -> None:
+        super().__init__()
+        self.admin_service = admin_service
+        self.status_fn = status_fn
+        self.table = QTableWidget(0, len(self.HEADERS))
+        self.table.setHorizontalHeaderLabels(self.HEADERS)
+        self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.table.itemSelectionChanged.connect(self._load_payload)
+        self.payload_edit = QPlainTextEdit()
+        self.payload_edit.setReadOnly(True)
+
+        refresh_button = QPushButton("Refresh")
+        refresh_button.clicked.connect(self.refresh_view)
+
+        splitter = QSplitter()
+        splitter.addWidget(self.table)
+        splitter.addWidget(self.payload_edit)
+        splitter.setStretchFactor(0, 1)
+        splitter.setStretchFactor(1, 1)
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(refresh_button)
+        layout.addWidget(splitter)
+        self.refresh_view()
+
+    def refresh_view(self) -> None:
+        rows = self.admin_service.list_sync_state()
+        self.table.setRowCount(len(rows))
+        for row_index, sync_row in enumerate(rows):
+            values = [sync_row.source, sync_row.version or "", str(sync_row.last_sync_at or "")]
+            for column, value in enumerate(values):
+                item = QTableWidgetItem(value)
+                item.setData(Qt.ItemDataRole.UserRole, sync_row.payload or {})
+                self.table.setItem(row_index, column, item)
+        self.table.resizeColumnsToContents()
+        self.status_fn(f"Sync rows: {len(rows)} loaded")
+
+    def _load_payload(self) -> None:
+        items = self.table.selectedItems()
+        if not items:
+            return
+        payload = items[0].data(Qt.ItemDataRole.UserRole)
+        self.payload_edit.setPlainText(json.dumps(payload, indent=2, sort_keys=True))
+
+
+class CoreAdminMainWindow(QMainWindow):
+    def __init__(self, admin_service: CardAdminService | None = None) -> None:
+        super().__init__()
+        self.admin_service = admin_service or CardAdminService()
+        self.setWindowTitle("MTG Core Database Admin")
+        self.resize(1360, 820)
+
+        status_bar = QStatusBar()
+        self.setStatusBar(status_bar)
+        self._db_label = QLabel(f"DB: {self.admin_service.database.db_path}")
+        status_bar.addPermanentWidget(self._db_label)
+
+        tabs = QTabWidget()
+        self.cards_tab = CardsTab(self.admin_service, self._set_status)
+        self.prints_tab = PrintsTab(self.admin_service, self._set_status)
+        self.images_tab = ImagesTab(self.admin_service, self._set_status)
+        self.sync_tab = SyncTab(self.admin_service, self._set_status)
+        tabs.addTab(self.cards_tab, "Cards")
+        tabs.addTab(self.prints_tab, "Prints")
+        tabs.addTab(self.images_tab, "Images")
+        tabs.addTab(self.sync_tab, "Sync")
+        self.setCentralWidget(tabs)
+        self._set_status("Ready")
+
+    def _set_status(self, message: str) -> None:
+        self.statusBar().showMessage(message, 6000)

@@ -70,3 +70,19 @@ class SyncMetadata:
     source: str
     last_sync_at: float | None
     version: str | None
+    payload: dict | None = None
+
+
+@dataclass(frozen=True)
+class ImageManifestView:
+    card_id: str
+    card_name: str | None
+    variant: str
+    asset_id: str | None
+    path: str | None
+    status: str
+    source: str | None = None
+    checksum: str | None = None
+    source_url: str | None = None
+    updated_at: float | None = None
+    created_at: float | None = None

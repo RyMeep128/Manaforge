@@ -1163,7 +1163,30 @@ def find_matching_backside_candidate(
 
 def invalidate_cached_card_artifacts(print_dict: ProjectState | dict, image_dir: str, card_name: str):
     state = as_project_state(print_dict)
+    crop_dir = os.path.join(image_dir, "crop")
+    if os.path.exists(crop_dir):
+        for root, _dirs, files in os.walk(crop_dir):
+            for file_name in files:
+                if file_name != card_name:
+                    continue
+                try:
+                    os.remove(os.path.join(root, file_name))
+                except OSError:
+                    pass
     runtime_images.invalidate_entry(state, {}, card_name)
+    img_cache_path = state.img_cache
+    if img_cache_path and os.path.exists(img_cache_path):
+        try:
+            with open(img_cache_path, "r", encoding="utf-8") as fp:
+                cache_data = json.load(fp)
+        except (OSError, json.JSONDecodeError, TypeError, ValueError):
+            cache_data = None
+        if isinstance(cache_data, dict) and card_name in cache_data:
+            del cache_data[card_name]
+            try:
+                util.write_json_atomic(img_cache_path, cache_data, ensure_ascii=False)
+            except OSError:
+                pass
 
 
 def maybe_find_matching_backside(

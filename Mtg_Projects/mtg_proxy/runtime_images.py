@@ -52,9 +52,12 @@ def _load_preview_cache(state: ProjectState) -> dict[str, dict]:
         return {}
     if not isinstance(payload, dict):
         return {}
-    for value in payload.values():
-        if isinstance(value, dict):
-            image.normalize_cached_preview_entry(value)
+    try:
+        for value in payload.values():
+            if isinstance(value, dict):
+                image.normalize_cached_preview_entry(value)
+    except (TypeError, ValueError):
+        return {}
     return payload
 
 
@@ -115,6 +118,8 @@ def _processing_fingerprint(state: ProjectState, card_name: str) -> str:
 
 def get_source_path(project_like, card_name: str) -> str | None:
     state = as_project_state(project_like)
+    if not card_name:
+        return None
     asset_id, label_name, _side = _asset_details(state, card_name)
     if asset_id:
         return get_default_card_service().materialize_image_asset(
@@ -152,6 +157,8 @@ def _write_processed_image(path: str, source_path: str, card_name: str, bleed_ed
 
 def get_processed_path(project_like, card_name: str) -> str | None:
     state = as_project_state(project_like)
+    if not card_name:
+        return None
     source_path = get_source_path(state, card_name)
     if not source_path:
         return None
@@ -206,6 +213,8 @@ def _build_preview_entry(state: ProjectState, card_name: str) -> dict | None:
 
 def ensure_preview_entry(project_like, img_dict: dict, card_name: str) -> dict | None:
     state = as_project_state(project_like)
+    if not card_name:
+        return None
     asset_key = _asset_key(state, card_name)
     fingerprint = _processing_fingerprint(state, card_name)
 
@@ -237,6 +246,8 @@ def ensure_preview_entry(project_like, img_dict: dict, card_name: str) -> dict |
 
 def invalidate_entry(project_like, img_dict: dict, card_name: str) -> None:
     state = as_project_state(project_like)
+    if not card_name:
+        return
     current_asset_key = None
     existing = img_dict.pop(card_name, None)
     if isinstance(existing, dict):

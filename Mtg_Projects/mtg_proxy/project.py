@@ -75,6 +75,20 @@ def init_dict(print_dict, img_dict, warn_fn=None):
 
     if not os.path.isabs(state.image_dir) or state.image_dir == "images":
         _assign_runtime_paths(state)
+    image_dir = state.image_dir
+    crop_dir = os.path.join(image_dir, "crop")
+    image.init_image_folder(image_dir, crop_dir)
+
+    crop_list = image.list_image_files(crop_dir)
+    source_list = image.list_image_files(image_dir)
+    if crop_list or source_list:
+        detected_default_back = _detect_default_back_image(source_list, crop_list)
+        if detected_default_back is not None:
+            state.backside_default = detected_default_back
+        state.remove_missing_cards(set(crop_list) | set(source_list))
+        for img in crop_list:
+            if img not in state.cards:
+                state.cards[img] = 0 if img.startswith("__") else 1
 
     bleed_edge = str(state.bleed_edge)
     bleed_edge = util.cap_bleed_edge_str(bleed_edge)
@@ -91,7 +105,26 @@ def init_dict(print_dict, img_dict, warn_fn=None):
         if parsed_metadata is not None:
             state.set_card_metadata(img, parsed_metadata)
 
-    runtime_images.prune_unused_entries(state, img_dict)
+    img_cache = state.img_cache
+    if os.path.exists(img_cache):
+        try:
+            with open(img_cache, "r", encoding="utf-8") as fp:
+                loaded_img_dict = json.load(fp)
+                for value in loaded_img_dict.values():
+                    if isinstance(value, dict):
+                        image.normalize_cached_preview_entry(value)
+                img_dict.clear()
+                for key, value in loaded_img_dict.items():
+                    img_dict[key] = value
+        except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
+            logger.warning("project image cache reset path=%s error=%s", img_cache, exc)
+            img_dict.clear()
+            if warn_fn is not None:
+                warn_fn(
+                    "Cache Reset",
+                    "The image cache could not be loaded and was reset. Thumbnails will be rebuilt.",
+                )
+
     return _sync_legacy_project_dict(print_dict, state)
 
 
@@ -101,8 +134,8 @@ def init_images(print_dict, img_dict, print_fn):
 
 
 def refresh_after_image_changes(print_dict, img_dict, print_fn, warn_fn=None):
-    state = as_project_state(print_dict)
-    runtime_images.prune_unused_entries(state, img_dict)
+    init_dict(print_dict, img_dict, warn_fn)
+    init_images(print_dict, img_dict, print_fn)
     return init_dict(print_dict, img_dict, warn_fn)
 
 
@@ -117,7 +150,28 @@ def delete_card_files(print_dict, img_dict, card_name):
         os.remove(source_path)
         deleted_count += 1
 
+    crop_dir = os.path.join(image_dir, "crop")
+    if os.path.exists(crop_dir):
+        for root, _dirs, files in os.walk(crop_dir, topdown=False):
+            for file_name in files:
+                if file_name != card_name:
+                    continue
+                os.remove(os.path.join(root, file_name))
+                deleted_count += 1
+            if root != crop_dir and len(os.listdir(root)) == 0:
+                os.rmdir(root)
+
     runtime_images.invalidate_entry(state, img_dict, card_name)
+    img_cache = state.img_cache
+    if img_cache and os.path.exists(img_cache):
+        try:
+            with open(img_cache, "r", encoding="utf-8") as fp:
+                cache_data = json.load(fp)
+        except (OSError, json.JSONDecodeError, TypeError, ValueError):
+            cache_data = None
+        if isinstance(cache_data, dict) and card_name in cache_data:
+            del cache_data[card_name]
+            util.write_json_atomic(img_cache, cache_data)
     state.remove_card(card_name)
     _sync_legacy_project_dict(print_dict, state)
     return deleted_count
@@ -134,6 +188,19 @@ def clear_old_cards(print_dict, img_dict):
             continue
         os.remove(os.path.join(image_dir, img_name))
         deleted_count += 1
+
+    crop_dir = os.path.join(image_dir, "crop")
+    if os.path.exists(crop_dir):
+        for root, _dirs, files in os.walk(crop_dir, topdown=False):
+            for file_name in files:
+                if os.path.splitext(file_name)[1].lower() not in image.valid_image_extensions:
+                    continue
+                if file_name.startswith("__back"):
+                    continue
+                os.remove(os.path.join(root, file_name))
+                deleted_count += 1
+            if root != crop_dir and len(os.listdir(root)) == 0:
+                os.rmdir(root)
 
     runtime_images.invalidate_all(state, img_dict)
     for card_name in [name for name in list(state.cards.keys()) if not name.startswith("__")]:
@@ -177,4 +244,5 @@ def load(print_dict, img_dict, json_path, print_fn, warn_fn=None):
         load_target = print_dict
 
     init_dict(load_target, img_dict, warn_fn)
+    init_images(load_target, img_dict, print_fn)
     return loaded_successfully
