@@ -3,6 +3,7 @@ setlocal
 
 title Print Proxy Prep
 cd /d "%~dp0"
+set "PYTHONPATH=%~dp0..;%~dp0..\mtg_core;%PYTHONPATH%"
 
 if not exist "images" mkdir "images"
 if not exist "images\crop" mkdir "images\crop"

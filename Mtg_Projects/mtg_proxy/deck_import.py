@@ -5,12 +5,14 @@ import logging
 import os
 import re
 import urllib.error
-import urllib.parse
 import urllib.request
+import uuid
 from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Callable
 
+from mtg_core import CardService
+from mtg_core.sync import fetch_json as core_fetch_json
 from models import ProjectState, as_project_state
 
 logger = logging.getLogger(__name__)
@@ -209,6 +211,7 @@ def import_decklist(
     print_fn = print_fn if print_fn is not None else lambda _text: None
     fetch_json = fetch_json if fetch_json is not None else _fetch_json
     fetch_bytes = fetch_bytes if fetch_bytes is not None else _fetch_bytes
+    card_service = _build_card_service(fetch_json)
 
     entries, unmatched_lines = parse_decklist(deck_text)
     return import_entries(
@@ -216,7 +219,7 @@ def import_decklist(
         image_dir,
         unmatched_lines=unmatched_lines,
         print_fn=print_fn,
-        fetch_json=fetch_json,
+        card_service=card_service,
         fetch_bytes=fetch_bytes,
     )
 
@@ -233,6 +236,7 @@ def import_archidekt_url(
     fetch_json = fetch_json if fetch_json is not None else _fetch_json
     fetch_bytes = fetch_bytes if fetch_bytes is not None else _fetch_bytes
     fetch_text = fetch_text if fetch_text is not None else _fetch_text
+    card_service = _build_card_service(fetch_json)
 
     if not is_archidekt_url(archidekt_url):
         raise ValueError("The URL is not a valid public Archidekt deck link.")
@@ -248,7 +252,7 @@ def import_archidekt_url(
         image_dir,
         unmatched_lines=[],
         print_fn=print_fn,
-        fetch_json=fetch_json,
+        card_service=card_service,
         fetch_bytes=fetch_bytes,
     )
 
@@ -258,12 +262,12 @@ def import_entries(
     image_dir: str,
     unmatched_lines: list[str],
     print_fn: PRINT_FN | None = None,
-    fetch_json: Callable[[str], dict] | None = None,
+    card_service: CardService | None = None,
     fetch_bytes: Callable[[str], bytes] | None = None,
 ) -> ImportResult:
     print_fn = print_fn if print_fn is not None else lambda _text: None
-    fetch_json = fetch_json if fetch_json is not None else _fetch_json
     fetch_bytes = fetch_bytes if fetch_bytes is not None else _fetch_bytes
+    card_service = card_service or _build_card_service()
 
     imported: list[ImportedCard] = []
     failed_cards: list[str] = []
@@ -273,7 +277,7 @@ def import_entries(
         label = f"{entry.name} ({index}/{len(entries)})"
         print_fn(f"Importing decklist...\nResolving {label}")
         try:
-            card_data = resolve_card(entry, fetch_json)
+            card_data = resolve_card(entry, card_service=card_service)
             imported_card, backside_name = download_card_image_set(
                 card_data,
                 entry,
@@ -400,28 +404,25 @@ def parse_archidekt_html(html: str) -> list[DeckEntry]:
     return list(aggregated.values())
 
 
-def resolve_card(entry: DeckEntry, fetch_json: Callable[[str], dict]) -> dict:
+def resolve_card(
+    entry: DeckEntry,
+    fetch_json: Callable[[str], dict] | None = None,
+    card_service: CardService | None = None,
+) -> dict:
+    service = card_service or _build_card_service(fetch_json)
     if entry.set_code and entry.collector_number:
-        url = (
-            "https://api.scryfall.com/cards/"
-            f"{urllib.parse.quote(entry.set_code)}/{urllib.parse.quote(entry.collector_number)}"
-        )
-        return fetch_json(url)
-
-    if entry.set_code:
-        query = f'!"{entry.name}" set:{entry.set_code}'
-        url = "https://api.scryfall.com/cards/search?" + urllib.parse.urlencode(
-            {"q": query, "unique": "prints"}
-        )
-        payload = fetch_json(url)
-        if payload.get("object") == "list" and payload.get("data"):
-            return payload["data"][0]
-        raise ValueError("Card not found")
-
-    url = "https://api.scryfall.com/cards/named?" + urllib.parse.urlencode(
-        {"exact": entry.name}
+        card = service.get_print(set_code=entry.set_code, collector_number=entry.collector_number)
+        if card is not None:
+            return card
+    if entry.name:
+        card = service.get_card(exact_name=entry.name)
+        if card is not None and not entry.set_code:
+            return card
+    return service.fetch_missing_card(
+        exact_name=entry.name,
+        set_code=entry.set_code,
+        collector_number=entry.collector_number,
     )
-    return fetch_json(url)
 
 
 def extract_image_url(card_data: dict) -> str | None:
@@ -550,18 +551,7 @@ def _format_failed_card(entry: DeckEntry) -> str:
 
 
 def _fetch_json(url: str) -> dict:
-    request = urllib.request.Request(
-        url,
-        headers={
-            "Accept": "application/json",
-            "User-Agent": "print-proxy-prep/1.0",
-        },
-    )
-    with urllib.request.urlopen(request, timeout=30) as response:
-        payload = json.loads(response.read().decode("utf-8"))
-    if payload.get("object") == "error":
-        raise ValueError(payload.get("details", "Scryfall error"))
-    return payload
+    return core_fetch_json(url)
 
 
 def _fetch_bytes(url: str) -> bytes:
@@ -583,3 +573,13 @@ def _fetch_text(url: str) -> str:
     )
     with urllib.request.urlopen(request, timeout=30) as response:
         return response.read().decode("utf-8", errors="replace")
+
+
+def _build_card_service(fetch_json: Callable[[str], dict] | None = None) -> CardService:
+    fetch_json = fetch_json or _fetch_json
+    db_path = None
+    if fetch_json is not _fetch_json:
+        db_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".mtg_core_test_cache")
+        os.makedirs(db_root, exist_ok=True)
+        db_path = os.path.join(db_root, f"card_data_{uuid.uuid4().hex}.sqlite3")
+    return CardService(db_path=db_path, fetch_json_fn=fetch_json)

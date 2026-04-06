@@ -3,6 +3,7 @@ setlocal
 
 title Build Print Proxy Prep EXE
 cd /d "%~dp0"
+set "PYTHONPATH=%~dp0..;%~dp0..\mtg_core;%PYTHONPATH%"
 
 if not exist "venv\Scripts\python.exe" (
     echo Virtual environment not found.

@@ -4,9 +4,13 @@ import sys
 from reportlab.lib.pagesizes import LETTER, A5, A4, A3, LEGAL
 
 if getattr(sys, "frozen", False):
-    cwd = os.path.dirname(os.path.abspath(sys.executable))
+    app_root = os.path.dirname(os.path.abspath(sys.executable))
 else:
-    cwd = os.path.dirname(os.path.abspath(__file__))
+    app_root = os.path.dirname(os.path.abspath(__file__))
+
+products_root = os.path.dirname(app_root)
+workspace_root = os.path.dirname(products_root)
+cwd = app_root
 
 page_sizes = {"Letter": LETTER, "A5": A5, "A4": A4, "A3": A3, "Legal": LEGAL}
 

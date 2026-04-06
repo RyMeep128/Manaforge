@@ -3,6 +3,7 @@ setlocal
 
 title Print Proxy Prep Setup
 cd /d "%~dp0"
+set "PYTHONPATH=%~dp0..;%~dp0..\mtg_core;%PYTHONPATH%"
 
 echo.
 echo ==================================

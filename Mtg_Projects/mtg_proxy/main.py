@@ -1,3 +1,13 @@
+from pathlib import Path
+import sys
+
+_APP_ROOT = Path(__file__).resolve().parent
+_PRODUCTS_ROOT = _APP_ROOT.parent
+_CORE_ROOT = _PRODUCTS_ROOT / "mtg_core"
+for _path in (str(_PRODUCTS_ROOT), str(_CORE_ROOT)):
+    if _path not in sys.path:
+        sys.path.insert(0, _path)
+
 import image
 import gui_qt
 

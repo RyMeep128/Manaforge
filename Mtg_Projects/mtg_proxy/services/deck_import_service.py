@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-import urllib.parse
+import os
+import uuid
 from dataclasses import dataclass
 from typing import Callable
 
 import deck_import
 import high_res
+from mtg_core import CardService
 
 from models import ProjectState, as_project_state
 from . import high_res_service, project_service
@@ -120,44 +122,6 @@ def _build_card_candidate(card_data: dict) -> ScryfallCardCandidate:
     )
 
 
-def _matches_set_filter(card_data: dict, set_filter: str | None) -> bool:
-    needle = (set_filter or "").strip().casefold()
-    if not needle:
-        return True
-    set_code = str(card_data.get("set") or "").casefold()
-    set_name = str(card_data.get("set_name") or "").casefold()
-    return set_code == needle or needle in set_name
-
-
-def _fetch_scryfall_search_payloads(
-    query: str,
-    fetch_json: Callable[[str], dict],
-) -> list[dict]:
-    url = "https://api.scryfall.com/cards/search?" + urllib.parse.urlencode(
-        {"q": query, "unique": "prints"}
-    )
-    payloads: list[dict] = []
-    seen_ids: set[str] = set()
-    while url:
-        payload = fetch_json(url)
-        if payload.get("object") == "error":
-            details = payload.get("details")
-            if details and "No cards found" in details:
-                return []
-            raise ValueError(details or "Scryfall card search failed.")
-        if payload.get("object") != "list":
-            raise ValueError("Scryfall card search failed.")
-        for card_data in payload.get("data") or []:
-            card_id = str(card_data.get("id") or "")
-            if card_id and card_id in seen_ids:
-                continue
-            if card_id:
-                seen_ids.add(card_id)
-            payloads.append(card_data)
-        url = payload.get("next_page") if payload.get("has_more") else None
-    return payloads
-
-
 def search_scryfall_card_page(
     name_query: str,
     set_filter: str | None = None,
@@ -169,16 +133,13 @@ def search_scryfall_card_page(
     if not normalized_query:
         raise ValueError("Enter a card name to search Scryfall.")
 
-    fetch_json = fetch_json or deck_import._fetch_json
-    exact_query = f'!"{normalized_query}"'
-    payloads = _fetch_scryfall_search_payloads(exact_query, fetch_json)
-    if not payloads:
-        payloads = _fetch_scryfall_search_payloads(normalized_query, fetch_json)
-
+    card_service = _build_card_service(fetch_json)
     filtered = [
-        _build_card_candidate(card_data)
-        for card_data in payloads
-        if _matches_set_filter(card_data, set_filter)
+        _build_card_candidate(result.payload)
+        for result in card_service.search_cards(
+            normalized_query,
+            {"set_filter": set_filter, "allow_remote": True, "limit": 500},
+        )
     ]
     total_count = len(filtered)
     if page_start < 0:
@@ -307,3 +268,13 @@ def import_single_card_into_project(
         art_candidate=art_candidate,
         art_source=normalized_art_source,
     )
+
+
+def _build_card_service(fetch_json: Callable[[str], dict] | None = None) -> CardService:
+    fetch_json = fetch_json or deck_import._fetch_json
+    db_path = None
+    if fetch_json is not deck_import._fetch_json:
+        db_root = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".mtg_core_test_cache")
+        os.makedirs(db_root, exist_ok=True)
+        db_path = os.path.join(db_root, f"card_data_{uuid.uuid4().hex}.sqlite3")
+    return CardService(db_path=db_path, fetch_json_fn=fetch_json)

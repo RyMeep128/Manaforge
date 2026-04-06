@@ -1,0 +1,126 @@
+from __future__ import annotations
+
+import json
+import urllib.parse
+import urllib.request
+
+
+USER_AGENT = "print-proxy-prep/1.0"
+
+
+def fetch_json(url: str) -> dict:
+    request = urllib.request.Request(
+        url,
+        headers={
+            "Accept": "application/json",
+            "User-Agent": USER_AGENT,
+        },
+    )
+    with urllib.request.urlopen(request, timeout=30) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+    if payload.get("object") == "error":
+        raise ValueError(payload.get("details", "Scryfall error"))
+    return payload
+
+
+def build_named_url(exact_name: str) -> str:
+    return "https://api.scryfall.com/cards/named?" + urllib.parse.urlencode(
+        {"exact": exact_name}
+    )
+
+
+def build_set_collectornumber_url(set_code: str, collector_number: str) -> str:
+    return (
+        "https://api.scryfall.com/cards/"
+        f"{urllib.parse.quote(set_code)}/{urllib.parse.quote(collector_number)}"
+    )
+
+
+def build_exact_print_search_url(name: str, set_code: str) -> str:
+    query = f'!"{name}" set:{set_code}'
+    return "https://api.scryfall.com/cards/search?" + urllib.parse.urlencode(
+        {"q": query, "unique": "prints"}
+    )
+
+
+def build_print_search_url(query: str) -> str:
+    return "https://api.scryfall.com/cards/search?" + urllib.parse.urlencode(
+        {"q": query, "unique": "prints"}
+    )
+
+
+def extract_image_urls(card_data: dict) -> tuple[str | None, str | None, str | None]:
+    image_uris = card_data.get("image_uris")
+    if image_uris:
+        return (
+            image_uris.get("png") or image_uris.get("large") or image_uris.get("normal"),
+            image_uris.get("small") or image_uris.get("normal") or image_uris.get("large"),
+            image_uris.get("normal") or image_uris.get("large") or image_uris.get("png"),
+        )
+
+    for face in card_data.get("card_faces") or []:
+        image_uris = face.get("image_uris")
+        if image_uris:
+            return (
+                image_uris.get("png") or image_uris.get("large") or image_uris.get("normal"),
+                image_uris.get("small") or image_uris.get("normal") or image_uris.get("large"),
+                image_uris.get("normal") or image_uris.get("large") or image_uris.get("png"),
+            )
+    return None, None, None
+
+
+def iter_search_payloads(query: str, fetch_json_fn=fetch_json) -> list[dict]:
+    url = build_print_search_url(query)
+    payloads: list[dict] = []
+    seen_ids: set[str] = set()
+    while url:
+        payload = fetch_json_fn(url)
+        if payload.get("object") == "error":
+            details = payload.get("details")
+            if details and "No cards found" in details:
+                return []
+            raise ValueError(details or "Scryfall card search failed.")
+        if payload.get("object") != "list":
+            raise ValueError("Scryfall card search failed.")
+        for card_data in payload.get("data") or []:
+            card_id = str(card_data.get("id") or "")
+            if card_id and card_id in seen_ids:
+                continue
+            if card_id:
+                seen_ids.add(card_id)
+            payloads.append(card_data)
+        url = payload.get("next_page") if payload.get("has_more") else None
+    return payloads
+
+
+def resolve_card_payload(
+    *,
+    exact_name: str | None = None,
+    set_code: str | None = None,
+    collector_number: str | None = None,
+    card_id: str | None = None,
+    fetch_json_fn=fetch_json,
+) -> dict:
+    if card_id:
+        return fetch_json_fn(f"https://api.scryfall.com/cards/{urllib.parse.quote(card_id)}")
+    if set_code and collector_number:
+        return fetch_json_fn(build_set_collectornumber_url(set_code, collector_number))
+    if set_code and exact_name:
+        payload = fetch_json_fn(build_exact_print_search_url(exact_name, set_code))
+        if payload.get("object") == "list" and payload.get("data"):
+            return payload["data"][0]
+        raise ValueError("Card not found")
+    if exact_name:
+        return fetch_json_fn(build_named_url(exact_name))
+    raise ValueError("A card lookup requires exact_name, card_id, or set+collector number.")
+
+
+def search_prints_payloads(name_query: str, fetch_json_fn=fetch_json) -> list[dict]:
+    normalized_query = (name_query or "").strip()
+    if not normalized_query:
+        return []
+    exact_query = f'!"{normalized_query}"'
+    payloads = iter_search_payloads(exact_query, fetch_json_fn)
+    if payloads:
+        return payloads
+    return iter_search_payloads(normalized_query, fetch_json_fn)
