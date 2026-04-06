@@ -41,6 +41,7 @@ from PyQt6.QtWidgets import (
 import pdf
 import image
 import project_library
+import runtime_images
 import fallback_image as fallback
 from config import CFG
 from constants import (
@@ -359,6 +360,7 @@ class CardWidget(QWidget):
         super().__init__()
         self.setMouseTracking(True)
         state = as_project_state(print_dict)
+        runtime_images.ensure_preview_entry(state, img_dict, card_name)
 
         if card_name in img_dict:
             img_data = cached_preview_bytes(img_dict[card_name])
@@ -387,6 +389,7 @@ class CardWidget(QWidget):
                 if card_name in state.backsides
                 else state.backside_default
             )
+            runtime_images.ensure_preview_entry(state, img_dict, backside_name)
             backside_img = BacksideImage(backside_name, img_dict)
 
         initial_number = state.cards[card_name] if card_name is not None else 1
@@ -516,6 +519,7 @@ class CardWidget(QWidget):
             def backside_reset():
                 if card_name in state.backsides:
                     del state.backsides[card_name]
+                    runtime_images.ensure_preview_entry(state, img_dict, state.backside_default)
                     new_backside_img = BacksideImage(
                         state.backside_default, img_dict
                     )
@@ -770,7 +774,10 @@ class CardGrid(QWidget):
             )
 
         for card_name in card_names:
-            if card_name.startswith("__") or card_name not in img_dict:
+            if card_name.startswith("__"):
+                continue
+            runtime_images.ensure_preview_entry(state, img_dict, card_name)
+            if card_name not in img_dict:
                 continue
 
             card_widget = CardWidget(state, img_dict, card_name)
@@ -1135,19 +1142,18 @@ class PrintPreview(QScrollArea):
 
         @functools.cache
         def img_get(card_name, bleed_edge):
-            if card_name in img_dict:
-                card_img = img_dict[card_name]
-                if bleed_edge > 0 and "uncropped" in card_img:
-                    uncropped_data = cached_preview_bytes(card_img["uncropped"])
-                    img = image.image_from_bytes(uncropped_data)
-                    img_crop = image.crop_image(img, "", bleed_edge, None)
-                    img_data, img_size = image.to_bytes(img_crop)
-                else:
-                    img_data = cached_preview_bytes(card_img)
-                    img_size = card_img["size"]
-                return img_data, img_size
-            else:
+            card_img = runtime_images.ensure_preview_entry(state, img_dict, card_name)
+            if card_img is None:
                 return None, None
+            if bleed_edge > 0 and "uncropped" in card_img:
+                uncropped_data = cached_preview_bytes(card_img["uncropped"])
+                img = image.image_from_bytes(uncropped_data)
+                img_crop = image.crop_image(img, card_name, bleed_edge, None)
+                img_data, img_size = image.to_bytes(img_crop)
+            else:
+                img_data = cached_preview_bytes(card_img)
+                img_size = card_img["size"]
+            return img_data, img_size
 
         img_get.cache_clear()
 
@@ -1349,18 +1355,6 @@ class ActionsWidget(QGroupBox):
         self.setLayout(layout)
 
         def render():
-            bleed_edge = float(state.bleed_edge)
-            image_dir = state.image_dir
-            crop_dir = os.path.join(image_dir, "crop")
-            if image.need_run_cropper(
-                image_dir, crop_dir, bleed_edge, CFG.VibranceBump
-            ):
-                QToolTip.showText(
-                    QCursor.pos(),
-                    "Prepare images first, then try saving the PDF again.",
-                )
-                return
-
             rgx = re.compile(r"\W")
             default_pdf_name = (
                 f"{re.sub(rgx, '', state.filename)}.pdf"
@@ -1384,7 +1378,6 @@ class ActionsWidget(QGroupBox):
             def render_work():
                 result = pdf_service.generate_pdf(
                     state,
-                    crop_dir,
                     page_sizes[state.pagesize],
                     pdf_path,
                     make_popup_print_fn(render_window),
@@ -1411,56 +1404,18 @@ class ActionsWidget(QGroupBox):
             )
 
         def run_cropper():
-            bleed_edge = float(state.bleed_edge)
-            image_dir = state.image_dir
-            crop_dir = os.path.join(image_dir, "crop")
-            img_cache = state.img_cache
-            if image.need_run_cropper(
-                image_dir, crop_dir, bleed_edge, CFG.VibranceBump
-            ):
+            runtime_images.invalidate_all(state, img_dict)
 
-                self._rebuild_after_cropper = False
+            def refresh_work():
+                card_names = [name for name in state.cards.keys() if not name.startswith("__")]
+                runtime_images.warm_preview_entries(state, img_dict, card_names)
 
-                def cropper_work():
-                    image.cropper(
-                        image_dir,
-                        crop_dir,
-                        img_cache,
-                        img_dict,
-                        bleed_edge,
-                        CFG.MaxDPI,
-                        CFG.VibranceBump,
-                        CFG.EnableUncrop,
-                        make_popup_print_fn(crop_window),
-                    )
-
-                    for img in image.list_image_files(crop_dir):
-                        if img not in state.cards:
-                            state.cards[img] = 1
-                            self._rebuild_after_cropper = True
-
-                    deleted_images = []
-                    for img in state.cards.keys():
-                        if img not in img_dict.keys():
-                            deleted_images.append(img)
-                            self._rebuild_after_cropper = True
-                    for img in deleted_images:
-                        del state.cards[img]
-
-                self.window().setEnabled(False)
-                crop_window = popup(self.window(), "Cropping images...", application._debug_mode)
-                crop_window.show_during_work(cropper_work)
-                del crop_window
-                if self._rebuild_after_cropper:
-                    self.window().refresh(state, img_dict)
-                else:
-                    self.window().refresh_preview(state, img_dict)
-                self.window().setEnabled(True)
-            else:
-                QToolTip.showText(
-                    QCursor.pos(),
-                    "Images are already prepared. You can check Preview or save the PDF.",
-                )
+            self.window().setEnabled(False)
+            crop_window = popup(self.window(), "Refreshing previews...", application._debug_mode)
+            crop_window.show_during_work(refresh_work)
+            del crop_window
+            self.window().refresh(state, img_dict)
+            self.window().setEnabled(True)
 
         def save_project():
             saved = application.save_active_project(state)
@@ -1487,27 +1442,8 @@ class ActionsWidget(QGroupBox):
                 state.img_cache = os.path.join(new_image_dir, "img.cache")
 
                 project_service.init_dict(state, img_dict, application.warn_nonfatal)
-
-                bleed_edge = float(state.bleed_edge)
-                image_dir = new_image_dir
-                crop_dir = os.path.join(image_dir, "crop")
-                if image.need_run_cropper(
-                    image_dir, crop_dir, bleed_edge, CFG.VibranceBump
-                ) or image.need_cache_previews(crop_dir, img_dict, image_dir):
-
-                    def reload_work():
-                        project_service.init_images(
-                            state, img_dict, make_popup_print_fn(reload_window)
-                        )
-
-                    self.window().setEnabled(False)
-                    reload_window = popup(self.window(), "Reloading project...", application._debug_mode)
-                    reload_window.show_during_work(reload_work)
-                    del reload_window
-                    self.window().refresh(state, img_dict)
-                    self.window().setEnabled(True)
-                else:
-                    self.window().refresh(state, img_dict)
+                runtime_images.invalidate_all(state, img_dict)
+                self.window().refresh(state, img_dict)
 
         def open_images_folder():
             open_folder(state.image_dir)

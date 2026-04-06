@@ -44,10 +44,24 @@ class SearchCardResult:
 class ImageRecord:
     card_id: str
     variant: str
+    asset_id: str | None
     path: str | None
     status: str
     source: str | None = None
     checksum: str | None = None
+    updated_at: float | None = None
+
+
+@dataclass(frozen=True)
+class ImageAssetRecord:
+    asset_id: str
+    checksum: str
+    extension: str | None
+    mime_type: str | None
+    source: str | None
+    source_url: str | None
+    payload: bytes
+    created_at: float | None = None
     updated_at: float | None = None
 
 

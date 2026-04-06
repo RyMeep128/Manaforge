@@ -166,6 +166,59 @@ class HighResOverride:
 
 
 @dataclass
+class ProjectCardEntry:
+    entry_id: str
+    front_name: str
+    count: int = 1
+    card_id: str | None = None
+    oracle_id: str | None = None
+    image_asset_id: str | None = None
+    backside_name: str | None = None
+    backside_asset_id: str | None = None
+    backside_short_edge: bool = False
+    oversized: bool = False
+    metadata: CardMetadata = field(default_factory=CardMetadata)
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any] | None) -> "ProjectCardEntry":
+        data = dict(data or {})
+        return cls(
+            entry_id=str(data.get("entry_id") or data.get("front_name") or ""),
+            front_name=str(data.get("front_name") or ""),
+            count=int(data.get("count", 1) or 1),
+            card_id=_optional_str(data.get("card_id")),
+            oracle_id=_optional_str(data.get("oracle_id")),
+            image_asset_id=_optional_str(data.get("image_asset_id")),
+            backside_name=_optional_str(data.get("backside_name")),
+            backside_asset_id=_optional_str(data.get("backside_asset_id")),
+            backside_short_edge=bool(data.get("backside_short_edge", False)),
+            oversized=bool(data.get("oversized", False)),
+            metadata=CardMetadata.from_dict(data.get("metadata")),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        result = {
+            "entry_id": self.entry_id,
+            "front_name": self.front_name,
+            "count": self.count,
+            "backside_short_edge": self.backside_short_edge,
+            "oversized": self.oversized,
+            "metadata": self.metadata.to_dict(),
+        }
+        optional_fields = {
+            "card_id": self.card_id,
+            "oracle_id": self.oracle_id,
+            "image_asset_id": self.image_asset_id,
+            "backside_name": self.backside_name,
+            "backside_asset_id": self.backside_asset_id,
+        }
+        for key, value in optional_fields.items():
+            if value is not None:
+                result[key] = value
+        return result
+
+
+@dataclass
 class ProjectState:
     image_dir: str = "images"
     img_cache: str = "img.cache"
@@ -180,12 +233,14 @@ class ProjectState:
     oversized: dict[str, bool] = field(default_factory=dict)
     card_metadata_store: dict[str, CardMetadata] = field(default_factory=dict)
     high_res_front_overrides_store: dict[str, HighResOverride] = field(default_factory=dict)
+    card_entries_store: dict[str, ProjectCardEntry] = field(default_factory=dict)
+    backside_default_asset_id: str | None = None
     render: RenderSettings = field(default_factory=RenderSettings.default)
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any] | None) -> "ProjectState":
         data = dict(data or {})
-        return cls(
+        state = cls(
             image_dir=str(data.get("image_dir", "images")),
             img_cache=str(data.get("img_cache", "img.cache")),
             cards=_coerce_plain_dict(data.get("cards")),
@@ -205,10 +260,26 @@ class ProjectState:
                 str(key): HighResOverride.from_dict(value)
                 for key, value in _coerce_plain_dict(data.get("high_res_front_overrides")).items()
             },
+            backside_default_asset_id=_optional_str(data.get("backside_default_asset_id")),
             render=RenderSettings.from_dict(data),
         )
+        card_entries_raw = data.get("card_entries")
+        if isinstance(card_entries_raw, list) and card_entries_raw:
+            state.card_entries_store = {}
+            for raw_entry in card_entries_raw:
+                entry = ProjectCardEntry.from_dict(raw_entry)
+                if not entry.entry_id:
+                    entry.entry_id = entry.front_name
+                if not entry.front_name:
+                    continue
+                state.card_entries_store[entry.front_name] = entry
+        else:
+            state._rebuild_entries_from_legacy_maps()
+        state._rebuild_legacy_maps_from_entries()
+        return state
 
     def to_dict(self) -> dict[str, Any]:
+        self._rebuild_legacy_maps_from_entries()
         result = {
             "image_dir": self.image_dir,
             "img_cache": self.img_cache,
@@ -223,6 +294,25 @@ class ProjectState:
             "oversized": dict(self.oversized),
             "card_metadata": self.card_metadata_dict(),
             "high_res_front_overrides": self.high_res_front_overrides_dict(),
+            "card_entries": self.card_entries_dict(),
+            "backside_default_asset_id": self.backside_default_asset_id,
+        }
+        result.update(self.render.to_dict())
+        return result
+
+    def to_persisted_dict(self) -> dict[str, Any]:
+        self._rebuild_legacy_maps_from_entries()
+        result = {
+            "project_version": 2,
+            "card_sort": self.card_sort,
+            "backside_enabled": self.backside_enabled,
+            "backside_default": self.backside_default,
+            "backside_default_asset_id": self.backside_default_asset_id,
+            "backside_offset": self.backside_offset,
+            "oversized_enabled": self.oversized_enabled,
+            "card_metadata": self.card_metadata_dict(),
+            "high_res_front_overrides": self.high_res_front_overrides_dict(),
+            "card_entries": self.card_entries_dict(),
         }
         result.update(self.render.to_dict())
         return result
@@ -282,6 +372,8 @@ class ProjectState:
         self.oversized = replacement.oversized
         self.card_metadata_store = replacement.card_metadata_store
         self.high_res_front_overrides_store = replacement.high_res_front_overrides_store
+        self.card_entries_store = replacement.card_entries_store
+        self.backside_default_asset_id = replacement.backside_default_asset_id
         self.render = replacement.render
 
     def get_card_count(self, card_name: str, default: int = 0) -> int:
@@ -289,6 +381,8 @@ class ProjectState:
 
     def set_card_count(self, card_name: str, count: int) -> None:
         self.cards[card_name] = int(count)
+        entry = self._ensure_card_entry(card_name)
+        entry.count = int(count)
 
     def remove_card(self, card_name: str) -> None:
         self.cards.pop(card_name, None)
@@ -297,6 +391,7 @@ class ProjectState:
         self.oversized.pop(card_name, None)
         self.card_metadata_store.pop(card_name, None)
         self.high_res_front_overrides_store.pop(card_name, None)
+        self.card_entries_store.pop(card_name, None)
 
     def card_metadata_dict(self) -> dict[str, dict[str, Any]]:
         return {
@@ -313,6 +408,7 @@ class ProjectState:
             self.card_metadata_store[card_name] = metadata
         else:
             self.card_metadata_store[card_name] = CardMetadata.from_dict(metadata)
+        self._ensure_card_entry(card_name).metadata = self.card_metadata_store[card_name]
 
     def high_res_front_overrides_dict(self) -> dict[str, dict[str, Any]]:
         return {
@@ -337,19 +433,38 @@ class ProjectState:
     def set_backside(self, front_name: str, back_name: str) -> None:
         self.backside_enabled = True
         self.backsides[front_name] = back_name
+        self._ensure_card_entry(front_name).backside_name = back_name
 
     def clear_card_links(self, card_name: str) -> None:
         self.backsides.pop(card_name, None)
         self.backside_short_edge.pop(card_name, None)
         self.oversized.pop(card_name, None)
+        entry = self.card_entries_store.get(card_name)
+        if entry is not None:
+            entry.backside_name = None
+            entry.backside_asset_id = None
+            entry.backside_short_edge = False
+            entry.oversized = False
 
     def apply_imported_card(
         self,
         filename: str,
         count: int,
         metadata: Mapping[str, Any] | None = None,
+        *,
+        card_id: str | None = None,
+        oracle_id: str | None = None,
+        image_asset_id: str | None = None,
+        backside_name: str | None = None,
+        backside_asset_id: str | None = None,
     ) -> None:
         self.set_card_count(filename, count)
+        entry = self._ensure_card_entry(filename)
+        entry.card_id = card_id
+        entry.oracle_id = oracle_id
+        entry.image_asset_id = image_asset_id
+        entry.backside_name = backside_name
+        entry.backside_asset_id = backside_asset_id
         if metadata is not None:
             self.set_card_metadata(filename, metadata)
 
@@ -362,6 +477,84 @@ class ProjectState:
         for card_name in card_names:
             if card_name not in self.cards:
                 self.cards[card_name] = 0 if card_name.startswith("__") else 1
+            self._ensure_card_entry(card_name)
+
+    def card_entries_dict(self) -> list[dict[str, Any]]:
+        entries = sorted(self.card_entries_store.values(), key=lambda entry: entry.front_name.casefold())
+        return [entry.to_dict() for entry in entries]
+
+    def get_card_entry(self, card_name: str) -> ProjectCardEntry | None:
+        return self.card_entries_store.get(card_name)
+
+    def set_card_image_refs(
+        self,
+        card_name: str,
+        *,
+        card_id: str | None = None,
+        oracle_id: str | None = None,
+        image_asset_id: str | None = None,
+        backside_name: str | None = None,
+        backside_asset_id: str | None = None,
+    ) -> None:
+        entry = self._ensure_card_entry(card_name)
+        if card_id is not None:
+            entry.card_id = card_id
+        if oracle_id is not None:
+            entry.oracle_id = oracle_id
+        if image_asset_id is not None:
+            entry.image_asset_id = image_asset_id
+        if backside_name is not None:
+            entry.backside_name = backside_name
+            self.backsides[card_name] = backside_name
+        if backside_asset_id is not None:
+            entry.backside_asset_id = backside_asset_id
+
+    def _ensure_card_entry(self, card_name: str) -> ProjectCardEntry:
+        entry = self.card_entries_store.get(card_name)
+        if entry is None:
+            existing_metadata = self.card_metadata_store.get(card_name)
+            entry = ProjectCardEntry(
+                entry_id=card_name,
+                front_name=card_name,
+                count=int(self.cards.get(card_name, 0 if card_name.startswith("__") else 1)),
+                metadata=existing_metadata if isinstance(existing_metadata, CardMetadata) else CardMetadata.from_dict(existing_metadata),
+            )
+            self.card_entries_store[card_name] = entry
+        return entry
+
+    def _rebuild_entries_from_legacy_maps(self) -> None:
+        valid_names = set(self.cards) | set(self.card_metadata_store) | set(self.high_res_front_overrides_store)
+        valid_names |= set(self.backsides)
+        for card_name in sorted(valid_names):
+            entry = self._ensure_card_entry(card_name)
+            entry.count = int(self.cards.get(card_name, 0 if card_name.startswith("__") else 1))
+            entry.backside_name = self.backsides.get(card_name)
+            entry.backside_short_edge = bool(self.backside_short_edge.get(card_name, False))
+            entry.oversized = bool(self.oversized.get(card_name, False))
+            if card_name in self.card_metadata_store:
+                entry.metadata = self.card_metadata_store[card_name]
+
+    def _rebuild_legacy_maps_from_entries(self) -> None:
+        rebuilt_cards: dict[str, int] = {}
+        rebuilt_backsides: dict[str, str] = {}
+        rebuilt_short_edge: dict[str, bool] = {}
+        rebuilt_oversized: dict[str, bool] = {}
+        rebuilt_metadata: dict[str, CardMetadata] = {}
+        for entry in self.card_entries_store.values():
+            rebuilt_cards[entry.front_name] = 0 if entry.front_name.startswith("__") else int(entry.count)
+            if entry.backside_name:
+                rebuilt_backsides[entry.front_name] = entry.backside_name
+            if entry.backside_short_edge:
+                rebuilt_short_edge[entry.front_name] = True
+            if entry.oversized:
+                rebuilt_oversized[entry.front_name] = True
+            if entry.metadata.to_dict():
+                rebuilt_metadata[entry.front_name] = entry.metadata
+        self.cards = rebuilt_cards
+        self.backsides = rebuilt_backsides
+        self.backside_short_edge = rebuilt_short_edge
+        self.oversized = rebuilt_oversized
+        self.card_metadata_store = rebuilt_metadata
 
 
 def as_project_state(project_like: ProjectState | Mapping[str, Any] | None) -> ProjectState:
@@ -372,3 +565,7 @@ def as_project_state(project_like: ProjectState | Mapping[str, Any] | None) -> P
 
 def project_to_dict(project_like: ProjectState | Mapping[str, Any]) -> dict[str, Any]:
     return as_project_state(project_like).to_dict()
+
+
+def project_to_persisted_dict(project_like: ProjectState | Mapping[str, Any]) -> dict[str, Any]:
+    return as_project_state(project_like).to_persisted_dict()

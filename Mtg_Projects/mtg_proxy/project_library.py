@@ -3,9 +3,11 @@ import uuid
 import shutil
 import datetime
 import json
+from pathlib import Path
 
 from constants import cwd
-from models import ProjectState, as_project_state, project_to_dict
+from mtg_core import get_default_card_service
+from models import ProjectState, as_project_state, project_to_dict, project_to_persisted_dict
 from util import write_json_atomic
 
 
@@ -133,6 +135,22 @@ def _load_project_json(project_path):
 
 
 def _playable_cards(project_data):
+    card_entries = project_data.get("card_entries", [])
+    if isinstance(card_entries, list) and card_entries:
+        playable = []
+        for entry in card_entries:
+            if not isinstance(entry, dict):
+                continue
+            card_name = str(entry.get("front_name") or "")
+            try:
+                quantity_num = int(entry.get("count", 0))
+            except (TypeError, ValueError):
+                continue
+            if card_name.startswith("__") or quantity_num <= 0:
+                continue
+            playable.append(card_name)
+        return playable
+
     cards = project_data.get("cards", {})
     if not isinstance(cards, dict):
         return []
@@ -167,17 +185,28 @@ def _resolve_thumbnail_path(project_data, thumbnail_card):
     if not thumbnail_card:
         return None
 
+    card_entries = project_data.get("card_entries")
+    if isinstance(card_entries, list):
+        for entry in card_entries:
+            if not isinstance(entry, dict) or entry.get("front_name") != thumbnail_card:
+                continue
+            asset_id = entry.get("image_asset_id")
+            if asset_id:
+                return get_default_card_service().materialize_image_asset(
+                    str(asset_id),
+                    preferred_name=thumbnail_card,
+                    output_root=str(Path(projects_root()) / ".thumbnails"),
+                )
+            break
+
     image_dir = project_data.get("image_dir")
-    if not image_dir:
-        return None
-
-    source_path = os.path.join(image_dir, thumbnail_card)
-    if os.path.exists(source_path):
-        return source_path
-
-    crop_path = os.path.join(image_dir, "crop", thumbnail_card)
-    if os.path.exists(crop_path):
-        return crop_path
+    if image_dir:
+        source_path = os.path.join(image_dir, thumbnail_card)
+        if os.path.exists(source_path):
+            return source_path
+        crop_path = os.path.join(image_dir, "crop", thumbnail_card)
+        if os.path.exists(crop_path):
+            return crop_path
 
     return None
 
@@ -295,13 +324,20 @@ def create_draft_project_dict():
 
 
 def _initial_project_dict(project_path):
-    image_dir = os.path.abspath(_project_image_dir(project_path))
-    default_back_name = _seed_default_back(image_dir)
-    return {
-        "image_dir": image_dir,
-        "img_cache": os.path.join(image_dir, "img.cache"),
-        "backside_default": default_back_name,
-    }
+    state = ProjectState()
+    default_back_name = "__back.png"
+    default_back_source = _shared_default_back_path()
+    if default_back_source is not None:
+        default_back_name = os.path.basename(default_back_source)
+        with open(default_back_source, "rb") as handle:
+            state.backside_default_asset_id = get_default_card_service().store_image_bytes(
+                handle.read(),
+                extension=os.path.splitext(default_back_name)[1].lstrip(".") or "png",
+                source="proxy_default_back",
+                source_url=default_back_source,
+            )
+    state.backside_default = default_back_name
+    return state.to_persisted_dict()
 
 
 def create_project(display_name=None):
@@ -328,19 +364,6 @@ def materialize_draft_project(display_name, print_dict, thumbnail_card=None):
     data = load_library()
     project_id = str(uuid.uuid4())
     path = os.path.join(projects_root(), _project_file_name(display_name))
-    destination_image_dir = os.path.abspath(_project_image_dir(path))
-    os.makedirs(destination_image_dir, exist_ok=True)
-    os.makedirs(os.path.join(destination_image_dir, "crop"), exist_ok=True)
-
-    ensure_draft_workspace()
-    for name in os.listdir(draft_root()):
-        source_path = os.path.join(draft_root(), name)
-        destination_path = os.path.join(destination_image_dir, name)
-        if os.path.isdir(source_path) and name == "crop":
-            _move_folder_contents(source_path, destination_path)
-        else:
-            shutil.move(source_path, destination_path)
-
     timestamp = _utc_now()
     entry = {
         "id": project_id,
@@ -352,15 +375,29 @@ def materialize_draft_project(display_name, print_dict, thumbnail_card=None):
     }
 
     state = as_project_state(print_dict)
-    state.image_dir = destination_image_dir
-    state.img_cache = os.path.join(destination_image_dir, "img.cache")
-    default_back_source = _shared_default_back_path()
-    if default_back_source is not None:
-        default_back_name = os.path.basename(default_back_source)
-        if os.path.exists(os.path.join(destination_image_dir, default_back_name)):
-            state.backside_default = default_back_name
+    ensure_draft_workspace()
+    card_service = get_default_card_service()
+    for name in os.listdir(draft_root()):
+        source_path = os.path.join(draft_root(), name)
+        if os.path.isdir(source_path) or name == "img.cache":
+            continue
+        with open(source_path, "rb") as handle:
+            asset_id = card_service.store_image_bytes(
+                handle.read(),
+                extension=os.path.splitext(name)[1].lstrip(".") or "png",
+                source="proxy_draft",
+                source_url=source_path,
+            )
+        if name.startswith("__back"):
+            state.backside_default = name
+            state.backside_default_asset_id = asset_id
+        else:
+            state.set_card_image_refs(name, image_asset_id=asset_id)
 
-    write_json_atomic(path, state.to_dict(), ensure_ascii=False)
+    write_json_atomic(path, state.to_persisted_dict(), ensure_ascii=False)
+    state.image_dir = os.path.join(projects_root(), ".runtime", os.path.splitext(os.path.basename(path))[0])
+    os.makedirs(state.image_dir, exist_ok=True)
+    state.img_cache = os.path.join(state.image_dir, "img.cache")
     _sync_legacy_project_dict(print_dict, state)
     data["projects"].append(entry)
     save_library(data)
@@ -463,7 +500,7 @@ def save_project(project_id, print_dict):
     if entry is None:
         return None
 
-    serialized = project_to_dict(print_dict)
+    serialized = project_to_persisted_dict(print_dict)
     if not _is_valid_thumbnail_card(serialized, entry.get("thumbnail_card")):
         entry["thumbnail_card"] = None
 

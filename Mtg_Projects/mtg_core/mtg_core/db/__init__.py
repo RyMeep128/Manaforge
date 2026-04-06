@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import sqlite3
 import time
 
-from mtg_core.models import ImageRecord, PrintRecord
+from mtg_core.models import ImageAssetRecord, ImageRecord, PrintRecord
 from mtg_core.paths import core_root
 from mtg_core.search import choose_canonical_print_key, normalized_search_text
 from mtg_core.sync import extract_image_urls
@@ -50,6 +51,7 @@ CREATE TABLE IF NOT EXISTS canonical_prints (
 CREATE TABLE IF NOT EXISTS image_manifest (
     card_id TEXT NOT NULL,
     variant TEXT NOT NULL DEFAULT 'default',
+    asset_id TEXT,
     path TEXT,
     status TEXT NOT NULL,
     source TEXT,
@@ -58,6 +60,20 @@ CREATE TABLE IF NOT EXISTS image_manifest (
     PRIMARY KEY (card_id, variant),
     FOREIGN KEY (card_id) REFERENCES prints(card_id)
 );
+
+CREATE TABLE IF NOT EXISTS image_assets (
+    asset_id TEXT PRIMARY KEY,
+    checksum TEXT NOT NULL,
+    extension TEXT,
+    mime_type TEXT,
+    source TEXT,
+    source_url TEXT,
+    payload BLOB NOT NULL,
+    created_at REAL NOT NULL,
+    updated_at REAL NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_image_assets_checksum ON image_assets(checksum);
 
 CREATE TABLE IF NOT EXISTS sync_state (
     source TEXT PRIMARY KEY,
@@ -82,26 +98,52 @@ class CardDatabase:
         self._ensure_schema()
 
     def connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(self.db_path)
+        connection = sqlite3.connect(self.db_path, timeout=30.0)
         connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA journal_mode=WAL")
+        connection.execute("PRAGMA synchronous=NORMAL")
         return connection
 
     def _ensure_schema(self) -> None:
         with self.connect() as connection:
             connection.executescript(SCHEMA)
+            self._ensure_column(connection, "image_manifest", "asset_id", "TEXT")
+
+    @staticmethod
+    def _ensure_column(
+        connection: sqlite3.Connection,
+        table_name: str,
+        column_name: str,
+        column_type: str,
+    ) -> None:
+        rows = connection.execute(f"PRAGMA table_info({table_name})").fetchall()
+        if any(row["name"] == column_name for row in rows):
+            return
+        connection.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}")
 
     def upsert_card_payload(self, card_payload: dict, *, source: str = "remote_fill") -> PrintRecord:
-        oracle_id = str(card_payload.get("oracle_id") or card_payload.get("id") or "")
-        card_id = str(card_payload.get("id") or "")
-        if not oracle_id or not card_id:
-            raise ValueError("Card payload is missing oracle or card identity.")
-
-        name = str(card_payload.get("name") or "")
+        payload = dict(card_payload)
+        name = str(payload.get("name") or "")
         if not name:
             raise ValueError("Card payload is missing a name.")
 
+        oracle_id = str(payload.get("oracle_id") or "").strip()
+        card_id = str(payload.get("id") or "").strip()
+        set_code = str(payload.get("set") or "").strip().lower() or None
+        collector_number = str(payload.get("collector_number") or "").strip() or None
+
+        # Some tests and offline/manual payloads omit Scryfall ids. Generate stable
+        # synthetic ids so the proxy app can still cache/search/print consistently.
+        if not oracle_id:
+            oracle_id = _synthesize_oracle_id(name)
+        if not card_id:
+            card_id = _synthesize_print_id(name, set_code, collector_number)
+
+        payload["oracle_id"] = oracle_id
+        payload["id"] = card_id
+
         normalized_name = normalized_search_text(name)
-        image_url, thumbnail_url, preview_url = extract_image_urls(card_payload)
+        image_url, thumbnail_url, preview_url = extract_image_urls(payload)
         now = time.time()
 
         with self.connect() as connection:
@@ -118,7 +160,7 @@ class CardDatabase:
                     oracle_id,
                     name,
                     normalized_name,
-                    card_payload.get("layout"),
+                    payload.get("layout"),
                 ),
             )
             connection.execute(
@@ -147,15 +189,15 @@ class CardDatabase:
                     card_id,
                     oracle_id,
                     name,
-                    card_payload.get("set"),
-                    card_payload.get("set_name"),
-                    str(card_payload.get("collector_number") or "") or None,
-                    card_payload.get("released_at"),
+                    set_code,
+                    payload.get("set_name"),
+                    collector_number,
+                    payload.get("released_at"),
                     image_url,
                     thumbnail_url,
                     preview_url,
-                    1 if card_payload.get("card_faces") else 0,
-                    json.dumps(card_payload, ensure_ascii=False, sort_keys=True),
+                    1 if payload.get("card_faces") else 0,
+                    json.dumps(payload, ensure_ascii=False, sort_keys=True),
                     now,
                 ),
             )
@@ -275,6 +317,7 @@ class CardDatabase:
         card_id: str,
         *,
         variant: str = "default",
+        asset_id: str | None = None,
         path: str | None,
         status: str,
         source: str | None = None,
@@ -284,20 +327,22 @@ class CardDatabase:
         with self.connect() as connection:
             connection.execute(
                 """
-                INSERT INTO image_manifest (card_id, variant, path, status, source, checksum, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO image_manifest (card_id, variant, asset_id, path, status, source, checksum, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(card_id, variant) DO UPDATE SET
+                    asset_id=excluded.asset_id,
                     path=excluded.path,
                     status=excluded.status,
                     source=excluded.source,
                     checksum=excluded.checksum,
                     updated_at=excluded.updated_at
                 """,
-                (card_id, variant, path, status, source, checksum, updated_at),
+                (card_id, variant, asset_id, path, status, source, checksum, updated_at),
             )
         return ImageRecord(
             card_id=card_id,
             variant=variant,
+            asset_id=asset_id,
             path=path,
             status=status,
             source=source,
@@ -309,7 +354,7 @@ class CardDatabase:
         with self.connect() as connection:
             row = connection.execute(
                 """
-                SELECT card_id, variant, path, status, source, checksum, updated_at
+                SELECT card_id, variant, asset_id, path, status, source, checksum, updated_at
                 FROM image_manifest
                 WHERE card_id = ? AND variant = ?
                 """,
@@ -320,10 +365,109 @@ class CardDatabase:
         return ImageRecord(
             card_id=row["card_id"],
             variant=row["variant"],
+            asset_id=row["asset_id"],
             path=row["path"],
             status=row["status"],
             source=row["source"],
             checksum=row["checksum"],
+            updated_at=row["updated_at"],
+        )
+
+    def store_image_asset(
+        self,
+        payload: bytes,
+        *,
+        extension: str | None = "png",
+        mime_type: str | None = None,
+        source: str | None = None,
+        source_url: str | None = None,
+    ) -> ImageAssetRecord:
+        checksum = hashlib.sha256(payload).hexdigest()
+        now = time.time()
+        with self.connect() as connection:
+            existing = connection.execute(
+                """
+                SELECT asset_id, checksum, extension, mime_type, source, source_url, payload, created_at, updated_at
+                FROM image_assets
+                WHERE checksum = ?
+                """,
+                (checksum,),
+            ).fetchone()
+            if existing is not None:
+                connection.execute(
+                    """
+                    UPDATE image_assets
+                    SET extension = coalesce(?, extension),
+                        mime_type = coalesce(?, mime_type),
+                        source = coalesce(?, source),
+                        source_url = coalesce(?, source_url),
+                        updated_at = ?
+                    WHERE asset_id = ?
+                    """,
+                    (
+                        extension,
+                        mime_type,
+                        source,
+                        source_url,
+                        now,
+                        existing["asset_id"],
+                    ),
+                )
+                return ImageAssetRecord(
+                    asset_id=existing["asset_id"],
+                    checksum=existing["checksum"],
+                    extension=extension or existing["extension"],
+                    mime_type=mime_type or existing["mime_type"],
+                    source=source or existing["source"],
+                    source_url=source_url or existing["source_url"],
+                    payload=bytes(existing["payload"]),
+                    created_at=existing["created_at"],
+                    updated_at=now,
+                )
+
+            asset_id = f"img-{checksum[:20]}"
+            connection.execute(
+                """
+                INSERT INTO image_assets (
+                    asset_id, checksum, extension, mime_type, source, source_url, payload, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (asset_id, checksum, extension, mime_type, source, source_url, payload, now, now),
+            )
+            return ImageAssetRecord(
+                asset_id=asset_id,
+                checksum=checksum,
+                extension=extension,
+                mime_type=mime_type,
+                source=source,
+                source_url=source_url,
+                payload=bytes(payload),
+                created_at=now,
+                updated_at=now,
+            )
+
+    def get_image_asset(self, asset_id: str) -> ImageAssetRecord | None:
+        with self.connect() as connection:
+            row = connection.execute(
+                """
+                SELECT asset_id, checksum, extension, mime_type, source, source_url, payload, created_at, updated_at
+                FROM image_assets
+                WHERE asset_id = ?
+                """,
+                (asset_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return ImageAssetRecord(
+            asset_id=row["asset_id"],
+            checksum=row["checksum"],
+            extension=row["extension"],
+            mime_type=row["mime_type"],
+            source=row["source"],
+            source_url=row["source_url"],
+            payload=bytes(row["payload"]),
+            created_at=row["created_at"],
             updated_at=row["updated_at"],
         )
 
@@ -345,3 +489,21 @@ class CardDatabase:
             is_double_faced=bool(row["is_double_faced"]),
             payload=json.loads(row["payload_json"]),
         )
+
+
+def _synthesize_oracle_id(name: str) -> str:
+    normalized = normalized_search_text(name) or "card"
+    digest = hashlib.sha1(normalized.encode("utf-8")).hexdigest()[:12]
+    return f"proxy-oracle-{digest}"
+
+
+def _synthesize_print_id(name: str, set_code: str | None, collector_number: str | None) -> str:
+    normalized = "|".join(
+        [
+            normalized_search_text(name) or "card",
+            set_code or "unknown",
+            collector_number or "0",
+        ]
+    )
+    digest = hashlib.sha1(normalized.encode("utf-8")).hexdigest()[:16]
+    return f"proxy-print-{digest}"

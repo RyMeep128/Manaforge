@@ -12,6 +12,7 @@ from config import CFG
 from constants import card_size_without_bleed_inch
 from image import read_image, image_to_bytes, rotate_image, Rotation
 from models import ProjectState, as_project_state
+import runtime_images
 
 
 class CrossSegment(Enum):
@@ -45,7 +46,7 @@ def draw_cross(can, x, y, segment, c=6, s=1):
     draw_line(can, x, y, x, ty, s)
 
 
-def generate(print_dict, crop_dir, size, pdf_path, print_fn):
+def generate(print_dict, size, pdf_path, print_fn):
     state = as_project_state(print_dict)
     has_backside = state.backside_enabled
     backside_offset = mm_to_point(float(state.backside_offset))
@@ -54,12 +55,8 @@ def generate(print_dict, crop_dir, size, pdf_path, print_fn):
     has_bleed_edge = bleed_edge > 0
 
     b = 0
-    img_dir = crop_dir
-    if CFG.VibranceBump:
-        img_dir = os.path.join(img_dir, "vibrance")
     if has_bleed_edge:
         b = mm_to_inch(bleed_edge)
-        img_dir = os.path.join(img_dir, str(bleed_edge).replace(".", "p"))
     (w, h) = card_size_without_bleed_inch
     w, h = inch_to_point((w + 2 * b)), inch_to_point((h + 2 * b))
     b = inch_to_point(b)
@@ -93,8 +90,8 @@ def generate(print_dict, crop_dir, size, pdf_path, print_fn):
             img, oversized, i, x, y, dx=0.0, dy=0.0, is_short_edge=False, backside=False
         ):
             print_fn(render_fmt.format(page=p + 1, img_idx=i + 1, img_name=img))
-            img_path = os.path.join(img_dir, img)
-            if os.path.exists(img_path):
+            img_path = runtime_images.get_processed_path(state, img)
+            if img_path and os.path.exists(img_path):
                 if oversized and backside:
                     x = x - 1
 

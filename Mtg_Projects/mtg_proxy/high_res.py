@@ -12,9 +12,11 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Callable
 
+from mtg_core import get_default_card_service
 from config import CFG
 from constants import cwd
 import image
+import runtime_images
 from image import image_from_bytes
 from models import ProjectState, as_project_state
 import util
@@ -1161,31 +1163,7 @@ def find_matching_backside_candidate(
 
 def invalidate_cached_card_artifacts(print_dict: ProjectState | dict, image_dir: str, card_name: str):
     state = as_project_state(print_dict)
-    crop_dir = os.path.join(image_dir, "crop")
-    if os.path.exists(crop_dir):
-        for root, _dirs, files in os.walk(crop_dir):
-            for file_name in files:
-                if file_name == card_name:
-                    try:
-                        os.remove(os.path.join(root, file_name))
-                    except OSError:
-                        pass
-
-    cache_data = None
-    img_cache_path = state.img_cache
-    if img_cache_path and os.path.exists(img_cache_path):
-        try:
-            with open(img_cache_path, "r", encoding="utf-8") as fp:
-                cache_data = json.load(fp)
-        except (OSError, json.JSONDecodeError, TypeError, ValueError):
-            cache_data = None
-
-    if isinstance(cache_data, dict) and card_name in cache_data:
-        del cache_data[card_name]
-        try:
-            util.write_json_atomic(img_cache_path, cache_data, ensure_ascii=False)
-        except OSError:
-            pass
+    runtime_images.invalidate_entry(state, {}, card_name)
 
 
 def maybe_find_matching_backside(
@@ -1289,6 +1267,7 @@ def apply_high_res_candidate(
     fetch_text: Callable[[str], str] | None = None,
 ):
     state = as_project_state(print_dict)
+    card_service = get_default_card_service()
     image_bytes = download_high_res_image(
         candidate.identifier,
         candidate.download_link,
@@ -1315,12 +1294,32 @@ def apply_high_res_candidate(
     with open(path, "wb") as fp:
         fp.write(image_bytes)
     invalidate_cached_card_artifacts(state, image_dir, card_name)
+    front_asset_id = card_service.store_image_bytes(
+        image_bytes,
+        extension=candidate.extension or (os.path.splitext(card_name)[1].lstrip(".") or "png"),
+        source=candidate.art_source,
+        source_url=candidate.download_link,
+    )
 
     if backside_match is not None and backside_bytes is not None:
         back_path = os.path.join(image_dir, backside_match.filename)
         with open(back_path, "wb") as fp:
             fp.write(backside_bytes)
         invalidate_cached_card_artifacts(state, image_dir, backside_match.filename)
+        back_asset_id = card_service.store_image_bytes(
+            backside_bytes,
+            extension=backside_match.candidate.extension or (os.path.splitext(backside_match.filename)[1].lstrip(".") or "png"),
+            source=backside_match.candidate.art_source,
+            source_url=backside_match.candidate.download_link,
+        )
+    else:
+        back_asset_id = None
 
     state.set_high_res_override(card_name, _build_override_payload(candidate, backside_match))
+    state.set_card_image_refs(
+        card_name,
+        image_asset_id=front_asset_id,
+        backside_name=backside_match.filename if backside_match is not None else None,
+        backside_asset_id=back_asset_id,
+    )
     return _sync_legacy_project_dict(print_dict, state)

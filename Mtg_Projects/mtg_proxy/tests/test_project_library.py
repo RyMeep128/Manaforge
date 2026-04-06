@@ -10,7 +10,7 @@ def _seed_test_back(tmp_path):
     (test_images_dir / "__back.jpg").write_bytes(b"shared-back")
 
 
-def test_create_project_adds_library_entry_and_seeded_image_folder(monkeypatch, tmp_path):
+def test_create_project_adds_library_entry_with_db_backed_default_back(monkeypatch, tmp_path):
     monkeypatch.setattr(project_library, "cwd", str(tmp_path))
     _seed_test_back(tmp_path)
 
@@ -20,8 +20,8 @@ def test_create_project_adds_library_entry_and_seeded_image_folder(monkeypatch, 
     assert (tmp_path / "projects" / "library.json").exists()
     project_data = json.loads(Path(entry["path"]).read_text(encoding="utf-8"))
     assert project_data["backside_default"] == "__back.jpg"
-    assert (Path(project_data["image_dir"]) / "__back.jpg").read_bytes() == b"shared-back"
-    assert (Path(project_data["image_dir"]) / "crop").exists()
+    assert "image_dir" not in project_data
+    assert project_data["backside_default_asset_id"].startswith("img-")
 
     projects = project_library.list_projects()
     assert len(projects) == 1
@@ -42,7 +42,7 @@ def test_draft_workspace_is_seeded_and_detects_user_content(monkeypatch, tmp_pat
     assert project_library.draft_has_user_content() is True
 
 
-def test_materialize_draft_project_moves_tmp_images_into_managed_folder(monkeypatch, tmp_path):
+def test_materialize_draft_project_persists_db_backed_references(monkeypatch, tmp_path):
     monkeypatch.setattr(project_library, "cwd", str(tmp_path))
     _seed_test_back(tmp_path)
 
@@ -66,11 +66,10 @@ def test_materialize_draft_project_moves_tmp_images_into_managed_folder(monkeypa
     )
 
     saved_project = json.loads(Path(entry["path"]).read_text(encoding="utf-8"))
-    managed_image_dir = Path(saved_project["image_dir"])
-    assert managed_image_dir.name.endswith("_images")
-    assert (managed_image_dir / "card-a.png").read_bytes() == b"front"
-    assert (managed_image_dir / "crop" / "card-a.png").read_bytes() == b"cropped"
-    assert (managed_image_dir / "__back.jpg").read_bytes() == b"shared-back"
+    assert "image_dir" not in saved_project
+    assert saved_project["backside_default_asset_id"].startswith("img-")
+    assert saved_project["card_entries"][0]["front_name"] == "card-a.png"
+    assert saved_project["card_entries"][0]["image_asset_id"].startswith("img-")
     assert entry["thumbnail_card"] == "card-a.png"
 
     assert (Path(project_library.draft_root()) / "crop").exists()
@@ -85,14 +84,17 @@ def test_list_projects_uses_thumbnail_override_then_first_playable(monkeypatch, 
     entry = project_library.create_project("Thumb Test")
     project_path = Path(entry["path"])
     project_data = json.loads(project_path.read_text(encoding="utf-8"))
-    image_dir = Path(project_data["image_dir"])
-    (image_dir / "front-a.png").write_bytes(b"a")
-    (image_dir / "front-b.png").write_bytes(b"b")
+    core = project_library.get_default_card_service()
+    front_a_asset = core.store_image_bytes(b"a", extension="png", source="test")
+    front_b_asset = core.store_image_bytes(b"b", extension="png", source="test")
     project_path.write_text(
         json.dumps(
             {
                 **project_data,
-                "cards": {"front-a.png": 1, "front-b.png": 1},
+                "card_entries": [
+                    {"entry_id": "front-a.png", "front_name": "front-a.png", "count": 1, "image_asset_id": front_a_asset, "metadata": {}},
+                    {"entry_id": "front-b.png", "front_name": "front-b.png", "count": 1, "image_asset_id": front_b_asset, "metadata": {}},
+                ],
             }
         ),
         encoding="utf-8",
@@ -122,19 +124,15 @@ def test_import_project_copies_external_project_into_library(monkeypatch, tmp_pa
     }
 
 
-def test_remove_project_deletes_project_file_and_image_folder(monkeypatch, tmp_path):
+def test_remove_project_deletes_project_file(monkeypatch, tmp_path):
     monkeypatch.setattr(project_library, "cwd", str(tmp_path))
     _seed_test_back(tmp_path)
     entry = project_library.create_project("Delete Me")
     project_path = Path(entry["path"])
-    project_data = json.loads(project_path.read_text(encoding="utf-8"))
-    image_dir = Path(project_data["image_dir"])
-    (image_dir / "card-a.png").write_bytes(b"front")
 
     assert project_library.remove_project(entry["id"]) is True
     assert project_library.list_projects() == []
     assert not project_path.exists()
-    assert not image_dir.exists()
 
 
 def test_remove_project_succeeds_when_project_artifacts_are_already_missing(
@@ -144,17 +142,8 @@ def test_remove_project_succeeds_when_project_artifacts_are_already_missing(
     _seed_test_back(tmp_path)
     entry = project_library.create_project("Missing Files")
     project_path = Path(entry["path"])
-    project_data = json.loads(project_path.read_text(encoding="utf-8"))
-    image_dir = Path(project_data["image_dir"])
 
     project_path.unlink()
-    if image_dir.exists():
-        for child in sorted(image_dir.rglob("*"), reverse=True):
-            if child.is_file():
-                child.unlink()
-            elif child.is_dir():
-                child.rmdir()
-        image_dir.rmdir()
 
     assert project_library.remove_project(entry["id"]) is True
     assert project_library.list_projects() == []

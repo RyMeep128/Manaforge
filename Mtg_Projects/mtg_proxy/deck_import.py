@@ -70,6 +70,10 @@ class DeckEntry:
 class ImportedCard:
     entry: DeckEntry
     filename: str
+    card_id: str | None = None
+    oracle_id: str | None = None
+    image_asset_id: str | None = None
+    backside_asset_id: str | None = None
 
 
 @dataclass
@@ -334,6 +338,14 @@ def apply_import_result(print_dict: dict, import_result: ImportResult):
     if import_result.backside_pairs:
         for front_name, back_name in import_result.backside_pairs.items():
             state.set_backside(front_name, back_name)
+    for imported_card in import_result.imported:
+        state.set_card_image_refs(
+            imported_card.filename,
+            card_id=imported_card.card_id,
+            oracle_id=imported_card.oracle_id,
+            image_asset_id=imported_card.image_asset_id,
+            backside_asset_id=imported_card.backside_asset_id,
+        )
     return _sync_legacy_project_dict(print_dict, state)
 
 
@@ -474,20 +486,61 @@ def download_card_image_set(
     image_dir: str,
     print_fn: PRINT_FN,
     fetch_bytes: Callable[[str], bytes],
+    *,
+    card_service: CardService | None = None,
 ) -> tuple[ImportedCard, str | None]:
+    card_service = card_service or _build_card_service()
     face_urls = extract_face_image_urls(card_data)
     face_names = [face.get("name") or card_data.get("name", "card") for face in card_data.get("card_faces", [])]
+    card_id = str(card_data.get("id") or "") or None
+    oracle_id = str(card_data.get("oracle_id") or "") or None
 
     if len(face_urls) >= 2 and len(face_names) >= 2:
         front_name = build_face_image_filename(card_data, face_names[0], hidden=False)
         back_name = build_face_image_filename(card_data, face_names[1], hidden=True)
 
         print_fn(f"Importing decklist...\nDownloading {entry.name} front")
-        write_downloaded_image(image_dir, front_name, fetch_bytes(face_urls[0]))
+        front_bytes = fetch_bytes(face_urls[0])
+        front_asset_id = card_service.store_image_bytes(
+            front_bytes,
+            extension=os.path.splitext(front_name)[1].lstrip(".") or "png",
+            source="scryfall",
+            source_url=face_urls[0],
+        )
+        write_downloaded_image(image_dir, front_name, front_bytes)
         print_fn(f"Importing decklist...\nDownloading {entry.name} back")
-        write_downloaded_image(image_dir, back_name, fetch_bytes(face_urls[1]))
+        back_bytes = fetch_bytes(face_urls[1])
+        back_asset_id = card_service.store_image_bytes(
+            back_bytes,
+            extension=os.path.splitext(back_name)[1].lstrip(".") or "png",
+            source="scryfall",
+            source_url=face_urls[1],
+        )
+        write_downloaded_image(image_dir, back_name, back_bytes)
+        if card_id:
+            card_service.set_print_image_asset(
+                card_id,
+                front_asset_id,
+                variant="default",
+                source="scryfall",
+                preferred_name=front_name,
+            )
+            card_service.set_print_image_asset(
+                card_id,
+                back_asset_id,
+                variant="back",
+                source="scryfall",
+                preferred_name=back_name,
+            )
 
-        return ImportedCard(entry=entry, filename=front_name), back_name
+        return ImportedCard(
+            entry=entry,
+            filename=front_name,
+            card_id=card_id,
+            oracle_id=oracle_id,
+            image_asset_id=front_asset_id,
+            backside_asset_id=back_asset_id,
+        ), back_name
 
     image_url = extract_image_url(card_data)
     if image_url is None:
@@ -496,8 +549,28 @@ def download_card_image_set(
     filename = build_image_filename(card_data)
     print_fn(f"Importing decklist...\nDownloading {entry.name}")
     image_bytes = fetch_bytes(image_url)
+    image_asset_id = card_service.store_image_bytes(
+        image_bytes,
+        extension=os.path.splitext(filename)[1].lstrip(".") or "png",
+        source="scryfall",
+        source_url=image_url,
+    )
     write_downloaded_image(image_dir, filename, image_bytes)
-    return ImportedCard(entry=entry, filename=filename), None
+    if card_id:
+        card_service.set_print_image_asset(
+            card_id,
+            image_asset_id,
+            variant="default",
+            source="scryfall",
+            preferred_name=filename,
+        )
+    return ImportedCard(
+        entry=entry,
+        filename=filename,
+        card_id=card_id,
+        oracle_id=oracle_id,
+        image_asset_id=image_asset_id,
+    ), None
 
 
 def slugify_filename(value: str) -> str:

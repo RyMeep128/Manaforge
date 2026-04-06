@@ -164,6 +164,10 @@ def apply_import_result(state: ProjectState, import_result: deck_import.ImportRe
                 "set_code": imported_card.entry.set_code,
                 "collector_number": imported_card.entry.collector_number,
             },
+            card_id=imported_card.card_id,
+            oracle_id=imported_card.oracle_id,
+            image_asset_id=imported_card.image_asset_id,
+            backside_asset_id=imported_card.backside_asset_id,
         )
     for front_name, back_name in import_result.backside_pairs.items():
         state.set_backside(front_name, back_name)
@@ -240,6 +244,10 @@ def import_single_card_into_project(
             "set_code": entry.set_code,
             "collector_number": entry.collector_number,
         },
+        card_id=imported_card.card_id,
+        oracle_id=imported_card.oracle_id,
+        image_asset_id=imported_card.image_asset_id,
+        backside_asset_id=imported_card.backside_asset_id,
     )
     if backside_name is not None:
         state.set_backside(imported_card.filename, backside_name)

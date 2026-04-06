@@ -404,16 +404,6 @@ class AppShellWindow(QMainWindow):
             state = ProjectState.from_dict(draft_defaults)
             img_dict = {}
             project_service.init_dict(state, img_dict, self._application.warn_nonfatal)
-            image_dir = state.image_dir
-            crop_dir = os.path.join(image_dir, "crop")
-            if image.need_run_cropper(
-                image_dir, crop_dir, float(state.bleed_edge), CFG.VibranceBump
-            ) or image.need_cache_previews(crop_dir, img_dict, image_dir):
-                project_service.init_images(
-                    state,
-                    img_dict,
-                    make_popup_print_fn(blank_window),
-                )
             return state, img_dict
 
         blank_window = popup(self, "Preparing editor...", self._application._debug_mode)
