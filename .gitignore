@@ -168,6 +168,7 @@ print.json
 tmp*/
 *.sqlite3-wal
 *.sqlite3-shm
+Mtg_Projects/mtg_core/card_data.sqlite3
 Mtg_Projects/mtg_proxy/.mtg_core_test_cache/
 Mtg_Projects/mtg_proxy/projects/.codex_test_runtime/
 
