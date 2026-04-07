@@ -91,6 +91,12 @@ def cached_preview_bytes(entry, field="data"):
     return image.decode_cached_image_bytes(entry[field])
 
 
+def autosave_managed_session():
+    application = QApplication.instance()
+    if application is not None and hasattr(application, "autosave_managed_session"):
+        application.autosave_managed_session()
+
+
 def _card_sort_label(state, card_name):
     metadata = state.get_card_metadata(card_name) or {}
     display_name = metadata.get("name")
@@ -375,6 +381,7 @@ class CardWidget(QWidget):
             dialog = HighResPickerDialog(self, state, img_dict, card_name)
             if dialog.exec() == QDialog.DialogCode.Accepted and dialog.was_applied():
                 self.window().refresh(state, img_dict)
+                autosave_managed_session()
 
         if card_name is not None:
             img.clicked.connect(open_high_res_picker)
@@ -451,7 +458,8 @@ class CardWidget(QWidget):
                     "Remove Card",
                     (
                         f"Remove '{card_name}' from this project?\n\n"
-                        "This will remove it from the project and delete that card image from disk."
+                        "This removes the card from this project and clears any local project cache files. "
+                        "The image stays in the card database."
                     ),
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                     QMessageBox.StandardButton.No,
@@ -1550,6 +1558,8 @@ class ActionsWidget(QGroupBox):
 
             if workflow_result is None:
                 return
+
+            autosave_managed_session()
 
             art_message = (
                 "Custom art was applied."

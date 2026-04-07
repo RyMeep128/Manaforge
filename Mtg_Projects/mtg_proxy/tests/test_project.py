@@ -1,6 +1,6 @@
 import json
 
-from models import CardMetadata
+from models import CardMetadata, ProjectState
 import project
 
 
@@ -47,6 +47,34 @@ def test_init_dict_adds_defaults_and_removes_stale_entries(monkeypatch, tmp_path
     assert print_dict["oversized"] == {}
     assert print_dict["bleed_edge"] == "0"
     assert img_dict == {"cached.png": {"size": [1, 2], "thumb": {}, "uncropped": {}}}
+
+
+def test_init_dict_keeps_asset_backed_cards_when_runtime_files_exist(monkeypatch, tmp_path):
+    image_dir = tmp_path / "images"
+    crop_dir = image_dir / "crop"
+
+    def fake_list_image_files(folder):
+        if folder == str(crop_dir):
+            return []
+        if folder == str(image_dir):
+            return ["new.png"]
+        return []
+
+    monkeypatch.setattr(project.image, "init_image_folder", lambda *_args: None)
+    monkeypatch.setattr(project.image, "list_image_files", fake_list_image_files)
+
+    state = ProjectState(
+        image_dir=str(image_dir),
+        img_cache=str(tmp_path / "img.cache"),
+    )
+    state.apply_imported_card("old.png", 1, image_asset_id="asset-old")
+    state.apply_imported_card("new.png", 1, image_asset_id="asset-new")
+
+    project.init_dict(state, {})
+
+    assert state.cards == {"old.png": 1, "new.png": 1}
+    assert state.get_card_entry("old.png").image_asset_id == "asset-old"
+    assert state.get_card_entry("new.png").image_asset_id == "asset-new"
 
 
 def test_init_dict_keeps_cards_with_source_files_even_if_crop_is_missing(monkeypatch, tmp_path):

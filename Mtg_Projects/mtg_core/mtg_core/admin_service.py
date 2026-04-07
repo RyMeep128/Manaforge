@@ -6,13 +6,16 @@ import uuid
 
 from mtg_core.db import CardDatabase
 from mtg_core.models import (
+    BulkDownloadStatus,
     CardRecord,
     ImageAssetRecord,
     ImageManifestView,
+    PaginatedResult,
     PrintRecord,
     SyncMetadata,
 )
 from mtg_core.search import choose_canonical_print_key, normalized_search_text
+from mtg_core.services import CardService
 
 
 class CardAdminService:
@@ -21,35 +24,70 @@ class CardAdminService:
         *,
         database: CardDatabase | None = None,
         db_path: str | None = None,
+        card_service: CardService | None = None,
     ) -> None:
         self.database = database or CardDatabase(db_path)
+        self.card_service = card_service or CardService(db_path=self.database.db_path)
 
-    def list_cards(self, query: str = "", *, limit: int = 250) -> list[CardRecord]:
+    def list_cards(
+        self,
+        query: str = "",
+        *,
+        page: int = 1,
+        page_size: int = 100,
+    ) -> PaginatedResult[CardRecord]:
         normalized_query = normalized_search_text(query)
         like = f"%{normalized_query}%"
+        page = max(1, int(page))
+        page_size = max(1, int(page_size))
         with self.database.connect() as connection:
             if normalized_query:
+                count_row = connection.execute(
+                    """
+                    SELECT count(*) AS count
+                    FROM cards_oracle
+                    WHERE normalized_name LIKE ? OR lower(name) LIKE lower(?)
+                    """,
+                    (like, like),
+                ).fetchone()
+                total_count = int(count_row["count"] or 0)
+                total_pages = max(1, (total_count + page_size - 1) // page_size)
+                page = min(page, total_pages)
+                offset = (page - 1) * page_size
                 rows = connection.execute(
                     """
                     SELECT oracle_id, name, normalized_name, layout
                     FROM cards_oracle
                     WHERE normalized_name LIKE ? OR lower(name) LIKE lower(?)
                     ORDER BY name, oracle_id
-                    LIMIT ?
+                    LIMIT ? OFFSET ?
                     """,
-                    (like, like, max(1, int(limit))),
+                    (like, like, page_size, offset),
                 ).fetchall()
             else:
+                count_row = connection.execute(
+                    "SELECT count(*) AS count FROM cards_oracle"
+                ).fetchone()
+                total_count = int(count_row["count"] or 0)
+                total_pages = max(1, (total_count + page_size - 1) // page_size)
+                page = min(page, total_pages)
+                offset = (page - 1) * page_size
                 rows = connection.execute(
                     """
                     SELECT oracle_id, name, normalized_name, layout
                     FROM cards_oracle
                     ORDER BY name, oracle_id
-                    LIMIT ?
+                    LIMIT ? OFFSET ?
                     """,
-                    (max(1, int(limit)),),
+                    (page_size, offset),
                 ).fetchall()
-        return [_row_to_card_record(row) for row in rows]
+        return PaginatedResult(
+            items=[_row_to_card_record(row) for row in rows],
+            page=page,
+            page_size=page_size,
+            total_count=total_count,
+            total_pages=total_pages,
+        )
 
     def get_card(self, oracle_id: str) -> CardRecord | None:
         with self.database.connect() as connection:
@@ -159,11 +197,14 @@ class CardAdminService:
         query: str = "",
         set_code: str = "",
         oracle_id: str = "",
-        limit: int = 250,
-    ) -> list[PrintRecord]:
+        page: int = 1,
+        page_size: int = 100,
+    ) -> PaginatedResult[PrintRecord]:
         conditions: list[str] = []
         params: list[object] = []
         normalized_query = normalized_search_text(query)
+        page = max(1, int(page))
+        page_size = max(1, int(page_size))
         if normalized_query:
             like = f"%{normalized_query}%"
             conditions.append("(c.normalized_name LIKE ? OR lower(p.name) LIKE lower(?))")
@@ -178,6 +219,19 @@ class CardAdminService:
         if conditions:
             where_clause = "WHERE " + " AND ".join(conditions)
         with self.database.connect() as connection:
+            count_row = connection.execute(
+                f"""
+                SELECT count(*) AS count
+                FROM prints p
+                JOIN cards_oracle c ON c.oracle_id = p.oracle_id
+                {where_clause}
+                """,
+                tuple(params),
+            ).fetchone()
+            total_count = int(count_row["count"] or 0)
+            total_pages = max(1, (total_count + page_size - 1) // page_size)
+            page = min(page, total_pages)
+            offset = (page - 1) * page_size
             rows = connection.execute(
                 f"""
                 SELECT p.*
@@ -185,11 +239,17 @@ class CardAdminService:
                 JOIN cards_oracle c ON c.oracle_id = p.oracle_id
                 {where_clause}
                 ORDER BY p.name, p.released_at, p.set_code, p.collector_number, p.card_id
-                LIMIT ?
+                LIMIT ? OFFSET ?
                 """,
-                (*params, max(1, int(limit))),
+                (*params, page_size, offset),
             ).fetchall()
-        return [_row_to_print_record(row) for row in rows]
+        return PaginatedResult(
+            items=[_row_to_print_record(row) for row in rows],
+            page=page,
+            page_size=page_size,
+            total_count=total_count,
+            total_pages=total_pages,
+        )
 
     def get_print(self, card_id: str) -> PrintRecord | None:
         return self.database.get_print_by_card_id(card_id)
@@ -368,8 +428,22 @@ class CardAdminService:
             _refresh_canonical_or_delete(connection, existing.oracle_id)
         return True
 
-    def list_image_manifest(self, *, limit: int = 500) -> list[ImageManifestView]:
+    def list_image_manifest(
+        self,
+        *,
+        page: int = 1,
+        page_size: int = 100,
+    ) -> PaginatedResult[ImageManifestView]:
+        page = max(1, int(page))
+        page_size = max(1, int(page_size))
         with self.database.connect() as connection:
+            count_row = connection.execute(
+                "SELECT count(*) AS count FROM image_manifest"
+            ).fetchone()
+            total_count = int(count_row["count"] or 0)
+            total_pages = max(1, (total_count + page_size - 1) // page_size)
+            page = min(page, total_pages)
+            offset = (page - 1) * page_size
             rows = connection.execute(
                 """
                 SELECT
@@ -388,52 +462,79 @@ class CardAdminService:
                 LEFT JOIN prints p ON p.card_id = m.card_id
                 LEFT JOIN image_assets a ON a.asset_id = m.asset_id
                 ORDER BY p.name, m.card_id, m.variant
-                LIMIT ?
+                LIMIT ? OFFSET ?
                 """,
-                (max(1, int(limit)),),
+                (page_size, offset),
             ).fetchall()
-        return [
-            ImageManifestView(
-                card_id=row["card_id"],
-                card_name=row["card_name"],
-                variant=row["variant"],
-                asset_id=row["asset_id"],
-                path=row["path"],
-                status=row["status"],
-                source=row["source"],
-                checksum=row["checksum"],
-                source_url=row["source_url"],
-                updated_at=row["updated_at"],
-                created_at=row["created_at"],
-            )
-            for row in rows
-        ]
+        return PaginatedResult(
+            items=[
+                ImageManifestView(
+                    card_id=row["card_id"],
+                    card_name=row["card_name"],
+                    variant=row["variant"],
+                    asset_id=row["asset_id"],
+                    path=row["path"],
+                    status=row["status"],
+                    source=row["source"],
+                    checksum=row["checksum"],
+                    source_url=row["source_url"],
+                    updated_at=row["updated_at"],
+                    created_at=row["created_at"],
+                )
+                for row in rows
+            ],
+            page=page,
+            page_size=page_size,
+            total_count=total_count,
+            total_pages=total_pages,
+        )
 
-    def list_image_assets(self, *, limit: int = 500) -> list[ImageAssetRecord]:
+    def list_image_assets(
+        self,
+        *,
+        page: int = 1,
+        page_size: int = 100,
+    ) -> PaginatedResult[ImageAssetRecord]:
+        page = max(1, int(page))
+        page_size = max(1, int(page_size))
         with self.database.connect() as connection:
+            count_row = connection.execute(
+                "SELECT count(*) AS count FROM image_assets"
+            ).fetchone()
+            total_count = int(count_row["count"] or 0)
+            total_pages = max(1, (total_count + page_size - 1) // page_size)
+            page = min(page, total_pages)
+            offset = (page - 1) * page_size
             rows = connection.execute(
                 """
-                SELECT asset_id, checksum, extension, mime_type, source, source_url, payload, created_at, updated_at
+                SELECT asset_id, checksum, extension, mime_type, source, source_url, length(payload) AS payload_size, created_at, updated_at
                 FROM image_assets
                 ORDER BY updated_at DESC, asset_id
-                LIMIT ?
+                LIMIT ? OFFSET ?
                 """,
-                (max(1, int(limit)),),
+                (page_size, offset),
             ).fetchall()
-        return [
-            ImageAssetRecord(
-                asset_id=row["asset_id"],
-                checksum=row["checksum"],
-                extension=row["extension"],
-                mime_type=row["mime_type"],
-                source=row["source"],
-                source_url=row["source_url"],
-                payload=bytes(row["payload"]),
-                created_at=row["created_at"],
-                updated_at=row["updated_at"],
-            )
-            for row in rows
-        ]
+        return PaginatedResult(
+            items=[
+                ImageAssetRecord(
+                    asset_id=row["asset_id"],
+                    checksum=row["checksum"],
+                    extension=row["extension"],
+                    mime_type=row["mime_type"],
+                    source=row["source"],
+                    source_url=row["source_url"],
+                    payload=b"",
+                    payload_size=int(row["payload_size"] or 0),
+                    created_at=row["created_at"],
+                    updated_at=row["updated_at"],
+                )
+                for row in rows
+            ],
+            page=page,
+            page_size=page_size,
+            total_count=total_count,
+            total_pages=total_pages,
+        )
 
     def get_image_asset(self, asset_id: str) -> ImageAssetRecord | None:
         return self.database.get_image_asset(asset_id)
@@ -456,6 +557,18 @@ class CardAdminService:
             )
             for row in rows
         ]
+
+    def get_bulk_download_status(self) -> BulkDownloadStatus:
+        return self.card_service.get_bulk_download_status()
+
+    def download_fixed_catalog_chunked(self, *, max_chunks: int | None = None) -> BulkDownloadStatus:
+        return self.card_service.download_fixed_catalog_chunked(max_chunks=max_chunks)
+
+    def process_bulk_download_chunk(self, should_pause=None) -> BulkDownloadStatus:
+        return self.card_service.process_bulk_download_chunk(should_pause=should_pause)
+
+    def pause_bulk_download(self) -> BulkDownloadStatus:
+        return self.card_service.pause_bulk_download()
 
 
 def _generated_id(prefix: str) -> str:

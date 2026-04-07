@@ -2,10 +2,39 @@ from __future__ import annotations
 
 import json
 import urllib.parse
+import urllib.error
 import urllib.request
 
 
 USER_AGENT = "print-proxy-prep/1.0"
+
+
+class RemoteLookupUnavailable(OSError):
+    """Raised when a remote lookup cannot be completed because the network is unavailable."""
+
+
+def _decode_error_payload(error: urllib.error.HTTPError) -> dict | None:
+    try:
+        payload = error.read()
+    except OSError:
+        return None
+    if not payload:
+        return None
+    try:
+        return json.loads(payload.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None
+
+
+def is_no_card_match_error(details: str | None) -> bool:
+    normalized = (details or "").casefold()
+    return (
+        "no cards found" in normalized
+        or "didn't match any cards" in normalized
+        or "did not match any cards" in normalized
+        or "your query didn't match" in normalized
+        or "your query did not match" in normalized
+    )
 
 
 def fetch_json(url: str) -> dict:
@@ -16,11 +45,35 @@ def fetch_json(url: str) -> dict:
             "User-Agent": USER_AGENT,
         },
     )
-    with urllib.request.urlopen(request, timeout=30) as response:
-        payload = json.loads(response.read().decode("utf-8"))
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as error:
+        payload = _decode_error_payload(error)
+        if payload is not None:
+            if payload.get("object") == "error":
+                raise ValueError(payload.get("details", "Scryfall error")) from error
+            return payload
+        raise ValueError(f"Remote lookup failed with HTTP {error.code}") from error
+    except urllib.error.URLError as error:
+        raise RemoteLookupUnavailable("Internet connection unavailable for remote card lookup.") from error
     if payload.get("object") == "error":
         raise ValueError(payload.get("details", "Scryfall error"))
     return payload
+
+
+def fetch_bytes(url: str) -> bytes:
+    request = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": USER_AGENT,
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            return response.read()
+    except urllib.error.URLError as error:
+        raise RemoteLookupUnavailable("Internet connection unavailable for remote image download.") from error
 
 
 def build_named_url(exact_name: str) -> str:
@@ -43,9 +96,12 @@ def build_exact_print_search_url(name: str, set_code: str) -> str:
     )
 
 
-def build_print_search_url(query: str) -> str:
+def build_print_search_url(query: str, *, include_extras: bool = False) -> str:
+    params = {"q": query, "unique": "prints"}
+    if include_extras:
+        params["include"] = "extras"
     return "https://api.scryfall.com/cards/search?" + urllib.parse.urlencode(
-        {"q": query, "unique": "prints"}
+        params
     )
 
 
@@ -69,15 +125,20 @@ def extract_image_urls(card_data: dict) -> tuple[str | None, str | None, str | N
     return None, None, None
 
 
-def iter_search_payloads(query: str, fetch_json_fn=fetch_json) -> list[dict]:
-    url = build_print_search_url(query)
+def iter_search_payloads(query: str, fetch_json_fn=fetch_json, *, include_extras: bool = False) -> list[dict]:
+    url = build_print_search_url(query, include_extras=include_extras)
     payloads: list[dict] = []
     seen_ids: set[str] = set()
     while url:
-        payload = fetch_json_fn(url)
+        try:
+            payload = fetch_json_fn(url)
+        except ValueError as exc:
+            if is_no_card_match_error(str(exc)):
+                return []
+            raise
         if payload.get("object") == "error":
             details = payload.get("details")
-            if details and "No cards found" in details:
+            if is_no_card_match_error(details):
                 return []
             raise ValueError(details or "Scryfall card search failed.")
         if payload.get("object") != "list":
@@ -115,12 +176,19 @@ def resolve_card_payload(
     raise ValueError("A card lookup requires exact_name, card_id, or set+collector number.")
 
 
-def search_prints_payloads(name_query: str, fetch_json_fn=fetch_json) -> list[dict]:
+def search_prints_payloads(
+    name_query: str,
+    fetch_json_fn=fetch_json,
+    *,
+    include_extras: bool = False,
+    exact_first: bool = True,
+) -> list[dict]:
     normalized_query = (name_query or "").strip()
     if not normalized_query:
         return []
-    exact_query = f'!"{normalized_query}"'
-    payloads = iter_search_payloads(exact_query, fetch_json_fn)
-    if payloads:
-        return payloads
-    return iter_search_payloads(normalized_query, fetch_json_fn)
+    if exact_first:
+        exact_query = f'!"{normalized_query}"'
+        payloads = iter_search_payloads(exact_query, fetch_json_fn, include_extras=include_extras)
+        if payloads:
+            return payloads
+    return iter_search_payloads(normalized_query, fetch_json_fn, include_extras=include_extras)

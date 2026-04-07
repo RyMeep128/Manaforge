@@ -169,6 +169,13 @@ def get_processed_path(project_like, card_name: str) -> str | None:
     return _write_processed_image(processed_path, source_path, card_name, float(state.bleed_edge))
 
 
+def _processed_path_for_asset_key(state: ProjectState, card_name: str, asset_key: str) -> str:
+    label_name = (_asset_details(state, card_name)[1] or card_name)
+    extension = os.path.splitext(label_name)[1].lower() or ".png"
+    file_name = f"{hashlib.sha256((asset_key + _processing_fingerprint(state, card_name)).encode('utf-8')).hexdigest()}{extension}"
+    return os.path.join(_processed_cache_root(state), file_name)
+
+
 def _build_preview_entry(state: ProjectState, card_name: str) -> dict | None:
     processed_path = get_processed_path(state, card_name)
     source_path = get_source_path(state, card_name)
@@ -248,10 +255,19 @@ def invalidate_entry(project_like, img_dict: dict, card_name: str) -> None:
     state = as_project_state(project_like)
     if not card_name:
         return
-    current_asset_key = None
+    current_asset_key = _asset_key(state, card_name)
+    asset_keys = {current_asset_key}
     existing = img_dict.pop(card_name, None)
-    if isinstance(existing, dict):
-        current_asset_key = existing.get("_asset_key")
+    if isinstance(existing, dict) and existing.get("_asset_key"):
+        asset_keys.add(existing.get("_asset_key"))
+
+    for asset_key in asset_keys:
+        processed_path = _processed_path_for_asset_key(state, card_name, asset_key)
+        if os.path.exists(processed_path):
+            try:
+                os.remove(processed_path)
+            except OSError:
+                pass
 
     preview_cache = _load_preview_cache(state)
     stale_keys = []
@@ -259,7 +275,7 @@ def invalidate_entry(project_like, img_dict: dict, card_name: str) -> None:
         if not isinstance(value, dict):
             stale_keys.append(key)
             continue
-        if value.get("_asset_key") == current_asset_key:
+        if value.get("_asset_key") in asset_keys:
             stale_keys.append(key)
     if stale_keys:
         for key in stale_keys:

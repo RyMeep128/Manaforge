@@ -3,7 +3,9 @@ from __future__ import annotations
 import uuid
 from pathlib import Path
 
+from mtg_core import RemoteLookupUnavailable
 from mtg_core.services import CardService
+from mtg_core.sync import build_print_search_url, search_prints_payloads
 
 
 def _workspace_runtime_dir(name: str) -> Path:
@@ -24,6 +26,8 @@ def _sample_print(
     collector_number: str,
     released_at: str,
     image_url: str,
+    layout: str = "normal",
+    type_line: str = "Instant",
 ) -> dict:
     return {
         "id": card_id,
@@ -33,6 +37,8 @@ def _sample_print(
         "set_name": set_name,
         "collector_number": collector_number,
         "released_at": released_at,
+        "layout": layout,
+        "type_line": type_line,
         "image_uris": {
             "png": image_url,
             "normal": image_url.replace(".png", "-normal.png"),
@@ -166,3 +172,342 @@ def test_ensure_image_records_manifest_and_reuses_cached_file():
     assert Path(first_path).exists()
     assert service.get_image_path("card-1") == first_path
     assert byte_calls == ["https://img.test/plains.png"]
+
+
+def test_materialize_image_asset_uses_asset_id_when_preferred_name_matches():
+    runtime_dir = _workspace_runtime_dir("materialize_same_name")
+    service = CardService(
+        db_path=str(runtime_dir / "card_data.sqlite3"),
+        image_root=str(runtime_dir / "images"),
+    )
+    old_asset_id = service.store_image_bytes(b"old-art", extension="png", source="test")
+    new_asset_id = service.store_image_bytes(b"new-art", extension="png", source="test")
+    output_root = runtime_dir / "materialized"
+
+    old_path = service.materialize_image_asset(
+        old_asset_id,
+        preferred_name="scryfall_sos_274_island.png",
+        output_root=str(output_root),
+    )
+    new_path = service.materialize_image_asset(
+        new_asset_id,
+        preferred_name="scryfall_sos_274_island.png",
+        output_root=str(output_root),
+    )
+    repeated_new_path = service.materialize_image_asset(
+        new_asset_id,
+        preferred_name="scryfall_sos_274_island.png",
+        output_root=str(output_root),
+    )
+
+    assert old_path is not None
+    assert new_path is not None
+    assert old_path != new_path
+    assert old_asset_id in Path(old_path).name
+    assert new_asset_id in Path(new_path).name
+    assert repeated_new_path == new_path
+    assert Path(old_path).read_bytes() == b"old-art"
+    assert Path(new_path).read_bytes() == b"new-art"
+
+
+def test_materialize_image_asset_rewrites_corrupt_existing_cache_file():
+    runtime_dir = _workspace_runtime_dir("materialize_rewrite_corrupt")
+    service = CardService(
+        db_path=str(runtime_dir / "card_data.sqlite3"),
+        image_root=str(runtime_dir / "images"),
+    )
+    asset_id = service.store_image_bytes(b"real-art", extension="png", source="test")
+
+    path = service.materialize_image_asset(
+        asset_id,
+        preferred_name="same-card.png",
+        output_root=str(runtime_dir / "materialized"),
+    )
+    assert path is not None
+    Path(path).write_bytes(b"stale-or-corrupt")
+
+    rematerialized_path = service.materialize_image_asset(
+        asset_id,
+        preferred_name="same-card.png",
+        output_root=str(runtime_dir / "materialized"),
+    )
+
+    assert rematerialized_path == path
+    assert Path(path).read_bytes() == b"real-art"
+
+
+def test_search_cards_returns_local_results_when_remote_lookup_is_unavailable():
+    runtime_dir = _workspace_runtime_dir("search_cards_offline_local")
+    service = CardService(
+        db_path=str(runtime_dir / "card_data.sqlite3"),
+        image_root=str(runtime_dir / "images"),
+        fetch_json_fn=lambda _url: (_ for _ in ()).throw(RemoteLookupUnavailable("offline")),
+    )
+    service.database.upsert_card_payload(
+        _sample_print(
+            card_id="bolt-local",
+            oracle_id="oracle-bolt",
+            name="Lightning Bolt",
+            set_code="lea",
+            set_name="Limited Edition Alpha",
+            collector_number="161",
+            released_at="1993-08-05",
+            image_url="https://img.test/bolt-local.png",
+        )
+    )
+
+    results = service.search_cards("Lightning Bolt", {"allow_remote": True})
+
+    assert [result.card_id for result in results] == ["bolt-local"]
+
+
+def test_search_cards_raises_friendly_offline_error_when_no_local_results_exist():
+    runtime_dir = _workspace_runtime_dir("search_cards_offline_empty")
+    service = CardService(
+        db_path=str(runtime_dir / "card_data.sqlite3"),
+        image_root=str(runtime_dir / "images"),
+        fetch_json_fn=lambda _url: (_ for _ in ()).throw(RemoteLookupUnavailable("offline")),
+    )
+
+    try:
+        service.search_cards("Mystic Tutor", {"allow_remote": True})
+    except RemoteLookupUnavailable as exc:
+        assert "offline" in str(exc)
+    else:
+        raise AssertionError("Expected offline search to raise when no local results exist.")
+
+
+def test_ensure_image_raises_offline_error_only_when_remote_download_is_required():
+    runtime_dir = _workspace_runtime_dir("ensure_image_offline")
+    service = CardService(
+        db_path=str(runtime_dir / "card_data.sqlite3"),
+        image_root=str(runtime_dir / "images"),
+        fetch_json_fn=lambda _url: (_ for _ in ()).throw(RemoteLookupUnavailable("offline")),
+        fetch_bytes_fn=lambda _url: (_ for _ in ()).throw(RemoteLookupUnavailable("offline")),
+    )
+
+    try:
+        service.ensure_image("missing-card")
+    except RemoteLookupUnavailable as exc:
+        assert "offline" in str(exc)
+    else:
+        raise AssertionError("Expected ensure_image to raise when the image is missing locally.")
+
+
+def test_search_cards_ranks_prefix_matches_before_substring_matches():
+    runtime_dir = _workspace_runtime_dir("search_rank_prefix")
+    service = CardService(
+        db_path=str(runtime_dir / "card_data.sqlite3"),
+        image_root=str(runtime_dir / "images"),
+        fetch_json_fn=lambda _url: (_ for _ in ()).throw(RemoteLookupUnavailable("offline")),
+    )
+    for payload in [
+        _sample_print(
+            card_id="tuna-can",
+            oracle_id="oracle-tuna",
+            name='"2 Seconds After Opening the Tuna Can"',
+            set_code="sos",
+            set_name="Secret Lair",
+            collector_number="7",
+            released_at="2025-01-01",
+            image_url="https://img.test/tuna.png",
+        ),
+        _sample_print(
+            card_id="aang",
+            oracle_id="oracle-aang",
+            name="Aang, Air Nomad",
+            set_code="tle",
+            set_name="Avatar",
+            collector_number="210",
+            released_at="2025-01-02",
+            image_url="https://img.test/aang.png",
+        ),
+        _sample_print(
+            card_id="ach",
+            oracle_id="oracle-ach",
+            name='"Ach! Hans, Run!"',
+            set_code="unh",
+            set_name="Unhinged",
+            collector_number="116",
+            released_at="2004-11-19",
+            image_url="https://img.test/ach.png",
+        ),
+    ]:
+        service.database.upsert_card_payload(payload)
+
+    results = service.search_cards("a", {"allow_remote": False, "limit": 10})
+
+    assert [result.card_id for result in results] == ["aang", "ach", "tuna-can"]
+
+
+def test_search_cards_returns_aang_matches_for_broad_name_fragment():
+    runtime_dir = _workspace_runtime_dir("search_rank_aang")
+    service = CardService(
+        db_path=str(runtime_dir / "card_data.sqlite3"),
+        image_root=str(runtime_dir / "images"),
+        fetch_json_fn=lambda _url: (_ for _ in ()).throw(RemoteLookupUnavailable("offline")),
+    )
+    service.database.upsert_card_payload(
+        _sample_print(
+            card_id="aang",
+            oracle_id="oracle-aang",
+            name="Aang, Air Nomad",
+            set_code="tle",
+            set_name="Avatar",
+            collector_number="210",
+            released_at="2025-01-02",
+            image_url="https://img.test/aang.png",
+        )
+    )
+
+    results = service.search_cards("aang", {"allow_remote": False, "limit": 10})
+
+    assert [result.name for result in results] == ["Aang, Air Nomad"]
+
+
+def test_scryfall_search_falls_back_from_newer_no_match_error_wording():
+    calls: list[str] = []
+
+    def fake_fetch_json(url: str) -> dict:
+        calls.append(url)
+        if 'q=%21%22pla%22' in url:
+            raise ValueError(
+                "Your query didn't match any cards. Adjust your search terms or refer to the syntax guide at https://scryfall.com/docs/reference"
+            )
+        return {
+            "object": "list",
+            "data": [
+                _sample_print(
+                    card_id="plains",
+                    oracle_id="oracle-plains",
+                    name="Plains",
+                    set_code="lea",
+                    set_name="Limited Edition Alpha",
+                    collector_number="286",
+                    released_at="1993-08-05",
+                    image_url="https://img.test/plains.png",
+                )
+            ],
+            "has_more": False,
+        }
+
+    results = search_prints_payloads("pla", fetch_json_fn=fake_fetch_json)
+
+    assert [result["name"] for result in results] == ["Plains"]
+    assert len(calls) == 2
+
+
+def test_token_keyword_filters_local_search_to_token_rows():
+    runtime_dir = _workspace_runtime_dir("search_token_keyword")
+    service = CardService(
+        db_path=str(runtime_dir / "card_data.sqlite3"),
+        image_root=str(runtime_dir / "images"),
+        fetch_json_fn=lambda _url: (_ for _ in ()).throw(RemoteLookupUnavailable("offline")),
+    )
+    service.database.upsert_card_payload(
+        _sample_print(
+            card_id="ooze-card",
+            oracle_id="oracle-ooze-card",
+            name="Ooze Garden",
+            set_code="ala",
+            set_name="Shards of Alara",
+            collector_number="142",
+            released_at="2008-10-03",
+            image_url="https://img.test/ooze-garden.png",
+            type_line="Enchantment",
+        )
+    )
+    service.database.upsert_card_payload(
+        _sample_print(
+            card_id="ooze-token",
+            oracle_id="oracle-ooze-token",
+            name="Ooze",
+            set_code="tmid",
+            set_name="Innistrad: Midnight Hunt Tokens",
+            collector_number="10",
+            released_at="2021-09-24",
+            image_url="https://img.test/ooze-token.png",
+            layout="token",
+            type_line="Token Creature — Ooze",
+        )
+    )
+
+    regular = service.search_cards("ooze", {"allow_remote": False, "limit": 10})
+    tokens = service.search_cards("ooze token", {"allow_remote": False, "limit": 10})
+
+    assert [result.card_id for result in regular] == ["ooze-card"]
+    assert [result.card_id for result in tokens] == ["ooze-token"]
+
+
+def test_token_remote_search_uses_extras_and_persists_token_payload():
+    runtime_dir = _workspace_runtime_dir("search_token_remote")
+    calls: list[str] = []
+
+    def fake_fetch_json(url: str) -> dict:
+        calls.append(url)
+        assert "include=extras" in url
+        assert "t%3Atoken" in url
+        return {
+            "object": "list",
+            "data": [
+                _sample_print(
+                    card_id="ooze-token",
+                    oracle_id="oracle-ooze-token",
+                    name="Ooze",
+                    set_code="tmid",
+                    set_name="Innistrad: Midnight Hunt Tokens",
+                    collector_number="10",
+                    released_at="2021-09-24",
+                    image_url="https://img.test/ooze-token.png",
+                    layout="token",
+                    type_line="Token Creature — Ooze",
+                )
+            ],
+            "has_more": False,
+        }
+
+    service = CardService(
+        db_path=str(runtime_dir / "card_data.sqlite3"),
+        image_root=str(runtime_dir / "images"),
+        fetch_json_fn=fake_fetch_json,
+    )
+
+    results = service.search_cards("ooze token", {"allow_remote": True, "limit": 10})
+    cached = service.search_cards("ooze token", {"allow_remote": False, "limit": 10})
+
+    assert [result.card_id for result in results] == ["ooze-token"]
+    assert [result.card_id for result in cached] == ["ooze-token"]
+    assert calls == [build_print_search_url("t:token ooze", include_extras=True)]
+
+
+def test_token_mode_offline_search_returns_local_or_raises_when_missing():
+    runtime_dir = _workspace_runtime_dir("search_token_offline")
+    service = CardService(
+        db_path=str(runtime_dir / "card_data.sqlite3"),
+        image_root=str(runtime_dir / "images"),
+        fetch_json_fn=lambda _url: (_ for _ in ()).throw(RemoteLookupUnavailable("offline")),
+    )
+    service.database.upsert_card_payload(
+        _sample_print(
+            card_id="ooze-token",
+            oracle_id="oracle-ooze-token",
+            name="Ooze",
+            set_code="tmid",
+            set_name="Innistrad: Midnight Hunt Tokens",
+            collector_number="10",
+            released_at="2021-09-24",
+            image_url="https://img.test/ooze-token.png",
+            layout="token",
+            type_line="Token Creature — Ooze",
+        )
+    )
+
+    local = service.search_cards("ooze token", {"allow_remote": True, "limit": 10})
+    try:
+        service.search_cards("goblin token", {"allow_remote": True, "limit": 10})
+    except RemoteLookupUnavailable as exc:
+        assert "offline" in str(exc)
+    else:
+        raise AssertionError("Expected missing token search to raise when offline.")
+
+    assert [result.card_id for result in local] == ["ooze-token"]

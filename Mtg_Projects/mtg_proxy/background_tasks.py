@@ -144,4 +144,41 @@ class HighResThumbnailLoader(QtCore.QThread):
             self.thumbnail_loaded.emit(self._page_token, identifier, data)
 
 
-__all__ = ["HighResThumbnailLoader", "make_popup_print_fn", "popup"]
+class CardSearchThumbnailLoader(QtCore.QThread):
+    thumbnail_loaded = QtCore.pyqtSignal(int, str, bytes)
+
+    def __init__(self, page_token, items):
+        super().__init__()
+        self._page_token = page_token
+        self._items = items
+        self._cancelled = False
+
+    def cancel(self):
+        self._cancelled = True
+
+    def run(self):
+        for _row, identifier, local_path, url in self._items:
+            if self._cancelled:
+                return
+            try:
+                if local_path:
+                    with open(local_path, "rb") as handle:
+                        data = handle.read()
+                elif url:
+                    data = high_res.fetch_preview_bytes(url, cache_kind="thumbnail")
+                else:
+                    continue
+            except (OSError, ValueError):
+                logger.warning(
+                    "card search thumbnail load failed identifier=%s local_path=%s url=%s",
+                    identifier,
+                    local_path,
+                    url,
+                )
+                continue
+            if self._cancelled:
+                return
+            self.thumbnail_loaded.emit(self._page_token, identifier, data)
+
+
+__all__ = ["CardSearchThumbnailLoader", "HighResThumbnailLoader", "make_popup_print_fn", "popup"]

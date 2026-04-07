@@ -295,20 +295,59 @@ class CardDatabase:
             ).fetchone()
         return self._row_to_print_record(row)
 
-    def search_prints(self, query: str, limit: int = 60) -> list[PrintRecord]:
+    def search_prints(self, query: str, limit: int = 60, *, token_mode: bool = False) -> list[PrintRecord]:
         normalized = normalized_search_text(query)
         like = f"%{normalized}%"
+        prefix_like = f"{normalized}%"
+        display_trim_chars = "\"'+- "
+        token_clause = """
+                    AND (
+                        lower(coalesce(json_extract(p.payload_json, '$.layout'), '')) = 'token'
+                        OR lower(coalesce(json_extract(p.payload_json, '$.type_line'), '')) LIKE 'token%'
+                    )
+                """ if token_mode else """
+                    AND NOT (
+                        lower(coalesce(json_extract(p.payload_json, '$.layout'), '')) = 'token'
+                        OR lower(coalesce(json_extract(p.payload_json, '$.type_line'), '')) LIKE 'token%'
+                    )
+                """
         with self.connect() as connection:
             rows = connection.execute(
-                """
+                f"""
                 SELECT p.*
                 FROM prints p
                 JOIN cards_oracle c ON c.oracle_id = p.oracle_id
-                WHERE c.normalized_name LIKE ? OR lower(p.name) LIKE lower(?)
-                ORDER BY p.name, p.released_at, p.set_code, p.collector_number
+                WHERE (
+                    c.normalized_name LIKE ?
+                    OR lower(p.name) LIKE lower(?)
+                    OR lower(coalesce(json_extract(p.payload_json, '$.type_line'), '')) LIKE lower(?)
+                )
+                {token_clause}
+                ORDER BY
+                    CASE
+                        WHEN c.normalized_name = ? OR lower(p.name) = lower(?) THEN 0
+                        WHEN ltrim(c.normalized_name, ?) LIKE ? OR lower(ltrim(p.name, ?)) LIKE lower(?) THEN 1
+                        ELSE 2
+                    END,
+                    lower(ltrim(p.name, ?)),
+                    p.released_at,
+                    p.set_code,
+                    p.collector_number
                 LIMIT ?
                 """,
-                (like, like, max(1, int(limit))),
+                (
+                    like,
+                    like,
+                    like,
+                    normalized,
+                    query,
+                    display_trim_chars,
+                    prefix_like,
+                    display_trim_chars,
+                    prefix_like,
+                    display_trim_chars,
+                    max(1, int(limit)),
+                ),
             ).fetchall()
         return [self._row_to_print_record(row) for row in rows]
 
@@ -421,6 +460,7 @@ class CardDatabase:
                     source=source or existing["source"],
                     source_url=source_url or existing["source_url"],
                     payload=bytes(existing["payload"]),
+                    payload_size=len(bytes(existing["payload"])),
                     created_at=existing["created_at"],
                     updated_at=now,
                 )
@@ -443,6 +483,7 @@ class CardDatabase:
                 source=source,
                 source_url=source_url,
                 payload=bytes(payload),
+                payload_size=len(payload),
                 created_at=now,
                 updated_at=now,
             )
@@ -467,9 +508,47 @@ class CardDatabase:
             source=row["source"],
             source_url=row["source_url"],
             payload=bytes(row["payload"]),
+            payload_size=len(bytes(row["payload"])),
             created_at=row["created_at"],
-            updated_at=row["updated_at"],
-        )
+                updated_at=row["updated_at"],
+            )
+
+    def get_sync_state(self, source: str) -> sqlite3.Row | None:
+        with self.connect() as connection:
+            return connection.execute(
+                """
+                SELECT source, version, last_sync_at, payload_json
+                FROM sync_state
+                WHERE source = ?
+                """,
+                (source,),
+            ).fetchone()
+
+    def upsert_sync_state(
+        self,
+        source: str,
+        *,
+        version: str | None = None,
+        last_sync_at: float | None = None,
+        payload: dict | None = None,
+    ) -> None:
+        with self.connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO sync_state (source, version, last_sync_at, payload_json)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(source) DO UPDATE SET
+                    version=excluded.version,
+                    last_sync_at=excluded.last_sync_at,
+                    payload_json=excluded.payload_json
+                """,
+                (
+                    source,
+                    version,
+                    last_sync_at,
+                    None if payload is None else json.dumps(payload, ensure_ascii=False, sort_keys=True),
+                ),
+            )
 
     @staticmethod
     def _row_to_print_record(row: sqlite3.Row | None) -> PrintRecord | None:

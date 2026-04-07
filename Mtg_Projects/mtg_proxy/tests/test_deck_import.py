@@ -1,5 +1,6 @@
 import deck_import
 import logging
+from mtg_core import CardService, RemoteLookupUnavailable
 
 
 def test_parse_decklist_aggregates_duplicate_lines_and_skips_sections():
@@ -344,6 +345,60 @@ def test_import_decklist_downloads_double_faced_card_and_assigns_backside(tmp_pa
     }
     assert (tmp_path / "scryfall_mom_239_invasion-of-new-phyrexia.png").read_bytes() == b"https://img/front.png"
     assert (tmp_path / "__scryfall_mom_239_teferi-akosa-of-zhalfir.png").read_bytes() == b"https://img/back.png"
+
+
+def test_import_decklist_uses_local_db_assets_when_offline(tmp_path, monkeypatch):
+    service = CardService(
+        db_path=str(tmp_path / "card_data.sqlite3"),
+        image_root=str(tmp_path / "images_db"),
+        fetch_json_fn=lambda _url: (_ for _ in ()).throw(RemoteLookupUnavailable("offline")),
+        fetch_bytes_fn=lambda _url: (_ for _ in ()).throw(RemoteLookupUnavailable("offline")),
+    )
+    payload = {
+        "id": "card-bolt",
+        "oracle_id": "oracle-bolt",
+        "name": "Lightning Bolt",
+        "set": "clu",
+        "set_name": "Ravnica: Clue Edition",
+        "collector_number": "141",
+        "image_uris": {
+            "png": "https://img/lightning-bolt.png",
+            "normal": "https://img/lightning-bolt-normal.png",
+            "small": "https://img/lightning-bolt-small.png",
+        },
+    }
+    service.database.upsert_card_payload(payload)
+    asset_id = service.store_image_bytes(
+        b"png-bytes",
+        extension="png",
+        source="scryfall",
+        source_url=payload["image_uris"]["png"],
+    )
+    service.set_print_image_asset("card-bolt", asset_id, preferred_name="scryfall_clu_141_lightning-bolt.png")
+    monkeypatch.setattr(deck_import, "_build_card_service", lambda fetch_json=None: service)
+
+    result = deck_import.import_decklist(
+        "4 Lightning Bolt\n",
+        str(tmp_path / "project_images"),
+        fetch_json=lambda _url: (_ for _ in ()).throw(RemoteLookupUnavailable("offline")),
+        fetch_bytes=lambda _url: (_ for _ in ()).throw(AssertionError("fetch_bytes should not be called")),
+    )
+
+    assert result.failed_cards == []
+    assert [card.filename for card in result.imported] == ["scryfall_clu_141_lightning-bolt.png"]
+    assert result.imported[0].image_asset_id == asset_id
+
+
+def test_import_decklist_reports_offline_miss_without_raw_network_error(tmp_path):
+    result = deck_import.import_decklist(
+        "1 Missing Card\n",
+        str(tmp_path),
+        fetch_json=lambda _url: (_ for _ in ()).throw(RemoteLookupUnavailable("offline")),
+        fetch_bytes=lambda _url: (_ for _ in ()).throw(RemoteLookupUnavailable("offline")),
+    )
+
+    assert result.imported == []
+    assert result.failed_cards == ["Missing Card"]
 
 
 def test_apply_import_result_sets_backsides_and_enables_backside_mode():

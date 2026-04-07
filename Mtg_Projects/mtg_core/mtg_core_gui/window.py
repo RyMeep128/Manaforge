@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import json
-from io import BytesIO
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QObject, QThread, QTimer, Qt, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtWidgets import (
     QCheckBox,
@@ -29,8 +28,37 @@ from mtg_core.admin_service import CardAdminService
 from mtg_core.models import CardRecord, ImageAssetRecord, ImageManifestView, PrintRecord, SyncMetadata
 
 
+class BulkDownloadWorker(QObject):
+    progress = pyqtSignal(object)
+    finished = pyqtSignal(object)
+    failed = pyqtSignal(str)
+
+    def __init__(self, admin_service: CardAdminService) -> None:
+        super().__init__()
+        self.admin_service = admin_service
+        self._pause_requested = False
+
+    def request_pause(self) -> None:
+        self._pause_requested = True
+
+    @pyqtSlot()
+    def run(self) -> None:
+        try:
+            while True:
+                status = self.admin_service.process_bulk_download_chunk(
+                    should_pause=lambda: self._pause_requested
+                )
+                self.progress.emit(status)
+                if status.status in {"completed", "failed", "paused"}:
+                    self.finished.emit(status)
+                    return
+        except Exception as exc:  # pragma: no cover - defensive GUI guard
+            self.failed.emit(str(exc))
+
+
 class CardsTab(QWidget):
     HEADERS = ["Oracle ID", "Name", "Normalized", "Layout"]
+    PAGE_SIZE = 100
 
     def __init__(self, admin_service: CardAdminService, status_fn) -> None:
         super().__init__()
@@ -38,9 +66,12 @@ class CardsTab(QWidget):
         self.status_fn = status_fn
         self._selected_oracle_id: str | None = None
         self._building_form = False
+        self._page = 1
+        self._total_pages = 1
+        self._total_count = 0
         self.search_edit = QLineEdit()
         self.search_edit.setPlaceholderText("Search cards")
-        self.search_edit.textChanged.connect(self.refresh_table)
+        self.search_edit.textChanged.connect(self._reset_and_refresh)
 
         self.table = QTableWidget(0, len(self.HEADERS))
         self.table.setHorizontalHeaderLabels(self.HEADERS)
@@ -79,6 +110,17 @@ class CardsTab(QWidget):
         detail_layout = QVBoxLayout(detail)
         detail_layout.addLayout(form)
         detail_layout.addLayout(buttons)
+        self.prev_button = QPushButton("Prev")
+        self.prev_button.clicked.connect(self._previous_page)
+        self.next_button = QPushButton("Next")
+        self.next_button.clicked.connect(self._next_page)
+        self.page_label = QLabel()
+        pagination = QHBoxLayout()
+        pagination.addWidget(self.prev_button)
+        pagination.addWidget(self.next_button)
+        pagination.addWidget(self.page_label)
+        pagination.addStretch(1)
+        detail_layout.addLayout(pagination)
 
         splitter = QSplitter()
         splitter.addWidget(self.table)
@@ -86,22 +128,56 @@ class CardsTab(QWidget):
         splitter.setStretchFactor(0, 2)
         splitter.setStretchFactor(1, 1)
 
+        self._loaded = False
         layout = QVBoxLayout(self)
         layout.addWidget(self.search_edit)
         layout.addWidget(splitter)
+
+    def ensure_loaded(self) -> None:
+        if self._loaded:
+            return
+        self._loaded = True
         self.refresh_table()
 
     def refresh_table(self) -> None:
-        cards = self.admin_service.list_cards(self.search_edit.text())
-        self.table.setRowCount(len(cards))
-        for row_index, card in enumerate(cards):
+        cards = self.admin_service.list_cards(
+            self.search_edit.text(),
+            page=self._page,
+            page_size=self.PAGE_SIZE,
+        )
+        self._page = cards.page
+        self._total_pages = cards.total_pages
+        self._total_count = cards.total_count
+        self.table.setRowCount(len(cards.items))
+        for row_index, card in enumerate(cards.items):
             values = [card.oracle_id, card.name, card.normalized_name, card.layout or ""]
             for column, value in enumerate(values):
                 item = QTableWidgetItem(value)
                 item.setData(Qt.ItemDataRole.UserRole, card.oracle_id)
                 self.table.setItem(row_index, column, item)
         self.table.resizeColumnsToContents()
-        self.status_fn(f"Cards: {len(cards)} loaded")
+        self.page_label.setText(
+            f"Page {self._page} of {self._total_pages} • {self._total_count} cards"
+        )
+        self.prev_button.setEnabled(self._page > 1)
+        self.next_button.setEnabled(self._page < self._total_pages)
+        self.status_fn(f"Cards: {len(cards.items)} loaded")
+
+    def _reset_and_refresh(self) -> None:
+        self._page = 1
+        self.refresh_table()
+
+    def _previous_page(self) -> None:
+        if self._page <= 1:
+            return
+        self._page -= 1
+        self.refresh_table()
+
+    def _next_page(self) -> None:
+        if self._page >= self._total_pages:
+            return
+        self._page += 1
+        self.refresh_table()
 
     def _load_selected_row(self) -> None:
         items = self.table.selectedItems()
@@ -180,12 +256,16 @@ class CardsTab(QWidget):
 
 class PrintsTab(QWidget):
     HEADERS = ["Card ID", "Name", "Set", "Collector #", "Oracle ID", "Released"]
+    PAGE_SIZE = 100
 
     def __init__(self, admin_service: CardAdminService, status_fn) -> None:
         super().__init__()
         self.admin_service = admin_service
         self.status_fn = status_fn
         self._selected_card_id: str | None = None
+        self._page = 1
+        self._total_pages = 1
+        self._total_count = 0
 
         self.query_edit = QLineEdit()
         self.query_edit.setPlaceholderText("Filter by card name")
@@ -194,7 +274,7 @@ class PrintsTab(QWidget):
         self.oracle_filter_edit = QLineEdit()
         self.oracle_filter_edit.setPlaceholderText("Oracle ID")
         for widget in (self.query_edit, self.set_code_edit, self.oracle_filter_edit):
-            widget.textChanged.connect(self.refresh_table)
+            widget.textChanged.connect(self._reset_and_refresh)
 
         filter_row = QHBoxLayout()
         filter_row.addWidget(self.query_edit)
@@ -255,6 +335,17 @@ class PrintsTab(QWidget):
         detail_layout = QVBoxLayout(detail)
         detail_layout.addLayout(form)
         detail_layout.addLayout(buttons)
+        self.prev_button = QPushButton("Prev")
+        self.prev_button.clicked.connect(self._previous_page)
+        self.next_button = QPushButton("Next")
+        self.next_button.clicked.connect(self._next_page)
+        self.page_label = QLabel()
+        pagination = QHBoxLayout()
+        pagination.addWidget(self.prev_button)
+        pagination.addWidget(self.next_button)
+        pagination.addWidget(self.page_label)
+        pagination.addStretch(1)
+        detail_layout.addLayout(pagination)
 
         splitter = QSplitter()
         splitter.addWidget(self.table)
@@ -262,9 +353,15 @@ class PrintsTab(QWidget):
         splitter.setStretchFactor(0, 2)
         splitter.setStretchFactor(1, 1)
 
+        self._loaded = False
         layout = QVBoxLayout(self)
         layout.addLayout(filter_row)
         layout.addWidget(splitter)
+
+    def ensure_loaded(self) -> None:
+        if self._loaded:
+            return
+        self._loaded = True
         self.refresh_table()
 
     def refresh_table(self) -> None:
@@ -272,9 +369,14 @@ class PrintsTab(QWidget):
             query=self.query_edit.text(),
             set_code=self.set_code_edit.text(),
             oracle_id=self.oracle_filter_edit.text(),
+            page=self._page,
+            page_size=self.PAGE_SIZE,
         )
-        self.table.setRowCount(len(prints))
-        for row_index, print_record in enumerate(prints):
+        self._page = prints.page
+        self._total_pages = prints.total_pages
+        self._total_count = prints.total_count
+        self.table.setRowCount(len(prints.items))
+        for row_index, print_record in enumerate(prints.items):
             values = [
                 print_record.card_id,
                 print_record.name,
@@ -288,7 +390,28 @@ class PrintsTab(QWidget):
                 item.setData(Qt.ItemDataRole.UserRole, print_record.card_id)
                 self.table.setItem(row_index, column, item)
         self.table.resizeColumnsToContents()
-        self.status_fn(f"Prints: {len(prints)} loaded")
+        self.page_label.setText(
+            f"Page {self._page} of {self._total_pages} • {self._total_count} prints"
+        )
+        self.prev_button.setEnabled(self._page > 1)
+        self.next_button.setEnabled(self._page < self._total_pages)
+        self.status_fn(f"Prints: {len(prints.items)} loaded")
+
+    def _reset_and_refresh(self) -> None:
+        self._page = 1
+        self.refresh_table()
+
+    def _previous_page(self) -> None:
+        if self._page <= 1:
+            return
+        self._page -= 1
+        self.refresh_table()
+
+    def _next_page(self) -> None:
+        if self._page >= self._total_pages:
+            return
+        self._page += 1
+        self.refresh_table()
 
     def _load_selected_row(self) -> None:
         items = self.table.selectedItems()
@@ -386,12 +509,19 @@ class PrintsTab(QWidget):
 class ImagesTab(QWidget):
     MANIFEST_HEADERS = ["Card", "Variant", "Asset", "Status", "Source", "Checksum"]
     ASSET_HEADERS = ["Asset", "Mime", "Source", "Checksum", "Bytes", "Updated"]
+    PAGE_SIZE = 100
 
     def __init__(self, admin_service: CardAdminService, status_fn) -> None:
         super().__init__()
         self.admin_service = admin_service
         self.status_fn = status_fn
         self._asset_records: dict[str, ImageAssetRecord] = {}
+        self._manifest_page = 1
+        self._manifest_total_pages = 1
+        self._manifest_total_count = 0
+        self._asset_page = 1
+        self._asset_total_pages = 1
+        self._asset_total_count = 0
 
         self.refresh_button = QPushButton("Refresh")
         self.refresh_button.clicked.connect(self.refresh_views)
@@ -405,6 +535,17 @@ class ImagesTab(QWidget):
         self.assets_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.assets_table.itemSelectionChanged.connect(self._refresh_asset_preview)
 
+        self.manifest_prev_button = QPushButton("Prev Manifests")
+        self.manifest_prev_button.clicked.connect(self._previous_manifest_page)
+        self.manifest_next_button = QPushButton("Next Manifests")
+        self.manifest_next_button.clicked.connect(self._next_manifest_page)
+        self.manifest_page_label = QLabel()
+        self.asset_prev_button = QPushButton("Prev Assets")
+        self.asset_prev_button.clicked.connect(self._previous_asset_page)
+        self.asset_next_button = QPushButton("Next Assets")
+        self.asset_next_button.clicked.connect(self._next_asset_page)
+        self.asset_page_label = QLabel()
+
         self.asset_meta = QPlainTextEdit()
         self.asset_meta.setReadOnly(True)
         self.asset_preview = QLabel("Select an asset to preview")
@@ -416,9 +557,31 @@ class ImagesTab(QWidget):
         preview_layout.addWidget(self.asset_preview)
         preview_layout.addWidget(self.asset_meta)
 
+        manifest_controls = QWidget()
+        manifest_controls_layout = QHBoxLayout(manifest_controls)
+        manifest_controls_layout.addWidget(self.manifest_prev_button)
+        manifest_controls_layout.addWidget(self.manifest_next_button)
+        manifest_controls_layout.addWidget(self.manifest_page_label)
+        manifest_controls_layout.addStretch(1)
+
+        asset_controls = QWidget()
+        asset_controls_layout = QHBoxLayout(asset_controls)
+        asset_controls_layout.addWidget(self.asset_prev_button)
+        asset_controls_layout.addWidget(self.asset_next_button)
+        asset_controls_layout.addWidget(self.asset_page_label)
+        asset_controls_layout.addStretch(1)
+
         tables = QSplitter(Qt.Orientation.Vertical)
-        tables.addWidget(self.manifest_table)
-        tables.addWidget(self.assets_table)
+        manifest_panel = QWidget()
+        manifest_panel_layout = QVBoxLayout(manifest_panel)
+        manifest_panel_layout.addWidget(manifest_controls)
+        manifest_panel_layout.addWidget(self.manifest_table)
+        assets_panel = QWidget()
+        assets_panel_layout = QVBoxLayout(assets_panel)
+        assets_panel_layout.addWidget(asset_controls)
+        assets_panel_layout.addWidget(self.assets_table)
+        tables.addWidget(manifest_panel)
+        tables.addWidget(assets_panel)
         tables.setStretchFactor(0, 1)
         tables.setStretchFactor(1, 1)
 
@@ -428,18 +591,36 @@ class ImagesTab(QWidget):
         body.setStretchFactor(0, 2)
         body.setStretchFactor(1, 1)
 
+        self._loaded = False
         layout = QVBoxLayout(self)
         layout.addWidget(self.refresh_button)
         layout.addWidget(body)
+        
+    def ensure_loaded(self) -> None:
+        if self._loaded:
+            return
+        self._loaded = True
         self.refresh_views()
 
     def refresh_views(self) -> None:
-        manifests = self.admin_service.list_image_manifest()
-        assets = self.admin_service.list_image_assets()
-        self._asset_records = {asset.asset_id: asset for asset in assets}
+        manifests = self.admin_service.list_image_manifest(
+            page=self._manifest_page,
+            page_size=self.PAGE_SIZE,
+        )
+        assets = self.admin_service.list_image_assets(
+            page=self._asset_page,
+            page_size=self.PAGE_SIZE,
+        )
+        self._manifest_page = manifests.page
+        self._manifest_total_pages = manifests.total_pages
+        self._manifest_total_count = manifests.total_count
+        self._asset_page = assets.page
+        self._asset_total_pages = assets.total_pages
+        self._asset_total_count = assets.total_count
+        self._asset_records = {asset.asset_id: asset for asset in assets.items}
 
-        self.manifest_table.setRowCount(len(manifests))
-        for row_index, manifest in enumerate(manifests):
+        self.manifest_table.setRowCount(len(manifests.items))
+        for row_index, manifest in enumerate(manifests.items):
             values = [
                 manifest.card_name or manifest.card_id,
                 manifest.variant,
@@ -452,14 +633,14 @@ class ImagesTab(QWidget):
                 item = QTableWidgetItem(value)
                 self.manifest_table.setItem(row_index, column, item)
 
-        self.assets_table.setRowCount(len(assets))
-        for row_index, asset in enumerate(assets):
+        self.assets_table.setRowCount(len(assets.items))
+        for row_index, asset in enumerate(assets.items):
             values = [
                 asset.asset_id,
                 asset.mime_type or "",
                 asset.source or "",
                 asset.checksum,
-                str(len(asset.payload)),
+                str(asset.payload_size or 0),
                 str(asset.updated_at or ""),
             ]
             for column, value in enumerate(values):
@@ -468,14 +649,48 @@ class ImagesTab(QWidget):
                 self.assets_table.setItem(row_index, column, item)
         self.manifest_table.resizeColumnsToContents()
         self.assets_table.resizeColumnsToContents()
-        self.status_fn(f"Images: {len(manifests)} manifests, {len(assets)} assets")
+        self.manifest_page_label.setText(
+            f"Page {self._manifest_page} of {self._manifest_total_pages} • {self._manifest_total_count} manifests"
+        )
+        self.asset_page_label.setText(
+            f"Page {self._asset_page} of {self._asset_total_pages} • {self._asset_total_count} assets"
+        )
+        self.manifest_prev_button.setEnabled(self._manifest_page > 1)
+        self.manifest_next_button.setEnabled(self._manifest_page < self._manifest_total_pages)
+        self.asset_prev_button.setEnabled(self._asset_page > 1)
+        self.asset_next_button.setEnabled(self._asset_page < self._asset_total_pages)
+        self.status_fn(f"Images: {len(manifests.items)} manifests, {len(assets.items)} assets")
+
+    def _previous_manifest_page(self) -> None:
+        if self._manifest_page <= 1:
+            return
+        self._manifest_page -= 1
+        self.refresh_views()
+
+    def _next_manifest_page(self) -> None:
+        if self._manifest_page >= self._manifest_total_pages:
+            return
+        self._manifest_page += 1
+        self.refresh_views()
+
+    def _previous_asset_page(self) -> None:
+        if self._asset_page <= 1:
+            return
+        self._asset_page -= 1
+        self.refresh_views()
+
+    def _next_asset_page(self) -> None:
+        if self._asset_page >= self._asset_total_pages:
+            return
+        self._asset_page += 1
+        self.refresh_views()
 
     def _refresh_asset_preview(self) -> None:
         items = self.assets_table.selectedItems()
         if not items:
             return
         asset_id = items[0].data(Qt.ItemDataRole.UserRole)
-        asset = self._asset_records.get(asset_id)
+        asset = self.admin_service.get_image_asset(asset_id)
         if asset is None:
             return
         pixmap = QPixmap()
@@ -487,8 +702,10 @@ class ImagesTab(QWidget):
                 Qt.AspectRatioMode.KeepAspectRatio,
                 Qt.TransformationMode.SmoothTransformation,
             )
+            self.asset_preview.setText("")
             self.asset_preview.setPixmap(scaled)
         else:
+            self.asset_preview.clear()
             self.asset_preview.setText("Preview unavailable for this asset")
         self.asset_meta.setPlainText(
             json.dumps(
@@ -499,7 +716,7 @@ class ImagesTab(QWidget):
                     "mime_type": asset.mime_type,
                     "source": asset.source,
                     "source_url": asset.source_url,
-                    "payload_bytes": len(asset.payload),
+                    "payload_bytes": asset.payload_size or len(asset.payload),
                     "created_at": asset.created_at,
                     "updated_at": asset.updated_at,
                 },
@@ -511,12 +728,36 @@ class ImagesTab(QWidget):
 
 
 class SyncTab(QWidget):
+    close_ready = pyqtSignal()
     HEADERS = ["Source", "Version", "Last Sync"]
 
     def __init__(self, admin_service: CardAdminService, status_fn) -> None:
         super().__init__()
         self.admin_service = admin_service
         self.status_fn = status_fn
+        self._thread: QThread | None = None
+        self._worker: BulkDownloadWorker | None = None
+        self._close_requested = False
+        self._loaded = False
+        self._status_timer = QTimer(self)
+        self._status_timer.setInterval(1000)
+        self._status_timer.timeout.connect(self._refresh_download_status)
+        self.query_label = QLabel()
+        self.job_status_label = QLabel()
+        self.chunk_status_label = QLabel()
+        self.counts_label = QLabel()
+        self.next_page_label = QLabel()
+        self.last_error_label = QLabel()
+        self.updated_label = QLabel()
+        self.start_button = QPushButton("Start")
+        self.start_button.clicked.connect(self._start_download_job)
+        self.pause_button = QPushButton("Pause")
+        self.pause_button.clicked.connect(self._pause_download_job)
+        self.resume_button = QPushButton("Resume")
+        self.resume_button.clicked.connect(self._resume_download_job)
+        self.refresh_status_button = QPushButton("Refresh Status")
+        self.refresh_status_button.clicked.connect(self._refresh_download_status)
+
         self.table = QTableWidget(0, len(self.HEADERS))
         self.table.setHorizontalHeaderLabels(self.HEADERS)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
@@ -527,6 +768,29 @@ class SyncTab(QWidget):
         refresh_button = QPushButton("Refresh")
         refresh_button.clicked.connect(self.refresh_view)
 
+        controls = QWidget()
+        controls_layout = QGridLayout(controls)
+        controls_layout.addWidget(QLabel("Fixed Query"), 0, 0)
+        controls_layout.addWidget(self.query_label, 0, 1, 1, 3)
+        controls_layout.addWidget(QLabel("Job Status"), 1, 0)
+        controls_layout.addWidget(self.job_status_label, 1, 1)
+        controls_layout.addWidget(QLabel("Chunk"), 1, 2)
+        controls_layout.addWidget(self.chunk_status_label, 1, 3)
+        controls_layout.addWidget(QLabel("Counts"), 2, 0)
+        controls_layout.addWidget(self.counts_label, 2, 1, 1, 3)
+        controls_layout.addWidget(QLabel("Next Page"), 3, 0)
+        controls_layout.addWidget(self.next_page_label, 3, 1, 1, 3)
+        controls_layout.addWidget(QLabel("Last Error"), 4, 0)
+        controls_layout.addWidget(self.last_error_label, 4, 1, 1, 3)
+        controls_layout.addWidget(QLabel("Updated"), 5, 0)
+        controls_layout.addWidget(self.updated_label, 5, 1, 1, 3)
+        controls_layout.addWidget(self.start_button, 6, 0)
+        controls_layout.addWidget(self.pause_button, 6, 1)
+        controls_layout.addWidget(self.resume_button, 6, 2)
+        controls_layout.addWidget(self.refresh_status_button, 6, 3)
+        controls_layout.addWidget(refresh_button, 7, 0)
+        controls_layout.setColumnStretch(1, 1)
+
         splitter = QSplitter()
         splitter.addWidget(self.table)
         splitter.addWidget(self.payload_edit)
@@ -534,8 +798,14 @@ class SyncTab(QWidget):
         splitter.setStretchFactor(1, 1)
 
         layout = QVBoxLayout(self)
-        layout.addWidget(refresh_button)
+        layout.addWidget(controls)
         layout.addWidget(splitter)
+
+    def ensure_loaded(self) -> None:
+        if self._loaded:
+            return
+        self._loaded = True
+        self._refresh_download_status()
         self.refresh_view()
 
     def refresh_view(self) -> None:
@@ -549,6 +819,7 @@ class SyncTab(QWidget):
                 self.table.setItem(row_index, column, item)
         self.table.resizeColumnsToContents()
         self.status_fn(f"Sync rows: {len(rows)} loaded")
+        self._refresh_download_status()
 
     def _load_payload(self) -> None:
         items = self.table.selectedItems()
@@ -556,6 +827,113 @@ class SyncTab(QWidget):
             return
         payload = items[0].data(Qt.ItemDataRole.UserRole)
         self.payload_edit.setPlainText(json.dumps(payload, indent=2, sort_keys=True))
+
+    def _refresh_download_status(self) -> None:
+        status = self.admin_service.get_bulk_download_status()
+        self._apply_download_status(status)
+
+    def _apply_download_status(self, status) -> None:
+        display_status = self._display_status(status)
+        self.query_label.setText(status.query)
+        self.job_status_label.setText(display_status)
+        self.chunk_status_label.setText(str(status.chunk_number))
+        self.counts_label.setText(
+            f"scanned={status.total_scanned}  downloaded={status.total_downloaded}  "
+            f"skipped={status.total_skipped}  failed={status.total_failed}"
+        )
+        self.next_page_label.setText(status.current_page_url or "Completed / none pending")
+        self.last_error_label.setText(status.last_error or "None")
+        self.updated_label.setText("" if status.last_sync_at is None else str(status.last_sync_at))
+        self._sync_buttons(status)
+
+    def _display_status(self, status) -> str:
+        if not self.is_download_running() and status.status == "running":
+            return "paused"
+        return status.status
+
+    def _sync_buttons(self, status) -> None:
+        running = self.is_download_running()
+        stale_running = (not running) and status.status == "running"
+        self.start_button.setEnabled(not running and status.status == "idle")
+        self.pause_button.setEnabled(running)
+        self.resume_button.setEnabled(not running and (status.can_resume or stale_running))
+        if running:
+            if not self._status_timer.isActive():
+                self._status_timer.start()
+        elif self._status_timer.isActive():
+            self._status_timer.stop()
+
+    def is_download_running(self) -> bool:
+        return self._thread is not None and self._thread.isRunning()
+
+    def request_pause_for_close(self) -> bool:
+        if not self.is_download_running():
+            status = self.admin_service.get_bulk_download_status()
+            if status.status == "running" and not status.completed:
+                self.admin_service.pause_bulk_download()
+            return True
+        self._close_requested = True
+        self._pause_download_job()
+        return False
+
+    def _start_download_job(self) -> None:
+        if self.is_download_running():
+            return
+        self._close_requested = False
+        self._launch_worker()
+
+    def _resume_download_job(self) -> None:
+        if self.is_download_running():
+            return
+        self._close_requested = False
+        self._launch_worker()
+
+    def _pause_download_job(self) -> None:
+        if self._worker is None:
+            status = self.admin_service.get_bulk_download_status()
+            self._apply_download_status(status)
+            return
+        self._worker.request_pause()
+        self.pause_button.setEnabled(False)
+        self.status_fn("Pausing after current chunk...")
+
+    def _launch_worker(self) -> None:
+        self._thread = QThread(self)
+        self._worker = BulkDownloadWorker(self.admin_service)
+        self._worker.moveToThread(self._thread)
+        self._thread.started.connect(self._worker.run)
+        self._worker.progress.connect(self._on_worker_progress)
+        self._worker.finished.connect(self._on_worker_finished)
+        self._worker.failed.connect(self._on_worker_failed)
+        self._worker.finished.connect(self._thread.quit)
+        self._worker.failed.connect(self._thread.quit)
+        self._worker.finished.connect(self._worker.deleteLater)
+        self._worker.failed.connect(self._worker.deleteLater)
+        self._thread.finished.connect(self._thread.deleteLater)
+        self._thread.start()
+        self._apply_download_status(self.admin_service.get_bulk_download_status())
+        self.status_fn("Catalog download started")
+
+    def _on_worker_progress(self, status) -> None:
+        self._apply_download_status(status)
+        self.status_fn(f"Catalog download: {status.status} after chunk {status.chunk_number}")
+
+    def _on_worker_finished(self, status) -> None:
+        self._apply_download_status(status)
+        self.status_fn(f"Catalog download finished with status: {status.status}")
+        self._worker = None
+        self._thread = None
+        self._refresh_download_status()
+        if self._close_requested:
+            self._close_requested = False
+            self.close_ready.emit()
+
+    def _on_worker_failed(self, message: str) -> None:
+        QMessageBox.critical(self, "Download All Cards", message)
+        self.status_fn("Download job failed")
+        self._worker = None
+        self._thread = None
+        self._refresh_download_status()
 
 
 class CoreAdminMainWindow(QMainWindow):
@@ -575,12 +953,36 @@ class CoreAdminMainWindow(QMainWindow):
         self.prints_tab = PrintsTab(self.admin_service, self._set_status)
         self.images_tab = ImagesTab(self.admin_service, self._set_status)
         self.sync_tab = SyncTab(self.admin_service, self._set_status)
+        self._allow_close_after_pause = False
+        self.sync_tab.close_ready.connect(self._close_after_pause)
         tabs.addTab(self.cards_tab, "Cards")
         tabs.addTab(self.prints_tab, "Prints")
         tabs.addTab(self.images_tab, "Images")
         tabs.addTab(self.sync_tab, "Sync")
+        tabs.currentChanged.connect(self._load_current_tab)
         self.setCentralWidget(tabs)
         self._set_status("Ready")
+        self._load_current_tab(tabs.currentIndex())
 
     def _set_status(self, message: str) -> None:
         self.statusBar().showMessage(message, 6000)
+
+    def _load_current_tab(self, _index: int) -> None:
+        current = self.centralWidget().currentWidget()
+        if hasattr(current, "ensure_loaded"):
+            current.ensure_loaded()
+
+    def _close_after_pause(self) -> None:
+        self._allow_close_after_pause = True
+        self._set_status("Catalog download paused; closing app")
+        QTimer.singleShot(0, self.close)
+
+    def closeEvent(self, event) -> None:  # pragma: no cover - GUI interaction
+        if self._allow_close_after_pause:
+            event.accept()
+            return
+        if self.sync_tab.request_pause_for_close():
+            event.accept()
+            return
+        self._set_status("Finishing current chunk before closing...")
+        event.ignore()

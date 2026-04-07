@@ -34,10 +34,11 @@ from PyQt6.QtWidgets import (
 
 import image
 import project_library
-from background_tasks import HighResThumbnailLoader, make_popup_print_fn, popup
+from background_tasks import CardSearchThumbnailLoader, HighResThumbnailLoader, make_popup_print_fn, popup
 from config import CFG, save_config
 from constants import cwd, page_sizes
 from models import ProjectState, as_project_state, project_to_dict
+from mtg_core import get_default_card_service
 from services import deck_import_service, high_res_service, project_service
 
 logger = logging.getLogger(__name__)
@@ -328,16 +329,17 @@ class AddCardDialog(QDialog):
         self._image_dir = image_dir
         self._card_candidates = []
         self._card_preview_cache = {}
+        self._card_thumbnail_cache = {}
+        self._card_thumbnail_loader = None
+        self._card_thumbnail_page_token = 0
         self._selected_card_value = None
         self._selected_art_candidate_value = None
         self._selected_art_source_value = None
-        self._card_page_size = 60
+        self._card_page_size = 250
         self._card_page_start = 0
         self._total_card_count = 0
 
-        intro = QLabel(
-            "Search Scryfall for the card printing you want to add, then optionally choose custom art from Scryfall or MPCFill."
-        )
+        intro = QLabel("Search your card catalog for the exact printing/art you want to add.")
         intro.setWordWrap(True)
 
         page_stack = QStackedWidget()
@@ -359,12 +361,12 @@ class AddCardDialog(QDialog):
         card_filters_layout.addWidget(WidgetWithLabel("Set Filter", card_set_filter_edit), 1)
         card_filters_layout.addWidget(card_search_button)
 
-        card_prev_page_button = QPushButton("Previous 60 Results")
+        card_prev_page_button = QPushButton("Previous 250 Results")
         card_prev_page_button.setEnabled(False)
         card_prev_page_button.clicked.connect(self._go_to_previous_card_page)
         self._card_prev_page_button = card_prev_page_button
 
-        card_next_page_button = QPushButton("Next 60 Results")
+        card_next_page_button = QPushButton("Next 250 Results")
         card_next_page_button.setEnabled(False)
         card_next_page_button.clicked.connect(self._go_to_next_card_page)
         self._card_next_page_button = card_next_page_button
@@ -381,7 +383,7 @@ class AddCardDialog(QDialog):
         card_results_list = QListWidget()
         card_results_list.setIconSize(QtCore.QSize(90, 126))
         card_results_list.currentRowChanged.connect(self._handle_card_selection_changed)
-        card_results_list.itemDoubleClicked.connect(lambda _item: self._go_to_art_step())
+        card_results_list.itemDoubleClicked.connect(lambda _item: self._accept_add_card())
         self._card_results_list = card_results_list
 
         card_preview_label = QLabel("Select a card to preview it here.")
@@ -396,7 +398,7 @@ class AddCardDialog(QDialog):
         self._card_details_label = card_details_label
 
         card_left_layout = QVBoxLayout()
-        card_left_layout.addWidget(QLabel("Scryfall Matches"))
+        card_left_layout.addWidget(QLabel("Card Catalog Matches"))
         card_left_layout.addWidget(card_results_list)
 
         card_right_layout = QVBoxLayout()
@@ -413,17 +415,17 @@ class AddCardDialog(QDialog):
         card_status_label.setWordWrap(True)
         self._card_status_label = card_status_label
 
-        card_next_button = QPushButton("Next: Art")
-        card_next_button.setEnabled(False)
-        card_next_button.clicked.connect(self._go_to_art_step)
-        self._card_next_button = card_next_button
+        card_add_button = QPushButton("Add Card")
+        card_add_button.setEnabled(False)
+        card_add_button.clicked.connect(self._accept_add_card)
+        self._card_next_button = card_add_button
 
         card_cancel_button = QPushButton("Cancel")
         card_cancel_button.clicked.connect(self.reject)
 
         card_button_row = QHBoxLayout()
         card_button_row.addStretch()
-        card_button_row.addWidget(card_next_button)
+        card_button_row.addWidget(card_add_button)
         card_button_row.addWidget(card_cancel_button)
 
         card_page = QWidget()
@@ -435,71 +437,12 @@ class AddCardDialog(QDialog):
         card_page_layout.addLayout(card_button_row)
         card_page.setLayout(card_page_layout)
 
-        art_page = QWidget()
-        art_page_layout = QVBoxLayout()
-
-        art_heading = QLabel("Choose the art for the card you selected.")
-        art_heading.setWordWrap(True)
-        self._art_heading = art_heading
-
-        selected_card_label = QLabel("No card selected yet.")
-        selected_card_label.setWordWrap(True)
-        self._selected_card_label = selected_card_label
-
-        art_summary_label = QLabel("")
-        art_summary_label.setWordWrap(True)
-        self._art_summary_label = art_summary_label
-
-        art_help_label = QLabel(
-            "Use the default Scryfall import art, or open the New Art picker to choose custom art from Scryfall or MPCFill."
-        )
-        art_help_label.setWordWrap(True)
-
-        choose_custom_art_button = QPushButton("Choose Custom Art")
-        choose_custom_art_button.clicked.connect(self._choose_custom_art)
-
-        use_default_art_button = QPushButton("Use Default Art")
-        use_default_art_button.clicked.connect(self._use_default_art)
-
-        art_back_button = QPushButton("Back")
-        art_back_button.clicked.connect(lambda: self._page_stack.setCurrentIndex(0))
-
-        add_card_button = QPushButton("Add Card")
-        add_card_button.clicked.connect(self._accept_add_card)
-        self._add_card_button = add_card_button
-
-        art_cancel_button = QPushButton("Cancel")
-        art_cancel_button.clicked.connect(self.reject)
-
-        art_actions_row = QHBoxLayout()
-        art_actions_row.addWidget(choose_custom_art_button)
-        art_actions_row.addWidget(use_default_art_button)
-        art_actions_row.addStretch()
-
-        art_button_row = QHBoxLayout()
-        art_button_row.addWidget(art_back_button)
-        art_button_row.addStretch()
-        art_button_row.addWidget(add_card_button)
-        art_button_row.addWidget(art_cancel_button)
-
-        art_page_layout.addWidget(art_heading)
-        art_page_layout.addWidget(selected_card_label)
-        art_page_layout.addWidget(art_help_label)
-        art_page_layout.addWidget(art_summary_label)
-        art_page_layout.addStretch()
-        art_page_layout.addLayout(art_actions_row)
-        art_page_layout.addLayout(art_button_row)
-        art_page.setLayout(art_page_layout)
-
         page_stack.addWidget(card_page)
-        page_stack.addWidget(art_page)
 
         layout = QVBoxLayout()
         layout.addWidget(intro)
         layout.addWidget(page_stack)
         self.setLayout(layout)
-
-        self._update_art_summary()
 
     def selected_card(self):
         return self._selected_card_value
@@ -573,6 +516,92 @@ class AddCardDialog(QDialog):
         self._card_page_start += self._card_page_size
         self.refresh_card_results(reset_page=False)
 
+    def _card_thumbnail_key(self, candidate):
+        return (
+            f"asset:{candidate.image_asset_id}"
+            if candidate.image_asset_id
+            else f"card:{candidate.card_id}"
+            if candidate.card_id
+            else f"url:{candidate.thumbnail_url or candidate.preview_url}"
+            if (candidate.thumbnail_url or candidate.preview_url)
+            else f"scryfall:{candidate.scryfall_id}"
+        )
+
+    def _card_thumbnail_sources(self, candidate):
+        local_path = candidate.local_image_path
+        if candidate.card_id and not local_path:
+            local_path = get_default_card_service().get_image_path(candidate.card_id)
+        return local_path, candidate.thumbnail_url or candidate.preview_url
+
+    def _stop_card_thumbnail_loader(self):
+        if self._card_thumbnail_loader is not None:
+            self._card_thumbnail_loader.cancel()
+            self._card_thumbnail_loader.wait(2000)
+            self._card_thumbnail_loader = None
+
+    @QtCore.pyqtSlot(int, str, bytes)
+    def _handle_card_thumbnail_loaded(self, page_token, identifier, data):
+        if page_token != self._card_thumbnail_page_token:
+            return
+        self._card_thumbnail_cache[identifier] = data
+        for row, candidate in enumerate(self._card_candidates):
+            if self._card_thumbnail_key(candidate) != identifier:
+                continue
+            item = self._card_results_list.item(row)
+            if item is None:
+                return
+            pixmap = QPixmap()
+            if pixmap.loadFromData(data):
+                item.setIcon(QIcon(pixmap))
+            return
+
+    def _apply_card_thumbnail(self, row, candidate, data):
+        self._card_thumbnail_cache[self._card_thumbnail_key(candidate)] = data
+        item = self._card_results_list.item(row)
+        if item is None:
+            return
+        pixmap = QPixmap()
+        if pixmap.loadFromData(data):
+            item.setIcon(QIcon(pixmap))
+
+    def _start_card_thumbnail_loader(self, candidates):
+        self._stop_card_thumbnail_loader()
+        pending = []
+        for row, candidate in enumerate(candidates):
+            identifier = self._card_thumbnail_key(candidate)
+            cached = self._card_thumbnail_cache.get(identifier)
+            if cached is not None:
+                self._apply_card_thumbnail(row, candidate, cached)
+                continue
+            local_path, url = self._card_thumbnail_sources(candidate)
+            if not local_path and url:
+                cached = high_res_service.get_cached_thumbnail_bytes(url)
+                if cached is not None:
+                    self._apply_card_thumbnail(row, candidate, cached)
+                    continue
+            if local_path or url:
+                pending.append((row, identifier, local_path, url))
+        if not pending:
+            return
+        self._card_thumbnail_page_token += 1
+        loader = CardSearchThumbnailLoader(self._card_thumbnail_page_token, pending)
+        loader.thumbnail_loaded.connect(self._handle_card_thumbnail_loaded)
+        loader.finished.connect(lambda: setattr(self, "_card_thumbnail_loader", None))
+        self._card_thumbnail_loader = loader
+        loader.start()
+
+    def closeEvent(self, event):
+        self._stop_card_thumbnail_loader()
+        super().closeEvent(event)
+
+    def reject(self):
+        self._stop_card_thumbnail_loader()
+        super().reject()
+
+    def accept(self):
+        self._stop_card_thumbnail_loader()
+        super().accept()
+
     def refresh_card_results(self, reset_page=False):
         name_query = self._card_name_edit.text().strip()
         set_filter = self._card_set_filter_edit.text().strip()
@@ -594,8 +623,9 @@ class AddCardDialog(QDialog):
             except ValueError as exc:
                 error = exc
 
-        self._run_with_popup("Searching Scryfall...", do_search)
+        self._run_with_popup("Searching card catalog...", do_search)
         if error is not None:
+            self._stop_card_thumbnail_loader()
             self._warn("Card Search Failed", str(error))
             self._card_status_label.setText("Card search failed. Check the warning for details.")
             self._card_candidates = []
@@ -607,6 +637,7 @@ class AddCardDialog(QDialog):
 
         self._card_candidates = [] if search_page is None else search_page.candidates
         self._total_card_count = 0 if search_page is None else search_page.total_count
+        self._stop_card_thumbnail_loader()
         self._card_results_list.clear()
         self._card_next_button.setEnabled(False)
         self._card_preview_label.setText("Select a card to preview it here.")
@@ -615,24 +646,26 @@ class AddCardDialog(QDialog):
         self._update_card_pagination_controls()
 
         if not self._card_candidates:
-            self._card_status_label.setText("No Scryfall card matches found.")
+            self._card_status_label.setText("No local or remote card matches found.")
             return
 
         page_number = (self._card_page_start // self._card_page_size) + 1
         total_pages = max(1, math.ceil(self._total_card_count / self._card_page_size))
         start_index = self._card_page_start + 1
         end_index = min(self._card_page_start + len(self._card_candidates), self._total_card_count)
+        source_text = "local catalog" if getattr(search_page, "search_source", "remote") == "local" else "local catalog plus online results"
         self._card_status_label.setText(
-            f"Showing {start_index}-{end_index} of {self._total_card_count} Scryfall printings (page {page_number}/{total_pages})."
+            f"Showing {start_index}-{end_index} of {self._total_card_count} {source_text} printings (page {page_number}/{total_pages})."
         )
         for candidate in self._card_candidates:
             item = QListWidgetItem(f"{candidate.name}\n{self._candidate_summary_text(candidate)}")
-            thumb_bytes = self._card_preview_cache.get(candidate.thumbnail_url)
+            thumb_bytes = self._card_thumbnail_cache.get(self._card_thumbnail_key(candidate))
             if thumb_bytes:
                 pixmap = QPixmap()
                 if pixmap.loadFromData(thumb_bytes):
                     item.setIcon(QIcon(pixmap))
             self._card_results_list.addItem(item)
+        self._start_card_thumbnail_loader(self._card_candidates)
         self._card_results_list.setCurrentRow(0)
 
     def _handle_card_selection_changed(self, row):
@@ -644,10 +677,15 @@ class AddCardDialog(QDialog):
             return
         self._card_next_button.setEnabled(True)
         self._card_details_label.setText(self._candidate_details_text(candidate))
+        self._selected_art_candidate_value = None
+        self._selected_art_source_value = None
         self._update_card_preview(candidate)
 
     def _update_card_preview(self, candidate):
-        cache_key = candidate.preview_url or candidate.thumbnail_url
+        local_path = candidate.local_image_path
+        if candidate.card_id and not local_path:
+            local_path = get_default_card_service().get_image_path(candidate.card_id)
+        cache_key = f"local:{local_path}" if local_path else (candidate.preview_url or candidate.thumbnail_url)
         if cache_key not in self._card_preview_cache:
             preview_bytes = None
             error = None
@@ -655,6 +693,10 @@ class AddCardDialog(QDialog):
             def load_preview():
                 nonlocal preview_bytes, error
                 try:
+                    if local_path:
+                        with open(local_path, "rb") as handle:
+                            preview_bytes = handle.read()
+                        return
                     url = candidate.preview_url or candidate.thumbnail_url
                     if not url:
                         preview_bytes = None
@@ -692,11 +734,7 @@ class AddCardDialog(QDialog):
             QToolTip.showText(QCursor.pos(), "Choose a card printing first")
             return
         self._selected_card_value = candidate
-        self._selected_card_label.setText(
-            f"Selected card: {candidate.name} | {self._candidate_summary_text(candidate)}"
-        )
-        self._update_art_summary()
-        self._page_stack.setCurrentIndex(1)
+        self.accept()
 
     def _update_art_summary(self):
         if self._selected_art_candidate_value is None:

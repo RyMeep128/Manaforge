@@ -11,8 +11,9 @@ from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Callable
 
-from mtg_core import CardService
+from mtg_core import CardService, RemoteLookupUnavailable
 from mtg_core.sync import fetch_json as core_fetch_json
+from mtg_core.sync import fetch_bytes as core_fetch_bytes
 from models import ProjectState, as_project_state
 
 logger = logging.getLogger(__name__)
@@ -25,6 +26,7 @@ RECOVERABLE_IMPORT_ERRORS = (
     json.JSONDecodeError,
     urllib.error.URLError,
     urllib.error.HTTPError,
+    RemoteLookupUnavailable,
 )
 
 
@@ -288,6 +290,7 @@ def import_entries(
                 image_dir,
                 print_fn,
                 fetch_bytes,
+                card_service=card_service,
             )
             imported.append(imported_card)
             if backside_name is not None:
@@ -494,10 +497,23 @@ def download_card_image_set(
     face_names = [face.get("name") or card_data.get("name", "card") for face in card_data.get("card_faces", [])]
     card_id = str(card_data.get("id") or "") or None
     oracle_id = str(card_data.get("oracle_id") or "") or None
+    front_record = card_service.database.get_image_record(card_id, "default") if card_id else None
+    back_record = card_service.database.get_image_record(card_id, "back") if card_id else None
 
     if len(face_urls) >= 2 and len(face_names) >= 2:
         front_name = build_face_image_filename(card_data, face_names[0], hidden=False)
         back_name = build_face_image_filename(card_data, face_names[1], hidden=True)
+        front_path = card_service.get_image_path(card_id, "default") if card_id else None
+        back_path = card_service.get_image_path(card_id, "back") if card_id else None
+        if front_path and back_path and front_record is not None:
+            return ImportedCard(
+                entry=entry,
+                filename=front_name,
+                card_id=card_id,
+                oracle_id=oracle_id,
+                image_asset_id=front_record.asset_id,
+                backside_asset_id=None if back_record is None else back_record.asset_id,
+            ), back_name
 
         print_fn(f"Importing decklist...\nDownloading {entry.name} front")
         front_bytes = fetch_bytes(face_urls[0])
@@ -547,6 +563,15 @@ def download_card_image_set(
         raise ValueError("No downloadable image URL found")
 
     filename = build_image_filename(card_data)
+    local_path = card_service.get_image_path(card_id, "default") if card_id else None
+    if local_path and front_record is not None:
+        return ImportedCard(
+            entry=entry,
+            filename=filename,
+            card_id=card_id,
+            oracle_id=oracle_id,
+            image_asset_id=front_record.asset_id,
+        ), None
     print_fn(f"Importing decklist...\nDownloading {entry.name}")
     image_bytes = fetch_bytes(image_url)
     image_asset_id = card_service.store_image_bytes(
@@ -628,12 +653,7 @@ def _fetch_json(url: str) -> dict:
 
 
 def _fetch_bytes(url: str) -> bytes:
-    request = urllib.request.Request(
-        url,
-        headers={"User-Agent": "print-proxy-prep/1.0"},
-    )
-    with urllib.request.urlopen(request, timeout=60) as response:
-        return response.read()
+    return core_fetch_bytes(url)
 
 
 def _fetch_text(url: str) -> str:

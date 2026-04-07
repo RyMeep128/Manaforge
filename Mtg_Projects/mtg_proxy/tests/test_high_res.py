@@ -1029,6 +1029,66 @@ def test_apply_high_res_candidate_invalidates_cached_outputs(tmp_path):
     assert card_name not in json.loads(img_cache_path.read_text())
 
 
+def test_apply_high_res_candidate_invalidates_asset_keyed_runtime_cache(tmp_path):
+    image_dir = tmp_path / "images"
+    image_dir.mkdir()
+    card_name = "scryfall_eld_59_opt.png"
+    img_cache_path = tmp_path / "img.cache"
+    img_cache_path.write_text(
+        json.dumps(
+            {
+                "asset:old-asset:front|fingerprint": {
+                    "_asset_key": "asset:old-asset:front",
+                    "_fingerprint": "fingerprint",
+                }
+            }
+        )
+    )
+    img_dict = {
+        card_name: {
+            "_asset_key": "asset:old-asset:front",
+            "_fingerprint": "fingerprint",
+        }
+    }
+    print_dict = {
+        "cards": {card_name: 1},
+        "img_cache": str(img_cache_path),
+        "card_entries": [
+            {
+                "entry_id": card_name,
+                "front_name": card_name,
+                "count": 1,
+                "image_asset_id": "old-asset",
+            }
+        ],
+        "high_res_front_overrides": {},
+    }
+    candidate = high_res.HighResCandidate(
+        identifier="drive123",
+        name="Opt",
+        dpi=1200,
+        extension="png",
+        download_link="https://download/opt.png",
+        small_thumbnail_url="https://thumb/small",
+        medium_thumbnail_url="https://thumb/medium",
+        source_id=7,
+        source_name="Test Source",
+    )
+
+    high_res.apply_high_res_candidate(
+        print_dict,
+        str(image_dir),
+        card_name,
+        candidate,
+        fetch_bytes=lambda _url: VALID_PNG_BYTES,
+        img_dict=img_dict,
+    )
+
+    assert card_name not in img_dict
+    assert json.loads(img_cache_path.read_text()) == {}
+    assert print_dict["card_entries"][0]["image_asset_id"] != "old-asset"
+
+
 def test_apply_high_res_candidate_replaces_matching_backside(tmp_path):
     image_dir = tmp_path / "images"
     image_dir.mkdir()

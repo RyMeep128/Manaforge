@@ -85,7 +85,18 @@ def init_dict(print_dict, img_dict, warn_fn=None):
         detected_default_back = _detect_default_back_image(source_list, crop_list)
         if detected_default_back is not None:
             state.backside_default = detected_default_back
-        state.remove_missing_cards(set(crop_list) | set(source_list))
+        file_backed_names = set(crop_list) | set(source_list)
+        asset_backed_names = {
+            entry.front_name
+            for entry in state.card_entries_store.values()
+            if entry.image_asset_id
+        }
+        asset_backed_names.update(
+            entry.backside_name
+            for entry in state.card_entries_store.values()
+            if entry.backside_name and entry.backside_asset_id
+        )
+        state.remove_missing_cards(file_backed_names | asset_backed_names)
         for img in crop_list:
             if img not in state.cards:
                 state.cards[img] = 0 if img.startswith("__") else 1

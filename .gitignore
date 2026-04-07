@@ -166,7 +166,14 @@ print.json
 .high_res_cache/
 .pytest_tmp*/
 tmp*/
+*.sqlite3-wal
+*.sqlite3-shm
+Mtg_Projects/mtg_proxy/.mtg_core_test_cache/
+Mtg_Projects/mtg_proxy/projects/.codex_test_runtime/
 
 # local scratch/debug folders
 crop_skip_debug/
 dubpes/
+
+MTGProxyPrinter/
+mpc-autofill/

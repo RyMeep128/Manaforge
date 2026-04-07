@@ -78,6 +78,7 @@ def apply_candidate_to_project(
         card_name,
         candidate,
         backside_match=backside_match,
+        img_dict=img_dict,
     )
     project_service.refresh_after_image_changes(state, img_dict, print_fn, warn_fn)
     return HighResApplyWorkflowResult(

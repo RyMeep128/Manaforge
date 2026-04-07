@@ -1161,7 +1161,12 @@ def find_matching_backside_candidate(
     return sorted(candidates, key=sort_key)[0]
 
 
-def invalidate_cached_card_artifacts(print_dict: ProjectState | dict, image_dir: str, card_name: str):
+def invalidate_cached_card_artifacts(
+    print_dict: ProjectState | dict,
+    image_dir: str,
+    card_name: str,
+    img_dict: dict | None = None,
+):
     state = as_project_state(print_dict)
     crop_dir = os.path.join(image_dir, "crop")
     if os.path.exists(crop_dir):
@@ -1173,7 +1178,7 @@ def invalidate_cached_card_artifacts(print_dict: ProjectState | dict, image_dir:
                     os.remove(os.path.join(root, file_name))
                 except OSError:
                     pass
-    runtime_images.invalidate_entry(state, {}, card_name)
+    runtime_images.invalidate_entry(state, img_dict if img_dict is not None else {}, card_name)
     img_cache_path = state.img_cache
     if img_cache_path and os.path.exists(img_cache_path):
         try:
@@ -1288,6 +1293,7 @@ def apply_high_res_candidate(
     backside_match: BacksideMatch | None = None,
     fetch_bytes: Callable[[str], bytes] | None = None,
     fetch_text: Callable[[str], str] | None = None,
+    img_dict: dict | None = None,
 ):
     state = as_project_state(print_dict)
     card_service = get_default_card_service()
@@ -1316,7 +1322,7 @@ def apply_high_res_candidate(
     path = os.path.join(image_dir, card_name)
     with open(path, "wb") as fp:
         fp.write(image_bytes)
-    invalidate_cached_card_artifacts(state, image_dir, card_name)
+    invalidate_cached_card_artifacts(state, image_dir, card_name, img_dict)
     front_asset_id = card_service.store_image_bytes(
         image_bytes,
         extension=candidate.extension or (os.path.splitext(card_name)[1].lstrip(".") or "png"),
@@ -1328,7 +1334,7 @@ def apply_high_res_candidate(
         back_path = os.path.join(image_dir, backside_match.filename)
         with open(back_path, "wb") as fp:
             fp.write(backside_bytes)
-        invalidate_cached_card_artifacts(state, image_dir, backside_match.filename)
+        invalidate_cached_card_artifacts(state, image_dir, backside_match.filename, img_dict)
         back_asset_id = card_service.store_image_bytes(
             backside_bytes,
             extension=backside_match.candidate.extension or (os.path.splitext(backside_match.filename)[1].lstrip(".") or "png"),

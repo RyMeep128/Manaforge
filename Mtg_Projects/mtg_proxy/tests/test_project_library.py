@@ -106,7 +106,11 @@ def test_list_projects_uses_thumbnail_override_then_first_playable(monkeypatch, 
     project_library.set_thumbnail_card(entry["id"], "front-b.png")
     second = project_library.get_project(entry["id"])
     assert second["thumbnail_card_resolved"] == "front-b.png"
-    assert second["thumbnail_path"].endswith("front-b.png")
+    thumbnail_path = Path(second["thumbnail_path"])
+    assert thumbnail_path.exists()
+    assert "front-b" in thumbnail_path.name
+    assert front_b_asset in thumbnail_path.name
+    assert thumbnail_path.read_bytes() == b"b"
 
 
 def test_import_project_copies_external_project_into_library(monkeypatch, tmp_path):

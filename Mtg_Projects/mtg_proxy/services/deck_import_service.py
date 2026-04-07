@@ -7,7 +7,7 @@ from typing import Callable
 
 import deck_import
 import high_res
-from mtg_core import CardService
+from mtg_core import CardService, RemoteLookupUnavailable
 
 from models import ProjectState, as_project_state
 from . import high_res_service, project_service
@@ -25,12 +25,18 @@ class ScryfallCardCandidate:
     set_code: str | None
     set_name: str | None
     collector_number: str | None
+    card_id: str | None
+    oracle_id: str | None
     scryfall_id: str
     preview_url: str
     thumbnail_url: str
     filename: str
     art_context: high_res.CardContext
     card_data: dict
+    image_asset_id: str | None = None
+    backside_asset_id: str | None = None
+    local_image_path: str | None = None
+    search_source: str = "remote"
 
 
 @dataclass(frozen=True)
@@ -39,6 +45,7 @@ class ScryfallCardSearchPage:
     total_count: int
     page_start: int
     page_size: int
+    search_source: str = "remote"
 
 
 @dataclass
@@ -92,7 +99,8 @@ def _extract_preview_urls(card_data: dict) -> tuple[str, str]:
     return "", ""
 
 
-def _build_card_candidate(card_data: dict) -> ScryfallCardCandidate:
+def _build_card_candidate(card_service: CardService, result, search_source: str) -> ScryfallCardCandidate:
+    card_data = result.payload
     face_urls = deck_import.extract_face_image_urls(card_data)
     front_name = _front_face_name(card_data)
     if len(face_urls) >= 2:
@@ -102,11 +110,15 @@ def _build_card_candidate(card_data: dict) -> ScryfallCardCandidate:
 
     preview_url, thumbnail_url = _extract_preview_urls(card_data)
     card_name = card_data.get("name") or front_name
+    front_record = card_service.database.get_image_record(result.card_id, "default")
+    back_record = card_service.database.get_image_record(result.card_id, "back")
     return ScryfallCardCandidate(
         name=card_name,
         set_code=card_data.get("set"),
         set_name=card_data.get("set_name"),
         collector_number=str(card_data.get("collector_number") or "") or None,
+        card_id=result.card_id,
+        oracle_id=result.oracle_id,
         scryfall_id=str(card_data.get("id") or filename),
         preview_url=preview_url,
         thumbnail_url=thumbnail_url,
@@ -119,6 +131,10 @@ def _build_card_candidate(card_data: dict) -> ScryfallCardCandidate:
             collector_number=str(card_data.get("collector_number") or "") or None,
         ),
         card_data=card_data,
+        image_asset_id=None if front_record is None else front_record.asset_id,
+        backside_asset_id=None if back_record is None else back_record.asset_id,
+        local_image_path=card_service.get_image_path(result.card_id),
+        search_source=search_source,
     )
 
 
@@ -134,13 +150,42 @@ def search_scryfall_card_page(
         raise ValueError("Enter a card name to search Scryfall.")
 
     card_service = _build_card_service(fetch_json)
-    filtered = [
-        _build_card_candidate(result.payload)
-        for result in card_service.search_cards(
-            normalized_query,
-            {"set_filter": set_filter, "allow_remote": True, "limit": 500},
-        )
-    ]
+    search_source = "local"
+    local_results = card_service.search_cards(
+        normalized_query,
+        {"set_filter": set_filter, "allow_remote": False, "limit": 500},
+    )
+    results = list(local_results)
+    should_try_remote = len(normalized_query) > 1 or not results
+    if should_try_remote:
+        try:
+            remote_results = card_service.search_cards(
+                normalized_query,
+                {
+                    "set_filter": set_filter,
+                    "allow_remote": True,
+                    "force_remote": True,
+                    "raise_remote_unavailable": True,
+                    "limit": 500,
+                },
+            )
+            if remote_results:
+                added_remote_result = False
+                seen = {result.card_id for result in results}
+                for result in remote_results:
+                    if result.card_id in seen:
+                        continue
+                    seen.add(result.card_id)
+                    results.append(result)
+                    added_remote_result = True
+                if added_remote_result:
+                    search_source = "remote"
+        except (RemoteLookupUnavailable, ValueError) as exc:
+            if not results:
+                if isinstance(exc, RemoteLookupUnavailable):
+                    raise ValueError("No local matches are available offline. Connect to the internet to search Scryfall.") from exc
+                raise
+    filtered = [_build_card_candidate(card_service, result, search_source) for result in results]
     total_count = len(filtered)
     if page_start < 0:
         page_start = 0
@@ -150,6 +195,7 @@ def search_scryfall_card_page(
         total_count=total_count,
         page_start=page_start,
         page_size=page_size,
+        search_source=search_source,
     )
 
 
@@ -221,6 +267,7 @@ def import_single_card_into_project(
     state = as_project_state(state)
     fetch_json = fetch_json or deck_import._fetch_json
     fetch_bytes = fetch_bytes or deck_import._fetch_bytes
+    card_service = _build_card_service(fetch_json)
 
     entry = deck_import.DeckEntry(
         count=1,
@@ -228,14 +275,38 @@ def import_single_card_into_project(
         set_code=selected_card.set_code,
         collector_number=selected_card.collector_number,
     )
-    card_data = deck_import.resolve_card(entry, fetch_json)
-    imported_card, backside_name = deck_import.download_card_image_set(
-        card_data,
-        entry,
-        image_dir,
-        print_fn,
-        fetch_bytes,
+    card_data = (
+        dict(selected_card.card_data)
+        if selected_card.card_data
+        else (card_service.get_card(card_id=selected_card.card_id) if selected_card.card_id else None)
     )
+    backside_name = None
+    if selected_card.card_id and selected_card.image_asset_id and card_service.get_image_path(selected_card.card_id):
+        if (card_data or {}).get("card_faces") and selected_card.backside_asset_id:
+            face_names = [
+                face.get("name") or selected_card.name
+                for face in (card_data or {}).get("card_faces", [])
+            ]
+            if len(face_names) >= 2:
+                backside_name = deck_import.build_face_image_filename(card_data, face_names[1], hidden=True)
+        imported_card = deck_import.ImportedCard(
+            entry=entry,
+            filename=selected_card.filename,
+            card_id=selected_card.card_id,
+            oracle_id=selected_card.oracle_id,
+            image_asset_id=selected_card.image_asset_id,
+            backside_asset_id=selected_card.backside_asset_id,
+        )
+    else:
+        card_data = card_data or deck_import.resolve_card(entry, fetch_json, card_service=card_service)
+        imported_card, backside_name = deck_import.download_card_image_set(
+            card_data,
+            entry,
+            image_dir,
+            print_fn,
+            fetch_bytes,
+            card_service=card_service,
+        )
     state.apply_imported_card(
         imported_card.filename,
         1,
