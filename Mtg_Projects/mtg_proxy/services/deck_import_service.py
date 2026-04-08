@@ -7,6 +7,7 @@ from typing import Callable
 
 import deck_import
 import high_res
+from config import CFG
 from mtg_core import CardService, RemoteLookupUnavailable
 
 from models import ProjectState, as_project_state
@@ -144,19 +145,27 @@ def search_scryfall_card_page(
     page_start: int = 0,
     page_size: int = 60,
     fetch_json: Callable[[str], dict] | None = None,
+    online_mode: bool | None = None,
 ) -> ScryfallCardSearchPage:
     normalized_query = name_query.strip()
     if not normalized_query:
         raise ValueError("Enter a card name to search Scryfall.")
 
+    online_mode = CFG.OnlineMode if online_mode is None else bool(online_mode)
     card_service = _build_card_service(fetch_json)
-    search_source = "local"
+    search_source = "remote" if online_mode else "local"
     local_results = card_service.search_cards(
         normalized_query,
-        {"set_filter": set_filter, "allow_remote": False, "limit": 500},
+        {
+            "set_filter": set_filter,
+            "allow_remote": False,
+            "limit": 500,
+            "online_mode": online_mode,
+            "cache_ttl_seconds": CFG.HighResCacheTTLSeconds,
+        },
     )
     results = list(local_results)
-    should_try_remote = len(normalized_query) > 1 or not results
+    should_try_remote = not results or (not online_mode and len(normalized_query) > 1)
     if should_try_remote:
         try:
             remote_results = card_service.search_cards(
@@ -167,6 +176,8 @@ def search_scryfall_card_page(
                     "force_remote": True,
                     "raise_remote_unavailable": True,
                     "limit": 500,
+                    "online_mode": online_mode,
+                    "cache_ttl_seconds": CFG.HighResCacheTTLSeconds,
                 },
             )
             if remote_results:
@@ -182,6 +193,31 @@ def search_scryfall_card_page(
                     search_source = "remote"
         except (RemoteLookupUnavailable, ValueError) as exc:
             if not results:
+                if online_mode:
+                    fallback_results = card_service.search_cards(
+                        normalized_query,
+                        {
+                            "set_filter": set_filter,
+                            "allow_remote": False,
+                            "limit": 500,
+                            "online_mode": False,
+                        },
+                    )
+                    if fallback_results:
+                        results = list(fallback_results)
+                        search_source = "local"
+                        filtered = [_build_card_candidate(card_service, result, search_source) for result in results]
+                        total_count = len(filtered)
+                        if page_start < 0:
+                            page_start = 0
+                        page_end = max(page_start, page_start + max(1, page_size))
+                        return ScryfallCardSearchPage(
+                            candidates=filtered[page_start:page_end],
+                            total_count=total_count,
+                            page_start=page_start,
+                            page_size=page_size,
+                            search_source=search_source,
+                        )
                 if isinstance(exc, RemoteLookupUnavailable):
                     raise ValueError("No local matches are available offline. Connect to the internet to search Scryfall.") from exc
                 raise
@@ -268,6 +304,8 @@ def import_single_card_into_project(
     fetch_json = fetch_json or deck_import._fetch_json
     fetch_bytes = fetch_bytes or deck_import._fetch_bytes
     card_service = _build_card_service(fetch_json)
+    if selected_card.card_data:
+        card_service.database.upsert_card_payload(selected_card.card_data)
 
     entry = deck_import.DeckEntry(
         count=1,

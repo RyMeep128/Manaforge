@@ -14,6 +14,7 @@ class GlobalConfig:
         self.HighResCacheTTLSeconds = 60 * 60
         self.HighResSearchCacheMemoryMB = 24
         self.HighResImageCacheMemoryMB = 64
+        self.OnlineMode = True
 
 
 def load_config() -> GlobalConfig:
@@ -40,6 +41,7 @@ def load_config() -> GlobalConfig:
         parsed_config.HighResImageCacheMemoryMB = def_cfg.getint(
             "HighRes.ImageCacheMemoryMB", 64
         )
+        parsed_config.OnlineMode = def_cfg.getboolean("Online.Mode", True)
 
     return parsed_config
 
@@ -59,6 +61,7 @@ def save_config(cfg):
     def_cfg["HighRes.CacheTTLSeconds"] = str(cfg.HighResCacheTTLSeconds)
     def_cfg["HighRes.SearchCacheMemoryMB"] = str(cfg.HighResSearchCacheMemoryMB)
     def_cfg["HighRes.ImageCacheMemoryMB"] = str(cfg.HighResImageCacheMemoryMB)
+    def_cfg["Online.Mode"] = str(cfg.OnlineMode)
 
     with open(cfg_path, "w") as configfile:
         config_parser.write(configfile)

@@ -63,22 +63,44 @@ class CardService:
         search_query, token_mode = _parse_token_search_query(query)
         set_filter = (filters.get("set_filter") or "").strip().casefold()
         limit = max(1, int(filters.get("limit", 200)))
-        local_rows = self.database.search_prints(search_query, limit=limit, token_mode=token_mode)
+        online_mode = bool(filters.get("online_mode", False))
+        cache_ttl_seconds = max(1, int(filters.get("cache_ttl_seconds", 60 * 60)))
+        local_rows = self.database.search_prints(
+            search_query,
+            limit=limit,
+            token_mode=token_mode,
+            online_mode=online_mode,
+            cache_ttl_seconds=cache_ttl_seconds,
+        )
         filtered_rows = _filter_print_rows(local_rows, set_filter)
-        if (filters.get("force_remote", False) or not filtered_rows) and filters.get("allow_remote", True):
+        if (
+            (filters.get("force_remote", False) or not filtered_rows)
+            and filters.get("allow_remote", True)
+        ):
             try:
                 remote_query = _build_token_remote_query(search_query) if token_mode else search_query
+                cache_expires_at = time.time() + cache_ttl_seconds if online_mode else None
                 for payload in search_prints_payloads(
                     remote_query,
                     self.fetch_json_fn,
                     include_extras=token_mode,
                     exact_first=not token_mode,
                 ):
-                    self.database.upsert_card_payload(payload)
+                    self.database.upsert_card_payload(
+                        payload,
+                        cache_scope="online_search" if online_mode else None,
+                        cache_expires_at=cache_expires_at,
+                    )
             except RemoteLookupUnavailable:
                 if filters.get("raise_remote_unavailable") or not filtered_rows:
                     raise
-            local_rows = self.database.search_prints(search_query, limit=limit, token_mode=token_mode)
+            local_rows = self.database.search_prints(
+                search_query,
+                limit=limit,
+                token_mode=token_mode,
+                online_mode=online_mode,
+                cache_ttl_seconds=cache_ttl_seconds,
+            )
             filtered_rows = _filter_print_rows(local_rows, set_filter)
         results = []
         for row in filtered_rows:

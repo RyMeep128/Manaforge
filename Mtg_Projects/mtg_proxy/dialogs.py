@@ -619,6 +619,7 @@ class AddCardDialog(QDialog):
                     set_filter=set_filter,
                     page_start=self._card_page_start,
                     page_size=self._card_page_size,
+                    online_mode=CFG.OnlineMode,
                 )
             except ValueError as exc:
                 error = exc
@@ -803,6 +804,9 @@ class SettingsDialog(QDialog):
         precropped_checkbox.setChecked(CFG.EnableUncrop)
         vibrance_checkbox = QCheckBox("Boost Color Vibrance")
         vibrance_checkbox.setChecked(CFG.VibranceBump)
+        online_mode_checkbox = QCheckBox("Online Mode: Prefer Online Card Search")
+        online_mode_checkbox.setChecked(CFG.OnlineMode)
+        online_mode_checkbox.setToolTip("Use recent online search results instead of requiring a full local card catalog")
 
         max_dpi_spin_box = QSpinBox()
         max_dpi_spin_box.setRange(300, 1200)
@@ -838,6 +842,7 @@ class SettingsDialog(QDialog):
         for widget in [
             description,
             display_columns,
+            online_mode_checkbox,
             precropped_checkbox,
             vibrance_checkbox,
             max_dpi,
@@ -869,6 +874,7 @@ class SettingsDialog(QDialog):
         self._display_columns_spin_box = display_columns_spin_box
         self._precropped_checkbox = precropped_checkbox
         self._vibrance_checkbox = vibrance_checkbox
+        self._online_mode_checkbox = online_mode_checkbox
         self._max_dpi_spin_box = max_dpi_spin_box
         self._paper_sizes = paper_sizes_box._widget
         self._backend_url = backend_url._widget
@@ -880,6 +886,7 @@ class SettingsDialog(QDialog):
         CFG.DisplayColumns = self._display_columns_spin_box.value()
         CFG.EnableUncrop = self._precropped_checkbox.isChecked()
         CFG.VibranceBump = self._vibrance_checkbox.isChecked()
+        CFG.OnlineMode = self._online_mode_checkbox.isChecked()
         CFG.MaxDPI = self._max_dpi_spin_box.value()
         CFG.DefaultPageSize = self._paper_sizes.currentText()
         CFG.HighResBackendURL = self._backend_url.text().strip()

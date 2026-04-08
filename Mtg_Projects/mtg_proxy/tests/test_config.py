@@ -17,6 +17,7 @@ def test_load_config_returns_defaults_when_file_missing(monkeypatch, tmp_path):
     assert cfg.HighResCacheTTLSeconds == 60 * 60
     assert cfg.HighResSearchCacheMemoryMB == 24
     assert cfg.HighResImageCacheMemoryMB == 64
+    assert cfg.OnlineMode is True
 
 
 def test_save_config_and_load_config_round_trip(monkeypatch, tmp_path):
@@ -32,6 +33,7 @@ def test_save_config_and_load_config_round_trip(monkeypatch, tmp_path):
     cfg.HighResCacheTTLSeconds = 30
     cfg.HighResSearchCacheMemoryMB = 8
     cfg.HighResImageCacheMemoryMB = 16
+    cfg.OnlineMode = False
 
     config.save_config(cfg)
     loaded = config.load_config()
@@ -46,3 +48,4 @@ def test_save_config_and_load_config_round_trip(monkeypatch, tmp_path):
     assert loaded.HighResCacheTTLSeconds == 30
     assert loaded.HighResSearchCacheMemoryMB == 8
     assert loaded.HighResImageCacheMemoryMB == 16
+    assert loaded.OnlineMode is False

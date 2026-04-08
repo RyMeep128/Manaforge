@@ -350,7 +350,7 @@ def test_search_scryfall_card_page_uses_local_results_when_offline(monkeypatch):
     service.set_print_image_asset("card-opt", asset_id, preferred_name="scryfall_eld_59_opt.png")
     monkeypatch.setattr(deck_import_service, "_build_card_service", lambda fetch_json=None: service)
 
-    page = deck_import_service.search_scryfall_card_page("Opt")
+    page = deck_import_service.search_scryfall_card_page("Opt", online_mode=False)
 
     assert page.search_source == "local"
     assert len(page.candidates) == 1
@@ -359,7 +359,7 @@ def test_search_scryfall_card_page_uses_local_results_when_offline(monkeypatch):
     assert page.candidates[0].local_image_path is not None
 
 
-def test_search_scryfall_card_page_merges_local_and_remote_results_when_online(monkeypatch):
+def test_search_scryfall_card_page_merges_local_and_remote_results_when_online_mode_off(monkeypatch):
     runtime_dir = _runtime_dir("merged_search")
     service = CardService(
         db_path=str(runtime_dir / "card_data.sqlite3"),
@@ -402,13 +402,57 @@ def test_search_scryfall_card_page_merges_local_and_remote_results_when_online(m
     )
     monkeypatch.setattr(deck_import_service, "_build_card_service", lambda fetch_json=None: service)
 
-    page = deck_import_service.search_scryfall_card_page("Opt")
+    page = deck_import_service.search_scryfall_card_page("Opt", online_mode=False)
 
     assert page.search_source == "remote"
     assert [candidate.card_id for candidate in page.candidates] == [
         "card-opt-local",
         "card-opt-remote",
     ]
+
+
+def test_search_scryfall_card_page_online_mode_defaults_to_remote_cache(monkeypatch):
+    runtime_dir = _runtime_dir("online_default_search")
+    service = CardService(
+        db_path=str(runtime_dir / "card_data.sqlite3"),
+        image_root=str(runtime_dir / "images"),
+        fetch_json_fn=lambda _url: {
+            "object": "list",
+            "data": [
+                {
+                    "id": "card-opt-remote",
+                    "oracle_id": "oracle-opt-remote",
+                    "name": "Opt",
+                    "set": "dom",
+                    "set_name": "Dominaria",
+                    "collector_number": "60",
+                    "image_uris": {"small": "small-remote", "normal": "normal-remote", "png": "png-remote"},
+                },
+            ],
+            "has_more": False,
+        },
+    )
+    service.database.upsert_card_payload(
+        {
+            "id": "card-opt-local",
+            "oracle_id": "oracle-opt-local",
+            "name": "Opt",
+            "set": "eld",
+            "set_name": "Throne of Eldraine",
+            "collector_number": "59",
+            "image_uris": {"small": "small-local", "normal": "normal-local", "png": "png-local"},
+        }
+    )
+    monkeypatch.setattr(deck_import_service.CFG, "OnlineMode", True)
+    monkeypatch.setattr(deck_import_service.CFG, "HighResCacheTTLSeconds", 60)
+    monkeypatch.setattr(deck_import_service, "_build_card_service", lambda fetch_json=None: service)
+
+    page = deck_import_service.search_scryfall_card_page("Opt")
+    cached = deck_import_service.search_scryfall_card_page("Opt")
+
+    assert page.search_source == "remote"
+    assert [candidate.card_id for candidate in page.candidates] == ["card-opt-remote"]
+    assert [candidate.card_id for candidate in cached.candidates] == ["card-opt-remote"]
 
 
 def test_search_scryfall_card_page_short_query_uses_local_catalog_without_remote(monkeypatch):
@@ -441,7 +485,7 @@ def test_search_scryfall_card_page_short_query_uses_local_catalog_without_remote
         service.database.upsert_card_payload(payload)
     monkeypatch.setattr(deck_import_service, "_build_card_service", lambda fetch_json=None: service)
 
-    page = deck_import_service.search_scryfall_card_page("a")
+    page = deck_import_service.search_scryfall_card_page("a", online_mode=False)
 
     assert page.search_source == "local"
     assert [candidate.card_id for candidate in page.candidates] == ["aang", "ach"]
@@ -496,7 +540,7 @@ def test_search_scryfall_card_page_keeps_local_results_when_remote_no_match_erro
     )
     monkeypatch.setattr(deck_import_service, "_build_card_service", lambda fetch_json=None: service)
 
-    page = deck_import_service.search_scryfall_card_page("pla")
+    page = deck_import_service.search_scryfall_card_page("pla", online_mode=False)
 
     assert page.search_source == "local"
     assert [candidate.name for candidate in page.candidates] == ["Plains"]
@@ -582,3 +626,81 @@ def test_import_single_card_into_project_uses_local_card_and_asset_when_availabl
 
     assert result.filename == "scryfall_lea_232_plains.png"
     assert state.get_card_entry("scryfall_lea_232_plains.png").image_asset_id == asset_id
+
+
+def test_import_single_card_promotes_online_cache_row_and_saves_image(monkeypatch):
+    runtime_dir = _runtime_dir("online_import_promotes")
+    service = CardService(
+        db_path=str(runtime_dir / "card_data.sqlite3"),
+        image_root=str(runtime_dir / "images"),
+        fetch_json_fn=lambda _url: (_ for _ in ()).throw(AssertionError("card data is already selected")),
+    )
+    payload = {
+        "id": "card-opt",
+        "oracle_id": "oracle-opt",
+        "name": "Opt",
+        "set": "dom",
+        "set_name": "Dominaria",
+        "collector_number": "60",
+        "image_uris": {
+            "png": "https://img.test/opt.png",
+            "normal": "https://img.test/opt-normal.png",
+            "small": "https://img.test/opt-small.png",
+        },
+    }
+    service.database.upsert_card_payload(
+        payload,
+        cache_scope="online_search",
+        cache_expires_at=9999999999,
+    )
+    monkeypatch.setattr(deck_import_service, "_build_card_service", lambda fetch_json=None: service)
+    monkeypatch.setattr(
+        deck_import_service.project_service,
+        "refresh_after_image_changes",
+        lambda state, img_dict, print_fn, warn_fn=None: state,
+    )
+    selected_card = deck_import_service.ScryfallCardCandidate(
+        name="Opt",
+        set_code="dom",
+        set_name="Dominaria",
+        collector_number="60",
+        card_id="card-opt",
+        oracle_id="oracle-opt",
+        scryfall_id="card-opt",
+        preview_url="https://img.test/opt-normal.png",
+        thumbnail_url="https://img.test/opt-small.png",
+        filename="scryfall_dom_60_opt.png",
+        art_context=high_res.CardContext(
+            filename="scryfall_dom_60_opt.png",
+            query="Opt",
+            display_name="Opt",
+            set_code="dom",
+            collector_number="60",
+        ),
+        card_data=payload,
+        search_source="remote",
+    )
+
+    state = ProjectState(image_dir=str(runtime_dir / "project_images"), img_cache=str(runtime_dir / "img.cache"))
+    result = deck_import_service.import_single_card_into_project(
+        state,
+        {},
+        state.image_dir,
+        selected_card,
+        lambda _message: None,
+        fetch_bytes=lambda _url: b"png-bytes",
+    )
+
+    entry = state.get_card_entry("scryfall_dom_60_opt.png")
+    with service.database.connect() as connection:
+        row = connection.execute(
+            "SELECT cache_scope, cache_expires_at FROM prints WHERE card_id = ?",
+            ("card-opt",),
+        ).fetchone()
+
+    assert result.filename == "scryfall_dom_60_opt.png"
+    assert entry is not None
+    assert entry.image_asset_id is not None
+    assert row["cache_scope"] is None
+    assert row["cache_expires_at"] is None
+    assert (runtime_dir / "project_images" / "scryfall_dom_60_opt.png").exists()

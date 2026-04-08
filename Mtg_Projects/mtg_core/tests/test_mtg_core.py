@@ -511,3 +511,97 @@ def test_token_mode_offline_search_returns_local_or_raises_when_missing():
         raise AssertionError("Expected missing token search to raise when offline.")
 
     assert [result.card_id for result in local] == ["ooze-token"]
+
+
+def test_online_mode_search_uses_only_recent_online_cache_rows():
+    runtime_dir = _workspace_runtime_dir("online_cache_scope")
+    service = CardService(
+        db_path=str(runtime_dir / "card_data.sqlite3"),
+        image_root=str(runtime_dir / "images"),
+        fetch_json_fn=lambda _url: (_ for _ in ()).throw(AssertionError("remote search should not run")),
+    )
+    service.database.upsert_card_payload(
+        _sample_print(
+            card_id="opt-durable",
+            oracle_id="oracle-opt-durable",
+            name="Opt",
+            set_code="eld",
+            set_name="Throne of Eldraine",
+            collector_number="59",
+            released_at="2019-10-04",
+            image_url="https://img.test/opt-durable.png",
+        )
+    )
+    service.database.upsert_card_payload(
+        _sample_print(
+            card_id="opt-online",
+            oracle_id="oracle-opt-online",
+            name="Opt",
+            set_code="dom",
+            set_name="Dominaria",
+            collector_number="60",
+            released_at="2018-04-27",
+            image_url="https://img.test/opt-online.png",
+        ),
+        cache_scope="online_search",
+        cache_expires_at=9999999999,
+    )
+    service.database.upsert_card_payload(
+        _sample_print(
+            card_id="opt-expired",
+            oracle_id="oracle-opt-expired",
+            name="Opt",
+            set_code="inv",
+            set_name="Invasion",
+            collector_number="64",
+            released_at="2000-10-02",
+            image_url="https://img.test/opt-expired.png",
+        ),
+        cache_scope="online_search",
+        cache_expires_at=1,
+    )
+
+    online = service.search_cards("Opt", {"online_mode": True, "allow_remote": False})
+    offline = service.search_cards("Opt", {"online_mode": False, "allow_remote": False})
+
+    assert [result.card_id for result in online] == ["opt-online"]
+    assert [result.card_id for result in offline] == ["opt-durable"]
+
+
+def test_online_mode_remote_results_are_cached_with_ttl():
+    runtime_dir = _workspace_runtime_dir("online_cache_remote")
+    calls: list[str] = []
+
+    def fake_fetch_json(url: str) -> dict:
+        calls.append(url)
+        return {
+            "object": "list",
+            "data": [
+                _sample_print(
+                    card_id="opt-online",
+                    oracle_id="oracle-opt-online",
+                    name="Opt",
+                    set_code="dom",
+                    set_name="Dominaria",
+                    collector_number="60",
+                    released_at="2018-04-27",
+                    image_url="https://img.test/opt-online.png",
+                )
+            ],
+            "has_more": False,
+        }
+
+    service = CardService(
+        db_path=str(runtime_dir / "card_data.sqlite3"),
+        image_root=str(runtime_dir / "images"),
+        fetch_json_fn=fake_fetch_json,
+    )
+
+    first = service.search_cards("Opt", {"online_mode": True, "allow_remote": True, "cache_ttl_seconds": 60})
+    second = service.search_cards("Opt", {"online_mode": True, "allow_remote": True, "cache_ttl_seconds": 60})
+    offline = service.search_cards("Opt", {"online_mode": False, "allow_remote": False})
+
+    assert [result.card_id for result in first] == ["opt-online"]
+    assert [result.card_id for result in second] == ["opt-online"]
+    assert offline == []
+    assert calls == [build_print_search_url('!"Opt"', include_extras=False)]

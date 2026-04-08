@@ -34,6 +34,8 @@ CREATE TABLE IF NOT EXISTS prints (
     is_double_faced INTEGER NOT NULL DEFAULT 0,
     payload_json TEXT NOT NULL,
     updated_at REAL NOT NULL,
+    cache_scope TEXT,
+    cache_expires_at REAL,
     FOREIGN KEY (oracle_id) REFERENCES cards_oracle(oracle_id)
 );
 
@@ -108,6 +110,8 @@ class CardDatabase:
         with self.connect() as connection:
             connection.executescript(SCHEMA)
             self._ensure_column(connection, "image_manifest", "asset_id", "TEXT")
+            self._ensure_column(connection, "prints", "cache_scope", "TEXT")
+            self._ensure_column(connection, "prints", "cache_expires_at", "REAL")
 
     @staticmethod
     def _ensure_column(
@@ -121,7 +125,14 @@ class CardDatabase:
             return
         connection.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}")
 
-    def upsert_card_payload(self, card_payload: dict, *, source: str = "remote_fill") -> PrintRecord:
+    def upsert_card_payload(
+        self,
+        card_payload: dict,
+        *,
+        source: str = "remote_fill",
+        cache_scope: str | None = None,
+        cache_expires_at: float | None = None,
+    ) -> PrintRecord:
         payload = dict(card_payload)
         name = str(payload.get("name") or "")
         if not name:
@@ -168,9 +179,9 @@ class CardDatabase:
                 INSERT INTO prints (
                     card_id, oracle_id, name, set_code, set_name, collector_number,
                     released_at, image_url, thumbnail_url, preview_url,
-                    is_double_faced, payload_json, updated_at
+                    is_double_faced, payload_json, updated_at, cache_scope, cache_expires_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(card_id) DO UPDATE SET
                     oracle_id=excluded.oracle_id,
                     name=excluded.name,
@@ -183,7 +194,9 @@ class CardDatabase:
                     preview_url=excluded.preview_url,
                     is_double_faced=excluded.is_double_faced,
                     payload_json=excluded.payload_json,
-                    updated_at=excluded.updated_at
+                    updated_at=excluded.updated_at,
+                    cache_scope=excluded.cache_scope,
+                    cache_expires_at=excluded.cache_expires_at
                 """,
                 (
                     card_id,
@@ -199,6 +212,8 @@ class CardDatabase:
                     1 if payload.get("card_faces") else 0,
                     json.dumps(payload, ensure_ascii=False, sort_keys=True),
                     now,
+                    cache_scope,
+                    cache_expires_at,
                 ),
             )
             self._refresh_canonical_print(connection, oracle_id)
@@ -295,11 +310,24 @@ class CardDatabase:
             ).fetchone()
         return self._row_to_print_record(row)
 
-    def search_prints(self, query: str, limit: int = 60, *, token_mode: bool = False) -> list[PrintRecord]:
+    def search_prints(
+        self,
+        query: str,
+        limit: int = 60,
+        *,
+        token_mode: bool = False,
+        online_mode: bool = False,
+        cache_ttl_seconds: int | None = None,
+    ) -> list[PrintRecord]:
         normalized = normalized_search_text(query)
         like = f"%{normalized}%"
         prefix_like = f"{normalized}%"
         display_trim_chars = "\"'+- "
+        cache_clause = (
+            "AND p.cache_scope = 'online_search' AND coalesce(p.cache_expires_at, 0) > ?"
+            if online_mode
+            else "AND coalesce(p.cache_scope, '') != 'online_search'"
+        )
         token_clause = """
                     AND (
                         lower(coalesce(json_extract(p.payload_json, '$.layout'), '')) = 'token'
@@ -311,6 +339,21 @@ class CardDatabase:
                         OR lower(coalesce(json_extract(p.payload_json, '$.type_line'), '')) LIKE 'token%'
                     )
                 """
+        params = [like, like, like]
+        if online_mode:
+            params.append(time.time())
+        params.extend(
+            [
+                normalized,
+                query,
+                display_trim_chars,
+                prefix_like,
+                display_trim_chars,
+                prefix_like,
+                display_trim_chars,
+                max(1, int(limit)),
+            ]
+        )
         with self.connect() as connection:
             rows = connection.execute(
                 f"""
@@ -323,6 +366,7 @@ class CardDatabase:
                     OR lower(coalesce(json_extract(p.payload_json, '$.type_line'), '')) LIKE lower(?)
                 )
                 {token_clause}
+                {cache_clause}
                 ORDER BY
                     CASE
                         WHEN c.normalized_name = ? OR lower(p.name) = lower(?) THEN 0
@@ -335,19 +379,7 @@ class CardDatabase:
                     p.collector_number
                 LIMIT ?
                 """,
-                (
-                    like,
-                    like,
-                    like,
-                    normalized,
-                    query,
-                    display_trim_chars,
-                    prefix_like,
-                    display_trim_chars,
-                    prefix_like,
-                    display_trim_chars,
-                    max(1, int(limit)),
-                ),
+                tuple(params),
             ).fetchall()
         return [self._row_to_print_record(row) for row in rows]
 
