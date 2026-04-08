@@ -76,11 +76,7 @@ def open_file(path):
 
 
 def resource_path():
-    try:
-        # PyInstaller creates a temp folder and stores path in _MEIPASS
-        return sys._MEIPASS
-    except Exception:
-        return constants.cwd
+    return constants.resource_dir
 
 
 def write_json_atomic(path, data, ensure_ascii=False):

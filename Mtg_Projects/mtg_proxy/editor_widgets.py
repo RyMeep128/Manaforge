@@ -1946,7 +1946,7 @@ class GlobalOptionsWidget(QGroupBox):
         self.setTitle("App Settings")
 
         description = QLabel(
-            "Open the settings window to edit app-wide options stored in config.ini."
+            f"Open the settings window to edit app-wide options stored in {os.path.join(cwd, 'config.ini')}."
         )
         description.setWordWrap(True)
 

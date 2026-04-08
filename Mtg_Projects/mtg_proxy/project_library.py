@@ -5,7 +5,7 @@ import datetime
 import json
 from pathlib import Path
 
-from constants import cwd
+from constants import cwd, app_dir
 from mtg_core import get_default_card_service
 from models import ProjectState, as_project_state, project_to_dict, project_to_persisted_dict
 from util import write_json_atomic
@@ -95,7 +95,7 @@ def _project_image_dir(project_path):
 
 
 def _shared_default_back_path():
-    test_images_dir = os.path.join(cwd, "test_Images")
+    test_images_dir = os.path.join(app_dir, "test_Images")
     if not os.path.isdir(test_images_dir):
         return None
 

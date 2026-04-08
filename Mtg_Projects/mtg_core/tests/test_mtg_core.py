@@ -4,6 +4,8 @@ import uuid
 from pathlib import Path
 
 from mtg_core import RemoteLookupUnavailable
+from mtg_core.db import default_db_path
+from mtg_core.paths import core_data_root, data_root
 from mtg_core.services import CardService
 from mtg_core.sync import build_print_search_url, search_prints_payloads
 
@@ -45,6 +47,13 @@ def _sample_print(
             "small": image_url.replace(".png", "-small.png"),
         },
     }
+
+
+def test_default_core_paths_use_app_data_root():
+    assert core_data_root() == data_root() / "mtg_core"
+    assert Path(default_db_path()) == core_data_root() / "card_data.sqlite3"
+    service = CardService()
+    assert Path(service.image_root) == core_data_root() / "images"
 
 
 def test_fetch_missing_card_persists_and_returns_cached_local():

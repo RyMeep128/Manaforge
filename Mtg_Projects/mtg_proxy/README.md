@@ -26,7 +26,7 @@ That produces:
 - `dist\Print Proxy Prep\Print Proxy Prep.exe`
 
 ## Manual Notes
-`Setup Print Proxy Prep.cmd` creates `images`, `images\crop`, a local `venv`, upgrades `pip`, and installs the dependencies from `requirements.txt`.
+`Setup Print Proxy Prep.cmd` creates a local `venv`, upgrades `pip`, and installs the dependencies from `requirements.txt`.
 
 After setup you can either:
 - run `venv\Scripts\python main.py`
@@ -149,14 +149,14 @@ For imported double-faced cards, applying a matching high-res front can also try
 High-res search uses the `HighRes.BackendURL` config value. By default it points at:
 - `https://mpcfill.com/`
 
-You can change this from the in-app `Settings` dialog or by editing `config.ini`.
+You can change this from the in-app `Settings` dialog or by editing `%LOCALAPPDATA%\PrintProxyPrep\config.ini`.
 
 ## Caching
 High-res search and image previews are cached to keep repeated browsing snappy.
 
 Important cache locations:
 - `img.cache` for local thumbnail/preview data
-- `.high_res_cache/` for high-res search and image caches
+- `%LOCALAPPDATA%\PrintProxyPrep\.high_res_cache\` for high-res search and image caches
 
 # Settings and Config
 
@@ -171,11 +171,11 @@ Use the `Settings` button to edit app-wide config values such as:
 - high-res search cache size
 - high-res image cache size
 
-These values are stored in `config.ini`.
+These values are stored in `%LOCALAPPDATA%\PrintProxyPrep\config.ini`.
 
 # Saving and Project Files
 
-The app stores project state in `print.json`, including:
+The app stores the default project state in `%LOCALAPPDATA%\PrintProxyPrep\print.json`, including:
 - selected card counts
 - backside assignments
 - oversized flags
@@ -192,7 +192,7 @@ When you are happy with the layout, click `Render Document` and choose where to 
 
 # Notes
 
-- If the program crashes on startup, first try deleting `print.json`, `img.cache`, and `.high_res_cache`.
+- If the program crashes on startup, first try deleting the affected `print.json`, `img.cache`, and `.high_res_cache` files under `%LOCALAPPDATA%\PrintProxyPrep`.
 - If you switch to a different image folder, the project and preview caches are rebuilt as needed.
 - `Run Cropper` may be required again after changing settings such as `Max DPI` or `Vibrance Bump`.
-- If you report a bug, include your `images` folder, `print.json`, `img.cache`, and any helpful repro steps.
+- If you report a bug, include the relevant project/images folder, `%LOCALAPPDATA%\PrintProxyPrep\print.json`, `img.cache`, and any helpful repro steps.

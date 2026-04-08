@@ -4,6 +4,11 @@ from pathlib import Path
 import project_library
 
 
+def _set_project_library_roots(monkeypatch, tmp_path):
+    monkeypatch.setattr(project_library, "cwd", str(tmp_path))
+    monkeypatch.setattr(project_library, "app_dir", str(tmp_path))
+
+
 def _seed_test_back(tmp_path):
     test_images_dir = tmp_path / "test_Images"
     test_images_dir.mkdir()
@@ -11,7 +16,7 @@ def _seed_test_back(tmp_path):
 
 
 def test_create_project_adds_library_entry_with_db_backed_default_back(monkeypatch, tmp_path):
-    monkeypatch.setattr(project_library, "cwd", str(tmp_path))
+    _set_project_library_roots(monkeypatch, tmp_path)
     _seed_test_back(tmp_path)
 
     entry = project_library.create_project("Alpha Project")
@@ -29,7 +34,7 @@ def test_create_project_adds_library_entry_with_db_backed_default_back(monkeypat
 
 
 def test_draft_workspace_is_seeded_and_detects_user_content(monkeypatch, tmp_path):
-    monkeypatch.setattr(project_library, "cwd", str(tmp_path))
+    _set_project_library_roots(monkeypatch, tmp_path)
     _seed_test_back(tmp_path)
 
     draft = project_library.create_draft_project_dict()
@@ -43,7 +48,7 @@ def test_draft_workspace_is_seeded_and_detects_user_content(monkeypatch, tmp_pat
 
 
 def test_materialize_draft_project_persists_db_backed_references(monkeypatch, tmp_path):
-    monkeypatch.setattr(project_library, "cwd", str(tmp_path))
+    _set_project_library_roots(monkeypatch, tmp_path)
     _seed_test_back(tmp_path)
 
     draft = project_library.create_draft_project_dict()
@@ -78,7 +83,7 @@ def test_materialize_draft_project_persists_db_backed_references(monkeypatch, tm
 
 
 def test_list_projects_uses_thumbnail_override_then_first_playable(monkeypatch, tmp_path):
-    monkeypatch.setattr(project_library, "cwd", str(tmp_path))
+    _set_project_library_roots(monkeypatch, tmp_path)
     _seed_test_back(tmp_path)
 
     entry = project_library.create_project("Thumb Test")
@@ -114,7 +119,7 @@ def test_list_projects_uses_thumbnail_override_then_first_playable(monkeypatch, 
 
 
 def test_import_project_copies_external_project_into_library(monkeypatch, tmp_path):
-    monkeypatch.setattr(project_library, "cwd", str(tmp_path))
+    _set_project_library_roots(monkeypatch, tmp_path)
     external = tmp_path / "outside.json"
     external.write_text(json.dumps({"cards": {"card-a.png": 2}}), encoding="utf-8")
 
@@ -129,7 +134,7 @@ def test_import_project_copies_external_project_into_library(monkeypatch, tmp_pa
 
 
 def test_remove_project_deletes_project_file(monkeypatch, tmp_path):
-    monkeypatch.setattr(project_library, "cwd", str(tmp_path))
+    _set_project_library_roots(monkeypatch, tmp_path)
     _seed_test_back(tmp_path)
     entry = project_library.create_project("Delete Me")
     project_path = Path(entry["path"])
@@ -142,7 +147,7 @@ def test_remove_project_deletes_project_file(monkeypatch, tmp_path):
 def test_remove_project_succeeds_when_project_artifacts_are_already_missing(
     monkeypatch, tmp_path
 ):
-    monkeypatch.setattr(project_library, "cwd", str(tmp_path))
+    _set_project_library_roots(monkeypatch, tmp_path)
     _seed_test_back(tmp_path)
     entry = project_library.create_project("Missing Files")
     project_path = Path(entry["path"])
@@ -154,7 +159,7 @@ def test_remove_project_succeeds_when_project_artifacts_are_already_missing(
 
 
 def test_remove_project_keeps_library_entry_when_delete_fails(monkeypatch, tmp_path):
-    monkeypatch.setattr(project_library, "cwd", str(tmp_path))
+    _set_project_library_roots(monkeypatch, tmp_path)
     _seed_test_back(tmp_path)
     entry = project_library.create_project("Fail Delete")
 

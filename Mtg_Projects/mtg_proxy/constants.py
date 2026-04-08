@@ -4,13 +4,34 @@ import sys
 from reportlab.lib.pagesizes import LETTER, A5, A4, A3, LEGAL
 
 if getattr(sys, "frozen", False):
-    app_root = os.path.dirname(os.path.abspath(sys.executable))
+    app_dir = os.path.dirname(os.path.abspath(sys.executable))
 else:
-    app_root = os.path.dirname(os.path.abspath(__file__))
+    app_dir = os.path.dirname(os.path.abspath(__file__))
 
-products_root = os.path.dirname(app_root)
+products_root = os.path.dirname(app_dir)
 workspace_root = os.path.dirname(products_root)
-cwd = app_root
+
+if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+    resource_dir = sys._MEIPASS
+else:
+    resource_dir = app_dir
+
+
+def _default_data_dir() -> str:
+    if sys.platform == "win32":
+        root = os.environ.get("LOCALAPPDATA")
+        if not root:
+            root = os.path.join(os.path.expanduser("~"), "AppData", "Local")
+        return os.path.join(root, "PrintProxyPrep")
+    root = os.environ.get("XDG_DATA_HOME") or os.path.join(os.path.expanduser("~"), ".local", "share")
+    return os.path.join(root, "PrintProxyPrep")
+
+
+data_dir = os.path.abspath(os.environ.get("PRINT_PROXY_PREP_DATA_DIR") or _default_data_dir())
+os.makedirs(data_dir, exist_ok=True)
+
+# Backwards-compatible name used by older modules for mutable app data.
+cwd = data_dir
 
 page_sizes = {"Letter": LETTER, "A5": A5, "A4": A4, "A3": A3, "Legal": LEGAL}
 

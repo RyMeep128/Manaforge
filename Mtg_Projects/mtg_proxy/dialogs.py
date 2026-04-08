@@ -36,7 +36,7 @@ import image
 import project_library
 from background_tasks import CardSearchThumbnailLoader, HighResThumbnailLoader, make_popup_print_fn, popup
 from config import CFG, save_config
-from constants import cwd, page_sizes
+from constants import app_dir, cwd, page_sizes
 from models import ProjectState, as_project_state, project_to_dict
 from mtg_core import get_default_card_service
 from services import deck_import_service, high_res_service, project_service
@@ -95,7 +95,8 @@ def format_exception_report(exc_type, exc_value, exc_traceback, context=None):
         f"Timestamp: {datetime.datetime.now().isoformat()}",
         f"Platform: {platform.platform()}",
         f"Python: {sys.version}",
-        f"Working Directory: {cwd}",
+        f"App Directory: {app_dir}",
+        f"Data Directory: {cwd}",
     ]
     if context:
         lines.append(f"Context: {context}")
@@ -789,7 +790,7 @@ class SettingsDialog(QDialog):
         self.resize(560, 420)
 
         description = QLabel(
-            "Edit application-wide settings stored in config.ini. Most changes apply immediately after saving."
+            f"Edit application-wide settings stored in {os.path.join(cwd, 'config.ini')}. Most changes apply immediately after saving."
         )
         description.setWordWrap(True)
 
@@ -1178,7 +1179,7 @@ class HighResPickerDialog(QDialog):
                 self._status_label.setText("Set your DPI filters and click Search to load MPCFill art.")
             else:
                 self._status_label.setText(
-                    "Set `HighRes.BackendURL` in config.ini to the MPCFill base URL to use MPCFill art."
+                    f"Set `HighRes.BackendURL` in {os.path.join(cwd, 'config.ini')} to the MPCFill base URL to use MPCFill art."
                 )
             return
         self._status_label.setText("Click Search to load Scryfall print art.")
@@ -1318,7 +1319,7 @@ class HighResPickerDialog(QDialog):
             if warn_on_missing_backend:
                 self._warn(
                     "MPCFill Backend Not Configured",
-                    "Set `HighRes.BackendURL` in config.ini to the MPCFill base URL, such as `https://mpcfill.com/`, then reopen the app.",
+                    f"Set `HighRes.BackendURL` in {os.path.join(cwd, 'config.ini')} to the MPCFill base URL, such as `https://mpcfill.com/`, then reopen the app.",
                 )
             self._status_label.setText("MPCFill art is disabled until a backend URL is configured.")
             return

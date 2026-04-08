@@ -9,7 +9,7 @@ from typing import Callable
 from mtg_core.db import CardDatabase
 from mtg_core.images import checksum_bytes, ensure_parent_dir
 from mtg_core.models import BulkDownloadStatus, ImageAssetRecord, PrintRecord, SearchCardResult
-from mtg_core.paths import core_root
+from mtg_core.paths import core_data_root
 from mtg_core.sync import (
     RemoteLookupUnavailable,
     build_print_search_url,
@@ -53,7 +53,7 @@ class CardService:
         fetch_bulk_fn: Callable[[], list[dict]] | None = None,
     ):
         self.database = CardDatabase(db_path)
-        self.image_root = image_root or str(core_root() / "images")
+        self.image_root = image_root or str(core_data_root() / "images")
         self.fetch_json_fn = fetch_json_fn or fetch_json
         self.fetch_bytes_fn = fetch_bytes_fn or fetch_bytes
         self.fetch_bulk_fn = fetch_bulk_fn

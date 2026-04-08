@@ -562,7 +562,7 @@ def validate_backend_url(backend_url: str):
     if not normalized:
         raise ValueError(
             "No high-res backend is configured. Set `HighRes.BackendURL` in "
-            "`config.ini` to the MPCFill base URL, such as `https://mpcfill.com/`."
+            f"`{os.path.join(cwd, 'config.ini')}` to the MPCFill base URL, such as `https://mpcfill.com/`."
         )
     return normalized
 

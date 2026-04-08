@@ -7,7 +7,7 @@ import sqlite3
 import time
 
 from mtg_core.models import ImageAssetRecord, ImageRecord, PrintRecord
-from mtg_core.paths import core_root
+from mtg_core.paths import core_data_root
 from mtg_core.search import choose_canonical_print_key, normalized_search_text
 from mtg_core.sync import extract_image_urls
 
@@ -87,7 +87,7 @@ CREATE TABLE IF NOT EXISTS sync_state (
 
 
 def default_db_path() -> str:
-    return str(core_root() / "card_data.sqlite3")
+    return str(core_data_root() / "card_data.sqlite3")
 
 
 class CardDatabase:

@@ -8,6 +8,7 @@ from pathlib import Path
 import util
 import image
 from config import CFG
+from constants import cwd
 from constants import page_sizes
 from models import ProjectState, as_project_state
 import runtime_images
@@ -21,7 +22,7 @@ def _project_runtime_root(project_path: str | None = None) -> str:
         project_file = Path(project_path)
         runtime_root = project_file.parent / ".runtime" / project_file.stem
     else:
-        runtime_root = Path("Mtg_Projects") / "mtg_proxy" / "projects" / ".runtime" / "draft"
+        runtime_root = Path(cwd) / "projects" / ".runtime" / "draft"
     runtime_root.mkdir(parents=True, exist_ok=True)
     return str(runtime_root.resolve())
 
