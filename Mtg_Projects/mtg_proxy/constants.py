@@ -3,6 +3,8 @@ import sys
 
 from reportlab.lib.pagesizes import LETTER, A5, A4, A3, LEGAL
 
+APP_VERSION = "0.1.0"
+
 if getattr(sys, "frozen", False):
     app_dir = os.path.dirname(os.path.abspath(sys.executable))
 else:

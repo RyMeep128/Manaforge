@@ -9,6 +9,7 @@ import deck_import
 import high_res
 from config import CFG
 from mtg_core import CardService, RemoteLookupUnavailable
+from mtg_core.sync import is_no_card_match_error
 
 from models import ProjectState, as_project_state
 from . import high_res_service, project_service
@@ -218,6 +219,16 @@ def search_scryfall_card_page(
                             page_size=page_size,
                             search_source=search_source,
                         )
+                if isinstance(exc, ValueError) and is_no_card_match_error(str(exc)):
+                    if page_start < 0:
+                        page_start = 0
+                    return ScryfallCardSearchPage(
+                        candidates=[],
+                        total_count=0,
+                        page_start=page_start,
+                        page_size=page_size,
+                        search_source=search_source,
+                    )
                 if isinstance(exc, RemoteLookupUnavailable):
                     raise ValueError("No local matches are available offline. Connect to the internet to search Scryfall.") from exc
                 raise

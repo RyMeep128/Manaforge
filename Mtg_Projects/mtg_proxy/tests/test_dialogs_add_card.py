@@ -1,5 +1,6 @@
 import dialogs
 import high_res
+from constants import APP_VERSION
 from services import deck_import_service
 
 
@@ -84,6 +85,15 @@ def test_add_card_dialog_uses_default_art_summary_when_no_custom_art_is_selected
     dialogs.AddCardDialog._update_art_summary(dialog_state)
 
     assert dialog_state._art_summary_label.value == "Art choice: Default Scryfall import art"
+
+
+def test_crash_report_includes_app_version():
+    try:
+        raise RuntimeError("boom")
+    except RuntimeError as exc:
+        report = dialogs.format_exception_report(type(exc), exc, exc.__traceback__)
+
+    assert f"App Version: {APP_VERSION}" in report
 
 
 def test_add_card_dialog_shows_custom_art_summary():

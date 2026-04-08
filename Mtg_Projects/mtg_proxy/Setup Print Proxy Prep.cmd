@@ -11,16 +11,6 @@ echo   Print Proxy Prep - Setup
 echo ==================================
 echo.
 
-if not exist "images" (
-    echo Creating images folder...
-    mkdir "images"
-)
-
-if not exist "images\crop" (
-    echo Creating crop output folder...
-    mkdir "images\crop"
-)
-
 where py >nul 2>nul
 if errorlevel 1 (
     echo Python launcher ^(`py`^) was not found.
@@ -49,6 +39,7 @@ if errorlevel 1 goto :setup_failed
 
 echo.
 echo Setup complete.
+echo App data will be stored under %%LOCALAPPDATA%%\PrintProxyPrep.
 echo You can now launch the app with:
 echo   Launch Print Proxy Prep.cmd
 echo.

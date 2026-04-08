@@ -133,6 +133,43 @@ def test_search_scryfall_card_page_falls_back_to_broad_query(monkeypatch):
     assert 'q=Bolt' in calls[1]
 
 
+def test_search_scryfall_card_page_returns_empty_page_when_scryfall_has_no_matches(monkeypatch):
+    calls = []
+
+    def fake_fetch_json(url):
+        calls.append(url)
+        raise ValueError(
+            "Your query didn't match any cards. Adjust your search terms or refer to the syntax guide at https://scryfall.com/docs/reference"
+        )
+
+    page = deck_import_service.search_scryfall_card_page(
+        "Definitely Not A Real Card",
+        fetch_json=fake_fetch_json,
+        online_mode=True,
+    )
+
+    assert page.candidates == []
+    assert page.total_count == 0
+    assert page.search_source == "remote"
+    assert len(calls) >= 1
+
+
+def test_search_scryfall_card_page_raises_friendly_error_when_remote_unavailable_without_local(monkeypatch):
+    def fake_fetch_json(_url):
+        raise RemoteLookupUnavailable("offline")
+
+    try:
+        deck_import_service.search_scryfall_card_page(
+            "Definitely Not A Real Card",
+            fetch_json=fake_fetch_json,
+            online_mode=True,
+        )
+    except ValueError as exc:
+        assert "Connect to the internet" in str(exc)
+    else:
+        raise AssertionError("Expected offline search to raise a friendly error.")
+
+
 def test_import_single_card_into_project_uses_default_art_and_refresh(monkeypatch):
     selected_card = deck_import_service.ScryfallCardCandidate(
         name="Plains",

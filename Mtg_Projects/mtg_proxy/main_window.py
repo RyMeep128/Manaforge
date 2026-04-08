@@ -62,6 +62,7 @@ import image
 import project_library
 from config import CFG, save_config
 from constants import (
+    APP_VERSION,
     card_ratio,
     card_size_without_bleed_inch,
     cwd,
@@ -160,7 +161,7 @@ class PrintProxyPrepApplication(QApplication):
 
     def save(self):
         settings = QtCore.QSettings("Proxy", "PDF Proxy Printer")
-        settings.setValue("version", "1.0.0")
+        settings.setValue("version", APP_VERSION)
         settings.setValue("geometry", self._window.saveGeometry())
         settings.setValue("state", self._window.saveState())
 

@@ -36,7 +36,7 @@ import image
 import project_library
 from background_tasks import CardSearchThumbnailLoader, HighResThumbnailLoader, make_popup_print_fn, popup
 from config import CFG, save_config
-from constants import app_dir, cwd, page_sizes
+from constants import APP_VERSION, app_dir, cwd, page_sizes
 from models import ProjectState, as_project_state, project_to_dict
 from mtg_core import get_default_card_service
 from services import deck_import_service, high_res_service, project_service
@@ -93,6 +93,7 @@ def format_exception_report(exc_type, exc_value, exc_traceback, context=None):
     lines = [
         "Print Proxy Prep Crash Report",
         f"Timestamp: {datetime.datetime.now().isoformat()}",
+        f"App Version: {APP_VERSION}",
         f"Platform: {platform.platform()}",
         f"Python: {sys.version}",
         f"App Directory: {app_dir}",
