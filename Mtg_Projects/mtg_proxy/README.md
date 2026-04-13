@@ -20,10 +20,11 @@ The app can:
 - Optional: run `Create Desktop Shortcut.ps1` once
 
 ## Build a Windows App Bundle
-If you want to hand this to someone without requiring Python on their machine, run `Build EXE.cmd`.
+If you want to hand this to someone without requiring Python on their machine, run `Mtg_Projects\Build EXE.cmd` from the product root.
 
 That produces:
-- `dist\Print Proxy Prep\Print Proxy Prep.exe`
+- `Mtg_Projects\dist\Print Proxy Prep\Print Proxy Prep.exe`
+- `Mtg_Projects\dist\PrintProxyPrep-<version>-win.zip`
 
 ## Manual Notes
 `Setup Print Proxy Prep.cmd` creates a local `venv`, upgrades `pip`, and installs the dependencies from `requirements.txt`.
