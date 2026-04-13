@@ -25,6 +25,19 @@ echo Building app bundle...
 call "venv\Scripts\pyinstaller.exe" --noconfirm "print_proxy_prep.spec"
 if errorlevel 1 goto :build_failed
 
+for /f "tokens=3 delims= " %%V in ('findstr /b "APP_VERSION" constants.py') do set "APP_VERSION=%%~V"
+if not defined APP_VERSION (
+    echo.
+    echo Could not read APP_VERSION from constants.py.
+    goto :build_failed
+)
+
+set "RELEASE_ZIP=dist\PrintProxyPrep-%APP_VERSION%-win.zip"
+echo Creating release zip...
+if exist "%RELEASE_ZIP%" del /q "%RELEASE_ZIP%"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Compress-Archive -Path 'dist\Print Proxy Prep' -DestinationPath '%RELEASE_ZIP%' -Force"
+if errorlevel 1 goto :build_failed
+
 echo.
 echo Build complete.
 echo EXE folder:
@@ -32,6 +45,9 @@ echo   dist\Print Proxy Prep
 echo.
 echo Main executable:
 echo   dist\Print Proxy Prep\Print Proxy Prep.exe
+echo.
+echo Release zip:
+echo   %RELEASE_ZIP%
 echo.
 pause
 exit /b 0
