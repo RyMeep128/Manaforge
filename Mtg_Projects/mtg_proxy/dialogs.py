@@ -809,6 +809,9 @@ class SettingsDialog(QDialog):
         online_mode_checkbox = QCheckBox("Online Mode: Prefer Online Card Search")
         online_mode_checkbox.setChecked(CFG.OnlineMode)
         online_mode_checkbox.setToolTip("Use recent online search results instead of requiring a full local card catalog")
+        update_check_checkbox = QCheckBox("Check for Updates on Startup")
+        update_check_checkbox.setChecked(CFG.UpdateCheckOnStartup)
+        update_check_checkbox.setToolTip("Quietly check GitHub Releases for a newer app version when the app starts")
 
         max_dpi_spin_box = QSpinBox()
         max_dpi_spin_box.setRange(300, 1200)
@@ -845,6 +848,7 @@ class SettingsDialog(QDialog):
             description,
             display_columns,
             online_mode_checkbox,
+            update_check_checkbox,
             precropped_checkbox,
             vibrance_checkbox,
             max_dpi,
@@ -877,6 +881,7 @@ class SettingsDialog(QDialog):
         self._precropped_checkbox = precropped_checkbox
         self._vibrance_checkbox = vibrance_checkbox
         self._online_mode_checkbox = online_mode_checkbox
+        self._update_check_checkbox = update_check_checkbox
         self._max_dpi_spin_box = max_dpi_spin_box
         self._paper_sizes = paper_sizes_box._widget
         self._backend_url = backend_url._widget
@@ -889,6 +894,7 @@ class SettingsDialog(QDialog):
         CFG.EnableUncrop = self._precropped_checkbox.isChecked()
         CFG.VibranceBump = self._vibrance_checkbox.isChecked()
         CFG.OnlineMode = self._online_mode_checkbox.isChecked()
+        CFG.UpdateCheckOnStartup = self._update_check_checkbox.isChecked()
         CFG.MaxDPI = self._max_dpi_spin_box.value()
         CFG.DefaultPageSize = self._paper_sizes.currentText()
         CFG.HighResBackendURL = self._backend_url.text().strip()

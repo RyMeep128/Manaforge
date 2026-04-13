@@ -21,3 +21,10 @@ from services.project_service import (
     refresh_after_image_changes,
     save_project_data,
 )
+from services.update_service import (
+    UpdateCheckError,
+    UpdateCheckResult,
+    check_for_update,
+    is_newer_version,
+    parse_latest_release,
+)

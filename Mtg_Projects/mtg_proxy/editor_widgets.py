@@ -2166,6 +2166,7 @@ class ProjectDashboardPage(QWidget):
         project_list.setGridSize(QtCore.QSize(220, 230))
         self._project_list = project_list
 
+        check_updates_button = QPushButton("Check for Updates")
         import_button = QPushButton("Import Project")
         new_button = QPushButton("+")
         new_button.setFixedSize(56, 56)
@@ -2179,12 +2180,14 @@ class ProjectDashboardPage(QWidget):
         )
         new_button.setToolTip("Start a new project draft")
 
+        check_updates_button.clicked.connect(lambda: application.check_for_updates(manual=True))
         import_button.clicked.connect(self.import_project)
         new_button.clicked.connect(application.open_blank_editor)
 
         top_row = QHBoxLayout()
         top_row.addWidget(title)
         top_row.addStretch()
+        top_row.addWidget(check_updates_button)
         top_row.addWidget(import_button)
 
         bottom_row = QHBoxLayout()
