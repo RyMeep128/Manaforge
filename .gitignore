@@ -180,3 +180,35 @@ dubpes/
 
 MTGProxyPrinter/
 mpc-autofill/
+
+# repo-root cleanup artifacts
+/.codex_tmp*/
+/.pytest_cache/
+/.pytest_tmp*/
+/__pycache__/
+/build/
+/dist/
+/venv/
+/crop_skip_debug/
+/dubpes/
+/images/
+/projects/
+/Refrence/
+/Sidar/
+/mtg_core/
+/mpc-autofill/
+
+# product-local runtime/build artifacts
+**/pytest-cache-files-*/
+Mtg_Projects/images/
+Mtg_Projects/mtg_core/images/
+Mtg_Projects/mtg_proxy/images/
+Mtg_Projects/mtg_proxy/test_Images/
+Mtg_Projects/mtg_proxy/build/
+Mtg_Projects/mtg_proxy/dist/
+Mtg_Projects/mtg_proxy/venv/
+Mtg_Projects/mtg_proxy/projects/.codex_pytest_tmp*/
+Mtg_Projects/mtg_proxy/projects/.runtime/
+Mtg_Projects/mtg_proxy/projects/.thumbnails/
+Mtg_Projects/mtg_proxy/projects/codex_manual_import/
+Mtg_Projects/mtg_proxy/projects/tmp_images/

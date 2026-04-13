@@ -8,9 +8,10 @@
             "name": "Python Debugger: Current File",
             "type": "debugpy",
             "request": "launch",
-            "program": "main.py",
+            "program": "${workspaceFolder}/Mtg_Projects/mtg_proxy/main.py",
+            "cwd": "${workspaceFolder}/Mtg_Projects/mtg_proxy",
             "console": "integratedTerminal",
-            "python": "venv/scripts/python.exe"
+            "python": "${workspaceFolder}/Mtg_Projects/mtg_proxy/venv/scripts/python.exe"
         }
     ]
 }

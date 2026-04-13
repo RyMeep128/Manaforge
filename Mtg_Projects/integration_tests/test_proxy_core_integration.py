@@ -6,6 +6,9 @@ from mtg_core.services import CardService
 from services import deck_import_service
 
 
+_PRODUCTS_ROOT = Path(__file__).resolve().parents[1]
+
+
 def test_proxy_and_core_import_together_and_search_uses_shared_contract():
     calls: list[str] = []
 
@@ -36,8 +39,8 @@ def test_proxy_and_core_import_together_and_search_uses_shared_contract():
     )
 
     core = CardService(
-        db_path=str(Path.cwd() / "Mtg_Projects" / "mtg_core" / "integration_card_data.sqlite3"),
-        image_root=str(Path.cwd() / "Mtg_Projects" / "mtg_core" / "images"),
+        db_path=str(_PRODUCTS_ROOT / "mtg_core" / "integration_card_data.sqlite3"),
+        image_root=str(_PRODUCTS_ROOT / "mtg_core" / "images"),
         fetch_json_fn=fake_fetch_json,
     )
     results = core.search_cards("Lightning Bolt", {"allow_remote": True})

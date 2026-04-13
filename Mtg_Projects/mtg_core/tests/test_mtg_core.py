@@ -10,8 +10,11 @@ from mtg_core.services import CardService
 from mtg_core.sync import build_print_search_url, search_prints_payloads
 
 
+_PRODUCTS_ROOT = Path(__file__).resolve().parents[2]
+
+
 def _workspace_runtime_dir(name: str) -> Path:
-    base = Path.cwd() / "Mtg_Projects" / "mtg_proxy" / "projects" / ".codex_test_runtime"
+    base = _PRODUCTS_ROOT / "mtg_proxy" / "projects" / ".codex_test_runtime"
     base.mkdir(parents=True, exist_ok=True)
     target = base / f"{name}_{uuid.uuid4().hex}"
     target.mkdir(parents=True, exist_ok=True)
