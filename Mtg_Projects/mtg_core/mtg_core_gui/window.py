@@ -26,6 +26,7 @@ from PyQt6.QtWidgets import (
 
 from mtg_core.admin_service import CardAdminService
 from mtg_core.models import CardRecord, ImageAssetRecord, ImageManifestView, PrintRecord, SyncMetadata
+from mtg_core.services import FIXED_CATALOG_QUERY
 
 
 class BulkDownloadWorker(QObject):
@@ -33,9 +34,10 @@ class BulkDownloadWorker(QObject):
     finished = pyqtSignal(object)
     failed = pyqtSignal(str)
 
-    def __init__(self, admin_service: CardAdminService) -> None:
+    def __init__(self, admin_service: CardAdminService, query: str) -> None:
         super().__init__()
         self.admin_service = admin_service
+        self.query = query
         self._pause_requested = False
 
     def request_pause(self) -> None:
@@ -46,6 +48,7 @@ class BulkDownloadWorker(QObject):
         try:
             while True:
                 status = self.admin_service.process_bulk_download_chunk(
+                    query=self.query,
                     should_pause=lambda: self._pause_requested
                 )
                 self.progress.emit(status)
@@ -739,10 +742,13 @@ class SyncTab(QWidget):
         self._worker: BulkDownloadWorker | None = None
         self._close_requested = False
         self._loaded = False
+        self._query_initialized = False
         self._status_timer = QTimer(self)
         self._status_timer.setInterval(1000)
         self._status_timer.timeout.connect(self._refresh_download_status)
-        self.query_label = QLabel()
+        self.query_edit = QLineEdit(FIXED_CATALOG_QUERY)
+        self.query_edit.setPlaceholderText("Scryfall search query")
+        self.query_edit.textChanged.connect(lambda _text: self._refresh_download_status())
         self.job_status_label = QLabel()
         self.chunk_status_label = QLabel()
         self.counts_label = QLabel()
@@ -770,8 +776,8 @@ class SyncTab(QWidget):
 
         controls = QWidget()
         controls_layout = QGridLayout(controls)
-        controls_layout.addWidget(QLabel("Fixed Query"), 0, 0)
-        controls_layout.addWidget(self.query_label, 0, 1, 1, 3)
+        controls_layout.addWidget(QLabel("Scryfall Query"), 0, 0)
+        controls_layout.addWidget(self.query_edit, 0, 1, 1, 3)
         controls_layout.addWidget(QLabel("Job Status"), 1, 0)
         controls_layout.addWidget(self.job_status_label, 1, 1)
         controls_layout.addWidget(QLabel("Chunk"), 1, 2)
@@ -834,7 +840,9 @@ class SyncTab(QWidget):
 
     def _apply_download_status(self, status) -> None:
         display_status = self._display_status(status)
-        self.query_label.setText(status.query)
+        if not self._query_initialized:
+            self._query_initialized = True
+            self.query_edit.setText(status.query)
         self.job_status_label.setText(display_status)
         self.chunk_status_label.setText(str(status.chunk_number))
         self.counts_label.setText(
@@ -846,6 +854,9 @@ class SyncTab(QWidget):
         self.updated_label.setText("" if status.last_sync_at is None else str(status.last_sync_at))
         self._sync_buttons(status)
 
+    def _query_text(self) -> str:
+        return self.query_edit.text().strip()
+
     def _display_status(self, status) -> str:
         if not self.is_download_running() and status.status == "running":
             return "paused"
@@ -854,9 +865,12 @@ class SyncTab(QWidget):
     def _sync_buttons(self, status) -> None:
         running = self.is_download_running()
         stale_running = (not running) and status.status == "running"
-        self.start_button.setEnabled(not running and status.status == "idle")
+        query_changed = self._query_text() != status.query
+        self.start_button.setEnabled(
+            not running and (query_changed or status.status in {"idle", "completed", "failed"})
+        )
         self.pause_button.setEnabled(running)
-        self.resume_button.setEnabled(not running and (status.can_resume or stale_running))
+        self.resume_button.setEnabled(not running and not query_changed and (status.can_resume or stale_running))
         if running:
             if not self._status_timer.isActive():
                 self._status_timer.start()
@@ -870,7 +884,7 @@ class SyncTab(QWidget):
         if not self.is_download_running():
             status = self.admin_service.get_bulk_download_status()
             if status.status == "running" and not status.completed:
-                self.admin_service.pause_bulk_download()
+                self.admin_service.pause_bulk_download(query=status.query)
             return True
         self._close_requested = True
         self._pause_download_job()
@@ -879,27 +893,45 @@ class SyncTab(QWidget):
     def _start_download_job(self) -> None:
         if self.is_download_running():
             return
+        query = self._query_text()
+        if not query:
+            QMessageBox.warning(self, "Scryfall Query Required", "Enter a Scryfall search query before starting sync.")
+            return
         self._close_requested = False
-        self._launch_worker()
+        try:
+            status = self.admin_service.reset_bulk_download_status(query=query)
+        except ValueError as exc:
+            QMessageBox.warning(self, "Scryfall Query Required", str(exc))
+            return
+        self._apply_download_status(status)
+        self._launch_worker(query)
 
     def _resume_download_job(self) -> None:
         if self.is_download_running():
             return
+        status = self.admin_service.get_bulk_download_status()
+        query = status.query.strip()
+        if not query:
+            QMessageBox.warning(self, "Scryfall Query Required", "Enter a Scryfall search query before resuming sync.")
+            return
+        self.query_edit.setText(query)
         self._close_requested = False
-        self._launch_worker()
+        self._launch_worker(query)
 
     def _pause_download_job(self) -> None:
         if self._worker is None:
             status = self.admin_service.get_bulk_download_status()
+            if status.status == "running" and not status.completed:
+                status = self.admin_service.pause_bulk_download(query=status.query)
             self._apply_download_status(status)
             return
         self._worker.request_pause()
         self.pause_button.setEnabled(False)
         self.status_fn("Pausing after current chunk...")
 
-    def _launch_worker(self) -> None:
+    def _launch_worker(self, query: str) -> None:
         self._thread = QThread(self)
-        self._worker = BulkDownloadWorker(self.admin_service)
+        self._worker = BulkDownloadWorker(self.admin_service, query)
         self._worker.moveToThread(self._thread)
         self._thread.started.connect(self._worker.run)
         self._worker.progress.connect(self._on_worker_progress)
@@ -912,15 +944,15 @@ class SyncTab(QWidget):
         self._thread.finished.connect(self._thread.deleteLater)
         self._thread.start()
         self._apply_download_status(self.admin_service.get_bulk_download_status())
-        self.status_fn("Catalog download started")
+        self.status_fn("Sync download started")
 
     def _on_worker_progress(self, status) -> None:
         self._apply_download_status(status)
-        self.status_fn(f"Catalog download: {status.status} after chunk {status.chunk_number}")
+        self.status_fn(f"Sync download: {status.status} after chunk {status.chunk_number}")
 
     def _on_worker_finished(self, status) -> None:
         self._apply_download_status(status)
-        self.status_fn(f"Catalog download finished with status: {status.status}")
+        self.status_fn(f"Sync download finished with status: {status.status}")
         self._worker = None
         self._thread = None
         self._refresh_download_status()
@@ -929,8 +961,8 @@ class SyncTab(QWidget):
             self.close_ready.emit()
 
     def _on_worker_failed(self, message: str) -> None:
-        QMessageBox.critical(self, "Download All Cards", message)
-        self.status_fn("Download job failed")
+        QMessageBox.critical(self, "Sync Download", message)
+        self.status_fn("Sync download failed")
         self._worker = None
         self._thread = None
         self._refresh_download_status()
@@ -974,7 +1006,7 @@ class CoreAdminMainWindow(QMainWindow):
 
     def _close_after_pause(self) -> None:
         self._allow_close_after_pause = True
-        self._set_status("Catalog download paused; closing app")
+        self._set_status("Sync download paused; closing app")
         QTimer.singleShot(0, self.close)
 
     def closeEvent(self, event) -> None:  # pragma: no cover - GUI interaction

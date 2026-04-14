@@ -3,8 +3,10 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import sqlite3
 import time
+from pathlib import Path
 
 from mtg_core.models import ImageAssetRecord, ImageRecord, PrintRecord
 from mtg_core.paths import core_data_root
@@ -41,6 +43,12 @@ CREATE TABLE IF NOT EXISTS prints (
 
 CREATE INDEX IF NOT EXISTS idx_prints_oracle_id ON prints(oracle_id);
 CREATE INDEX IF NOT EXISTS idx_prints_name ON prints(name);
+CREATE INDEX IF NOT EXISTS idx_prints_lower_name_updated ON prints(lower(name), updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_prints_set_collector_updated ON prints(lower(coalesce(set_code, '')), collector_number, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_prints_oracle_order ON prints(oracle_id, released_at, set_code, collector_number);
+CREATE INDEX IF NOT EXISTS idx_prints_admin_order ON prints(name, released_at, set_code, collector_number, card_id);
+CREATE INDEX IF NOT EXISTS idx_prints_online_cache ON prints(cache_scope, cache_expires_at);
+CREATE INDEX IF NOT EXISTS idx_cards_oracle_name_order ON cards_oracle(name, oracle_id);
 
 CREATE TABLE IF NOT EXISTS canonical_prints (
     oracle_id TEXT PRIMARY KEY,
@@ -71,11 +79,14 @@ CREATE TABLE IF NOT EXISTS image_assets (
     source TEXT,
     source_url TEXT,
     payload BLOB NOT NULL,
+    payload_size INTEGER,
+    storage_path TEXT,
     created_at REAL NOT NULL,
     updated_at REAL NOT NULL
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_image_assets_checksum ON image_assets(checksum);
+CREATE INDEX IF NOT EXISTS idx_image_assets_updated_asset ON image_assets(updated_at DESC, asset_id);
 
 CREATE TABLE IF NOT EXISTS sync_state (
     source TEXT PRIMARY KEY,
@@ -112,6 +123,9 @@ class CardDatabase:
             self._ensure_column(connection, "image_manifest", "asset_id", "TEXT")
             self._ensure_column(connection, "prints", "cache_scope", "TEXT")
             self._ensure_column(connection, "prints", "cache_expires_at", "REAL")
+            self._ensure_column(connection, "image_assets", "payload_size", "INTEGER")
+            self._ensure_column(connection, "image_assets", "storage_path", "TEXT")
+            self._ensure_search_index(connection)
 
     @staticmethod
     def _ensure_column(
@@ -124,6 +138,117 @@ class CardDatabase:
         if any(row["name"] == column_name for row in rows):
             return
         connection.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}")
+
+    def _ensure_search_index(self, connection: sqlite3.Connection) -> None:
+        try:
+            connection.execute(
+                """
+                CREATE VIRTUAL TABLE IF NOT EXISTS print_search_fts USING fts5(
+                    card_id UNINDEXED,
+                    name,
+                    normalized_name,
+                    type_line,
+                    layout,
+                    set_code,
+                    collector_number,
+                    cache_scope UNINDEXED,
+                    cache_expires_at UNINDEXED
+                )
+                """
+            )
+            print_count = connection.execute("SELECT count(*) FROM prints").fetchone()[0]
+            fts_count = connection.execute("SELECT count(*) FROM print_search_fts").fetchone()[0]
+            if int(print_count or 0) != int(fts_count or 0):
+                self.rebuild_search_index(connection)
+        except sqlite3.DatabaseError:
+            # FTS is an optimization. The regular LIKE search remains the fallback.
+            return
+
+    def rebuild_search_index(self, connection: sqlite3.Connection | None = None) -> None:
+        owns_connection = connection is None
+        if connection is None:
+            connection = self.connect()
+        try:
+            connection.execute("DELETE FROM print_search_fts")
+            connection.execute(
+                """
+                INSERT INTO print_search_fts (
+                    card_id, name, normalized_name, type_line, layout,
+                    set_code, collector_number, cache_scope, cache_expires_at
+                )
+                SELECT
+                    p.card_id,
+                    p.name,
+                    c.normalized_name,
+                    coalesce(json_extract(p.payload_json, '$.type_line'), ''),
+                    coalesce(json_extract(p.payload_json, '$.layout'), ''),
+                    coalesce(p.set_code, ''),
+                    coalesce(p.collector_number, ''),
+                    coalesce(p.cache_scope, ''),
+                    coalesce(p.cache_expires_at, '')
+                FROM prints p
+                JOIN cards_oracle c ON c.oracle_id = p.oracle_id
+                """
+            )
+            if owns_connection:
+                connection.commit()
+        finally:
+            if owns_connection:
+                connection.close()
+
+    def refresh_search_index_for_print(
+        self,
+        connection: sqlite3.Connection,
+        card_id: str,
+    ) -> None:
+        try:
+            connection.execute("DELETE FROM print_search_fts WHERE card_id = ?", (card_id,))
+            connection.execute(
+                """
+                INSERT INTO print_search_fts (
+                    card_id, name, normalized_name, type_line, layout,
+                    set_code, collector_number, cache_scope, cache_expires_at
+                )
+                SELECT
+                    p.card_id,
+                    p.name,
+                    c.normalized_name,
+                    coalesce(json_extract(p.payload_json, '$.type_line'), ''),
+                    coalesce(json_extract(p.payload_json, '$.layout'), ''),
+                    coalesce(p.set_code, ''),
+                    coalesce(p.collector_number, ''),
+                    coalesce(p.cache_scope, ''),
+                    coalesce(p.cache_expires_at, '')
+                FROM prints p
+                JOIN cards_oracle c ON c.oracle_id = p.oracle_id
+                WHERE p.card_id = ?
+                """,
+                (card_id,),
+            )
+        except sqlite3.DatabaseError:
+            return
+
+    def delete_search_index_for_print(
+        self,
+        connection: sqlite3.Connection,
+        card_id: str,
+    ) -> None:
+        try:
+            connection.execute("DELETE FROM print_search_fts WHERE card_id = ?", (card_id,))
+        except sqlite3.DatabaseError:
+            return
+
+    def refresh_search_index_for_oracle(
+        self,
+        connection: sqlite3.Connection,
+        oracle_id: str,
+    ) -> None:
+        rows = connection.execute(
+            "SELECT card_id FROM prints WHERE oracle_id = ?",
+            (oracle_id,),
+        ).fetchall()
+        for row in rows:
+            self.refresh_search_index_for_print(connection, row["card_id"])
 
     def upsert_card_payload(
         self,
@@ -228,6 +353,7 @@ class CardDatabase:
                 """,
                 (source, None, now, json.dumps({"last_card_id": card_id})),
             )
+            self.refresh_search_index_for_print(connection, card_id)
             row = connection.execute(
                 "SELECT * FROM prints WHERE card_id = ?",
                 (card_id,),
@@ -268,7 +394,7 @@ class CardDatabase:
                 """
                 SELECT * FROM prints
                 WHERE lower(coalesce(set_code, '')) = lower(?)
-                  AND coalesce(collector_number, '') = ?
+                  AND collector_number = ?
                 ORDER BY updated_at DESC
                 LIMIT 1
                 """,
@@ -355,16 +481,86 @@ class CardDatabase:
             ]
         )
         with self.connect() as connection:
-            rows = connection.execute(
+            rows = self._search_prints_fts(
+                connection,
+                normalized=normalized,
+                query=query,
+                limit=limit,
+                token_clause=token_clause,
+                cache_clause=cache_clause,
+                online_mode=online_mode,
+                display_trim_chars=display_trim_chars,
+                prefix_like=prefix_like,
+            )
+            if rows is None:
+                rows = connection.execute(
+                    f"""
+                    SELECT p.*
+                    FROM prints p
+                    JOIN cards_oracle c ON c.oracle_id = p.oracle_id
+                    WHERE (
+                        c.normalized_name LIKE ?
+                        OR lower(p.name) LIKE lower(?)
+                        OR lower(coalesce(json_extract(p.payload_json, '$.type_line'), '')) LIKE lower(?)
+                    )
+                    {token_clause}
+                    {cache_clause}
+                    ORDER BY
+                        CASE
+                            WHEN c.normalized_name = ? OR lower(p.name) = lower(?) THEN 0
+                            WHEN ltrim(c.normalized_name, ?) LIKE ? OR lower(ltrim(p.name, ?)) LIKE lower(?) THEN 1
+                            ELSE 2
+                        END,
+                        lower(ltrim(p.name, ?)),
+                        p.released_at,
+                        p.set_code,
+                        p.collector_number
+                    LIMIT ?
+                    """,
+                    tuple(params),
+                ).fetchall()
+        return [self._row_to_print_record(row) for row in rows]
+
+    def _search_prints_fts(
+        self,
+        connection: sqlite3.Connection,
+        *,
+        normalized: str,
+        query: str,
+        limit: int,
+        token_clause: str,
+        cache_clause: str,
+        online_mode: bool,
+        display_trim_chars: str,
+        prefix_like: str,
+    ) -> list[sqlite3.Row] | None:
+        fts_query = _fts_query(normalized)
+        if fts_query is None:
+            return None
+
+        params: list[object] = [fts_query]
+        if online_mode:
+            params.append(time.time())
+        params.extend(
+            [
+                normalized,
+                query,
+                display_trim_chars,
+                prefix_like,
+                display_trim_chars,
+                prefix_like,
+                display_trim_chars,
+                max(1, int(limit)),
+            ]
+        )
+        try:
+            return connection.execute(
                 f"""
                 SELECT p.*
-                FROM prints p
+                FROM print_search_fts f
+                JOIN prints p ON p.card_id = f.card_id
                 JOIN cards_oracle c ON c.oracle_id = p.oracle_id
-                WHERE (
-                    c.normalized_name LIKE ?
-                    OR lower(p.name) LIKE lower(?)
-                    OR lower(coalesce(json_extract(p.payload_json, '$.type_line'), '')) LIKE lower(?)
-                )
+                WHERE print_search_fts MATCH ?
                 {token_clause}
                 {cache_clause}
                 ORDER BY
@@ -381,7 +577,8 @@ class CardDatabase:
                 """,
                 tuple(params),
             ).fetchall()
-        return [self._row_to_print_record(row) for row in rows]
+        except sqlite3.DatabaseError:
+            return None
 
     def upsert_image_record(
         self,
@@ -444,6 +641,98 @@ class CardDatabase:
             updated_at=row["updated_at"],
         )
 
+    def _image_asset_base_dir(self) -> Path:
+        if self.db_path == ":memory:":
+            return core_data_root()
+        return Path(self.db_path).expanduser().resolve().parent
+
+    def _image_asset_storage_root(self) -> Path:
+        return self._image_asset_base_dir() / "images" / "assets"
+
+    @staticmethod
+    def _safe_asset_extension(extension: str | None) -> str:
+        safe = re.sub(r"[^A-Za-z0-9]+", "", (extension or "").lstrip("."))
+        return safe.lower() or "bin"
+
+    def _image_asset_path(self, asset_id: str, checksum: str, extension: str | None) -> Path:
+        filename = f"{asset_id}.{self._safe_asset_extension(extension)}"
+        return self._image_asset_storage_root() / checksum[:2] / filename
+
+    def _image_asset_storage_reference(self, path: Path) -> str:
+        try:
+            return str(path.resolve().relative_to(self._image_asset_base_dir()))
+        except ValueError:
+            return str(path.resolve())
+
+    def _resolve_image_asset_storage_path(self, storage_path: str | None) -> Path | None:
+        if not storage_path:
+            return None
+        path = Path(storage_path)
+        if path.is_absolute():
+            return path
+        return self._image_asset_base_dir() / path
+
+    @staticmethod
+    def _row_blob(row: sqlite3.Row, column_name: str = "payload") -> bytes:
+        value = row[column_name]
+        if value is None:
+            return b""
+        return bytes(value)
+
+    @staticmethod
+    def _write_verified_image_asset_file(path: Path, payload: bytes, checksum: str) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temp_path = path.with_name(f"{path.name}.tmp")
+        with open(temp_path, "wb") as handle:
+            handle.write(payload)
+        with open(temp_path, "rb") as handle:
+            written_checksum = hashlib.sha256(handle.read()).hexdigest()
+        if written_checksum != checksum:
+            try:
+                temp_path.unlink()
+            except OSError:
+                pass
+            raise OSError("Stored image asset checksum verification failed.")
+        os.replace(temp_path, path)
+
+    @staticmethod
+    def _read_verified_image_asset_file(path: Path, checksum: str) -> bytes | None:
+        try:
+            with open(path, "rb") as handle:
+                payload = handle.read()
+        except OSError:
+            return None
+        if hashlib.sha256(payload).hexdigest() != checksum:
+            return None
+        return payload
+
+    def _row_to_image_asset_record(
+        self,
+        row: sqlite3.Row,
+        *,
+        payload_override: bytes | None = None,
+        payload_size_override: int | None = None,
+    ) -> ImageAssetRecord:
+        payload = self._row_blob(row) if payload_override is None else payload_override
+        payload_size = row["payload_size"]
+        if payload_size_override is not None:
+            payload_size = payload_size_override
+        if payload_size is None:
+            payload_size = len(payload)
+        return ImageAssetRecord(
+            asset_id=row["asset_id"],
+            checksum=row["checksum"],
+            extension=row["extension"],
+            mime_type=row["mime_type"],
+            source=row["source"],
+            source_url=row["source_url"],
+            payload=payload,
+            payload_size=int(payload_size or 0),
+            storage_path=row["storage_path"],
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
+        )
+
     def store_image_asset(
         self,
         payload: bytes,
@@ -455,16 +744,30 @@ class CardDatabase:
     ) -> ImageAssetRecord:
         checksum = hashlib.sha256(payload).hexdigest()
         now = time.time()
+        asset_id = f"img-{checksum[:20]}"
+        asset_path = self._image_asset_path(asset_id, checksum, extension)
+        self._write_verified_image_asset_file(asset_path, payload, checksum)
+        storage_path = self._image_asset_storage_reference(asset_path)
         with self.connect() as connection:
             existing = connection.execute(
                 """
-                SELECT asset_id, checksum, extension, mime_type, source, source_url, payload, created_at, updated_at
+                SELECT
+                    asset_id, checksum, extension, mime_type, source, source_url,
+                    payload, payload_size, storage_path, created_at, updated_at
                 FROM image_assets
                 WHERE checksum = ?
                 """,
                 (checksum,),
             ).fetchone()
             if existing is not None:
+                existing_asset_path = self._image_asset_path(
+                    existing["asset_id"],
+                    checksum,
+                    extension or existing["extension"],
+                )
+                if existing_asset_path != asset_path:
+                    self._write_verified_image_asset_file(existing_asset_path, payload, checksum)
+                    storage_path = self._image_asset_storage_reference(existing_asset_path)
                 connection.execute(
                     """
                     UPDATE image_assets
@@ -472,6 +775,9 @@ class CardDatabase:
                         mime_type = coalesce(?, mime_type),
                         source = coalesce(?, source),
                         source_url = coalesce(?, source_url),
+                        payload = ?,
+                        payload_size = ?,
+                        storage_path = ?,
                         updated_at = ?
                     WHERE asset_id = ?
                     """,
@@ -480,32 +786,46 @@ class CardDatabase:
                         mime_type,
                         source,
                         source_url,
+                        b"",
+                        len(payload),
+                        storage_path,
                         now,
                         existing["asset_id"],
                     ),
                 )
-                return ImageAssetRecord(
-                    asset_id=existing["asset_id"],
-                    checksum=existing["checksum"],
-                    extension=extension or existing["extension"],
-                    mime_type=mime_type or existing["mime_type"],
-                    source=source or existing["source"],
-                    source_url=source_url or existing["source_url"],
-                    payload=bytes(existing["payload"]),
-                    payload_size=len(bytes(existing["payload"])),
-                    created_at=existing["created_at"],
-                    updated_at=now,
-                )
+                row = connection.execute(
+                    """
+                    SELECT
+                        asset_id, checksum, extension, mime_type, source, source_url,
+                        payload, payload_size, storage_path, created_at, updated_at
+                    FROM image_assets
+                    WHERE asset_id = ?
+                    """,
+                    (existing["asset_id"],),
+                ).fetchone()
+                return self._row_to_image_asset_record(row, payload_override=payload)
 
-            asset_id = f"img-{checksum[:20]}"
             connection.execute(
                 """
                 INSERT INTO image_assets (
-                    asset_id, checksum, extension, mime_type, source, source_url, payload, created_at, updated_at
+                    asset_id, checksum, extension, mime_type, source, source_url,
+                    payload, payload_size, storage_path, created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (asset_id, checksum, extension, mime_type, source, source_url, payload, now, now),
+                (
+                    asset_id,
+                    checksum,
+                    extension,
+                    mime_type,
+                    source,
+                    source_url,
+                    b"",
+                    len(payload),
+                    storage_path,
+                    now,
+                    now,
+                ),
             )
             return ImageAssetRecord(
                 asset_id=asset_id,
@@ -516,6 +836,7 @@ class CardDatabase:
                 source_url=source_url,
                 payload=bytes(payload),
                 payload_size=len(payload),
+                storage_path=storage_path,
                 created_at=now,
                 updated_at=now,
             )
@@ -524,7 +845,9 @@ class CardDatabase:
         with self.connect() as connection:
             row = connection.execute(
                 """
-                SELECT asset_id, checksum, extension, mime_type, source, source_url, payload, created_at, updated_at
+                SELECT
+                    asset_id, checksum, extension, mime_type, source, source_url,
+                    payload, payload_size, storage_path, created_at, updated_at
                 FROM image_assets
                 WHERE asset_id = ?
                 """,
@@ -532,18 +855,14 @@ class CardDatabase:
             ).fetchone()
         if row is None:
             return None
-        return ImageAssetRecord(
-            asset_id=row["asset_id"],
-            checksum=row["checksum"],
-            extension=row["extension"],
-            mime_type=row["mime_type"],
-            source=row["source"],
-            source_url=row["source_url"],
-            payload=bytes(row["payload"]),
-            payload_size=len(bytes(row["payload"])),
-            created_at=row["created_at"],
-                updated_at=row["updated_at"],
-            )
+        payload = None
+        path = self._resolve_image_asset_storage_path(row["storage_path"])
+        if path is not None:
+            payload = self._read_verified_image_asset_file(path, row["checksum"])
+        if payload is None:
+            blob = self._row_blob(row)
+            payload = blob if blob else b""
+        return self._row_to_image_asset_record(row, payload_override=payload)
 
     def get_sync_state(self, source: str) -> sqlite3.Row | None:
         with self.connect() as connection:
@@ -618,3 +937,10 @@ def _synthesize_print_id(name: str, set_code: str | None, collector_number: str 
     )
     digest = hashlib.sha1(normalized.encode("utf-8")).hexdigest()[:16]
     return f"proxy-print-{digest}"
+
+
+def _fts_query(normalized: str) -> str | None:
+    terms = re.findall(r"[\w]+", normalized or "", flags=re.UNICODE)
+    if not terms or any(len(term) < 2 for term in terms):
+        return None
+    return " ".join(f"{term}*" for term in terms)

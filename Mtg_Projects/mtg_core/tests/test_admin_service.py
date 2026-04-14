@@ -73,6 +73,42 @@ def test_create_update_delete_card(tmp_path):
     assert service.list_cards().items == []
 
 
+def test_admin_print_changes_refresh_search_index(tmp_path):
+    service, database = _service(tmp_path)
+    service.create_card(
+        oracle_id="oracle-alpha",
+        name="Lightning Bolt",
+        layout="normal",
+    )
+    created = service.create_print(
+        card_id="print-alpha",
+        oracle_id="oracle-alpha",
+        name="Lightning Bolt",
+        set_code="lea",
+        collector_number="161",
+    )
+
+    assert [row.card_id for row in database.search_prints("Lightning", limit=10)] == ["print-alpha"]
+
+    service.update_card(
+        "oracle-alpha",
+        name="Thunder Bolt",
+        layout="normal",
+    )
+    service.update_print(
+        created.card_id,
+        oracle_id="oracle-alpha",
+        name="Thunder Bolt",
+        set_code="lea",
+        collector_number="161",
+    )
+
+    assert [row.card_id for row in database.search_prints("Thunder", limit=10)] == ["print-alpha"]
+
+    assert service.delete_print(created.card_id) is True
+    assert database.search_prints("Thunder", limit=10) == []
+
+
 def test_print_crud_keeps_payload_in_sync_and_recomputes_canonical(tmp_path):
     service, database = _service(tmp_path)
     service.create_card(
@@ -360,6 +396,67 @@ def test_bulk_download_persists_partial_progress_when_a_later_page_fails(tmp_pat
     assert persisted.last_error == "page 2 failed"
     assert persisted.current_page_url == second_url
     assert persisted.completed is False
+
+
+def test_bulk_download_uses_custom_scryfall_query_and_persists_it(tmp_path):
+    custom_query = "artist:avon game:paper"
+    calls: list[str] = []
+    cards = [_print_payload(1)]
+
+    def fake_fetch_json(url: str) -> dict:
+        calls.append(url)
+        return {
+            "object": "list",
+            "data": cards,
+            "has_more": False,
+        }
+
+    service, database = _bulk_service(
+        tmp_path,
+        fetch_json=fake_fetch_json,
+        fetch_bytes=lambda _url: b"custom-query-bytes" * 400,
+    )
+
+    status = service.run_bulk_query_download(query=custom_query)
+    persisted = service.get_bulk_download_status()
+    sync_row = database.get_sync_state(FIXED_CATALOG_SOURCE)
+
+    assert status.status == "completed"
+    assert persisted.query == custom_query
+    assert sync_row is not None
+    assert calls == [build_print_search_url(custom_query, include_extras=True)]
+
+
+def test_bulk_download_resets_checkpoint_when_query_changes(tmp_path):
+    calls: list[str] = []
+
+    def fake_fetch_json(url: str) -> dict:
+        calls.append(url)
+        return {
+            "object": "list",
+            "data": [_print_payload(index) for index in range(120)],
+            "has_more": False,
+        }
+
+    service, _database = _bulk_service(
+        tmp_path,
+        fetch_json=fake_fetch_json,
+        fetch_bytes=lambda _url: b"reset-query-bytes" * 400,
+    )
+
+    first = service.process_bulk_download_chunk(query=FIXED_CATALOG_QUERY)
+    changed = service.run_bulk_query_download(query="set:lea")
+
+    assert first.status == "running"
+    assert first.page_offset == 100
+    assert changed.status == "completed"
+    assert changed.query == "set:lea"
+    assert changed.total_scanned == 120
+    assert calls == [
+        build_print_search_url(FIXED_CATALOG_QUERY, include_extras=True),
+        build_print_search_url("set:lea", include_extras=True),
+        build_print_search_url("set:lea", include_extras=True),
+    ]
 
 
 def test_bulk_download_pause_preserves_resume_checkpoint(tmp_path):

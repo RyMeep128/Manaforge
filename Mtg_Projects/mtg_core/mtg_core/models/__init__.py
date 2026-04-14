@@ -66,6 +66,7 @@ class ImageAssetRecord:
     source_url: str | None
     payload: bytes
     payload_size: int | None = None
+    storage_path: str | None = None
     created_at: float | None = None
     updated_at: float | None = None
 
