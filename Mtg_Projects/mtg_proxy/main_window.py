@@ -84,8 +84,8 @@ from editor_widgets import (
     CardScrollArea,
     CardTabs,
     EditorPage,
+    LazyPrintPreview,
     OptionsWidget,
-    PrintPreview,
     ProjectDashboardPage,
 )
 from services import deck_import_service, high_res_service, pdf_service, project_service, update_service
@@ -377,7 +377,7 @@ class AppShellWindow(QMainWindow):
     def _build_editor_page(self, state, img_dict):
         card_grid = CardGrid(state, img_dict)
         scroll_area = CardScrollArea(state, img_dict, card_grid)
-        print_preview = PrintPreview(state, img_dict)
+        print_preview = LazyPrintPreview(state, img_dict)
         tabs = CardTabs(state, img_dict, scroll_area, print_preview)
         options = OptionsWidget(self._application, state, img_dict)
         options_scroll_area = QScrollArea()

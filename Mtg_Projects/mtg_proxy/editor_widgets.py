@@ -127,6 +127,7 @@ class EditorPage(QWidget):
         layout.addWidget(splitter)
         self.setLayout(layout)
 
+        self._tabs = tabs
         self._scroll_area = scroll_area
         self._options = options
         self._print_preview = print_preview
@@ -140,7 +141,10 @@ class EditorPage(QWidget):
         self.refresh_preview(state, img_dict)
 
     def refresh_preview(self, state, img_dict):
-        self._print_preview.refresh(state, img_dict)
+        if hasattr(self._tabs, "refresh_preview"):
+            self._tabs.refresh_preview(state, img_dict)
+        else:
+            self._print_preview.refresh(state, img_dict)
 
 
 class WorkflowGuideWidget(QGroupBox):
@@ -1157,27 +1161,7 @@ class PrintPreview(QScrollArea):
         rows = int(page_height // card_height)
 
         raw_pages = pdf.distribute_cards_to_pages(state, columns, rows)
-        pages = [
-            {
-                "cards": page,
-                "backside": False,
-            }
-            for page in raw_pages
-        ]
-
-        if state.backside_enabled:
-            backside_pages = pdf.make_backside_pages(state, raw_pages)
-            backside_pages = [
-                {
-                    "cards": page,
-                    "backside": True,
-                }
-                for page in backside_pages
-            ]
-
-            pages = [
-                page for page_pair in zip(pages, backside_pages) for page in page_pair
-            ]
+        pages = pdf.make_render_page_sequence(state, raw_pages)
 
         @functools.cache
         def img_get(card_name, bleed_edge):
@@ -1240,6 +1224,32 @@ class PrintPreview(QScrollArea):
         pages_widget.setLayout(layout)
 
         self.setWidget(pages_widget)
+
+
+class LazyPrintPreview(QWidget):
+    def __init__(self, print_dict, img_dict):
+        super().__init__()
+        self._state = as_project_state(print_dict)
+        self._img_dict = img_dict
+        self._preview = None
+
+        layout = QVBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        self.setLayout(layout)
+
+    def is_loaded(self):
+        return self._preview is not None
+
+    def refresh(self, print_dict, img_dict, force=False):
+        self._state = as_project_state(print_dict)
+        self._img_dict = img_dict
+        if self._preview is None:
+            if not force:
+                return
+            self._preview = PrintPreview(self._state, self._img_dict)
+            self.layout().addWidget(self._preview)
+            return
+        self._preview.refresh(self._state, self._img_dict)
 
 
 class ActionsWidget(QGroupBox):
@@ -1832,6 +1842,12 @@ class CardOptionsWidget(QGroupBox):
             "Turn this on only if you want separate back pages in the final PDF."
         )
 
+        backside_pages_at_end_checkbox = QCheckBox("Put Back Pages At End")
+        backside_pages_at_end_checkbox.setChecked(state.backside_pages_at_end)
+        backside_pages_at_end_checkbox.setToolTip(
+            "Put all front pages first, then all matching back pages in order."
+        )
+
         backside_default_button = QPushButton("Choose Default Back")
         backside_default_preview = BacksidePreview(
             state.backside_default, img_dict
@@ -1854,6 +1870,7 @@ class CardOptionsWidget(QGroupBox):
         backside_default_button.setEnabled(backside_enabled)
         backside_default_preview.setEnabled(backside_enabled)
         backside_offset.setEnabled(backside_enabled)
+        backside_pages_at_end_checkbox.setEnabled(backside_enabled)
 
         back_over_divider = QFrame()
         back_over_divider.setFrameShape(QFrame.Shape.HLine)
@@ -1872,6 +1889,7 @@ class CardOptionsWidget(QGroupBox):
         layout.addWidget(bleed_edge)
         layout.addWidget(bleed_back_divider)
         layout.addWidget(backside_checkbox)
+        layout.addWidget(backside_pages_at_end_checkbox)
         layout.addWidget(backside_default_button)
         layout.addWidget(backside_default_preview)
         layout.addWidget(backside_offset)
@@ -1894,7 +1912,13 @@ class CardOptionsWidget(QGroupBox):
             backside_default_button.setEnabled(enabled)
             backside_offset.setEnabled(enabled)
             backside_default_preview.setEnabled(enabled)
+            backside_pages_at_end_checkbox.setEnabled(enabled)
             self.window().refresh(state, img_dict)
+
+        def switch_backside_pages_at_end(s):
+            enabled = s == QtCore.Qt.CheckState.Checked
+            state.backside_pages_at_end = enabled
+            self.window().refresh_preview(state, img_dict)
 
         def pick_backside():
             default_backside_choice = image_file_dialog(self, state.image_dir)
@@ -1916,12 +1940,14 @@ class CardOptionsWidget(QGroupBox):
 
         bleed_edge_spin.valueChanged.connect(change_bleed_edge)
         backside_checkbox.checkStateChanged.connect(switch_backside_enabled)
+        backside_pages_at_end_checkbox.checkStateChanged.connect(switch_backside_pages_at_end)
         backside_default_button.clicked.connect(pick_backside)
         backside_offset_spin.valueChanged.connect(change_backside_offset)
         oversized_checkbox.checkStateChanged.connect(switch_oversized_enabled)
 
         self._bleed_edge_spin = bleed_edge_spin
         self._backside_checkbox = backside_checkbox
+        self._backside_pages_at_end_checkbox = backside_pages_at_end_checkbox
         self._backside_offset_spin = backside_offset_spin
         self._backside_default_preview = backside_default_preview
         self._oversized_checkbox = oversized_checkbox
@@ -1930,6 +1956,8 @@ class CardOptionsWidget(QGroupBox):
         state = as_project_state(print_dict)
         self._bleed_edge_spin.setValue(float(state.bleed_edge))
         self._backside_checkbox.setChecked(state.backside_enabled)
+        self._backside_pages_at_end_checkbox.setChecked(state.backside_pages_at_end)
+        self._backside_pages_at_end_checkbox.setEnabled(state.backside_enabled)
         self._backside_offset_spin.setValue(float(state.backside_offset))
         self._oversized_checkbox.setChecked(state.oversized_enabled)
 
@@ -2030,16 +2058,34 @@ class OptionsWidget(QWidget):
 class CardTabs(QTabWidget):
     def __init__(self, print_dict, img_dict, scroll_area, print_preview):
         super().__init__()
-        state = as_project_state(print_dict)
+        self._state = as_project_state(print_dict)
+        self._img_dict = img_dict
+        self._print_preview = print_preview
 
         self.addTab(scroll_area, "Cards")
         self.addTab(print_preview, "Preview")
 
         def current_changed(i):
-            if i == 1:
-                print_preview.refresh(state, img_dict)
+            if i == self.indexOf(self._print_preview):
+                self._refresh_print_preview(force=True)
 
         self.currentChanged.connect(current_changed)
+
+    def _refresh_print_preview(self, force=False):
+        if isinstance(self._print_preview, LazyPrintPreview):
+            self._print_preview.refresh(self._state, self._img_dict, force=force)
+        elif force:
+            self._print_preview.refresh(self._state, self._img_dict)
+
+    def refresh_preview(self, print_dict, img_dict):
+        self._state = as_project_state(print_dict)
+        self._img_dict = img_dict
+        if isinstance(self._print_preview, LazyPrintPreview):
+            self._refresh_print_preview(
+                force=self.currentIndex() == self.indexOf(self._print_preview)
+            )
+        else:
+            self._print_preview.refresh(self._state, self._img_dict)
 
 
 class ProjectTileWidget(QWidget):
@@ -2264,6 +2310,7 @@ __all__ = [
     "DummyCardWidget",
     "EditorPage",
     "GlobalOptionsWidget",
+    "LazyPrintPreview",
     "OptionsWidget",
     "PageGrid",
     "PagePreview",

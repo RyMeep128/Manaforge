@@ -32,7 +32,7 @@ def list_image_files(dir):
 
 
 def is_pre_cropped_image_name(image_name):
-    lowered = image_name.lower()
+    lowered = image_name.lower().lstrip("_")
     return any(lowered.startswith(prefix) for prefix in pre_cropped_prefixes)
 
 

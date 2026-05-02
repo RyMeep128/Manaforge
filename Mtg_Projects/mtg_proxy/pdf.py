@@ -48,7 +48,6 @@ def draw_cross(can, x, y, segment, c=6, s=1):
 
 def generate(print_dict, size, pdf_path, print_fn):
     state = as_project_state(print_dict)
-    has_backside = state.backside_enabled
     backside_offset = mm_to_point(float(state.backside_offset))
 
     bleed_edge = float(state.bleed_edge)
@@ -68,7 +67,8 @@ def generate(print_dict, size, pdf_path, print_fn):
     rx, ry = round((pw - (w * cols)) / 2), round((ph - (h * rows)) / 2)
     ry = ph - ry
 
-    images = distribute_cards_to_pages(state, cols, rows)
+    front_pages = distribute_cards_to_pages(state, cols, rows)
+    render_pages = make_render_page_sequence(state, front_pages)
 
     extended_guides = state.extended_guides
 
@@ -83,24 +83,27 @@ def generate(print_dict, size, pdf_path, print_fn):
         img = ImageReader(io.BytesIO(img))
         return img
 
-    for p, page_images in enumerate(images):
-        render_fmt = "Rendering page {page}...\nImage number {img_idx} - {img_name}"
+    for page in render_pages:
+        page_images = page["cards"]
+        is_backside_page = page["backside"]
+        render_fmt = (
+            "Rendering backside for page {page}...\nImage number {img_idx} - {img_name}"
+            if is_backside_page
+            else "Rendering page {page}...\nImage number {img_idx} - {img_name}"
+        )
 
         def draw_image(
             img, oversized, i, x, y, dx=0.0, dy=0.0, is_short_edge=False, backside=False
         ):
-            print_fn(render_fmt.format(page=p + 1, img_idx=i + 1, img_name=img))
+            print_fn(render_fmt.format(page=page["front_page_number"], img_idx=i + 1, img_name=img))
             img_path = runtime_images.get_processed_path(state, img)
             if img_path and os.path.exists(img_path):
-                if oversized and backside:
-                    x = x - 1
-
-                rotation = get_card_rotation(backside, is_oversized, is_short_edge)
+                rotation = get_card_rotation(backside, oversized, is_short_edge)
                 img = get_img(img_path, rotation)
 
                 x = rx + x * w + dx
                 y = ry - y * h + dy - h
-                cw = cw = 2 * w if oversized else w
+                cw = 2 * w if oversized else w
                 ch = h
 
                 pages.drawImage(
@@ -125,7 +128,7 @@ def generate(print_dict, size, pdf_path, print_fn):
                 if iy == rows:
                     draw_line(pages, x, y, x, 0)
 
-        card_grid = distribute_cards_to_grid(page_images, True, cols, rows)
+        card_grid = distribute_cards_to_grid(page_images, not is_backside_page, cols, rows)
 
         i = 0
         for y in range(0, rows):
@@ -136,9 +139,19 @@ def generate(print_dict, size, pdf_path, print_fn):
                         continue
 
                     draw_image(
-                        card_name, is_oversized, i, x, y, is_short_edge=is_short_edge
+                        card_name,
+                        is_oversized,
+                        i,
+                        x,
+                        y,
+                        dx=backside_offset if is_backside_page else 0.0,
+                        is_short_edge=is_short_edge,
+                        backside=is_backside_page,
                     )
                     i = i + 1
+
+                    if is_backside_page:
+                        continue
 
                     if is_oversized:
                         ob = 2 * b
@@ -162,37 +175,6 @@ def generate(print_dict, size, pdf_path, print_fn):
 
         # Next page
         pages.showPage()
-
-        # Draw back-sides if requested
-        if has_backside:
-            render_fmt = "Rendering backside for page {page}...\nImage number {img_idx} - {img_name}"
-            i = 0
-            for y in range(0, rows):
-                for x in range(0, cols):
-                    if card := card_grid[y][x]:
-                        (card_name, is_short_edge, is_oversized) = card
-                        if card_name is None:
-                            continue
-
-                        print_fn(
-                            render_fmt.format(
-                                page=p + 1, img_idx=i + 1, img_name=card_name
-                            )
-                        )
-                        backside = state.backsides.get(card_name, state.backside_default)
-                        draw_image(
-                            backside,
-                            is_oversized,
-                            i,
-                            cols - x - 1,
-                            y,
-                            dx=backside_offset,
-                            is_short_edge=is_short_edge,
-                            backside=True,
-                        )
-
-            # Next page
-            pages.showPage()
 
     return pages
 
@@ -292,6 +274,37 @@ def make_backside_pages(print_dict, pages):
         page["oversized"] = [backside_of_img(img) for img in page["oversized"]]
 
     return backside_pages
+
+
+def make_render_page_sequence(print_dict, front_pages):
+    state = as_project_state(print_dict)
+    front_render_pages = [
+        {
+            "cards": page,
+            "backside": False,
+            "front_page_number": index + 1,
+        }
+        for index, page in enumerate(front_pages)
+    ]
+    if not state.backside_enabled:
+        return front_render_pages
+
+    backside_render_pages = [
+        {
+            "cards": page,
+            "backside": True,
+            "front_page_number": index + 1,
+        }
+        for index, page in enumerate(make_backside_pages(state, front_pages))
+    ]
+    if state.backside_pages_at_end:
+        return front_render_pages + backside_render_pages
+
+    return [
+        page
+        for page_pair in zip(front_render_pages, backside_render_pages)
+        for page in page_pair
+    ]
 
 
 def distribute_cards_to_grid(cards, left_to_right, columns, rows):

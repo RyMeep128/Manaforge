@@ -117,17 +117,16 @@ def init_dict(print_dict, img_dict, warn_fn=None):
         if parsed_metadata is not None:
             state.set_card_metadata(img, parsed_metadata)
 
+    img_dict.clear()
     img_cache = state.img_cache
     if os.path.exists(img_cache):
         try:
-            with open(img_cache, "r", encoding="utf-8") as fp:
-                loaded_img_dict = json.load(fp)
-                for value in loaded_img_dict.values():
-                    if isinstance(value, dict):
-                        image.normalize_cached_preview_entry(value)
-                img_dict.clear()
-                for key, value in loaded_img_dict.items():
-                    img_dict[key] = value
+            runtime_images.hydrate_preview_entries(
+                state,
+                img_dict,
+                list(state.cards.keys()),
+                raise_on_load_error=True,
+            )
         except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
             logger.warning("project image cache reset path=%s error=%s", img_cache, exc)
             img_dict.clear()

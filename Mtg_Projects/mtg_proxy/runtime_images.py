@@ -41,7 +41,11 @@ def _preview_cache_path(state: ProjectState) -> str:
     return path
 
 
-def _load_preview_cache(state: ProjectState) -> dict[str, dict]:
+def _load_preview_cache(
+    state: ProjectState,
+    *,
+    raise_on_load_error: bool = False,
+) -> dict[str, dict]:
     path = _preview_cache_path(state)
     if not os.path.exists(path):
         return {}
@@ -49,20 +53,54 @@ def _load_preview_cache(state: ProjectState) -> dict[str, dict]:
         with open(path, "r", encoding="utf-8") as fp:
             payload = json.load(fp)
     except (OSError, json.JSONDecodeError, TypeError, ValueError):
+        if raise_on_load_error:
+            raise
         return {}
     if not isinstance(payload, dict):
+        if raise_on_load_error:
+            raise TypeError("preview cache payload must be a dictionary")
         return {}
-    try:
-        for value in payload.values():
-            if isinstance(value, dict):
-                image.normalize_cached_preview_entry(value)
-    except (TypeError, ValueError):
-        return {}
-    return payload
+
+    cache_data = {}
+    for key, value in payload.items():
+        if not isinstance(key, str) or not isinstance(value, dict):
+            continue
+        try:
+            image.normalize_cached_preview_entry(value)
+        except (TypeError, ValueError):
+            continue
+        cache_data[key] = value
+    return cache_data
 
 
 def _save_preview_cache(state: ProjectState, cache_data: dict[str, dict]) -> None:
     util.write_json_atomic(_preview_cache_path(state), cache_data, ensure_ascii=False)
+
+
+def _is_usable_preview_entry(entry: dict | None) -> bool:
+    if not isinstance(entry, dict):
+        return False
+    thumb = entry.get("thumb")
+    uncropped = entry.get("uncropped")
+    if (
+        "data" not in entry
+        or "size" not in entry
+        or not isinstance(thumb, dict)
+        or "data" not in thumb
+        or "size" not in thumb
+        or not isinstance(uncropped, dict)
+        or "data" not in uncropped
+        or "size" not in uncropped
+        or "effective_dpi" not in entry
+    ):
+        return False
+    try:
+        image.decode_cached_image_bytes(entry["data"])
+        image.decode_cached_image_bytes(thumb["data"])
+        image.decode_cached_image_bytes(uncropped["data"])
+    except (TypeError, ValueError):
+        return False
+    return True
 
 
 def _entry_by_front_or_back(state: ProjectState, card_name: str) -> tuple[ProjectCardEntry | None, str]:
@@ -114,6 +152,12 @@ def _processing_fingerprint(state: ProjectState, card_name: str) -> str:
         "max_dpi": int(CFG.MaxDPI) if CFG.MaxDPI is not None else None,
     }
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()[:16]
+
+
+def _preview_cache_key(state: ProjectState, card_name: str) -> tuple[str, str, str]:
+    asset_key = _asset_key(state, card_name)
+    fingerprint = _processing_fingerprint(state, card_name)
+    return asset_key, fingerprint, f"{asset_key}|{fingerprint}"
 
 
 def get_source_path(project_like, card_name: str) -> str | None:
@@ -222,21 +266,26 @@ def ensure_preview_entry(project_like, img_dict: dict, card_name: str) -> dict |
     state = as_project_state(project_like)
     if not card_name:
         return None
-    asset_key = _asset_key(state, card_name)
-    fingerprint = _processing_fingerprint(state, card_name)
+    asset_key, fingerprint, cache_key = _preview_cache_key(state, card_name)
 
     cached_entry = img_dict.get(card_name)
     if (
         isinstance(cached_entry, dict)
         and cached_entry.get("_asset_key") == asset_key
         and cached_entry.get("_fingerprint") == fingerprint
+        and _is_usable_preview_entry(cached_entry)
     ):
         return cached_entry
 
     preview_cache = _load_preview_cache(state)
-    cache_key = f"{asset_key}|{fingerprint}"
-    cached_entry = preview_cache.get(cache_key)
-    if isinstance(cached_entry, dict):
+    cached_entry = _cached_preview_for_card(
+        preview_cache,
+        card_name,
+        asset_key,
+        fingerprint,
+        cache_key,
+    )
+    if cached_entry is not None:
         img_dict[card_name] = cached_entry
         return cached_entry
 
@@ -249,6 +298,57 @@ def ensure_preview_entry(project_like, img_dict: dict, card_name: str) -> dict |
     _save_preview_cache(state, preview_cache)
     img_dict[card_name] = built
     return built
+
+
+def _cached_preview_for_card(
+    preview_cache: dict[str, dict],
+    card_name: str,
+    asset_key: str,
+    fingerprint: str,
+    cache_key: str,
+) -> dict | None:
+    cached_entry = preview_cache.get(cache_key)
+    if _is_usable_preview_entry(cached_entry):
+        cached_entry["_asset_key"] = asset_key
+        cached_entry["_fingerprint"] = fingerprint
+        return cached_entry
+
+    legacy_entry = preview_cache.get(card_name)
+    if _is_usable_preview_entry(legacy_entry):
+        legacy_entry["_asset_key"] = asset_key
+        legacy_entry["_fingerprint"] = fingerprint
+        return legacy_entry
+
+    return None
+
+
+def hydrate_preview_entries(
+    project_like,
+    img_dict: dict,
+    card_names: list[str] | None = None,
+    *,
+    raise_on_load_error: bool = False,
+) -> int:
+    state = as_project_state(project_like)
+    preview_cache = _load_preview_cache(state, raise_on_load_error=raise_on_load_error)
+    if card_names is None:
+        card_names = list(state.cards.keys())
+
+    hydrated_count = 0
+    for card_name in card_names:
+        asset_key, fingerprint, cache_key = _preview_cache_key(state, card_name)
+        cached_entry = _cached_preview_for_card(
+            preview_cache,
+            card_name,
+            asset_key,
+            fingerprint,
+            cache_key,
+        )
+        if cached_entry is None:
+            continue
+        img_dict[card_name] = cached_entry
+        hydrated_count += 1
+    return hydrated_count
 
 
 def invalidate_entry(project_like, img_dict: dict, card_name: str) -> None:
