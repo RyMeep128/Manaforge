@@ -153,6 +153,7 @@ class CardAdminService:
                 """,
                 (name, normalized_name, layout or None, oracle_id),
             )
+            self.database.refresh_search_index_for_oracle(connection, oracle_id)
         return CardRecord(
             oracle_id=oracle_id,
             name=name,
@@ -173,6 +174,7 @@ class CardAdminService:
                 (oracle_id,),
             ).fetchall()
             for print_row in print_rows:
+                self.database.delete_search_index_for_print(connection, print_row["card_id"])
                 connection.execute(
                     "DELETE FROM image_manifest WHERE card_id = ?",
                     (print_row["card_id"],),
@@ -319,6 +321,7 @@ class CardAdminService:
                 ),
             )
             _refresh_canonical_print(connection, oracle_id)
+            self.database.refresh_search_index_for_print(connection, card_id)
             row = connection.execute(
                 "SELECT * FROM prints WHERE card_id = ?",
                 (card_id,),
@@ -402,6 +405,7 @@ class CardAdminService:
             if old_oracle_id != oracle_id:
                 _refresh_canonical_or_delete(connection, old_oracle_id)
             _refresh_canonical_print(connection, oracle_id)
+            self.database.refresh_search_index_for_print(connection, card_id)
             row = connection.execute(
                 "SELECT * FROM prints WHERE card_id = ?",
                 (card_id,),
@@ -413,6 +417,7 @@ class CardAdminService:
         if existing is None:
             return False
         with self.database.connect() as connection:
+            self.database.delete_search_index_for_print(connection, card_id)
             connection.execute(
                 "DELETE FROM image_manifest WHERE card_id = ?",
                 (card_id,),
@@ -507,7 +512,10 @@ class CardAdminService:
             offset = (page - 1) * page_size
             rows = connection.execute(
                 """
-                SELECT asset_id, checksum, extension, mime_type, source, source_url, length(payload) AS payload_size, created_at, updated_at
+                SELECT
+                    asset_id, checksum, extension, mime_type, source, source_url,
+                    coalesce(payload_size, length(payload)) AS payload_size,
+                    storage_path, created_at, updated_at
                 FROM image_assets
                 ORDER BY updated_at DESC, asset_id
                 LIMIT ? OFFSET ?
@@ -525,6 +533,7 @@ class CardAdminService:
                     source_url=row["source_url"],
                     payload=b"",
                     payload_size=int(row["payload_size"] or 0),
+                    storage_path=row["storage_path"],
                     created_at=row["created_at"],
                     updated_at=row["updated_at"],
                 )
@@ -561,14 +570,25 @@ class CardAdminService:
     def get_bulk_download_status(self) -> BulkDownloadStatus:
         return self.card_service.get_bulk_download_status()
 
+    def reset_bulk_download_status(self, *, query: str) -> BulkDownloadStatus:
+        return self.card_service.reset_bulk_download_status(query=query)
+
     def download_fixed_catalog_chunked(self, *, max_chunks: int | None = None) -> BulkDownloadStatus:
         return self.card_service.download_fixed_catalog_chunked(max_chunks=max_chunks)
 
-    def process_bulk_download_chunk(self, should_pause=None) -> BulkDownloadStatus:
-        return self.card_service.process_bulk_download_chunk(should_pause=should_pause)
+    def run_bulk_query_download(self, *, query: str, max_chunks: int | None = None) -> BulkDownloadStatus:
+        return self.card_service.run_bulk_query_download(query=query, max_chunks=max_chunks)
 
-    def pause_bulk_download(self) -> BulkDownloadStatus:
-        return self.card_service.pause_bulk_download()
+    def process_bulk_download_chunk(self, *, query: str | None = None, should_pause=None) -> BulkDownloadStatus:
+        kwargs = {"should_pause": should_pause}
+        if query is not None:
+            kwargs["query"] = query
+        return self.card_service.process_bulk_download_chunk(**kwargs)
+
+    def pause_bulk_download(self, *, query: str | None = None) -> BulkDownloadStatus:
+        if query is None:
+            return self.card_service.pause_bulk_download()
+        return self.card_service.pause_bulk_download(query=query)
 
 
 def _generated_id(prefix: str) -> str:

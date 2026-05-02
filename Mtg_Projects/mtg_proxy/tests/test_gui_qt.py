@@ -1,6 +1,23 @@
+import os
+
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+import editor_widgets
 import gui_qt
 from models import ProjectState
-from PyQt6.QtWidgets import QMessageBox
+from PyQt6.QtWidgets import QApplication, QMessageBox, QWidget
+
+
+_QT_APP = None
+
+
+def _qt_app():
+    global _QT_APP
+    app = QApplication.instance()
+    if app is None:
+        _QT_APP = QApplication([])
+        return _QT_APP
+    return app
 
 
 class _FakeApplication:
@@ -134,3 +151,38 @@ def test_delete_project_with_confirmation_only_runs_after_confirmation(monkeypat
     )
     assert deleted == ["project-1"]
     assert refreshed == [True]
+
+
+def test_lazy_print_preview_builds_only_when_preview_tab_is_selected(monkeypatch):
+    _qt_app()
+    constructed = []
+    refreshed = []
+
+    class _FakePrintPreview(QWidget):
+        def __init__(self, print_dict, img_dict):
+            super().__init__()
+            constructed.append((print_dict, img_dict))
+
+        def refresh(self, print_dict, img_dict):
+            refreshed.append((print_dict, img_dict))
+
+    monkeypatch.setattr(editor_widgets, "PrintPreview", _FakePrintPreview)
+
+    state = ProjectState()
+    img_dict = {}
+    scroll_area = QWidget()
+    preview_tab = editor_widgets.LazyPrintPreview(state, img_dict)
+    tabs = editor_widgets.CardTabs(state, img_dict, scroll_area, preview_tab)
+
+    assert constructed == []
+    assert preview_tab.is_loaded() is False
+
+    tabs.setCurrentIndex(1)
+
+    assert len(constructed) == 1
+    assert preview_tab.is_loaded() is True
+
+    tabs.refresh_preview(state, img_dict)
+
+    assert len(constructed) == 1
+    assert len(refreshed) == 1

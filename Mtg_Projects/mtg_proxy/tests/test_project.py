@@ -2,6 +2,35 @@ import json
 
 from models import CardMetadata, ProjectState
 import project
+import runtime_images
+
+
+def _cached_preview_entry(data: bytes = b"preview") -> dict:
+    return {
+        "data": project.image.encode_cached_image_bytes(data),
+        "size": [2, 3],
+        "thumb": {
+            "data": project.image.encode_cached_image_bytes(b"thumb"),
+            "size": [1, 2],
+        },
+        "uncropped": {
+            "data": project.image.encode_cached_image_bytes(b"uncropped"),
+            "size": [4, 5],
+        },
+        "effective_dpi": 300,
+    }
+
+
+def test_project_state_backside_pages_at_end_defaults_and_persists():
+    old_project = ProjectState.from_dict({})
+    assert old_project.backside_pages_at_end is False
+
+    state = ProjectState.from_dict({"backside_pages_at_end": True})
+
+    assert state.backside_pages_at_end is True
+    assert state.to_dict()["backside_pages_at_end"] is True
+    assert state.to_persisted_dict()["backside_pages_at_end"] is True
+    assert ProjectState.from_dict(state.to_persisted_dict()).backside_pages_at_end is True
 
 
 def test_init_dict_adds_defaults_and_removes_stale_entries(monkeypatch, tmp_path):
@@ -46,7 +75,7 @@ def test_init_dict_adds_defaults_and_removes_stale_entries(monkeypatch, tmp_path
     assert print_dict["backside_short_edge"] == {}
     assert print_dict["oversized"] == {}
     assert print_dict["bleed_edge"] == "0"
-    assert img_dict == {"cached.png": {"size": [1, 2], "thumb": {}, "uncropped": {}}}
+    assert img_dict == {}
 
 
 def test_init_dict_keeps_asset_backed_cards_when_runtime_files_exist(monkeypatch, tmp_path):
@@ -128,12 +157,7 @@ def test_init_dict_loads_utf8_cache_keys_without_mojibake(monkeypatch, tmp_path)
     img_cache.write_text(
         json.dumps(
             {
-                unicode_name: {
-                    "size": [1, 2],
-                    "thumb": {},
-                    "uncropped": {},
-                    "effective_dpi": 300,
-                }
+                unicode_name: _cached_preview_entry()
             },
             ensure_ascii=False,
         ),
@@ -214,7 +238,7 @@ def test_init_dict_normalizes_legacy_cached_preview_payloads(monkeypatch, tmp_pa
     assert img_dict["card-a.png"]["uncropped"]["data"] == project.image.encode_cached_image_bytes(b"uncropped-bytes")
 
 
-def test_init_dict_resets_cache_when_cached_preview_payload_is_invalid(monkeypatch, tmp_path):
+def test_init_dict_ignores_invalid_cached_preview_payload(monkeypatch, tmp_path):
     image_dir = tmp_path / "images"
     crop_dir = image_dir / "crop"
     img_cache = tmp_path / "img.cache"
@@ -257,12 +281,7 @@ def test_init_dict_resets_cache_when_cached_preview_payload_is_invalid(monkeypat
     project.init_dict(print_dict, img_dict, lambda title, message: warnings.append((title, message)))
 
     assert img_dict == {}
-    assert warnings == [
-        (
-            "Cache Reset",
-            "The image cache could not be loaded and was reset. Thumbnails will be rebuilt.",
-        )
-    ]
+    assert warnings == []
 
 
 def test_init_dict_backfills_scryfall_metadata_from_filename(monkeypatch, tmp_path):
@@ -419,6 +438,42 @@ def test_load_valid_project_replaces_existing_state(monkeypatch, tmp_path):
     assert print_dict["card_metadata"] == {"new-card.png": {"name": "New Card"}}
     assert len(init_dict_calls) == 1
     assert len(init_images_calls) == 1
+
+
+def test_load_valid_project_hydrates_asset_cache_without_raw_asset_keys(tmp_path):
+    project_file = tmp_path / "print.json"
+    card_name = "scryfall_sos_272_plains.png"
+    state = ProjectState()
+    state.apply_imported_card(card_name, 1, image_asset_id="asset-project-load")
+    project_file.write_text(json.dumps(state.to_persisted_dict()), encoding="utf-8")
+
+    runtime_root = tmp_path / ".runtime" / "print"
+    runtime_root.mkdir(parents=True)
+    runtime_state = ProjectState.from_dict(state.to_persisted_dict())
+    runtime_state.image_dir = str(runtime_root)
+    runtime_state.img_cache = str(runtime_root / "img.cache")
+    asset_key, fingerprint, cache_key = runtime_images._preview_cache_key(runtime_state, card_name)
+    entry = {
+        **_cached_preview_entry(b"hydrated"),
+        "_asset_key": asset_key,
+        "_fingerprint": fingerprint,
+    }
+    (runtime_root / "img.cache").write_text(json.dumps({cache_key: entry}), encoding="utf-8")
+
+    print_dict = {}
+    img_dict = {}
+
+    loaded_successfully = project.load(
+        print_dict,
+        img_dict,
+        str(project_file),
+        lambda _message: None,
+    )
+
+    assert loaded_successfully is True
+    assert card_name in img_dict
+    assert img_dict[card_name]["data"] == project.image.encode_cached_image_bytes(b"hydrated")
+    assert all(not key.startswith("asset:") for key in img_dict.keys())
 
 
 def test_card_metadata_to_dict_omits_none_fields():

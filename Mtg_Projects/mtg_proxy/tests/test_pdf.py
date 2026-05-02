@@ -48,6 +48,69 @@ def test_make_backside_pages_uses_default_and_overrides():
     assert pages[0]["regular"][0] == ("front-a.png", False)
 
 
+def test_make_render_page_sequence_interleaves_backs_by_default():
+    print_dict = {
+        "backside_enabled": True,
+        "backsides": {"front-a.png": "back-a.png", "front-b.png": "back-b.png"},
+        "backside_default": "__back.png",
+    }
+    pages = [
+        {"regular": [("front-a.png", False)], "oversized": []},
+        {"regular": [("front-b.png", True)], "oversized": []},
+    ]
+
+    render_pages = pdf.make_render_page_sequence(print_dict, pages)
+
+    assert [(page["backside"], page["front_page_number"], page["cards"]) for page in render_pages] == [
+        (False, 1, {"regular": [("front-a.png", False)], "oversized": []}),
+        (True, 1, {"regular": [("back-a.png", False)], "oversized": []}),
+        (False, 2, {"regular": [("front-b.png", True)], "oversized": []}),
+        (True, 2, {"regular": [("back-b.png", True)], "oversized": []}),
+    ]
+
+
+def test_make_render_page_sequence_can_put_backs_at_end():
+    print_dict = {
+        "backside_enabled": True,
+        "backside_pages_at_end": True,
+        "backsides": {"front-a.png": "back-a.png", "front-b.png": "back-b.png"},
+        "backside_default": "__back.png",
+    }
+    pages = [
+        {"regular": [("front-a.png", False)], "oversized": []},
+        {"regular": [("front-b.png", True)], "oversized": []},
+    ]
+
+    render_pages = pdf.make_render_page_sequence(print_dict, pages)
+
+    assert [(page["backside"], page["front_page_number"], page["cards"]) for page in render_pages] == [
+        (False, 1, {"regular": [("front-a.png", False)], "oversized": []}),
+        (False, 2, {"regular": [("front-b.png", True)], "oversized": []}),
+        (True, 1, {"regular": [("back-a.png", False)], "oversized": []}),
+        (True, 2, {"regular": [("back-b.png", True)], "oversized": []}),
+    ]
+
+
+def test_make_render_page_sequence_ignores_back_order_when_backs_disabled():
+    print_dict = {
+        "backside_enabled": False,
+        "backside_pages_at_end": True,
+        "backsides": {"front-a.png": "back-a.png"},
+        "backside_default": "__back.png",
+    }
+    pages = [
+        {"regular": [("front-a.png", False)], "oversized": []},
+        {"regular": [("front-b.png", True)], "oversized": []},
+    ]
+
+    render_pages = pdf.make_render_page_sequence(print_dict, pages)
+
+    assert [(page["backside"], page["front_page_number"], page["cards"]) for page in render_pages] == [
+        (False, 1, {"regular": [("front-a.png", False)], "oversized": []}),
+        (False, 2, {"regular": [("front-b.png", True)], "oversized": []}),
+    ]
+
+
 def test_distribute_cards_to_grid_reserves_extra_slot_for_oversized_cards():
     cards = {
         "regular": [("regular-a.png", False), ("regular-b.png", True)],
@@ -78,4 +141,3 @@ def test_get_card_rotation_matches_backside_rules():
     assert pdf.get_card_rotation(True, False, True) == Rotation.Rotate_180
     assert pdf.get_card_rotation(True, True, False) == Rotation.RotateCounterClockwise_90
     assert pdf.get_card_rotation(True, True, True) == Rotation.RotateClockwise_90
-

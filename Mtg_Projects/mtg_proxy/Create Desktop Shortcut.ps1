@@ -1,8 +1,9 @@
 $ErrorActionPreference = "Stop"
 
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
+$productRoot = Split-Path -Parent $root
 $launcher = Join-Path $root "Launch Print Proxy Prep.cmd"
-$exe = Join-Path $root "dist\Print Proxy Prep\Print Proxy Prep.exe"
+$exe = Join-Path $productRoot "dist\Print Proxy Prep\Print Proxy Prep.exe"
 $desktop = [Environment]::GetFolderPath("Desktop")
 $shortcutPath = Join-Path $desktop "Print Proxy Prep.lnk"
 

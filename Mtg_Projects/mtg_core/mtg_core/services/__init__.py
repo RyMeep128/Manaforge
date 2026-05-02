@@ -355,6 +355,13 @@ class CardService:
             chunk_size=chunk_size,
             min_image_bytes=min_image_bytes,
         )
+        if status.query != (query or "").strip():
+            status = self.reset_bulk_download_status(
+                source_key=source_key,
+                query=query,
+                chunk_size=chunk_size,
+                min_image_bytes=min_image_bytes,
+            )
         processed_chunks = 0
         while not status.completed:
             if max_chunks is not None and processed_chunks >= max(1, int(max_chunks)):
@@ -554,6 +561,37 @@ class CardService:
             status="paused",
             last_error=None if status.status != "failed" else status.last_error,
         )
+
+    def reset_bulk_download_status(
+        self,
+        *,
+        source_key: str = FIXED_CATALOG_SOURCE,
+        query: str = FIXED_CATALOG_QUERY,
+        chunk_size: int = FIXED_CATALOG_CHUNK_SIZE,
+        min_image_bytes: int = FIXED_CATALOG_MIN_IMAGE_BYTES,
+    ) -> BulkDownloadStatus:
+        stripped_query = (query or "").strip()
+        if not stripped_query:
+            raise ValueError("Scryfall query is required.")
+        status = BulkDownloadStatus(
+            source=source_key,
+            query=stripped_query,
+            chunk_size=max(1, int(chunk_size)),
+            min_image_bytes=max(1, int(min_image_bytes)),
+            status="idle",
+            total_scanned=0,
+            total_downloaded=0,
+            total_skipped=0,
+            total_failed=0,
+            chunk_number=0,
+            current_page_url=None,
+            next_page_url=None,
+            page_offset=0,
+            completed=False,
+            completed_at=None,
+            last_error=None,
+        )
+        return self._save_bulk_download_status(status)
 
     def _resolve_image_url(self, card_id: str, payload: dict) -> str | None:
         print_record = self.database.get_print_by_card_id(card_id)

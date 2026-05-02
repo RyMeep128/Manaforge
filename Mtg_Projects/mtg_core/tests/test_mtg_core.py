@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import uuid
+import hashlib
 from pathlib import Path
 
 from mtg_core import RemoteLookupUnavailable
-from mtg_core.db import default_db_path
+from mtg_core.db import CardDatabase, default_db_path
 from mtg_core.paths import core_data_root, data_root
 from mtg_core.services import CardService
 from mtg_core.sync import build_print_search_url, search_prints_payloads
+from mtg_core.tools.migrate_image_assets import migrate_image_assets_to_files
 
 
 _PRODUCTS_ROOT = Path(__file__).resolve().parents[2]
@@ -90,6 +92,246 @@ def test_fetch_missing_card_persists_and_returns_cached_local():
     assert cached["id"] == "card-opt-1"
     assert [result.card_id for result in results] == ["card-opt-1"]
     assert len(calls) == 1
+
+
+def test_database_creates_performance_indexes_and_search_fts():
+    runtime_dir = _workspace_runtime_dir("db_performance_schema")
+    database = CardDatabase(str(runtime_dir / "card_data.sqlite3"))
+
+    with database.connect() as connection:
+        print_indexes = {row["name"] for row in connection.execute("PRAGMA index_list(prints)").fetchall()}
+        card_indexes = {row["name"] for row in connection.execute("PRAGMA index_list(cards_oracle)").fetchall()}
+        asset_indexes = {row["name"] for row in connection.execute("PRAGMA index_list(image_assets)").fetchall()}
+        fts_row = connection.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'print_search_fts'"
+        ).fetchone()
+
+    assert "idx_prints_lower_name_updated" in print_indexes
+    assert "idx_prints_set_collector_updated" in print_indexes
+    assert "idx_prints_oracle_order" in print_indexes
+    assert "idx_prints_admin_order" in print_indexes
+    assert "idx_prints_online_cache" in print_indexes
+    assert "idx_cards_oracle_name_order" in card_indexes
+    assert "idx_image_assets_updated_asset" in asset_indexes
+    assert fts_row is not None
+
+
+def test_store_image_asset_writes_file_backed_payload_and_empty_db_blob():
+    runtime_dir = _workspace_runtime_dir("image_asset_file_backed")
+    database = CardDatabase(str(runtime_dir / "card_data.sqlite3"))
+
+    asset = database.store_image_asset(
+        b"file-backed-art",
+        extension="../PNG",
+        source="test",
+        source_url="https://img.test/card.png",
+    )
+    fetched = database.get_image_asset(asset.asset_id)
+
+    with database.connect() as connection:
+        row = connection.execute(
+            "SELECT payload, payload_size, storage_path FROM image_assets WHERE asset_id = ?",
+            (asset.asset_id,),
+        ).fetchone()
+
+    assert row is not None
+    assert bytes(row["payload"]) == b""
+    assert row["payload_size"] == len(b"file-backed-art")
+    assert row["storage_path"]
+    assert (runtime_dir / row["storage_path"]).read_bytes() == b"file-backed-art"
+    assert asset.payload == b"file-backed-art"
+    assert fetched is not None
+    assert fetched.payload == b"file-backed-art"
+    assert fetched.storage_path == row["storage_path"]
+
+
+def test_get_image_asset_reads_legacy_blob_and_falls_back_when_file_is_corrupt():
+    runtime_dir = _workspace_runtime_dir("image_asset_legacy_fallback")
+    database = CardDatabase(str(runtime_dir / "card_data.sqlite3"))
+    legacy_payload = b"legacy-art"
+    checksum = hashlib.sha256(legacy_payload).hexdigest()
+    corrupt_path = runtime_dir / "images" / "assets" / "bad" / "legacy.png"
+    corrupt_path.parent.mkdir(parents=True, exist_ok=True)
+    corrupt_path.write_bytes(b"not-the-right-art")
+
+    with database.connect() as connection:
+        connection.execute(
+            """
+            INSERT INTO image_assets (
+                asset_id, checksum, extension, mime_type, source, source_url,
+                payload, payload_size, storage_path, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "legacy-asset",
+                checksum,
+                "png",
+                None,
+                "legacy",
+                None,
+                legacy_payload,
+                len(legacy_payload),
+                str(corrupt_path.relative_to(runtime_dir)),
+                1.0,
+                1.0,
+            ),
+        )
+
+    fetched = database.get_image_asset("legacy-asset")
+
+    assert fetched is not None
+    assert fetched.payload == legacy_payload
+    assert fetched.payload_size == len(legacy_payload)
+
+
+def test_migrate_image_assets_to_files_exports_legacy_blobs_idempotently():
+    runtime_dir = _workspace_runtime_dir("image_asset_migration")
+    database = CardDatabase(str(runtime_dir / "card_data.sqlite3"))
+    payload = b"legacy-migration-art"
+    checksum = hashlib.sha256(payload).hexdigest()
+
+    with database.connect() as connection:
+        connection.execute(
+            """
+            INSERT INTO image_assets (
+                asset_id, checksum, extension, mime_type, source, source_url,
+                payload, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            ("legacy-migrate", checksum, "jpg", None, "legacy", None, payload, 1.0, 1.0),
+        )
+
+    result = migrate_image_assets_to_files(database, batch_size=1)
+    repeated = migrate_image_assets_to_files(database, batch_size=1)
+
+    with database.connect() as connection:
+        row = connection.execute(
+            "SELECT payload, payload_size, storage_path FROM image_assets WHERE asset_id = ?",
+            ("legacy-migrate",),
+        ).fetchone()
+
+    assert result.exported == 1
+    assert result.failed == 0
+    assert repeated.exported == 0
+    assert row is not None
+    assert bytes(row["payload"]) == b""
+    assert row["payload_size"] == len(payload)
+    assert row["storage_path"]
+    assert (runtime_dir / row["storage_path"]).read_bytes() == payload
+
+
+def test_migrate_image_assets_does_not_clear_blob_when_export_fails(monkeypatch):
+    runtime_dir = _workspace_runtime_dir("image_asset_migration_fail")
+    database = CardDatabase(str(runtime_dir / "card_data.sqlite3"))
+    payload = b"legacy-failure-art"
+    checksum = hashlib.sha256(payload).hexdigest()
+
+    with database.connect() as connection:
+        connection.execute(
+            """
+            INSERT INTO image_assets (
+                asset_id, checksum, extension, mime_type, source, source_url,
+                payload, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            ("legacy-fail", checksum, "png", None, "legacy", None, payload, 1.0, 1.0),
+        )
+
+    def fail_write(*_args, **_kwargs):
+        raise OSError("disk said nope")
+
+    monkeypatch.setattr(database, "_write_verified_image_asset_file", fail_write)
+
+    result = migrate_image_assets_to_files(database, batch_size=1)
+
+    with database.connect() as connection:
+        row = connection.execute(
+            "SELECT payload, payload_size, storage_path FROM image_assets WHERE asset_id = ?",
+            ("legacy-fail",),
+        ).fetchone()
+
+    assert result.exported == 0
+    assert result.failed == 1
+    assert row is not None
+    assert bytes(row["payload"]) == payload
+    assert row["storage_path"] is None
+
+
+def test_exact_lookup_query_plans_use_performance_indexes():
+    runtime_dir = _workspace_runtime_dir("db_query_plan_indexes")
+    database = CardDatabase(str(runtime_dir / "card_data.sqlite3"))
+    database.upsert_card_payload(
+        _sample_print(
+            card_id="bolt-alpha",
+            oracle_id="oracle-bolt",
+            name="Lightning Bolt",
+            set_code="lea",
+            set_name="Limited Edition Alpha",
+            collector_number="161",
+            released_at="1993-08-05",
+            image_url="https://img.test/bolt-alpha.png",
+        )
+    )
+
+    with database.connect() as connection:
+        name_plan = " ".join(
+            row["detail"]
+            for row in connection.execute(
+                "EXPLAIN QUERY PLAN SELECT * FROM prints WHERE lower(name) = lower(?) ORDER BY updated_at DESC LIMIT 1",
+                ("Lightning Bolt",),
+            ).fetchall()
+        )
+        set_plan = " ".join(
+            row["detail"]
+            for row in connection.execute(
+                """
+                EXPLAIN QUERY PLAN
+                SELECT * FROM prints
+                WHERE lower(coalesce(set_code, '')) = lower(?)
+                  AND collector_number = ?
+                ORDER BY updated_at DESC
+                LIMIT 1
+                """,
+                ("lea", "161"),
+            ).fetchall()
+        )
+
+    assert "idx_prints_lower_name_updated" in name_plan
+    assert "idx_prints_set_collector_updated" in set_plan
+
+
+def test_search_prints_uses_fts_and_can_fallback_to_like_search(monkeypatch):
+    runtime_dir = _workspace_runtime_dir("db_search_fts_fallback")
+    database = CardDatabase(str(runtime_dir / "card_data.sqlite3"))
+    database.upsert_card_payload(
+        _sample_print(
+            card_id="bolt-alpha",
+            oracle_id="oracle-bolt",
+            name="Lightning Bolt",
+            set_code="lea",
+            set_name="Limited Edition Alpha",
+            collector_number="161",
+            released_at="1993-08-05",
+            image_url="https://img.test/bolt-alpha.png",
+        )
+    )
+
+    with database.connect() as connection:
+        fts_matches = connection.execute(
+            "SELECT card_id FROM print_search_fts WHERE print_search_fts MATCH ?",
+            ("lightning*",),
+        ).fetchall()
+    direct = database.search_prints("Lightning", limit=10)
+
+    monkeypatch.setattr(database, "_search_prints_fts", lambda *args, **kwargs: None)
+    fallback = database.search_prints("Lightning", limit=10)
+
+    assert [row["card_id"] for row in fts_matches] == ["bolt-alpha"]
+    assert [row.card_id for row in direct] == ["bolt-alpha"]
+    assert [row.card_id for row in fallback] == ["bolt-alpha"]
 
 
 def test_search_cards_remote_fill_sets_canonical_print_and_sync_bulk_data():

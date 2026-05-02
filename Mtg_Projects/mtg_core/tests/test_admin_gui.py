@@ -10,6 +10,7 @@ from PyQt6.QtWidgets import QApplication, QMessageBox
 from mtg_core.admin_service import CardAdminService
 from mtg_core.db import CardDatabase
 from mtg_core.models import BulkDownloadStatus
+from mtg_core.services import FIXED_CATALOG_QUERY
 from mtg_core_gui.window import CoreAdminMainWindow
 
 
@@ -248,9 +249,9 @@ def test_sync_tab_download_controls_refresh_status(tmp_path, monkeypatch):
     monkeypatch.setattr(
         service,
         "process_bulk_download_chunk",
-        lambda should_pause=None: current.update(status=states[1]) or states[1],
+        lambda query=None, should_pause=None: current.update(status=states[1]) or states[1],
     )
-    monkeypatch.setattr(service, "pause_bulk_download", lambda: current["status"])
+    monkeypatch.setattr(service, "pause_bulk_download", lambda query=None: current["status"])
 
     window.sync_tab._refresh_download_status()
     assert window.sync_tab.job_status_label.text() == "idle"
@@ -262,6 +263,166 @@ def test_sync_tab_download_controls_refresh_status(tmp_path, monkeypatch):
     assert window.sync_tab.job_status_label.text() == "completed"
     assert "downloaded=95" in window.sync_tab.counts_label.text()
     assert window.sync_tab.pause_button.isEnabled() is False
+
+
+def test_sync_tab_starts_with_custom_scryfall_query(tmp_path, monkeypatch):
+    app = _app()
+    window, service = _window(tmp_path)
+    custom_query = "artist:avon game:paper"
+    calls: list[tuple[str, str | None]] = []
+    current = {
+        "status": BulkDownloadStatus(
+            source="catalog_download_all_cards",
+            query=FIXED_CATALOG_QUERY,
+            chunk_size=100,
+            min_image_bytes=4096,
+            status="idle",
+            total_scanned=0,
+            total_downloaded=0,
+            total_skipped=0,
+            total_failed=0,
+            chunk_number=0,
+        )
+    }
+
+    def fake_reset(*, query):
+        calls.append(("reset", query))
+        current["status"] = BulkDownloadStatus(
+            source="catalog_download_all_cards",
+            query=query,
+            chunk_size=100,
+            min_image_bytes=4096,
+            status="idle",
+            total_scanned=0,
+            total_downloaded=0,
+            total_skipped=0,
+            total_failed=0,
+            chunk_number=0,
+        )
+        return current["status"]
+
+    def fake_process(query=None, should_pause=None):
+        calls.append(("process", query))
+        current["status"] = BulkDownloadStatus(
+            source="catalog_download_all_cards",
+            query=query or "",
+            chunk_size=100,
+            min_image_bytes=4096,
+            status="completed",
+            total_scanned=1,
+            total_downloaded=1,
+            total_skipped=0,
+            total_failed=0,
+            chunk_number=1,
+            completed=True,
+        )
+        return current["status"]
+
+    monkeypatch.setattr(service, "get_bulk_download_status", lambda: current["status"])
+    monkeypatch.setattr(service, "reset_bulk_download_status", fake_reset)
+    monkeypatch.setattr(service, "process_bulk_download_chunk", fake_process)
+
+    window.sync_tab._refresh_download_status()
+    assert window.sync_tab.query_edit.text() == FIXED_CATALOG_QUERY
+
+    window.sync_tab.query_edit.setText(custom_query)
+    assert window.sync_tab.start_button.isEnabled()
+
+    window.sync_tab._start_download_job()
+    assert _spin(app, lambda: window.sync_tab.job_status_label.text() == "completed")
+
+    assert calls == [("reset", custom_query), ("process", custom_query)]
+
+
+def test_sync_tab_resume_uses_saved_query(tmp_path, monkeypatch):
+    app = _app()
+    window, service = _window(tmp_path)
+    saved_query = "set:lea"
+    calls: list[str | None] = []
+    current = {
+        "status": BulkDownloadStatus(
+            source="catalog_download_all_cards",
+            query=saved_query,
+            chunk_size=100,
+            min_image_bytes=4096,
+            status="paused",
+            total_scanned=100,
+            total_downloaded=95,
+            total_skipped=5,
+            total_failed=0,
+            chunk_number=1,
+            page_offset=100,
+            current_page_url="page-1",
+        )
+    }
+
+    def fake_process(query=None, should_pause=None):
+        calls.append(query)
+        current["status"] = BulkDownloadStatus(
+            source="catalog_download_all_cards",
+            query=query or "",
+            chunk_size=100,
+            min_image_bytes=4096,
+            status="completed",
+            total_scanned=120,
+            total_downloaded=115,
+            total_skipped=5,
+            total_failed=0,
+            chunk_number=2,
+            completed=True,
+        )
+        return current["status"]
+
+    monkeypatch.setattr(service, "get_bulk_download_status", lambda: current["status"])
+    monkeypatch.setattr(service, "process_bulk_download_chunk", fake_process)
+
+    window.sync_tab._refresh_download_status()
+    window.sync_tab.query_edit.setText("artist:avon")
+
+    window.sync_tab._resume_download_job()
+    assert _spin(app, lambda: window.sync_tab.job_status_label.text() == "completed")
+
+    assert calls == [saved_query]
+    assert window.sync_tab.query_edit.text() == saved_query
+
+
+def test_sync_tab_blank_query_does_not_start_worker(tmp_path, monkeypatch):
+    app = _app()
+    window, service = _window(tmp_path)
+    warnings: list[tuple[str, str]] = []
+    current = BulkDownloadStatus(
+        source="catalog_download_all_cards",
+        query=FIXED_CATALOG_QUERY,
+        chunk_size=100,
+        min_image_bytes=4096,
+        status="idle",
+        total_scanned=0,
+        total_downloaded=0,
+        total_skipped=0,
+        total_failed=0,
+        chunk_number=0,
+    )
+
+    monkeypatch.setattr(service, "get_bulk_download_status", lambda: current)
+    monkeypatch.setattr(
+        service,
+        "reset_bulk_download_status",
+        lambda *, query: (_ for _ in ()).throw(AssertionError("blank query should not reset")),
+    )
+    monkeypatch.setattr(
+        QMessageBox,
+        "warning",
+        lambda _parent, title, message: warnings.append((title, message)),
+    )
+
+    window.sync_tab._refresh_download_status()
+    window.sync_tab.query_edit.setText("")
+    window.sync_tab._start_download_job()
+    app.processEvents()
+
+    assert warnings
+    assert warnings[0][0] == "Scryfall Query Required"
+    assert window.sync_tab.is_download_running() is False
 
 
 def test_sync_tab_pause_stops_after_current_chunk(tmp_path, monkeypatch):
@@ -302,7 +463,7 @@ def test_sync_tab_pause_stops_after_current_chunk(tmp_path, monkeypatch):
     )
     current = {"status": running}
 
-    def fake_process(should_pause=None):
+    def fake_process(query=None, should_pause=None):
         time.sleep(0.05)
         if should_pause is not None and should_pause():
             current["status"] = paused
@@ -310,7 +471,7 @@ def test_sync_tab_pause_stops_after_current_chunk(tmp_path, monkeypatch):
         current["status"] = running
         return running
 
-    def fake_pause():
+    def fake_pause(query=None):
         current["status"] = paused
         return paused
 
@@ -397,7 +558,7 @@ def test_closing_window_with_stale_running_state_allows_exit(tmp_path, monkeypat
     monkeypatch.setattr(
         service,
         "pause_bulk_download",
-        lambda: current.update(status=paused) or paused,
+        lambda query=None: current.update(status=paused) or paused,
     )
 
     window.close()
@@ -444,7 +605,7 @@ def test_closing_window_while_running_pauses_and_then_closes(tmp_path, monkeypat
     )
     current = {"status": running}
 
-    def fake_process(should_pause=None):
+    def fake_process(query=None, should_pause=None):
         time.sleep(0.05)
         if should_pause is not None and should_pause():
             current["status"] = paused
@@ -452,7 +613,7 @@ def test_closing_window_while_running_pauses_and_then_closes(tmp_path, monkeypat
         current["status"] = running
         return running
 
-    def fake_pause():
+    def fake_pause(query=None):
         current["status"] = paused
         return paused
 
