@@ -2,152 +2,128 @@ from __future__ import annotations
 
 import pytest
 
-from mtg_editor.models import DEFAULT_CATEGORY_ID, DeckEditorState
-from mtg_editor.services import CardGroup, compute_deck_stats, group_cards, sort_card_names
+from mtg_editor.models import DEFAULT_CATEGORY_ID, DeckProject
+from mtg_editor.services import CardGroup, compute_deck_stats, group_cards, sort_cards
 
 
 def _project():
-    return {
-        "cards": {
-            "__back.png": 0,
-            "z-card.png": 2,
-            "a-card.png": 4,
-            "m-card.png": 1,
-        },
-        "card_metadata": {
-            "z-card.png": {"name": "Zebra"},
-            "a-card.png": {"name": "Alpha"},
-            "m-card.png": {"name": "Manta"},
-        },
-    }
+    project = DeckProject.new("Service Test")
+    project.add_card("Zebra", quantity=2, card_id="card-z", sort_index=0)
+    project.add_card("Alpha", quantity=4, card_id="card-a", sort_index=1)
+    project.add_card("Manta", quantity=1, card_id="card-m", sort_index=2)
+    return project
 
 
-def test_sort_card_names_by_supported_modes():
+def test_sort_cards_by_supported_modes():
     project = _project()
-    state = DeckEditorState.from_project_dict(project)
 
-    assert sort_card_names(state, project, "alphabetical_az") == [
-        "a-card.png",
-        "m-card.png",
-        "z-card.png",
+    assert [card.card_id for card in sort_cards(project, "alphabetical_az")] == [
+        "card-a",
+        "card-m",
+        "card-z",
     ]
-    assert sort_card_names(state, project, "alphabetical_za") == [
-        "z-card.png",
-        "m-card.png",
-        "a-card.png",
+    assert [card.card_id for card in sort_cards(project, "alphabetical_za")] == [
+        "card-z",
+        "card-m",
+        "card-a",
     ]
-    assert sort_card_names(state, project, "quantity") == [
-        "a-card.png",
-        "z-card.png",
-        "m-card.png",
+    assert [card.card_id for card in sort_cards(project, "quantity")] == [
+        "card-a",
+        "card-z",
+        "card-m",
     ]
-    assert sort_card_names(state, project, "import_order") == [
-        "z-card.png",
-        "a-card.png",
-        "m-card.png",
+    assert [card.card_id for card in sort_cards(project, "import_order")] == [
+        "card-z",
+        "card-a",
+        "card-m",
     ]
 
 
-def test_sort_card_names_rejects_unknown_mode():
-    project = _project()
-    state = DeckEditorState.from_project_dict(project)
-
+def test_sort_cards_rejects_unknown_mode():
     with pytest.raises(ValueError):
-        sort_card_names(state, project, "mana_value")
+        sort_cards(_project(), "mana_value")
 
 
 def test_group_cards_by_none():
     project = _project()
-    state = DeckEditorState.from_project_dict(project)
 
-    assert group_cards(state, project, "none") == [
+    assert group_cards(project, "none") == [
         CardGroup(
             key="all",
             label="All Cards",
-            card_names=["a-card.png", "m-card.png", "z-card.png"],
+            card_ids=["card-a", "card-m", "card-z"],
         )
     ]
 
 
 def test_group_cards_by_category_in_category_order():
     project = _project()
-    state = DeckEditorState.from_project_dict(project)
-    ramp_id = state.create_category("Ramp")
-    draw_id = state.create_category("Draw")
-    state.assign_category("z-card.png", ramp_id)
-    state.assign_category("a-card.png", draw_id)
+    ramp_id = project.create_category("Ramp")
+    draw_id = project.create_category("Draw")
+    project.assign_category("card-z", ramp_id)
+    project.assign_category("card-a", draw_id)
 
-    groups = group_cards(state, project, "category")
+    groups = group_cards(project, "category")
 
     assert groups == [
-        CardGroup(key=DEFAULT_CATEGORY_ID, label="Uncategorized", card_names=["m-card.png"]),
-        CardGroup(key=ramp_id, label="Ramp", card_names=["z-card.png"]),
-        CardGroup(key=draw_id, label="Draw", card_names=["a-card.png"]),
+        CardGroup(key=DEFAULT_CATEGORY_ID, label="Uncategorized", card_ids=["card-m"]),
+        CardGroup(key=ramp_id, label="Ramp", card_ids=["card-z"]),
+        CardGroup(key=draw_id, label="Draw", card_ids=["card-a"]),
     ]
 
 
 def test_group_cards_by_section_and_import_section():
     project = _project()
-    state = DeckEditorState.from_project_dict(project)
-    state.set_section("z-card.png", "sideboard")
-    state.set_section("a-card.png", "main")
-    state.set_section("m-card.png", "maybeboard")
-    state.set_import_section("z-card.png", "Sideboard")
-    state.set_import_section("a-card.png", "Mainboard")
+    project.set_section("card-z", "sideboard")
+    project.set_section("card-a", "main")
+    project.set_section("card-m", "maybeboard")
+    project.set_import_section("card-z", "Sideboard")
+    project.set_import_section("card-a", "Mainboard")
 
-    assert group_cards(state, project, "section") == [
-        CardGroup(key="main", label="Main Deck", card_names=["a-card.png"]),
-        CardGroup(key="maybeboard", label="Maybeboard", card_names=["m-card.png"]),
-        CardGroup(key="sideboard", label="Sideboard", card_names=["z-card.png"]),
+    assert group_cards(project, "section") == [
+        CardGroup(key="main", label="Main Deck", card_ids=["card-a"]),
+        CardGroup(key="maybeboard", label="Maybeboard", card_ids=["card-m"]),
+        CardGroup(key="sideboard", label="Sideboard", card_ids=["card-z"]),
     ]
-    assert group_cards(state, project, "import_section") == [
-        CardGroup(key="Mainboard", label="Mainboard", card_names=["a-card.png"]),
-        CardGroup(key="Unsectioned", label="Unsectioned", card_names=["m-card.png"]),
-        CardGroup(key="Sideboard", label="Sideboard", card_names=["z-card.png"]),
+    assert group_cards(project, "import_section") == [
+        CardGroup(key="Mainboard", label="Mainboard", card_ids=["card-a"]),
+        CardGroup(key="Unsectioned", label="Unsectioned", card_ids=["card-m"]),
+        CardGroup(key="Sideboard", label="Sideboard", card_ids=["card-z"]),
     ]
 
 
 def test_group_cards_uses_current_preference_sort_mode():
     project = _project()
-    state = DeckEditorState.from_project_dict(project)
-    state.preferences.sort_mode = "quantity"
+    project.preferences.sort_mode = "quantity"
 
-    groups = group_cards(state, project, "none")
+    groups = group_cards(project, "none")
 
-    assert groups[0].card_names == ["a-card.png", "z-card.png", "m-card.png"]
+    assert groups[0].card_ids == ["card-a", "card-z", "card-m"]
 
 
 def test_group_cards_rejects_unknown_mode():
-    project = _project()
-    state = DeckEditorState.from_project_dict(project)
-
     with pytest.raises(ValueError):
-        group_cards(state, project, "color")
+        group_cards(_project(), "color")
 
 
 def test_compute_deck_stats_counts_sections_categories_and_tags():
-    project = {
-        "cards": {
-            "__back.png": 0,
-            "ramp.png": 3,
-            "draw.png": 2,
-            "excluded.png": 5,
-            "zero.png": 0,
-        }
-    }
-    state = DeckEditorState.from_project_dict(project)
-    ramp_id = state.create_category("Ramp")
-    draw_id = state.create_category("Draw")
-    state.assign_category("ramp.png", ramp_id)
-    state.assign_category("draw.png", draw_id)
-    state.assign_category("excluded.png", draw_id)
-    state.add_tag("ramp.png", "Mana")
-    state.add_tag("draw.png", "Card Advantage")
-    state.add_tag("excluded.png", "Card Advantage")
-    state.set_section("draw.png", "sideboard")
-    state.set_section("excluded.png", "excluded")
+    project = DeckProject.new()
+    project.add_card("Ramp", quantity=3, card_id="ramp")
+    project.add_card("Draw", quantity=2, card_id="draw")
+    project.add_card("Excluded", quantity=5, card_id="excluded")
+    project.add_card("Zero", quantity=0, card_id="zero")
+    ramp_id = project.create_category("Ramp")
+    draw_id = project.create_category("Draw")
+    project.assign_category("ramp", ramp_id)
+    project.assign_category("draw", draw_id)
+    project.assign_category("excluded", draw_id)
+    project.add_tag("ramp", "Mana")
+    project.add_tag("draw", "Card Advantage")
+    project.add_tag("excluded", "Card Advantage")
+    project.set_section("draw", "sideboard")
+    project.set_section("excluded", "excluded")
 
-    stats = compute_deck_stats(state, project)
+    stats = compute_deck_stats(project)
 
     assert stats["total_unique_cards"] == 2
     assert stats["total_copies"] == 5
@@ -164,18 +140,3 @@ def test_compute_deck_stats_counts_sections_categories_and_tags():
         "Mana": {"unique": 1, "copies": 3},
         "Card Advantage": {"unique": 2, "copies": 7},
     }
-
-
-def test_services_read_card_entries_when_present():
-    project = {
-        "cards": {"legacy-only.png": 9},
-        "card_entries": [
-            {"front_name": "second.png", "count": 1, "metadata": {"name": "Beta"}},
-            {"front_name": "first.png", "count": 2, "metadata": {"name": "Alpha"}},
-        ],
-    }
-    state = DeckEditorState.from_project_dict(project)
-
-    assert sort_card_names(state, project, "import_order") == ["second.png", "first.png"]
-    assert sort_card_names(state, project, "alphabetical_az") == ["first.png", "second.png"]
-    assert compute_deck_stats(state, project)["total_copies"] == 3
