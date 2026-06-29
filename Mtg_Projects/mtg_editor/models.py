@@ -56,6 +56,15 @@ def _int_or_default(value: Any, default: int) -> int:
         return default
 
 
+def _optional_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _non_negative_int(value: Any, default: int = 0) -> int:
     return max(0, _int_or_default(value, default))
 
@@ -173,6 +182,19 @@ class DeckCard:
     image_path: str | None = None
     image_uri: str | None = None
     image_asset_id: str | None = None
+    catalog_card_id: str | None = None
+    oracle_id: str | None = None
+    set_name: str | None = None
+    preview_uri: str | None = None
+    thumbnail_uri: str | None = None
+    local_image_path: str | None = None
+    catalog_status: str | None = None
+    type_line: str | None = None
+    mana_cost: str | None = None
+    mana_value: float | None = None
+    colors: list[str] = field(default_factory=list)
+    color_identity: list[str] = field(default_factory=list)
+    card_types: list[str] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any] | None) -> "DeckCard":
@@ -196,6 +218,19 @@ class DeckCard:
             image_path=_optional_str(raw.get("image_path")),
             image_uri=_optional_str(raw.get("image_uri")),
             image_asset_id=_optional_str(raw.get("image_asset_id")),
+            catalog_card_id=_optional_str(raw.get("catalog_card_id")),
+            oracle_id=_optional_str(raw.get("oracle_id")),
+            set_name=_optional_str(raw.get("set_name")),
+            preview_uri=_optional_str(raw.get("preview_uri")),
+            thumbnail_uri=_optional_str(raw.get("thumbnail_uri")),
+            local_image_path=_optional_str(raw.get("local_image_path")),
+            catalog_status=_optional_str(raw.get("catalog_status")),
+            type_line=_optional_str(raw.get("type_line")),
+            mana_cost=_optional_str(raw.get("mana_cost")),
+            mana_value=_optional_float(raw.get("mana_value")),
+            colors=_string_list(raw.get("colors")),
+            color_identity=_string_list(raw.get("color_identity")),
+            card_types=_string_list(raw.get("card_types")),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -213,6 +248,19 @@ class DeckCard:
             "image_path": self.image_path,
             "image_uri": self.image_uri,
             "image_asset_id": self.image_asset_id,
+            "catalog_card_id": self.catalog_card_id,
+            "oracle_id": self.oracle_id,
+            "set_name": self.set_name,
+            "preview_uri": self.preview_uri,
+            "thumbnail_uri": self.thumbnail_uri,
+            "local_image_path": self.local_image_path,
+            "catalog_status": self.catalog_status,
+            "type_line": self.type_line,
+            "mana_cost": self.mana_cost,
+            "mana_value": self.mana_value,
+            "colors": list(self.colors),
+            "color_identity": list(self.color_identity),
+            "card_types": list(self.card_types),
         }
 
 
@@ -294,6 +342,19 @@ class DeckProject:
             image_path=_optional_str(metadata.pop("image_path", None)),
             image_uri=_optional_str(metadata.pop("image_uri", None)),
             image_asset_id=_optional_str(metadata.pop("image_asset_id", None)),
+            catalog_card_id=_optional_str(metadata.pop("catalog_card_id", None)),
+            oracle_id=_optional_str(metadata.pop("oracle_id", None)),
+            set_name=_optional_str(metadata.pop("set_name", None)),
+            preview_uri=_optional_str(metadata.pop("preview_uri", None)),
+            thumbnail_uri=_optional_str(metadata.pop("thumbnail_uri", None)),
+            local_image_path=_optional_str(metadata.pop("local_image_path", None)),
+            catalog_status=_optional_str(metadata.pop("catalog_status", None)),
+            type_line=_optional_str(metadata.pop("type_line", None)),
+            mana_cost=_optional_str(metadata.pop("mana_cost", None)),
+            mana_value=_optional_float(metadata.pop("mana_value", None)),
+            colors=_string_list(metadata.pop("colors", [])),
+            color_identity=_string_list(metadata.pop("color_identity", [])),
+            card_types=_string_list(metadata.pop("card_types", [])),
         )
         self.cards.append(card)
         return card.card_id

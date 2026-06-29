@@ -25,6 +25,146 @@ def test_distribute_cards_to_pages_splits_regular_and_oversized_cards():
     assert pages[1]["regular"] == [("regular-b.png", True)]
 
 
+def test_distribute_cards_to_pages_fills_letter_landscape_mixed_page():
+    print_dict = {
+        "cards": {
+            "oversized-a.png": 3,
+            "regular-a.png": 2,
+        },
+        "oversized_enabled": True,
+        "oversized": {"oversized-a.png": True},
+    }
+
+    pages = pdf.distribute_cards_to_pages(print_dict, columns=4, rows=2)
+
+    assert pages == [
+        {
+            "oversized": [
+                ("oversized-a.png", False),
+                ("oversized-a.png", False),
+                ("oversized-a.png", False),
+            ],
+            "regular": [
+                ("regular-a.png", False),
+                ("regular-a.png", False),
+            ],
+        }
+    ]
+
+
+def test_distribute_cards_to_pages_splits_unfit_four_oversized_plus_two_regular():
+    print_dict = {
+        "cards": {
+            "oversized-a.png": 4,
+            "regular-a.png": 2,
+        },
+        "oversized_enabled": True,
+        "oversized": {"oversized-a.png": True},
+    }
+
+    pages = pdf.distribute_cards_to_pages(print_dict, columns=4, rows=2)
+
+    assert pages == [
+        {
+            "oversized": [
+                ("oversized-a.png", False),
+                ("oversized-a.png", False),
+                ("oversized-a.png", False),
+                ("oversized-a.png", False),
+            ],
+            "regular": [],
+        },
+        {
+            "oversized": [],
+            "regular": [
+                ("regular-a.png", False),
+                ("regular-a.png", False),
+            ],
+        },
+    ]
+
+
+def test_distribute_cards_to_pages_allows_four_oversized_plus_two_regular_on_larger_grid():
+    print_dict = {
+        "cards": {
+            "oversized-a.png": 4,
+            "regular-a.png": 2,
+        },
+        "oversized_enabled": True,
+        "oversized": {"oversized-a.png": True},
+    }
+
+    pages = pdf.distribute_cards_to_pages(print_dict, columns=5, rows=2)
+
+    assert pages == [
+        {
+            "oversized": [
+                ("oversized-a.png", False),
+                ("oversized-a.png", False),
+                ("oversized-a.png", False),
+                ("oversized-a.png", False),
+            ],
+            "regular": [
+                ("regular-a.png", False),
+                ("regular-a.png", False),
+            ],
+        }
+    ]
+
+
+def test_make_backside_pages_preserves_mixed_front_page_buckets():
+    print_dict = {
+        "cards": {
+            "oversized-a.png": 3,
+            "regular-a.png": 2,
+        },
+        "backsides": {
+            "oversized-a.png": "oversized-back.png",
+            "regular-a.png": "regular-back.png",
+        },
+        "backside_default": "__back.png",
+        "oversized_enabled": True,
+        "oversized": {"oversized-a.png": True},
+    }
+    front_pages = pdf.distribute_cards_to_pages(print_dict, columns=4, rows=2)
+
+    backside_pages = pdf.make_backside_pages(print_dict, front_pages)
+
+    assert backside_pages == [
+        {
+            "oversized": [
+                ("oversized-back.png", False),
+                ("oversized-back.png", False),
+                ("oversized-back.png", False),
+            ],
+            "regular": [
+                ("regular-back.png", False),
+                ("regular-back.png", False),
+            ],
+        }
+    ]
+
+
+def test_needs_oversized_landscape_warning_ignores_hidden_and_zero_count_cards():
+    assert pdf.needs_oversized_landscape_warning(
+        {
+            "orient": "Portrait",
+            "oversized_enabled": True,
+            "cards": {"__back.png": 1, "oversized-a.png": 0},
+            "oversized": {"__back.png": True, "oversized-a.png": True},
+        }
+    ) is False
+
+    assert pdf.needs_oversized_landscape_warning(
+        {
+            "orient": "Portrait",
+            "oversized_enabled": True,
+            "cards": {"oversized-a.png": 1},
+            "oversized": {"oversized-a.png": True},
+        }
+    ) is True
+
+
 def test_make_backside_pages_uses_default_and_overrides():
     print_dict = {
         "backsides": {"front-a.png": "back-a.png"},

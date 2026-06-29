@@ -45,6 +45,19 @@ def test_deck_project_round_trips_native_json_shape():
         collector_number="59",
         import_section="Mainboard",
         image_uri="https://example.test/opt.png",
+        catalog_card_id="scryfall-opt",
+        oracle_id="oracle-opt",
+        set_name="Throne of Eldraine",
+        preview_uri="https://example.test/opt-normal.png",
+        thumbnail_uri="https://example.test/opt-small.png",
+        local_image_path="cache/opt.png",
+        catalog_status="resolved",
+        type_line="Instant",
+        mana_cost="{U}",
+        mana_value=1,
+        colors=["U"],
+        color_identity=["U"],
+        card_types=["Instant"],
     )
     project.set_section(card_id, "Sideboard")
     project.notes = "Need more lands."
@@ -70,6 +83,20 @@ def test_deck_project_round_trips_native_json_shape():
     assert restored.cards[0].section == "sideboard"
     assert restored.cards[0].set_code == "eld"
     assert restored.cards[0].image_uri == "https://example.test/opt.png"
+    assert restored.cards[0].card_id == "card-opt"
+    assert restored.cards[0].catalog_card_id == "scryfall-opt"
+    assert restored.cards[0].oracle_id == "oracle-opt"
+    assert restored.cards[0].set_name == "Throne of Eldraine"
+    assert restored.cards[0].preview_uri == "https://example.test/opt-normal.png"
+    assert restored.cards[0].thumbnail_uri == "https://example.test/opt-small.png"
+    assert restored.cards[0].local_image_path == "cache/opt.png"
+    assert restored.cards[0].catalog_status == "resolved"
+    assert restored.cards[0].type_line == "Instant"
+    assert restored.cards[0].mana_cost == "{U}"
+    assert restored.cards[0].mana_value == 1.0
+    assert restored.cards[0].colors == ["U"]
+    assert restored.cards[0].color_identity == ["U"]
+    assert restored.cards[0].card_types == ["Instant"]
     assert restored.notes == "Need more lands."
 
 
@@ -214,3 +241,8 @@ def test_unknown_category_from_file_falls_back_to_uncategorized():
 
     assert project.cards[0].primary_category == DEFAULT_CATEGORY_ID
     assert project.cards[0].section == DEFAULT_SECTION
+    assert project.cards[0].type_line is None
+    assert project.cards[0].mana_value is None
+    assert project.cards[0].colors == []
+    assert project.cards[0].color_identity == []
+    assert project.cards[0].card_types == []

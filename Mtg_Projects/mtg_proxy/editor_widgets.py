@@ -91,6 +91,44 @@ def cached_preview_bytes(entry, field="data"):
     return image.decode_cached_image_bytes(entry[field])
 
 
+def confirm_oversized_landscape_if_needed(parent, state, img_dict=None, refresh_preview=True):
+    state = as_project_state(state)
+    if not pdf.needs_oversized_landscape_warning(state):
+        return True
+
+    dialog = QMessageBox(parent)
+    dialog.setIcon(QMessageBox.Icon.Warning)
+    dialog.setWindowTitle("Landscape Recommended")
+    dialog.setText("This project contains oversized cards, but the PDF orientation is not Landscape.")
+    dialog.setInformativeText(
+        "Landscape mode gives oversized cards the expected horizontal space. "
+        "You can switch now, continue in Portrait, or cancel."
+    )
+    switch_button = dialog.addButton("Switch to Landscape", QMessageBox.ButtonRole.AcceptRole)
+    continue_button = dialog.addButton("Continue Portrait", QMessageBox.ButtonRole.ActionRole)
+    dialog.addButton(QMessageBox.StandardButton.Cancel)
+    dialog.setDefaultButton(switch_button)
+    dialog.exec()
+
+    clicked_button = dialog.clickedButton()
+    if clicked_button == switch_button:
+        state.orient = "Landscape"
+        window = parent.window() if parent is not None else None
+        if window is not None and hasattr(window, "refresh_widgets"):
+            window.refresh_widgets(state)
+        if (
+            refresh_preview
+            and img_dict is not None
+            and window is not None
+            and hasattr(window, "refresh_preview")
+        ):
+            window.refresh_preview(state, img_dict)
+        return True
+    if clicked_button == continue_button:
+        return True
+    return False
+
+
 def autosave_managed_session():
     application = QApplication.instance()
     if application is not None and hasattr(application, "autosave_managed_session"):
@@ -1246,8 +1284,22 @@ class LazyPrintPreview(QWidget):
         if self._preview is None:
             if not force:
                 return
+            if not confirm_oversized_landscape_if_needed(
+                self,
+                self._state,
+                self._img_dict,
+                refresh_preview=False,
+            ):
+                return
             self._preview = PrintPreview(self._state, self._img_dict)
             self.layout().addWidget(self._preview)
+            return
+        if not confirm_oversized_landscape_if_needed(
+            self,
+            self._state,
+            self._img_dict,
+            refresh_preview=False,
+        ):
             return
         self._preview.refresh(self._state, self._img_dict)
 
@@ -1404,6 +1456,9 @@ class ActionsWidget(QGroupBox):
         self.setLayout(layout)
 
         def render():
+            if not confirm_oversized_landscape_if_needed(self, state, img_dict):
+                return
+
             rgx = re.compile(r"\W")
             default_pdf_name = (
                 f"{re.sub(rgx, '', state.filename)}.pdf"
@@ -1702,6 +1757,7 @@ class ActionsWidget(QGroupBox):
         clear_cards_button.clicked.connect(clear_old_cards)
 
         self._cropper_button = cropper_button
+        self._render_button = render_button
         self._rebuild_after_cropper = False
         self._img_dict = img_dict
 

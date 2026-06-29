@@ -186,3 +186,168 @@ def test_lazy_print_preview_builds_only_when_preview_tab_is_selected(monkeypatch
 
     assert len(constructed) == 1
     assert len(refreshed) == 1
+
+
+def test_lazy_print_preview_cancelled_oversized_warning_stops_loading(monkeypatch):
+    _qt_app()
+    constructed = []
+    confirm_calls = []
+
+    class _FakePrintPreview(QWidget):
+        def __init__(self, print_dict, img_dict):
+            super().__init__()
+            constructed.append((print_dict, img_dict))
+
+    monkeypatch.setattr(editor_widgets, "PrintPreview", _FakePrintPreview)
+    monkeypatch.setattr(
+        editor_widgets,
+        "confirm_oversized_landscape_if_needed",
+        lambda *args, **kwargs: confirm_calls.append((args, kwargs)) or False,
+    )
+
+    state = ProjectState.from_dict(
+        {
+            "orient": "Portrait",
+            "cards": {"oversized-a.png": 1},
+            "oversized_enabled": True,
+            "oversized": {"oversized-a.png": True},
+        }
+    )
+    img_dict = {}
+    scroll_area = QWidget()
+    preview_tab = editor_widgets.LazyPrintPreview(state, img_dict)
+    tabs = editor_widgets.CardTabs(state, img_dict, scroll_area, preview_tab)
+
+    tabs.setCurrentIndex(1)
+
+    assert len(confirm_calls) == 1
+    assert constructed == []
+    assert preview_tab.is_loaded() is False
+
+
+def test_oversized_warning_switches_to_landscape_and_refreshes(monkeypatch):
+    class _FakeMessageBox:
+        class Icon:
+            Warning = object()
+
+        class ButtonRole:
+            AcceptRole = object()
+            ActionRole = object()
+
+        class StandardButton:
+            Cancel = object()
+
+        def __init__(self, parent):
+            self.parent = parent
+            self._clicked_button = None
+            self._switch_button = None
+
+        def setIcon(self, icon):
+            self.icon = icon
+
+        def setWindowTitle(self, title):
+            self.title = title
+
+        def setText(self, text):
+            self.text = text
+
+        def setInformativeText(self, text):
+            self.informative_text = text
+
+        def addButton(self, text, role=None):
+            if text == "Switch to Landscape":
+                self._switch_button = text
+            return text
+
+        def setDefaultButton(self, button):
+            self.default_button = button
+
+        def exec(self):
+            self._clicked_button = self._switch_button
+
+        def clickedButton(self):
+            return self._clicked_button
+
+    class _FakeWindow:
+        def __init__(self):
+            self.refreshed_widgets = []
+            self.refreshed_previews = []
+
+        def refresh_widgets(self, state):
+            self.refreshed_widgets.append(state.orient)
+
+        def refresh_preview(self, state, img_dict):
+            self.refreshed_previews.append((state.orient, img_dict))
+
+    class _FakeParent:
+        def __init__(self, window):
+            self._window = window
+
+        def window(self):
+            return self._window
+
+    monkeypatch.setattr(editor_widgets, "QMessageBox", _FakeMessageBox)
+
+    window = _FakeWindow()
+    state = ProjectState.from_dict(
+        {
+            "orient": "Portrait",
+            "cards": {"oversized-a.png": 1},
+            "oversized_enabled": True,
+            "oversized": {"oversized-a.png": True},
+        }
+    )
+    img_dict = {}
+
+    result = editor_widgets.confirm_oversized_landscape_if_needed(
+        _FakeParent(window),
+        state,
+        img_dict,
+    )
+
+    assert result is True
+    assert state.orient == "Landscape"
+    assert window.refreshed_widgets == ["Landscape"]
+    assert window.refreshed_previews == [("Landscape", img_dict)]
+
+
+def test_save_pdf_cancelled_oversized_warning_stops_before_file_dialog(monkeypatch):
+    _qt_app()
+    confirm_calls = []
+
+    class _FakeActionsApplication(_FakeApplication):
+        _debug_mode = False
+
+        def show_home(self):
+            pass
+
+        def import_and_open_project(self, json_path):
+            pass
+
+        def save_active_project(self, state):
+            return None
+
+    monkeypatch.setattr(
+        editor_widgets,
+        "confirm_oversized_landscape_if_needed",
+        lambda *args, **kwargs: confirm_calls.append((args, kwargs)) or False,
+    )
+    monkeypatch.setattr(
+        editor_widgets.QFileDialog,
+        "getSaveFileName",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("file dialog opened")),
+    )
+
+    state = ProjectState.from_dict(
+        {
+            "orient": "Portrait",
+            "cards": {"oversized-a.png": 1},
+            "oversized_enabled": True,
+            "oversized": {"oversized-a.png": True},
+        }
+    )
+    widget = editor_widgets.ActionsWidget(_FakeActionsApplication("project.json"), state, {})
+
+    widget._render_button.click()
+
+    assert len(confirm_calls) == 1

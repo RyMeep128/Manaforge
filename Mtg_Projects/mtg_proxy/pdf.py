@@ -179,6 +179,27 @@ def generate(print_dict, size, pdf_path, print_fn):
     return pages
 
 
+def has_active_oversized_cards(print_dict):
+    state = as_project_state(print_dict)
+    if not state.oversized_enabled:
+        return False
+
+    oversized_dict = state.oversized
+    for card_name, count in state.cards.items():
+        if card_name.startswith("__"):
+            continue
+        if int(count) <= 0:
+            continue
+        if oversized_dict.get(card_name, False):
+            return True
+    return False
+
+
+def needs_oversized_landscape_warning(print_dict):
+    state = as_project_state(print_dict)
+    return has_active_oversized_cards(state) and state.orient != "Landscape"
+
+
 def distribute_cards_to_pages(print_dict, columns, rows):
     state = as_project_state(print_dict)
     images_per_page = columns * rows
@@ -209,51 +230,30 @@ def distribute_cards_to_pages(print_dict, columns, rows):
         is_oversized = oversized_dict[img] if img in oversized_dict else False
         images.extend([(img, is_short_edge, is_oversized)] * num)
 
-    # favor filling up with oversized cards first
-    images = sorted(images, key=lambda x: not x[2])
-
-    def page_has_space(page, oversized):
-        oversized_cards = len(page["oversized"])
-        regular_cards = len(page["regular"])
-        single_spaces = regular_cards + oversized_cards * 2
-        free_single_spaces = images_per_page - single_spaces
-        if oversized:
-            free_double_spaces = oversized_images_per_page - oversized_cards
-            return free_double_spaces > 0 and free_single_spaces > 1
-        else:
-            return free_single_spaces > 0
-
-    def is_page_full(page):
-        return page_has_space(page, False) == False
-
-    empty_page = {"regular": [], "oversized": []}
+    oversized_images = [image for image in images if image[2]]
+    regular_images = [image for image in images if not image[2]]
     pages = []
 
-    unfinished_pages = []
-    for img, is_short_edge, is_oversized in images:
-        # get a page that can fit this card
-        page_with_space = next(
-            filter(lambda x: page_has_space(x, is_oversized), unfinished_pages),
-            None,
-        )
+    while oversized_images or regular_images:
+        page = {"regular": [], "oversized": []}
+        used_single_spaces = 0
 
-        # or start a new page if none is available
-        if page_with_space is None:
-            unfinished_pages.append(deepcopy(empty_page))
-            page_with_space = unfinished_pages[-1]
+        while (
+            oversized_images
+            and len(page["oversized"]) < oversized_images_per_page
+            and used_single_spaces + 2 <= images_per_page
+        ):
+            img, is_short_edge, _is_oversized = oversized_images.pop(0)
+            page["oversized"].append((img, is_short_edge))
+            used_single_spaces += 2
 
-        # add the image to the page
-        page_with_space["oversized" if is_oversized else "regular"].append(
-            (img, is_short_edge)
-        )
+        while regular_images and used_single_spaces < images_per_page:
+            img, is_short_edge, _is_oversized = regular_images.pop(0)
+            page["regular"].append((img, is_short_edge))
+            used_single_spaces += 1
 
-        # push full page into final list
-        if is_page_full(page_with_space):
-            pages.append(page_with_space)
-            unfinished_pages.remove(page_with_space)
+        pages.append(page)
 
-    # push all unfinished pages into final list
-    pages.extend(unfinished_pages)
     return pages
 
 

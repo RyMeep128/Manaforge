@@ -3,7 +3,14 @@ from __future__ import annotations
 import pytest
 
 from mtg_editor.models import DEFAULT_CATEGORY_ID, DeckProject
-from mtg_editor.services import CardGroup, compute_deck_stats, group_cards, sort_cards
+from mtg_editor.services import (
+    CardFilters,
+    CardGroup,
+    compute_deck_stats,
+    filter_cards,
+    group_cards,
+    sort_cards,
+)
 
 
 def _project():
@@ -41,7 +48,26 @@ def test_sort_cards_by_supported_modes():
 
 def test_sort_cards_rejects_unknown_mode():
     with pytest.raises(ValueError):
-        sort_cards(_project(), "mana_value")
+        sort_cards(_project(), "power")
+
+
+def test_sort_cards_by_mana_value_and_color():
+    project = _insight_project()
+
+    assert [card.card_id for card in sort_cards(project, "mana_value")] == [
+        "bolt",
+        "sol",
+        "counterspell",
+        "elves",
+        "atraxa",
+    ]
+    assert [card.card_id for card in sort_cards(project, "color")] == [
+        "counterspell",
+        "bolt",
+        "elves",
+        "atraxa",
+        "sol",
+    ]
 
 
 def test_group_cards_by_none():
@@ -103,7 +129,57 @@ def test_group_cards_uses_current_preference_sort_mode():
 
 def test_group_cards_rejects_unknown_mode():
     with pytest.raises(ValueError):
-        group_cards(_project(), "color")
+        group_cards(_project(), "rarity")
+
+
+def test_group_cards_by_card_type_mana_value_and_color():
+    project = _insight_project()
+
+    assert group_cards(project, "card_type") == [
+        CardGroup(key="creature", label="Creature", card_ids=["atraxa", "elves"]),
+        CardGroup(key="artifact", label="Artifact", card_ids=["sol"]),
+        CardGroup(key="instant", label="Instant", card_ids=["counterspell", "bolt"]),
+    ]
+    assert group_cards(project, "mana_value") == [
+        CardGroup(key="1", label="1", card_ids=["bolt", "sol"]),
+        CardGroup(key="2", label="2", card_ids=["counterspell", "elves"]),
+        CardGroup(key="4", label="4", card_ids=["atraxa"]),
+    ]
+    assert group_cards(project, "color") == [
+        CardGroup(key="blue", label="Blue", card_ids=["counterspell"]),
+        CardGroup(key="red", label="Red", card_ids=["bolt"]),
+        CardGroup(key="green", label="Green", card_ids=["elves"]),
+        CardGroup(key="multicolor", label="Multicolor", card_ids=["atraxa"]),
+        CardGroup(key="colorless", label="Colorless", card_ids=["sol"]),
+    ]
+
+
+def test_filter_cards_by_editor_and_metadata_fields():
+    project = _insight_project()
+    burn_id = project.create_category("Burn")
+    ramp_id = project.create_category("Ramp")
+    project.assign_category("bolt", burn_id)
+    project.assign_category("elves", ramp_id)
+    project.add_tag("bolt", "Removal")
+    project.add_tag("elves", "Ramp")
+    project.set_section("elves", "sideboard")
+
+    assert [card.card_id for card in filter_cards(project, CardFilters(text="bolt"))] == ["bolt"]
+    assert [card.card_id for card in filter_cards(project, {"category": burn_id})] == ["bolt"]
+    assert [card.card_id for card in filter_cards(project, CardFilters(tag="ramp"))] == ["elves"]
+    assert [card.card_id for card in filter_cards(project, CardFilters(section="sideboard"))] == ["elves"]
+    assert [card.card_id for card in filter_cards(project, CardFilters(card_type="creature"))] == [
+        "atraxa",
+        "elves",
+    ]
+    assert [card.card_id for card in filter_cards(project, CardFilters(color="R"))] == ["bolt"]
+    assert [card.card_id for card in filter_cards(project, CardFilters(catalog_status="unresolved"))] == [
+        "elves"
+    ]
+    assert [card.card_id for card in filter_cards(project, CardFilters(missing_image=True))] == [
+        "elves",
+        "sol",
+    ]
 
 
 def test_compute_deck_stats_counts_sections_categories_and_tags():
@@ -140,3 +216,103 @@ def test_compute_deck_stats_counts_sections_categories_and_tags():
         "Mana": {"unique": 1, "copies": 3},
         "Card Advantage": {"unique": 2, "copies": 7},
     }
+    assert stats["type_counts"] == {"Other": {"unique": 2, "copies": 5}}
+    assert stats["color_counts"] == {"Colorless": {"unique": 2, "copies": 5}}
+    assert stats["mana_value_counts"] == {"Unknown": {"unique": 2, "copies": 5}}
+    assert stats["unresolved_count"] == 0
+    assert stats["missing_image_count"] == 2
+
+
+def test_compute_deck_stats_includes_insight_counts():
+    project = _insight_project()
+    project.set_section("atraxa", "commander")
+    project.set_section("sol", "excluded")
+
+    stats = compute_deck_stats(project)
+
+    assert stats["total_unique_cards"] == 4
+    assert stats["total_copies"] == 7
+    assert stats["type_counts"] == {
+        "Instant": {"unique": 2, "copies": 5},
+        "Creature": {"unique": 2, "copies": 2},
+    }
+    assert stats["color_counts"] == {
+        "Red": {"unique": 1, "copies": 4},
+        "Blue": {"unique": 1, "copies": 1},
+        "Multicolor": {"unique": 1, "copies": 1},
+        "Green": {"unique": 1, "copies": 1},
+    }
+    assert stats["mana_value_counts"] == {
+        "1": {"unique": 1, "copies": 4},
+        "2": {"unique": 2, "copies": 2},
+        "4": {"unique": 1, "copies": 1},
+    }
+    assert stats["unresolved_count"] == 1
+    assert stats["missing_image_count"] == 1
+
+
+def _insight_project():
+    project = DeckProject.new("Insights Test")
+    project.add_card(
+        "Lightning Bolt",
+        quantity=4,
+        card_id="bolt",
+        type_line="Instant",
+        mana_cost="{R}",
+        mana_value=1,
+        colors=["R"],
+        color_identity=["R"],
+        card_types=["Instant"],
+        image_uri="https://img.test/bolt.png",
+        catalog_status="resolved",
+    )
+    project.add_card(
+        "Counterspell",
+        quantity=1,
+        card_id="counterspell",
+        type_line="Instant",
+        mana_cost="{U}{U}",
+        mana_value=2,
+        colors=["U"],
+        color_identity=["U"],
+        card_types=["Instant"],
+        image_uri="https://img.test/counterspell.png",
+        catalog_status="resolved",
+    )
+    project.add_card(
+        "Atraxa, Praetors' Voice",
+        quantity=1,
+        card_id="atraxa",
+        type_line="Legendary Creature — Phyrexian Angel Horror",
+        mana_cost="{G}{W}{U}{B}",
+        mana_value=4,
+        colors=["W", "U", "B", "G"],
+        color_identity=["W", "U", "B", "G"],
+        card_types=["Creature"],
+        image_uri="https://img.test/atraxa.png",
+        catalog_status="resolved",
+    )
+    project.add_card(
+        "Llanowar Elves",
+        quantity=1,
+        card_id="elves",
+        type_line="Creature — Elf Druid",
+        mana_cost="{G}",
+        mana_value=2,
+        colors=["G"],
+        color_identity=["G"],
+        card_types=["Creature"],
+        catalog_status="unresolved",
+    )
+    project.add_card(
+        "Sol Ring",
+        quantity=1,
+        card_id="sol",
+        type_line="Artifact",
+        mana_cost="{1}",
+        mana_value=1,
+        colors=[],
+        color_identity=[],
+        card_types=["Artifact"],
+    )
+    return project

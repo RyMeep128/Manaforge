@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
+
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 _EDITOR_ROOT = Path(__file__).resolve().parents[1]
 _PRODUCTS_ROOT = _EDITOR_ROOT.parent
