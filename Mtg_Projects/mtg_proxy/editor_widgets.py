@@ -1592,7 +1592,7 @@ class ActionsWidget(QGroupBox):
                 return
 
             deck_text = dialog.deck_text()
-            archidekt_url = dialog.archidekt_url()
+            deck_url = dialog.deck_url()
             import_result = None
             import_error = None
 
@@ -1605,7 +1605,7 @@ class ActionsWidget(QGroupBox):
                         state.image_dir,
                         make_popup_print_fn(import_window),
                         deck_text=deck_text,
-                        archidekt_url=archidekt_url,
+                        deck_url=deck_url,
                         warn_fn=application.warn_nonfatal,
                     )
                     import_result = workflow_result.import_result

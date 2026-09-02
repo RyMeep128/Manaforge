@@ -271,8 +271,8 @@ class DeckImportDialog(QDialog):
         self._text_edit.setPlaceholderText(
             "4 Lightning Bolt\n2 Counterspell\n1 Opt (ELD) 59\n\nor CSV with headers like:\ncount,name,set_code,collector_number"
         )
-        self._archidekt_url = QLineEdit()
-        self._archidekt_url.setPlaceholderText("https://archidekt.com/decks/123456/example-deck")
+        self._deck_url = QLineEdit()
+        self._deck_url.setPlaceholderText("Archidekt, Moxfield, or Blueprint MTG public deck URL")
 
         load_file_button = QPushButton("Choose File")
         import_button = QPushButton("Import Cards")
@@ -286,7 +286,7 @@ class DeckImportDialog(QDialog):
 
         layout = QVBoxLayout()
         layout.addWidget(instructions)
-        layout.addWidget(WidgetWithLabel("Archidekt &URL", self._archidekt_url))
+        layout.addWidget(WidgetWithLabel("Public deck &URL", self._deck_url))
         layout.addWidget(self._text_edit)
         layout.addLayout(button_row)
         self.setLayout(layout)
@@ -303,11 +303,11 @@ class DeckImportDialog(QDialog):
                 QMessageBox.warning(self, "Decklist Load Failed", f"The decklist file could not be loaded.\n\n{exc}")
 
         def import_deck():
-            if len(self.archidekt_url().strip()) > 0 and not deck_import_service.is_archidekt_url(self.archidekt_url()):
-                QToolTip.showText(QCursor.pos(), "Enter a valid public Archidekt deck URL")
+            if len(self.deck_url()) > 0 and not deck_import_service.is_supported_deck_url(self.deck_url()):
+                QToolTip.showText(QCursor.pos(), "Enter a valid public Archidekt, Moxfield, or Blueprint MTG deck URL")
                 return
-            if len(self.archidekt_url().strip()) == 0 and len(self.deck_text().strip()) == 0:
-                QToolTip.showText(QCursor.pos(), "Paste/load a decklist or enter an Archidekt URL")
+            if len(self.deck_url()) == 0 and len(self.deck_text().strip()) == 0:
+                QToolTip.showText(QCursor.pos(), "Paste/load a decklist or enter a public deck URL")
                 return
             self.accept()
 
@@ -319,7 +319,10 @@ class DeckImportDialog(QDialog):
         return self._text_edit.toPlainText()
 
     def archidekt_url(self):
-        return self._archidekt_url.text().strip()
+        return self.deck_url()
+
+    def deck_url(self):
+        return self._deck_url.text().strip()
 
 
 class AddCardDialog(QDialog):

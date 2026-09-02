@@ -203,6 +203,48 @@ def test_is_archidekt_url_validates_public_deck_links():
     assert not deck_import.is_archidekt_url("not a url")
 
 
+def test_supported_deck_url_accepts_all_public_deck_providers():
+    assert deck_import.is_supported_deck_url("https://archidekt.com/decks/12345/test-deck")
+    assert deck_import.is_supported_deck_url("https://www.moxfield.com/decks/abc_DEF-123")
+    assert deck_import.is_supported_deck_url("https://blueprintmtg.io/decks/KamizObscu-123")
+    assert not deck_import.is_supported_deck_url("https://example.com/decks/123")
+
+
+def test_parse_moxfield_json_reads_all_boards_and_exact_printings():
+    entries = deck_import.parse_moxfield_json({
+        "mainboard": {"a": {"quantity": 2, "card": {
+            "name": "Lightning Bolt", "setCode": "clu", "collectorNumber": "141"
+        }}},
+        "commanders": {"b": {"quantity": 1, "card": {
+            "name": "Atraxa, Praetors' Voice", "set": "2xm", "number": "190"
+        }}},
+        "sideboard": {"c": {"quantity": 1, "card": {"name": "Opt"}}},
+    })
+
+    assert entries == [
+        deck_import.DeckEntry(2, "Lightning Bolt", "clu", "141"),
+        deck_import.DeckEntry(1, "Opt"),
+        deck_import.DeckEntry(1, "Atraxa, Praetors' Voice", "2xm", "190"),
+    ]
+
+
+def test_parse_blueprint_json_reads_saved_deck_payload():
+    entries = deck_import.parse_blueprint_json([{
+        "visibility": "public",
+        "payload": {
+            "deck": [{"count": 2, "card": {
+                "name": "Sol Ring", "set": "ltc", "collector_number": "263"
+            }}],
+            "considering": [{"count": 1, "card": {"name": "Arcane Signet"}}],
+        },
+    }])
+
+    assert entries == [
+        deck_import.DeckEntry(2, "Sol Ring", "ltc", "263"),
+        deck_import.DeckEntry(1, "Arcane Signet"),
+    ]
+
+
 def test_parse_archidekt_html_extracts_entries_and_aggregates_duplicates():
     html = """
 <html><body>

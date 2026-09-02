@@ -3,7 +3,7 @@ Prepare proxy card images for home printing with a desktop Qt app.
 
 The app can:
 - crop bleed edges and build print-ready PDFs
-- import card images from Scryfall using pasted decklists, deck files, or public Archidekt URLs
+- import card images from Scryfall using pasted decklists, deck files, or public Archidekt, Moxfield, and Blueprint MTG URLs
 - handle double-faced cards and per-card backsides
 - search MPCFill for higher-DPI replacements
 - cache previews and high-res search results so repeat work is much faster
@@ -79,7 +79,7 @@ The right-side `Actions` box includes:
 - pasted deck text like `4 Lightning Bolt`
 - deck files such as `.txt`, `.csv`, `.dek`, `.mtga`, and `.dck`
 - CSV rows with `count`, `name`, `set_code`, and `collector_number`
-- public Archidekt deck URLs
+- public Archidekt, Moxfield, and Blueprint MTG deck URLs
 
 The importer resolves cards through Scryfall and downloads image files into your image folder.
 

@@ -5,6 +5,7 @@ import logging
 import os
 import re
 import urllib.error
+import urllib.parse
 import urllib.request
 import uuid
 from collections import OrderedDict
@@ -44,6 +45,16 @@ ARCHIDEKT_URL_RE = re.compile(
     r"^https://(www\.)?archidekt\.com/decks/(?P<deck_id>\d+)(/.*)?$",
     re.IGNORECASE,
 )
+MOXFIELD_URL_RE = re.compile(
+    r"^https://(www\.)?moxfield\.com/decks/(?P<deck_id>[A-Za-z0-9_-]+)(?:[/?#].*)?$",
+    re.IGNORECASE,
+)
+BLUEPRINT_URL_RE = re.compile(
+    r"^https://(www\.)?blueprintmtg\.io/decks/(?P<deck_slug>[A-Za-z0-9_-]+)(?:[/?#].*)?$",
+    re.IGNORECASE,
+)
+BLUEPRINT_APP_URL = "https://blueprintmtg.io/"
+BLUEPRINT_DECK_SELECT = "id,name,visibility,payload"
 
 SECTION_HEADERS = {
     "deck",
@@ -263,6 +274,59 @@ def import_archidekt_url(
     )
 
 
+def import_deck_url(
+    deck_url: str,
+    image_dir: str,
+    print_fn: PRINT_FN | None = None,
+    fetch_json: Callable[[str], dict] | None = None,
+    fetch_bytes: Callable[[str], bytes] | None = None,
+    fetch_text: Callable[[str], str] | None = None,
+) -> ImportResult:
+    """Import a public Archidekt, Moxfield, or Blueprint MTG deck URL."""
+    if is_archidekt_url(deck_url):
+        return import_archidekt_url(
+            deck_url, image_dir, print_fn, fetch_json, fetch_bytes, fetch_text
+        )
+
+    print_fn = print_fn if print_fn is not None else lambda _text: None
+    fetch_json = fetch_json if fetch_json is not None else _fetch_json
+    fetch_bytes = fetch_bytes if fetch_bytes is not None else _fetch_bytes
+    card_service = _build_card_service(fetch_json)
+
+    moxfield_match = MOXFIELD_URL_RE.match(deck_url.strip())
+    blueprint_match = BLUEPRINT_URL_RE.match(deck_url.strip())
+    if moxfield_match:
+        source = "Moxfield"
+        deck_id = moxfield_match.group("deck_id")
+        print_fn("Importing Moxfield deck...\nDownloading public deck data")
+        payload = fetch_json(f"https://api2.moxfield.com/v3/decks/all/{deck_id}")
+        entries = parse_moxfield_json(payload)
+    elif blueprint_match:
+        source = "Blueprint MTG"
+        deck_id = _blueprint_deck_id(blueprint_match.group("deck_slug"))
+        print_fn("Importing Blueprint MTG deck...\nDownloading public deck data")
+        if fetch_json is _fetch_json:
+            payload = _fetch_blueprint_deck(deck_id, fetch_text=fetch_text)
+        else:
+            payload = fetch_json(_blueprint_api_url(deck_id))
+        entries = parse_blueprint_json(payload)
+    else:
+        raise ValueError(
+            "Enter a valid public Archidekt, Moxfield, or Blueprint MTG deck URL."
+        )
+
+    if not entries:
+        raise ValueError(f"No cards were found in the public {source} deck.")
+    return import_entries(
+        entries,
+        image_dir,
+        unmatched_lines=[],
+        print_fn=print_fn,
+        card_service=card_service,
+        fetch_bytes=fetch_bytes,
+    )
+
+
 def import_entries(
     entries: list[DeckEntry],
     image_dir: str,
@@ -366,6 +430,149 @@ def read_decklist_file(path: str) -> str:
 
 def is_archidekt_url(value: str) -> bool:
     return ARCHIDEKT_URL_RE.match(value.strip()) is not None
+
+
+def is_supported_deck_url(value: str) -> bool:
+    value = value.strip()
+    return any(pattern.match(value) is not None for pattern in (
+        ARCHIDEKT_URL_RE,
+        MOXFIELD_URL_RE,
+        BLUEPRINT_URL_RE,
+    ))
+
+
+def parse_moxfield_json(payload: dict) -> list[DeckEntry]:
+    sections = (
+        payload.get("mainboard"),
+        payload.get("sideboard"),
+        payload.get("maybeboard"),
+        payload.get("commanders"),
+        payload.get("companions"),
+    )
+    entries = []
+    for section in sections:
+        entries.extend(_entries_from_card_collection(section))
+    if not entries:
+        raise ValueError("The Moxfield response did not include a readable card list.")
+    return _aggregate_entries(entries)
+
+
+def parse_blueprint_json(payload: dict | list) -> list[DeckEntry]:
+    if isinstance(payload, list):
+        if not payload:
+            raise ValueError("The Blueprint MTG deck was not found or is private.")
+        payload = payload[0]
+    if not isinstance(payload, dict):
+        raise ValueError("The Blueprint MTG response could not be read.")
+    if payload.get("visibility") == "private":
+        raise ValueError("Private Blueprint MTG decks cannot be imported.")
+    deck_payload = payload.get("payload") or payload
+    entries = []
+    for key in ("deck", "considering", "commanders"):
+        entries.extend(_entries_from_card_collection(deck_payload.get(key)))
+    if not entries:
+        raise ValueError("The Blueprint MTG response did not include a readable card list.")
+    return _aggregate_entries(entries)
+
+
+def _entries_from_card_collection(collection) -> list[DeckEntry]:
+    if not collection:
+        return []
+    values = collection.values() if isinstance(collection, dict) else collection
+    entries = []
+    for item in values:
+        if not isinstance(item, dict):
+            continue
+        card = item.get("card") if isinstance(item.get("card"), dict) else item
+        oracle_card = card.get("oracleCard") if isinstance(card.get("oracleCard"), dict) else {}
+        name = str(
+            card.get("name") or card.get("displayName") or oracle_card.get("name") or ""
+        ).strip()
+        try:
+            count = int(item.get("quantity", item.get("count", item.get("qty", 1))))
+        except (TypeError, ValueError):
+            continue
+        set_code = _first_optional(
+            item,
+            card,
+            names=("setCode", "set_code", "editionCode", "editioncode", "set"),
+        )
+        if not set_code:
+            set_record = card.get("set") or card.get("edition")
+            if isinstance(set_record, dict):
+                set_code = _first_optional(set_record, names=("code", "editioncode"))
+        collector_number = _first_optional(
+            item, card, names=("collectorNumber", "collector_number", "number")
+        )
+        if name and count > 0:
+            entries.append(DeckEntry(count, _normalize_card_name(name), set_code, collector_number))
+    return entries
+
+
+def _first_optional(*objects: dict, names: tuple[str, ...]) -> str | None:
+    for obj in objects:
+        for name in names:
+            raw_value = obj.get(name)
+            if isinstance(raw_value, (dict, list)):
+                continue
+            value = _normalize_optional_field(raw_value)
+            if value:
+                return value
+    return None
+
+
+def _aggregate_entries(entries: list[DeckEntry]) -> list[DeckEntry]:
+    aggregated: OrderedDict[tuple[str, str | None, str | None], DeckEntry] = OrderedDict()
+    for entry in entries:
+        key = (entry.name.casefold(), entry.set_code, entry.collector_number)
+        previous = aggregated.get(key)
+        aggregated[key] = DeckEntry(
+            count=entry.count + (previous.count if previous else 0),
+            name=previous.name if previous else entry.name,
+            set_code=entry.set_code,
+            collector_number=entry.collector_number,
+        )
+    return list(aggregated.values())
+
+
+def _blueprint_deck_id(slug: str) -> str:
+    decoded = urllib.parse.unquote(slug)
+    if decoded.startswith("deck-"):
+        return decoded
+    suffix = decoded.rsplit("-", 1)[-1]
+    return f"deck-{suffix}" if suffix != decoded else decoded
+
+
+def _blueprint_api_url(deck_id: str) -> str:
+    query = urllib.parse.urlencode({"id": f"eq.{deck_id}", "select": BLUEPRINT_DECK_SELECT})
+    return f"https://blueprintmtg.io/api/import/blueprint?{query}"
+
+
+def _fetch_blueprint_deck(deck_id: str, fetch_text=None) -> dict | list:
+    fetch_text = fetch_text or _fetch_text
+    app_html = fetch_text(BLUEPRINT_APP_URL)
+    asset_match = re.search(r'<script[^>]+src="(?P<src>/assets/index-[^"]+\.js)"', app_html)
+    if not asset_match:
+        raise ValueError("Blueprint MTG connection details could not be discovered.")
+    javascript = fetch_text(urllib.parse.urljoin(BLUEPRINT_APP_URL, asset_match.group("src")))
+    url_match = re.search(r'VITE_SUPABASE_URL:"(?P<url>https://[^"]+)"', javascript)
+    key_match = re.search(r'VITE_SUPABASE_PUBLISHABLE_KEY:"(?P<key>[^"]+)"', javascript)
+    if not url_match or not key_match:
+        # The connection settings currently live in Blueprint's shared data chunk.
+        chunk_match = re.search(r'from"\./(?P<src>playtester-[^"]+\.js)"', javascript)
+        if chunk_match:
+            shared_js = fetch_text(urllib.parse.urljoin(BLUEPRINT_APP_URL + "assets/", chunk_match.group("src")))
+            url_match = re.search(r'VITE_SUPABASE_URL:"(?P<url>https://[^"]+)"', shared_js)
+            key_match = re.search(r'VITE_SUPABASE_PUBLISHABLE_KEY:"(?P<key>[^"]+)"', shared_js)
+    if not url_match or not key_match:
+        raise ValueError("Blueprint MTG connection details could not be discovered.")
+    query = urllib.parse.urlencode({"id": f"eq.{deck_id}", "select": BLUEPRINT_DECK_SELECT})
+    request = urllib.request.Request(
+        f"{url_match.group('url')}/rest/v1/decks?{query}",
+        headers={"Accept": "application/json", "apikey": key_match.group("key")},
+    )
+    with urllib.request.urlopen(request, timeout=30) as response:
+        return json.loads(response.read().decode("utf-8"))
 
 
 def parse_archidekt_html(html: str) -> list[DeckEntry]:

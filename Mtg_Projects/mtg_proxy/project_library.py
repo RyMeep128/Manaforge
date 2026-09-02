@@ -5,7 +5,8 @@ import datetime
 import json
 from pathlib import Path
 
-from constants import cwd, app_dir
+import fallback_image
+from constants import cwd, app_dir, resource_dir
 from mtg_core import get_default_card_service
 from models import ProjectState, as_project_state, project_to_dict, project_to_persisted_dict
 from util import write_json_atomic
@@ -95,19 +96,20 @@ def _project_image_dir(project_path):
 
 
 def _shared_default_back_path():
+    # Keep supporting older source checkouts that supplied a local test image.
     test_images_dir = os.path.join(app_dir, "test_Images")
-    if not os.path.isdir(test_images_dir):
-        return None
+    if os.path.isdir(test_images_dir):
+        back_candidates = sorted(
+            file_name
+            for file_name in os.listdir(test_images_dir)
+            if file_name.startswith("__back")
+            and os.path.isfile(os.path.join(test_images_dir, file_name))
+        )
+        if back_candidates:
+            return os.path.join(test_images_dir, back_candidates[0])
 
-    back_candidates = sorted(
-        file_name
-        for file_name in os.listdir(test_images_dir)
-        if file_name.startswith("__back")
-        and os.path.isfile(os.path.join(test_images_dir, file_name))
-    )
-    if not back_candidates:
-        return None
-    return os.path.join(test_images_dir, back_candidates[0])
+    bundled_back = os.path.join(resource_dir, "assets", "__back.png")
+    return bundled_back if os.path.isfile(bundled_back) else None
 
 
 def _seed_default_back(image_dir):
@@ -116,6 +118,8 @@ def _seed_default_back(image_dir):
 
     default_back_source = _shared_default_back_path()
     if default_back_source is None:
+        with open(os.path.join(image_dir, "__back.png"), "wb") as handle:
+            handle.write(fallback_image.data)
         return "__back.png"
 
     default_back_name = os.path.basename(default_back_source)
@@ -253,6 +257,10 @@ def ensure_draft_workspace():
 
     default_back_source = _shared_default_back_path()
     if default_back_source is None:
+        draft_back_path = os.path.join(root, "__back.png")
+        if not os.path.exists(draft_back_path):
+            with open(draft_back_path, "wb") as handle:
+                handle.write(fallback_image.data)
         return {
             "image_dir": os.path.abspath(root),
             "img_cache": os.path.abspath(draft_cache_path()),
@@ -336,6 +344,12 @@ def _initial_project_dict(project_path):
                 source="proxy_default_back",
                 source_url=default_back_source,
             )
+    else:
+        state.backside_default_asset_id = get_default_card_service().store_image_bytes(
+            fallback_image.data,
+            extension="png",
+            source="proxy_default_back",
+        )
     state.backside_default = default_back_name
     return state.to_persisted_dict()
 

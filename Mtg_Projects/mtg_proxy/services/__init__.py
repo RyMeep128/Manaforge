@@ -1,6 +1,7 @@
 from services.deck_import_service import (
     apply_import_result,
     import_archidekt_url,
+    import_deck_url,
     import_decklist,
     import_single_card_into_project,
     search_scryfall_card_page,

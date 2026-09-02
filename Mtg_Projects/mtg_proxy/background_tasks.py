@@ -16,7 +16,9 @@ def popup(window, middle_text, debug_thread):
             super().__init__(parent)
 
             text_widget = QLabel(text)
+            text_widget.setStyleSheet("color: #f5f5f5; background: transparent;")
             layout = QVBoxLayout()
+            layout.setContentsMargins(16, 12, 16, 12)
             layout.addWidget(text_widget)
             self.setLayout(layout)
             self.setWindowFlags(
@@ -28,6 +30,9 @@ def popup(window, middle_text, debug_thread):
             palette.setColor(self.backgroundRole(), 0x111111)
             self.setPalette(palette)
             self.setAutoFillBackground(True)
+            self.setStyleSheet(
+                "QDialog { background-color: #111111; border: 1px solid #555555; }"
+            )
 
             self._text = text_widget
             self._thread = None

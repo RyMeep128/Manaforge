@@ -157,6 +157,8 @@ cython_debug/
 *.gif
 *.jpg
 *.jpeg
+!Mtg_Projects/mtg_proxy/assets/
+!Mtg_Projects/mtg_proxy/assets/__back.png
 
 # local project files
 img.cache

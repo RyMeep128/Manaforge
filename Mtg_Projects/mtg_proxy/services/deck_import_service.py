@@ -68,12 +68,20 @@ def import_archidekt_url(*args, **kwargs):
     return deck_import.import_archidekt_url(*args, **kwargs)
 
 
+def import_deck_url(*args, **kwargs):
+    return deck_import.import_deck_url(*args, **kwargs)
+
+
 def read_decklist_file(path: str) -> str:
     return deck_import.read_decklist_file(path)
 
 
 def is_archidekt_url(value: str) -> bool:
     return deck_import.is_archidekt_url(value)
+
+
+def is_supported_deck_url(value: str) -> bool:
+    return deck_import.is_supported_deck_url(value)
 
 
 def _front_face_name(card_data: dict) -> str:
@@ -274,12 +282,14 @@ def import_into_project(
     print_fn: Callable[[str], None],
     deck_text: str = "",
     archidekt_url: str = "",
+    deck_url: str = "",
     warn_fn: Callable[[str, str], None] | None = None,
 ) -> DeckImportWorkflowResult:
     state = as_project_state(state)
-    if archidekt_url:
-        import_result = deck_import.import_archidekt_url(
-            archidekt_url,
+    requested_deck_url = deck_url or archidekt_url
+    if requested_deck_url:
+        import_result = deck_import.import_deck_url(
+            requested_deck_url,
             image_dir,
             print_fn,
         )
