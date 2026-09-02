@@ -170,6 +170,26 @@ def _playable_cards(project_data):
     return playable
 
 
+def _playable_print_count(project_data):
+    card_entries = project_data.get("card_entries", [])
+    if isinstance(card_entries, list) and card_entries:
+        values = (
+            entry.get("count", 0)
+            for entry in card_entries
+            if isinstance(entry, dict) and not str(entry.get("front_name") or "").startswith("__")
+        )
+    else:
+        cards = project_data.get("cards", {})
+        values = cards.values() if isinstance(cards, dict) else []
+    total = 0
+    for value in values:
+        try:
+            total += max(0, int(value))
+        except (TypeError, ValueError):
+            continue
+    return total
+
+
 def _is_valid_thumbnail_card(project_data, card_name):
     return card_name in _playable_cards(project_data)
 
@@ -225,12 +245,16 @@ def _project_summary(entry):
             os.path.getmtime(project_path),
             tz=datetime.timezone.utc,
         ).isoformat()
+    playable = _playable_cards(project_data)
+    total_prints = _playable_print_count(project_data)
     return {
         **entry,
         "exists": bool(project_path and os.path.exists(project_path)),
         "modified_at": modified_at,
         "thumbnail_card_resolved": thumbnail_card,
         "thumbnail_path": _resolve_thumbnail_path(project_data, thumbnail_card),
+        "card_count": len(playable),
+        "print_count": total_prints,
     }
 
 
@@ -482,6 +506,36 @@ def clear_thumbnail_card(project_id):
     entry["thumbnail_card"] = None
     save_library(data)
     return get_project(project_id)
+
+
+def rename_project(project_id, display_name):
+    display_name = str(display_name).strip()
+    if not display_name:
+        raise ValueError("Project name cannot be empty.")
+    data = load_library()
+    entry = _find_entry(data, project_id)
+    if entry is None:
+        return None
+    entry["display_name"] = display_name
+    save_library(data)
+    return get_project(project_id)
+
+
+def duplicate_project(project_id, display_name=None):
+    source = get_project(project_id)
+    if source is None:
+        return None
+    duplicate_name = str(display_name or f"{source['display_name']} Copy").strip()
+    if not duplicate_name:
+        raise ValueError("Project name cannot be empty.")
+    created = create_project(duplicate_name)
+    shutil.copyfile(source["path"], created["path"])
+    data = load_library()
+    entry = _find_entry(data, created["id"])
+    if entry is not None:
+        entry["thumbnail_card"] = source.get("thumbnail_card")
+        save_library(data)
+    return get_project(created["id"])
 
 
 def remove_project(project_id):

@@ -97,16 +97,14 @@ def test_search_scryfall_card_page_filters_by_set_name(monkeypatch):
     assert page.total_count == 1
     assert page.candidates[0].set_code == "lea"
     assert page.candidates[0].art_context.filename == "scryfall_lea_161_lightning-bolt.png"
-    assert 'q=%21%22Lightning+Bolt%22' in calls[0]
+    assert 'q=%28Lightning+Bolt%29+set%3Aalpha' in calls[0]
 
 
-def test_search_scryfall_card_page_falls_back_to_broad_query(monkeypatch):
+def test_search_scryfall_card_page_uses_broad_partial_name_query(monkeypatch):
     calls = []
 
     def fake_fetch_json(url):
         calls.append(url)
-        if 'q=%21%22Bolt%22' in url:
-            return {"object": "error", "details": "No cards found matching that query."}
         return {
             "object": "list",
             "data": [
@@ -129,8 +127,45 @@ def test_search_scryfall_card_page_falls_back_to_broad_query(monkeypatch):
 
     assert len(page.candidates) == 1
     assert page.candidates[0].name == "Lightning Bolt"
-    assert len(calls) == 2
-    assert 'q=Bolt' in calls[1]
+    assert len(calls) == 1
+    assert 'q=Bolt' in calls[0]
+    assert '%21%22Bolt%22' not in calls[0]
+
+
+def test_search_scryfall_card_page_passes_full_syntax_without_exact_name_probe():
+    calls = []
+
+    def fake_fetch_json(url):
+        calls.append(url)
+        return {
+            "object": "list",
+            "data": [{
+                "id": "spell",
+                "name": "Opt",
+                "set": "dom",
+                "set_name": "Dominaria",
+                "collector_number": "60",
+                "image_uris": {"small": "small", "normal": "normal"},
+            }],
+            "has_more": False,
+        }
+
+    page = deck_import_service.search_scryfall_card_page(
+        't:instant c:blue mv<=1 -is:digital',
+        fetch_json=fake_fetch_json,
+        online_mode=True,
+    )
+
+    assert [candidate.name for candidate in page.candidates] == ["Opt"]
+    assert len(calls) == 1
+    assert "%21%22" not in calls[0]
+    assert "t%3Ainstant+c%3Ablue+mv%3C%3D1+-is%3Adigital" in calls[0]
+
+
+def test_detects_scryfall_operator_queries_but_not_plain_card_names():
+    assert deck_import_service.is_scryfall_syntax_query("Lightning Bolt") is False
+    assert deck_import_service.is_scryfall_syntax_query("oracle:draw c:u") is True
+    assert deck_import_service.is_scryfall_syntax_query("pow>=5") is True
 
 
 def test_search_scryfall_card_page_returns_empty_page_when_scryfall_has_no_matches(monkeypatch):
@@ -492,12 +527,24 @@ def test_search_scryfall_card_page_online_mode_defaults_to_remote_cache(monkeypa
     assert [candidate.card_id for candidate in cached.candidates] == ["card-opt-remote"]
 
 
-def test_search_scryfall_card_page_short_query_uses_local_catalog_without_remote(monkeypatch):
+def test_search_scryfall_card_page_short_query_uses_scryfall_partial_search(monkeypatch):
     runtime_dir = _runtime_dir("short_local_search")
     service = CardService(
         db_path=str(runtime_dir / "card_data.sqlite3"),
         image_root=str(runtime_dir / "images"),
-        fetch_json_fn=lambda _url: (_ for _ in ()).throw(AssertionError("short local searches should not force remote")),
+        fetch_json_fn=lambda _url: {
+            "object": "list",
+            "data": [{
+                "id": "aang",
+                "oracle_id": "oracle-aang",
+                "name": "Aang, Air Nomad",
+                "set": "tle",
+                "set_name": "Avatar",
+                "collector_number": "210",
+                "image_uris": {"small": "small-aang", "normal": "normal-aang"},
+            }],
+            "has_more": False,
+        },
     )
     for payload in [
         {

@@ -485,8 +485,10 @@ class ProjectState:
             self._ensure_card_entry(card_name)
 
     def card_entries_dict(self) -> list[dict[str, Any]]:
-        entries = sorted(self.card_entries_store.values(), key=lambda entry: entry.front_name.casefold())
-        return [entry.to_dict() for entry in entries]
+        # Dictionaries preserve insertion order; that order is the user's card
+        # order and must survive a save/load cycle.
+        return [entry.to_dict() for entry in self.card_entries_store.values()]
+
 
     def get_card_entry(self, card_name: str) -> ProjectCardEntry | None:
         return self.card_entries_store.get(card_name)

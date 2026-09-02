@@ -60,8 +60,13 @@ class CardService:
 
     def search_cards(self, query: str, filters: dict | None = None) -> list[SearchCardResult]:
         filters = filters or {}
-        search_query, token_mode = _parse_token_search_query(query)
+        if filters.get("scryfall_syntax", False):
+            search_query = (query or "").strip()
+            token_mode = False
+        else:
+            search_query, token_mode = _parse_token_search_query(query)
         set_filter = (filters.get("set_filter") or "").strip().casefold()
+        scryfall_syntax = bool(filters.get("scryfall_syntax", False))
         limit = max(1, int(filters.get("limit", 200)))
         online_mode = bool(filters.get("online_mode", False))
         cache_ttl_seconds = max(1, int(filters.get("cache_ttl_seconds", 60 * 60)))
@@ -73,6 +78,33 @@ class CardService:
             cache_ttl_seconds=cache_ttl_seconds,
         )
         filtered_rows = _filter_print_rows(local_rows, set_filter)
+        if scryfall_syntax and filters.get("allow_remote", True):
+            remote_query = search_query
+            if set_filter:
+                remote_query = f"({remote_query}) set:{set_filter}"
+            try:
+                payloads = search_prints_payloads(
+                    remote_query,
+                    self.fetch_json_fn,
+                    include_extras=True,
+                    exact_first=False,
+                )
+                cache_expires_at = time.time() + cache_ttl_seconds if online_mode else None
+                remote_rows = []
+                for payload in payloads[:limit]:
+                    self.database.upsert_card_payload(
+                        payload,
+                        cache_scope="online_search" if online_mode else None,
+                        cache_expires_at=cache_expires_at,
+                    )
+                    row = self.database.get_print_by_card_id(str(payload.get("id") or ""))
+                    if row is not None:
+                        remote_rows.append(row)
+                filtered_rows = _filter_print_rows(remote_rows, set_filter)
+            except RemoteLookupUnavailable:
+                if filters.get("raise_remote_unavailable") or not filtered_rows:
+                    raise
+            return [_search_result_from_row(row) for row in filtered_rows[:limit]]
         if (
             (filters.get("force_remote", False) or not filtered_rows)
             and filters.get("allow_remote", True)
@@ -102,22 +134,7 @@ class CardService:
                 cache_ttl_seconds=cache_ttl_seconds,
             )
             filtered_rows = _filter_print_rows(local_rows, set_filter)
-        results = []
-        for row in filtered_rows:
-            results.append(
-                SearchCardResult(
-                    card_id=row.card_id,
-                    oracle_id=row.oracle_id,
-                    name=row.name,
-                    set_code=row.set_code,
-                    set_name=row.set_name,
-                    collector_number=row.collector_number,
-                    preview_url=row.preview_url,
-                    thumbnail_url=row.thumbnail_url,
-                    payload=row.payload,
-                )
-            )
-        return results
+        return [_search_result_from_row(row) for row in filtered_rows]
 
     def get_card(
         self,
@@ -673,6 +690,20 @@ def _parse_token_search_query(query: str) -> tuple[str, bool]:
     if parts and parts[-1].casefold() == "token":
         return " ".join(parts[:-1]).strip(), True
     return stripped, False
+
+
+def _search_result_from_row(row: PrintRecord) -> SearchCardResult:
+    return SearchCardResult(
+        card_id=row.card_id,
+        oracle_id=row.oracle_id,
+        name=row.name,
+        set_code=row.set_code,
+        set_name=row.set_name,
+        collector_number=row.collector_number,
+        preview_url=row.preview_url,
+        thumbnail_url=row.thumbnail_url,
+        payload=row.payload,
+    )
 
 
 def _build_token_remote_query(query: str) -> str:

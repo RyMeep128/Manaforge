@@ -344,14 +344,20 @@ class AddCardDialog(QDialog):
         self._card_page_start = 0
         self._total_card_count = 0
 
-        intro = QLabel("Search your card catalog for the exact printing/art you want to add.")
+        intro = QLabel(
+            "Search by full or partial card name, or use Scryfall syntax such as "
+            "t:creature c:blue mv<=3, set:neo, or oracle:\"draw a card\"."
+        )
         intro.setWordWrap(True)
 
         page_stack = QStackedWidget()
         self._page_stack = page_stack
 
         card_name_edit = QLineEdit()
-        card_name_edit.setPlaceholderText("Search card name")
+        card_name_edit.setPlaceholderText("Card name or Scryfall query")
+        card_name_edit.setToolTip(
+            "Accepts Scryfall search operators, comparisons, negation, parentheses, and OR."
+        )
         self._card_name_edit = card_name_edit
 
         card_set_filter_edit = QLineEdit()
@@ -362,7 +368,7 @@ class AddCardDialog(QDialog):
         card_search_button.clicked.connect(lambda: self.refresh_card_results(reset_page=True))
 
         card_filters_layout = QHBoxLayout()
-        card_filters_layout.addWidget(WidgetWithLabel("Card Name", card_name_edit), 2)
+        card_filters_layout.addWidget(WidgetWithLabel("Search Query", card_name_edit), 2)
         card_filters_layout.addWidget(WidgetWithLabel("Set Filter", card_set_filter_edit), 1)
         card_filters_layout.addWidget(card_search_button)
 

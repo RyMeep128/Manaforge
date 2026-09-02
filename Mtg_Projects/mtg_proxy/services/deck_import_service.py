@@ -15,6 +15,15 @@ from models import ProjectState, as_project_state
 from . import high_res_service, project_service
 
 
+def is_scryfall_syntax_query(query: str) -> bool:
+    """Return whether input contains Scryfall operators rather than plain name text."""
+    text = (query or "").strip()
+    return any(
+        marker in text
+        for marker in (":", "<=", ">=", "!=", "<", ">", " OR ", " or ", "-is:", "(", ")")
+    )
+
+
 @dataclass
 class DeckImportWorkflowResult:
     state: ProjectState
@@ -163,6 +172,10 @@ def search_scryfall_card_page(
     online_mode = CFG.OnlineMode if online_mode is None else bool(online_mode)
     card_service = _build_card_service(fetch_json)
     search_source = "remote" if online_mode else "local"
+    # Add Card uses Scryfall's search endpoint for every query. Plain text then
+    # benefits from Scryfall's partial-name matching, while operator syntax is
+    # passed through unchanged. The local lookup above remains an offline fallback.
+    syntax_query = True
     local_results = card_service.search_cards(
         normalized_query,
         {
@@ -171,10 +184,11 @@ def search_scryfall_card_page(
             "limit": 500,
             "online_mode": online_mode,
             "cache_ttl_seconds": CFG.HighResCacheTTLSeconds,
+            "scryfall_syntax": False,
         },
     )
     results = list(local_results)
-    should_try_remote = not results or (not online_mode and len(normalized_query) > 1)
+    should_try_remote = syntax_query or not results or (not online_mode and len(normalized_query) > 1)
     if should_try_remote:
         try:
             remote_results = card_service.search_cards(
@@ -187,6 +201,7 @@ def search_scryfall_card_page(
                     "limit": 500,
                     "online_mode": online_mode,
                     "cache_ttl_seconds": CFG.HighResCacheTTLSeconds,
+                    "scryfall_syntax": syntax_query,
                 },
             )
             if remote_results:

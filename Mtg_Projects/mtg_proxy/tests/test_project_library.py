@@ -131,6 +131,8 @@ def test_import_project_copies_external_project_into_library(monkeypatch, tmp_pa
     assert json.loads(Path(entry["path"]).read_text(encoding="utf-8")) == {
         "cards": {"card-a.png": 2}
     }
+    assert entry["card_count"] == 1
+    assert entry["print_count"] == 2
 
 
 def test_remove_project_deletes_project_file(monkeypatch, tmp_path):
@@ -142,6 +144,24 @@ def test_remove_project_deletes_project_file(monkeypatch, tmp_path):
     assert project_library.remove_project(entry["id"]) is True
     assert project_library.list_projects() == []
     assert not project_path.exists()
+
+
+def test_rename_and_duplicate_project(monkeypatch, tmp_path):
+    _set_project_library_roots(monkeypatch, tmp_path)
+    _seed_test_back(tmp_path)
+    source = project_library.create_project("Original")
+    Path(source["path"]).write_text(json.dumps({"cards": {"card.png": 2}}), encoding="utf-8")
+    project_library.set_thumbnail_card(source["id"], "card.png")
+
+    renamed = project_library.rename_project(source["id"], "Renamed")
+    duplicate = project_library.duplicate_project(source["id"], "Renamed Copy")
+
+    assert renamed["display_name"] == "Renamed"
+    assert duplicate["id"] != source["id"]
+    assert duplicate["display_name"] == "Renamed Copy"
+    assert json.loads(Path(duplicate["path"]).read_text(encoding="utf-8")) == {
+        "cards": {"card.png": 2}
+    }
 
 
 def test_remove_project_succeeds_when_project_artifacts_are_already_missing(

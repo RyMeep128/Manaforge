@@ -22,6 +22,8 @@ from PyQt6.QtGui import (
     QCursor,
     QIcon,
     QTransform,
+    QKeySequence,
+    QShortcut,
 )
 from PyQt6.QtWidgets import (
     QApplication,
@@ -72,6 +74,7 @@ from constants import (
 from models import ProjectState
 from util import inch_to_mm, mm_to_inch, open_folder, point_to_inch, resource_path
 import fallback_image as fallback
+import ui_theme
 from background_tasks import HighResThumbnailLoader, make_popup_print_fn, popup
 from dialogs import (
     delete_project_with_confirmation,
@@ -145,6 +148,10 @@ class PrintProxyPrepApplication(QApplication):
 
     def __init__(self, argv):
         super().__init__(argv)
+
+        self.setApplicationName("Print Proxy Prep")
+        self.setStyle("Fusion")
+        self.setStyleSheet(ui_theme.application_stylesheet())
 
         self._settings_loaded = False
         self._debug_mode = "--debug" in sys.argv
@@ -236,6 +243,10 @@ class PrintProxyPrepApplication(QApplication):
         if hasattr(self, "_window"):
             self._window.autosave_managed_session()
 
+    def show_status(self, message, timeout=3500):
+        if hasattr(self, "_window"):
+            self._window.statusBar().showMessage(message, timeout)
+
     @QtCore.pyqtSlot(str, str)
     def _show_nonfatal_error(self, title, message):
         parent = getattr(self, "_window", None)
@@ -253,7 +264,8 @@ class AppShellWindow(QMainWindow):
     def __init__(self, application):
         super().__init__()
 
-        self.setWindowTitle("PDF Proxy Printer")
+        self.setWindowTitle("Print Proxy Prep")
+        self.setMinimumSize(980, 680)
         icon = QIcon(resource_path() + "/proxy.png")
         self.setWindowIcon(icon)
         if sys.platform == "win32":
@@ -274,6 +286,14 @@ class AppShellWindow(QMainWindow):
         stack.addWidget(self._dashboard_page)
         self.setCentralWidget(stack)
         self._dashboard_page.refresh_projects()
+        self.statusBar().setSizeGripEnabled(False)
+        self.statusBar().showMessage("Ready")
+        self._shortcuts = [
+            QShortcut(QKeySequence.StandardKey.New, self),
+            QShortcut(QKeySequence.StandardKey.Open, self),
+        ]
+        self._shortcuts[0].activated.connect(self.open_blank_editor)
+        self._shortcuts[1].activated.connect(self._dashboard_page.import_project)
 
     def current_project_path(self):
         if self._active_session is not None and self._active_session.get("project_path"):
@@ -291,6 +311,8 @@ class AppShellWindow(QMainWindow):
             self._editor_page.deleteLater()
         self._editor_page = editor_page
         self._active_session = session
+        if hasattr(editor_page, "set_project_name"):
+            editor_page.set_project_name(session.get("display_name"))
         self._current_project_path = session.get("project_path") or self._current_project_path
         self._stack.addWidget(editor_page)
         self._stack.setCurrentWidget(editor_page)
@@ -306,10 +328,10 @@ class AppShellWindow(QMainWindow):
 
     def _update_window_title(self):
         if self._active_session is None:
-            self.setWindowTitle("PDF Proxy Printer")
+            self.setWindowTitle("Print Proxy Prep")
             return
         name = self._active_session.get("display_name") or "Untitled Project"
-        self.setWindowTitle(f"PDF Proxy Printer - {name}")
+        self.setWindowTitle(f"{name} — Print Proxy Prep")
 
     def check_for_updates_on_startup(self):
         if CFG.UpdateCheckOnStartup:
