@@ -2,3 +2,4 @@ PyQt6
 reportlab
 opencv-python
 Pillow
+certifi

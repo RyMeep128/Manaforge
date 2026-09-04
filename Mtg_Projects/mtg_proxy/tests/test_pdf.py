@@ -91,6 +91,29 @@ def test_make_render_page_sequence_can_put_backs_at_end():
     ]
 
 
+def test_make_render_page_sequence_can_reverse_back_page_order():
+    print_dict = {
+        "backside_enabled": True,
+        "backside_pages_at_end": True,
+        "backside_reverse_page_order": True,
+        "backsides": {"front-a.png": "back-a.png", "front-b.png": "back-b.png"},
+        "backside_default": "__back.png",
+    }
+    pages = [
+        {"regular": [("front-a.png", False)], "oversized": []},
+        {"regular": [("front-b.png", True)], "oversized": []},
+    ]
+
+    render_pages = pdf.make_render_page_sequence(print_dict, pages)
+
+    assert [(page["backside"], page["front_page_number"]) for page in render_pages] == [
+        (False, 1),
+        (False, 2),
+        (True, 2),
+        (True, 1),
+    ]
+
+
 def test_make_render_page_sequence_ignores_back_order_when_backs_disabled():
     print_dict = {
         "backside_enabled": False,

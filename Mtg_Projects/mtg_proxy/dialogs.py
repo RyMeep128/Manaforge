@@ -24,6 +24,7 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QSpinBox,
     QStackedWidget,
     QTextEdit,
@@ -1051,7 +1052,14 @@ class HighResPickerDialog(QDialog):
 
         preview_label = QLabel("Select a result to preview it here.")
         preview_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        preview_label.setMinimumSize(300, 420)
+        preview_label.setMinimumSize(240, 336)
+        # A QLabel normally uses its pixmap's native dimensions as its size
+        # hint. Card previews are much taller than this dialog, so allowing
+        # that hint to drive the layout can push the action buttons offscreen.
+        preview_label.setSizePolicy(
+            QSizePolicy.Policy.Ignored,
+            QSizePolicy.Policy.Ignored,
+        )
         preview_label.setFrameShape(QFrame.Shape.StyledPanel)
         preview_label.setWordWrap(True)
         self._preview_label = preview_label
@@ -1092,7 +1100,7 @@ class HighResPickerDialog(QDialog):
         layout.addLayout(search_controls_layout)
         layout.addLayout(pagination_layout)
         layout.addWidget(self._status_label)
-        layout.addLayout(content_layout)
+        layout.addLayout(content_layout, 1)
         layout.addLayout(button_row)
         self.setLayout(layout)
 

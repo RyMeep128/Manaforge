@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import json
+import ssl
 import urllib.parse
 import urllib.error
 import urllib.request
 
+import certifi
+
 
 USER_AGENT = "print-proxy-prep/1.0"
+HTTPS_CONTEXT = ssl.create_default_context(cafile=certifi.where())
 
 
 class RemoteLookupUnavailable(OSError):
@@ -46,7 +50,7 @@ def fetch_json(url: str) -> dict:
         },
     )
     try:
-        with urllib.request.urlopen(request, timeout=30) as response:
+        with urllib.request.urlopen(request, timeout=30, context=HTTPS_CONTEXT) as response:
             payload = json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as error:
         payload = _decode_error_payload(error)
@@ -56,7 +60,9 @@ def fetch_json(url: str) -> dict:
             return payload
         raise ValueError(f"Remote lookup failed with HTTP {error.code}") from error
     except urllib.error.URLError as error:
-        raise RemoteLookupUnavailable("Internet connection unavailable for remote card lookup.") from error
+        raise RemoteLookupUnavailable(
+            f"Remote card lookup failed: {error.reason}"
+        ) from error
     if payload.get("object") == "error":
         raise ValueError(payload.get("details", "Scryfall error"))
     return payload
@@ -70,10 +76,12 @@ def fetch_bytes(url: str) -> bytes:
         },
     )
     try:
-        with urllib.request.urlopen(request, timeout=30) as response:
+        with urllib.request.urlopen(request, timeout=30, context=HTTPS_CONTEXT) as response:
             return response.read()
     except urllib.error.URLError as error:
-        raise RemoteLookupUnavailable("Internet connection unavailable for remote image download.") from error
+        raise RemoteLookupUnavailable(
+            f"Remote image download failed: {error.reason}"
+        ) from error
 
 
 def build_named_url(exact_name: str) -> str:

@@ -2231,6 +2231,14 @@ class CardOptionsWidget(QGroupBox):
             "Save back pages to a second file ending in _backs.pdf."
         )
 
+        backside_reverse_page_order_checkbox = QCheckBox("Reverse Back Page Order")
+        backside_reverse_page_order_checkbox.setChecked(
+            state.backside_reverse_page_order
+        )
+        backside_reverse_page_order_checkbox.setToolTip(
+            "Export the last backside sheet first, which can help with manual duplex printing."
+        )
+
         backside_default_button = QPushButton("Choose Default Back")
         backside_default_preview = BacksidePreview(
             state.backside_default, img_dict
@@ -2255,6 +2263,7 @@ class CardOptionsWidget(QGroupBox):
         backside_offset.setEnabled(backside_enabled)
         backside_pages_at_end_checkbox.setEnabled(backside_enabled)
         backside_separate_file_checkbox.setEnabled(backside_enabled)
+        backside_reverse_page_order_checkbox.setEnabled(backside_enabled)
 
         back_over_divider = QFrame()
         back_over_divider.setFrameShape(QFrame.Shape.HLine)
@@ -2275,6 +2284,7 @@ class CardOptionsWidget(QGroupBox):
         layout.addWidget(backside_checkbox)
         layout.addWidget(backside_pages_at_end_checkbox)
         layout.addWidget(backside_separate_file_checkbox)
+        layout.addWidget(backside_reverse_page_order_checkbox)
         layout.addWidget(backside_default_button)
         layout.addWidget(backside_default_preview)
         layout.addWidget(backside_offset)
@@ -2299,6 +2309,7 @@ class CardOptionsWidget(QGroupBox):
             backside_default_preview.setEnabled(enabled)
             backside_pages_at_end_checkbox.setEnabled(enabled)
             backside_separate_file_checkbox.setEnabled(enabled)
+            backside_reverse_page_order_checkbox.setEnabled(enabled)
             self.window().refresh(state, img_dict)
 
         def switch_backside_pages_at_end(s):
@@ -2308,6 +2319,12 @@ class CardOptionsWidget(QGroupBox):
 
         def switch_backside_separate_file(s):
             state.backside_separate_file = s == QtCore.Qt.CheckState.Checked
+
+        def switch_backside_reverse_page_order(s):
+            state.backside_reverse_page_order = (
+                s == QtCore.Qt.CheckState.Checked
+            )
+            self.window().refresh_preview(state, img_dict)
 
         def pick_backside():
             default_backside_choice = image_file_dialog(self, state.image_dir)
@@ -2331,6 +2348,9 @@ class CardOptionsWidget(QGroupBox):
         backside_checkbox.checkStateChanged.connect(switch_backside_enabled)
         backside_pages_at_end_checkbox.checkStateChanged.connect(switch_backside_pages_at_end)
         backside_separate_file_checkbox.checkStateChanged.connect(switch_backside_separate_file)
+        backside_reverse_page_order_checkbox.checkStateChanged.connect(
+            switch_backside_reverse_page_order
+        )
         backside_default_button.clicked.connect(pick_backside)
         backside_offset_spin.valueChanged.connect(change_backside_offset)
         oversized_checkbox.checkStateChanged.connect(switch_oversized_enabled)
@@ -2339,6 +2359,7 @@ class CardOptionsWidget(QGroupBox):
         self._backside_checkbox = backside_checkbox
         self._backside_pages_at_end_checkbox = backside_pages_at_end_checkbox
         self._backside_separate_file_checkbox = backside_separate_file_checkbox
+        self._backside_reverse_page_order_checkbox = backside_reverse_page_order_checkbox
         self._backside_offset_spin = backside_offset_spin
         self._backside_default_preview = backside_default_preview
         self._oversized_checkbox = oversized_checkbox

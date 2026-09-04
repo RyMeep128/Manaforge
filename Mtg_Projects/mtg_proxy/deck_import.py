@@ -67,7 +67,7 @@ SECTION_HEADERS = {
 
 LINE_PATTERN = re.compile(
     r"^(?:(?:SB|MB|CMDR|COMMANDER):\s*)?(?P<count>\d+)\s+(?P<name>.+?)"
-    r"(?:\s+\((?P<set_code>[A-Za-z0-9]+)\)(?:\s+(?P<collector_number>[A-Za-z0-9]+))?)?$"
+    r"(?:\s+\((?P<set_code>[A-Za-z0-9]+)\)(?:\s+(?P<collector_number>[A-Za-z0-9-]+))?)?$"
 )
 
 
@@ -632,8 +632,15 @@ def resolve_card(
     card_service: CardService | None = None,
 ) -> dict:
     service = card_service or _build_card_service(fetch_json)
-    if entry.set_code and entry.collector_number:
-        card = service.get_print(set_code=entry.set_code, collector_number=entry.collector_number)
+    set_code = entry.set_code
+    collector_number = entry.collector_number
+    # Scryfall's PLST collector-number prefixes are case-sensitive even though
+    # decklists commonly contain lowercase values such as "tmp-234".
+    if set_code and set_code.casefold() == "plst" and collector_number:
+        collector_number = collector_number.upper()
+
+    if set_code and collector_number:
+        card = service.get_print(set_code=set_code, collector_number=collector_number)
         if card is not None:
             return card
     if entry.name:
@@ -642,8 +649,8 @@ def resolve_card(
             return card
     return service.fetch_missing_card(
         exact_name=entry.name,
-        set_code=entry.set_code,
-        collector_number=entry.collector_number,
+        set_code=set_code,
+        collector_number=collector_number,
     )
 
 

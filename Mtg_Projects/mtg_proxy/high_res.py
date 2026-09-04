@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 from mtg_core import get_default_card_service
+from mtg_core.sync import HTTPS_CONTEXT
 from config import CFG
 from constants import cwd
 import image
@@ -474,7 +475,7 @@ def _fetch_json(
             **request_headers,
         }
     request = urllib.request.Request(url, data=request_body, headers=request_headers)
-    with urllib.request.urlopen(request) as response:
+    with urllib.request.urlopen(request, context=HTTPS_CONTEXT) as response:
         raw = response.read().decode("utf-8", errors="replace")
         try:
             return json.loads(raw)
@@ -495,7 +496,7 @@ def _fetch_text(url: str) -> str:
             "Accept": "*/*",
         },
     )
-    with urllib.request.urlopen(request) as response:
+    with urllib.request.urlopen(request, context=HTTPS_CONTEXT) as response:
         return response.read().decode("utf-8")
 
 
@@ -507,7 +508,7 @@ def _fetch_bytes(url: str) -> bytes:
             "Accept": "*/*",
         },
     )
-    with urllib.request.urlopen(request) as response:
+    with urllib.request.urlopen(request, context=HTTPS_CONTEXT) as response:
         return response.read()
 
 

@@ -303,6 +303,8 @@ def make_render_page_sequence(print_dict, front_pages):
         }
         for index, page in enumerate(make_backside_pages(state, front_pages))
     ]
+    if state.backside_reverse_page_order:
+        backside_render_pages.reverse()
     if state.backside_pages_at_end:
         return front_render_pages + backside_render_pages
 

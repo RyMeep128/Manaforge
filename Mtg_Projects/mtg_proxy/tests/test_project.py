@@ -43,6 +43,16 @@ def test_project_state_separate_backside_file_defaults_and_persists():
     assert state.to_persisted_dict()["backside_separate_file"] is True
 
 
+def test_project_state_reverse_back_page_order_defaults_and_persists():
+    old_project = ProjectState.from_dict({})
+    assert old_project.backside_reverse_page_order is False
+
+    state = ProjectState.from_dict({"backside_reverse_page_order": True})
+    assert state.backside_reverse_page_order is True
+    assert state.to_dict()["backside_reverse_page_order"] is True
+    assert state.to_persisted_dict()["backside_reverse_page_order"] is True
+
+
 def test_init_dict_adds_defaults_and_removes_stale_entries(monkeypatch, tmp_path):
     image_dir = tmp_path / "images"
     crop_dir = image_dir / "crop"

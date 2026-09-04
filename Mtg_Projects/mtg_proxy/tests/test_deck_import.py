@@ -35,6 +35,22 @@ def test_parse_decklist_supports_set_code_and_collector_number():
     ]
 
 
+def test_parse_decklist_supports_hyphenated_collector_number():
+    entries, unmatched = deck_import.parse_decklist(
+        "1 Horned Sliver (plst) TMP-234\n"
+    )
+
+    assert unmatched == []
+    assert entries == [
+        deck_import.DeckEntry(
+            count=1,
+            name="Horned Sliver",
+            set_code="plst",
+            collector_number="TMP-234",
+        )
+    ]
+
+
 def test_parse_decklist_collects_unmatched_lines():
     entries, unmatched = deck_import.parse_decklist("hello world\n2 Fire // Ice\n")
 
@@ -194,6 +210,29 @@ def test_import_decklist_csv_uses_exact_printing_endpoint(tmp_path):
     assert [card.filename for card in result.imported] == [
         "scryfall_moc_166_acclaimed-contender.png"
     ]
+
+
+def test_import_decklist_normalizes_lowercase_plst_collector_prefix(tmp_path):
+    seen_urls = []
+
+    def fake_fetch_json(url):
+        seen_urls.append(url)
+        return {
+            "name": "Horned Sliver",
+            "set": "plst",
+            "collector_number": "TMP-234",
+            "image_uris": {"png": "https://img/horned-sliver.png"},
+        }
+
+    result = deck_import.import_decklist(
+        "1 Horned Sliver (plst) tmp-234\n",
+        str(tmp_path),
+        fetch_json=fake_fetch_json,
+        fetch_bytes=lambda _url: b"image",
+    )
+
+    assert seen_urls == ["https://api.scryfall.com/cards/plst/TMP-234"]
+    assert result.failed_cards == []
 
 
 def test_is_archidekt_url_validates_public_deck_links():
