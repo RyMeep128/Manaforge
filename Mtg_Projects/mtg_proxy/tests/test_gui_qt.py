@@ -20,6 +20,15 @@ def _qt_app():
     return app
 
 
+def test_failed_cards_decklist_text_is_ready_to_reimport():
+    assert editor_widgets.failed_cards_decklist_text(
+        ["Rootborn Defenses (clu) 71", "Yeva, Nature's Herald (rvr) 162"]
+    ) == (
+        "1 Rootborn Defenses (clu) 71\n"
+        "1 Yeva, Nature's Herald (rvr) 162"
+    )
+
+
 class _FakeApplication:
     def __init__(self, json_path):
         self._json_path = json_path

@@ -75,6 +75,46 @@ from dialogs import (
 from services import deck_import_service, pdf_service, project_service
 
 
+def failed_cards_decklist_text(failed_cards):
+    """Return failed imports in a format accepted by the decklist importer."""
+    return "\n".join(f"1 {card}" for card in failed_cards)
+
+
+def show_card_import_complete(parent, import_result):
+    summary_lines = [
+        f"Imported {len(import_result.imported)} unique cards "
+        f"({import_result.imported_count} total copies)."
+    ]
+    if import_result.failed_cards:
+        failed_count = len(import_result.failed_cards)
+        summary_lines.append(f"Failed to import {failed_count} card(s).")
+    if import_result.unmatched_lines:
+        summary_lines.append(
+            "Unmatched lines: " + ", ".join(import_result.unmatched_lines[:8])
+        )
+
+    message_box = QMessageBox(parent)
+    message_box.setIcon(QMessageBox.Icon.Information)
+    message_box.setWindowTitle("Card Import Complete")
+    message_box.setText("\n\n".join(summary_lines))
+    message_box.setInformativeText(
+        "Next step: click 'Prepare Images' if needed, then check the Preview tab."
+    )
+    message_box.setStandardButtons(QMessageBox.StandardButton.Ok)
+
+    copy_button = None
+    if import_result.failed_cards:
+        failed_text = failed_cards_decklist_text(import_result.failed_cards)
+        message_box.setDetailedText(failed_text)
+        copy_button = message_box.addButton(
+            "Copy Failed Cards", QMessageBox.ButtonRole.ActionRole
+        )
+
+    message_box.exec()
+    if copy_button is not None and message_box.clickedButton() is copy_button:
+        QApplication.clipboard().setText(failed_text)
+
+
 def project_thumbnail_pixmap(image_path, width=120, height=160):
     pixmap = QPixmap()
     if image_path and os.path.exists(image_path):
@@ -1748,16 +1788,20 @@ class ActionsWidget(QGroupBox):
                 pdf_path = pdf_path + ".pdf"
 
             state.filename = os.path.splitext(os.path.basename(pdf_path))[0]
+            render_result = None
 
             def render_work():
-                result = pdf_service.generate_pdf(
+                nonlocal render_result
+                render_result = pdf_service.generate_pdf(
                     state,
                     page_sizes[state.pagesize],
                     pdf_path,
                     make_popup_print_fn(render_window),
                 )
                 make_popup_print_fn(render_window)("Saving PDF...")
-                result.pages.save()
+                render_result.pages.save()
+                if render_result.backside_pages is not None:
+                    render_result.backside_pages.save()
                 try:
                     subprocess.Popen([pdf_path], shell=True)
                 except OSError as e:
@@ -1771,10 +1815,13 @@ class ActionsWidget(QGroupBox):
             render_window.show_during_work(render_work)
             del render_window
             self.window().setEnabled(True)
+            saved_paths = pdf_path
+            if render_result is not None and render_result.backside_pdf_path:
+                saved_paths += f"\n{render_result.backside_pdf_path}"
             QMessageBox.information(
                 self,
                 "PDF Saved",
-                f"Your PDF was saved here:\n\n{pdf_path}\n\nThe app will try to open it for you automatically.",
+                f"Your PDF was saved here:\n\n{saved_paths}\n\nThe app will try to open the front PDF for you automatically.",
             )
 
         def run_cropper():
@@ -1961,29 +2008,22 @@ class ActionsWidget(QGroupBox):
                         f"Imported {import_result.imported_count} cards"
                     )
 
-            summary_lines = [
-                f"Imported {len(import_result.imported)} unique cards "
-                f"({import_result.imported_count} total copies)."
-            ]
-            if import_result.failed_cards:
-                summary_lines.append(
-                    "Failed to import: " + ", ".join(import_result.failed_cards[:8])
-                )
-            if import_result.unmatched_lines:
-                summary_lines.append(
-                    "Unmatched lines: " + ", ".join(import_result.unmatched_lines[:8])
-                )
-
-            message = "\n\n".join(summary_lines)
             if import_result.imported:
-                QMessageBox.information(
-                    self,
-                    "Card Import Complete",
-                    message
-                    + "\n\nNext step: click 'Prepare Images' if needed, then check the Preview tab.",
-                )
+                show_card_import_complete(self, import_result)
             else:
-                application.warn_nonfatal("Card Import Failed", message)
+                failure_lines = ["No cards were imported."]
+                if import_result.failed_cards:
+                    failure_lines.append(
+                        f"Failed to import {len(import_result.failed_cards)} card(s):\n"
+                        + failed_cards_decklist_text(import_result.failed_cards)
+                    )
+                if import_result.unmatched_lines:
+                    failure_lines.append(
+                        "Unmatched lines:\n" + "\n".join(import_result.unmatched_lines)
+                    )
+                application.warn_nonfatal(
+                    "Card Import Failed", "\n\n".join(failure_lines)
+                )
 
         def clear_old_cards():
             confirm = QMessageBox.question(
@@ -2185,6 +2225,12 @@ class CardOptionsWidget(QGroupBox):
             "Put all front pages first, then all matching back pages in order."
         )
 
+        backside_separate_file_checkbox = QCheckBox("Export Card Backs As Separate PDF")
+        backside_separate_file_checkbox.setChecked(state.backside_separate_file)
+        backside_separate_file_checkbox.setToolTip(
+            "Save back pages to a second file ending in _backs.pdf."
+        )
+
         backside_default_button = QPushButton("Choose Default Back")
         backside_default_preview = BacksidePreview(
             state.backside_default, img_dict
@@ -2208,6 +2254,7 @@ class CardOptionsWidget(QGroupBox):
         backside_default_preview.setEnabled(backside_enabled)
         backside_offset.setEnabled(backside_enabled)
         backside_pages_at_end_checkbox.setEnabled(backside_enabled)
+        backside_separate_file_checkbox.setEnabled(backside_enabled)
 
         back_over_divider = QFrame()
         back_over_divider.setFrameShape(QFrame.Shape.HLine)
@@ -2227,6 +2274,7 @@ class CardOptionsWidget(QGroupBox):
         layout.addWidget(bleed_back_divider)
         layout.addWidget(backside_checkbox)
         layout.addWidget(backside_pages_at_end_checkbox)
+        layout.addWidget(backside_separate_file_checkbox)
         layout.addWidget(backside_default_button)
         layout.addWidget(backside_default_preview)
         layout.addWidget(backside_offset)
@@ -2250,12 +2298,16 @@ class CardOptionsWidget(QGroupBox):
             backside_offset.setEnabled(enabled)
             backside_default_preview.setEnabled(enabled)
             backside_pages_at_end_checkbox.setEnabled(enabled)
+            backside_separate_file_checkbox.setEnabled(enabled)
             self.window().refresh(state, img_dict)
 
         def switch_backside_pages_at_end(s):
             enabled = s == QtCore.Qt.CheckState.Checked
             state.backside_pages_at_end = enabled
             self.window().refresh_preview(state, img_dict)
+
+        def switch_backside_separate_file(s):
+            state.backside_separate_file = s == QtCore.Qt.CheckState.Checked
 
         def pick_backside():
             default_backside_choice = image_file_dialog(self, state.image_dir)
@@ -2278,6 +2330,7 @@ class CardOptionsWidget(QGroupBox):
         bleed_edge_spin.valueChanged.connect(change_bleed_edge)
         backside_checkbox.checkStateChanged.connect(switch_backside_enabled)
         backside_pages_at_end_checkbox.checkStateChanged.connect(switch_backside_pages_at_end)
+        backside_separate_file_checkbox.checkStateChanged.connect(switch_backside_separate_file)
         backside_default_button.clicked.connect(pick_backside)
         backside_offset_spin.valueChanged.connect(change_backside_offset)
         oversized_checkbox.checkStateChanged.connect(switch_oversized_enabled)
@@ -2285,6 +2338,7 @@ class CardOptionsWidget(QGroupBox):
         self._bleed_edge_spin = bleed_edge_spin
         self._backside_checkbox = backside_checkbox
         self._backside_pages_at_end_checkbox = backside_pages_at_end_checkbox
+        self._backside_separate_file_checkbox = backside_separate_file_checkbox
         self._backside_offset_spin = backside_offset_spin
         self._backside_default_preview = backside_default_preview
         self._oversized_checkbox = oversized_checkbox

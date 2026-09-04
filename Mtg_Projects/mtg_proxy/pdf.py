@@ -46,7 +46,7 @@ def draw_cross(can, x, y, segment, c=6, s=1):
     draw_line(can, x, y, x, ty, s)
 
 
-def generate(print_dict, size, pdf_path, print_fn):
+def generate(print_dict, size, pdf_path, print_fn, *, page_side="both"):
     state = as_project_state(print_dict)
     backside_offset = mm_to_point(float(state.backside_offset))
 
@@ -69,6 +69,12 @@ def generate(print_dict, size, pdf_path, print_fn):
 
     front_pages = distribute_cards_to_pages(state, cols, rows)
     render_pages = make_render_page_sequence(state, front_pages)
+    if page_side == "front":
+        render_pages = [page for page in render_pages if not page["backside"]]
+    elif page_side == "back":
+        render_pages = [page for page in render_pages if page["backside"]]
+    elif page_side != "both":
+        raise ValueError(f"Unknown PDF page side: {page_side}")
 
     extended_guides = state.extended_guides
 

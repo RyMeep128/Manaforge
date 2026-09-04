@@ -226,6 +226,7 @@ class ProjectState:
     card_sort: str = "Alphabetical (A-Z)"
     backside_enabled: bool = False
     backside_pages_at_end: bool = False
+    backside_separate_file: bool = False
     backside_default: str = "__back.png"
     backside_offset: str = "0"
     backsides: dict[str, str] = field(default_factory=dict)
@@ -248,6 +249,7 @@ class ProjectState:
             card_sort=str(data.get("card_sort", "Alphabetical (A-Z)")),
             backside_enabled=bool(data.get("backside_enabled", False)),
             backside_pages_at_end=bool(data.get("backside_pages_at_end", False)),
+            backside_separate_file=bool(data.get("backside_separate_file", False)),
             backside_default=str(data.get("backside_default", "__back.png")),
             backside_offset=str(data.get("backside_offset", "0")),
             backsides=_coerce_plain_dict(data.get("backsides")),
@@ -289,6 +291,7 @@ class ProjectState:
             "card_sort": self.card_sort,
             "backside_enabled": self.backside_enabled,
             "backside_pages_at_end": self.backside_pages_at_end,
+            "backside_separate_file": self.backside_separate_file,
             "backside_default": self.backside_default,
             "backside_offset": self.backside_offset,
             "backsides": dict(self.backsides),
@@ -310,6 +313,7 @@ class ProjectState:
             "card_sort": self.card_sort,
             "backside_enabled": self.backside_enabled,
             "backside_pages_at_end": self.backside_pages_at_end,
+            "backside_separate_file": self.backside_separate_file,
             "backside_default": self.backside_default,
             "backside_default_asset_id": self.backside_default_asset_id,
             "backside_offset": self.backside_offset,
@@ -369,6 +373,7 @@ class ProjectState:
         self.card_sort = replacement.card_sort
         self.backside_enabled = replacement.backside_enabled
         self.backside_pages_at_end = replacement.backside_pages_at_end
+        self.backside_separate_file = replacement.backside_separate_file
         self.backside_default = replacement.backside_default
         self.backside_offset = replacement.backside_offset
         self.backsides = replacement.backsides

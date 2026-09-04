@@ -33,6 +33,16 @@ def test_project_state_backside_pages_at_end_defaults_and_persists():
     assert ProjectState.from_dict(state.to_persisted_dict()).backside_pages_at_end is True
 
 
+def test_project_state_separate_backside_file_defaults_and_persists():
+    old_project = ProjectState.from_dict({})
+    assert old_project.backside_separate_file is False
+
+    state = ProjectState.from_dict({"backside_separate_file": True})
+    assert state.backside_separate_file is True
+    assert state.to_dict()["backside_separate_file"] is True
+    assert state.to_persisted_dict()["backside_separate_file"] is True
+
+
 def test_init_dict_adds_defaults_and_removes_stale_entries(monkeypatch, tmp_path):
     image_dir = tmp_path / "images"
     crop_dir = image_dir / "crop"
