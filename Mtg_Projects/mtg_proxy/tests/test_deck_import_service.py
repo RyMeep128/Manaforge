@@ -287,6 +287,11 @@ def test_import_single_card_into_project_uses_default_art_and_refresh(monkeypatc
     assert refresh_calls == [{"scryfall_lea_232_plains.png": 1}]
     assert applied_art_calls == []
 
+    deck_import_service.import_single_card_into_project(
+        state, img_dict, "images", selected_card, lambda _message: None,
+    )
+    assert state.get_card_count(result.filename) == 2
+
 
 def test_import_single_card_into_project_applies_optional_art_and_backside(monkeypatch):
     selected_card = deck_import_service.ScryfallCardCandidate(

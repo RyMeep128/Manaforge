@@ -60,6 +60,10 @@ Global controls at the top of the grid let you increment, decrement, or reset al
 ### Preview Tab
 The `Preview` tab renders the current document layout so you can sanity-check pagination, bleed, guides, and backsides before exporting.
 
+Hover over a front card to highlight it, then drag to move that printed copy to an exact slot. Dropping onto another card swaps the two when both fit. Empty slots have a large **+** that opens Add Card; adding an existing card adds another copy. Oversized cards occupy two adjacent horizontal slots and move as one card. Backs follow their matching fronts automatically.
+
+Use **Add page** for more placement space. Drag near the top or bottom to scroll in Continuous view, or hover Previous/Next while dragging in Single Page view. Empty trailing editing pages are excluded from export; intentional gaps between populated pages are retained. **Save Project** keeps the layout, and PDF export uses the same positions. Card-list sorting does not rearrange a manual layout; **Reset layout** restores automatic arrangement. If paper or card sizes change, valid placements stay in place and displaced copies move to the next fitting spaces.
+
 ### Actions Panel
 The right-side `Actions` box includes:
 - `Run Cropper`
