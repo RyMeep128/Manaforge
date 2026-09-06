@@ -52,10 +52,23 @@ def test_parse_decklist_supports_hyphenated_collector_number():
 
 
 def test_parse_decklist_collects_unmatched_lines():
-    entries, unmatched = deck_import.parse_decklist("hello world\n2 Fire // Ice\n")
+    entries, unmatched = deck_import.parse_decklist("123\n2 Fire // Ice\n")
 
     assert entries == [deck_import.DeckEntry(count=2, name="Fire // Ice")]
-    assert unmatched == ["hello world"]
+    assert unmatched == ["123"]
+
+
+def test_card_names_without_quantities_mix_with_counts_and_printings():
+    entries, unmatched = deck_import.parse_decklist(
+        "Commander\nAtraxa, Praetors' Voice\nSol Ring\n2 Sol Ring\n"
+        "sol ring\nSB: Opt (eld) 59\nFire // Ice\n# comment\n// comment\n")
+    assert unmatched == []
+    assert entries == [
+        deck_import.DeckEntry(1, "Atraxa, Praetors' Voice"),
+        deck_import.DeckEntry(4, 'Sol Ring'),
+        deck_import.DeckEntry(1, 'Opt', 'eld', '59'),
+        deck_import.DeckEntry(1, 'Fire // Ice'),
+    ]
 
 
 def test_parse_decklist_supports_csv_with_exact_printing_fields():

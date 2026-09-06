@@ -60,9 +60,11 @@ The Deck Editor has no launch command yet. Windows is the packaged target; the c
 5. **Save Project**, then export the PDF. If sheets are under-filled, choose **Go Back** or **Print Anyway**.
 6. Print the PDF from your viewer with the intended scaling and duplex settings. Exporting does not send a physical printer job.
 
-Backside offsets and output settings are saved per project. Named printer profiles and calibration PDFs are [planned next steps](docs/printing-roadmap.md).
+Backside offsets and output settings are saved per project. **Print Settings → Printer profiles…** saves reusable paper, backside, alignment, and duplex preferences and lets you apply them to other projects. See [printer setup](docs/printing-roadmap.md) for details and the planned calibration PDF workflow.
 
 Named projects autosave after two seconds without edits. The header and window title show `*` while changes are unsaved; successful autosaving or **Save Project** clears it. New drafts need their first Save to choose a name. Closing or switching away saves pending work, and a failed save keeps the project open and marked unsaved.
+
+For large projects, unchanged card widgets and decoded previews are reused and preview-cache disk access is batched. **More → Application settings… → Preview Image Cache** controls the decoded-image RAM budget (256 MB default; up to 2048 MB), independently of export quality.
 
 For supported import formats, image preparation, and detailed controls, see the [Print Proxy Prep guide](Mtg_Projects/mtg_proxy/README.md).
 
@@ -108,6 +110,8 @@ flowchart TD
 On Windows, runtime data defaults to `%LOCALAPPDATA%\PrintProxyPrep`; the shared catalog and assets live beneath its `mtg_core` directory. Set `PRINT_PROXY_PREP_DATA_DIR` to isolate development/test data. Project JSON references shared assets rather than embedding full-resolution images. Keep runtime databases, caches, virtual environments, and generated bundles out of commits.
 
 ## Development and tests
+
+Manaforge is in alpha/beta development. Commits increment the patch version (for example, `0.2.1-alpha.1` → `0.2.2-alpha.1`); merges into `main` increment the minor version and reset patch (`0.2.2-alpha.1` → `0.3.0-alpha.1`). `APP_VERSION` in `Mtg_Projects/mtg_proxy/constants.py` is the source for the app and build archive name. Alpha/beta builds stay marked as prereleases; tagging or publishing a release is a separate step. See [versioning instructions](AGENTS.md).
 
 From the repository root, after setup:
 

@@ -83,3 +83,39 @@ def test_check_for_update_uses_supplied_fetcher():
     assert result.update_available is True
     assert result.latest_version == "0.1.1"
 
+
+@pytest.mark.parametrize('newer,older', [
+    ('0.2.0-alpha.2', '0.2.0-alpha.1'),
+    ('0.2.0-beta.1', '0.2.0-alpha.9'),
+    ('0.2.0', '0.2.0-beta.9'),
+    ('0.3.0-alpha.1', '0.2.9-beta.1'),
+])
+def test_prerelease_version_order(newer, older):
+    assert update_service.is_newer_version(newer, older)
+    assert not update_service.is_newer_version(older, newer)
+    assert not update_service.is_newer_version(newer, newer)
+
+
+def test_alpha_update_fetches_release_list_and_skips_drafts(monkeypatch):
+    urls = []
+    def fetch(url):
+        urls.append(url)
+        return [release_payload('v0.2.0-alpha.1'),
+                dict(release_payload('v0.9.0'), draft=True),
+                release_payload('not-a-version'), release_payload('v0.1.2-alpha.1')]
+    monkeypatch.setattr(update_service, 'fetch_latest_release_json', fetch)
+    result = update_service.check_for_update('0.1.2-alpha.1')
+    assert result.latest_version == '0.2.0-alpha.1'
+    assert result.update_available
+    assert urls == [update_service.PRERELEASES_URL]
+
+
+def test_beta_channel_does_not_offer_alpha():
+    result = update_service.check_for_update('0.2.0-beta.1', lambda: [
+        release_payload('v0.3.0-alpha.1'), release_payload('v0.2.0-beta.2')])
+    assert result.latest_version == '0.2.0-beta.2'
+
+
+def test_empty_prerelease_channel_reports_no_update():
+    assert not update_service.check_for_update('0.1.2-alpha.1', lambda: []).update_available
+

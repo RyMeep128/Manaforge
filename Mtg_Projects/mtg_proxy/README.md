@@ -73,7 +73,7 @@ Preview **Undo / Redo** restores moves, swaps, resets, added editing pages, and 
 
 Named projects **autosave after two seconds without edits**. A `*` beside the project name (in the header and window title) means changes have not yet been saved. It disappears after a successful autosave or manual Save. New drafts need their first Save to choose a name. Save failures keep the `*`, show a status message, and retry; leaving or closing a named project flushes pending changes and stays open if saving fails.
 
-See the [Manaforge README](../../README.md) for all three app areas and the [printer setup roadmap](../../docs/printing-roadmap.md) for profiles/calibration plans.
+See the [Manaforge README](../../README.md) for all three app areas and the [printer setup guide](../../docs/printing-roadmap.md) for printer profiles and calibration plans.
 
 Use **More → Check for updates…** while editing, or **Check for updates** on the Projects screen, to check for a newer release.
 
@@ -93,7 +93,7 @@ The right-side `Actions` box includes:
 
 ## Import Decklist
 `Import Decklist` can import from:
-- pasted deck text like `4 Lightning Bolt`
+- pasted deck text with one card name per line (defaults to one copy), or quantities like `4 Lightning Bolt`; both formats can be mixed
 - deck files such as `.txt`, `.csv`, `.dek`, `.mtga`, and `.dck`
 - CSV rows with `count`, `name`, `set_code`, and `collector_number`
 - public Archidekt, Moxfield, and Blueprint MTG deck URLs
@@ -110,6 +110,12 @@ If you already have card art, place it in `images` and run the cropper.
 If a file is already pre-cropped, enable `Allow Precropped` in `Settings` and place the file in `images\crop`. The app will treat it as already cropped and keep the rest of the workflow working.
 
 # Printing Options
+
+## Printer profiles
+
+Open **Print Settings → Printer profiles…** to save the current paper size, orientation, backside output settings, horizontal offset, and a duplex preference under a name. Select a saved profile to inspect and apply it; the app shows the changes before applying them. Save with the same name to replace a profile, or delete a profile you no longer need. Existing projects keep their own copies of the applied settings.
+
+The **PDF viewer duplex preference** is remembered per project. Use it with Actual size / 100% in your PDF viewer; it does not configure the printer driver or change per-card short-edge rotation. Calibration PDF generation and vertical alignment offsets remain planned.
 
 ## Print Options
 The print section controls:
@@ -177,6 +183,12 @@ Important cache locations:
 - `%LOCALAPPDATA%\PrintProxyPrep\.high_res_cache\` for high-res search and image caches
 
 # Settings and Config
+
+## Large projects
+
+The card grid reuses unchanged widgets during edits and sorting, and bulk preview generation reads/writes the preview cache once per operation. Decoded card images are cached in RAM for reuse across printed copies and refreshes.
+
+Use **More → Application settings… → Preview Image Cache** to adjust that cache budget: 256 MB by default, up to 2048 MB, or 0 to disable it. This limits reusable decoded-image cache memory, not total app memory. It does not change PDF quality, grant additional CPU/GPU access, or eliminate initial image processing and disk reads. The high-res search/image cache settings are separate.
 
 Use the `Settings` button to edit app-wide config values such as:
 - display columns in the card grid

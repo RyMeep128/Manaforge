@@ -263,7 +263,7 @@ class DeckImportDialog(QDialog):
         self.resize(560, 420)
 
         instructions = QLabel(
-            "Paste a decklist or load one from a file. Supported formats include lines like `4 Lightning Bolt` and CSV exports with count/name/set_code/collector_number columns."
+            "Paste a decklist or load one from a file. Enter one card name per line (one copy each), or include a quantity like `4 Lightning Bolt`. CSV exports with count/name/set_code/collector_number columns are also supported."
         )
         instructions.setWordWrap(True)
 
@@ -853,6 +853,14 @@ class SettingsDialog(QDialog):
         image_cache_spin_box.setValue(CFG.HighResImageCacheMemoryMB)
         image_cache = WidgetWithLabel("Image Cache Memory", image_cache_spin_box)
 
+        preview_cache_spin_box = QSpinBox()
+        preview_cache_spin_box.setRange(0, 2048)
+        preview_cache_spin_box.setSingleStep(64)
+        preview_cache_spin_box.setSuffix(" MB")
+        preview_cache_spin_box.setValue(CFG.PreviewImageCacheMemoryMB)
+        preview_cache = WidgetWithLabel("Preview Image Cache", preview_cache_spin_box)
+        preview_cache.setToolTip("RAM budget for decoded card previews. Increase for large projects to reduce repeated image decoding. 0 disables this cache. This is not a total application memory limit and does not change export quality.")
+
         fields_layout = QVBoxLayout()
         for widget in [
             description,
@@ -867,6 +875,7 @@ class SettingsDialog(QDialog):
             cache_ttl,
             search_cache,
             image_cache,
+            preview_cache,
         ]:
             fields_layout.addWidget(widget)
         fields_layout.addStretch()
@@ -898,6 +907,7 @@ class SettingsDialog(QDialog):
         self._cache_ttl_spin_box = cache_ttl_spin_box
         self._search_cache_spin_box = search_cache_spin_box
         self._image_cache_spin_box = image_cache_spin_box
+        self._preview_cache_spin_box = preview_cache_spin_box
 
     def apply(self):
         CFG.DisplayColumns = self._display_columns_spin_box.value()
@@ -911,6 +921,9 @@ class SettingsDialog(QDialog):
         CFG.HighResCacheTTLSeconds = self._cache_ttl_spin_box.value()
         CFG.HighResSearchCacheMemoryMB = self._search_cache_spin_box.value()
         CFG.HighResImageCacheMemoryMB = self._image_cache_spin_box.value()
+        CFG.PreviewImageCacheMemoryMB = self._preview_cache_spin_box.value()
+        from PyQt6.QtGui import QPixmapCache
+        QPixmapCache.setCacheLimit(CFG.PreviewImageCacheMemoryMB * 1024)
         save_config(CFG)
 
 

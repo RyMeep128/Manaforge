@@ -369,38 +369,10 @@ class CardImage(QLabel):
     def __init__(self, img_data, img_size, round_corners=True, rotation=False):
         super().__init__()
 
-        raw_pixmap = QPixmap()
-        raw_pixmap.loadFromData(img_data, "PNG")
-        pixmap = raw_pixmap
-
+        from PyQt6.QtGui import QPixmapCache
+        import hashlib
+        QPixmapCache.setCacheLimit(max(0, int(CFG.PreviewImageCacheMemoryMB)) * 1024)
         card_size_minimum_width_pixels = 130
-
-        if round_corners:
-            card_corner_radius_inch = 1 / 8
-            card_corner_radius_pixels = (
-                card_corner_radius_inch * img_size[0] / card_size_without_bleed_inch[0]
-            )
-
-            clipped_pixmap = QPixmap(int(img_size[0]), int(img_size[1]))
-            clipped_pixmap.fill(QtCore.Qt.GlobalColor.transparent)
-
-            path = QPainterPath()
-            path.addRoundedRect(
-                QtCore.QRectF(pixmap.rect()),
-                card_corner_radius_pixels,
-                card_corner_radius_pixels,
-            )
-
-            painter = QPainter(clipped_pixmap)
-            painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-            painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
-
-            painter.setClipPath(path)
-            painter.drawPixmap(0, 0, pixmap)
-            del painter
-
-            pixmap = clipped_pixmap
-
         if rotation is not None:
             match rotation:
                 case image.Rotation.RotateClockwise_90:
@@ -409,9 +381,46 @@ class CardImage(QLabel):
                     rotation = -90
                 case image.Rotation.Rotate_180:
                     rotation = 180
-            transform = QTransform()
-            transform.rotate(rotation)
-            pixmap = pixmap.transformed(transform)
+        key = 'manaforge-card:' + hashlib.blake2b(img_data, digest_size=16).hexdigest() + repr((img_size, round_corners, rotation))
+        pixmap = QPixmapCache.find(key)
+        if pixmap is None:
+            raw_pixmap = QPixmap()
+            raw_pixmap.loadFromData(img_data, "PNG")
+            pixmap = raw_pixmap
+
+
+            if round_corners:
+                card_corner_radius_inch = 1 / 8
+                card_corner_radius_pixels = (
+                    card_corner_radius_inch * img_size[0] / card_size_without_bleed_inch[0]
+                )
+
+                clipped_pixmap = QPixmap(int(img_size[0]), int(img_size[1]))
+                clipped_pixmap.fill(QtCore.Qt.GlobalColor.transparent)
+
+                path = QPainterPath()
+                path.addRoundedRect(
+                    QtCore.QRectF(pixmap.rect()),
+                    card_corner_radius_pixels,
+                    card_corner_radius_pixels,
+                )
+
+                painter = QPainter(clipped_pixmap)
+                painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+                painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+
+                painter.setClipPath(path)
+                painter.drawPixmap(0, 0, pixmap)
+                del painter
+
+                pixmap = clipped_pixmap
+
+            if rotation is not None:
+                transform = QTransform()
+                transform.rotate(rotation)
+                pixmap = pixmap.transformed(transform)
+
+            QPixmapCache.insert(key, pixmap)
 
         self.setPixmap(pixmap)
 
@@ -1046,12 +1055,14 @@ class CardGrid(QWidget):
         height = self.heightForWidth(width)
         self.setFixedHeight(height)
 
+    @runtime_images.batched_previews
     def refresh(self, print_dict, img_dict):
         state = as_project_state(print_dict)
         self._state = state
         self._img_dict = img_dict
-        for card in self._cards.values():
-            card.setParent(None)
+        previous = self._cards
+        for card in previous.values():
+            self.layout().removeWidget(card)
         self._cards = {}
 
         grid_layout = self.layout()
@@ -1079,8 +1090,22 @@ class CardGrid(QWidget):
             if card_name not in img_dict:
                 continue
 
-            card_widget = CardWidget(state, img_dict, card_name)
-            card_widget.selection_changed.connect(self._card_selection_changed)
+            back_name = state.backsides.get(card_name, state.backside_default)
+            if state.backside_enabled:
+                runtime_images.ensure_preview_entry(state, img_dict, back_name)
+            signature = (id(state), id(img_dict), id(img_dict.get(card_name)),
+                         id(img_dict.get(back_name)), repr(state.get_card_entry(card_name)),
+                         state.cards[card_name], state.backside_enabled, state.oversized_enabled,
+                         state.oversized.get(card_name), state.backside_short_edge.get(card_name),
+                         back_name, state.bleed_edge)
+            card_widget = previous.pop(card_name, None)
+            if card_widget is None or getattr(card_widget, '_render_signature', None) != signature:
+                if card_widget is not None:
+                    card_widget.hide()
+                    card_widget.deleteLater()
+                card_widget = CardWidget(state, img_dict, card_name)
+                card_widget._render_signature = signature
+                card_widget.selection_changed.connect(self._card_selection_changed)
             if card_name in self._selected_names:
                 card_widget.set_selected(True)
             self._cards[card_name] = card_widget
@@ -1101,6 +1126,9 @@ class CardGrid(QWidget):
             grid_layout.addWidget(card_widget, 0, j)
             i = i + 1
 
+        for obsolete in previous.values():
+            obsolete.hide()
+            obsolete.deleteLater()
         self._first_item = list(self._cards.values())[0]
         self._cols = cols
         self._rows = math.ceil(i / cols)
@@ -1495,6 +1523,7 @@ class PrintPreview(QScrollArea):
         self.setWidgetResizable(True)
         self.setFrameShape(QFrame.Shape.NoFrame)
 
+    @runtime_images.batched_previews
     def refresh(self, print_dict, img_dict, *, preserve_scroll=True):
         scroll_value = self.verticalScrollBar().value()
         horizontal_value = self.horizontalScrollBar().value()
@@ -2385,6 +2414,36 @@ class PrintOptionsWidget(QGroupBox):
         layout.addWidget(orientation)
         layout.addWidget(guides_checkbox)
 
+        profiles_button = QPushButton("Printer profiles…")
+        layout.addWidget(profiles_button)
+        from services.printer_profiles import DUPLEX
+        duplex = QComboBox()
+        duplex.addItems(DUPLEX)
+        duplex.setCurrentText(state.printer_duplex)
+        layout.addWidget(QLabel("PDF viewer duplex preference"))
+        layout.addWidget(duplex)
+        viewer_note = QLabel("In your PDF viewer, choose Actual size / 100% and the duplex preference above. These controls do not configure the printer driver or change per-card short-edge rotation.")
+        viewer_note.setWordWrap(True)
+        layout.addWidget(viewer_note)
+        duplex.currentTextChanged.connect(lambda value: setattr(state, 'printer_duplex', value))
+        self._printer_duplex = duplex
+
+        def manage_profiles():
+            from printer_profile_dialog import PrinterProfileDialog
+            try:
+                dialog = PrinterProfileDialog(self, state)
+            except (OSError, ValueError, TypeError) as exc:
+                QMessageBox.warning(self, "Could not load printer profiles", str(exc))
+                return
+            if dialog.exec() == QDialog.DialogCode.Accepted and dialog.applied:
+                window = self.window()
+                window.refresh_widgets(state)
+                window.refresh(state, img_dict)
+                autosave_managed_session()
+                if dialog.relocated and hasattr(window, 'statusBar'):
+                    window.statusBar().showMessage(f"{dialog.relocated} copies moved to fit the printer profile", 3500)
+        profiles_button.clicked.connect(manage_profiles)
+
         self.setLayout(layout)
 
         def change_output(t):
@@ -2414,10 +2473,15 @@ class PrintOptionsWidget(QGroupBox):
 
     def refresh_widgets(self, print_dict):
         state = as_project_state(print_dict)
+        blockers = [QtCore.QSignalBlocker(widget) for widget in (
+            self._print_output, self._paper_size, self._orientation,
+            self._guides_checkbox, self._printer_duplex)]
         self._print_output.setText(state.filename)
         self._paper_size.setCurrentText(state.pagesize)
         self._orientation.setCurrentText(state.orient)
         self._guides_checkbox.setChecked(state.extended_guides)
+        self._printer_duplex.setCurrentText(state.printer_duplex)
+        del blockers
 
 
 class BacksidePreview(QWidget):

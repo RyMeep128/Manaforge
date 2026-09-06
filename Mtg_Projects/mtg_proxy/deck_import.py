@@ -66,7 +66,7 @@ SECTION_HEADERS = {
 }
 
 LINE_PATTERN = re.compile(
-    r"^(?:(?:SB|MB|CMDR|COMMANDER):\s*)?(?P<count>\d+)\s+(?P<name>.+?)"
+    r"^(?:(?:SB|MB|CMDR|COMMANDER):\s*)?(?:(?P<count>\d+)\s+)?(?P<name>.+?)"
     r"(?:\s+\((?P<set_code>[A-Za-z0-9]+)\)(?:\s+(?P<collector_number>[A-Za-z0-9-]+))?)?$"
 )
 
@@ -138,14 +138,19 @@ def _parse_text_decklist(deck_text: str) -> tuple[list[DeckEntry], list[str]]:
             continue
         if line.lower().rstrip(":") in SECTION_HEADERS:
             continue
+        if line.startswith(('#', '//')):
+            continue
 
         match = LINE_PATTERN.match(line)
         if match is None:
             unmatched_lines.append(line)
             continue
 
-        count = int(match.group("count"))
+        count = int(match.group("count") or 1)
         name = _normalize_card_name(match.group("name"))
+        if not any(character.isalpha() for character in name) or count < 1:
+            unmatched_lines.append(line)
+            continue
         set_code = match.group("set_code")
         collector_number = match.group("collector_number")
         key = (name.casefold(), set_code.lower() if set_code else None, collector_number)

@@ -7,7 +7,8 @@ import urllib.error
 import urllib.request
 
 
-LATEST_RELEASE_URL = "https://api.github.com/repos/RyMeep128/branch_print-proxy-prep-QtPort/releases/latest"
+LATEST_RELEASE_URL = "https://api.github.com/repos/RyMeep128/Manaforge/releases/latest"
+PRERELEASES_URL = "https://api.github.com/repos/RyMeep128/Manaforge/releases?per_page=100"
 WINDOWS_ZIP_PATTERN = re.compile(r"^PrintProxyPrep-.+-win\.zip$", re.IGNORECASE)
 
 
@@ -34,9 +35,12 @@ def _normalize_version(version: str | None) -> str:
 
 def _version_parts(version: str | None) -> tuple[int, ...]:
     normalized = _normalize_version(version)
-    if not normalized or not re.fullmatch(r"\d+(?:\.\d+)*", normalized):
+    match = re.fullmatch(r"(\d+(?:\.\d+){0,2})(?:-(alpha|beta|rc)\.(\d+))?", normalized)
+    if match is None:
         raise UpdateCheckError(f"Invalid version: {version!r}")
-    return tuple(int(part) for part in normalized.split("."))
+    parts = tuple(int(part) for part in match[1].split('.'))
+    return parts + (0,) * (3 - len(parts)) + (
+        {None: 3, 'alpha': 0, 'beta': 1, 'rc': 2}[match[2]], int(match[3] or 0))
 
 
 def is_newer_version(latest_version: str | None, current_version: str | None) -> bool:
@@ -107,6 +111,30 @@ def fetch_latest_release_json(url: str = LATEST_RELEASE_URL) -> dict:
         raise UpdateCheckError("GitHub Releases returned invalid JSON.") from exc
 
 
-def check_for_update(current_version: str, fetch_json_fn=fetch_latest_release_json) -> UpdateCheckResult:
-    return parse_latest_release(fetch_json_fn(), current_version)
+def check_for_update(current_version: str, fetch_json_fn=None) -> UpdateCheckResult:
+    default_fetcher = fetch_json_fn is None
+    fetch_json_fn = fetch_json_fn or fetch_latest_release_json
+    if '-' not in _normalize_version(current_version):
+        return parse_latest_release(fetch_json_fn(), current_version)
+    releases = (fetch_json_fn(PRERELEASES_URL) if default_fetcher
+                else fetch_json_fn())
+    if not isinstance(releases, list):
+        raise UpdateCheckError('GitHub prerelease response was not a list.')
+    candidates = []
+    for release in releases:
+        if not isinstance(release, dict) or release.get('draft'):
+            continue
+        try:
+            version = _release_version(release)
+        except UpdateCheckError:
+            continue
+        # Beta users receive beta/RC/stable builds, not experimental alpha builds.
+        if '-beta.' in current_version and '-alpha.' in version:
+            continue
+        candidates.append(release)
+    if not candidates:
+        return UpdateCheckResult(_normalize_version(current_version),
+                                 _normalize_version(current_version), False, '')
+    newest = max(candidates, key=lambda release: _version_parts(_release_version(release)))
+    return parse_latest_release(newest, current_version)
 

@@ -3,6 +3,9 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+from contextlib import contextmanager
+from contextvars import ContextVar
+from functools import wraps
 from pathlib import Path
 
 import numpy
@@ -13,6 +16,35 @@ import util
 from config import CFG
 from models import ProjectCardEntry, ProjectState, as_project_state
 from mtg_core import get_default_card_service
+
+
+_preview_batch = ContextVar('preview_batch', default=None)
+
+
+@contextmanager
+def preview_batch(project_like):
+    """Read/write the disk cache once per bulk operation, not once per card."""
+    state = as_project_state(project_like)
+    active = _preview_batch.get()
+    if active is not None and active['state'] is state:
+        yield
+        return
+    batch = dict(state=state, cache=None, dirty=False, resolved={})
+    token = _preview_batch.set(batch)
+    try:
+        yield
+    finally:
+        _preview_batch.reset(token)
+        if batch['dirty']:
+            _save_preview_cache(state, batch['cache'])
+
+
+def batched_previews(method):
+    @wraps(method)
+    def wrapped(self, print_dict, *args, **kwargs):
+        with preview_batch(print_dict):
+            return method(self, print_dict, *args, **kwargs)
+    return wrapped
 
 
 def _runtime_cache_root(state: ProjectState) -> str:
@@ -266,6 +298,11 @@ def ensure_preview_entry(project_like, img_dict: dict, card_name: str) -> dict |
     state = as_project_state(project_like)
     if not card_name:
         return None
+    batch = _preview_batch.get()
+    if batch is not None and batch['state'] is not state:
+        batch = None
+    if batch is not None and card_name in batch['resolved']:
+        return batch['resolved'][card_name]
     asset_key, fingerprint, cache_key = _preview_cache_key(state, card_name)
 
     cached_entry = img_dict.get(card_name)
@@ -275,9 +312,16 @@ def ensure_preview_entry(project_like, img_dict: dict, card_name: str) -> dict |
         and cached_entry.get("_fingerprint") == fingerprint
         and _is_usable_preview_entry(cached_entry)
     ):
+        if batch is not None:
+            batch['resolved'][card_name] = cached_entry
         return cached_entry
 
-    preview_cache = _load_preview_cache(state)
+    if batch is None:
+        preview_cache = _load_preview_cache(state)
+    else:
+        if batch['cache'] is None:
+            batch['cache'] = _load_preview_cache(state)
+        preview_cache = batch['cache']
     cached_entry = _cached_preview_for_card(
         preview_cache,
         card_name,
@@ -287,15 +331,23 @@ def ensure_preview_entry(project_like, img_dict: dict, card_name: str) -> dict |
     )
     if cached_entry is not None:
         img_dict[card_name] = cached_entry
+        if batch is not None:
+            batch['resolved'][card_name] = cached_entry
         return cached_entry
 
     built = _build_preview_entry(state, card_name)
     if built is None:
         img_dict.pop(card_name, None)
+        if batch is not None:
+            batch['resolved'][card_name] = None
         return None
 
     preview_cache[cache_key] = built
-    _save_preview_cache(state, preview_cache)
+    if batch is None:
+        _save_preview_cache(state, preview_cache)
+    else:
+        batch['dirty'] = True
+        batch['resolved'][card_name] = built
     img_dict[card_name] = built
     return built
 
@@ -404,7 +456,8 @@ def prune_unused_entries(project_like, img_dict: dict) -> None:
 
 def warm_preview_entries(project_like, img_dict: dict, card_names: list[str]) -> None:
     state = as_project_state(project_like)
-    for card_name in card_names:
-        if card_name.startswith("__"):
-            continue
-        ensure_preview_entry(state, img_dict, card_name)
+    with preview_batch(state):
+        for card_name in card_names:
+            if card_name.startswith("__"):
+                continue
+            ensure_preview_entry(state, img_dict, card_name)
