@@ -103,17 +103,21 @@ def move(items, copy_id, destination, columns, rows):
     candidate = dict(source, **dict(zip(('page', 'row', 'column'), destination)))
     others = [p for p in result if p is not source]
     hits = [p for p in others if cells(p).intersection(cells(candidate))]
-    if len(hits) > 1:
+    if len(hits) > 1 and not (
+            source['span'] == 2 and len(hits) == 2
+            and all(p['span'] == 1 for p in hits)):
         return None
     stationary = [p for p in others if p not in hits]
     occupied = set().union(*(cells(p) for p in stationary))
     if not fits(candidate, occupied, columns, rows):
         return None
-    if hits:
-        target = hits[0]
-        swapped = dict(target, **{k: source[k] for k in ('page', 'row', 'column')})
-        if not fits(swapped, occupied | cells(candidate), columns, rows):
+    swap_occupied = occupied | cells(candidate)
+    for offset, target in enumerate(sorted(hits, key=lambda p: p['column'])):
+        swapped = dict(target, page=source['page'], row=source['row'],
+                       column=source['column'] + offset)
+        if not fits(swapped, swap_occupied, columns, rows):
             return None
+        swap_occupied.update(cells(swapped))
         target.update(swapped)
     source.update(candidate)
     return result

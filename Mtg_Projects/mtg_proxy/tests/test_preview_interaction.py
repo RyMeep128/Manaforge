@@ -75,6 +75,39 @@ def test_drag_validation_and_drop_preserve_grab_offset(preview):
     assert pdf.distribute_cards_to_grid(pages[0], True, preview._columns, preview._rows)[1][1][0] == 'wide'
 
 
+@pytest.mark.parametrize('offset', [0, 1])
+def test_drag_oversized_onto_two_normal_cards_and_undo(preview, offset):
+    items = sorted(preview._placements, key=lambda p: -p['span'])
+    for item, pos in zip(items, [(0, 1, 0), (0, 0, 0), (0, 0, 1)]):
+        item.update(zip(('page', 'row', 'column'), pos))
+    preview._state.manual_layout = layout.record(items)
+    preview.refresh_after_edit()
+    before = preview._state.to_dict()
+    overlay = preview._overlays[0]
+    mime = QtCore.QMimeData()
+    mime.setData(MIME, json.dumps(dict(copy_id=items[0]['copy_id'], offset=offset,
+                                     preview=id(preview))).encode())
+    point = center(overlay, 0, offset)
+    event = QtGui.QDragEnterEvent(point, QtCore.Qt.DropAction.MoveAction, mime,
+        QtCore.Qt.MouseButton.LeftButton, QtCore.Qt.KeyboardModifier.NoModifier)
+    overlay.dragEnterEvent(event)
+    assert overlay.drop_valid
+    drop = QtGui.QDropEvent(QtCore.QPointF(point), QtCore.Qt.DropAction.MoveAction,
+        mime, QtCore.Qt.MouseButton.LeftButton, QtCore.Qt.KeyboardModifier.NoModifier)
+    overlay.dropEvent(drop)
+    APP.processEvents()
+    assert drop.isAccepted()
+    pages = pdf.distribute_cards_to_pages(preview._state, preview._columns, preview._rows)
+    grid = pdf.distribute_cards_to_grid(pages[0], True, preview._columns, preview._rows)
+    assert grid[0][0][0] == 'wide'
+    assert grid[1][0][0] == grid[1][1][0] == 'a'
+    after = preview._state.to_dict()
+    preview.undo_layout()
+    assert preview._state.to_dict() == before
+    preview.redo_layout()
+    assert preview._state.to_dict() == after
+
+
 def test_fit_zoom_page_navigation_reset_and_empty_project(preview):
     preview._set_zoom('Fit')
     preview._set_view_mode('Single Page')
@@ -381,3 +414,84 @@ def test_cards_tab_quantity_changes_reach_preview_and_saved_project(monkeypatch,
                 if p['name'] == 'a']) == expected
     tabs.deleteLater()
     APP.processEvents()
+
+
+def test_preview_context_menu_has_only_artwork_and_oversized(preview):
+    menu = preview.card_context_menu('a')
+    assert [action.text() for action in menu.actions()] == ['Change artwork…', 'Print oversized']
+    assert menu.actions()[1].isCheckable()
+    assert not menu.actions()[1].isChecked()
+    wide_menu = preview.card_context_menu('wide')
+    assert wide_menu.actions()[1].isChecked()
+    menu.deleteLater()
+    wide_menu.deleteLater()
+
+
+def test_right_click_either_oversized_half_targets_same_card(preview, monkeypatch):
+    names = []
+    menu = SimpleNamespace(exec=lambda pos: None, deleteLater=lambda: None)
+    monkeypatch.setattr(preview, 'card_context_menu', lambda name: names.append(name) or menu)
+    overlay = preview._overlays[0]
+    wide = next(p for p in preview._placements if p['name'] == 'wide')
+    for column in (wide['column'], wide['column'] + 1):
+        point = center(overlay, wide['row'], column)
+        event = QtGui.QContextMenuEvent(QtGui.QContextMenuEvent.Reason.Mouse, point, overlay.mapToGlobal(point))
+        overlay.contextMenuEvent(event)
+        assert event.isAccepted()
+    point = center(overlay, 2, 2)
+    overlay.contextMenuEvent(QtGui.QContextMenuEvent(QtGui.QContextMenuEvent.Reason.Mouse, point))
+    assert names == ['wide', 'wide']
+
+
+@pytest.mark.parametrize('accepted,applied', [(False, False), (True, False), (True, True)])
+def test_preview_artwork_reuses_picker_and_refreshes_only_when_applied(preview, monkeypatch, accepted, applied):
+    calls = []
+    def picker(parent, state, images, name):
+        assert parent is preview and state is preview._state and images is preview._img_dict and name == 'a'
+        return SimpleNamespace(exec=lambda: QtWidgets.QDialog.DialogCode.Accepted if accepted else QtWidgets.QDialog.DialogCode.Rejected,
+                               was_applied=lambda: applied)
+    monkeypatch.setattr(editor_widgets, 'HighResPickerDialog', picker)
+    monkeypatch.setattr(preview, 'refresh_after_edit', lambda: calls.append('refresh'))
+    monkeypatch.setattr(editor_widgets, 'autosave_managed_session', lambda: calls.append('save'))
+    before = preview._state.to_dict()
+    preview.card_context_menu('a').actions()[0].trigger()
+    assert calls == (['refresh', 'save'] if accepted and applied else [])
+    assert preview._state.to_dict() == before
+
+
+def test_preview_oversized_toggle_reconciles_copies_and_supports_undo(preview):
+    before = preview._state.to_dict()
+    preview.card_context_menu('a').actions()[1].trigger()
+    assert preview._state.oversized['a']
+    assert preview._state.get_card_entry('a').oversized
+    copies = [p for p in preview._placements if p['name'] == 'a']
+    assert len(copies) == 2 and all(p['span'] == 2 for p in copies)
+    occupied = set()
+    for item in preview._placements:
+        assert layout.fits(item, occupied, preview._columns, preview._rows)
+        occupied.update(layout.cells(item))
+    loaded = ProjectState.from_dict(preview._state.to_persisted_dict())
+    assert loaded.oversized['a']
+    preview.undo_layout()
+    assert preview._state.to_dict() == before
+    preview.redo_layout()
+    assert preview._state.oversized['a']
+    preview.card_context_menu('a').actions()[1].trigger()
+    assert not preview._state.oversized.get('a')
+    assert all(p['span'] == 1 for p in preview._placements if p['name'] == 'a')
+
+
+def test_preview_can_enable_oversized_mode_and_rejects_impossible_size(preview, monkeypatch):
+    preview._state.oversized_enabled = False
+    preview.refresh_after_edit()
+    preview.set_card_oversized('a', True)
+    assert preview._state.oversized_enabled
+    preview.undo_layout()
+    assert not preview._state.oversized_enabled
+    before = preview._state.to_dict()
+    preview._columns = 1
+    warnings = []
+    monkeypatch.setattr(editor_widgets.QMessageBox, 'warning', lambda *args: warnings.append(args))
+    preview.set_card_oversized('a', True)
+    assert preview._state.to_dict() == before
+    assert len(warnings) == 1

@@ -209,6 +209,7 @@ class EditorPage(QWidget):
         more_menu.addAction("Open image folder", actions._open_images_button.click)
         more_menu.addAction("Import saved project…", actions._load_button.click)
         more_menu.addAction("Application settings…", actions._settings_button.click)
+        more_menu.addAction(actions._check_updates_action)
         more_menu.addSeparator()
         clean_action = more_menu.addAction("Clean image cache…", actions._clear_cards_button.click)
         more_button.setMenu(more_menu)
@@ -1668,6 +1669,8 @@ class PrintPreview(QScrollArea):
     def refresh_after_edit(self):
         window = self.window()
         if window is not self and hasattr(window, "refresh"):
+            if hasattr(window, "refresh_widgets"):
+                window.refresh_widgets(self._state)
             window.refresh(self._state, self._img_dict)
         else:
             self.refresh(self._state, self._img_dict)
@@ -1720,6 +1723,49 @@ class PrintPreview(QScrollArea):
         before = self.layout_snapshot()
         self._state.manual_layout = layout_service.record(placements)
         self._history.push(before, self.layout_snapshot())
+
+    def card_context_menu(self, card_name):
+        menu = QMenu(self)
+        artwork = menu.addAction("Change artwork…")
+        artwork.setToolTip("Change artwork for all copies of this card")
+        artwork.triggered.connect(lambda: self.change_card_artwork(card_name))
+        oversized = menu.addAction("Print oversized")
+        oversized.setCheckable(True)
+        oversized.setChecked(bool(self._state.oversized_enabled and self._state.oversized.get(card_name)))
+        oversized.setToolTip("Print all copies of this card in two horizontal slots")
+        oversized.triggered.connect(lambda checked: self.set_card_oversized(card_name, checked))
+        return menu
+
+    def change_card_artwork(self, card_name):
+        if card_name not in self._state.cards:
+            return
+        dialog = HighResPickerDialog(self, self._state, self._img_dict, card_name)
+        if dialog.exec() == QDialog.DialogCode.Accepted and dialog.was_applied():
+            self.refresh_after_edit()
+            autosave_managed_session()
+
+    def set_card_oversized(self, card_name, enabled):
+        if card_name not in self._state.cards:
+            return
+        before = self.layout_snapshot()
+        candidate = ProjectState.from_dict(before['project'])
+        candidate.manual_layout = layout_service.record(self._placements)
+        if enabled:
+            candidate.oversized_enabled = True
+            candidate.oversized[card_name] = True
+        else:
+            candidate.oversized.pop(card_name, None)
+        candidate._ensure_card_entry(card_name).oversized = bool(enabled)
+        try:
+            _, relocated = layout_service.resolve(candidate, self._columns, self._rows)
+        except ValueError as exc:
+            QMessageBox.warning(self, "Card Does Not Fit", str(exc))
+            return
+        self._state.copy_from(candidate)
+        self._history.push(before, self.layout_snapshot())
+        self.refresh_after_edit()
+        if relocated and hasattr(self.window(), 'statusBar'):
+            self.window().statusBar().showMessage(f"{relocated} copies moved to fit the new card size", 3500)
 
     def _restore_layout(self, snapshot):
         if snapshot is None:
@@ -2302,6 +2348,8 @@ class ActionsWidget(QGroupBox):
         self._settings_button = settings_button
         self._add_card_button = add_card_button
         self._add_single_card = add_single_card
+        self._check_updates_action = QAction("Check for updates…", self)
+        self._check_updates_action.triggered.connect(lambda: application.check_for_updates(manual=True))
         self._import_button = import_decklist_button
         self._clear_cards_button = clear_cards_button
         self._rebuild_after_cropper = False
@@ -2591,12 +2639,17 @@ class CardOptionsWidget(QGroupBox):
 
     def refresh_widgets(self, print_dict):
         state = as_project_state(print_dict)
+        blockers = [QtCore.QSignalBlocker(widget) for widget in (
+            self._bleed_edge_spin, self._backside_checkbox,
+            self._backside_pages_at_end_checkbox, self._backside_offset_spin,
+            self._oversized_checkbox)]
         self._bleed_edge_spin.setValue(float(state.bleed_edge))
         self._backside_checkbox.setChecked(state.backside_enabled)
         self._backside_pages_at_end_checkbox.setChecked(state.backside_pages_at_end)
         self._backside_pages_at_end_checkbox.setEnabled(state.backside_enabled)
         self._backside_offset_spin.setValue(float(state.backside_offset))
         self._oversized_checkbox.setChecked(state.oversized_enabled)
+        del blockers
 
     def refresh(self, print_dict, img_dict):
         state = as_project_state(print_dict)
@@ -2869,6 +2922,8 @@ class ProjectDashboardPage(QWidget):
         new_button = QPushButton("+ New Project")
         new_button.setProperty("buttonRole", "primary")
         new_button.setToolTip("Start a new project draft")
+        check_updates_button = QPushButton("Check for updates")
+        check_updates_button.clicked.connect(lambda: application.check_for_updates(manual=True))
 
         import_button.clicked.connect(self.import_project)
         new_button.clicked.connect(application.open_blank_editor)
@@ -2876,6 +2931,7 @@ class ProjectDashboardPage(QWidget):
         top_row = QHBoxLayout()
         top_row.addWidget(title)
         top_row.addStretch()
+        top_row.addWidget(check_updates_button)
         top_row.addWidget(import_button)
         top_row.addWidget(new_button)
 
