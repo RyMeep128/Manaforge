@@ -48,6 +48,7 @@ import runtime_images
 import fallback_image as fallback
 import ui_theme
 from config import CFG
+from card_image_widgets import CardImage, BacksideImage, cached_preview_bytes
 from constants import (
     cwd,
     card_ratio,
@@ -155,10 +156,7 @@ def project_thumbnail_pixmap(image_path, width=120, height=160):
     )
 
 
-def cached_preview_bytes(entry, field="data"):
-    if not isinstance(entry, dict):
-        raise TypeError("cached preview entry must be a dictionary")
-    return image.decode_cached_image_bytes(entry[field])
+
 
 
 def autosave_managed_session():
@@ -360,105 +358,6 @@ class WorkflowGuideWidget(QGroupBox):
         layout.addWidget(intro)
         layout.addWidget(steps)
         self.setLayout(layout)
-
-
-class CardImage(QLabel):
-    clicked = QtCore.pyqtSignal()
-    double_clicked = QtCore.pyqtSignal()
-
-    def __init__(self, img_data, img_size, round_corners=True, rotation=False):
-        super().__init__()
-
-        from PyQt6.QtGui import QPixmapCache
-        import hashlib
-        QPixmapCache.setCacheLimit(max(0, int(CFG.PreviewImageCacheMemoryMB)) * 1024)
-        card_size_minimum_width_pixels = 130
-        if rotation is not None:
-            match rotation:
-                case image.Rotation.RotateClockwise_90:
-                    rotation = 90
-                case image.Rotation.RotateCounterClockwise_90:
-                    rotation = -90
-                case image.Rotation.Rotate_180:
-                    rotation = 180
-        key = 'manaforge-card:' + hashlib.blake2b(img_data, digest_size=16).hexdigest() + repr((img_size, round_corners, rotation))
-        pixmap = QPixmapCache.find(key)
-        if pixmap is None:
-            raw_pixmap = QPixmap()
-            raw_pixmap.loadFromData(img_data, "PNG")
-            pixmap = raw_pixmap
-
-
-            if round_corners:
-                card_corner_radius_inch = 1 / 8
-                card_corner_radius_pixels = (
-                    card_corner_radius_inch * img_size[0] / card_size_without_bleed_inch[0]
-                )
-
-                clipped_pixmap = QPixmap(int(img_size[0]), int(img_size[1]))
-                clipped_pixmap.fill(QtCore.Qt.GlobalColor.transparent)
-
-                path = QPainterPath()
-                path.addRoundedRect(
-                    QtCore.QRectF(pixmap.rect()),
-                    card_corner_radius_pixels,
-                    card_corner_radius_pixels,
-                )
-
-                painter = QPainter(clipped_pixmap)
-                painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-                painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
-
-                painter.setClipPath(path)
-                painter.drawPixmap(0, 0, pixmap)
-                del painter
-
-                pixmap = clipped_pixmap
-
-            if rotation is not None:
-                transform = QTransform()
-                transform.rotate(rotation)
-                pixmap = pixmap.transformed(transform)
-
-            QPixmapCache.insert(key, pixmap)
-
-        self.setPixmap(pixmap)
-
-        self.setSizePolicy(
-            QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.MinimumExpanding
-        )
-        self.setScaledContents(True)
-        self.setMinimumWidth(card_size_minimum_width_pixels)
-
-        self._rotated = rotation in [-90, 90]
-
-    def heightForWidth(self, width):
-        if self._rotated:
-            return int(width * card_ratio)
-        else:
-            return int(width / card_ratio)
-
-    def mouseReleaseEvent(self, event):
-        super().mouseReleaseEvent(event)
-        if event.button() == QtCore.Qt.MouseButton.LeftButton:
-            self.clicked.emit()
-
-    def mouseDoubleClickEvent(self, event):
-        super().mouseDoubleClickEvent(event)
-        if event.button() == QtCore.Qt.MouseButton.LeftButton:
-            self.double_clicked.emit()
-
-
-class BacksideImage(CardImage):
-    def __init__(self, backside_name, img_dict):
-        if backside_name in img_dict:
-            backside_data = cached_preview_bytes(img_dict[backside_name])
-            backside_size = img_dict[backside_name]["size"]
-        else:
-            backside_data = fallback.data
-            backside_size = fallback.size
-
-        super().__init__(backside_data, backside_size)
 
 
 class StackedCardBacksideView(QStackedWidget):
@@ -1122,7 +1021,7 @@ class CardGrid(QWidget):
             card_widget.setSizePolicy(sp_retain)
             card_widget.hide()
 
-            self._cards[card_widget._card_name] = card_widget
+            self._cards[f"__dummy_{j}"] = card_widget
             grid_layout.addWidget(card_widget, 0, j)
             i = i + 1
 
@@ -1141,6 +1040,8 @@ class CardGrid(QWidget):
             self._first_item.heightForWidth(self._first_item.minimumWidth())
         )
         self.apply_filter(self._filter_text)
+        self._selected_names.intersection_update(self._cards.keys())
+        self.selection_changed.emit(len(self._selected_names))
 
     def _card_selection_changed(self, card_name, selected):
         if selected:
@@ -1216,6 +1117,15 @@ class CardScrollArea(QScrollArea):
         decrement_button.setToolTip("Remove one copy from selected cards")
         increment_button.setToolTip("Add one copy to selected cards")
         clear_selection_button.setToolTip("Clear selection")
+        bulk_button = QToolButton()
+        bulk_button.setText("Edit selected")
+        bulk_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        bulk_menu = QMenu(bulk_button)
+        bulk_menu.addAction("Make oversized", lambda: self.set_selected_oversized(True))
+        bulk_menu.addAction("Make normal size", lambda: self.set_selected_oversized(False))
+        bulk_button.setMenu(bulk_menu)
+        bulk_button.setToolTip("Changes apply to all copies of the selected cards")
+        self._bulk_button = bulk_button
 
         global_number_layout = QHBoxLayout()
         global_number_layout.addWidget(search_edit, 1)
@@ -1227,6 +1137,7 @@ class CardScrollArea(QScrollArea):
         global_number_layout.addWidget(decrement_button)
         global_number_layout.addWidget(increment_button)
         global_number_layout.addWidget(clear_selection_button)
+        global_number_layout.addWidget(bulk_button)
         global_number_layout.setContentsMargins(6, 0, 6, 0)
 
         global_number_widget = QWidget()
@@ -1283,6 +1194,7 @@ class CardScrollArea(QScrollArea):
             decrement_button.setVisible(count > 0)
             increment_button.setVisible(count > 0)
             clear_selection_button.setVisible(count > 0)
+            bulk_button.setVisible(count > 0)
 
         card_grid.selection_changed.connect(update_selection)
         update_selection(0)
@@ -1300,6 +1212,30 @@ class CardScrollArea(QScrollArea):
 
         QShortcut(QKeySequence.StandardKey.Find, self, activated=search_edit.setFocus)
         QShortcut(QKeySequence.StandardKey.SelectAll, self, activated=card_grid.select_all_visible)
+
+    def set_selected_oversized(self, enabled):
+        from services.card_edit_service import set_oversized
+        state = self._card_grid._state
+        names = [card._card_name for card in self._card_grid.selected_cards()]
+        if not names:
+            return
+        try:
+            relocated = set_oversized(state, names, enabled)
+        except ValueError as exc:
+            QMessageBox.warning(self, "Cards Do Not Fit", str(exc))
+            return
+        window = self.window()
+        scroll_value = self.verticalScrollBar().value()
+        if window is not self and hasattr(window, 'refresh'):
+            if hasattr(window, 'refresh_widgets'):
+                window.refresh_widgets(state)
+            window.refresh(state, self._img_dict)
+        else:
+            self.refresh(state, self._img_dict)
+        self.verticalScrollBar().setValue(scroll_value)
+        autosave_managed_session()
+        if relocated and hasattr(window, 'statusBar'):
+            window.statusBar().showMessage(f"{relocated} copies moved to fit the new card sizes", 3500)
 
     def computeMinimumWidth(self):
         margins = self.widget().layout().contentsMargins()
@@ -1777,20 +1713,14 @@ class PrintPreview(QScrollArea):
         if card_name not in self._state.cards:
             return
         before = self.layout_snapshot()
-        candidate = ProjectState.from_dict(before['project'])
-        candidate.manual_layout = layout_service.record(self._placements)
-        if enabled:
-            candidate.oversized_enabled = True
-            candidate.oversized[card_name] = True
-        else:
-            candidate.oversized.pop(card_name, None)
-        candidate._ensure_card_entry(card_name).oversized = bool(enabled)
+        from services.card_edit_service import set_oversized
         try:
-            _, relocated = layout_service.resolve(candidate, self._columns, self._rows)
+            relocated = set_oversized(self._state, [card_name], enabled,
+                                      placements=self._placements,
+                                      capacity=(self._columns, self._rows))
         except ValueError as exc:
             QMessageBox.warning(self, "Card Does Not Fit", str(exc))
             return
-        self._state.copy_from(candidate)
         self._history.push(before, self.layout_snapshot())
         self.refresh_after_edit()
         if relocated and hasattr(self.window(), 'statusBar'):

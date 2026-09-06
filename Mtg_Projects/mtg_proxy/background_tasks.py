@@ -36,6 +36,7 @@ def popup(window, middle_text, debug_thread):
 
             self._text = text_widget
             self._thread = None
+            self._busy = False
 
             self.update_text_impl(text)
 
@@ -84,13 +85,17 @@ def popup(window, middle_text, debug_thread):
                         self._exception_info = sys.exc_info()
 
             work_thread = WorkThread()
-
+            self._busy = True
+            self._thread = work_thread
             self.open()
-            work_thread.finished.connect(lambda: self.close())
+            def finished():
+                self._busy = False
+                self.accept()
+            work_thread.finished.connect(finished)
             work_thread._refresh.connect(self.update_text_impl)
             work_thread.start()
-            self._thread = work_thread
             self.exec()
+            work_thread.wait()
             self._thread = None
 
             if work_thread._exception_info is not None:
@@ -99,14 +104,26 @@ def popup(window, middle_text, debug_thread):
                     exc_value.add_note(f"Background task failed: {middle_text}")
                 raise exc_value.with_traceback(exc_traceback)
 
+        def reject(self):
+            if not self._busy:
+                super().reject()
+
+        def done(self, result):
+            if not self._busy:
+                super().done(result)
+
+        def closeEvent(self, event):
+            if self._busy:
+                event.ignore()
+            else:
+                super().closeEvent(event)
+
         def showEvent(self, event):
             super().showEvent(event)
             self.recenter()
 
         def resizeEvent(self, event):
             super().resizeEvent(event)
-            self.recenter()
-            self.recenter()
             self.recenter()
 
     return PopupWindow(window, middle_text)

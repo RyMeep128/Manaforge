@@ -281,13 +281,15 @@ class AppShellWindow(QMainWindow):
         self._update_check_worker = None
         self._saved_project_snapshot = None
         self._observed_project_snapshot = None
+        self._observed_project_state = None
         self._project_dirty = False
         self._saving_project = False
         self._autosave_timer = QtCore.QTimer(self)
         self._autosave_timer.setSingleShot(True)
         self._autosave_timer.setInterval(2000)
         self._autosave_timer.timeout.connect(self._autosave_if_idle)
-        # Some card/settings controls edit state without rebuilding widgets.
+        # Legacy controls still mutate state directly. Compare without copying or
+        # serializing while idle; build snapshots only after a change.
         self._project_watch_timer = QtCore.QTimer(self)
         self._project_watch_timer.setInterval(250)
         self._project_watch_timer.timeout.connect(self.project_changed)
@@ -328,6 +330,7 @@ class AppShellWindow(QMainWindow):
         snapshot = self._project_snapshot(session['state'])
         self._saved_project_snapshot = snapshot if session.get('managed') else None
         self._observed_project_snapshot = snapshot
+        self._observed_project_state = deepcopy(session['state'])
         self._project_dirty = not session.get('managed', False)
         if hasattr(editor_page, "set_project_name"):
             editor_page.set_project_name(session.get("display_name"))
@@ -340,6 +343,7 @@ class AppShellWindow(QMainWindow):
         self._autosave_timer.stop()
         self._saved_project_snapshot = None
         self._observed_project_snapshot = None
+        self._observed_project_state = None
         self._project_dirty = False
         if self._editor_page is not None:
             self._stack.removeWidget(self._editor_page)
@@ -361,15 +365,18 @@ class AppShellWindow(QMainWindow):
 
     @staticmethod
     def _project_snapshot(state):
-        # Observe persisted content only, without serialization mutating live state.
-        return deepcopy(state).to_persisted_dict()
+        return deepcopy(state.to_persisted_dict())
 
     def project_changed(self):
         if self._active_session is None or self._saving_project or not self.isEnabled():
             return
         if QApplication.activeModalWidget() is not None:
             return
-        snapshot = self._project_snapshot(self._active_session['state'])
+        state = self._active_session['state']
+        if state == self._observed_project_state:
+            return
+        self._observed_project_state = deepcopy(state)
+        snapshot = self._project_snapshot(state)
         if snapshot == self._observed_project_snapshot:
             return
         self._observed_project_snapshot = snapshot
@@ -383,6 +390,7 @@ class AppShellWindow(QMainWindow):
         self._saved_project_snapshot = snapshot
         current = self._project_snapshot(self._active_session['state'])
         self._observed_project_snapshot = current
+        self._observed_project_state = deepcopy(self._active_session['state'])
         self._project_dirty = current != snapshot
         self._autosave_timer.stop()
         if self._project_dirty:

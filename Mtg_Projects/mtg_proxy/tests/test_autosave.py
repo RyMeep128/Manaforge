@@ -68,6 +68,16 @@ def test_dirty_marker_and_debounced_autosave(window):
     assert len(window.writes) == 1
 
 
+def test_idle_poll_does_not_copy_or_serialize_project(window, monkeypatch):
+    def unexpected(*args):
+        raise AssertionError('Idle polling must not copy or serialize')
+    monkeypatch.setattr(main_window, 'deepcopy', unexpected)
+    monkeypatch.setattr(window, '_project_snapshot', unexpected)
+    for _ in range(20):
+        window.project_changed()
+    assert window.writes == []
+
+
 def test_edit_at_timeout_restarts_debounce_and_revert_clears_star(window):
     state = window._active_session['state']
     state.set_card_count('a', 2)

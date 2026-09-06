@@ -58,6 +58,8 @@ Each card tile includes:
 
 Global controls at the top of the grid let you increment, decrement, or reset all visible card counts.
 
+Click cards to select them, or use `Ctrl+A` to select visible cards. **Edit selected → Make oversized / Make normal size** applies to every copy of the selected cards. The existing **+ / −** buttons adjust their quantities together. Bulk size changes preserve valid manual placements and relocate copies as needed; if a required footprint cannot fit, the whole size change is rejected. Bulk edits use the usual Save/autosave workflow and clear Preview history like other card-level setting changes.
+
 ### Preview Tab
 The `Preview` tab renders the current document layout so you can sanity-check pagination, bleed, guides, and backsides before exporting.
 

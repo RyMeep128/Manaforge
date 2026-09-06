@@ -3,10 +3,11 @@ import json
 import math
 from pathlib import Path
 
-from constants import cwd, page_sizes, card_size_without_bleed_inch
+from constants import cwd, page_sizes
 from models import ProjectState
 from util import write_json_atomic
 from services import layout_service
+from services.card_edit_service import sheet_capacity
 
 FIELDS = ('pagesize', 'orient', 'backside_enabled', 'backside_offset',
           'backside_pages_at_end', 'backside_separate_file',
@@ -62,12 +63,7 @@ def apply(state, settings):
     candidate = ProjectState.from_dict(state.to_dict())
     for key, value in validate(settings).items():
         setattr(candidate, key, value)
-    width, height = page_sizes[candidate.pagesize]
-    if candidate.orient == 'Landscape':
-        width, height = height, width
-    bleed = max(0, float(candidate.bleed_edge)) / 25.4
-    card_width, card_height = (72 * (v + 2 * bleed) for v in card_size_without_bleed_inch)
-    _, relocated = layout_service.resolve(candidate, int(width // card_width), int(height // card_height))
+    _, relocated = layout_service.resolve(candidate, *sheet_capacity(candidate))
     state.copy_from(candidate)
     return relocated
 

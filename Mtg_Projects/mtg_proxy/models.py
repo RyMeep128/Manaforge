@@ -290,11 +290,11 @@ class ProjectState:
         return state
 
     def to_dict(self) -> dict[str, Any]:
-        self._rebuild_legacy_maps_from_entries()
+        entries = list(self.card_entries_store.values())
         result = {
             "image_dir": self.image_dir,
             "img_cache": self.img_cache,
-            "cards": dict(self.cards),
+            "cards": {e.front_name: 0 if e.front_name.startswith('__') else int(e.count) for e in entries},
             "card_sort": self.card_sort,
             "manual_layout": deepcopy(self.manual_layout),
             "backside_enabled": self.backside_enabled,
@@ -304,11 +304,11 @@ class ProjectState:
             "backside_default": self.backside_default,
             "backside_offset": self.backside_offset,
             "printer_duplex": self.printer_duplex,
-            "backsides": dict(self.backsides),
-            "backside_short_edge": dict(self.backside_short_edge),
+            "backsides": {e.front_name: e.backside_name for e in entries if e.backside_name},
+            "backside_short_edge": {e.front_name: True for e in entries if e.backside_short_edge},
             "oversized_enabled": self.oversized_enabled,
-            "oversized": dict(self.oversized),
-            "card_metadata": self.card_metadata_dict(),
+            "oversized": {e.front_name: True for e in entries if e.oversized},
+            "card_metadata": {e.front_name: e.metadata.to_dict() for e in entries if e.metadata.to_dict()},
             "high_res_front_overrides": self.high_res_front_overrides_dict(),
             "card_entries": self.card_entries_dict(),
             "backside_default_asset_id": self.backside_default_asset_id,
@@ -317,7 +317,7 @@ class ProjectState:
         return result
 
     def to_persisted_dict(self) -> dict[str, Any]:
-        self._rebuild_legacy_maps_from_entries()
+        entries = list(self.card_entries_store.values())
         result = {
             "project_version": 2,
             "card_sort": self.card_sort,
@@ -331,7 +331,7 @@ class ProjectState:
             "backside_offset": self.backside_offset,
             "printer_duplex": self.printer_duplex,
             "oversized_enabled": self.oversized_enabled,
-            "card_metadata": self.card_metadata_dict(),
+            "card_metadata": {e.front_name: e.metadata.to_dict() for e in entries if e.metadata.to_dict()},
             "high_res_front_overrides": self.high_res_front_overrides_dict(),
             "card_entries": self.card_entries_dict(),
         }
