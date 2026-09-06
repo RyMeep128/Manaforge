@@ -1,5 +1,6 @@
-# print-proxy-prep
-Prepare proxy card images for home printing with a desktop Qt app.
+# Manaforge — Print Proxy Prep
+
+Print Proxy Prep is the proxy-printing app in the [Manaforge suite](../../README.md). Prepare proxy card images for home printing with a desktop Qt app.
 
 The app can:
 - crop bleed edges and build print-ready PDFs
@@ -72,7 +73,7 @@ Preview **Undo / Redo** restores moves, swaps, resets, added editing pages, and 
 
 Named projects **autosave after two seconds without edits**. A `*` beside the project name (in the header and window title) means changes have not yet been saved. It disappears after a successful autosave or manual Save. New drafts need their first Save to choose a name. Save failures keep the `*`, show a status message, and retry; leaving or closing a named project flushes pending changes and stays open if saving fails.
 
-See the [suite README](../../README.md) for all three app areas and the [printer setup roadmap](../../docs/printing-roadmap.md) for profiles/calibration plans.
+See the [Manaforge README](../../README.md) for all three app areas and the [printer setup roadmap](../../docs/printing-roadmap.md) for profiles/calibration plans.
 
 Use **More → Check for updates…** while editing, or **Check for updates** on the Projects screen, to check for a newer release.
 

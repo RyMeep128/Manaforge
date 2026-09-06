@@ -1,10 +1,10 @@
-# MTG Desktop Suite
+# Manaforge
 
-[![Tests](https://github.com/RyMeep128/branch_print-proxy-prep-QtPort/actions/workflows/tests.yml/badge.svg)](https://github.com/RyMeep128/branch_print-proxy-prep-QtPort/actions/workflows/tests.yml)
+[![Tests](https://github.com/RyMeep128/Manaforge/actions/workflows/tests.yml/badge.svg)](https://github.com/RyMeep128/Manaforge/actions/workflows/tests.yml)
 
-A Python / PyQt6 workspace for preparing Magic: The Gathering proxies, managing shared card data, and building toward a dedicated deck editor.
+Manaforge is a Python / PyQt6 desktop suite for preparing Magic: The Gathering proxies, managing shared card data, and building toward a dedicated deck editor.
 
-This repository is organized around **three apps**, with a shared card-data layer. The repository name comes from Print Proxy Prep, the first app.
+Manaforge is organized around **three apps**, with a shared card-data layer.
 
 | App | Purpose | Current status |
 | --- | --- | --- |
