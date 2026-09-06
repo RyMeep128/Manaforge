@@ -163,7 +163,7 @@ class PreviewOverlay(QtWidgets.QWidget):
             result = layout_service.move(self.preview._placements, payload['copy_id'],
                 self.drop_destination, self.preview._columns, self.preview._rows)
             if result is not None and result != self.preview._placements:
-                self.preview._state.manual_layout = layout_service.record(result)
+                self.preview.commit_layout(result)
                 QtCore.QTimer.singleShot(0, self.preview.refresh_after_edit)
                 event.acceptProposedAction()
         else:

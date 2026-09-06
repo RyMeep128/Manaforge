@@ -119,6 +119,35 @@ def test_legacy_preview_resolution_does_not_enable_manual_layout():
     assert state.manual_layout is None
 
 
+def test_occupancy_counts_slots_and_preserves_internal_empty_sheets():
+    state = state_with({'a': 1, 'wide': 1}, ['wide'])
+    items, _ = layout.resolve(state, 3, 3)
+    next(p for p in items if p['name'] == 'a').update(page=3, row=0, column=0)
+    pages = layout.occupancy(items, 3, 3)
+    assert [p['filled'] for p in pages] == [2, 0, 0, 1]
+    assert pages[0]['cards'] == 1
+    assert layout.occupancy_label(pages[3]) == 'Page 4: 1/9 filled'
+    assert len(layout.occupancy(items, 3, 3, minimum_pages=8)) == 8
+    assert layout.occupancy([], 3, 3) == []
+
+
+def test_history_bounds_branching_and_external_change_invalidation():
+    history = layout.LayoutHistory(limit=2)
+    snapshots = [dict(project={'revision': i}, extra_pages=0) for i in range(4)]
+    history.observe(snapshots[0]['project'])
+    for before, after in zip(snapshots, snapshots[1:]):
+        history.push(before, after)
+        history.observe(after['project'])
+    assert len(history.undo_entries) == 2
+    assert history.undo() == snapshots[2]
+    assert history.redo() == snapshots[3]
+    history.undo()
+    history.push(snapshots[2], dict(project={'revision': 9}, extra_pages=0))
+    assert history.redo() is None
+    history.observe({'revision': 10})
+    assert history.undo() is None
+
+
 def test_editor_only_trailing_pages_are_not_exported():
     state = state_with({'a': 1})
     items, _ = layout.resolve(state, 3, 3)

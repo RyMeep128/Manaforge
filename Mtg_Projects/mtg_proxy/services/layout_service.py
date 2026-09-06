@@ -126,3 +126,57 @@ def pages_from_items(state, items, columns, rows, minimum_pages=0):
         card = (item['name'], bool(state.backside_short_edge.get(item['name'])), item['span'] == 2)
         pages[item['page']]['placements'].append((item['row'], item['column'], card))
     return pages
+
+
+def occupancy(items, columns, rows, minimum_pages=0):
+    """Physical front-sheet occupancy; oversized copies consume two slots."""
+    count = max(minimum_pages, max((item['page'] + 1 for item in items), default=0))
+    pages = [dict(page=index + 1, filled=0, capacity=columns * rows, cards=0)
+             for index in range(count)]
+    for item in items:
+        pages[item['page']]['filled'] += item['span']
+        pages[item['page']]['cards'] += 1
+    return pages
+
+
+def occupancy_label(page):
+    return f"Page {page['page']}: {page['filled']}/{page['capacity']} filled"
+
+
+class LayoutHistory:
+    """Bounded, session-only snapshots. External project changes invalidate history."""
+    def __init__(self, limit=100):
+        self.limit = limit
+        self.undo_entries = []
+        self.redo_entries = []
+        self.baseline = None
+
+    def observe(self, project):
+        if self.baseline is not None and self.baseline != project:
+            self.undo_entries.clear()
+            self.redo_entries.clear()
+        self.baseline = deepcopy(project)
+
+    def push(self, before, after):
+        if before == after:
+            return
+        self.undo_entries.append((deepcopy(before), deepcopy(after)))
+        self.undo_entries = self.undo_entries[-self.limit:]
+        self.redo_entries.clear()
+        self.baseline = deepcopy(after['project'])
+
+    def undo(self):
+        if not self.undo_entries:
+            return None
+        entry = self.undo_entries.pop()
+        self.redo_entries.append(entry)
+        self.baseline = deepcopy(entry[0]['project'])
+        return deepcopy(entry[0])
+
+    def redo(self):
+        if not self.redo_entries:
+            return None
+        entry = self.redo_entries.pop()
+        self.undo_entries.append(entry)
+        self.baseline = deepcopy(entry[1]['project'])
+        return deepcopy(entry[1])

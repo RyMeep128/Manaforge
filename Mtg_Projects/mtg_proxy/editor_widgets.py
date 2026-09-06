@@ -76,6 +76,31 @@ from services import deck_import_service, pdf_service, project_service, layout_s
 from preview_interaction import PreviewOverlay, DragPageButton
 
 
+def confirm_underfilled_export(parent, occupancy):
+    underfilled = [page for page in occupancy if page['filled'] < page['capacity']]
+    if not underfilled:
+        return True
+    dialog = QMessageBox(parent)
+    dialog.setIcon(QMessageBox.Icon.Warning)
+    dialog.setWindowTitle("Under-filled sheets")
+    dialog.setText("Some sheets have unused card slots.")
+    lines = [layout_service.occupancy_label(page) for page in underfilled]
+    summary = "\n".join(lines[:8])
+    if len(lines) > 8:
+        summary += f"\n…and {len(lines) - 8} more sheets."
+        dialog.setDetailedText("\n".join(lines))
+    dialog.setInformativeText(
+        summary + "\n\nFilled counts are slots; oversized cards use two. "
+        "Backs are paired with their fronts. You can go back to fill the sheets "
+        "or export this layout to print anyway.")
+    go_back = dialog.addButton("Go Back", QMessageBox.ButtonRole.RejectRole)
+    print_anyway = dialog.addButton("Print Anyway", QMessageBox.ButtonRole.AcceptRole)
+    dialog.setDefaultButton(go_back)
+    dialog.setEscapeButton(go_back)
+    dialog.exec()
+    return dialog.clickedButton() is print_anyway
+
+
 def failed_cards_decklist_text(failed_cards):
     """Return failed imports in a format accepted by the decklist importer."""
     return "\n".join(f"1 {card}" for card in failed_cards)
@@ -703,6 +728,7 @@ class CardWidget(QWidget):
             def backside_reset():
                 if card_name in state.backsides:
                     del state.backsides[card_name]
+                    state._ensure_card_entry(card_name).backside_name = None
                     runtime_images.ensure_preview_entry(state, img_dict, state.backside_default)
                     new_backside_img = BacksideImage(
                         state.backside_default, img_dict
@@ -715,7 +741,7 @@ class CardWidget(QWidget):
                     card_name not in state.backsides
                     or backside_choice != state.backsides[card_name]
                 ):
-                    state.backsides[card_name] = backside_choice
+                    state.set_backside(card_name, backside_choice)
                     new_backside_img = BacksideImage(backside_choice, img_dict)
                     card_widget.refresh_backside(new_backside_img)
 
@@ -872,7 +898,11 @@ class CardWidget(QWidget):
 
     def apply_number(self, state, number):
         self._number_edit.setText(str(number))
-        state.cards[self._card_name] = number
+        # Keep the persisted entry in sync: preview/history serialization rebuilds
+        # the legacy cards map from these entries.
+        state.set_card_count(self._card_name, number)
+        if hasattr(self.window(), 'project_changed'):
+            self.window().project_changed()
 
     def edit_number(self, state):
         number = int(self._number_edit.text())
@@ -895,6 +925,7 @@ class CardWidget(QWidget):
             short_edge_dict[self._card_name] = True
         elif self._card_name in short_edge_dict:
             del short_edge_dict[self._card_name]
+        state._ensure_card_entry(self._card_name).backside_short_edge = bool(short_edge_dict.get(self._card_name))
 
     def toggle_oversized(self, state, s):
         oversized_dict = state.oversized
@@ -902,6 +933,7 @@ class CardWidget(QWidget):
             oversized_dict[self._card_name] = True
         elif self._card_name in oversized_dict:
             del oversized_dict[self._card_name]
+        state._ensure_card_entry(self._card_name).oversized = bool(oversized_dict.get(self._card_name))
 
 
 class DummyCardWidget(CardWidget):
@@ -1446,6 +1478,15 @@ class PrintPreview(QScrollArea):
         self._overlays = []
         self._drag_span = 1
         self._drag_active = False
+        self._history = layout_service.LayoutHistory()
+        self._layout_shortcuts = []
+        for sequence, callback in ((QKeySequence.StandardKey.Undo, self.undo_layout),
+                                   (QKeySequence.StandardKey.Redo, self.redo_layout),
+                                   ("Ctrl+Shift+Z", self.redo_layout)):
+            shortcut = QShortcut(QKeySequence(sequence), self)
+            shortcut.setContext(QtCore.Qt.ShortcutContext.WidgetWithChildrenShortcut)
+            shortcut.activated.connect(callback)
+            self._layout_shortcuts.append(shortcut)
         self._drag_timer = QtCore.QTimer(self)
         self._drag_timer.setInterval(40)
         self._drag_timer.timeout.connect(self._scroll_drag)
@@ -1458,6 +1499,7 @@ class PrintPreview(QScrollArea):
         horizontal_value = self.horizontalScrollBar().value()
         state = as_project_state(print_dict)
         self._state, self._img_dict = state, img_dict
+        self._history.observe(state.to_dict())
         self._overlays = []
         bleed_edge = float(state.bleed_edge)
         bleed_edge_inch = mm_to_inch(bleed_edge)
@@ -1486,6 +1528,9 @@ class PrintPreview(QScrollArea):
         raw_pages = layout_service.pages_from_items(
             state, self._placements, columns, rows,
             max(1, self._extra_pages))
+        self._history.baseline = state.to_dict()
+        occupancy = layout_service.occupancy(self._placements, columns, rows, len(raw_pages))
+        self._page_captions = []
         pages = pdf.make_render_page_sequence(state, raw_pages)
 
         @functools.cache
@@ -1507,6 +1552,17 @@ class PrintPreview(QScrollArea):
 
         page_widgets = []
         for page in pages:
+            occupied = occupancy[page["front_page_number"] - 1]
+            caption = layout_service.occupancy_label(occupied)
+            if page["backside"]:
+                caption += " (back)"
+            if occupied['cards'] != occupied['filled']:
+                caption += f" | {occupied['cards']} cards; oversized cards use two slots"
+            if occupied['page'] > max((p['page'] + 1 for p in self._placements), default=0):
+                caption += " | Empty editing sheet; not exported"
+            label = QLabel(caption)
+            label.setProperty("role", "subtitle")
+            self._page_captions.append(label)
             widget = PagePreview(page["cards"], page["backside"], columns, rows,
                 bleed_edge, float(state.backside_offset), page_size, img_get)
             page_widgets.append(widget)
@@ -1541,6 +1597,16 @@ class PrintPreview(QScrollArea):
         reset_layout.clicked.connect(self.reset_layout)
         header_layout.addWidget(add_page)
         header_layout.addWidget(reset_layout)
+        self._undo_button = QPushButton("Undo")
+        self._redo_button = QPushButton("Redo")
+        self._undo_button.setToolTip("Undo preview edit (Ctrl+Z)")
+        self._redo_button.setToolTip("Redo preview edit (Ctrl+Y / Ctrl+Shift+Z)")
+        self._undo_button.setEnabled(bool(self._history.undo_entries))
+        self._redo_button.setEnabled(bool(self._history.redo_entries))
+        self._undo_button.clicked.connect(self.undo_layout)
+        self._redo_button.clicked.connect(self.redo_layout)
+        header_layout.addWidget(self._undo_button)
+        header_layout.addWidget(self._redo_button)
         header_layout.addStretch()
         preview_note = QLabel(
             f"{relocated} copies moved to fit the sheet" if relocated else
@@ -1570,7 +1636,8 @@ class PrintPreview(QScrollArea):
 
         layout = QVBoxLayout()
         layout.addWidget(header)
-        for page in pages:
+        for caption, page in zip(self._page_captions, pages):
+            layout.addWidget(caption, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter)
             layout.addWidget(page, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter)
         layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
         layout.setSpacing(22)
@@ -1606,13 +1673,17 @@ class PrintPreview(QScrollArea):
             self.refresh(self._state, self._img_dict)
 
     def reset_layout(self):
+        before = self.layout_snapshot()
         self._state.manual_layout = None
         self._extra_pages = 0
         self._selected_copy = None
+        self._history.push(before, self.layout_snapshot())
         self.refresh_after_edit()
 
     def add_page(self):
+        before = self.layout_snapshot()
         self._extra_pages = max(1, self._extra_pages, max((p['page'] + 1 for p in self._placements), default=0)) + 1
+        self._history.push(before, self.layout_snapshot())
         self.refresh(self._state, self._img_dict, preserve_scroll=False)
         target = next((i for i, page in enumerate(self._pages)
                        if any(o.parentWidget() is page._grid and o.page == self._extra_pages - 1
@@ -1623,6 +1694,7 @@ class PrintPreview(QScrollArea):
         actions = self.window().findChildren(ActionsWidget)
         if not actions:
             return
+        history_before = self.layout_snapshot()
         before = layout_service.record(self._placements)
         old_ids = {p['copy_id'] for p in self._placements}
         def place_import(result):
@@ -1637,7 +1709,33 @@ class PrintPreview(QScrollArea):
             self._state.manual_layout = before
             self._state.manual_layout['placements'].extend(layout_service.record([candidate])['placements'])
             self._selected_copy = candidate['copy_id']
+            self._history.push(history_before, self.layout_snapshot())
         actions[0]._add_single_card(on_added=place_import)
+
+    def layout_snapshot(self):
+        return dict(project=self._state.to_dict(), extra_pages=self._extra_pages,
+                    selected_copy=self._selected_copy)
+
+    def commit_layout(self, placements):
+        before = self.layout_snapshot()
+        self._state.manual_layout = layout_service.record(placements)
+        self._history.push(before, self.layout_snapshot())
+
+    def _restore_layout(self, snapshot):
+        if snapshot is None:
+            return
+        self._state.copy_from(ProjectState.from_dict(snapshot['project']))
+        self._extra_pages = snapshot['extra_pages']
+        self._selected_copy = snapshot['selected_copy']
+        self.refresh_after_edit()
+
+    def undo_layout(self):
+        self._history.observe(self._state.to_dict())
+        self._restore_layout(self._history.undo())
+
+    def redo_layout(self):
+        self._history.observe(self._state.to_dict())
+        self._restore_layout(self._history.redo())
 
     def _scroll_drag(self):
         if self._view_mode != "Continuous":
@@ -1671,6 +1769,7 @@ class PrintPreview(QScrollArea):
         count = len(self._pages)
         for index, page in enumerate(self._pages):
             page.setVisible(self._view_mode == "Continuous" or index == self._page_index)
+            self._page_captions[index].setVisible(page.isVisibleTo(self.widget()))
         self._page_label.setText(
             f"Page {self._page_index + 1} of {count}" if count else "No pages"
         )
@@ -1892,9 +1991,12 @@ class ActionsWidget(QGroupBox):
             cols = int(point_to_inch(sheet[0]) // (card_size_without_bleed_inch[0] + 2 * bleed))
             rows = int(point_to_inch(sheet[1]) // (card_size_without_bleed_inch[1] + 2 * bleed))
             try:
-                layout_service.resolve(state, cols, rows)
+                placements, _ = layout_service.resolve(state, cols, rows)
             except ValueError as exc:
                 application.warn_nonfatal("Cannot Export Layout", str(exc))
+                return
+
+            if not confirm_underfilled_export(self.window(), layout_service.occupancy(placements, cols, rows)):
                 return
 
             state.filename = os.path.splitext(os.path.basename(pdf_path))[0]

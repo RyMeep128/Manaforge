@@ -205,3 +205,179 @@ def test_continuous_drag_scrolls_at_viewport_edge(preview, monkeypatch):
     preview._view_mode = 'Single Page'
     preview._scroll_drag()
     assert preview.verticalScrollBar().value() == previous
+
+
+def test_layout_undo_redo_and_reset_restore_exact_state(preview):
+    original = preview._state.to_dict()
+    item = next(p for p in preview._placements if p['span'] == 1)
+    preview.commit_layout(layout.move(preview._placements, item['copy_id'], (0, 2, 2),
+                                      preview._columns, preview._rows))
+    preview.refresh_after_edit()
+    moved = preview._state.to_dict()
+    assert preview._undo_button.isEnabled()
+    preview.undo_layout()
+    assert preview._state.to_dict() == original
+    assert preview._redo_button.isEnabled()
+    preview.redo_layout()
+    assert preview._state.to_dict() == moved
+    preview.reset_layout()
+    assert preview._state.manual_layout is None
+    preview.undo_layout()
+    assert preview._state.to_dict() == moved
+
+
+def test_undo_page_and_addition_and_external_changes(preview, monkeypatch):
+    preview.add_page()
+    preview.undo_layout()
+    assert preview._extra_pages == 0
+    preview.redo_layout()
+    assert preview._extra_pages == 2
+
+    class Actions(QtWidgets.QWidget):
+        def _add_single_card(self, *, on_added):
+            preview._state.set_card_count('a', 3)
+            on_added(SimpleNamespace(filename='a'))
+
+    monkeypatch.setattr(editor_widgets, 'ActionsWidget', Actions)
+    actions = Actions(preview)
+    preview.add_at_slot((1, 0, 0))
+    preview.refresh_after_edit()
+    added = preview._state.to_dict()
+    preview.undo_layout()
+    assert preview._state.get_card_count('a') == 2
+    preview.redo_layout()
+    assert preview._state.to_dict() == added
+    preview._state.set_card_count('a', 8)
+    preview.refresh_after_edit()
+    preview.undo_layout()
+    assert preview._state.get_card_count('a') == 8
+    assert not preview._undo_button.isEnabled()
+    assert not preview._redo_button.isEnabled()
+
+
+def test_page_occupancy_captions_and_single_page_visibility(preview):
+    assert preview._page_captions[0].text().startswith('Page 1: 4/9 filled')
+    assert '(back)' in preview._page_captions[1].text()
+    preview._view_combo.setCurrentText('Single Page')
+    APP.processEvents()
+    assert not preview._page_captions[0].isHidden()
+    assert preview._page_captions[1].isHidden()
+    preview._set_page(1)
+    assert preview._page_captions[0].isHidden()
+    assert not preview._page_captions[1].isHidden()
+
+
+@pytest.mark.parametrize('choice,expected', [('Go Back', False), ('Print Anyway', True)])
+def test_underfilled_warning_keeps_explicit_print_anyway(choice, expected):
+    def answer():
+        dialog = APP.activeModalWidget()
+        assert isinstance(dialog, QtWidgets.QMessageBox)
+        assert 'Page 4: 1/9 filled' in dialog.informativeText()
+        assert dialog.defaultButton().text() == 'Go Back'
+        next(button for button in dialog.buttons() if button.text() == choice).click()
+    QtCore.QTimer.singleShot(0, answer)
+    assert editor_widgets.confirm_underfilled_export(None, [dict(page=4, filled=1, capacity=9)]) is expected
+
+
+def test_full_sheets_do_not_show_warning(monkeypatch):
+    monkeypatch.setattr(editor_widgets, 'QMessageBox', lambda *args: pytest.fail('Unexpected warning'))
+    assert editor_widgets.confirm_underfilled_export(None, [dict(page=1, filled=9, capacity=9)])
+
+
+@pytest.mark.parametrize('proceed', [False, True])
+def test_export_warning_gates_pdf_generation(monkeypatch, tmp_path, proceed):
+    calls = []
+    app = SimpleNamespace(show_home=lambda: None, _debug_mode=False,
+                          warn_nonfatal=lambda *args: pytest.fail(str(args)))
+    state = ProjectState.from_dict({'cards': {'one': 1}})
+    actions = editor_widgets.ActionsWidget(app, state, {})
+    monkeypatch.setattr(editor_widgets.QFileDialog, 'getSaveFileName',
+                        lambda *args: (str(tmp_path / 'output.pdf'), ''))
+    def confirm(parent, pages):
+        assert pages == [dict(page=1, filled=1, capacity=9, cards=1)]
+        calls.append('warning')
+        return proceed
+    monkeypatch.setattr(editor_widgets, 'confirm_underfilled_export', confirm)
+    monkeypatch.setattr(editor_widgets, 'popup', lambda *args:
+                        SimpleNamespace(show_during_work=lambda work: work()))
+    monkeypatch.setattr(editor_widgets, 'make_popup_print_fn', lambda *args: lambda text: None)
+    def generate(*args, **kwargs):
+        calls.append('generate')
+        return SimpleNamespace(pages=SimpleNamespace(save=lambda: calls.append('save')),
+                               backside_pages=None, backside_pdf_path=None)
+    monkeypatch.setattr(editor_widgets.pdf_service, 'generate_pdf', generate)
+    monkeypatch.setattr(editor_widgets.subprocess, 'Popen', lambda *args, **kwargs: None)
+    monkeypatch.setattr(editor_widgets.QMessageBox, 'information', lambda *args: None)
+    actions._render_button.click()
+    assert calls == (['warning', 'generate', 'save'] if proceed else ['warning'])
+    actions.deleteLater()
+
+
+def test_escape_cancels_underfilled_export():
+    QtCore.QTimer.singleShot(0, lambda: APP.activeModalWidget().reject())
+    assert not editor_widgets.confirm_underfilled_export(None, [dict(page=1, filled=1, capacity=9)])
+
+
+def test_preview_keyboard_undo_redo(preview):
+    item = next(p for p in preview._placements if p['span'] == 1)
+    preview.commit_layout(layout.move(preview._placements, item['copy_id'], (0, 2, 2),
+                                      preview._columns, preview._rows))
+    preview.refresh_after_edit()
+    moved = preview._state.to_dict()
+    preview.activateWindow()
+    preview._overlays[0].setFocus()
+    APP.processEvents()
+    QtTest.QTest.keyClick(preview._overlays[0], QtCore.Qt.Key.Key_Z, QtCore.Qt.KeyboardModifier.ControlModifier)
+    APP.processEvents()
+    assert preview._state.manual_layout is None
+    preview._overlays[0].setFocus()
+    QtTest.QTest.keyClick(preview._overlays[0], QtCore.Qt.Key.Key_Y, QtCore.Qt.KeyboardModifier.ControlModifier)
+    APP.processEvents()
+    assert preview._state.to_dict() == moved
+
+
+@pytest.mark.parametrize('manual', [False, True])
+@pytest.mark.parametrize('operation,expected', [('increment', 3), ('typed', 5),
+                                               ('selected_increment', 3), ('decrement', 1)])
+def test_cards_tab_quantity_changes_reach_preview_and_saved_project(monkeypatch, manual, operation, expected):
+    monkeypatch.setattr(editor_widgets.runtime_images, 'ensure_preview_entry', lambda *args: None)
+    state = ProjectState.from_dict({'cards': {'a': 2, 'wide': 1},
+        'oversized_enabled': True, 'oversized': {'wide': True}})
+    images = {name: dict(data=editor_widgets.image.encode_cached_image_bytes(editor_widgets.fallback.data),
+                         size=editor_widgets.fallback.size) for name in state.cards}
+    grid = editor_widgets.CardGrid(state, images)
+    cards = editor_widgets.CardScrollArea(state, images, grid)
+    lazy = editor_widgets.LazyPrintPreview(state, images)
+    tabs = editor_widgets.CardTabs(state, images, cards, lazy)
+    tabs.setCurrentIndex(1)
+    preview = lazy._preview
+    original = next(p for p in preview._placements if p['name'] == 'a')
+    if manual:
+        preview.commit_layout(layout.move(preview._placements, original['copy_id'], (1, 0, 0),
+                                          preview._columns, preview._rows))
+        preview.refresh_after_edit()
+    tabs.setCurrentIndex(0)
+    card = grid._cards['a']
+    if operation == 'typed':
+        card._number_edit.setText('5')
+        card._number_edit.editingFinished.emit()
+    elif operation == 'selected_increment':
+        card.set_selected(True)
+        cards._selection_buttons[1].click()
+    else:
+        tooltip = 'Add one copy' if operation == 'increment' else 'Remove one copy'
+        next(button for button in card.findChildren(QtWidgets.QPushButton)
+             if button.toolTip() == tooltip).click()
+    tabs.setCurrentIndex(1)
+    assert state.get_card_count('a') == expected
+    assert len([p for p in preview._placements if p['name'] == 'a']) == expected
+    assert sum(p['span'] for p in preview._placements) == expected + 2
+    if manual:
+        kept = next(p for p in preview._placements if p['copy_id'] == original['copy_id'])
+        assert (kept['page'], kept['row'], kept['column']) == (1, 0, 0)
+    saved = ProjectState.from_dict(state.to_persisted_dict())
+    assert saved.get_card_count('a') == expected
+    assert len([p for p in layout.resolve(saved, preview._columns, preview._rows)[0]
+                if p['name'] == 'a']) == expected
+    tabs.deleteLater()
+    APP.processEvents()

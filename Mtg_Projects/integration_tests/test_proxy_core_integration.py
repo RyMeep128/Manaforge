@@ -1,20 +1,17 @@
 from __future__ import annotations
 
-from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 from mtg_core.services import CardService
 from services import deck_import_service
 
 
-_PRODUCTS_ROOT = Path(__file__).resolve().parents[1]
-
-
-def test_proxy_and_core_import_together_and_search_uses_shared_contract():
+def test_proxy_and_core_import_together_and_search_uses_shared_contract(tmp_path, monkeypatch):
     calls: list[str] = []
 
     def fake_fetch_json(url: str) -> dict:
         calls.append(url)
-        if 'q=%21%22Lightning+Bolt%22' in url:
+        if parse_qs(urlparse(url).query).get('q', [''])[0] in ('Lightning Bolt', '!"Lightning Bolt"'):
             return {
                 "object": "list",
                 "data": [
@@ -33,16 +30,16 @@ def test_proxy_and_core_import_together_and_search_uses_shared_contract():
             }
         raise AssertionError(url)
 
-    page = deck_import_service.search_scryfall_card_page(
-        "Lightning Bolt",
-        fetch_json=fake_fetch_json,
-    )
-
     core = CardService(
-        db_path=str(_PRODUCTS_ROOT / "mtg_core" / "integration_card_data.sqlite3"),
-        image_root=str(_PRODUCTS_ROOT / "mtg_core" / "images"),
+        db_path=str(tmp_path / "integration.sqlite3"),
+        image_root=str(tmp_path / "images"),
         fetch_json_fn=fake_fetch_json,
     )
+    monkeypatch.setattr(deck_import_service, "_build_card_service", lambda fetch_json=None: core)
+    page = deck_import_service.search_scryfall_card_page(
+        "Lightning Bolt", fetch_json=fake_fetch_json, online_mode=True,
+    )
+
     results = core.search_cards("Lightning Bolt", {"allow_remote": True})
 
     assert len(page.candidates) == 1
@@ -51,7 +48,7 @@ def test_proxy_and_core_import_together_and_search_uses_shared_contract():
     assert calls
 
 
-def test_proxy_search_can_request_tokens_through_core_without_proxy_changes():
+def test_proxy_search_passes_token_syntax_through_core(tmp_path, monkeypatch):
     calls: list[str] = []
 
     def fake_fetch_json(url: str) -> dict:
@@ -77,9 +74,12 @@ def test_proxy_search_can_request_tokens_through_core_without_proxy_changes():
             "has_more": False,
         }
 
+    core = CardService(db_path=str(tmp_path / "tokens.sqlite3"),
+                       image_root=str(tmp_path / "images"), fetch_json_fn=fake_fetch_json)
+    monkeypatch.setattr(deck_import_service, "_build_card_service", lambda fetch_json=None: core)
     page = deck_import_service.search_scryfall_card_page(
-        "ooze token",
-        fetch_json=fake_fetch_json,
+        "t:token ooze",
+        fetch_json=fake_fetch_json, online_mode=True,
     )
 
     assert [candidate.scryfall_id for candidate in page.candidates] == ["ooze-token"]
