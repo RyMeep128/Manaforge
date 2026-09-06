@@ -60,6 +60,18 @@ Global controls at the top of the grid let you increment, decrement, or reset al
 ### Preview Tab
 The `Preview` tab renders the current document layout so you can sanity-check pagination, bleed, guides, and backsides before exporting.
 
+Hover over a front card to highlight it, then drag to move that printed copy to an exact slot. Dropping onto another card swaps the two when both fit. Empty slots have a large **+** that opens Add Card; adding an existing card adds another copy. Oversized cards occupy two adjacent horizontal slots and move as one card. Backs follow their matching fronts automatically.
+
+Use **Add page** for more placement space. Drag near the top or bottom to scroll in Continuous view, or hover Previous/Next while dragging in Single Page view. Empty trailing editing pages are excluded from export; intentional gaps between populated pages are retained. **Save Project** keeps the layout, and PDF export uses the same positions. Card-list sorting does not rearrange a manual layout; **Reset layout** restores automatic arrangement. If paper or card sizes change, valid placements stay in place and displaced copies move to the next fitting spaces.
+
+Each sheet shows its occupied slots, for example **Page 4: 1/9 filled**. Oversized cards count as two slots. Export warns about under-filled sheets and offers **Go Back** or **Print Anyway**; matching backs are not counted as additional sheets.
+
+Preview **Undo / Redo** restores moves, swaps, resets, added editing pages, and successful slot additions (including quantities). Use `Ctrl+Z`, `Ctrl+Y`, or `Ctrl+Shift+Z` while focused in Preview. The last 100 edits are retained for this session; unrelated project or print-setting changes clear history so Undo cannot overwrite them. Project Save persists the current result, not the undo stack.
+
+Named projects **autosave after two seconds without edits**. A `*` beside the project name (in the header and window title) means changes have not yet been saved. It disappears after a successful autosave or manual Save. New drafts need their first Save to choose a name. Save failures keep the `*`, show a status message, and retry; leaving or closing a named project flushes pending changes and stays open if saving fails.
+
+See the [suite README](../../README.md) for all three app areas and the [printer setup roadmap](../../docs/printing-roadmap.md) for profiles/calibration plans.
+
 ### Actions Panel
 The right-side `Actions` box includes:
 - `Run Cropper`

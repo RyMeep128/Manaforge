@@ -187,6 +187,11 @@ def generate(print_dict, size, pdf_path, print_fn, *, page_side="both"):
 
 def distribute_cards_to_pages(print_dict, columns, rows):
     state = as_project_state(print_dict)
+    from services import layout_service
+    layout_service.validate_capacity(list(layout_service.copies(state).values()), columns, rows)
+    if state.manual_layout is not None:
+        items, _ = layout_service.resolve(state, columns, rows)
+        return layout_service.pages_from_items(state, items, columns, rows)
     images_per_page = columns * rows
     oversized_images_per_page = (columns // 2) * rows
 
@@ -276,6 +281,11 @@ def make_backside_pages(print_dict, pages):
 
     backside_pages = deepcopy(pages)
     for page in backside_pages:
+        if "placements" in page:
+            page["placements"] = [
+                (row, column, (back_dict.get(card[0], state.backside_default), card[1], card[2]))
+                for row, column, card in page["placements"]
+            ]
         page["regular"] = [backside_of_img(img) for img in page["regular"]]
         page["oversized"] = [backside_of_img(img) for img in page["oversized"]]
 
@@ -316,6 +326,15 @@ def make_render_page_sequence(print_dict, front_pages):
 
 
 def distribute_cards_to_grid(cards, left_to_right, columns, rows):
+    if "placements" in cards:
+        grid = [[None] * columns for _ in range(rows)]
+        for row, column, card in cards["placements"]:
+            span = 2 if card[2] else 1
+            column = column if left_to_right else columns - column - span
+            grid[row][column] = card
+            if span == 2:
+                grid[row][column + 1] = (None, None, None)
+        return grid
     def get_coord(i):
         return get_grid_coords(i, columns, left_to_right)
 

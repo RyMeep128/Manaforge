@@ -1,0 +1,2 @@
+-r Mtg_Projects/mtg_proxy/requirements.txt
+pytest>=8,<10

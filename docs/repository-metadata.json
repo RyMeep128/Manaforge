@@ -1,0 +1,15 @@
+{
+  "description": "MTG desktop suite: Print Proxy Prep, a shared card database and admin app, and a planned Deck Editor. Python, PyQt6, SQLite, and PDF printing.",
+  "topics": [
+    "magic-the-gathering",
+    "mtg",
+    "proxy-printing",
+    "deck-builder",
+    "scryfall",
+    "pyqt6",
+    "python",
+    "sqlite",
+    "pdf",
+    "desktop-app"
+  ]
+}

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from copy import deepcopy
 from typing import Any, Mapping
 
 from config import CFG
@@ -239,6 +240,7 @@ class ProjectState:
     card_entries_store: dict[str, ProjectCardEntry] = field(default_factory=dict)
     backside_default_asset_id: str | None = None
     render: RenderSettings = field(default_factory=RenderSettings.default)
+    manual_layout: dict | None = None
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any] | None) -> "ProjectState":
@@ -247,6 +249,7 @@ class ProjectState:
             image_dir=str(data.get("image_dir", "images")),
             img_cache=str(data.get("img_cache", "img.cache")),
             cards=_coerce_plain_dict(data.get("cards")),
+            manual_layout=deepcopy(data.get("manual_layout")),
             card_sort=str(data.get("card_sort", "Alphabetical (A-Z)")),
             backside_enabled=bool(data.get("backside_enabled", False)),
             backside_pages_at_end=bool(data.get("backside_pages_at_end", False)),
@@ -291,6 +294,7 @@ class ProjectState:
             "img_cache": self.img_cache,
             "cards": dict(self.cards),
             "card_sort": self.card_sort,
+            "manual_layout": deepcopy(self.manual_layout),
             "backside_enabled": self.backside_enabled,
             "backside_pages_at_end": self.backside_pages_at_end,
             "backside_separate_file": self.backside_separate_file,
@@ -314,6 +318,7 @@ class ProjectState:
         result = {
             "project_version": 2,
             "card_sort": self.card_sort,
+            "manual_layout": deepcopy(self.manual_layout),
             "backside_enabled": self.backside_enabled,
             "backside_pages_at_end": self.backside_pages_at_end,
             "backside_separate_file": self.backside_separate_file,
@@ -375,6 +380,7 @@ class ProjectState:
         self.img_cache = replacement.img_cache
         self.cards = replacement.cards
         self.card_sort = replacement.card_sort
+        self.manual_layout = replacement.manual_layout
         self.backside_enabled = replacement.backside_enabled
         self.backside_pages_at_end = replacement.backside_pages_at_end
         self.backside_separate_file = replacement.backside_separate_file

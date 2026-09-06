@@ -1,4 +1,5 @@
 from pathlib import Path
+import os
 
 import config
 import constants
@@ -8,7 +9,11 @@ def test_app_paths_split_install_and_data_dirs():
     assert Path(constants.app_dir).name == "mtg_proxy"
     assert Path(constants.resource_dir) == Path(constants.app_dir)
     assert Path(constants.cwd) == Path(constants.data_dir)
-    assert Path(constants.data_dir).name in {"PrintProxyPrep", ".pytest_tmp_data"}
+    override = os.environ.get("PRINT_PROXY_PREP_DATA_DIR")
+    if override:
+        assert Path(constants.data_dir) == Path(override).resolve()
+    else:
+        assert Path(constants.data_dir).name == "PrintProxyPrep"
 
 
 def test_load_config_returns_defaults_when_file_missing(monkeypatch, tmp_path):

@@ -72,7 +72,33 @@ from dialogs import (
     image_file_dialog,
     project_file_dialog,
 )
-from services import deck_import_service, pdf_service, project_service
+from services import deck_import_service, pdf_service, project_service, layout_service
+from preview_interaction import PreviewOverlay, DragPageButton
+
+
+def confirm_underfilled_export(parent, occupancy):
+    underfilled = [page for page in occupancy if page['filled'] < page['capacity']]
+    if not underfilled:
+        return True
+    dialog = QMessageBox(parent)
+    dialog.setIcon(QMessageBox.Icon.Warning)
+    dialog.setWindowTitle("Under-filled sheets")
+    dialog.setText("Some sheets have unused card slots.")
+    lines = [layout_service.occupancy_label(page) for page in underfilled]
+    summary = "\n".join(lines[:8])
+    if len(lines) > 8:
+        summary += f"\n…and {len(lines) - 8} more sheets."
+        dialog.setDetailedText("\n".join(lines))
+    dialog.setInformativeText(
+        summary + "\n\nFilled counts are slots; oversized cards use two. "
+        "Backs are paired with their fronts. You can go back to fill the sheets "
+        "or export this layout to print anyway.")
+    go_back = dialog.addButton("Go Back", QMessageBox.ButtonRole.RejectRole)
+    print_anyway = dialog.addButton("Print Anyway", QMessageBox.ButtonRole.AcceptRole)
+    dialog.setDefaultButton(go_back)
+    dialog.setEscapeButton(go_back)
+    dialog.exec()
+    return dialog.clickedButton() is print_anyway
 
 
 def failed_cards_decklist_text(failed_cards):
@@ -702,6 +728,7 @@ class CardWidget(QWidget):
             def backside_reset():
                 if card_name in state.backsides:
                     del state.backsides[card_name]
+                    state._ensure_card_entry(card_name).backside_name = None
                     runtime_images.ensure_preview_entry(state, img_dict, state.backside_default)
                     new_backside_img = BacksideImage(
                         state.backside_default, img_dict
@@ -714,7 +741,7 @@ class CardWidget(QWidget):
                     card_name not in state.backsides
                     or backside_choice != state.backsides[card_name]
                 ):
-                    state.backsides[card_name] = backside_choice
+                    state.set_backside(card_name, backside_choice)
                     new_backside_img = BacksideImage(backside_choice, img_dict)
                     card_widget.refresh_backside(new_backside_img)
 
@@ -871,7 +898,11 @@ class CardWidget(QWidget):
 
     def apply_number(self, state, number):
         self._number_edit.setText(str(number))
-        state.cards[self._card_name] = number
+        # Keep the persisted entry in sync: preview/history serialization rebuilds
+        # the legacy cards map from these entries.
+        state.set_card_count(self._card_name, number)
+        if hasattr(self.window(), 'project_changed'):
+            self.window().project_changed()
 
     def edit_number(self, state):
         number = int(self._number_edit.text())
@@ -894,6 +925,7 @@ class CardWidget(QWidget):
             short_edge_dict[self._card_name] = True
         elif self._card_name in short_edge_dict:
             del short_edge_dict[self._card_name]
+        state._ensure_card_entry(self._card_name).backside_short_edge = bool(short_edge_dict.get(self._card_name))
 
     def toggle_oversized(self, state, s):
         oversized_dict = state.oversized
@@ -901,6 +933,7 @@ class CardWidget(QWidget):
             oversized_dict[self._card_name] = True
         elif self._card_name in oversized_dict:
             del oversized_dict[self._card_name]
+        state._ensure_card_entry(self._card_name).oversized = bool(oversized_dict.get(self._card_name))
 
 
 class DummyCardWidget(CardWidget):
@@ -1313,25 +1346,19 @@ class PageGrid(QWidget):
                         rotation=rotation,
                     )
 
+                    img.setMinimumSize(0, 0)
+                    img.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
                     if is_oversized:
                         grid.addWidget(img, x, y, 1, 2)
                     else:
                         grid.addWidget(img, x, y)
 
-        # pad with dummy images if we have only one uncompleted row
-        for i in range(0, columns):
-            x, y = pdf.get_grid_coords(i, columns, backside)
-            if grid.itemAtPosition(x, y) is None:
-                img_data = fallback.data
-                img_size = fallback.size
-
-                img = CardImage(img_data, img_size)
-                sp_retain = img.sizePolicy()
-                sp_retain.setRetainSizeWhenHidden(True)
-                img.setSizePolicy(sp_retain)
-                img.hide()
-
-                grid.addWidget(img, x, y)
+        # Reserve every printable slot, including empty rows and wide-card coverage.
+        for row in range(rows):
+            for column in range(columns):
+                if grid.itemAtPosition(row, column) is None:
+                    spacer = QWidget()
+                    grid.addWidget(spacer, row, column)
 
         for i in range(0, grid.columnCount()):
             grid.setColumnStretch(i, 1)
@@ -1340,15 +1367,18 @@ class PageGrid(QWidget):
 
         self.setLayout(grid)
 
-        self._rows = grid.rowCount()
-        self._cols = grid.columnCount()
+        self._rows = rows
+        self._cols = max(1, columns)
+        bleed = mm_to_inch(bleed_edge_mm)
+        self._card_ratio = ((card_size_without_bleed_inch[0] + 2 * bleed)
+                            / (card_size_without_bleed_inch[1] + 2 * bleed))
         self._has_missing_preview = has_missing_preview
 
     def hasMissingPreviews(self):
         return self._has_missing_preview
 
     def heightForWidth(self, width):
-        return int(width / card_ratio * (self._rows / self._cols))
+        return int(width / self._card_ratio * (self._rows / self._cols))
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -1386,6 +1416,8 @@ class PagePreview(QWidget):
         palette.setColor(self.backgroundRole(), 0xFFFFFF)
         self.setPalette(palette)
         self.setAutoFillBackground(True)
+        self.setObjectName("printSheet")
+        self.setStyleSheet("#printSheet { background: white; } #printSheet QWidget { background: transparent; }")
 
         (page_width, page_height) = page_size
         self._page_ratio = page_width / page_height
@@ -1408,6 +1440,10 @@ class PagePreview(QWidget):
     def hasMissingPreviews(self):
         return self._grid.hasMissingPreviews()
 
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.fillRect(self.rect(), QtCore.Qt.GlobalColor.white)
+
     def heightForWidth(self, width):
         return int(width / self._page_ratio)
 
@@ -1418,8 +1454,8 @@ class PagePreview(QWidget):
         height = self.heightForWidth(width)
         self.setFixedHeight(height)
 
-        padding_width_pixels = int(self._padding_width * width / self._page_width)
-        padding_height_pixels = int(self._padding_height * height / self._page_height)
+        padding_width_pixels = round(self._padding_width * width / self._page_width)
+        padding_height_pixels = round(self._padding_height * height / self._page_height)
         backside_offset_pixels = int(self._backside_offset * width / self._page_width)
         self.setContentsMargins(
             max(0, padding_width_pixels + backside_offset_pixels),
@@ -1436,12 +1472,35 @@ class PrintPreview(QScrollArea):
         self._page_index = 0
         self._pages = []
         self._view_mode = "Continuous"
+        self._fit_zoom = False
+        self._selected_copy = None
+        self._extra_pages = 0
+        self._overlays = []
+        self._drag_span = 1
+        self._drag_active = False
+        self._history = layout_service.LayoutHistory()
+        self._layout_shortcuts = []
+        for sequence, callback in ((QKeySequence.StandardKey.Undo, self.undo_layout),
+                                   (QKeySequence.StandardKey.Redo, self.redo_layout),
+                                   ("Ctrl+Shift+Z", self.redo_layout)):
+            shortcut = QShortcut(QKeySequence(sequence), self)
+            shortcut.setContext(QtCore.Qt.ShortcutContext.WidgetWithChildrenShortcut)
+            shortcut.activated.connect(callback)
+            self._layout_shortcuts.append(shortcut)
+        self._drag_timer = QtCore.QTimer(self)
+        self._drag_timer.setInterval(40)
+        self._drag_timer.timeout.connect(self._scroll_drag)
         self.refresh(as_project_state(print_dict), img_dict)
         self.setWidgetResizable(True)
         self.setFrameShape(QFrame.Shape.NoFrame)
 
-    def refresh(self, print_dict, img_dict):
+    def refresh(self, print_dict, img_dict, *, preserve_scroll=True):
+        scroll_value = self.verticalScrollBar().value()
+        horizontal_value = self.horizontalScrollBar().value()
         state = as_project_state(print_dict)
+        self._state, self._img_dict = state, img_dict
+        self._history.observe(state.to_dict())
+        self._overlays = []
         bleed_edge = float(state.bleed_edge)
         bleed_edge_inch = mm_to_inch(bleed_edge)
 
@@ -1458,7 +1517,20 @@ class PrintPreview(QScrollArea):
         columns = int(page_width // card_width)
         rows = int(page_height // card_height)
 
-        raw_pages = pdf.distribute_cards_to_pages(state, columns, rows)
+        self._columns, self._rows = columns, rows
+        try:
+            self._placements, relocated = layout_service.resolve(state, columns, rows)
+        except ValueError as exc:
+            self._placements, self._pages = [], []
+            self._zoom_combo = None
+            self.setWidget(QLabel(str(exc)))
+            return
+        raw_pages = layout_service.pages_from_items(
+            state, self._placements, columns, rows,
+            max(1, self._extra_pages))
+        self._history.baseline = state.to_dict()
+        occupancy = layout_service.occupancy(self._placements, columns, rows, len(raw_pages))
+        self._page_captions = []
         pages = pdf.make_render_page_sequence(state, raw_pages)
 
         @functools.cache
@@ -1478,46 +1550,69 @@ class PrintPreview(QScrollArea):
 
         img_get.cache_clear()
 
-        pages = [
-            PagePreview(
-                page["cards"],
-                page["backside"],
-                columns,
-                rows,
-                bleed_edge,
-                float(state.backside_offset),
-                page_size,
-                img_get,
-            )
-            for page in pages
-        ]
+        page_widgets = []
+        for page in pages:
+            occupied = occupancy[page["front_page_number"] - 1]
+            caption = layout_service.occupancy_label(occupied)
+            if page["backside"]:
+                caption += " (back)"
+            if occupied['cards'] != occupied['filled']:
+                caption += f" | {occupied['cards']} cards; oversized cards use two slots"
+            if occupied['page'] > max((p['page'] + 1 for p in self._placements), default=0):
+                caption += " | Empty editing sheet; not exported"
+            label = QLabel(caption)
+            label.setProperty("role", "subtitle")
+            self._page_captions.append(label)
+            widget = PagePreview(page["cards"], page["backside"], columns, rows,
+                bleed_edge, float(state.backside_offset), page_size, img_get)
+            page_widgets.append(widget)
+            if not page["backside"] and columns > 0 and rows > 0:
+                self._overlays.append(PreviewOverlay(widget._grid, self, page["front_page_number"] - 1))
+        pages = page_widgets
 
         has_missing_previews = any([p.hasMissingPreviews() for p in pages])
         self._pages = pages
         self._page_index = min(self._page_index, max(0, len(pages) - 1))
         header_layout = QHBoxLayout()
         header_layout.setContentsMargins(8, 4, 8, 4)
-        previous_button = QPushButton("Previous")
-        next_button = QPushButton("Next")
+        previous_button = DragPageButton("Previous", lambda: self._set_page(self._page_index - 1), self)
+        next_button = DragPageButton("Next", lambda: self._set_page(self._page_index + 1), self)
         page_count = QLabel()
         page_count.setProperty("role", "subtitle")
         zoom_combo = QComboBox()
         zoom_combo.addItems(["Fit", "50%", "75%", "100%", "125%", "150%"])
-        zoom_combo.setCurrentText(f"{self._zoom_percent}%")
+        zoom_combo.setCurrentText("Fit" if self._fit_zoom else f"{self._zoom_percent}%")
         view_combo = QComboBox()
         view_combo.addItems(["Continuous", "Single Page"])
         view_combo.setCurrentText(self._view_mode)
-        previous_button.clicked.connect(lambda: self._set_page(self._page_index - 1))
-        next_button.clicked.connect(lambda: self._set_page(self._page_index + 1))
         zoom_combo.currentTextChanged.connect(self._set_zoom)
         view_combo.currentTextChanged.connect(self._set_view_mode)
         header_layout.addWidget(previous_button)
         header_layout.addWidget(next_button)
         header_layout.addWidget(page_count)
+        add_page = QPushButton("Add page")
+        add_page.clicked.connect(self.add_page)
+        reset_layout = QPushButton("Reset layout")
+        reset_layout.setEnabled(state.manual_layout is not None)
+        reset_layout.clicked.connect(self.reset_layout)
+        header_layout.addWidget(add_page)
+        header_layout.addWidget(reset_layout)
+        self._undo_button = QPushButton("Undo")
+        self._redo_button = QPushButton("Redo")
+        self._undo_button.setToolTip("Undo preview edit (Ctrl+Z)")
+        self._redo_button.setToolTip("Redo preview edit (Ctrl+Y / Ctrl+Shift+Z)")
+        self._undo_button.setEnabled(bool(self._history.undo_entries))
+        self._redo_button.setEnabled(bool(self._history.redo_entries))
+        self._undo_button.clicked.connect(self.undo_layout)
+        self._redo_button.clicked.connect(self.redo_layout)
+        header_layout.addWidget(self._undo_button)
+        header_layout.addWidget(self._redo_button)
         header_layout.addStretch()
-        preview_note = QLabel("Preview quality · final PDF renders at full resolution")
+        preview_note = QLabel(
+            f"{relocated} copies moved to fit the sheet" if relocated else
+            "Drag fronts to arrange | + to add | Save to keep layout")
+        preview_note.setWordWrap(True)
         preview_note.setProperty("role", "muted")
-        header_layout.addWidget(preview_note)
         header_layout.addWidget(QLabel("View"))
         header_layout.addWidget(view_combo)
         header_layout.addWidget(QLabel("Zoom"))
@@ -1532,17 +1627,25 @@ class PrintPreview(QScrollArea):
             header_layout.addWidget(vibrance_info)
 
         header = QWidget()
-        header.setLayout(header_layout)
+        header_stack = QVBoxLayout()
+        header_stack.setContentsMargins(0, 0, 0, 0)
+        header_stack.addLayout(header_layout)
+        header_stack.addWidget(preview_note)
+        header.setLayout(header_stack)
+        header.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
 
         layout = QVBoxLayout()
         layout.addWidget(header)
-        for page in pages:
-            layout.addWidget(page)
+        for caption, page in zip(self._page_captions, pages):
+            layout.addWidget(caption, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter)
+            layout.addWidget(page, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter)
+        layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
         layout.setSpacing(22)
         layout.setContentsMargins(80, 24, 80, 40)
         pages_widget = QWidget()
         pages_widget.setLayout(layout)
-        pages_widget.setStyleSheet("background: #242a32;")
+        pages_widget.setObjectName("printPreviewWorkspace")
+        pages_widget.setStyleSheet("#printPreviewWorkspace { background: #242a32; }")
 
         self.setWidget(pages_widget)
         self._page_label = page_count
@@ -1550,13 +1653,105 @@ class PrintPreview(QScrollArea):
         self._next_button = next_button
         self._zoom_combo = zoom_combo
         self._view_combo = view_combo
-        self._apply_preview_view()
+        self._apply_preview_view(fit=self._fit_zoom)
+        if preserve_scroll:
+            def restore_scroll():
+                self.verticalScrollBar().setValue(scroll_value)
+                self.horizontalScrollBar().setValue(horizontal_value)
+            restore_scroll()
+            QtCore.QTimer.singleShot(0, restore_scroll)
+
+    def update_overlays(self):
+        for overlay in self._overlays:
+            overlay.update()
+
+    def refresh_after_edit(self):
+        window = self.window()
+        if window is not self and hasattr(window, "refresh"):
+            window.refresh(self._state, self._img_dict)
+        else:
+            self.refresh(self._state, self._img_dict)
+
+    def reset_layout(self):
+        before = self.layout_snapshot()
+        self._state.manual_layout = None
+        self._extra_pages = 0
+        self._selected_copy = None
+        self._history.push(before, self.layout_snapshot())
+        self.refresh_after_edit()
+
+    def add_page(self):
+        before = self.layout_snapshot()
+        self._extra_pages = max(1, self._extra_pages, max((p['page'] + 1 for p in self._placements), default=0)) + 1
+        self._history.push(before, self.layout_snapshot())
+        self.refresh(self._state, self._img_dict, preserve_scroll=False)
+        target = next((i for i, page in enumerate(self._pages)
+                       if any(o.parentWidget() is page._grid and o.page == self._extra_pages - 1
+                              for o in self._overlays)), len(self._pages) - 1)
+        self._set_page(target)
+
+    def add_at_slot(self, destination):
+        actions = self.window().findChildren(ActionsWidget)
+        if not actions:
+            return
+        history_before = self.layout_snapshot()
+        before = layout_service.record(self._placements)
+        old_ids = {p['copy_id'] for p in self._placements}
+        def place_import(result):
+            expected = layout_service.copies(self._state)
+            new = [p for key, p in expected.items() if key not in old_ids and p['name'] == result.filename]
+            if not new:
+                raise ValueError("The import did not add a new printed copy.")
+            candidate = dict(new[-1], **dict(zip(('page', 'row', 'column'), destination)))
+            occupied = set().union(*(layout_service.cells(p) for p in self._placements))
+            if not layout_service.fits(candidate, occupied, self._columns, self._rows):
+                raise ValueError("This card does not fit here. Oversized cards need two adjacent empty slots.")
+            self._state.manual_layout = before
+            self._state.manual_layout['placements'].extend(layout_service.record([candidate])['placements'])
+            self._selected_copy = candidate['copy_id']
+            self._history.push(history_before, self.layout_snapshot())
+        actions[0]._add_single_card(on_added=place_import)
+
+    def layout_snapshot(self):
+        return dict(project=self._state.to_dict(), extra_pages=self._extra_pages,
+                    selected_copy=self._selected_copy)
+
+    def commit_layout(self, placements):
+        before = self.layout_snapshot()
+        self._state.manual_layout = layout_service.record(placements)
+        self._history.push(before, self.layout_snapshot())
+
+    def _restore_layout(self, snapshot):
+        if snapshot is None:
+            return
+        self._state.copy_from(ProjectState.from_dict(snapshot['project']))
+        self._extra_pages = snapshot['extra_pages']
+        self._selected_copy = snapshot['selected_copy']
+        self.refresh_after_edit()
+
+    def undo_layout(self):
+        self._history.observe(self._state.to_dict())
+        self._restore_layout(self._history.undo())
+
+    def redo_layout(self):
+        self._history.observe(self._state.to_dict())
+        self._restore_layout(self._history.redo())
+
+    def _scroll_drag(self):
+        if self._view_mode != "Continuous":
+            return
+        point = self.viewport().mapFromGlobal(QCursor.pos())
+        if not 0 <= point.x() < self.viewport().width():
+            return
+        direction = -1 if point.y() < 60 else 1 if point.y() > self.viewport().height() - 60 else 0
+        bar = self.verticalScrollBar()
+        bar.setValue(bar.value() + direction * 22)
 
     def _set_page(self, index):
         if not self._pages:
             return
         self._page_index = max(0, min(int(index), len(self._pages) - 1))
-        self._apply_preview_view()
+        self._apply_preview_view(fit=self._fit_zoom)
         if self._view_mode == "Continuous":
             self.ensureWidgetVisible(self._pages[self._page_index], 20, 20)
 
@@ -1565,6 +1760,7 @@ class PrintPreview(QScrollArea):
         self._apply_preview_view(fit=self._zoom_combo.currentText() == "Fit")
 
     def _set_zoom(self, text):
+        self._fit_zoom = text == "Fit"
         if text != "Fit":
             self._zoom_percent = int(text.rstrip("%"))
         self._apply_preview_view(fit=text == "Fit")
@@ -1573,6 +1769,7 @@ class PrintPreview(QScrollArea):
         count = len(self._pages)
         for index, page in enumerate(self._pages):
             page.setVisible(self._view_mode == "Continuous" or index == self._page_index)
+            self._page_captions[index].setVisible(page.isVisibleTo(self.widget()))
         self._page_label.setText(
             f"Page {self._page_index + 1} of {count}" if count else "No pages"
         )
@@ -1587,7 +1784,7 @@ class PrintPreview(QScrollArea):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        if hasattr(self, "_zoom_combo") and self._zoom_combo.currentText() == "Fit":
+        if getattr(self, "_zoom_combo", None) is not None and self._zoom_combo.currentText() == "Fit":
             self._apply_preview_view(fit=True)
 
 
@@ -1787,6 +1984,21 @@ class ActionsWidget(QGroupBox):
             if not pdf_path.lower().endswith(".pdf"):
                 pdf_path = pdf_path + ".pdf"
 
+            sheet = page_sizes[state.pagesize]
+            if state.orient == "Landscape":
+                sheet = tuple(reversed(sheet))
+            bleed = mm_to_inch(float(state.bleed_edge))
+            cols = int(point_to_inch(sheet[0]) // (card_size_without_bleed_inch[0] + 2 * bleed))
+            rows = int(point_to_inch(sheet[1]) // (card_size_without_bleed_inch[1] + 2 * bleed))
+            try:
+                placements, _ = layout_service.resolve(state, cols, rows)
+            except ValueError as exc:
+                application.warn_nonfatal("Cannot Export Layout", str(exc))
+                return
+
+            if not confirm_underfilled_export(self.window(), layout_service.occupancy(placements, cols, rows)):
+                return
+
             state.filename = os.path.splitext(os.path.basename(pdf_path))[0]
             render_result = None
 
@@ -1892,7 +2104,7 @@ class ActionsWidget(QGroupBox):
             ):
                 self.window().refresh_preview(state, img_dict)
 
-        def add_single_card():
+        def add_single_card(checked=False, *, on_added=None):
             dialog = AddCardDialog(self, state.image_dir)
             if dialog.exec() != QDialog.DialogCode.Accepted:
                 return
@@ -1901,6 +2113,7 @@ class ActionsWidget(QGroupBox):
             if selected_card is None:
                 return
 
+            snapshot = ProjectState.from_dict(state.to_dict()) if on_added else None
             workflow_result = None
             add_error = None
 
@@ -1929,6 +2142,15 @@ class ActionsWidget(QGroupBox):
             del add_window
             self.window().setEnabled(True)
 
+            if on_added is not None:
+                if workflow_result is not None and add_error is None:
+                    try:
+                        on_added(workflow_result)
+                    except ValueError as exc:
+                        add_error = exc
+                if add_error is not None:
+                    state.copy_from(snapshot)
+
             if workflow_result is not None or add_error is not None:
                 self.window().refresh(state, img_dict)
 
@@ -1939,6 +2161,8 @@ class ActionsWidget(QGroupBox):
             if workflow_result is None:
                 return
 
+            if on_added is not None:
+                return
             autosave_managed_session()
 
             art_message = (
@@ -2077,6 +2301,7 @@ class ActionsWidget(QGroupBox):
         self._open_images_button = open_images_button
         self._settings_button = settings_button
         self._add_card_button = add_card_button
+        self._add_single_card = add_single_card
         self._import_button = import_decklist_button
         self._clear_cards_button = clear_cards_button
         self._rebuild_after_cropper = False

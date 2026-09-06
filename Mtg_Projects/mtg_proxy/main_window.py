@@ -279,6 +279,19 @@ class AppShellWindow(QMainWindow):
         self._active_session = None
         self._editor_page = None
         self._update_check_worker = None
+        self._saved_project_snapshot = None
+        self._observed_project_snapshot = None
+        self._project_dirty = False
+        self._saving_project = False
+        self._autosave_timer = QtCore.QTimer(self)
+        self._autosave_timer.setSingleShot(True)
+        self._autosave_timer.setInterval(2000)
+        self._autosave_timer.timeout.connect(self._autosave_if_idle)
+        # Some card/settings controls edit state without rebuilding widgets.
+        self._project_watch_timer = QtCore.QTimer(self)
+        self._project_watch_timer.setInterval(250)
+        self._project_watch_timer.timeout.connect(self.project_changed)
+        self._project_watch_timer.start()
 
         stack = QStackedWidget()
         self._stack = stack
@@ -311,6 +324,11 @@ class AppShellWindow(QMainWindow):
             self._editor_page.deleteLater()
         self._editor_page = editor_page
         self._active_session = session
+        self._autosave_timer.stop()
+        snapshot = self._project_snapshot(session['state'])
+        self._saved_project_snapshot = snapshot if session.get('managed') else None
+        self._observed_project_snapshot = snapshot
+        self._project_dirty = not session.get('managed', False)
         if hasattr(editor_page, "set_project_name"):
             editor_page.set_project_name(session.get("display_name"))
         self._current_project_path = session.get("project_path") or self._current_project_path
@@ -319,6 +337,10 @@ class AppShellWindow(QMainWindow):
         self._update_window_title()
 
     def _clear_active_session(self):
+        self._autosave_timer.stop()
+        self._saved_project_snapshot = None
+        self._observed_project_snapshot = None
+        self._project_dirty = False
         if self._editor_page is not None:
             self._stack.removeWidget(self._editor_page)
             self._editor_page.deleteLater()
@@ -331,7 +353,41 @@ class AppShellWindow(QMainWindow):
             self.setWindowTitle("Print Proxy Prep")
             return
         name = self._active_session.get("display_name") or "Untitled Project"
+        if self._project_dirty:
+            name += "*"
+        if self._editor_page is not None and hasattr(self._editor_page, 'set_project_name'):
+            self._editor_page.set_project_name(name)
         self.setWindowTitle(f"{name} — Print Proxy Prep")
+
+    @staticmethod
+    def _project_snapshot(state):
+        # Observe persisted content only, without serialization mutating live state.
+        return deepcopy(state).to_persisted_dict()
+
+    def project_changed(self):
+        if self._active_session is None or self._saving_project or not self.isEnabled():
+            return
+        if QApplication.activeModalWidget() is not None:
+            return
+        snapshot = self._project_snapshot(self._active_session['state'])
+        if snapshot == self._observed_project_snapshot:
+            return
+        self._observed_project_snapshot = snapshot
+        self._project_dirty = snapshot != self._saved_project_snapshot
+        self._update_window_title()
+        self._autosave_timer.stop()
+        if self._project_dirty and self._active_session.get('managed'):
+            self._autosave_timer.start(2000)
+
+    def _mark_project_saved(self, snapshot):
+        self._saved_project_snapshot = snapshot
+        current = self._project_snapshot(self._active_session['state'])
+        self._observed_project_snapshot = current
+        self._project_dirty = current != snapshot
+        self._autosave_timer.stop()
+        if self._project_dirty:
+            self._autosave_timer.start(2000)
+        self._update_window_title()
 
     def check_for_updates_on_startup(self):
         if CFG.UpdateCheckOnStartup:
@@ -470,7 +526,8 @@ class AppShellWindow(QMainWindow):
             return True
 
         if self._active_session.get("managed"):
-            self.save_active_project(self._active_session["state"])
+            if self.save_active_project(self._active_session["state"]) is None:
+                return False
         elif self._active_session.get("is_draft"):
             if not self._confirm_discard_draft():
                 return False
@@ -498,7 +555,19 @@ class AppShellWindow(QMainWindow):
     def _autosave_managed_session(self):
         if self._active_session is None or not self._active_session.get("managed"):
             return
-        self.save_active_project(self._active_session["state"])
+        if not self.isEnabled() or QApplication.activeModalWidget() is not None:
+            self._autosave_timer.start(2000)
+            return
+        self.project_changed()
+        if self._project_dirty:
+            self.save_active_project(self._active_session["state"], automatic=True)
+
+    def _autosave_if_idle(self):
+        previous = self._observed_project_snapshot
+        self.project_changed()
+        if previous != self._observed_project_snapshot:
+            return  # A last-moment edit restarted the debounce interval.
+        self._autosave_managed_session()
 
     def autosave_managed_session(self):
         self._autosave_managed_session()
@@ -596,19 +665,37 @@ class AppShellWindow(QMainWindow):
         project_entry = project_library.import_project(source_path)
         self.open_managed_project(project_entry["id"])
 
-    def save_active_project(self, state):
+    def save_active_project(self, state, *, automatic=False):
         session = self._active_session
         if session is None:
             return None
         if session.get("managed") and session.get("project_id") is not None:
-            saved = project_library.save_project(session["project_id"], state)
+            self._saving_project = True
+            snapshot = self._project_snapshot(state)
+            try:
+                saved = project_library.save_project(session["project_id"], state)
+                if saved is None:
+                    raise OSError("This project is no longer in the project library.")
+            except (OSError, ValueError) as exc:
+                self._project_dirty = True
+                self._update_window_title()
+                self.statusBar().showMessage(f"Save failed; changes are still unsaved: {exc}")
+                if automatic:
+                    self._autosave_timer.start(10000)
+                else:
+                    self._application.warn_nonfatal('Save Failed', str(exc))
+                return None
+            finally:
+                self._saving_project = False
             if saved is not None:
                 session["project_path"] = saved["path"]
                 session["display_name"] = saved["display_name"]
                 session["thumbnail_card"] = saved.get("thumbnail_card")
                 self._current_project_path = saved["path"]
-                self._dashboard_page.refresh_projects()
-                self._update_window_title()
+                self._mark_project_saved(snapshot)
+                if not automatic:
+                    self._dashboard_page.refresh_projects()
+                self.statusBar().showMessage('Autosaved' if automatic else 'Saved', 2500)
             return saved
 
         name, accepted = QInputDialog.getText(
@@ -641,8 +728,20 @@ class AppShellWindow(QMainWindow):
         session["thumbnail_card"] = created.get("thumbnail_card")
         self._current_project_path = created["path"]
         self._dashboard_page.refresh_projects()
-        self._update_window_title()
+        self._mark_project_saved(self._project_snapshot(state))
         return created
+
+    def closeEvent(self, event):
+        # Flush before Qt exits so a failed write cannot silently close the project.
+        if not self.isEnabled():
+            event.ignore()
+            return
+        if self._active_session is not None and self._active_session.get('managed'):
+            if self.save_active_project(self._active_session['state']) is None:
+                event.ignore()
+                return
+        self._autosave_timer.stop()
+        super().closeEvent(event)
 
     def set_project_thumbnail(self, card_name):
         session = self._active_session
@@ -677,10 +776,12 @@ class AppShellWindow(QMainWindow):
     def refresh(self, state, img_dict):
         if self._editor_page is not None:
             self._editor_page.refresh(state, img_dict)
+            self.project_changed()
 
     def refresh_preview(self, state, img_dict):
         if self._editor_page is not None:
             self._editor_page.refresh_preview(state, img_dict)
+            self.project_changed()
 
 
 def window_setup(application):

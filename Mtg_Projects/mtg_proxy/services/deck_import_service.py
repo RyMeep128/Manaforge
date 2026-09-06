@@ -383,7 +383,7 @@ def import_single_card_into_project(
         )
     state.apply_imported_card(
         imported_card.filename,
-        1,
+        state.get_card_count(imported_card.filename) + 1,
         {
             "name": entry.name,
             "set_code": entry.set_code,
