@@ -62,6 +62,8 @@ The `Preview` tab renders the current document layout so you can sanity-check pa
 
 Hover over a front card to highlight it, then drag to move that printed copy to an exact slot. Dropping onto another card swaps the two when both fit. Empty slots have a large **+** that opens Add Card; adding an existing card adds another copy. Oversized cards occupy two adjacent horizontal slots and move as one card. Backs follow their matching fronts automatically.
 
+Right-click a front card for **Change artwork…** or **Print oversized**. Either half of an oversized card opens the same menu. Artwork and size apply to all copies of that card, as in the Cards tab. Size changes preserve fitting placements, relocate copies as needed, and support Preview Undo/Redo. Cards that cannot fit on the sheet are rejected without changing the project.
+
 Use **Add page** for more placement space. Drag near the top or bottom to scroll in Continuous view, or hover Previous/Next while dragging in Single Page view. Empty trailing editing pages are excluded from export; intentional gaps between populated pages are retained. **Save Project** keeps the layout, and PDF export uses the same positions. Card-list sorting does not rearrange a manual layout; **Reset layout** restores automatic arrangement. If paper or card sizes change, valid placements stay in place and displaced copies move to the next fitting spaces.
 
 Each sheet shows its occupied slots, for example **Page 4: 1/9 filled**. Oversized cards count as two slots. Export warns about under-filled sheets and offers **Go Back** or **Print Anyway**; matching backs are not counted as additional sheets.
@@ -71,6 +73,8 @@ Preview **Undo / Redo** restores moves, swaps, resets, added editing pages, and 
 Named projects **autosave after two seconds without edits**. A `*` beside the project name (in the header and window title) means changes have not yet been saved. It disappears after a successful autosave or manual Save. New drafts need their first Save to choose a name. Save failures keep the `*`, show a status message, and retry; leaving or closing a named project flushes pending changes and stays open if saving fails.
 
 See the [suite README](../../README.md) for all three app areas and the [printer setup roadmap](../../docs/printing-roadmap.md) for profiles/calibration plans.
+
+Use **More → Check for updates…** while editing, or **Check for updates** on the Projects screen, to check for a newer release.
 
 ### Actions Panel
 The right-side `Actions` box includes:

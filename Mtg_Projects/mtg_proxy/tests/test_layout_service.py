@@ -48,12 +48,30 @@ def test_swap_and_invalid_targets_are_atomic():
     assert items == original
 
 
-def test_multiple_card_collision_rejected():
+@pytest.mark.parametrize('source_page', [0, 2])
+def test_oversized_swaps_with_two_normal_copies(source_page):
     state = state_with({'wide': 1, 'a': 1, 'b': 1}, ['wide'])
     items = sorted(layout.copies(state).values(), key=lambda p: -p['span'])
-    for item, pos in zip(items, [(0, 1, 0), (0, 0, 0), (0, 0, 1)]):
+    for item, pos in zip(items, [(source_page, 1, 0), (0, 0, 0), (0, 0, 1)]):
         item.update(zip(('page', 'row', 'column'), pos))
+    original = deepcopy(items)
+    # Input ordering must not reverse the two normal cards.
+    swapped = layout.move(list(reversed(items)), items[0]['copy_id'], (0, 0, 0), 3, 2)
+    by_id = {p['copy_id']: p for p in swapped}
+    assert layout.cells(by_id[items[0]['copy_id']]) == {(0, 0, 0), (0, 0, 1)}
+    for column, item in enumerate(items[1:]):
+        assert layout.cells(by_id[item['copy_id']]) == {(source_page, 1, column)}
+    assert items == original
+
+
+def test_oversized_collision_with_normal_and_oversized_is_atomic():
+    state = state_with({'wide': 2, 'a': 1}, ['wide'])
+    items = sorted(layout.copies(state).values(), key=lambda p: -p['span'])
+    for item, pos in zip(items, [(0, 1, 0), (0, 0, 1), (0, 0, 0)]):
+        item.update(zip(('page', 'row', 'column'), pos))
+    original = deepcopy(items)
     assert layout.move(items, items[0]['copy_id'], (0, 0, 0), 3, 2) is None
+    assert items == original
 
 
 def test_reconcile_quantities_sort_and_geometry():

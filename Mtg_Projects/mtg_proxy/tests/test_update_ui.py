@@ -2,6 +2,36 @@ from services.update_service import UpdateCheckResult
 import main_window
 
 
+def test_update_check_is_available_on_projects_and_editor():
+    from types import SimpleNamespace
+    from PyQt6 import QtWidgets
+    from editor_widgets import ProjectDashboardPage
+    from models import ProjectState
+
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    calls = []
+    application = SimpleNamespace(
+        check_for_updates=lambda manual: calls.append(manual),
+        open_blank_editor=lambda: None,
+        show_home=lambda: None,
+    )
+    dashboard = ProjectDashboardPage(application)
+    button = next(button for button in dashboard.findChildren(QtWidgets.QPushButton)
+                  if button.text() == 'Check for updates')
+    button.click()
+    editor = main_window.AppShellWindow._build_editor_page(
+        SimpleNamespace(_application=application), ProjectState(), {})
+    more = next(button for button in editor.findChildren(QtWidgets.QToolButton)
+                if button.text() == 'More')
+    action = next(action for action in more.menu().actions()
+                  if action.text() == 'Check for updates…')
+    action.trigger()
+    assert calls == [True, True]
+    dashboard.deleteLater()
+    editor.deleteLater()
+    app.processEvents()
+
+
 class _FakeWindow:
     def __init__(self):
         self.calls = []

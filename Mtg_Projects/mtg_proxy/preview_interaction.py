@@ -36,6 +36,19 @@ class PreviewOverlay(QtWidgets.QWidget):
     def item_at(self, slot):
         return self.occupied.get(slot)
 
+    def contextMenuEvent(self, event):
+        item = self.item_at(self.slot(event.pos()))
+        if item is None:
+            event.ignore()
+            return
+        self.preview._selected_copy = item['copy_id']
+        self.preview.update_overlays()
+        # Parent to the preview: applying an action can rebuild this overlay.
+        menu = self.preview.card_context_menu(item['name'])
+        menu.exec(event.globalPos())
+        menu.deleteLater()
+        event.accept()
+
     def rectangle(self, row, column, span=1):
         width = self.width() / max(1, self.preview._columns)
         height = self.height() / max(1, self.preview._rows)
