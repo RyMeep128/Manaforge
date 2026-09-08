@@ -1,4 +1,6 @@
 import dialogs
+import high_res
+from models import ProjectState
 
 
 class _FakeWidget:
@@ -62,6 +64,29 @@ class _FakeDialogState:
 
     def _apply_search_mode_ui(self):
         return dialogs.HighResPickerDialog._apply_search_mode_ui(self)
+
+
+def test_mpcfill_refresh_accepts_high_res_page_without_has_more(tmp_path, monkeypatch):
+    from PyQt6.QtWidgets import QApplication
+    app = QApplication.instance() or QApplication([])
+    page = high_res.HighResSearchPage(candidates=[], total_count=0,
+                                      page_start=0, page_size=60)
+    monkeypatch.setattr(dialogs.high_res_service, 'search_new_art_page',
+                        lambda *args, **kwargs: page)
+    dialog = dialogs.HighResPickerDialog(
+        None, ProjectState(), {}, 'opt.png',
+        context_override=high_res.CardContext(
+            filename='opt.png', query='Opt', display_name='Opt'))
+    monkeypatch.setattr(dialog, '_run_with_popup', lambda title, work: work())
+
+    dialog.refresh_results(reset_page=True)
+
+    assert dialog._total_result_count == 0
+    assert dialog._results_have_more is False
+    assert dialog._page_label.text() == 'Page 0 of 0'
+    dialog.reject()
+    dialog.deleteLater()
+    app.processEvents()
 
 
 def test_apply_source_mode_ui_shows_mpcfill_manual_search_controls():

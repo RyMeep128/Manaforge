@@ -2921,12 +2921,16 @@ class ProjectDashboardPage(QWidget):
 
         import_button.clicked.connect(self.import_project)
         new_button.clicked.connect(application.open_blank_editor)
+        resume_draft_button = QPushButton("Resume Draft")
+        resume_draft_button.clicked.connect(application.resume_draft)
+        self._resume_draft_button = resume_draft_button
 
         top_row = QHBoxLayout()
         top_row.addWidget(title)
         top_row.addStretch()
         top_row.addWidget(check_updates_button)
         top_row.addWidget(import_button)
+        top_row.addWidget(resume_draft_button)
         top_row.addWidget(new_button)
 
         layout = QVBoxLayout()
@@ -2940,6 +2944,7 @@ class ProjectDashboardPage(QWidget):
         self.setLayout(layout)
 
     def refresh_projects(self):
+        self._resume_draft_button.setVisible(project_library.draft_has_user_content())
         self._projects = project_library.list_projects()
         self._project_list.clear()
         for project_entry in self._projects:

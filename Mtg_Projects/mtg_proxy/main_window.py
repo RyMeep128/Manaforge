@@ -214,6 +214,10 @@ class PrintProxyPrepApplication(QApplication):
         if hasattr(self, "_window"):
             self._window.open_blank_editor()
 
+    def resume_draft(self):
+        if hasattr(self, "_window"):
+            self._window.resume_draft()
+
     def open_managed_project(self, project_id):
         if hasattr(self, "_window"):
             self._window.open_managed_project(project_id)
@@ -383,7 +387,9 @@ class AppShellWindow(QMainWindow):
         self._project_dirty = snapshot != self._saved_project_snapshot
         self._update_window_title()
         self._autosave_timer.stop()
-        if self._project_dirty and self._active_session.get('managed'):
+        if self._project_dirty and (
+            self._active_session.get('managed') or self._active_session.get('is_draft')
+        ):
             self._autosave_timer.start(2000)
 
     def _mark_project_saved(self, snapshot):
@@ -547,27 +553,46 @@ class AppShellWindow(QMainWindow):
         if project_library.draft_has_user_content():
             confirm = QMessageBox.question(
                 self,
-                "Start New Project?",
+                "Resume Draft?",
                 (
-                    "tmp_images already contains an unsaved draft.\n\n"
-                    "Start a fresh draft and remove those temporary images first?"
+                    "Manaforge found an unsaved draft.\n\n"
+                    "Choose Yes to resume it, No to discard it and start fresh, "
+                    "or Cancel to return to Projects."
                 ),
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No |
+                QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Yes,
             )
-            if confirm != QMessageBox.StandardButton.Yes:
+            if confirm == QMessageBox.StandardButton.Cancel:
                 return None
+            if confirm == QMessageBox.StandardButton.Yes:
+                return project_library.load_draft_project_dict()
             return project_library.reset_draft_workspace()
         return project_library.create_draft_project_dict()
 
     def _autosave_managed_session(self):
-        if self._active_session is None or not self._active_session.get("managed"):
+        if self._active_session is None:
             return
         if not self.isEnabled() or QApplication.activeModalWidget() is not None:
             self._autosave_timer.start(2000)
             return
         self.project_changed()
         if self._project_dirty:
+            if self._active_session.get('is_draft'):
+                try:
+                    project_library.save_draft_project(self._active_session['state'])
+                except (OSError, ValueError, TypeError) as exc:
+                    self.statusBar().showMessage(f"Draft recovery save failed: {exc}")
+                    self._autosave_timer.start(10000)
+                    return
+                self._observed_project_snapshot = self._project_snapshot(
+                    self._active_session['state'])
+                self._observed_project_state = deepcopy(self._active_session['state'])
+                self._autosave_timer.stop()
+                self.statusBar().showMessage('Draft recovery saved', 2500)
+                return
+            if not self._active_session.get("managed"):
+                return
             self.save_active_project(self._active_session["state"], automatic=True)
 
     def _autosave_if_idle(self):
@@ -619,6 +644,34 @@ class AppShellWindow(QMainWindow):
                 "img_dict": img_dict,
             },
         )
+
+    def resume_draft(self):
+        if not project_library.draft_has_user_content():
+            self._application.warn_nonfatal(
+                'No Draft Found', 'There is no unsaved draft to recover.')
+            self._dashboard_page.refresh_projects()
+            return
+        if not self._leave_active_session():
+            return
+        try:
+            draft_data = project_library.load_draft_project_dict()
+            state = ProjectState.from_dict(draft_data)
+            img_dict = {}
+            project_service.init_dict(state, img_dict, self._application.warn_nonfatal)
+        except RECOVERABLE_EDITOR_LOAD_ERRORS as exc:
+            self._application.warn_nonfatal('Draft Recovery Failed', str(exc))
+            return
+        editor_page = self._build_editor_page(state, img_dict)
+        self._set_active_editor(editor_page, {
+            'project_id': None,
+            'project_path': None,
+            'display_name': 'Recovered Draft',
+            'managed': False,
+            'is_draft': True,
+            'thumbnail_card': None,
+            'state': state,
+            'img_dict': img_dict,
+        })
 
     def open_managed_project(self, project_id):
         if not self._leave_active_session():
@@ -746,6 +799,13 @@ class AppShellWindow(QMainWindow):
             return
         if self._active_session is not None and self._active_session.get('managed'):
             if self.save_active_project(self._active_session['state']) is None:
+                event.ignore()
+                return
+        elif self._active_session is not None and self._active_session.get('is_draft'):
+            try:
+                project_library.save_draft_project(self._active_session['state'])
+            except (OSError, ValueError, TypeError) as exc:
+                self._application.warn_nonfatal('Draft Recovery Save Failed', str(exc))
                 event.ignore()
                 return
         self._autosave_timer.stop()

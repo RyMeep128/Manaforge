@@ -126,16 +126,20 @@ def test_failed_autosave_keeps_dirty_and_retries_without_modal(window, monkeypat
     assert not event.isAccepted()
 
 
-def test_new_draft_does_not_autosave_or_prompt_for_a_name(window, monkeypatch):
+def test_new_draft_autosaves_recovery_without_prompting_for_a_name(window, monkeypatch):
     state = window._active_session['state']
     window._set_active_editor(Editor(), dict(state=state, managed=False, is_draft=True,
         display_name='Unsaved Draft', project_id=None, project_path=None))
     monkeypatch.setattr(main_window.QInputDialog, 'getText', lambda *args: pytest.fail('Unexpected prompt'))
+    recovery_writes = []
+    monkeypatch.setattr(main_window.project_library, 'save_draft_project',
+                        lambda value: recovery_writes.append(value.to_persisted_dict()))
     state.set_card_count('a', 2)
     window.project_changed()
     window._autosave_managed_session()
     assert window._editor_page.text() == 'Unsaved Draft*'
     assert window.writes == []
+    assert recovery_writes[0]['card_entries'][0]['count'] == 2
     assert not window._autosave_timer.isActive()
 
 

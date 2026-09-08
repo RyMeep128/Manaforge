@@ -6,6 +6,9 @@ Manaforge is a Python / PyQt6 desktop suite for preparing Magic: The Gathering p
 
 Manaforge is organized around **three apps**, with a shared card-data layer.
 
+See the [Manaforge delivery checklist](docs/roadmap.md) for the ordered printer,
+Deck Editor, integration, and recommendation roadmap.
+
 | App | Purpose | Current status |
 | --- | --- | --- |
 | **Print Proxy Prep** | Import cards, prepare images, arrange print sheets, and export PDFs with paired backs and oversized cards. | Runnable; Windows launchers and app-bundle build included. |
@@ -62,7 +65,7 @@ The Deck Editor has no launch command yet. Windows is the packaged target; the c
 
 Backside offsets and output settings are saved per project. **Print Settings → Printer profiles…** saves reusable paper, backside, alignment, and duplex preferences and lets you apply them to other projects. See [printer setup](docs/printing-roadmap.md) for details and the planned calibration PDF workflow.
 
-Named projects autosave after two seconds without edits. The header and window title show `*` while changes are unsaved; successful autosaving or **Save Project** clears it. New drafts need their first Save to choose a name. Closing or switching away saves pending work, and a failed save keeps the project open and marked unsaved.
+Named projects autosave after two seconds without edits. The header and window title show `*` while changes are unsaved; successful autosaving or **Save Project** clears it. Unnamed drafts save a recovery snapshot without asking for a name; use **Resume Draft** on the Projects screen after restarting. The first regular Save chooses the permanent project name. Closing or switching away saves pending work, and a failed save keeps the project open and marked unsaved.
 
 For large projects, unchanged card widgets and decoded previews are reused and preview-cache disk access is batched. **More → Application settings… → Preview Image Cache** controls the decoded-image RAM budget (256 MB default; up to 2048 MB), independently of export quality.
 

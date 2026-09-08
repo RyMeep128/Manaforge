@@ -47,6 +47,34 @@ def test_draft_workspace_is_seeded_and_detects_user_content(monkeypatch, tmp_pat
     assert project_library.draft_has_user_content() is True
 
 
+def test_draft_project_state_can_be_saved_and_recovered(monkeypatch, tmp_path):
+    _set_project_library_roots(monkeypatch, tmp_path)
+    _seed_test_back(tmp_path)
+    draft = project_library.create_draft_project_dict()
+    state = {**draft, "cards": {"card-a.png": 3}, "bleed_edge": "0.1"}
+
+    project_library.save_draft_project(state)
+    recovered = project_library.load_draft_project_dict()
+
+    recovered_entries = {entry["front_name"]: entry["count"]
+                         for entry in recovered["card_entries"]}
+    assert recovered_entries == {"card-a.png": 3}
+    assert recovered["bleed_edge"] == "0.1"
+    assert recovered["image_dir"] == draft["image_dir"]
+    assert recovered["img_cache"] == draft["img_cache"]
+
+
+def test_image_only_legacy_draft_is_recoverable(monkeypatch, tmp_path):
+    _set_project_library_roots(monkeypatch, tmp_path)
+    _seed_test_back(tmp_path)
+    draft = project_library.create_draft_project_dict()
+    (Path(draft["image_dir"]) / "card-a.png").write_bytes(b"front")
+
+    recovered = project_library.load_draft_project_dict()
+
+    assert recovered["cards"] == {"card-a.png": 1}
+
+
 def test_materialize_draft_project_persists_db_backed_references(monkeypatch, tmp_path):
     _set_project_library_roots(monkeypatch, tmp_path)
     _seed_test_back(tmp_path)

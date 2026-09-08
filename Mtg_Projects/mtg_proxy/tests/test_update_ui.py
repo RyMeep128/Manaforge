@@ -13,6 +13,7 @@ def test_update_check_is_available_on_projects_and_editor():
     application = SimpleNamespace(
         check_for_updates=lambda manual: calls.append(manual),
         open_blank_editor=lambda: None,
+        resume_draft=lambda: None,
         show_home=lambda: None,
     )
     dashboard = ProjectDashboardPage(application)

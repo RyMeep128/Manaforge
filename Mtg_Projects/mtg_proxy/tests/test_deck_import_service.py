@@ -74,6 +74,27 @@ def test_add_card_local_checkbox_and_text_without_image(tmp_path, monkeypatch):
     app.processEvents()
 
 
+def test_add_card_actions_stay_visible_with_large_preview(tmp_path):
+    import dialogs
+    from PyQt6.QtGui import QPixmap
+    from PyQt6.QtWidgets import QApplication
+    app = QApplication.instance() or QApplication([])
+    dialog = dialogs.AddCardDialog(None, str(tmp_path))
+    dialog.resize(800, 600)
+    dialog._card_preview_label.setPixmap(QPixmap(1000, 1400))
+    dialog.show()
+    app.processEvents()
+
+    assert dialog._card_next_button.isVisible()
+    assert dialog._card_cancel_button.isVisible()
+    assert dialog._card_next_button.mapTo(dialog, dialog._card_next_button.rect().bottomRight()).y() < dialog.height()
+    assert dialog._card_cancel_button.mapTo(dialog, dialog._card_cancel_button.rect().bottomRight()).y() < dialog.height()
+
+    dialog.reject()
+    dialog.deleteLater()
+    app.processEvents()
+
+
 def _runtime_dir(name: str) -> Path:
     target = Path(__file__).resolve().parents[1] / "projects" / ".codex_test_runtime" / f"{name}_{uuid.uuid4().hex}"
     target.mkdir(parents=True, exist_ok=True)

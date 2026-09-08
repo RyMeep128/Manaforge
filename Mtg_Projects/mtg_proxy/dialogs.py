@@ -406,13 +406,20 @@ class AddCardDialog(QDialog):
 
         card_preview_label = QLabel("Select a card to preview it here.")
         card_preview_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        card_preview_label.setMinimumSize(300, 420)
+        # Ignore the pixmap's native size hint. Large card images otherwise make
+        # the dialog taller than the screen and push its action buttons off-screen.
+        card_preview_label.setSizePolicy(
+            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
+        card_preview_label.setMinimumSize(220, 280)
+        card_preview_label.setMaximumHeight(420)
         card_preview_label.setFrameShape(QFrame.Shape.StyledPanel)
         card_preview_label.setWordWrap(True)
         self._card_preview_label = card_preview_label
 
         card_details_label = QTextEdit()
         card_details_label.setReadOnly(True)
+        card_details_label.setMinimumHeight(90)
+        card_details_label.setMaximumHeight(180)
         self._card_details_label = card_details_label
 
         card_left_layout = QVBoxLayout()
@@ -440,6 +447,7 @@ class AddCardDialog(QDialog):
 
         card_cancel_button = QPushButton("Cancel")
         card_cancel_button.clicked.connect(self.reject)
+        self._card_cancel_button = card_cancel_button
 
         card_button_row = QHBoxLayout()
         card_button_row.addStretch()
@@ -1428,7 +1436,9 @@ class HighResPickerDialog(QDialog):
 
         results = [] if search_page is None else search_page.candidates
         self._total_result_count = 0 if search_page is None else search_page.total_count
-        self._results_have_more = bool(search_page and search_page.has_more)
+        # High-resolution providers return an exact total using the existing
+        # HighResSearchPage model, which has no has_more field.
+        self._results_have_more = False
         self._candidates = results
         self._results_list.clear()
         self._apply_button.setEnabled(False)

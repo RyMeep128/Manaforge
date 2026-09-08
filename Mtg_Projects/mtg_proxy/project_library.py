@@ -43,6 +43,10 @@ def draft_cache_path():
     return os.path.join(draft_root(), "img.cache")
 
 
+def draft_project_path():
+    return os.path.join(draft_root(), "draft.json")
+
+
 def _utc_now():
     return datetime.datetime.now(datetime.timezone.utc).isoformat()
 
@@ -355,6 +359,41 @@ def create_draft_project_dict():
     return ensure_draft_workspace()
 
 
+def save_draft_project(print_dict):
+    ensure_draft_workspace()
+    write_json_atomic(
+        draft_project_path(),
+        project_to_persisted_dict(print_dict),
+        ensure_ascii=False,
+    )
+    return draft_project_path()
+
+
+def load_draft_project_dict():
+    defaults = ensure_draft_workspace()
+    path = draft_project_path()
+    if not os.path.exists(path):
+        default_back = defaults.get("backside_default")
+        defaults["cards"] = {
+            name: 1
+            for name in os.listdir(draft_root())
+            if name != default_back
+            and os.path.isfile(os.path.join(draft_root(), name))
+            and os.path.splitext(name)[1].casefold() in {
+                ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff"
+            }
+        }
+        return defaults
+    with open(path, "r", encoding="utf-8") as handle:
+        data = json.load(handle)
+    if not isinstance(data, dict):
+        raise ValueError("The recovered draft is not a valid project.")
+    data["image_dir"] = defaults["image_dir"]
+    data["img_cache"] = defaults["img_cache"]
+    data.setdefault("backside_default", defaults["backside_default"])
+    return data
+
+
 def _initial_project_dict(project_path):
     state = ProjectState()
     default_back_name = "__back.png"
@@ -417,7 +456,7 @@ def materialize_draft_project(display_name, print_dict, thumbnail_card=None):
     card_service = get_default_card_service()
     for name in os.listdir(draft_root()):
         source_path = os.path.join(draft_root(), name)
-        if os.path.isdir(source_path) or name == "img.cache":
+        if os.path.isdir(source_path) or name in {"img.cache", "draft.json"}:
             continue
         with open(source_path, "rb") as handle:
             asset_id = card_service.store_image_bytes(
