@@ -59,6 +59,22 @@ class BulkDownloadWorker(QObject):
             self.failed.emit(str(exc))
 
 
+class OracleTagSyncWorker(QObject):
+    finished = pyqtSignal(object)
+    failed = pyqtSignal(str)
+
+    def __init__(self, admin_service: CardAdminService) -> None:
+        super().__init__()
+        self.admin_service = admin_service
+
+    @pyqtSlot()
+    def run(self) -> None:
+        try:
+            self.finished.emit(self.admin_service.sync_oracle_tags())
+        except Exception as exc:  # pragma: no cover - defensive GUI guard
+            self.failed.emit(str(exc))
+
+
 class CardsTab(QWidget):
     HEADERS = ["Oracle ID", "Name", "Normalized", "Layout"]
     PAGE_SIZE = 100
@@ -271,16 +287,26 @@ class PrintsTab(QWidget):
         self._total_count = 0
 
         self.query_edit = QLineEdit()
-        self.query_edit.setPlaceholderText("Filter by card name")
+        self.query_edit.setPlaceholderText('Local query: t:creature o:"draw a card" mv<=3')
+        self.syntax_checkbox = QCheckBox('Scryfall syntax')
+        self.syntax_checkbox.setChecked(True)
+        self.syntax_checkbox.setToolTip('Search locally stored rules text, Oracle tags, and card properties. Regex is not supported.')
+        self._search_timer = QTimer(self)
+        self._search_timer.setSingleShot(True)
+        self._search_timer.setInterval(300)
+        self._search_timer.timeout.connect(self._reset_and_refresh)
+        self.syntax_checkbox.toggled.connect(self._reset_and_refresh)
         self.set_code_edit = QLineEdit()
         self.set_code_edit.setPlaceholderText("Set code")
         self.oracle_filter_edit = QLineEdit()
         self.oracle_filter_edit.setPlaceholderText("Oracle ID")
-        for widget in (self.query_edit, self.set_code_edit, self.oracle_filter_edit):
-            widget.textChanged.connect(self._reset_and_refresh)
+        self.query_edit.textChanged.connect(self._schedule_refresh)
+        self.set_code_edit.textChanged.connect(self._reset_and_refresh)
+        self.oracle_filter_edit.textChanged.connect(self._reset_and_refresh)
 
         filter_row = QHBoxLayout()
         filter_row.addWidget(self.query_edit)
+        filter_row.addWidget(self.syntax_checkbox)
         filter_row.addWidget(self.set_code_edit)
         filter_row.addWidget(self.oracle_filter_edit)
 
@@ -303,6 +329,8 @@ class PrintsTab(QWidget):
         self.double_faced_checkbox = QCheckBox("Double faced")
         self.payload_edit = QPlainTextEdit()
         self.payload_edit.setReadOnly(True)
+        self.rules_edit = QPlainTextEdit()
+        self.rules_edit.setReadOnly(True)
 
         form = QFormLayout()
         form.addRow("Card ID", self.card_id_edit)
@@ -317,6 +345,7 @@ class PrintsTab(QWidget):
         form.addRow("Preview URL", self.preview_url_edit)
         form.addRow("", self.double_faced_checkbox)
         form.addRow("Payload JSON", self.payload_edit)
+        form.addRow("Card text (all faces)", self.rules_edit)
 
         new_button = QPushButton("New")
         save_button = QPushButton("Save")
@@ -368,13 +397,22 @@ class PrintsTab(QWidget):
         self.refresh_table()
 
     def refresh_table(self) -> None:
-        prints = self.admin_service.list_prints(
-            query=self.query_edit.text(),
-            set_code=self.set_code_edit.text(),
-            oracle_id=self.oracle_filter_edit.text(),
-            page=self._page,
-            page_size=self.PAGE_SIZE,
-        )
+        try:
+            prints = self.admin_service.list_prints(
+                query=self.query_edit.text(),
+                set_code=self.set_code_edit.text(),
+                oracle_id=self.oracle_filter_edit.text(),
+                page=self._page,
+                page_size=self.PAGE_SIZE,
+                syntax=self.syntax_checkbox.isChecked(),
+            )
+        except ValueError as exc:
+            self.table.setRowCount(0)
+            self.page_label.setText(str(exc))
+            self.prev_button.setEnabled(False)
+            self.next_button.setEnabled(False)
+            self.status_fn(str(exc))
+            return
         self._page = prints.page
         self._total_pages = prints.total_pages
         self._total_count = prints.total_count
@@ -403,6 +441,9 @@ class PrintsTab(QWidget):
     def _reset_and_refresh(self) -> None:
         self._page = 1
         self.refresh_table()
+
+    def _schedule_refresh(self) -> None:
+        self._search_timer.start()
 
     def _previous_page(self) -> None:
         if self._page <= 1:
@@ -438,6 +479,8 @@ class PrintsTab(QWidget):
         self.preview_url_edit.setText(print_record.preview_url or "")
         self.double_faced_checkbox.setChecked(print_record.is_double_faced)
         self.payload_edit.setPlainText(json.dumps(print_record.payload, indent=2, sort_keys=True))
+        from mtg_core.search import card_rules_text
+        self.rules_edit.setPlainText(card_rules_text(print_record.payload))
         self.status_fn(f"Selected print: {print_record.name} ({print_record.card_id})")
 
     def _new_print(self) -> None:
@@ -455,6 +498,7 @@ class PrintsTab(QWidget):
         self.preview_url_edit.clear()
         self.double_faced_checkbox.setChecked(False)
         self.payload_edit.clear()
+        self.rules_edit.clear()
         self.status_fn("Creating new print")
 
     def _save_print(self) -> None:
@@ -740,6 +784,8 @@ class SyncTab(QWidget):
         self.status_fn = status_fn
         self._thread: QThread | None = None
         self._worker: BulkDownloadWorker | None = None
+        self._tag_thread: QThread | None = None
+        self._tag_worker: OracleTagSyncWorker | None = None
         self._close_requested = False
         self._loaded = False
         self._query_initialized = False
@@ -763,6 +809,9 @@ class SyncTab(QWidget):
         self.resume_button.clicked.connect(self._resume_download_job)
         self.refresh_status_button = QPushButton("Refresh Status")
         self.refresh_status_button.clicked.connect(self._refresh_download_status)
+        self.oracle_tags_button = QPushButton("Update Oracle Tags")
+        self.oracle_tags_button.clicked.connect(self._start_oracle_tag_sync)
+        self.oracle_tags_label = QLabel("Not updated this session")
 
         self.table = QTableWidget(0, len(self.HEADERS))
         self.table.setHorizontalHeaderLabels(self.HEADERS)
@@ -795,6 +844,8 @@ class SyncTab(QWidget):
         controls_layout.addWidget(self.resume_button, 6, 2)
         controls_layout.addWidget(self.refresh_status_button, 6, 3)
         controls_layout.addWidget(refresh_button, 7, 0)
+        controls_layout.addWidget(self.oracle_tags_button, 8, 0)
+        controls_layout.addWidget(self.oracle_tags_label, 8, 1, 1, 3)
         controls_layout.setColumnStretch(1, 1)
 
         splitter = QSplitter()
@@ -881,6 +932,9 @@ class SyncTab(QWidget):
         return self._thread is not None and self._thread.isRunning()
 
     def request_pause_for_close(self) -> bool:
+        if self._tag_thread is not None and self._tag_thread.isRunning():
+            self._close_requested = True
+            return False
         if not self.is_download_running():
             status = self.admin_service.get_bulk_download_status()
             if status.status == "running" and not status.completed:
@@ -945,6 +999,46 @@ class SyncTab(QWidget):
         self._thread.start()
         self._apply_download_status(self.admin_service.get_bulk_download_status())
         self.status_fn("Sync download started")
+
+    def _start_oracle_tag_sync(self) -> None:
+        if self._tag_thread is not None and self._tag_thread.isRunning():
+            return
+        self.oracle_tags_button.setEnabled(False)
+        self.oracle_tags_label.setText('Downloading Oracle Tags…')
+        self._tag_thread = QThread(self)
+        self._tag_worker = OracleTagSyncWorker(self.admin_service)
+        self._tag_worker.moveToThread(self._tag_thread)
+        self._tag_thread.started.connect(self._tag_worker.run)
+        self._tag_worker.finished.connect(self._on_oracle_tags_finished)
+        self._tag_worker.failed.connect(self._on_oracle_tags_failed)
+        self._tag_worker.finished.connect(self._tag_thread.quit)
+        self._tag_worker.failed.connect(self._tag_thread.quit)
+        self._tag_worker.finished.connect(self._tag_worker.deleteLater)
+        self._tag_worker.failed.connect(self._tag_worker.deleteLater)
+        self._tag_thread.finished.connect(self._tag_thread.deleteLater)
+        self._tag_thread.start()
+
+    def _on_oracle_tags_finished(self, result) -> None:
+        self.oracle_tags_label.setText(
+            f"{result['tags']} tags • {result['taggings']} card assignments")
+        self.oracle_tags_button.setEnabled(True)
+        self._tag_worker = None
+        self._tag_thread = None
+        self.refresh_view()
+        self.status_fn('Oracle Tags updated')
+        if self._close_requested:
+            self._close_requested = False
+            self.close_ready.emit()
+
+    def _on_oracle_tags_failed(self, message: str) -> None:
+        self.oracle_tags_label.setText(f'Update failed: {message}')
+        self.oracle_tags_button.setEnabled(True)
+        self._tag_worker = None
+        self._tag_thread = None
+        self.status_fn('Oracle Tags update failed')
+        if self._close_requested:
+            self._close_requested = False
+            self.close_ready.emit()
 
     def _on_worker_progress(self, status) -> None:
         self._apply_download_status(status)

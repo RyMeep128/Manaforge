@@ -344,6 +344,7 @@ class AddCardDialog(QDialog):
         self._card_page_size = 250
         self._card_page_start = 0
         self._total_card_count = 0
+        self._card_results_have_more = False
 
         intro = QLabel(
             "Search by full or partial card name, or use Scryfall syntax such as "
@@ -364,6 +365,10 @@ class AddCardDialog(QDialog):
         card_set_filter_edit = QLineEdit()
         card_set_filter_edit.setPlaceholderText("Set code or set name")
         self._card_set_filter_edit = card_set_filter_edit
+        self._local_search_checkbox = QCheckBox("Local database only")
+        self._local_search_checkbox.setToolTip(
+            'Search stored card data using supported Scryfall syntax. No online card lookup. '
+            'Regex and Tagger filters require online search.')
 
         card_search_button = QPushButton("Search")
         card_search_button.clicked.connect(lambda: self.refresh_card_results(reset_page=True))
@@ -372,6 +377,7 @@ class AddCardDialog(QDialog):
         card_filters_layout.addWidget(WidgetWithLabel("Search Query", card_name_edit), 2)
         card_filters_layout.addWidget(WidgetWithLabel("Set Filter", card_set_filter_edit), 1)
         card_filters_layout.addWidget(card_search_button)
+        card_filters_layout.addWidget(self._local_search_checkbox)
 
         card_prev_page_button = QPushButton("Previous 250 Results")
         card_prev_page_button.setEnabled(False)
@@ -405,8 +411,8 @@ class AddCardDialog(QDialog):
         card_preview_label.setWordWrap(True)
         self._card_preview_label = card_preview_label
 
-        card_details_label = QLabel("")
-        card_details_label.setWordWrap(True)
+        card_details_label = QTextEdit()
+        card_details_label.setReadOnly(True)
         self._card_details_label = card_details_label
 
         card_left_layout = QVBoxLayout()
@@ -487,12 +493,14 @@ class AddCardDialog(QDialog):
         return f"{set_name} [{set_code} #{collector_number}]"
 
     def _candidate_details_text(self, candidate):
+        from mtg_core.search import card_rules_text
         details = [candidate.name]
         if candidate.set_name:
             details.append(f"Set Name: {candidate.set_name}")
         if candidate.set_code and candidate.collector_number:
             details.append(f"Set: {str(candidate.set_code).upper()} #{candidate.collector_number}")
         details.append(f"Filename: {candidate.filename}")
+        details.append(card_rules_text(candidate.card_data))
         return "\n".join(details)
 
     def _selected_card_candidate(self, row=None):
@@ -509,8 +517,11 @@ class AddCardDialog(QDialog):
             self._card_next_page_button.setEnabled(False)
             return
         current_page = (self._card_page_start // self._card_page_size) + 1
-        total_pages = max(1, math.ceil(self._total_card_count / self._card_page_size))
-        self._card_page_label.setText(f"Page {current_page} of {total_pages}")
+        if self._card_results_have_more:
+            self._card_page_label.setText(f"Page {current_page} • more results")
+        else:
+            total_pages = max(1, math.ceil(self._total_card_count / self._card_page_size))
+            self._card_page_label.setText(f"Page {current_page} of {total_pages}")
         self._card_prev_page_button.setEnabled(self._card_page_start > 0)
         self._card_next_page_button.setEnabled(
             self._card_page_start + self._card_page_size < self._total_card_count
@@ -543,7 +554,9 @@ class AddCardDialog(QDialog):
         local_path = candidate.local_image_path
         if candidate.card_id and not local_path:
             local_path = get_default_card_service().get_image_path(candidate.card_id)
-        return local_path, candidate.thumbnail_url or candidate.preview_url
+        checkbox = getattr(self, '_local_search_checkbox', None)
+        local_only = checkbox is not None and checkbox.isChecked()
+        return local_path, None if local_only else candidate.thumbnail_url or candidate.preview_url
 
     def _stop_card_thumbnail_loader(self):
         if self._card_thumbnail_loader is not None:
@@ -617,6 +630,7 @@ class AddCardDialog(QDialog):
     def refresh_card_results(self, reset_page=False):
         name_query = self._card_name_edit.text().strip()
         set_filter = self._card_set_filter_edit.text().strip()
+        local_only = self._local_search_checkbox.isChecked()
         if reset_page:
             self._card_page_start = 0
 
@@ -632,6 +646,7 @@ class AddCardDialog(QDialog):
                     page_start=self._card_page_start,
                     page_size=self._card_page_size,
                     online_mode=CFG.OnlineMode,
+                    local_only=local_only,
                 )
             except ValueError as exc:
                 error = exc
@@ -645,11 +660,13 @@ class AddCardDialog(QDialog):
             self._card_results_list.clear()
             self._card_next_button.setEnabled(False)
             self._total_card_count = 0
+            self._card_results_have_more = False
             self._update_card_pagination_controls()
             return
 
         self._card_candidates = [] if search_page is None else search_page.candidates
         self._total_card_count = 0 if search_page is None else search_page.total_count
+        self._card_results_have_more = bool(search_page and search_page.has_more)
         self._stop_card_thumbnail_loader()
         self._card_results_list.clear()
         self._card_next_button.setEnabled(False)
@@ -686,10 +703,10 @@ class AddCardDialog(QDialog):
         self._selected_card_value = candidate
         if candidate is None:
             self._card_next_button.setEnabled(False)
-            self._card_details_label.setText("")
+            self._card_details_label.setPlainText("")
             return
         self._card_next_button.setEnabled(True)
-        self._card_details_label.setText(self._candidate_details_text(candidate))
+        self._card_details_label.setPlainText(self._candidate_details_text(candidate))
         self._selected_art_candidate_value = None
         self._selected_art_source_value = None
         self._update_card_preview(candidate)
@@ -698,6 +715,11 @@ class AddCardDialog(QDialog):
         local_path = candidate.local_image_path
         if candidate.card_id and not local_path:
             local_path = get_default_card_service().get_image_path(candidate.card_id)
+        checkbox = getattr(self, '_local_search_checkbox', None)
+        if not local_path and checkbox is not None and checkbox.isChecked():
+            self._card_preview_label.setPixmap(QPixmap())
+            self._card_preview_label.setText('No local image stored. Card text is available; adding this card may require downloading its image.')
+            return
         cache_key = f"local:{local_path}" if local_path else (candidate.preview_url or candidate.thumbnail_url)
         if cache_key not in self._card_preview_cache:
             preview_bytes = None
@@ -955,6 +977,7 @@ class HighResPickerDialog(QDialog):
         self._page_size = 60
         self._page_start = 0
         self._total_result_count = 0
+        self._results_have_more = False
         self._thumbnail_loader = None
         self._page_token = 0
         self._mpcfill_name_search_text = self._context.display_name
@@ -1330,8 +1353,11 @@ class HighResPickerDialog(QDialog):
             self._next_page_button.setEnabled(False)
             return
         current_page = (self._page_start // self._page_size) + 1
-        total_pages = max(1, math.ceil(self._total_result_count / self._page_size))
-        self._page_label.setText(f"Page {current_page} of {total_pages}")
+        if self._results_have_more:
+            self._page_label.setText(f"Page {current_page} • more results")
+        else:
+            total_pages = max(1, math.ceil(self._total_result_count / self._page_size))
+            self._page_label.setText(f"Page {current_page} of {total_pages}")
         self._prev_page_button.setEnabled(self._page_start > 0)
         self._next_page_button.setEnabled(self._page_start + self._page_size < self._total_result_count)
 
@@ -1396,11 +1422,13 @@ class HighResPickerDialog(QDialog):
             self._warn("New Art Search Failed", str(error))
             self._status_label.setText("Search failed. Check the warning for details.")
             self._total_result_count = 0
+            self._results_have_more = False
             self._update_pagination_controls()
             return
 
         results = [] if search_page is None else search_page.candidates
         self._total_result_count = 0 if search_page is None else search_page.total_count
+        self._results_have_more = bool(search_page and search_page.has_more)
         self._candidates = results
         self._results_list.clear()
         self._apply_button.setEnabled(False)

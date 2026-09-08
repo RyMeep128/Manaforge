@@ -93,6 +93,8 @@ The right-side `Actions` box includes:
 
 # Importing Cards
 
+In **Add Card**, enable **Local database only** to search stored rules text and card properties with supported Scryfall syntax, without online lookups or image downloads. The details panel displays full stored card text, including every face. See the [local search guide](../../docs/local-card-search.md) for examples and limitations.
+
 ## Import Decklist
 `Import Decklist` can import from:
 - pasted deck text with one card name per line (defaults to one copy), or quantities like `4 Lightning Bolt`; both formats can be mixed

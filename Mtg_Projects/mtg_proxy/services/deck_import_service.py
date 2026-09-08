@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import uuid
 from dataclasses import dataclass
 from typing import Callable
@@ -57,6 +58,7 @@ class ScryfallCardSearchPage:
     page_start: int
     page_size: int
     search_source: str = "remote"
+    has_more: bool = False
 
 
 @dataclass
@@ -118,7 +120,8 @@ def _extract_preview_urls(card_data: dict) -> tuple[str, str]:
     return "", ""
 
 
-def _build_card_candidate(card_service: CardService, result, search_source: str) -> ScryfallCardCandidate:
+def _build_card_candidate(card_service: CardService, result, search_source: str,
+                          *, image_records=None) -> ScryfallCardCandidate:
     card_data = result.payload
     face_urls = deck_import.extract_face_image_urls(card_data)
     front_name = _front_face_name(card_data)
@@ -129,8 +132,10 @@ def _build_card_candidate(card_service: CardService, result, search_source: str)
 
     preview_url, thumbnail_url = _extract_preview_urls(card_data)
     card_name = card_data.get("name") or front_name
-    front_record = card_service.database.get_image_record(result.card_id, "default")
-    back_record = card_service.database.get_image_record(result.card_id, "back")
+    image_records = image_records or {}
+    front_record = image_records.get((result.card_id, 'default'))
+    back_record = image_records.get((result.card_id, 'back'))
+    local_path = front_record.path if front_record and front_record.path and os.path.exists(front_record.path) else None
     return ScryfallCardCandidate(
         name=card_name,
         set_code=card_data.get("set"),
@@ -152,9 +157,17 @@ def _build_card_candidate(card_service: CardService, result, search_source: str)
         card_data=card_data,
         image_asset_id=None if front_record is None else front_record.asset_id,
         backside_asset_id=None if back_record is None else back_record.asset_id,
-        local_image_path=card_service.get_image_path(result.card_id),
+        local_image_path=local_path,
         search_source=search_source,
     )
+
+
+def _build_card_candidates(card_service: CardService, results, search_source: str,
+                           *, resolve_images: bool = True):
+    records = (card_service.database.get_image_records_for_cards(
+        result.card_id for result in results) if resolve_images else {})
+    return [_build_card_candidate(card_service, result, search_source,
+                                  image_records=records) for result in results]
 
 
 def search_scryfall_card_page(
@@ -164,6 +177,7 @@ def search_scryfall_card_page(
     page_size: int = 60,
     fetch_json: Callable[[str], dict] | None = None,
     online_mode: bool | None = None,
+    local_only: bool = False,
 ) -> ScryfallCardSearchPage:
     normalized_query = name_query.strip()
     if not normalized_query:
@@ -171,6 +185,40 @@ def search_scryfall_card_page(
 
     online_mode = CFG.OnlineMode if online_mode is None else bool(online_mode)
     card_service = _build_card_service(fetch_json)
+    needs_oracle_tags = re.search(r'(?i)(?:^|[\s(])-?otag(?:ger)?:', normalized_query) is not None
+    if needs_oracle_tags and card_service.database.oracle_tag_count() == 0:
+        if local_only:
+            raise ValueError(
+                'Oracle tag data has not been downloaded yet. Turn off Local database only '
+                'for the first search so Manaforge can download the Oracle Tags bulk file.')
+        try:
+            card_service.sync_oracle_tags()
+        except (RemoteLookupUnavailable, OSError) as exc:
+            raise ValueError(
+                'Oracle tag data is unavailable locally and could not be downloaded.') from exc
+    page_start = max(0, page_start)
+    page_size = max(1, page_size)
+    lookahead = page_start + page_size + 1
+    local_error = None
+    try:
+        local_results = card_service.search_cards(normalized_query, {
+            'set_filter': set_filter, 'allow_remote': False, 'online_mode': False,
+            'scryfall_syntax': True, 'limit': lookahead})
+    except ValueError as exc:
+        local_results = []
+        local_error = exc
+    # The downloaded bulk catalog is the primary search source. Scryfall is only
+    # needed as a fallback for a missing plain-name card or unsupported syntax.
+    if local_results or local_only or (is_scryfall_syntax_query(normalized_query) and local_error is None):
+        if local_error is not None:
+            raise local_error
+        candidates = _build_card_candidates(card_service, local_results, 'local',
+                                            resolve_images=not local_only)
+        has_more = len(candidates) > page_start + page_size
+        total_count = page_start + page_size + 1 if has_more else len(candidates)
+        return ScryfallCardSearchPage(candidates=candidates[page_start:page_start + page_size],
+            total_count=total_count, page_start=page_start, page_size=page_size,
+            search_source='local', has_more=has_more)
     search_source = "remote" if online_mode else "local"
     # Add Card uses Scryfall's search endpoint for every query. Plain text then
     # benefits from Scryfall's partial-name matching, while operator syntax is
@@ -230,7 +278,7 @@ def search_scryfall_card_page(
                     if fallback_results:
                         results = list(fallback_results)
                         search_source = "local"
-                        filtered = [_build_card_candidate(card_service, result, search_source) for result in results]
+                        filtered = _build_card_candidates(card_service, results, search_source)
                         total_count = len(filtered)
                         if page_start < 0:
                             page_start = 0
@@ -255,7 +303,7 @@ def search_scryfall_card_page(
                 if isinstance(exc, RemoteLookupUnavailable):
                     raise ValueError("No local matches are available offline. Connect to the internet to search Scryfall.") from exc
                 raise
-    filtered = [_build_card_candidate(card_service, result, search_source) for result in results]
+    filtered = _build_card_candidates(card_service, results, search_source)
     total_count = len(filtered)
     if page_start < 0:
         page_start = 0
@@ -342,6 +390,14 @@ def import_single_card_into_project(
     card_service = _build_card_service(fetch_json)
     if selected_card.card_data:
         card_service.database.upsert_card_payload(selected_card.card_data)
+    selected_front_record = (card_service.database.get_image_record(selected_card.card_id, 'default')
+                             if selected_card.card_id else None)
+    selected_back_record = (card_service.database.get_image_record(selected_card.card_id, 'back')
+                            if selected_card.card_id else None)
+    selected_image_asset_id = selected_card.image_asset_id or (
+        selected_front_record.asset_id if selected_front_record else None)
+    selected_backside_asset_id = selected_card.backside_asset_id or (
+        selected_back_record.asset_id if selected_back_record else None)
 
     entry = deck_import.DeckEntry(
         count=1,
@@ -355,8 +411,8 @@ def import_single_card_into_project(
         else (card_service.get_card(card_id=selected_card.card_id) if selected_card.card_id else None)
     )
     backside_name = None
-    if selected_card.card_id and selected_card.image_asset_id and card_service.get_image_path(selected_card.card_id):
-        if (card_data or {}).get("card_faces") and selected_card.backside_asset_id:
+    if selected_card.card_id and selected_image_asset_id and card_service.get_image_path(selected_card.card_id):
+        if (card_data or {}).get("card_faces") and selected_backside_asset_id:
             face_names = [
                 face.get("name") or selected_card.name
                 for face in (card_data or {}).get("card_faces", [])
@@ -368,8 +424,8 @@ def import_single_card_into_project(
             filename=selected_card.filename,
             card_id=selected_card.card_id,
             oracle_id=selected_card.oracle_id,
-            image_asset_id=selected_card.image_asset_id,
-            backside_asset_id=selected_card.backside_asset_id,
+            image_asset_id=selected_image_asset_id,
+            backside_asset_id=selected_backside_asset_id,
         )
     else:
         card_data = card_data or deck_import.resolve_card(entry, fetch_json, card_service=card_service)
@@ -425,6 +481,9 @@ def import_single_card_into_project(
 
 def _build_card_service(fetch_json: Callable[[str], dict] | None = None) -> CardService:
     fetch_json = fetch_json or deck_import._fetch_json
+    if fetch_json is deck_import._fetch_json:
+        from mtg_core import get_default_card_service
+        return get_default_card_service()
     db_path = None
     if fetch_json is not deck_import._fetch_json:
         db_root = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".mtg_core_test_cache")

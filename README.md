@@ -85,6 +85,8 @@ This bundle packages **Print Proxy Prep** and its shared dependencies. Core Admi
 
 ## Shared architecture
 
+The shared database retains full Scryfall payloads, including rules text and all card faces. **Add Card → Local database only** and **Core Admin → Prints → Scryfall syntax** support local queries such as `t:creature o:"draw a card" mv<=3`. See the [local card data and search guide](docs/local-card-search.md) for supported filters, index upgrades, and data-freshness limits.
+
 ```mermaid
 flowchart TD
     Proxy[Print Proxy Prep / PyQt6] --> Core[mtg_core services]

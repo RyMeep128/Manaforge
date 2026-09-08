@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import uuid
 import hashlib
+import gzip
+import json
 from pathlib import Path
 
 from mtg_core import RemoteLookupUnavailable
@@ -92,6 +94,36 @@ def test_fetch_missing_card_persists_and_returns_cached_local():
     assert cached["id"] == "card-opt-1"
     assert [result.card_id for result in results] == ["card-opt-1"]
     assert len(calls) == 1
+
+
+def test_oracle_tags_bulk_sync_populates_local_search():
+    runtime_dir = _workspace_runtime_dir('oracle_tags')
+    metadata_url = 'https://api.scryfall.com/bulk-data/oracle-tags'
+    download_url = 'https://data.test/oracle-tags.jsonl.gz'
+    service = CardService(
+        db_path=str(runtime_dir / 'card_data.sqlite3'),
+        fetch_json_fn=lambda url: {
+            'type': 'oracle_tags', 'updated_at': '2026-09-08T09:00:00Z',
+            'jsonl_download_uri': download_url,
+        } if url == metadata_url else {},
+        fetch_bytes_fn=lambda url: gzip.compress(
+            (json.dumps({'label': 'ramp', 'aliases': ['acceleration'],
+                         'taggings': [{'oracle_id': 'oracle-ramp', 'weight': 'median'}]}) + '\n').encode()),
+    )
+    service.database.upsert_card_payload(dict(
+        id='ramp-card', oracle_id='oracle-ramp', name='Small Ramp',
+        type_line='Creature', oracle_text='Add {G}.', cmc=1, colors=['G'],
+        color_identity=['G'], legalities={'commander': 'legal'},
+        set='tst', collector_number='1'))
+
+    status = service.sync_oracle_tags()
+
+    assert status['tags'] == 1
+    assert status['taggings'] == 2
+    assert [row.card_id for row in service.database.search_syntax(
+        'otag:ramp c=g cmc=1 legal:edh')] == ['ramp-card']
+    assert [row.card_id for row in service.database.search_syntax(
+        'otag:acceleration')] == ['ramp-card']
 
 
 def test_database_creates_performance_indexes_and_search_fts():

@@ -7,6 +7,73 @@ from pathlib import Path
 import uuid
 
 
+def test_local_syntax_search_does_not_fetch_remote_data(tmp_path, monkeypatch):
+    def no_network(*args):
+        raise AssertionError('Local-only search contacted the network')
+    service = CardService(db_path=str(tmp_path / 'local.sqlite3'),
+                          fetch_json_fn=no_network, fetch_bytes_fn=no_network)
+    service.database.upsert_card_payload(dict(id='local', oracle_id='oracle-local',
+        name='Test Scholar', type_line='Creature', oracle_text='Draw a card.',
+        colors=['U'], color_identity=['U'], cmc=2, set='test', collector_number='1'))
+    monkeypatch.setattr(deck_import_service, '_build_card_service', lambda *a: service)
+    page = deck_import_service.search_scryfall_card_page('t:creature o:"draw a card" c:u mv<=2', local_only=True)
+    assert page.search_source == 'local'
+    assert [c.card_id for c in page.candidates] == ['local']
+    assert page.candidates[0].card_data['oracle_text'] == 'Draw a card.'
+
+
+def test_local_search_only_builds_requested_page_plus_lookahead(monkeypatch):
+    calls = []
+    results = [type('Result', (), {'card_id': str(i), 'oracle_id': str(i),
+        'payload': {'id': str(i), 'name': f'Card {i}'}})() for i in range(800)]
+    class Service:
+        def search_cards(self, query, filters):
+            calls.append(filters['limit'])
+            return results[:filters['limit']]
+    service = Service()
+    monkeypatch.setattr(deck_import_service, '_build_card_service', lambda *a: service)
+    monkeypatch.setattr(deck_import_service, '_build_card_candidates',
+        lambda service, rows, source, **kwargs: list(rows))
+    first = deck_import_service.search_scryfall_card_page('t:creature', page_size=250, local_only=True)
+    second = deck_import_service.search_scryfall_card_page('t:creature', page_start=250,
+                                                            page_size=250, local_only=True)
+    assert calls == [251, 501]
+    assert len(first.candidates) == len(second.candidates) == 250
+    assert first.total_count == 251
+    assert second.total_count == 501
+    assert first.has_more is True
+    assert second.has_more is True
+
+
+def test_add_card_local_checkbox_and_text_without_image(tmp_path, monkeypatch):
+    import dialogs
+    from PyQt6.QtWidgets import QApplication
+    app = QApplication.instance() or QApplication([])
+    def no_network(*args, **kwargs):
+        raise AssertionError('Local-only search or preview contacted the network')
+    service = CardService(db_path=str(tmp_path / 'local-ui.sqlite3'),
+                          fetch_json_fn=no_network, fetch_bytes_fn=no_network)
+    service.database.upsert_card_payload(dict(id='local', oracle_id='oracle-local',
+        name='Test Scholar', type_line='Creature', oracle_text='Draw a card.',
+        colors=['U'], color_identity=['U'], cmc=2, set='test', collector_number='1',
+        image_uris={'normal': 'https://example.invalid/image.png'}))
+    monkeypatch.setattr(deck_import_service, '_build_card_service', lambda *a: service)
+    monkeypatch.setattr(dialogs, 'get_default_card_service', lambda: service)
+    monkeypatch.setattr(dialogs.high_res_service, 'fetch_preview_bytes', no_network)
+    dialog = dialogs.AddCardDialog(None, str(tmp_path))
+    monkeypatch.setattr(dialog, '_run_with_popup', lambda title, work: work())
+    dialog._local_search_checkbox.setChecked(True)
+    dialog._card_name_edit.setText('o:"draw a card"')
+    dialog.refresh_card_results(reset_page=True)
+    assert dialog._total_card_count == 1
+    assert 'Draw a card.' in dialog._card_details_label.toPlainText()
+    assert 'No local image' in dialog._card_preview_label.text()
+    assert dialog._card_thumbnail_loader is None
+    dialog.reject()
+    dialog.deleteLater()
+    app.processEvents()
+
+
 def _runtime_dir(name: str) -> Path:
     target = Path(__file__).resolve().parents[1] / "projects" / ".codex_test_runtime" / f"{name}_{uuid.uuid4().hex}"
     target.mkdir(parents=True, exist_ok=True)
@@ -132,34 +199,22 @@ def test_search_scryfall_card_page_uses_broad_partial_name_query(monkeypatch):
     assert '%21%22Bolt%22' not in calls[0]
 
 
-def test_search_scryfall_card_page_passes_full_syntax_without_exact_name_probe():
-    calls = []
-
-    def fake_fetch_json(url):
-        calls.append(url)
-        return {
-            "object": "list",
-            "data": [{
-                "id": "spell",
-                "name": "Opt",
-                "set": "dom",
-                "set_name": "Dominaria",
-                "collector_number": "60",
-                "image_uris": {"small": "small", "normal": "normal"},
-            }],
-            "has_more": False,
-        }
+def test_search_scryfall_card_page_uses_local_catalog_for_syntax_even_online(tmp_path, monkeypatch):
+    def no_network(*args):
+        raise AssertionError('Supported syntax must not contact Scryfall')
+    service = CardService(db_path=str(tmp_path / 'syntax.sqlite3'),
+                          fetch_json_fn=no_network, fetch_bytes_fn=no_network)
+    service.database.upsert_card_payload(dict(
+        id='spell', oracle_id='spell', name='Opt', type_line='Instant',
+        oracle_text='Scry 1. Draw a card.', cmc=1, colors=['U'], color_identity=['U'],
+        digital=False, set='dom', collector_number='60'))
+    monkeypatch.setattr(deck_import_service, '_build_card_service', lambda *args: service)
 
     page = deck_import_service.search_scryfall_card_page(
-        't:instant c:blue mv<=1 -is:digital',
-        fetch_json=fake_fetch_json,
-        online_mode=True,
-    )
+        't:instant c:blue mv<=1 -is:digital', online_mode=True)
 
-    assert [candidate.name for candidate in page.candidates] == ["Opt"]
-    assert len(calls) == 1
-    assert "%21%22" not in calls[0]
-    assert "t%3Ainstant+c%3Ablue+mv%3C%3D1+-is%3Adigital" in calls[0]
+    assert [candidate.name for candidate in page.candidates] == ['Opt']
+    assert page.search_source == 'local'
 
 
 def test_detects_scryfall_operator_queries_but_not_plain_card_names():
@@ -436,7 +491,7 @@ def test_search_scryfall_card_page_uses_local_results_when_offline(monkeypatch):
     assert page.candidates[0].local_image_path is not None
 
 
-def test_search_scryfall_card_page_merges_local_and_remote_results_when_online_mode_off(monkeypatch):
+def test_search_scryfall_card_page_prefers_local_results_when_online_mode_off(monkeypatch):
     runtime_dir = _runtime_dir("merged_search")
     service = CardService(
         db_path=str(runtime_dir / "card_data.sqlite3"),
@@ -481,14 +536,11 @@ def test_search_scryfall_card_page_merges_local_and_remote_results_when_online_m
 
     page = deck_import_service.search_scryfall_card_page("Opt", online_mode=False)
 
-    assert page.search_source == "remote"
-    assert [candidate.card_id for candidate in page.candidates] == [
-        "card-opt-local",
-        "card-opt-remote",
-    ]
+    assert page.search_source == "local"
+    assert [candidate.card_id for candidate in page.candidates] == ["card-opt-local"]
 
 
-def test_search_scryfall_card_page_online_mode_defaults_to_remote_cache(monkeypatch):
+def test_search_scryfall_card_page_online_mode_still_prefers_local_catalog(monkeypatch):
     runtime_dir = _runtime_dir("online_default_search")
     service = CardService(
         db_path=str(runtime_dir / "card_data.sqlite3"),
@@ -527,9 +579,9 @@ def test_search_scryfall_card_page_online_mode_defaults_to_remote_cache(monkeypa
     page = deck_import_service.search_scryfall_card_page("Opt")
     cached = deck_import_service.search_scryfall_card_page("Opt")
 
-    assert page.search_source == "remote"
-    assert [candidate.card_id for candidate in page.candidates] == ["card-opt-remote"]
-    assert [candidate.card_id for candidate in cached.candidates] == ["card-opt-remote"]
+    assert page.search_source == "local"
+    assert [candidate.card_id for candidate in page.candidates] == ["card-opt-local"]
+    assert [candidate.card_id for candidate in cached.candidates] == ["card-opt-local"]
 
 
 def test_search_scryfall_card_page_short_query_uses_scryfall_partial_search(monkeypatch):
@@ -577,7 +629,7 @@ def test_search_scryfall_card_page_short_query_uses_scryfall_partial_search(monk
     page = deck_import_service.search_scryfall_card_page("a", online_mode=False)
 
     assert page.search_source == "local"
-    assert [candidate.card_id for candidate in page.candidates] == ["aang", "ach"]
+    assert {candidate.card_id for candidate in page.candidates} == {"aang", "ach"}
 
 
 def test_search_scryfall_card_page_returns_aang_catalog_matches(monkeypatch):

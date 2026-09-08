@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import gzip
 import os
 import re
 import time
@@ -26,6 +27,8 @@ FIXED_CATALOG_ITEM_SOURCE = "catalog_download_all_cards_include_extras_item"
 FIXED_CATALOG_VERSION = "catalog-download-v2"
 FIXED_CATALOG_CHUNK_SIZE = 100
 FIXED_CATALOG_MIN_IMAGE_BYTES = 4096
+ORACLE_TAGS_SOURCE = 'scryfall_oracle_tags'
+ORACLE_TAGS_METADATA_URL = 'https://api.scryfall.com/bulk-data/oracle-tags'
 
 
 def _materialized_asset_filename(asset: ImageAssetRecord, preferred_name: str | None) -> str:
@@ -70,13 +73,19 @@ class CardService:
         limit = max(1, int(filters.get("limit", 200)))
         online_mode = bool(filters.get("online_mode", False))
         cache_ttl_seconds = max(1, int(filters.get("cache_ttl_seconds", 60 * 60)))
-        local_rows = self.database.search_prints(
-            search_query,
-            limit=limit,
-            token_mode=token_mode,
-            online_mode=online_mode,
-            cache_ttl_seconds=cache_ttl_seconds,
-        )
+        if scryfall_syntax:
+            from mtg_core.search.syntax import LocalQueryError
+            try:
+                local_rows = self.database.search_syntax(search_query, limit=limit,
+                    set_filter=set_filter, online_mode=online_mode)
+            except LocalQueryError:
+                if not filters.get('allow_remote', True):
+                    raise
+                local_rows = []
+        else:
+            local_rows = self.database.search_prints(
+                search_query, limit=limit, token_mode=token_mode,
+                online_mode=online_mode, cache_ttl_seconds=cache_ttl_seconds)
         filtered_rows = _filter_print_rows(local_rows, set_filter)
         if scryfall_syntax and filters.get("allow_remote", True):
             remote_query = search_query
@@ -300,6 +309,38 @@ class CardService:
             self.database.upsert_card_payload(payload, source="bulk_sync")
             synced += 1
         return {"synced": synced, "status": "ok"}
+
+    def sync_oracle_tags(self) -> dict:
+        metadata = self.fetch_json_fn(ORACLE_TAGS_METADATA_URL)
+        download_url = metadata.get('jsonl_download_uri') or metadata.get('download_uri')
+        if not download_url:
+            raise ValueError('Scryfall did not provide an Oracle Tags download URL.')
+        payload = self.fetch_bytes_fn(download_url)
+        if payload[:2] == b'\x1f\x8b':
+            payload = gzip.decompress(payload)
+        text = payload.decode('utf-8-sig')
+        if text.lstrip().startswith('['):
+            records = json.loads(text)
+        else:
+            records = [json.loads(line) for line in text.splitlines() if line.strip()]
+        tagging_count = self.database.replace_oracle_tags(records)
+        tag_count = sum(1 for record in records if record.get('label'))
+        updated_at = metadata.get('updated_at')
+        now = time.time()
+        self.database.upsert_sync_state(
+            ORACLE_TAGS_SOURCE,
+            version=str(updated_at or ''),
+            last_sync_at=now,
+            payload={'updated_at': updated_at, 'tags': tag_count,
+                     'taggings': tagging_count, 'download_url': download_url},
+        )
+        return {'tags': tag_count, 'taggings': tagging_count,
+                'updated_at': updated_at, 'last_sync_at': now}
+
+    def ensure_oracle_tags(self) -> dict | None:
+        if self.database.oracle_tag_count() > 0:
+            return None
+        return self.sync_oracle_tags()
 
     def fetch_missing_card(
         self,

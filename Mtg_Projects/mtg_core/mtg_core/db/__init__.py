@@ -11,6 +11,7 @@ from pathlib import Path
 from mtg_core.models import ImageAssetRecord, ImageRecord, PrintRecord
 from mtg_core.paths import core_data_root
 from mtg_core.search import choose_canonical_print_key, normalized_search_text
+from mtg_core.search.syntax import compile_query, text_expression
 from mtg_core.sync import extract_image_urls
 
 
@@ -49,6 +50,19 @@ CREATE INDEX IF NOT EXISTS idx_prints_oracle_order ON prints(oracle_id, released
 CREATE INDEX IF NOT EXISTS idx_prints_admin_order ON prints(name, released_at, set_code, collector_number, card_id);
 CREATE INDEX IF NOT EXISTS idx_prints_online_cache ON prints(cache_scope, cache_expires_at);
 CREATE INDEX IF NOT EXISTS idx_cards_oracle_name_order ON cards_oracle(name, oracle_id);
+
+CREATE TABLE IF NOT EXISTS print_search_data (
+    card_id TEXT PRIMARY KEY,
+    search_json TEXT NOT NULL,
+    FOREIGN KEY (card_id) REFERENCES prints(card_id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS oracle_tags (
+    oracle_id TEXT NOT NULL,
+    tag TEXT NOT NULL,
+    PRIMARY KEY (oracle_id, tag)
+);
+CREATE INDEX IF NOT EXISTS idx_oracle_tags_tag ON oracle_tags(tag, oracle_id);
 
 CREATE TABLE IF NOT EXISTS canonical_prints (
     oracle_id TEXT PRIMARY KEY,
@@ -126,6 +140,7 @@ class CardDatabase:
             self._ensure_column(connection, "image_assets", "payload_size", "INTEGER")
             self._ensure_column(connection, "image_assets", "storage_path", "TEXT")
             self._ensure_search_index(connection)
+            self._ensure_search_data(connection)
 
     @staticmethod
     def _ensure_column(
@@ -141,6 +156,9 @@ class CardDatabase:
 
     def _ensure_search_index(self, connection: sqlite3.Connection) -> None:
         try:
+            columns = connection.execute('PRAGMA table_info(print_search_fts)').fetchall()
+            if columns and 'oracle_text' not in {row['name'] for row in columns}:
+                connection.execute('DROP TABLE print_search_fts')
             connection.execute(
                 """
                 CREATE VIRTUAL TABLE IF NOT EXISTS print_search_fts USING fts5(
@@ -148,6 +166,7 @@ class CardDatabase:
                     name,
                     normalized_name,
                     type_line,
+                    oracle_text,
                     layout,
                     set_code,
                     collector_number,
@@ -164,6 +183,19 @@ class CardDatabase:
             # FTS is an optimization. The regular LIKE search remains the fallback.
             return
 
+    def _ensure_search_data(self, connection: sqlite3.Connection) -> None:
+        print_count = int(connection.execute('SELECT count(*) FROM prints').fetchone()[0] or 0)
+        search_count = int(connection.execute('SELECT count(*) FROM print_search_data').fetchone()[0] or 0)
+        sample = connection.execute('SELECT search_json FROM print_search_data LIMIT 1').fetchone()
+        current_format = sample is None or 'oracle_text_search' in json.loads(sample['search_json'])
+        if print_count == search_count and current_format:
+            return
+        connection.execute('DELETE FROM print_search_data')
+        rows = connection.execute('SELECT card_id, payload_json FROM prints').fetchall()
+        connection.executemany(
+            'INSERT INTO print_search_data (card_id, search_json) VALUES (?, ?)',
+            ((row['card_id'], _compact_search_json(json.loads(row['payload_json']))) for row in rows))
+
     def rebuild_search_index(self, connection: sqlite3.Connection | None = None) -> None:
         owns_connection = connection is None
         if connection is None:
@@ -173,7 +205,7 @@ class CardDatabase:
             connection.execute(
                 """
                 INSERT INTO print_search_fts (
-                    card_id, name, normalized_name, type_line, layout,
+                    card_id, name, normalized_name, type_line, oracle_text, layout,
                     set_code, collector_number, cache_scope, cache_expires_at
                 )
                 SELECT
@@ -181,6 +213,9 @@ class CardDatabase:
                     p.name,
                     c.normalized_name,
                     coalesce(json_extract(p.payload_json, '$.type_line'), ''),
+                    coalesce(json_extract(p.payload_json, '$.oracle_text'), '') || ' ' ||
+                    coalesce((SELECT group_concat(json_extract(face.value, '$.oracle_text'), ' ')
+                              FROM json_each(p.payload_json, '$.card_faces') face), ''),
                     coalesce(json_extract(p.payload_json, '$.layout'), ''),
                     coalesce(p.set_code, ''),
                     coalesce(p.collector_number, ''),
@@ -206,7 +241,7 @@ class CardDatabase:
             connection.execute(
                 """
                 INSERT INTO print_search_fts (
-                    card_id, name, normalized_name, type_line, layout,
+                    card_id, name, normalized_name, type_line, oracle_text, layout,
                     set_code, collector_number, cache_scope, cache_expires_at
                 )
                 SELECT
@@ -214,6 +249,9 @@ class CardDatabase:
                     p.name,
                     c.normalized_name,
                     coalesce(json_extract(p.payload_json, '$.type_line'), ''),
+                    coalesce(json_extract(p.payload_json, '$.oracle_text'), '') || ' ' ||
+                    coalesce((SELECT group_concat(json_extract(face.value, '$.oracle_text'), ' ')
+                              FROM json_each(p.payload_json, '$.card_faces') face), ''),
                     coalesce(json_extract(p.payload_json, '$.layout'), ''),
                     coalesce(p.set_code, ''),
                     coalesce(p.collector_number, ''),
@@ -237,6 +275,13 @@ class CardDatabase:
             connection.execute("DELETE FROM print_search_fts WHERE card_id = ?", (card_id,))
         except sqlite3.DatabaseError:
             return
+
+    def delete_search_data_for_print(
+        self,
+        connection: sqlite3.Connection,
+        card_id: str,
+    ) -> None:
+        connection.execute("DELETE FROM print_search_data WHERE card_id = ?", (card_id,))
 
     def refresh_search_index_for_oracle(
         self,
@@ -354,11 +399,19 @@ class CardDatabase:
                 (source, None, now, json.dumps({"last_card_id": card_id})),
             )
             self.refresh_search_index_for_print(connection, card_id)
+            self.refresh_search_data_for_print(connection, card_id, payload)
             row = connection.execute(
                 "SELECT * FROM prints WHERE card_id = ?",
                 (card_id,),
             ).fetchone()
         return self._row_to_print_record(row)
+
+    @staticmethod
+    def refresh_search_data_for_print(connection, card_id, payload):
+        connection.execute(
+            'INSERT INTO print_search_data (card_id, search_json) VALUES (?, ?) '
+            'ON CONFLICT(card_id) DO UPDATE SET search_json=excluded.search_json',
+            (card_id, _compact_search_json(payload)))
 
     def _refresh_canonical_print(self, connection: sqlite3.Connection, oracle_id: str) -> None:
         rows = connection.execute(
@@ -465,7 +518,7 @@ class CardDatabase:
                         OR lower(coalesce(json_extract(p.payload_json, '$.type_line'), '')) LIKE 'token%'
                     )
                 """
-        params = [like, like, like]
+        params = [like, like, like, like]
         if online_mode:
             params.append(time.time())
         params.extend(
@@ -498,10 +551,12 @@ class CardDatabase:
                     SELECT p.*
                     FROM prints p
                     JOIN cards_oracle c ON c.oracle_id = p.oracle_id
+                    JOIN print_search_data s ON s.card_id = p.card_id
                     WHERE (
                         c.normalized_name LIKE ?
                         OR lower(p.name) LIKE lower(?)
                         OR lower(coalesce(json_extract(p.payload_json, '$.type_line'), '')) LIKE lower(?)
+                        OR lower({text_expression('oracle_text')}) LIKE lower(?)
                     )
                     {token_clause}
                     {cache_clause}
@@ -520,6 +575,91 @@ class CardDatabase:
                     tuple(params),
                 ).fetchall()
         return [self._row_to_print_record(row) for row in rows]
+
+    def search_syntax(self, query: str, limit: int = 200, *, set_filter: str = '',
+                      online_mode: bool = False) -> list[PrintRecord]:
+        predicate, params = compile_query(query)
+        if online_mode:
+            predicate += " AND p.cache_scope = 'online_search' AND coalesce(p.cache_expires_at, 0) > ?"
+            params.append(time.time())
+        else:
+            predicate += " AND coalesce(p.cache_scope, '') != 'online_search'"
+        if set_filter:
+            predicate += " AND (lower(p.set_code) = ? OR instr(lower(coalesce(p.set_name, '')), ?) > 0)"
+            params.extend([set_filter.lower(), set_filter.lower()])
+        with self.connect() as connection:
+            rows = connection.execute(
+                'WITH matches AS ('
+                'SELECT p.*, ROW_NUMBER() OVER (PARTITION BY p.oracle_id ORDER BY '
+                'CASE WHEN cp.card_id = p.card_id THEN 0 ELSE 1 END, '
+                'p.released_at DESC, p.card_id) AS search_rank '
+                'FROM prints p JOIN print_search_data s ON s.card_id = p.card_id '
+                'LEFT JOIN canonical_prints cp ON cp.oracle_id = p.oracle_id '
+                f'WHERE {predicate}) '
+                'SELECT * FROM matches WHERE search_rank = 1 '
+                'ORDER BY name COLLATE NOCASE, released_at, card_id LIMIT ?',
+                [*params, max(1, min(10000, int(limit)))]).fetchall()
+        return [self._row_to_print_record(row) for row in rows]
+
+    def replace_oracle_tags(self, tag_records) -> int:
+        tag_records = list(tag_records)
+        records_by_id = {
+            str(record.get('id')): record for record in tag_records if record.get('id')
+        }
+        def record_oracle_ids(record):
+            oracle_ids = set(str(value) for value in record.get('oracle_ids') or [] if value)
+            oracle_ids.update(
+                str(tagging.get('oracle_id')) for tagging in record.get('taggings') or []
+                if isinstance(tagging, dict) and tagging.get('oracle_id')
+            )
+            return oracle_ids
+
+        direct_oracle_ids = {}
+        for record in tag_records:
+            oracle_ids = record_oracle_ids(record)
+            direct_oracle_ids[str(record.get('id') or '')] = oracle_ids
+
+        descendant_cache = {}
+        def oracle_ids_with_descendants(record_id, visiting=None):
+            if record_id in descendant_cache:
+                return descendant_cache[record_id]
+            visiting = set() if visiting is None else visiting
+            if record_id in visiting:
+                return set()
+            visiting.add(record_id)
+            result = set(direct_oracle_ids.get(record_id, ()))
+            record = records_by_id.get(record_id, {})
+            for child_id in record.get('child_ids') or []:
+                result.update(oracle_ids_with_descendants(str(child_id), visiting))
+            visiting.remove(record_id)
+            descendant_cache[record_id] = result
+            return result
+
+        rows = []
+        for record in tag_records:
+            tag_names = {
+                str(value or '').strip().casefold()
+                for value in [record.get('label'), record.get('slug'), *(record.get('aliases') or [])]
+                if str(value or '').strip()
+            }
+            if not tag_names:
+                continue
+            record_id = str(record.get('id') or '')
+            oracle_ids = oracle_ids_with_descendants(record_id) if record_id else record_oracle_ids(record)
+            for oracle_id in oracle_ids:
+                oracle_id = str(oracle_id or '').strip()
+                if oracle_id:
+                    rows.extend((oracle_id, tag) for tag in tag_names)
+        with self.connect() as connection:
+            connection.execute('DELETE FROM oracle_tags')
+            connection.executemany(
+                'INSERT OR IGNORE INTO oracle_tags (oracle_id, tag) VALUES (?, ?)', rows)
+        return len(rows)
+
+    def oracle_tag_count(self) -> int:
+        with self.connect() as connection:
+            row = connection.execute('SELECT count(*) FROM oracle_tags').fetchone()
+        return int(row[0] or 0)
 
     def _search_prints_fts(
         self,
@@ -640,6 +780,21 @@ class CardDatabase:
             checksum=row["checksum"],
             updated_at=row["updated_at"],
         )
+
+    def get_image_records_for_cards(self, card_ids) -> dict[tuple[str, str], ImageRecord]:
+        card_ids = list(dict.fromkeys(str(card_id) for card_id in card_ids if card_id))
+        if not card_ids:
+            return {}
+        placeholders = ','.join('?' for _ in card_ids)
+        with self.connect() as connection:
+            rows = connection.execute(
+                f'SELECT card_id, variant, asset_id, path, status, source, checksum, updated_at '
+                f'FROM image_manifest WHERE card_id IN ({placeholders}) AND variant IN (\'default\', \'back\')',
+                card_ids).fetchall()
+        return {(row['card_id'], row['variant']): ImageRecord(
+            card_id=row['card_id'], variant=row['variant'], asset_id=row['asset_id'],
+            path=row['path'], status=row['status'], source=row['source'],
+            checksum=row['checksum'], updated_at=row['updated_at']) for row in rows}
 
     def _image_asset_base_dir(self) -> Path:
         if self.db_path == ":memory:":
@@ -937,6 +1092,42 @@ def _synthesize_print_id(name: str, set_code: str | None, collector_number: str 
     )
     digest = hashlib.sha1(normalized.encode("utf-8")).hexdigest()[:16]
     return f"proxy-print-{digest}"
+
+
+_SEARCH_PAYLOAD_FIELDS = (
+    'type_line', 'oracle_text', 'flavor_text', 'cmc', 'power', 'toughness',
+    'loyalty', 'colors', 'color_identity', 'rarity', 'layout', 'lang',
+    'artist', 'legalities', 'keywords', 'games', 'foil', 'digital', 'reserved',
+    'reprint', 'promo', 'prices', 'card_faces',
+)
+
+
+def _compact_search_json(payload: dict) -> str:
+    compact = {key: payload[key] for key in _SEARCH_PAYLOAD_FIELDS if key in payload}
+    compact['oracle_text_search'] = _without_reminder_text(payload.get('oracle_text') or '')
+    if isinstance(compact.get('card_faces'), list):
+        face_fields = ('name', 'type_line', 'oracle_text', 'flavor_text', 'power',
+                       'toughness', 'loyalty', 'colors')
+        compact['card_faces'] = [
+            ({key: face[key] for key in face_fields if key in face} | {
+                'oracle_text_search': _without_reminder_text(face.get('oracle_text') or '')})
+            for face in compact['card_faces'] if isinstance(face, dict)
+        ]
+    return json.dumps(compact, ensure_ascii=False, separators=(',', ':'))
+
+
+def _without_reminder_text(text: str) -> str:
+    """Remove balanced parenthetical reminder text from searchable Oracle text."""
+    result = []
+    depth = 0
+    for character in str(text):
+        if character == '(':
+            depth += 1
+        elif character == ')' and depth:
+            depth -= 1
+        elif depth == 0:
+            result.append(character)
+    return ''.join(result)
 
 
 def _fts_query(normalized: str) -> str | None:

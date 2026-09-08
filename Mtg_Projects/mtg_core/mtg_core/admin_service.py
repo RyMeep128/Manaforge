@@ -175,6 +175,7 @@ class CardAdminService:
             ).fetchall()
             for print_row in print_rows:
                 self.database.delete_search_index_for_print(connection, print_row["card_id"])
+                self.database.delete_search_data_for_print(connection, print_row["card_id"])
                 connection.execute(
                     "DELETE FROM image_manifest WHERE card_id = ?",
                     (print_row["card_id"],),
@@ -201,6 +202,7 @@ class CardAdminService:
         oracle_id: str = "",
         page: int = 1,
         page_size: int = 100,
+        syntax: bool = False,
     ) -> PaginatedResult[PrintRecord]:
         conditions: list[str] = []
         params: list[object] = []
@@ -208,9 +210,15 @@ class CardAdminService:
         page = max(1, int(page))
         page_size = max(1, int(page_size))
         if normalized_query:
-            like = f"%{normalized_query}%"
-            conditions.append("(c.normalized_name LIKE ? OR lower(p.name) LIKE lower(?))")
-            params.extend([like, like])
+            if syntax:
+                from mtg_core.search.syntax import compile_query
+                predicate, query_params = compile_query(query)
+                conditions.append(predicate)
+                params.extend(query_params)
+            else:
+                like = f"%{normalized_query}%"
+                conditions.append("(c.normalized_name LIKE ? OR lower(p.name) LIKE lower(?))")
+                params.extend([like, like])
         if set_code.strip():
             conditions.append("lower(coalesce(p.set_code, '')) = lower(?)")
             params.append(set_code.strip())
@@ -220,12 +228,14 @@ class CardAdminService:
         where_clause = ""
         if conditions:
             where_clause = "WHERE " + " AND ".join(conditions)
+        search_join = 'JOIN print_search_data s ON s.card_id = p.card_id' if syntax and normalized_query else ''
         with self.database.connect() as connection:
             count_row = connection.execute(
                 f"""
                 SELECT count(*) AS count
                 FROM prints p
                 JOIN cards_oracle c ON c.oracle_id = p.oracle_id
+                {search_join}
                 {where_clause}
                 """,
                 tuple(params),
@@ -239,6 +249,7 @@ class CardAdminService:
                 SELECT p.*
                 FROM prints p
                 JOIN cards_oracle c ON c.oracle_id = p.oracle_id
+                {search_join}
                 {where_clause}
                 ORDER BY p.name, p.released_at, p.set_code, p.collector_number, p.card_id
                 LIMIT ? OFFSET ?
@@ -418,6 +429,7 @@ class CardAdminService:
             return False
         with self.database.connect() as connection:
             self.database.delete_search_index_for_print(connection, card_id)
+            self.database.delete_search_data_for_print(connection, card_id)
             connection.execute(
                 "DELETE FROM image_manifest WHERE card_id = ?",
                 (card_id,),
@@ -575,6 +587,9 @@ class CardAdminService:
 
     def download_fixed_catalog_chunked(self, *, max_chunks: int | None = None) -> BulkDownloadStatus:
         return self.card_service.download_fixed_catalog_chunked(max_chunks=max_chunks)
+
+    def sync_oracle_tags(self) -> dict:
+        return self.card_service.sync_oracle_tags()
 
     def run_bulk_query_download(self, *, query: str, max_chunks: int | None = None) -> BulkDownloadStatus:
         return self.card_service.run_bulk_query_download(query=query, max_chunks=max_chunks)
