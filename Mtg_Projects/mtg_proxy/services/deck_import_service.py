@@ -29,6 +29,7 @@ def is_scryfall_syntax_query(query: str) -> bool:
 class DeckImportWorkflowResult:
     state: ProjectState
     import_result: deck_import.ImportResult
+    component_suggestions: list['ComponentSuggestion'] | None = None
 
 
 @dataclass(frozen=True)
@@ -69,6 +70,58 @@ class SingleCardImportWorkflowResult:
     backside_filename: str | None
     art_candidate: high_res.HighResCandidate | None = None
     art_source: str | None = None
+    component_suggestions: list['ComponentSuggestion'] | None = None
+
+
+@dataclass(frozen=True)
+class ComponentSuggestion:
+    source_name: str
+    component: str
+    candidate: ScryfallCardCandidate
+
+
+def component_suggestions_for_card_ids(card_ids, card_service=None):
+    """Resolve unique Scryfall all_parts relationships from the local catalog."""
+    card_service = card_service or _build_card_service()
+    source_ids = {str(card_id) for card_id in card_ids if card_id}
+    suggestions = []
+    seen = set()
+    for source_id in source_ids:
+        source = card_service.database.get_print_by_card_id(source_id)
+        if source is None:
+            continue
+        for part in source.payload.get('all_parts') or []:
+            part_id = str(part.get('id') or '')
+            component = str(part.get('component') or 'related_card')
+            if not part_id or part_id in source_ids or part_id in seen:
+                continue
+            record = card_service.database.get_print_by_card_id(part_id)
+            if record is None and part.get('uri'):
+                try:
+                    payload = card_service.fetch_json_fn(str(part['uri']))
+                    if isinstance(payload, dict) and payload.get('id'):
+                        card_service.database.upsert_card_payload(payload)
+                        record = card_service.database.get_print_by_card_id(part_id)
+                except (RemoteLookupUnavailable, OSError, ValueError, TypeError):
+                    record = None
+            if record is None:
+                continue
+            result = type('ComponentResult', (), {
+                'card_id': record.card_id,
+                'oracle_id': record.oracle_id,
+                'payload': record.payload,
+            })()
+            suggestions.append(ComponentSuggestion(
+                source_name=source.name,
+                component=component,
+                candidate=_build_card_candidate(
+                    card_service, result, 'local',
+                    image_records=card_service.database.get_image_records_for_cards(
+                        [record.card_id])),
+            ))
+            seen.add(part_id)
+    return sorted(suggestions, key=lambda item: (
+        item.component.casefold(), item.candidate.name.casefold()))
 
 
 def import_decklist(*args, **kwargs):
@@ -198,25 +251,32 @@ def search_scryfall_card_page(
                 'Oracle tag data is unavailable locally and could not be downloaded.') from exc
     page_start = max(0, page_start)
     page_size = max(1, page_size)
-    lookahead = page_start + page_size + 1
+    syntax_query = is_scryfall_syntax_query(normalized_query)
     local_error = None
     try:
+        local_total = (card_service.database.count_syntax(
+            normalized_query, set_filter=set_filter or '', online_mode=False)
+            if syntax_query else None)
         local_results = card_service.search_cards(normalized_query, {
             'set_filter': set_filter, 'allow_remote': False, 'online_mode': False,
-            'scryfall_syntax': True, 'limit': lookahead})
+            'scryfall_syntax': True, 'limit': page_size,
+            'offset': page_start})
     except ValueError as exc:
         local_results = []
+        local_total = None
         local_error = exc
     # The downloaded bulk catalog is the primary search source. Scryfall is only
     # needed as a fallback for a missing plain-name card or unsupported syntax.
-    if local_results or local_only or (is_scryfall_syntax_query(normalized_query) and local_error is None):
+    if (local_results or local_only or
+            (syntax_query and
+             local_error is None and not online_mode)):
         if local_error is not None:
             raise local_error
         candidates = _build_card_candidates(card_service, local_results, 'local',
                                             resolve_images=not local_only)
-        has_more = len(candidates) > page_start + page_size
-        total_count = page_start + page_size + 1 if has_more else len(candidates)
-        return ScryfallCardSearchPage(candidates=candidates[page_start:page_start + page_size],
+        total_count = int(local_total if local_total is not None else len(candidates))
+        has_more = page_start + len(candidates) < total_count
+        return ScryfallCardSearchPage(candidates=candidates,
             total_count=total_count, page_start=page_start, page_size=page_size,
             search_source='local', has_more=has_more)
     search_source = "remote" if online_mode else "local"
@@ -368,7 +428,11 @@ def import_into_project(
         print_fn("Refreshing project...")
         project_service.refresh_after_image_changes(state, img_dict, print_fn, warn_fn)
 
-    return DeckImportWorkflowResult(state=state, import_result=import_result)
+    suggestions = component_suggestions_for_card_ids(
+        [card.card_id for card in import_result.imported])
+    return DeckImportWorkflowResult(
+        state=state, import_result=import_result,
+        component_suggestions=suggestions)
 
 
 def import_single_card_into_project(
@@ -476,6 +540,8 @@ def import_single_card_into_project(
         backside_filename=backside_name,
         art_candidate=art_candidate,
         art_source=normalized_art_source,
+        component_suggestions=component_suggestions_for_card_ids(
+            [imported_card.card_id], card_service),
     )
 
 

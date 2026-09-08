@@ -77,6 +77,7 @@ class CardService:
             from mtg_core.search.syntax import LocalQueryError
             try:
                 local_rows = self.database.search_syntax(search_query, limit=limit,
+                    offset=max(0, int(filters.get('offset', 0))),
                     set_filter=set_filter, online_mode=online_mode)
             except LocalQueryError:
                 if not filters.get('allow_remote', True):

@@ -22,14 +22,20 @@ def test_local_syntax_search_does_not_fetch_remote_data(tmp_path, monkeypatch):
     assert page.candidates[0].card_data['oracle_text'] == 'Draw a card.'
 
 
-def test_local_search_only_builds_requested_page_plus_lookahead(monkeypatch):
+def test_local_search_uses_exact_count_and_database_paging(monkeypatch):
     calls = []
     results = [type('Result', (), {'card_id': str(i), 'oracle_id': str(i),
         'payload': {'id': str(i), 'name': f'Card {i}'}})() for i in range(800)]
     class Service:
+        class Database:
+            @staticmethod
+            def count_syntax(query, **kwargs):
+                return len(results)
+        database = Database()
         def search_cards(self, query, filters):
-            calls.append(filters['limit'])
-            return results[:filters['limit']]
+            calls.append((filters['limit'], filters['offset']))
+            start = filters['offset']
+            return results[start:start + filters['limit']]
     service = Service()
     monkeypatch.setattr(deck_import_service, '_build_card_service', lambda *a: service)
     monkeypatch.setattr(deck_import_service, '_build_card_candidates',
@@ -37,10 +43,9 @@ def test_local_search_only_builds_requested_page_plus_lookahead(monkeypatch):
     first = deck_import_service.search_scryfall_card_page('t:creature', page_size=250, local_only=True)
     second = deck_import_service.search_scryfall_card_page('t:creature', page_start=250,
                                                             page_size=250, local_only=True)
-    assert calls == [251, 501]
+    assert calls == [(250, 0), (250, 250)]
     assert len(first.candidates) == len(second.candidates) == 250
-    assert first.total_count == 251
-    assert second.total_count == 501
+    assert first.total_count == second.total_count == 800
     assert first.has_more is True
     assert second.has_more is True
 
@@ -94,6 +99,129 @@ def test_add_card_actions_stay_visible_with_large_preview(tmp_path):
     dialog.deleteLater()
     app.processEvents()
 
+
+def test_add_card_tag_selection_runs_local_tag_search(tmp_path, monkeypatch):
+    import dialogs
+    from types import SimpleNamespace
+    from PyQt6.QtWidgets import QApplication, QDialog
+    app = QApplication.instance() or QApplication([])
+    dialog = dialogs.AddCardDialog(None, str(tmp_path))
+    candidate = SimpleNamespace(name='Test Card', oracle_id='oracle-test')
+    database = SimpleNamespace(
+        oracle_tags_for_card=lambda oracle_id: ['card-draw', 'ramp'])
+    monkeypatch.setattr(
+        dialogs, 'get_default_card_service',
+        lambda: SimpleNamespace(database=database))
+
+    class TagDialog:
+        selected_tag = 'card-draw'
+        def __init__(self, *args): pass
+        def exec(self): return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(dialogs, 'CardTagsDialog', TagDialog)
+    searches = []
+    monkeypatch.setattr(
+        dialog, 'refresh_card_results',
+        lambda reset_page=False: searches.append(reset_page))
+    dialog._card_set_filter_edit.setText('abc')
+
+    dialog._show_card_tags(candidate)
+
+    assert dialog._card_name_edit.text() == 'otag:"card-draw"'
+    assert dialog._card_set_filter_edit.text() == ''
+    assert searches == [True]
+    dialog.reject()
+    dialog.deleteLater()
+    app.processEvents()
+
+
+def test_add_card_search_history_restores_query_filters_and_page(tmp_path, monkeypatch):
+    import dialogs
+    from PyQt6.QtWidgets import QApplication
+    app = QApplication.instance() or QApplication([])
+    dialog = dialogs.AddCardDialog(None, str(tmp_path))
+    dialog._card_name_edit.setText('bolt')
+    dialog._card_set_filter_edit.setText('lea')
+    dialog._card_page_start = 250
+    dialog._commit_search_history(dialog._current_search_state())
+    dialog._card_name_edit.setText('otag:"burn"')
+    dialog._card_set_filter_edit.clear()
+    dialog._local_search_checkbox.setChecked(True)
+    dialog._card_page_start = 0
+    dialog._commit_search_history(dialog._current_search_state())
+    refreshes = []
+    monkeypatch.setattr(
+        dialog, 'refresh_card_results',
+        lambda reset_page=False: refreshes.append(reset_page))
+
+    dialog._go_back_search()
+    assert dialog._card_name_edit.text() == 'bolt'
+    assert dialog._card_set_filter_edit.text() == 'lea'
+    assert dialog._card_page_start == 250
+    assert not dialog._local_search_checkbox.isChecked()
+    assert dialog._search_forward_button.isEnabled()
+
+    dialog._go_forward_search()
+    assert dialog._card_name_edit.text() == 'otag:"burn"'
+    assert dialog._card_set_filter_edit.text() == ''
+    assert dialog._card_page_start == 0
+    assert dialog._local_search_checkbox.isChecked()
+    assert refreshes == [False, False]
+    dialog.reject()
+    dialog.deleteLater()
+    app.processEvents()
+
+
+def test_component_suggestions_resolve_all_parts_from_local_catalog(tmp_path):
+    from mtg_core import CardService
+    service = CardService(db_path=str(tmp_path / 'components.sqlite3'))
+    service.database.upsert_card_payload({
+        'id': 'goblin-token', 'oracle_id': 'goblin-token-oracle',
+        'name': 'Goblin', 'layout': 'token', 'type_line': 'Token Creature - Goblin',
+        'set': 'tst', 'set_name': 'Test Tokens', 'collector_number': '1'})
+    service.database.upsert_card_payload({
+        'id': 'maker', 'oracle_id': 'maker-oracle', 'name': 'Goblin Maker',
+        'type_line': 'Creature', 'set': 'tst', 'collector_number': '2',
+        'all_parts': [
+            {'id': 'maker', 'component': 'combo_piece', 'name': 'Goblin Maker'},
+            {'id': 'goblin-token', 'component': 'token', 'name': 'Goblin'},
+            {'id': 'goblin-token', 'component': 'token', 'name': 'Goblin'},
+        ]})
+
+    suggestions = deck_import_service.component_suggestions_for_card_ids(
+        ['maker'], service)
+
+    assert len(suggestions) == 1
+    assert suggestions[0].source_name == 'Goblin Maker'
+    assert suggestions[0].component == 'token'
+    assert suggestions[0].candidate.card_id == 'goblin-token'
+    assert suggestions[0].candidate.name == 'Goblin'
+
+
+def test_component_suggestions_fetch_missing_exact_token(tmp_path):
+    from mtg_core import CardService
+    calls = []
+    token_payload = {
+        'id': 'sliver-token', 'oracle_id': 'sliver-token-oracle',
+        'name': 'Sliver', 'layout': 'token',
+        'type_line': 'Token Creature - Sliver', 'set': 'tst',
+        'collector_number': '1', 'image_uris': {'normal': 'https://img/token.jpg'}}
+    service = CardService(
+        db_path=str(tmp_path / 'missing-component.sqlite3'),
+        fetch_json_fn=lambda uri: calls.append(uri) or token_payload)
+    service.database.upsert_card_payload({
+        'id': 'brood', 'oracle_id': 'brood-oracle', 'name': 'Brood Sliver',
+        'type_line': 'Creature - Sliver', 'set': 'lgn', 'collector_number': '120',
+        'all_parts': [{
+            'id': 'sliver-token', 'component': 'token', 'name': 'Sliver',
+            'uri': 'https://api.scryfall.test/cards/sliver-token'}]})
+
+    suggestions = deck_import_service.component_suggestions_for_card_ids(
+        ['brood'], service)
+
+    assert calls == ['https://api.scryfall.test/cards/sliver-token']
+    assert [item.candidate.card_id for item in suggestions] == ['sliver-token']
+    assert service.database.get_print_by_card_id('sliver-token') is not None
 
 def _runtime_dir(name: str) -> Path:
     target = Path(__file__).resolve().parents[1] / "projects" / ".codex_test_runtime" / f"{name}_{uuid.uuid4().hex}"

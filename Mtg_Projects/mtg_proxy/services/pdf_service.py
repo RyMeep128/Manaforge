@@ -23,12 +23,15 @@ def generate_pdf(
     size,
     pdf_path,
     print_fn: Callable[[str], None],
+    *,
+    page_side: str | None = None,
 ) -> PDFGenerationResult:
     state = as_project_state(project_like)
-    separate_backs = state.backside_enabled and state.backside_separate_file
+    separate_backs = (
+        page_side is None and state.backside_enabled and state.backside_separate_file)
     pages = pdf.generate(
         state, size, pdf_path, print_fn,
-        page_side="front" if separate_backs else "both",
+        page_side=page_side or ("front" if separate_backs else "both"),
     )
     backside_pdf_path = None
     backside_pages = None

@@ -112,6 +112,30 @@ def test_set_filter_is_applied_before_limit(database):
     assert database.search_syntax('t:creature', limit=1, set_filter='missing') == []
 
 
+def test_syntax_count_and_offset_match_filtered_unique_cards(database):
+    query = '-t:legendary legal:edh'
+    assert database.count_syntax(query) == 1
+    assert database.search_syntax(query, limit=1, offset=0)[0].card_id == 'blue'
+    assert database.search_syntax(query, limit=1, offset=1) == []
+
+
+def test_legal_filter_excludes_banned_and_missing_legalities(database):
+    rows = database.search_syntax('legal:edh')
+    assert {row.card_id for row in rows} == {'blue'}
+    assert all(row.payload['legalities']['commander'] == 'legal' for row in rows)
+
+
+def test_local_syntax_includes_records_already_cached_in_database(database):
+    database.upsert_card_payload(dict(
+        id='cached-scheme', oracle_id='cached-scheme', name='Cached Scheme',
+        type_line='Scheme', set='arc', collector_number='1'),
+        cache_scope='online_search', cache_expires_at=0)
+
+    assert database.count_syntax('t:scheme') == 1
+    assert [row.card_id for row in database.search_syntax('t:scheme')] == [
+        'cached-scheme']
+
+
 def test_search_returns_one_canonical_print_per_oracle_card(database):
     database.upsert_card_payload(dict(
         id='blue-reprint', oracle_id='blue', name='Blue Scholar',
@@ -140,6 +164,8 @@ def test_oracle_tag_search_uses_local_tag_index(database):
     ])
     assert {row.oracle_id for row in database.search_syntax('otag:ramp')} == {'blue', 'rock'}
     assert {row.oracle_id for row in database.search_syntax('otag:ramp -otag:card-draw')} == {'rock'}
+    assert database.oracle_tags_for_card('blue') == ['card-draw', 'ramp']
+    assert database.oracle_tags_for_card('missing') == []
 
 
 def test_parent_oracle_tag_includes_descendant_assignments(database):

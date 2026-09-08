@@ -20,6 +20,7 @@ def storage(tmp_path, monkeypatch):
 def test_profile_persistence_application_and_independent_projects(storage):
     source = ProjectState.from_dict({'pagesize': 'A4', 'orient': 'Landscape',
         'backside_offset': '-1.5', 'backside_enabled': True,
+        'backside_vertical_offset': '2.25',
         'backside_separate_file': True, 'backside_reverse_page_order': True})
     settings = profiles.capture(source, 'Short edge')
     profiles.save_all({'Office printer': settings})
@@ -34,6 +35,15 @@ def test_profile_persistence_application_and_independent_projects(storage):
     profiles.save_all({})
     assert profiles.load() == {}
     assert target.backside_offset == '-1.5'
+    assert target.backside_vertical_offset == '2.25'
+
+
+def test_legacy_profile_defaults_vertical_offset_to_zero(storage):
+    legacy = profiles.capture(ProjectState(), 'Long edge')
+    del legacy['backside_vertical_offset']
+    storage.write_text(__import__('json').dumps(
+        {'version': 1, 'profiles': {'Legacy': legacy}}), encoding='utf-8')
+    assert profiles.load()['Legacy']['backside_vertical_offset'] == '0'
 
 
 def test_bad_profile_storage_is_not_overwritten(storage):

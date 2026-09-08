@@ -5,6 +5,7 @@ import json
 import datetime
 import functools
 import subprocess
+import tempfile
 
 import PyQt6.QtCore as QtCore
 from PyQt6.QtGui import QPixmap, QIntValidator, QPainter, QPainterPath, QCursor, QTransform, QAction, QKeySequence, QShortcut
@@ -40,6 +41,7 @@ from PyQt6.QtWidgets import (
     QToolButton,
     QInputDialog,
 )
+from PyQt6.QtPrintSupport import QPrintDialog, QPrinter
 
 import pdf
 import image
@@ -61,6 +63,8 @@ from util import inch_to_mm, mm_to_inch, open_folder, point_to_inch
 from background_tasks import make_popup_print_fn, popup
 from dialogs import (
     AddCardDialog,
+    CardTagsDialog,
+    ComponentSuggestionsDialog,
     ComboBoxWithLabel,
     DeckImportDialog,
     FileDialogType,
@@ -73,11 +77,13 @@ from dialogs import (
     image_file_dialog,
     project_file_dialog,
 )
-from services import deck_import_service, pdf_service, project_service, layout_service
+from direct_print_dialog import DirectPrintOptionsDialog
+from services import (deck_import_service, direct_print_service, pdf_service,
+                      project_service, layout_service)
 from preview_interaction import PreviewOverlay, DragPageButton
 
 
-def confirm_underfilled_export(parent, occupancy):
+def confirm_underfilled_export(parent, occupancy, action='export'):
     underfilled = [page for page in occupancy if page['filled'] < page['capacity']]
     if not underfilled:
         return True
@@ -93,7 +99,7 @@ def confirm_underfilled_export(parent, occupancy):
     dialog.setInformativeText(
         summary + "\n\nFilled counts are slots; oversized cards use two. "
         "Backs are paired with their fronts. You can go back to fill the sheets "
-        "or export this layout to print anyway.")
+        f"or {action} this layout anyway.")
     go_back = dialog.addButton("Go Back", QMessageBox.ButtonRole.RejectRole)
     print_anyway = dialog.addButton("Print Anyway", QMessageBox.ButtonRole.AcceptRole)
     dialog.setDefaultButton(go_back)
@@ -195,6 +201,9 @@ class EditorPage(QWidget):
         export_button = actions._render_button
         export_button.setText("Export PDF")
         export_button.setProperty("buttonRole", "primary")
+        print_button = actions._print_button
+        print_button.setText('Print')
+        print_button.setProperty('buttonRole', 'primary')
         settings_button = QPushButton("Print Settings")
         settings_button.setCheckable(True)
         more_button = QToolButton()
@@ -232,6 +241,7 @@ class EditorPage(QWidget):
         header_layout.addSpacing(8)
         header_layout.addWidget(add_button)
         header_layout.addWidget(export_button)
+        header_layout.addWidget(print_button)
         header_layout.addWidget(settings_button)
         header_layout.addWidget(more_button)
 
@@ -270,6 +280,7 @@ class EditorPage(QWidget):
         self._prepare_button = prepare_button
         self._prepare_action = prepare_action
         self._export_button = export_button
+        self._print_button = print_button
         self._shortcuts = [
             QShortcut(QKeySequence.StandardKey.Save, self),
             QShortcut(QKeySequence(QtCore.Qt.Key.Key_Escape), self),
@@ -744,8 +755,39 @@ class CardWidget(QWidget):
 
         self.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.CustomContextMenu)
 
+        def view_tags():
+            from mtg_core import get_default_card_service
+            entry = state._ensure_card_entry(card_name)
+            tags = get_default_card_service().database.oracle_tags_for_card(
+                entry.oracle_id)
+            if not tags:
+                QMessageBox.information(
+                    self, 'No Tags Found',
+                    f'No local Oracle Tags are stored for {display_name}. Refresh Oracle '
+                    'Tags in MTG Core Admin if the tag catalog is missing or out of date.')
+                return
+            dialog = CardTagsDialog(self, display_name, tags)
+            if (dialog.exec() != QDialog.DialogCode.Accepted or
+                    not dialog.selected_tag):
+                return
+            query = AddCardDialog._oracle_tag_query(dialog.selected_tag)
+            application = QApplication.instance()
+            if application is not None and hasattr(
+                    application, '_open_add_card_search'):
+                application._open_add_card_search(query)
+
         def show_card_menu(position):
             menu = QMenu(self)
+            menu.addAction('View Tags', view_tags)
+            entry = state._ensure_card_entry(card_name)
+            suggestions = deck_import_service.component_suggestions_for_card_ids(
+                [entry.card_id])
+            application = QApplication.instance()
+            if (suggestions and application is not None and
+                    hasattr(application, '_offer_component_suggestions')):
+                menu.addAction(
+                    'Add Related Tokens/Cards...',
+                    lambda: application._offer_component_suggestions(suggestions))
             menu.addAction("Replace artwork…", open_high_res_picker)
             if backside_enabled:
                 menu.addAction("Choose custom back…", backside_choose)
@@ -1362,6 +1404,7 @@ class PagePreview(QWidget):
         rows,
         bleed_edge_mm,
         backside_offset_mm,
+        backside_vertical_offset_mm,
         page_size,
         img_get,
     ):
@@ -1399,6 +1442,8 @@ class PagePreview(QWidget):
         self._padding_width = (page_width - columns * card_width) / 2
         self._padding_height = (page_height - rows * card_height) / 2
         self._backside_offset = mm_to_inch(backside_offset_mm) if backside else 0
+        self._backside_vertical_offset = (
+            mm_to_inch(backside_vertical_offset_mm) if backside else 0)
 
         self._grid = grid
 
@@ -1422,11 +1467,13 @@ class PagePreview(QWidget):
         padding_width_pixels = round(self._padding_width * width / self._page_width)
         padding_height_pixels = round(self._padding_height * height / self._page_height)
         backside_offset_pixels = int(self._backside_offset * width / self._page_width)
+        backside_vertical_offset_pixels = int(
+            self._backside_vertical_offset * height / self._page_height)
         self.setContentsMargins(
             max(0, padding_width_pixels + backside_offset_pixels),
-            padding_height_pixels,
+            max(0, padding_height_pixels - backside_vertical_offset_pixels),
             max(0, padding_width_pixels - backside_offset_pixels),
-            padding_height_pixels,
+            max(0, padding_height_pixels + backside_vertical_offset_pixels),
         )
 
 
@@ -1530,7 +1577,8 @@ class PrintPreview(QScrollArea):
             label.setProperty("role", "subtitle")
             self._page_captions.append(label)
             widget = PagePreview(page["cards"], page["backside"], columns, rows,
-                bleed_edge, float(state.backside_offset), page_size, img_get)
+                bleed_edge, float(state.backside_offset),
+                float(state.backside_vertical_offset), page_size, img_get)
             page_widgets.append(widget)
             if not page["backside"] and columns > 0 and rows > 0:
                 self._overlays.append(PreviewOverlay(widget._grid, self, page["front_page_number"] - 1))
@@ -1833,6 +1881,7 @@ class ActionsWidget(QGroupBox):
 
         cropper_button = QPushButton("Prepare Images")
         render_button = QPushButton("Save PDF")
+        print_button = QPushButton("Print")
         home_button = QPushButton("Back to Projects")
         save_button = QPushButton("Save Project")
         load_button = QPushButton("Load Project")
@@ -1848,6 +1897,7 @@ class ActionsWidget(QGroupBox):
             import_decklist_button,
             cropper_button,
             render_button,
+            print_button,
             save_button,
             load_button,
             set_images_button,
@@ -1879,11 +1929,13 @@ class ActionsWidget(QGroupBox):
         import_decklist_button.setStyleSheet(primary_button_style)
         cropper_button.setStyleSheet(primary_button_style)
         render_button.setStyleSheet(primary_button_style)
+        print_button.setStyleSheet(primary_button_style)
         clear_cards_button.setStyleSheet(danger_button_style)
 
         buttons = [
             cropper_button,
             render_button,
+            print_button,
             home_button,
             save_button,
             load_button,
@@ -1921,8 +1973,8 @@ class ActionsWidget(QGroupBox):
             "Bring cards into the project, choose image files, and prepare them for printing.",
         )
         export_section = section_title(
-            "3. Export",
-            "Check the preview, then save the final PDF.",
+            "3. Print or Export",
+            "Check the preview, then print directly or save the final PDF.",
         )
         more_section = section_title(
             "More Tools",
@@ -1950,7 +2002,8 @@ class ActionsWidget(QGroupBox):
         export_grid = QGridLayout()
         export_grid.setColumnMinimumWidth(0, minimum_width + 10)
         export_grid.setColumnMinimumWidth(1, minimum_width + 10)
-        export_grid.addWidget(render_button, 0, 0, 1, 2)
+        export_grid.addWidget(render_button, 0, 0)
+        export_grid.addWidget(print_button, 0, 1)
 
         more_grid = QGridLayout()
         more_grid.setColumnMinimumWidth(0, minimum_width + 10)
@@ -2041,6 +2094,78 @@ class ActionsWidget(QGroupBox):
                 f"Your PDF was saved here:\n\n{saved_paths}\n\nThe app will try to open the front PDF for you automatically.",
             )
 
+        def direct_print():
+            side_dialog = DirectPrintOptionsDialog(
+                self.window(), backs_enabled=state.backside_enabled)
+            if side_dialog.exec() != QDialog.DialogCode.Accepted:
+                return
+            page_side = side_dialog.page_side()
+            sheet = page_sizes[state.pagesize]
+            if state.orient == 'Landscape':
+                sheet = tuple(reversed(sheet))
+            bleed = mm_to_inch(float(state.bleed_edge))
+            cols = int(point_to_inch(sheet[0]) // (
+                card_size_without_bleed_inch[0] + 2 * bleed))
+            rows = int(point_to_inch(sheet[1]) // (
+                card_size_without_bleed_inch[1] + 2 * bleed))
+            try:
+                placements, _ = layout_service.resolve(state, cols, rows)
+            except ValueError as exc:
+                application.warn_nonfatal('Cannot Print Layout', str(exc))
+                return
+            if not confirm_underfilled_export(
+                    self.window(),
+                    layout_service.occupancy(placements, cols, rows),
+                    action='print'):
+                return
+
+            with tempfile.TemporaryDirectory(prefix='manaforge-print-') as temp_dir:
+                print_pdf_path = os.path.join(temp_dir, 'manaforge-print-job.pdf')
+                render_result = None
+                render_error = None
+
+                def render_print_job():
+                    nonlocal render_result, render_error
+                    try:
+                        render_result = pdf_service.generate_pdf(
+                            state, page_sizes[state.pagesize], print_pdf_path,
+                            make_popup_print_fn(render_window), page_side=page_side)
+                        render_result.pages.save()
+                    except (OSError, ValueError, TypeError) as exc:
+                        render_error = exc
+
+                self.window().setEnabled(False)
+                render_window = popup(
+                    self.window(), 'Preparing print job...', application._debug_mode)
+                render_window.show_during_work(render_print_job)
+                del render_window
+                self.window().setEnabled(True)
+                if render_error is not None:
+                    application.warn_nonfatal('Could Not Prepare Print Job', str(render_error))
+                    return
+
+                printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+                direct_print_service.configure_printer(printer, state)
+                printer_dialog = QPrintDialog(printer, self.window())
+                printer_dialog.setWindowTitle('Print from Manaforge')
+                printer_dialog.setOption(QPrintDialog.PrintDialogOption.PrintPageRange, True)
+                try:
+                    page_count = direct_print_service.pdf_page_count(print_pdf_path)
+                    printer_dialog.setMinMax(1, page_count)
+                except ValueError as exc:
+                    application.warn_nonfatal('Could Not Prepare Print Job', str(exc))
+                    return
+                if printer_dialog.exec() != QDialog.DialogCode.Accepted:
+                    return
+                try:
+                    printed_pages = direct_print_service.print_pdf(print_pdf_path, printer)
+                except (OSError, ValueError) as exc:
+                    application.warn_nonfatal('Printing Failed', str(exc))
+                    return
+                if hasattr(application, 'show_status'):
+                    application.show_status(
+                        f'Sent {printed_pages} page(s) to {printer.printerName()}')
+
         def run_cropper():
             runtime_images.invalidate_all(state, img_dict)
 
@@ -2109,8 +2234,47 @@ class ActionsWidget(QGroupBox):
             ):
                 self.window().refresh_preview(state, img_dict)
 
-        def add_single_card(checked=False, *, on_added=None):
-            dialog = AddCardDialog(self, state.image_dir)
+        def offer_component_suggestions(suggestions):
+            if not suggestions:
+                return
+            dialog = ComponentSuggestionsDialog(self.window(), suggestions)
+            if dialog.exec() != QDialog.DialogCode.Accepted:
+                return
+            selected = dialog.selected_suggestions()
+            if not selected:
+                return
+            errors = []
+
+            def add_components():
+                for index, suggestion in enumerate(selected, start=1):
+                    make_popup_print_fn(component_window)(
+                        f'Adding related card {index}/{len(selected)}...\n'
+                        f'{suggestion.candidate.name}')
+                    try:
+                        deck_import_service.import_single_card_into_project(
+                            state, img_dict, state.image_dir, suggestion.candidate,
+                            make_popup_print_fn(component_window),
+                            warn_fn=application.warn_nonfatal)
+                    except (OSError, ValueError) as exc:
+                        errors.append(f'{suggestion.candidate.name}: {exc}')
+
+            self.window().setEnabled(False)
+            component_window = popup(
+                self.window(), 'Adding related tokens...', application._debug_mode)
+            component_window.show_during_work(add_components)
+            del component_window
+            self.window().setEnabled(True)
+            self.window().refresh(state, img_dict)
+            autosave_managed_session()
+            if errors:
+                application.warn_nonfatal(
+                    'Some Related Cards Failed', '\n'.join(errors))
+            elif hasattr(application, 'show_status'):
+                application.show_status(
+                    f'Added {len(selected)} related token/card(s)')
+
+        def add_single_card(checked=False, *, on_added=None, initial_query=None):
+            dialog = AddCardDialog(self, state.image_dir, initial_query=initial_query)
             if dialog.exec() != QDialog.DialogCode.Accepted:
                 return
 
@@ -2184,6 +2348,7 @@ class ActionsWidget(QGroupBox):
                     "Next step: click 'Prepare Images' if needed, then check the Preview tab."
                 ),
             )
+            offer_component_suggestions(workflow_result.component_suggestions)
 
         def import_decklist_images():
             dialog = DeckImportDialog(self, state.image_dir)
@@ -2239,6 +2404,8 @@ class ActionsWidget(QGroupBox):
 
             if import_result.imported:
                 show_card_import_complete(self, import_result)
+                offer_component_suggestions(
+                    workflow_result.component_suggestions)
             else:
                 failure_lines = ["No cards were imported."]
                 if import_result.failed_cards:
@@ -2286,6 +2453,7 @@ class ActionsWidget(QGroupBox):
             )
 
         render_button.clicked.connect(render)
+        print_button.clicked.connect(direct_print)
         cropper_button.clicked.connect(run_cropper)
         home_button.clicked.connect(application.show_home)
         save_button.clicked.connect(save_project)
@@ -2299,6 +2467,7 @@ class ActionsWidget(QGroupBox):
 
         self._cropper_button = cropper_button
         self._render_button = render_button
+        self._print_button = print_button
         self._home_button = home_button
         self._save_button = save_button
         self._load_button = load_button
@@ -2307,6 +2476,9 @@ class ActionsWidget(QGroupBox):
         self._settings_button = settings_button
         self._add_card_button = add_card_button
         self._add_single_card = add_single_card
+        application._open_add_card_search = (
+            lambda query: add_single_card(initial_query=query))
+        application._offer_component_suggestions = offer_component_suggestions
         self._check_updates_action = QAction("Check for updates…", self)
         self._check_updates_action.triggered.connect(lambda: application.check_for_updates(manual=True))
         self._import_button = import_decklist_button
@@ -2346,6 +2518,8 @@ class PrintOptionsWidget(QGroupBox):
 
         profiles_button = QPushButton("Printer profiles…")
         layout.addWidget(profiles_button)
+        calibration_button = QPushButton("Calibrate printer…")
+        layout.addWidget(calibration_button)
         from services.printer_profiles import DUPLEX
         duplex = QComboBox()
         duplex.addItems(DUPLEX)
@@ -2373,6 +2547,17 @@ class PrintOptionsWidget(QGroupBox):
                 if dialog.relocated and hasattr(window, 'statusBar'):
                     window.statusBar().showMessage(f"{dialog.relocated} copies moved to fit the printer profile", 3500)
         profiles_button.clicked.connect(manage_profiles)
+
+        def calibrate_printer():
+            from calibration_dialog import PrinterCalibrationDialog
+            dialog = PrinterCalibrationDialog(self, state)
+            dialog.exec()
+            if dialog.applied:
+                window = self.window()
+                window.refresh_widgets(state)
+                window.refresh_preview(state, img_dict)
+                autosave_managed_session()
+        calibration_button.clicked.connect(calibrate_printer)
 
         self.setLayout(layout)
 
@@ -2520,14 +2705,26 @@ class CardOptionsWidget(QGroupBox):
         backside_offset_spin.setSingleStep(0.1)
         backside_offset_spin.setSuffix("mm")
         backside_offset_spin.setValue(float(state.backside_offset))
-        backside_offset = WidgetWithLabel("Back &Offset", backside_offset_spin)
+        backside_offset = WidgetWithLabel("Back Horizontal &Offset", backside_offset_spin)
         backside_offset.setToolTip(
-            "Adjust this only if front and back pages print slightly misaligned."
+            "Move printed backs right (positive) or left (negative)."
         )
+
+        backside_vertical_offset_spin = QDoubleSpinBox()
+        backside_vertical_offset_spin.setDecimals(2)
+        backside_vertical_offset_spin.setRange(-inch_to_mm(0.3), inch_to_mm(0.3))
+        backside_vertical_offset_spin.setSingleStep(0.1)
+        backside_vertical_offset_spin.setSuffix("mm")
+        backside_vertical_offset_spin.setValue(float(state.backside_vertical_offset))
+        backside_vertical_offset = WidgetWithLabel(
+            "Back &Vertical Offset", backside_vertical_offset_spin)
+        backside_vertical_offset.setToolTip(
+            "Move printed backs up (positive) or down (negative).")
 
         backside_default_button.setEnabled(backside_enabled)
         backside_default_preview.setEnabled(backside_enabled)
         backside_offset.setEnabled(backside_enabled)
+        backside_vertical_offset.setEnabled(backside_enabled)
         backside_pages_at_end_checkbox.setEnabled(backside_enabled)
         backside_separate_file_checkbox.setEnabled(backside_enabled)
         backside_reverse_page_order_checkbox.setEnabled(backside_enabled)
@@ -2555,6 +2752,7 @@ class CardOptionsWidget(QGroupBox):
         layout.addWidget(backside_default_button)
         layout.addWidget(backside_default_preview)
         layout.addWidget(backside_offset)
+        layout.addWidget(backside_vertical_offset)
         layout.addWidget(back_over_divider)
         layout.addWidget(oversized_checkbox)
 
@@ -2573,6 +2771,7 @@ class CardOptionsWidget(QGroupBox):
             state.backside_enabled = enabled
             backside_default_button.setEnabled(enabled)
             backside_offset.setEnabled(enabled)
+            backside_vertical_offset.setEnabled(enabled)
             backside_default_preview.setEnabled(enabled)
             backside_pages_at_end_checkbox.setEnabled(enabled)
             backside_separate_file_checkbox.setEnabled(enabled)
@@ -2606,6 +2805,10 @@ class CardOptionsWidget(QGroupBox):
             state.backside_offset = v
             self.window().refresh_preview(state, img_dict)
 
+        def change_backside_vertical_offset(v):
+            state.backside_vertical_offset = v
+            self.window().refresh_preview(state, img_dict)
+
         def switch_oversized_enabled(s):
             enabled = s == QtCore.Qt.CheckState.Checked
             state.oversized_enabled = enabled
@@ -2620,6 +2823,7 @@ class CardOptionsWidget(QGroupBox):
         )
         backside_default_button.clicked.connect(pick_backside)
         backside_offset_spin.valueChanged.connect(change_backside_offset)
+        backside_vertical_offset_spin.valueChanged.connect(change_backside_vertical_offset)
         oversized_checkbox.checkStateChanged.connect(switch_oversized_enabled)
 
         self._bleed_edge_spin = bleed_edge_spin
@@ -2628,6 +2832,7 @@ class CardOptionsWidget(QGroupBox):
         self._backside_separate_file_checkbox = backside_separate_file_checkbox
         self._backside_reverse_page_order_checkbox = backside_reverse_page_order_checkbox
         self._backside_offset_spin = backside_offset_spin
+        self._backside_vertical_offset_spin = backside_vertical_offset_spin
         self._backside_default_preview = backside_default_preview
         self._oversized_checkbox = oversized_checkbox
 
@@ -2636,12 +2841,16 @@ class CardOptionsWidget(QGroupBox):
         blockers = [QtCore.QSignalBlocker(widget) for widget in (
             self._bleed_edge_spin, self._backside_checkbox,
             self._backside_pages_at_end_checkbox, self._backside_offset_spin,
+            self._backside_vertical_offset_spin,
             self._oversized_checkbox)]
         self._bleed_edge_spin.setValue(float(state.bleed_edge))
         self._backside_checkbox.setChecked(state.backside_enabled)
         self._backside_pages_at_end_checkbox.setChecked(state.backside_pages_at_end)
         self._backside_pages_at_end_checkbox.setEnabled(state.backside_enabled)
         self._backside_offset_spin.setValue(float(state.backside_offset))
+        self._backside_vertical_offset_spin.setValue(float(state.backside_vertical_offset))
+        self._backside_offset_spin.setEnabled(state.backside_enabled)
+        self._backside_vertical_offset_spin.setEnabled(state.backside_enabled)
         self._oversized_checkbox.setChecked(state.oversized_enabled)
         del blockers
 

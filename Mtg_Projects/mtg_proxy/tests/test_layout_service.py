@@ -206,6 +206,7 @@ def test_pdf_drawing_uses_manual_slots_back_offset_and_no_editor_artwork(monkeyp
     state.backside_enabled = True
     state.backside_separate_file = separate
     state.backside_offset = '2'
+    state.backside_vertical_offset = '3'
     state.backsides = {'wide': 'wide-back'}
     item = next(iter(layout.copies(state).values()))
     item.update(page=1, row=1, column=1)
@@ -223,5 +224,6 @@ def test_pdf_drawing_uses_manual_slots_back_offset_and_no_editor_artwork(monkeyp
         front, back = canvases[0].pages[2][0], canvases[0].pages[3][0]
     assert front[0] == 'wide'
     assert back[0] == 'wide-back'
-    assert front[2:] == back[2:]
+    assert front[3:] == back[3:]
     assert back[1] == pytest.approx(front[1] - front[3] / 2 + mm_to_point(2))
+    assert back[2] == pytest.approx(front[2] + mm_to_point(3))

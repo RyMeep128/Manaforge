@@ -576,17 +576,29 @@ class CardDatabase:
                 ).fetchall()
         return [self._row_to_print_record(row) for row in rows]
 
-    def search_syntax(self, query: str, limit: int = 200, *, set_filter: str = '',
-                      online_mode: bool = False) -> list[PrintRecord]:
+    def _syntax_predicate(self, query, set_filter, online_mode):
         predicate, params = compile_query(query)
         if online_mode:
             predicate += " AND p.cache_scope = 'online_search' AND coalesce(p.cache_expires_at, 0) > ?"
             params.append(time.time())
-        else:
-            predicate += " AND coalesce(p.cache_scope, '') != 'online_search'"
         if set_filter:
             predicate += " AND (lower(p.set_code) = ? OR instr(lower(coalesce(p.set_name, '')), ?) > 0)"
             params.extend([set_filter.lower(), set_filter.lower()])
+        return predicate, params
+
+    def count_syntax(self, query: str, *, set_filter: str = '',
+                     online_mode: bool = False) -> int:
+        predicate, params = self._syntax_predicate(query, set_filter, online_mode)
+        with self.connect() as connection:
+            row = connection.execute(
+                'SELECT count(DISTINCT p.oracle_id) FROM prints p '
+                'JOIN print_search_data s ON s.card_id = p.card_id '
+                f'WHERE {predicate}', params).fetchone()
+        return int(row[0] or 0)
+
+    def search_syntax(self, query: str, limit: int = 200, *, offset: int = 0,
+                      set_filter: str = '', online_mode: bool = False) -> list[PrintRecord]:
+        predicate, params = self._syntax_predicate(query, set_filter, online_mode)
         with self.connect() as connection:
             rows = connection.execute(
                 'WITH matches AS ('
@@ -597,8 +609,8 @@ class CardDatabase:
                 'LEFT JOIN canonical_prints cp ON cp.oracle_id = p.oracle_id '
                 f'WHERE {predicate}) '
                 'SELECT * FROM matches WHERE search_rank = 1 '
-                'ORDER BY name COLLATE NOCASE, released_at, card_id LIMIT ?',
-                [*params, max(1, min(10000, int(limit)))]).fetchall()
+                'ORDER BY name COLLATE NOCASE, released_at, card_id LIMIT ? OFFSET ?',
+                [*params, max(1, min(10000, int(limit))), max(0, int(offset))]).fetchall()
         return [self._row_to_print_record(row) for row in rows]
 
     def replace_oracle_tags(self, tag_records) -> int:
@@ -660,6 +672,15 @@ class CardDatabase:
         with self.connect() as connection:
             row = connection.execute('SELECT count(*) FROM oracle_tags').fetchone()
         return int(row[0] or 0)
+
+    def oracle_tags_for_card(self, oracle_id: str) -> list[str]:
+        if not str(oracle_id or '').strip():
+            return []
+        with self.connect() as connection:
+            rows = connection.execute(
+                'SELECT tag FROM oracle_tags WHERE oracle_id = ? '
+                'ORDER BY tag COLLATE NOCASE', (str(oracle_id),)).fetchall()
+        return [str(row['tag']) for row in rows]
 
     def _search_prints_fts(
         self,

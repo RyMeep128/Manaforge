@@ -22,6 +22,7 @@ from PyQt6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QMessageBox,
+    QMenu,
     QPushButton,
     QScrollArea,
     QSizePolicy,
@@ -326,8 +327,74 @@ class DeckImportDialog(QDialog):
         return self._deck_url.text().strip()
 
 
+class CardTagsDialog(QDialog):
+    def __init__(self, parent, card_name, tags):
+        super().__init__(parent)
+        self.selected_tag = None
+        self.setWindowTitle(f'Tags for {card_name}')
+        self.resize(420, 520)
+        intro = QLabel(
+            f'<b>{card_name}</b> has {len(tags)} local Oracle Tag'
+            f'{"" if len(tags) == 1 else "s"}. Click a tag to search for every card under it.')
+        intro.setWordWrap(True)
+        tag_list = QListWidget()
+        tag_list.addItems(tags)
+        tag_list.itemClicked.connect(self._choose_tag)
+        close_button = QPushButton('Close')
+        close_button.clicked.connect(self.reject)
+        buttons = QHBoxLayout()
+        buttons.addStretch()
+        buttons.addWidget(close_button)
+        layout = QVBoxLayout(self)
+        layout.addWidget(intro)
+        layout.addWidget(tag_list)
+        layout.addLayout(buttons)
+
+    def _choose_tag(self, item):
+        self.selected_tag = item.text()
+        self.accept()
+
+
+class ComponentSuggestionsDialog(QDialog):
+    def __init__(self, parent, suggestions):
+        super().__init__(parent)
+        self._suggestions = list(suggestions)
+        self.setWindowTitle('Add related tokens and cards')
+        self.resize(540, 520)
+        intro = QLabel(
+            'These tokens or related cards are referenced by the cards you added. '
+            'Select the physical cards you also want to print.')
+        intro.setWordWrap(True)
+        self.list = QListWidget()
+        for suggestion in self._suggestions:
+            component = suggestion.component.replace('_', ' ').title()
+            item = QListWidgetItem(
+                f'{suggestion.candidate.name}\n{component} for {suggestion.source_name}')
+            item.setFlags(item.flags() | QtCore.Qt.ItemFlag.ItemIsUserCheckable)
+            item.setCheckState(QtCore.Qt.CheckState.Checked)
+            self.list.addItem(item)
+        add_button = QPushButton('Add Selected')
+        add_button.clicked.connect(self.accept)
+        dismiss_button = QPushButton('Not Now')
+        dismiss_button.clicked.connect(self.reject)
+        buttons = QHBoxLayout()
+        buttons.addStretch()
+        buttons.addWidget(add_button)
+        buttons.addWidget(dismiss_button)
+        layout = QVBoxLayout(self)
+        layout.addWidget(intro)
+        layout.addWidget(self.list)
+        layout.addLayout(buttons)
+
+    def selected_suggestions(self):
+        return [
+            suggestion for row, suggestion in enumerate(self._suggestions)
+            if self.list.item(row).checkState() == QtCore.Qt.CheckState.Checked
+        ]
+
+
 class AddCardDialog(QDialog):
-    def __init__(self, parent, image_dir):
+    def __init__(self, parent, image_dir, initial_query=None):
         super().__init__(parent)
         self.setWindowTitle("Add Card")
         self.resize(960, 700)
@@ -345,6 +412,9 @@ class AddCardDialog(QDialog):
         self._card_page_start = 0
         self._total_card_count = 0
         self._card_results_have_more = False
+        self._search_history = []
+        self._search_history_index = -1
+        self._restoring_search_history = False
 
         intro = QLabel(
             "Search by full or partial card name, or use Scryfall syntax such as "
@@ -371,7 +441,10 @@ class AddCardDialog(QDialog):
             'Regex and Tagger filters require online search.')
 
         card_search_button = QPushButton("Search")
-        card_search_button.clicked.connect(lambda: self.refresh_card_results(reset_page=True))
+        card_search_button.clicked.connect(
+            lambda: self.refresh_card_results(reset_page=True))
+        card_name_edit.returnPressed.connect(
+            lambda: self.refresh_card_results(reset_page=True))
 
         card_filters_layout = QHBoxLayout()
         card_filters_layout.addWidget(WidgetWithLabel("Search Query", card_name_edit), 2)
@@ -393,6 +466,17 @@ class AddCardDialog(QDialog):
         self._card_page_label = card_page_label
 
         card_pagination_layout = QHBoxLayout()
+        search_back_button = QPushButton('Back')
+        search_back_button.setEnabled(False)
+        search_back_button.clicked.connect(self._go_back_search)
+        self._search_back_button = search_back_button
+        search_forward_button = QPushButton('Forward')
+        search_forward_button.setEnabled(False)
+        search_forward_button.clicked.connect(self._go_forward_search)
+        self._search_forward_button = search_forward_button
+        card_pagination_layout.addWidget(search_back_button)
+        card_pagination_layout.addWidget(search_forward_button)
+        card_pagination_layout.addSpacing(12)
         card_pagination_layout.addWidget(card_prev_page_button)
         card_pagination_layout.addWidget(card_next_page_button)
         card_pagination_layout.addWidget(card_page_label)
@@ -402,6 +486,10 @@ class AddCardDialog(QDialog):
         card_results_list.setIconSize(QtCore.QSize(90, 126))
         card_results_list.currentRowChanged.connect(self._handle_card_selection_changed)
         card_results_list.itemDoubleClicked.connect(lambda _item: self._accept_add_card())
+        card_results_list.setContextMenuPolicy(
+            QtCore.Qt.ContextMenuPolicy.CustomContextMenu)
+        card_results_list.customContextMenuRequested.connect(
+            self._show_card_result_menu)
         self._card_results_list = card_results_list
 
         card_preview_label = QLabel("Select a card to preview it here.")
@@ -469,6 +557,10 @@ class AddCardDialog(QDialog):
         layout.addWidget(intro)
         layout.addWidget(page_stack)
         self.setLayout(layout)
+        if initial_query:
+            self._card_name_edit.setText(str(initial_query))
+            QtCore.QTimer.singleShot(
+                0, lambda: self.refresh_card_results(reset_page=True))
 
     def selected_card(self):
         return self._selected_card_value
@@ -518,6 +610,40 @@ class AddCardDialog(QDialog):
             return None
         return self._card_candidates[row]
 
+    @staticmethod
+    def _oracle_tag_query(tag):
+        escaped = str(tag).replace('\\', '\\\\').replace('"', '\\"')
+        return f'otag:"{escaped}"'
+
+    def _show_card_result_menu(self, position):
+        item = self._card_results_list.itemAt(position)
+        if item is None:
+            return
+        candidate = self._selected_card_candidate(self._card_results_list.row(item))
+        if candidate is None:
+            return
+        menu = QMenu(self)
+        view_tags = menu.addAction('View Tags')
+        chosen = menu.exec(self._card_results_list.viewport().mapToGlobal(position))
+        if chosen == view_tags:
+            self._show_card_tags(candidate)
+
+    def _show_card_tags(self, candidate):
+        tags = get_default_card_service().database.oracle_tags_for_card(
+            candidate.oracle_id)
+        if not tags:
+            self._warn(
+                'No Tags Found',
+                f'No local Oracle Tags are stored for {candidate.name}. Refresh Oracle '
+                'Tags in MTG Core Admin if the tag catalog is missing or out of date.')
+            return
+        dialog = CardTagsDialog(self, candidate.name, tags)
+        if dialog.exec() != QDialog.DialogCode.Accepted or not dialog.selected_tag:
+            return
+        self._card_name_edit.setText(self._oracle_tag_query(dialog.selected_tag))
+        self._card_set_filter_edit.clear()
+        self.refresh_card_results(reset_page=True)
+
     def _update_card_pagination_controls(self):
         if self._total_card_count <= 0:
             self._card_page_label.setText("Page 0 of 0")
@@ -546,6 +672,50 @@ class AddCardDialog(QDialog):
             return
         self._card_page_start += self._card_page_size
         self.refresh_card_results(reset_page=False)
+
+    def _current_search_state(self):
+        return {
+            'query': self._card_name_edit.text(),
+            'set_filter': self._card_set_filter_edit.text(),
+            'local_only': self._local_search_checkbox.isChecked(),
+            'page_start': self._card_page_start,
+        }
+
+    def _commit_search_history(self, state):
+        if (self._search_history_index >= 0 and
+                self._search_history[self._search_history_index] == state):
+            return
+        del self._search_history[self._search_history_index + 1:]
+        self._search_history.append(dict(state))
+        self._search_history_index = len(self._search_history) - 1
+        self._update_search_history_buttons()
+
+    def _update_search_history_buttons(self):
+        self._search_back_button.setEnabled(self._search_history_index > 0)
+        self._search_forward_button.setEnabled(
+            0 <= self._search_history_index < len(self._search_history) - 1)
+
+    def _restore_search_history(self, index):
+        if index < 0 or index >= len(self._search_history):
+            return
+        self._search_history_index = index
+        state = self._search_history[index]
+        self._card_name_edit.setText(state['query'])
+        self._card_set_filter_edit.setText(state['set_filter'])
+        self._local_search_checkbox.setChecked(state['local_only'])
+        self._card_page_start = state['page_start']
+        self._restoring_search_history = True
+        try:
+            self.refresh_card_results(reset_page=False)
+        finally:
+            self._restoring_search_history = False
+        self._update_search_history_buttons()
+
+    def _go_back_search(self):
+        self._restore_search_history(self._search_history_index - 1)
+
+    def _go_forward_search(self):
+        self._restore_search_history(self._search_history_index + 1)
 
     def _card_thumbnail_key(self, candidate):
         return (
@@ -641,6 +811,9 @@ class AddCardDialog(QDialog):
         local_only = self._local_search_checkbox.isChecked()
         if reset_page:
             self._card_page_start = 0
+        history_state = (
+            self._current_search_state()
+            if reset_page and not self._restoring_search_history else None)
 
         search_page = None
         error = None
@@ -671,6 +844,12 @@ class AddCardDialog(QDialog):
             self._card_results_have_more = False
             self._update_card_pagination_controls()
             return
+
+        if history_state is not None:
+            self._commit_search_history(history_state)
+        elif self._search_history_index >= 0:
+            self._search_history[self._search_history_index] = (
+                self._current_search_state())
 
         self._card_candidates = [] if search_page is None else search_page.candidates
         self._total_card_count = 0 if search_page is None else search_page.total_count
@@ -728,6 +907,7 @@ class AddCardDialog(QDialog):
             self._card_preview_label.setPixmap(QPixmap())
             self._card_preview_label.setText('No local image stored. Card text is available; adding this card may require downloading its image.')
             return
+
         cache_key = f"local:{local_path}" if local_path else (candidate.preview_url or candidate.thumbnail_url)
         if cache_key not in self._card_preview_cache:
             preview_bytes = None

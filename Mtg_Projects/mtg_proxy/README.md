@@ -106,6 +106,8 @@ The importer resolves cards through Scryfall and downloads image files into your
 
 If a deck contains double-faced cards, the importer also pulls the matching back face and automatically enables per-card backsides for those imports.
 
+After deck or single-card imports, Manaforge offers tokens and related cards found through Scryfall `all_parts` relationships. Select any combination in the chooser or dismiss it. You can reopen the same chooser later with **Add Related Tokens/Cards...** in a token-producing card's right-click menu.
+
 If some lines cannot be parsed or some cards cannot be resolved, the app shows a summary instead of silently failing.
 
 ## Existing Images
@@ -115,11 +117,13 @@ If a file is already pre-cropped, enable `Allow Precropped` in `Settings` and pl
 
 # Printing Options
 
+Use **Print** in the project toolbar to print directly. Choose fronts and backs, fronts only, or backs only, review any under-filled-sheet warning, then select the installed printer, copies, and page range in the system print dialog. Manaforge starts with the active paper, orientation, and duplex profile settings and renders through the same geometry used for PDF export.
+
 ## Printer profiles
 
-Open **Print Settings → Printer profiles…** to save the current paper size, orientation, backside output settings, horizontal offset, and a duplex preference under a name. Select a saved profile to inspect and apply it; the app shows the changes before applying them. Save with the same name to replace a profile, or delete a profile you no longer need. Existing projects keep their own copies of the applied settings.
+Open **Print Settings > Printer profiles...** to save the current paper size, orientation, backside output settings, horizontal and vertical offsets, and a duplex preference under a name. Select a saved profile to inspect and apply it; the app shows the changes before applying them. Save with the same name to replace a profile, or delete a profile you no longer need. Existing projects keep their own copies of the applied settings.
 
-The **PDF viewer duplex preference** is remembered per project. Use it with Actual size / 100% in your PDF viewer; it does not configure the printer driver or change per-card short-edge rotation. Calibration PDF generation and vertical alignment offsets remain planned.
+The **PDF viewer duplex preference** is remembered per project. Use it with Actual size / 100% in your PDF viewer; it does not configure the printer driver or change per-card short-edge rotation. Use **Print Settings > Calibrate printer...** to create a paired test PDF, enter horizontal and vertical back corrections, verify them, and optionally save the result as a named profile.
 
 ## Print Options
 The print section controls:

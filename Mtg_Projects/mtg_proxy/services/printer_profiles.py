@@ -10,6 +10,7 @@ from services import layout_service
 from services.card_edit_service import sheet_capacity
 
 FIELDS = ('pagesize', 'orient', 'backside_enabled', 'backside_offset',
+          'backside_vertical_offset',
           'backside_pages_at_end', 'backside_separate_file',
           'backside_reverse_page_order', 'printer_duplex')
 DUPLEX = ('Long edge', 'Short edge', 'Manual / single-sided')
@@ -20,16 +21,24 @@ def path():
 
 
 def validate(settings):
-    if not isinstance(settings, dict) or any(key not in settings for key in FIELDS):
+    if not isinstance(settings, dict):
+        raise ValueError('Incomplete printer profile.')
+    settings = dict(settings)
+    # Profiles created before vertical calibration remain valid.
+    settings.setdefault('backside_vertical_offset', '0')
+    if any(key not in settings for key in FIELDS):
         raise ValueError('Incomplete printer profile.')
     if settings['pagesize'] not in page_sizes or settings['orient'] not in ('Portrait', 'Landscape'):
         raise ValueError('Invalid paper size or orientation.')
     if settings['printer_duplex'] not in DUPLEX:
         raise ValueError('Invalid duplex preference.')
-    if not math.isfinite(float(settings['backside_offset'])):
-        raise ValueError('Backside offset must be a finite number.')
+    if not all(math.isfinite(float(settings[key])) for key in
+               ('backside_offset', 'backside_vertical_offset')):
+        raise ValueError('Backside offsets must be finite numbers.')
     for key in FIELDS:
-        if key.startswith('backside_') and key != 'backside_offset' and not isinstance(settings[key], bool):
+        if (key.startswith('backside_') and key not in
+                ('backside_offset', 'backside_vertical_offset') and
+                not isinstance(settings[key], bool)):
             raise ValueError('Invalid backside setting.')
     return {key: settings[key] for key in FIELDS}
 

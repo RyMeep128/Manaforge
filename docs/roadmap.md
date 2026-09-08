@@ -20,25 +20,25 @@ Status: **[x] complete**, **[ ] planned**, **[~] partially complete**.
 
 ### 1. Calibration and duplex alignment
 
-- [ ] Generate a front/back calibration PDF with orientation arrows, registration marks, rulers, and measured reference boxes.
-- [ ] Add a guided wizard for paper choice, duplex edge, actual-size printing, and measured X/Y drift.
-- [ ] Add vertical backside offset throughout state, profiles, preview, and export.
-- [ ] Save calibration corrections into a named printer profile.
-- [ ] Print a second verification sheet from the wizard.
+- [x] Generate a front/back calibration PDF with orientation arrows, registration marks, rulers, and measured reference boxes.
+- [x] Add a guided calibration dialog showing paper choice, orientation, duplex edge, actual-size printing, and measured X/Y drift.
+- [x] Add vertical backside offset throughout state, profiles, preview, and export.
+- [x] Save calibration corrections into a named printer profile.
+- [x] Generate a second verification sheet from the dialog after entering corrections.
 - [ ] Test portrait/landscape, Letter/A4, long-edge/short-edge duplex, and mirrored backs.
 
 **Exit gate:** A user can calibrate a printer, save the result, reopen Manaforge, and reproduce aligned fronts and backs.
 
 ### 2. Direct printing
 
-- [ ] Enumerate system printers and select one in Manaforge.
-- [ ] Map profiles to printer capabilities: paper, orientation, duplex mode, color, and copies.
-- [ ] Provide print range and front-only/back-only controls.
-- [ ] Render through the same placement service used by preview and PDF.
+- [x] Enumerate system printers and select one in Manaforge through the native print dialog.
+- [~] Map profiles to printer capabilities: paper, orientation, and duplex are applied; color and copies remain driver-controlled.
+- [x] Provide print range and front-only/back-only controls.
+- [x] Render through the same placement service used by preview and PDF.
 - [ ] Show occupancy, low-resolution, missing-back, clipping, and invalid-layout warnings before submission.
-- [ ] Keep **Print Anyway** where output remains valid.
-- [ ] Show operating-system print errors and job-submission status clearly.
-- [ ] Require an explicit final **Print** action; calibration and preview never submit automatically.
+- [x] Keep **Print Anyway** where output remains valid.
+- [x] Show operating-system print errors and job-submission status clearly.
+- [x] Require an explicit final **Print** action; calibration and preview never submit automatically.
 
 **Depends on:** calibration and vertical offset.
 
@@ -83,8 +83,8 @@ Status: **[x] complete**, **[ ] planned**, **[~] partially complete**.
 
 ### 6. Tokens and unusual card layouts
 
-- [ ] Read `all_parts`/component relationships and suggest created tokens or referenced cards.
-- [ ] Let users add all suggested tokens, select some, or dismiss them.
+- [x] Read `all_parts`/component relationships and suggest created tokens or referenced cards after imports and from project-card context menus.
+- [x] Let users add all suggested tokens, select some, or dismiss them.
 - [ ] Verify transform and modal DFC front/back pairing.
 - [ ] Add explicit tests and rendering rules for meld, split, aftermath, adventure, flip, battle, plane, scheme, token, and custom cards.
 - [ ] Verify oversized behavior for each compatible layout.
@@ -243,4 +243,3 @@ Status: **[x] complete**, **[ ] planned**, **[~] partially complete**.
 8. Freeze printer expansion and build the Deck Editor MVP.
 9. Make the editor fast and pleasant before adding recommendations.
 10. Integrate **Print Deck**, shared preferences, and owned/do-not-print state.
-

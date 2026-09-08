@@ -49,6 +49,7 @@ def draw_cross(can, x, y, segment, c=6, s=1):
 def generate(print_dict, size, pdf_path, print_fn, *, page_side="both"):
     state = as_project_state(print_dict)
     backside_offset = mm_to_point(float(state.backside_offset))
+    backside_vertical_offset = mm_to_point(float(state.backside_vertical_offset))
 
     bleed_edge = float(state.bleed_edge)
     has_bleed_edge = bleed_edge > 0
@@ -151,6 +152,7 @@ def generate(print_dict, size, pdf_path, print_fn, *, page_side="both"):
                         x,
                         y,
                         dx=backside_offset if is_backside_page else 0.0,
+                        dy=backside_vertical_offset if is_backside_page else 0.0,
                         is_short_edge=is_short_edge,
                         backside=is_backside_page,
                     )

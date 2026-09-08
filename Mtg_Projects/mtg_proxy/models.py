@@ -231,6 +231,7 @@ class ProjectState:
     backside_reverse_page_order: bool = False
     backside_default: str = "__back.png"
     backside_offset: str = "0"
+    backside_vertical_offset: str = "0"
     printer_duplex: str = "Long edge"
     backsides: dict[str, str] = field(default_factory=dict)
     backside_short_edge: dict[str, bool] = field(default_factory=dict)
@@ -258,6 +259,7 @@ class ProjectState:
             backside_reverse_page_order=bool(data.get("backside_reverse_page_order", False)),
             backside_default=str(data.get("backside_default", "__back.png")),
             backside_offset=str(data.get("backside_offset", "0")),
+            backside_vertical_offset=str(data.get("backside_vertical_offset", "0")),
             printer_duplex=str(data.get("printer_duplex", "Long edge")),
             backsides=_coerce_plain_dict(data.get("backsides")),
             backside_short_edge=_coerce_plain_dict(data.get("backside_short_edge")),
@@ -303,6 +305,7 @@ class ProjectState:
             "backside_reverse_page_order": self.backside_reverse_page_order,
             "backside_default": self.backside_default,
             "backside_offset": self.backside_offset,
+            "backside_vertical_offset": self.backside_vertical_offset,
             "printer_duplex": self.printer_duplex,
             "backsides": {e.front_name: e.backside_name for e in entries if e.backside_name},
             "backside_short_edge": {e.front_name: True for e in entries if e.backside_short_edge},
@@ -329,6 +332,7 @@ class ProjectState:
             "backside_default": self.backside_default,
             "backside_default_asset_id": self.backside_default_asset_id,
             "backside_offset": self.backside_offset,
+            "backside_vertical_offset": self.backside_vertical_offset,
             "printer_duplex": self.printer_duplex,
             "oversized_enabled": self.oversized_enabled,
             "card_metadata": {e.front_name: e.metadata.to_dict() for e in entries if e.metadata.to_dict()},
@@ -391,6 +395,7 @@ class ProjectState:
         self.backside_reverse_page_order = replacement.backside_reverse_page_order
         self.backside_default = replacement.backside_default
         self.backside_offset = replacement.backside_offset
+        self.backside_vertical_offset = replacement.backside_vertical_offset
         self.printer_duplex = replacement.printer_duplex
         self.backsides = replacement.backsides
         self.backside_short_edge = replacement.backside_short_edge

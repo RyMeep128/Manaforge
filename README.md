@@ -57,13 +57,14 @@ The Deck Editor has no launch command yet. Windows is the packaged target; the c
 ### First print project
 
 1. Create/open a project and add individual cards, import a decklist, or choose existing images.
+   After an import, Manaforge offers locally known tokens and related cards from Scryfall `all_parts` relationships. The same chooser is available by right-clicking a token-producing project card.
 2. Prepare images and configure paper, bleed, and optional backs/oversized cards.
 3. Open **Preview**, arrange copies, and check each sheet's filled-slot count.
 4. Use **Undo / Redo** or `Ctrl+Z` / `Ctrl+Y` (`Ctrl+Shift+Z` also works) while focused in Preview. History covers moves, resets, added editing pages, and successful slot additions, including their quantities. It is session-only and clears after unrelated project/settings changes.
-5. **Save Project**, then export the PDF. If sheets are under-filled, choose **Go Back** or **Print Anyway**.
-6. Print the PDF from your viewer with the intended scaling and duplex settings. Exporting does not send a physical printer job.
+5. **Save Project**, then choose **Export PDF** or **Print**. If sheets are under-filled, choose **Go Back** or **Print Anyway**.
+6. Direct printing lets you select fronts/backs and then opens the operating-system printer dialog for printer, copies, page range, and driver properties. PDF export remains available for external printing.
 
-Backside offsets and output settings are saved per project. **Print Settings → Printer profiles…** saves reusable paper, backside, alignment, and duplex preferences and lets you apply them to other projects. See [printer setup](docs/printing-roadmap.md) for details and the planned calibration PDF workflow.
+Backside offsets and output settings are saved per project. **Print Settings > Printer profiles...** saves reusable paper, backside, alignment, and duplex preferences and lets you apply them to other projects. **Print Settings > Calibrate printer...** creates a two-sided alignment sheet and can save measured X/Y corrections into a profile. See [printer setup](docs/printing-roadmap.md) for the workflow.
 
 Named projects autosave after two seconds without edits. The header and window title show `*` while changes are unsaved; successful autosaving or **Save Project** clears it. Unnamed drafts save a recovery snapshot without asking for a name; use **Resume Draft** on the Projects screen after restarting. The first regular Save chooses the permanent project name. Closing or switching away saves pending work, and a failed save keeps the project open and marked unsaved.
 
