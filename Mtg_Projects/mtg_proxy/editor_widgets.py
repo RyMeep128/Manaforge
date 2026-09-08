@@ -1706,7 +1706,7 @@ class PrintPreview(QScrollArea):
                               for o in self._overlays)), len(self._pages) - 1)
         self._set_page(target)
 
-    def add_at_slot(self, destination):
+    def add_at_slot(self, destination, selected_card=None):
         actions = self.window().findChildren(ActionsWidget)
         if not actions:
             return
@@ -1726,7 +1726,24 @@ class PrintPreview(QScrollArea):
             self._state.manual_layout['placements'].extend(layout_service.record([candidate])['placements'])
             self._selected_copy = candidate['copy_id']
             self._history.push(history_before, self.layout_snapshot())
-        actions[0]._add_single_card(on_added=place_import)
+        kwargs = {'on_added': place_import}
+        if selected_card is not None:
+            kwargs['selected_card_override'] = selected_card
+        actions[0]._add_single_card(**kwargs)
+
+    def empty_slot_context_menu(self, destination):
+        menu = QMenu(self)
+        menu.addAction('Add Card Here...', lambda: self.add_at_slot(destination))
+        suggestions = deck_import_service.unadded_token_suggestions(self._state)
+        if suggestions:
+            token_menu = menu.addMenu('Add Related Token')
+            for suggestion in suggestions:
+                action = token_menu.addAction(
+                    f'{suggestion.candidate.name} ({suggestion.source_name})')
+                action.triggered.connect(
+                    lambda _checked=False, value=suggestion:
+                    self.add_at_slot(destination, value.candidate))
+        return menu
 
     def layout_snapshot(self):
         return dict(project=self._state.to_dict(), extra_pages=self._extra_pages,
@@ -2254,7 +2271,8 @@ class ActionsWidget(QGroupBox):
                         deck_import_service.import_single_card_into_project(
                             state, img_dict, state.image_dir, suggestion.candidate,
                             make_popup_print_fn(component_window),
-                            warn_fn=application.warn_nonfatal)
+                            warn_fn=application.warn_nonfatal,
+                            full_project_refresh=False)
                     except (OSError, ValueError) as exc:
                         errors.append(f'{suggestion.candidate.name}: {exc}')
 
@@ -2273,14 +2291,17 @@ class ActionsWidget(QGroupBox):
                 application.show_status(
                     f'Added {len(selected)} related token/card(s)')
 
-        def add_single_card(checked=False, *, on_added=None, initial_query=None):
-            dialog = AddCardDialog(self, state.image_dir, initial_query=initial_query)
-            if dialog.exec() != QDialog.DialogCode.Accepted:
-                return
-
-            selected_card = dialog.selected_card()
+        def add_single_card(checked=False, *, on_added=None, initial_query=None,
+                            selected_card_override=None):
+            dialog = None
+            selected_card = selected_card_override
             if selected_card is None:
-                return
+                dialog = AddCardDialog(self, state.image_dir, initial_query=initial_query)
+                if dialog.exec() != QDialog.DialogCode.Accepted:
+                    return
+                selected_card = dialog.selected_card()
+                if selected_card is None:
+                    return
 
             snapshot = ProjectState.from_dict(state.to_dict()) if on_added else None
             workflow_result = None
@@ -2296,9 +2317,10 @@ class ActionsWidget(QGroupBox):
                         selected_card,
                         make_popup_print_fn(add_window),
                         warn_fn=application.warn_nonfatal,
-                        art_candidate=dialog.selected_art_candidate(),
-                        art_source=dialog.selected_art_source(),
+                        art_candidate=(dialog.selected_art_candidate() if dialog else None),
+                        art_source=(dialog.selected_art_source() if dialog else None),
                         backend_url=CFG.HighResBackendURL,
+                        full_project_refresh=False,
                     )
                 except (OSError, ValueError) as exc:
                     add_error = exc

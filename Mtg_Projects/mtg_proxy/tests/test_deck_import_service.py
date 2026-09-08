@@ -197,6 +197,16 @@ def test_component_suggestions_resolve_all_parts_from_local_catalog(tmp_path):
     assert suggestions[0].candidate.card_id == 'goblin-token'
     assert suggestions[0].candidate.name == 'Goblin'
 
+    state = ProjectState()
+    state.apply_imported_card(
+        'maker.png', 1, {'name': 'Goblin Maker'}, card_id='maker',
+        oracle_id='maker-oracle')
+    assert len(deck_import_service.unadded_token_suggestions(state, service)) == 1
+    state.apply_imported_card(
+        'token.png', 1, {'name': 'Goblin'}, card_id='goblin-token',
+        oracle_id='goblin-token-oracle')
+    assert deck_import_service.unadded_token_suggestions(state, service) == []
+
 
 def test_component_suggestions_fetch_missing_exact_token(tmp_path):
     from mtg_core import CardService
@@ -495,6 +505,39 @@ def test_import_single_card_into_project_uses_default_art_and_refresh(monkeypatc
         state, img_dict, "images", selected_card, lambda _message: None,
     )
     assert state.get_card_count(result.filename) == 2
+
+
+def test_import_single_card_can_prepare_only_the_added_preview(monkeypatch):
+    selected_card = deck_import_service.ScryfallCardCandidate(
+        name="Plains", set_code="lea", set_name="Limited Edition Alpha",
+        collector_number="232", card_id=None, oracle_id=None,
+        scryfall_id="card-1", preview_url="preview", thumbnail_url="thumb",
+        filename="scryfall_lea_232_plains.png",
+        art_context=high_res.CardContext(
+            filename="scryfall_lea_232_plains.png", query="Plains",
+            display_name="Plains", set_code="lea", collector_number="232"),
+        card_data={},
+    )
+    monkeypatch.setattr(deck_import, "resolve_card", lambda *args, **kwargs: {})
+    monkeypatch.setattr(
+        deck_import, "download_card_image_set",
+        lambda *args, **kwargs: (
+            deck_import.ImportedCard(
+                entry=args[1], filename="scryfall_lea_232_plains.png"), None))
+    monkeypatch.setattr(
+        deck_import_service.project_service, "refresh_after_image_changes",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("full project refresh should be skipped")))
+    prepared = []
+    monkeypatch.setattr(
+        deck_import_service.runtime_images, "ensure_preview_entry",
+        lambda state, images, name: prepared.append(name))
+
+    deck_import_service.import_single_card_into_project(
+        ProjectState(), {}, "images", selected_card, lambda _message: None,
+        full_project_refresh=False)
+
+    assert prepared == ["scryfall_lea_232_plains.png"]
 
 
 def test_import_single_card_into_project_applies_optional_art_and_backside(monkeypatch):

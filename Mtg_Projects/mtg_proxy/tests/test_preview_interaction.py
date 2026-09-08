@@ -50,6 +50,28 @@ def test_hover_select_both_halves_and_plus_click(preview, monkeypatch):
     assert len(preview._overlays) * 2 == len(preview._pages)
 
 
+def test_empty_slot_menu_offers_unadded_related_token(preview, monkeypatch):
+    token = SimpleNamespace(name='Sliver', card_id='token-id')
+    suggestion = SimpleNamespace(
+        candidate=token, source_name='Brood Sliver', component='token')
+    monkeypatch.setattr(
+        editor_widgets.deck_import_service, 'unadded_token_suggestions',
+        lambda state: [suggestion])
+    additions = []
+    monkeypatch.setattr(
+        preview, 'add_at_slot',
+        lambda destination, selected_card=None:
+        additions.append((destination, selected_card)))
+
+    menu = preview.empty_slot_context_menu((0, 2, 2))
+    related = next(action for action in menu.actions()
+                   if action.text() == 'Add Related Token')
+    related.menu().actions()[0].trigger()
+
+    assert additions == [((0, 2, 2), token)]
+    menu.deleteLater()
+
+
 def test_drag_validation_and_drop_preserve_grab_offset(preview):
     overlay = preview._overlays[0]
     wide = next(p for p in preview._placements if p['span'] == 2)
@@ -429,8 +451,12 @@ def test_preview_context_menu_has_only_artwork_and_oversized(preview):
 
 def test_right_click_either_oversized_half_targets_same_card(preview, monkeypatch):
     names = []
+    empty_slots = []
     menu = SimpleNamespace(exec=lambda pos: None, deleteLater=lambda: None)
     monkeypatch.setattr(preview, 'card_context_menu', lambda name: names.append(name) or menu)
+    monkeypatch.setattr(
+        preview, 'empty_slot_context_menu',
+        lambda slot: empty_slots.append(slot) or menu)
     overlay = preview._overlays[0]
     wide = next(p for p in preview._placements if p['name'] == 'wide')
     for column in (wide['column'], wide['column'] + 1):
@@ -439,8 +465,12 @@ def test_right_click_either_oversized_half_targets_same_card(preview, monkeypatc
         overlay.contextMenuEvent(event)
         assert event.isAccepted()
     point = center(overlay, 2, 2)
-    overlay.contextMenuEvent(QtGui.QContextMenuEvent(QtGui.QContextMenuEvent.Reason.Mouse, point))
+    empty_event = QtGui.QContextMenuEvent(
+        QtGui.QContextMenuEvent.Reason.Mouse, point)
+    overlay.contextMenuEvent(empty_event)
     assert names == ['wide', 'wide']
+    assert empty_slots == [(0, 2, 2)]
+    assert empty_event.isAccepted()
 
 
 @pytest.mark.parametrize('accepted,applied', [(False, False), (True, False), (True, True)])

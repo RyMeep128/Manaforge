@@ -8,6 +8,7 @@ from typing import Callable
 
 import deck_import
 import high_res
+import runtime_images
 from config import CFG
 from mtg_core import CardService, RemoteLookupUnavailable
 from mtg_core.sync import is_no_card_match_error
@@ -122,6 +123,22 @@ def component_suggestions_for_card_ids(card_ids, card_service=None):
             seen.add(part_id)
     return sorted(suggestions, key=lambda item: (
         item.component.casefold(), item.candidate.name.casefold()))
+
+
+def unadded_token_suggestions(project_like, card_service=None):
+    state = as_project_state(project_like)
+    entries = [state.get_card_entry(name) for name in state.cards]
+    existing_card_ids = {entry.card_id for entry in entries if entry.card_id}
+    existing_oracle_ids = {entry.oracle_id for entry in entries if entry.oracle_id}
+    suggestions = component_suggestions_for_card_ids(
+        existing_card_ids, card_service=card_service)
+    return [
+        suggestion for suggestion in suggestions
+        if suggestion.component == 'token'
+        and suggestion.candidate.card_id not in existing_card_ids
+        and (not suggestion.candidate.oracle_id or
+             suggestion.candidate.oracle_id not in existing_oracle_ids)
+    ]
 
 
 def import_decklist(*args, **kwargs):
@@ -447,6 +464,7 @@ def import_single_card_into_project(
     backend_url: str = "",
     fetch_json: Callable[[str], dict] | None = None,
     fetch_bytes: Callable[[str], bytes] | None = None,
+    full_project_refresh: bool = True,
 ) -> SingleCardImportWorkflowResult:
     state = as_project_state(state)
     fetch_json = fetch_json or deck_import._fetch_json
@@ -517,8 +535,9 @@ def import_single_card_into_project(
     if backside_name is not None:
         state.set_backside(imported_card.filename, backside_name)
 
-    print_fn("Refreshing project...")
-    project_service.refresh_after_image_changes(state, img_dict, print_fn, warn_fn)
+    if full_project_refresh:
+        print_fn("Refreshing project...")
+        project_service.refresh_after_image_changes(state, img_dict, print_fn, warn_fn)
 
     normalized_art_source = (art_source or getattr(art_candidate, "art_source", "") or "").strip() or None
     if art_candidate is not None:
@@ -532,6 +551,12 @@ def import_single_card_into_project(
             print_fn,
             warn_fn,
         )
+
+    if not full_project_refresh:
+        print_fn("Preparing card preview...")
+        runtime_images.ensure_preview_entry(state, img_dict, imported_card.filename)
+        if backside_name:
+            runtime_images.ensure_preview_entry(state, img_dict, backside_name)
 
     return SingleCardImportWorkflowResult(
         state=state,

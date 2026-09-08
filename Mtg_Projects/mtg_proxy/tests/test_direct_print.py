@@ -52,10 +52,26 @@ def test_configure_printer_applies_project_page_and_duplex():
     state.pagesize = 'A4'
     state.orient = 'Landscape'
     state.printer_duplex = 'Short edge'
-    printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+    qt_printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+
+    class PrinterSpy:
+        def __init__(self, wrapped):
+            self.wrapped = wrapped
+            self.requested_duplex = None
+
+        def setDuplex(self, mode):
+            self.requested_duplex = mode
+            self.wrapped.setDuplex(mode)
+
+        def __getattr__(self, name):
+            return getattr(self.wrapped, name)
+
+    printer = PrinterSpy(qt_printer)
 
     direct_print_service.configure_printer(printer, state)
 
     assert printer.pageLayout().orientation().name == 'Landscape'
     assert printer.pageLayout().pageSize().id().name == 'A4'
-    assert printer.duplex() == QPrinter.DuplexMode.DuplexShortSide
+    # A headless CI printer may reject duplex because it has no duplex-capable
+    # device. Verify the requested setting rather than a hardware-dependent readback.
+    assert printer.requested_duplex == QPrinter.DuplexMode.DuplexShortSide

@@ -37,9 +37,13 @@ class PreviewOverlay(QtWidgets.QWidget):
         return self.occupied.get(slot)
 
     def contextMenuEvent(self, event):
-        item = self.item_at(self.slot(event.pos()))
+        slot = self.slot(event.pos())
+        item = self.item_at(slot)
         if item is None:
-            event.ignore()
+            menu = self.preview.empty_slot_context_menu(slot)
+            menu.exec(event.globalPos())
+            menu.deleteLater()
+            event.accept()
             return
         self.preview._selected_copy = item['copy_id']
         self.preview.update_overlays()
