@@ -11,6 +11,7 @@ from mtg_core.db import CardDatabase
 from mtg_core.images import checksum_bytes, ensure_parent_dir
 from mtg_core.models import BulkDownloadStatus, ImageAssetRecord, PrintRecord, SearchCardResult
 from mtg_core.paths import core_data_root
+from mtg_core.preferences import ArtworkPreferenceRules, choose_print
 from mtg_core.sync import (
     RemoteLookupUnavailable,
     build_print_search_url,
@@ -168,6 +169,30 @@ class CardService:
 
     def get_prints(self, oracle_id: str) -> list[dict]:
         return [dict(row.payload) for row in self.database.get_prints_for_oracle(oracle_id)]
+
+    def get_artwork_favorite(self, oracle_id: str) -> str | None:
+        return self.database.get_artwork_favorite(oracle_id)
+
+    def set_artwork_favorite(self, oracle_id: str,
+                             card_id: str | None) -> None:
+        self.database.set_artwork_favorite(oracle_id, card_id)
+
+    def get_artwork_preferences(self) -> ArtworkPreferenceRules:
+        return ArtworkPreferenceRules.from_dict(
+            self.database.get_artwork_preference_profile())
+
+    def set_artwork_preferences(self, rules) -> ArtworkPreferenceRules:
+        normalized = (rules if isinstance(rules, ArtworkPreferenceRules)
+                      else ArtworkPreferenceRules.from_dict(rules))
+        self.database.set_artwork_preference_profile(normalized.to_dict())
+        return normalized
+
+    def choose_preferred_print(self, oracle_id: str, *,
+                               explicit_card_id: str | None = None) -> dict | None:
+        return choose_print(
+            self.get_prints(oracle_id), explicit_card_id=explicit_card_id,
+            favorite_card_id=self.get_artwork_favorite(oracle_id),
+            rules=self.get_artwork_preferences())
 
     def get_canonical_print(self, oracle_id: str) -> dict | None:
         record = self.database.get_canonical_print(oracle_id)

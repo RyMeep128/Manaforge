@@ -70,14 +70,14 @@ Status: **[x] complete**, **[ ] planned**, **[~] partially complete**.
 
 ### 5. Printing preferences and artwork picker
 
-- [ ] Store a global preferred printing/art choice by Oracle card in Core.
-- [ ] Add preference rules for language, resolution, set, year, artist, frame, border, and source.
-- [ ] Add avoidance rules for promos, textless cards, Universes Beyond, and foil-only treatments.
-- [ ] Define deterministic precedence: explicit project choice → global card favorite → profile rules → best available default.
-- [ ] Show DPI/resolution badges in the artwork picker.
-- [ ] Add set/year/artist/source/treatment filters.
-- [ ] Virtualize results and load only cached thumbnails visible on screen.
-- [ ] Add a refresh/replace-all workflow that previews every proposed change before applying it.
+- [x] Store a global preferred printing/art choice by Oracle card in Core.
+- [x] Add preference rules for language, resolution, set, year, artist, frame, border, and source.
+- [x] Add avoidance rules for promos, textless cards, Universes Beyond, and foil-only treatments.
+- [x] Define deterministic precedence: explicit project choice → global card favorite → profile rules → best available default.
+- [x] Show DPI/resolution badges in the artwork picker.
+- [x] Add set/year/artist/source/treatment filters.
+- [x] Virtualize results and load only cached thumbnails visible on screen.
+- [x] Add a refresh/replace-all workflow that previews every proposed change before applying it.
 
 **Exit gate:** The same preferred art is selected consistently in Core, Deck Editor, Proxy Printer, and exports.
 

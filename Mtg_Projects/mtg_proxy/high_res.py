@@ -89,6 +89,15 @@ class HighResCandidate:
     back_download_link: str = ""
     back_small_thumbnail_url: str = ""
     back_medium_thumbnail_url: str = ""
+    released_at: str = ""
+    artist: str = ""
+    language: str = ""
+    frame: str = ""
+    border: str = ""
+    treatments: tuple[str, ...] = ()
+    promo: bool = False
+    textless: bool = False
+    universes_beyond: bool = False
 
 
 @dataclass(frozen=True)
@@ -371,6 +380,15 @@ def _search_page_payload(page: "HighResSearchPage") -> dict:
                 "back_download_link": candidate.back_download_link,
                 "back_small_thumbnail_url": candidate.back_small_thumbnail_url,
                 "back_medium_thumbnail_url": candidate.back_medium_thumbnail_url,
+                "released_at": candidate.released_at,
+                "artist": candidate.artist,
+                "language": candidate.language,
+                "frame": candidate.frame,
+                "border": candidate.border,
+                "treatments": list(candidate.treatments),
+                "promo": candidate.promo,
+                "textless": candidate.textless,
+                "universes_beyond": candidate.universes_beyond,
             }
             for candidate in page.candidates
         ],
@@ -398,6 +416,15 @@ def _search_page_from_payload(payload: dict) -> "HighResSearchPage":
                 back_download_link=candidate.get("back_download_link", ""),
                 back_small_thumbnail_url=candidate.get("back_small_thumbnail_url", ""),
                 back_medium_thumbnail_url=candidate.get("back_medium_thumbnail_url", ""),
+                released_at=candidate.get("released_at", ""),
+                artist=candidate.get("artist", ""),
+                language=candidate.get("language", ""),
+                frame=candidate.get("frame", ""),
+                border=candidate.get("border", ""),
+                treatments=tuple(candidate.get("treatments") or ()),
+                promo=bool(candidate.get("promo", False)),
+                textless=bool(candidate.get("textless", False)),
+                universes_beyond=bool(candidate.get("universes_beyond", False)),
             )
             for candidate in payload.get("candidates", [])
             if candidate.get("identifier")
@@ -775,7 +802,7 @@ def _make_scryfall_candidate(card_data: dict) -> HighResCandidate | None:
     return HighResCandidate(
         identifier=identifier,
         name=front_name,
-        dpi=0,
+        dpi=300 if card_data.get("highres_image", True) else 0,
         extension=_extension_from_url(download_link),
         download_link=download_link,
         small_thumbnail_url=front_uris.get("small") or front_uris.get("normal") or "",
@@ -790,7 +817,23 @@ def _make_scryfall_candidate(card_data: dict) -> HighResCandidate | None:
         back_download_link=back_uris.get("png") or back_uris.get("large") or back_uris.get("normal") or "",
         back_small_thumbnail_url=back_uris.get("small") or back_uris.get("normal") or "",
         back_medium_thumbnail_url=back_uris.get("large") or back_uris.get("normal") or "",
+        released_at=str(card_data.get('released_at') or ''),
+        artist=str(card_data.get('artist') or ''),
+        language=str(card_data.get('lang') or ''),
+        frame=str(card_data.get('frame') or ''),
+        border=str(card_data.get('border_color') or ''),
+        treatments=tuple(card_data.get('finishes') or ()),
+        promo=bool(card_data.get('promo')),
+        textless=bool(card_data.get('textless')),
+        universes_beyond=(
+            'universes_beyond' in {
+                str(item).casefold() for item in card_data.get('promo_types') or ()}
+            or bool(card_data.get('universes_beyond'))),
     )
+
+
+def scryfall_candidate_from_payload(card_data: dict) -> HighResCandidate | None:
+    return _make_scryfall_candidate(card_data)
 
 
 def _fetch_scryfall_print_payloads(

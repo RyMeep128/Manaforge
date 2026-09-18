@@ -215,7 +215,9 @@ def _playable_print_count(project_data):
         values = (
             entry.get("count", 0)
             for entry in card_entries
-            if isinstance(entry, dict) and not str(entry.get("front_name") or "").startswith("__")
+            if (isinstance(entry, dict)
+                and not str(entry.get("front_name") or "").startswith("__")
+                and not entry.get('do_not_print', False))
         )
     else:
         cards = project_data.get("cards", {})

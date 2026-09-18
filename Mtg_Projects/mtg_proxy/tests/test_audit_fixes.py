@@ -101,6 +101,37 @@ def test_selected_size_actions_only_change_selected_cards(collection):
     assert state.oversized == {}
 
 
+def test_bulk_quality_tools_are_available_before_selecting_cards(collection):
+    _state, _images, grid, area = collection
+    assert grid._selected_names == set()
+    assert area._bulk_button.isVisible()
+    assert area._bulk_button.text() == 'Bulk tools'
+
+
+def test_low_resolution_selection_ignores_unknown_dpi(collection):
+    _state, images, grid, area = collection
+    images['a']['effective_dpi'] = 150
+    images['b']['effective_dpi'] = None
+    images['c']['effective_dpi'] = 600
+
+    area.select_low_resolution()
+
+    assert grid._selected_names == {'a'}
+
+
+def test_basic_land_selection_uses_quality_service(collection, monkeypatch):
+    _state, _images, grid, area = collection
+    monkeypatch.setattr(
+        widgets.quality_service, 'is_basic_land',
+        lambda _state, name, _service: name in {'b', 'c'})
+    monkeypatch.setattr(
+        'mtg_core.get_default_card_service', lambda: object())
+
+    area.select_basic_lands()
+
+    assert grid._selected_names == {'b', 'c'}
+
+
 def test_bulk_size_failure_is_atomic():
     state = ProjectState.from_dict({'cards': {'a': 2, 'b': 1}, 'pagesize': 'A5', 'bleed_edge': '10'})
     before = deepcopy(state)

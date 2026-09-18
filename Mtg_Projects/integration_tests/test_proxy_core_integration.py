@@ -53,7 +53,7 @@ def test_proxy_search_passes_token_syntax_through_core(tmp_path, monkeypatch):
 
     def fake_fetch_json(url: str) -> dict:
         calls.append(url)
-        assert "include=extras" in url
+        assert "include_extras=true" in url
         assert "t%3Atoken" in url
         return {
             "object": "list",

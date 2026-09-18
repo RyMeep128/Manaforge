@@ -137,3 +137,51 @@ def test_apply_search_mode_ui_restores_name_and_artist_text():
     dialog_state._search_mode = "artist"
     dialogs.HighResPickerDialog._apply_search_mode_ui(dialog_state)
     assert dialog_state._manual_search_edit.text() == "John Avon"
+
+
+def test_artwork_preferences_dialog_saves_shared_rules(tmp_path):
+    from PyQt6.QtWidgets import QApplication
+    from mtg_core.services import CardService
+    app = QApplication.instance() or QApplication([])
+    service = CardService(db_path=str(tmp_path / 'cards.sqlite3'))
+    dialog = dialogs.ArtworkPreferencesDialog(None, service)
+    dialog.language.setText('ja')
+    dialog.sets.setText('neo, kam')
+    dialog.artists.setText('Artist One, Artist Two')
+    dialog.minimum_dpi.setValue(600)
+    dialog.avoid_promos.setChecked(True)
+
+    saved = dialog.save()
+
+    assert saved.language == 'ja'
+    assert saved.preferred_sets == ('neo', 'kam')
+    assert saved.preferred_artists == ('Artist One', 'Artist Two')
+    assert saved.minimum_dpi == 600
+    assert saved.avoid_promos
+    assert service.get_artwork_preferences() == saved
+    dialog.deleteLater()
+    app.processEvents()
+
+
+def test_preferred_replacement_review_can_exclude_proposals():
+    from PyQt6 import QtCore
+    from PyQt6.QtWidgets import QApplication
+    app = QApplication.instance() or QApplication([])
+    candidate = high_res.HighResCandidate(
+        identifier='new-print', name='Opt', dpi=300, extension='png',
+        download_link='https://img.test/opt.png', small_thumbnail_url='',
+        medium_thumbnail_url='', source_id=0, source_name='Scryfall',
+        art_source='scryfall', set_code='dom', set_name='Dominaria',
+        collector_number='60')
+    proposals = [
+        {'display_name': 'Opt', 'current_card_id': 'old-print',
+         'candidate': candidate},
+        {'display_name': 'Opt 2', 'current_card_id': 'other-print',
+         'candidate': candidate},
+    ]
+    dialog = dialogs.PreferredReplacementDialog(None, proposals)
+    dialog._items.item(1).setCheckState(QtCore.Qt.CheckState.Unchecked)
+
+    assert dialog.selected_proposals() == [proposals[0]]
+    dialog.deleteLater()
+    app.processEvents()

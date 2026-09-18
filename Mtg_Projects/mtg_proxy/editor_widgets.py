@@ -69,6 +69,7 @@ from dialogs import (
     DeckImportDialog,
     FileDialogType,
     HighResPickerDialog,
+    PreferredReplacementDialog,
     LineEditWithLabel,
     SettingsDialog,
     WidgetWithLabel,
@@ -80,7 +81,8 @@ from dialogs import (
 from direct_print_dialog import DirectPrintOptionsDialog
 from services import (deck_import_service, direct_print_service, pdf_service,
                       project_service, layout_service, print_preflight)
-from services import export_service, print_presets
+from services import export_service, print_presets, high_res_service
+from services import quality_service
 from preview_interaction import PreviewOverlay, DragPageButton
 
 
@@ -333,20 +335,24 @@ class EditorPage(QWidget):
 
     def _update_readiness(self, state):
         card_names = [name for name in state.cards if not name.startswith("__")]
-        prints = sum(max(0, state.cards.get(name, 0)) for name in card_names)
-        missing = [name for name in card_names if name not in self._tabs._img_dict]
-        unprepared = [
+        printable_names = [
             name for name in card_names
+            if not (state.get_card_entry(name) and
+                    state.get_card_entry(name).do_not_print)]
+        prints = sum(max(0, state.cards.get(name, 0)) for name in printable_names)
+        missing = [name for name in printable_names if name not in self._tabs._img_dict]
+        unprepared = [
+            name for name in printable_names
             if name in self._tabs._img_dict
             and not image.is_pre_cropped_image_name(name)
             and "uncropped" not in self._tabs._img_dict[name]
         ]
         low_res = [
-            name for name in card_names
+            name for name in printable_names
             if (self._tabs._img_dict.get(name) or {}).get("effective_dpi", low_dpi_warning_threshold)
             < low_dpi_warning_threshold
         ]
-        has_cards = bool(card_names)
+        has_cards = bool(printable_names)
         self._prepare_button.setEnabled(has_cards)
         self._prepare_action.setEnabled(has_cards)
         ready = has_cards and prints > 0 and not missing and not unprepared
@@ -1147,7 +1153,8 @@ class CardGrid(QWidget):
         self.selection_changed.emit(len(self._selected_names))
 
     def selected_cards(self):
-        return [self._cards[name] for name in self._selected_names if name in self._cards]
+        return [card for name, card in self._cards.items()
+                if name in self._selected_names]
 
     def clear_selection(self):
         for card in self.selected_cards():
@@ -1214,7 +1221,7 @@ class CardScrollArea(QScrollArea):
         increment_button.setToolTip("Add one copy to selected cards")
         clear_selection_button.setToolTip("Clear selection")
         bulk_button = QToolButton()
-        bulk_button.setText("Edit selected")
+        bulk_button.setText("Bulk tools")
         bulk_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         bulk_menu = QMenu(bulk_button)
         bulk_menu.addAction("Make oversized", lambda: self.set_selected_oversized(True))
@@ -1231,9 +1238,14 @@ class CardScrollArea(QScrollArea):
         bulk_menu.addAction(
             "Replace artwork for selected…", self.replace_selected_artwork)
         bulk_menu.addAction(
+            "Preview preferred replacements…", self.preview_preferred_replacements)
+        bulk_menu.addAction(
             "Set one back for selected…", self.set_selected_back)
+        bulk_menu.addAction(
+            "Recover cached DFC backs", self.recover_selected_backs)
         bulk_button.setMenu(bulk_menu)
-        bulk_button.setToolTip("Changes apply to all copies of the selected cards")
+        bulk_button.setToolTip(
+            "Select cards by quality or apply changes to all selected cards")
         self._bulk_button = bulk_button
 
         global_number_layout = QHBoxLayout()
@@ -1303,7 +1315,7 @@ class CardScrollArea(QScrollArea):
             decrement_button.setVisible(count > 0)
             increment_button.setVisible(count > 0)
             clear_selection_button.setVisible(count > 0)
-            bulk_button.setVisible(count > 0)
+            bulk_button.setVisible(True)
 
         card_grid.selection_changed.connect(update_selection)
         update_selection(0)
@@ -1371,27 +1383,30 @@ class CardScrollArea(QScrollArea):
         self._select_matching(lambda name: name in names)
 
     def select_low_resolution(self):
-        self._select_matching(lambda name: (
-            self._img_dict.get(name) or {}).get(
-                'effective_dpi', low_dpi_warning_threshold) < low_dpi_warning_threshold)
+        def low_resolution(name):
+            dpi = (self._img_dict.get(name) or {}).get('effective_dpi')
+            return dpi is not None and float(dpi) < low_dpi_warning_threshold
+        self._select_matching(low_resolution)
 
     def select_missing_backs(self):
         state = self._card_grid._state
+        from mtg_core import get_default_card_service
+        card_service = get_default_card_service()
         def missing(name):
             if not state.backside_enabled:
                 return False
-            back_name = state.backsides.get(name) or state.backside_default
-            return not back_name or runtime_images.ensure_preview_entry(
-                state, self._img_dict, back_name) is None
+            return quality_service.missing_back(
+                state, self._img_dict, name, card_service,
+                runtime_images.ensure_preview_entry)
         self._select_matching(missing)
 
     def select_basic_lands(self):
         state = self._card_grid._state
-        def is_basic(name):
-            metadata = state.get_card_metadata(name) or {}
-            type_line = str(metadata.get('type_line') or '')
-            return 'Basic Land' in type_line
-        self._select_matching(is_basic)
+        from mtg_core import get_default_card_service
+        card_service = get_default_card_service()
+        self._select_matching(
+            lambda name: quality_service.is_basic_land(
+                state, name, card_service))
 
     def replace_selected_artwork(self):
         state = self._card_grid._state
@@ -1415,6 +1430,61 @@ class CardScrollArea(QScrollArea):
                 self.refresh(state, self._img_dict)
             autosave_managed_session()
 
+    def preview_preferred_replacements(self):
+        state = self._card_grid._state
+        selected = [card._card_name for card in self._card_grid.selected_cards()]
+        names = selected or [name for name in state.cards if not name.startswith('__')]
+        from mtg_core import get_default_card_service
+        card_service = get_default_card_service()
+        proposals = []
+        for name in names:
+            entry = state.get_card_entry(name)
+            if entry is None or not entry.oracle_id or entry.do_not_print:
+                continue
+            payload = card_service.choose_preferred_print(entry.oracle_id)
+            if not payload or payload.get('id') == entry.card_id:
+                continue
+            candidate = high_res_service.scryfall_candidate_from_payload(payload)
+            if candidate is None:
+                continue
+            proposals.append({
+                'card_name': name, 'display_name': _card_sort_label(state, name),
+                'current_card_id': entry.card_id, 'candidate': candidate})
+        if not proposals:
+            QMessageBox.information(
+                self, 'Preferred Artwork',
+                'No selected cards have a different preferred printing.')
+            return
+        dialog = PreferredReplacementDialog(self, proposals)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        chosen = dialog.selected_proposals()
+        if not chosen:
+            return
+        application = QApplication.instance()
+        applied, failures = 0, []
+        def work():
+            nonlocal applied
+            for proposal in chosen:
+                try:
+                    high_res_service.apply_candidate_to_project(
+                        state, self._img_dict, proposal['card_name'],
+                        proposal['candidate'], 'scryfall', CFG.HighResBackendURL,
+                        make_popup_print_fn(progress),
+                        getattr(application, 'warn_nonfatal', None))
+                    applied += 1
+                except (OSError, ValueError) as exc:
+                    failures.append(f"{proposal['display_name']}: {exc}")
+        progress = popup(self.window(), 'Applying preferred artwork…',
+                         getattr(application, '_debug_mode', False))
+        progress.show_during_work(work)
+        if applied:
+            self.window().refresh(state, self._img_dict)
+            autosave_managed_session()
+        if failures:
+            QMessageBox.warning(
+                self, 'Some Artwork Was Not Replaced', '\n'.join(failures[:20]))
+
     def set_selected_back(self):
         state = self._card_grid._state
         names = [card._card_name for card in self._card_grid.selected_cards()]
@@ -1432,6 +1502,28 @@ class CardScrollArea(QScrollArea):
         else:
             self.refresh(state, self._img_dict)
         autosave_managed_session()
+
+    def recover_selected_backs(self):
+        state = self._card_grid._state
+        names = [card._card_name for card in self._card_grid.selected_cards()]
+        if not names:
+            return
+        repaired, unresolved = quality_service.recover_cached_backs(
+            state, self._img_dict, names,
+            ensure_preview=runtime_images.ensure_preview_entry)
+        if repaired:
+            window = self.window()
+            if window is not self and hasattr(window, 'refresh'):
+                window.refresh(state, self._img_dict)
+            else:
+                self.refresh(state, self._img_dict)
+            autosave_managed_session()
+        message = f'Recovered {len(repaired)} cached back(s).'
+        if unresolved:
+            message += f' {len(unresolved)} still need a custom back or reimport.'
+        window = self.window()
+        if hasattr(window, 'statusBar'):
+            window.statusBar().showMessage(message, 5000)
 
     def computeMinimumWidth(self):
         margins = self.widget().layout().contentsMargins()
@@ -1461,8 +1553,12 @@ class CardScrollArea(QScrollArea):
     @staticmethod
     def _count_text(state):
         names = [name for name in state.cards if not name.startswith("__")]
-        prints = sum(max(0, state.cards.get(name, 0)) for name in names)
-        return f"{len(names)} cards  |  {prints} prints"
+        owned = [name for name in names if (
+            state.get_card_entry(name) and state.get_card_entry(name).do_not_print)]
+        printable = [name for name in names if name not in owned]
+        prints = sum(max(0, state.cards.get(name, 0)) for name in printable)
+        suffix = f"  |  {len(owned)} owned" if owned else ""
+        return f"{len(names)} cards  |  {prints} to print{suffix}"
 
     def _update_empty_state(self):
         has_cards = self._card_grid.has_visible_cards()

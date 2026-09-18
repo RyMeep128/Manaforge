@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from constants import low_dpi_warning_threshold
 from models import as_project_state
 import runtime_images
-from services import layout_service
+from services import layout_service, quality_service
 
 
 @dataclass(frozen=True)
@@ -34,6 +34,10 @@ def analyze(project_like, img_dict, placements, columns, rows):
     missing_art = []
     clipping = []
     missing_backs = []
+    card_service = None
+    if state.backside_enabled:
+        from mtg_core import get_default_card_service
+        card_service = get_default_card_service()
     for name in card_names:
         preview = runtime_images.ensure_preview_entry(state, img_dict, name)
         if preview is None:
@@ -46,9 +50,9 @@ def analyze(project_like, img_dict, placements, columns, rows):
         if float(state.bleed_edge) > 0 and not preview.get('uncropped'):
             clipping.append(name)
         if state.backside_enabled:
-            back_name = state.backsides.get(name) or state.backside_default
-            if not back_name or runtime_images.ensure_preview_entry(
-                    state, img_dict, back_name) is None:
+            if quality_service.missing_back(
+                    state, img_dict, name, card_service,
+                    ensure_preview=runtime_images.ensure_preview_entry):
                 missing_backs.append(name)
 
     if low_resolution:

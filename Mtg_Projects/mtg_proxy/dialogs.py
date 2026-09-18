@@ -1137,6 +1137,127 @@ class SettingsDialog(QDialog):
         save_config(CFG)
 
 
+class ArtworkPreferencesDialog(QDialog):
+    def __init__(self, parent, card_service):
+        super().__init__(parent)
+        self._card_service = card_service
+        rules = card_service.get_artwork_preferences()
+        self.setWindowTitle('Artwork Preferences')
+        self.resize(520, 560)
+        self.language = QLineEdit(rules.language)
+        self.sets = QLineEdit(', '.join(rules.preferred_sets))
+        self.year = QSpinBox()
+        self.year.setRange(0, 2200)
+        self.year.setSpecialValueText('Any year')
+        self.year.setValue(rules.preferred_year or 0)
+        self.artists = QLineEdit(', '.join(rules.preferred_artists))
+        self.frames = QLineEdit(', '.join(rules.preferred_frames))
+        self.borders = QLineEdit(', '.join(rules.preferred_borders))
+        self.sources = QLineEdit(', '.join(rules.preferred_sources))
+        self.minimum_dpi = QSpinBox()
+        self.minimum_dpi.setRange(0, 2400)
+        self.minimum_dpi.setSingleStep(50)
+        self.minimum_dpi.setValue(rules.minimum_dpi)
+        self.avoid_promos = QCheckBox('Avoid promotional printings')
+        self.avoid_textless = QCheckBox('Avoid textless printings')
+        self.avoid_ub = QCheckBox('Avoid Universes Beyond printings')
+        self.avoid_foil = QCheckBox('Avoid foil-only treatments')
+        self.avoid_promos.setChecked(rules.avoid_promos)
+        self.avoid_textless.setChecked(rules.avoid_textless)
+        self.avoid_ub.setChecked(rules.avoid_universes_beyond)
+        self.avoid_foil.setChecked(rules.avoid_foil_only)
+        layout = QVBoxLayout()
+        intro = QLabel(
+            'These preferences are shared by Manaforge apps. Lists use commas; '
+            'earlier values have higher priority.')
+        intro.setWordWrap(True)
+        layout.addWidget(intro)
+        for label, widget in (
+            ('Language code', self.language), ('Preferred sets', self.sets),
+            ('Preferred year', self.year), ('Preferred artists', self.artists),
+            ('Preferred frames', self.frames), ('Preferred borders', self.borders),
+            ('Preferred sources', self.sources), ('Minimum DPI', self.minimum_dpi)):
+            layout.addWidget(QLabel(label))
+            layout.addWidget(widget)
+        for checkbox in (self.avoid_promos, self.avoid_textless,
+                         self.avoid_ub, self.avoid_foil):
+            layout.addWidget(checkbox)
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Save |
+            QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+        self.setLayout(layout)
+
+    @staticmethod
+    def _list(text):
+        return tuple(item.strip() for item in text.split(',') if item.strip())
+
+    def rules(self):
+        from mtg_core import ArtworkPreferenceRules
+        return ArtworkPreferenceRules(
+            language=self.language.text().strip() or 'en',
+            preferred_sets=self._list(self.sets.text()),
+            preferred_year=self.year.value() or None,
+            preferred_artists=self._list(self.artists.text()),
+            preferred_frames=self._list(self.frames.text()),
+            preferred_borders=self._list(self.borders.text()),
+            preferred_sources=self._list(self.sources.text()),
+            minimum_dpi=self.minimum_dpi.value(),
+            avoid_promos=self.avoid_promos.isChecked(),
+            avoid_textless=self.avoid_textless.isChecked(),
+            avoid_universes_beyond=self.avoid_ub.isChecked(),
+            avoid_foil_only=self.avoid_foil.isChecked())
+
+    def save(self):
+        return self._card_service.set_artwork_preferences(self.rules())
+
+
+class PreferredReplacementDialog(QDialog):
+    def __init__(self, parent, proposals):
+        super().__init__(parent)
+        self._proposals = list(proposals)
+        self.setWindowTitle('Review Preferred Artwork Replacements')
+        self.resize(720, 520)
+        intro = QLabel(
+            'Review every proposed printing change. Uncheck any card you want '
+            'to keep as-is, then apply the remaining replacements.')
+        intro.setWordWrap(True)
+        items = QListWidget()
+        for index, proposal in enumerate(self._proposals):
+            candidate = proposal['candidate']
+            current = proposal.get('current_card_id') or 'custom/current art'
+            target = (f"{candidate.set_name or candidate.set_code or 'Unknown set'} "
+                      f"#{candidate.collector_number or '?'}")
+            item = QListWidgetItem(
+                f"{proposal['display_name']}\n{current} → {target} [{candidate.dpi or '?'} DPI]")
+            item.setData(QtCore.Qt.ItemDataRole.UserRole, index)
+            item.setFlags(item.flags() | QtCore.Qt.ItemFlag.ItemIsUserCheckable)
+            item.setCheckState(QtCore.Qt.CheckState.Checked)
+            items.addItem(item)
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Apply |
+            QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout = QVBoxLayout()
+        layout.addWidget(intro)
+        layout.addWidget(items, 1)
+        layout.addWidget(buttons)
+        self.setLayout(layout)
+        self._items = items
+
+    def selected_proposals(self):
+        selected = []
+        for row in range(self._items.count()):
+            item = self._items.item(row)
+            if item.checkState() == QtCore.Qt.CheckState.Checked:
+                selected.append(self._proposals[item.data(
+                    QtCore.Qt.ItemDataRole.UserRole)])
+        return selected
+
+
 class HighResPickerDialog(QDialog):
     def __init__(
         self,
@@ -1162,6 +1283,14 @@ class HighResPickerDialog(QDialog):
         self._applied = False
         self._selected_candidate_value = None
         self._selected_source_value = None
+        entry = self._state.get_card_entry(card_name)
+        self._oracle_id = None if entry is None else entry.oracle_id
+        from mtg_core import get_default_card_service
+        self._card_service = get_default_card_service()
+        self._preferences = self._card_service.get_artwork_preferences()
+        self._favorite_card_id = (
+            self._card_service.get_artwork_favorite(self._oracle_id)
+            if self._oracle_id else None)
         self._page_size = 60
         self._page_start = 0
         self._total_result_count = 0
@@ -1226,12 +1355,15 @@ class HighResPickerDialog(QDialog):
         min_dpi.setRange(0, 5000)
         min_dpi.setSingleStep(50)
         min_dpi.setValue(300)
+        min_dpi.setValue(self._preferences.minimum_dpi)
         max_dpi = QSpinBox()
         max_dpi.setRange(0, 5000)
         max_dpi.setSingleStep(50)
         max_dpi.setValue(1500)
         search_button = QPushButton("Search")
         search_button.clicked.connect(lambda: self.refresh_results(reset_page=True))
+        preferences_button = QPushButton("Preferences…")
+        preferences_button.clicked.connect(self._edit_artwork_preferences)
 
         filters_layout = QHBoxLayout()
         min_dpi_widget = WidgetWithLabel("Min DPI", min_dpi)
@@ -1240,6 +1372,7 @@ class HighResPickerDialog(QDialog):
         filters_layout.addWidget(min_dpi_widget)
         filters_layout.addWidget(max_dpi_widget)
         filters_layout.addWidget(search_button)
+        filters_layout.addWidget(preferences_button)
         filters_layout.addStretch()
         self._min_dpi = min_dpi
         self._max_dpi = max_dpi
@@ -1272,6 +1405,9 @@ class HighResPickerDialog(QDialog):
         results_list.setIconSize(QtCore.QSize(90, 126))
         results_list.currentRowChanged.connect(self._handle_selection_changed)
         results_list.itemDoubleClicked.connect(lambda _item: self.apply_selected())
+        results_list.verticalScrollBar().valueChanged.connect(
+            lambda _value: QtCore.QTimer.singleShot(
+                50, self._start_visible_thumbnail_loader))
         self._results_list = results_list
 
         preview_label = QLabel("Select a result to preview it here.")
@@ -1310,8 +1446,14 @@ class HighResPickerDialog(QDialog):
         self._apply_button = apply_button
         cancel_button = QPushButton("Cancel")
         cancel_button.clicked.connect(self.reject)
+        favorite_checkbox = QCheckBox("Use this printing as my preferred art")
+        favorite_checkbox.setEnabled(False)
+        favorite_checkbox.setToolTip(
+            "Remember this choice for this Oracle card in every Manaforge app")
+        self._favorite_checkbox = favorite_checkbox
 
         button_row = QHBoxLayout()
+        button_row.addWidget(favorite_checkbox)
         button_row.addStretch()
         button_row.addWidget(apply_button)
         button_row.addWidget(cancel_button)
@@ -1333,6 +1475,14 @@ class HighResPickerDialog(QDialog):
 
     def was_applied(self):
         return self._applied
+
+    def _edit_artwork_preferences(self):
+        dialog = ArtworkPreferencesDialog(self, self._card_service)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            rules = dialog.save()
+            self._preferences = rules
+            self._min_dpi.setValue(rules.minimum_dpi)
+            self.refresh_results(reset_page=True)
 
     def selected_candidate(self):
         return self._selected_candidate_value
@@ -1381,8 +1531,12 @@ class HighResPickerDialog(QDialog):
             set_code = candidate.set_code or "?"
             collector_number = candidate.collector_number or "?"
             if candidate.set_name:
-                return f"{candidate.source_name} | {candidate.set_name} [{str(set_code).upper()} #{collector_number}]"
-            return f"{candidate.source_name} | {str(set_code).upper()} #{collector_number}"
+                base = f"{candidate.source_name} | {candidate.set_name} [{str(set_code).upper()} #{collector_number}]"
+            else:
+                base = f"{candidate.source_name} | {str(set_code).upper()} #{collector_number}"
+            resolution = f" | {candidate.dpi} DPI" if candidate.dpi else ""
+            favorite = " | Preferred" if candidate.identifier == self._favorite_card_id else ""
+            return base + resolution + favorite
         return f"{candidate.source_name} | {candidate.dpi} DPI"
 
     def _candidate_details_text(self, candidate):
@@ -1510,7 +1664,8 @@ class HighResPickerDialog(QDialog):
     def _start_thumbnail_loader(self, candidates):
         self._stop_thumbnail_loader()
         pending = []
-        for row, candidate in enumerate(candidates):
+        for candidate in candidates:
+            row = self._candidates.index(candidate)
             if not candidate.small_thumbnail_url:
                 continue
             if candidate.identifier in self._thumbnail_cache:
@@ -1533,6 +1688,16 @@ class HighResPickerDialog(QDialog):
         loader.finished.connect(lambda: setattr(self, "_thumbnail_loader", None))
         self._thumbnail_loader = loader
         loader.start()
+
+    def _start_visible_thumbnail_loader(self):
+        viewport = self._results_list.viewport().rect()
+        visible = []
+        for row, candidate in enumerate(self._candidates):
+            item = self._results_list.item(row)
+            if item is not None and self._results_list.visualItemRect(
+                    item).intersects(viewport):
+                visible.append(candidate)
+        self._start_thumbnail_loader(visible)
 
     def _update_pagination_controls(self):
         if self._total_result_count <= 0:
@@ -1615,6 +1780,25 @@ class HighResPickerDialog(QDialog):
             return
 
         results = [] if search_page is None else search_page.candidates
+        if source == 'scryfall':
+            from mtg_core.preferences import rank_prints
+            def payload(candidate):
+                return {
+                    'id': candidate.identifier, 'lang': candidate.language,
+                    'set': candidate.set_code, 'released_at': candidate.released_at,
+                    'artist': candidate.artist, 'frame': candidate.frame,
+                    'border_color': candidate.border,
+                    'finishes': candidate.treatments, 'promo': candidate.promo,
+                    'textless': candidate.textless,
+                    'universes_beyond': candidate.universes_beyond,
+                    'highres_image': bool(candidate.dpi),
+                }
+            by_id = {candidate.identifier: candidate for candidate in results}
+            ranked = rank_prints(
+                [payload(candidate) for candidate in results],
+                favorite_card_id=self._favorite_card_id,
+                rules=self._preferences)
+            results = [by_id[item['id']] for item in ranked]
         self._total_result_count = 0 if search_page is None else search_page.total_count
         # High-resolution providers return an exact total using the existing
         # HighResSearchPage model, which has no has_more field.
@@ -1646,7 +1830,7 @@ class HighResPickerDialog(QDialog):
                 pixmap.loadFromData(thumb_bytes)
                 item.setIcon(QIcon(pixmap))
             self._results_list.addItem(item)
-        self._start_thumbnail_loader(results)
+        self._start_visible_thumbnail_loader()
         self._results_list.setCurrentRow(0)
 
     def _selected_candidate(self, row=None):
@@ -1663,6 +1847,10 @@ class HighResPickerDialog(QDialog):
             self._details_label.setText("")
             return
         self._apply_button.setEnabled(True)
+        self._favorite_checkbox.setEnabled(
+            candidate.art_source == 'scryfall' and bool(self._oracle_id))
+        self._favorite_checkbox.setChecked(
+            candidate.identifier == self._favorite_card_id)
         self._details_label.setText(self._candidate_details_text(candidate))
         self._update_preview(candidate)
 
@@ -1747,6 +1935,11 @@ class HighResPickerDialog(QDialog):
         if error is not None:
             self._warn("New Art Apply Failed", str(error))
             return
+        if (self._favorite_checkbox.isChecked() and self._oracle_id
+                and candidate.art_source == 'scryfall'):
+            self._card_service.set_artwork_favorite(
+                self._oracle_id, candidate.identifier)
+            self._favorite_card_id = candidate.identifier
         self._applied = True
         self._current_source_label.setText(
             self._format_override_source_text(self._state.get_high_res_override(self._card_name))
@@ -1758,6 +1951,8 @@ class HighResPickerDialog(QDialog):
 
 __all__ = [
     "AddCardDialog",
+    "ArtworkPreferencesDialog",
+    "PreferredReplacementDialog",
     "ComboBoxWithLabel",
     "DeckImportDialog",
     "FileDialogType",

@@ -226,3 +226,14 @@ def test_remove_project_keeps_library_entry_when_delete_fails(monkeypatch, tmp_p
     remaining = project_library.list_projects()
     assert len(remaining) == 1
     assert remaining[0]["id"] == entry["id"]
+
+
+def test_project_print_count_excludes_owned_entries():
+    project = {
+        'card_entries': [
+            {'front_name': 'needed.png', 'count': 3},
+            {'front_name': 'owned.png', 'count': 4, 'do_not_print': True},
+        ]
+    }
+
+    assert project_library._playable_print_count(project) == 3
