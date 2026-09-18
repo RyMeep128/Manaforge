@@ -24,6 +24,9 @@ def test_update_check_is_available_on_projects_and_editor():
         SimpleNamespace(_application=application), ProjectState(), {})
     more = next(button for button in editor.findChildren(QtWidgets.QToolButton)
                 if button.text() == 'More')
+    menu_labels = [action.text() for action in more.menu().actions()]
+    assert any(label.startswith('Export sheets or cards') for label in menu_labels)
+    assert any(label.startswith('Apply print preset') for label in menu_labels)
     action = next(action for action in more.menu().actions()
                   if action.text() == 'Check for updates…')
     action.trigger()

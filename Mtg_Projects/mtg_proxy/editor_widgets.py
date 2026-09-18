@@ -79,7 +79,8 @@ from dialogs import (
 )
 from direct_print_dialog import DirectPrintOptionsDialog
 from services import (deck_import_service, direct_print_service, pdf_service,
-                      project_service, layout_service)
+                      project_service, layout_service, print_preflight)
+from services import export_service, print_presets
 from preview_interaction import PreviewOverlay, DragPageButton
 
 
@@ -105,6 +106,39 @@ def confirm_underfilled_export(parent, occupancy, action='export'):
     dialog.setDefaultButton(go_back)
     dialog.setEscapeButton(go_back)
     dialog.exec()
+    return dialog.clickedButton() is print_anyway
+
+
+def confirm_print_preflight(parent, issues, action='export', on_fix=None):
+    if not issues:
+        return True
+    dialog = QMessageBox(parent)
+    dialog.setIcon(QMessageBox.Icon.Warning)
+    dialog.setWindowTitle('Print readiness')
+    dialog.setText('Manaforge found issues to review before output.')
+    summaries = [f'• {issue.summary}' for issue in issues]
+    details = []
+    for issue in issues:
+        if issue.details:
+            details.append(issue.summary + ':\n' + '\n'.join(issue.details))
+    dialog.setInformativeText('\n'.join(summaries))
+    if details:
+        dialog.setDetailedText('\n\n'.join(details))
+    go_back = dialog.addButton('Go Back', QMessageBox.ButtonRole.RejectRole)
+    fix_button = None
+    if on_fix is not None and any(issue.card_names for issue in issues):
+        fix_button = dialog.addButton(
+            'Select affected cards', QMessageBox.ButtonRole.ActionRole)
+    dialog.setDefaultButton(go_back)
+    dialog.setEscapeButton(go_back)
+    if any(issue.blocking for issue in issues):
+        dialog.exec()
+        return False
+    print_anyway = dialog.addButton('Print Anyway', QMessageBox.ButtonRole.AcceptRole)
+    dialog.exec()
+    if fix_button is not None and dialog.clickedButton() is fix_button:
+        on_fix({name for issue in issues for name in issue.card_names})
+        return False
     return dialog.clickedButton() is print_anyway
 
 
@@ -213,10 +247,14 @@ class EditorPage(QWidget):
         more_menu = QMenu(more_button)
         prepare_action = more_menu.addAction("Prepare images…", prepare_button.click)
         more_menu.addSeparator()
+        more_menu.addAction("Export sheets or cards…", actions._more_exports_button.click)
+        more_menu.addAction("Apply print preset…", actions._preset_button.click)
+        more_menu.addSeparator()
         more_menu.addAction("Open image folder", actions._open_images_button.click)
         more_menu.addAction("Import saved project…", actions._load_button.click)
         more_menu.addAction("Application settings…", actions._settings_button.click)
         more_menu.addAction(actions._check_updates_action)
+        more_menu.addAction(actions._restore_snapshot_action)
         more_menu.addSeparator()
         clean_action = more_menu.addAction("Clean image cache…", actions._clear_cards_button.click)
         more_button.setMenu(more_menu)
@@ -714,6 +752,9 @@ class CardWidget(QWidget):
         name_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         name_label.setToolTip(display_name)
         name_label.setProperty("role", "subtitle")
+        if state._ensure_card_entry(card_name).do_not_print:
+            name_label.setText(f"{display_name} · OWNED / NOT PRINTING")
+            name_label.setStyleSheet("color: #d6ad55; font-weight: bold;")
 
         layout = QVBoxLayout()
         layout.setContentsMargins(7, 7, 7, 9)
@@ -752,6 +793,7 @@ class CardWidget(QWidget):
 
         self._number_edit = number_edit
         self._card_name = card_name
+        self._img_dict = img_dict
 
         self.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.CustomContextMenu)
 
@@ -804,6 +846,11 @@ class CardWidget(QWidget):
                         QtCore.Qt.CheckState.Checked if checked else QtCore.Qt.CheckState.Unchecked,
                     )
                 )
+            excluded_action = menu.addAction("Do not print / owned copy")
+            excluded_action.setCheckable(True)
+            excluded_action.setChecked(entry.do_not_print)
+            excluded_action.toggled.connect(
+                lambda checked: self.set_do_not_print(state, checked))
             menu.addSeparator()
             menu.addAction("Remove from project", delete_card)
             menu.exec(self.mapToGlobal(position))
@@ -885,6 +932,13 @@ class CardWidget(QWidget):
         elif self._card_name in oversized_dict:
             del oversized_dict[self._card_name]
         state._ensure_card_entry(self._card_name).oversized = bool(oversized_dict.get(self._card_name))
+
+    def set_do_not_print(self, state, excluded):
+        state._ensure_card_entry(self._card_name).do_not_print = bool(excluded)
+        window = self.window()
+        if window is not None and hasattr(window, 'refresh'):
+            window.refresh(state, self._img_dict)
+        autosave_managed_session()
 
 
 class DummyCardWidget(CardWidget):
@@ -1165,6 +1219,19 @@ class CardScrollArea(QScrollArea):
         bulk_menu = QMenu(bulk_button)
         bulk_menu.addAction("Make oversized", lambda: self.set_selected_oversized(True))
         bulk_menu.addAction("Make normal size", lambda: self.set_selected_oversized(False))
+        bulk_menu.addSeparator()
+        bulk_menu.addAction(
+            "Mark owned / do not print", lambda: self.set_selected_do_not_print(True))
+        bulk_menu.addAction(
+            "Include in printing", lambda: self.set_selected_do_not_print(False))
+        bulk_menu.addAction("Select low-resolution cards", self.select_low_resolution)
+        bulk_menu.addAction("Select cards missing backs", self.select_missing_backs)
+        bulk_menu.addAction("Select basic lands", self.select_basic_lands)
+        bulk_menu.addSeparator()
+        bulk_menu.addAction(
+            "Replace artwork for selected…", self.replace_selected_artwork)
+        bulk_menu.addAction(
+            "Set one back for selected…", self.set_selected_back)
         bulk_button.setMenu(bulk_menu)
         bulk_button.setToolTip("Changes apply to all copies of the selected cards")
         self._bulk_button = bulk_button
@@ -1278,6 +1345,93 @@ class CardScrollArea(QScrollArea):
         autosave_managed_session()
         if relocated and hasattr(window, 'statusBar'):
             window.statusBar().showMessage(f"{relocated} copies moved to fit the new card sizes", 3500)
+
+    def set_selected_do_not_print(self, excluded):
+        state = self._card_grid._state
+        names = [card._card_name for card in self._card_grid.selected_cards()]
+        for name in names:
+            state._ensure_card_entry(name).do_not_print = bool(excluded)
+        if not names:
+            return
+        window = self.window()
+        if window is not self and hasattr(window, 'refresh'):
+            window.refresh(state, self._img_dict)
+        else:
+            self.refresh(state, self._img_dict)
+        autosave_managed_session()
+
+    def _select_matching(self, predicate):
+        self._card_grid.clear_selection()
+        for name, card in self._card_grid._cards.items():
+            if not name.startswith('__') and predicate(name):
+                card.set_selected(True)
+
+    def select_names(self, names):
+        names = set(names)
+        self._select_matching(lambda name: name in names)
+
+    def select_low_resolution(self):
+        self._select_matching(lambda name: (
+            self._img_dict.get(name) or {}).get(
+                'effective_dpi', low_dpi_warning_threshold) < low_dpi_warning_threshold)
+
+    def select_missing_backs(self):
+        state = self._card_grid._state
+        def missing(name):
+            if not state.backside_enabled:
+                return False
+            back_name = state.backsides.get(name) or state.backside_default
+            return not back_name or runtime_images.ensure_preview_entry(
+                state, self._img_dict, back_name) is None
+        self._select_matching(missing)
+
+    def select_basic_lands(self):
+        state = self._card_grid._state
+        def is_basic(name):
+            metadata = state.get_card_metadata(name) or {}
+            type_line = str(metadata.get('type_line') or '')
+            return 'Basic Land' in type_line
+        self._select_matching(is_basic)
+
+    def replace_selected_artwork(self):
+        state = self._card_grid._state
+        names = [card._card_name for card in self._card_grid.selected_cards()]
+        if not names:
+            return
+        applied = 0
+        for index, name in enumerate(names, 1):
+            dialog = HighResPickerDialog(self, state, self._img_dict, name)
+            dialog.setWindowTitle(
+                f'Choose artwork ({index}/{len(names)}): {_card_sort_label(state, name)}')
+            if dialog.exec() != QDialog.DialogCode.Accepted:
+                break
+            if dialog.was_applied():
+                applied += 1
+        if applied:
+            window = self.window()
+            if window is not self and hasattr(window, 'refresh'):
+                window.refresh(state, self._img_dict)
+            else:
+                self.refresh(state, self._img_dict)
+            autosave_managed_session()
+
+    def set_selected_back(self):
+        state = self._card_grid._state
+        names = [card._card_name for card in self._card_grid.selected_cards()]
+        if not names:
+            return
+        backside_choice = image_file_dialog(self, state.image_dir)
+        if backside_choice is None:
+            return
+        state.backside_enabled = True
+        for name in names:
+            state.set_backside(name, backside_choice)
+        window = self.window()
+        if window is not self and hasattr(window, 'refresh'):
+            window.refresh(state, self._img_dict)
+        else:
+            self.refresh(state, self._img_dict)
+        autosave_managed_session()
 
     def computeMinimumWidth(self):
         margins = self.widget().layout().contentsMargins()
@@ -1898,6 +2052,8 @@ class ActionsWidget(QGroupBox):
 
         cropper_button = QPushButton("Prepare Images")
         render_button = QPushButton("Save PDF")
+        more_exports_button = QPushButton("More Exports")
+        preset_button = QPushButton("Apply Print Preset")
         print_button = QPushButton("Print")
         home_button = QPushButton("Back to Projects")
         save_button = QPushButton("Save Project")
@@ -1914,6 +2070,8 @@ class ActionsWidget(QGroupBox):
             import_decklist_button,
             cropper_button,
             render_button,
+            more_exports_button,
+            preset_button,
             print_button,
             save_button,
             load_button,
@@ -1946,12 +2104,15 @@ class ActionsWidget(QGroupBox):
         import_decklist_button.setStyleSheet(primary_button_style)
         cropper_button.setStyleSheet(primary_button_style)
         render_button.setStyleSheet(primary_button_style)
+        more_exports_button.setStyleSheet(primary_button_style)
         print_button.setStyleSheet(primary_button_style)
         clear_cards_button.setStyleSheet(danger_button_style)
 
         buttons = [
             cropper_button,
             render_button,
+            more_exports_button,
+            preset_button,
             print_button,
             home_button,
             save_button,
@@ -2021,6 +2182,8 @@ class ActionsWidget(QGroupBox):
         export_grid.setColumnMinimumWidth(1, minimum_width + 10)
         export_grid.addWidget(render_button, 0, 0)
         export_grid.addWidget(print_button, 0, 1)
+        export_grid.addWidget(more_exports_button, 1, 0, 1, 2)
+        export_grid.addWidget(preset_button, 2, 0, 1, 2)
 
         more_grid = QGridLayout()
         more_grid.setColumnMinimumWidth(0, minimum_width + 10)
@@ -2039,6 +2202,16 @@ class ActionsWidget(QGroupBox):
         layout.addLayout(more_grid)
 
         self.setLayout(layout)
+
+        def select_preflight_cards(names):
+            window = self.window()
+            editor = getattr(window, '_editor_page', None)
+            scroll = getattr(editor, '_scroll_area', None)
+            tabs = getattr(editor, '_tabs', None)
+            if scroll is not None:
+                scroll._card_grid.select_names(names)
+            if tabs is not None:
+                tabs.setCurrentIndex(0)
 
         def render():
             rgx = re.compile(r"\W")
@@ -2068,10 +2241,14 @@ class ActionsWidget(QGroupBox):
             try:
                 placements, _ = layout_service.resolve(state, cols, rows)
             except ValueError as exc:
-                application.warn_nonfatal("Cannot Export Layout", str(exc))
+                confirm_print_preflight(
+                    self.window(), [print_preflight.invalid_layout_issue(exc)])
                 return
 
-            if not confirm_underfilled_export(self.window(), layout_service.occupancy(placements, cols, rows)):
+            issues = print_preflight.analyze(
+                state, img_dict, placements, cols, rows)
+            if not confirm_print_preflight(
+                    self.window(), issues, on_fix=select_preflight_cards):
                 return
 
             state.filename = os.path.splitext(os.path.basename(pdf_path))[0]
@@ -2128,12 +2305,15 @@ class ActionsWidget(QGroupBox):
             try:
                 placements, _ = layout_service.resolve(state, cols, rows)
             except ValueError as exc:
-                application.warn_nonfatal('Cannot Print Layout', str(exc))
+                confirm_print_preflight(
+                    self.window(), [print_preflight.invalid_layout_issue(exc)],
+                    action='print')
                 return
-            if not confirm_underfilled_export(
-                    self.window(),
-                    layout_service.occupancy(placements, cols, rows),
-                    action='print'):
+            issues = print_preflight.analyze(
+                state, img_dict, placements, cols, rows)
+            if not confirm_print_preflight(
+                    self.window(), issues, action='print',
+                    on_fix=select_preflight_cards):
                 return
 
             with tempfile.TemporaryDirectory(prefix='manaforge-print-') as temp_dir:
@@ -2183,6 +2363,112 @@ class ActionsWidget(QGroupBox):
                     application.show_status(
                         f'Sent {printed_pages} page(s) to {printer.printerName()}')
 
+        def more_exports():
+            choices = ('PNG sheets', 'JPEG sheets',
+                       'Individual prepared cards', 'ZIP package')
+            choice, accepted = QInputDialog.getItem(
+                self, 'More exports', 'Export format:', choices, 0, False)
+            if not accepted:
+                return
+            from services.card_edit_service import sheet_capacity
+            columns, rows = sheet_capacity(state)
+            try:
+                placements, _ = layout_service.resolve(state, columns, rows)
+            except ValueError as exc:
+                confirm_print_preflight(
+                    self.window(), [print_preflight.invalid_layout_issue(exc)])
+                return
+            issues = print_preflight.analyze(
+                state, img_dict, placements, columns, rows)
+            if not confirm_print_preflight(
+                    self.window(), issues, on_fix=select_preflight_cards):
+                return
+            dpi, quality, transparent = 300, 90, False
+            if choice != 'Individual prepared cards':
+                dpi, accepted = QInputDialog.getInt(
+                    self, 'Export resolution', 'DPI:', 300, 72, 1200, 25)
+                if not accepted:
+                    return
+            if choice == 'JPEG sheets':
+                quality, accepted = QInputDialog.getInt(
+                    self, 'JPEG quality', 'Quality:', 90, 1, 100, 1)
+                if not accepted:
+                    return
+            if choice == 'PNG sheets':
+                transparent = QMessageBox.question(
+                    self, 'PNG background',
+                    'Use a transparent page background where possible?',
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes
+            if choice == 'ZIP package':
+                destination = QFileDialog.getSaveFileName(
+                    self, 'Save export package',
+                    os.path.join(cwd, 'manaforge-export.zip'),
+                    'ZIP Files (*.zip)')[0]
+                if destination and not destination.lower().endswith('.zip'):
+                    destination += '.zip'
+            else:
+                destination = QFileDialog.getExistingDirectory(
+                    self, 'Choose export folder', cwd)
+            if not destination:
+                return
+
+            result, export_error = None, None
+            def export_work():
+                nonlocal result, export_error
+                try:
+                    progress = make_popup_print_fn(export_window)
+                    if choice == 'PNG sheets':
+                        result = export_service.export_sheets(
+                            state, destination, progress, image_format='PNG',
+                            dpi=dpi, transparent=transparent)
+                    elif choice == 'JPEG sheets':
+                        result = export_service.export_sheets(
+                            state, destination, progress, image_format='JPEG',
+                            dpi=dpi, quality=quality)
+                    elif choice == 'Individual prepared cards':
+                        result = export_service.export_individual_cards(
+                            state, destination)
+                    else:
+                        result = export_service.export_zip(
+                            state, destination, progress, dpi=dpi)
+                except (OSError, ValueError, TypeError) as exc:
+                    export_error = exc
+            export_window = popup(
+                self.window(), 'Exporting...', application._debug_mode)
+            export_window.show_during_work(export_work)
+            if export_error is not None:
+                application.warn_nonfatal('Export Failed', str(export_error))
+                return
+            count = len(result) if isinstance(result, list) else 1
+            if hasattr(application, 'show_status'):
+                application.show_status(f'Exported {count} file(s)')
+
+        def apply_print_preset():
+            name, accepted = QInputDialog.getItem(
+                self, 'Apply print preset', 'Preset:', print_presets.names(), 0, False)
+            if not accepted:
+                return
+            preset = print_presets.details(name)
+            answer = QMessageBox.question(
+                self, 'Apply print preset',
+                f"{preset['description']}\n\nApply this preset to the current project?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes)
+            if answer != QMessageBox.StandardButton.Yes:
+                return
+            try:
+                relocated = print_presets.apply(state, name)
+            except ValueError as exc:
+                application.warn_nonfatal('Could Not Apply Preset', str(exc))
+                return
+            self.window().refresh(state, img_dict)
+            message = f'Applied {name}'
+            if relocated:
+                message += f'; relocated {relocated} card copy/copies'
+            if hasattr(application, 'show_status'):
+                application.show_status(message)
+
         def run_cropper():
             runtime_images.invalidate_all(state, img_dict)
 
@@ -2225,6 +2511,44 @@ class ActionsWidget(QGroupBox):
 
         def open_images_folder():
             open_folder(state.image_dir)
+
+        def restore_recovery_snapshot():
+            window = self.window()
+            session = getattr(window, '_active_session', None) or {}
+            project_id = session.get('project_id')
+            if not project_id:
+                QMessageBox.information(
+                    self, 'No Recovery Snapshots',
+                    'Save this project before using recovery snapshots.')
+                return
+            paths = project_library.recovery_snapshots(project_id)
+            if not paths:
+                QMessageBox.information(
+                    self, 'No Recovery Snapshots',
+                    'No earlier saved versions are available for this project.')
+                return
+            labels = [datetime.datetime.fromtimestamp(
+                os.path.getmtime(path)).strftime('%Y-%m-%d %I:%M:%S %p')
+                for path in paths]
+            label, accepted = QInputDialog.getItem(
+                self, 'Restore Recovery Snapshot',
+                'Choose an earlier project state:', labels, 0, False)
+            if not accepted:
+                return
+            try:
+                data = project_library.load_recovery_snapshot(
+                    paths[labels.index(label)])
+                data['image_dir'] = state.image_dir
+                data['img_cache'] = state.img_cache
+                restored = ProjectState.from_dict(data)
+            except (OSError, ValueError, TypeError) as exc:
+                application.warn_nonfatal('Recovery Failed', str(exc))
+                return
+            state.copy_from(restored)
+            window.refresh(state, img_dict)
+            autosave_managed_session()
+            if hasattr(application, 'show_status'):
+                application.show_status('Recovery snapshot restored')
 
         def open_settings():
             prior_values = {
@@ -2379,11 +2703,12 @@ class ActionsWidget(QGroupBox):
 
             deck_text = dialog.deck_text()
             deck_url = dialog.deck_url()
+            workflow_result = None
             import_result = None
             import_error = None
 
             def import_work():
-                nonlocal import_result, import_error
+                nonlocal workflow_result, import_result, import_error
                 try:
                     workflow_result = deck_import_service.import_into_project(
                         state,
@@ -2476,6 +2801,8 @@ class ActionsWidget(QGroupBox):
 
         render_button.clicked.connect(render)
         print_button.clicked.connect(direct_print)
+        more_exports_button.clicked.connect(more_exports)
+        preset_button.clicked.connect(apply_print_preset)
         cropper_button.clicked.connect(run_cropper)
         home_button.clicked.connect(application.show_home)
         save_button.clicked.connect(save_project)
@@ -2490,6 +2817,8 @@ class ActionsWidget(QGroupBox):
         self._cropper_button = cropper_button
         self._render_button = render_button
         self._print_button = print_button
+        self._more_exports_button = more_exports_button
+        self._preset_button = preset_button
         self._home_button = home_button
         self._save_button = save_button
         self._load_button = load_button
@@ -2503,6 +2832,8 @@ class ActionsWidget(QGroupBox):
         application._offer_component_suggestions = offer_component_suggestions
         self._check_updates_action = QAction("Check for updates…", self)
         self._check_updates_action.triggered.connect(lambda: application.check_for_updates(manual=True))
+        self._restore_snapshot_action = QAction("Restore recovery snapshot…", self)
+        self._restore_snapshot_action.triggered.connect(restore_recovery_snapshot)
         self._import_button = import_decklist_button
         self._clear_cards_button = clear_cards_button
         self._rebuild_after_cropper = False

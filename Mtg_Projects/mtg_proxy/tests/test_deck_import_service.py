@@ -233,6 +233,29 @@ def test_component_suggestions_fetch_missing_exact_token(tmp_path):
     assert [item.candidate.card_id for item in suggestions] == ['sliver-token']
     assert service.database.get_print_by_card_id('sliver-token') is not None
 
+
+def test_component_suggestions_exclude_another_printing_of_source_card(tmp_path):
+    service = CardService(db_path=str(tmp_path / 'self-components.sqlite3'))
+    service.database.upsert_card_payload({
+        'id': 'alrund-other-print', 'oracle_id': 'alrund-oracle',
+        'name': 'Alrund, God of the Cosmos // Hakka, Whispering Raven',
+        'layout': 'modal_dfc', 'set': 'khm', 'collector_number': '40',
+    })
+    service.database.upsert_card_payload({
+        'id': 'alrund-selected-print', 'oracle_id': 'alrund-oracle',
+        'name': 'Alrund, God of the Cosmos // Hakka, Whispering Raven',
+        'layout': 'modal_dfc', 'set': 'pkhm', 'collector_number': '40p',
+        'all_parts': [{
+            'id': 'alrund-other-print', 'component': 'combo_piece',
+            'name': 'Alrund, God of the Cosmos // Hakka, Whispering Raven',
+        }],
+    })
+
+    suggestions = deck_import_service.component_suggestions_for_card_ids(
+        ['alrund-selected-print'], service)
+
+    assert suggestions == []
+
 def _runtime_dir(name: str) -> Path:
     target = Path(__file__).resolve().parents[1] / "projects" / ".codex_test_runtime" / f"{name}_{uuid.uuid4().hex}"
     target.mkdir(parents=True, exist_ok=True)
@@ -959,6 +982,54 @@ def test_import_single_card_into_project_uses_local_card_and_asset_when_availabl
 
     assert result.filename == "scryfall_lea_232_plains.png"
     assert state.get_card_entry("scryfall_lea_232_plains.png").image_asset_id == asset_id
+
+
+def test_modal_dfc_with_only_cached_front_downloads_and_links_complete_pair(monkeypatch):
+    runtime_dir = _runtime_dir("partial_local_modal_dfc")
+    service = CardService(
+        db_path=str(runtime_dir / "card_data.sqlite3"),
+        image_root=str(runtime_dir / "images"),
+        fetch_json_fn=lambda _url: (_ for _ in ()).throw(
+            AssertionError("selected card data should be reused")),
+    )
+    payload = {
+        "id": "card-pathway", "oracle_id": "oracle-pathway",
+        "name": "Branchloft Pathway // Boulderloft Pathway",
+        "layout": "modal_dfc", "set": "znr", "set_name": "Zendikar Rising",
+        "collector_number": "258",
+        "card_faces": [
+            {"name": "Branchloft Pathway", "image_uris": {"png": "front-url"}},
+            {"name": "Boulderloft Pathway", "image_uris": {"png": "back-url"}},
+        ],
+    }
+    service.database.upsert_card_payload(payload)
+    front_asset = service.store_image_bytes(
+        b"cached-front", extension="png", source="scryfall", source_url="front-url")
+    service.set_print_image_asset(
+        payload["id"], front_asset, variant="default",
+        preferred_name="scryfall_znr_258_branchloft-pathway.png")
+    monkeypatch.setattr(deck_import_service, "_build_card_service", lambda *args: service)
+    monkeypatch.setattr(
+        deck_import_service.project_service, "refresh_after_image_changes",
+        lambda state, img_dict, print_fn, warn_fn=None: state)
+    candidate = deck_import_service._build_card_candidate(
+        service, service.database.get_print_by_card_id(payload["id"]), "local",
+        image_records=service.database.get_image_records_for_cards([payload["id"]]))
+    fetched = []
+    state = ProjectState(
+        image_dir=str(runtime_dir / "project"),
+        img_cache=str(runtime_dir / "preview.cache"))
+
+    result = deck_import_service.import_single_card_into_project(
+        state, {}, state.image_dir, candidate, lambda _message: None,
+        fetch_bytes=lambda url: fetched.append(url) or (url + "-bytes").encode())
+
+    assert fetched == ["front-url", "back-url"]
+    assert result.backside_filename == "__scryfall_znr_258_boulderloft-pathway.png"
+    entry = state.get_card_entry(result.filename)
+    assert entry.backside_name == result.backside_filename
+    assert entry.backside_asset_id
+    assert state.backside_enabled is True
 
 
 def test_import_single_card_promotes_online_cache_row_and_saves_image(monkeypatch):

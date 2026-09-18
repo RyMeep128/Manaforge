@@ -25,7 +25,7 @@ Status: **[x] complete**, **[ ] planned**, **[~] partially complete**.
 - [x] Add vertical backside offset throughout state, profiles, preview, and export.
 - [x] Save calibration corrections into a named printer profile.
 - [x] Generate a second verification sheet from the dialog after entering corrections.
-- [ ] Test portrait/landscape, Letter/A4, long-edge/short-edge duplex, and mirrored backs.
+- [x] Test portrait/landscape, Letter/A4, long-edge/short-edge duplex, and mirrored backs.
 
 **Exit gate:** A user can calibrate a printer, save the result, reopen Manaforge, and reproduce aligned fronts and backs.
 
@@ -35,7 +35,7 @@ Status: **[x] complete**, **[ ] planned**, **[~] partially complete**.
 - [~] Map profiles to printer capabilities: paper, orientation, and duplex are applied; color and copies remain driver-controlled.
 - [x] Provide print range and front-only/back-only controls.
 - [x] Render through the same placement service used by preview and PDF.
-- [ ] Show occupancy, low-resolution, missing-back, clipping, and invalid-layout warnings before submission.
+- [x] Show occupancy, low-resolution, missing-back, clipping, and invalid-layout warnings before submission.
 - [x] Keep **Print Anyway** where output remains valid.
 - [x] Show operating-system print errors and job-submission status clearly.
 - [x] Require an explicit final **Print** action; calibration and preview never submit automatically.
@@ -46,25 +46,25 @@ Status: **[x] complete**, **[ ] planned**, **[~] partially complete**.
 
 ### 3. Export formats and presets
 
-- [ ] Export each sheet as PNG with selectable DPI and transparent/solid background where applicable.
-- [ ] Export each sheet as JPEG with quality control.
-- [ ] Export individual prepared card fronts and backs.
-- [ ] Export a ZIP containing sheets/cards plus a manifest of settings and filenames.
-- [ ] Add validated presets: Letter 3×3, A4, duplex, bleed, cut guides, and oversized layouts.
-- [ ] Preserve intentional page gaps and exclude empty editing-only sheets in every format.
+- [x] Export each sheet as PNG with selectable DPI and transparent/solid background where applicable.
+- [x] Export each sheet as JPEG with quality control.
+- [x] Export individual prepared card fronts and backs.
+- [x] Export a ZIP containing sheets/cards plus a manifest of settings and filenames.
+- [x] Add validated presets: Letter 3×3, A4, duplex, bleed, cut guides, and oversized layouts.
+- [x] Preserve intentional page gaps and exclude empty editing-only sheets in every format.
 
 **Exit gate:** All formats match PDF placement and have deterministic filenames and contents.
 
 ### 4. Printer bulk tools and quality workflow
 
-- [~] Multi-select and bulk oversized changes exist.
-- [ ] Bulk replace all low-resolution artwork.
-- [ ] Bulk add missing DFC/custom backs.
-- [ ] Bulk change printings/artwork using one filtered picker.
-- [ ] Bulk remove or exclude basic lands.
-- [ ] Add a persistent **Do not print / owned copy** flag.
-- [ ] Add fix actions directly from print-readiness warnings.
-- [ ] Add crash-recovery snapshots and a recovery chooser for interrupted writes.
+- [x] Multi-select and bulk oversized changes exist.
+- [x] Bulk replace all low-resolution artwork.
+- [x] Bulk add missing DFC/custom backs.
+- [x] Bulk change printings/artwork using one filtered picker.
+- [x] Bulk remove or exclude basic lands.
+- [x] Add a persistent **Do not print / owned copy** flag.
+- [x] Add fix actions directly from print-readiness warnings.
+- [x] Add crash-recovery snapshots and a recovery chooser for interrupted writes.
 
 **Exit gate:** A 500-card project can be audited and repaired without editing cards individually.
 
@@ -85,10 +85,10 @@ Status: **[x] complete**, **[ ] planned**, **[~] partially complete**.
 
 - [x] Read `all_parts`/component relationships and suggest created tokens or referenced cards after imports and from project-card context menus.
 - [x] Let users add all suggested tokens, select some, or dismiss them.
-- [ ] Verify transform and modal DFC front/back pairing.
-- [ ] Add explicit tests and rendering rules for meld, split, aftermath, adventure, flip, battle, plane, scheme, token, and custom cards.
-- [ ] Verify oversized behavior for each compatible layout.
-- [ ] Define clear fallback behavior for unsupported physical footprints.
+- [x] Verify transform and modal DFC front/back pairing, including recovery when only the front image is cached.
+- [x] Add explicit tests and [rendering rules](card-layout-support.md) for meld, split, aftermath, adventure, flip, battle, plane, scheme, token, and custom cards.
+- [x] Verify oversized behavior for each compatible layout.
+- [x] Define clear fallback behavior for unsupported physical footprints.
 
 **Exit gate:** The supported-layout matrix is documented and every row has import, preview, save/reload, and export coverage.
 

@@ -9,6 +9,7 @@ from typing import Callable
 import deck_import
 import high_res
 import runtime_images
+import card_layouts
 from config import CFG
 from mtg_core import CardService, RemoteLookupUnavailable
 from mtg_core.sync import is_no_card_match_error
@@ -91,6 +92,8 @@ def component_suggestions_for_card_ids(card_ids, card_service=None):
         source = card_service.database.get_print_by_card_id(source_id)
         if source is None:
             continue
+        source_oracle_id = str(source.oracle_id or '')
+        source_name = str(source.name or '').strip().casefold()
         for part in source.payload.get('all_parts') or []:
             part_id = str(part.get('id') or '')
             component = str(part.get('component') or 'related_card')
@@ -106,6 +109,13 @@ def component_suggestions_for_card_ids(card_ids, card_service=None):
                 except (RemoteLookupUnavailable, OSError, ValueError, TypeError):
                     record = None
             if record is None:
+                continue
+            # Scryfall sometimes lists another printing of the same card as a
+            # combo_piece (for example Alrund's paper and Arena printings).
+            # Those are artwork/printing alternatives, not related cards to add.
+            if ((source_oracle_id and str(record.oracle_id or '') == source_oracle_id)
+                    or (source_name and str(record.name or '').strip().casefold() == source_name)):
+                seen.add(part_id)
                 continue
             result = type('ComponentResult', (), {
                 'card_id': record.card_id,
@@ -195,7 +205,7 @@ def _build_card_candidate(card_service: CardService, result, search_source: str,
     card_data = result.payload
     face_urls = deck_import.extract_face_image_urls(card_data)
     front_name = _front_face_name(card_data)
-    if len(face_urls) >= 2:
+    if card_layouts.has_printed_back(card_data) and len(face_urls) >= 2:
         filename = deck_import.build_face_image_filename(card_data, front_name, hidden=False)
     else:
         filename = deck_import.build_image_filename(card_data)
@@ -493,7 +503,15 @@ def import_single_card_into_project(
         else (card_service.get_card(card_id=selected_card.card_id) if selected_card.card_id else None)
     )
     backside_name = None
-    if selected_card.card_id and selected_image_asset_id and card_service.get_image_path(selected_card.card_id):
+    face_urls = deck_import.extract_face_image_urls(card_data or {})
+    requires_backside = card_layouts.has_printed_back(card_data or {})
+    has_local_front = bool(
+        selected_card.card_id and selected_image_asset_id
+        and card_service.get_image_path(selected_card.card_id))
+    has_local_back = bool(
+        selected_card.card_id and selected_backside_asset_id
+        and card_service.get_image_path(selected_card.card_id, 'back'))
+    if has_local_front and (not requires_backside or has_local_back):
         if (card_data or {}).get("card_faces") and selected_backside_asset_id:
             face_names = [
                 face.get("name") or selected_card.name

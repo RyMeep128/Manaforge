@@ -107,7 +107,7 @@ def build_exact_print_search_url(name: str, set_code: str) -> str:
 def build_print_search_url(query: str, *, include_extras: bool = False) -> str:
     params = {"q": query, "unique": "prints"}
     if include_extras:
-        params["include"] = "extras"
+        params["include_extras"] = "true"
     return "https://api.scryfall.com/cards/search?" + urllib.parse.urlencode(
         params
     )

@@ -182,6 +182,19 @@ def test_readable_text_includes_both_faces(database):
     assert 'Day' in text and 'Night' in text and 'Vigilance' in text and 'Trample' in text
 
 
+def test_is_dfc_includes_double_sided_art_series(database):
+    database.upsert_card_payload(dict(
+        id='art-card', oracle_id='art-card', name='Concept Art // Statistics',
+        layout='art_series', type_line='Card', card_faces=[
+            {'name': 'Concept Art'}, {'name': 'Statistics'}],
+        set='abc', collector_number='art-1'))
+
+    result_ids = {row.card_id for row in database.search_syntax('is:dfc')}
+
+    assert result_ids == {'faces', 'art-card'}
+    assert database.count_syntax('is:dfc') == 2
+
+
 def test_rules_search_falls_back_without_fts(database):
     with database.connect() as connection:
         connection.execute('DROP TABLE print_search_fts')

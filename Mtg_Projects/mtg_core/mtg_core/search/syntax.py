@@ -163,7 +163,7 @@ class Parser:
             if value in ('foil', 'digital', 'reserved', 'reprint', 'promo'):
                 return f"json_extract(s.search_json, '$.{value}') = 1"
             if value in ('dfc', 'double-faced'):
-                return "json_extract(s.search_json, '$.layout') IN ('transform', 'modal_dfc', 'double_faced_token', 'reversible_card')"
+                return "json_extract(s.search_json, '$.layout') IN ('transform', 'modal_dfc', 'double_faced_token', 'reversible_card', 'art_series')"
             if value == 'token':
                 return "json_extract(s.search_json, '$.layout') IN ('token', 'double_faced_token')"
         raise LocalQueryError(f'Unsupported local search filter: {field}{op}{value}. Use online search for this filter.')

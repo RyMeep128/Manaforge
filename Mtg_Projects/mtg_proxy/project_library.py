@@ -31,6 +31,41 @@ def library_path():
     return os.path.join(projects_root(), "library.json")
 
 
+def recovery_root():
+    path = os.path.join(projects_root(), 'recovery')
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
+def _snapshot_existing_project(project_id, project_path, limit=5):
+    if not project_path or not os.path.exists(project_path):
+        return None
+    current = _load_project_json(project_path)
+    if not isinstance(current, dict):
+        return None
+    timestamp = datetime.datetime.now().strftime('%Y%m%d-%H%M%S-%f')
+    snapshot = os.path.join(recovery_root(), f'{project_id}-{timestamp}.json')
+    write_json_atomic(snapshot, current, ensure_ascii=False)
+    paths = sorted(Path(recovery_root()).glob(f'{project_id}-*.json'),
+                   key=lambda item: item.stat().st_mtime, reverse=True)
+    for obsolete in paths[max(1, int(limit)):]:
+        obsolete.unlink(missing_ok=True)
+    return snapshot
+
+
+def recovery_snapshots(project_id):
+    paths = sorted(Path(recovery_root()).glob(f'{project_id}-*.json'),
+                   key=lambda item: item.stat().st_mtime, reverse=True)
+    return [str(path) for path in paths]
+
+
+def load_recovery_snapshot(path):
+    data = _load_project_json(path)
+    if not isinstance(data, dict):
+        raise ValueError('The recovery snapshot is invalid.')
+    return data
+
+
 def draft_root():
     return os.path.join(projects_root(), "tmp_images")
 
@@ -611,6 +646,9 @@ def save_project(project_id, print_dict):
     if not _is_valid_thumbnail_card(serialized, entry.get("thumbnail_card")):
         entry["thumbnail_card"] = None
 
+    existing = _load_project_json(entry["path"])
+    if existing != serialized:
+        _snapshot_existing_project(project_id, entry["path"])
     write_json_atomic(entry["path"], serialized, ensure_ascii=False)
     entry["last_opened_at"] = _utc_now()
     save_library(data)

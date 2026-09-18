@@ -20,6 +20,28 @@ def _service(tmp_path):
     return CardAdminService(database=database), database
 
 
+def test_catalog_version_change_invalidates_completed_download_status(tmp_path):
+    database = CardDatabase(str(tmp_path / "catalog-version.sqlite3"))
+    database.upsert_sync_state(
+        FIXED_CATALOG_SOURCE,
+        version="catalog-download-v2",
+        last_sync_at=time.time(),
+        payload={
+            "query": FIXED_CATALOG_QUERY,
+            "status": "completed",
+            "completed": True,
+            "total_scanned": 40000,
+        },
+    )
+    service = CardService(db_path=database.db_path)
+
+    status = service.get_bulk_download_status()
+
+    assert status.status == "idle"
+    assert status.completed is False
+    assert status.total_scanned == 0
+
+
 def _bulk_service(tmp_path, *, fetch_json, fetch_bytes):
     db_path = tmp_path / "bulk.sqlite3"
     database = CardDatabase(str(db_path))

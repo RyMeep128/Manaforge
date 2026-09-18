@@ -26,6 +26,12 @@ Calibration remains separate from card sheets and does not submit a physical pri
 
 ## Direct printing
 
-Choose **Print** in the project toolbar, then select fronts and backs, fronts only, or backs only. Manaforge validates layout capacity and warns about under-filled sheets before rendering. The native printer dialog then provides installed-printer selection, copies, page range, and driver-specific properties. The active project or printer profile supplies the initial paper size, orientation, and duplex edge.
+Choose **Print** in the project toolbar, then select fronts and backs, fronts only, or backs only. Manaforge validates layout capacity and reviews under-filled sheets, low-resolution artwork, missing backs, bleed clipping risks, missing images, and invalid layouts before rendering. Valid output keeps **Print Anyway**; missing images and impossible layouts must be fixed first. The native printer dialog then provides installed-printer selection, copies, page range, and driver-specific properties. The active project or printer profile supplies the initial paper size, orientation, and duplex edge.
 
-The print job is rasterized at the highest printer-supported resolution up to 600 DPI, one page at a time, from the shared PDF geometry. Printer rejection, invalid page ranges, and rendering failures are reported in the UI. Low-resolution artwork and missing-back preflight details remain the next direct-print increment.
+The print job is rasterized at the highest printer-supported resolution up to 600 DPI, one page at a time, from the shared PDF geometry. Printer rejection, invalid page ranges, and rendering failures are reported in the UI.
+
+## More exports and presets
+
+Choose **More Exports** to save every populated sheet as PNG or JPEG, export the unique prepared card fronts and backs, or create a ZIP containing sheets, cards, and a settings manifest. Raster sheet exports offer DPI control; PNG supports a transparent page background and JPEG supports quality control. Filenames are numbered deterministically, and sheet images use the same PDF renderer and placements as preview and printing.
+
+Choose **Apply Print Preset** for validated Letter 3 x 3, A4 3 x 3, duplex Letter, 3 mm bleed, cut-guide, and oversized-card settings. Applying a preset reconciles manual placements before changing the active project and reports any moved copies.

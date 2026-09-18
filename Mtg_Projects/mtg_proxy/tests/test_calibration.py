@@ -2,6 +2,7 @@ import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 
 from PyQt6 import QtWidgets
+import pytest
 
 from calibration_dialog import PrinterCalibrationDialog
 from models import ProjectState
@@ -44,6 +45,49 @@ def test_calibration_card_targets_use_manaforge_trim_size():
     assert all(rectangle[2:] == tuple(
         dimension * 72 for dimension in card_size_without_bleed_inch)
         for rectangle in rectangles)
+
+
+@pytest.mark.parametrize('paper', ['Letter', 'A4'])
+@pytest.mark.parametrize('orientation', ['Portrait', 'Landscape'])
+@pytest.mark.parametrize('duplex', ['Long edge', 'Short edge'])
+def test_calibration_matrix_preserves_paper_orientation_and_duplex(
+        monkeypatch, tmp_path, paper, orientation, duplex):
+    from constants import page_sizes
+    instances = []
+
+    class Canvas:
+        def __init__(self, path, pagesize):
+            self.pagesize = pagesize
+            self.labels = []
+            self.pages = 0
+            instances.append(self)
+
+        def drawCentredString(self, x, y, text):
+            self.labels.append(text)
+
+        def showPage(self):
+            self.pages += 1
+
+        def __getattr__(self, name):
+            return lambda *args, **kwargs: None
+
+    monkeypatch.setattr(calibration_service.canvas, 'Canvas', Canvas)
+    state = ProjectState.from_dict({
+        'pagesize': paper, 'orient': orientation,
+        'printer_duplex': duplex, 'backside_enabled': True,
+    })
+
+    calibration_service.generate_calibration_pdf(
+        state, tmp_path / f'{paper}-{orientation}-{duplex}.pdf')
+
+    expected_size = page_sizes[paper]
+    if orientation == 'Landscape':
+        expected_size = tuple(reversed(expected_size))
+    assert instances[0].pagesize == expected_size
+    assert instances[0].pages == 2
+    assert sum(f'Duplex: {duplex}' in label for label in instances[0].labels) == 2
+    assert any('FRONT TEST CARD 5' == label for label in instances[0].labels)
+    assert any('BACK TEST CARD 5' == label for label in instances[0].labels)
 
 
 def test_calibration_dialog_applies_and_saves_profile(tmp_path, monkeypatch):

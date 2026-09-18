@@ -731,7 +731,7 @@ def test_token_remote_search_uses_extras_and_persists_token_payload():
 
     def fake_fetch_json(url: str) -> dict:
         calls.append(url)
-        assert "include=extras" in url
+        assert "include_extras=true" in url
         assert "t%3Atoken" in url
         return {
             "object": "list",

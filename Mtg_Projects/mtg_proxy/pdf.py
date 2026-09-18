@@ -217,6 +217,9 @@ def distribute_cards_to_pages(print_dict, columns, rows):
         )
 
     for img in card_names:
+        entry = state.get_card_entry(img)
+        if entry is not None and entry.do_not_print:
+            continue
         num = state.cards[img]
         is_short_edge = short_edge_dict[img] if img in short_edge_dict else False
         is_oversized = oversized_dict[img] if img in oversized_dict else False

@@ -16,6 +16,7 @@ from mtg_core import CardService, RemoteLookupUnavailable
 from mtg_core.sync import fetch_json as core_fetch_json
 from mtg_core.sync import fetch_bytes as core_fetch_bytes
 from models import ProjectState, as_project_state
+import card_layouts
 
 logger = logging.getLogger(__name__)
 
@@ -719,7 +720,7 @@ def download_card_image_set(
     front_record = card_service.database.get_image_record(card_id, "default") if card_id else None
     back_record = card_service.database.get_image_record(card_id, "back") if card_id else None
 
-    if len(face_urls) >= 2 and len(face_names) >= 2:
+    if card_layouts.has_printed_back(card_data) and len(face_urls) >= 2 and len(face_names) >= 2:
         front_name = build_face_image_filename(card_data, face_names[0], hidden=False)
         back_name = build_face_image_filename(card_data, face_names[1], hidden=True)
         front_path = card_service.get_image_path(card_id, "default") if card_id else None

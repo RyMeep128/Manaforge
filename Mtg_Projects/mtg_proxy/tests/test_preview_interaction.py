@@ -339,6 +339,74 @@ def test_full_sheets_do_not_show_warning(monkeypatch):
     assert editor_widgets.confirm_underfilled_export(None, [dict(page=1, filled=9, capacity=9)])
 
 
+@pytest.mark.parametrize('blocking,choice,expected', [
+    (False, 'Print Anyway', True),
+    (False, 'Go Back', False),
+    (True, 'Go Back', False),
+])
+def test_preflight_dialog_only_allows_valid_output(blocking, choice, expected):
+    issue = editor_widgets.print_preflight.PreflightIssue(
+        'test', 'Review this issue', ('card.png',), blocking=blocking)
+
+    def answer():
+        dialog = APP.activeModalWidget()
+        next(button for button in dialog.buttons() if button.text() == choice).click()
+
+    QtCore.QTimer.singleShot(0, answer)
+    assert editor_widgets.confirm_print_preflight(None, [issue]) is expected
+
+
+def test_completed_deck_import_keeps_workflow_result_for_component_suggestions(monkeypatch):
+    class ImportDialog:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def exec(self):
+            return QtWidgets.QDialog.DialogCode.Accepted
+
+        def deck_text(self):
+            return "1 Plains"
+
+        def deck_url(self):
+            return ""
+
+    class Window(QtWidgets.QWidget):
+        def __init__(self):
+            super().__init__()
+            self.refreshes = 0
+
+        def refresh(self, state, images):
+            self.refreshes += 1
+
+    imported = SimpleNamespace(imported_count=1, imported=[object()],
+                               failed_cards=[], unmatched_lines=[])
+    workflow = SimpleNamespace(import_result=imported, component_suggestions=[])
+    monkeypatch.setattr(editor_widgets, "DeckImportDialog", ImportDialog)
+    monkeypatch.setattr(
+        editor_widgets.deck_import_service, "import_into_project",
+        lambda *args, **kwargs: workflow)
+    monkeypatch.setattr(
+        editor_widgets, "popup",
+        lambda *args: SimpleNamespace(show_during_work=lambda work: work()))
+    monkeypatch.setattr(editor_widgets, "make_popup_print_fn", lambda *args: lambda text: None)
+    monkeypatch.setattr(editor_widgets, "show_card_import_complete", lambda *args: None)
+    app = SimpleNamespace(
+        show_home=lambda: None, _debug_mode=False,
+        warn_nonfatal=lambda *args: pytest.fail(str(args)),
+        show_status=lambda _text: None,
+        check_for_updates=lambda **kwargs: None,
+    )
+    window = Window()
+    actions = editor_widgets.ActionsWidget(app, ProjectState(), {})
+    actions.setParent(window)
+
+    actions._import_button.click()
+
+    assert window.refreshes == 1
+    actions.deleteLater()
+    window.deleteLater()
+
+
 @pytest.mark.parametrize('proceed', [False, True])
 def test_export_warning_gates_pdf_generation(monkeypatch, tmp_path, proceed):
     calls = []
@@ -348,11 +416,15 @@ def test_export_warning_gates_pdf_generation(monkeypatch, tmp_path, proceed):
     actions = editor_widgets.ActionsWidget(app, state, {})
     monkeypatch.setattr(editor_widgets.QFileDialog, 'getSaveFileName',
                         lambda *args: (str(tmp_path / 'output.pdf'), ''))
-    def confirm(parent, pages):
-        assert pages == [dict(page=1, filled=1, capacity=9, cards=1)]
+    issue = object()
+    monkeypatch.setattr(
+        editor_widgets.print_preflight, 'analyze',
+        lambda *args: [issue])
+    def confirm(parent, issues, **_kwargs):
+        assert issues == [issue]
         calls.append('warning')
         return proceed
-    monkeypatch.setattr(editor_widgets, 'confirm_underfilled_export', confirm)
+    monkeypatch.setattr(editor_widgets, 'confirm_print_preflight', confirm)
     monkeypatch.setattr(editor_widgets, 'popup', lambda *args:
                         SimpleNamespace(show_during_work=lambda work: work()))
     monkeypatch.setattr(editor_widgets, 'make_popup_print_fn', lambda *args: lambda text: None)

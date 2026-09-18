@@ -7,6 +7,8 @@ def copies(state):
     result = {}
     for name, count in state.cards.items():
         entry = state.get_card_entry(name)
+        if entry is not None and entry.do_not_print:
+            continue
         entry_id = entry.entry_id if entry else name
         for ordinal in range(max(0, int(count))):
             copy_id = json.dumps([entry_id, ordinal], ensure_ascii=False)

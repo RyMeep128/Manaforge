@@ -409,6 +409,7 @@ def test_import_decklist_downloads_double_faced_card_and_assigns_backside(tmp_pa
         assert "named" in url
         return {
             "name": "Invasion of New Phyrexia // Teferi Akosa of Zhalfir",
+            "layout": "transform",
             "set": "mom",
             "collector_number": "239",
             "card_faces": [
@@ -439,6 +440,38 @@ def test_import_decklist_downloads_double_faced_card_and_assigns_backside(tmp_pa
     }
     assert (tmp_path / "scryfall_mom_239_invasion-of-new-phyrexia.png").read_bytes() == b"https://img/front.png"
     assert (tmp_path / "__scryfall_mom_239_teferi-akosa-of-zhalfir.png").read_bytes() == b"https://img/back.png"
+
+
+def test_unknown_multiface_layout_imports_first_face_without_inventing_backs(tmp_path):
+    service = CardService(
+        db_path=str(tmp_path / "fallback.sqlite3"),
+        image_root=str(tmp_path / "assets"),
+    )
+    payload = {
+        "id": "future-card", "oracle_id": "future-oracle",
+        "name": "Future Tri-Fold", "layout": "future_tri_fold",
+        "set": "ftr", "collector_number": "1",
+        "card_faces": [
+            {"name": "First", "image_uris": {"png": "first-url"}},
+            {"name": "Second", "image_uris": {"png": "second-url"}},
+            {"name": "Third", "image_uris": {"png": "third-url"}},
+        ],
+    }
+    fetched = []
+
+    imported, backside = deck_import.download_card_image_set(
+        payload,
+        deck_import.DeckEntry(count=1, name=payload["name"]),
+        str(tmp_path / "project"),
+        lambda _message: None,
+        lambda url: fetched.append(url) or url.encode(),
+        card_service=service,
+    )
+
+    assert fetched == ["first-url"]
+    assert imported.filename == "scryfall_ftr_1_future-tri-fold.png"
+    assert imported.backside_asset_id is None
+    assert backside is None
 
 
 def test_import_decklist_uses_local_db_assets_when_offline(tmp_path, monkeypatch):

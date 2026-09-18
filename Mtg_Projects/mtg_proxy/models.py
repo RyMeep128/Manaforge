@@ -178,6 +178,7 @@ class ProjectCardEntry:
     backside_asset_id: str | None = None
     backside_short_edge: bool = False
     oversized: bool = False
+    do_not_print: bool = False
     metadata: CardMetadata = field(default_factory=CardMetadata)
 
     @classmethod
@@ -194,6 +195,7 @@ class ProjectCardEntry:
             backside_asset_id=_optional_str(data.get("backside_asset_id")),
             backside_short_edge=bool(data.get("backside_short_edge", False)),
             oversized=bool(data.get("oversized", False)),
+            do_not_print=bool(data.get("do_not_print", False)),
             metadata=CardMetadata.from_dict(data.get("metadata")),
         )
 
@@ -204,6 +206,7 @@ class ProjectCardEntry:
             "count": self.count,
             "backside_short_edge": self.backside_short_edge,
             "oversized": self.oversized,
+            "do_not_print": self.do_not_print,
             "metadata": self.metadata.to_dict(),
         }
         optional_fields = {
