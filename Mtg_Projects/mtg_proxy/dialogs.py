@@ -1296,6 +1296,7 @@ class HighResPickerDialog(QDialog):
         self._total_result_count = 0
         self._results_have_more = False
         self._thumbnail_loader = None
+        self._pending_thumbnail_candidates = []
         self._page_token = 0
         self._mpcfill_name_search_text = self._context.display_name
         self._mpcfill_artist_search_text = ""
@@ -1632,9 +1633,13 @@ class HighResPickerDialog(QDialog):
         self._apply_search_mode_ui()
 
     def _stop_thumbnail_loader(self):
+        self._pending_thumbnail_candidates = []
         if self._thumbnail_loader is not None:
             self._thumbnail_loader.cancel()
-            self._thumbnail_loader.wait(2000)
+            # A QThread must remain alive until run() exits. A timed wait can
+            # release the last Python reference while Qt is still executing,
+            # which terminates the process inside Qt6Core on Windows.
+            self._thumbnail_loader.wait()
             self._thumbnail_loader = None
 
     def closeEvent(self, event):
@@ -1662,7 +1667,9 @@ class HighResPickerDialog(QDialog):
             return
 
     def _start_thumbnail_loader(self, candidates):
-        self._stop_thumbnail_loader()
+        if self._thumbnail_loader is not None and self._thumbnail_loader.isRunning():
+            self._pending_thumbnail_candidates = list(candidates)
+            return
         pending = []
         for candidate in candidates:
             row = self._candidates.index(candidate)
@@ -1685,9 +1692,19 @@ class HighResPickerDialog(QDialog):
         self._page_token += 1
         loader = HighResThumbnailLoader(self._page_token, pending)
         loader.thumbnail_loaded.connect(self._handle_thumbnail_loaded)
-        loader.finished.connect(lambda: setattr(self, "_thumbnail_loader", None))
+        loader.finished.connect(
+            lambda: self._thumbnail_loader_finished(loader))
         self._thumbnail_loader = loader
         loader.start()
+
+    def _thumbnail_loader_finished(self, loader):
+        if self._thumbnail_loader is not loader:
+            return
+        self._thumbnail_loader = None
+        pending = self._pending_thumbnail_candidates
+        self._pending_thumbnail_candidates = []
+        if pending:
+            self._start_thumbnail_loader(pending)
 
     def _start_visible_thumbnail_loader(self):
         viewport = self._results_list.viewport().rect()

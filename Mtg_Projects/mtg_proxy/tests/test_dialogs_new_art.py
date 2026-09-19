@@ -185,3 +185,38 @@ def test_preferred_replacement_review_can_exclude_proposals():
     assert dialog.selected_proposals() == [proposals[0]]
     dialog.deleteLater()
     app.processEvents()
+
+
+def test_thumbnail_requests_queue_while_loader_is_running():
+    class Loader:
+        def isRunning(self):
+            return True
+
+    state = type('State', (), {})()
+    state._thumbnail_loader = Loader()
+    state._pending_thumbnail_candidates = []
+    candidates = [object(), object()]
+
+    dialogs.HighResPickerDialog._start_thumbnail_loader(state, candidates)
+
+    assert state._pending_thumbnail_candidates == candidates
+
+
+def test_stopping_thumbnail_loader_waits_until_thread_exits():
+    calls = []
+    class Loader:
+        def cancel(self):
+            calls.append('cancel')
+
+        def wait(self):
+            calls.append('wait')
+
+    state = type('State', (), {})()
+    state._thumbnail_loader = Loader()
+    state._pending_thumbnail_candidates = [object()]
+
+    dialogs.HighResPickerDialog._stop_thumbnail_loader(state)
+
+    assert calls == ['cancel', 'wait']
+    assert state._thumbnail_loader is None
+    assert state._pending_thumbnail_candidates == []
