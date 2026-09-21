@@ -1,5 +1,3 @@
-import csv
-import html.parser
 import json
 import logging
 import os
@@ -8,7 +6,6 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
-from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Callable
 
@@ -42,42 +39,12 @@ def _sync_legacy_project_dict(target, state: ProjectState) -> ProjectState:
 
 
 PRINT_FN = Callable[[str], None]
-ARCHIDEKT_URL_RE = re.compile(
-    r"^https://(www\.)?archidekt\.com/decks/(?P<deck_id>\d+)(/.*)?$",
-    re.IGNORECASE,
-)
-MOXFIELD_URL_RE = re.compile(
-    r"^https://(www\.)?moxfield\.com/decks/(?P<deck_id>[A-Za-z0-9_-]+)(?:[/?#].*)?$",
-    re.IGNORECASE,
-)
-BLUEPRINT_URL_RE = re.compile(
-    r"^https://(www\.)?blueprintmtg\.io/decks/(?P<deck_slug>[A-Za-z0-9_-]+)(?:[/?#].*)?$",
-    re.IGNORECASE,
-)
-BLUEPRINT_APP_URL = "https://blueprintmtg.io/"
-BLUEPRINT_DECK_SELECT = "id,name,visibility,payload"
+from mtg_core.deck_sources import (ARCHIDEKT_URL_RE, MOXFIELD_URL_RE, BLUEPRINT_URL_RE,
+    is_archidekt_url, is_supported_deck_url, parse_archidekt_html, parse_moxfield_json,
+    parse_blueprint_json, _blueprint_deck_id, _blueprint_api_url, _fetch_blueprint_deck)
 
-SECTION_HEADERS = {
-    "deck",
-    "sideboard",
-    "commander",
-    "companions",
-    "companion",
-    "maybeboard",
-}
-
-LINE_PATTERN = re.compile(
-    r"^(?:(?:SB|MB|CMDR|COMMANDER):\s*)?(?:(?P<count>\d+)\s+)?(?P<name>.+?)"
-    r"(?:\s+\((?P<set_code>[A-Za-z0-9]+)\)(?:\s+(?P<collector_number>[A-Za-z0-9-]+))?)?$"
-)
-
-
-@dataclass(frozen=True)
-class DeckEntry:
-    count: int
-    name: str
-    set_code: str | None = None
-    collector_number: str | None = None
+from mtg_core.decklists import (DecklistEntry as DeckEntry, parse_decklist as core_parse_decklist,
+                                resolve_card as core_resolve_card, read_decklist_file)
 
 
 @dataclass(frozen=True)
@@ -102,126 +69,8 @@ class ImportResult:
         return sum(card.entry.count for card in self.imported)
 
 
-class ArchidektHTMLParser(html.parser.HTMLParser):
-    def __init__(self, *, convert_charrefs=True):
-        super().__init__(convert_charrefs=convert_charrefs)
-        self.decklist_json = ""
-        self._found_deck_tag = False
-
-    def handle_starttag(self, tag, attrs):
-        attributes = {key: value for key, value in attrs}
-        if (
-            tag == "script"
-            and attributes.get("id") == "__NEXT_DATA__"
-            and attributes.get("type") == "application/json"
-        ):
-            self._found_deck_tag = True
-
-    def handle_data(self, data):
-        if self._found_deck_tag:
-            self.decklist_json = data
-            self._found_deck_tag = False
-
-
 def parse_decklist(deck_text: str) -> tuple[list[DeckEntry], list[str]]:
-    if _looks_like_csv(deck_text):
-        return _parse_csv_decklist(deck_text)
-    return _parse_text_decklist(deck_text)
-
-
-def _parse_text_decklist(deck_text: str) -> tuple[list[DeckEntry], list[str]]:
-    aggregated: OrderedDict[tuple[str, str | None, str | None], DeckEntry] = OrderedDict()
-    unmatched_lines: list[str] = []
-
-    for raw_line in deck_text.splitlines():
-        line = raw_line.strip()
-        if not line:
-            continue
-        if line.lower().rstrip(":") in SECTION_HEADERS:
-            continue
-        if line.startswith(('#', '//')):
-            continue
-
-        match = LINE_PATTERN.match(line)
-        if match is None:
-            unmatched_lines.append(line)
-            continue
-
-        count = int(match.group("count") or 1)
-        name = _normalize_card_name(match.group("name"))
-        if not any(character.isalpha() for character in name) or count < 1:
-            unmatched_lines.append(line)
-            continue
-        set_code = match.group("set_code")
-        collector_number = match.group("collector_number")
-        key = (name.casefold(), set_code.lower() if set_code else None, collector_number)
-
-        if key in aggregated:
-            previous = aggregated[key]
-            aggregated[key] = DeckEntry(
-                count=previous.count + count,
-                name=previous.name,
-                set_code=previous.set_code,
-                collector_number=previous.collector_number,
-            )
-        else:
-            aggregated[key] = DeckEntry(
-                count=count,
-                name=name,
-                set_code=set_code.lower() if set_code else None,
-                collector_number=collector_number,
-            )
-
-    return list(aggregated.values()), unmatched_lines
-
-
-def _parse_csv_decklist(deck_text: str) -> tuple[list[DeckEntry], list[str]]:
-    aggregated: OrderedDict[tuple[str, str | None, str | None], DeckEntry] = OrderedDict()
-    unmatched_lines: list[str] = []
-
-    reader = csv.DictReader(deck_text.splitlines())
-    fieldnames = {_normalize_csv_field_name(field_name) for field_name in (reader.fieldnames or [])}
-    required_fields = {"count", "name", "set_code", "collector_number"}
-    if not required_fields.issubset(fieldnames):
-        return _parse_text_decklist(deck_text)
-
-    for row_number, row in enumerate(reader, start=2):
-        normalized_row = {
-            _normalize_csv_field_name(key): (value or "").strip()
-            for key, value in row.items()
-            if key is not None
-        }
-
-        count_raw = normalized_row.get("count", "")
-        name_raw = normalized_row.get("name", "")
-        set_code = normalized_row.get("set_code") or None
-        collector_number = normalized_row.get("collector_number") or None
-
-        if not count_raw or not count_raw.isdigit() or not name_raw or not set_code or not collector_number:
-            unmatched_lines.append(f"CSV row {row_number}")
-            continue
-
-        name = _normalize_card_name(name_raw)
-        key = (name.casefold(), set_code.lower(), collector_number)
-        count = int(count_raw)
-
-        if key in aggregated:
-            previous = aggregated[key]
-            aggregated[key] = DeckEntry(
-                count=previous.count + count,
-                name=previous.name,
-                set_code=previous.set_code,
-                collector_number=previous.collector_number,
-            )
-        else:
-            aggregated[key] = DeckEntry(
-                count=count,
-                name=name,
-                set_code=set_code.lower(),
-                collector_number=collector_number,
-            )
-
-    return list(aggregated.values()), unmatched_lines
+    return core_parse_decklist(deck_text, preserve_sections=False)
 
 
 def import_decklist(
@@ -422,242 +271,8 @@ def apply_import_result(print_dict: dict, import_result: ImportResult):
     return _sync_legacy_project_dict(print_dict, state)
 
 
-def read_decklist_file(path: str) -> str:
-    with open(path, "rb") as fp:
-        raw = fp.read()
-
-    for encoding in ("utf-8-sig", "utf-8", "cp1252", "latin-1"):
-        try:
-            return raw.decode(encoding)
-        except UnicodeDecodeError:
-            continue
-    return raw.decode("utf-8", errors="replace")
-
-
-def is_archidekt_url(value: str) -> bool:
-    return ARCHIDEKT_URL_RE.match(value.strip()) is not None
-
-
-def is_supported_deck_url(value: str) -> bool:
-    value = value.strip()
-    return any(pattern.match(value) is not None for pattern in (
-        ARCHIDEKT_URL_RE,
-        MOXFIELD_URL_RE,
-        BLUEPRINT_URL_RE,
-    ))
-
-
-def parse_moxfield_json(payload: dict) -> list[DeckEntry]:
-    sections = (
-        payload.get("mainboard"),
-        payload.get("sideboard"),
-        payload.get("maybeboard"),
-        payload.get("commanders"),
-        payload.get("companions"),
-    )
-    entries = []
-    for section in sections:
-        entries.extend(_entries_from_card_collection(section))
-    if not entries:
-        raise ValueError("The Moxfield response did not include a readable card list.")
-    return _aggregate_entries(entries)
-
-
-def parse_blueprint_json(payload: dict | list) -> list[DeckEntry]:
-    if isinstance(payload, list):
-        if not payload:
-            raise ValueError("The Blueprint MTG deck was not found or is private.")
-        payload = payload[0]
-    if not isinstance(payload, dict):
-        raise ValueError("The Blueprint MTG response could not be read.")
-    if payload.get("visibility") == "private":
-        raise ValueError("Private Blueprint MTG decks cannot be imported.")
-    deck_payload = payload.get("payload") or payload
-    entries = []
-    for key in ("deck", "considering", "commanders"):
-        entries.extend(_entries_from_card_collection(deck_payload.get(key)))
-    if not entries:
-        raise ValueError("The Blueprint MTG response did not include a readable card list.")
-    return _aggregate_entries(entries)
-
-
-def _entries_from_card_collection(collection) -> list[DeckEntry]:
-    if not collection:
-        return []
-    values = collection.values() if isinstance(collection, dict) else collection
-    entries = []
-    for item in values:
-        if not isinstance(item, dict):
-            continue
-        card = item.get("card") if isinstance(item.get("card"), dict) else item
-        oracle_card = card.get("oracleCard") if isinstance(card.get("oracleCard"), dict) else {}
-        name = str(
-            card.get("name") or card.get("displayName") or oracle_card.get("name") or ""
-        ).strip()
-        try:
-            count = int(item.get("quantity", item.get("count", item.get("qty", 1))))
-        except (TypeError, ValueError):
-            continue
-        set_code = _first_optional(
-            item,
-            card,
-            names=("setCode", "set_code", "editionCode", "editioncode", "set"),
-        )
-        if not set_code:
-            set_record = card.get("set") or card.get("edition")
-            if isinstance(set_record, dict):
-                set_code = _first_optional(set_record, names=("code", "editioncode"))
-        collector_number = _first_optional(
-            item, card, names=("collectorNumber", "collector_number", "number")
-        )
-        if name and count > 0:
-            entries.append(DeckEntry(count, _normalize_card_name(name), set_code, collector_number))
-    return entries
-
-
-def _first_optional(*objects: dict, names: tuple[str, ...]) -> str | None:
-    for obj in objects:
-        for name in names:
-            raw_value = obj.get(name)
-            if isinstance(raw_value, (dict, list)):
-                continue
-            value = _normalize_optional_field(raw_value)
-            if value:
-                return value
-    return None
-
-
-def _aggregate_entries(entries: list[DeckEntry]) -> list[DeckEntry]:
-    aggregated: OrderedDict[tuple[str, str | None, str | None], DeckEntry] = OrderedDict()
-    for entry in entries:
-        key = (entry.name.casefold(), entry.set_code, entry.collector_number)
-        previous = aggregated.get(key)
-        aggregated[key] = DeckEntry(
-            count=entry.count + (previous.count if previous else 0),
-            name=previous.name if previous else entry.name,
-            set_code=entry.set_code,
-            collector_number=entry.collector_number,
-        )
-    return list(aggregated.values())
-
-
-def _blueprint_deck_id(slug: str) -> str:
-    decoded = urllib.parse.unquote(slug)
-    if decoded.startswith("deck-"):
-        return decoded
-    suffix = decoded.rsplit("-", 1)[-1]
-    return f"deck-{suffix}" if suffix != decoded else decoded
-
-
-def _blueprint_api_url(deck_id: str) -> str:
-    query = urllib.parse.urlencode({"id": f"eq.{deck_id}", "select": BLUEPRINT_DECK_SELECT})
-    return f"https://blueprintmtg.io/api/import/blueprint?{query}"
-
-
-def _fetch_blueprint_deck(deck_id: str, fetch_text=None) -> dict | list:
-    fetch_text = fetch_text or _fetch_text
-    app_html = fetch_text(BLUEPRINT_APP_URL)
-    asset_match = re.search(r'<script[^>]+src="(?P<src>/assets/index-[^"]+\.js)"', app_html)
-    if not asset_match:
-        raise ValueError("Blueprint MTG connection details could not be discovered.")
-    javascript = fetch_text(urllib.parse.urljoin(BLUEPRINT_APP_URL, asset_match.group("src")))
-    url_match = re.search(r'VITE_SUPABASE_URL:"(?P<url>https://[^"]+)"', javascript)
-    key_match = re.search(r'VITE_SUPABASE_PUBLISHABLE_KEY:"(?P<key>[^"]+)"', javascript)
-    if not url_match or not key_match:
-        # The connection settings currently live in Blueprint's shared data chunk.
-        chunk_match = re.search(r'from"\./(?P<src>playtester-[^"]+\.js)"', javascript)
-        if chunk_match:
-            shared_js = fetch_text(urllib.parse.urljoin(BLUEPRINT_APP_URL + "assets/", chunk_match.group("src")))
-            url_match = re.search(r'VITE_SUPABASE_URL:"(?P<url>https://[^"]+)"', shared_js)
-            key_match = re.search(r'VITE_SUPABASE_PUBLISHABLE_KEY:"(?P<key>[^"]+)"', shared_js)
-    if not url_match or not key_match:
-        raise ValueError("Blueprint MTG connection details could not be discovered.")
-    query = urllib.parse.urlencode({"id": f"eq.{deck_id}", "select": BLUEPRINT_DECK_SELECT})
-    request = urllib.request.Request(
-        f"{url_match.group('url')}/rest/v1/decks?{query}",
-        headers={"Accept": "application/json", "apikey": key_match.group("key")},
-    )
-    with urllib.request.urlopen(request, timeout=30) as response:
-        return json.loads(response.read().decode("utf-8"))
-
-
-def parse_archidekt_html(html: str) -> list[DeckEntry]:
-    parser = ArchidektHTMLParser()
-    parser.feed(html)
-    parser.close()
-    if not parser.decklist_json:
-        raise ValueError("The Archidekt page did not include deck data.")
-
-    try:
-        payload = json.loads(parser.decklist_json)
-    except json.JSONDecodeError as exc:
-        raise ValueError("The Archidekt deck data could not be parsed.") from exc
-
-    try:
-        card_map = payload["props"]["pageProps"]["redux"]["deck"]["cardMap"]
-    except KeyError as exc:
-        raise ValueError("The Archidekt deck data is missing its card list.") from exc
-
-    aggregated: OrderedDict[tuple[str, str | None, str | None], DeckEntry] = OrderedDict()
-    for card in card_map.values():
-        name = _normalize_card_name(str(card.get("name", "")).strip())
-        set_code = _normalize_optional_field(card.get("setCode"))
-        collector_number = _normalize_optional_field(card.get("collectorNumber"))
-        quantity = card.get("qty", 0)
-        try:
-            count = int(quantity)
-        except (TypeError, ValueError):
-            continue
-
-        if count <= 0 or not name:
-            continue
-
-        key = (name.casefold(), set_code, collector_number)
-        if key in aggregated:
-            previous = aggregated[key]
-            aggregated[key] = DeckEntry(
-                count=previous.count + count,
-                name=previous.name,
-                set_code=previous.set_code,
-                collector_number=previous.collector_number,
-            )
-        else:
-            aggregated[key] = DeckEntry(
-                count=count,
-                name=name,
-                set_code=set_code,
-                collector_number=collector_number,
-            )
-
-    return list(aggregated.values())
-
-
-def resolve_card(
-    entry: DeckEntry,
-    fetch_json: Callable[[str], dict] | None = None,
-    card_service: CardService | None = None,
-) -> dict:
-    service = card_service or _build_card_service(fetch_json)
-    set_code = entry.set_code
-    collector_number = entry.collector_number
-    # Scryfall's PLST collector-number prefixes are case-sensitive even though
-    # decklists commonly contain lowercase values such as "tmp-234".
-    if set_code and set_code.casefold() == "plst" and collector_number:
-        collector_number = collector_number.upper()
-
-    if set_code and collector_number:
-        card = service.get_print(set_code=set_code, collector_number=collector_number)
-        if card is not None:
-            return card
-    if entry.name:
-        card = service.get_card(exact_name=entry.name)
-        if card is not None and not entry.set_code:
-            return card
-    return service.fetch_missing_card(
-        exact_name=entry.name,
-        set_code=set_code,
-        collector_number=collector_number,
-    )
+def resolve_card(entry, fetch_json=None, card_service=None):
+    return core_resolve_card(entry, card_service or _build_card_service(fetch_json))
 
 
 def extract_image_url(card_data: dict) -> str | None:
@@ -830,33 +445,6 @@ def write_downloaded_image(image_dir: str, filename: str, image_bytes: bytes):
     path = os.path.join(image_dir, filename)
     with open(path, "wb") as fp:
         fp.write(image_bytes)
-
-
-def _normalize_card_name(name: str) -> str:
-    normalized = re.sub(r"\s+", " ", name.strip())
-    normalized = normalized.replace(" / ", " // ")
-    return normalized
-
-
-def _normalize_optional_field(value):
-    if value is None:
-        return None
-    normalized = str(value).strip()
-    return normalized.lower() if normalized else None
-
-
-def _looks_like_csv(deck_text: str) -> bool:
-    first_line = next((line for line in deck_text.splitlines() if line.strip()), "")
-    if "," not in first_line:
-        return False
-    normalized_headers = {
-        _normalize_csv_field_name(part) for part in first_line.split(",")
-    }
-    return "count" in normalized_headers and "name" in normalized_headers
-
-
-def _normalize_csv_field_name(value: str) -> str:
-    return value.strip().lower()
 
 
 def _format_failed_card(entry: DeckEntry) -> str:

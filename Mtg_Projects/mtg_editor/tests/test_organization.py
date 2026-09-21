@@ -67,3 +67,13 @@ def test_empty_categories_hide_without_removing_assignments_or_definitions():
     keys = [key for key, _, _ in grouped_entries(document.deck, 'Category')]
     assert 'draw' in keys and 'ramp' not in keys
     assert [key for key, _, _ in grouped_entries(document.deck, 'Category', query='missing')] == []
+
+
+def test_color_sort_wubrg_multicolor_colorless_unknown():
+    document = DeckDocument()
+    colors = [None, [], ['G', 'W'], ['G'], ['R'], ['B'], ['U'], ['W']]
+    document.deck.entries = [DeckEntry(str(i), str(i), extras={'facts': {'colors': c}})
+                             for i, c in enumerate(colors)]
+    entries = grouped_entries(document.deck, 'Section', sort='Color')
+    mainboard = next(cards for key, _, cards in entries if key == 'Mainboard')
+    assert [e.entry_id for e in mainboard] == ['7', '6', '5', '4', '3', '2', '1', '0']

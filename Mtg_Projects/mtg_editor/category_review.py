@@ -15,6 +15,8 @@ class CategoryReview(W.QDialog):
                               'Manual categories are preserved. Rule matches are explained below; no AI is used.')
         explanation.setWordWrap(True)
         layout.addWidget(explanation)
+        self.reconsider = W.QCheckBox('Reconsider manual assignments (replace my primary categories)')
+        layout.addWidget(self.reconsider)
         self.table = W.QTableWidget(len(document.deck.entries), 3)
         self.table.setHorizontalHeaderLabels(['Card', 'Categories', 'Why / source'])
         self.table.setEditTriggers(W.QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -36,6 +38,24 @@ class CategoryReview(W.QDialog):
             for column in (1, 2):
                 self.table.item(row, column).setToolTip(self.table.item(row, column).text())
         layout.addWidget(self.table, 1)
+        def toggle_manual(checked):
+            for row, entry in enumerate(document.deck.entries):
+                if not is_manual(entry) or not proposals.get(entry.entry_id):
+                    continue
+                item = self.table.item(row, 0)
+                if checked:
+                    item.setFlags(item.flags() | QtCore.Qt.ItemFlag.ItemIsUserCheckable)
+                    item.setCheckState(QtCore.Qt.CheckState.Checked)
+                    self.rows.append((row, entry.entry_id))
+                else:
+                    item.setCheckState(QtCore.Qt.CheckState.Unchecked)
+                    item.setFlags(item.flags() & ~QtCore.Qt.ItemFlag.ItemIsUserCheckable)
+                    self.rows.remove((row, entry.entry_id))
+                self.table.item(row, 1).setText(', '.join(m['name'] for m in proposals[entry.entry_id])
+                                              if checked else 'Manual — unchanged')
+                self.table.item(row, 2).setText('; '.join(m['reason'] for m in proposals[entry.entry_id])
+                                              if checked else 'Manual assignment')
+        self.reconsider.toggled.connect(toggle_manual)
         layout.addWidget(W.QLabel(f'{len(self.rows)} entries can be categorized. Uncheck any you want to leave unchanged.'))
         buttons = W.QDialogButtonBox(W.QDialogButtonBox.StandardButton.Apply | W.QDialogButtonBox.StandardButton.Cancel)
         buttons.button(W.QDialogButtonBox.StandardButton.Apply).clicked.connect(self.accept)

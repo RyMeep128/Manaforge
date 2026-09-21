@@ -109,7 +109,7 @@ Status: **[x] complete**, **[ ] planned**, **[~] partially complete**.
 ### 8. Fast editor shell
 
 - [x] Build the runnable PyQt6 Deck Editor application boundary.
-- [~] Deck header includes name, format, count, save state, Add Cards, and **Print Deck**; decklist Import UI remains.
+- [x] Deck header includes name, format, count, save state, Add Cards, Import, and **Print Deck**.
 - [x] Add responsive search-as-you-type using MTG Core.
 - [x] Add instant add/remove and quantity controls.
 - [x] Add image/grid and compact text/list views.
@@ -123,12 +123,13 @@ Status: **[x] complete**, **[ ] planned**, **[~] partially complete**.
 
 - [x] Support mainboard, commander, sideboard, considering/maybeboard, and excluded sections.
 - [x] Support grouping by type, mana value, color, custom category, and import section.
-- [~] Sort by name, mana value, quantity, and import order; color sorting remains.
+- [x] Sort by name, mana value, color, quantity, and import order.
 - [x] Create, rename, reorder, and delete custom categories.
 - [x] Drag cards between sections and categories.
 - [x] Allow one primary category and multiple functional/user tags per card.
-- [ ] Add reusable category templates such as Ramp, Draw, Removal, Wipes, Protection, Recursion, Win Conditions, and Lands.
-- [x] Add deterministic local Oracle Tag/text/keyword/type categorization, reviewable bulk application, manual override protection, and Undo/Redo. Category template editing and aggregate recommendations remain separate work.
+- [x] Add reusable category templates such as Ramp, Draw, Removal, Wipes, Protection, Recursion, Win Conditions, and Lands. Save/update a deck's category layout and apply it to another deck without changing card assignments.
+- [x] Add deterministic local Oracle Tag/text/keyword/type categorization, reviewable bulk application, manual override protection, and Undo/Redo. Aggregate recommendations remain separate work.
+- [x] Add radial batch primary-category/tag editing, Auto/Manual badges, automatic organization on opening imported decks, and explicit reconsideration of manual assignments.
 - [x] Support multi-select and bulk section/category/tag changes.
 
 **Exit gate:** Users can organize a Commander deck without changing its printed quantities accidentally.
@@ -137,10 +138,11 @@ Status: **[x] complete**, **[ ] planned**, **[~] partially complete**.
 
 - [x] Core proxy workflow accepts pasted names with or without a leading quantity.
 - [~] Text/file/CSV and public deck-site imports exist in the proxy workflow.
-- [ ] Move shared import parsing and resolution into Core for reuse by the editor.
-- [ ] Preserve source sections, quantities, set codes, collector numbers, and art when supplied.
-- [ ] Support public Moxfield, Archidekt, Blueprint MTG, and other chosen sources through tested adapters.
-- [ ] Export common text formats with optional set/collector data and sections.
+- [x] Move shared text/CSV import parsing and card resolution into Core for reuse by the editor; keep Proxy compatibility wrappers.
+- [x] Add editor paste/file import with background resolution, progress, cancellation, unresolved-line review, automatic categorization, and one-step Undo.
+- [~] Preserve sections, quantities, set codes, collector numbers, and explicit Scryfall printing/art choices in editor imports. Arbitrary custom-art image overrides from external sites remain unsupported.
+- [x] Support public Moxfield, Archidekt, and Blueprint MTG in the editor through shared Core adapters, with fixture-tested section/printing preservation, cancellation, and error handling. Live availability depends on each site's public endpoints.
+- [x] Export quantity/name text with optional set/collector data and sections; preview, clipboard copy, and file saving.
 - [ ] Add Commander selection and partner/background rules.
 - [ ] Validate deck size, singleton rules, color identity, banned lists, and format legality.
 - [ ] Version or date legality data and explain stale/unknown results.

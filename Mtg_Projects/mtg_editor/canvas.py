@@ -4,6 +4,7 @@ from PyQt6 import QtCore as C, QtGui as G, QtWidgets as W
 from mtg_ui.cards import rounded_card, drag_ghost
 from mtg_ui.theme import COLORS
 from .organization import grouped_entries
+from mtg_core.categorization import is_manual
 
 
 class CardCanvas(W.QAbstractScrollArea):
@@ -11,6 +12,7 @@ class CardCanvas(W.QAbstractScrollArea):
     quantityRequested = C.pyqtSignal(str, int)
     artworkRequested = C.pyqtSignal(str)
     menuRequested = C.pyqtSignal(str, object)
+    quickTagRequested = C.pyqtSignal(object)
     moveRequested = C.pyqtSignal(object, str, object)
     preferencesChanged = C.pyqtSignal()
     addRequested = C.pyqtSignal()
@@ -138,6 +140,11 @@ class CardCanvas(W.QAbstractScrollArea):
             p.fillRect(badge, G.QColor('#20352f'))
             p.setPen(G.QColor('white'))
             p.drawText(badge, C.Qt.AlignmentFlag.AlignCenter, str(entry.quantity))
+            if not self.search_mode and (entry.category_ids or entry.extras.get('auto_categories')):
+                source = 'Manual' if is_manual(entry) else 'Auto'
+                source_rect = C.QRect(rect.x()+48, rect.y()+4, 54, 24)
+                p.fillRect(source_rect, G.QColor('#69458a' if source == 'Manual' else '#20352f'))
+                p.drawText(source_rect, C.Qt.AlignmentFlag.AlignCenter, source)
             if entry.entry_id == self.hovered or entry.entry_id in self.selected:
                 control = self.control_rect(rect)
                 p.fillRect(control, G.QColor('#20352f'))
@@ -171,6 +178,15 @@ class CardCanvas(W.QAbstractScrollArea):
         self.setFocus()
         self.hover_timer.stop()
         self.preview.hide()
+        if event.button() == C.Qt.MouseButton.RightButton and not self.search_mode:
+            item = self.hit(event.position().toPoint())
+            if item and not event.modifiers() & C.Qt.KeyboardModifier.ShiftModifier:
+                if item[0].entry_id not in self.selected:
+                    self.selected = {item[0].entry_id}
+                self.selectionChanged.emit()
+                self.viewport().update()
+                self.quickTagRequested.emit(event.globalPosition().toPoint())
+                return
         if event.button() != C.Qt.MouseButton.LeftButton:
             return
         header = self.header_at(event.position().toPoint())
@@ -269,6 +285,9 @@ class CardCanvas(W.QAbstractScrollArea):
         self.preview.show()
 
     def contextMenuEvent(self, event):
+        if not self.search_mode and not event.modifiers() & C.Qt.KeyboardModifier.ShiftModifier:
+            event.accept()
+            return
         self.hover_timer.stop()
         self.preview.hide()
         item = self.hit(event.pos())
@@ -280,7 +299,10 @@ class CardCanvas(W.QAbstractScrollArea):
             self.viewport().update()
 
     def keyPressEvent(self, event):
-        if event.matches(G.QKeySequence.StandardKey.SelectAll):
+        if event.key() == C.Qt.Key.Key_T and not event.modifiers() and self.selected and not self.search_mode:
+            if not event.isAutoRepeat():
+                self.quickTagRequested.emit(G.QCursor.pos())
+        elif event.matches(G.QKeySequence.StandardKey.SelectAll):
             self.selected = {e.entry_id for e, _, _ in self.items}
             self.selectionChanged.emit()
             self.viewport().update()

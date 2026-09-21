@@ -2,7 +2,7 @@
 SECTIONS = {'mainboard': 'Mainboard', 'commander': 'Commander', 'sideboard': 'Sideboard',
             'considering': 'Considering', 'excluded': 'Excluded'}
 GROUPS = ['Type', 'Mana Value', 'Color', 'Category', 'Section']
-SORTS = ['Name', 'Mana Value', 'Quantity', 'Import Order']
+SORTS = ['Name', 'Mana Value', 'Color', 'Quantity', 'Import Order']
 
 
 def card_facts(payload):
@@ -59,6 +59,11 @@ def grouped_entries(deck, grouping='Type', sort='Name', query='', show_empty_cat
             return (0, order.index(key) if key in order else len(order), key)
         return (0, 0, key)
     def entry_order(e):
+        if sort == 'Color':
+            colors = e.extras.get('facts', {}).get('colors')
+            ranks = tuple(i for i, color in enumerate('WUBRG') if color in (colors or []))
+            group = 3 if colors is None else (0 if len(ranks) == 1 else 1 if ranks else 2)
+            return (group, ranks, e.name.casefold(), e.entry_id)
         if sort == 'Quantity':
             return (-e.quantity, e.name.casefold(), e.entry_id)
         if sort == 'Mana Value':

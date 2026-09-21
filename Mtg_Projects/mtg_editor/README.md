@@ -15,17 +15,32 @@ remaining window space, and the toolbars wrap on smaller screens.
   control to add that exact printing. Closing the panel retains its search and scroll.
 - Group by **Type**, **Mana Value**, **Color**, **Category**, or **Section**. Commander
   cards appear first. Group headings show quantities and can be collapsed.
-- Sort by **Name**, **Mana Value**, **Quantity**, or **Import Order**. Filter the deck
+- Sort by **Name**, **Mana Value**, **Color**, **Quantity**, or **Import Order**. Color
+  sorting orders white, blue, black, red, green, multicolor, colorless, then unknown.
+  Filter the deck
   by name or user tag and adjust image sizes with the slider.
 - Click cards to select; Ctrl-click toggles selection, Shift-click selects a range,
   and Ctrl+A selects visible cards. Hover reveals quantity controls and a larger preview.
   Double-click a deck card to open the shared Proxy artwork picker.
-- Right-click for artwork, Oracle/user tags, section/category assignment, commander
+- Right-click a card, hold **T** with cards selected, or click **Quick tags** to open
+  the radial menu. Move toward a role and release, or click a role after opening.
+  **Primary** mode replaces the primary category; **Tab** or the mode wedge switches
+  to purple **Secondary tags** mode, which adds/removes tags without changing categories.
+  Mixed selections add a tag to all; when all have it, the same action removes it.
+  **More…** includes other roles, custom categories/tags, and creating a new one.
+  **Esc** cancels. The six common roles keep fixed positions for muscle memory.
+- Shift+right-click for artwork, Oracle/user tags, section/category assignment, commander
   assignment, oversized/normal size, owned/do-not-print, retry artwork, and removal.
   Bulk actions affect all selected entries in one Undo step.
 - **More > Manage categories** creates, renames, reorders, and deletes categories.
   Deleting a category preserves its cards. The first category association is primary;
   additional associations survive changing the primary category.
+- **More > Category templates** provides **Commander essentials** and saved personal
+  layouts. Save the current deck's category list to reuse its names and order in
+  another deck; save under the same name to update a template after editing categories.
+  Applying adds missing categories, preserves existing categories and assignments,
+  and shows empty category columns. Apply is one Undo step. Saving a personal template
+  takes effect immediately, independently of applying it to a deck.
 - Drag selections onto section/category headings or cards to assign them. With
   Import Order sorting, dropping before a card also reorders the selection. Derived
   groups such as Type do not accept reassignment; reordering within the same group
@@ -38,6 +53,37 @@ Images load from Core's cache first. Only visible images and a small prefetch ma
 can request missing artwork, in the background. Search itself stays local. Failed
 images show a placeholder with a right-click retry action; rate limits delay further
 requests. Selected alternate artwork takes precedence over a printing's normal art.
+
+## Import and export decklists
+
+**Import** accepts pasted lists, text/CSV files, and public deck URLs. Use section headings such as
+`Commander`, `Deck`, `Sideboard`, `Maybeboard`, and `Excluded`; `SB:` and `CMDR:`
+prefixes apply to individual lines. Names may have a quantity and optional printing,
+for example `1 Sol Ring (cmm) 410`. CSV supports `name`, `count` (or `quantity`),
+and optional `section`, `set_code`, and `collector_number` columns.
+
+Click **Review import** to resolve cards against the local catalog. Enable
+**Fetch missing cards online** if desired. Resolution runs in the background;
+Cancel waits for the current lookup to finish and discards the import. Review the
+resolved cards and unresolved lines, then click **Import reviewed cards**. Only
+resolved cards are added. An unavailable exact printing is reported instead of
+silently replaced. Imports preserve sections and quantities, categorize new entries,
+and apply as one Undo operation. Existing manual categories are preserved when
+quantities merge. Artwork downloads continue through the normal thumbnail workflow.
+
+**More > Export decklist** previews quantity/name text with optional sections and
+set/collector numbers. Copy it or save a text file. This format does not carry custom
+artwork, tags, or category assignments; native deck files retain that information.
+
+Choose **Public deck URL** in Import to load a public Moxfield, Archidekt, or
+Blueprint MTG deck. **Review import** downloads the deck data; **Fetch missing cards
+online** separately controls card lookups. Supported source sections, quantities,
+set/collector numbers, and explicit Scryfall printing IDs are preserved. Commander
+entries remain commanders; sideboards and considering lists stay separate. Exact
+printing IDs preserve that printing's artwork. Arbitrary custom-image overrides
+are not imported. Private/unavailable decks and changed source formats show errors;
+no cards are applied until you accept a successful preview. These adapters are
+covered by payload-fixture tests; source availability is not guaranteed.
 
 ## Save and recover
 
@@ -58,7 +104,12 @@ and bulk changes. View changes do not roll back when undoing a deck edit.
 
 ## Automatic categories
 
-New cards added through search receive categories automatically. For an existing
+New cards added through search and uncategorized cards in opened/imported decks
+receive categories automatically from local card data. New decks open in category
+stacks; saved view preferences remain respected. **Auto** and **Manual** badges show
+assignment sources. Manual corrections survive subsequent categorization and saving.
+To explicitly replace them, enable **Reconsider manual assignments** in the review.
+For an existing
 deck, choose **More → Auto Categorize…**, review the proposed roles and their
 sources, and click **Apply**. Uncheck any entries to leave them unchanged. Switch
 to **Category** grouping to see the results; new decks use this grouping by default.
@@ -129,7 +180,8 @@ Concurrent changes are not synchronized live between the two applications.
 
 Ctrl+N: New; Ctrl+O: Open; Ctrl+S: Save; Ctrl+Z: Undo;
 Ctrl+Y/Ctrl+Shift+Z: Redo; Ctrl+F: deck filter; Ctrl+K: Add Cards;
-Ctrl+A: select visible cards; Delete: remove selection.
+Ctrl+A: select visible cards; Delete: remove selection; hold T: quick tagging;
+Tab in the radial menu: switch primary/category tag mode; Esc: cancel.
 
-Decklist import UI, legality analysis, category templates, statistics, and playtesting
+Commander legality analysis, statistics, and playtesting
 remain on the roadmap. The compact table is available under **More**.

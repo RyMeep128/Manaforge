@@ -140,14 +140,18 @@ class EditorWindow(W.QMainWindow):
         bar.addWidget(self.save_status)
         self.button(bar, 'Save', self.save)
         self.add_button = self.button(bar, '+ Add Cards', self.toggle_search, True)
+        self.button(bar, 'Import', self.import_decklist)
         self.button(bar, 'Print Deck', self.print_deck, True)
         more = W.QToolButton()
         more.setText('More')
         more.setPopupMode(W.QToolButton.ToolButtonPopupMode.InstantPopup)
         menu = W.QMenu(more)
         menu.addAction('Compact table', self.show_table)
+        menu.addAction('Export decklist…', self.export_decklist)
         menu.addAction('Manage categories…', self.manage_categories)
+        menu.addAction('Category templates…', self.category_templates)
         menu.addAction('Auto Categorize…', self.auto_categorize)
+        menu.addAction('Quick category / tags (hold T)', lambda: self.quick_tag(QtGui.QCursor.pos()))
         self.show_empty_categories = menu.addAction('Show empty categories')
         self.show_empty_categories.setCheckable(True)
         self.show_empty_categories.toggled.connect(self.toggle_empty_categories)
@@ -194,6 +198,8 @@ class EditorWindow(W.QMainWindow):
         row.addWidget(self.zoom)
         self.selection_label = W.QLabel('')
         row.addWidget(self.selection_label)
+        self.quick_tag_button = self.button(row, 'Quick tags', lambda: self.quick_tag(QtGui.QCursor.pos()))
+        self.quick_tag_button.setToolTip('Replace primary category or toggle secondary tags for selected cards')
         self.control_overflow = [self.filter, self.zoom, self.selection_label]
         layout.addWidget(controls)
         self.splitter = W.QSplitter()
@@ -227,6 +233,8 @@ class EditorWindow(W.QMainWindow):
         self.grid.quantityRequested.connect(self.change_quantity)
         self.grid.artworkRequested.connect(self.replace_artwork)
         self.grid.menuRequested.connect(self.card_menu)
+        self.grid.quickTagRequested.connect(self.quick_tag)
+        self.grid.setToolTip('Right-click or hold T: quick category / tags. Shift+right-click: card actions.')
         self.grid.moveRequested.connect(self.move_cards)
         self.grid.preferencesChanged.connect(self.preferences_changed)
         self.grid.addRequested.connect(self.open_search)
@@ -236,6 +244,8 @@ class EditorWindow(W.QMainWindow):
         self.table.setSelectionBehavior(W.QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(W.QAbstractItemView.SelectionMode.ExtendedSelection)
         self.table.selectionModel().selectionChanged.connect(self.table_selection_changed)
+        self.table.installEventFilter(self)
+        self.table.viewport().installEventFilter(self)
         self._refreshing_table = False
         self.table.horizontalHeader().setSectionResizeMode(1, W.QHeaderView.ResizeMode.Stretch)
         self.views = W.QStackedWidget()
@@ -325,6 +335,25 @@ class EditorWindow(W.QMainWindow):
     def selection_changed(self):
         count = len(self.grid.selected)
         self.selection_label.setText(f'{count} selected' if count else '')
+        self.quick_tag_button.setEnabled(bool(count))
+
+    def eventFilter(self, watched, event):
+        if watched in (self.table, self.table.viewport()):
+            if (event.type() == QtCore.QEvent.Type.KeyPress and event.key() == QtCore.Qt.Key.Key_T
+                    and not event.modifiers() and self.grid.selected):
+                if not event.isAutoRepeat():
+                    self.quick_tag(QtGui.QCursor.pos())
+                return True
+            if (event.type() == QtCore.QEvent.Type.MouseButtonPress
+                    and event.button() == QtCore.Qt.MouseButton.RightButton):
+                index = self.table.indexAt(event.position().toPoint())
+                if index.isValid():
+                    entry_id = self.document.deck.entries[index.row()].entry_id
+                    if entry_id not in self.grid.selected:
+                        self.table.selectRow(index.row())
+                    self.quick_tag(event.globalPosition().toPoint())
+                    return True
+        return super().eventFilter(watched, event)
 
     def show_table(self):
         self.views.setCurrentWidget(self.table)
@@ -450,10 +479,31 @@ class EditorWindow(W.QMainWindow):
     def move_cards(self, ids, target, before):
         self.edit(lambda d: move_entries(d, ids, self.grid.grouping, target, before))
 
+    def quick_tag(self, position):
+        from .quick_tags import QuickTagMenu, apply_quick_role
+        ids = set(self.grid.selected)
+        if not ids:
+            self.statusBar().showMessage('Select cards to categorize or tag.', 4000)
+            return
+        self.grid.hover_timer.stop()
+        self.grid.preview.hide()
+        previous = getattr(self, 'quick_menu', None)
+        if previous is not None:
+            previous.close()
+            previous.deleteLater()
+        self.quick_menu = QuickTagMenu(self.document, ids, self)
+        def apply(name, tags):
+            self.edit(lambda d: apply_quick_role(d, ids, name, tags))
+            self.statusBar().showMessage(f'Updated {len(ids)} cards: ' +
+                ('secondary tags' if tags else 'manual primary category') + '. Undo is available.', 5000)
+        self.quick_menu.chosen.connect(apply)
+        self.quick_menu.popup(position)
+
     def card_menu(self, entry_id, position):
         ids = set(self.grid.selected) or {entry_id}
         entry = next(e for e in self.document.deck.entries if e.entry_id == entry_id)
         menu = W.QMenu(self)
+        menu.addAction('Quick category / tags', lambda: self.quick_tag(position))
         menu.addAction('Replace artwork…', lambda: self.replace_artwork(entry_id)).setEnabled(len(ids) == 1)
         menu.addAction('View Oracle tags…', lambda: self.view_tags(entry))
         menu.addAction('Edit user tags…', lambda: self.edit_tags(ids, entry.tags))
@@ -499,6 +549,35 @@ class EditorWindow(W.QMainWindow):
                 self.open_search()
                 self.query.setText('otag:' + dialog.selected_tag)
         self.run_task(lambda: self.service.database.oracle_tags_for_card(entry.oracle_id) if entry.oracle_id else [], show)
+
+    def import_decklist(self):
+        from .decklist_dialogs import ImportDecklist
+        from mtg_core.decklists import apply_decklist
+        if self.task is not None:
+            return
+        dialog = ImportDecklist(self.service, self)
+        if dialog.exec() == W.QDialog.DialogCode.Accepted and dialog.result:
+            self.edit(lambda d: apply_decklist(d, dialog.result))
+            self.group.setCurrentText('Category')
+            self.statusBar().showMessage('Decklist imported and categorized. Undo is available.', 6000)
+
+    def export_decklist(self):
+        from .decklist_dialogs import ExportDecklist
+        ExportDecklist(self.document, self).exec()
+
+    def category_templates(self):
+        from .category_templates import CategoryTemplates, TemplateStore, apply_template
+        try:
+            dialog = CategoryTemplates(self.document, TemplateStore(self.root / 'category_templates.json'), self)
+        except (OSError, ValueError) as exc:
+            W.QMessageBox.warning(self, 'Could not load templates', str(exc))
+            return
+        if dialog.exec() == W.QDialog.DialogCode.Accepted:
+            names = dialog.selected_names()
+            self.edit(lambda d: apply_template(d, names))
+            self.group.setCurrentText('Category')
+            self.show_empty_categories.setChecked(True)
+            self.statusBar().showMessage('Category template applied. Card assignments preserved; Undo is available.', 6000)
 
     def manage_categories(self):
         dialog = W.QDialog(self)
@@ -557,7 +636,8 @@ class EditorWindow(W.QMainWindow):
             dialog = CategoryReview(self.document, proposals, self)
             if dialog.exec() == W.QDialog.DialogCode.Accepted:
                 selected = dialog.selected_proposals()
-                self.edit(lambda document: apply_categories(document, selected))
+                self.edit(lambda document: apply_categories(document, selected,
+                          reconsider_manual=dialog.reconsider.isChecked()))
                 self.group.setCurrentText('Category')
                 self.statusBar().showMessage(f'Categorized {len(selected)} entries. Undo is available.', 8000)
         self.run_task(lambda: analyze_entries(self.service.database, entries), review)
@@ -669,7 +749,7 @@ class EditorWindow(W.QMainWindow):
         self.format.setCurrentText(self.document.deck.format)
         prefs = self.document.editor_preferences
         self.show_empty_categories.setChecked(prefs.get('show_empty_categories', False))
-        self.view_mode.setCurrentText(prefs.get('view', 'Grid'))
+        self.view_mode.setCurrentText(prefs.get('view', 'Stacks'))
         self.group.setCurrentText(prefs.get('group', 'Category'))
         self.sort.setCurrentText(prefs.get('sort', 'Name'))
         self.zoom.setValue(prefs.get('card_width', 180))
@@ -708,24 +788,30 @@ class EditorWindow(W.QMainWindow):
         legacy_folder = document.print_settings.get('proxy_project', {}).get('image_dir')
         missing = [(e.entry_id, e.card_id, e.extras.get('proxy_front_name'), e.image_asset_id)
                    for e in document.deck.entries if (e.card_id and not e.extras.get('facts')) or (legacy_folder and not e.image_asset_id)]
-        if missing and hasattr(self.service, 'get_card'):
+        uncategorized = [deepcopy(e) for e in document.deck.entries
+                         if not e.category_ids and not e.extras.get('auto_categories')]
+        can_analyze = hasattr(getattr(self.service, 'database', None), 'categorization_data')
+        if (missing and hasattr(self.service, 'get_card')) or (uncategorized and can_analyze):
             def resolve():
                 result = {}
                 for eid, cid, front_name, asset in missing:
-                    facts = card_facts(self.service.get_card(card_id=cid) or {}) if cid else {}
+                    facts = card_facts(self.service.get_card(card_id=cid) or {}) if cid and hasattr(self.service, 'get_card') else {}
                     if not asset and legacy_folder and front_name:
                         path = Path(legacy_folder) / Path(front_name).name
                         if path.is_file():
                             asset = self.service.store_image_bytes(path.read_bytes(),
                                 extension=path.suffix.lstrip('.') or 'png', source='editor_legacy')
                     result[eid] = facts, asset
-                return result
+                proposals = analyze_entries(self.service.database, uncategorized) if can_analyze else {}
+                return result, proposals
             def apply(resolved):
+                resolved, proposals = resolved
                 for entry in self.document.deck.entries:
                     if entry.entry_id in resolved:
                         facts, asset = resolved[entry.entry_id]
                         entry.extras['facts'] = facts
                         entry.image_asset_id = asset
+                self.edit(lambda d: apply_categories(d, proposals))
                 self.changed()
             self.run_task(resolve, apply)
 

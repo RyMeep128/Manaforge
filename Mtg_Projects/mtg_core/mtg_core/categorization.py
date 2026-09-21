@@ -63,11 +63,11 @@ def is_manual(entry):
     return bool(record.get('manual') or (entry.category_ids and not record))
 
 
-def apply_categories(document, proposals):
+def apply_categories(document, proposals, reconsider_manual=False):
     """Apply entry-id -> evidence in the caller's transaction, protecting manual work."""
     for entry in document.deck.entries:
         evidence = proposals.get(entry.entry_id)
-        if not evidence or is_manual(entry):
+        if not evidence or (is_manual(entry) and not reconsider_manual):
             continue
         categories = document.deck.categories
         previous = entry.extras.get('auto_categories', {}).get('managed_ids', [])

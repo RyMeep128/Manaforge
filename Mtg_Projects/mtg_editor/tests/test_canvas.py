@@ -10,6 +10,7 @@ from mtg_editor.gui import EditorWindow
 def window(tmp_path):
     app = W.QApplication.instance() or W.QApplication([])
     window = EditorWindow(service=object(), root=tmp_path)
+    window.view_mode.setCurrentText('Grid')
     pixmap = G.QPixmap(180, 252)
     pixmap.fill(G.QColor('darkgreen'))
     for i in range(12):
