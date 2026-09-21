@@ -57,7 +57,8 @@ class CardCanvas(W.QAbstractScrollArea):
             cw = min(cw, (width-48)//2)
         ch = int(cw * 1.4)
         groups = [('Search', 'Results', self.document.deck.entries)] if self.search_mode else grouped_entries(
-            self.document.deck, self.grouping, self.sort, self.query)
+            self.document.deck, self.grouping, self.sort, self.query,
+            show_empty_categories=self.document.editor_preferences.get('show_empty_categories', False))
         y, x = 12, 16
         columns = max(1, (width - 16) // (cw + 16))
         row_bottom = y

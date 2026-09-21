@@ -33,7 +33,7 @@ def group_key(entry, grouping):
                             'Sorcery', 'Artifact', 'Enchantment') if t in line), 'Other')
 
 
-def grouped_entries(deck, grouping='Type', sort='Name', query=''):
+def grouped_entries(deck, grouping='Type', sort='Name', query='', show_empty_categories=False):
     categories = {c.category_id: c for c in deck.categories}
     groups = {}
     for entry in deck.entries:
@@ -43,7 +43,7 @@ def grouped_entries(deck, grouping='Type', sort='Name', query=''):
     if grouping == 'Section':
         for label in SECTIONS.values():
             groups.setdefault(label, [])
-    if grouping == 'Category':
+    if grouping == 'Category' and show_empty_categories:
         for key in categories:
             groups.setdefault(key, [])
         groups.setdefault('Uncategorized', [])

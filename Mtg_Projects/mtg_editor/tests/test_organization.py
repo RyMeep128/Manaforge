@@ -55,3 +55,15 @@ def test_move_primary_category_retains_extra_categories_and_commander_ids():
     assert not document.deck.commander_entry_ids
     assign(document, {'a', 'b'}, 'section', 'commander')
     assert document.deck.commander_entry_ids == ['a', 'b']
+
+
+def test_empty_categories_hide_without_removing_assignments_or_definitions():
+    document = deck()
+    before = document.to_dict()
+    assert [key for key, _, _ in grouped_entries(document.deck, 'Category')] == ['Commander', 'ramp', 'Uncategorized']
+    assert 'draw' in [key for key, _, _ in grouped_entries(document.deck, 'Category', show_empty_categories=True)]
+    assert document.to_dict() == before
+    assign(document, {'a'}, 'category', 'draw')
+    keys = [key for key, _, _ in grouped_entries(document.deck, 'Category')]
+    assert 'draw' in keys and 'ramp' not in keys
+    assert [key for key, _, _ in grouped_entries(document.deck, 'Category', query='missing')] == []

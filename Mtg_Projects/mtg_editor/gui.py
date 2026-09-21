@@ -148,6 +148,9 @@ class EditorWindow(W.QMainWindow):
         menu.addAction('Compact table', self.show_table)
         menu.addAction('Manage categories…', self.manage_categories)
         menu.addAction('Auto Categorize…', self.auto_categorize)
+        self.show_empty_categories = menu.addAction('Show empty categories')
+        self.show_empty_categories.setCheckable(True)
+        self.show_empty_categories.toggled.connect(self.toggle_empty_categories)
         menu.addAction('Deck description…', self.edit_description)
         menu.addAction('Restore recovery snapshot…', self.recover)
         menu.addAction('Open deck…', self.open)
@@ -654,13 +657,18 @@ class EditorWindow(W.QMainWindow):
         self.sync_fields()
         self.changed()
 
+    def toggle_empty_categories(self, visible):
+        self.document.editor_preferences['show_empty_categories'] = visible
+        self.changed()
+
     def sync_fields(self):
-        blockers = [QtCore.QSignalBlocker(w) for w in (self.name, self.format, self.view_mode, self.group, self.sort, self.zoom)]
+        blockers = [QtCore.QSignalBlocker(w) for w in (self.name, self.format, self.view_mode, self.group, self.sort, self.zoom, self.show_empty_categories)]
         self.name.setText(self.document.deck.name)
         if self.format.findText(self.document.deck.format) < 0:
             self.format.addItem(self.document.deck.format)
         self.format.setCurrentText(self.document.deck.format)
         prefs = self.document.editor_preferences
+        self.show_empty_categories.setChecked(prefs.get('show_empty_categories', False))
         self.view_mode.setCurrentText(prefs.get('view', 'Grid'))
         self.group.setCurrentText(prefs.get('group', 'Category'))
         self.sort.setCurrentText(prefs.get('sort', 'Name'))

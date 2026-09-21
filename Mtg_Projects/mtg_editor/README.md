@@ -63,6 +63,10 @@ deck, choose **More → Auto Categorize…**, review the proposed roles and thei
 sources, and click **Apply**. Uncheck any entries to leave them unchanged. Switch
 to **Category** grouping to see the results; new decks use this grouping by default.
 Apply is one Undo/Redo operation, and category assignments persist with the deck.
+Empty categories are hidden automatically, including old categories left behind
+by reclassification. They remain available in assignment menus and Manage categories.
+Use **More → Show empty categories** to reveal them as drag destinations; this view
+preference is saved with the deck. Categories reappear when cards are assigned to them.
 
 This uses only local database data: no AI, remote inference, or popularity guesses.
 The explicit rules live in `mtg_core/categorization.py` and `category_rules.py`.

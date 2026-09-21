@@ -74,3 +74,26 @@ def test_search_worker_enriches_results_locally_without_changing_payload():
     assert observed[0][1] == ''
     assert observed[0][0][0].payload['_category_evidence'][0]['name'] == 'Ramp'
     assert '_category_evidence' not in original.payload
+
+
+def test_show_empty_categories_preference_and_canvas(tmp_path):
+    from mtg_editor.gui import EditorWindow
+    from mtg_core.decks import DeckCategory
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    window = EditorWindow(service=object(), root=tmp_path)
+    window.document.deck.categories = [DeckCategory('empty', 'Old automatic category')]
+    window.changed()
+    assert not window.grid.headers
+    window.show_empty_categories.setChecked(True)
+    assert 'empty' in [h[0] for h in window.grid.headers]
+    assert window.save()
+    path = window.path
+    window.new()
+    window.open_path(path)
+    assert window.show_empty_categories.isChecked()
+    window.show_empty_categories.setChecked(False)
+    assert not window.grid.headers
+    assert window.document.deck.categories[0].category_id == 'empty'
+    window.saved = window.document.to_dict()
+    window.close()
+    app.processEvents()
