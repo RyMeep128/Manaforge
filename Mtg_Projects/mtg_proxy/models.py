@@ -181,6 +181,8 @@ class ProjectCardEntry:
     oversized: bool = False
     do_not_print: bool = False
     metadata: CardMetadata = field(default_factory=CardMetadata)
+    pre_cropped: bool = False
+    backside_pre_cropped: bool = False
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any] | None) -> "ProjectCardEntry":
@@ -198,6 +200,8 @@ class ProjectCardEntry:
             oversized=bool(data.get("oversized", False)),
             do_not_print=bool(data.get("do_not_print", False)),
             metadata=CardMetadata.from_dict(data.get("metadata")),
+            pre_cropped=bool(data.get("pre_cropped", False)),
+            backside_pre_cropped=bool(data.get("backside_pre_cropped", False)),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -209,6 +213,8 @@ class ProjectCardEntry:
             "oversized": self.oversized,
             "do_not_print": self.do_not_print,
             "metadata": self.metadata.to_dict(),
+            "pre_cropped": self.pre_cropped,
+            "backside_pre_cropped": self.backside_pre_cropped,
         }
         optional_fields = {
             "card_id": self.card_id,
@@ -318,7 +324,8 @@ class ProjectState:
             entry.sort_order = old.sort_order
             preserved = {key: deepcopy(value) for key, value in old.extras.items()
                          if key not in {"proxy_front_name", "oversized", "backside_name",
-                                        "backside_asset_id", "backside_short_edge", "art_override"}}
+                                        "backside_asset_id", "backside_short_edge", "art_override",
+                                        "pre_cropped", "backside_pre_cropped"}}
             entry.extras.update(preserved)
         migrated.deck.deck_id = current.deck.deck_id
         migrated.deck.format = current.deck.format
@@ -333,7 +340,6 @@ class ProjectState:
         migrated.editor_preferences = deepcopy(current.editor_preferences)
         migrated.extras = deepcopy(current.extras)
         migrated.print_settings = {}
-        self.deck_document = migrated
         return migrated
 
     def to_dict(self) -> dict[str, Any]:

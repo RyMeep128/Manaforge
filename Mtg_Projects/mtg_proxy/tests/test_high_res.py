@@ -814,6 +814,20 @@ def test_apply_high_res_candidate_crops_mpcfill_art_before_writing(monkeypatch, 
 
     assert (tmp_path / "scryfall_eld_59_opt.png").read_bytes() == b"cropped-bytes"
     assert print_dict["high_res_front_overrides"]["scryfall_eld_59_opt.png"]["art_source"] == "mpcfill"
+    assert print_dict['card_entries'][0]['pre_cropped']
+
+
+def test_scryfall_replacement_keeps_card_sized_bytes_with_unique_name(tmp_path):
+    candidate = high_res.HighResCandidate(
+        identifier='printing', name='Example', dpi=300, extension='png',
+        download_link='https://example.invalid/card.png', small_thumbnail_url='',
+        medium_thumbnail_url='', source_id=0, source_name='Scryfall',
+        art_source=high_res.NEW_ART_SOURCE_SCRYFALL)
+    project = {'cards': {'entry-id.png': 1}}
+    high_res.apply_high_res_candidate(project, str(tmp_path), 'entry-id.png', candidate,
+                                      fetch_bytes=lambda url: VALID_PNG_BYTES)
+    assert (tmp_path / 'entry-id.png').read_bytes() == VALID_PNG_BYTES
+    assert project['card_entries'][0]['pre_cropped']
 
 
 def test_download_high_res_image_falls_back_to_drive_identifier():

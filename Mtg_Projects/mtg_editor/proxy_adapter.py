@@ -23,6 +23,10 @@ def project_payload(document, base=None):
         adapter.print_settings['proxy_project'] = deepcopy(base)
     # Stable unique filenames also distinguish two entries of the same printing.
     for entry in adapter.deck.entries:
+        # New catalog entries use card-sized images. Legacy/custom sources retain
+        # their explicit metadata or the printer's filename compatibility rule.
+        entry.extras.setdefault('pre_cropped', bool(entry.card_id
+            and not entry.extras.get('art_override') and not entry.extras.get('proxy_front_name')))
         entry.extras.setdefault('proxy_front_name', f'{entry.entry_id}.png')
     payload = adapter.apply_to_legacy_proxy()
     by_id = {e.entry_id: e for e in adapter.deck.entries}
@@ -68,6 +72,7 @@ def apply_art(selection):
         high_res.apply_high_res_candidate(state, folder, name, candidate, backside_match=back)
     entry = state.get_card_entry(name)
     return dict(image_asset_id=entry.image_asset_id,
+                pre_cropped=entry.pre_cropped, backside_pre_cropped=entry.backside_pre_cropped,
                 backside_name=entry.backside_name, backside_asset_id=entry.backside_asset_id,
                 art_override=state.high_res_front_overrides_dict().get(name))
 
@@ -112,6 +117,10 @@ def prepare_print(document, service, sections):
                     imported, back_name = deck_import.download_card_image_set(
                         card, deck_import.DeckEntry(entry.quantity, entry.name, entry.set_code, entry.collector_number),
                         folder, lambda message: None, service.fetch_bytes_fn, card_service=service)
+                    if not raw.get('image_asset_id'):
+                        raw['pre_cropped'] = True
+                    if not raw.get('backside_asset_id') and imported.backside_asset_id:
+                        raw['backside_pre_cropped'] = True
                     raw['image_asset_id'] = raw.get('image_asset_id') or imported.image_asset_id
                     raw['backside_asset_id'] = raw.get('backside_asset_id') or imported.backside_asset_id
                     raw['backside_name'] = raw.get('backside_name') or back_name

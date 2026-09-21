@@ -179,6 +179,7 @@ def _asset_key(state: ProjectState, card_name: str) -> str:
 def _processing_fingerprint(state: ProjectState, card_name: str) -> str:
     payload = {
         "card_name": card_name,
+        "pre_cropped": is_pre_cropped(state, card_name),
         "bleed_edge": str(state.bleed_edge),
         "vibrance": bool(CFG.VibranceBump),
         "max_dpi": int(CFG.MaxDPI) if CFG.MaxDPI is not None else None,
@@ -206,7 +207,14 @@ def get_source_path(project_like, card_name: str) -> str | None:
     return _local_source_path(state, label_name or card_name)
 
 
-def _write_processed_image(path: str, source_path: str, card_name: str, bleed_edge: float) -> str | None:
+def is_pre_cropped(state: ProjectState, card_name: str) -> bool:
+    entry, side = _entry_by_front_or_back(state, card_name)
+    explicit = entry and (entry.backside_pre_cropped if side == 'back' else entry.pre_cropped)
+    return bool(explicit or image.is_pre_cropped_image_name(card_name))
+
+
+def _write_processed_image(path: str, source_path: str, card_name: str, bleed_edge: float,
+                           pre_cropped: bool = False) -> str | None:
     if os.path.exists(path):
         return path
 
@@ -214,7 +222,7 @@ def _write_processed_image(path: str, source_path: str, card_name: str, bleed_ed
     if not image.is_decoded_image_valid(source_image):
         return None
 
-    if image.is_pre_cropped_image_name(card_name):
+    if pre_cropped or image.is_pre_cropped_image_name(card_name):
         processed = source_image
     else:
         processed = image.crop_image(
@@ -242,7 +250,8 @@ def get_processed_path(project_like, card_name: str) -> str | None:
     extension = os.path.splitext(label_name)[1].lower() or ".png"
     file_name = f"{hashlib.sha256((_asset_key(state, card_name) + _processing_fingerprint(state, card_name)).encode('utf-8')).hexdigest()}{extension}"
     processed_path = os.path.join(_processed_cache_root(state), file_name)
-    return _write_processed_image(processed_path, source_path, card_name, float(state.bleed_edge))
+    return _write_processed_image(processed_path, source_path, card_name, float(state.bleed_edge),
+                                  is_pre_cropped(state, card_name))
 
 
 def _processed_path_for_asset_key(state: ProjectState, card_name: str, asset_key: str) -> str:
@@ -288,7 +297,8 @@ def _build_preview_entry(state: ProjectState, card_name: str) -> dict | None:
             "data": image.encode_cached_image_bytes(uncropped_data),
             "size": uncropped_dims,
         },
-        "effective_dpi": image.effective_dpi_from_dimensions(sw, source_img.shape[0], card_name),
+        "effective_dpi": image.effective_dpi_from_dimensions(sw, source_img.shape[0], card_name,
+                                                             pre_cropped=is_pre_cropped(state, card_name)),
         "_asset_key": _asset_key(state, card_name),
         "_fingerprint": _processing_fingerprint(state, card_name),
     }

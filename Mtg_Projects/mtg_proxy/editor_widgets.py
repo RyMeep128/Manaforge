@@ -344,7 +344,7 @@ class EditorPage(QWidget):
         unprepared = [
             name for name in printable_names
             if name in self._tabs._img_dict
-            and not image.is_pre_cropped_image_name(name)
+            and not runtime_images.is_pre_cropped(state, name)
             and "uncropped" not in self._tabs._img_dict[name]
         ]
         low_res = [
@@ -1801,7 +1801,7 @@ class PrintPreview(QScrollArea):
             card_img = runtime_images.ensure_preview_entry(state, img_dict, card_name)
             if card_img is None:
                 return None, None
-            if bleed_edge > 0 and "uncropped" in card_img:
+            if bleed_edge > 0 and "uncropped" in card_img and not runtime_images.is_pre_cropped(state, card_name):
                 uncropped_data = cached_preview_bytes(card_img["uncropped"])
                 img = image.image_from_bytes(uncropped_data)
                 img_crop = image.crop_image(img, card_name, bleed_edge, None)

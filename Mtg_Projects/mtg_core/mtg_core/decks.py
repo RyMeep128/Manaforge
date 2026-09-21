@@ -235,7 +235,7 @@ class DeckDocument:
                 do_not_print=bool(raw.get("do_not_print", False)),
                 extras={"proxy_front_name": front_name,
                         "oversized": bool(raw.get('oversized', False)),
-                        **{key: deepcopy(raw[key]) for key in ('backside_name', 'backside_asset_id', 'backside_short_edge') if raw.get(key) is not None},
+                        **{key: deepcopy(raw[key]) for key in ('backside_name', 'backside_asset_id', 'backside_short_edge', 'pre_cropped', 'backside_pre_cropped') if raw.get(key) is not None},
                         **({'art_override': deepcopy(project['high_res_front_overrides'][front_name])}
                            if front_name in (project.get('high_res_front_overrides') or {}) else {})},
             )
@@ -279,7 +279,7 @@ class DeckDocument:
                 if value is not None:
                     raw[key] = value
             card_entries.append(raw)
-            for key in ('backside_name', 'backside_asset_id', 'backside_short_edge', 'oversized'):
+            for key in ('backside_name', 'backside_asset_id', 'backside_short_edge', 'oversized', 'pre_cropped', 'backside_pre_cropped'):
                 if key in entry.extras:
                     raw[key] = deepcopy(entry.extras[key])
         project["card_entries"] = card_entries

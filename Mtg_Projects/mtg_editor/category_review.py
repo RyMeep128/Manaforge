@@ -11,8 +11,8 @@ class CategoryReview(W.QDialog):
         self.proposals = proposals
         self.rows = []
         layout = W.QVBoxLayout(self)
-        explanation = W.QLabel('Uses local Oracle Tags and front-face types only. First role is the primary category. '
-                              'Manual categories are preserved. Missing tags may produce type-only results.')
+        explanation = W.QLabel('Uses local Oracle Tags, Oracle text, keywords, and card types. First role is primary. '
+                              'Manual categories are preserved. Rule matches are explained below; no AI is used.')
         explanation.setWordWrap(True)
         layout.addWidget(explanation)
         self.table = W.QTableWidget(len(document.deck.entries), 3)

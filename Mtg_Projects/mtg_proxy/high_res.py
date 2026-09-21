@@ -1300,11 +1300,8 @@ def _prepare_bytes_for_source(card_name: str, candidate: HighResCandidate, image
             return image_bytes
         return image.image_to_bytes(cropped)
 
-    if normalized_source == NEW_ART_SOURCE_SCRYFALL and not image.is_pre_cropped_image_name(card_name):
-        decoded = image.image_from_bytes(image_bytes)
-        uncropped = image.uncrop_image(decoded, card_name)
-        return image.image_to_bytes(uncropped)
-
+    # Scryfall already provides card-sized pixels. The entry now records that
+    # explicitly, so unique filenames no longer require adding artificial bleed.
     return image_bytes
 
 
@@ -1395,4 +1392,10 @@ def apply_high_res_candidate(
         backside_name=backside_match.filename if backside_match is not None else None,
         backside_asset_id=back_asset_id,
     )
+    entry = state.get_card_entry(card_name)
+    entry.pre_cropped = (candidate.art_source or NEW_ART_SOURCE_MPCFILL).strip().casefold() in (
+        NEW_ART_SOURCE_SCRYFALL, NEW_ART_SOURCE_MPCFILL)
+    if backside_match is not None:
+        entry.backside_pre_cropped = (backside_match.candidate.art_source or NEW_ART_SOURCE_MPCFILL).strip().casefold() in (
+            NEW_ART_SOURCE_SCRYFALL, NEW_ART_SOURCE_MPCFILL)
     return _sync_legacy_project_dict(print_dict, state)

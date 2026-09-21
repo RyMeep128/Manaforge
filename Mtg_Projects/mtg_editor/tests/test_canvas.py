@@ -97,6 +97,7 @@ def test_collapse_selection_scroll_preferences_survive_edits(window):
 
 
 def test_drag_feedback_rejects_derived_groups_and_accepts_section(window):
+    window.group.setCurrentText('Type')
     canvas = window.grid
     canvas.selected = {'0'}
     class Event:

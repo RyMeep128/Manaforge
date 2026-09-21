@@ -128,7 +128,7 @@ Status: **[x] complete**, **[ ] planned**, **[~] partially complete**.
 - [x] Drag cards between sections and categories.
 - [x] Allow one primary category and multiple functional/user tags per card.
 - [ ] Add reusable category templates such as Ramp, Draw, Removal, Wipes, Protection, Recursion, Win Conditions, and Lands.
-- [x] Add deterministic local Oracle Tag/type categorization, reviewable bulk application, manual override protection, and Undo/Redo. Category template editing and aggregate recommendations remain separate work.
+- [x] Add deterministic local Oracle Tag/text/keyword/type categorization, reviewable bulk application, manual override protection, and Undo/Redo. Category template editing and aggregate recommendations remain separate work.
 - [x] Support multi-select and bulk section/category/tag changes.
 
 **Exit gate:** Users can organize a Commander deck without changing its printed quantities accidentally.

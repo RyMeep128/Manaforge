@@ -257,6 +257,7 @@ class EditorWindow(W.QMainWindow):
             shortcut = QtGui.QShortcut(QtGui.QKeySequence(sequence), self)
             shortcut.activated.connect(callback)
             self.shortcuts.append(shortcut)
+        self.sync_fields()
         self.changed()
 
     def resizeEvent(self, event):
@@ -396,7 +397,7 @@ class EditorWindow(W.QMainWindow):
             return
         self.search_document.deck.entries = [DeckEntry(entry_id=r.card_id, name=r.name,
             card_id=r.card_id, oracle_id=r.oracle_id, set_code=r.set_code,
-            collector_number=r.collector_number, extras={'facts': card_facts(getattr(r, 'payload', {}) or {}),
+            collector_number=r.collector_number, extras={'pre_cropped': True, 'facts': card_facts(getattr(r, 'payload', {}) or {}),
                 'category_suggestion': (getattr(r, 'payload', {}) or {}).get('_category_evidence',
                     classify(getattr(r, 'payload', {}) or {}))}) for r in results]
         self.results.refresh()

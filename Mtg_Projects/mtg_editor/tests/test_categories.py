@@ -37,6 +37,8 @@ def test_search_add_categorizes_in_same_undo_transaction(tmp_path):
     from mtg_editor.gui import EditorWindow
     app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
     window = EditorWindow(service=object(), root=tmp_path)
+    assert window.group.currentText() == 'Category'
+    assert window.grid.grouping == 'Category'
     result = SimpleNamespace(name='Example', card_id='a', oracle_id='o', set_code='abc',
         collector_number='1', payload={'type_line': 'Artifact', '_category_evidence': classify({}, ['ramp'])})
     window.show_results('', [result], '')

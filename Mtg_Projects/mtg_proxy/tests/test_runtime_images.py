@@ -6,6 +6,50 @@ from pathlib import Path
 import runtime_images
 from models import ProjectState
 from mtg_core import get_default_card_service
+import pytest
+
+
+@pytest.mark.parametrize('name,flag,cropped', [
+    ('entry.png', True, False), ('scryfall_old.png', False, False), ('custom.png', False, True)])
+def test_explicit_crop_metadata_and_legacy_fallback(tmp_path, monkeypatch, name, flag, cropped):
+    from PIL import Image
+    source = tmp_path / name
+    Image.new('RGB', (300, 420), 'blue').save(source)
+    state = ProjectState.from_dict({'image_dir': str(tmp_path), 'cards': {name: 1},
+        'card_entries': [{'front_name': name, 'entry_id': 'id', 'pre_cropped': flag}]})
+    called = []
+    original = runtime_images.image.crop_image
+    def crop(*args, **kwargs):
+        called.append(True)
+        return original(*args, **kwargs)
+    monkeypatch.setattr(runtime_images.image, 'crop_image', crop)
+    monkeypatch.setattr(runtime_images.CFG, 'VibranceBump', False)
+    path = runtime_images.get_processed_path(state, name)
+    assert bool(called) == cropped
+    with Image.open(path) as result:
+        assert (result.size == (300, 420)) == (not cropped)
+
+
+def test_crop_metadata_invalidates_cache_and_does_not_affect_custom_back(tmp_path):
+    state = ProjectState.from_dict({'image_dir': str(tmp_path), 'cards': {'front.png': 1},
+        'card_entries': [{'front_name': 'front.png', 'entry_id': 'id', 'backside_name': 'back.png'}]})
+    before = runtime_images._processing_fingerprint(state, 'front.png')
+    state.get_card_entry('front.png').pre_cropped = True
+    assert before != runtime_images._processing_fingerprint(state, 'front.png')
+    assert not runtime_images.is_pre_cropped(state, 'back.png')
+    state.get_card_entry('front.png').backside_pre_cropped = True
+    assert runtime_images.is_pre_cropped(ProjectState.from_dict(state.to_dict()), 'back.png')
+
+
+def test_saved_deck_crop_metadata_follows_project_without_mutating_live_state():
+    from copy import deepcopy
+    state = ProjectState.from_dict({'cards': {'a.png': 1}, 'card_entries': [
+        {'entry_id': 'a', 'front_name': 'a.png', 'pre_cropped': False}]})
+    state.get_card_entry('a.png').pre_cropped = True
+    before = deepcopy(state)
+    saved = state.to_dict()
+    assert saved['deck_document']['deck']['entries'][0]['pre_cropped']
+    assert state == before
 
 
 def _workspace_runtime_dir(name: str) -> Path:

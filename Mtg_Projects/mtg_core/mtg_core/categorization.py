@@ -1,20 +1,29 @@
-"""Deterministic deck roles from local Oracle Tags and front-face card types.
+"""Deterministic deck roles from local tags, Oracle wording, and structured facts.
 
-Scores are rule priorities, not probabilities. No text inference or remote calls.
+Scores are rule priorities, not probabilities. No AI or remote classification.
 """
 from .decks import DeckCategory
+from .category_rules import text_roles
 
-RULE_VERSION = 1
+RULE_VERSION = 4
 # Earlier functional roles win primary-category ties; all matches are retained.
 ROLE_TAGS = (
-    ('Board Wipes', ('board-wipe', 'mass-removal')),
+    ('Board Wipes', ('board-wipe', 'boardwipe', 'sweeper', 'mass-removal')),
+    ('Counterspells', ('counterspell', 'counter', 'counter-ability')),
+    ('Interaction', ('redirect', 'redirection', 'spell-redirection', 'change-target')),
     ('Ramp', ('ramp',)),
-    ('Draw', ('card-draw',)),
     ('Removal', ('removal',)),
     ('Tutors', ('tutor',)),
     ('Protection', ('protection',)),
     ('Recursion', ('recursion', 'reanimation')),
-    ('Tokens', ('token-generator',)),
+    ('Win Conditions', ('win-condition', 'wincon', 'finisher')),
+    ('Draw', ('card-draw', 'draw')),
+    ('Card Advantage', ('card-advantage', 'impulse-draw', 'impulsive-draw')),
+    ('Tokens', ('token-generator', 'token-generation', 'token-creation')),
+    ('Lifegain', ('lifegain', 'life-gain')),
+    ('Graveyard', ('graveyard', 'self-mill', 'mill', 'graveyard-hate')),
+    ('Sacrifice / Aristocrats', ('sacrifice-outlet', 'aristocrats', 'sacrifice-payoff')),
+    ('Utility', ('utility', 'scry', 'surveil')),
 )
 TYPES = ('Land', 'Creature', 'Planeswalker', 'Battle', 'Artifact', 'Enchantment', 'Instant', 'Sorcery')
 
@@ -26,17 +35,26 @@ def classify(payload, tags=()):
     type_line = str((faces[0] if faces else payload).get('type_line') or '')
     front_types = type_line.split('—')[0].split('//')[0].split()
     matches = []
+    text_evidence = text_roles(payload)
     if 'Land' in front_types:
         matches.append({'name': 'Lands', 'score': 200, 'reason': 'Front face has type Land'})
     for name, aliases in ROLE_TAGS:
         found = sorted(tags.intersection(aliases))
-        if found:
-            matches.append({'name': name, 'score': 100, 'reason': 'Local Oracle Tags: ' + ', '.join(found)})
+        reasons = (['Local Oracle Tags: ' + ', '.join(found)] if found else []) + text_evidence.get(name, [])
+        if reasons:
+            # Casting this card again describes how it is used, not its main job.
+            # Keep genuine graveyard-recovery effects at normal priority.
+            keyword_recursion = (name == 'Recursion' and text_evidence.get(name)
+                and all(reason.startswith('Keywords:') for reason in text_evidence[name])
+                and not set(found).difference({'recursion'}))
+            matches.append({'name': name, 'score': 40 if keyword_recursion else 100,
+                            'reason': '; '.join(dict.fromkeys(reasons))})
+    matches.sort(key=lambda match: -match['score'])
     if not matches:
         kind = next((kind for kind in TYPES if kind in front_types), None)
         if kind:
             matches.append({'name': 'Sorceries' if kind == 'Sorcery' else kind + 's', 'score': 10,
-                            'reason': f'Type fallback: {kind}; no supported functional tag'})
+                            'reason': f'Type fallback: {kind}; no matching functional rule'})
     return matches
 
 

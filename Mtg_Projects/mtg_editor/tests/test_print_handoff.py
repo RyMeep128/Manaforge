@@ -98,6 +98,7 @@ def test_dfc_resolution_uses_existing_proxy_import_and_preserves_override(librar
     assert calls == ['dfc-id']
     assert data['card_entries'][0]['image_asset_id'] == 'chosen-front'
     assert data['card_entries'][0]['backside_asset_id'] == 'paired-back'
+    assert data['card_entries'][0]['backside_pre_cropped']
     assert data['backside_enabled']
 
 
@@ -141,3 +142,44 @@ def test_art_picker_cancellation_keeps_document_unchanged(monkeypatch):
     before = value.to_dict()
     assert choose_art(None, value, 'a') is None
     assert value.to_dict() == before
+
+
+@pytest.mark.parametrize('bleed', ['0', '1'])
+def test_precropped_catalog_art_survives_unique_names_and_processing(library, monkeypatch, bleed):
+    import io
+    from PIL import Image
+    from mtg_core import get_default_card_service
+    from models import ProjectState
+    import runtime_images
+    service = get_default_card_service()
+    image = Image.new('RGB', (300, 420), 'green')
+    stream = io.BytesIO()
+    image.save(stream, format='PNG')
+    asset = service.store_image_bytes(stream.getvalue(), extension='png', source='scryfall')
+    monkeypatch.setattr(service, 'get_card', lambda **kwargs: None)
+    monkeypatch.setattr(runtime_images, 'get_default_card_service', lambda: service)
+    monkeypatch.setattr(runtime_images.CFG, 'VibranceBump', False)
+    value = DeckDocument()
+    value.deck.entries = [DeckEntry(eid, 'Catalog card', card_id='same-print', image_asset_id=asset)
+                          for eid in ('copy-one', 'copy-two')]
+    project = prepare_print(value, service, {'mainboard'})
+    state = ProjectState.from_dict(json.loads(Path(project['path']).read_text(encoding='utf-8')))
+    state.bleed_edge = bleed
+    for name in ('copy-one.png', 'copy-two.png'):
+        assert state.get_card_entry(name).pre_cropped
+        processed = runtime_images.get_processed_path(state, name)
+        with Image.open(processed) as result:
+            assert result.size == image.size
+    roundtrip = ProjectState.from_dict(state.to_dict())
+    assert roundtrip.get_card_entry('copy-one.png').pre_cropped
+    migrated = DeckDocument.from_legacy_proxy(roundtrip.to_dict())
+    assert project_payload(migrated)['card_entries'][0]['pre_cropped']
+
+
+def test_custom_art_is_not_marked_as_catalog_crop():
+    value = DeckDocument()
+    value.deck.entries = [DeckEntry('custom', 'Custom', card_id='id', image_asset_id='custom',
+                                  extras={'art_override': {'identifier': 'alternate'}}),
+                          DeckEntry('explicit', 'Explicit', card_id='id', extras={'pre_cropped': False})]
+    entries = project_payload(value)['card_entries']
+    assert not any(e['pre_cropped'] for e in entries)

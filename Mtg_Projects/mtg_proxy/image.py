@@ -36,8 +36,8 @@ def is_pre_cropped_image_name(image_name):
     return any(lowered.startswith(prefix) for prefix in pre_cropped_prefixes)
 
 
-def effective_dpi_from_dimensions(width, height, image_name):
-    if is_pre_cropped_image_name(image_name):
+def effective_dpi_from_dimensions(width, height, image_name, pre_cropped=False):
+    if pre_cropped or is_pre_cropped_image_name(image_name):
         base_width, base_height = card_size_without_bleed_inch
     else:
         base_width, base_height = card_size_with_bleed_inch

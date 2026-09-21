@@ -7,7 +7,8 @@ SORTS = ['Name', 'Mana Value', 'Quantity', 'Import Order']
 
 def card_facts(payload):
     face = (payload.get('card_faces') or [{}])[0]
-    return {key: payload.get(key, face.get(key)) for key in ('type_line', 'cmc', 'colors')}
+    return {key: payload.get(key, face.get(key)) for key in
+            ('type_line', 'cmc', 'colors', 'oracle_text', 'keywords', 'layout', 'card_faces')}
 
 
 def group_key(entry, grouping):

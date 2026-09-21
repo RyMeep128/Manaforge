@@ -65,18 +65,32 @@ to **Category** grouping to see the results; new decks use this grouping by defa
 Apply is one Undo/Redo operation, and category assignments persist with the deck.
 
 This uses only local database data: no AI, remote inference, or popularity guesses.
-The explicit rule table lives in `mtg_core/categorization.py`. Supported functional
-tags currently map to Board Wipes, Ramp, Draw, Removal, Tutors, Protection,
-Recursion, and Tokens. Every matching role is retained; the first is primary.
-Front-face Lands take precedence, followed by functional roles in the listed
-order. Other cards fall back to their front-face type. A spell with a land back
+The explicit rules live in `mtg_core/categorization.py` and `category_rules.py`.
+Roles include Board Wipes, Counterspells, Interaction, Ramp, Removal, Tutors, Protection,
+Recursion, Win Conditions, Draw, Card Advantage, Tokens, Lifegain, Graveyard,
+Sacrifice / Aristocrats, and Utility. Every matching role is retained; the first
+is primary. Front-face Lands take precedence, followed by functional roles in
+the listed order. Removal and other stronger roles stay ahead of incidental
+cantrip draw. Other cards fall back to their front-face type. A spell with a land back
 is not classified as a land merely because of that back.
 
-Functional coverage depends on the locally synchronized Oracle Tags dataset.
-The review displays the exact matching tags or a type-fallback explanation.
+Spell redirection counts as Interaction. A card's own flashback/escape-style
+recursion is secondary to its functional effect, so draw spells with flashback
+remain Draw. Actual graveyard-recovery effects retain normal Recursion priority.
+Sacrificing the card itself does not alone establish a general sacrifice outlet.
+Cost reductions for spells you cast count as Ramp, including conditional and
+experience-counter-based reductions. A discount solely on the card itself does not.
+
+Functional roles use locally synchronized Oracle Tags, explicit Oracle wording
+patterns, and structured keywords. Text rules work even without the tag dataset.
+Reminder text is excluded, faces are evaluated independently, and land-only
+library searches putting lands onto the battlefield count as Ramp rather than
+Tutors. The review displays the matching tags, text rule, keyword, or type fallback.
 Missing data leaves an entry unchanged. Scores in saved evidence are explicit
 rule priorities, not confidence estimates. Arbitrary user tags are not interpreted
-as functional roles. No card-text heuristics run in this first version.
+as functional roles. These conservative role hints are not a complete Magic rules
+engine; unusual wording and context-dependent combos can still need manual edits.
+Rerun **Auto Categorize** on existing decks to apply the expanded rules.
 
 Manual assignments, including explicitly choosing Uncategorized or deleting an
 assigned category, are protected from subsequent automatic passes. Additional
@@ -93,6 +107,10 @@ this version supplies the deterministic, saved role data for that work.
 by default; cards marked do-not-print are excluded. The deck is saved, printable
 assets and paired backs are resolved using Proxy's import workflow, and a managed
 Proxy project opens in a separate process.
+
+Handoffs preserve explicit front/back pre-cropped metadata alongside stable unique
+entry filenames. Catalog artwork is not cropped again; custom artwork retains its
+normal crop processing. Legacy Scryfall filename detection remains supported.
 
 Subsequent handoffs reuse that project's latest paper, backside, offset, and manual
 layout settings. Surviving placements stay put where possible; displaced copies are
