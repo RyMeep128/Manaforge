@@ -281,6 +281,7 @@ class AppShellWindow(QMainWindow):
         self._application = application
         self._current_project_path = os.path.join(cwd, "print.json")
         self._active_session = None
+        self._project_file_lock = None
         self._editor_page = None
         self._update_check_worker = None
         self._saved_project_snapshot = None
@@ -344,6 +345,9 @@ class AppShellWindow(QMainWindow):
         self._update_window_title()
 
     def _clear_active_session(self):
+        if self._project_file_lock is not None:
+            self._project_file_lock.unlock()
+            self._project_file_lock = None
         self._autosave_timer.stop()
         self._saved_project_snapshot = None
         self._observed_project_snapshot = None
@@ -688,6 +692,12 @@ class AppShellWindow(QMainWindow):
 
         state = ProjectState()
         img_dict = {}
+        from mtg_ui.project_lock import acquire_project_lock
+        try:
+            self._project_file_lock = acquire_project_lock(project_entry['path'])
+        except OSError as exc:
+            self._application.warn_nonfatal('Project Already Open', str(exc))
+            return
 
         def load_work():
             loaded = load_project_file(
@@ -701,11 +711,16 @@ class AppShellWindow(QMainWindow):
                 raise ValueError("The selected project could not be loaded.")
 
         reload_window = popup(self, "Loading project...", self._application._debug_mode)
-        reload_window.show_during_work(load_work)
-        del reload_window
-
-        project_library.touch_opened(project_id)
-        editor_page = self._build_editor_page(state, img_dict)
+        try:
+            reload_window.show_during_work(load_work)
+            project_library.touch_opened(project_id)
+            editor_page = self._build_editor_page(state, img_dict)
+        except Exception:
+            self._project_file_lock.unlock()
+            self._project_file_lock = None
+            raise
+        finally:
+            del reload_window
         self._set_active_editor(
             editor_page,
             {
@@ -809,6 +824,9 @@ class AppShellWindow(QMainWindow):
                 event.ignore()
                 return
         self._autosave_timer.stop()
+        if self._project_file_lock is not None:
+            self._project_file_lock.unlock()
+            self._project_file_lock = None
         super().closeEvent(event)
 
     def set_project_thumbnail(self, card_name):

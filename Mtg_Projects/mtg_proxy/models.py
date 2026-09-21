@@ -6,6 +6,7 @@ from typing import Any, Mapping
 
 from config import CFG
 from constants import page_sizes
+from mtg_core.decks import DeckDocument
 
 
 def _coerce_plain_dict(value: Any) -> dict[str, Any]:
@@ -187,7 +188,7 @@ class ProjectCardEntry:
         return cls(
             entry_id=str(data.get("entry_id") or data.get("front_name") or ""),
             front_name=str(data.get("front_name") or ""),
-            count=int(data.get("count", 1) or 1),
+            count=int(data.get("count", 1)) if data.get("count") is not None else 1,
             card_id=_optional_str(data.get("card_id")),
             oracle_id=_optional_str(data.get("oracle_id")),
             image_asset_id=_optional_str(data.get("image_asset_id")),
@@ -246,6 +247,7 @@ class ProjectState:
     backside_default_asset_id: str | None = None
     render: RenderSettings = field(default_factory=RenderSettings.default)
     manual_layout: dict | None = None
+    deck_document: DeckDocument | None = None
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any] | None) -> "ProjectState":
@@ -292,7 +294,47 @@ class ProjectState:
         else:
             state._rebuild_entries_from_legacy_maps()
         state._rebuild_legacy_maps_from_entries()
+        raw_deck = data.get("deck_document")
+        if isinstance(raw_deck, Mapping):
+            state.deck_document = DeckDocument.from_dict(raw_deck)
+        else:
+            state.deck_document = DeckDocument.from_legacy_proxy(data)
+            state.deck_document.print_settings = {}
         return state
+
+    def _synced_deck_document(self, proxy_data: Mapping[str, Any]) -> DeckDocument:
+        current = self.deck_document or DeckDocument.from_legacy_proxy(proxy_data)
+        migrated = DeckDocument.from_legacy_proxy(proxy_data, name=current.deck.name)
+        previous = {entry.entry_id: entry for entry in current.deck.entries}
+        for entry in migrated.deck.entries:
+            old = previous.get(entry.entry_id)
+            if old is None:
+                continue
+            entry.category_ids = list(old.category_ids)
+            entry.tags = list(old.tags)
+            entry.notes = old.notes
+            entry.owned = old.owned
+            entry.section = old.section
+            entry.sort_order = old.sort_order
+            preserved = {key: deepcopy(value) for key, value in old.extras.items()
+                         if key not in {"proxy_front_name", "oversized", "backside_name",
+                                        "backside_asset_id", "backside_short_edge", "art_override"}}
+            entry.extras.update(preserved)
+        migrated.deck.deck_id = current.deck.deck_id
+        migrated.deck.format = current.deck.format
+        migrated.deck.description = current.deck.description
+        migrated.deck.categories = deepcopy(current.deck.categories)
+        migrated.deck.tags = list(current.deck.tags)
+        migrated.deck.commander_entry_ids = [
+            entry.entry_id for entry in migrated.deck.entries
+            if entry.section.casefold() in {"commander", "commanders"}
+        ]
+        migrated.deck.extras = deepcopy(current.deck.extras)
+        migrated.editor_preferences = deepcopy(current.editor_preferences)
+        migrated.extras = deepcopy(current.extras)
+        migrated.print_settings = {}
+        self.deck_document = migrated
+        return migrated
 
     def to_dict(self) -> dict[str, Any]:
         entries = list(self.card_entries_store.values())
@@ -320,6 +362,7 @@ class ProjectState:
             "backside_default_asset_id": self.backside_default_asset_id,
         }
         result.update(self.render.to_dict())
+        result["deck_document"] = self._synced_deck_document(result).to_dict()
         return result
 
     def to_persisted_dict(self) -> dict[str, Any]:
@@ -343,6 +386,7 @@ class ProjectState:
             "card_entries": self.card_entries_dict(),
         }
         result.update(self.render.to_dict())
+        result["deck_document"] = self._synced_deck_document(result).to_dict()
         return result
 
     @property
@@ -409,6 +453,7 @@ class ProjectState:
         self.card_entries_store = replacement.card_entries_store
         self.backside_default_asset_id = replacement.backside_default_asset_id
         self.render = replacement.render
+        self.deck_document = replacement.deck_document
 
     def get_card_count(self, card_name: str, default: int = 0) -> int:
         return int(self.cards.get(card_name, default))

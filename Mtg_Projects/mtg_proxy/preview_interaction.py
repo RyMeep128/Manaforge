@@ -2,6 +2,7 @@
 import json
 from PyQt6 import QtCore, QtGui, QtWidgets
 from services import layout_service
+from mtg_ui.cards import selection_outline
 
 MIME = 'application/x-print-proxy-copy'
 
@@ -82,9 +83,8 @@ class PreviewOverlay(QtWidgets.QWidget):
             hovered = self.hovered is not None and self.hovered in layout_service.cells(item)
             if selected or hovered:
                 rect = self.rectangle(item['row'], item['column'], item['span']).adjusted(3, 3, -3, -3)
-                painter.fillRect(rect, QtGui.QColor(70, 165, 255, 45 if hovered else 20))
-                painter.setPen(QtGui.QPen(QtGui.QColor('#128cff' if hovered else '#005fc7'), 4 if hovered else 3))
-                painter.drawRoundedRect(rect, 4, 4)
+                selection_outline(painter, rect, '#128cff' if hovered else '#005fc7',
+                                  4 if hovered else 3, fill=QtGui.QColor(70, 165, 255, 45 if hovered else 20))
         if self.hovered and self.item_at(self.hovered) is None:
             _, row, column = self.hovered
             painter.setPen(QtGui.QPen(QtGui.QColor('#128cff'), 4))

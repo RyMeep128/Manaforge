@@ -685,6 +685,27 @@ class CardDatabase:
             row = connection.execute('SELECT count(*) FROM oracle_tags').fetchone()
         return int(row[0] or 0)
 
+    def categorization_data(self, card_ids, oracle_ids):
+        """Read local role inputs in bounded batches on a single connection."""
+        cards, tags = {}, {}
+        with self.connect() as connection:
+            for column, values in (('card_id', card_ids), ('oracle_id', oracle_ids)):
+                if column == 'oracle_id':
+                    values = list(values) + [payload.get('oracle_id') for payload in cards.values()]
+                values = list(dict.fromkeys(value for value in values if value))
+                for offset in range(0, len(values), 400):
+                    batch = values[offset:offset + 400]
+                    marks = ','.join('?' for _ in batch)
+                    if column == 'card_id':
+                        rows = connection.execute(f'SELECT card_id, payload_json FROM prints WHERE card_id IN ({marks})', batch)
+                        for row in rows:
+                            cards[row['card_id']] = json.loads(row['payload_json'])
+                    else:
+                        rows = connection.execute(f'SELECT oracle_id, tag FROM oracle_tags WHERE oracle_id IN ({marks}) ORDER BY tag', batch)
+                        for row in rows:
+                            tags.setdefault(row['oracle_id'], []).append(row['tag'])
+        return {'cards': cards, 'tags': tags}
+
     def oracle_tags_for_card(self, oracle_id: str) -> list[str]:
         if not str(oracle_id or '').strip():
             return []

@@ -36,7 +36,7 @@ jobs:
             Mtg_Projects/mtg_proxy/requirements.txt
       - name: Install test and application dependencies
         run: python -m pip install -r requirements-dev.txt
-      - name: Test Proxy, Core, and their integration
+      - name: Test Proxy, Core, Deck Editor, and their integration
         working-directory: Mtg_Projects
         env:
           PRINT_PROXY_PREP_DATA_DIR: ${{ runner.temp }}/mtg-suite-test-data

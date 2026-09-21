@@ -96,39 +96,40 @@ Status: **[x] complete**, **[ ] planned**, **[~] partially complete**.
 
 ### 7. Shared deck model and persistence
 
-- [ ] Define a versioned Core deck model separate from print-render settings.
-- [ ] Store deck name, format, description, sections, commander(s), categories, tags, notes, and sort order.
-- [ ] Store exact printing/art selection and owned/do-not-print state per entry.
-- [ ] Migrate existing proxy projects without losing counts, backs, layouts, oversized flags, or artwork overrides.
-- [ ] Add deck create/open/recent flows to the project dashboard.
-- [ ] Add autosave, dirty status, atomic writes, backups, and recovery.
-- [ ] Add model-level Undo/Redo commands.
+- [x] Define a versioned Core deck model separate from print-render settings.
+- [x] Store deck name, format, description, sections, commander(s), categories, tags, notes, and sort order.
+- [x] Store exact printing/art selection and owned/do-not-print state per entry.
+- [x] Migrate existing proxy projects without losing counts, backs, layouts, oversized flags, or artwork overrides.
+- [~] Editor New/Open/Recent flows exist; unified project dashboard integration remains.
+- [x] Add autosave, dirty status, atomic writes, backups, and recovery.
+- [x] Add model-level Undo/Redo commands.
 
 **Exit gate:** Decks and legacy proxy projects round-trip without data loss.
 
 ### 8. Fast editor shell
 
-- [ ] Build the runnable PyQt6 Deck Editor application boundary.
-- [ ] Add a deck header with name, format, count, save state, Import, Add Card, and **Print Deck**.
-- [ ] Add responsive search-as-you-type using MTG Core.
-- [ ] Add instant add/remove and quantity controls.
-- [ ] Add image/grid and compact text/list views.
-- [ ] Add adjustable card sizes, collapsible groups, hover preview, context menus, and keyboard shortcuts.
-- [ ] Virtualize grids/lists and decode only visible small thumbnails.
-- [ ] Keep filtering and scrolling responsive with 500+ entries.
+- [x] Build the runnable PyQt6 Deck Editor application boundary.
+- [~] Deck header includes name, format, count, save state, Add Cards, and **Print Deck**; decklist Import UI remains.
+- [x] Add responsive search-as-you-type using MTG Core.
+- [x] Add instant add/remove and quantity controls.
+- [x] Add image/grid and compact text/list views.
+- [x] Add adjustable card sizes, collapsible groups, hover preview, context menus, and keyboard shortcuts.
+- [x] Virtualize grids/lists and decode only visible small thumbnails.
+- [x] Keep filtering and scrolling responsive with 500+ entries.
 
 **Exit gate:** Creating a deck and adding or editing cards feels immediate on a 500-card stress project.
 
 ### 9. Sections, categories, and organization
 
-- [ ] Support mainboard, commander, sideboard, considering/maybeboard, and excluded sections.
-- [ ] Support grouping by type, mana value, color, custom category, and import section.
-- [ ] Support sorting by name, mana value, color, quantity, and import order.
-- [ ] Create, rename, reorder, and delete custom categories.
-- [ ] Drag cards between sections and categories.
-- [ ] Allow one primary category and multiple functional/user tags per card.
+- [x] Support mainboard, commander, sideboard, considering/maybeboard, and excluded sections.
+- [x] Support grouping by type, mana value, color, custom category, and import section.
+- [~] Sort by name, mana value, quantity, and import order; color sorting remains.
+- [x] Create, rename, reorder, and delete custom categories.
+- [x] Drag cards between sections and categories.
+- [x] Allow one primary category and multiple functional/user tags per card.
 - [ ] Add reusable category templates such as Ramp, Draw, Removal, Wipes, Protection, Recursion, Win Conditions, and Lands.
-- [ ] Support multi-select and bulk section/category/tag changes.
+- [x] Add deterministic local Oracle Tag/type categorization, reviewable bulk application, manual override protection, and Undo/Redo. Category template editing and aggregate recommendations remain separate work.
+- [x] Support multi-select and bulk section/category/tag changes.
 
 **Exit gate:** Users can organize a Commander deck without changing its printed quantities accidentally.
 
@@ -172,12 +173,12 @@ Status: **[x] complete**, **[ ] planned**, **[~] partially complete**.
 
 ### 13. One-click Print Deck
 
-- [ ] Pass quantities, exact printings, artwork, backs, and oversized flags to Print Proxy Prep.
-- [ ] Preserve manual print layout when compatible and reconcile it predictably when the deck changes.
-- [ ] Offer inclusion toggles for unowned cards, tokens, basics, commanders, and cards marked as real copies.
+- [x] Pass quantities, exact printings, artwork, backs, and oversized flags to Print Proxy Prep.
+- [x] Preserve manual print layout when compatible and reconcile it predictably when the deck changes.
+- [~] Section inclusion toggles and do-not-print exclusions exist; token/basic/ownership-count toggles remain.
 - [ ] Suggest required tokens before opening print preview.
-- [ ] Reuse global artwork preferences and printer profiles.
-- [ ] Return from print preparation without losing editor selection, scroll, filters, or Undo history.
+- [~] Shared artwork picker and linked Proxy print settings are reused; unified preference editing remains.
+- [x] Return from print preparation without losing editor selection, scroll, filters, or Undo history.
 
 **Exit gate:** A deck can move from editor to calibrated physical print without reselecting cards or artwork.
 

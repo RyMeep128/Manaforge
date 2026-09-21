@@ -13,9 +13,23 @@ Deck Editor, integration, and recommendation roadmap.
 | --- | --- | --- |
 | **Print Proxy Prep** | Import cards, prepare images, arrange print sheets, and export PDFs with paired backs and oversized cards. | Runnable; Windows launchers and app-bundle build included. |
 | **MTG Core Database Admin** | Browse and manage cards, printings, images, and catalog synchronization. | Runnable Qt app backed by the shared `mtg_core` library. |
-| **MTG Deck Editor** | Planned visual deckbuilding, grouping, statistics, and handoff to print preparation. | Specification stage; no runnable editor yet. [Read the epic](Mtg_Projects/mtg_editor/docs/deck-editor-epic.md). |
+| **MTG Deck Editor** | Build and organize decks with visual search, grouped grids/stacks, categories, Undo/Redo, autosave, and Print Deck. | Runnable Qt editor sharing Proxy styling, artwork tools, and print preparation. [Guide](Mtg_Projects/mtg_editor/README.md). |
 
 ## See the apps
+
+### MTG Deck Editor
+
+![Deck Editor with visual search and grouped card images](docs/images/deck-editor-search.png)
+
+Use **Add Cards** to open local visual search, then arrange your deck in **Grid** or **Stacks**.
+Group by type, mana value, color, category, or section. Right-click cards for artwork,
+tags, section/category assignment, and bulk print flags. **Print Deck** opens a linked
+Proxy project while keeping your deck workspace in place.
+
+![Deck Editor with overlapping category stacks](docs/images/deck-editor-stacks.png)
+
+These captures use original demonstration cards. Regenerate them with
+`python tools/capture_editor.py`; set `QT_SCALE_FACTOR=2` to capture 200% scaling.
 
 ### Print Proxy Prep
 
@@ -52,7 +66,13 @@ Setup creates `Mtg_Projects/mtg_proxy/venv` and installs the shared runtime depe
 & '.\Mtg_Projects\mtg_core\Launch MTG Core Admin.cmd'
 ```
 
-The Deck Editor has no launch command yet. Windows is the packaged target; the code includes data-path handling for other platforms, but this repository does not provide macOS/Linux bundles or CI coverage for them.
+Launch the early Deck Editor using the same environment:
+
+```powershell
+& '.\Mtg_Projects\mtg_editor\Launch Manaforge Deck Editor.cmd'
+```
+
+Windows is the packaged target; the code includes data-path handling for other platforms, but this repository does not provide macOS/Linux bundles or CI coverage for them.
 
 ### First print project
 
@@ -85,7 +105,7 @@ The script installs PyInstaller, rebuilds the product `build` and `dist` directo
 - `Mtg_Projects/dist/Print Proxy Prep/Print Proxy Prep.exe`
 - `Mtg_Projects/dist/PrintProxyPrep-<version>-win.zip`
 
-This bundle packages **Print Proxy Prep** and its shared dependencies. Core Admin currently runs from source; Deck Editor is not yet implemented.
+This bundle packages **Print Proxy Prep** and its shared dependencies. Core Admin and the early Deck Editor currently run from source.
 
 ## Shared architecture
 
