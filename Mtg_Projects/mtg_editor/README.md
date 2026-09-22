@@ -26,7 +26,7 @@ remaining window space, and the toolbars wrap on smaller screens.
   (Undo is available). Double-faced cards have a **Flip card** control for both image
   and rules text. Ctrl/Shift-click still selects cards without opening details.
   Double-click a deck card to open the shared Proxy artwork picker.
-- Hold the right mouse button on a card for **150 ms**, hold **T** with cards selected, or click **Quick tags** to open
+- Hold the right mouse button on a card for **100 ms**, hold **T** with cards selected, or click **Quick tags** to open
   the radial menu. Move toward a role and release, or click a role after opening.
   **Primary** mode replaces the primary category; **Tab** or the mode wedge switches
   to purple **Secondary tags** mode, which adds/removes tags without changing categories.

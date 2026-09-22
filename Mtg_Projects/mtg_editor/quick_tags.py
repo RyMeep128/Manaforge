@@ -17,7 +17,7 @@ class HoldTagGesture(C.QObject):
         self.pending = None
         self.timer = C.QTimer(self)
         self.timer.setSingleShot(True)
-        self.timer.setInterval(150)
+        self.timer.setInterval(100)
         self.timer.timeout.connect(self.open_radial)
         view.installEventFilter(self)
         view.viewport().installEventFilter(self)
