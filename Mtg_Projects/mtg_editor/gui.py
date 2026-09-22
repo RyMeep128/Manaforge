@@ -16,6 +16,7 @@ from mtg_ui.theme import application_stylesheet
 from copy import deepcopy
 from dataclasses import replace
 from mtg_core.categorization import classify, analyze_entries, apply_categories
+from mtg_editor.filtering import compile_filter, matches, HELP as FILTER_HELP
 
 
 class Task(QtCore.QThread):
@@ -148,6 +149,7 @@ class EditorWindow(W.QMainWindow):
         menu = W.QMenu(more)
         menu.addAction('Compact table', self.show_table)
         menu.addAction('Deck insights…', self.deck_insights)
+        menu.addAction('Print readiness…', self.print_readiness)
         menu.addAction('Export decklist…', self.export_decklist)
         menu.addAction('Commander / format deck checks…', self.commander_checks)
         menu.addAction('Manage categories…', self.manage_categories)
@@ -190,8 +192,18 @@ class EditorWindow(W.QMainWindow):
         self.sort.setToolTip('Sort cards within groups')
         row.addWidget(self.sort)
         self.filter = W.QLineEdit()
+        self.filter.setClearButtonEnabled(True)
+        self.filter.setToolTip(FILTER_HELP)
         self.filter.setPlaceholderText('Filter this deck…')
         row.addWidget(self.filter, 1)
+        self.filter_help = W.QPushButton('Filter help')
+        self.filter_help.clicked.connect(lambda: W.QMessageBox.information(self, 'Deck filters', FILTER_HELP))
+        row.addWidget(self.filter_help)
+        self.readiness_filter = W.QPushButton()
+        self.readiness_filter.hide()
+        self.readiness_filter.clicked.connect(self.clear_readiness_filter)
+        row.addWidget(self.readiness_filter)
+        self.readiness_snapshot = None
         self.zoom = W.QSlider(QtCore.Qt.Orientation.Horizontal)
         self.zoom.setRange(120, 260)
         self.zoom.setValue(180)
@@ -202,7 +214,7 @@ class EditorWindow(W.QMainWindow):
         row.addWidget(self.selection_label)
         self.quick_tag_button = self.button(row, 'Quick tags', lambda: self.quick_tag(QtGui.QCursor.pos()))
         self.quick_tag_button.setToolTip('Replace primary category or toggle secondary tags for selected cards')
-        self.control_overflow = [self.filter, self.zoom, self.selection_label]
+        self.control_overflow = [self.filter, self.filter_help, self.readiness_filter, self.zoom, self.selection_label]
         layout.addWidget(controls)
         self.splitter = W.QSplitter()
         self.search_panel = W.QWidget()
@@ -326,8 +338,36 @@ class EditorWindow(W.QMainWindow):
             self.thumbnails.set_visible(id(self.results), [])
 
     def filter_changed(self):
+        try:
+            compile_filter(self.filter.text())
+        except ValueError as exc:
+            self.filter.setStyleSheet('border: 1px solid #e0a040;')
+            self.filter.setToolTip(f'{exc} Showing the last valid filter.\n\n{FILTER_HELP}')
+            self.statusBar().showMessage(f'{exc} Showing the last valid filter.')
+            return
+        self.filter.setStyleSheet('')
+        self.filter.setToolTip(FILTER_HELP)
         self.grid.query = self.filter.text()
         self.grid.relayout()
+        visible = self.apply_table_filter()
+        active = bool(self.grid.query) or self.grid.filtered_ids is not None
+        self.statusBar().showMessage(f'{visible} of {len(self.document.deck.entries)} entries match' if active else 'Deck filter cleared')
+
+    def apply_table_filter(self):
+        terms = compile_filter(self.grid.query)
+        categories = {c.category_id: c.name for c in self.document.deck.categories}
+        visible_ids = set()
+        for row, entry in enumerate(self.document.deck.entries):
+            visible = matches(entry, terms, categories)
+            if self.grid.filtered_ids is not None:
+                visible = visible and entry.entry_id in self.grid.filtered_ids
+            self.table.setRowHidden(row, not visible)
+            if visible:
+                visible_ids.add(entry.entry_id)
+        self.grid.selected.intersection_update(visible_ids)
+        self.restore_table_selection()
+        self.selection_changed()
+        return len(visible_ids)
 
     def preferences_changed(self, *_):
         self.views.setCurrentWidget(self.grid)
@@ -406,10 +446,16 @@ class EditorWindow(W.QMainWindow):
             self.changed()
 
     def changed(self):
+        if self.readiness_snapshot is not None and self.document.to_dict() != self.readiness_snapshot:
+            self.grid.filtered_ids = None
+            self.readiness_snapshot = None
+            self.readiness_filter.hide()
+            self.statusBar().showMessage('Deck changed; readiness filter cleared. Run Print readiness again for updated results.')
         self._refreshing_table = True
         self.model.refresh()
         self._refreshing_table = False
         self.grid.refresh()
+        self.apply_table_filter()
         if self.views.currentWidget() is self.table:
             self.restore_table_selection()
         dirty = self.document.to_dict() != self.saved
@@ -573,6 +619,29 @@ class EditorWindow(W.QMainWindow):
                 self.open_search()
                 self.query.setText('otag:' + dialog.selected_tag)
         self.run_task(lambda: self.service.database.oracle_tags_for_card(entry.oracle_id) if entry.oracle_id else [], show)
+
+    def clear_readiness_filter(self):
+        self.grid.filtered_ids = None
+        self.readiness_snapshot = None
+        self.readiness_filter.hide()
+        self.filter_changed()
+
+    def print_readiness(self):
+        from .readiness import inspect_readiness, ReadinessDialog, LABELS
+        snapshot = DeckDocument.from_dict(self.document.to_dict())
+        def show(result):
+            dialog = ReadinessDialog(result, self)
+            def apply(key, ids):
+                self.filter.clear()
+                self.grid.filtered_ids = set(ids)
+                self.readiness_snapshot = self.document.to_dict()
+                self.readiness_filter.setText(f'{LABELS[key]} ×')
+                self.readiness_filter.setToolTip('Clear readiness filter. Results are cleared when the deck changes.')
+                self.readiness_filter.show()
+                self.filter_changed()
+            dialog.filterRequested.connect(apply)
+            dialog.exec()
+        self.run_task(lambda: inspect_readiness(snapshot, self.service), show)
 
     def deck_insights(self):
         from .insights import InsightsDialog
@@ -853,7 +922,7 @@ class EditorWindow(W.QMainWindow):
         # Legacy entries have no grouping facts; hydrate local metadata off the UI thread.
         legacy_folder = document.print_settings.get('proxy_project', {}).get('image_dir')
         missing = [(e.entry_id, e.card_id, e.extras.get('proxy_front_name'), e.image_asset_id)
-                   for e in document.deck.entries if (e.card_id and not e.extras.get('facts')) or (legacy_folder and not e.image_asset_id)]
+                   for e in document.deck.entries if (e.card_id and 'legalities' not in e.extras.get('facts', {})) or (legacy_folder and not e.image_asset_id)]
         uncategorized = [deepcopy(e) for e in document.deck.entries
                          if not e.category_ids and not e.extras.get('auto_categories')]
         can_analyze = hasattr(getattr(self.service, 'database', None), 'categorization_data')

@@ -25,6 +25,7 @@ class CardCanvas(W.QAbstractScrollArea):
         self.mode, self.grouping, self.sort, self.query = 'Grid', 'Type', 'Name', ''
         self.card_width = 180
         self.selected = set()
+        self.filtered_ids = None
         self.collapsed = set()
         self.items, self.headers = [], []
         self.hovered = None
@@ -67,7 +68,8 @@ class CardCanvas(W.QAbstractScrollArea):
         ch = int(cw * 1.4)
         groups = [('Search', 'Results', self.document.deck.entries)] if self.search_mode else grouped_entries(
             self.document.deck, self.grouping, self.sort, self.query,
-            show_empty_categories=self.document.editor_preferences.get('show_empty_categories', False))
+            show_empty_categories=self.document.editor_preferences.get('show_empty_categories', False),
+            entry_ids=self.filtered_ids)
         y, x = 12, 16
         columns = max(1, (width - 16) // (cw + 16))
         row_bottom = y

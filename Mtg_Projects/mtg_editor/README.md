@@ -250,3 +250,31 @@ Tab in the radial menu: switch primary/category tag mode; Esc: cancel.
 
 Expanded filters, statistics, and playtesting
 remain on the roadmap. The compact table is available under **More**.
+## Deck filtering
+
+The deck filter supports combined queries in card and table views. Plain text
+matches names and tags. Examples: `type:creature mv<=3`, `id:wu -color:r`,
+`category:"Card Draw"`, `legal:commander`, and `is:do-not-print`.
+Use **Filter help** for supported fields and flags, and the field's clear button
+to restore all entries. Filters change only the view, never deck quantities or
+print output. Hidden entries are removed from the current selection.
+
+Metadata filters use locally cached facts; missing data does not match positive
+filters. Color `:` includes the specified colors and `=` requires an exact match;
+`C` means colorless. Treatment matches available printing metadata (for example,
+foil availability), not a selected physical finish. Legality reflects cached data.
+Invalid queries show an error and preserve the last valid results.
+
+**More > Print readiness** scans local artwork in the background and reports
+clickable totals for missing/unreadable fronts, low DPI, missing required or
+assigned backs, double-faced cards, oversized cards, and excluded/do-not-print
+copies. Totals include all sections and show both copies and distinct entries.
+Low DPI uses the printer's front source-image calculation and warning threshold.
+Default backs are checked when duplex output is enabled; required DFC and assigned
+backs are checked regardless. No images are downloaded. Unknown layout metadata
+is reported because it can prevent DFC detection.
+
+Click a total to filter the deck, then optionally narrow it with the text filter.
+Clear the readiness filter with its labelled × button. Editing the deck clears
+the snapshot filter; rerun the scan after edits or external asset changes.
+This scan does not replace the printer's final placement and output checks.

@@ -7,6 +7,7 @@ import re
 import time
 from typing import Callable
 
+from mtg_core.network import RateLimitExceeded, get_download_logger
 from mtg_core.db import CardDatabase
 from mtg_core.images import checksum_bytes, ensure_parent_dir
 from mtg_core.models import BulkDownloadStatus, ImageAssetRecord, PrintRecord, SearchCardResult
@@ -552,8 +553,7 @@ class CardService:
                         try:
                             image_url = self._resolve_image_url(card_id, payload)
                             if not image_url:
-                                failed += 1
-                                continue
+                                raise ValueError("No image URL available for this printing")
                             image_payload = self.fetch_bytes_fn(image_url)
                             extension = _extension_from_url(image_url) or "png"
                             asset_id = self.store_image_bytes(
@@ -576,7 +576,11 @@ class CardService:
                                 checksum=checksum_bytes(image_payload),
                             )
                             downloaded += 1
+                        except RateLimitExceeded:
+                            get_download_logger().exception("card_rate_limited card_id=%s name=%s set=%s collector=%s", card_id, payload.get("name"), payload.get("set"), payload.get("collector_number"))
+                            raise
                         except Exception:
+                            get_download_logger().exception("card_failed card_id=%s name=%s set=%s collector=%s", card_id, payload.get("name"), payload.get("set"), payload.get("collector_number"))
                             failed += 1
 
                 page_offset += 1
@@ -597,6 +601,7 @@ class CardService:
                         last_error=None,
                     )
 
+            get_download_logger().info("batch scanned=%s downloaded=%s skipped=%s failed=%s page=%s offset=%s", scanned, downloaded, skipped, failed, status.current_page_url, page_offset)
             chunk_number = status.chunk_number + 1
             advance_to_next = page_offset >= len(chunk_records)
             current_page_url = next_page_url if advance_to_next else status.current_page_url
@@ -625,6 +630,7 @@ class CardService:
                 last_error=None,
             )
         except Exception as exc:
+            get_download_logger().exception("bulk_stopped page=%s offset=%s", status.current_page_url, status.page_offset)
             return self._save_bulk_download_status(
                 status,
                 status="failed",

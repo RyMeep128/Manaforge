@@ -8,6 +8,8 @@ import urllib.request
 
 import certifi
 
+from mtg_core.network import read_response
+
 
 USER_AGENT = "print-proxy-prep/1.0"
 HTTPS_CONTEXT = ssl.create_default_context(cafile=certifi.where())
@@ -50,8 +52,7 @@ def fetch_json(url: str) -> dict:
         },
     )
     try:
-        with urllib.request.urlopen(request, timeout=30, context=HTTPS_CONTEXT) as response:
-            payload = json.loads(response.read().decode("utf-8"))
+        payload = json.loads(read_response(request, opener=urllib.request.urlopen, context=HTTPS_CONTEXT).decode("utf-8"))
     except urllib.error.HTTPError as error:
         payload = _decode_error_payload(error)
         if payload is not None:
@@ -76,8 +77,7 @@ def fetch_bytes(url: str) -> bytes:
         },
     )
     try:
-        with urllib.request.urlopen(request, timeout=30, context=HTTPS_CONTEXT) as response:
-            return response.read()
+        return read_response(request, opener=urllib.request.urlopen, context=HTTPS_CONTEXT)
     except urllib.error.URLError as error:
         raise RemoteLookupUnavailable(
             f"Remote image download failed: {error.reason}"

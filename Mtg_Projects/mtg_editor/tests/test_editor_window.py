@@ -6,6 +6,48 @@ from PyQt6 import QtGui
 from mtg_core.decks import DeckEntry
 
 
+def test_deck_filters_share_views_clear_selection_and_keep_last_valid_query(tmp_path):
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    window = EditorWindow(service=object(), root=tmp_path)
+    window.document.deck.entries = [
+        DeckEntry('a', 'Bird', extras={'facts': {'cmc': 2}}),
+        DeckEntry('b', 'Dragon', extras={'facts': {'cmc': 6}})]
+    window.changed()
+    before = window.document.to_dict()
+    window.grid.selected = {'b'}
+    window.filter.setText('mv<=2')
+    assert not window.table.isRowHidden(0)
+    assert window.table.isRowHidden(1)
+    assert not window.grid.selected
+    assert {entry.entry_id for entry, _, _ in window.grid.items} == {'a'}
+    window.filter.setText('mv:bad')
+    assert window.grid.query == 'mv<=2'
+    assert window.table.isRowHidden(1)
+    window.filter.clear()
+    assert not window.table.isRowHidden(1)
+    assert window.document.to_dict() == before
+    window.close()
+    app.processEvents()
+
+
+def test_readiness_filter_applies_to_both_views_and_expires_on_edit(tmp_path):
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    window = EditorWindow(service=object(), root=tmp_path)
+    window.document.deck.entries = [DeckEntry('a', 'First'), DeckEntry('b', 'Second')]
+    window.changed()
+    window.grid.filtered_ids = {'b'}
+    window.readiness_snapshot = window.document.to_dict()
+    window.filter_changed()
+    assert window.table.isRowHidden(0)
+    assert not window.table.isRowHidden(1)
+    assert {e.entry_id for e, _, _ in window.grid.items} == {'b'}
+    window.change_quantity('b', 1)
+    assert window.grid.filtered_ids is None
+    assert not window.table.isRowHidden(0)
+    window.close()
+    app.processEvents()
+
+
 def test_visual_grid_loads_cached_art_and_shares_table_selection(tmp_path):
     import time
     app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])

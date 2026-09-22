@@ -1,8 +1,38 @@
 # Manaforge delivery checklist
 
-This checklist coordinates work across MTG Core, Print Proxy Prep, and the Deck Editor. It is ordered by dependency and product value. Detailed requirements remain in the [printer plan](printing-roadmap.md) and [Deck Editor epic](../Mtg_Projects/mtg_editor/docs/deck-editor-epic.md).
+This checklist coordinates work across MTG Core, Print Proxy Prep, and the Deck Editor. It is ordered by dependency and product value. Detailed requirements remain in the [printer plan](printing-roadmap.md), [Deck Editor epic](../Mtg_Projects/mtg_editor/docs/deck-editor-epic.md), [architecture cleanup epic](architecture-cleanup-epic.md), and [long-term product epic](long-term-product-epic.md). This checklist is the delivery sequence; the epics retain detailed scope and acceptance criteria. Product-epic phase numbers are mapped into the sequence below rather than replacing existing completed milestones.
 
 Status: **[x] complete**, **[ ] planned**, **[~] partially complete**.
+
+## Product direction and scope
+
+**Build -> Test -> Learn -> Print -> Play:** a local-first, open-source Magic workstation for personal use and private games with friends. One serializable deck model, with separate Oracle identity and exact printing identity, feeds building, analysis, recommendations, printing, and future play modes without re-entry or export. Match card instances and print jobs reference that model through adapters rather than putting game or rendering state into card records.
+
+Current priority remains completing and stabilizing the editor and print workflow, with incremental boundary cleanup. The later phases record direction, not authorization to implement a rules engine, AI, or networking now. Recommendations are deterministic and data-driven; a future gameplay AI is a separate system and does not require an LLM.
+
+Keep decks, downloaded data, artwork, preferences, and future rules/recommendation datasets user-owned and usable offline where practical. Avoid required accounts, subscriptions, cloud-only storage, public matchmaking, rankings, social feeds, marketplaces, and unnecessary central infrastructure.
+
+## Architecture cleanup - staged workstream alongside Phases 3-4
+
+These are planned tasks from the [architecture cleanup epic](architecture-cleanup-epic.md), not newly verified defects or completed work. Confirm each against the current code before implementation. Preserve behavior, PyQt6, existing public interfaces where useful, and old project compatibility; deliver small, independently testable changes rather than a rewrite.
+
+| Order / epic workstream | Planned outcome and acceptance gate |
+| --- | --- |
+| A1 / 1 | One canonical-print selection and `PrintRecord` row conversion implementation; admin paths reuse it. Regression coverage removes stale canonical mappings when the final print is deleted. |
+| A2 / 2 | Domain-focused database/repository mutations own search, canonical, image-manifest, and dependent-record invariants; admin services express intent instead of duplicating SQL write rules. |
+| A3 / 9 | Consistent contextual logging for bulk image and editor worker failures, preserving tracebacks while keeping user messages concise. |
+| A4 / 5 | Categorization/analysis use meaningful application services; editor callers no longer reach through `service.database`. Domain behavior remains testable without Qt. |
+| A5 / 3 | Split database internals into schema, cards, search, images, preferences, and sync responsibilities; keep a convenient facade and lightweight package boundary. |
+| A6 / 4 | Separate search, artwork/image, and catalog-sync responsibilities internally while preserving useful `CardService` compatibility. |
+| A7 / 6 | Extract stable editor session/history/persistence, task lifecycle, and search responsibilities; test session behavior independently where practical and avoid callback-sized abstractions. |
+| A8 / 7 | Replace the editor's Proxy `sys.path` integration with normal shared-package imports, starting with adapter consumers. Preserve Proxy UI and print-handoff tests; keep non-UI shared code independent of Qt. |
+| A9 / 8, 10 | Promote mature `extras` concepts into typed state and centralize persistent section/sync values. Preserve old serialized values and unknown extension data; test old/new round trips. Keep display labels separate. |
+| A10 / 11 | Explicit schema version and ordered, tested SQLite migrations, including fresh creation and automatic legacy upgrades without unnecessary destructive rebuilds. |
+| A11 / 12 | Focused Ruff adoption (`ruff check`, `ruff format --check`) alongside pytest on Python 3.12/3.13 CI; avoid a blanket formatting rewrite. Broader type checking can follow later. |
+
+All A1-A11 items are **planned**. Start with persistence invariants and diagnostics, then service/editor boundaries and shared printing. Introduce migrations before any subsequent schema change needs them. Complete the relevant boundaries before expanding recommendations, rules storage, or gameplay; do not delay unrelated editor fixes behind the whole epic.
+
+**Exit gate:** Existing tests and CI remain green, duplicated persistence rules and editor boundary leaks are removed, responsibilities have clear owners, failures are diagnosable, and typed state/migrations preserve compatibility. No recommendation, rules-reference, AI, or multiplayer implementation belongs to this cleanup epic.
 
 ## Foundations already in place
 
@@ -160,11 +190,11 @@ and ambiguous rules are not presented as verified. Phase 3 starts with filters a
 
 ### 11. Insights and filtering
 
-- [ ] Add filters for name, colors/identity, mana value, type/subtype, Oracle text, keywords, power/toughness, rarity, set, artist, legality, treatment, tags, and print readiness.
+- [x] Add filters for name, colors/identity, mana value, type/subtype, Oracle text, keywords, power/toughness, rarity, set, artist, legality, treatment, tags, and print readiness. Local queries support combined metadata/category/section filters and entry flags in card and table views; **More > Print readiness** provides asset-based snapshot filters.
 - [x] Add mana curve, average mana value, color/pip distribution, type distribution, and land count. **More > Deck insights** reads local metadata in the background and shows a quantity-weighted snapshot with section scope and missing-data notices.
 - [x] Count ramp, draw, removal, wipes, protection, recursion, interaction, creatures, and user-defined roles. Role totals use assigned categories/tags without reclassifying manual choices; creature totals use card types.
 - [ ] Let users override every inferred role without changing global tag data.
-- [ ] Add clickable print-readiness totals for low DPI, missing art, missing backs, DFCs, oversized cards, and excluded cards.
+- [x] Add clickable print-readiness totals for low DPI, missing art, missing backs, DFCs, oversized cards, and excluded cards. Background local scans report copies and entries across all sections; clicking a total filters both views. Snapshot filters clear when the deck changes.
 - [ ] Add recent-search caching and background/cancellable database queries.
 
 ### 12. Playtest lite
@@ -173,7 +203,7 @@ and ambiguous rules are not presented as verified. Phase 3 starts with filters a
 - [ ] Support mulligans and drawing additional cards.
 - [ ] Exclude commanders, sideboards, maybeboards, and do-not-print entries as configured.
 - [ ] Persist plain-text playtest notes.
-- [ ] Keep this a sampling tool rather than a rules engine.
+- [ ] Keep this a sampling tool rather than a rules engine; reuse its deck-selection and hand-sampling behavior in Phase 7 local playtest.
 
 **Exit gate:** Users can evaluate composition and sample hands without leaving Manaforge.
 
@@ -207,6 +237,8 @@ and ambiguous rules are not presented as verified. Phase 3 starts with filters a
 - [ ] Explain every suggestion and allow dismissal/override.
 - [ ] Avoid presenting heuristic categories as rules facts.
 
+- [ ] Suggest deck-specific themes only when a meaningful, configurable threshold is met; keep final category assignments under user control.
+
 ### 16. Local recommendation dataset
 
 - [ ] Choose licensed/public decklist sources and document provenance and refresh policy.
@@ -216,9 +248,77 @@ and ambiguous rules are not presented as verified. Phase 3 starts with filters a
 - [ ] Store compact indexed aggregates rather than loading raw decks during editor use.
 - [ ] Add freshness, source, and sample-size indicators.
 
+- [ ] Add a recommendation grid/list with previews, expandable reasons, immediate Add to Deck, categories/themes, and Scryfall-style filtering.
+- [ ] Combine commander usage, co-occurrence, archetypes, color identity, themes, synergy, popularity, curve needs, and role gaps through transparent scoring.
+- [ ] Download/cache versioned recommendation aggregates for offline use without requiring EDHREC during normal operation.
+
 **Exit gate:** Recommendations are local, fast, explainable, reproducible, and clearly sourced.
 
-## Phase 6 — Optional ecosystem expansion
+## Phase 6 - Rules and rulings reference
+
+- [ ] Add a local Rules section with Oracle text, official card rulings, keywords, and related Comprehensive Rules links.
+- [ ] Support full-text/rule-number search, section navigation, keyword indexes, and cross-links.
+- [ ] Version rules/rulings separately from decks/artwork, show installed version/date, and support updates.
+- [ ] Add card-context access throughout Manaforge and eventually during matches.
+
+**Exit gate:** Cached rules and rulings work offline, including direct rule-number navigation. This reference library is independent of rules enforcement.
+
+## Phase 7 - Local playtest and reusable game state
+
+- [ ] Open an existing deck directly into manual goldfish play, reusing Phase 3 hand sampling.
+- [ ] Model players, unique card instances, zones, and turn state outside widgets with serializable state and explicit actions/events.
+- [ ] Support library, hand, battlefield, graveyard, exile, and command zone; shuffle, mulligan, draw, mill, move, tap/untap, restart, and repeated opening hands.
+- [ ] Track life, commander damage, poison, counters, and tokens.
+
+**Exit gate:** Manual play needs no deck recreation; transitions are testable without Qt and expose an adapter boundary for the future engine.
+
+## Phase 8 - Rules-engine feasibility prototype
+
+- [ ] Investigate Forge/XMage before writing a new Magic engine; evaluate license compatibility before incorporating code.
+- [ ] Compare embedding, subprocess, and API integration while preserving Manaforge's UI; document supported cards/formats and limitations.
+- [ ] Map Oracle/printing IDs to engine definitions and consume authoritative state/events through a game API.
+- [ ] Prove: load deck -> start game -> draw hand -> list legal actions -> play land -> cast simple spell -> resolve.
+
+**Exit gate:** Documented engine/licensing decision and reproducible integration proof before sophisticated gameplay UI or networking.
+
+## Phase 9 - Rules-enforced local play
+
+- [ ] Keep a deterministic, authoritative engine behind presentation/client and game API layers. UI requests actions and renders events; rules stay outside UI.
+- [ ] Support legal actions/targets, costs/mana payment, stack/priority, phases/steps, triggers, replacement effects, combat/damage, state-based actions, tokens/counters, and zone movement.
+- [ ] Preserve hidden information and clearly identify supported-rule/card limitations.
+- [ ] Provide legal-action/target highlights, readable stack, priority stops/automatic passing, attack/block selection, clear prompts, card zoom, and responsive battlefield interaction.
+
+**Exit gate:** Supported games automate bookkeeping with deterministic tests, serializable state, and action/event logs suitable for replay and networking.
+
+## Phase 10 - Local AI deck testing
+
+- [ ] Run human versus local AI through the same engine and legal-action interface; prefer adapting usable engine AI.
+- [ ] Progress from random legal actions to heuristics, state evaluation/search, then deck-aware strategy.
+- [ ] Cover sensible spell/target choices, interaction, and combat decisions to expose deck weaknesses.
+
+**Exit gate:** Repeatable matches provide useful testing; competitive strength and LLM integration are not prerequisites.
+
+## Phase 11 - Private 1v1 multiplayer
+
+- [ ] Support host, invite/code, and join; prefer peer-to-peer where practical and evaluate lightweight rendezvous only if needed.
+- [ ] Reuse authoritative state and synchronized actions/events with per-player hidden-state views and reconnect support.
+- [ ] Test action validation, determinism, hidden-information isolation, and disconnect recovery.
+
+**Exit gate:** Friends can complete and reconnect to private games using existing decks without state divergence or hidden-information leaks.
+
+## Phase 12 - Commander multiplayer
+
+- [ ] Extend private play to 3-4 players with multiplayer priority/combat, commander damage, and readable larger battlefields.
+- [ ] Consider spectators, saved/recoverable matches, and LAN play when useful.
+
+**Exit gate:** Supported Commander games retain authoritative rules, correct private views, and reconnect behavior.
+
+## Phase 13 - Complete-loop polish
+
+- [ ] Once Build -> Test -> Learn -> Print -> Play works, invest in richer animations, transitions, effects, sound, onboarding, and accessibility improvements.
+- [ ] Keep essential usability/accessibility and responsiveness part of every earlier phase.
+
+## Optional ecosystem expansion - not a prerequisite for play
 
 - [ ] Collection tracking by card, quantity, and printing.
 - [ ] Deck usage, owned totals, missing cards, and **Print missing proxies**.
@@ -228,6 +328,13 @@ and ambiguous rules are not presented as verified. Phase 3 starts with filters a
 - [ ] Advanced non-destructive image editing with reset and preview comparison.
 - [ ] Additional export formats only when a concrete user workflow requires them.
 - [ ] Plugin/extension boundary only after Core APIs and project schemas stabilize.
+
+## Local data and archive strategy
+
+- [ ] Keep the core installation relatively small: application, metadata/database, indexes, and local rules/rulings rather than mandatory full-resolution artwork.
+- [ ] Resolve images by printing ID through local cache -> remote download when absent -> reusable cached asset.
+- [ ] Support optional resumable archives of every English card/printing and high-quality images; a 100+ GB archive is acceptable but never required.
+- [ ] Keep external data cacheable and separately versioned where appropriate, preserving user ownership and useful offline behavior.
 
 ## Rules that apply to every phase
 
@@ -242,13 +349,12 @@ and ambiguous rules are not presented as verified. Phase 3 starts with filters a
 
 ## Recommended next execution order
 
-1. Calibration sheet and vertical offset.
-2. Calibration wizard and profile verification.
-3. Direct printing through the shared renderer.
-4. PNG/JPEG/card/ZIP export.
-5. Printer bulk repair tools.
-6. Preferred-print rules and faster artwork picker.
-7. Token relationships and unusual-layout matrix.
-8. Freeze printer expansion and build the Deck Editor MVP.
-9. Make the editor fast and pleasant before adding recommendations.
-10. Integrate **Print Deck**, shared preferences, and owned/do-not-print state.
+1. Finish the remaining Phase 3 editor work: inferred-role overrides, cancellable queries/search caching, and opening-hand sampling. Preserve the completed filters, insights, and print-readiness work.
+2. Begin architecture A1-A4: shared persistence invariants, regression coverage, diagnostics, and editor service boundaries.
+3. Complete Phase 4 print handoff and shared preferences alongside A5-A8 database/service/session and shared-print extractions.
+4. Finish typed persistent state, migrations, and focused quality tooling (A9-A11); introduce migration support sooner if schema changes require it.
+5. Add explainable guidance and offline recommendation datasets/UI (Phase 5) after the editor is stable.
+6. Add the versioned rules reference (Phase 6), then reusable manual local playtest (Phase 7).
+7. Prove engine and licensing feasibility (Phase 8) before rules-enforced local play (Phase 9).
+8. Add useful local AI (Phase 10), private 1v1 (Phase 11), then Commander multiplayer (Phase 12).
+9. Invest in complete-loop polish (Phase 13); schedule optional ecosystem work only when needed.

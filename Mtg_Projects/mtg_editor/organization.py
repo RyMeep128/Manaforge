@@ -1,4 +1,5 @@
 """Deck organization commands and deterministic visual groups."""
+from .filtering import compile_filter, matches
 SECTIONS = {'mainboard': 'Mainboard', 'commander': 'Commander', 'sideboard': 'Sideboard',
             'considering': 'Considering', 'excluded': 'Excluded'}
 GROUPS = ['Type', 'Mana Value', 'Color', 'Category', 'Section']
@@ -8,7 +9,9 @@ SORTS = ['Name', 'Mana Value', 'Color', 'Quantity', 'Import Order']
 def card_facts(payload):
     face = (payload.get('card_faces') or [{}])[0]
     return {key: payload.get(key, face.get(key)) for key in
-            ('type_line', 'cmc', 'colors', 'oracle_text', 'keywords', 'layout', 'card_faces')}
+            ('type_line', 'cmc', 'colors', 'oracle_text', 'keywords', 'layout', 'card_faces',
+             'color_identity', 'power', 'toughness', 'rarity', 'artist', 'legalities',
+             'finishes', 'frame_effects', 'promo', 'textless', 'full_art', 'border_color')}
 
 
 def group_key(entry, grouping):
@@ -33,11 +36,15 @@ def group_key(entry, grouping):
                             'Sorcery', 'Artifact', 'Enchantment') if t in line), 'Other')
 
 
-def grouped_entries(deck, grouping='Type', sort='Name', query='', show_empty_categories=False):
+def grouped_entries(deck, grouping='Type', sort='Name', query='', show_empty_categories=False, entry_ids=None):
     categories = {c.category_id: c for c in deck.categories}
+    terms = compile_filter(query)
+    category_names = {key: c.name for key, c in categories.items()}
     groups = {}
     for entry in deck.entries:
-        if query.casefold() not in (entry.name + ' ' + ' '.join(entry.tags)).casefold():
+        if entry_ids is not None and entry.entry_id not in entry_ids:
+            continue
+        if not matches(entry, terms, category_names):
             continue
         groups.setdefault(group_key(entry, grouping), []).append(entry)
     if grouping == 'Section':
