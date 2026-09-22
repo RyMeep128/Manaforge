@@ -3576,6 +3576,9 @@ class ProjectDashboardPage(QWidget):
         new_button.setToolTip("Start a new project draft")
         check_updates_button = QPushButton("Check for updates")
         check_updates_button.clicked.connect(lambda: application.check_for_updates(manual=True))
+        deck_library_button = QPushButton('Decks and print projects')
+        deck_library_button.clicked.connect(self.open_deck_library)
+        self._deck_windows = []
 
         import_button.clicked.connect(self.import_project)
         new_button.clicked.connect(application.open_blank_editor)
@@ -3587,6 +3590,7 @@ class ProjectDashboardPage(QWidget):
         top_row.addWidget(title)
         top_row.addStretch()
         top_row.addWidget(check_updates_button)
+        top_row.addWidget(deck_library_button)
         top_row.addWidget(import_button)
         top_row.addWidget(resume_draft_button)
         top_row.addWidget(new_button)
@@ -3600,6 +3604,20 @@ class ProjectDashboardPage(QWidget):
         layout.addWidget(empty_state)
         layout.addWidget(project_list)
         self.setLayout(layout)
+
+    def open_deck_library(self):
+        from mtg_core.paths import data_root
+        from mtg_editor.project_browser import ProjectBrowser
+        from mtg_editor.gui import EditorWindow
+        dialog = ProjectBrowser(data_root() / 'decks', project_library.projects_root(), self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            window = EditorWindow()
+            window.setAttribute(QtCore.Qt.WidgetAttribute.WA_DeleteOnClose)
+            self._deck_windows.append(window)
+            window.destroyed.connect(lambda: self._deck_windows.remove(window))
+            if dialog.path:
+                window.open_path(dialog.path)
+            window.show()
 
     def refresh_projects(self):
         self._resume_draft_button.setVisible(project_library.draft_has_user_content())

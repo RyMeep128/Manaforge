@@ -178,15 +178,6 @@ class CardCanvas(W.QAbstractScrollArea):
         self.setFocus()
         self.hover_timer.stop()
         self.preview.hide()
-        if event.button() == C.Qt.MouseButton.RightButton and not self.search_mode:
-            item = self.hit(event.position().toPoint())
-            if item and not event.modifiers() & C.Qt.KeyboardModifier.ShiftModifier:
-                if item[0].entry_id not in self.selected:
-                    self.selected = {item[0].entry_id}
-                self.selectionChanged.emit()
-                self.viewport().update()
-                self.quickTagRequested.emit(event.globalPosition().toPoint())
-                return
         if event.button() != C.Qt.MouseButton.LeftButton:
             return
         header = self.header_at(event.position().toPoint())

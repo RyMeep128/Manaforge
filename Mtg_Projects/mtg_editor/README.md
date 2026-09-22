@@ -22,14 +22,14 @@ remaining window space, and the toolbars wrap on smaller screens.
 - Click cards to select; Ctrl-click toggles selection, Shift-click selects a range,
   and Ctrl+A selects visible cards. Hover reveals quantity controls and a larger preview.
   Double-click a deck card to open the shared Proxy artwork picker.
-- Right-click a card, hold **T** with cards selected, or click **Quick tags** to open
+- Hold the right mouse button on a card for **250 ms**, hold **T** with cards selected, or click **Quick tags** to open
   the radial menu. Move toward a role and release, or click a role after opening.
   **Primary** mode replaces the primary category; **Tab** or the mode wedge switches
   to purple **Secondary tags** mode, which adds/removes tags without changing categories.
   Mixed selections add a tag to all; when all have it, the same action removes it.
   **More…** includes other roles, custom categories/tags, and creating a new one.
-  **Esc** cancels. The six common roles keep fixed positions for muscle memory.
-- Shift+right-click for artwork, Oracle/user tags, section/category assignment, commander
+  Release in the center or outside the ring to cancel a mouse hold. **Esc** cancels. The six common roles keep fixed positions for muscle memory.
+- A quick right-click (or Shift+right-click) opens artwork, Oracle/user tags, section/category assignment, commander
   assignment, oversized/normal size, owned/do-not-print, retry artwork, and removal.
   Bulk actions affect all selected entries in one Undo step.
 - **More > Manage categories** creates, renames, reorders, and deletes categories.
@@ -60,7 +60,11 @@ requests. Selected alternate artwork takes precedence over a printing's normal a
 `Commander`, `Deck`, `Sideboard`, `Maybeboard`, and `Excluded`; `SB:` and `CMDR:`
 prefixes apply to individual lines. Names may have a quantity and optional printing,
 for example `1 Sol Ring (cmm) 410`. CSV supports `name`, `count` (or `quantity`),
-and optional `section`, `set_code`, and `collector_number` columns.
+and optional `section`, `set_code`, `collector_number`, `image_url`, and
+`backside_image_url` columns. Enable **Download custom artwork when supplied** to
+import PNG, JPEG, or WebP front/back images. Failed downloads or invalid images leave
+that card unresolved. The preview identifies custom artwork; native saves and Print
+Deck retain the downloaded assets. Uncheck this option to use the selected printing's art.
 
 Click **Review import** to resolve cards against the local catalog. Enable
 **Fetch missing cards online** if desired. Resolution runs in the background;
@@ -80,8 +84,11 @@ Blueprint MTG deck. **Review import** downloads the deck data; **Fetch missing c
 online** separately controls card lookups. Supported source sections, quantities,
 set/collector numbers, and explicit Scryfall printing IDs are preserved. Commander
 entries remain commanders; sideboards and considering lists stay separate. Exact
-printing IDs preserve that printing's artwork. Arbitrary custom-image overrides
-are not imported. Private/unavailable decks and changed source formats show errors;
+printing IDs preserve that printing's artwork. Explicit source overrides are also read
+from `customImageUrl` / `custom_image_url`, their `customBackImageUrl` /
+`custom_back_image_url` equivalents, or `artOverride` / `art_override` objects with
+`front_url` / `image_url` and `back_url` fields. Normal card thumbnails are not treated
+as custom artwork. Private/unavailable decks and changed source formats show errors;
 no cards are applied until you accept a successful preview. These adapters are
 covered by payload-fixture tests; source availability is not guaranteed.
 
@@ -94,6 +101,13 @@ in memory, report the error, and retry. **Save** also works with Ctrl+S.
 **Decks** provides New, Open, and recent decks. Open accepts native editor documents
 and existing Proxy JSON projects. Proxy imports save as separate editor documents;
 the source is retained. Existing local artwork is imported into shared image storage.
+
+**Decks > Decks and print projects** opens the shared library browser. The same
+browser is available from Proxy's project dashboard. It loads native decks and managed
+print projects in the background, supports name/type filtering, and offers New deck
+and Open file. Double-click a row to open it in the editor. Unavailable files are
+reported without removing their library entries. Print projects remain intact when
+opened as separate editor decks.
 
 Up to five pre-save snapshots live in the adjacent `.recovery` folder.
 **More > Restore recovery snapshot** restores into a new deck without overwriting
@@ -176,6 +190,41 @@ Print/PDF preflight checks remain in Proxy. Printing does not close or reset the
 Editor: selection, filters, scroll position, and Undo history remain available.
 Concurrent changes are not synchronized live between the two applications.
 
+## Commander selection and deck checks
+
+**More > Commander / format deck checks** lets you choose one commander or a
+partner/background pair. The report previews those choices before you apply them.
+Applying moves previous commanders to the mainboard, preserves all card quantities,
+and supports Undo. Invalid choices remain editable for unfinished decks and house rules.
+
+Checks cover the 100-card total, commander eligibility, supported partner abilities,
+singleton limits (including basic lands and explicit copy exceptions), color identity,
+basic land types, and locally cached Commander legality/bans. Legendary Vehicles and
+Spacecraft with printed power/toughness are included. Sideboard, considering, and
+excluded cards are outside the checked deck; owned/do-not-print cards still count.
+Choose a **Companion** from the sideboard and, for commanders that request one,
+choose their pregame color. Both choices persist and support Undo. Companion checks
+include the starting commanders and enforce the companion's own legality, color
+identity, quantity, and restriction. All ten named Ikoria companions are supported;
+ambiguous activated abilities or unfamiliar companions receive Unknown findings.
+
+With **Standard**, **Modern**, **Pauper**, **Legacy**, or **Vintage** selected in the
+deck header, the same dialog checks that format instead: a 60-card minimum, a maximum
+15-card sideboard, combined main/sideboard copy limits, explicit card-copy exceptions,
+Vintage restricted cards, companion restrictions, and cached format legality.
+Pauper legality comes from format metadata rather than the selected printing's rarity.
+Custom decks can use the Commander preview without changing their format.
+
+The report separates violations from unknown results and shows the checker version
+and oldest known card-cache date. Data older than 30 days is flagged for refresh.
+Refresh card data in Core and reopen the report to use it. A cache timestamp records
+local retrieval, not publication of a ban list; a clean report means no violations
+were detected in that local data. House rules are not enforced; unsupported or ambiguous
+characteristics remain explicit Unknown findings. Printing and deck edits remain available.
+
+Rule references: [Comprehensive Rules](https://magic.wizards.com/en/rules), sections
+903 and 702.124; [Vehicle/Spacecraft eligibility update](https://magic.wizards.com/en/news/announcements/edge-of-eternities-update-bulletin).
+
 ## Shortcuts and remaining work
 
 Ctrl+N: New; Ctrl+O: Open; Ctrl+S: Save; Ctrl+Z: Undo;
@@ -183,5 +232,5 @@ Ctrl+Y/Ctrl+Shift+Z: Redo; Ctrl+F: deck filter; Ctrl+K: Add Cards;
 Ctrl+A: select visible cards; Delete: remove selection; hold T: quick tagging;
 Tab in the radial menu: switch primary/category tag mode; Esc: cancel.
 
-Commander legality analysis, statistics, and playtesting
+Expanded filters, statistics, and playtesting
 remain on the roadmap. The compact table is available under **More**.

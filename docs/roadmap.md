@@ -100,7 +100,7 @@ Status: **[x] complete**, **[ ] planned**, **[~] partially complete**.
 - [x] Store deck name, format, description, sections, commander(s), categories, tags, notes, and sort order.
 - [x] Store exact printing/art selection and owned/do-not-print state per entry.
 - [x] Migrate existing proxy projects without losing counts, backs, layouts, oversized flags, or artwork overrides.
-- [~] Editor New/Open/Recent flows exist; unified project dashboard integration remains.
+- [x] Share a background-loaded Decks and print projects browser between Editor and Proxy, with filtering, New/Open, and preserved Editor recent-deck flows. Opening a print project creates a separate editable deck.
 - [x] Add autosave, dirty status, atomic writes, backups, and recovery.
 - [x] Add model-level Undo/Redo commands.
 
@@ -137,18 +137,24 @@ Status: **[x] complete**, **[ ] planned**, **[~] partially complete**.
 ### 10. Import, export, and legality
 
 - [x] Core proxy workflow accepts pasted names with or without a leading quantity.
-- [~] Text/file/CSV and public deck-site imports exist in the proxy workflow.
+- [x] Text/file/CSV and public deck-site imports are available in Editor and Proxy.
 - [x] Move shared text/CSV import parsing and card resolution into Core for reuse by the editor; keep Proxy compatibility wrappers.
 - [x] Add editor paste/file import with background resolution, progress, cancellation, unresolved-line review, automatic categorization, and one-step Undo.
-- [~] Preserve sections, quantities, set codes, collector numbers, and explicit Scryfall printing/art choices in editor imports. Arbitrary custom-art image overrides from external sites remain unsupported.
+- [x] Preserve sections, quantities, exact printing IDs, set/collector coordinates, and supported explicit custom front/back image overrides. CSV can supply image URLs; imported artwork is validated, stored in Core, previewed, persisted, and retained through print handoff. Failed image downloads are reported instead of silently substituted.
 - [x] Support public Moxfield, Archidekt, and Blueprint MTG in the editor through shared Core adapters, with fixture-tested section/printing preservation, cancellation, and error handling. Live availability depends on each site's public endpoints.
 - [x] Export quantity/name text with optional set/collector data and sections; preview, clipboard copy, and file saving.
-- [ ] Add Commander selection and partner/background rules.
-- [ ] Validate deck size, singleton rules, color identity, banned lists, and format legality.
-- [ ] Version or date legality data and explain stale/unknown results.
-- [ ] Add other formats only after Commander validation is dependable.
+- [x] Add Commander selection with compatible partner/background checks, including named partners, partner variants, and Doctor's companion; preserve quantities and support Undo.
+- [x] Check Commander deck size, singleton exceptions, color identity/basic land types, cached bans/legality, the ten named companion restrictions, and chosen pregame commander colors. Unsupported/ambiguous card characteristics produce explicit Unknown findings rather than a clean result.
+- [x] Version the Commander checker, show local card-cache dates, and explicitly identify stale/missing legality data. Cache dates are not represented as ban-list publication dates.
+- [x] After Commander coverage, add Standard, Modern, Pauper, Legacy, and Vintage checks: main/sideboard size, shared copy limits, Vintage restrictions, companions, and dated local format legality.
 
 **Exit gate:** A public or pasted Commander deck imports with sections and printings intact and receives an explainable legality report.
+
+**Phase 2 complete:** Shared library navigation, import/art persistence, undoable organization,
+Commander/constructed checks, and the existing editor/print bridge have regression coverage.
+External site availability and current ban-list accuracy still depend on public endpoints and
+fresh Core data. Custom artwork support uses explicit override fields; unknown source schemas
+and ambiguous rules are not presented as verified. Phase 3 starts with filters and statistics.
 
 ## Phase 3 — Make the editor enjoyable
 

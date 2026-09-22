@@ -685,6 +685,21 @@ class CardDatabase:
             row = connection.execute('SELECT count(*) FROM oracle_tags').fetchone()
         return int(row[0] or 0)
 
+    def legality_data(self, card_ids):
+        """Exact local printing payloads and cache dates for explainable deck checks."""
+        values = list(dict.fromkeys(value for value in card_ids if value))
+        result = {}
+        with self.connect() as connection:
+            for offset in range(0, len(values), 400):
+                batch = values[offset:offset + 400]
+                marks = ','.join('?' for _ in batch)
+                rows = connection.execute(
+                    f'SELECT card_id, payload_json, updated_at FROM prints WHERE card_id IN ({marks})', batch)
+                for row in rows:
+                    result[row['card_id']] = {'payload': json.loads(row['payload_json']),
+                                               'cached_at': row['updated_at']}
+        return result
+
     def categorization_data(self, card_ids, oracle_ids):
         """Read local role inputs in bounded batches on a single connection."""
         cards, tags = {}, {}

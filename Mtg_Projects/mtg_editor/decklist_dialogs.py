@@ -8,22 +8,23 @@ from mtg_core.deck_sources import fetch_public_deck
 class ImportWorker(C.QThread):
     progress = C.pyqtSignal(int, int)
 
-    def __init__(self, text, service, remote, parent=None, *, public_url=''):
+    def __init__(self, text, service, remote, parent=None, *, public_url='', import_artwork=True):
         super().__init__(parent)
         self.text, self.service, self.remote = text, service, remote
         self.result, self.error = None, ''
         self.cancelled = Event()
         self.public_url = public_url
+        self.import_artwork = import_artwork
 
     def run(self):
         try:
             if self.public_url:
                 entries = fetch_public_deck(self.public_url, cancelled=self.cancelled.is_set)
                 self.result = resolve_entries(entries, self.service, allow_remote=self.remote,
-                    progress=self.progress.emit, cancelled=self.cancelled.is_set)
+                    progress=self.progress.emit, cancelled=self.cancelled.is_set, import_artwork=self.import_artwork)
             else:
                 self.result = resolve_decklist(self.text, self.service, allow_remote=self.remote,
-                    progress=self.progress.emit, cancelled=self.cancelled.is_set)
+                    progress=self.progress.emit, cancelled=self.cancelled.is_set, import_artwork=self.import_artwork)
         except Exception as exc:
             self.error = str(exc)
 
@@ -63,12 +64,15 @@ class ImportDecklist(W.QDialog):
         self.resolve_button.clicked.connect(self.resolve)
         row.addWidget(self.resolve_button)
         layout.addLayout(row)
+        self.artwork = W.QCheckBox('Download custom artwork when supplied')
+        self.artwork.setChecked(True)
+        layout.addWidget(self.artwork)
         self.progress = W.QProgressBar()
         self.progress.setRange(0, 1)
         self.progress.setValue(0)
         layout.addWidget(self.progress)
-        self.preview = W.QTableWidget(0, 4)
-        self.preview.setHorizontalHeaderLabels(['Card', 'Quantity', 'Section', 'Printing'])
+        self.preview = W.QTableWidget(0, 5)
+        self.preview.setHorizontalHeaderLabels(['Card', 'Quantity', 'Section', 'Printing', 'Artwork'])
         self.preview.horizontalHeader().setSectionResizeMode(0, W.QHeaderView.ResizeMode.Stretch)
         self.preview.setEditTriggers(W.QAbstractItemView.EditTrigger.NoEditTriggers)
         layout.addWidget(self.preview, 1)
@@ -85,6 +89,7 @@ class ImportDecklist(W.QDialog):
         layout.addWidget(self.buttons)
         self.source.textChanged.connect(self.invalidate)
         self.remote.toggled.connect(self.invalidate)
+        self.artwork.toggled.connect(self.invalidate)
         self.url.textChanged.connect(self.invalidate)
         self.input_mode.currentIndexChanged.connect(self.change_mode)
 
@@ -115,10 +120,11 @@ class ImportDecklist(W.QDialog):
         if self.worker is not None or not source:
             return
         self.invalidate()
-        for widget in (self.source, self.file_button, self.remote, self.resolve_button, self.url, self.input_mode):
+        for widget in (self.source, self.file_button, self.remote, self.resolve_button, self.url, self.input_mode, self.artwork):
             widget.setEnabled(False)
         self.progress.setRange(0, 0)
-        self.worker = ImportWorker(source, self.service, self.remote.isChecked(), self, public_url=public_url)
+        self.worker = ImportWorker(source, self.service, self.remote.isChecked(), self, public_url=public_url,
+                                   import_artwork=self.artwork.isChecked())
         self.worker.progress.connect(self.update_progress)
         self.worker.finished.connect(self.resolved)
         self.worker.start()
@@ -136,7 +142,7 @@ class ImportDecklist(W.QDialog):
             self.result = None
             super().reject()
             return
-        for widget in (self.source, self.file_button, self.remote, self.resolve_button, self.url, self.input_mode):
+        for widget in (self.source, self.file_button, self.remote, self.resolve_button, self.url, self.input_mode, self.artwork):
             widget.setEnabled(True)
         self.progress.setRange(0, 1)
         self.progress.setValue(1)
@@ -147,7 +153,8 @@ class ImportDecklist(W.QDialog):
         self.preview.setRowCount(len(entries))
         for row, entry in enumerate(entries):
             for col, value in enumerate((entry.name, str(entry.quantity), entry.section,
-                                         f'{entry.set_code or ""} {entry.collector_number or ""}')):
+                                         f'{entry.set_code or ""} {entry.collector_number or ""}',
+                                         'Custom' if entry.extras.get('imported_artwork') else 'Printing')):
                 self.preview.setItem(row, col, W.QTableWidgetItem(value))
         self.messages.setPlainText(f'{sum(e.quantity for e in entries)} cards ready; {len(warnings)} unresolved lines.\n'
                                   + '\n'.join(warnings))

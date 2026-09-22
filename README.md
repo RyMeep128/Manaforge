@@ -22,8 +22,8 @@ Deck Editor, integration, and recommendation roadmap.
 ![Deck Editor with visual search and grouped card images](docs/images/deck-editor-search.png)
 
 Use **Add Cards** to open local visual search, then arrange your deck in **Grid** or **Stacks**.
-Group by type, mana value, color, category, or section. Right-click cards for quick
-radial categories/tags; Shift+right-click for artwork and bulk card actions. **Print Deck** opens a linked
+Group by type, mana value, color, category, or section. Hold the right mouse button for quick
+radial categories/tags; quick right-click for artwork and bulk card actions. **Print Deck** opens a linked
 Proxy project while keeping your deck workspace in place.
 
 ![Deck Editor with overlapping category stacks](docs/images/deck-editor-stacks.png)

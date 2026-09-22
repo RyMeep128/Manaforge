@@ -148,6 +148,7 @@ class EditorWindow(W.QMainWindow):
         menu = W.QMenu(more)
         menu.addAction('Compact table', self.show_table)
         menu.addAction('Export decklist…', self.export_decklist)
+        menu.addAction('Commander / format deck checks…', self.commander_checks)
         menu.addAction('Manage categories…', self.manage_categories)
         menu.addAction('Category templates…', self.category_templates)
         menu.addAction('Auto Categorize…', self.auto_categorize)
@@ -234,7 +235,7 @@ class EditorWindow(W.QMainWindow):
         self.grid.artworkRequested.connect(self.replace_artwork)
         self.grid.menuRequested.connect(self.card_menu)
         self.grid.quickTagRequested.connect(self.quick_tag)
-        self.grid.setToolTip('Right-click or hold T: quick category / tags. Shift+right-click: card actions.')
+        self.grid.setToolTip('Hold right mouse or T: quick category / tags. Right-click: card actions.')
         self.grid.moveRequested.connect(self.move_cards)
         self.grid.preferencesChanged.connect(self.preferences_changed)
         self.grid.addRequested.connect(self.open_search)
@@ -246,6 +247,12 @@ class EditorWindow(W.QMainWindow):
         self.table.selectionModel().selectionChanged.connect(self.table_selection_changed)
         self.table.installEventFilter(self)
         self.table.viewport().installEventFilter(self)
+        from .quick_tags import HoldTagGesture
+        self.tag_gestures = [HoldTagGesture(view,
+            lambda position, v=view: self.select_tag_target(v, position),
+            lambda entry_id, position: self.card_menu(entry_id, position), self.quick_tag)
+            for view in (self.grid, self.table)]
+        self.table.setToolTip(self.grid.toolTip())
         self._refreshing_table = False
         self.table.horizontalHeader().setSectionResizeMode(1, W.QHeaderView.ResizeMode.Stretch)
         self.views = W.QStackedWidget()
@@ -344,16 +351,30 @@ class EditorWindow(W.QMainWindow):
                 if not event.isAutoRepeat():
                     self.quick_tag(QtGui.QCursor.pos())
                 return True
-            if (event.type() == QtCore.QEvent.Type.MouseButtonPress
-                    and event.button() == QtCore.Qt.MouseButton.RightButton):
-                index = self.table.indexAt(event.position().toPoint())
-                if index.isValid():
-                    entry_id = self.document.deck.entries[index.row()].entry_id
-                    if entry_id not in self.grid.selected:
-                        self.table.selectRow(index.row())
-                    self.quick_tag(event.globalPosition().toPoint())
-                    return True
         return super().eventFilter(watched, event)
+
+    def select_tag_target(self, view, position):
+        view.setFocus()
+        self.grid.hover_timer.stop()
+        self.grid.preview.hide()
+        point = view.viewport().mapFromGlobal(position)
+        if view is self.table:
+            index = self.table.indexAt(point)
+            if not index.isValid():
+                return None
+            entry_id = self.document.deck.entries[index.row()].entry_id
+            if entry_id not in self.grid.selected:
+                self.table.selectRow(index.row())
+        else:
+            item = self.grid.hit(point)
+            if not item:
+                return None
+            entry_id = item[0].entry_id
+            if entry_id not in self.grid.selected:
+                self.grid.selected = {entry_id}
+            self.grid.selectionChanged.emit()
+            self.grid.viewport().update()
+        return entry_id
 
     def show_table(self):
         self.views.setCurrentWidget(self.table)
@@ -479,7 +500,7 @@ class EditorWindow(W.QMainWindow):
     def move_cards(self, ids, target, before):
         self.edit(lambda d: move_entries(d, ids, self.grid.grouping, target, before))
 
-    def quick_tag(self, position):
+    def quick_tag(self, position, *, hold=False):
         from .quick_tags import QuickTagMenu, apply_quick_role
         ids = set(self.grid.selected)
         if not ids:
@@ -491,7 +512,7 @@ class EditorWindow(W.QMainWindow):
         if previous is not None:
             previous.close()
             previous.deleteLater()
-        self.quick_menu = QuickTagMenu(self.document, ids, self)
+        self.quick_menu = QuickTagMenu(self.document, ids, self, hold=hold)
         def apply(name, tags):
             self.edit(lambda d: apply_quick_role(d, ids, name, tags))
             self.statusBar().showMessage(f'Updated {len(ids)} cards: ' +
@@ -549,6 +570,16 @@ class EditorWindow(W.QMainWindow):
                 self.open_search()
                 self.query.setText('otag:' + dialog.selected_tag)
         self.run_task(lambda: self.service.database.oracle_tags_for_card(entry.oracle_id) if entry.oracle_id else [], show)
+
+    def commander_checks(self):
+        from .commander_dialog import CommanderDialog
+        from mtg_core.commander import set_commanders
+        ids = [e.card_id for e in self.document.deck.entries]
+        def show(records):
+            dialog = CommanderDialog(self.document, records, self)
+            if dialog.exec() == W.QDialog.DialogCode.Accepted:
+                self.edit(dialog.apply_selections)
+        self.run_task(lambda: self.service.database.legality_data(ids), show)
 
     def import_decklist(self):
         from .decklist_dialogs import ImportDecklist
@@ -870,6 +901,7 @@ class EditorWindow(W.QMainWindow):
 
     def refresh_recent(self):
         self.recent.clear()
+        self.recent.addAction('Decks and print projects…', self.project_browser)
         self.recent.addAction('New deck', self.new)
         self.recent.addAction('Open deck / proxy project…', self.open)
         self.recent.addSeparator()
@@ -880,6 +912,17 @@ class EditorWindow(W.QMainWindow):
             except (OSError, ValueError, TypeError):
                 continue
             self.recent.addAction(name, lambda checked=False, p=path: self.open_path(p))
+
+    def project_browser(self):
+        from .project_browser import ProjectBrowser
+        if self.task is not None:
+            return
+        dialog = ProjectBrowser(self.root, data_root() / 'projects', self)
+        if dialog.exec() == W.QDialog.DialogCode.Accepted:
+            if dialog.new_deck:
+                self.new()
+            elif dialog.path:
+                self.open_path(dialog.path)
 
     def closeEvent(self, event):
         if self.worker is not None or self.task is not None or self.thumbnails.worker is not None:

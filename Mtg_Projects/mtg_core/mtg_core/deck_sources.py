@@ -27,6 +27,21 @@ def _printing_id(*objects):
     return None
 
 
+def _custom_art(*objects):
+    """Only explicit overrides; a site's card thumbnail is not custom artwork."""
+    front_url = back_url = None
+    for obj in objects:
+        override = obj.get('artOverride') or obj.get('art_override') or {}
+        front_url = front_url or obj.get('customImageUrl') or obj.get('custom_image_url')
+        back_url = back_url or obj.get('customBackImageUrl') or obj.get('custom_back_image_url')
+        if isinstance(override, dict):
+            front_url = front_url or override.get('front_url') or override.get('image_url')
+            back_url = back_url or override.get('back_url')
+    if any(value is not None and not isinstance(value, str) for value in (front_url, back_url)):
+        raise ValueError('The custom artwork override could not be read.')
+    return front_url, back_url
+
+
 def _archidekt_section(card):
     if card.get('isCommander'):
         return 'commander'
@@ -202,7 +217,8 @@ def _entries_from_card_collection(collection, *, section='mainboard', preserve_p
         )
         if name and count > 0:
             entries.append(DeckEntry(count, _normalize_card_name(name), set_code, collector_number, section,
-                                      _printing_id(item, card) if preserve_printing else None))
+                                      _printing_id(item, card) if preserve_printing else None,
+                                      *(_custom_art(item, card) if preserve_printing else (None, None))))
         elif not name and preserve_printing:
             raise ValueError('The deck source contains a card without a name. Try importing a text export.')
     return entries
@@ -223,7 +239,7 @@ def _first_optional(*objects: dict, names: tuple[str, ...]) -> str | None:
 def _aggregate_entries(entries: list[DeckEntry]) -> list[DeckEntry]:
     aggregated: OrderedDict[tuple[str, str | None, str | None], DeckEntry] = OrderedDict()
     for entry in entries:
-        key = (entry.name.casefold(), entry.set_code, entry.collector_number, entry.section, entry.card_id)
+        key = (entry.name.casefold(), entry.set_code, entry.collector_number, entry.section, entry.card_id, entry.image_url, entry.backside_image_url)
         previous = aggregated.get(key)
         aggregated[key] = replace(entry,
             count=entry.count + (previous.count if previous else 0),
@@ -313,7 +329,8 @@ def parse_archidekt_html(html: str, *, preserve_sections=False) -> list[DeckEntr
 
         section = _archidekt_section(card) if preserve_sections else 'mainboard'
         entries.append(DeckEntry(count, name, set_code, collector_number, section,
-                                 _printing_id(card) if preserve_sections else None))
+                                 _printing_id(card) if preserve_sections else None,
+                                 *(_custom_art(card) if preserve_sections else (None, None))))
     return _aggregate_entries(entries)
 
 

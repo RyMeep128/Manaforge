@@ -67,6 +67,8 @@ def test_right_press_preserves_batch_selection_and_history(tmp_path):
     window.grid.selected = {'a', 'b'}
     rect = window.grid.items[-1][1]
     QtTest.QTest.mousePress(window.grid.viewport(), C.Qt.MouseButton.RightButton, pos=rect.center())
+    assert not hasattr(window, 'quick_menu')
+    QtTest.QTest.qWait(300)
     assert window.quick_menu.ids == {'a', 'b'}
     QtTest.QTest.mouseRelease(window.quick_menu, C.Qt.MouseButton.RightButton, pos=C.QPoint(220, 75))
     assert all(is_manual(e) for e in window.document.deck.entries)
@@ -118,4 +120,57 @@ def test_review_explicitly_reconsiders_manual():
     dialog.reconsider.setChecked(False)
     assert dialog.selected_proposals() == {}
     dialog.close()
+    app.processEvents()
+
+
+def test_click_hold_and_cancellation_in_both_views(tmp_path):
+    from mtg_editor.gui import EditorWindow
+    app = W.QApplication.instance() or W.QApplication([])
+    window = EditorWindow(service=object(), root=tmp_path)
+    window.document.deck.entries = [DeckEntry('a', 'One'), DeckEntry('b', 'Two')]
+    window.changed()
+    window.show()
+    app.processEvents()
+    actions = []
+    window.card_menu = lambda *args: actions.append(args)
+    for view in (window.grid, window.table):
+        window.views.setCurrentWidget(view)
+        app.processEvents()
+        if view is window.table:
+            point = view.visualRect(window.model.index(0, 0)).center()
+        else:
+            point = window.grid.items[-1][1].center()
+        surface = view.viewport()
+        QtTest.QTest.mouseClick(surface, C.Qt.MouseButton.RightButton, pos=point)
+        assert len(actions) == 1
+        context = G.QContextMenuEvent(G.QContextMenuEvent.Reason.Mouse, point, surface.mapToGlobal(point))
+        app.sendEvent(surface, context)
+        assert len(actions) == 1
+        actions.clear()
+        for cancel in ('escape', 'move', 'wheel', 'focus'):
+            QtTest.QTest.mousePress(surface, C.Qt.MouseButton.RightButton, pos=point)
+            if cancel == 'escape':
+                QtTest.QTest.keyClick(view, C.Qt.Key.Key_Escape)
+            elif cancel == 'move':
+                event = G.QMouseEvent(C.QEvent.Type.MouseMove, C.QPointF(point + C.QPoint(40, 0)),
+                    C.QPointF(surface.mapToGlobal(point + C.QPoint(40, 0))),
+                    C.Qt.MouseButton.NoButton, C.Qt.MouseButton.RightButton, C.Qt.KeyboardModifier.NoModifier)
+                app.sendEvent(surface, event)
+            elif cancel == 'wheel':
+                gesture = window.tag_gestures[0 if view is window.grid else 1]
+                gesture.eventFilter(surface, C.QEvent(C.QEvent.Type.Wheel))
+            else:
+                app.sendEvent(view, G.QFocusEvent(C.QEvent.Type.FocusOut))
+            QtTest.QTest.mouseRelease(surface, C.Qt.MouseButton.RightButton, pos=point)
+            gesture = window.tag_gestures[0 if view is window.grid else 1]
+            assert gesture.pending is None and not gesture.timer.isActive()
+            assert not actions
+        QtTest.QTest.mousePress(surface, C.Qt.MouseButton.RightButton, pos=point)
+        QtTest.QTest.qWait(300)
+        assert window.quick_menu.isVisible()
+        QtTest.QTest.mouseRelease(window.quick_menu, C.Qt.MouseButton.RightButton, pos=C.QPoint(220, 220))
+        assert not window.quick_menu.isVisible()
+        assert not actions and all(not e.category_ids for e in window.document.deck.entries)
+    window.saved = window.document.to_dict()
+    window.close()
     app.processEvents()

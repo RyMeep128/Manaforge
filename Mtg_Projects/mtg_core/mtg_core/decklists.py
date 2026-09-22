@@ -17,6 +17,8 @@ class DecklistEntry:
     collector_number: str | None = None
     section: str = 'mainboard'
     card_id: str | None = None
+    image_url: str | None = None
+    backside_image_url: str | None = None
 
 
 SECTIONS = {'deck': 'mainboard', 'mainboard': 'mainboard', 'main': 'mainboard',
@@ -55,7 +57,9 @@ def parse_decklist(text, *, preserve_sections=True):
                 unmatched.append(f'CSV row {number}')
                 continue
             entries.append(DecklistEntry(int(count), name, code.lower() if code else None, collector,
-                                         section if preserve_sections else 'mainboard'))
+                                         section if preserve_sections else 'mainboard',
+                                         image_url=fields.get('image_url') or None if preserve_sections else None,
+                                         backside_image_url=fields.get('backside_image_url') or None if preserve_sections else None))
     else:
         section = 'mainboard'
         for raw in text.splitlines():
@@ -85,7 +89,7 @@ def parse_decklist(text, *, preserve_sections=True):
                                          target if preserve_sections else 'mainboard'))
     aggregated = {}
     for entry in entries:
-        key = (entry.name.casefold(), entry.set_code, entry.collector_number, entry.section)
+        key = (entry.name.casefold(), entry.set_code, entry.collector_number, entry.section, entry.image_url, entry.backside_image_url)
         previous = aggregated.get(key)
         aggregated[key] = replace(previous, count=previous.count + entry.count) if previous else entry
     return list(aggregated.values()), unmatched
@@ -156,15 +160,15 @@ def export_decklist(document, *, include_printings=True, include_sections=True):
     return '\n'.join(lines) + ('\n' if lines else '')
 
 
-def resolve_decklist(text, service, *, allow_remote=False, progress=None, cancelled=lambda: False):
+def resolve_decklist(text, service, *, allow_remote=False, progress=None, cancelled=lambda: False, import_artwork=True):
     """Prepare an import off-thread. No deck mutations occur until accepted by the caller."""
     parsed, warnings = parse_decklist(text)
     warnings = ['Unrecognized: ' + line for line in warnings]
     return resolve_entries(parsed, service, allow_remote=allow_remote, progress=progress,
-                           cancelled=cancelled, warnings=warnings)
+                           cancelled=cancelled, warnings=warnings, import_artwork=import_artwork)
 
 
-def resolve_entries(parsed, service, *, allow_remote=False, progress=None, cancelled=lambda: False, warnings=()):
+def resolve_entries(parsed, service, *, allow_remote=False, progress=None, cancelled=lambda: False, warnings=(), import_artwork=True):
     warnings = list(warnings)
     entries = []
     for index, source in enumerate(parsed):
@@ -174,12 +178,27 @@ def resolve_entries(parsed, service, *, allow_remote=False, progress=None, cance
             payload = resolve_card(source, service, allow_remote=allow_remote)
             if not payload or not payload.get('id'):
                 raise ValueError('No matching printing found')
-            entries.append(DeckEntry(str(uuid.uuid4()), payload.get('name') or source.name,
+            entry = DeckEntry(str(uuid.uuid4()), payload.get('name') or source.name,
                 quantity=source.count, section=source.section, card_id=payload['id'],
                 oracle_id=payload.get('oracle_id'), set_code=payload.get('set'),
                 collector_number=payload.get('collector_number'),
                 extras={'pre_cropped': True, 'facts': {key: payload.get(key) for key in
-                    ('type_line', 'cmc', 'colors', 'oracle_text', 'keywords', 'layout', 'card_faces')}}))
+                    ('type_line', 'cmc', 'colors', 'oracle_text', 'keywords', 'layout', 'card_faces')}})
+            if import_artwork:
+                for url, field in ((source.image_url, 'image_asset_id'), (source.backside_image_url, 'backside_asset_id')):
+                    if cancelled():
+                        return None
+                    if url:
+                        asset = import_image(service, url)
+                        if field == 'image_asset_id':
+                            entry.image_asset_id = asset
+                        else:
+                            entry.extras[field] = asset
+                            entry.extras['backside_name'] = f'__back_{entry.entry_id}.png'
+                            entry.extras['backside_pre_cropped'] = True
+                if source.image_url or source.backside_image_url:
+                    entry.extras['imported_artwork'] = {'front_url': source.image_url, 'back_url': source.backside_image_url}
+            entries.append(entry)
         except (ValueError, OSError, RemoteLookupUnavailable) as exc:
             printing = f' ({source.set_code}) {source.collector_number or ""}' if source.set_code else ''
             warnings.append(f'{source.count} {source.name}{printing}: {exc}')
@@ -191,6 +210,24 @@ def resolve_entries(parsed, service, *, allow_remote=False, progress=None, cance
     return entries, proposals, warnings
 
 
+def import_image(service, url):
+    from urllib.parse import urlsplit
+    from io import BytesIO
+    from PIL import Image
+    parts = urlsplit(url)
+    if parts.scheme not in ('http', 'https') or not parts.hostname or parts.username or parts.password:
+        raise ValueError('Custom artwork needs a public HTTP(S) image URL')
+    content = service.fetch_bytes_fn(url)
+    if len(content) > 50 * 1024 * 1024:
+        raise ValueError('Custom artwork exceeds 50 MB')
+    with Image.open(BytesIO(content)) as image:
+        extension = {'JPEG': 'jpg', 'PNG': 'png', 'WEBP': 'webp'}.get(image.format)
+        if not extension:
+            raise ValueError('Custom artwork must be PNG, JPEG, or WebP')
+        image.verify()
+    return service.store_image_bytes(content, extension=extension, source='deck_import', source_url=url)
+
+
 def apply_decklist(document, result):
     """Append/merge quantities and categorize new entries in the caller's undo transaction."""
     from copy import deepcopy
@@ -198,7 +235,9 @@ def apply_decklist(document, result):
     for prepared in entries:
         existing = next((e for e in document.deck.entries if e.card_id == prepared.card_id
                          and e.section == prepared.section and not e.extras.get('art_override')
-                         and not e.image_asset_id and not e.do_not_print), None)
+                         and e.image_asset_id == prepared.image_asset_id
+                         and e.extras.get('backside_asset_id') == prepared.extras.get('backside_asset_id')
+                         and not e.do_not_print), None)
         if existing:
             existing.quantity += prepared.quantity
             continue

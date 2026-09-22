@@ -9,6 +9,59 @@ from .organization import assign
 COMMON = ('Ramp', 'Draw', 'Removal', 'Protection', 'Board Wipes', 'Win Conditions')
 
 
+class HoldTagGesture(C.QObject):
+    """Shared right-button gesture for canvas and table viewports."""
+    def __init__(self, view, select, actions, radial):
+        super().__init__(view)
+        self.select, self.actions, self.radial = select, actions, radial
+        self.pending = None
+        self.timer = C.QTimer(self)
+        self.timer.setSingleShot(True)
+        self.timer.setInterval(250)
+        self.timer.timeout.connect(self.open_radial)
+        view.installEventFilter(self)
+        view.viewport().installEventFilter(self)
+        view.verticalScrollBar().valueChanged.connect(self.cancel)
+        view.horizontalScrollBar().valueChanged.connect(self.cancel)
+
+    def cancel(self, *_):
+        self.timer.stop()
+        self.pending = None
+
+    def open_radial(self):
+        pending = self.pending
+        self.cancel()
+        if pending:
+            self.radial(pending[1], hold=True)
+
+    def eventFilter(self, watched, event):
+        kind = event.type()
+        if kind == C.QEvent.Type.ContextMenu and event.reason() == G.QContextMenuEvent.Reason.Mouse:
+            return True
+        if kind == C.QEvent.Type.MouseButtonPress and event.button() == C.Qt.MouseButton.RightButton:
+            self.cancel()
+            entry_id = self.select(event.globalPosition().toPoint())
+            if entry_id:
+                self.pending = (entry_id, event.globalPosition().toPoint())
+                if not event.modifiers() & C.Qt.KeyboardModifier.ShiftModifier:
+                    self.timer.start()
+            return True
+        if kind == C.QEvent.Type.MouseButtonRelease and event.button() == C.Qt.MouseButton.RightButton:
+            pending = self.pending
+            self.cancel()
+            if pending:
+                self.actions(*pending)
+            return True
+        if kind == C.QEvent.Type.MouseMove and self.pending:
+            if (event.globalPosition().toPoint() - self.pending[1]).manhattanLength() >= W.QApplication.startDragDistance():
+                self.cancel()
+        if kind in (C.QEvent.Type.FocusOut, C.QEvent.Type.Hide, C.QEvent.Type.Wheel):
+            self.cancel()
+        if kind == C.QEvent.Type.KeyPress and event.key() == C.Qt.Key.Key_Escape:
+            self.cancel()
+        return False
+
+
 def apply_quick_role(document, ids, name, tags=False):
     entries = [e for e in document.deck.entries if e.entry_id in ids]
     if not entries:
@@ -36,17 +89,19 @@ def apply_quick_role(document, ids, name, tags=False):
 class QuickTagMenu(W.QWidget):
     chosen = C.pyqtSignal(str, bool)
 
-    def __init__(self, document, ids, parent=None):
+    def __init__(self, document, ids, parent=None, *, hold=False):
         super().__init__(parent, C.Qt.WindowType.Popup | C.Qt.WindowType.FramelessWindowHint)
         self.document, self.ids = document, set(ids)
         self.tags = False
         self.active = None
+        self.hold = hold
         self.setFixedSize(440, 440)
         self.setMouseTracking(True)
         self.setFocusPolicy(C.Qt.FocusPolicy.StrongFocus)
         self.setAccessibleName('Quick tagging: primary category. Tab switches to secondary tags.')
 
     def popup(self, position):
+        self.press_origin = C.QPoint(position)
         screen = W.QApplication.screenAt(position) or W.QApplication.primaryScreen()
         bounds = screen.availableGeometry()
         origin = position - C.QPoint(220, 220)
@@ -104,7 +159,13 @@ class QuickTagMenu(W.QWidget):
 
     def mouseReleaseEvent(self, event):
         if event.button() in (C.Qt.MouseButton.LeftButton, C.Qt.MouseButton.RightButton):
-            self.activate(self.sector(event.position()))
+            index = self.sector(event.position())
+            unmoved = (event.globalPosition().toPoint() - self.press_origin).manhattanLength() < W.QApplication.startDragDistance()
+            if self.hold and (index is None or unmoved):
+                self.close()
+            else:
+                self.activate(index)
+            self.hold = False
 
     def contextMenuEvent(self, event):
         event.accept()
@@ -132,7 +193,7 @@ class QuickTagMenu(W.QWidget):
 
     def activate(self, index):
         if index is None:
-            return  # A simple right click opens the menu for a subsequent click.
+            return  # Button-opened menus remain available for a subsequent click.
         if index == 7:
             self.switch_mode()
         elif index == 6:
