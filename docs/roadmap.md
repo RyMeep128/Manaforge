@@ -161,8 +161,8 @@ and ambiguous rules are not presented as verified. Phase 3 starts with filters a
 ### 11. Insights and filtering
 
 - [ ] Add filters for name, colors/identity, mana value, type/subtype, Oracle text, keywords, power/toughness, rarity, set, artist, legality, treatment, tags, and print readiness.
-- [ ] Add mana curve, average mana value, color/pip distribution, type distribution, and land count.
-- [ ] Count ramp, draw, removal, wipes, protection, recursion, interaction, creatures, and user-defined roles.
+- [x] Add mana curve, average mana value, color/pip distribution, type distribution, and land count. **More > Deck insights** reads local metadata in the background and shows a quantity-weighted snapshot with section scope and missing-data notices.
+- [x] Count ramp, draw, removal, wipes, protection, recursion, interaction, creatures, and user-defined roles. Role totals use assigned categories/tags without reclassifying manual choices; creature totals use card types.
 - [ ] Let users override every inferred role without changing global tag data.
 - [ ] Add clickable print-readiness totals for low DPI, missing art, missing backs, DFCs, oversized cards, and excluded cards.
 - [ ] Add recent-search caching and background/cancellable database queries.

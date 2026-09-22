@@ -147,6 +147,7 @@ class EditorWindow(W.QMainWindow):
         more.setPopupMode(W.QToolButton.ToolButtonPopupMode.InstantPopup)
         menu = W.QMenu(more)
         menu.addAction('Compact table', self.show_table)
+        menu.addAction('Deck insights…', self.deck_insights)
         menu.addAction('Export decklist…', self.export_decklist)
         menu.addAction('Commander / format deck checks…', self.commander_checks)
         menu.addAction('Manage categories…', self.manage_categories)
@@ -572,6 +573,21 @@ class EditorWindow(W.QMainWindow):
                 self.open_search()
                 self.query.setText('otag:' + dialog.selected_tag)
         self.run_task(lambda: self.service.database.oracle_tags_for_card(entry.oracle_id) if entry.oracle_id else [], show)
+
+    def deck_insights(self):
+        from .insights import InsightsDialog
+        snapshot = DeckDocument.from_dict(self.document.to_dict())
+        ids = {e.card_id for e in snapshot.deck.entries if e.card_id}
+        def load():
+            return {cid: self.service.get_card(card_id=cid) or {} for cid in ids}
+        def show(records):
+            previous = getattr(self, 'insights_dialog', None)
+            if previous is not None:
+                previous.close()
+                previous.deleteLater()
+            self.insights_dialog = InsightsDialog(snapshot, records, self)
+            self.insights_dialog.show()
+        self.run_task(load, show)
 
     def commander_checks(self):
         from .commander_dialog import CommanderDialog

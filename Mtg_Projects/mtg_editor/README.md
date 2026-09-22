@@ -174,6 +174,18 @@ Deck-wide analysis runs in a worker and reads the database in batches.
 An EDHREC-like local statistics/recommendation database remains a later step;
 this version supplies the deterministic, saved role data for that work.
 
+## Deck insights
+
+Open **More > Deck insights** for a quantity-weighted mana curve, average mana
+value, color and mana-symbol counts, types, lands, and assigned category/tag totals.
+Choose mainboard plus commanders, mainboard only, or all sections. Owned and
+do-not-print copies still contribute to deck composition. Lands are excluded
+from the curve and average; unknown types are excluded from the nonland count.
+Missing local metadata is reported instead of being treated as zero or colorless.
+Hybrid symbols count toward both colors, and multi-type cards count in each type.
+Roles come from your existing categories/tags and never overwrite manual choices.
+This is a snapshot: reopen it after editing the deck.
+
 ## Print Deck
 
 **Print Deck** asks which sections to include. Mainboard and Commander are selected
