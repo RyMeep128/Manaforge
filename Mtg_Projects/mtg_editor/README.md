@@ -1,4 +1,4 @@
-﻿# Manaforge Deck Editor
+# Manaforge Deck Editor
 
 Run `Launch Manaforge Deck Editor.cmd` after installing dependencies with the
 Proxy setup script. Alternatively run `python Mtg_Projects/mtg_editor/run_editor.py`
@@ -21,8 +21,12 @@ remaining window space, and the toolbars wrap on smaller screens.
   by name or user tag and adjust image sizes with the slider.
 - Click cards to select; Ctrl-click toggles selection, Shift-click selects a range,
   and Ctrl+A selects visible cards. Hover reveals quantity controls and a larger preview.
+  Click a deck card to inspect its larger image and Oracle text. Browse printings
+  fetched from Scryfall (with cached choices available offline) and choose **Use this printing** to apply one
+  (Undo is available). Double-faced cards have a **Flip card** control for both image
+  and rules text. Ctrl/Shift-click still selects cards without opening details.
   Double-click a deck card to open the shared Proxy artwork picker.
-- Hold the right mouse button on a card for **250 ms**, hold **T** with cards selected, or click **Quick tags** to open
+- Hold the right mouse button on a card for **150 ms**, hold **T** with cards selected, or click **Quick tags** to open
   the radial menu. Move toward a role and release, or click a role after opening.
   **Primary** mode replaces the primary category; **Tab** or the mode wedge switches
   to purple **Secondary tags** mode, which adds/removes tags without changing categories.

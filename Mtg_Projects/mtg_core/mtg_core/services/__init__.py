@@ -19,6 +19,7 @@ from mtg_core.sync import (
     fetch_json,
     resolve_card_payload,
     search_prints_payloads,
+    iter_search_payloads,
 )
 
 
@@ -61,6 +62,7 @@ class CardService:
         self.fetch_json_fn = fetch_json_fn or fetch_json
         self.fetch_bytes_fn = fetch_bytes_fn or fetch_bytes
         self.fetch_bulk_fn = fetch_bulk_fn
+        self._printings_refreshed = {}
 
     def search_cards(self, query: str, filters: dict | None = None) -> list[SearchCardResult]:
         filters = filters or {}
@@ -167,7 +169,13 @@ class CardService:
         record = self.database.get_print_by_set_and_number(set_code, collector_number)
         return None if record is None else dict(record.payload)
 
-    def get_prints(self, oracle_id: str) -> list[dict]:
+    def get_prints(self, oracle_id: str, *, allow_remote: bool = False) -> list[dict]:
+        if allow_remote and time.monotonic() - self._printings_refreshed.get(oracle_id, float('-inf')) > 3600:
+            payloads = iter_search_payloads(f'oracleid:{oracle_id}', self.fetch_json_fn, include_extras=True)
+            for payload in payloads:
+                if payload.get('oracle_id') == oracle_id and payload.get('id'):
+                    self.database.upsert_card_payload(payload)
+            self._printings_refreshed[oracle_id] = time.monotonic()
         return [dict(row.payload) for row in self.database.get_prints_for_oracle(oracle_id)]
 
     def get_artwork_favorite(self, oracle_id: str) -> str | None:

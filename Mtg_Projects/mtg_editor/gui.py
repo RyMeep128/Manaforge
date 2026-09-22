@@ -233,6 +233,7 @@ class EditorWindow(W.QMainWindow):
         self.grid.selectionChanged.connect(self.selection_changed)
         self.grid.quantityRequested.connect(self.change_quantity)
         self.grid.artworkRequested.connect(self.replace_artwork)
+        self.grid.detailsRequested.connect(self.card_details)
         self.grid.menuRequested.connect(self.card_menu)
         self.grid.quickTagRequested.connect(self.quick_tag)
         self.grid.setToolTip('Hold right mouse or T: quick category / tags. Right-click: card actions.')
@@ -354,6 +355,7 @@ class EditorWindow(W.QMainWindow):
         return super().eventFilter(watched, event)
 
     def select_tag_target(self, view, position):
+        self.grid.detail_timer.stop()
         view.setFocus()
         self.grid.hover_timer.stop()
         self.grid.preview.hide()
@@ -699,6 +701,23 @@ class EditorWindow(W.QMainWindow):
     def task_finished(self):
         self.task.deleteLater()
         self.task = None
+
+    def card_details(self, entry_id):
+        from .card_details import CardDetails, apply_printing
+        entry = next((e for e in self.document.deck.entries if e.entry_id == entry_id), None)
+        if entry is None:
+            return
+        previous = getattr(self, 'details_dialog', None)
+        if previous is not None:
+            previous.close()
+            previous.deleteLater()
+        document = self.document
+        self.details_dialog = CardDetails(self.service, entry, self)
+        def choose(target, payload):
+            if self.document is document:
+                self.edit(lambda d: apply_printing(d, target, payload))
+        self.details_dialog.printingChosen.connect(choose)
+        self.details_dialog.show()
 
     def replace_artwork(self, entry_id):
         from .proxy_adapter import choose_art, apply_art

@@ -11,6 +11,7 @@ class CardCanvas(W.QAbstractScrollArea):
     selectionChanged = C.pyqtSignal()
     quantityRequested = C.pyqtSignal(str, int)
     artworkRequested = C.pyqtSignal(str)
+    detailsRequested = C.pyqtSignal(str)
     menuRequested = C.pyqtSignal(str, object)
     quickTagRequested = C.pyqtSignal(object)
     moveRequested = C.pyqtSignal(object, str, object)
@@ -29,11 +30,17 @@ class CardCanvas(W.QAbstractScrollArea):
         self.hovered = None
         self.anchor = None
         self.press_position = None
+        self.detail_entry = None
+        self.detail_timer = C.QTimer(self)
+        self.detail_timer.setSingleShot(True)
+        self.detail_timer.timeout.connect(self.open_details)
         self.drop_target = None
         self.setFrameShape(W.QFrame.Shape.NoFrame)
         self.setFocusPolicy(C.Qt.FocusPolicy.StrongFocus)
         self.viewport().setMouseTracking(True)
         self.setAcceptDrops(not search)
+        # Use a useful pixel step for card-sized content and native wheel handling.
+        self.verticalScrollBar().setSingleStep(48)
         self.verticalScrollBar().valueChanged.connect(self.scrolled)
         self.thumbnails.updated.connect(self.viewport().update)
         self.hover_timer = C.QTimer(self)
@@ -99,6 +106,7 @@ class CardCanvas(W.QAbstractScrollArea):
         self.relayout()
 
     def scrolled(self):
+        self.detail_timer.stop()
         self.preview.hide()
         self.viewport().update()
 
@@ -136,13 +144,13 @@ class CardCanvas(W.QAbstractScrollArea):
                 continue
             pixmap = self.thumbnails.get(entry.card_id, entry.image_asset_id)
             rounded_card(p, rect, pixmap, entry.entry_id in self.selected, entry.entry_id == self.hovered)
-            badge = C.QRect(rect.x()+4, rect.y()+4, 40, 24)
+            badge = C.QRect(rect.x()+4, rect.bottom()-28, 32, 24)
             p.fillRect(badge, G.QColor('#20352f'))
             p.setPen(G.QColor('white'))
             p.drawText(badge, C.Qt.AlignmentFlag.AlignCenter, str(entry.quantity))
             if not self.search_mode and (entry.category_ids or entry.extras.get('auto_categories')):
                 source = 'Manual' if is_manual(entry) else 'Auto'
-                source_rect = C.QRect(rect.x()+48, rect.y()+4, 54, 24)
+                source_rect = C.QRect(rect.x()+40, rect.bottom()-28, 54, 24)
                 p.fillRect(source_rect, G.QColor('#69458a' if source == 'Manual' else '#20352f'))
                 p.drawText(source_rect, C.Qt.AlignmentFlag.AlignCenter, source)
             if entry.entry_id == self.hovered or entry.entry_id in self.selected:
@@ -172,9 +180,13 @@ class CardCanvas(W.QAbstractScrollArea):
         p.end()
 
     def control_rect(self, rect):
-        return C.QRect(rect.right()-65, rect.top()+3 if self.mode == 'Stacks' else rect.bottom()-29, 60, 25)
+        # Narrow cards need a separate row so controls do not cover the badges.
+        bottom_offset = 57 if rect.width() < 164 else 29
+        return C.QRect(rect.right()-65, rect.top()+3 if self.mode == 'Stacks' else rect.bottom()-bottom_offset, 60, 25)
 
     def mousePressEvent(self, event):
+        self.detail_timer.stop()
+        self.detail_entry = None
         self.setFocus()
         self.hover_timer.stop()
         self.preview.hide()
@@ -211,6 +223,8 @@ class CardCanvas(W.QAbstractScrollArea):
             self.selected = {entry.entry_id}
         self.anchor = entry.entry_id
         self.press_position = event.position().toPoint()
+        if not self.search_mode and not mods:
+            self.detail_entry = entry.entry_id
         self.selectionChanged.emit()
         self.viewport().update()
 
@@ -225,6 +239,7 @@ class CardCanvas(W.QAbstractScrollArea):
         if (not self.search_mode and event.buttons() & C.Qt.MouseButton.LeftButton and self.press_position is not None
                 and (event.position().toPoint()-self.press_position).manhattanLength() >= W.QApplication.startDragDistance()):
             self.press_position = None
+            self.detail_entry = None
             self.hover_timer.stop()
             drag = G.QDrag(self)
             mime = C.QMimeData()
@@ -240,9 +255,22 @@ class CardCanvas(W.QAbstractScrollArea):
             self.viewport().update()
 
     def mouseReleaseEvent(self, event):
+        if event.button() == C.Qt.MouseButton.LeftButton and self.press_position is not None and self.detail_entry:
+            self.detail_timer.start(W.QApplication.doubleClickInterval())
         self.press_position = None
 
+    def open_details(self):
+        if self.detail_entry and self.isVisible():
+            self.hover_timer.stop()
+            self.preview.hide()
+            self.detailsRequested.emit(self.detail_entry)
+
     def mouseDoubleClickEvent(self, event):
+        self.detail_timer.stop()
+        self.detail_entry = None
+        self.press_position = None
+        if event.button() != C.Qt.MouseButton.LeftButton:
+            return
         item = self.hit(event.position().toPoint())
         if item:
             if self.search_mode:
@@ -290,6 +318,7 @@ class CardCanvas(W.QAbstractScrollArea):
             self.viewport().update()
 
     def keyPressEvent(self, event):
+        self.detail_timer.stop()
         if event.key() == C.Qt.Key.Key_T and not event.modifiers() and self.selected and not self.search_mode:
             if not event.isAutoRepeat():
                 self.quickTagRequested.emit(G.QCursor.pos())
