@@ -14,7 +14,7 @@ from mtg_editor.organization import SECTIONS, GROUPS, SORTS, card_facts, assign,
 from mtg_core.decks import DeckCategory
 from mtg_ui.theme import application_stylesheet
 from copy import deepcopy
-from mtg_core.categorization import classify, analyze_entries, apply_categories
+from mtg_core.categorization import classify, apply_categories
 from mtg_editor.filtering import compile_filter, matches, HELP as FILTER_HELP
 from mtg_editor.search import SearchCache, SearchWorker
 from mtg_core.diagnostics import get_logger
@@ -653,7 +653,7 @@ class EditorWindow(W.QMainWindow):
             if dialog.exec() == W.QDialog.DialogCode.Accepted and dialog.selected_tag:
                 self.open_search()
                 self.query.setText('otag:' + dialog.selected_tag)
-        self.run_task(lambda: self.service.database.oracle_tags_for_card(entry.oracle_id) if entry.oracle_id else [], show)
+        self.run_task(lambda: self.service.get_oracle_tags(entry.oracle_id), show)
 
     def clear_readiness_filter(self):
         self.grid.filtered_ids = None
@@ -706,12 +706,12 @@ class EditorWindow(W.QMainWindow):
     def commander_checks(self):
         from .commander_dialog import CommanderDialog
         from mtg_core.commander import set_commanders
-        ids = [e.card_id for e in self.document.deck.entries]
+        entries = deepcopy(self.document.deck.entries)
         def show(records):
             dialog = CommanderDialog(self.document, records, self)
             if dialog.exec() == W.QDialog.DialogCode.Accepted:
                 self.edit(dialog.apply_selections)
-        self.run_task(lambda: self.service.database.legality_data(ids), show)
+        self.run_task(lambda: self.service.get_deck_legality_data(entries), show)
 
     def import_decklist(self):
         from .decklist_dialogs import ImportDecklist
@@ -813,7 +813,7 @@ class EditorWindow(W.QMainWindow):
                           reconsider_manual=dialog.reconsider.isChecked()))
                 self.group.setCurrentText('Category')
                 self.statusBar().showMessage(f'Categorized {len(selected)} entries. Undo is available.', 8000)
-        self.run_task(lambda: analyze_entries(self.service.database, entries), review)
+        self.run_task(lambda: self.service.analyze_entries(entries), review)
 
     def run_task(self, work, callback):
         if self.task is not None:
@@ -983,7 +983,7 @@ class EditorWindow(W.QMainWindow):
                    for e in document.deck.entries if (e.card_id and 'legalities' not in e.extras.get('facts', {})) or (legacy_folder and not e.image_asset_id)]
         uncategorized = [deepcopy(e) for e in document.deck.entries
                          if not e.category_ids and not e.extras.get('auto_categories')]
-        can_analyze = hasattr(getattr(self.service, 'database', None), 'categorization_data')
+        can_analyze = callable(getattr(self.service, 'analyze_entries', None))
         if (missing and hasattr(self.service, 'get_card')) or (uncategorized and can_analyze):
             def resolve():
                 result = {}
@@ -995,7 +995,7 @@ class EditorWindow(W.QMainWindow):
                             asset = self.service.store_image_bytes(path.read_bytes(),
                                 extension=path.suffix.lstrip('.') or 'png', source='editor_legacy')
                     result[eid] = facts, asset
-                proposals = analyze_entries(self.service.database, uncategorized) if can_analyze else {}
+                proposals = self.service.analyze_entries(uncategorized) if can_analyze else {}
                 return result, proposals
             def apply(resolved):
                 resolved, proposals = resolved

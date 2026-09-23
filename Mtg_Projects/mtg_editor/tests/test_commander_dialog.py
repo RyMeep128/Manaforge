@@ -24,7 +24,7 @@ def test_window_commander_selection_is_undoable(tmp_path, monkeypatch):
     from types import SimpleNamespace
     from mtg_editor.gui import EditorWindow
     app = W.QApplication.instance() or W.QApplication([])
-    window = EditorWindow(service=SimpleNamespace(database=SimpleNamespace(legality_data=lambda ids: {})), root=tmp_path)
+    window = EditorWindow(service=SimpleNamespace(get_deck_legality_data=lambda entries: {}), root=tmp_path)
     window.document.deck.entries = [DeckEntry('a', 'Card')]
     window.run_task = lambda work, callback: callback(work())
     def accept(dialog):

@@ -170,6 +170,22 @@ class CardService:
                 '_category_evidence': classify(result.payload or {}, data['tags'].get(result.oracle_id, []))}))
         return enriched
 
+    def analyze_entries(self, entries):
+        """Return explainable role proposals without mutating entries or global tags.
+
+        Reads are batched and local; GUI callers should run this in a worker.
+        """
+        from mtg_core.categorization import analyze_entries
+        return analyze_entries(self.database, entries)
+
+    def get_deck_legality_data(self, entries):
+        """Load dated local facts for deck checks, preserving missing-data signals."""
+        return self.database.legality_data([entry.card_id for entry in entries if entry.card_id])
+
+    def get_oracle_tags(self, oracle_id):
+        """Return local Oracle tags for display; never synchronize implicitly."""
+        return self.database.oracle_tags_for_card(oracle_id) if oracle_id else []
+
     def get_card(
         self,
         *,

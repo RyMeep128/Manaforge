@@ -90,9 +90,10 @@ def test_open_import_categorizes_without_overwriting_manual(tmp_path):
     from types import SimpleNamespace
     from mtg_editor.gui import EditorWindow
     app = W.QApplication.instance() or W.QApplication([])
-    database = SimpleNamespace(categorization_data=lambda cards, oracles: {
-        'cards': {'card': {'type_line': 'Artifact', 'oracle_text': '{T}: Add {G}.'}}, 'tags': {}})
-    window = EditorWindow(service=SimpleNamespace(database=database), root=tmp_path)
+    service = SimpleNamespace(analyze_entries=lambda entries: {
+        entry.entry_id: classify({'type_line': 'Artifact', 'oracle_text': '{T}: Add {G}.'})
+        for entry in entries})
+    window = EditorWindow(service=service, root=tmp_path)
     window.run_task = lambda work, callback: callback(work())
     doc = DeckDocument()
     doc.deck.entries = [DeckEntry('a', 'Mana rock', card_id='card'),
