@@ -8,7 +8,8 @@ import sqlite3
 import time
 from pathlib import Path
 
-from mtg_core.models import ImageAssetRecord, ImageRecord, PrintRecord
+from mtg_core.models import CardRecord, ImageAssetRecord, ImageRecord, PrintRecord
+from .catalog import CatalogRepository
 from mtg_core.paths import core_data_root
 from mtg_core.search import choose_canonical_print_key, normalized_search_text
 from mtg_core.search.syntax import compile_query, text_expression
@@ -136,6 +137,78 @@ class CardDatabase:
             if parent:
                 os.makedirs(parent, exist_ok=True)
         self._ensure_schema()
+        self._catalog = CatalogRepository(self)
+
+    def get_oracle_card(self, oracle_id: str) -> CardRecord | None:
+        return self._catalog.get_card(oracle_id=oracle_id)
+
+    def create_oracle_card(
+        self,
+        *,
+        oracle_id: str | None,
+        name: str,
+        normalized_name: str | None = None,
+        layout: str | None = None,
+    ) -> CardRecord:
+        return self._catalog.create_card(oracle_id=oracle_id, name=name, normalized_name=normalized_name, layout=layout)
+
+    def update_oracle_card(
+        self,
+        oracle_id: str,
+        *,
+        name: str,
+        normalized_name: str | None = None,
+        layout: str | None = None,
+    ) -> CardRecord:
+        return self._catalog.update_card(oracle_id=oracle_id, name=name, normalized_name=normalized_name, layout=layout)
+
+    def delete_oracle_card(self, oracle_id: str) -> bool:
+        return self._catalog.delete_card(oracle_id=oracle_id)
+
+    def create_print(
+        self,
+        *,
+        card_id: str | None,
+        oracle_id: str,
+        name: str,
+        set_code: str | None = None,
+        set_name: str | None = None,
+        collector_number: str | None = None,
+        released_at: str | None = None,
+        image_url: str | None = None,
+        thumbnail_url: str | None = None,
+        preview_url: str | None = None,
+        is_double_faced: bool = False,
+        payload: dict | None = None,
+    ) -> PrintRecord:
+        return self._catalog.create_print(
+            card_id=card_id, oracle_id=oracle_id, name=name, set_code=set_code, set_name=set_name,
+            collector_number=collector_number, released_at=released_at, image_url=image_url,
+            thumbnail_url=thumbnail_url, preview_url=preview_url, is_double_faced=is_double_faced,
+            payload=payload)
+
+    def update_print(
+        self,
+        card_id: str,
+        *,
+        oracle_id: str,
+        name: str,
+        set_code: str | None = None,
+        set_name: str | None = None,
+        collector_number: str | None = None,
+        released_at: str | None = None,
+        image_url: str | None = None,
+        thumbnail_url: str | None = None,
+        preview_url: str | None = None,
+        is_double_faced: bool = False,
+    ) -> PrintRecord:
+        return self._catalog.update_print(
+            card_id=card_id, oracle_id=oracle_id, name=name, set_code=set_code, set_name=set_name,
+            collector_number=collector_number, released_at=released_at, image_url=image_url,
+            thumbnail_url=thumbnail_url, preview_url=preview_url, is_double_faced=is_double_faced)
+
+    def delete_print(self, card_id: str) -> bool:
+        return self._catalog.delete_print(card_id=card_id)
 
     def connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.db_path, timeout=30.0)
@@ -400,9 +473,8 @@ class CardDatabase:
                     cache_expires_at,
                 ),
             )
-            if previous is not None and previous["oracle_id"] != oracle_id:
-                self.refresh_canonical_print(connection, previous["oracle_id"])
-            self.refresh_canonical_print(connection, oracle_id)
+            self.refresh_print_state(connection, card_id,
+                previous["oracle_id"] if previous is not None else None)
             connection.execute(
                 """
                 INSERT INTO sync_state (source, version, last_sync_at, payload_json)
@@ -414,8 +486,6 @@ class CardDatabase:
                 """,
                 (source, None, now, json.dumps({"last_card_id": card_id})),
             )
-            self.refresh_search_index_for_print(connection, card_id)
-            self.refresh_search_data_for_print(connection, card_id, payload)
             row = connection.execute(
                 "SELECT * FROM prints WHERE card_id = ?",
                 (card_id,),
@@ -428,6 +498,18 @@ class CardDatabase:
             'INSERT INTO print_search_data (card_id, search_json) VALUES (?, ?) '
             'ON CONFLICT(card_id) DO UPDATE SET search_json=excluded.search_json',
             (card_id, _compact_search_json(payload)))
+
+    def refresh_print_state(self, connection, card_id, previous_oracle_id=None):
+        """Maintain search and canonical state after a print write in this transaction."""
+        row = connection.execute('SELECT oracle_id, payload_json FROM prints WHERE card_id = ?', (card_id,)).fetchone()
+        oracle_id = row['oracle_id']
+        self.refresh_search_index_for_print(connection, card_id)
+        self.refresh_search_data_for_print(connection, card_id, json.loads(row['payload_json']))
+        if previous_oracle_id is not None and previous_oracle_id != oracle_id:
+            connection.execute('DELETE FROM artwork_favorites WHERE oracle_id = ? AND card_id = ?',
+                               (previous_oracle_id, card_id))
+            self.refresh_canonical_print(connection, previous_oracle_id)
+        self.refresh_canonical_print(connection, oracle_id)
 
     def refresh_canonical_print(self, connection: sqlite3.Connection, oracle_id: str) -> None:
         """Recompute the canonical mapping in the caller's transaction, or remove it."""

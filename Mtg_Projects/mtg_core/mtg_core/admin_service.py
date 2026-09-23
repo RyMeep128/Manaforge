@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import json
-import time
-import uuid
 
 from mtg_core.db import CardDatabase
 from mtg_core.models import (
@@ -90,16 +88,7 @@ class CardAdminService:
         )
 
     def get_card(self, oracle_id: str) -> CardRecord | None:
-        with self.database.connect() as connection:
-            row = connection.execute(
-                """
-                SELECT oracle_id, name, normalized_name, layout
-                FROM cards_oracle
-                WHERE oracle_id = ?
-                """,
-                (oracle_id,),
-            ).fetchone()
-        return _row_to_card_record(row)
+        return self.database.get_oracle_card(oracle_id=oracle_id)
 
     def create_card(
         self,
@@ -109,25 +98,8 @@ class CardAdminService:
         normalized_name: str | None = None,
         layout: str | None = None,
     ) -> CardRecord:
-        name = (name or "").strip()
-        if not name:
-            raise ValueError("Card name is required.")
-        oracle_id = (oracle_id or "").strip() or _generated_id("admin-oracle")
-        normalized_name = (normalized_name or "").strip() or normalized_search_text(name)
-        with self.database.connect() as connection:
-            connection.execute(
-                """
-                INSERT INTO cards_oracle (oracle_id, name, normalized_name, layout)
-                VALUES (?, ?, ?, ?)
-                """,
-                (oracle_id, name, normalized_name, layout or None),
-            )
-        return CardRecord(
-            oracle_id=oracle_id,
-            name=name,
-            normalized_name=normalized_name,
-            layout=layout or None,
-        )
+        return self.database.create_oracle_card(
+            oracle_id=oracle_id, name=name, normalized_name=normalized_name, layout=layout)
 
     def update_card(
         self,
@@ -137,62 +109,11 @@ class CardAdminService:
         normalized_name: str | None = None,
         layout: str | None = None,
     ) -> CardRecord:
-        existing = self.get_card(oracle_id)
-        if existing is None:
-            raise ValueError(f"Card '{oracle_id}' was not found.")
-        name = (name or "").strip()
-        if not name:
-            raise ValueError("Card name is required.")
-        normalized_name = (normalized_name or "").strip() or normalized_search_text(name)
-        with self.database.connect() as connection:
-            connection.execute(
-                """
-                UPDATE cards_oracle
-                SET name = ?, normalized_name = ?, layout = ?
-                WHERE oracle_id = ?
-                """,
-                (name, normalized_name, layout or None, oracle_id),
-            )
-            self.database.refresh_search_index_for_oracle(connection, oracle_id)
-        return CardRecord(
-            oracle_id=oracle_id,
-            name=name,
-            normalized_name=normalized_name,
-            layout=layout or None,
-        )
+        return self.database.update_oracle_card(
+            oracle_id=oracle_id, name=name, normalized_name=normalized_name, layout=layout)
 
     def delete_card(self, oracle_id: str) -> bool:
-        with self.database.connect() as connection:
-            row = connection.execute(
-                "SELECT 1 FROM cards_oracle WHERE oracle_id = ?",
-                (oracle_id,),
-            ).fetchone()
-            if row is None:
-                return False
-            print_rows = connection.execute(
-                "SELECT card_id FROM prints WHERE oracle_id = ?",
-                (oracle_id,),
-            ).fetchall()
-            for print_row in print_rows:
-                self.database.delete_search_index_for_print(connection, print_row["card_id"])
-                self.database.delete_search_data_for_print(connection, print_row["card_id"])
-                connection.execute(
-                    "DELETE FROM image_manifest WHERE card_id = ?",
-                    (print_row["card_id"],),
-                )
-            connection.execute(
-                "DELETE FROM canonical_prints WHERE oracle_id = ?",
-                (oracle_id,),
-            )
-            connection.execute(
-                "DELETE FROM prints WHERE oracle_id = ?",
-                (oracle_id,),
-            )
-            connection.execute(
-                "DELETE FROM cards_oracle WHERE oracle_id = ?",
-                (oracle_id,),
-            )
-        return True
+        return self.database.delete_oracle_card(oracle_id=oracle_id)
 
     def list_prints(
         self,
@@ -283,61 +204,11 @@ class CardAdminService:
         is_double_faced: bool = False,
         payload: dict | None = None,
     ) -> PrintRecord:
-        oracle_card = self.get_card(oracle_id)
-        if oracle_card is None:
-            raise ValueError(f"Card '{oracle_id}' does not exist.")
-        name = (name or "").strip()
-        if not name:
-            raise ValueError("Print name is required.")
-        card_id = (card_id or "").strip() or _generated_id("admin-print")
-        payload_json = _build_print_payload_json(
-            card_id=card_id,
-            oracle_card=oracle_card,
-            name=name,
-            set_code=set_code,
-            set_name=set_name,
-            collector_number=collector_number,
-            released_at=released_at,
-            image_url=image_url,
-            thumbnail_url=thumbnail_url,
-            preview_url=preview_url,
-            is_double_faced=is_double_faced,
-            existing_payload=payload,
-        )
-        now = time.time()
-        with self.database.connect() as connection:
-            connection.execute(
-                """
-                INSERT INTO prints (
-                    card_id, oracle_id, name, set_code, set_name, collector_number,
-                    released_at, image_url, thumbnail_url, preview_url,
-                    is_double_faced, payload_json, updated_at
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    card_id,
-                    oracle_id,
-                    name,
-                    _blank_to_none(set_code),
-                    _blank_to_none(set_name),
-                    _blank_to_none(collector_number),
-                    _blank_to_none(released_at),
-                    _blank_to_none(image_url),
-                    _blank_to_none(thumbnail_url),
-                    _blank_to_none(preview_url),
-                    1 if is_double_faced else 0,
-                    payload_json,
-                    now,
-                ),
-            )
-            self.database.refresh_canonical_print(connection, oracle_id)
-            self.database.refresh_search_index_for_print(connection, card_id)
-            row = connection.execute(
-                "SELECT * FROM prints WHERE card_id = ?",
-                (card_id,),
-            ).fetchone()
-        return self.database.row_to_print_record(row)
+        return self.database.create_print(
+            card_id=card_id, oracle_id=oracle_id, name=name, set_code=set_code, set_name=set_name,
+            collector_number=collector_number, released_at=released_at, image_url=image_url,
+            thumbnail_url=thumbnail_url, preview_url=preview_url, is_double_faced=is_double_faced,
+            payload=payload)
 
     def update_print(
         self,
@@ -354,92 +225,13 @@ class CardAdminService:
         preview_url: str | None = None,
         is_double_faced: bool = False,
     ) -> PrintRecord:
-        existing = self.get_print(card_id)
-        if existing is None:
-            raise ValueError(f"Print '{card_id}' was not found.")
-        oracle_card = self.get_card(oracle_id)
-        if oracle_card is None:
-            raise ValueError(f"Card '{oracle_id}' does not exist.")
-        name = (name or "").strip()
-        if not name:
-            raise ValueError("Print name is required.")
-        payload_json = _build_print_payload_json(
-            card_id=card_id,
-            oracle_card=oracle_card,
-            name=name,
-            set_code=set_code,
-            set_name=set_name,
-            collector_number=collector_number,
-            released_at=released_at,
-            image_url=image_url,
-            thumbnail_url=thumbnail_url,
-            preview_url=preview_url,
-            is_double_faced=is_double_faced,
-            existing_payload=existing.payload,
-        )
-        old_oracle_id = existing.oracle_id
-        now = time.time()
-        with self.database.connect() as connection:
-            connection.execute(
-                """
-                UPDATE prints
-                SET oracle_id = ?,
-                    name = ?,
-                    set_code = ?,
-                    set_name = ?,
-                    collector_number = ?,
-                    released_at = ?,
-                    image_url = ?,
-                    thumbnail_url = ?,
-                    preview_url = ?,
-                    is_double_faced = ?,
-                    payload_json = ?,
-                    updated_at = ?
-                WHERE card_id = ?
-                """,
-                (
-                    oracle_id,
-                    name,
-                    _blank_to_none(set_code),
-                    _blank_to_none(set_name),
-                    _blank_to_none(collector_number),
-                    _blank_to_none(released_at),
-                    _blank_to_none(image_url),
-                    _blank_to_none(thumbnail_url),
-                    _blank_to_none(preview_url),
-                    1 if is_double_faced else 0,
-                    payload_json,
-                    now,
-                    card_id,
-                ),
-            )
-            if old_oracle_id != oracle_id:
-                self.database.refresh_canonical_print(connection, old_oracle_id)
-            self.database.refresh_canonical_print(connection, oracle_id)
-            self.database.refresh_search_index_for_print(connection, card_id)
-            row = connection.execute(
-                "SELECT * FROM prints WHERE card_id = ?",
-                (card_id,),
-            ).fetchone()
-        return self.database.row_to_print_record(row)
+        return self.database.update_print(
+            card_id=card_id, oracle_id=oracle_id, name=name, set_code=set_code, set_name=set_name,
+            collector_number=collector_number, released_at=released_at, image_url=image_url,
+            thumbnail_url=thumbnail_url, preview_url=preview_url, is_double_faced=is_double_faced)
 
     def delete_print(self, card_id: str) -> bool:
-        existing = self.get_print(card_id)
-        if existing is None:
-            return False
-        with self.database.connect() as connection:
-            self.database.delete_search_index_for_print(connection, card_id)
-            self.database.delete_search_data_for_print(connection, card_id)
-            connection.execute(
-                "DELETE FROM image_manifest WHERE card_id = ?",
-                (card_id,),
-            )
-            connection.execute(
-                "DELETE FROM prints WHERE card_id = ?",
-                (card_id,),
-            )
-            self.database.refresh_canonical_print(connection, existing.oracle_id)
-        return True
+        return self.database.delete_print(card_id=card_id)
 
     def list_image_manifest(
         self,
@@ -602,15 +394,6 @@ class CardAdminService:
         return self.card_service.pause_bulk_download(query=query)
 
 
-def _generated_id(prefix: str) -> str:
-    return f"{prefix}-{uuid.uuid4().hex[:12]}"
-
-
-def _blank_to_none(value: str | None) -> str | None:
-    text = (value or "").strip()
-    return text or None
-
-
 def _loads_json(value: str | None) -> dict | None:
     if not value:
         return None
@@ -624,45 +407,3 @@ def _row_to_card_record(row) -> CardRecord:
         normalized_name=row["normalized_name"],
         layout=row["layout"],
     )
-
-
-def _build_print_payload_json(
-    *,
-    card_id: str,
-    oracle_card: CardRecord,
-    name: str,
-    set_code: str | None,
-    set_name: str | None,
-    collector_number: str | None,
-    released_at: str | None,
-    image_url: str | None,
-    thumbnail_url: str | None,
-    preview_url: str | None,
-    is_double_faced: bool,
-    existing_payload: dict | None,
-) -> str:
-    payload = dict(existing_payload or {})
-    payload["id"] = card_id
-    payload["oracle_id"] = oracle_card.oracle_id
-    payload["name"] = name
-    payload["layout"] = oracle_card.layout
-    payload["set"] = _blank_to_none(set_code)
-    payload["set_name"] = _blank_to_none(set_name)
-    payload["collector_number"] = _blank_to_none(collector_number)
-    payload["released_at"] = _blank_to_none(released_at)
-    image_uris = {}
-    if image_url:
-        image_uris["png"] = image_url.strip()
-    if preview_url:
-        image_uris["normal"] = preview_url.strip()
-    if thumbnail_url:
-        image_uris["small"] = thumbnail_url.strip()
-    if image_uris:
-        payload["image_uris"] = image_uris
-    else:
-        payload.pop("image_uris", None)
-    if is_double_faced:
-        payload["card_faces"] = payload.get("card_faces") or [{"name": name}]
-    else:
-        payload.pop("card_faces", None)
-    return json.dumps(payload, ensure_ascii=False, sort_keys=True)
