@@ -275,6 +275,17 @@ inclusion/mulligan settings. Notes support Undo/Redo; preferences stay in place
 when undoing deck edits. **Cancel** discards changes to notes/settings. Trial
 hands are temporary and never change deck quantities, artwork, or print settings.
 
+## Background diagnostics
+
+Background failures keep short messages in the editor and record technical details
+in `%LOCALAPPDATA%\PrintProxyPrep\mtg_core\logs\diagnostics-<process-id>.log`.
+The log includes tracebacks and relevant operation/card/project identifiers.
+Each process keeps a 5 MB current log and up to three rotated backups. When
+`PRINT_PROXY_PREP_DATA_DIR` is set, logs use its `mtg_core/logs` folder instead.
+If that folder cannot be written, diagnostics fall back to stderr. Bulk download
+requests and failures continue using the existing `downloads-<process-id>.log`.
+Review paths, queries, and identifiers before sharing a log.
+
 ## Override inferred roles
 
 Select cards and right-click **Edit roles/categories** to add or remove any

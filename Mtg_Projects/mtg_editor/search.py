@@ -1,7 +1,7 @@
 """Bounded recent results and cancellable local editor searches."""
 from collections import OrderedDict
 from copy import deepcopy
-import logging
+from mtg_core.diagnostics import get_logger
 from threading import Event
 from time import monotonic
 
@@ -59,5 +59,5 @@ class SearchWorker(QtCore.QThread):
             pass
         except Exception as exc:
             if not self.cancelled.is_set():
-                logging.getLogger(__name__).exception('Local card search failed query=%r', self.query)
+                get_logger(__name__).exception('Local card search failed query=%r', self.query)
                 self.completed.emit(self.query, [], str(exc))

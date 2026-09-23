@@ -17,19 +17,24 @@ from copy import deepcopy
 from mtg_core.categorization import classify, analyze_entries, apply_categories
 from mtg_editor.filtering import compile_filter, matches, HELP as FILTER_HELP
 from mtg_editor.search import SearchCache, SearchWorker
+from mtg_core.diagnostics import get_logger
 
 
 class Task(QtCore.QThread):
     completed = QtCore.pyqtSignal(object, str)
 
-    def __init__(self, work, parent=None):
+    def __init__(self, work, parent=None, *, operation=None, context=None):
         super().__init__(parent)
         self.work = work
+        self.operation = operation or getattr(work, '__qualname__', type(work).__name__)
+        self.context = context or {}
 
     def run(self):
         try:
             self.completed.emit(self.work(), '')
         except Exception as exc:
+            get_logger(__name__).exception('Background task failed operation=%s context=%s',
+                                           self.operation, self.context)
             self.completed.emit(None, str(exc))
 
 
@@ -816,7 +821,9 @@ class EditorWindow(W.QMainWindow):
         self.autosave.stop()
         self.centralWidget().setEnabled(False)
         self.statusBar().showMessage('Working…')
-        self.task = Task(work, self)
+        operation = getattr(callback, '__qualname__', type(callback).__name__)
+        context = {'deck_id': self.document.deck.deck_id, 'path': str(self.path) if self.path else None}
+        self.task = Task(work, self, operation=operation, context=context)
         def completed(result, error):
             self.centralWidget().setEnabled(True)
             if error:
@@ -826,6 +833,7 @@ class EditorWindow(W.QMainWindow):
                 try:
                     callback(result)
                 except (OSError, ValueError, TypeError) as exc:
+                    get_logger(__name__).exception('Background result failed operation=%s context=%s', operation, context)
                     W.QMessageBox.warning(self, 'Could not complete operation', str(exc))
             if self.document.to_dict() != self.saved:
                 self.autosave.start()

@@ -3,6 +3,8 @@ from PyQt6 import QtCore as C, QtWidgets as W
 from threading import Event
 from mtg_core.decklists import resolve_decklist, resolve_entries, read_decklist_file, export_decklist
 from mtg_core.deck_sources import fetch_public_deck
+from mtg_core.diagnostics import get_logger
+from urllib.parse import urlsplit
 
 
 class ImportWorker(C.QThread):
@@ -26,6 +28,14 @@ class ImportWorker(C.QThread):
                 self.result = resolve_decklist(self.text, self.service, allow_remote=self.remote,
                     progress=self.progress.emit, cancelled=self.cancelled.is_set, import_artwork=self.import_artwork)
         except Exception as exc:
+            if not self.cancelled.is_set():
+                try:
+                    source = urlsplit(self.public_url)
+                    host, path = source.hostname, source.path
+                except ValueError:
+                    host, path = 'invalid URL', ''
+                get_logger(__name__).exception('Deck import failed source_host=%s source_path=%s remote=%s',
+                                               host, path, self.remote)
             self.error = str(exc)
 
 

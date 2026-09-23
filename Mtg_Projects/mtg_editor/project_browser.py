@@ -3,6 +3,7 @@ from datetime import datetime
 from pathlib import Path
 from PyQt6 import QtCore as C, QtWidgets as W
 from mtg_core.project_catalog import project_catalog
+from mtg_core.diagnostics import get_logger
 
 
 class CatalogWorker(C.QThread):
@@ -15,6 +16,7 @@ class CatalogWorker(C.QThread):
         try:
             self.result = project_catalog(*self.roots)
         except Exception as exc:
+            get_logger(__name__).exception('Project catalog failed deck_root=%s project_root=%s', *self.roots)
             self.result = [], [str(exc)]
 
 

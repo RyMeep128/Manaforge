@@ -3,6 +3,7 @@ from copy import deepcopy
 from pathlib import Path
 from PyQt6 import QtCore as C, QtGui as G, QtWidgets as W
 from .organization import card_facts
+from mtg_core.diagnostics import get_logger
 
 
 class Result(C.QObject):
@@ -10,9 +11,11 @@ class Result(C.QObject):
 
 
 class Load(C.QRunnable):
-    def __init__(self, token, work, callback):
+    def __init__(self, token, work, callback, *, context=None):
         super().__init__()
         self.token, self.work = token, work
+        self.context = context or {}
+        self.operation = getattr(work, '__qualname__', type(work).__name__)
         self.signals = Result()
         self.signals.ready.connect(callback)
 
@@ -20,6 +23,8 @@ class Load(C.QRunnable):
         try:
             self.signals.ready.emit(self.token, self.work(), '')
         except Exception as exc:
+            get_logger(__name__).exception('Card details failed operation=%s context=%s request=%s',
+                                           self.operation, self.context, self.token)
             self.signals.ready.emit(self.token, None, str(exc))
 
 
@@ -94,7 +99,8 @@ class CardDetails(W.QDialog):
 
     def submit(self, work, callback):
         self.token += 1
-        C.QThreadPool.globalInstance().start(Load(self.token, work, callback))
+        C.QThreadPool.globalInstance().start(Load(self.token, work, callback, context={
+            'entry_id': self.entry.entry_id, 'card_id': self.entry.card_id, 'oracle_id': self.entry.oracle_id}))
 
     def load_catalog(self):
         def work():

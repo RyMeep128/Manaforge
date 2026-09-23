@@ -1,6 +1,7 @@
 """Read-only catalog of native decks and managed print projects."""
 import json
 from pathlib import Path
+from mtg_core.diagnostics import get_logger
 
 
 def project_catalog(deck_root, project_root):
@@ -16,6 +17,7 @@ def project_catalog(deck_root, project_root):
                 if isinstance(item, dict) and item.get('path'):
                     candidates.append((Path(item['path']), 'Print project', item.get('display_name', '')))
         except (OSError, ValueError, AttributeError) as exc:
+            get_logger(__name__).exception('Print library index read failed path=%s', index)
             errors.append(f'Could not read print library: {exc}')
     for path, kind, title in candidates:
         key = str(path.resolve()).casefold()
@@ -29,5 +31,6 @@ def project_catalog(deck_root, project_root):
             rows.append({'path': str(path.resolve()), 'kind': kind, 'name': name,
                          'modified': path.stat().st_mtime})
         except (OSError, ValueError, AttributeError) as exc:
+            get_logger(__name__).exception('Project read failed path=%s kind=%s', path, kind)
             errors.append(f'{path.name}: {exc}')
     return sorted(rows, key=lambda row: -row['modified']), errors

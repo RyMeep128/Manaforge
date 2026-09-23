@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from PyQt6 import QtCore, QtGui
+from mtg_core.diagnostics import get_logger
 
 
 class ImageReader(QtCore.QThread):
@@ -38,7 +39,11 @@ class ImageReader(QtCore.QThread):
                 size.scale(300, 420, QtCore.Qt.AspectRatioMode.KeepAspectRatio)
                 reader.setScaledSize(size)
             image = reader.read()
+            if image.isNull():
+                get_logger(__name__).warning('Image decode failed card_id=%s asset_id=%s error=%s',
+                                             card_id, asset_id, reader.errorString())
         except Exception as exc:
+            get_logger(__name__).exception('Image load failed card_id=%s asset_id=%s', *self.key)
             delay = 0
             cause = exc
             while cause:
