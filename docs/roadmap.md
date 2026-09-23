@@ -199,11 +199,11 @@ and ambiguous rules are not presented as verified. Phase 3 starts with filters a
 
 ### 12. Playtest lite
 
-- [ ] Draw and redraw randomized opening hands using actual quantities.
-- [ ] Support mulligans and drawing additional cards.
-- [ ] Exclude commanders, sideboards, maybeboards, and do-not-print entries as configured.
-- [ ] Persist plain-text playtest notes.
-- [ ] Keep this a sampling tool rather than a rules engine; reuse its deck-selection and hand-sampling behavior in Phase 7 local playtest.
+- [x] Draw and redraw randomized opening hands using actual quantities through **More > Opening-hand playtest**. Each copy retains its entry/printing identity; sampling leaves deck quantities unchanged.
+- [x] Support seven-card redraw mulligans, an optional free first mulligan, choosing cards to bottom before keeping, and additional draws without replacement. Handle small decks and empty libraries explicitly.
+- [x] Exclude commanders, sideboards, maybeboards, excluded sections, and do-not-print entries as configured. Default to mainboard, retaining do-not-print/owned cards; recognize commander IDs as well as the commander section.
+- [x] Persist plain-text playtest notes with the deck, with Undo/Redo and backward-compatible loading. Save inclusion/mulligan settings as editor preferences; Cancel discards dialog changes.
+- [x] Keep this a sampling tool rather than a rules engine; the Qt-independent sampler can be reused in Phase 7 local playtest. Hands and library state are temporary, not saved matches.
 
 **Exit gate:** Users can evaluate composition and sample hands without leaving Manaforge.
 
@@ -349,7 +349,7 @@ and ambiguous rules are not presented as verified. Phase 3 starts with filters a
 
 ## Recommended next execution order
 
-1. Finish the remaining Phase 3 editor work: opening-hand sampling. Preserve the completed cancellable search/cache, role overrides, filters, insights, and print-readiness work.
+1. Phase 3 is complete: preserve opening-hand sampling, cancellable search/cache, role overrides, filters, insights, and print-readiness behavior during the next refactors.
 2. Begin architecture A1-A4: shared persistence invariants, regression coverage, diagnostics, and editor service boundaries.
 3. Complete Phase 4 print handoff and shared preferences alongside A5-A8 database/service/session and shared-print extractions.
 4. Finish typed persistent state, migrations, and focused quality tooling (A9-A11); introduce migration support sooner if schema changes require it.

@@ -248,8 +248,32 @@ Ctrl+Y/Ctrl+Shift+Z: Redo; Ctrl+F: deck filter; Ctrl+K: Add Cards;
 Ctrl+A: select visible cards; Delete: remove selection; hold T: quick tagging;
 Tab in the radial menu: switch primary/category tag mode; Esc: cancel.
 
-Expanded filters and statistics are available; opening-hand playtesting remains
-on the roadmap. The compact table is available under **More**.
+Expanded filters, statistics, and opening-hand playtesting are available.
+The compact table is available under **More**.
+
+## Opening-hand playtest
+
+Open **More > Opening-hand playtest** to sample seven cards using actual deck
+quantities. Each copy is drawn separately without replacement; chosen printings
+remain identified by set/collector number. Hover a row for cached card text.
+**New sample** reshuffles the full included deck and resets mulligans.
+
+Choose which sections to include. Mainboard is the default; commanders are
+excluded even when identified by the deck's commander list. Do-not-print cards
+are included by default because owned cards still belong in the deck. Changing
+settings starts a new sample. No card data or images need to download.
+
+**Mulligan** redraws seven, or the full included deck if smaller. Enable **First
+mulligan is free** as desired (on by default for Commander). Each later mulligan
+requires one more card to be put on the bottom. Select the indicated number of
+rows (Ctrl-click for multiple cards), then **Keep hand**. **Draw a card** draws
+from the remaining library; it disables when empty. This is a sampler, not a
+rules-enforced game or a legality check.
+
+**Save notes/settings** stores plain-text notes with the deck and remembers the
+inclusion/mulligan settings. Notes support Undo/Redo; preferences stay in place
+when undoing deck edits. **Cancel** discards changes to notes/settings. Trial
+hands are temporary and never change deck quantities, artwork, or print settings.
 
 ## Override inferred roles
 

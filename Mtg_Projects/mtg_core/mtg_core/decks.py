@@ -126,17 +126,19 @@ class Deck:
     tags: list[str] = field(default_factory=list)
     commander_entry_ids: list[str] = field(default_factory=list)
     extras: dict[str, Any] = field(default_factory=dict)
+    playtest_notes: str = ""
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any] | None) -> "Deck":
         value = dict(value or {})
-        known = {"deck_id", "name", "format", "description", "entries", "categories",
+        known = {"deck_id", "name", "format", "description", "playtest_notes", "entries", "categories",
                  "tags", "commander_entry_ids"}
         return cls(
             deck_id=str(value.get("deck_id") or uuid.uuid4()),
             name=str(value.get("name") or "Untitled Deck"),
             format=str(value.get("format") or "Custom"),
             description=str(value.get("description") or ""),
+            playtest_notes=str(value.get("playtest_notes") or ""),
             entries=[DeckEntry.from_dict(item) for item in value.get("entries", []) if isinstance(item, Mapping)],
             categories=[DeckCategory.from_dict(item) for item in value.get("categories", []) if isinstance(item, Mapping)],
             tags=[str(item) for item in value.get("tags", [])],
@@ -151,6 +153,7 @@ class Deck:
             "name": self.name,
             "format": self.format,
             "description": self.description,
+            "playtest_notes": self.playtest_notes,
             "entries": [entry.to_dict() for entry in self.entries],
             "categories": [category.to_dict() for category in self.categories],
             "tags": list(self.tags),

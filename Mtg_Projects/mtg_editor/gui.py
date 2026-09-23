@@ -132,6 +132,7 @@ class EditorWindow(W.QMainWindow):
         menu = W.QMenu(more)
         menu.addAction('Compact table', self.show_table)
         menu.addAction('Deck insights…', self.deck_insights)
+        menu.addAction('Opening-hand playtest…', self.playtest)
         menu.addAction('Print readiness…', self.print_readiness)
         menu.addAction('Export decklist…', self.export_decklist)
         menu.addAction('Commander / format deck checks…', self.commander_checks)
@@ -671,6 +672,16 @@ class EditorWindow(W.QMainWindow):
             dialog.filterRequested.connect(apply)
             dialog.exec()
         self.run_task(lambda: inspect_readiness(snapshot, self.service), show)
+
+    def playtest(self):
+        from .playtest import PlaytestDialog
+        dialog = PlaytestDialog(DeckDocument.from_dict(self.document.to_dict()), self)
+        if dialog.exec() == W.QDialog.DialogCode.Accepted:
+            def apply(document):
+                document.deck.playtest_notes = dialog.notes.toPlainText()
+            self.edit(apply)
+            self.document.editor_preferences['playtest'] = dialog.settings()
+            self.changed()
 
     def deck_insights(self):
         from .insights import InsightsDialog
