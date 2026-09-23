@@ -248,9 +248,33 @@ Ctrl+Y/Ctrl+Shift+Z: Redo; Ctrl+F: deck filter; Ctrl+K: Add Cards;
 Ctrl+A: select visible cards; Delete: remove selection; hold T: quick tagging;
 Tab in the radial menu: switch primary/category tag mode; Esc: cancel.
 
-Expanded filters, statistics, and playtesting
-remain on the roadmap. The compact table is available under **More**.
+Expanded filters and statistics are available; opening-hand playtesting remains
+on the roadmap. The compact table is available under **More**.
+
+## Override inferred roles
+
+Select cards and right-click **Edit roles/categories** to add or remove any
+category, including secondary automatic roles. Checked assigns to all selected
+cards, unchecked removes from all, and partially checked preserves each card's
+current assignment. Cancel leaves the deck unchanged.
+
+The primary category stays first when retained; removing it promotes the next
+remaining category. Use **Primary category** to choose a different primary, and
+**Manage categories** to create custom roles. Changes are deck-local, support
+Undo/Redo, and survive save/reload. Changed cards become Manual; **Auto Categorize**
+preserves them unless you explicitly enable reconsidering manual assignments.
+User tags remain editable through **Edit user tags** and also count toward role
+totals. Global Oracle tags and factual card-type statistics are unchanged.
+
 ## Deck filtering
+
+**Add Cards** searches the local catalog in the background. Typing a new query
+cancels the previous search; **Cancel**, clearing the field, hiding the search
+panel, and closing the editor also stop outstanding searches. Obsolete results
+never replace the current query's results. Recent successful searches (including
+empty results) are cached in memory, up to 20 queries for 30 seconds. Use **Refresh**
+to bypass the cache after updating card data or Oracle tags. Search errors are not
+cached. This cache is separate from the deck-view filter below.
 
 The deck filter supports combined queries in card and table views. Plain text
 matches names and tags. Examples: `type:creature mv<=3`, `id:wu -color:r`,

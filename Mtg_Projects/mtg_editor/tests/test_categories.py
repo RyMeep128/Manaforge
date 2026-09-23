@@ -61,8 +61,12 @@ def test_search_worker_enriches_results_locally_without_changing_payload():
     app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
     original = SearchCardResult('card', 'oracle', 'Example', None, None, None, None, None,
                                 {'type_line': 'Artifact'})
-    class Service:
-        database = SimpleNamespace(categorization_data=lambda cards, oracles:
+    from mtg_core.services import CardService
+    class Service(CardService):
+        def __init__(self):
+            pass
+
+        database = SimpleNamespace(categorization_data=lambda cards, oracles, **kwargs:
                                    {'tags': {'oracle': ['ramp']}})
         def search_cards(self, query, options):
             assert options['allow_remote'] is False

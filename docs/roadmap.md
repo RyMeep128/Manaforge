@@ -193,9 +193,9 @@ and ambiguous rules are not presented as verified. Phase 3 starts with filters a
 - [x] Add filters for name, colors/identity, mana value, type/subtype, Oracle text, keywords, power/toughness, rarity, set, artist, legality, treatment, tags, and print readiness. Local queries support combined metadata/category/section filters and entry flags in card and table views; **More > Print readiness** provides asset-based snapshot filters.
 - [x] Add mana curve, average mana value, color/pip distribution, type distribution, and land count. **More > Deck insights** reads local metadata in the background and shows a quantity-weighted snapshot with section scope and missing-data notices.
 - [x] Count ramp, draw, removal, wipes, protection, recursion, interaction, creatures, and user-defined roles. Role totals use assigned categories/tags without reclassifying manual choices; creature totals use card types.
-- [ ] Let users override every inferred role without changing global tag data.
+- [x] Let users override every inferred role without changing global tag data. Card actions provide **Edit roles/categories** for individual or bulk membership changes, preserving mixed selections, Undo/Redo, and saved manual protection; user tags remain separately editable.
 - [x] Add clickable print-readiness totals for low DPI, missing art, missing backs, DFCs, oversized cards, and excluded cards. Background local scans report copies and entries across all sections; clicking a total filters both views. Snapshot filters clear when the deck changes.
-- [ ] Add recent-search caching and background/cancellable database queries.
+- [x] Add recent-search caching and background/cancellable database queries. Editor card search keeps up to 20 queries for 30 seconds, with Refresh to bypass the cache; query replacement, Cancel, clearing, hiding search, and closing cancel local SQL/role lookup and suppress obsolete results.
 
 ### 12. Playtest lite
 
@@ -349,7 +349,7 @@ and ambiguous rules are not presented as verified. Phase 3 starts with filters a
 
 ## Recommended next execution order
 
-1. Finish the remaining Phase 3 editor work: inferred-role overrides, cancellable queries/search caching, and opening-hand sampling. Preserve the completed filters, insights, and print-readiness work.
+1. Finish the remaining Phase 3 editor work: opening-hand sampling. Preserve the completed cancellable search/cache, role overrides, filters, insights, and print-readiness work.
 2. Begin architecture A1-A4: shared persistence invariants, regression coverage, diagnostics, and editor service boundaries.
 3. Complete Phase 4 print handoff and shared preferences alongside A5-A8 database/service/session and shared-print extractions.
 4. Finish typed persistent state, migrations, and focused quality tooling (A9-A11); introduce migration support sooner if schema changes require it.

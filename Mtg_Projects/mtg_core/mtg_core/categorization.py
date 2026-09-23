@@ -86,6 +86,29 @@ def apply_categories(document, proposals, reconsider_manual=False):
         entry.extras['auto_categories'] = {'version': RULE_VERSION, 'managed_ids': managed, 'evidence': evidence}
 
 
+def override_categories(document, entry_ids, choices):
+    """Set deck-local memberships; omitted categories keep their current state.
+
+    Preserve the primary category when retained, otherwise promote the next
+    remaining category. The caller owns the history/persistence transaction.
+    """
+    known = {category.category_id for category in document.deck.categories}
+    if choices.keys() - known:
+        raise ValueError('Unknown category')
+    if any(type(value) is not bool for value in choices.values()):
+        raise ValueError('Category choices must be true or false')
+    entry_ids = set(entry_ids)
+    for entry in document.deck.entries:
+        if entry.entry_id not in entry_ids:
+            continue
+        selected = [cid for cid in entry.category_ids if choices.get(cid, True)]
+        selected.extend(cid for cid, enabled in choices.items() if enabled and cid not in selected)
+        if selected != entry.category_ids:
+            entry.category_ids = selected
+            entry.extras['auto_categories'] = {
+                **entry.extras.get('auto_categories', {}), 'manual': True}
+
+
 def analyze_entries(database, entries):
     """Batch local data access; callers run this off the UI thread."""
     entries = list(entries)

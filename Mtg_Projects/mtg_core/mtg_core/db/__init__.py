@@ -12,6 +12,7 @@ from mtg_core.models import ImageAssetRecord, ImageRecord, PrintRecord
 from mtg_core.paths import core_data_root
 from mtg_core.search import choose_canonical_print_key, normalized_search_text
 from mtg_core.search.syntax import compile_query, text_expression
+from mtg_core.search.cancellation import search_connection
 from mtg_core.sync import extract_image_urls
 
 
@@ -609,9 +610,10 @@ class CardDatabase:
         return int(row[0] or 0)
 
     def search_syntax(self, query: str, limit: int = 200, *, offset: int = 0,
-                      set_filter: str = '', online_mode: bool = False) -> list[PrintRecord]:
+                      set_filter: str = '', online_mode: bool = False,
+                      should_cancel=None) -> list[PrintRecord]:
         predicate, params = self._syntax_predicate(query, set_filter, online_mode)
-        with self.connect() as connection:
+        with search_connection(self, should_cancel) as connection:
             rows = connection.execute(
                 'WITH matches AS ('
                 'SELECT p.*, ROW_NUMBER() OVER (PARTITION BY p.oracle_id ORDER BY '
@@ -700,10 +702,10 @@ class CardDatabase:
                                                'cached_at': row['updated_at']}
         return result
 
-    def categorization_data(self, card_ids, oracle_ids):
+    def categorization_data(self, card_ids, oracle_ids, *, should_cancel=None):
         """Read local role inputs in bounded batches on a single connection."""
         cards, tags = {}, {}
-        with self.connect() as connection:
+        with search_connection(self, should_cancel) as connection:
             for column, values in (('card_id', card_ids), ('oracle_id', oracle_ids)):
                 if column == 'oracle_id':
                     values = list(values) + [payload.get('oracle_id') for payload in cards.values()]

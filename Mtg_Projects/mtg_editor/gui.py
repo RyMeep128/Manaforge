@@ -14,9 +14,9 @@ from mtg_editor.organization import SECTIONS, GROUPS, SORTS, card_facts, assign,
 from mtg_core.decks import DeckCategory
 from mtg_ui.theme import application_stylesheet
 from copy import deepcopy
-from dataclasses import replace
 from mtg_core.categorization import classify, analyze_entries, apply_categories
 from mtg_editor.filtering import compile_filter, matches, HELP as FILTER_HELP
+from mtg_editor.search import SearchCache, SearchWorker
 
 
 class Task(QtCore.QThread):
@@ -31,25 +31,6 @@ class Task(QtCore.QThread):
             self.completed.emit(self.work(), '')
         except Exception as exc:
             self.completed.emit(None, str(exc))
-
-
-class SearchWorker(QtCore.QThread):
-    completed = QtCore.pyqtSignal(str, object, str)
-
-    def __init__(self, query, service, parent=None):
-        super().__init__(parent)
-        self.query, self.service = query, service
-
-    def run(self):
-        try:
-            results = self.service.search_cards(self.query, {
-                'scryfall_syntax': True, 'allow_remote': False, 'limit': 100})
-            data = self.service.database.categorization_data([], [r.oracle_id for r in results])
-            results = [replace(r, payload={**(r.payload or {}), '_category_evidence':
-                classify(r.payload or {}, data['tags'].get(r.oracle_id, []))}) for r in results]
-            self.completed.emit(self.query, results, '')
-        except Exception as exc:
-            self.completed.emit(self.query, [], str(exc))
 
 
 class DeckTable(QtCore.QAbstractTableModel):
@@ -90,6 +71,8 @@ class EditorWindow(W.QMainWindow):
         self.history = DeckHistory(self.document)
         self.saved = self.document.to_dict()
         self.worker = self.task = None
+        self.search_cache = SearchCache()
+        self.pending_search = self.refresh_search = self.closing = False
         self.thumbnails = Thumbnails(self.service, self)
         self.setStyleSheet(application_stylesheet())
         self.setWindowIcon(QtGui.QIcon(str(Path(__file__).resolve().parents[1] / 'mtg_proxy' / 'proxy.png')))
@@ -229,9 +212,16 @@ class EditorWindow(W.QMainWindow):
         search_layout.addLayout(search_header)
         self.query = W.QLineEdit()
         self.query.setPlaceholderText('Local search: o:flying c=g')
-        self.query.textChanged.connect(lambda: self.search_timer.start())
+        self.query.textChanged.connect(self.search_changed)
         self.query.returnPressed.connect(self.search)
+        self.query.setClearButtonEnabled(True)
         search_layout.addWidget(self.query)
+        search_controls = W.QHBoxLayout()
+        self.cancel_search_button = self.button(search_controls, 'Cancel', self.cancel_search)
+        self.cancel_search_button.setEnabled(False)
+        self.refresh_search_button = self.button(search_controls, 'Refresh', self.refresh_results)
+        self.refresh_search_button.setToolTip('Bypass recent results. Cached searches expire after 30 seconds.')
+        search_layout.addLayout(search_controls)
         self.search_status = W.QLabel('Search by name or Scryfall syntax')
         self.search_status.setWordWrap(True)
         search_layout.addWidget(self.search_status)
@@ -334,6 +324,7 @@ class EditorWindow(W.QMainWindow):
             self.open_search()
         else:
             self.search_panel.hide()
+            self.cancel_search()
             self.results.preview.hide()
             self.thumbnails.set_visible(id(self.results), [])
 
@@ -480,19 +471,56 @@ class EditorWindow(W.QMainWindow):
         if ok:
             self.edit(lambda d: setattr(d.deck, 'description', text))
 
-    def search(self):
+    def search_changed(self):
+        self.cancel_search()
+        self.search_document.deck.entries.clear()
+        self.results.refresh()
+        if self.query.text().strip():
+            self.pending_search = True
+            self.search_timer.start(350)
+        else:
+            self.search_status.setText('Search by name or Scryfall syntax')
+
+    def cancel_search(self):
+        self.search_timer.stop()
+        self.pending_search = self.refresh_search = False
         if self.worker is not None:
+            self.worker.cancel()
+        self.cancel_search_button.setEnabled(False)
+        self.search_status.setText('Search cancelled')
+
+    def refresh_results(self):
+        self.refresh_search = True
+        self.search()
+
+    def search(self):
+        self.search_timer.stop()
+        if self.closing:
+            return
+        if self.worker is not None:
+            self.worker.cancel()
+            self.pending_search = True
             return
         query = self.query.text().strip()
+        self.pending_search = False
         if not query:
             self.search_document.deck.entries.clear()
             self.results.refresh()
+            self.search_status.setText('Search by name or Scryfall syntax')
             return
-        self.search_status.setText('Searching local database…')
-        self.worker = SearchWorker(query, self.service, self)
-        self.worker.completed.connect(self.show_results)
+        self.search_status.setText('Searching local database...')
+        self.cancel_search_button.setEnabled(True)
+        self.worker = SearchWorker(query, self.service, self, cache=self.search_cache,
+                                   refresh=self.refresh_search)
+        self.refresh_search = False
+        self.worker.completed.connect(self.search_completed)
         self.worker.finished.connect(self.search_finished)
         self.worker.start()
+
+    def search_completed(self, query, results, error):
+        worker = self.sender()
+        if worker is self.worker and not worker.cancelled.is_set() and not self.closing:
+            self.show_results(query, results, error)
 
     def show_results(self, query, results, error):
         if query != self.query.text().strip():
@@ -506,11 +534,11 @@ class EditorWindow(W.QMainWindow):
         self.search_status.setText(error or f'{len(results)} local matches (up to 100). Double-click or + to add.')
 
     def search_finished(self):
-        query = self.worker.query
         self.worker.deleteLater()
         self.worker = None
-        if query != self.query.text().strip():
-            self.search_timer.start()
+        self.cancel_search_button.setEnabled(False)
+        if self.pending_search and not self.closing and not self.search_timer.isActive():
+            self.search_timer.start(0)
 
     def add_result(self, entry_id, delta=1):
         result = next((e for e in self.search_document.deck.entries if e.entry_id == entry_id), None)
@@ -577,6 +605,7 @@ class EditorWindow(W.QMainWindow):
         menu.addAction('Replace artwork…', lambda: self.replace_artwork(entry_id)).setEnabled(len(ids) == 1)
         menu.addAction('View Oracle tags…', lambda: self.view_tags(entry))
         menu.addAction('Edit user tags…', lambda: self.edit_tags(ids, entry.tags))
+        menu.addAction('Edit roles/categories…', lambda: self.edit_roles(ids))
         sections = menu.addMenu('Move to section')
         for key, label in SECTIONS.items():
             sections.addAction(label, lambda checked=False, k=key: self.edit(lambda d: assign(d, ids, 'section', k)))
@@ -746,6 +775,16 @@ class EditorWindow(W.QMainWindow):
                     category.sort_order = i
                 document.deck.categories = categories
             self.edit(apply)
+
+    def edit_roles(self, ids):
+        from .role_editor import RoleEditor
+        from mtg_core.categorization import override_categories
+        dialog = RoleEditor(self.document, ids, self)
+        if dialog.exec() == W.QDialog.DialogCode.Accepted:
+            choices = dialog.choices()
+            if choices:
+                self.edit(lambda document: override_categories(document, ids, choices))
+                self.statusBar().showMessage('Deck roles updated. Undo is available.', 5000)
 
     def auto_categorize(self):
         from .category_review import CategoryReview
@@ -1029,6 +1068,8 @@ class EditorWindow(W.QMainWindow):
                 self.open_path(dialog.path)
 
     def closeEvent(self, event):
+        self.closing = True
+        self.cancel_search()
         if self.worker is not None or self.task is not None or self.thumbnails.worker is not None:
             self.thumbnails.stopping = True
             self.thumbnails.pending.clear()
@@ -1038,6 +1079,7 @@ class EditorWindow(W.QMainWindow):
             return
         if self.document.to_dict() != self.saved and not self.save():
             self.thumbnails.stopping = False
+            self.closing = False
             event.ignore()
             return
         self.autosave.stop()

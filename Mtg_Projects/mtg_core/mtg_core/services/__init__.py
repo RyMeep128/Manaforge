@@ -5,6 +5,7 @@ import gzip
 import os
 import re
 import time
+from dataclasses import replace
 from typing import Callable
 
 from mtg_core.network import RateLimitExceeded, get_download_logger
@@ -82,7 +83,8 @@ class CardService:
             try:
                 local_rows = self.database.search_syntax(search_query, limit=limit,
                     offset=max(0, int(filters.get('offset', 0))),
-                    set_filter=set_filter, online_mode=online_mode)
+                    set_filter=set_filter, online_mode=online_mode,
+                    should_cancel=filters.get('should_cancel'))
             except LocalQueryError:
                 if not filters.get('allow_remote', True):
                     raise
@@ -149,6 +151,24 @@ class CardService:
             )
             filtered_rows = _filter_print_rows(local_rows, set_filter)
         return [_search_result_from_row(row) for row in filtered_rows]
+
+    def search_editor_cards(self, query, *, should_cancel=None):
+        """Local editor search with role evidence and cooperative cancellation."""
+        from mtg_core.categorization import classify
+        from mtg_core.search.cancellation import check_cancelled
+        check_cancelled(should_cancel)
+        results = self.search_cards(query, {
+            'scryfall_syntax': True, 'allow_remote': False, 'limit': 100,
+            'should_cancel': should_cancel})
+        check_cancelled(should_cancel)
+        data = self.database.categorization_data(
+            [], [r.oracle_id for r in results], should_cancel=should_cancel)
+        enriched = []
+        for result in results:
+            check_cancelled(should_cancel)
+            enriched.append(replace(result, payload={**(result.payload or {}),
+                '_category_evidence': classify(result.payload or {}, data['tags'].get(result.oracle_id, []))}))
+        return enriched
 
     def get_card(
         self,
