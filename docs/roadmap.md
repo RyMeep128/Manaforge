@@ -22,7 +22,7 @@ This workstream tracks the [architecture cleanup epic](architecture-cleanup-epic
 | A2 / 2 - complete | `CardDatabase` exposes Oracle/print mutation APIs backed by `db/catalog.py`. Admin mutations delegate transaction ownership, validation, canonical mappings, both search indexes, manifests, and dependent tags/favorites; shared image assets survive deletion. Catalog upserts reuse print-state maintenance. Rollback and structured-search regressions are covered. Read-only admin listing SQL remains for later database modularization. |
 | A3 / 9 - complete | Bulk downloads retain contextual request/failure logs. Editor task, search, image, import, card-detail, and project-browser failures now retain tracebacks and identifiers in a shared rotating diagnostic log, with concise UI errors, thread-safe initialization, and stderr fallback. Cancellation is not logged as an error. |
 | A4 / 5 - complete | Editor role analysis, dated legality inputs, and Oracle-tag lookup use `CardService` APIs. Runtime editor code no longer reaches through `service.database`; local/read-only behavior, batched reads, missing-data handling, and database-free editor test doubles are covered. |
-| A5 / 3 | Split database internals into schema, cards, search, images, preferences, and sync responsibilities; keep a convenient facade and lightweight package boundary. |
+| A5 / 3 - complete | Database internals are split into schema, cards, search, images, preferences, and sync operation groups behind the unchanged `CardDatabase` facade. `db/__init__.py` is a lightweight public boundary; `catalog.py` retains transactional mutation ownership. See the [database module guide](../Mtg_Projects/mtg_core/mtg_core/db/README.md). |
 | A6 / 4 | Separate search, artwork/image, and catalog-sync responsibilities internally while preserving useful `CardService` compatibility. |
 | A7 / 6 | Extract stable editor session/history/persistence, task lifecycle, and search responsibilities; test session behavior independently where practical and avoid callback-sized abstractions. |
 | A8 / 7 | Replace the editor's Proxy `sys.path` integration with normal shared-package imports, starting with adapter consumers. Preserve Proxy UI and print-handoff tests; keep non-UI shared code independent of Qt. |
@@ -30,7 +30,7 @@ This workstream tracks the [architecture cleanup epic](architecture-cleanup-epic
 | A10 / 11 | Explicit schema version and ordered, tested SQLite migrations, including fresh creation and automatic legacy upgrades without unnecessary destructive rebuilds. |
 | A11 / 12 | Focused Ruff adoption (`ruff check`, `ruff format --check`) alongside pytest on Python 3.12/3.13 CI; avoid a blanket formatting rewrite. Broader type checking can follow later. |
 
-**A1-A4 are complete; A5-A11 remain planned.** Continue with service/editor boundaries and shared printing. Introduce migrations before any subsequent schema change needs them. Complete the relevant boundaries before expanding recommendations, rules storage, or gameplay; do not delay unrelated editor fixes behind the whole epic.
+**A1-A5 are complete; A6-A11 remain planned.** Continue with service/editor boundaries and shared printing. Introduce migrations before any subsequent schema change needs them. Complete the relevant boundaries before expanding recommendations, rules storage, or gameplay; do not delay unrelated editor fixes behind the whole epic.
 
 **Exit gate:** Existing tests and CI remain green, duplicated persistence rules and editor boundary leaks are removed, responsibilities have clear owners, failures are diagnosable, and typed state/migrations preserve compatibility. No recommendation, rules-reference, AI, or multiplayer implementation belongs to this cleanup epic.
 
@@ -350,8 +350,8 @@ and ambiguous rules are not presented as verified. Phase 3 starts with filters a
 ## Recommended next execution order
 
 1. Phase 3 is complete: preserve opening-hand sampling, cancellable search/cache, role overrides, filters, insights, and print-readiness behavior during the next refactors.
-2. Architecture A1-A4 are complete: shared canonical selection/row conversion, transactional admin persistence, background diagnostics, and editor service boundaries. Continue with A5 database modularization alongside the Phase 4 integration work below.
-3. Complete Phase 4 print handoff and shared preferences alongside A5-A8 database/service/session and shared-print extractions.
+2. Architecture A1-A5 are complete: shared persistence invariants, transactional admin operations, diagnostics, editor service boundaries, and database modularization. Continue with A6 service internals alongside the Phase 4 integration work below.
+3. Complete Phase 4 print handoff and shared preferences alongside A6-A8 service/session and shared-print extractions.
 4. Finish typed persistent state, migrations, and focused quality tooling (A9-A11); introduce migration support sooner if schema changes require it.
 5. Add explainable guidance and offline recommendation datasets/UI (Phase 5) after the editor is stable.
 6. Add the versioned rules reference (Phase 6), then reusable manual local playtest (Phase 7).
