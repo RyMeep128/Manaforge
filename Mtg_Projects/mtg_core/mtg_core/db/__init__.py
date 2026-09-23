@@ -341,6 +341,7 @@ class CardDatabase:
         now = time.time()
 
         with self.connect() as connection:
+            previous = connection.execute("SELECT oracle_id FROM prints WHERE card_id = ?", (card_id,)).fetchone()
             connection.execute(
                 """
                 INSERT INTO cards_oracle (oracle_id, name, normalized_name, layout)
@@ -399,7 +400,9 @@ class CardDatabase:
                     cache_expires_at,
                 ),
             )
-            self._refresh_canonical_print(connection, oracle_id)
+            if previous is not None and previous["oracle_id"] != oracle_id:
+                self.refresh_canonical_print(connection, previous["oracle_id"])
+            self.refresh_canonical_print(connection, oracle_id)
             connection.execute(
                 """
                 INSERT INTO sync_state (source, version, last_sync_at, payload_json)
@@ -417,7 +420,7 @@ class CardDatabase:
                 "SELECT * FROM prints WHERE card_id = ?",
                 (card_id,),
             ).fetchone()
-        return self._row_to_print_record(row)
+        return self.row_to_print_record(row)
 
     @staticmethod
     def refresh_search_data_for_print(connection, card_id, payload):
@@ -426,12 +429,14 @@ class CardDatabase:
             'ON CONFLICT(card_id) DO UPDATE SET search_json=excluded.search_json',
             (card_id, _compact_search_json(payload)))
 
-    def _refresh_canonical_print(self, connection: sqlite3.Connection, oracle_id: str) -> None:
+    def refresh_canonical_print(self, connection: sqlite3.Connection, oracle_id: str) -> None:
+        """Recompute the canonical mapping in the caller's transaction, or remove it."""
         rows = connection.execute(
             "SELECT payload_json FROM prints WHERE oracle_id = ?",
             (oracle_id,),
         ).fetchall()
         if not rows:
+            connection.execute("DELETE FROM canonical_prints WHERE oracle_id = ?", (oracle_id,))
             return
         payloads = [json.loads(row["payload_json"]) for row in rows]
         payload = min(payloads, key=choose_canonical_print_key)
@@ -452,7 +457,7 @@ class CardDatabase:
                 "SELECT * FROM prints WHERE card_id = ?",
                 (card_id,),
             ).fetchone()
-        return self._row_to_print_record(row)
+        return self.row_to_print_record(row)
 
     def get_print_by_set_and_number(self, set_code: str, collector_number: str) -> PrintRecord | None:
         with self.connect() as connection:
@@ -466,7 +471,7 @@ class CardDatabase:
                 """,
                 (set_code, collector_number),
             ).fetchone()
-        return self._row_to_print_record(row)
+        return self.row_to_print_record(row)
 
     def get_named_print(self, exact_name: str) -> PrintRecord | None:
         with self.connect() as connection:
@@ -479,7 +484,7 @@ class CardDatabase:
                 """,
                 (exact_name,),
             ).fetchone()
-        return self._row_to_print_record(row)
+        return self.row_to_print_record(row)
 
     def get_prints_for_oracle(self, oracle_id: str) -> list[PrintRecord]:
         with self.connect() as connection:
@@ -487,7 +492,7 @@ class CardDatabase:
                 "SELECT * FROM prints WHERE oracle_id = ? ORDER BY released_at, set_code, collector_number",
                 (oracle_id,),
             ).fetchall()
-        return [self._row_to_print_record(row) for row in rows]
+        return [self.row_to_print_record(row) for row in rows]
 
     def get_canonical_print(self, oracle_id: str) -> PrintRecord | None:
         with self.connect() as connection:
@@ -500,7 +505,7 @@ class CardDatabase:
                 """,
                 (oracle_id,),
             ).fetchone()
-        return self._row_to_print_record(row)
+        return self.row_to_print_record(row)
 
     def search_prints(
         self,
@@ -587,7 +592,7 @@ class CardDatabase:
                     """,
                     tuple(params),
                 ).fetchall()
-        return [self._row_to_print_record(row) for row in rows]
+        return [self.row_to_print_record(row) for row in rows]
 
     def _syntax_predicate(self, query, set_filter, online_mode):
         predicate, params = compile_query(query)
@@ -625,7 +630,7 @@ class CardDatabase:
                 'SELECT * FROM matches WHERE search_rank = 1 '
                 'ORDER BY name COLLATE NOCASE, released_at, card_id LIMIT ? OFFSET ?',
                 [*params, max(1, min(10000, int(limit))), max(0, int(offset))]).fetchall()
-        return [self._row_to_print_record(row) for row in rows]
+        return [self.row_to_print_record(row) for row in rows]
 
     def replace_oracle_tags(self, tag_records) -> int:
         tag_records = list(tag_records)
@@ -1175,7 +1180,7 @@ class CardDatabase:
             )
 
     @staticmethod
-    def _row_to_print_record(row: sqlite3.Row | None) -> PrintRecord | None:
+    def row_to_print_record(row: sqlite3.Row | None) -> PrintRecord | None:
         if row is None:
             return None
         return PrintRecord(

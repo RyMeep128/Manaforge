@@ -14,11 +14,11 @@ Keep decks, downloaded data, artwork, preferences, and future rules/recommendati
 
 ## Architecture cleanup - staged workstream alongside Phases 3-4
 
-These are planned tasks from the [architecture cleanup epic](architecture-cleanup-epic.md), not newly verified defects or completed work. Confirm each against the current code before implementation. Preserve behavior, PyQt6, existing public interfaces where useful, and old project compatibility; deliver small, independently testable changes rather than a rewrite.
+This workstream tracks the [architecture cleanup epic](architecture-cleanup-epic.md). Completed stages are marked below; confirm remaining concerns against the current code before implementation. Preserve behavior, PyQt6, existing public interfaces where useful, and old project compatibility; deliver small, independently testable changes rather than a rewrite.
 
 | Order / epic workstream | Planned outcome and acceptance gate |
 | --- | --- |
-| A1 / 1 | One canonical-print selection and `PrintRecord` row conversion implementation; admin paths reuse it. Regression coverage removes stale canonical mappings when the final print is deleted. |
+| A1 / 1 - complete | Core owns canonical-print maintenance and `PrintRecord` row conversion; admin create/update/delete/list paths reuse them. Regression coverage checks final-print deletion, stale mapping removal, transaction rollback, and Oracle reassignment through both admin and catalog upsert paths. |
 | A2 / 2 | Domain-focused database/repository mutations own search, canonical, image-manifest, and dependent-record invariants; admin services express intent instead of duplicating SQL write rules. |
 | A3 / 9 | Consistent contextual logging for bulk image and editor worker failures, preserving tracebacks while keeping user messages concise. |
 | A4 / 5 | Categorization/analysis use meaningful application services; editor callers no longer reach through `service.database`. Domain behavior remains testable without Qt. |
@@ -30,7 +30,7 @@ These are planned tasks from the [architecture cleanup epic](architecture-cleanu
 | A10 / 11 | Explicit schema version and ordered, tested SQLite migrations, including fresh creation and automatic legacy upgrades without unnecessary destructive rebuilds. |
 | A11 / 12 | Focused Ruff adoption (`ruff check`, `ruff format --check`) alongside pytest on Python 3.12/3.13 CI; avoid a blanket formatting rewrite. Broader type checking can follow later. |
 
-All A1-A11 items are **planned**. Start with persistence invariants and diagnostics, then service/editor boundaries and shared printing. Introduce migrations before any subsequent schema change needs them. Complete the relevant boundaries before expanding recommendations, rules storage, or gameplay; do not delay unrelated editor fixes behind the whole epic.
+**A1 is complete; A2-A11 remain planned.** Start with persistence invariants and diagnostics, then service/editor boundaries and shared printing. Introduce migrations before any subsequent schema change needs them. Complete the relevant boundaries before expanding recommendations, rules storage, or gameplay; do not delay unrelated editor fixes behind the whole epic.
 
 **Exit gate:** Existing tests and CI remain green, duplicated persistence rules and editor boundary leaks are removed, responsibilities have clear owners, failures are diagnosable, and typed state/migrations preserve compatibility. No recommendation, rules-reference, AI, or multiplayer implementation belongs to this cleanup epic.
 
@@ -350,7 +350,7 @@ and ambiguous rules are not presented as verified. Phase 3 starts with filters a
 ## Recommended next execution order
 
 1. Phase 3 is complete: preserve opening-hand sampling, cancellable search/cache, role overrides, filters, insights, and print-readiness behavior during the next refactors.
-2. Begin architecture A1-A4: shared persistence invariants, regression coverage, diagnostics, and editor service boundaries.
+2. Continue architecture A2-A4: centralize admin persistence operations, improve diagnostics, and remove editor database access. A1 shared canonical selection/row conversion and regression coverage are complete.
 3. Complete Phase 4 print handoff and shared preferences alongside A5-A8 database/service/session and shared-print extractions.
 4. Finish typed persistent state, migrations, and focused quality tooling (A9-A11); introduce migration support sooner if schema changes require it.
 5. Add explainable guidance and offline recommendation datasets/UI (Phase 5) after the editor is stable.

@@ -14,7 +14,7 @@ from mtg_core.models import (
     PrintRecord,
     SyncMetadata,
 )
-from mtg_core.search import choose_canonical_print_key, normalized_search_text
+from mtg_core.search import normalized_search_text
 from mtg_core.services import CardService
 
 
@@ -257,7 +257,7 @@ class CardAdminService:
                 (*params, page_size, offset),
             ).fetchall()
         return PaginatedResult(
-            items=[_row_to_print_record(row) for row in rows],
+            items=[self.database.row_to_print_record(row) for row in rows],
             page=page,
             page_size=page_size,
             total_count=total_count,
@@ -331,13 +331,13 @@ class CardAdminService:
                     now,
                 ),
             )
-            _refresh_canonical_print(connection, oracle_id)
+            self.database.refresh_canonical_print(connection, oracle_id)
             self.database.refresh_search_index_for_print(connection, card_id)
             row = connection.execute(
                 "SELECT * FROM prints WHERE card_id = ?",
                 (card_id,),
             ).fetchone()
-        return _row_to_print_record(row)
+        return self.database.row_to_print_record(row)
 
     def update_print(
         self,
@@ -414,14 +414,14 @@ class CardAdminService:
                 ),
             )
             if old_oracle_id != oracle_id:
-                _refresh_canonical_or_delete(connection, old_oracle_id)
-            _refresh_canonical_print(connection, oracle_id)
+                self.database.refresh_canonical_print(connection, old_oracle_id)
+            self.database.refresh_canonical_print(connection, oracle_id)
             self.database.refresh_search_index_for_print(connection, card_id)
             row = connection.execute(
                 "SELECT * FROM prints WHERE card_id = ?",
                 (card_id,),
             ).fetchone()
-        return _row_to_print_record(row)
+        return self.database.row_to_print_record(row)
 
     def delete_print(self, card_id: str) -> bool:
         existing = self.get_print(card_id)
@@ -435,14 +435,10 @@ class CardAdminService:
                 (card_id,),
             )
             connection.execute(
-                "DELETE FROM canonical_prints WHERE card_id = ?",
-                (card_id,),
-            )
-            connection.execute(
                 "DELETE FROM prints WHERE card_id = ?",
                 (card_id,),
             )
-            _refresh_canonical_or_delete(connection, existing.oracle_id)
+            self.database.refresh_canonical_print(connection, existing.oracle_id)
         return True
 
     def list_image_manifest(
@@ -630,23 +626,6 @@ def _row_to_card_record(row) -> CardRecord:
     )
 
 
-def _row_to_print_record(row) -> PrintRecord:
-    return PrintRecord(
-        card_id=row["card_id"],
-        oracle_id=row["oracle_id"],
-        name=row["name"],
-        set_code=row["set_code"],
-        set_name=row["set_name"],
-        collector_number=row["collector_number"],
-        released_at=row["released_at"],
-        image_url=row["image_url"],
-        thumbnail_url=row["thumbnail_url"],
-        preview_url=row["preview_url"],
-        is_double_faced=bool(row["is_double_faced"]),
-        payload=json.loads(row["payload_json"]),
-    )
-
-
 def _build_print_payload_json(
     *,
     card_id: str,
@@ -687,42 +666,3 @@ def _build_print_payload_json(
     else:
         payload.pop("card_faces", None)
     return json.dumps(payload, ensure_ascii=False, sort_keys=True)
-
-
-def _refresh_canonical_print(connection, oracle_id: str) -> None:
-    rows = connection.execute(
-        "SELECT payload_json FROM prints WHERE oracle_id = ?",
-        (oracle_id,),
-    ).fetchall()
-    if not rows:
-        connection.execute(
-            "DELETE FROM canonical_prints WHERE oracle_id = ?",
-            (oracle_id,),
-        )
-        return
-    payloads = [json.loads(row["payload_json"]) for row in rows]
-    payload = min(payloads, key=choose_canonical_print_key)
-    connection.execute(
-        """
-        INSERT INTO canonical_prints (oracle_id, card_id, chosen_at)
-        VALUES (?, ?, ?)
-        ON CONFLICT(oracle_id) DO UPDATE SET
-            card_id = excluded.card_id,
-            chosen_at = excluded.chosen_at
-        """,
-        (oracle_id, str(payload.get("id")), time.time()),
-    )
-
-
-def _refresh_canonical_or_delete(connection, oracle_id: str) -> None:
-    count_row = connection.execute(
-        "SELECT count(*) AS count FROM prints WHERE oracle_id = ?",
-        (oracle_id,),
-    ).fetchone()
-    if count_row is None or int(count_row["count"] or 0) == 0:
-        connection.execute(
-            "DELETE FROM canonical_prints WHERE oracle_id = ?",
-            (oracle_id,),
-        )
-        return
-    _refresh_canonical_print(connection, oracle_id)
