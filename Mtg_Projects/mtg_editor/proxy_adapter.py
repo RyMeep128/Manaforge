@@ -7,7 +7,6 @@ import sys
 import tempfile
 
 from mtg_print.project import project_payload
-from mtg_ui.project_lock import acquire_project_lock
 
 
 def choose_art(parent, document, entry_id):
@@ -43,6 +42,7 @@ def prepare_print(document, service, sections):
     if not any(e.quantity > 0 and e.section in sections and not e.do_not_print for e in document.deck.entries):
         raise ValueError('No printable cards in the selected sections.')
     from mtg_print import library as project_library
+    from mtg_ui.project_lock import acquire_project_lock
     from mtg_print import deck_import
     from mtg_print.models import ProjectState
     linked = document.extras.get('proxy_project_id')

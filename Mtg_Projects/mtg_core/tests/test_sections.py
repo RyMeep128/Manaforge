@@ -23,6 +23,7 @@ def test_section_values_keep_legacy_json_and_unknown_sections():
 
 
 def test_import_aliases_keep_stable_section_values():
-    entries = parse_decklist('Commander\n1 Leader\nSideboard\n1 Spare\nMaybeboard\n1 Maybe')
+    entries, unmatched = parse_decklist('Commander\n1 Leader\nSideboard\n1 Spare\nMaybeboard\n1 Maybe')
+    assert unmatched == []
     assert [entry.section for entry in entries] == [
         DeckSection.COMMANDER, DeckSection.SIDEBOARD, DeckSection.CONSIDERING]

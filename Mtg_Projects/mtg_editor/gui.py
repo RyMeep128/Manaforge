@@ -18,7 +18,7 @@ from mtg_ui.theme import application_stylesheet
 from copy import deepcopy
 from mtg_core.categorization import classify, apply_categories
 from mtg_editor.filtering import compile_filter, matches, HELP as FILTER_HELP
-from mtg_editor.search import SearchController
+from mtg_editor.search import SearchController, SearchWorker
 from mtg_editor.tasks import EditorTaskRunner, Task
 
 
