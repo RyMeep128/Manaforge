@@ -19,6 +19,7 @@ def test_printing_preserves_deck_roles_and_undo_clears_old_art():
     assert entry.quantity == 3 and entry.category_ids == ['ramp'] and entry.tags == ['favorite']
     assert entry.extras['auto_categories']['manual']
     assert entry.image_asset_id is None and entry.backside_asset_id is None
+    assert entry.art_override is None
     history.undo()
     assert doc.to_dict() == original
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from mtg_core.sections import DeckSection
+from mtg_core.artwork import HighResOverride
 
 from pathlib import Path
 import uuid
@@ -540,7 +541,7 @@ class EditorWindow(W.QMainWindow):
         if result is None:
             return
         def action(document):
-            existing = next((e for e in document.deck.entries if e.card_id == result.card_id and e.section == DeckSection.MAINBOARD and not e.extras.get('art_override')), None)
+            existing = next((e for e in document.deck.entries if e.card_id == result.card_id and e.section == DeckSection.MAINBOARD and not e.art_override), None)
             if existing:
                 existing.quantity += 1
             else:
@@ -848,7 +849,9 @@ class EditorWindow(W.QMainWindow):
                 entry.image_asset_id = result.pop('image_asset_id')
                 for key, value in result.items():
                     if value is not None:
-                        if key in ENTRY_PRINT_FIELDS:
+                        if key == "art_override":
+                            entry.art_override = HighResOverride.from_dict(value)
+                        elif key in ENTRY_PRINT_FIELDS:
                             setattr(entry, key, value)
                         else:
                             entry.extras[key] = value

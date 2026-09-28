@@ -236,7 +236,7 @@ def apply_decklist(document, result):
     entries, proposals, _ = result
     for prepared in entries:
         existing = next((e for e in document.deck.entries if e.card_id == prepared.card_id
-                         and e.section == prepared.section and not e.extras.get('art_override')
+                         and e.section == prepared.section and not e.art_override
                          and e.image_asset_id == prepared.image_asset_id
                          and e.backside_asset_id == prepared.backside_asset_id
                          and not e.do_not_print), None)

@@ -11,10 +11,14 @@ import project_library
 
 
 def test_typed_print_metadata_reaches_printer_without_mutating_deck():
+    from mtg_core.artwork import HighResOverride
+    from mtg_print.models import HighResOverride as PrintOverride
+    assert PrintOverride is HighResOverride
     document = DeckDocument()
     document.deck.entries = [DeckEntry(
         'typed', 'Card', card_id='print', oversized=True, pre_cropped=False,
         backside_pre_cropped=True, backside_asset_id='back',
+        art_override=HighResOverride(identifier='chosen', extras={'future': {'keep': True}}),
     )]
     before = deepcopy(document.to_dict())
     payload = project_payload(document)
@@ -30,6 +34,9 @@ def test_typed_print_metadata_reaches_printer_without_mutating_deck():
     assert embedded.pre_cropped is False
     assert embedded.backside_pre_cropped is True
     assert embedded.backside_asset_id == 'back'
+    assert embedded.art_override.identifier == 'chosen'
+    assert embedded.art_override.extras == {'future': {'keep': True}}
+    assert payload['high_res_front_overrides']['typed.png']['identifier'] == 'chosen'
     assert document.to_dict() == before
 
 

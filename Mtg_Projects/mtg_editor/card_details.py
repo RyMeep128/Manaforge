@@ -41,8 +41,9 @@ def apply_printing(document, entry_id, payload):
     entry.set_code = payload.get('set')
     entry.collector_number = payload.get('collector_number')
     entry.image_asset_id = None
-    for key in ('art_override', 'imported_artwork', 'backside_name', 'backside_short_edge'):
+    for key in ('imported_artwork', 'backside_name', 'backside_short_edge'):
         entry.extras.pop(key, None)
+    entry.art_override = None
     entry.pre_cropped = True
     entry.backside_asset_id = None
     entry.backside_pre_cropped = None

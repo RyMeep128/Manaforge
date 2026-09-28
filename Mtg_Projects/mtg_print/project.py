@@ -13,7 +13,7 @@ def project_payload(document, base=None):
         # their explicit metadata or the printer's filename compatibility rule.
         if entry.pre_cropped is None:
             entry.pre_cropped = bool(entry.card_id
-                and not entry.extras.get('art_override') and not entry.extras.get('proxy_front_name'))
+                and not entry.art_override and not entry.extras.get('proxy_front_name'))
         entry.extras.setdefault('proxy_front_name', f'{entry.entry_id}.png')
     payload = adapter.apply_to_legacy_proxy()
     by_id = {e.entry_id: e for e in adapter.deck.entries}
@@ -23,9 +23,6 @@ def project_payload(document, base=None):
         for key in ('backside_name', 'backside_short_edge'):
             if key in entry.extras:
                 raw[key] = entry.extras[key]
-        override = entry.extras.get('art_override')
-        if override:
-            payload.setdefault('high_res_front_overrides', {})[raw['front_name']] = deepcopy(override)
     payload['oversized_enabled'] = payload.get('oversized_enabled', False) or any(r.get('oversized') for r in payload['card_entries'])
     # Embed deck metadata without recursively embedding the entire print project.
     embedded = adapter.to_dict()

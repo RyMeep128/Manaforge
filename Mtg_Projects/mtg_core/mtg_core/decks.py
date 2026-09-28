@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from mtg_core.sections import DeckSection
+from mtg_core.artwork import HighResOverride
 
 from copy import deepcopy
 from dataclasses import dataclass, field
@@ -75,11 +76,17 @@ class DeckEntry:
     pre_cropped: bool | None = None
     backside_pre_cropped: bool | None = None
     backside_asset_id: str | None = None
+    art_override: HighResOverride | None = None
 
     def __post_init__(self) -> None:
         # Older callers supplied these fields through extras. Consume a copy so
         # the caller's dictionary is unchanged and there is one source of truth.
         self.extras = dict(self.extras)
+        legacy_art = self.extras.pop("art_override", None)
+        if self.art_override is None:
+            self.art_override = legacy_art
+        if isinstance(self.art_override, Mapping):
+            self.art_override = HighResOverride.from_dict(self.art_override)
         for key in ENTRY_PRINT_FIELDS:
             legacy = self.extras.pop(key, None)
             value = getattr(self, key)
@@ -96,6 +103,7 @@ class DeckEntry:
             "oracle_id", "set_code", "collector_number", "image_asset_id",
             "category_ids", "tags", "notes", "owned", "do_not_print",
             *ENTRY_PRINT_FIELDS,
+            "art_override",
         }
         return cls(
             entry_id=str(value.get("entry_id") or uuid.uuid4()),
@@ -114,11 +122,15 @@ class DeckEntry:
             owned=_quantity(value.get("owned"), 0),
             do_not_print=bool(value.get("do_not_print", False)),
             **{key: value.get(key) for key in ENTRY_PRINT_FIELDS},
+            art_override=(HighResOverride.from_dict(value["art_override"])
+                          if value.get("art_override") is not None else None),
             extras={key: deepcopy(item) for key, item in value.items() if key not in known},
         )
 
     def to_dict(self) -> dict[str, Any]:
         result = deepcopy(self.extras)
+        if self.art_override is not None:
+            result["art_override"] = self.art_override.to_dict()
         result.update({
             "entry_id": self.entry_id,
             "name": self.name,
@@ -263,10 +275,11 @@ class DeckDocument:
                 pre_cropped=raw.get('pre_cropped'),
                 backside_pre_cropped=raw.get('backside_pre_cropped'),
                 backside_asset_id=raw.get('backside_asset_id'),
+                art_override=(HighResOverride.from_dict(project['high_res_front_overrides'][front_name])
+                              if front_name in (project.get('high_res_front_overrides') or {}) else None),
                 extras={"proxy_front_name": front_name,
                         **{key: deepcopy(raw[key]) for key in ('backside_name', 'backside_short_edge') if raw.get(key) is not None},
-                        **({'art_override': deepcopy(project['high_res_front_overrides'][front_name])}
-                           if front_name in (project.get('high_res_front_overrides') or {}) else {})},
+                        },
             )
             entries.append(entry)
             if section in {DeckSection.COMMANDER, "commanders"}:
@@ -290,6 +303,8 @@ class DeckDocument:
         for entry in sorted(self.deck.entries, key=lambda item: item.sort_order):
             raw = original.get(entry.entry_id, {})
             front_name = str(entry.extras.get("proxy_front_name") or raw.get("front_name") or entry.name)
+            if entry.art_override is not None:
+                project.setdefault("high_res_front_overrides", {})[front_name] = entry.art_override.to_dict()
             metadata = deepcopy(dict(raw.get("metadata") or {}))
             metadata.update({"name": entry.name, "section": entry.section})
             if entry.set_code is not None:
