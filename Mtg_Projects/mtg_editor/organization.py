@@ -1,7 +1,9 @@
 """Deck organization commands and deterministic visual groups."""
+
+from mtg_core.sections import DeckSection
 from .filtering import compile_filter, matches
-SECTIONS = {'mainboard': 'Mainboard', 'commander': 'Commander', 'sideboard': 'Sideboard',
-            'considering': 'Considering', 'excluded': 'Excluded'}
+SECTIONS = {DeckSection.MAINBOARD: 'Mainboard', DeckSection.COMMANDER: 'Commander', DeckSection.SIDEBOARD: 'Sideboard',
+            DeckSection.CONSIDERING: 'Considering', DeckSection.EXCLUDED: 'Excluded'}
 GROUPS = ['Type', 'Mana Value', 'Color', 'Category', 'Section']
 SORTS = ['Name', 'Mana Value', 'Color', 'Quantity', 'Import Order']
 
@@ -15,7 +17,7 @@ def card_facts(payload):
 
 
 def group_key(entry, grouping):
-    if entry.section == 'commander':
+    if entry.section == DeckSection.COMMANDER:
         return 'Commander'
     facts = entry.extras.get('facts', {})
     if grouping == 'Category':
@@ -93,7 +95,7 @@ def assign(document, ids, field, value):
             entry.extras[field] = value
         else:
             setattr(entry, field, value.copy() if isinstance(value, list) else value)
-    document.deck.commander_entry_ids = [e.entry_id for e in document.deck.entries if e.section == 'commander']
+    document.deck.commander_entry_ids = [e.entry_id for e in document.deck.entries if e.section == DeckSection.COMMANDER]
 
 
 def remove_category(document, category_id):
@@ -114,15 +116,15 @@ def move_entries(document, ids, grouping, target, before_id=None):
         assign(document, ids, 'section', section)
     elif grouping == 'Category':
         if target == 'Commander':
-            assign(document, ids, 'section', 'commander')
+            assign(document, ids, 'section', DeckSection.COMMANDER)
         else:
             if target != 'Uncategorized' and target not in {c.category_id for c in document.deck.categories}:
                 raise ValueError('Unknown category')
             assign(document, ids, 'category', None if target == 'Uncategorized' else target)
             for entry in document.deck.entries:
-                if entry.entry_id in ids and entry.section == 'commander':
-                    entry.section = 'mainboard'
-            document.deck.commander_entry_ids = [e.entry_id for e in document.deck.entries if e.section == 'commander']
+                if entry.entry_id in ids and entry.section == DeckSection.COMMANDER:
+                    entry.section = DeckSection.MAINBOARD
+            document.deck.commander_entry_ids = [e.entry_id for e in document.deck.entries if e.section == DeckSection.COMMANDER]
     ordered = sorted(document.deck.entries, key=lambda e: e.sort_order)
     moving = [e for e in ordered if e.entry_id in ids]
     remaining = [e for e in ordered if e.entry_id not in ids]

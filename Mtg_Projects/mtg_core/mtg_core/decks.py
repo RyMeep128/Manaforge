@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from mtg_core.sections import DeckSection
+
 from copy import deepcopy
 from dataclasses import dataclass, field
 import json
@@ -54,7 +56,7 @@ class DeckEntry:
     entry_id: str
     name: str
     quantity: int = 1
-    section: str = "mainboard"
+    section: str = DeckSection.MAINBOARD
     sort_order: int = 0
     card_id: str | None = None
     oracle_id: str | None = None
@@ -79,7 +81,7 @@ class DeckEntry:
             entry_id=str(value.get("entry_id") or uuid.uuid4()),
             name=str(value.get("name") or ""),
             quantity=_quantity(value.get("quantity")),
-            section=str(value.get("section") or "mainboard"),
+            section=str(value.get("section") or DeckSection.MAINBOARD),
             sort_order=int(value.get("sort_order", 0)),
             card_id=_text(value.get("card_id")),
             oracle_id=_text(value.get("oracle_id")),
@@ -222,7 +224,7 @@ class DeckDocument:
             if not front_name or front_name.startswith("__"):
                 continue
             metadata = raw.get("metadata") if isinstance(raw.get("metadata"), Mapping) else {}
-            section = str(metadata.get("section") or "mainboard").casefold()
+            section = str(metadata.get("section") or DeckSection.MAINBOARD).casefold()
             entry_id = str(raw.get("entry_id") or front_name)
             entry = DeckEntry(
                 entry_id=entry_id,
@@ -243,7 +245,7 @@ class DeckDocument:
                            if front_name in (project.get('high_res_front_overrides') or {}) else {})},
             )
             entries.append(entry)
-            if section in {"commander", "commanders"}:
+            if section in {DeckSection.COMMANDER, "commanders"}:
                 commanders.append(entry_id)
 
         return cls(

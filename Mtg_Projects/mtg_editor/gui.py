@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-import json
+from mtg_core.sections import DeckSection
+
 from pathlib import Path
 import uuid
 
 from PyQt6 import QtCore, QtGui, QtWidgets as W
-from mtg_core.decks import DeckDocument, DeckEntry, DeckHistory, DeckStore
+from mtg_core.decks import DeckDocument, DeckEntry
+from mtg_editor.session import DeckSession
 from mtg_core.paths import data_root
 from mtg_core import get_default_card_service
 from mtg_editor.card_views import Thumbnails
@@ -16,26 +18,8 @@ from mtg_ui.theme import application_stylesheet
 from copy import deepcopy
 from mtg_core.categorization import classify, apply_categories
 from mtg_editor.filtering import compile_filter, matches, HELP as FILTER_HELP
-from mtg_editor.search import SearchCache, SearchWorker
-from mtg_core.diagnostics import get_logger
-
-
-class Task(QtCore.QThread):
-    completed = QtCore.pyqtSignal(object, str)
-
-    def __init__(self, work, parent=None, *, operation=None, context=None):
-        super().__init__(parent)
-        self.work = work
-        self.operation = operation or getattr(work, '__qualname__', type(work).__name__)
-        self.context = context or {}
-
-    def run(self):
-        try:
-            self.completed.emit(self.work(), '')
-        except Exception as exc:
-            get_logger(__name__).exception('Background task failed operation=%s context=%s',
-                                           self.operation, self.context)
-            self.completed.emit(None, str(exc))
+from mtg_editor.search import SearchController
+from mtg_editor.tasks import EditorTaskRunner, Task
 
 
 class DeckTable(QtCore.QAbstractTableModel):
@@ -71,13 +55,13 @@ class EditorWindow(W.QMainWindow):
         super().__init__()
         self.service = service or get_default_card_service()
         self.root = Path(root) if root else data_root() / 'decks'
-        self.store, self.path = DeckStore(), None
-        self.document = DeckDocument()
-        self.history = DeckHistory(self.document)
-        self.saved = self.document.to_dict()
-        self.worker = self.task = None
-        self.search_cache = SearchCache()
-        self.pending_search = self.refresh_search = self.closing = False
+        self.session = DeckSession(self.root)
+        self.closing = False
+        self.task_runner = EditorTaskRunner(self)
+        self.task_runner.busyChanged.connect(self.task_busy_changed)
+        self.task_runner.failed.connect(self.task_failed)
+        self.task_runner.settled.connect(self.task_settled)
+        self.search_controller = SearchController(self.service, self)
         self.thumbnails = Thumbnails(self.service, self)
         self.setStyleSheet(application_stylesheet())
         self.setWindowIcon(QtGui.QIcon(str(Path(__file__).resolve().parents[1] / 'mtg_proxy' / 'proxy.png')))
@@ -87,10 +71,6 @@ class EditorWindow(W.QMainWindow):
         self.autosave.setSingleShot(True)
         self.autosave.setInterval(2000)
         self.autosave.timeout.connect(self.save)
-        self.search_timer = QtCore.QTimer(self)
-        self.search_timer.setSingleShot(True)
-        self.search_timer.setInterval(350)
-        self.search_timer.timeout.connect(self.search)
         body = W.QWidget()
         layout = W.QVBoxLayout(body)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -290,6 +270,56 @@ class EditorWindow(W.QMainWindow):
         self.sync_fields()
         self.changed()
 
+        self.search_controller.resultsReady.connect(self.show_results)
+        self.search_controller.cleared.connect(self.clear_search_results)
+        self.search_controller.statusChanged.connect(self.search_status.setText)
+        self.search_controller.busyChanged.connect(self.cancel_search_button.setEnabled)
+
+    @property
+    def task(self):
+        return self.task_runner.task
+
+    @property
+    def worker(self):
+        return self.search_controller.worker
+
+    @property
+    def search_timer(self):
+        return self.search_controller.timer
+
+    @property
+    def pending_search(self):
+        return self.search_controller.pending
+
+    @property
+    def search_cache(self):
+        return self.search_controller.cache
+
+    # Compatibility accessors keep existing widget and extension callers working.
+    @property
+    def document(self):
+        return self.session.document
+
+    @property
+    def history(self):
+        return self.session.history
+
+    @property
+    def store(self):
+        return self.session.store
+
+    @property
+    def path(self):
+        return self.session.path
+
+    @property
+    def saved(self):
+        return self.session.saved
+
+    @saved.setter
+    def saved(self, value):
+        self.session.saved = value
+
     def resizeEvent(self, event):
         super().resizeEvent(event)
         if not hasattr(self, 'control_overflow'):
@@ -439,7 +469,7 @@ class EditorWindow(W.QMainWindow):
         self._refreshing_table = False
 
     def edit(self, action):
-        if self.history.execute(action):
+        if self.session.edit(action):
             self.changed()
 
     def changed(self):
@@ -455,9 +485,9 @@ class EditorWindow(W.QMainWindow):
         self.apply_table_filter()
         if self.views.currentWidget() is self.table:
             self.restore_table_selection()
-        dirty = self.document.to_dict() != self.saved
+        dirty = self.session.dirty
         self.setWindowTitle(f'{self.document.deck.name}{"*" if dirty else ""} — Manaforge Deck Editor')
-        total = sum(e.quantity for e in self.document.deck.entries if e.section in ('mainboard', 'commander'))
+        total = sum(e.quantity for e in self.document.deck.entries if e.section in (DeckSection.MAINBOARD, DeckSection.COMMANDER))
         self.count.setText(f'{total} cards')
         self.save_status.setText('Unsaved' if dirty else 'Saved')
         self.undo_button.setEnabled(self.history.can_undo)
@@ -477,56 +507,22 @@ class EditorWindow(W.QMainWindow):
         if ok:
             self.edit(lambda d: setattr(d.deck, 'description', text))
 
-    def search_changed(self):
-        self.cancel_search()
+    def clear_search_results(self):
         self.search_document.deck.entries.clear()
         self.results.refresh()
-        if self.query.text().strip():
-            self.pending_search = True
-            self.search_timer.start(350)
-        else:
-            self.search_status.setText('Search by name or Scryfall syntax')
+
+    def search_changed(self):
+        self.search_controller.change_query(self.query.text())
 
     def cancel_search(self):
-        self.search_timer.stop()
-        self.pending_search = self.refresh_search = False
-        if self.worker is not None:
-            self.worker.cancel()
-        self.cancel_search_button.setEnabled(False)
-        self.search_status.setText('Search cancelled')
+        self.search_controller.cancel()
 
     def refresh_results(self):
-        self.refresh_search = True
-        self.search()
+        self.search_controller.search(self.query.text(), refresh=True)
 
     def search(self):
-        self.search_timer.stop()
-        if self.closing:
-            return
-        if self.worker is not None:
-            self.worker.cancel()
-            self.pending_search = True
-            return
-        query = self.query.text().strip()
-        self.pending_search = False
-        if not query:
-            self.search_document.deck.entries.clear()
-            self.results.refresh()
-            self.search_status.setText('Search by name or Scryfall syntax')
-            return
-        self.search_status.setText('Searching local database...')
-        self.cancel_search_button.setEnabled(True)
-        self.worker = SearchWorker(query, self.service, self, cache=self.search_cache,
-                                   refresh=self.refresh_search)
-        self.refresh_search = False
-        self.worker.completed.connect(self.search_completed)
-        self.worker.finished.connect(self.search_finished)
-        self.worker.start()
-
-    def search_completed(self, query, results, error):
-        worker = self.sender()
-        if worker is self.worker and not worker.cancelled.is_set() and not self.closing:
-            self.show_results(query, results, error)
+        if not self.closing:
+            self.search_controller.search(self.query.text())
 
     def show_results(self, query, results, error):
         if query != self.query.text().strip():
@@ -539,19 +535,12 @@ class EditorWindow(W.QMainWindow):
         self.results.refresh()
         self.search_status.setText(error or f'{len(results)} local matches (up to 100). Double-click or + to add.')
 
-    def search_finished(self):
-        self.worker.deleteLater()
-        self.worker = None
-        self.cancel_search_button.setEnabled(False)
-        if self.pending_search and not self.closing and not self.search_timer.isActive():
-            self.search_timer.start(0)
-
     def add_result(self, entry_id, delta=1):
         result = next((e for e in self.search_document.deck.entries if e.entry_id == entry_id), None)
         if result is None:
             return
         def action(document):
-            existing = next((e for e in document.deck.entries if e.card_id == result.card_id and e.section == 'mainboard' and not e.extras.get('art_override')), None)
+            existing = next((e for e in document.deck.entries if e.card_id == result.card_id and e.section == DeckSection.MAINBOARD and not e.extras.get('art_override')), None)
             if existing:
                 existing.quantity += 1
             else:
@@ -621,7 +610,7 @@ class EditorWindow(W.QMainWindow):
             categories.addAction(category.name, lambda checked=False, cid=category.category_id: self.edit(lambda d: assign(d, ids, 'category', cid)))
         categories.addSeparator()
         categories.addAction('Manage categories…', self.manage_categories)
-        menu.addAction('Make commander', lambda: self.edit(lambda d: assign(d, ids, 'section', 'commander')))
+        menu.addAction('Make commander', lambda: self.edit(lambda d: assign(d, ids, 'section', DeckSection.COMMANDER)))
         for label, field, value in [('Make oversized', 'oversized', True), ('Make normal size', 'oversized', False),
                                     ('Owned / do not print', 'do_not_print', True), ('Include in printing', 'do_not_print', False)]:
             menu.addAction(label, lambda checked=False, f=field, v=value: self.edit(lambda d: assign(d, ids, f, v)))
@@ -645,9 +634,7 @@ class EditorWindow(W.QMainWindow):
             self.edit(lambda d: assign(d, ids, 'tags', list(dict.fromkeys(t.strip() for t in text.split(',') if t.strip()))))
 
     def view_tags(self, entry):
-        from .proxy_adapter import enable_proxy_imports
-        enable_proxy_imports()
-        from dialogs import CardTagsDialog
+        from mtg_ui.print_dialogs import CardTagsDialog
         def show(tags):
             dialog = CardTagsDialog(self, entry.name, tags)
             if dialog.exec() == W.QDialog.DialogCode.Accepted and dialog.selected_tag:
@@ -816,34 +803,22 @@ class EditorWindow(W.QMainWindow):
         self.run_task(lambda: self.service.analyze_entries(entries), review)
 
     def run_task(self, work, callback):
-        if self.task is not None:
-            return
-        self.autosave.stop()
-        self.centralWidget().setEnabled(False)
-        self.statusBar().showMessage('Working…')
-        operation = getattr(callback, '__qualname__', type(callback).__name__)
         context = {'deck_id': self.document.deck.deck_id, 'path': str(self.path) if self.path else None}
-        self.task = Task(work, self, operation=operation, context=context)
-        def completed(result, error):
-            self.centralWidget().setEnabled(True)
-            if error:
-                self.statusBar().showMessage(error)
-                W.QMessageBox.warning(self, 'Could not complete operation', error)
-            else:
-                try:
-                    callback(result)
-                except (OSError, ValueError, TypeError) as exc:
-                    get_logger(__name__).exception('Background result failed operation=%s context=%s', operation, context)
-                    W.QMessageBox.warning(self, 'Could not complete operation', str(exc))
-            if self.document.to_dict() != self.saved:
-                self.autosave.start()
-        self.task.completed.connect(completed)
-        self.task.finished.connect(self.task_finished)
-        self.task.start()
+        self.task_runner.start(work, callback, context=context)
 
-    def task_finished(self):
-        self.task.deleteLater()
-        self.task = None
+    def task_busy_changed(self, busy):
+        self.centralWidget().setEnabled(not busy)
+        if busy:
+            self.autosave.stop()
+            self.statusBar().showMessage('Working?')
+
+    def task_failed(self, error):
+        self.statusBar().showMessage(error)
+        W.QMessageBox.warning(self, 'Could not complete operation', error)
+
+    def task_settled(self):
+        if self.session.dirty:
+            self.autosave.start()
 
     def card_details(self, entry_id):
         from .card_details import CardDetails, apply_printing
@@ -884,7 +859,7 @@ class EditorWindow(W.QMainWindow):
         checks = {}
         for key, label in SECTIONS.items():
             check = W.QCheckBox(label)
-            check.setChecked(key in ('mainboard', 'commander'))
+            check.setChecked(key in (DeckSection.MAINBOARD, DeckSection.COMMANDER))
             layout.addWidget(check)
             checks[key] = check
         buttons = W.QDialogButtonBox(W.QDialogButtonBox.StandardButton.Ok | W.QDialogButtonBox.StandardButton.Cancel)
@@ -911,22 +886,14 @@ class EditorWindow(W.QMainWindow):
     def undo(self):
         if self.task is not None:
             return
-        prefs, link = deepcopy(self.document.editor_preferences), self.document.extras.get('proxy_project_id')
-        self.history.undo()
-        self.document.editor_preferences = prefs
-        if link:
-            self.document.extras['proxy_project_id'] = link
+        self.session.undo()
         self.sync_fields()
         self.changed()
 
     def redo(self):
         if self.task is not None:
             return
-        prefs, link = deepcopy(self.document.editor_preferences), self.document.extras.get('proxy_project_id')
-        self.history.redo()
-        self.document.editor_preferences = prefs
-        if link:
-            self.document.extras['proxy_project_id'] = link
+        self.session.redo()
         self.sync_fields()
         self.changed()
 
@@ -955,23 +922,24 @@ class EditorWindow(W.QMainWindow):
         if (self.name.text().strip() or 'Untitled Deck') != self.document.deck.name or self.format.currentText() != self.document.deck.format:
             self.edit_metadata()
         self.autosave.stop()
-        if self.document.to_dict() == self.saved and self.path:
+        if not self.session.dirty and self.path:
             return True
-        destination = self.path or self.root / f'{self.document.deck.deck_id}.manaforge.json'
         try:
-            self.store.save(destination, self.document)
+            destination = self.session.save()
         except (OSError, ValueError, TypeError) as exc:
             self.statusBar().showMessage(f'Save failed; changes remain unsaved: {exc}')
             self.autosave.start(10000)
             return False
-        self.path, self.saved = destination, self.document.to_dict()
         self.changed()
         self.statusBar().showMessage(f'Saved: {destination}')
         return True
 
     def replace_document(self, document, path=None):
-        self.document, self.path = document, path
-        self.history, self.saved = DeckHistory(document), document.to_dict()
+        self.session.replace_document(document, path)
+        self._document_replaced()
+
+    def _document_replaced(self):
+        document = self.document
         self.model.document = self.grid.document = document
         self.grid.selected.clear()
         self.grid.verticalScrollBar().setValue(0)
@@ -1009,9 +977,10 @@ class EditorWindow(W.QMainWindow):
             self.run_task(resolve, apply)
 
     def new(self):
-        if self.task is not None or (self.document.to_dict() != self.saved and not self.save()):
+        if self.task is not None or (self.session.dirty and not self.save()):
             return
-        self.replace_document(DeckDocument())
+        self.session.new()
+        self._document_replaced()
 
     def open(self):
         path, _ = W.QFileDialog.getOpenFileName(self, 'Open deck or proxy project', str(self.root), 'JSON projects (*.json)')
@@ -1019,46 +988,34 @@ class EditorWindow(W.QMainWindow):
             self.open_path(Path(path))
 
     def open_path(self, path):
-        if self.task is not None or (self.document.to_dict() != self.saved and not self.save()):
+        if self.task is not None or (self.session.dirty and not self.save()):
             return
         try:
-            raw = json.loads(path.read_text(encoding='utf-8'))
-            if 'schema_version' in raw and 'deck' in raw:
-                document, destination = DeckDocument.from_dict(raw), path
-            else:
-                document = DeckDocument.from_legacy_proxy(raw, name=path.stem)
-                if isinstance(raw.get('deck_document'), dict):
-                    embedded = DeckDocument.from_dict(raw['deck_document'])
-                    embedded.print_settings['proxy_project'] = raw
-                    document = embedded
-                destination = None
+            self.session.open(path)
         except (OSError, ValueError, TypeError, AttributeError) as exc:
             W.QMessageBox.warning(self, 'Open failed', str(exc))
             return
-        self.replace_document(document, destination)
-        if destination is None:
+        self._document_replaced()
+        if self.path is None:
             self.save()
 
     def recover(self):
         if not self.path:
             return
-        paths = self.store.recovery_paths(self.path)
+        paths = self.session.recovery_paths()
         if not paths:
             W.QMessageBox.information(self, 'Recovery', 'No recovery snapshots yet.')
             return
         value, ok = W.QInputDialog.getItem(self, 'Recovery', 'Restore a snapshot into a new deck:', [p.name for p in paths], 0, False)
         if ok:
-            if self.document.to_dict() != self.saved and not self.save():
+            if self.session.dirty and not self.save():
                 return
             try:
-                document = self.store.load(next(p for p in paths if p.name == value))
+                self.session.recover(next(p for p in paths if p.name == value))
             except (OSError, ValueError) as exc:
                 W.QMessageBox.warning(self, 'Recovery failed', str(exc))
                 return
-            document.deck.deck_id = str(uuid.uuid4())
-            document.deck.name += ' (Recovered)'
-            document.extras.pop('proxy_project_id', None)
-            self.replace_document(document)
+            self._document_replaced()
             self.save()
 
     def refresh_recent(self):
@@ -1088,7 +1045,7 @@ class EditorWindow(W.QMainWindow):
 
     def closeEvent(self, event):
         self.closing = True
-        self.cancel_search()
+        self.search_controller.shutdown()
         if self.worker is not None or self.task is not None or self.thumbnails.worker is not None:
             self.thumbnails.stopping = True
             self.thumbnails.pending.clear()
@@ -1096,9 +1053,10 @@ class EditorWindow(W.QMainWindow):
             QtCore.QTimer.singleShot(150, self.close)
             event.ignore()
             return
-        if self.document.to_dict() != self.saved and not self.save():
+        if self.session.dirty and not self.save():
             self.thumbnails.stopping = False
             self.closing = False
+            self.search_controller.resume()
             event.ignore()
             return
         self.autosave.stop()

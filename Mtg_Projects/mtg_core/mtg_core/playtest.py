@@ -1,4 +1,6 @@
 """Quantity-aware opening-hand sampling; no rules engine or Qt dependency."""
+
+from mtg_core.sections import DeckSection
 from dataclasses import dataclass
 import random
 
@@ -10,14 +12,14 @@ class SampleCard:
 
 
 class HandSampler:
-    def __init__(self, deck, *, sections=('mainboard',), include_do_not_print=True,
+    def __init__(self, deck, *, sections=(DeckSection.MAINBOARD,), include_do_not_print=True,
                  free_mulligans=0, rng=None):
         self.rng = rng if rng is not None else random.Random()
         self.free_mulligans = max(0, int(free_mulligans))
         commanders = set(deck.commander_entry_ids)
         self.cards = tuple(SampleCard(entry.entry_id, copy_index)
             for entry in deck.entries
-            if ('commander' if entry.entry_id in commanders else entry.section) in sections
+            if (DeckSection.COMMANDER if entry.entry_id in commanders else entry.section) in sections
             and (include_do_not_print or not entry.do_not_print)
             for copy_index in range(max(0, entry.quantity)))
         self.restart()

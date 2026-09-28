@@ -1,4 +1,6 @@
 """Local asset inspection and a clickable, quantity-weighted readiness snapshot."""
+
+from mtg_core.sections import DeckSection
 from io import BytesIO
 from pathlib import Path
 
@@ -11,12 +13,11 @@ LABELS = {'missing-art': 'Missing artwork', 'low-dpi': 'Low DPI',
 
 
 def inspect_readiness(document, service):
-    from .proxy_adapter import enable_proxy_imports, project_payload
-    enable_proxy_imports()
-    from constants import low_dpi_warning_threshold
-    from image import effective_dpi_from_dimensions
-    from models import ProjectState
-    from card_layouts import has_printed_back, PAIRED_BACK_LAYOUTS
+    from mtg_print.project import project_payload
+    from mtg_print.geometry import low_dpi_warning_threshold
+    from mtg_print.image import effective_dpi_from_dimensions
+    from mtg_print.models import ProjectState
+    from mtg_print.card_layouts import has_printed_back, PAIRED_BACK_LAYOUTS
 
     state = ProjectState.from_dict(project_payload(document))
     groups = {key: set() for key in LABELS}
@@ -69,7 +70,7 @@ def inspect_readiness(document, service):
         flags = {'missing-art': size is None, 'low-dpi': low,
                  'missing-back': needs_back and back_size is None, 'dfc': dfc,
                  'oversized': bool(entry.extras.get('oversized')),
-                 'excluded': entry.section == 'excluded' or entry.do_not_print}
+                 'excluded': entry.section == DeckSection.EXCLUDED or entry.do_not_print}
         for key, active in flags.items():
             if active:
                 groups[key].add(entry.entry_id)

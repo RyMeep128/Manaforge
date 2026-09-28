@@ -1,4 +1,6 @@
 """Select commanders and review local deck checks without blocking house rules."""
+
+from mtg_core.sections import DeckSection
 from copy import deepcopy
 from datetime import datetime, timezone
 from PyQt6 import QtWidgets as W
@@ -22,7 +24,7 @@ class CommanderDialog(W.QDialog):
         form = W.QFormLayout()
         self.selectors = []
         self.color_choices = []
-        current = [e.entry_id for e in document.deck.entries if e.section == 'commander']
+        current = [e.entry_id for e in document.deck.entries if e.section == DeckSection.COMMANDER]
         for i, label in enumerate(('Commander', 'Partner / Background')):
             combo = W.QComboBox()
             combo.addItem('None', None)
@@ -47,7 +49,7 @@ class CommanderDialog(W.QDialog):
         self.companion = W.QComboBox()
         self.companion.addItem('No companion', None)
         for entry in document.deck.entries:
-            if entry.section == 'sideboard':
+            if entry.section == DeckSection.SIDEBOARD:
                 self.companion.addItem(entry.name, entry.entry_id)
         saved_companion = document.deck.extras.get('companion_entry_id')
         if saved_companion and self.companion.findData(saved_companion) < 0:
@@ -105,7 +107,7 @@ class CommanderDialog(W.QDialog):
         self.apply_selections(preview)
         report = check_commander(preview, self.records) if self.is_commander else check_constructed(preview, self.records)
         target = '/ 100' if self.is_commander else '(minimum 60)'
-        current_ids = [e.entry_id for e in self.document.deck.entries if e.section == 'commander']
+        current_ids = [e.entry_id for e in self.document.deck.entries if e.section == DeckSection.COMMANDER]
         changed = ((self.is_commander and set(ids) != set(current_ids)) or
                    preview.deck.extras.get('companion_entry_id') != self.document.deck.extras.get('companion_entry_id') or
                    preview.deck.extras.get('commander_colors', {}) != self.document.deck.extras.get('commander_colors', {}))

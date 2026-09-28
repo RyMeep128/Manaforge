@@ -4,6 +4,23 @@ Run `Launch Manaforge Deck Editor.cmd` after installing dependencies with the
 Proxy setup script. Alternatively run `python Mtg_Projects/mtg_editor/run_editor.py`
 from the repository root with application dependencies installed.
 
+## Internal session boundary
+
+`session.DeckSession` owns the current document, history, path, saved snapshot,
+and save/open/new/recovery operations without importing Qt. Undo/Redo preserve
+current editor preferences and the linked print project. Failed reads or writes
+retain the active session; recovery creates a new, unlinked deck. Proxy imports
+receive a separate deck save destination.
+
+`EditorWindow` coordinates dialogs, dirty-change guards, autosave timing, and
+widget refresh. Its document/history/store/path accessors refer to the session.
+`tasks.EditorTaskRunner` owns background execution, worker cleanup, callback
+error reporting, and busy/settled signals. `search.SearchController` owns the
+current query, debounce timer, cache, cancellation, and stale-result suppression.
+The window displays their results and errors and coordinates shutdown with
+thumbnail work. Session regressions in `tests/test_session.py` need no Qt
+application; controller lifecycle coverage is in `tests/test_controllers.py`.
+
 ## Visual workspace
 
 The editor shares Proxy's dark styling and green accents. **Grid** shows complete

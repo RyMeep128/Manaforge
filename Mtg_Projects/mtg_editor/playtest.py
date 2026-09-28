@@ -1,4 +1,6 @@
 """A local hand sampler with deck-local notes and optional inclusion settings."""
+
+from mtg_core.sections import DeckSection
 from PyQt6 import QtCore as C, QtWidgets as W
 
 from mtg_core.playtest import HandSampler
@@ -17,11 +19,11 @@ class PlaytestDialog(W.QDialog):
         note.setWordWrap(True)
         layout.addWidget(note)
         settings = document.editor_preferences.get('playtest', {})
-        included = settings.get('sections', ['mainboard'])
+        included = settings.get('sections', [DeckSection.MAINBOARD])
         controls = W.QGridLayout()
         self.sections = {}
-        for i, (key, label) in enumerate((('mainboard', 'Mainboard'), ('commander', 'Commanders'),
-                ('sideboard', 'Sideboard'), ('considering', 'Considering'), ('excluded', 'Excluded'))):
+        for i, (key, label) in enumerate(((DeckSection.MAINBOARD, 'Mainboard'), (DeckSection.COMMANDER, 'Commanders'),
+                (DeckSection.SIDEBOARD, 'Sideboard'), (DeckSection.CONSIDERING, 'Considering'), (DeckSection.EXCLUDED, 'Excluded'))):
             box = W.QCheckBox(label)
             box.setChecked(key in included)
             controls.addWidget(box, i // 3, i % 3)

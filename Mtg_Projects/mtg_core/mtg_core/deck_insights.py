@@ -1,4 +1,6 @@
 """Quantity-weighted deck composition; never modifies cards or inferred roles."""
+
+from mtg_core.sections import DeckSection
 from collections import Counter
 import math
 import re
@@ -6,7 +8,7 @@ import re
 from .categorization import ROLE_TAGS, TYPES
 
 
-def deck_insights(document, records=None, sections=('mainboard', 'commander')):
+def deck_insights(document, records=None, sections=(DeckSection.MAINBOARD, DeckSection.COMMANDER)):
     records = records or {}
     categories = {c.category_id: c.name for c in document.deck.categories}
     curve, types, colors, pips = Counter(), Counter(), Counter(), Counter()

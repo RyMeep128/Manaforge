@@ -1,4 +1,6 @@
 """Read-only deck filters over cached card facts; no database work while typing."""
+
+from mtg_core.sections import DeckSection
 import operator
 import re
 import shlex
@@ -78,7 +80,7 @@ def matches(entry, terms, categories):
             return (facts.get('legalities') or {}).get(value) == 'legal'
         if field == 'is':
             return {'oversized': bool(entry.extras.get('oversized')),
-                    'excluded': entry.section == 'excluded',
+                    'excluded': entry.section == DeckSection.EXCLUDED,
                     'do-not-print': entry.do_not_print, 'owned': entry.owned > 0,
                     'back': bool(entry.extras.get('backside_asset_id') or entry.extras.get('backside_name')),
                     'dfc': facts.get('layout') in ('transform', 'modal_dfc', 'double_faced_token', 'reversible_card', 'art_series')}[value]

@@ -1,4 +1,6 @@
 """Shared text/CSV decklists and local-first card resolution, independent of Qt/printing."""
+
+from mtg_core.sections import DeckSection
 import csv
 import io
 import re
@@ -15,17 +17,17 @@ class DecklistEntry:
     name: str
     set_code: str | None = None
     collector_number: str | None = None
-    section: str = 'mainboard'
+    section: str = DeckSection.MAINBOARD
     card_id: str | None = None
     image_url: str | None = None
     backside_image_url: str | None = None
 
 
-SECTIONS = {'deck': 'mainboard', 'mainboard': 'mainboard', 'main': 'mainboard',
-            'sideboard': 'sideboard', 'commander': 'commander', 'commanders': 'commander',
-            'companion': 'sideboard', 'companions': 'sideboard', 'maybeboard': 'considering',
-            'considering': 'considering', 'excluded': 'excluded'}
-PREFIXES = {'SB': 'sideboard', 'MB': 'mainboard', 'CMDR': 'commander', 'COMMANDER': 'commander'}
+SECTIONS = {'deck': DeckSection.MAINBOARD, DeckSection.MAINBOARD: DeckSection.MAINBOARD, 'main': DeckSection.MAINBOARD,
+            DeckSection.SIDEBOARD: DeckSection.SIDEBOARD, DeckSection.COMMANDER: DeckSection.COMMANDER, 'commanders': DeckSection.COMMANDER,
+            'companion': DeckSection.SIDEBOARD, 'companions': DeckSection.SIDEBOARD, 'maybeboard': DeckSection.CONSIDERING,
+            DeckSection.CONSIDERING: DeckSection.CONSIDERING, DeckSection.EXCLUDED: DeckSection.EXCLUDED}
+PREFIXES = {'SB': DeckSection.SIDEBOARD, 'MB': DeckSection.MAINBOARD, 'CMDR': DeckSection.COMMANDER, 'COMMANDER': DeckSection.COMMANDER}
 LINE = re.compile(r'^(?:(?P<count>\d+)(?:x)?\s+)?(?P<name>.+?)'
                   r'(?:\s+\((?P<set_code>[A-Za-z0-9]+)\)(?:\s+(?P<collector_number>[A-Za-z0-9-]+))?)?$')
 
@@ -48,8 +50,8 @@ def parse_decklist(text, *, preserve_sections=True):
             name = normalize_name(fields.get('name', ''))
             code = fields.get('set_code') or None
             collector = fields.get('collector_number') or None
-            section_text = fields.get('section', 'mainboard').casefold()
-            section = SECTIONS.get(section_text, 'mainboard')
+            section_text = fields.get('section', DeckSection.MAINBOARD).casefold()
+            section = SECTIONS.get(section_text, DeckSection.MAINBOARD)
             # Legacy Proxy CSV import required complete printing coordinates.
             invalid = not count.isdigit() or not name or (preserve_sections and int(count) < 1)
             invalid |= not preserve_sections and (not code or not collector)
@@ -57,11 +59,11 @@ def parse_decklist(text, *, preserve_sections=True):
                 unmatched.append(f'CSV row {number}')
                 continue
             entries.append(DecklistEntry(int(count), name, code.lower() if code else None, collector,
-                                         section if preserve_sections else 'mainboard',
+                                         section if preserve_sections else DeckSection.MAINBOARD,
                                          image_url=fields.get('image_url') or None if preserve_sections else None,
                                          backside_image_url=fields.get('backside_image_url') or None if preserve_sections else None))
     else:
-        section = 'mainboard'
+        section = DeckSection.MAINBOARD
         for raw in text.splitlines():
             line = raw.strip()
             heading = line.casefold().rstrip(':')
@@ -86,7 +88,7 @@ def parse_decklist(text, *, preserve_sections=True):
                 continue
             code = match['set_code']
             entries.append(DecklistEntry(count, name, code.lower() if code else None, match['collector_number'],
-                                         target if preserve_sections else 'mainboard'))
+                                         target if preserve_sections else DeckSection.MAINBOARD))
     aggregated = {}
     for entry in entries:
         key = (entry.name.casefold(), entry.set_code, entry.collector_number, entry.section, entry.image_url, entry.backside_image_url)
@@ -139,8 +141,8 @@ def read_decklist_file(path):
 
 def export_decklist(document, *, include_printings=True, include_sections=True):
     """Common quantity/name text; exact printing coordinates and sections are optional."""
-    labels = {'mainboard': 'Deck', 'commander': 'Commander', 'sideboard': 'Sideboard',
-              'considering': 'Maybeboard', 'excluded': 'Excluded'}
+    labels = {DeckSection.MAINBOARD: 'Deck', DeckSection.COMMANDER: 'Commander', DeckSection.SIDEBOARD: 'Sideboard',
+              DeckSection.CONSIDERING: 'Maybeboard', DeckSection.EXCLUDED: 'Excluded'}
     lines = []
     for section, label in labels.items():
         entries = [e for e in document.deck.entries if e.section == section and e.quantity > 0]
@@ -245,4 +247,4 @@ def apply_decklist(document, result):
         entry.sort_order = max((e.sort_order for e in document.deck.entries), default=-1) + 1
         document.deck.entries.append(entry)
         apply_categories(document, {entry.entry_id: proposals.get(entry.entry_id, [])})
-    document.deck.commander_entry_ids = [e.entry_id for e in document.deck.entries if e.section == 'commander']
+    document.deck.commander_entry_ids = [e.entry_id for e in document.deck.entries if e.section == DeckSection.COMMANDER]

@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 from PyQt6 import QtWidgets as W
 
-from mtg_editor import card_details, card_views, decklist_dialogs, gui, project_browser
+from mtg_editor import card_details, card_views, decklist_dialogs, gui, project_browser, tasks
 
 
 def fail(*args, **kwargs):
@@ -12,7 +12,7 @@ def fail(*args, **kwargs):
 
 def test_workers_preserve_tracebacks_context_and_concise_errors(monkeypatch, caplog):
     app = W.QApplication.instance() or W.QApplication([])
-    for module in (card_details, card_views, decklist_dialogs, gui, project_browser):
+    for module in (card_details, card_views, decklist_dialogs, tasks, project_browser):
         monkeypatch.setattr(module, 'get_logger', lambda name: logging.getLogger('worker-test.' + name))
     observed = []
     task = gui.Task(fail, operation='deck_insights', context={'deck_id': 'deck-123'})

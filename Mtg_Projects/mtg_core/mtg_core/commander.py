@@ -4,6 +4,8 @@ Rules: https://magic.wizards.com/en/rules (903, 702.124).
 Vehicle/Spacecraft eligibility: Wizards' Edge of Eternities update bulletin.
 This is a deck checker, not a rules engine or an online legality guarantee.
 """
+
+from mtg_core.sections import DeckSection
 from dataclasses import dataclass, field
 import re
 import time
@@ -118,10 +120,10 @@ def copy_limit(payload, default=1):
 
 def check_commander(document, records, *, now=None):
     now = time.time() if now is None else now
-    entries = [e for e in document.deck.entries if e.section in ('mainboard', 'commander')]
+    entries = [e for e in document.deck.entries if e.section in (DeckSection.MAINBOARD, DeckSection.COMMANDER)]
     companion_id = document.deck.extras.get('companion_entry_id')
     companion = next((e for e in document.deck.entries if e.entry_id == companion_id), None)
-    commanders = [e for e in entries if e.section == 'commander']
+    commanders = [e for e in entries if e.section == DeckSection.COMMANDER]
     report = Report(sum(e.quantity for e in entries))
     def issue(severity, code, message, selected=()):
         report.issues.append(Issue(severity, code, message, tuple(e.entry_id for e in selected)))
@@ -163,7 +165,7 @@ def check_commander(document, records, *, now=None):
     oracle_names = {p['oracle_id']: p.get('name', '').casefold() for p in payloads.values() if p.get('oracle_id') and p.get('name')}
     checked_entries = list(entries)
     if companion:
-        if companion.section != 'sideboard' or companion.quantity != 1:
+        if companion.section != DeckSection.SIDEBOARD or companion.quantity != 1:
             issue('Error', 'companion_selection', 'The companion must be one card outside the starting deck (sideboard).', [companion])
         if companion.entry_id not in payloads:
             payloads[companion.entry_id] = records.get(companion.card_id, {}).get('payload', {'name': companion.name, **companion.extras.get('facts', {})})
@@ -236,7 +238,7 @@ def set_commanders(document, ids):
         raise ValueError('A selected commander is no longer in this deck.')
     for entry in document.deck.entries:
         if entry.entry_id in ids:
-            entry.section = 'commander'
-        elif entry.section == 'commander':
-            entry.section = 'mainboard'
+            entry.section = DeckSection.COMMANDER
+        elif entry.section == DeckSection.COMMANDER:
+            entry.section = DeckSection.MAINBOARD
     document.deck.commander_entry_ids = ids

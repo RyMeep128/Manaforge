@@ -3,7 +3,7 @@ import sys
 
 from reportlab.lib.pagesizes import LETTER, A5, A4, A3, LEGAL
 
-APP_VERSION = "0.1.23-alpha.1"
+APP_VERSION = "0.1.24-alpha.1"
 
 if getattr(sys, "frozen", False):
     app_dir = os.path.dirname(os.path.abspath(sys.executable))
@@ -35,10 +35,7 @@ os.makedirs(data_dir, exist_ok=True)
 # Backwards-compatible name used by older modules for mutable app data.
 cwd = data_dir
 
-page_sizes = {"Letter": LETTER, "A5": A5, "A4": A4, "A3": A3, "Legal": LEGAL}
-
-card_size_with_bleed_inch = (2.72, 3.7)
-card_size_without_bleed_inch = (2.48, 3.46)
-card_ratio = card_size_without_bleed_inch[0] / card_size_without_bleed_inch[1]
-
-low_dpi_warning_threshold = 300
+from mtg_print.geometry import (
+    page_sizes, card_size_with_bleed_inch, card_size_without_bleed_inch,
+    card_ratio, low_dpi_warning_threshold,
+)

@@ -1,7 +1,7 @@
 import os
 import io
 from enum import Enum
-from copy import deepcopy
+from mtg_print import layout as print_layout
 from functools import cache
 
 from reportlab.pdfgen import canvas
@@ -188,198 +188,23 @@ def generate(print_dict, size, pdf_path, print_fn, *, page_side="both"):
 
 
 def distribute_cards_to_pages(print_dict, columns, rows):
-    state = as_project_state(print_dict)
-    from services import layout_service
-    layout_service.validate_capacity(list(layout_service.copies(state).values()), columns, rows)
-    if state.manual_layout is not None:
-        items, _ = layout_service.resolve(state, columns, rows)
-        return layout_service.pages_from_items(state, items, columns, rows)
-    images_per_page = columns * rows
-    oversized_images_per_page = (columns // 2) * rows
-
-    short_edge_dict = state.backside_short_edge
-    oversized_dict = state.oversized if state.oversized_enabled else {}
-
-    # throw all images n times into a list
-    images = []
-    card_sort = getattr(state, "card_sort", "Alphabetical (A-Z)")
-    card_names = list(state.cards.keys())
-    if card_sort == "Alphabetical (A-Z)":
-        card_names = sorted(
-            card_names,
-            key=lambda name: (state.get_card_metadata(name) or {}).get("name", name).casefold(),
-        )
-    elif card_sort == "Alphabetical (Z-A)":
-        card_names = sorted(
-            card_names,
-            key=lambda name: (state.get_card_metadata(name) or {}).get("name", name).casefold(),
-            reverse=True,
-        )
-
-    for img in card_names:
-        entry = state.get_card_entry(img)
-        if entry is not None and entry.do_not_print:
-            continue
-        num = state.cards[img]
-        is_short_edge = short_edge_dict[img] if img in short_edge_dict else False
-        is_oversized = oversized_dict[img] if img in oversized_dict else False
-        images.extend([(img, is_short_edge, is_oversized)] * num)
-
-    # favor filling up with oversized cards first
-    images = sorted(images, key=lambda x: not x[2])
-
-    def page_has_space(page, oversized):
-        oversized_cards = len(page["oversized"])
-        regular_cards = len(page["regular"])
-        single_spaces = regular_cards + oversized_cards * 2
-        free_single_spaces = images_per_page - single_spaces
-        if oversized:
-            free_double_spaces = oversized_images_per_page - oversized_cards
-            return free_double_spaces > 0 and free_single_spaces > 1
-        else:
-            return free_single_spaces > 0
-
-    def is_page_full(page):
-        return page_has_space(page, False) == False
-
-    empty_page = {"regular": [], "oversized": []}
-    pages = []
-
-    unfinished_pages = []
-    for img, is_short_edge, is_oversized in images:
-        # get a page that can fit this card
-        page_with_space = next(
-            filter(lambda x: page_has_space(x, is_oversized), unfinished_pages),
-            None,
-        )
-
-        # or start a new page if none is available
-        if page_with_space is None:
-            unfinished_pages.append(deepcopy(empty_page))
-            page_with_space = unfinished_pages[-1]
-
-        # add the image to the page
-        page_with_space["oversized" if is_oversized else "regular"].append(
-            (img, is_short_edge)
-        )
-
-        # push full page into final list
-        if is_page_full(page_with_space):
-            pages.append(page_with_space)
-            unfinished_pages.remove(page_with_space)
-
-    # push all unfinished pages into final list
-    pages.extend(unfinished_pages)
-    return pages
+    return print_layout.distribute_cards_to_pages(as_project_state(print_dict), columns, rows)
 
 
 def make_backside_pages(print_dict, pages):
-    state = as_project_state(print_dict)
-    back_dict = state.backsides
-
-    def backside_of_img(img_pair):
-        (img, is_short_edge) = img_pair
-        return (
-            (back_dict[img] if img in back_dict else state.backside_default),
-            is_short_edge,
-        )
-
-    backside_pages = deepcopy(pages)
-    for page in backside_pages:
-        if "placements" in page:
-            page["placements"] = [
-                (row, column, (back_dict.get(card[0], state.backside_default), card[1], card[2]))
-                for row, column, card in page["placements"]
-            ]
-        page["regular"] = [backside_of_img(img) for img in page["regular"]]
-        page["oversized"] = [backside_of_img(img) for img in page["oversized"]]
-
-    return backside_pages
+    return print_layout.make_backside_pages(as_project_state(print_dict), pages)
 
 
 def make_render_page_sequence(print_dict, front_pages):
-    state = as_project_state(print_dict)
-    front_render_pages = [
-        {
-            "cards": page,
-            "backside": False,
-            "front_page_number": index + 1,
-        }
-        for index, page in enumerate(front_pages)
-    ]
-    if not state.backside_enabled:
-        return front_render_pages
-
-    backside_render_pages = [
-        {
-            "cards": page,
-            "backside": True,
-            "front_page_number": index + 1,
-        }
-        for index, page in enumerate(make_backside_pages(state, front_pages))
-    ]
-    if state.backside_reverse_page_order:
-        backside_render_pages.reverse()
-    if state.backside_pages_at_end:
-        return front_render_pages + backside_render_pages
-
-    return [
-        page
-        for page_pair in zip(front_render_pages, backside_render_pages)
-        for page in page_pair
-    ]
+    return print_layout.make_render_page_sequence(as_project_state(print_dict), front_pages)
 
 
 def distribute_cards_to_grid(cards, left_to_right, columns, rows):
-    if "placements" in cards:
-        grid = [[None] * columns for _ in range(rows)]
-        for row, column, card in cards["placements"]:
-            span = 2 if card[2] else 1
-            column = column if left_to_right else columns - column - span
-            grid[row][column] = card
-            if span == 2:
-                grid[row][column + 1] = (None, None, None)
-        return grid
-    def get_coord(i):
-        return get_grid_coords(i, columns, left_to_right)
-
-    card_grid = [[None] * columns for i in range(rows)]
-
-    k = 0
-    for card_name, is_short_edge in cards["oversized"]:
-        x, y = get_coord(k)
-
-        # find slot that fits an oversized card
-        while y + 1 >= columns or card_grid[x][y + 1] is not None:
-            k = k + 1
-            x, y = get_coord(k)
-
-        card_grid[x][y] = (card_name, is_short_edge, True)
-        card_grid[x][y + 1] = (None, None, None)
-        k = k + 2
-    del k
-
-    i = 0
-    for card_name, is_short_edge in cards["regular"]:
-        x, y = get_coord(i)
-
-        # find slot that is free for single card
-        while card_grid[x][y] is not None:
-            i = i + 1
-            x, y = get_coord(i)
-
-        card_grid[x][y] = (card_name, is_short_edge, False)
-        i = i + 1
-    del i
-
-    return card_grid
+    return print_layout.distribute_cards_to_grid(cards, left_to_right, columns, rows)
 
 
 def get_grid_coords(idx, columns, left_to_right):
-    x, y = divmod(idx, columns)
-    if not left_to_right:
-        y = columns - y - 1
-    return x, y
+    return print_layout.get_grid_coords(idx, columns, left_to_right)
 
 
 def get_card_rotation(backside, is_oversized, is_short_edge):

@@ -1,0 +1,1990 @@
+import datetime
+import logging
+import math
+import os
+import platform
+import sys
+import traceback
+
+import PyQt6.QtCore as QtCore
+from PyQt6.QtGui import QCursor, QIcon, QPixmap
+from PyQt6.QtWidgets import (
+    QApplication,
+    QCheckBox,
+    QComboBox,
+    QDialog,
+    QDialogButtonBox,
+    QFileDialog,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QMessageBox,
+    QMenu,
+    QPushButton,
+    QScrollArea,
+    QSizePolicy,
+    QSpinBox,
+    QStackedWidget,
+    QTextEdit,
+    QToolTip,
+    QVBoxLayout,
+    QWidget,
+)
+
+from mtg_print import image
+from mtg_print import library as project_library
+from mtg_ui.print_tasks import CardSearchThumbnailLoader, HighResThumbnailLoader, make_popup_print_fn, popup
+from mtg_print.config import CFG, save_config
+from mtg_proxy.constants import APP_VERSION, app_dir, cwd, page_sizes
+from mtg_print.models import ProjectState, as_project_state, project_to_dict
+from mtg_core import get_default_card_service
+from mtg_print.services import deck_import_service, high_res_service, project_service
+
+logger = logging.getLogger(__name__)
+
+_showing_exception_dialog = False
+
+
+class FileDialogType:
+    Open = 0
+    Save = 1
+
+
+def _default_crash_log_path():
+    timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    crash_dir = os.path.join(cwd, "crash_logs")
+    os.makedirs(crash_dir, exist_ok=True)
+    return os.path.join(crash_dir, f"print-proxy-prep-crash-{timestamp}.log")
+
+
+def file_dialog(parent, title, root, filter, type):
+    function = QFileDialog.getOpenFileName if type == FileDialogType.Open else QFileDialog.getSaveFileName
+    choice = function(parent, title, root, filter)[0]
+    return choice if choice != "" else None
+
+
+def project_file_dialog(parent, type, root):
+    return file_dialog(parent, "Open Project", root, "Json Files (*.json)", type)
+
+
+def decklist_file_dialog(parent, root):
+    return file_dialog(
+        parent,
+        "Open Decklist",
+        root,
+        "Deck Files (*.txt *.csv *.dek *.mtga *.dck);;All Files (*)",
+        FileDialogType.Open,
+    )
+
+
+def image_file_dialog(parent, folder):
+    choice = file_dialog(
+        parent,
+        "Open Image",
+        folder,
+        f"Image Files ({' '.join(image.valid_image_extensions).replace('.', '*.')})",
+        FileDialogType.Open,
+    )
+    return os.path.basename(choice) if choice is not None else None
+
+
+def format_exception_report(exc_type, exc_value, exc_traceback, context=None):
+    lines = [
+        "Print Proxy Prep Crash Report",
+        f"Timestamp: {datetime.datetime.now().isoformat()}",
+        f"App Version: {APP_VERSION}",
+        f"Platform: {platform.platform()}",
+        f"Python: {sys.version}",
+        f"App Directory: {app_dir}",
+        f"Data Directory: {cwd}",
+    ]
+    if context:
+        lines.append(f"Context: {context}")
+    lines.extend(
+        [
+            "",
+            "Exception:",
+            "".join(traceback.format_exception(exc_type, exc_value, exc_traceback)),
+        ]
+    )
+    return "\n".join(lines)
+
+
+def show_exception_dialog(exc_type, exc_value, exc_traceback, context=None, parent=None):
+    global _showing_exception_dialog
+
+    if _showing_exception_dialog:
+        return
+
+    _showing_exception_dialog = True
+    temp_app = None
+    try:
+        app = QApplication.instance()
+        if app is None:
+            temp_app = QApplication(sys.argv)
+            app = temp_app
+
+        parent = parent or getattr(app, "_window", None)
+        report = format_exception_report(exc_type, exc_value, exc_traceback, context)
+        summary = f"{exc_type.__name__}: {exc_value}"
+
+        dialog = QMessageBox(parent)
+        dialog.setIcon(QMessageBox.Icon.Critical)
+        dialog.setWindowTitle("Unexpected Error")
+        dialog.setText("Print Proxy Prep hit an unexpected error.")
+        dialog.setInformativeText(summary)
+        dialog.setDetailedText(report)
+
+        save_button = dialog.addButton("Save Crash Log", QMessageBox.ButtonRole.ActionRole)
+        close_button = dialog.addButton(QMessageBox.StandardButton.Close)
+        dialog.setDefaultButton(close_button)
+        dialog.exec()
+
+        if dialog.clickedButton() == save_button:
+            default_path = _default_crash_log_path()
+            selected_path = file_dialog(
+                parent,
+                "Save Crash Log",
+                default_path,
+                "Log Files (*.log);;Text Files (*.txt);;All Files (*)",
+                FileDialogType.Save,
+            )
+            if selected_path is None:
+                selected_path = default_path
+            if not os.path.splitext(selected_path)[1]:
+                selected_path += ".log"
+            try:
+                with open(selected_path, "w", encoding="utf-8") as fp:
+                    fp.write(report)
+                QMessageBox.information(parent, "Crash Log Saved", f"The crash log was saved to:\n\n{selected_path}")
+            except OSError as exc:
+                QMessageBox.warning(parent, "Crash Log Save Failed", f"The crash log could not be saved.\n\n{exc}")
+    finally:
+        _showing_exception_dialog = False
+        if temp_app is not None:
+            temp_app.quit()
+
+
+def folder_dialog(parent=None):
+    choice = QFileDialog.getExistingDirectory(
+        parent,
+        "Choose Folder",
+        cwd,
+        QFileDialog.Option.ShowDirsOnly | QFileDialog.Option.DontResolveSymlinks,
+    )
+    return choice if choice else None
+
+
+def load_project_file(application, print_dict, img_dict, json_path, print_fn):
+    state = print_dict if isinstance(print_dict, ProjectState) else print_dict
+    loaded_successfully = project_service.load_project(
+        state,
+        img_dict,
+        json_path,
+        print_fn,
+        application.warn_nonfatal,
+    )
+    if loaded_successfully:
+        application.set_json_path(json_path)
+    return loaded_successfully
+
+
+def remove_card_from_project_state(print_dict, card_name):
+    state = as_project_state(print_dict)
+    state.remove_card(card_name)
+    if isinstance(print_dict, ProjectState):
+        return state
+
+    print_dict.clear()
+    print_dict.update(project_to_dict(state))
+    return state
+
+
+def delete_project_with_confirmation(parent, application, project_id, refresh_fn):
+    project_entry = project_library.get_project(project_id)
+    if project_entry is None:
+        refresh_fn()
+        return
+    confirm = QMessageBox.question(
+        parent,
+        "Delete Project",
+        (
+            f"Delete '{project_entry.get('display_name', 'Untitled Project')}'?\n\n"
+            "This will permanently delete the saved project file and its project images from disk."
+        ),
+        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        QMessageBox.StandardButton.No,
+    )
+    if confirm != QMessageBox.StandardButton.Yes:
+        return
+    try:
+        project_library.remove_project(project_id)
+    except OSError as exc:
+        application.warn_nonfatal("Delete Project Failed", f"The project could not be fully deleted.\n\n{exc}")
+        return
+    refresh_fn()
+
+
+class WidgetWithLabel(QWidget):
+    def __init__(self, label_text, widget):
+        super().__init__()
+        label = QLabel(label_text + ":")
+        if "&" in label_text:
+            label.setBuddy(widget)
+        layout = QHBoxLayout()
+        layout.addWidget(label)
+        layout.addWidget(widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+        self.setLayout(layout)
+        self._widget = widget
+
+
+class ComboBoxWithLabel(WidgetWithLabel):
+    def __init__(self, label_text, options, default_option=None):
+        combo = QComboBox()
+        for option in options:
+            combo.addItem(option)
+        if default_option is not None and default_option in options:
+            combo.setCurrentIndex(options.index(default_option))
+        super().__init__(label_text, combo)
+
+
+class LineEditWithLabel(WidgetWithLabel):
+    def __init__(self, label_text, default_text=None):
+        super().__init__(label_text, QLineEdit(default_text))
+
+
+class DeckImportDialog(QDialog):
+    def __init__(self, parent, image_dir):
+        super().__init__(parent)
+        self.setWindowTitle("Import Cards")
+        self.resize(560, 420)
+
+        instructions = QLabel(
+            "Paste a decklist or load one from a file. Enter one card name per line (one copy each), or include a quantity like `4 Lightning Bolt`. CSV exports with count/name/set_code/collector_number columns are also supported."
+        )
+        instructions.setWordWrap(True)
+
+        self._text_edit = QTextEdit()
+        self._text_edit.setAcceptRichText(False)
+        self._text_edit.setPlaceholderText(
+            "4 Lightning Bolt\n2 Counterspell\n1 Opt (ELD) 59\n\nor CSV with headers like:\ncount,name,set_code,collector_number"
+        )
+        self._deck_url = QLineEdit()
+        self._deck_url.setPlaceholderText("Archidekt, Moxfield, or Blueprint MTG public deck URL")
+
+        load_file_button = QPushButton("Choose File")
+        import_button = QPushButton("Import Cards")
+        cancel_button = QPushButton("Cancel")
+
+        button_row = QHBoxLayout()
+        button_row.addWidget(load_file_button)
+        button_row.addStretch()
+        button_row.addWidget(import_button)
+        button_row.addWidget(cancel_button)
+
+        layout = QVBoxLayout()
+        layout.addWidget(instructions)
+        layout.addWidget(WidgetWithLabel("Public deck &URL", self._deck_url))
+        layout.addWidget(self._text_edit)
+        layout.addLayout(button_row)
+        self.setLayout(layout)
+
+        self._image_dir = image_dir
+
+        def load_file():
+            decklist_path = decklist_file_dialog(self, self._image_dir)
+            if decklist_path is None:
+                return
+            try:
+                self._text_edit.setPlainText(deck_import_service.read_decklist_file(decklist_path))
+            except OSError as exc:
+                QMessageBox.warning(self, "Decklist Load Failed", f"The decklist file could not be loaded.\n\n{exc}")
+
+        def import_deck():
+            if len(self.deck_url()) > 0 and not deck_import_service.is_supported_deck_url(self.deck_url()):
+                QToolTip.showText(QCursor.pos(), "Enter a valid public Archidekt, Moxfield, or Blueprint MTG deck URL")
+                return
+            if len(self.deck_url()) == 0 and len(self.deck_text().strip()) == 0:
+                QToolTip.showText(QCursor.pos(), "Paste/load a decklist or enter a public deck URL")
+                return
+            self.accept()
+
+        load_file_button.clicked.connect(load_file)
+        import_button.clicked.connect(import_deck)
+        cancel_button.clicked.connect(self.reject)
+
+    def deck_text(self):
+        return self._text_edit.toPlainText()
+
+    def archidekt_url(self):
+        return self.deck_url()
+
+    def deck_url(self):
+        return self._deck_url.text().strip()
+
+
+class CardTagsDialog(QDialog):
+    def __init__(self, parent, card_name, tags):
+        super().__init__(parent)
+        self.selected_tag = None
+        self.setWindowTitle(f'Tags for {card_name}')
+        self.resize(420, 520)
+        intro = QLabel(
+            f'<b>{card_name}</b> has {len(tags)} local Oracle Tag'
+            f'{"" if len(tags) == 1 else "s"}. Click a tag to search for every card under it.')
+        intro.setWordWrap(True)
+        tag_list = QListWidget()
+        tag_list.addItems(tags)
+        tag_list.itemClicked.connect(self._choose_tag)
+        close_button = QPushButton('Close')
+        close_button.clicked.connect(self.reject)
+        buttons = QHBoxLayout()
+        buttons.addStretch()
+        buttons.addWidget(close_button)
+        layout = QVBoxLayout(self)
+        layout.addWidget(intro)
+        layout.addWidget(tag_list)
+        layout.addLayout(buttons)
+
+    def _choose_tag(self, item):
+        self.selected_tag = item.text()
+        self.accept()
+
+
+class ComponentSuggestionsDialog(QDialog):
+    def __init__(self, parent, suggestions):
+        super().__init__(parent)
+        self._suggestions = list(suggestions)
+        self.setWindowTitle('Add related tokens and cards')
+        self.resize(540, 520)
+        intro = QLabel(
+            'These tokens or related cards are referenced by the cards you added. '
+            'Select the physical cards you also want to print.')
+        intro.setWordWrap(True)
+        self.list = QListWidget()
+        for suggestion in self._suggestions:
+            component = suggestion.component.replace('_', ' ').title()
+            item = QListWidgetItem(
+                f'{suggestion.candidate.name}\n{component} for {suggestion.source_name}')
+            item.setFlags(item.flags() | QtCore.Qt.ItemFlag.ItemIsUserCheckable)
+            item.setCheckState(QtCore.Qt.CheckState.Checked)
+            self.list.addItem(item)
+        add_button = QPushButton('Add Selected')
+        add_button.clicked.connect(self.accept)
+        dismiss_button = QPushButton('Not Now')
+        dismiss_button.clicked.connect(self.reject)
+        buttons = QHBoxLayout()
+        buttons.addStretch()
+        buttons.addWidget(add_button)
+        buttons.addWidget(dismiss_button)
+        layout = QVBoxLayout(self)
+        layout.addWidget(intro)
+        layout.addWidget(self.list)
+        layout.addLayout(buttons)
+
+    def selected_suggestions(self):
+        return [
+            suggestion for row, suggestion in enumerate(self._suggestions)
+            if self.list.item(row).checkState() == QtCore.Qt.CheckState.Checked
+        ]
+
+
+class AddCardDialog(QDialog):
+    def __init__(self, parent, image_dir, initial_query=None):
+        super().__init__(parent)
+        self.setWindowTitle("Add Card")
+        self.resize(960, 700)
+
+        self._image_dir = image_dir
+        self._card_candidates = []
+        self._card_preview_cache = {}
+        self._card_thumbnail_cache = {}
+        self._card_thumbnail_loader = None
+        self._card_thumbnail_page_token = 0
+        self._selected_card_value = None
+        self._selected_art_candidate_value = None
+        self._selected_art_source_value = None
+        self._card_page_size = 250
+        self._card_page_start = 0
+        self._total_card_count = 0
+        self._card_results_have_more = False
+        self._search_history = []
+        self._search_history_index = -1
+        self._restoring_search_history = False
+
+        intro = QLabel(
+            "Search by full or partial card name, or use Scryfall syntax such as "
+            "t:creature c:blue mv<=3, set:neo, or oracle:\"draw a card\"."
+        )
+        intro.setWordWrap(True)
+
+        page_stack = QStackedWidget()
+        self._page_stack = page_stack
+
+        card_name_edit = QLineEdit()
+        card_name_edit.setPlaceholderText("Card name or Scryfall query")
+        card_name_edit.setToolTip(
+            "Accepts Scryfall search operators, comparisons, negation, parentheses, and OR."
+        )
+        self._card_name_edit = card_name_edit
+
+        card_set_filter_edit = QLineEdit()
+        card_set_filter_edit.setPlaceholderText("Set code or set name")
+        self._card_set_filter_edit = card_set_filter_edit
+        self._local_search_checkbox = QCheckBox("Local database only")
+        self._local_search_checkbox.setToolTip(
+            'Search stored card data using supported Scryfall syntax. No online card lookup. '
+            'Regex and Tagger filters require online search.')
+
+        card_search_button = QPushButton("Search")
+        card_search_button.clicked.connect(
+            lambda: self.refresh_card_results(reset_page=True))
+        card_name_edit.returnPressed.connect(
+            lambda: self.refresh_card_results(reset_page=True))
+
+        card_filters_layout = QHBoxLayout()
+        card_filters_layout.addWidget(WidgetWithLabel("Search Query", card_name_edit), 2)
+        card_filters_layout.addWidget(WidgetWithLabel("Set Filter", card_set_filter_edit), 1)
+        card_filters_layout.addWidget(card_search_button)
+        card_filters_layout.addWidget(self._local_search_checkbox)
+
+        card_prev_page_button = QPushButton("Previous 250 Results")
+        card_prev_page_button.setEnabled(False)
+        card_prev_page_button.clicked.connect(self._go_to_previous_card_page)
+        self._card_prev_page_button = card_prev_page_button
+
+        card_next_page_button = QPushButton("Next 250 Results")
+        card_next_page_button.setEnabled(False)
+        card_next_page_button.clicked.connect(self._go_to_next_card_page)
+        self._card_next_page_button = card_next_page_button
+
+        card_page_label = QLabel("Page 0 of 0")
+        self._card_page_label = card_page_label
+
+        card_pagination_layout = QHBoxLayout()
+        search_back_button = QPushButton('Back')
+        search_back_button.setEnabled(False)
+        search_back_button.clicked.connect(self._go_back_search)
+        self._search_back_button = search_back_button
+        search_forward_button = QPushButton('Forward')
+        search_forward_button.setEnabled(False)
+        search_forward_button.clicked.connect(self._go_forward_search)
+        self._search_forward_button = search_forward_button
+        card_pagination_layout.addWidget(search_back_button)
+        card_pagination_layout.addWidget(search_forward_button)
+        card_pagination_layout.addSpacing(12)
+        card_pagination_layout.addWidget(card_prev_page_button)
+        card_pagination_layout.addWidget(card_next_page_button)
+        card_pagination_layout.addWidget(card_page_label)
+        card_pagination_layout.addStretch()
+
+        card_results_list = QListWidget()
+        card_results_list.setIconSize(QtCore.QSize(90, 126))
+        card_results_list.currentRowChanged.connect(self._handle_card_selection_changed)
+        card_results_list.itemDoubleClicked.connect(lambda _item: self._accept_add_card())
+        card_results_list.setContextMenuPolicy(
+            QtCore.Qt.ContextMenuPolicy.CustomContextMenu)
+        card_results_list.customContextMenuRequested.connect(
+            self._show_card_result_menu)
+        self._card_results_list = card_results_list
+
+        card_preview_label = QLabel("Select a card to preview it here.")
+        card_preview_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        # Ignore the pixmap's native size hint. Large card images otherwise make
+        # the dialog taller than the screen and push its action buttons off-screen.
+        card_preview_label.setSizePolicy(
+            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
+        card_preview_label.setMinimumSize(220, 280)
+        card_preview_label.setMaximumHeight(420)
+        card_preview_label.setFrameShape(QFrame.Shape.StyledPanel)
+        card_preview_label.setWordWrap(True)
+        self._card_preview_label = card_preview_label
+
+        card_details_label = QTextEdit()
+        card_details_label.setReadOnly(True)
+        card_details_label.setMinimumHeight(90)
+        card_details_label.setMaximumHeight(180)
+        self._card_details_label = card_details_label
+
+        card_left_layout = QVBoxLayout()
+        card_left_layout.addWidget(QLabel("Card Catalog Matches"))
+        card_left_layout.addWidget(card_results_list)
+
+        card_right_layout = QVBoxLayout()
+        card_right_layout.addWidget(QLabel("Preview"))
+        card_right_layout.addWidget(card_preview_label)
+        card_right_layout.addWidget(card_details_label)
+        card_right_layout.addStretch()
+
+        card_content_layout = QHBoxLayout()
+        card_content_layout.addLayout(card_left_layout, 3)
+        card_content_layout.addLayout(card_right_layout, 2)
+
+        card_status_label = QLabel("Enter a card name and click Search.")
+        card_status_label.setWordWrap(True)
+        self._card_status_label = card_status_label
+
+        card_add_button = QPushButton("Add Card")
+        card_add_button.setEnabled(False)
+        card_add_button.clicked.connect(self._accept_add_card)
+        self._card_next_button = card_add_button
+
+        card_cancel_button = QPushButton("Cancel")
+        card_cancel_button.clicked.connect(self.reject)
+        self._card_cancel_button = card_cancel_button
+
+        card_button_row = QHBoxLayout()
+        card_button_row.addStretch()
+        card_button_row.addWidget(card_add_button)
+        card_button_row.addWidget(card_cancel_button)
+
+        card_page = QWidget()
+        card_page_layout = QVBoxLayout()
+        card_page_layout.addLayout(card_filters_layout)
+        card_page_layout.addLayout(card_pagination_layout)
+        card_page_layout.addWidget(card_status_label)
+        card_page_layout.addLayout(card_content_layout)
+        card_page_layout.addLayout(card_button_row)
+        card_page.setLayout(card_page_layout)
+
+        page_stack.addWidget(card_page)
+
+        layout = QVBoxLayout()
+        layout.addWidget(intro)
+        layout.addWidget(page_stack)
+        self.setLayout(layout)
+        if initial_query:
+            self._card_name_edit.setText(str(initial_query))
+            QtCore.QTimer.singleShot(
+                0, lambda: self.refresh_card_results(reset_page=True))
+
+    def selected_card(self):
+        return self._selected_card_value
+
+    def selected_art_candidate(self):
+        return self._selected_art_candidate_value
+
+    def selected_art_source(self):
+        return self._selected_art_source_value
+
+    def _warn(self, title, message):
+        application = QApplication.instance()
+        if application is not None and hasattr(application, "warn_nonfatal"):
+            application.warn_nonfatal(title, message)
+        else:
+            QMessageBox.warning(self, title, message)
+
+    def _run_with_popup(self, title, work):
+        application = QApplication.instance()
+        debug_mode = getattr(application, "_debug_mode", False)
+        window = self.window() if self.window() is not None else self
+        loading_window = popup(window, title, debug_mode)
+        loading_window.show_during_work(work)
+        del loading_window
+
+    def _candidate_summary_text(self, candidate):
+        set_code = str(candidate.set_code or "?").upper()
+        set_name = candidate.set_name or set_code
+        collector_number = candidate.collector_number or "?"
+        return f"{set_name} [{set_code} #{collector_number}]"
+
+    def _candidate_details_text(self, candidate):
+        from mtg_core.search import card_rules_text
+        details = [candidate.name]
+        if candidate.set_name:
+            details.append(f"Set Name: {candidate.set_name}")
+        if candidate.set_code and candidate.collector_number:
+            details.append(f"Set: {str(candidate.set_code).upper()} #{candidate.collector_number}")
+        details.append(f"Filename: {candidate.filename}")
+        details.append(card_rules_text(candidate.card_data))
+        return "\n".join(details)
+
+    def _selected_card_candidate(self, row=None):
+        if row is None:
+            row = self._card_results_list.currentRow()
+        if row < 0 or row >= len(self._card_candidates):
+            return None
+        return self._card_candidates[row]
+
+    @staticmethod
+    def _oracle_tag_query(tag):
+        escaped = str(tag).replace('\\', '\\\\').replace('"', '\\"')
+        return f'otag:"{escaped}"'
+
+    def _show_card_result_menu(self, position):
+        item = self._card_results_list.itemAt(position)
+        if item is None:
+            return
+        candidate = self._selected_card_candidate(self._card_results_list.row(item))
+        if candidate is None:
+            return
+        menu = QMenu(self)
+        view_tags = menu.addAction('View Tags')
+        chosen = menu.exec(self._card_results_list.viewport().mapToGlobal(position))
+        if chosen == view_tags:
+            self._show_card_tags(candidate)
+
+    def _show_card_tags(self, candidate):
+        tags = get_default_card_service().database.oracle_tags_for_card(
+            candidate.oracle_id)
+        if not tags:
+            self._warn(
+                'No Tags Found',
+                f'No local Oracle Tags are stored for {candidate.name}. Refresh Oracle '
+                'Tags in MTG Core Admin if the tag catalog is missing or out of date.')
+            return
+        dialog = CardTagsDialog(self, candidate.name, tags)
+        if dialog.exec() != QDialog.DialogCode.Accepted or not dialog.selected_tag:
+            return
+        self._card_name_edit.setText(self._oracle_tag_query(dialog.selected_tag))
+        self._card_set_filter_edit.clear()
+        self.refresh_card_results(reset_page=True)
+
+    def _update_card_pagination_controls(self):
+        if self._total_card_count <= 0:
+            self._card_page_label.setText("Page 0 of 0")
+            self._card_prev_page_button.setEnabled(False)
+            self._card_next_page_button.setEnabled(False)
+            return
+        current_page = (self._card_page_start // self._card_page_size) + 1
+        if self._card_results_have_more:
+            self._card_page_label.setText(f"Page {current_page} • more results")
+        else:
+            total_pages = max(1, math.ceil(self._total_card_count / self._card_page_size))
+            self._card_page_label.setText(f"Page {current_page} of {total_pages}")
+        self._card_prev_page_button.setEnabled(self._card_page_start > 0)
+        self._card_next_page_button.setEnabled(
+            self._card_page_start + self._card_page_size < self._total_card_count
+        )
+
+    def _go_to_previous_card_page(self):
+        if self._card_page_start <= 0:
+            return
+        self._card_page_start = max(0, self._card_page_start - self._card_page_size)
+        self.refresh_card_results(reset_page=False)
+
+    def _go_to_next_card_page(self):
+        if self._card_page_start + self._card_page_size >= self._total_card_count:
+            return
+        self._card_page_start += self._card_page_size
+        self.refresh_card_results(reset_page=False)
+
+    def _current_search_state(self):
+        return {
+            'query': self._card_name_edit.text(),
+            'set_filter': self._card_set_filter_edit.text(),
+            'local_only': self._local_search_checkbox.isChecked(),
+            'page_start': self._card_page_start,
+        }
+
+    def _commit_search_history(self, state):
+        if (self._search_history_index >= 0 and
+                self._search_history[self._search_history_index] == state):
+            return
+        del self._search_history[self._search_history_index + 1:]
+        self._search_history.append(dict(state))
+        self._search_history_index = len(self._search_history) - 1
+        self._update_search_history_buttons()
+
+    def _update_search_history_buttons(self):
+        self._search_back_button.setEnabled(self._search_history_index > 0)
+        self._search_forward_button.setEnabled(
+            0 <= self._search_history_index < len(self._search_history) - 1)
+
+    def _restore_search_history(self, index):
+        if index < 0 or index >= len(self._search_history):
+            return
+        self._search_history_index = index
+        state = self._search_history[index]
+        self._card_name_edit.setText(state['query'])
+        self._card_set_filter_edit.setText(state['set_filter'])
+        self._local_search_checkbox.setChecked(state['local_only'])
+        self._card_page_start = state['page_start']
+        self._restoring_search_history = True
+        try:
+            self.refresh_card_results(reset_page=False)
+        finally:
+            self._restoring_search_history = False
+        self._update_search_history_buttons()
+
+    def _go_back_search(self):
+        self._restore_search_history(self._search_history_index - 1)
+
+    def _go_forward_search(self):
+        self._restore_search_history(self._search_history_index + 1)
+
+    def _card_thumbnail_key(self, candidate):
+        return (
+            f"asset:{candidate.image_asset_id}"
+            if candidate.image_asset_id
+            else f"card:{candidate.card_id}"
+            if candidate.card_id
+            else f"url:{candidate.thumbnail_url or candidate.preview_url}"
+            if (candidate.thumbnail_url or candidate.preview_url)
+            else f"scryfall:{candidate.scryfall_id}"
+        )
+
+    def _card_thumbnail_sources(self, candidate):
+        local_path = candidate.local_image_path
+        if candidate.card_id and not local_path:
+            local_path = get_default_card_service().get_image_path(candidate.card_id)
+        checkbox = getattr(self, '_local_search_checkbox', None)
+        local_only = checkbox is not None and checkbox.isChecked()
+        return local_path, None if local_only else candidate.thumbnail_url or candidate.preview_url
+
+    def _stop_card_thumbnail_loader(self):
+        if self._card_thumbnail_loader is not None:
+            self._card_thumbnail_loader.cancel()
+            self._card_thumbnail_loader.wait(2000)
+            self._card_thumbnail_loader = None
+
+    @QtCore.pyqtSlot(int, str, bytes)
+    def _handle_card_thumbnail_loaded(self, page_token, identifier, data):
+        if page_token != self._card_thumbnail_page_token:
+            return
+        self._card_thumbnail_cache[identifier] = data
+        for row, candidate in enumerate(self._card_candidates):
+            if self._card_thumbnail_key(candidate) != identifier:
+                continue
+            item = self._card_results_list.item(row)
+            if item is None:
+                return
+            pixmap = QPixmap()
+            if pixmap.loadFromData(data):
+                item.setIcon(QIcon(pixmap))
+            return
+
+    def _apply_card_thumbnail(self, row, candidate, data):
+        self._card_thumbnail_cache[self._card_thumbnail_key(candidate)] = data
+        item = self._card_results_list.item(row)
+        if item is None:
+            return
+        pixmap = QPixmap()
+        if pixmap.loadFromData(data):
+            item.setIcon(QIcon(pixmap))
+
+    def _start_card_thumbnail_loader(self, candidates):
+        self._stop_card_thumbnail_loader()
+        pending = []
+        for row, candidate in enumerate(candidates):
+            identifier = self._card_thumbnail_key(candidate)
+            cached = self._card_thumbnail_cache.get(identifier)
+            if cached is not None:
+                self._apply_card_thumbnail(row, candidate, cached)
+                continue
+            local_path, url = self._card_thumbnail_sources(candidate)
+            if not local_path and url:
+                cached = high_res_service.get_cached_thumbnail_bytes(url)
+                if cached is not None:
+                    self._apply_card_thumbnail(row, candidate, cached)
+                    continue
+            if local_path or url:
+                pending.append((row, identifier, local_path, url))
+        if not pending:
+            return
+        self._card_thumbnail_page_token += 1
+        loader = CardSearchThumbnailLoader(self._card_thumbnail_page_token, pending)
+        loader.thumbnail_loaded.connect(self._handle_card_thumbnail_loaded)
+        loader.finished.connect(lambda: setattr(self, "_card_thumbnail_loader", None))
+        self._card_thumbnail_loader = loader
+        loader.start()
+
+    def closeEvent(self, event):
+        self._stop_card_thumbnail_loader()
+        super().closeEvent(event)
+
+    def reject(self):
+        self._stop_card_thumbnail_loader()
+        super().reject()
+
+    def accept(self):
+        self._stop_card_thumbnail_loader()
+        super().accept()
+
+    def refresh_card_results(self, reset_page=False):
+        name_query = self._card_name_edit.text().strip()
+        set_filter = self._card_set_filter_edit.text().strip()
+        local_only = self._local_search_checkbox.isChecked()
+        if reset_page:
+            self._card_page_start = 0
+        history_state = (
+            self._current_search_state()
+            if reset_page and not self._restoring_search_history else None)
+
+        search_page = None
+        error = None
+
+        def do_search():
+            nonlocal search_page, error
+            try:
+                search_page = deck_import_service.search_scryfall_card_page(
+                    name_query,
+                    set_filter=set_filter,
+                    page_start=self._card_page_start,
+                    page_size=self._card_page_size,
+                    online_mode=CFG.OnlineMode,
+                    local_only=local_only,
+                )
+            except ValueError as exc:
+                error = exc
+
+        self._run_with_popup("Searching card catalog...", do_search)
+        if error is not None:
+            self._stop_card_thumbnail_loader()
+            self._warn("Card Search Failed", str(error))
+            self._card_status_label.setText("Card search failed. Check the warning for details.")
+            self._card_candidates = []
+            self._card_results_list.clear()
+            self._card_next_button.setEnabled(False)
+            self._total_card_count = 0
+            self._card_results_have_more = False
+            self._update_card_pagination_controls()
+            return
+
+        if history_state is not None:
+            self._commit_search_history(history_state)
+        elif self._search_history_index >= 0:
+            self._search_history[self._search_history_index] = (
+                self._current_search_state())
+
+        self._card_candidates = [] if search_page is None else search_page.candidates
+        self._total_card_count = 0 if search_page is None else search_page.total_count
+        self._card_results_have_more = bool(search_page and search_page.has_more)
+        self._stop_card_thumbnail_loader()
+        self._card_results_list.clear()
+        self._card_next_button.setEnabled(False)
+        self._card_preview_label.setText("Select a card to preview it here.")
+        self._card_preview_label.setPixmap(QPixmap())
+        self._card_details_label.setText("")
+        self._update_card_pagination_controls()
+
+        if not self._card_candidates:
+            self._card_status_label.setText("No local or remote card matches found.")
+            return
+
+        page_number = (self._card_page_start // self._card_page_size) + 1
+        total_pages = max(1, math.ceil(self._total_card_count / self._card_page_size))
+        start_index = self._card_page_start + 1
+        end_index = min(self._card_page_start + len(self._card_candidates), self._total_card_count)
+        source_text = "local catalog" if getattr(search_page, "search_source", "remote") == "local" else "local catalog plus online results"
+        self._card_status_label.setText(
+            f"Showing {start_index}-{end_index} of {self._total_card_count} {source_text} printings (page {page_number}/{total_pages})."
+        )
+        for candidate in self._card_candidates:
+            item = QListWidgetItem(f"{candidate.name}\n{self._candidate_summary_text(candidate)}")
+            thumb_bytes = self._card_thumbnail_cache.get(self._card_thumbnail_key(candidate))
+            if thumb_bytes:
+                pixmap = QPixmap()
+                if pixmap.loadFromData(thumb_bytes):
+                    item.setIcon(QIcon(pixmap))
+            self._card_results_list.addItem(item)
+        self._start_card_thumbnail_loader(self._card_candidates)
+        self._card_results_list.setCurrentRow(0)
+
+    def _handle_card_selection_changed(self, row):
+        candidate = self._selected_card_candidate(row)
+        self._selected_card_value = candidate
+        if candidate is None:
+            self._card_next_button.setEnabled(False)
+            self._card_details_label.setPlainText("")
+            return
+        self._card_next_button.setEnabled(True)
+        self._card_details_label.setPlainText(self._candidate_details_text(candidate))
+        self._selected_art_candidate_value = None
+        self._selected_art_source_value = None
+        self._update_card_preview(candidate)
+
+    def _update_card_preview(self, candidate):
+        local_path = candidate.local_image_path
+        if candidate.card_id and not local_path:
+            local_path = get_default_card_service().get_image_path(candidate.card_id)
+        checkbox = getattr(self, '_local_search_checkbox', None)
+        if not local_path and checkbox is not None and checkbox.isChecked():
+            self._card_preview_label.setPixmap(QPixmap())
+            self._card_preview_label.setText('No local image stored. Card text is available; adding this card may require downloading its image.')
+            return
+
+        cache_key = f"local:{local_path}" if local_path else (candidate.preview_url or candidate.thumbnail_url)
+        if cache_key not in self._card_preview_cache:
+            preview_bytes = None
+            error = None
+
+            def load_preview():
+                nonlocal preview_bytes, error
+                try:
+                    if local_path:
+                        with open(local_path, "rb") as handle:
+                            preview_bytes = handle.read()
+                        return
+                    url = candidate.preview_url or candidate.thumbnail_url
+                    if not url:
+                        preview_bytes = None
+                        return
+                    preview_bytes = high_res_service.fetch_preview_bytes(url, cache_kind="preview")
+                except (OSError, ValueError) as exc:
+                    error = exc
+
+            self._run_with_popup("Loading preview...", load_preview)
+            if error is not None:
+                self._warn("Preview Load Failed", str(error))
+                return
+            if preview_bytes is not None and cache_key:
+                self._card_preview_cache[cache_key] = preview_bytes
+
+        preview_bytes = self._card_preview_cache.get(cache_key)
+        if preview_bytes is None:
+            self._card_preview_label.setText("Preview unavailable.")
+            self._card_preview_label.setPixmap(QPixmap())
+            return
+
+        pixmap = QPixmap()
+        pixmap.loadFromData(preview_bytes)
+        scaled = pixmap.scaled(
+            self._card_preview_label.size(),
+            QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+            QtCore.Qt.TransformationMode.SmoothTransformation,
+        )
+        self._card_preview_label.setPixmap(scaled)
+        self._card_preview_label.setText("")
+
+    def _go_to_art_step(self):
+        candidate = self._selected_card_candidate()
+        if candidate is None:
+            QToolTip.showText(QCursor.pos(), "Choose a card printing first")
+            return
+        self._selected_card_value = candidate
+        self.accept()
+
+    def _update_art_summary(self):
+        if self._selected_art_candidate_value is None:
+            self._art_summary_label.setText("Art choice: Default Scryfall import art")
+            return
+        summary = self._selected_art_candidate_value.source_name
+        if self._selected_art_candidate_value.art_source == "scryfall":
+            set_code = str(self._selected_art_candidate_value.set_code or "?").upper()
+            collector_number = self._selected_art_candidate_value.collector_number or "?"
+            summary = f"{summary} [{set_code} #{collector_number}]"
+        else:
+            summary = f"{summary} [{self._selected_art_candidate_value.dpi} DPI]"
+        self._art_summary_label.setText(f"Art choice: Custom art from {summary}")
+
+    def _use_default_art(self):
+        self._selected_art_candidate_value = None
+        self._selected_art_source_value = None
+        self._update_art_summary()
+
+    def _choose_custom_art(self):
+        if self._selected_card_value is None:
+            QToolTip.showText(QCursor.pos(), "Choose a card printing first")
+            return
+        temp_state = ProjectState()
+        temp_state.image_dir = self._image_dir
+        dialog = HighResPickerDialog(
+            self,
+            temp_state,
+            {},
+            self._selected_card_value.filename,
+            context_override=self._selected_card_value.art_context,
+            selection_mode=True,
+        )
+        if dialog.exec() != QDialog.DialogCode.Accepted or not dialog.was_applied():
+            return
+        self._selected_art_candidate_value = dialog.selected_candidate()
+        self._selected_art_source_value = dialog.selected_source()
+        self._update_art_summary()
+
+    def _accept_add_card(self):
+        if self._selected_card_value is None:
+            QToolTip.showText(QCursor.pos(), "Choose a card printing first")
+            return
+        self.accept()
+
+
+class SettingsDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Settings")
+        self.resize(560, 420)
+
+        description = QLabel(
+            f"Edit application-wide settings stored in {os.path.join(cwd, 'config.ini')}. Most changes apply immediately after saving."
+        )
+        description.setWordWrap(True)
+
+        display_columns_spin_box = QSpinBox()
+        display_columns_spin_box.setRange(2, 10)
+        display_columns_spin_box.setSingleStep(1)
+        display_columns_spin_box.setValue(CFG.DisplayColumns)
+        display_columns = WidgetWithLabel("Display &Columns", display_columns_spin_box)
+        display_columns.setToolTip("Number of columns shown in the card grid")
+
+        precropped_checkbox = QCheckBox("Allow Pre-Cropped Images")
+        precropped_checkbox.setChecked(CFG.EnableUncrop)
+        vibrance_checkbox = QCheckBox("Boost Color Vibrance")
+        vibrance_checkbox.setChecked(CFG.VibranceBump)
+        online_mode_checkbox = QCheckBox("Online Mode: Prefer Online Card Search")
+        online_mode_checkbox.setChecked(CFG.OnlineMode)
+        online_mode_checkbox.setToolTip("Use recent online search results instead of requiring a full local card catalog")
+        update_check_checkbox = QCheckBox("Check for Updates on Startup")
+        update_check_checkbox.setChecked(CFG.UpdateCheckOnStartup)
+        update_check_checkbox.setToolTip("Quietly check GitHub Releases for a newer app version when the app starts")
+
+        max_dpi_spin_box = QSpinBox()
+        max_dpi_spin_box.setRange(300, 1200)
+        max_dpi_spin_box.setSingleStep(100)
+        max_dpi_spin_box.setValue(CFG.MaxDPI)
+        max_dpi = WidgetWithLabel("&Max DPI", max_dpi_spin_box)
+
+        paper_sizes_box = ComboBoxWithLabel("Default P&aper Size", list(page_sizes.keys()), CFG.DefaultPageSize)
+        backend_url = LineEditWithLabel("High-Res Backend &URL", CFG.HighResBackendURL)
+
+        cache_ttl_spin_box = QSpinBox()
+        cache_ttl_spin_box.setRange(0, 24 * 60 * 60)
+        cache_ttl_spin_box.setSingleStep(60)
+        cache_ttl_spin_box.setSuffix(" sec")
+        cache_ttl_spin_box.setValue(CFG.HighResCacheTTLSeconds)
+        cache_ttl = WidgetWithLabel("High-Res Cache &TTL", cache_ttl_spin_box)
+
+        search_cache_spin_box = QSpinBox()
+        search_cache_spin_box.setRange(1, 1024)
+        search_cache_spin_box.setSingleStep(1)
+        search_cache_spin_box.setSuffix(" MB")
+        search_cache_spin_box.setValue(CFG.HighResSearchCacheMemoryMB)
+        search_cache = WidgetWithLabel("Search Cache Memory", search_cache_spin_box)
+
+        image_cache_spin_box = QSpinBox()
+        image_cache_spin_box.setRange(1, 2048)
+        image_cache_spin_box.setSingleStep(1)
+        image_cache_spin_box.setSuffix(" MB")
+        image_cache_spin_box.setValue(CFG.HighResImageCacheMemoryMB)
+        image_cache = WidgetWithLabel("Image Cache Memory", image_cache_spin_box)
+
+        preview_cache_spin_box = QSpinBox()
+        preview_cache_spin_box.setRange(0, 2048)
+        preview_cache_spin_box.setSingleStep(64)
+        preview_cache_spin_box.setSuffix(" MB")
+        preview_cache_spin_box.setValue(CFG.PreviewImageCacheMemoryMB)
+        preview_cache = WidgetWithLabel("Preview Image Cache", preview_cache_spin_box)
+        preview_cache.setToolTip("RAM budget for decoded card previews. Increase for large projects to reduce repeated image decoding. 0 disables this cache. This is not a total application memory limit and does not change export quality.")
+
+        fields_layout = QVBoxLayout()
+        for widget in [
+            description,
+            display_columns,
+            online_mode_checkbox,
+            update_check_checkbox,
+            precropped_checkbox,
+            vibrance_checkbox,
+            max_dpi,
+            paper_sizes_box,
+            backend_url,
+            cache_ttl,
+            search_cache,
+            image_cache,
+            preview_cache,
+        ]:
+            fields_layout.addWidget(widget)
+        fields_layout.addStretch()
+
+        fields_widget = QWidget()
+        fields_widget.setLayout(fields_layout)
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QFrame.Shape.NoFrame)
+        scroll_area.setWidget(fields_widget)
+
+        button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+
+        layout = QVBoxLayout()
+        layout.addWidget(scroll_area)
+        layout.addWidget(button_box)
+        self.setLayout(layout)
+
+        self._display_columns_spin_box = display_columns_spin_box
+        self._precropped_checkbox = precropped_checkbox
+        self._vibrance_checkbox = vibrance_checkbox
+        self._online_mode_checkbox = online_mode_checkbox
+        self._update_check_checkbox = update_check_checkbox
+        self._max_dpi_spin_box = max_dpi_spin_box
+        self._paper_sizes = paper_sizes_box._widget
+        self._backend_url = backend_url._widget
+        self._cache_ttl_spin_box = cache_ttl_spin_box
+        self._search_cache_spin_box = search_cache_spin_box
+        self._image_cache_spin_box = image_cache_spin_box
+        self._preview_cache_spin_box = preview_cache_spin_box
+
+    def apply(self):
+        CFG.DisplayColumns = self._display_columns_spin_box.value()
+        CFG.EnableUncrop = self._precropped_checkbox.isChecked()
+        CFG.VibranceBump = self._vibrance_checkbox.isChecked()
+        CFG.OnlineMode = self._online_mode_checkbox.isChecked()
+        CFG.UpdateCheckOnStartup = self._update_check_checkbox.isChecked()
+        CFG.MaxDPI = self._max_dpi_spin_box.value()
+        CFG.DefaultPageSize = self._paper_sizes.currentText()
+        CFG.HighResBackendURL = self._backend_url.text().strip()
+        CFG.HighResCacheTTLSeconds = self._cache_ttl_spin_box.value()
+        CFG.HighResSearchCacheMemoryMB = self._search_cache_spin_box.value()
+        CFG.HighResImageCacheMemoryMB = self._image_cache_spin_box.value()
+        CFG.PreviewImageCacheMemoryMB = self._preview_cache_spin_box.value()
+        from PyQt6.QtGui import QPixmapCache
+        QPixmapCache.setCacheLimit(CFG.PreviewImageCacheMemoryMB * 1024)
+        save_config(CFG)
+
+
+class ArtworkPreferencesDialog(QDialog):
+    def __init__(self, parent, card_service):
+        super().__init__(parent)
+        self._card_service = card_service
+        rules = card_service.get_artwork_preferences()
+        self.setWindowTitle('Artwork Preferences')
+        self.resize(520, 560)
+        self.language = QLineEdit(rules.language)
+        self.sets = QLineEdit(', '.join(rules.preferred_sets))
+        self.year = QSpinBox()
+        self.year.setRange(0, 2200)
+        self.year.setSpecialValueText('Any year')
+        self.year.setValue(rules.preferred_year or 0)
+        self.artists = QLineEdit(', '.join(rules.preferred_artists))
+        self.frames = QLineEdit(', '.join(rules.preferred_frames))
+        self.borders = QLineEdit(', '.join(rules.preferred_borders))
+        self.sources = QLineEdit(', '.join(rules.preferred_sources))
+        self.minimum_dpi = QSpinBox()
+        self.minimum_dpi.setRange(0, 2400)
+        self.minimum_dpi.setSingleStep(50)
+        self.minimum_dpi.setValue(rules.minimum_dpi)
+        self.avoid_promos = QCheckBox('Avoid promotional printings')
+        self.avoid_textless = QCheckBox('Avoid textless printings')
+        self.avoid_ub = QCheckBox('Avoid Universes Beyond printings')
+        self.avoid_foil = QCheckBox('Avoid foil-only treatments')
+        self.avoid_promos.setChecked(rules.avoid_promos)
+        self.avoid_textless.setChecked(rules.avoid_textless)
+        self.avoid_ub.setChecked(rules.avoid_universes_beyond)
+        self.avoid_foil.setChecked(rules.avoid_foil_only)
+        layout = QVBoxLayout()
+        intro = QLabel(
+            'These preferences are shared by Manaforge apps. Lists use commas; '
+            'earlier values have higher priority.')
+        intro.setWordWrap(True)
+        layout.addWidget(intro)
+        for label, widget in (
+            ('Language code', self.language), ('Preferred sets', self.sets),
+            ('Preferred year', self.year), ('Preferred artists', self.artists),
+            ('Preferred frames', self.frames), ('Preferred borders', self.borders),
+            ('Preferred sources', self.sources), ('Minimum DPI', self.minimum_dpi)):
+            layout.addWidget(QLabel(label))
+            layout.addWidget(widget)
+        for checkbox in (self.avoid_promos, self.avoid_textless,
+                         self.avoid_ub, self.avoid_foil):
+            layout.addWidget(checkbox)
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Save |
+            QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+        self.setLayout(layout)
+
+    @staticmethod
+    def _list(text):
+        return tuple(item.strip() for item in text.split(',') if item.strip())
+
+    def rules(self):
+        from mtg_core import ArtworkPreferenceRules
+        return ArtworkPreferenceRules(
+            language=self.language.text().strip() or 'en',
+            preferred_sets=self._list(self.sets.text()),
+            preferred_year=self.year.value() or None,
+            preferred_artists=self._list(self.artists.text()),
+            preferred_frames=self._list(self.frames.text()),
+            preferred_borders=self._list(self.borders.text()),
+            preferred_sources=self._list(self.sources.text()),
+            minimum_dpi=self.minimum_dpi.value(),
+            avoid_promos=self.avoid_promos.isChecked(),
+            avoid_textless=self.avoid_textless.isChecked(),
+            avoid_universes_beyond=self.avoid_ub.isChecked(),
+            avoid_foil_only=self.avoid_foil.isChecked())
+
+    def save(self):
+        return self._card_service.set_artwork_preferences(self.rules())
+
+
+class PreferredReplacementDialog(QDialog):
+    def __init__(self, parent, proposals):
+        super().__init__(parent)
+        self._proposals = list(proposals)
+        self.setWindowTitle('Review Preferred Artwork Replacements')
+        self.resize(720, 520)
+        intro = QLabel(
+            'Review every proposed printing change. Uncheck any card you want '
+            'to keep as-is, then apply the remaining replacements.')
+        intro.setWordWrap(True)
+        items = QListWidget()
+        for index, proposal in enumerate(self._proposals):
+            candidate = proposal['candidate']
+            current = proposal.get('current_card_id') or 'custom/current art'
+            target = (f"{candidate.set_name or candidate.set_code or 'Unknown set'} "
+                      f"#{candidate.collector_number or '?'}")
+            item = QListWidgetItem(
+                f"{proposal['display_name']}\n{current} → {target} [{candidate.dpi or '?'} DPI]")
+            item.setData(QtCore.Qt.ItemDataRole.UserRole, index)
+            item.setFlags(item.flags() | QtCore.Qt.ItemFlag.ItemIsUserCheckable)
+            item.setCheckState(QtCore.Qt.CheckState.Checked)
+            items.addItem(item)
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Apply |
+            QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout = QVBoxLayout()
+        layout.addWidget(intro)
+        layout.addWidget(items, 1)
+        layout.addWidget(buttons)
+        self.setLayout(layout)
+        self._items = items
+
+    def selected_proposals(self):
+        selected = []
+        for row in range(self._items.count()):
+            item = self._items.item(row)
+            if item.checkState() == QtCore.Qt.CheckState.Checked:
+                selected.append(self._proposals[item.data(
+                    QtCore.Qt.ItemDataRole.UserRole)])
+        return selected
+
+
+class HighResPickerDialog(QDialog):
+    def __init__(
+        self,
+        parent,
+        print_dict,
+        img_dict,
+        card_name,
+        context_override=None,
+        selection_mode=False,
+    ):
+        super().__init__(parent)
+        self._selection_mode = bool(selection_mode)
+        self.setWindowTitle("Choose New Front Art" if not self._selection_mode else "Choose Art")
+        self.resize(960, 680)
+
+        self._state = as_project_state(print_dict)
+        self._img_dict = img_dict
+        self._card_name = card_name
+        self._context = context_override or high_res_service.build_card_context(card_name, self._state)
+        self._candidates = []
+        self._thumbnail_cache = {}
+        self._preview_cache = {}
+        self._applied = False
+        self._selected_candidate_value = None
+        self._selected_source_value = None
+        entry = self._state.get_card_entry(card_name)
+        self._oracle_id = None if entry is None else entry.oracle_id
+        from mtg_core import get_default_card_service
+        self._card_service = get_default_card_service()
+        self._preferences = self._card_service.get_artwork_preferences()
+        self._favorite_card_id = (
+            self._card_service.get_artwork_favorite(self._oracle_id)
+            if self._oracle_id else None)
+        self._page_size = 60
+        self._page_start = 0
+        self._total_result_count = 0
+        self._results_have_more = False
+        self._thumbnail_loader = None
+        self._pending_thumbnail_candidates = []
+        self._page_token = 0
+        self._mpcfill_name_search_text = self._context.display_name
+        self._mpcfill_artist_search_text = ""
+
+        info_text = QLabel(
+            f"Search for new front art for `{self._context.display_name}`."
+            if not self._selection_mode
+            else f"Choose art for `{self._context.display_name}`."
+        )
+        info_text.setWordWrap(True)
+        helper_text = QLabel(
+            "Choose either Scryfall print art or MPCFill art to replace the current front image."
+        )
+        helper_text.setWordWrap(True)
+        self._info_text = info_text
+        self._helper_text = helper_text
+
+        current_override = None if self._selection_mode else self._state.get_high_res_override(card_name)
+        current_source_text = (
+            "Selected art will be applied after the card is added."
+            if self._selection_mode
+            else self._format_override_source_text(current_override)
+        )
+        self._current_source_label = QLabel(current_source_text)
+        self._current_source_label.setWordWrap(True)
+
+        source_combo = QComboBox()
+        source_combo.addItem("MPCFill", "mpcfill")
+        source_combo.addItem("Scryfall", "scryfall")
+        default_source = "mpcfill"
+        if current_override is not None and current_override.get("art_source") == "scryfall":
+            default_source = "scryfall"
+        source_combo.setCurrentIndex(0 if default_source == "mpcfill" else 1)
+        source_combo.currentIndexChanged.connect(self._handle_source_changed)
+        self._source_combo = source_combo
+        self._source_widget = WidgetWithLabel("Source", source_combo)
+
+        search_mode_combo = QComboBox()
+        search_mode_combo.addItem("Name", "name")
+        search_mode_combo.addItem("Artist", "artist")
+        search_mode_combo.currentIndexChanged.connect(self._handle_search_mode_changed)
+        self._search_mode_combo = search_mode_combo
+        self._search_mode_widget = WidgetWithLabel("Search By", search_mode_combo)
+
+        manual_search_edit = QLineEdit(self._context.display_name)
+        manual_search_edit.setPlaceholderText("Search card name")
+        manual_search_edit.textChanged.connect(self._remember_manual_search_text)
+        self._manual_search_edit = manual_search_edit
+        self._manual_search_widget = WidgetWithLabel("Search", manual_search_edit)
+
+        scryfall_set_filter_edit = QLineEdit()
+        scryfall_set_filter_edit.setPlaceholderText("Set code or set name")
+        self._scryfall_set_filter_edit = scryfall_set_filter_edit
+        self._scryfall_set_filter_widget = WidgetWithLabel("Set Filter", scryfall_set_filter_edit)
+
+        min_dpi = QSpinBox()
+        min_dpi.setRange(0, 5000)
+        min_dpi.setSingleStep(50)
+        min_dpi.setValue(300)
+        min_dpi.setValue(self._preferences.minimum_dpi)
+        max_dpi = QSpinBox()
+        max_dpi.setRange(0, 5000)
+        max_dpi.setSingleStep(50)
+        max_dpi.setValue(1500)
+        search_button = QPushButton("Search")
+        search_button.clicked.connect(lambda: self.refresh_results(reset_page=True))
+        preferences_button = QPushButton("Preferences…")
+        preferences_button.clicked.connect(self._edit_artwork_preferences)
+
+        filters_layout = QHBoxLayout()
+        min_dpi_widget = WidgetWithLabel("Min DPI", min_dpi)
+        max_dpi_widget = WidgetWithLabel("Max DPI", max_dpi)
+        filters_layout.addWidget(self._source_widget)
+        filters_layout.addWidget(min_dpi_widget)
+        filters_layout.addWidget(max_dpi_widget)
+        filters_layout.addWidget(search_button)
+        filters_layout.addWidget(preferences_button)
+        filters_layout.addStretch()
+        self._min_dpi = min_dpi
+        self._max_dpi = max_dpi
+        self._min_dpi_widget = min_dpi_widget
+        self._max_dpi_widget = max_dpi_widget
+
+        search_controls_layout = QHBoxLayout()
+        search_controls_layout.addWidget(self._search_mode_widget)
+        search_controls_layout.addWidget(self._manual_search_widget, 1)
+        search_controls_layout.addWidget(self._scryfall_set_filter_widget, 1)
+        search_controls_layout.addStretch()
+
+        prev_page_button = QPushButton("Previous 60 Results")
+        prev_page_button.setEnabled(False)
+        prev_page_button.clicked.connect(self._go_to_previous_page)
+        self._prev_page_button = prev_page_button
+        next_page_button = QPushButton("Next 60 Results")
+        next_page_button.setEnabled(False)
+        next_page_button.clicked.connect(self._go_to_next_page)
+        self._next_page_button = next_page_button
+        self._page_label = QLabel("Page 0 of 0")
+
+        pagination_layout = QHBoxLayout()
+        pagination_layout.addWidget(prev_page_button)
+        pagination_layout.addWidget(next_page_button)
+        pagination_layout.addWidget(self._page_label)
+        pagination_layout.addStretch()
+
+        results_list = QListWidget()
+        results_list.setIconSize(QtCore.QSize(90, 126))
+        results_list.currentRowChanged.connect(self._handle_selection_changed)
+        results_list.itemDoubleClicked.connect(lambda _item: self.apply_selected())
+        results_list.verticalScrollBar().valueChanged.connect(
+            lambda _value: QtCore.QTimer.singleShot(
+                50, self._start_visible_thumbnail_loader))
+        self._results_list = results_list
+
+        preview_label = QLabel("Select a result to preview it here.")
+        preview_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        preview_label.setMinimumSize(240, 336)
+        # A QLabel normally uses its pixmap's native dimensions as its size
+        # hint. Card previews are much taller than this dialog, so allowing
+        # that hint to drive the layout can push the action buttons offscreen.
+        preview_label.setSizePolicy(
+            QSizePolicy.Policy.Ignored,
+            QSizePolicy.Policy.Ignored,
+        )
+        preview_label.setFrameShape(QFrame.Shape.StyledPanel)
+        preview_label.setWordWrap(True)
+        self._preview_label = preview_label
+        self._details_label = QLabel("")
+        self._details_label.setWordWrap(True)
+
+        left_layout = QVBoxLayout()
+        left_layout.addWidget(QLabel("Matches"))
+        left_layout.addWidget(results_list)
+        right_layout = QVBoxLayout()
+        right_layout.addWidget(QLabel("Preview"))
+        right_layout.addWidget(preview_label)
+        right_layout.addWidget(self._details_label)
+        right_layout.addStretch()
+
+        content_layout = QHBoxLayout()
+        content_layout.addLayout(left_layout, 3)
+        content_layout.addLayout(right_layout, 2)
+
+        self._status_label = QLabel("")
+        apply_button = QPushButton("Apply" if not self._selection_mode else "Select Art")
+        apply_button.setEnabled(False)
+        apply_button.clicked.connect(self.apply_selected)
+        self._apply_button = apply_button
+        cancel_button = QPushButton("Cancel")
+        cancel_button.clicked.connect(self.reject)
+        favorite_checkbox = QCheckBox("Use this printing as my preferred art")
+        favorite_checkbox.setEnabled(False)
+        favorite_checkbox.setToolTip(
+            "Remember this choice for this Oracle card in every Manaforge app")
+        self._favorite_checkbox = favorite_checkbox
+
+        button_row = QHBoxLayout()
+        button_row.addWidget(favorite_checkbox)
+        button_row.addStretch()
+        button_row.addWidget(apply_button)
+        button_row.addWidget(cancel_button)
+
+        layout = QVBoxLayout()
+        layout.addWidget(info_text)
+        layout.addWidget(helper_text)
+        layout.addWidget(self._current_source_label)
+        layout.addLayout(filters_layout)
+        layout.addLayout(search_controls_layout)
+        layout.addLayout(pagination_layout)
+        layout.addWidget(self._status_label)
+        layout.addLayout(content_layout, 1)
+        layout.addLayout(button_row)
+        self.setLayout(layout)
+
+        self._apply_source_mode_ui()
+        QtCore.QTimer.singleShot(0, lambda: self._auto_refresh_initial_results())
+
+    def was_applied(self):
+        return self._applied
+
+    def _edit_artwork_preferences(self):
+        dialog = ArtworkPreferencesDialog(self, self._card_service)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            rules = dialog.save()
+            self._preferences = rules
+            self._min_dpi.setValue(rules.minimum_dpi)
+            self.refresh_results(reset_page=True)
+
+    def selected_candidate(self):
+        return self._selected_candidate_value
+
+    def selected_source(self):
+        return self._selected_source_value
+
+    def _warn(self, title, message):
+        application = QApplication.instance()
+        if application is not None and hasattr(application, "warn_nonfatal"):
+            application.warn_nonfatal(title, message)
+        else:
+            QMessageBox.warning(self, title, message)
+
+    def _run_with_popup(self, title, work):
+        application = QApplication.instance()
+        debug_mode = getattr(application, "_debug_mode", False)
+        window = self.window() if self.window() is not None else self
+        loading_window = popup(window, title, debug_mode)
+        loading_window.show_during_work(work)
+        del loading_window
+
+    def _selected_source(self):
+        return str(self._source_combo.currentData() or "mpcfill")
+
+    def _selected_search_mode(self):
+        return str(self._search_mode_combo.currentData() or "name")
+
+    def _format_override_source_text(self, override):
+        if override is None:
+            return "Current source: Scryfall import"
+        source_name = override.get("source_name") or (
+            "Scryfall" if override.get("art_source") == "scryfall" else "MPCFill"
+        )
+        dpi = override.get("dpi")
+        if isinstance(dpi, int) and dpi > 0:
+            return f"Current source: {source_name} [{dpi} DPI]"
+        set_code = override.get("set_code")
+        collector_number = override.get("collector_number")
+        if set_code and collector_number:
+            return f"Current source: {source_name} [{str(set_code).upper()} #{collector_number}]"
+        return f"Current source: {source_name}"
+
+    def _candidate_summary_text(self, candidate):
+        if candidate.art_source == "scryfall":
+            set_code = candidate.set_code or "?"
+            collector_number = candidate.collector_number or "?"
+            if candidate.set_name:
+                base = f"{candidate.source_name} | {candidate.set_name} [{str(set_code).upper()} #{collector_number}]"
+            else:
+                base = f"{candidate.source_name} | {str(set_code).upper()} #{collector_number}"
+            resolution = f" | {candidate.dpi} DPI" if candidate.dpi else ""
+            favorite = " | Preferred" if candidate.identifier == self._favorite_card_id else ""
+            return base + resolution + favorite
+        return f"{candidate.source_name} | {candidate.dpi} DPI"
+
+    def _candidate_details_text(self, candidate):
+        details = [candidate.name, candidate.source_name]
+        if candidate.art_source == "scryfall":
+            if candidate.set_name:
+                details.append(f"Set Name: {candidate.set_name}")
+            if candidate.set_code and candidate.collector_number:
+                details.append(f"Set: {str(candidate.set_code).upper()} #{candidate.collector_number}")
+        else:
+            details.append(f"{candidate.dpi} DPI")
+            details.append(f"Source ID: {candidate.source_id}")
+        details.append(f"ID: {candidate.identifier}")
+        return "\n".join(details)
+
+    def _apply_source_mode_ui(self):
+        is_mpcfill = self._selected_source() == "mpcfill"
+        self._min_dpi_widget.setVisible(is_mpcfill)
+        self._max_dpi_widget.setVisible(is_mpcfill)
+        self._search_mode_widget.setVisible(is_mpcfill)
+        self._manual_search_widget.setVisible(is_mpcfill)
+        self._scryfall_set_filter_widget.setVisible(not is_mpcfill)
+        if is_mpcfill:
+            self._info_text.setText(
+                f"Search MPCFill for new front art for `{self._context.display_name}`."
+            )
+            self._helper_text.setText(
+                "MPCFill results are treated as source art and cropped to the project card size when applied. Search by card name or artist."
+            )
+            self._apply_search_mode_ui()
+        else:
+            self._info_text.setText(
+                f"Search Scryfall print variants for `{self._context.display_name}`."
+            )
+            self._helper_text.setText(
+                "Scryfall results use full-card print images and do not use the MPCFill DPI filters. Filter printings by set code or set name."
+            )
+
+    def _set_idle_status_for_source(self):
+        if self._selected_source() == "mpcfill":
+            if CFG.HighResBackendURL.strip():
+                self._status_label.setText("Set your DPI filters and click Search to load MPCFill art.")
+            else:
+                self._status_label.setText(
+                    f"Set `HighRes.BackendURL` in {os.path.join(cwd, 'config.ini')} to the MPCFill base URL to use MPCFill art."
+                )
+            return
+        self._status_label.setText("Click Search to load Scryfall print art.")
+
+    def _remember_manual_search_text(self, text):
+        if self._selected_search_mode() == "artist":
+            self._mpcfill_artist_search_text = text
+        else:
+            self._mpcfill_name_search_text = text
+
+    def _apply_search_mode_ui(self):
+        if self._selected_search_mode() == "artist":
+            self._manual_search_edit.setPlaceholderText("Search artist")
+            if self._manual_search_edit.text() != self._mpcfill_artist_search_text:
+                self._manual_search_edit.setText(self._mpcfill_artist_search_text)
+        else:
+            self._manual_search_edit.setPlaceholderText("Search card name")
+            target_text = self._mpcfill_name_search_text or self._context.display_name
+            if self._manual_search_edit.text() != target_text:
+                self._manual_search_edit.setText(target_text)
+
+    def _clear_results(self):
+        self._stop_thumbnail_loader()
+        self._candidates = []
+        self._results_list.clear()
+        self._apply_button.setEnabled(False)
+        self._preview_label.setText("Select a result to preview it here.")
+        self._preview_label.setPixmap(QPixmap())
+        self._details_label.setText("")
+        self._total_result_count = 0
+        self._update_pagination_controls()
+
+    def _auto_refresh_initial_results(self):
+        self._apply_source_mode_ui()
+        self._set_idle_status_for_source()
+        if self._selected_source() == "scryfall" or CFG.HighResBackendURL.strip():
+            self.refresh_results(reset_page=True, warn_on_missing_backend=False)
+
+    def _handle_source_changed(self, *_args):
+        self._page_start = 0
+        self._apply_source_mode_ui()
+        self._clear_results()
+        self._set_idle_status_for_source()
+        if self._selected_source() == "scryfall" or CFG.HighResBackendURL.strip():
+            self.refresh_results(reset_page=True, warn_on_missing_backend=False)
+
+    def _handle_search_mode_changed(self, *_args):
+        self._apply_search_mode_ui()
+
+    def _stop_thumbnail_loader(self):
+        self._pending_thumbnail_candidates = []
+        if self._thumbnail_loader is not None:
+            self._thumbnail_loader.cancel()
+            # A QThread must remain alive until run() exits. A timed wait can
+            # release the last Python reference while Qt is still executing,
+            # which terminates the process inside Qt6Core on Windows.
+            self._thumbnail_loader.wait()
+            self._thumbnail_loader = None
+
+    def closeEvent(self, event):
+        self._stop_thumbnail_loader()
+        super().closeEvent(event)
+
+    def reject(self):
+        self._stop_thumbnail_loader()
+        super().reject()
+
+    @QtCore.pyqtSlot(int, str, bytes)
+    def _handle_thumbnail_loaded(self, page_token, identifier, data):
+        if page_token != self._page_token:
+            return
+        self._thumbnail_cache[identifier] = data
+        for row, candidate in enumerate(self._candidates):
+            if candidate.identifier != identifier:
+                continue
+            item = self._results_list.item(row)
+            if item is None:
+                return
+            pixmap = QPixmap()
+            if pixmap.loadFromData(data):
+                item.setIcon(QIcon(pixmap))
+            return
+
+    def _start_thumbnail_loader(self, candidates):
+        if self._thumbnail_loader is not None and self._thumbnail_loader.isRunning():
+            self._pending_thumbnail_candidates = list(candidates)
+            return
+        pending = []
+        for candidate in candidates:
+            row = self._candidates.index(candidate)
+            if not candidate.small_thumbnail_url:
+                continue
+            if candidate.identifier in self._thumbnail_cache:
+                continue
+            cached = high_res_service.get_cached_thumbnail_bytes(candidate.small_thumbnail_url)
+            if cached is not None:
+                self._thumbnail_cache[candidate.identifier] = cached
+                item = self._results_list.item(row)
+                if item is not None:
+                    pixmap = QPixmap()
+                    if pixmap.loadFromData(cached):
+                        item.setIcon(QIcon(pixmap))
+                continue
+            pending.append((row, candidate.identifier, candidate.small_thumbnail_url))
+        if not pending:
+            return
+        self._page_token += 1
+        loader = HighResThumbnailLoader(self._page_token, pending)
+        loader.thumbnail_loaded.connect(self._handle_thumbnail_loaded)
+        loader.finished.connect(
+            lambda: self._thumbnail_loader_finished(loader))
+        self._thumbnail_loader = loader
+        loader.start()
+
+    def _thumbnail_loader_finished(self, loader):
+        if self._thumbnail_loader is not loader:
+            return
+        self._thumbnail_loader = None
+        pending = self._pending_thumbnail_candidates
+        self._pending_thumbnail_candidates = []
+        if pending:
+            self._start_thumbnail_loader(pending)
+
+    def _start_visible_thumbnail_loader(self):
+        viewport = self._results_list.viewport().rect()
+        visible = []
+        for row, candidate in enumerate(self._candidates):
+            item = self._results_list.item(row)
+            if item is not None and self._results_list.visualItemRect(
+                    item).intersects(viewport):
+                visible.append(candidate)
+        self._start_thumbnail_loader(visible)
+
+    def _update_pagination_controls(self):
+        if self._total_result_count <= 0:
+            self._page_label.setText("Page 0 of 0")
+            self._prev_page_button.setEnabled(False)
+            self._next_page_button.setEnabled(False)
+            return
+        current_page = (self._page_start // self._page_size) + 1
+        if self._results_have_more:
+            self._page_label.setText(f"Page {current_page} • more results")
+        else:
+            total_pages = max(1, math.ceil(self._total_result_count / self._page_size))
+            self._page_label.setText(f"Page {current_page} of {total_pages}")
+        self._prev_page_button.setEnabled(self._page_start > 0)
+        self._next_page_button.setEnabled(self._page_start + self._page_size < self._total_result_count)
+
+    def _go_to_previous_page(self):
+        if self._page_start <= 0:
+            return
+        self._page_start = max(0, self._page_start - self._page_size)
+        self.refresh_results(reset_page=False)
+
+    def _go_to_next_page(self):
+        if self._page_start + self._page_size >= self._total_result_count:
+            return
+        self._page_start += self._page_size
+        self.refresh_results(reset_page=False)
+
+    def refresh_results(self, reset_page=False, warn_on_missing_backend=True):
+        source = self._selected_source()
+        search_mode = self._selected_search_mode()
+        search_text = self._manual_search_edit.text()
+        set_filter = self._scryfall_set_filter_edit.text()
+        if source == "mpcfill" and not CFG.HighResBackendURL.strip():
+            if warn_on_missing_backend:
+                self._warn(
+                    "MPCFill Backend Not Configured",
+                    f"Set `HighRes.BackendURL` in {os.path.join(cwd, 'config.ini')} to the MPCFill base URL, such as `https://mpcfill.com/`, then reopen the app.",
+                )
+            self._status_label.setText("MPCFill art is disabled until a backend URL is configured.")
+            return
+
+        if reset_page:
+            self._page_start = 0
+        min_dpi = self._min_dpi.value()
+        max_dpi = self._max_dpi.value()
+        if min_dpi > max_dpi:
+            max_dpi = min_dpi
+            self._max_dpi.setValue(max_dpi)
+
+        search_page = None
+        error = None
+
+        def do_search():
+            nonlocal search_page, error
+            try:
+                search_page = high_res_service.search_new_art_page(
+                    self._context,
+                    source,
+                    CFG.HighResBackendURL,
+                    min_dpi,
+                    max_dpi,
+                    page_start=self._page_start,
+                    page_size=self._page_size,
+                    search_text=search_text,
+                    search_mode=search_mode,
+                    set_filter=set_filter,
+                )
+            except ValueError as exc:
+                error = exc
+
+        popup_title = "Searching MPCFill..." if source == "mpcfill" else "Searching Scryfall..."
+        self._run_with_popup(popup_title, do_search)
+        if error is not None:
+            self._warn("New Art Search Failed", str(error))
+            self._status_label.setText("Search failed. Check the warning for details.")
+            self._total_result_count = 0
+            self._results_have_more = False
+            self._update_pagination_controls()
+            return
+
+        results = [] if search_page is None else search_page.candidates
+        if source == 'scryfall':
+            from mtg_core.preferences import rank_prints
+            def payload(candidate):
+                return {
+                    'id': candidate.identifier, 'lang': candidate.language,
+                    'set': candidate.set_code, 'released_at': candidate.released_at,
+                    'artist': candidate.artist, 'frame': candidate.frame,
+                    'border_color': candidate.border,
+                    'finishes': candidate.treatments, 'promo': candidate.promo,
+                    'textless': candidate.textless,
+                    'universes_beyond': candidate.universes_beyond,
+                    'highres_image': bool(candidate.dpi),
+                }
+            by_id = {candidate.identifier: candidate for candidate in results}
+            ranked = rank_prints(
+                [payload(candidate) for candidate in results],
+                favorite_card_id=self._favorite_card_id,
+                rules=self._preferences)
+            results = [by_id[item['id']] for item in ranked]
+        self._total_result_count = 0 if search_page is None else search_page.total_count
+        # High-resolution providers return an exact total using the existing
+        # HighResSearchPage model, which has no has_more field.
+        self._results_have_more = False
+        self._candidates = results
+        self._results_list.clear()
+        self._apply_button.setEnabled(False)
+        self._preview_label.setText("Select a result to preview it here.")
+        self._preview_label.setPixmap(QPixmap())
+        self._details_label.setText("")
+        self._update_pagination_controls()
+
+        if not results:
+            self._status_label.setText("No new art matches found for this card.")
+            return
+
+        page_number = (self._page_start // self._page_size) + 1
+        total_pages = max(1, math.ceil(self._total_result_count / self._page_size))
+        start_index = self._page_start + 1
+        end_index = min(self._page_start + len(results), self._total_result_count)
+        self._status_label.setText(
+            f"Showing {start_index}-{end_index} of {self._total_result_count} new art options (page {page_number}/{total_pages})."
+        )
+        for candidate in results:
+            item = QListWidgetItem(f"{candidate.name}\n{self._candidate_summary_text(candidate)}")
+            thumb_bytes = self._thumbnail_cache.get(candidate.identifier)
+            if thumb_bytes:
+                pixmap = QPixmap()
+                pixmap.loadFromData(thumb_bytes)
+                item.setIcon(QIcon(pixmap))
+            self._results_list.addItem(item)
+        self._start_visible_thumbnail_loader()
+        self._results_list.setCurrentRow(0)
+
+    def _selected_candidate(self, row=None):
+        if row is None:
+            row = self._results_list.currentRow()
+        if row < 0 or row >= len(self._candidates):
+            return None
+        return self._candidates[row]
+
+    def _handle_selection_changed(self, row):
+        candidate = self._selected_candidate(row)
+        if candidate is None:
+            self._apply_button.setEnabled(False)
+            self._details_label.setText("")
+            return
+        self._apply_button.setEnabled(True)
+        self._favorite_checkbox.setEnabled(
+            candidate.art_source == 'scryfall' and bool(self._oracle_id))
+        self._favorite_checkbox.setChecked(
+            candidate.identifier == self._favorite_card_id)
+        self._details_label.setText(self._candidate_details_text(candidate))
+        self._update_preview(candidate)
+
+    def _update_preview(self, candidate):
+        if candidate.identifier not in self._preview_cache:
+            error = None
+            preview_bytes = None
+
+            def load_preview():
+                nonlocal preview_bytes, error
+                try:
+                    url = candidate.medium_thumbnail_url or candidate.small_thumbnail_url
+                    if not url:
+                        preview_bytes = None
+                        return
+                    preview_bytes = high_res_service.fetch_preview_bytes(url, cache_kind="preview")
+                except (OSError, ValueError) as exc:
+                    error = exc
+
+            self._run_with_popup("Loading preview...", load_preview)
+            if error is not None:
+                self._warn("Preview Load Failed", str(error))
+                return
+            if preview_bytes is not None:
+                self._preview_cache[candidate.identifier] = preview_bytes
+
+        preview_bytes = self._preview_cache.get(candidate.identifier)
+        if preview_bytes is None:
+            self._preview_label.setText("Preview unavailable.")
+            self._preview_label.setPixmap(QPixmap())
+            return
+
+        pixmap = QPixmap()
+        pixmap.loadFromData(preview_bytes)
+        scaled = pixmap.scaled(
+            self._preview_label.size(),
+            QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+            QtCore.Qt.TransformationMode.SmoothTransformation,
+        )
+        self._preview_label.setPixmap(scaled)
+        self._preview_label.setText("")
+
+    def apply_selected(self):
+        candidate = self._selected_candidate()
+        if candidate is None:
+            return
+        if self._selection_mode:
+            self._selected_candidate_value = candidate
+            self._selected_source_value = self._selected_source()
+            self._applied = True
+            self.accept()
+            return
+        application = QApplication.instance()
+        error = None
+        backside_match = None
+
+        def do_apply():
+            nonlocal error, backside_match
+            try:
+                result = high_res_service.apply_candidate_to_project(
+                    self._state,
+                    self._img_dict,
+                    self._card_name,
+                    candidate,
+                    self._selected_source(),
+                    CFG.HighResBackendURL,
+                    make_popup_print_fn(apply_window),
+                    getattr(application, "warn_nonfatal", None),
+                )
+                backside_match = result.backside_match
+            except (OSError, ValueError) as exc:
+                error = exc
+
+        apply_window = popup(
+            self.window() if self.window() is not None else self,
+            "Applying new art...",
+            getattr(application, "_debug_mode", False),
+        )
+        apply_window.show_during_work(do_apply)
+        del apply_window
+
+        if error is not None:
+            self._warn("New Art Apply Failed", str(error))
+            return
+        if (self._favorite_checkbox.isChecked() and self._oracle_id
+                and candidate.art_source == 'scryfall'):
+            self._card_service.set_artwork_favorite(
+                self._oracle_id, candidate.identifier)
+            self._favorite_card_id = candidate.identifier
+        self._applied = True
+        self._current_source_label.setText(
+            self._format_override_source_text(self._state.get_high_res_override(self._card_name))
+        )
+        if backside_match is not None:
+            self._current_source_label.setText(self._current_source_label.text() + " | front + back applied")
+        self.accept()
+
+
+__all__ = [
+    "AddCardDialog",
+    "ArtworkPreferencesDialog",
+    "PreferredReplacementDialog",
+    "ComboBoxWithLabel",
+    "DeckImportDialog",
+    "FileDialogType",
+    "HighResPickerDialog",
+    "LineEditWithLabel",
+    "SettingsDialog",
+    "WidgetWithLabel",
+    "decklist_file_dialog",
+    "delete_project_with_confirmation",
+    "file_dialog",
+    "format_exception_report",
+    "folder_dialog",
+    "image_file_dialog",
+    "load_project_file",
+    "project_file_dialog",
+    "remove_card_from_project_state",
+    "show_exception_dialog",
+]

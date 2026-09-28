@@ -129,9 +129,8 @@ def test_empty_section_selection_does_not_create_project(library):
 
 
 def test_art_picker_cancellation_keeps_document_unchanged(monkeypatch):
-    from mtg_editor.proxy_adapter import choose_art, enable_proxy_imports
-    enable_proxy_imports()
-    import dialogs
+    from mtg_editor.proxy_adapter import choose_art
+    from mtg_ui import print_dialogs as dialogs
     class Picker:
         def __init__(self, *args, **kwargs):
             assert kwargs['selection_mode']

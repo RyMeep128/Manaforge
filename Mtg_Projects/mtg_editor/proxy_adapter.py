@@ -6,51 +6,13 @@ import subprocess
 import sys
 import tempfile
 
-from mtg_core.decks import DeckDocument
+from mtg_print.project import project_payload
 from mtg_ui.project_lock import acquire_project_lock
 
 
-def enable_proxy_imports():
-    root = Path(__file__).resolve().parents[1] / 'mtg_proxy'
-    if str(root) not in sys.path:
-        sys.path.append(str(root))
-    return root
-
-
-def project_payload(document, base=None):
-    adapter = DeckDocument.from_dict(document.to_dict())
-    if base is not None:
-        adapter.print_settings['proxy_project'] = deepcopy(base)
-    # Stable unique filenames also distinguish two entries of the same printing.
-    for entry in adapter.deck.entries:
-        # New catalog entries use card-sized images. Legacy/custom sources retain
-        # their explicit metadata or the printer's filename compatibility rule.
-        entry.extras.setdefault('pre_cropped', bool(entry.card_id
-            and not entry.extras.get('art_override') and not entry.extras.get('proxy_front_name')))
-        entry.extras.setdefault('proxy_front_name', f'{entry.entry_id}.png')
-    payload = adapter.apply_to_legacy_proxy()
-    by_id = {e.entry_id: e for e in adapter.deck.entries}
-    for raw in payload['card_entries']:
-        entry = by_id[raw['entry_id']]
-        raw['oversized'] = entry.extras.get('oversized', raw.get('oversized', False))
-        for key in ('backside_name', 'backside_asset_id', 'backside_short_edge'):
-            if key in entry.extras:
-                raw[key] = entry.extras[key]
-        override = entry.extras.get('art_override')
-        if override:
-            payload.setdefault('high_res_front_overrides', {})[raw['front_name']] = deepcopy(override)
-    payload['oversized_enabled'] = payload.get('oversized_enabled', False) or any(r.get('oversized') for r in payload['card_entries'])
-    # Embed deck metadata without recursively embedding the entire print project.
-    embedded = adapter.to_dict()
-    embedded['print_settings'] = {}
-    payload['deck_document'] = embedded
-    return payload
-
-
 def choose_art(parent, document, entry_id):
-    enable_proxy_imports()
-    from dialogs import HighResPickerDialog
-    from models import ProjectState
+    from mtg_ui.print_dialogs import HighResPickerDialog
+    from mtg_print.models import ProjectState
     from PyQt6.QtWidgets import QDialog
     state = ProjectState.from_dict(project_payload(document))
     raw = next(e for e in state.card_entries_store.values() if e.entry_id == entry_id)
@@ -62,8 +24,8 @@ def choose_art(parent, document, entry_id):
 
 def apply_art(selection):
     candidate, state, name = selection
-    import high_res
-    from config import CFG
+    from mtg_print import high_res
+    from mtg_print.config import CFG
     context = high_res.build_card_context(name, state)
     backend = CFG.HighResBackendURL
     back = high_res.maybe_find_matching_backside(state, name, context, candidate, backend)
@@ -80,10 +42,9 @@ def apply_art(selection):
 def prepare_print(document, service, sections):
     if not any(e.quantity > 0 and e.section in sections and not e.do_not_print for e in document.deck.entries):
         raise ValueError('No printable cards in the selected sections.')
-    enable_proxy_imports()
-    import project_library
-    import deck_import
-    from models import ProjectState
+    from mtg_print import library as project_library
+    from mtg_print import deck_import
+    from mtg_print.models import ProjectState
     linked = document.extras.get('proxy_project_id')
     project = project_library.get_project(linked) if linked else None
     created = project is None
@@ -128,9 +89,9 @@ def prepare_print(document, service, sections):
                 raise ValueError(f'No printable artwork for {entry.name}. Choose artwork and retry.')
         payload['backside_enabled'] = payload.get('backside_enabled', False) or any(r.get('backside_asset_id') for r in payload['card_entries'])
         state = ProjectState.from_dict(payload)
-        from constants import page_sizes, card_size_without_bleed_inch
-        from util import mm_to_inch, inch_to_point
-        from services import layout_service
+        from mtg_print.geometry import page_sizes, card_size_without_bleed_inch
+        from mtg_print.geometry import mm_to_inch, inch_to_point
+        from mtg_print import layout as layout_service
         size = page_sizes[state.pagesize]
         if state.orient == 'Landscape':
             size = size[::-1]
@@ -150,6 +111,6 @@ def prepare_print(document, service, sections):
 
 
 def launch_print(project):
-    root = enable_proxy_imports()
+    root = Path(__file__).resolve().parents[1] / 'mtg_proxy'
     return subprocess.Popen([sys.executable, str(root / 'main.py'), '--open-project', project['path']],
                             cwd=str(root), creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))

@@ -1,4 +1,6 @@
 """Constructed deck checks based on local, dated Oracle legality records."""
+
+from mtg_core.sections import DeckSection
 import time
 from .commander import Report, Issue, copy_limit, abilities, front, STALE_DAYS
 from .companions import companion_restriction
@@ -9,8 +11,8 @@ FORMATS = ('Standard', 'Modern', 'Pauper', 'Legacy', 'Vintage')
 def check_constructed(document, records, *, now=None):
     now = time.time() if now is None else now
     format_name = document.deck.format
-    main = [e for e in document.deck.entries if e.section == 'mainboard']
-    side = [e for e in document.deck.entries if e.section == 'sideboard']
+    main = [e for e in document.deck.entries if e.section == DeckSection.MAINBOARD]
+    side = [e for e in document.deck.entries if e.section == DeckSection.SIDEBOARD]
     entries = main + side
     report = Report(sum(e.quantity for e in main))
     def issue(severity, code, message, selected=()):
@@ -22,7 +24,7 @@ def check_constructed(document, records, *, now=None):
         issue('Error', 'size', f'The main deck contains {report.total} cards; at least 60 are required.')
     if sum(e.quantity for e in side) > 15:
         issue('Error', 'sideboard', 'The sideboard exceeds 15 cards.', side)
-    if any(e.section == 'commander' for e in document.deck.entries):
+    if any(e.section == DeckSection.COMMANDER for e in document.deck.entries):
         issue('Error', 'commander_section', f'{format_name} does not use commanders; move those cards to the mainboard or sideboard.')
     payloads, groups, dates, stale, undated = {}, {}, [], [], []
     for entry in entries:
