@@ -41,10 +41,11 @@ def apply_printing(document, entry_id, payload):
     entry.set_code = payload.get('set')
     entry.collector_number = payload.get('collector_number')
     entry.image_asset_id = None
-    for key in ('art_override', 'imported_artwork', 'backside_asset_id', 'backside_name',
-                'backside_pre_cropped', 'backside_short_edge'):
+    for key in ('art_override', 'imported_artwork', 'backside_name', 'backside_short_edge'):
         entry.extras.pop(key, None)
-    entry.extras['pre_cropped'] = True
+    entry.pre_cropped = True
+    entry.backside_asset_id = None
+    entry.backside_pre_cropped = None
     entry.extras['facts'] = card_facts(payload)
 
 
@@ -169,7 +170,7 @@ class CardDetails(W.QDialog):
         self.status.setText(self.catalog_notice)
         payload, face_index = self.payload, self.face
         current = payload.get('id') == self.entry.card_id
-        asset = (self.entry.extras.get('backside_asset_id') if face_index else self.entry.image_asset_id) if current else None
+        asset = (self.entry.backside_asset_id if face_index else self.entry.image_asset_id) if current else None
         key = (payload.get('id'), face_index, asset)
         if key in self.cache:
             self.token += 1

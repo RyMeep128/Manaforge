@@ -39,7 +39,7 @@ def test_manual_protection_idempotence_history_and_serialization():
     assert doc.deck.entries[2].category_ids == []
     assert doc.deck.entries[0].image_asset_id == 'exact-art'
     assert doc.deck.entries[0].quantity == 4
-    assert doc.deck.entries[0].extras['oversized']
+    assert doc.deck.entries[0].oversized
     apply_categories(doc, proposals)
     assert doc.to_dict() == after
     assert DeckDocument.from_dict(after).to_dict() == after

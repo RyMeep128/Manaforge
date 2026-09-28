@@ -18,7 +18,7 @@ def test_printing_preserves_deck_roles_and_undo_clears_old_art():
     assert entry.card_id == 'new' and entry.set_code == 'abc'
     assert entry.quantity == 3 and entry.category_ids == ['ramp'] and entry.tags == ['favorite']
     assert entry.extras['auto_categories']['manual']
-    assert entry.image_asset_id is None and 'backside_asset_id' not in entry.extras
+    assert entry.image_asset_id is None and entry.backside_asset_id is None
     history.undo()
     assert doc.to_dict() == original
 

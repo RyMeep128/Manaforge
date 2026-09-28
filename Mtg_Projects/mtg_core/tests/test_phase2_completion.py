@@ -50,14 +50,14 @@ def test_custom_front_back_art_roundtrip_undo_and_no_merge_loss():
     source, errors = parse_decklist('count,name,image_url,backside_image_url\n1,Test,https://art.example/front,https://art.example/back')
     result = resolve_entries(source, service)
     assert not errors and not result[2]
-    assert result[0][0].image_asset_id == 'front' and result[0][0].extras['backside_asset_id'] == 'back'
+    assert result[0][0].image_asset_id == 'front' and result[0][0].backside_asset_id == 'back'
     doc = DeckDocument()
     doc.deck.entries = [DeckEntry('existing', 'Test', card_id='card')]
     history = DeckHistory(doc)
     history.execute(lambda d: apply_decklist(d, result))
     assert len(doc.deck.entries) == 2 and doc.deck.entries[0].quantity == 1
     restored = DeckDocument.from_dict(doc.to_dict())
-    assert restored.deck.entries[1].extras['backside_asset_id'] == 'back'
+    assert restored.deck.entries[1].backside_asset_id == 'back'
     legacy = restored.apply_to_legacy_proxy()
     custom = legacy['card_entries'][1]
     assert custom['image_asset_id'] == 'front' and custom['backside_asset_id'] == 'back'

@@ -10,6 +10,29 @@ from mtg_ui.project_lock import acquire_project_lock
 import project_library
 
 
+def test_typed_print_metadata_reaches_printer_without_mutating_deck():
+    document = DeckDocument()
+    document.deck.entries = [DeckEntry(
+        'typed', 'Card', card_id='print', oversized=True, pre_cropped=False,
+        backside_pre_cropped=True, backside_asset_id='back',
+    )]
+    before = deepcopy(document.to_dict())
+    payload = project_payload(document)
+    raw = payload['card_entries'][0]
+    assert raw['oversized'] is True
+    assert raw['pre_cropped'] is False
+    assert raw['backside_pre_cropped'] is True
+    assert raw['backside_asset_id'] == 'back'
+    from mtg_print.models import ProjectState
+    restored = ProjectState.from_dict(payload).to_dict()
+    embedded = DeckDocument.from_dict(restored['deck_document']).deck.entries[0]
+    assert embedded.oversized is True
+    assert embedded.pre_cropped is False
+    assert embedded.backside_pre_cropped is True
+    assert embedded.backside_asset_id == 'back'
+    assert document.to_dict() == before
+
+
 @pytest.fixture
 def library(tmp_path, monkeypatch):
     monkeypatch.setattr(project_library, 'cwd', str(tmp_path))

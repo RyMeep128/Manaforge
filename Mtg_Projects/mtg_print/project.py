@@ -11,15 +11,16 @@ def project_payload(document, base=None):
     for entry in adapter.deck.entries:
         # New catalog entries use card-sized images. Legacy/custom sources retain
         # their explicit metadata or the printer's filename compatibility rule.
-        entry.extras.setdefault('pre_cropped', bool(entry.card_id
-            and not entry.extras.get('art_override') and not entry.extras.get('proxy_front_name')))
+        if entry.pre_cropped is None:
+            entry.pre_cropped = bool(entry.card_id
+                and not entry.extras.get('art_override') and not entry.extras.get('proxy_front_name'))
         entry.extras.setdefault('proxy_front_name', f'{entry.entry_id}.png')
     payload = adapter.apply_to_legacy_proxy()
     by_id = {e.entry_id: e for e in adapter.deck.entries}
     for raw in payload['card_entries']:
         entry = by_id[raw['entry_id']]
-        raw['oversized'] = entry.extras.get('oversized', raw.get('oversized', False))
-        for key in ('backside_name', 'backside_asset_id', 'backside_short_edge'):
+        raw['oversized'] = entry.oversized if entry.oversized is not None else raw.get('oversized', False)
+        for key in ('backside_name', 'backside_short_edge'):
             if key in entry.extras:
                 raw[key] = entry.extras[key]
         override = entry.extras.get('art_override')

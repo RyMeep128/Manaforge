@@ -69,7 +69,7 @@ def inspect_readiness(document, service):
                 back_size = dimensions(state.backside_default_asset_id, state.backside_default)
         flags = {'missing-art': size is None, 'low-dpi': low,
                  'missing-back': needs_back and back_size is None, 'dfc': dfc,
-                 'oversized': bool(entry.extras.get('oversized')),
+                 'oversized': bool(entry.oversized),
                  'excluded': entry.section == DeckSection.EXCLUDED or entry.do_not_print}
         for key, active in flags.items():
             if active:

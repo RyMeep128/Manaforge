@@ -91,8 +91,6 @@ def assign(document, ids, field, value):
         if field == 'category':
             entry.extras['auto_categories'] = {'manual': True}
             entry.category_ids = ([value] + [c for c in entry.category_ids if c != value]) if value else []
-        elif field in ('oversized',):
-            entry.extras[field] = value
         else:
             setattr(entry, field, value.copy() if isinstance(value, list) else value)
     document.deck.commander_entry_ids = [e.entry_id for e in document.deck.entries if e.section == DeckSection.COMMANDER]

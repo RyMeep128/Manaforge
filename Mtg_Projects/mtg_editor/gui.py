@@ -6,7 +6,7 @@ from pathlib import Path
 import uuid
 
 from PyQt6 import QtCore, QtGui, QtWidgets as W
-from mtg_core.decks import DeckDocument, DeckEntry
+from mtg_core.decks import DeckDocument, DeckEntry, ENTRY_PRINT_FIELDS
 from mtg_editor.session import DeckSession
 from mtg_core.paths import data_root
 from mtg_core import get_default_card_service
@@ -529,7 +529,7 @@ class EditorWindow(W.QMainWindow):
             return
         self.search_document.deck.entries = [DeckEntry(entry_id=r.card_id, name=r.name,
             card_id=r.card_id, oracle_id=r.oracle_id, set_code=r.set_code,
-            collector_number=r.collector_number, extras={'pre_cropped': True, 'facts': card_facts(getattr(r, 'payload', {}) or {}),
+            collector_number=r.collector_number, pre_cropped=True, extras={'facts': card_facts(getattr(r, 'payload', {}) or {}),
                 'category_suggestion': (getattr(r, 'payload', {}) or {}).get('_category_evidence',
                     classify(getattr(r, 'payload', {}) or {}))}) for r in results]
         self.results.refresh()
@@ -846,7 +846,12 @@ class EditorWindow(W.QMainWindow):
             def action(document):
                 entry = next(e for e in document.deck.entries if e.entry_id == entry_id)
                 entry.image_asset_id = result.pop('image_asset_id')
-                entry.extras.update({k: v for k, v in result.items() if v is not None})
+                for key, value in result.items():
+                    if value is not None:
+                        if key in ENTRY_PRINT_FIELDS:
+                            setattr(entry, key, value)
+                        else:
+                            entry.extras[key] = value
             self.edit(action)
         self.run_task(lambda: apply_art(selection), apply)
 

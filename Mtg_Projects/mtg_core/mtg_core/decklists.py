@@ -184,7 +184,7 @@ def resolve_entries(parsed, service, *, allow_remote=False, progress=None, cance
                 quantity=source.count, section=source.section, card_id=payload['id'],
                 oracle_id=payload.get('oracle_id'), set_code=payload.get('set'),
                 collector_number=payload.get('collector_number'),
-                extras={'pre_cropped': True, 'facts': {key: payload.get(key) for key in
+                pre_cropped=True, extras={'facts': {key: payload.get(key) for key in
                     ('type_line', 'cmc', 'colors', 'oracle_text', 'keywords', 'layout', 'card_faces')}})
             if import_artwork:
                 for url, field in ((source.image_url, 'image_asset_id'), (source.backside_image_url, 'backside_asset_id')):
@@ -195,9 +195,9 @@ def resolve_entries(parsed, service, *, allow_remote=False, progress=None, cance
                         if field == 'image_asset_id':
                             entry.image_asset_id = asset
                         else:
-                            entry.extras[field] = asset
+                            entry.backside_asset_id = asset
                             entry.extras['backside_name'] = f'__back_{entry.entry_id}.png'
-                            entry.extras['backside_pre_cropped'] = True
+                            entry.backside_pre_cropped = True
                 if source.image_url or source.backside_image_url:
                     entry.extras['imported_artwork'] = {'front_url': source.image_url, 'back_url': source.backside_image_url}
             entries.append(entry)
@@ -238,7 +238,7 @@ def apply_decklist(document, result):
         existing = next((e for e in document.deck.entries if e.card_id == prepared.card_id
                          and e.section == prepared.section and not e.extras.get('art_override')
                          and e.image_asset_id == prepared.image_asset_id
-                         and e.extras.get('backside_asset_id') == prepared.extras.get('backside_asset_id')
+                         and e.backside_asset_id == prepared.backside_asset_id
                          and not e.do_not_print), None)
         if existing:
             existing.quantity += prepared.quantity

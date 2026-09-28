@@ -79,10 +79,10 @@ def matches(entry, terms, categories):
         if field == 'legal':
             return (facts.get('legalities') or {}).get(value) == 'legal'
         if field == 'is':
-            return {'oversized': bool(entry.extras.get('oversized')),
+            return {'oversized': bool(entry.oversized),
                     'excluded': entry.section == DeckSection.EXCLUDED,
                     'do-not-print': entry.do_not_print, 'owned': entry.owned > 0,
-                    'back': bool(entry.extras.get('backside_asset_id') or entry.extras.get('backside_name')),
+                    'back': bool(entry.backside_asset_id or entry.extras.get('backside_name')),
                     'dfc': facts.get('layout') in ('transform', 'modal_dfc', 'double_faced_token', 'reversible_card', 'art_series')}[value]
         if field == 'treatment':
             raw = list(facts.get('finishes') or []) + list(facts.get('frame_effects') or [])

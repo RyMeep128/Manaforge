@@ -160,7 +160,7 @@ class CardCanvas(W.QAbstractScrollArea):
                 p.fillRect(control, G.QColor('#20352f'))
                 p.drawText(control, C.Qt.AlignmentFlag.AlignCenter, '+ Add' if self.search_mode else '−     +')
             if self.mode != 'Stacks' or not any(r.y() > rect.y() and r.x() == rect.x() and k == key for _, r, k in self.items):
-                label = ('Oversized · ' if entry.extras.get('oversized') else '') + ('Owned · ' if entry.do_not_print else '') + entry.name
+                label = ('Oversized · ' if entry.oversized else '') + ('Owned · ' if entry.do_not_print else '') + entry.name
                 p.setPen(G.QColor(COLORS['text_secondary']))
                 p.drawText(C.QRect(rect.x(), rect.bottom()+4, rect.width(), 28), C.Qt.AlignmentFlag.AlignCenter,
                            p.fontMetrics().elidedText(label, C.Qt.TextElideMode.ElideRight, rect.width()))

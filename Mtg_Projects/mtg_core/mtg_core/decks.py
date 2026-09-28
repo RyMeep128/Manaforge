@@ -13,6 +13,7 @@ import uuid
 
 
 DECK_SCHEMA_VERSION = 1
+ENTRY_PRINT_FIELDS = ("oversized", "pre_cropped", "backside_pre_cropped", "backside_asset_id")
 
 
 def _text(value: Any) -> str | None:
@@ -69,6 +70,24 @@ class DeckEntry:
     owned: int = 0
     do_not_print: bool = False
     extras: dict[str, Any] = field(default_factory=dict)
+    # None retains the absence of legacy metadata (including crop inference).
+    oversized: bool | None = None
+    pre_cropped: bool | None = None
+    backside_pre_cropped: bool | None = None
+    backside_asset_id: str | None = None
+
+    def __post_init__(self) -> None:
+        # Older callers supplied these fields through extras. Consume a copy so
+        # the caller's dictionary is unchanged and there is one source of truth.
+        self.extras = dict(self.extras)
+        for key in ENTRY_PRINT_FIELDS:
+            legacy = self.extras.pop(key, None)
+            value = getattr(self, key)
+            if value is None:
+                value = legacy
+            if value is not None:
+                value = _text(value) if key == "backside_asset_id" else bool(value)
+            setattr(self, key, value)
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> "DeckEntry":
@@ -76,6 +95,7 @@ class DeckEntry:
             "entry_id", "name", "quantity", "section", "sort_order", "card_id",
             "oracle_id", "set_code", "collector_number", "image_asset_id",
             "category_ids", "tags", "notes", "owned", "do_not_print",
+            *ENTRY_PRINT_FIELDS,
         }
         return cls(
             entry_id=str(value.get("entry_id") or uuid.uuid4()),
@@ -93,6 +113,7 @@ class DeckEntry:
             notes=str(value.get("notes") or ""),
             owned=_quantity(value.get("owned"), 0),
             do_not_print=bool(value.get("do_not_print", False)),
+            **{key: value.get(key) for key in ENTRY_PRINT_FIELDS},
             extras={key: deepcopy(item) for key, item in value.items() if key not in known},
         )
 
@@ -110,7 +131,7 @@ class DeckEntry:
             "owned": self.owned,
             "do_not_print": self.do_not_print,
         })
-        for key in ("card_id", "oracle_id", "set_code", "collector_number", "image_asset_id"):
+        for key in ("card_id", "oracle_id", "set_code", "collector_number", "image_asset_id", *ENTRY_PRINT_FIELDS):
             value = getattr(self, key)
             if value is not None:
                 result[key] = value
@@ -238,9 +259,12 @@ class DeckDocument:
                 collector_number=_text(metadata.get("collector_number")),
                 image_asset_id=_text(raw.get("image_asset_id")),
                 do_not_print=bool(raw.get("do_not_print", False)),
+                oversized=bool(raw.get('oversized', False)),
+                pre_cropped=raw.get('pre_cropped'),
+                backside_pre_cropped=raw.get('backside_pre_cropped'),
+                backside_asset_id=raw.get('backside_asset_id'),
                 extras={"proxy_front_name": front_name,
-                        "oversized": bool(raw.get('oversized', False)),
-                        **{key: deepcopy(raw[key]) for key in ('backside_name', 'backside_asset_id', 'backside_short_edge', 'pre_cropped', 'backside_pre_cropped') if raw.get(key) is not None},
+                        **{key: deepcopy(raw[key]) for key in ('backside_name', 'backside_short_edge') if raw.get(key) is not None},
                         **({'art_override': deepcopy(project['high_res_front_overrides'][front_name])}
                            if front_name in (project.get('high_res_front_overrides') or {}) else {})},
             )
@@ -284,7 +308,11 @@ class DeckDocument:
                 if value is not None:
                     raw[key] = value
             card_entries.append(raw)
-            for key in ('backside_name', 'backside_asset_id', 'backside_short_edge', 'oversized', 'pre_cropped', 'backside_pre_cropped'):
+            for key in ENTRY_PRINT_FIELDS:
+                value = getattr(entry, key)
+                if value is not None:
+                    raw[key] = value
+            for key in ('backside_name', 'backside_short_edge'):
                 if key in entry.extras:
                     raw[key] = deepcopy(entry.extras[key])
         project["card_entries"] = card_entries
