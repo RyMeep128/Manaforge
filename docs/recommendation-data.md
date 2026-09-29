@@ -27,8 +27,8 @@ imported samples; dataset removal/editing is not yet exposed in the UI.
 
 **More > Recommendations** provides optional local Scryfall-style filtering,
 statistics/reasons, roles/themes, Inspect/preview, and explicit Add to Deck with
-Undo. It shows an unavailable-source message until an approved primary source
-provides data; it does not substitute local-only recommendations. Candidate
+Undo. It uses the cached Archidekt dataset when present and shows an unavailable-source
+message when no primary cache exists; it does not substitute local-only recommendations. Candidate
 processing is bounded at 200 and local search at 10,000 matches. Image previews
 reuse the normal card-detail behavior, which can fetch uncached images.
 
@@ -36,17 +36,18 @@ reuse the normal card-detail behavior, which can fetch uncached images.
 
 | Source | Role | Current access status |
 | --- | --- | --- |
-| Archidekt public Commander decks | Designated primary dataset | Bulk collection disabled pending an approved API/data-reuse arrangement |
+| Archidekt public Commander decks | Designated primary dataset | User-authorized one-time personal/noncommercial collection; conservative caching collector available |
 | EDHREC | Behavior and validation reference | No deck-data ingestion or runtime dependency |
 | BlueprintMTG | Optional secondary public source | Disabled; API and data-reuse terms not verified |
 | User-imported local Commander decks | Supplementary signal | Enabled only alongside public results and at least 15 relevant local decks |
 
 [Archidekt's published terms](https://archidekt.com/terms), sections 2 and 3,
 restrict copying/reuse, collection of other users' data, and automated queries.
-Public visibility is not a verified bulk-data license. Before enabling its
-collector, establish permitted endpoints, reuse/redistribution rights, rate
-limits, attribution, refresh cadence, deletion handling, and caching retention.
-This implementation does not scrape the site or contact its operators.
+The user subsequently reported permission for one personal/noncommercial run,
+with rate limiting, caching, and no redistribution of raw user deck data. That
+permission governs this run; it is not a general redistribution license or an
+automatic recurring-refresh authorization. The collector uses public endpoints
+without authentication and stops on access denial. No operator messages are sent.
 
 BlueprintMTG's main site could not be inspected successfully during this review;
 no verified public API/reuse agreement was found. Existing single-deck import
@@ -66,8 +67,9 @@ sample counts, source status, and scored Oracle IDs. `CachedSource` wraps an
 aggregate store; unavailable source adapters expose their reason without making
 network requests. `recommend()` accepts sources by injection, so adapters can
 be added/replaced without changes to the ranking engine. The editor loader also
-accepts injected sources. Approved public transport/normalization and a
-versioned downloadable aggregate distribution are not implemented yet.
+accepts injected sources. A one-time Archidekt API collector now normalizes public Commander samples into
+the same versioned store. A downloadable aggregate distribution is not implemented,
+and this permission must not be treated as redistribution permission.
 
 Relevant local decks contain every selected commander as a commander. Thus a
 partner pair needs 15 decks with that pair, not 15 unrelated Commander decks.
@@ -85,12 +87,15 @@ Refresh is manual via reimport, and source file paths/import times remain local.
 
 ## Remaining Phase 5 acceptance
 
-- Approved primary dataset access, resumable public ingestion, normalization,
-  permitted aggregate downloads, and refresh/deletion policy.
+- Public-corpus quality/performance validation, permitted aggregate distribution,
+  and a refresh/deletion policy beyond the authorized one-time run.
 - Color/date-eligible baselines, co-occurrence/archetype signals, curve/role-gap
   scoring, and wider-meta validation against documented reference behavior.
 - Source removal controls and scalable incremental aggregate updates. The
-  initial local importer rebuilds aggregates per changed deck; it is not the
-  planned high-volume public ingestion implementation.
+  local file importer rebuilds aggregates per changed deck; public ingestion
+  incrementally replaces per-deck counts in one transaction.
 - CI acceptance and public-corpus performance validation. No local tests or
   CI monitoring were performed for this increment.
+
+For pacing, run bounds, cache paths, and stop/resume controls, see the
+[one-time collection runbook](archidekt-collection.md).

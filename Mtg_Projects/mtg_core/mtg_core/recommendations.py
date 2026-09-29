@@ -37,6 +37,59 @@ class RecommendationStore:
         db.row_factory = sqlite3.Row
         return db
 
+    def ingest_members(self, deck_id, digest, source, members):
+        """Atomically replace one normalized sample and update compact counts."""
+        if not members or not any(members.values()):
+            raise ValueError("A sample requires card identities and a commander")
+        with closing(self.connect()) as db, db:
+            db.execute("BEGIN IMMEDIATE")
+            previous = db.execute(
+                "SELECT digest FROM decks WHERE deck_id=?", (deck_id,)
+            ).fetchone()
+            if previous and previous["digest"] == digest:
+                return False
+            old = dict(
+                db.execute(
+                    "SELECT oracle_id, commander FROM members WHERE deck_id=?",
+                    (deck_id,),
+                )
+            )
+            for oid in old:
+                db.execute(
+                    "UPDATE popularity SET decks=decks-1 WHERE oracle_id=?", (oid,)
+                )
+            for commander, enabled in old.items():
+                if enabled:
+                    db.executemany(
+                        "UPDATE inclusion SET decks=decks-1 WHERE commander=? AND oracle_id=?",
+                        [(commander, oid) for oid in old],
+                    )
+            db.execute("DELETE FROM popularity WHERE decks<=0")
+            db.execute("DELETE FROM inclusion WHERE decks<=0")
+            db.execute("DELETE FROM members WHERE deck_id=?", (deck_id,))
+            db.execute(
+                "INSERT OR REPLACE INTO decks VALUES (?, ?, ?, ?)",
+                (deck_id, digest, source, time.time()),
+            )
+            db.executemany(
+                "INSERT INTO members VALUES (?, ?, ?)",
+                [
+                    (deck_id, oid, int(bool(commander)))
+                    for oid, commander in members.items()
+                ],
+            )
+            db.executemany(
+                "INSERT INTO popularity VALUES (?, 1) ON CONFLICT(oracle_id) DO UPDATE SET decks=decks+1",
+                [(oid,) for oid in members],
+            )
+            for commander, enabled in members.items():
+                if enabled:
+                    db.executemany(
+                        "INSERT INTO inclusion VALUES (?, ?, 1) ON CONFLICT(commander, oracle_id) DO UPDATE SET decks=decks+1",
+                        [(commander, oid) for oid in members],
+                    )
+        return True
+
     def import_files(self, paths, *, should_cancel=lambda: False):
         """Commit each native deck and its aggregates atomically; reimports resume.
 

@@ -243,7 +243,7 @@ Implemented pending CI; see [guidance and dataset notes](recommendation-data.md)
 
 ### 16. Local recommendation dataset
 
-Archidekt is the designated primary source; public collection is blocked pending approved access/reuse terms. EDHREC is a behavioral reference, BlueprintMTG optional and unverified. Local data supplements public results only at 15 relevant decks. Source adapters, a resumable local importer, aggregate statistics, and a browser are implemented pending CI; Phase 5 is not yet complete. See [source policy and remaining acceptance](recommendation-data.md).
+Archidekt is the primary source. The user authorized one personal/noncommercial run with pacing, caching, and no raw-data redistribution; a resumable single-worker collector now populates the primary cache with incremental aggregates. EDHREC is a behavioral reference, BlueprintMTG optional and unverified. Local data supplements public results only at 15 relevant decks. Source adapters, a resumable local importer, aggregate statistics, and a browser are implemented pending CI; Phase 5 is not yet complete. See [source policy and remaining acceptance](recommendation-data.md).
 
 - [~] Choose licensed/public decklist sources and document provenance and refresh policy.
 - [~] Build a resumable ingestion and normalization pipeline.

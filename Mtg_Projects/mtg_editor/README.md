@@ -189,7 +189,7 @@ keeps its identity. Existing legacy categories count as manual assignments.
 Deck-wide analysis runs in a worker and reads the database in batches.
 
 A local statistics store and source interface now support Phase 5 development;
-the primary public corpus still requires approved access. See the guidance and
+the primary public corpus is populated by the authorized one-time Archidekt collector. See the guidance and
 recommendation-source section below for current capabilities and limits.
 
 ## Deck insights
@@ -370,6 +370,6 @@ retained. Already-open pickers can reopen Preferences to load another app's chan
 with saved dismissals and Undo/Redo. **More > Import recommendation decks**
 imports your native Commander decks as a supplementary local signal.
 **More > Recommendations** exposes dataset status and the recommendation browser.
-Archidekt is the designated primary source but collection awaits approved access;
+Archidekt is the primary source, using the authorized one-time local cache;
 local data never replaces the public dataset and requires 15 relevant decks.
 See [source policy, scoring, and remaining work](../../docs/recommendation-data.md).

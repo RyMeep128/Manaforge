@@ -154,7 +154,7 @@ class RecommendationsDialog(W.QDialog):
                 + "\n".join(
                     f"{item['name']}: {item['reason']}" for item in row["roles"]
                 )
-                + "\n\nSource files (explicit imports, no automatic refresh):\n"
+                + "\n\nCached sources (no automatic refresh):\n"
                 + self.sources
             )
 

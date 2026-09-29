@@ -1,5 +1,7 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
+archidekt-run/
+archidekt.sqlite3*
 *.py[cod]
 *$py.class
 

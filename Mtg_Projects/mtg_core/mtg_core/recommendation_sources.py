@@ -46,12 +46,20 @@ class UnavailableSource:
 
 
 def default_sources(local_store):
-    return [
-        UnavailableSource(
+    from .recommendations import RecommendationStore
+
+    public_path = local_store.path.parent / "archidekt.sqlite3"
+    primary = (
+        CachedSource("archidekt", "primary", RecommendationStore(public_path))
+        if public_path.exists()
+        else UnavailableSource(
             "archidekt",
             "primary",
-            "Primary source: awaiting approved API/data-reuse access; collection disabled.",
-        ),
+            "No cached primary dataset. Run the authorized one-time importer to populate it.",
+        )
+    )
+    return [
+        primary,
         UnavailableSource(
             "blueprintmtg",
             "secondary",
