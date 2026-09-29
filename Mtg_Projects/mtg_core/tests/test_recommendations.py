@@ -70,3 +70,19 @@ def test_bad_import_does_not_destroy_prior_aggregates(tmp_path):
     path.write_text("not json")
     assert store.import_files([path])["errors"]
     assert store.snapshot()["decks"] == 1
+
+
+def test_partner_cohort_and_cooccurrence_do_not_use_individual_samples(tmp_path):
+    store = RecommendationStore(tmp_path / "recs.sqlite3")
+    store.ingest_members("pair", "1", "fixture", {"a": 1, "b": 1, "x": 0, "seed": 0})
+    store.ingest_members("solo", "2", "fixture", {"a": 1, "y": 0, "seed": 0})
+    store.ingest_members("other", "3", "fixture", {"b": 1, "y": 0})
+    rows = {r["oracle_id"]: r for r in store.snapshot(["a", "b"])["results"]}
+    assert rows["x"]["sample"] == 1 and rows["x"]["inclusion"] == 1
+    assert rows["y"]["sample"] == 1 and rows["y"]["inclusion"] == 0
+    assert rows["y"]["score"] < 0
+    association = store.associations(["seed", "seed", "missing"], ["x", "y"])
+    assert association["x"]["seeds"] == 1
+    assert association["x"]["value"] == 0.5
+    assert association["y"]["value"] == 0.5
+    assert store.associations(["missing"], ["x"])["x"]["value"] == 0

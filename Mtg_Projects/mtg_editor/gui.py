@@ -120,6 +120,8 @@ class EditorWindow(W.QMainWindow):
         menu.addAction('Deck guidance…', self.deck_guidance)
         menu.addAction('Recommendations…', self.recommendations)
         menu.addAction('Import recommendation decks…', self.import_recommendation_decks)
+        from .recommendation_cache import manage_cache
+        menu.addAction('Recommendation cache…', lambda: manage_cache(self))
         menu.addAction('Compact table', self.show_table)
         menu.addAction('Deck insights…', self.deck_insights)
         menu.addAction('Opening-hand playtest…', self.playtest)

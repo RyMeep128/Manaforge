@@ -243,7 +243,7 @@ Implemented pending CI; see [guidance and dataset notes](recommendation-data.md)
 
 ### 16. Local recommendation dataset
 
-Archidekt is the primary source. The user authorized one personal/noncommercial run with pacing, caching, and no raw-data redistribution; a resumable single-worker collector now populates the primary cache with incremental aggregates. EDHREC is a behavioral reference, BlueprintMTG optional and unverified. Local data supplements public results only at 15 relevant decks. Source adapters, a resumable local importer, aggregate statistics, and a browser are implemented pending CI; Phase 5 is not yet complete. See [source policy and remaining acceptance](recommendation-data.md).
+Archidekt is the primary source. The user authorized one personal/noncommercial run with pacing, caching, and no raw-data redistribution; a resumable single-worker collector populates the primary cache with incremental aggregates. EDHREC is a behavioral reference, BlueprintMTG optional and unverified. Local data supplements public results only at 15 relevant decks. Phase 5 implementation is complete pending CI and representative public-corpus quality/performance acceptance: source adapters, importers, joint commander statistics, contextual scoring, browser controls, and versioned personal offline archives are present. No public aggregate distribution is configured. See [source policy, scoring, and acceptance limits](recommendation-data.md).
 
 - [~] Choose licensed/public decklist sources and document provenance and refresh policy.
 - [~] Build a resumable ingestion and normalization pipeline.
@@ -253,8 +253,8 @@ Archidekt is the primary source. The user authorized one personal/noncommercial 
 - [~] Add freshness, source, and sample-size indicators.
 
 - [~] Add a recommendation grid/list with previews, expandable reasons, immediate Add to Deck, categories/themes, and Scryfall-style filtering.
-- [ ] Combine commander usage, co-occurrence, archetypes, color identity, themes, synergy, popularity, curve needs, and role gaps through transparent scoring.
-- [ ] Download/cache versioned recommendation aggregates for offline use without requiring EDHREC during normal operation.
+- [~] Combine commander usage, co-occurrence, type-based archetypes, color identity, themes, synergy, popularity, curve needs, and role gaps through transparent, adjustable scoring.
+- [~] Download/cache versioned personal recommendation aggregates for offline use without requiring EDHREC during normal operation; explicit HTTPS transfer with checksum validation, no hosted public feed.
 
 **Exit gate:** Recommendations are local, fast, explainable, reproducible, and clearly sourced.
 

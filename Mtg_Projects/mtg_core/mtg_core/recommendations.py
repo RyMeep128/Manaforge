@@ -194,8 +194,8 @@ class RecommendationStore:
     def snapshot(self, commanders=(), *, exclude=(), limit=200):
         """Read compact aggregates only; synergy is inclusion minus baseline.
 
-        Partner commanders use their best individual signal, not a fabricated
-        joint sample. Scores and sample sizes are exposed for inspection.
+        Commander pairs use their exact joint cohort. Scores and sample sizes
+        are exposed for inspection; baseline is the full imported corpus.
         """
         with closing(self.connect()) as db:
             db.execute("BEGIN")
@@ -221,32 +221,40 @@ class RecommendationStore:
                 for row in db.execute("SELECT * FROM popularity")
             }
             signals = {}
-            for commander in sorted(set(commanders)):
-                rows = list(
-                    db.execute(
+            if commander_ids and relevant:
+                cohort = f"""SELECT deck_id FROM members WHERE commander=1
+                    AND oracle_id IN ({placeholders}) GROUP BY deck_id HAVING count(*)=?"""
+                if len(commander_ids) == 1:
+                    rows = db.execute(
                         "SELECT oracle_id, decks FROM inclusion WHERE commander=?",
-                        (commander,),
+                        commander_ids,
                     )
-                )
-                sample = next(
-                    (row["decks"] for row in rows if row["oracle_id"] == commander), 0
-                )
-                if not sample:
-                    continue
+                else:
+                    rows = db.execute(
+                        f"""SELECT oracle_id, count(*) AS decks FROM members
+                        WHERE deck_id IN ({cohort}) GROUP BY oracle_id""",
+                        (*commander_ids, len(commander_ids)),
+                    )
                 for row in rows:
-                    rate = row["decks"] / sample
-                    prior = signals.get(row["oracle_id"])
-                    if prior is None or rate > prior["inclusion"]:
-                        signals[row["oracle_id"]] = dict(
-                            inclusion=rate, sample=sample, commander=commander
-                        )
+                    signals[row["oracle_id"]] = dict(
+                        inclusion=row["decks"] / relevant,
+                        sample=relevant,
+                        commander=" + ".join(commander_ids),
+                    )
             excluded = set(exclude)
             results = []
             for oid, count in populations.items():
                 if oid in excluded:
                     continue
                 baseline = count / total if total else 0
-                signal = signals.get(oid, dict(inclusion=0, sample=0, commander=None))
+                signal = signals.get(
+                    oid,
+                    dict(
+                        inclusion=0,
+                        sample=relevant,
+                        commander=" + ".join(commander_ids) or None,
+                    ),
+                )
                 synergy = signal["inclusion"] - baseline if signal["sample"] else 0
                 score = (
                     signal["inclusion"] + 0.5 * synergy + 0.25 * baseline
@@ -272,3 +280,46 @@ class RecommendationStore:
                 results=results[: max(0, limit)],
                 formula="inclusion + 0.5 × (inclusion - baseline) + 0.25 × baseline; baseline alone without commander samples",
             )
+
+    def associations(self, seeds, candidates):
+        """Bounded indexed co-occurrence aggregates, computed in the background.
+
+        Return conditional inclusion with each known seed, never raw deck lists.
+        """
+        seeds = sorted(set(seeds))[:200]
+        candidates = sorted(set(candidates))[:2000]
+        if not seeds or not candidates:
+            return {}
+        with closing(self.connect()) as db:
+            db.execute("BEGIN")
+            seed_marks = ",".join("?" for _ in seeds)
+            candidate_marks = ",".join("?" for _ in candidates)
+            sizes = dict(
+                db.execute(
+                    f"SELECT oracle_id, decks FROM popularity WHERE oracle_id IN ({seed_marks})",
+                    seeds,
+                )
+            )
+            rows = db.execute(
+                f"""SELECT s.oracle_id AS seed, c.oracle_id AS candidate, count(*) AS decks
+                FROM members s JOIN members c ON c.deck_id=s.deck_id
+                WHERE s.oracle_id IN ({seed_marks}) AND c.oracle_id IN ({candidate_marks})
+                GROUP BY s.oracle_id, c.oracle_id""",
+                (*seeds, *candidates),
+            )
+            result = {
+                oid: dict(value=0.0, seeds=len(sizes), matches=[]) for oid in candidates
+            }
+            for row in rows:
+                sample = sizes[row["seed"]]
+                rate = row["decks"] / sample
+                result[row["candidate"]]["value"] += rate / len(sizes)
+                result[row["candidate"]]["matches"].append(
+                    dict(
+                        oracle_id=row["seed"],
+                        count=row["decks"],
+                        sample=sample,
+                        inclusion=rate,
+                    )
+                )
+            return result

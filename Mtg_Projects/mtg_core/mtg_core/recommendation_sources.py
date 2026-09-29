@@ -1,6 +1,7 @@
 """Pluggable aggregate sources; public recommendations lead, local data supplements."""
 
 from dataclasses import dataclass
+import json
 from typing import Protocol
 
 
@@ -26,6 +27,9 @@ class CachedSource:
             status="cached",
         )
 
+    def associations(self, seeds, candidates):
+        return self.store.associations(seeds, candidates)
+
 
 @dataclass
 class UnavailableSource:
@@ -47,17 +51,35 @@ class UnavailableSource:
 
 def default_sources(local_store):
     from .recommendations import RecommendationStore
+    from .recommendation_cache import AggregateSource
 
-    public_path = local_store.path.parent / "archidekt.sqlite3"
+    root = local_store.path.parent
+    settings_path = root / "source-settings.json"
+    mode = (
+        json.loads(settings_path.read_text(encoding="utf-8")).get("primary", "live")
+        if settings_path.exists()
+        else "live"
+    )
+    public_path = root / "archidekt.sqlite3"
     primary = (
         CachedSource("archidekt", "primary", RecommendationStore(public_path))
-        if public_path.exists()
+        if mode == "live" and public_path.exists()
         else UnavailableSource(
             "archidekt",
             "primary",
             "No cached primary dataset. Run the authorized one-time importer to populate it.",
         )
     )
+    if mode == "portable":
+        primary = AggregateSource(root / "archidekt.aggregate.json.gz")
+    elif mode == "disabled":
+        primary = UnavailableSource(
+            "archidekt",
+            "primary",
+            "Primary recommendations disabled in cache settings.",
+        )
+    elif mode != "live":
+        raise ValueError("Unknown recommendation source mode")
     return [
         primary,
         UnavailableSource(
@@ -69,7 +91,7 @@ def default_sources(local_store):
     ]
 
 
-def recommend(sources, commanders=(), *, exclude=(), limit=200):
+def recommend(sources, commanders=(), *, exclude=(), limit=200, seeds=()):
     """Use a primary dataset; never silently substitute local-only suggestions.
 
     Local relevance requires all selected commanders in at least 15 distinct
@@ -103,6 +125,17 @@ def recommend(sources, commanders=(), *, exclude=(), limit=200):
             row["score"] = 0.8 * row["primary_score"] + 0.2 * local_score
         rows.append(row)
     rows.sort(key=lambda row: (-row["score"], row["oracle_id"]))
+    rows = rows[: max(0, limit)]
+    primary_source = next(
+        (source for source, _ in snapshots if source.role == "primary"), None
+    )
+    associations = (
+        primary_source.associations(seeds, [row["oracle_id"] for row in rows])
+        if seeds and hasattr(primary_source, "associations")
+        else {}
+    )
+    for row in rows:
+        row["association"] = associations.get(row["oracle_id"], {})
     return dict(
         primary,
         results=rows[:limit],
