@@ -135,24 +135,12 @@ class RecommendationPanel(W.QWidget):
         self.timer.setInterval(750)
         self.timer.timeout.connect(self.refresh)
         layout = W.QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        line = W.QFrame()
-        line.setFrameShape(W.QFrame.Shape.HLine)
-        layout.addWidget(line)
+        layout.setContentsMargins(0, 8, 0, 0)
         header = W.QHBoxLayout()
-        self.toggle = W.QToolButton()
-        self.toggle.setText("Recommendations")
-        self.toggle.setToolButtonStyle(C.Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        self.toggle.setCheckable(True)
-        self.toggle.setChecked(True)
-        self.toggle.setArrowType(C.Qt.ArrowType.DownArrow)
-        header.addWidget(self.toggle, 1)
         refresh = W.QToolButton()
         refresh.setText("Refresh")
         refresh.setToolTip("Refresh recommendations from local caches")
         refresh.clicked.connect(self.request_refresh)
-        header.addWidget(refresh)
-        layout.addLayout(header)
         self.content = W.QWidget()
         body = W.QVBoxLayout(self.content)
         body.setContentsMargins(0, 0, 0, 0)
@@ -160,7 +148,9 @@ class RecommendationPanel(W.QWidget):
         self.type_filter.setAccessibleName("Recommendation card type")
         self.type_filter.addItems(["All Card Types", *CARD_TYPES])
         self.type_filter.currentTextChanged.connect(self.filter_rows)
-        body.addWidget(self.type_filter)
+        header.addWidget(self.type_filter, 1)
+        header.addWidget(refresh)
+        body.addLayout(header)
         self.status = W.QLabel("Recommendations load from your local dataset.")
         self.status.setWordWrap(True)
         body.addWidget(self.status)
@@ -169,23 +159,9 @@ class RecommendationPanel(W.QWidget):
         self.canvas.whyRequested.connect(self.why)
         body.addWidget(self.canvas, 1)
         layout.addWidget(self.content, 1)
-        self.toggle.toggled.connect(self.expand)
-
-    def expand(self, expanded):
-        self.content.setVisible(expanded)
-        self.setMaximumHeight(
-            16777215 if expanded else self.toggle.sizeHint().height() + 20
-        )
-        self.toggle.setArrowType(
-            C.Qt.ArrowType.DownArrow if expanded else C.Qt.ArrowType.RightArrow
-        )
-        if expanded:
-            self.deck_changed()
-        else:
-            self.suspend()
 
     def active(self):
-        return self.isVisible() and self.toggle.isChecked() and not self.editor.closing
+        return self.isVisible() and not self.editor.closing
 
     def deck_changed(self):
         key = context_key(self.editor.document)

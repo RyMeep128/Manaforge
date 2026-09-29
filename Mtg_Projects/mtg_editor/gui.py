@@ -203,6 +203,12 @@ class EditorWindow(W.QMainWindow):
         search_header.addWidget(label, 1)
         self.search_close = self.button(search_header, '×', self.toggle_search)
         search_layout.addLayout(search_header)
+        self.add_card_tabs = W.QTabWidget()
+        search_layout.addWidget(self.add_card_tabs, 1)
+        self.syntax_search_page = W.QWidget()
+        search_layout = W.QVBoxLayout(self.syntax_search_page)
+        search_layout.setContentsMargins(0, 8, 0, 0)
+        self.add_card_tabs.addTab(self.syntax_search_page, 'Syntax Search')
         self.query = W.QLineEdit()
         self.query.setPlaceholderText('Local search: o:flying c=g')
         self.query.textChanged.connect(self.search_changed)
@@ -226,7 +232,8 @@ class EditorWindow(W.QMainWindow):
         search_layout.addWidget(self.results, 1)
         from .recommendation_panel import RecommendationPanel
         self.recommendation_panel = RecommendationPanel(self)
-        search_layout.addWidget(self.recommendation_panel, 2)
+        self.add_card_tabs.addTab(self.recommendation_panel, 'Recommendations')
+        self.add_card_tabs.currentChanged.connect(self.add_card_tab_changed)
         self.splitter.addWidget(self.search_panel)
         self.grid = CardCanvas(self.document, self.thumbnails)
         self.grid.selectionChanged.connect(self.selection_changed)
@@ -366,8 +373,17 @@ class EditorWindow(W.QMainWindow):
 
     def open_search(self):
         self.search_panel.show()
+        self.add_card_tabs.setCurrentIndex(0)
         self.splitter.setSizes([self.document.editor_preferences.get('panel_width', 330), max(400, self.width()-330)])
         self.query.setFocus()
+
+    def add_card_tab_changed(self, index):
+        if index == 0:
+            self.query.setFocus()
+        else:
+            self.results.hover_timer.stop()
+            self.results.preview.hide()
+            self.thumbnails.set_visible(id(self.results), [])
 
     def toggle_search(self):
         if self.search_panel.isHidden():

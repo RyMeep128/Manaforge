@@ -2,9 +2,9 @@
 
 ## Available workflow
 
-**Add Cards > Recommendations** is a visual section beneath the existing search
-controls and results. Search remains independent. The collapsible recommendation
-area shows a responsive card grid (about two columns at the normal sidebar width)
+**Add Cards** has separate **Syntax Search** and **Recommendations** tabs.
+The existing search controls and results remain together in Syntax Search.
+The Recommendations tab shows a responsive card grid (about two columns at the normal sidebar width)
 with name, mainboard-plus-commander quantity across printings, **+ Add**, and a
 compact **Why?** popover containing reasons, provenance, and dismissal. Its type
 filter matches normalized type tokens, including multi-type cards and card faces;
@@ -22,7 +22,7 @@ Refresh reads local recommendation caches; it does not start public collection.
 The grid reuses the shared bounded thumbnail cache and background image reader
 (at most 300 × 420 decoded pixels), requesting only visible/nearby cards. It does
 not load full-resolution artwork into the browser. Missing-image behavior follows
-the existing thumbnail cache policy. Hiding/collapsing releases queued thumbnail
+the existing thumbnail cache policy. Hiding the tab releases queued thumbnail
 interest. Advanced weighting and dismissal restoration remain available through
 **More > Recommendations**.
 
