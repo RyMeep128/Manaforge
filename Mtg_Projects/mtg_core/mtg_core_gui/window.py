@@ -1067,6 +1067,8 @@ class CoreAdminMainWindow(QMainWindow):
     def __init__(self, admin_service: CardAdminService | None = None) -> None:
         super().__init__()
         self.admin_service = admin_service or CardAdminService()
+        preferences = self.menuBar().addMenu("Preferences")
+        preferences.addAction("Artwork preferences?", self.artwork_preferences)
         self.setWindowTitle("MTG Core Database Admin")
         self.resize(1360, 820)
 
@@ -1090,6 +1092,10 @@ class CoreAdminMainWindow(QMainWindow):
         self.setCentralWidget(tabs)
         self._set_status("Ready")
         self._load_current_tab(tabs.currentIndex())
+
+    def artwork_preferences(self):
+        from mtg_ui.artwork_preferences import edit_artwork_preferences
+        edit_artwork_preferences(self, self.admin_service.card_service)
 
     def _set_status(self, message: str) -> None:
         self.statusBar().showMessage(message, 6000)

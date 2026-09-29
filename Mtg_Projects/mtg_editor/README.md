@@ -354,3 +354,11 @@ Click a total to filter the deck, then optionally narrow it with the text filter
 Clear the readiness filter with its labelled × button. Editing the deck clears
 the snapshot filter; rerun the scan after edits or external asset changes.
 This scan does not replace the printer's final placement and output checks.
+
+### Shared artwork preferences
+
+Use **More > Artwork preferences** to edit the same artwork rules used by Core
+(**Preferences > Artwork preferences**) and the print picker (**Preferences**).
+The dialog reloads saved rules whenever opened. **Save** updates global rules;
+**Cancel** leaves them unchanged. Existing exact printing/artwork selections are
+retained. Already-open pickers can reopen Preferences to load another app's changes.

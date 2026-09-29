@@ -223,10 +223,10 @@ and ambiguous rules are not presented as verified. Phase 3 starts with filters a
 ### 14. Shared preference ownership
 
 - [ ] Put global printing/art preferences in Core with a versioned schema.
-- [ ] Expose the same preference editor in Core, Deck Editor, and Proxy Printer.
+- [~] Share the artwork preference editor across Core (**Preferences > Artwork preferences**), Deck Editor (**More > Artwork preferences**), and Proxy's artwork picker (**Preferences**). The standalone `mtg_ui` dialog reloads shared rules on open and saves only on acceptance; printing preference editing remains.
 - [ ] Define project overrides and a reset-to-global action.
 - [ ] Notify open apps when shared preferences change or refresh on focus safely.
-- [ ] Add integration tests proving the three apps resolve the same print.
+- [~] Added integration coverage for shared artwork-dialog entry points, cross-service print selection, reload, Cancel, and save errors; acceptance awaits CI. Global printing preference resolution remains.
 
 ## Phase 5 — Intelligence after the editor is solid
 

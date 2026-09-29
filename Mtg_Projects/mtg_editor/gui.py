@@ -116,6 +116,7 @@ class EditorWindow(W.QMainWindow):
         more.setText('More')
         more.setPopupMode(W.QToolButton.ToolButtonPopupMode.InstantPopup)
         menu = W.QMenu(more)
+        menu.addAction('Artwork preferences?', self.artwork_preferences)
         menu.addAction('Compact table', self.show_table)
         menu.addAction('Deck insights…', self.deck_insights)
         menu.addAction('Opening-hand playtest…', self.playtest)
@@ -346,6 +347,10 @@ class EditorWindow(W.QMainWindow):
         button.clicked.connect(lambda checked=False: callback())
         layout.addWidget(button)
         return button
+
+    def artwork_preferences(self):
+        from mtg_ui.artwork_preferences import edit_artwork_preferences
+        edit_artwork_preferences(self, self.service)
 
     def focus_filter(self):
         self.filter.setFocus()
