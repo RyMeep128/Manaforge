@@ -1,5 +1,7 @@
 # Manaforge — Long-Term Product Epic
 
+The [Manaforge Play epic](manaforge-play-epic.md) defines the detailed gameplay and playgroup scope: versioned engine adapters, adaptive 2-5-player tables, mixed human/AI seats, borrowing, local history, custom brackets, optional synchronization, and preservation. The [roadmap](roadmap.md) owns delivery order; the development phases below are product-level milestones.
+
 ## Product Vision
 
 Manaforge should become a **local-first, open-source Magic: The Gathering workstation** built primarily for personal use and private play with friends.
@@ -421,7 +423,7 @@ This separation is essential for:
 
 Manaforge should **not immediately attempt to implement all Magic rules from scratch**.
 
-Before building the automated game engine, investigate mature open-source engines including:
+XMage is the preferred initial authoritative engine, subject to feasibility and licensing review. Investigate mature open-source engines including:
 
 * Forge
 * XMage
@@ -435,7 +437,7 @@ Determine whether Manaforge can:
 * receive authoritative game events/state
 * preserve Manaforge's own UI
 
-The goal is to reuse mature rules/card implementations while keeping Manaforge's application experience independent.
+The goal is to reuse mature rules/card implementations while keeping Manaforge's application experience independent. Own a versioned game protocol and adapter, keep XMage classes out of application models, pin compatible engine revisions, and verify upgrades without changing the gameplay UI. See the [Play epic](manaforge-play-epic.md) for acceptance gates.
 
 License compatibility must be evaluated before incorporating code.
 
@@ -445,7 +447,7 @@ Studying architecture is always acceptable; directly importing code requires lic
 
 # 9. AI Opponent
 
-Manaforge should eventually support local AI play.
+Manaforge should support mixed human/AI seats through the same legal-action protocol, initially adapting usable XMage AI. Seat controllers may be local humans, remote humans, or engine AI; deck ownership and match piloting remain separate.
 
 The goal is **useful deck testing**, not world-class competitive AI.
 
@@ -502,7 +504,7 @@ Friend Connects
 Play
 ```
 
-Peer-to-peer networking should be preferred where practical.
+The host owns authoritative rules state and sends visibility-filtered views; clients never receive hidden opponent information. Keep networking transport replaceable and prefer peer-to-peer where practical.
 
 A lightweight rendezvous/signaling service may eventually be necessary for NAT traversal, but the actual product should avoid unnecessary central infrastructure.
 
@@ -519,7 +521,7 @@ Initial multiplayer goals:
 
 Later:
 
-* 3–4 player Commander
+* adaptive 2-5-player Commander with mixed human/AI seats
 * spectators if useful
 * saved/recoverable matches
 * optional LAN play
@@ -527,7 +529,7 @@ Later:
 Do **not** prioritize:
 
 * public matchmaking
-* rankings
+* public/global rankings
 * ladders
 * user profiles
 * social feeds
@@ -782,7 +784,7 @@ Integrate:
 * triggers
 * visual feedback
 
-## Phase 6 — AI
+## Phase 6 — Mixed Human/AI Seats
 
 Allow:
 
@@ -791,7 +793,7 @@ Deck A: Human
 Deck B: AI
 ```
 
-Focus first on useful testing rather than AI strength.
+This is the first seat configuration, not a separate human-versus-AI mode. Allow mixed controllers and **Add Computer** as multiplayer support arrives. Focus first on useful testing rather than AI strength.
 
 ## Phase 7 — Private 1v1
 
@@ -809,13 +811,19 @@ Implement:
 
 Extend networking and battlefield UX to support:
 
-* 3–4 players
+* 2-5 players with adaptive Overview, Compare, Focus, and Inspect contexts
 * commander damage
 * shared combat state
 * multiplayer priority
 * larger battlefield layouts
 
-## Phase 9 — Polish
+## Phase 9 — Playgroups & History
+
+Add local playgroups, ownership/piloting, sharing and borrowing, preconstructed deck libraries, configurable local brackets, and automatic digital match history/statistics. Preserve historical rank/bracket snapshots. External Playgroup.gg synchronization is optional and capability-dependent; local data remains canonical.
+
+Preserve known-good engine/adapter installations and cached data so previously supported play survives external service loss. See the [Play epic](manaforge-play-epic.md) for detailed scope.
+
+## Phase 10 — Polish
 
 Only after the complete loop works:
 
