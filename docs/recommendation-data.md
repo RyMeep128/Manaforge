@@ -2,6 +2,30 @@
 
 ## Available workflow
 
+**Add Cards > Recommendations** is a visual section beneath the existing search
+controls and results. Search remains independent. The collapsible recommendation
+area shows a responsive card grid (about two columns at the normal sidebar width)
+with name, mainboard-plus-commander quantity across printings, **+ Add**, and a
+compact **Why?** popover containing reasons, provenance, and dismissal. Its type
+filter matches normalized type tokens, including multi-type cards and card faces;
+it preserves recommendation rank within each filter.
+
+The sidebar shares the existing recommendation loader, contextual ranking,
+preferences, and dismissals. Existing deck cards can remain visible so quantities
+update immediately. A candidate does not count as evidence of its own
+co-occurrence. Search and recommendations call the same add-card command, keeping
+manual categories, dirty state, autosave, and Undo/Redo behavior consistent.
+
+Loading and ranking run in a separate worker without disabling search. Changes
+to the deck debounce a refresh; results from an older deck/context are discarded.
+Refresh reads local recommendation caches; it does not start public collection.
+The grid reuses the shared bounded thumbnail cache and background image reader
+(at most 300 × 420 decoded pixels), requesting only visible/nearby cards. It does
+not load full-resolution artwork into the browser. Missing-image behavior follows
+the existing thumbnail cache policy. Hiding/collapsing releases queued thumbnail
+interest. Advanced weighting and dismissal restoration remain available through
+**More > Recommendations**.
+
 **More > Deck guidance** loads local Oracle Tag/text evidence in a worker and
 shows quantity-weighted lands, ramp, draw, and interaction. Manual roles,
 including explicitly empty roles, override inference. Owned cards remain in

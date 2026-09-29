@@ -86,3 +86,5 @@ def test_partner_cohort_and_cooccurrence_do_not_use_individual_samples(tmp_path)
     assert association["x"]["value"] == 0.5
     assert association["y"]["value"] == 0.5
     assert store.associations(["missing"], ["x"])["x"]["value"] == 0
+    assert store.associations(["seed"], ["seed"])["seed"]["value"] == 0
+    assert store.associations(["seed"], ["seed"])["seed"]["seeds"] == 0

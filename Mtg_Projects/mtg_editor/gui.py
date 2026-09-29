@@ -224,6 +224,9 @@ class EditorWindow(W.QMainWindow):
         self.results.quantityRequested.connect(self.add_result)
         self.results.menuRequested.connect(self.search_menu)
         search_layout.addWidget(self.results, 1)
+        from .recommendation_panel import RecommendationPanel
+        self.recommendation_panel = RecommendationPanel(self)
+        search_layout.addWidget(self.recommendation_panel, 2)
         self.splitter.addWidget(self.search_panel)
         self.grid = CardCanvas(self.document, self.thumbnails)
         self.grid.selectionChanged.connect(self.selection_changed)
@@ -484,6 +487,7 @@ class EditorWindow(W.QMainWindow):
             self.changed()
 
     def changed(self):
+        self.recommendation_panel.deck_changed()
         if self.readiness_snapshot is not None and self.document.to_dict() != self.readiness_snapshot:
             self.grid.filtered_ids = None
             self.readiness_snapshot = None
@@ -550,12 +554,17 @@ class EditorWindow(W.QMainWindow):
         result = next((e for e in self.search_document.deck.entries if e.entry_id == entry_id), None)
         if result is None:
             return
+        self.add_card(result)
+
+    def add_card(self, result):
+        """Shared Add Card command for search and recommendation discovery."""
         def action(document):
             existing = next((e for e in document.deck.entries if e.card_id == result.card_id and e.section == DeckSection.MAINBOARD and not e.art_override), None)
             if existing:
                 existing.quantity += 1
             else:
                 entry = deepcopy(result)
+                entry.quantity = 1
                 entry.entry_id = str(uuid.uuid4())
                 entry.sort_order = max((e.sort_order for e in document.deck.entries), default=-1)+1
                 document.deck.entries.append(entry)
@@ -1118,7 +1127,8 @@ class EditorWindow(W.QMainWindow):
     def closeEvent(self, event):
         self.closing = True
         self.search_controller.shutdown()
-        if self.worker is not None or self.task is not None or self.thumbnails.worker is not None:
+        self.recommendation_panel.suspend()
+        if self.worker is not None or self.task is not None or self.thumbnails.worker is not None or self.recommendation_panel.worker is not None:
             self.thumbnails.stopping = True
             self.thumbnails.pending.clear()
             self.statusBar().showMessage('Finishing background work before closing…')
@@ -1129,6 +1139,7 @@ class EditorWindow(W.QMainWindow):
             self.thumbnails.stopping = False
             self.closing = False
             self.search_controller.resume()
+            self.recommendation_panel.deck_changed()
             event.ignore()
             return
         self.autosave.stop()
@@ -1136,6 +1147,7 @@ class EditorWindow(W.QMainWindow):
         self.thumbnails.stop()
         self.grid.preview.close()
         self.results.preview.close()
+        self.recommendation_panel.canvas.preview.close()
         super().closeEvent(event)
 
 

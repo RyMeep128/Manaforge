@@ -311,9 +311,12 @@ class RecommendationStore:
                 oid: dict(value=0.0, seeds=len(sizes), matches=[]) for oid in candidates
             }
             for row in rows:
+                if row["seed"] == row["candidate"]:
+                    continue
                 sample = sizes[row["seed"]]
                 rate = row["decks"] / sample
-                result[row["candidate"]]["value"] += rate / len(sizes)
+                denominator = len(sizes) - int(row["candidate"] in sizes)
+                result[row["candidate"]]["value"] += rate / denominator
                 result[row["candidate"]]["matches"].append(
                     dict(
                         oracle_id=row["seed"],
@@ -322,4 +325,6 @@ class RecommendationStore:
                         inclusion=rate,
                     )
                 )
+            for oid, association in result.items():
+                association["seeds"] -= int(oid in sizes)
             return result

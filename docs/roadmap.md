@@ -253,6 +253,7 @@ Archidekt is the primary source. The user authorized one personal/noncommercial 
 - [~] Add freshness, source, and sample-size indicators.
 
 - [~] Add a recommendation grid/list with previews, expandable reasons, immediate Add to Deck, categories/themes, and Scryfall-style filtering.
+  - Add Cards now includes a collapsible visual recommendation grid below the unchanged search UI, with card-type browsing, quantity badges, compact explanations, shared add commands, and lazy cached thumbnails; Qt regression acceptance pending CI.
 - [~] Combine commander usage, co-occurrence, type-based archetypes, color identity, themes, synergy, popularity, curve needs, and role gaps through transparent, adjustable scoring.
 - [~] Download/cache versioned personal recommendation aggregates for offline use without requiring EDHREC during normal operation; explicit HTTPS transfer with checksum validation, no hosted public feed.
 

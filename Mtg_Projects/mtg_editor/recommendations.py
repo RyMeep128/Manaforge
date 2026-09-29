@@ -11,7 +11,9 @@ from .organization import card_facts
 from mtg_core.recommendation_scoring import context, score, settings
 
 
-def load_recommendations(service, document, store, query="", *, sources=None):
+def load_recommendations(
+    service, document, store, query="", *, sources=None, include_present=False
+):
     commanders = [
         e
         for e in document.deck.entries
@@ -24,7 +26,7 @@ def load_recommendations(service, document, store, query="", *, sources=None):
     snapshot = recommend(
         default_sources(store) if sources is None else sources,
         commander_ids,
-        exclude=[e.oracle_id for e in document.deck.entries],
+        exclude=[] if include_present else [e.oracle_id for e in document.deck.entries],
         limit=2000,
         seeds=[
             e.oracle_id
@@ -90,6 +92,39 @@ def load_recommendations(service, document, store, query="", *, sources=None):
         deck_context=context(document, current_proposals, records),
     )
     return snapshot
+
+
+def rank_recommendations(rows, deck_context, preferences, query=""):
+    """Shared presentation ranking; preserve source scores and saved dismissals."""
+    ranked = []
+    for row in rows:
+        if row["oracle_id"] in preferences["dismissed"]:
+            continue
+        text = row["entry"].name + " " + " ".join(item["name"] for item in row["roles"])
+        if query.casefold().strip() not in text.casefold():
+            continue
+        raw = dict(
+            row,
+            statistical_score=row["score"]
+            if preferences["local_enabled"]
+            else row["primary_score"],
+        )
+        ranked.append(score(raw, deck_context, preferences["weights"]))
+    return sorted(ranked, key=lambda row: (-row["score"], row["oracle_id"]))
+
+
+def recommendation_reason(row):
+    return "\n".join(
+        [
+            f"Commander inclusion: {row['inclusion']:.1%} ({row['sample']} decks)",
+            f"Global popularity: {row['baseline']:.1%}; synergy: {row['synergy']:+.1%}",
+            "Weighted components: "
+            + ", ".join(f"{k} {v:+.3f}" for k, v in row["contributions"].items()),
+            *row["context_reasons"],
+            *(f"{item['name']}: {item['reason']}" for item in row["roles"]),
+            "Heuristic guidance, not legality advice.",
+        ]
+    )
 
 
 class RecommendationsDialog(W.QDialog):
@@ -191,26 +226,9 @@ class RecommendationsDialog(W.QDialog):
             key: spin.value() for key, spin in self.weights.items()
         }
         self.preferences["local_enabled"] = self.use_local.isChecked()
-        query = self.filter.text().casefold().strip()
-        rows = []
-        for row in self.all_rows:
-            if row["oracle_id"] in self.preferences["dismissed"]:
-                continue
-            text = (
-                row["entry"].name
-                + " "
-                + " ".join(item["name"] for item in row["roles"])
-            )
-            if query not in text.casefold():
-                continue
-            raw = dict(
-                row,
-                statistical_score=row["score"]
-                if self.use_local.isChecked()
-                else row["primary_score"],
-            )
-            rows.append(score(raw, self.deck_context, self.preferences["weights"]))
-        self.rows = sorted(rows, key=lambda row: (-row["score"], row["oracle_id"]))
+        self.rows = rank_recommendations(
+            self.all_rows, self.deck_context, self.preferences, self.filter.text()
+        )
         self.list.clear()
         self.list.addItems(
             [f"{row['entry'].name} — {row['score']:.3f}" for row in self.rows]
