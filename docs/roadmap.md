@@ -232,23 +232,27 @@ and ambiguous rules are not presented as verified. Phase 3 starts with filters a
 
 ### 15. Deterministic guidance
 
-- [ ] Detect likely shortages in lands, ramp, draw, and interaction using configurable rules.
-- [ ] Use local Oracle Tags plus user overrides for functional counts.
-- [ ] Explain every suggestion and allow dismissal/override.
-- [ ] Avoid presenting heuristic categories as rules facts.
+Implemented pending CI; see [guidance and dataset notes](recommendation-data.md).
 
-- [ ] Suggest deck-specific themes only when a meaningful, configurable threshold is met; keep final category assignments under user control.
+- [~] Detect likely shortages in lands, ramp, draw, and interaction using configurable rules.
+- [~] Use local Oracle Tags plus user overrides for functional counts.
+- [~] Explain every suggestion and allow dismissal/override.
+- [~] Avoid presenting heuristic categories as rules facts.
+
+- [~] Suggest deck-specific themes only when a meaningful, configurable threshold is met; keep final category assignments under user control.
 
 ### 16. Local recommendation dataset
 
-- [ ] Choose licensed/public decklist sources and document provenance and refresh policy.
-- [ ] Build a resumable ingestion and normalization pipeline.
-- [ ] Precompute commander inclusion rates and baseline card popularity.
-- [ ] Calculate transparent synergy scores against baseline popularity.
-- [ ] Store compact indexed aggregates rather than loading raw decks during editor use.
-- [ ] Add freshness, source, and sample-size indicators.
+Archidekt is the designated primary source; public collection is blocked pending approved access/reuse terms. EDHREC is a behavioral reference, BlueprintMTG optional and unverified. Local data supplements public results only at 15 relevant decks. Source adapters, a resumable local importer, aggregate statistics, and a browser are implemented pending CI; Phase 5 is not yet complete. See [source policy and remaining acceptance](recommendation-data.md).
 
-- [ ] Add a recommendation grid/list with previews, expandable reasons, immediate Add to Deck, categories/themes, and Scryfall-style filtering.
+- [~] Choose licensed/public decklist sources and document provenance and refresh policy.
+- [~] Build a resumable ingestion and normalization pipeline.
+- [~] Precompute commander inclusion rates and baseline card popularity.
+- [~] Calculate transparent synergy scores against baseline popularity.
+- [~] Store compact indexed aggregates rather than loading raw decks during editor use.
+- [~] Add freshness, source, and sample-size indicators.
+
+- [~] Add a recommendation grid/list with previews, expandable reasons, immediate Add to Deck, categories/themes, and Scryfall-style filtering.
 - [ ] Combine commander usage, co-occurrence, archetypes, color identity, themes, synergy, popularity, curve needs, and role gaps through transparent scoring.
 - [ ] Download/cache versioned recommendation aggregates for offline use without requiring EDHREC during normal operation.
 

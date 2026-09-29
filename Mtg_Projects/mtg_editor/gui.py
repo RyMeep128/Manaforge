@@ -117,6 +117,9 @@ class EditorWindow(W.QMainWindow):
         more.setPopupMode(W.QToolButton.ToolButtonPopupMode.InstantPopup)
         menu = W.QMenu(more)
         menu.addAction('Artwork preferences?', self.artwork_preferences)
+        menu.addAction('Deck guidance…', self.deck_guidance)
+        menu.addAction('Recommendations…', self.recommendations)
+        menu.addAction('Import recommendation decks…', self.import_recommendation_decks)
         menu.addAction('Compact table', self.show_table)
         menu.addAction('Deck insights…', self.deck_insights)
         menu.addAction('Opening-hand playtest…', self.playtest)
@@ -680,6 +683,60 @@ class EditorWindow(W.QMainWindow):
             self.edit(apply)
             self.document.editor_preferences['playtest'] = dialog.settings()
             self.changed()
+
+    def recommendation_store(self):
+        from mtg_core.paths import core_data_root
+        from mtg_core.recommendations import RecommendationStore
+        return RecommendationStore(core_data_root() / 'recommendations' / 'local.sqlite3')
+
+    def import_recommendation_decks(self):
+        from threading import Event
+        paths, _ = W.QFileDialog.getOpenFileNames(self, 'Import your Commander decks',
+                                                 str(self.root), 'Manaforge decks (*.json)')
+        if not paths:
+            return
+        cancelled = Event()
+        progress = W.QProgressDialog('Importing local recommendation decks…', 'Cancel', 0, 0, self)
+        progress.canceled.connect(cancelled.set)
+        self.task_runner.failed.connect(progress.close)
+        self.task_runner.failed.connect(progress.deleteLater)
+        progress.show()
+        def complete(result):
+            progress.close()
+            progress.deleteLater()
+            W.QMessageBox.information(self, 'Recommendation import',
+                f"Imported {result['imported']}; unchanged {result['unchanged']}; "
+                f"entries missing Oracle identity {result['missing_identities']}.\n"
+                f"Cancelled: {result['cancelled']}. Reimport the same files to resume.\n" +
+                '\n'.join(result['errors']))
+        self.run_task(lambda: self.recommendation_store().import_files(paths, should_cancel=cancelled.is_set), complete)
+
+    def recommendations(self):
+        from .recommendations import RecommendationsDialog, load_recommendations
+        query, accepted = W.QInputDialog.getText(self, 'Recommendations',
+            'Optional local Scryfall-style filter (for example t:creature c:g):')
+        if not accepted:
+            return
+        snapshot = DeckDocument.from_dict(self.document.to_dict())
+        def show(result):
+            if self.document.to_dict() != snapshot.to_dict():
+                self.statusBar().showMessage('Deck changed; reopen recommendations.', 6000)
+                return
+            RecommendationsDialog(result, self).exec()
+        self.run_task(lambda: load_recommendations(self.service, snapshot, self.recommendation_store(), query), show)
+
+    def deck_guidance(self):
+        from .guidance import GuidanceDialog
+        snapshot = DeckDocument.from_dict(self.document.to_dict())
+        def show(proposals):
+            if self.document.to_dict() != snapshot.to_dict():
+                self.statusBar().showMessage('Deck changed while loading guidance; please reopen it.', 6000)
+                return
+            dialog = GuidanceDialog(snapshot, proposals, self)
+            if dialog.exec() == W.QDialog.DialogCode.Accepted:
+                self.edit(lambda document: document.editor_preferences.update(
+                    guidance=dialog.settings.to_dict()))
+        self.run_task(lambda: self.service.analyze_entries(snapshot.deck.entries), show)
 
     def deck_insights(self):
         from .insights import InsightsDialog

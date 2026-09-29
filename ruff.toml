@@ -3,6 +3,14 @@ required-version = "==0.16.9"
 target-version = "py312"
 line-length = 88
 include = [
+    "Mtg_Projects/mtg_core/mtg_core/guidance.py",
+    "Mtg_Projects/mtg_core/mtg_core/recommendations.py",
+    "Mtg_Projects/mtg_core/mtg_core/recommendation_sources.py",
+    "Mtg_Projects/mtg_core/tests/test_guidance.py",
+    "Mtg_Projects/mtg_core/tests/test_recommendations.py",
+    "Mtg_Projects/mtg_editor/guidance.py",
+    "Mtg_Projects/mtg_editor/recommendations.py",
+    "Mtg_Projects/mtg_editor/tests/test_guidance_dialog.py",
     "Mtg_Projects/mtg_core/mtg_core/artwork.py",
     "Mtg_Projects/mtg_core/mtg_core/sections.py",
     "Mtg_Projects/mtg_core/mtg_core/sync_status.py",

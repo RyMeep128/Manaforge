@@ -188,8 +188,9 @@ category associations remain intact. Renaming an automatically created category
 keeps its identity. Existing legacy categories count as manual assignments.
 Deck-wide analysis runs in a worker and reads the database in batches.
 
-An EDHREC-like local statistics/recommendation database remains a later step;
-this version supplies the deterministic, saved role data for that work.
+A local statistics store and source interface now support Phase 5 development;
+the primary public corpus still requires approved access. See the guidance and
+recommendation-source section below for current capabilities and limits.
 
 ## Deck insights
 
@@ -362,3 +363,13 @@ Use **More > Artwork preferences** to edit the same artwork rules used by Core
 The dialog reloads saved rules whenever opened. **Save** updates global rules;
 **Cancel** leaves them unchanged. Existing exact printing/artwork selections are
 retained. Already-open pickers can reopen Preferences to load another app's changes.
+
+### Guidance and recommendation sources
+
+**More > Deck guidance** provides configurable, explainable composition checks
+with saved dismissals and Undo/Redo. **More > Import recommendation decks**
+imports your native Commander decks as a supplementary local signal.
+**More > Recommendations** exposes dataset status and the recommendation browser.
+Archidekt is the designated primary source but collection awaits approved access;
+local data never replaces the public dataset and requires 15 relevant decks.
+See [source policy, scoring, and remaining work](../../docs/recommendation-data.md).
