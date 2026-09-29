@@ -1,4 +1,5 @@
 """Compatibility coverage for persisted bulk-download checkpoints."""
+
 import json
 
 import pytest
@@ -37,9 +38,17 @@ def test_checkpoint_strings_round_trip(tmp_path, value):
 @pytest.mark.parametrize("completed", [False, True])
 def test_legacy_constructor_and_resume_behavior(value, completed):
     status = BulkDownloadStatus(
-        source="test", query="test", chunk_size=1, min_image_bytes=1,
-        status=str(value), total_scanned=0, total_downloaded=0,
-        total_skipped=0, total_failed=0, chunk_number=0, completed=completed,
+        source="test",
+        query="test",
+        chunk_size=1,
+        min_image_bytes=1,
+        status=str(value),
+        total_scanned=0,
+        total_downloaded=0,
+        total_skipped=0,
+        total_failed=0,
+        chunk_number=0,
+        completed=completed,
     )
     assert status.is_running == (value == SyncStatus.RUNNING)
     assert status.can_resume == (
@@ -52,7 +61,9 @@ def test_missing_checkpoint_status_defaults(tmp_path):
     service = CardService(db_path=str(tmp_path / "sync.sqlite3"))
     assert service.get_bulk_download_status().status is SyncStatus.IDLE
     service.database.upsert_sync_state(
-        FIXED_CATALOG_SOURCE, version=FIXED_CATALOG_VERSION,
-        last_sync_at=123.0, payload={},
+        FIXED_CATALOG_SOURCE,
+        version=FIXED_CATALOG_VERSION,
+        last_sync_at=123.0,
+        payload={},
     )
     assert service.get_bulk_download_status().status is SyncStatus.READY

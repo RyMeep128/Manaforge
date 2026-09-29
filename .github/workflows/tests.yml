@@ -41,3 +41,9 @@ jobs:
         env:
           PRINT_PROXY_PREP_DATA_DIR: ${{ runner.temp }}/mtg-suite-test-data
         run: python -m pytest -q --durations=10
+      - name: Lint scoped Core modules
+        if: ${{ !cancelled() }}
+        run: python -m ruff check .
+      - name: Check scoped Core formatting
+        if: ${{ !cancelled() }}
+        run: python -m ruff format --check .

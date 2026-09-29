@@ -1,4 +1,5 @@
 """Shared artwork selection metadata, independent of printer and UI modules."""
+
 from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import Any, Mapping

@@ -1,4 +1,5 @@
 """Stable bulk-download checkpoint values, separate from image status."""
+
 from enum import StrEnum
 
 

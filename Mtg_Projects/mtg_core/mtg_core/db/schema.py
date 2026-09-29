@@ -1,4 +1,5 @@
 """Versioned, transactional schema creation and legacy upgrades."""
+
 from __future__ import annotations
 
 from contextlib import closing
@@ -117,6 +118,7 @@ CREATE TABLE IF NOT EXISTS artwork_preference_profiles (
 );
 """
 
+
 class SchemaOperations:
     def _ensure_schema(self) -> None:
         with closing(self.connect()) as connection, connection:
@@ -162,4 +164,6 @@ class SchemaOperations:
         rows = connection.execute(f"PRAGMA table_info({table_name})").fetchall()
         if any(row["name"] == column_name for row in rows):
             return
-        connection.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}")
+        connection.execute(
+            f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}"
+        )

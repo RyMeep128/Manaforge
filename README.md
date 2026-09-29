@@ -137,6 +137,14 @@ On Windows, runtime data defaults to `%LOCALAPPDATA%\PrintProxyPrep`; the shared
 
 ## Development and tests
 
+CI runs `python -m ruff check .` and `python -m ruff format --check .` on
+Python 3.12 and 3.13 alongside pytest. The pinned Ruff version is installed by
+`requirements-dev.txt`. The explicit allowlist in `ruff.toml` initially covers
+Core's typed artwork/section/sync state, SQLite migrations, and their tests.
+Broader adoption should expand that list in small changes, without a suite-wide
+formatting rewrite. To format only these files, run `python -m ruff format .`
+from the repository root. CI reports lint and formatting failures separately.
+
 Manaforge is in alpha/beta development. Commits increment the patch version (for example, `0.2.1-alpha.1` → `0.2.2-alpha.1`); merges into `main` increment the minor version and reset patch (`0.2.2-alpha.1` → `0.3.0-alpha.1`). `APP_VERSION` in `Mtg_Projects/mtg_proxy/constants.py` is the source for the app and build archive name. Alpha/beta builds stay marked as prereleases; tagging or publishing a release is a separate step. See [versioning instructions](AGENTS.md).
 
 From the repository root, after setup:

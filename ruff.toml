@@ -1,0 +1,19 @@
+# Expand this allowlist in small, reviewed increments; do not reformat the suite.
+required-version = "==0.16.9"
+target-version = "py312"
+line-length = 88
+include = [
+    "Mtg_Projects/mtg_core/mtg_core/artwork.py",
+    "Mtg_Projects/mtg_core/mtg_core/sections.py",
+    "Mtg_Projects/mtg_core/mtg_core/sync_status.py",
+    "Mtg_Projects/mtg_core/mtg_core/db/schema.py",
+    "Mtg_Projects/mtg_core/tests/test_entry_print_state.py",
+    "Mtg_Projects/mtg_core/tests/test_migrations.py",
+    "Mtg_Projects/mtg_core/tests/test_sections.py",
+    "Mtg_Projects/mtg_core/tests/test_sync_status.py",
+]
+force-exclude = true
+
+[lint]
+# Basic syntax/style errors and Pyflakes (undefined names, unused imports, etc.).
+select = ["E4", "E7", "E9", "F"]
