@@ -1,7 +1,13 @@
-"""Schema creation and compatibility checks."""
+"""Versioned, transactional schema creation and legacy upgrades."""
 from __future__ import annotations
 
+from contextlib import closing
 import sqlite3
+
+
+SCHEMA_VERSION = 1
+# Append migrations; never change the order of already published versions.
+MIGRATIONS = ("_migrate_to_v1",)
 
 
 SCHEMA = """
@@ -113,15 +119,38 @@ CREATE TABLE IF NOT EXISTS artwork_preference_profiles (
 
 class SchemaOperations:
     def _ensure_schema(self) -> None:
-        with self.connect() as connection:
-            connection.executescript(SCHEMA)
-            self._ensure_column(connection, "image_manifest", "asset_id", "TEXT")
-            self._ensure_column(connection, "prints", "cache_scope", "TEXT")
-            self._ensure_column(connection, "prints", "cache_expires_at", "REAL")
-            self._ensure_column(connection, "image_assets", "payload_size", "INTEGER")
-            self._ensure_column(connection, "image_assets", "storage_path", "TEXT")
+        with closing(self.connect()) as connection, connection:
+            # Serialize concurrent app startups, then read the version under the
+            # write lock. DDL and version changes must roll back together.
+            connection.execute("BEGIN IMMEDIATE")
+            version = connection.execute("PRAGMA user_version").fetchone()[0]
+            if version > SCHEMA_VERSION:
+                raise ValueError(
+                    f"Database schema {version} is newer than supported schema {SCHEMA_VERSION}."
+                )
+            for target in range(version + 1, SCHEMA_VERSION + 1):
+                getattr(self, MIGRATIONS[target - 1])(connection)
+                connection.execute(f"PRAGMA user_version = {target}")
+            # Retain repair of missing/outdated derived indexes on current DBs.
             self._ensure_search_index(connection)
             self._ensure_search_data(connection)
+
+    def _migrate_to_v1(self, connection: sqlite3.Connection) -> None:
+        # Version zero includes both empty files and historical unversioned DBs.
+        # Create tables first, add legacy columns, then create dependent indexes.
+        # execute (not executescript) keeps all DDL inside the caller's transaction.
+        statements = [sql.strip() for sql in SCHEMA.split(";") if sql.strip()]
+        for sql in statements:
+            if sql.startswith("CREATE TABLE"):
+                connection.execute(sql)
+        self._ensure_column(connection, "image_manifest", "asset_id", "TEXT")
+        self._ensure_column(connection, "prints", "cache_scope", "TEXT")
+        self._ensure_column(connection, "prints", "cache_expires_at", "REAL")
+        self._ensure_column(connection, "image_assets", "payload_size", "INTEGER")
+        self._ensure_column(connection, "image_assets", "storage_path", "TEXT")
+        for sql in statements:
+            if not sql.startswith("CREATE TABLE"):
+                connection.execute(sql)
 
     @staticmethod
     def _ensure_column(
