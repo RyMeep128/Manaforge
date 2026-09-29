@@ -251,7 +251,7 @@ class AggregateSource:
 
 
 def set_mode(root, mode):
-    if mode not in ("live", "portable", "disabled"):
+    if mode not in ("live", "portable", "disabled", "edhrec"):
         raise ValueError("Unknown primary source mode")
     root = Path(root)
     root.mkdir(parents=True, exist_ok=True)

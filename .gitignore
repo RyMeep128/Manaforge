@@ -2,6 +2,8 @@
 __pycache__/
 archidekt-run/
 archidekt.sqlite3*
+edhrec-run/
+edhrec.sqlite3*
 *.py[cod]
 *$py.class
 

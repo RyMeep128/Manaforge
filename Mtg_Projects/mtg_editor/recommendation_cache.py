@@ -22,6 +22,7 @@ def manage_cache(editor):
         "Export personal aggregate cache",
         "Import personal aggregate cache",
         "Download personal aggregate cache",
+        "Use offline EDHREC cache",
     ]
     action, accepted = W.QInputDialog.getItem(
         editor,
@@ -34,7 +35,18 @@ def manage_cache(editor):
         return
     root = editor.recommendation_store().path.parent
     destination = root / "archidekt.aggregate.json.gz"
-    if action in actions[:3]:
+    if action == "Use offline EDHREC cache":
+
+        def select_edhrec():
+            if not (root / "edhrec.sqlite3").exists():
+                raise ValueError(
+                    "Run tools/collect_edhrec.py to download the one-time snapshot first."
+                )
+            set_mode(root, "edhrec")
+            return "Offline EDHREC selected. Reopen recommendations to apply."
+
+        work = select_edhrec
+    elif action in actions[:3]:
         mode = ["live", "portable", "disabled"][actions.index(action)]
 
         def select():

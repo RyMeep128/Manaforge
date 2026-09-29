@@ -72,6 +72,10 @@ def default_sources(local_store):
     )
     if mode == "portable":
         primary = AggregateSource(root / "archidekt.aggregate.json.gz")
+    elif mode == "edhrec":
+        from .edhrec import EdhrecSource
+
+        primary = EdhrecSource(root / "edhrec.sqlite3")
     elif mode == "disabled":
         primary = UnavailableSource(
             "archidekt",

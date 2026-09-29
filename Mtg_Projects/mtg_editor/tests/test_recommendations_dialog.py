@@ -4,6 +4,25 @@ from mtg_core.decks import DeckDocument, DeckEntry, DeckHistory
 from mtg_editor.recommendations import RecommendationsDialog
 
 
+def test_edhrec_statistics_are_not_presented_as_global_baseline():
+    from mtg_editor.recommendations import statistical_reason
+
+    text = statistical_reason(
+        dict(
+            statistics_source="edhrec",
+            inclusion=0.5,
+            num_decks=25,
+            sample=50,
+            categories=["Top Cards"],
+            edhrec_synergy=0.3,
+        )
+    )
+    assert "25 / 50 eligible decks" in text
+    assert "uninterpreted" in text
+    assert "unavailable" in text
+    assert "Global popularity: 0.0%" not in text
+
+
 def test_preferences_dismissal_and_add_follow_editor_history():
     app = QApplication.instance() or QApplication([])
 

@@ -63,7 +63,7 @@ reuse the normal card-detail behavior, which can fetch uncached images.
 | Source | Role | Current access status |
 | --- | --- | --- |
 | Archidekt public Commander decks | Designated primary dataset | User-authorized one-time personal/noncommercial collection; conservative caching collector available |
-| EDHREC | Behavior and validation reference | No deck-data ingestion or runtime dependency |
+| EDHREC | Optional offline primary recommendation source | Explicit one-time commander JSON download; separate cache, no runtime network dependency |
 | BlueprintMTG | Optional secondary public source | Disabled; API and data-reuse terms not verified |
 | User-imported local Commander decks | Supplementary signal | Enabled only alongside public results and at least 15 relevant local decks |
 
@@ -141,9 +141,15 @@ is available locally; its availability is shown explicitly.
 ## Personal offline cache
 
 **More > Recommendation cache** selects the live collected dataset, an imported
-personal archive, or disabled primary recommendations. Switching sources does
+personal archive, the offline EDHREC cache, or disabled primary recommendations. Switching sources does
 not alter, stop, or restart the collector. The local supplement can be disabled
 independently in ranking preferences.
+
+The [EDHREC downloader](edhrec-collection.md) uses a separate database and response
+cache. Select **Use offline EDHREC cache** after downloading. EDHREC ranking uses
+the published card inclusion fraction, with each card's own eligible-deck count.
+It does not fabricate global popularity, co-occurrence, or partner cohorts.
+Existing contextual ranking and optional eligible local blending still apply.
 
 Export creates a schema-versioned gzip JSON archive from a consistent snapshot
 of the collected public dataset. It includes global popularity, collection time,

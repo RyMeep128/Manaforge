@@ -113,11 +113,24 @@ def rank_recommendations(rows, deck_context, preferences, query=""):
     return sorted(ranked, key=lambda row: (-row["score"], row["oracle_id"]))
 
 
+def statistical_reason(row):
+    if row.get("statistics_source") == "edhrec":
+        return (
+            f"EDHREC inclusion: {row['inclusion']:.1%} ({row['num_decks']} / {row['sample']} eligible decks)\n"
+            f"Categories: {', '.join(row['categories'])}\n"
+            f"EDHREC reported synergy (uninterpreted): {row.get('edhrec_synergy')}\n"
+            "Global popularity and deck-card co-occurrence unavailable."
+        )
+    return (
+        f"Commander inclusion: {row['inclusion']:.1%} ({row['sample']} decks)\n"
+        f"Global popularity: {row['baseline']:.1%}; synergy: {row['synergy']:+.1%}"
+    )
+
+
 def recommendation_reason(row):
     return "\n".join(
         [
-            f"Commander inclusion: {row['inclusion']:.1%} ({row['sample']} decks)",
-            f"Global popularity: {row['baseline']:.1%}; synergy: {row['synergy']:+.1%}",
+            statistical_reason(row),
             "Weighted components: "
             + ", ".join(f"{k} {v:+.3f}" for k, v in row["contributions"].items()),
             *row["context_reasons"],
@@ -207,7 +220,7 @@ class RecommendationsDialog(W.QDialog):
             buttons.addWidget(button)
         layout.addLayout(buttons)
         self.notice = W.QLabel(
-            "Archidekt is the primary dataset. Local imports supplement it only at 15 relevant decks; local data never replaces it."
+            "The selected public cache is the primary dataset. Local imports supplement it only at 15 relevant decks; local data never replaces it."
         )
         self.notice.setWordWrap(True)
         layout.addWidget(self.notice)
@@ -250,9 +263,9 @@ class RecommendationsDialog(W.QDialog):
         row = self.selected()
         if row:
             self.details.setPlainText(
-                f"Commander inclusion: {row['inclusion']:.1%} ({row['sample']} decks; commander {row['commander'] or 'none'})\n"
-                f"Baseline popularity: {row['baseline']:.1%}\nSynergy difference: {row['synergy']:+.1%}\n"
-                f"Available statistical formula: {self.formula}\nPublic component: {row['primary_score']:.3f}; local component: {row['local_score']:.3f}\n"
+                statistical_reason(row)
+                + "\n"
+                + f"Available statistical formula: {self.formula}\nPublic component: {row['primary_score']:.3f}; local component: {row['local_score']:.3f}\n"
                 + f"Local blend used: {bool(row['local_enabled'] and self.use_local.isChecked())}\n"
                 + "\nRoles / themes:\n"
                 + "\n".join(
