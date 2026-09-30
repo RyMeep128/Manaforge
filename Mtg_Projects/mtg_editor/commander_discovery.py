@@ -3,7 +3,7 @@
 import json
 from datetime import datetime
 
-from PyQt6 import QtCore as C, QtGui as G, QtWidgets as W
+from PyQt6 import QtCore as C, QtWidgets as W
 from mtg_core.commander_discovery import search_commanders
 from mtg_core.decks import DeckDocument, DeckEntry
 from mtg_core.edhrec_discovery import DiscoveryStore
@@ -30,24 +30,6 @@ class DiscoveryCanvas(CardCanvas):
     def __init__(self, document, thumbnails, parent):
         super().__init__(document, thumbnails, parent, search=True)
         self.theme_name = ""
-
-    def paintEvent(self, event):
-        super().paintEvent(event)
-        if not self.theme_name:
-            return
-        painter = G.QPainter(self.viewport())
-        offset = self.verticalScrollBar().value()
-        painter.translate(0, -offset)
-        visible = C.QRect(0, offset, self.viewport().width(), self.viewport().height())
-        for entry, rect, _ in self.items:
-            if not rect.intersects(visible):
-                continue
-            badge = C.QRect(rect.x()+4, rect.y()+4, rect.width()-8, 24)
-            painter.fillRect(badge, G.QColor("#20352f"))
-            painter.setPen(G.QColor("white"))
-            painter.drawText(badge, C.Qt.AlignmentFlag.AlignCenter,
-                             painter.fontMetrics().elidedText(self.theme_name, C.Qt.TextElideMode.ElideRight, badge.width()-6))
-        painter.end()
 
 
 class CommanderDiscovery(W.QWidget):
