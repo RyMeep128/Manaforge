@@ -72,11 +72,16 @@ class CommanderDiscovery(W.QWidget):
         self.theme.setInsertPolicy(W.QComboBox.InsertPolicy.NoInsert)
         self.theme.addItem("All themes / local discovery", "")
         self.theme.setMinimumWidth(220)
-        self.theme.setToolTip("Type to find an imported theme, then choose a match.")
+        self.theme.setToolTip("Type to find a theme, or use Browse themes to open the full dropdown.")
         self.theme.completer().setFilterMode(C.Qt.MatchFlag.MatchContains)
         self.theme.completer().setCaseSensitivity(C.Qt.CaseSensitivity.CaseInsensitive)
         self.theme.completer().setCompletionMode(W.QCompleter.CompletionMode.PopupCompletion)
         theme_row.addWidget(self.theme, 1)
+        self.browse_themes = W.QPushButton("Browse themes ▾")
+        self.browse_themes.setToolTip("Open the full list of imported themes.")
+        self.browse_themes.setEnabled(False)
+        self.browse_themes.clicked.connect(self.show_themes)
+        theme_row.addWidget(self.browse_themes)
         refresh = W.QPushButton("Refresh local data")
         refresh.clicked.connect(lambda: self.search(refresh=True))
         theme_row.addWidget(refresh)
@@ -194,6 +199,11 @@ class CommanderDiscovery(W.QWidget):
             self.theme.setCurrentIndex(index)
             self.theme_selected(index)
 
+    def show_themes(self):
+        self.theme.completer().popup().hide()
+        self.theme.setFocus()
+        self.theme.showPopup()
+
     def import_themes(self):
         from threading import Event
         from mtg_core.edhrec_discovery_ingest import import_cached_discovery
@@ -264,6 +274,7 @@ class CommanderDiscovery(W.QWidget):
                     self.theme.setEditText(typed)
             self.theme_catalog = catalog
         self.theme.setEnabled(bool(snapshot["themes"]))
+        self.browse_themes.setEnabled(bool(snapshot["themes"]))
         self.theme_status.setText(snapshot["status"])
         if self.theme_slug and self.theme.findData(self.theme_slug) < 0:
             # A removed/unavailable snapshot must not leave a hidden theme filter

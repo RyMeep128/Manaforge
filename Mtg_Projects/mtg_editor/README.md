@@ -41,7 +41,8 @@ remaining window space, and the toolbars wrap on smaller screens.
   Commander discovery supports local name/text/type filters and
   [explicit offline EDHREC themes](../../docs/edhrec-collection.md#offline-commandertheme-discovery).
   Use **Import cached themes** to build the theme catalog from previously collected
-  responses, then type in Theme and choose a match to filter commanders.
+  responses, then type in Theme and choose a match to filter commanders, or click
+  **Browse themes ▾** to choose from the full dropdown list.
   Set a commander or add a compatible second commander with Undo/Redo; replacing
   existing commanders requires confirmation.
 - Group by **Type**, **Mana Value**, **Color**, **Category**, or **Section**. Commander
