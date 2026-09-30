@@ -232,32 +232,32 @@ and ambiguous rules are not presented as verified. Phase 3 starts with filters a
 
 ### 15. Deterministic guidance
 
-Implemented pending CI; see [guidance and dataset notes](recommendation-data.md).
+Implementation complete; full-suite CI passed on Python 3.12/3.13 at `6453d75`. Scale acceptance is tracked below; see [guidance and dataset notes](recommendation-data.md).
 
-- [~] Detect likely shortages in lands, ramp, draw, and interaction using configurable rules.
-- [~] Use local Oracle Tags plus user overrides for functional counts.
-- [~] Explain every suggestion and allow dismissal/override.
-- [~] Avoid presenting heuristic categories as rules facts.
+- [x] Detect likely shortages in lands, ramp, draw, and interaction using configurable rules.
+- [x] Use local Oracle Tags plus user overrides for functional counts.
+- [x] Explain every suggestion and allow dismissal/override.
+- [x] Avoid presenting heuristic categories as rules facts.
 
-- [~] Suggest deck-specific themes only when a meaningful, configurable threshold is met; keep final category assignments under user control.
+- [x] Suggest deck-specific themes only when a meaningful, configurable threshold is met; keep final category assignments under user control.
 
 ### 16. Local recommendation dataset
 
-Archidekt is the primary source. The user authorized one personal/noncommercial run with pacing, caching, and no raw-data redistribution; a resumable single-worker collector populates the primary cache with incremental aggregates. EDHREC is a behavioral reference, BlueprintMTG optional and unverified. Local data supplements public results only at 15 relevant decks. Phase 5 implementation is complete pending CI and representative public-corpus quality/performance acceptance: source adapters, importers, joint commander statistics, contextual scoring, browser controls, and versioned personal offline archives are present. No public aggregate distribution is configured. See [source policy, scoring, and acceptance limits](recommendation-data.md).
+Archidekt is the primary source. The user authorized one personal/noncommercial run with pacing, caching, and no raw-data redistribution; a resumable single-worker collector populates the primary cache with incremental aggregates. EDHREC is an optional offline primary source; BlueprintMTG remains optional and unverified. Local data supplements public results only at 15 relevant decks. Phase 5 feature implementation is complete: source adapters, importers, joint commander statistics, contextual scoring, browser controls, and versioned personal offline archives are present. No public aggregate distribution is configured. See [source policy, scoring, and acceptance limits](recommendation-data.md).
 
-- [~] Choose licensed/public decklist sources and document provenance and refresh policy.
-- [~] Build a resumable ingestion and normalization pipeline.
-- [~] Precompute commander inclusion rates and baseline card popularity.
-- [~] Calculate transparent synergy scores against baseline popularity.
-- [~] Store compact indexed aggregates rather than loading raw decks during editor use.
-- [~] Add freshness, source, and sample-size indicators.
+- [x] Choose licensed/public decklist sources and document provenance and refresh policy.
+- [x] Build a resumable ingestion and normalization pipeline.
+- [x] Precompute commander inclusion rates and baseline card popularity.
+- [x] Calculate transparent synergy scores against baseline popularity.
+- [x] Store compact indexed aggregates rather than loading raw decks during editor use.
+- [x] Add freshness, source, and sample-size indicators.
 
-- [~] Add a recommendation grid/list with previews, expandable reasons, immediate Add to Deck, categories/themes, and Scryfall-style filtering.
-  - Add Cards now has separate Syntax Search and Recommendations tabs, preserving the search UI and visual recommendation grid with card-type browsing, quantity badges, compact explanations, shared add commands, and lazy cached thumbnails; Qt regression acceptance pending CI.
-- [~] Combine commander usage, co-occurrence, type-based archetypes, color identity, themes, synergy, popularity, curve needs, and role gaps through transparent, adjustable scoring.
-- [~] Download/cache versioned personal recommendation aggregates for offline use without requiring EDHREC during normal operation; explicit HTTPS transfer with checksum validation, no hosted public feed.
+- [x] Add a recommendation grid/list with previews, expandable reasons, immediate Add to Deck, categories/themes, and Scryfall-style filtering.
+  - Add Cards now has separate Syntax Search and Recommendations tabs, preserving the search UI and visual recommendation grid with card-type browsing, quantity badges, compact explanations, shared add commands, and lazy cached thumbnails; Qt regression coverage passed in CI at `6453d75`.
+- [x] Combine commander usage, co-occurrence, type-based archetypes, color identity, themes, synergy, popularity, curve needs, and role gaps through transparent, adjustable scoring.
+- [x] Download/cache versioned personal recommendation aggregates for offline use without requiring EDHREC during normal operation; explicit HTTPS transfer with checksum validation, no hosted public feed.
 
-**Exit gate:** Recommendations are local, fast, explainable, reproducible, and clearly sourced.
+**Exit gate:** Recommendations are local, fast, explainable, reproducible, and clearly sourced. Feature regressions passed in CI at `6453d75`; a new 20,000-deck synthetic offline scale/reproducibility gate is pending CI. Representative public-corpus quality and worst-case 200-seed latency remain open acceptance items. Completed feature checkboxes do not claim those measurements.
 
 ## Phase 6 - Rules and rulings reference
 
