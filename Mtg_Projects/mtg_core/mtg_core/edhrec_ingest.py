@@ -77,8 +77,13 @@ class Downloader:
                     request, timeout=45
                 ) as response:
                     return response.read(MAX_BYTES + 1)
-            except (urllib.error.URLError, TimeoutError, ConnectionError,
-                    http.client.IncompleteRead, http.client.RemoteDisconnected) as exc:
+            except (
+                urllib.error.URLError,
+                TimeoutError,
+                ConnectionError,
+                http.client.IncompleteRead,
+                http.client.RemoteDisconnected,
+            ) as exc:
                 retry_after = 0
                 if isinstance(exc, urllib.error.HTTPError):
                     if exc.code not in (408, 429) and not 500 <= exc.code < 600:
@@ -89,12 +94,17 @@ class Downloader:
                         retry_after = float(header)
                     except ValueError:
                         try:
-                            retry_after = parsedate_to_datetime(header).timestamp() - time.time()
+                            retry_after = (
+                                parsedate_to_datetime(header).timestamp() - time.time()
+                            )
                         except (ValueError, TypeError, OverflowError):
                             pass
                     exc.close()
                 wait = max(backoff, retry_after)
-                print(f"EDHREC retry in {wait:.0f}s: {request.full_url}: {exc}", flush=True)
+                print(
+                    f"EDHREC retry in {wait:.0f}s: {request.full_url}: {exc}",
+                    flush=True,
+                )
                 self.wait(wait)
                 backoff = min(backoff * 2, 900)
 
