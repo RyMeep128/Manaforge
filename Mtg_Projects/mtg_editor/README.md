@@ -373,3 +373,11 @@ imports your native Commander decks as a supplementary local signal.
 Archidekt is the primary source, using the authorized one-time local cache;
 local data never replaces the public dataset and requires 15 relevant decks.
 See [source policy, scoring, and remaining work](../../docs/recommendation-data.md).
+# Token suggestions when printing
+
+After choosing sections in **Print Deck**, Manaforge offers related tokens for
+the included cards. Choose **Add Selected** to include one copy of each selected
+token, or **Not Now** to continue without them. Tokens are added to the print
+job only; your saved deck stays unchanged. Suggestions use catalog relationships
+and may fetch missing related card records.
+

@@ -110,6 +110,31 @@ def prepare_print(document, service, sections):
         lock.unlock()
 
 
+def print_token_suggestions(document, service, sections):
+    """Suggest missing tokens for only the cards included in this print job."""
+    from mtg_print.services.deck_import_service import unadded_token_suggestions
+    snapshot = deepcopy(document)
+    snapshot.deck.entries = [entry for entry in snapshot.deck.entries
+                             if entry.quantity > 0 and entry.section in sections
+                             and not entry.do_not_print]
+    if not snapshot.deck.entries:
+        return []
+    return unadded_token_suggestions(project_payload(snapshot), card_service=service)
+
+
+def include_print_tokens(document, suggestions, sections):
+    """Add selected tokens to the handoff snapshot without editing the deck."""
+    from mtg_core.decks import DeckEntry
+    from uuid import uuid4
+    section = next(iter(sorted(sections)))
+    for suggestion in suggestions:
+        candidate = suggestion.candidate
+        document.deck.entries.append(DeckEntry(
+            entry_id=str(uuid4()), name=candidate.name, card_id=candidate.card_id,
+            oracle_id=candidate.oracle_id, section=section,
+        ))
+
+
 def launch_print(project):
     root = Path(__file__).resolve().parents[1] / 'mtg_proxy'
     return subprocess.Popen([sys.executable, str(root / 'main.py'), '--open-project', project['path']],

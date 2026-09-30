@@ -948,7 +948,7 @@ class EditorWindow(W.QMainWindow):
         self.run_task(lambda: apply_art(selection), apply)
 
     def print_deck(self):
-        from .proxy_adapter import prepare_print, launch_print
+        from .proxy_adapter import prepare_print, launch_print, print_token_suggestions, include_print_tokens
         dialog = W.QDialog(self)
         dialog.setWindowTitle('Print Deck — sections')
         layout = W.QVBoxLayout(dialog)
@@ -978,7 +978,20 @@ class EditorWindow(W.QMainWindow):
                         (f' {relocated} copies relocated to fit the sheet.' if relocated else ''))
                 except OSError as exc:
                     W.QMessageBox.warning(self, 'Could not launch Proxy', str(exc))
-        self.run_task(lambda: prepare_print(snapshot, self.service, sections), launch)
+        def choose_tokens(suggestions):
+            from mtg_ui.print_dialogs import ComponentSuggestionsDialog
+            if suggestions:
+                chooser = ComponentSuggestionsDialog(self, suggestions)
+                if chooser.exec() == W.QDialog.DialogCode.Accepted:
+                    include_print_tokens(snapshot, chooser.selected_suggestions(), sections)
+            def prepare():
+                self.run_task(lambda: prepare_print(snapshot, self.service, sections), launch)
+            # A modal chooser may already have delivered the worker's finished signal.
+            if self.task is None:
+                prepare()
+            else:
+                self.task.finished.connect(lambda: QtCore.QTimer.singleShot(0, prepare))
+        self.run_task(lambda: print_token_suggestions(snapshot, self.service, sections), choose_tokens)
 
     def undo(self):
         if self.task is not None:
