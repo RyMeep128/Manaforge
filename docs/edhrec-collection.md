@@ -25,7 +25,7 @@ Archidekt's process, checkpoint directory, database, and source selection are
 not modified. The downloader reads the local card catalog in read-only mode.
 EDHREC IDs are not assumed to be Oracle IDs: names resolve through that catalog,
 including unambiguous front-face aliases. Unknown cards are omitted and retained
-in each page's unresolved-name report. Unsupported commander names/pairs or
+in each page's unresolved-name report. Unsupported commander names or
 invalid pages are reported as skipped, not merged into unrelated cohorts.
 
 One process holds a directory lock. Requests are serial with at least six seconds
@@ -47,8 +47,30 @@ files in `edhrec-run`; use a hidden window on Windows.
 In Manaforge, choose **More > Recommendation cache > Use offline EDHREC cache**.
 Reopen recommendations to apply the selection. Switching back to the live
 Archidekt cache does not interrupt either downloader. Missing commander pages
-produce an explicit unavailable status; partner pairs and commander-free decks
-are not assigned made-up aggregate statistics.
+produce an explicit unavailable status. Partner pairs use only their exact cached
+joint page, independent of commander order; they never fall back to individual
+pages. Commander-free decks remain unavailable.
+
+## Repair an existing snapshot offline
+
+```powershell
+& '.\Mtg_Projects\mtg_proxy\venv\Scripts\python.exe' tools/collect_edhrec.py --reprocess-cached
+```
+
+This explicit mode reprocesses every indexed cached page, even after completion,
+without network requests. It filters art-series, token, emblem, and synthetic
+proxy identities before matching exact names and unambiguous front-face aliases.
+Full card names are resolved before attempting a two-commander split. Genuine
+ambiguities stay skipped with candidate Oracle IDs in `reprocess-report.json`.
+
+The existing collector lock protects rebuilding. A temporary database is checked
+for integrity, missing/invalid pages, and loss of previously completed pages.
+Only a validated rebuild replaces the live cache and checkpoint. Both originals
+are backed up in `edhrec-run/backup-<unique-id>`; publication errors roll back.
+STOP or processing failures preserve the existing cache. Rerunning starts a fresh
+offline rebuild. The report separates imported, ambiguous, unresolved, invalid,
+and missing-cache counts; imported pages can exceed unique commander cohorts.
+Existing single-commander keys remain compatible; pairs use sorted Oracle IDs.
 
 Ranking uses `num_decks / potential_decks` for each candidate. The UI preserves
 categories and the reported EDHREC `synergy` value as uninterpreted provenance.

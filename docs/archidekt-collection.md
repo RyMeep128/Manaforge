@@ -67,6 +67,22 @@ a license for publishing an aggregate dataset either; verify that separately.
 
 ## Provenance and sampling limitations
 
+Offline audit and optional replay, under the same collector lock:
+
+```powershell
+& '.\Mtg_Projects\mtg_proxy\venv\Scripts\python.exe' tools/collect_archidekt.py --audit-cached
+& '.\Mtg_Projects\mtg_proxy\venv\Scripts\python.exe' tools/collect_archidekt.py --replay-cached
+```
+
+Neither command requests network data or changes historical download counters.
+The audit writes `audit-report.json` with one record per unique cached deck ID:
+included size, commander count, excluded-entry reasons, and acceptance/rejection.
+Cache errors and duplicate IDs have separate counts. Nonpublic/non-Commander decks
+are rejected before their contents are counted. The 100-card and one-or-two-
+commander requirements remain unchanged. Replay writes `replay-report.json` and
+uses idempotent ingestion, separating changed decks from unchanged decks. STOP
+interrupts either operation; completed replay transactions remain safe to rerun.
+
 Aggregate provenance retains public deck URLs and import timestamps. Raw JSON
 is private to this machine. Rankings will initially be biased toward the search
 orders already processed; the UI's sample counts and source status should be
@@ -76,5 +92,5 @@ synergy scores equivalent to EDHREC's current lift methodology.
 Endpoint discovery used the public API directly and Archidekt's own forum:
 [public search example](https://archidekt.com/forum/thread/21858972),
 [staff API guidance](https://archidekt.com/forum/thread/2832338).
-No local tests or CI monitoring were performed. Regression tests for the
-collector and incremental aggregates are supplied for CI.
+Local regression coverage includes collector behavior, offline audit/replay,
+deduplication, and idempotent ingestion. No CI monitoring was performed.

@@ -11,13 +11,23 @@ def cardlists(payload):
     return payload["container"]["json_dict"]["cardlists"]
 
 
+def commander_key(commanders):
+    return "|".join(sorted(set(commanders)))
+
+
 def normalize(payload, resolve, slug):
     """Resolve names through our Oracle catalog, not EDHREC printing IDs."""
     page = payload["container"]["json_dict"]
     card = page["card"]
     commander = resolve(card["name"])
-    if not commander:
-        raise ValueError(f"Unresolved commander: {card['name']}")
+    commanders = [commander] if commander else []
+    if not commanders:
+        parts = card["name"].split(" // ")
+        if len(parts) == 2:
+            commanders = [resolve(part) for part in parts]
+        if not commanders or not all(commanders) or len(set(commanders)) != len(commanders):
+            raise ValueError(f"Unresolved commander: {card['name']}")
+    commander = commander_key(commanders)
     sample = card["num_decks"]
     if type(sample) is not int or sample <= 0:
         raise ValueError("Invalid commander deck count")
@@ -53,6 +63,7 @@ def normalize(payload, resolve, slug):
                 baseline=0.0,
                 synergy=0.0,
                 commander=commander,
+                commanders=sorted(commanders),
                 categories=[category],
                 edhrec_synergy=item.get("synergy"),
                 statistics_source="edhrec",
@@ -61,6 +72,7 @@ def normalize(payload, resolve, slug):
         raise ValueError("No resolved recommendation rows")
     return dict(
         commander=commander,
+        commanders=sorted(commanders),
         slug=slug,
         sample=sample,
         results=list(rows.values()),
@@ -99,9 +111,9 @@ class EdhrecSource:
             formula="EDHREC card inclusion = num_decks / potential_decks; no global baseline or co-occurrence",
         )
         selected = set(commanders)
-        if len(selected) != 1:
+        if not 1 <= len(selected) <= 2:
             result["status"] = (
-                "EDHREC cache requires one commander; joint partner cohorts are not inferred."
+                "EDHREC cache requires one commander or an exact cached commander pair."
             )
             return result
         if not Path(self.path).exists():
@@ -111,7 +123,7 @@ class EdhrecSource:
         ) as db:
             row = db.execute(
                 "SELECT payload, imported FROM pages WHERE commander=?",
-                (next(iter(selected)),),
+                (commander_key(selected),),
             ).fetchone()
         if row is None:
             return result

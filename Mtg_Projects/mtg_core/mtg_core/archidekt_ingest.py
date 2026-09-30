@@ -40,7 +40,9 @@ def api_url(value):
     )
 
 
-def normalize_deck(payload):
+def normalize_deck(payload, *, diagnostics=None):
+    details = diagnostics if diagnostics is not None else {}
+    details.update(size=0, commander_count=0, excluded={})
     if (
         payload.get("private") is not False
         or payload.get("unlisted") is not False
@@ -50,19 +52,25 @@ def normalize_deck(payload):
     categories = {c["name"]: c for c in payload.get("categories", [])}
     members = {}
     size = 0
+    def excluded(reason):
+        details["excluded"][reason] = details["excluded"].get(reason, 0) + 1
     for entry in payload.get("cards", []):
         if entry.get("deletedAt"):
+            excluded("deleted")
             continue
         names = entry.get("categories") or []
         lowered = {name.casefold() for name in names}
         if lowered & {"sideboard", "maybeboard", "considering", "excluded"}:
+            excluded("excluded_section")
             continue
         if names and not any(
             categories.get(name, {}).get("includedInDeck", True) for name in names
         ):
+            excluded("category_not_in_deck")
             continue
         qty = int(entry.get("quantity") or 0)
         if qty <= 0:
+            excluded("nonpositive_quantity")
             continue
         oracle = entry["card"]["oracleCard"]
         oid = str(uuid.UUID(oracle["uid"]))
@@ -71,11 +79,60 @@ def normalize_deck(payload):
         )
         members[oid] = max(members.get(oid, 0), int(commander))
         size += qty
+        details.update(size=size, commander_count=sum(members.values()))
     if size != 100 or not 1 <= sum(members.values()) <= 2:
         raise ValueError(
             "Require 100 mainboard/commander cards and one or two commanders"
         )
     return members
+
+
+def audit_cached(root, *, replay=False):
+    """Inspect unique cached decks offline; caller holds the collector lock."""
+    root = Path(root)
+    report = dict(status="running", accepted=0, rejected=0, invalid_cache=0,
+                  duplicates=0, replayed=0, unchanged=0, decks={}, errors={})
+    store = RecommendationStore(root.parent / "archidekt.sqlite3") if replay else None
+    try:
+        for path in sorted(root.glob("*.json.gz")):
+            if (root / "STOP").exists():
+                raise InterruptedError("STOP file present")
+            try:
+                payload = json.loads(gzip.decompress(path.read_bytes()))
+                if not isinstance(payload, dict):
+                    raise ValueError("Unexpected cached payload")
+                if "cards" not in payload:
+                    continue
+                deck_id = str(int(payload["id"]))
+            except (OSError, EOFError, ValueError, TypeError, KeyError) as exc:
+                report["invalid_cache"] += 1
+                report["errors"][path.name] = str(exc)
+                continue
+            if deck_id in report["decks"]:
+                report["duplicates"] += 1
+                continue
+            details = {}
+            try:
+                members = normalize_deck(payload, diagnostics=details)
+            except (ValueError, TypeError, KeyError) as exc:
+                details.update(status="rejected", reason=str(exc))
+                report["rejected"] += 1
+            else:
+                details["status"] = "accepted"
+                report["accepted"] += 1
+                if replay:
+                    digest = hashlib.sha256(json.dumps(members, sort_keys=True).encode()).hexdigest()
+                    changed = store.ingest_members(deck_id, digest, f"{BASE}/decks/{deck_id}", members)
+                    report["replayed" if changed else "unchanged"] += 1
+            report["decks"][deck_id] = details
+        report["unique_decks"] = len(report["decks"])
+        report["status"] = "complete"
+    except BaseException as exc:
+        report.update(status="stopped", error=str(exc))
+        raise
+    finally:
+        atomic_json(root / ("replay-report.json" if replay else "audit-report.json"), report)
+    return report
 
 
 def atomic_json(path, payload):
@@ -296,6 +353,9 @@ def main():
     )
     parser.add_argument("--max-hours", type=float, default=24)
     parser.add_argument("--max-decks", type=int, default=20000)
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--audit-cached", action="store_true")
+    mode.add_argument("--replay-cached", action="store_true")
     args = parser.parse_args()
     args.root.mkdir(parents=True, exist_ok=True)
     # OS-held lock is released after crashes; no second request stream can start.
@@ -312,6 +372,10 @@ def main():
             import fcntl
 
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        if args.audit_cached or args.replay_cached:
+            report = audit_cached(args.root, replay=args.replay_cached)
+            print(json.dumps({k: v for k, v in report.items() if k not in {"decks", "errors"}}, indent=2))
+            return
         collector = Collector(
             args.root, max_hours=args.max_hours, max_decks=args.max_decks
         )
