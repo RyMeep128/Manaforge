@@ -269,19 +269,27 @@ class SearchOperations:
 
     def search_syntax(self, query: str, limit: int = 200, *, offset: int = 0,
                       set_filter: str = '', online_mode: bool = False,
-                      should_cancel=None) -> list[PrintRecord]:
+                      should_cancel=None, oracle_ids=None) -> list[PrintRecord]:
         predicate, params = self._syntax_predicate(query, set_filter, online_mode)
+        if oracle_ids is not None:
+            identities = list(dict.fromkeys(oracle_ids))
+            if not identities:
+                return []
+            predicate = f'({predicate}) AND p.oracle_id IN (SELECT value FROM json_each(?))'
+            params = [*params, json.dumps(identities)]
         with search_connection(self, should_cancel) as connection:
             rows = connection.execute(
                 'WITH matches AS ('
-                'SELECT p.*, ROW_NUMBER() OVER (PARTITION BY p.oracle_id ORDER BY '
+                'SELECT p.card_id, p.name, p.released_at, ROW_NUMBER() OVER (PARTITION BY p.oracle_id ORDER BY '
                 'CASE WHEN cp.card_id = p.card_id THEN 0 ELSE 1 END, '
                 'p.released_at DESC, p.card_id) AS search_rank '
                 'FROM prints p JOIN print_search_data s ON s.card_id = p.card_id '
                 'LEFT JOIN canonical_prints cp ON cp.oracle_id = p.oracle_id '
                 f'WHERE {predicate}) '
-                'SELECT * FROM matches WHERE search_rank = 1 '
-                'ORDER BY name COLLATE NOCASE, released_at, card_id LIMIT ? OFFSET ?',
+                ', page AS (SELECT card_id, name, released_at FROM matches WHERE search_rank = 1 '
+                'ORDER BY name COLLATE NOCASE, released_at, card_id LIMIT ? OFFSET ?) '
+                'SELECT p.* FROM page JOIN prints p ON p.card_id = page.card_id '
+                'ORDER BY page.name COLLATE NOCASE, page.released_at, page.card_id',
                 [*params, max(1, min(10000, int(limit))), max(0, int(offset))]).fetchall()
         return [self.row_to_print_record(row) for row in rows]
 

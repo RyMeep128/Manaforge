@@ -29,8 +29,11 @@ Search, recommendations and commander discovery display mainboard-plus-commander
 quantities from the active document, including alternate printings. Temporary
 result entries remain display objects only.
 
-Loading and ranking run in a separate worker without disabling search. Changes
-to the deck debounce a refresh; results from an older deck/context are discarded.
+Loading and ranking run in a separate worker without disabling search.
+Artwork resolution uses bounded batches of local printings and favorites,
+with one preference read per request and no further batches after the result
+limit is reached. Artwork selection still uses the shared preference rules.
+Changes to the deck debounce a refresh; results from an older deck/context are discarded.
 Refresh reads local recommendation caches; it does not start public collection.
 The grid reuses the shared bounded thumbnail cache and background image reader
 (at most 300 × 420 decoded pixels), requesting only visible/nearby cards. It does
@@ -61,6 +64,12 @@ This does not claim current online legality. Results load asynchronously with
 debouncing, bounded recent caching, cancellation and stale-result suppression,
 and offer Show more up to 2,000 displayed cards. Only visible/nearby artwork is
 requested through the existing thumbnail cache.
+
+Theme searches restrict catalog candidates to imported Oracle identities before
+selecting printings, while eligibility and exact-pair checks still use the shared
+rules. Catalog search sorts compact printing identifiers and loads full card
+payloads only for the requested page. Larger discovery pages reduce repeated
+catalog sorting for theme and capability filters.
 
 **Set as Commander** adds or moves one copy in one history edit. Existing copies,
 artwork, categories and print settings are retained; if an entry has multiple

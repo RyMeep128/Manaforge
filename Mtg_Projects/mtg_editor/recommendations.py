@@ -53,10 +53,20 @@ def load_recommendations(
         )
         allowed = {row.oracle_id for row in matches}
     rows = []
-    for row in snapshot["results"]:
-        if allowed is not None and row["oracle_id"] not in allowed:
-            continue
-        payload = service.choose_preferred_print(row["oracle_id"])
+    candidates = [
+        row
+        for row in snapshot["results"]
+        if allowed is None or row["oracle_id"] in allowed
+    ]
+    identities = [row["oracle_id"] for row in candidates]
+    # Retain support for service adapters that only expose single-card lookup.
+    batch_lookup = getattr(service, "iter_preferred_prints", None)
+    payloads = (
+        batch_lookup(identities)
+        if batch_lookup
+        else (service.choose_preferred_print(oracle_id) for oracle_id in identities)
+    )
+    for row, payload in zip(candidates, payloads):
         if not payload:
             continue
         if color_known and (

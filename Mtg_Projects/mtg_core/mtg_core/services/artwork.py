@@ -30,3 +30,19 @@ class ArtworkOperations:
             self.get_prints(oracle_id), explicit_card_id=explicit_card_id,
             favorite_card_id=self.get_artwork_favorite(oracle_id),
             rules=self.get_artwork_preferences())
+
+    def iter_preferred_prints(self, oracle_ids):
+        """Resolve recommendations in small batches, preserving input order.
+
+        Read preferences once per request; stop loading batches as soon as the
+        caller has enough cards. Favorites and print selection use the same rules
+        as individual artwork requests.
+        """
+        identities = list(oracle_ids)
+        rules = self.get_artwork_preferences()
+        for offset in range(0, len(identities), 100):
+            batch = identities[offset:offset + 100]
+            prints, favorites = self.database.artwork_candidates(batch)
+            for oracle_id in batch:
+                yield choose_print(prints.get(oracle_id, []),
+                                   favorite_card_id=favorites.get(oracle_id), rules=rules)

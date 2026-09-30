@@ -56,10 +56,15 @@ def search_commanders(service, filters, store, *, should_cancel=None):
                         status="Current commander's local rules data is unavailable; cannot verify compatible partners.")
     limit = min(2000, max(100, int(filters.get("limit", 200))))
     results, offset = [], 0
+    # Theme membership is an exact Oracle-ID prefilter, applied before the SQL
+    # printing selection. Larger pages avoid repeating the catalog sort while
+    # retaining pagination for catalogs that exceed a single page.
+    batch_size = 10000 if theme or partner or filters.get("capability") else 1000
     while True:
         check_cancelled(should_cancel)
         batch = service.search_cards(query, dict(scryfall_syntax=True, allow_remote=False,
-                                    limit=500, offset=offset, should_cancel=should_cancel))
+                                    limit=batch_size, offset=offset, should_cancel=should_cancel,
+                                    oracle_ids=list(associations) if theme else None))
         for result in batch:
             check_cancelled(should_cancel)
             payload = result.payload or {}
@@ -85,7 +90,7 @@ def search_commanders(service, filters, store, *, should_cancel=None):
         offset += len(batch)
         # Theme results need the complete matching pool before ordering by the
         # source's cohort count; local browsing can stop at the display bound.
-        if len(batch) < 500 or (not theme and len(results) > limit):
+        if len(batch) < batch_size or (not theme and len(results) > limit):
             break
     if theme:
         results.sort(key=lambda row: (-max(a["num_decks"] for a in row["associations"]), row["card"].name.casefold()))

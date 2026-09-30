@@ -271,6 +271,25 @@ class CardOperations:
             ).fetchall()
         return [self.row_to_print_record(row) for row in rows]
 
+    def artwork_candidates(self, oracle_ids):
+        """Read a bounded batch of printings and favorites on one connection."""
+        identities = list(dict.fromkeys(oracle_ids))
+        prints, favorites = {}, {}
+        with search_connection(self) as connection:
+            for offset in range(0, len(identities), 100):
+                batch = identities[offset:offset + 100]
+                marks = ','.join('?' for _ in batch)
+                for row in connection.execute(
+                    f'SELECT oracle_id, payload_json FROM prints WHERE oracle_id IN ({marks}) '
+                    'ORDER BY released_at, set_code, collector_number', batch
+                ):
+                    prints.setdefault(row['oracle_id'], []).append(json.loads(row['payload_json']))
+                for row in connection.execute(
+                    f'SELECT oracle_id, card_id FROM artwork_favorites WHERE oracle_id IN ({marks})', batch
+                ):
+                    favorites[row['oracle_id']] = row['card_id']
+        return prints, favorites
+
     def get_canonical_print(self, oracle_id: str) -> PrintRecord | None:
         with self.connect() as connection:
             row = connection.execute(
