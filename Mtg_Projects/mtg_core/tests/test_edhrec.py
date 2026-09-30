@@ -2,6 +2,8 @@ import gzip
 import json
 import sqlite3
 import time
+import urllib.error
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -154,6 +156,45 @@ def test_download_cache_and_stop(tmp_path, monkeypatch):
     (tmp_path / "STOP").touch()
     with pytest.raises(InterruptedError):
         downloader.fetch("commanders/a.json")
+
+
+def test_download_retries_network_and_server_errors(tmp_path, monkeypatch):
+    opener = MagicMock()
+    response = MagicMock()
+    response.__enter__.return_value.read.return_value = b'{"ok":true}'
+    opener.open.side_effect = [
+        urllib.error.URLError("DNS failed"),
+        urllib.error.HTTPError("url", 429, "busy", {"Retry-After": "120"}, None),
+        urllib.error.HTTPError("url", 503, "unavailable", {}, None),
+        response,
+    ]
+    monkeypatch.setattr("urllib.request.build_opener", lambda *args: opener)
+    downloader = Downloader(tmp_path)
+    waits = []
+    monkeypatch.setattr(downloader, "wait", waits.append)
+    assert downloader.fetch("commanders/a.json") == {"ok": True}
+    assert waits[1::2] == [30, 120, 120]
+    assert opener.open.call_count == 4
+
+
+def test_retry_wait_obeys_stop(tmp_path, monkeypatch):
+    opener = MagicMock()
+    opener.open.side_effect = urllib.error.URLError("offline")
+    monkeypatch.setattr("urllib.request.build_opener", lambda *args: opener)
+    monkeypatch.setattr(time, "sleep", lambda seconds: (tmp_path / "STOP").touch())
+    with pytest.raises(InterruptedError):
+        Downloader(tmp_path).fetch("commanders/a.json")
+    assert opener.open.call_count == 1
+
+
+@pytest.mark.parametrize("code", [401, 403, 404, 410, 302])
+def test_permanent_http_errors_do_not_retry(tmp_path, monkeypatch, code):
+    opener = MagicMock()
+    opener.open.side_effect = urllib.error.HTTPError("url", code, "error", {}, None)
+    monkeypatch.setattr("urllib.request.build_opener", lambda *args: opener)
+    with pytest.raises(urllib.error.HTTPError):
+        Downloader(tmp_path).fetch("commanders/a.json")
+    assert opener.open.call_count == 1
 
 
 def test_resume_and_completion_do_not_redownload(tmp_path, monkeypatch):

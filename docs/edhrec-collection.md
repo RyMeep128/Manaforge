@@ -29,8 +29,11 @@ in each page's unresolved-name report. Unsupported commander names/pairs or
 invalid pages are reported as skipped, not merged into unrelated cohorts.
 
 One process holds a directory lock. Requests are serial with at least six seconds
-between starts. There are no automatic retries: HTTP errors (including 429 and
-401/403), redirects, and network errors stop the run with a recorded reason.
+between starts. Network failures, timeouts, HTTP 408/429, and server errors retry
+indefinitely with exponential delays from 30 seconds up to 15 minutes, honoring
+longer Retry-After headers. STOP remains responsive during retry waits.
+Missing commander pages (404/410) and invalid pages are skipped. Other HTTP
+errors (including 401/403) and redirects stop the run with a recorded reason.
 Each response is limited to 8 MiB; index traversal is limited to 200 pages and
 the run to 10,000 imported commanders. `--max-commanders N` allows a smaller
 trial; rerunning with a larger bound resumes using cached responses. A completed

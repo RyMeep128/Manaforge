@@ -4,12 +4,15 @@ import argparse
 from contextlib import closing
 import gzip
 import hashlib
+import http.client
 import json
 from pathlib import Path
 import re
 import sqlite3
 import time
 import urllib.request
+import urllib.error
+from email.utils import parsedate_to_datetime
 
 from .edhrec import cardlists, normalize, save_page
 from .paths import core_data_root
@@ -50,6 +53,51 @@ class Downloader:
         self.last = 0.0
         (self.root / "responses").mkdir(parents=True, exist_ok=True)
 
+    def wait(self, seconds):
+        deadline = time.monotonic() + seconds
+        while True:
+            if (self.root / "STOP").exists():
+                raise InterruptedError("STOP file present")
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return
+            time.sleep(min(1, remaining))
+
+    def download(self, request):
+        class NoRedirect(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, req, fp, code, msg, headers, newurl):
+                return None
+
+        backoff = 30
+        while True:
+            self.wait(max(0, self.delay - (time.monotonic() - self.last)))
+            self.last = time.monotonic()
+            try:
+                with urllib.request.build_opener(NoRedirect).open(
+                    request, timeout=45
+                ) as response:
+                    return response.read(MAX_BYTES + 1)
+            except (urllib.error.URLError, TimeoutError, ConnectionError,
+                    http.client.IncompleteRead, http.client.RemoteDisconnected) as exc:
+                retry_after = 0
+                if isinstance(exc, urllib.error.HTTPError):
+                    if exc.code not in (408, 429) and not 500 <= exc.code < 600:
+                        exc.close()
+                        raise
+                    header = exc.headers.get("Retry-After", "")
+                    try:
+                        retry_after = float(header)
+                    except ValueError:
+                        try:
+                            retry_after = parsedate_to_datetime(header).timestamp() - time.time()
+                        except (ValueError, TypeError, OverflowError):
+                            pass
+                    exc.close()
+                wait = max(backoff, retry_after)
+                print(f"EDHREC retry in {wait:.0f}s: {request.full_url}: {exc}", flush=True)
+                self.wait(wait)
+                backoff = min(backoff * 2, 900)
+
     def fetch(self, page):
         page_path(page)
         if (self.root / "STOP").exists():
@@ -63,24 +111,12 @@ class Downloader:
             with gzip.open(path, "rb") as stream:
                 raw = stream.read(MAX_BYTES + 1)
         else:
-            time.sleep(max(0, self.delay - (time.monotonic() - self.last)))
-            if (self.root / "STOP").exists():
-                raise InterruptedError("STOP file present")
-            self.last = time.monotonic()
             request = urllib.request.Request(
                 BASE + page,
                 headers={"User-Agent": "Manaforge/EDHREC personal offline snapshot"},
             )
 
-            # Fail closed on redirects, rate limits, access denial, or server errors.
-            class NoRedirect(urllib.request.HTTPRedirectHandler):
-                def redirect_request(self, req, fp, code, msg, headers, newurl):
-                    return None
-
-            with urllib.request.build_opener(NoRedirect).open(
-                request, timeout=45
-            ) as response:
-                raw = response.read(MAX_BYTES + 1)
+            raw = self.download(request)
             if len(raw) > MAX_BYTES:
                 raise ValueError("EDHREC response exceeds size limit")
             json.loads(raw)
@@ -142,9 +178,13 @@ def collect(root, catalog, *, max_commanders=10000, delay=6):
                 break
             state["current"] = slug
             write_json(state_path, state)
-            payload = downloader.fetch(f"commanders/{slug}.json")
             try:
+                payload = downloader.fetch(f"commanders/{slug}.json")
                 data = normalize(payload, resolve, slug)
+            except urllib.error.HTTPError as exc:
+                if exc.code not in (404, 410):
+                    raise
+                state["skipped"][slug] = str(exc)
             except (KeyError, TypeError, ValueError) as exc:
                 state["skipped"][slug] = str(exc)
             else:
