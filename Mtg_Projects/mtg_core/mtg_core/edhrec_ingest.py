@@ -77,18 +77,32 @@ def name_index(rows):
 
 
 def catalog_index(catalog):
-    with closing(sqlite3.connect(Path(catalog).resolve().as_uri() + "?mode=ro", uri=True)) as db:
+    with closing(
+        sqlite3.connect(Path(catalog).resolve().as_uri() + "?mode=ro", uri=True)
+    ) as db:
         columns = {r[1] for r in db.execute("PRAGMA table_info(cards_oracle)")}
-        query = "SELECT oracle_id, name" + (", layout" if "layout" in columns else "") + " FROM cards_oracle"
-        rows = [r[:2] for r in db.execute(query)
-                if not r[0].startswith("proxy-oracle-")
-                and (len(r) < 3 or r[2] not in {"art_series", "token", "double_faced_token", "emblem"})]
+        query = (
+            "SELECT oracle_id, name"
+            + (", layout" if "layout" in columns else "")
+            + " FROM cards_oracle"
+        )
+        rows = [
+            r[:2]
+            for r in db.execute(query)
+            if not r[0].startswith("proxy-oracle-")
+            and (
+                len(r) < 3
+                or r[2] not in {"art_series", "token", "double_faced_token", "emblem"}
+            )
+        ]
     names = name_index(rows)
     candidates = {}
     for oid, name in rows:
         for key in {name.casefold(), name.casefold().split(" // ")[0]}:
             candidates.setdefault(key, set()).add(oid)
-    return names, {key: sorted(ids) for key, ids in candidates.items() if names.get(key) is None}
+    return names, {
+        key: sorted(ids) for key, ids in candidates.items() if names.get(key) is None
+    }
 
 
 def reprocess_cached(root, catalog):
@@ -99,18 +113,32 @@ def reprocess_cached(root, catalog):
     names, ambiguities = catalog_index(catalog)
     target = root.parent / "edhrec.sqlite3"
     temporary = root / ("rebuild-" + uuid.uuid4().hex + ".sqlite3")
-    report = dict(status="running", imported=0, ambiguous=0, invalid=0,
-                  missing_cache=0, unresolved=0, pages={}, previous_imported=state.get("imported", 0))
+    report = dict(
+        status="running",
+        imported=0,
+        ambiguous=0,
+        invalid=0,
+        missing_cache=0,
+        unresolved=0,
+        pages={},
+        previous_imported=state.get("imported", 0),
+    )
     completed, skipped = [], {}
+
     def check_stop():
         if (root / "STOP").exists():
             raise InterruptedError("STOP file present")
+
     try:
         check_stop()
         for slug in dict.fromkeys(state["slugs"]):
             check_stop()
             page = page_path(f"commanders/{slug}.json")
-            cached = root / "responses" / (hashlib.sha256(page.encode()).hexdigest() + ".json.gz")
+            cached = (
+                root
+                / "responses"
+                / (hashlib.sha256(page.encode()).hexdigest() + ".json.gz")
+            )
             category, reason, candidates = None, None, {}
             if not cached.exists():
                 category, reason = "missing_cache", "Cached response missing"
@@ -122,39 +150,65 @@ def reprocess_cached(root, catalog):
                         raise ValueError("EDHREC response exceeds size limit")
                     payload = json.loads(raw)
                     name = payload["container"]["json_dict"]["card"]["name"]
-                    candidates = {n: ambiguities[n.casefold()] for n in [name, *name.split(" // ")]
-                                  if n.casefold() in ambiguities}
+                    candidates = {
+                        n: ambiguities[n.casefold()]
+                        for n in [name, *name.split(" // ")]
+                        if n.casefold() in ambiguities
+                    }
                     data = normalize(payload, lambda n: names.get(n.casefold()), slug)
                     save_page(temporary, data, time.time())
                 except (OSError, EOFError, KeyError, TypeError, ValueError) as exc:
                     reason = str(exc)
-                    category = ("ambiguous" if candidates else "unresolved") if reason.startswith("Unresolved commander:") else "invalid"
+                    category = (
+                        ("ambiguous" if candidates else "unresolved")
+                        if reason.startswith("Unresolved commander:")
+                        else "invalid"
+                    )
             if category:
                 report[category] += 1
                 skipped[slug] = reason
-                report["pages"][slug] = dict(category=category, reason=reason, candidates=candidates)
+                report["pages"][slug] = dict(
+                    category=category, reason=reason, candidates=candidates
+                )
             else:
                 completed.append(slug)
                 report["imported"] += 1
         # Do not replace a usable cache with missing/corrupt data or lost pages.
-        if report["missing_cache"] or report["invalid"] or not set(state.get("completed", [])).issubset(completed):
-            raise ValueError("Rebuild validation failed; existing database and checkpoint preserved")
+        if (
+            report["missing_cache"]
+            or report["invalid"]
+            or not set(state.get("completed", [])).issubset(completed)
+        ):
+            raise ValueError(
+                "Rebuild validation failed; existing database and checkpoint preserved"
+            )
         if not temporary.exists():
             raise ValueError("No usable pages to publish")
         with closing(sqlite3.connect(temporary)) as db:
             if db.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
                 raise ValueError("Rebuilt database failed integrity check")
-            report["unique_cohorts"] = db.execute("SELECT COUNT(*) FROM pages").fetchone()[0]
+            report["unique_cohorts"] = db.execute(
+                "SELECT COUNT(*) FROM pages"
+            ).fetchone()[0]
         check_stop()
         backup = root / ("backup-" + uuid.uuid4().hex)
         backup.mkdir()
         shutil.copy2(state_path, backup / "state.json")
         if target.exists():
-            with closing(sqlite3.connect(target)) as source, closing(sqlite3.connect(backup / target.name)) as dest:
+            with (
+                closing(sqlite3.connect(target)) as source,
+                closing(sqlite3.connect(backup / target.name)) as dest,
+            ):
                 source.backup(dest)
         report["backup"] = str(backup)
-        state.update(status="complete", completed=completed, skipped=skipped,
-                     imported=len(completed), current=None, last_error=None)
+        state.update(
+            status="complete",
+            completed=completed,
+            skipped=skipped,
+            imported=len(completed),
+            current=None,
+            last_error=None,
+        )
         try:
             temporary.replace(target)
             write_json(state_path, state)
@@ -352,7 +406,11 @@ def main():
         "--catalog", type=Path, default=core_data_root() / "card_data.sqlite3"
     )
     parser.add_argument("--max-commanders", type=int, default=10000)
-    parser.add_argument("--reprocess-cached", action="store_true", help="Rebuild from cached pages without network requests")
+    parser.add_argument(
+        "--reprocess-cached",
+        action="store_true",
+        help="Rebuild from cached pages without network requests",
+    )
     parser.add_argument(
         "--build-discovery",
         action="store_true",
@@ -383,7 +441,9 @@ def main():
             )
         elif args.reprocess_cached:
             result = reprocess_cached(args.root, args.catalog)
-            print(json.dumps({k: v for k, v in result.items() if k != "pages"}, indent=2))
+            print(
+                json.dumps({k: v for k, v in result.items() if k != "pages"}, indent=2)
+            )
         else:
             collect(args.root, args.catalog, max_commanders=args.max_commanders)
         if args.with_discovery:

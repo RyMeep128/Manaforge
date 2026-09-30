@@ -52,8 +52,10 @@ def normalize_deck(payload, *, diagnostics=None):
     categories = {c["name"]: c for c in payload.get("categories", [])}
     members = {}
     size = 0
+
     def excluded(reason):
         details["excluded"][reason] = details["excluded"].get(reason, 0) + 1
+
     for entry in payload.get("cards", []):
         if entry.get("deletedAt"):
             excluded("deleted")
@@ -90,8 +92,17 @@ def normalize_deck(payload, *, diagnostics=None):
 def audit_cached(root, *, replay=False):
     """Inspect unique cached decks offline; caller holds the collector lock."""
     root = Path(root)
-    report = dict(status="running", accepted=0, rejected=0, invalid_cache=0,
-                  duplicates=0, replayed=0, unchanged=0, decks={}, errors={})
+    report = dict(
+        status="running",
+        accepted=0,
+        rejected=0,
+        invalid_cache=0,
+        duplicates=0,
+        replayed=0,
+        unchanged=0,
+        decks={},
+        errors={},
+    )
     store = RecommendationStore(root.parent / "archidekt.sqlite3") if replay else None
     try:
         for path in sorted(root.glob("*.json.gz")):
@@ -121,8 +132,12 @@ def audit_cached(root, *, replay=False):
                 details["status"] = "accepted"
                 report["accepted"] += 1
                 if replay:
-                    digest = hashlib.sha256(json.dumps(members, sort_keys=True).encode()).hexdigest()
-                    changed = store.ingest_members(deck_id, digest, f"{BASE}/decks/{deck_id}", members)
+                    digest = hashlib.sha256(
+                        json.dumps(members, sort_keys=True).encode()
+                    ).hexdigest()
+                    changed = store.ingest_members(
+                        deck_id, digest, f"{BASE}/decks/{deck_id}", members
+                    )
                     report["replayed" if changed else "unchanged"] += 1
             report["decks"][deck_id] = details
         report["unique_decks"] = len(report["decks"])
@@ -131,7 +146,9 @@ def audit_cached(root, *, replay=False):
         report.update(status="stopped", error=str(exc))
         raise
     finally:
-        atomic_json(root / ("replay-report.json" if replay else "audit-report.json"), report)
+        atomic_json(
+            root / ("replay-report.json" if replay else "audit-report.json"), report
+        )
     return report
 
 
@@ -374,7 +391,12 @@ def main():
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         if args.audit_cached or args.replay_cached:
             report = audit_cached(args.root, replay=args.replay_cached)
-            print(json.dumps({k: v for k, v in report.items() if k not in {"decks", "errors"}}, indent=2))
+            print(
+                json.dumps(
+                    {k: v for k, v in report.items() if k not in {"decks", "errors"}},
+                    indent=2,
+                )
+            )
             return
         collector = Collector(
             args.root, max_hours=args.max_hours, max_decks=args.max_decks
