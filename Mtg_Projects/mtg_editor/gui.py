@@ -109,7 +109,8 @@ class EditorWindow(W.QMainWindow):
         self.save_status.setProperty('role', 'muted')
         bar.addWidget(self.save_status)
         self.button(bar, 'Save', self.save)
-        self.add_button = self.button(bar, '+ Add Cards', self.toggle_search, True)
+        self.add_button = self.button(bar, 'Quick Add', self.toggle_search)
+        self.workspace_button = self.button(bar, 'Add Cards', self.open_add_cards, True)
         self.button(bar, 'Import', self.import_decklist)
         self.button(bar, 'Print Deck', self.print_deck, True)
         more = W.QToolButton()
@@ -197,7 +198,7 @@ class EditorWindow(W.QMainWindow):
         self.search_panel.setMinimumWidth(270)
         search_layout = W.QVBoxLayout(self.search_panel)
         search_header = W.QHBoxLayout()
-        label = W.QLabel('Add Cards')
+        label = W.QLabel('Quick Add')
         self.search_heading = label
         label.setProperty('role', 'title')
         search_header.addWidget(label, 1)
@@ -245,7 +246,7 @@ class EditorWindow(W.QMainWindow):
         self.grid.setToolTip('Hold right mouse or T: quick category / tags. Right-click: card actions.')
         self.grid.moveRequested.connect(self.move_cards)
         self.grid.preferencesChanged.connect(self.preferences_changed)
-        self.grid.addRequested.connect(self.open_search)
+        self.grid.addRequested.connect(self.open_add_cards)
         self.model = DeckTable(self.document, self)
         self.table = W.QTableView()
         self.table.setModel(self.model)
@@ -271,7 +272,12 @@ class EditorWindow(W.QMainWindow):
         self.splitter.setSizes([330, 920])
         self.splitter.splitterMoved.connect(self.preferences_changed)
         self.search_panel.hide()
-        layout.addWidget(self.splitter, 1)
+        from .add_cards_workspace import AddCardsWorkspace
+        self.workspace_stack = W.QStackedWidget()
+        self.workspace_stack.addWidget(self.splitter)
+        self.add_cards_workspace = AddCardsWorkspace(self, controls)
+        self.workspace_stack.addWidget(self.add_cards_workspace)
+        layout.addWidget(self.workspace_stack, 1)
         self.setCentralWidget(body)
         for combo in (self.view_mode, self.group, self.sort):
             combo.currentTextChanged.connect(self.preferences_changed)
@@ -368,24 +374,42 @@ class EditorWindow(W.QMainWindow):
         edit_artwork_preferences(self, self.service)
 
     def focus_filter(self):
+        self.add_cards_workspace.back()
         self.filter.setFocus()
         self.filter.selectAll()
 
     def open_search(self):
+        self.add_cards_workspace.back()
         self.search_panel.show()
-        self.add_card_tabs.setCurrentIndex(0)
+        with QtCore.QSignalBlocker(self.add_card_tabs):
+            self.add_card_tabs.setCurrentIndex(0)
         self.splitter.setSizes([self.document.editor_preferences.get('panel_width', 330), max(400, self.width()-330)])
-        self.query.setFocus()
+        self.add_card_tab_changed(0)
+
+    def open_add_cards(self):
+        self.add_cards_workspace.open()
 
     def add_card_tab_changed(self, index):
         if index == 0:
             self.query.setFocus()
+            if (self.query.text().strip() and not self.search_document.deck.entries
+                    and not self.pending_search
+                    and (self.worker is None or self.worker.cancelled.is_set())):
+                self.search()
+            elif (self.search_document.deck.entries
+                    and (self.worker is None or self.worker.cancelled.is_set())):
+                self.search_status.setText(
+                    f'{len(self.search_document.deck.entries)} local matches (up to 100). Double-click or + to add.')
         else:
+            self.cancel_search()
             self.results.hover_timer.stop()
             self.results.preview.hide()
             self.thumbnails.set_visible(id(self.results), [])
 
     def toggle_search(self):
+        if self.add_cards_workspace.expanded:
+            self.open_search()
+            return
         if self.search_panel.isHidden():
             self.open_search()
         else:
@@ -477,6 +501,7 @@ class EditorWindow(W.QMainWindow):
         return entry_id
 
     def show_table(self):
+        self.add_cards_workspace.back()
         self.views.setCurrentWidget(self.table)
         self.restore_table_selection()
 
@@ -505,6 +530,7 @@ class EditorWindow(W.QMainWindow):
     def changed(self):
         self.update_search_membership()
         self.recommendation_panel.deck_changed()
+        self.add_cards_workspace.discovery.deck_changed()
         if self.readiness_snapshot is not None and self.document.to_dict() != self.readiness_snapshot:
             self.grid.filtered_ids = None
             self.readiness_snapshot = None
@@ -524,6 +550,8 @@ class EditorWindow(W.QMainWindow):
         self.save_status.setText('Unsaved' if dirty else 'Saved')
         self.undo_button.setEnabled(self.history.can_undo)
         self.redo_button.setEnabled(self.history.can_redo)
+        self.add_cards_workspace.undo_button.setEnabled(self.history.can_undo)
+        self.add_cards_workspace.redo_button.setEnabled(self.history.can_redo)
         self.selection_changed()
         if dirty:
             self.autosave.start()
@@ -569,9 +597,8 @@ class EditorWindow(W.QMainWindow):
         self.update_search_membership()
 
     def update_search_membership(self):
-        from .organization import in_deck_entries
-        self.results.in_deck_ids = in_deck_entries(self.document, self.search_document.deck.entries)
-        self.results.viewport().update()
+        from .organization import update_candidate_quantities
+        update_candidate_quantities(self.document, self.results)
 
     def add_result(self, entry_id, delta=1):
         result = next((e for e in self.search_document.deck.entries if e.entry_id == entry_id), None)
@@ -1177,8 +1204,10 @@ class EditorWindow(W.QMainWindow):
     def closeEvent(self, event):
         self.closing = True
         self.search_controller.shutdown()
+        self.add_cards_workspace.discovery.controller.shutdown()
         self.recommendation_panel.suspend()
-        if self.worker is not None or self.task is not None or self.thumbnails.worker is not None or self.recommendation_panel.worker is not None:
+        if (self.worker is not None or self.task is not None or self.thumbnails.worker is not None
+                or self.recommendation_panel.worker is not None or self.add_cards_workspace.discovery.controller.worker is not None):
             self.thumbnails.stopping = True
             self.thumbnails.pending.clear()
             self.statusBar().showMessage('Finishing background work before closing…')
@@ -1189,6 +1218,7 @@ class EditorWindow(W.QMainWindow):
             self.thumbnails.stopping = False
             self.closing = False
             self.search_controller.resume()
+            self.add_cards_workspace.discovery.controller.resume()
             self.recommendation_panel.deck_changed()
             event.ignore()
             return
@@ -1198,6 +1228,7 @@ class EditorWindow(W.QMainWindow):
         self.grid.preview.close()
         self.results.preview.close()
         self.recommendation_panel.canvas.preview.close()
+        self.add_cards_workspace.discovery.canvas.preview.close()
         super().closeEvent(event)
 
 

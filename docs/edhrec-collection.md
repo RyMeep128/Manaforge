@@ -9,9 +9,71 @@ Run explicitly from the repository root:
 The downloader follows the `more` links returned by
 `https://json.edhrec.com/pages/commanders/year.json`, deduplicates slugs, and fetches
 each listed commander page once. These are frontend JSON endpoints, not a stable
-public API contract. This run captures available commander category lists, not
+public API contract. The recommendation snapshot captures available commander category lists, not
 raw decks, every possible card, separate theme pages, average decks, or combos.
 It does not follow category-list continuation pages within commander pages.
+
+## Offline commander/theme discovery
+
+Build the discovery snapshot explicitly from responses already collected:
+
+```powershell
+& '.\Mtg_Projects\mtg_proxy\venv\Scripts\python.exe' tools/collect_edhrec.py --build-discovery
+```
+
+For a new or resumed collection followed by discovery normalization, use
+`--with-discovery`. Both modes use the existing collector lock and STOP file.
+`--build-discovery` makes **no network requests**, works after a completed
+recommendation run, and leaves its database and checkpoint unchanged. The editor
+never collects EDHREC data. In **Add Cards > Commanders**, use **Refresh local
+data** after publishing a snapshot.
+
+The raw commander frontend responses contain explicit `tag_counts` records
+(`panels.taglinks` is the equivalent supported representation), with theme slug,
+display name, and deck count for that exact commander cohort. Discovery normalizes
+these real source-provided associations. It does **not** infer themes from
+recommendation categories such as Creatures or High Synergy Cards. No separate
+theme pages, invented theme catalog, or additional downloader are needed for this
+snapshot. The available themes and membership coverage are limited to the cached
+commander pages; this is not a complete global EDHREC theme-page index.
+
+`edhrec-discovery.sqlite3` is a separate schema-versioned normalized database:
+
+- `themes`: source slug and display name;
+- `commanders`: order-independent cohort key, source name/slug, cohort sample,
+  and cached response timestamp;
+- `commander_members`: locally resolved Oracle identities for each cohort;
+- `theme_commanders`: exact theme/cohort membership and source deck count.
+
+Pair memberships retain the complete pair identity. A pair's sample/count is
+never presented as a single commander's sample, a global theme total, or a card
+recommendation score. Discovery orders theme matches by the largest available
+matching cohort count, with name as a tie-breaker; this is a local browse order,
+not a claimed EDHREC global rank. Selecting a result exposes the exact cohort,
+counts, cache date, and source URL.
+
+Normalization resolves exact names before unambiguous front-face aliases or pair
+splitting, using the same filtered local Oracle catalog as recommendation ingest.
+Unresolved/ambiguous cohorts are omitted and reported with candidate identities
+in `edhrec-run/discovery-state.json`. Missing theme fields, conflicting records,
+invalid counts, malformed responses, and missing previously collected responses
+stop publication explicitly. An empty source-provided tag list is valid; absent
+tag data is not silently treated as an empty list.
+
+`discovery-staging.sqlite3` and `discovery-state.json` checkpoint completed pages.
+STOP preserves the staging work for resume. A changed raw-response/catalog
+signature starts a fresh build. Integrity, foreign keys, and retention of
+previously resolved cohorts are checked before atomic publication. The previous
+snapshot and checkpoint are backed up under `discovery-backup-<unique-id>`;
+publication failure rolls back the live snapshot. Readers continue using the
+previous snapshot throughout normalization. Raw response reads retain the 8 MiB
+bound; network collection retains all existing pacing, retry, and access-denial
+behavior.
+
+Without a usable discovery snapshot, name, type/subtype, Oracle text, color
+identity, and commander capability filters remain available from the local card
+catalog. The Theme control explicitly reports unavailable data. Refresh does
+not download themes or change recommendation-source preferences.
 
 Files live in `%LOCALAPPDATA%\PrintProxyPrep\mtg_core\recommendations` (or the
 configured `PRINT_PROXY_PREP_DATA_DIR`):

@@ -6,7 +6,6 @@ from datetime import datetime
 from PyQt6 import QtCore as C, QtGui as G, QtWidgets as W
 from mtg_core.decks import DeckDocument
 from mtg_core.recommendation_scoring import settings
-from mtg_core.sections import DeckSection
 from mtg_ui.theme import COLORS
 
 from .canvas import CardCanvas
@@ -16,7 +15,7 @@ from .recommendations import (
     recommendation_reason,
 )
 from .tasks import Task
-from .organization import in_deck_entries
+from .organization import update_candidate_quantities
 
 
 CARD_TYPES = (
@@ -152,6 +151,15 @@ class RecommendationPanel(W.QWidget):
         header.addWidget(self.type_filter, 1)
         header.addWidget(refresh)
         body.addLayout(header)
+        self.type_tabs = W.QTabBar()
+        self.type_tabs.setExpanding(False)
+        self.type_tabs.setUsesScrollButtons(True)
+        for title in ["All Card Types", *CARD_TYPES]:
+            self.type_tabs.addTab(title)
+        self.type_tabs.currentChanged.connect(self.type_filter.setCurrentIndex)
+        self.type_filter.currentIndexChanged.connect(self.type_tabs.setCurrentIndex)
+        self.type_tabs.hide()
+        body.addWidget(self.type_tabs)
         self.status = W.QLabel("Recommendations load from your local dataset.")
         self.status.setWordWrap(True)
         body.addWidget(self.status)
@@ -163,6 +171,10 @@ class RecommendationPanel(W.QWidget):
 
     def active(self):
         return self.isVisible() and not self.editor.closing
+
+    def set_expanded(self, expanded):
+        self.type_tabs.setVisible(expanded)
+        self.type_filter.setVisible(not expanded)
 
     def deck_changed(self):
         key = context_key(self.editor.document)
@@ -280,18 +292,7 @@ class RecommendationPanel(W.QWidget):
         self.canvas.refresh()
 
     def update_quantities(self):
-        self.canvas.in_deck_ids = in_deck_entries(
-            self.editor.document, [row["entry"] for row in self.rows]
-        )
-        quantities = {}
-        for entry in self.editor.document.deck.entries:
-            if entry.section in (DeckSection.MAINBOARD, DeckSection.COMMANDER):
-                identity = entry.oracle_id or entry.card_id
-                quantities[identity] = quantities.get(identity, 0) + entry.quantity
-        for row in self.rows:
-            entry = row["entry"]
-            entry.quantity = quantities.get(entry.oracle_id or entry.card_id, 0)
-        self.canvas.viewport().update()
+        update_candidate_quantities(self.editor.document, self.canvas)
 
     def add(self, entry_id, _delta=1):
         row = next((r for r in self.rows if r["entry"].entry_id == entry_id), None)

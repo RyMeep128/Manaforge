@@ -22,6 +22,7 @@ class CardCanvas(W.QAbstractScrollArea):
         super().__init__(parent)
         self.document, self.thumbnails = document, thumbnails
         self.search_mode = search
+        self.search_action_text = '+ Add'
         self.mode, self.grouping, self.sort, self.query = 'Grid', 'Type', 'Name', ''
         self.card_width = 180
         self.selected = set()
@@ -165,7 +166,7 @@ class CardCanvas(W.QAbstractScrollArea):
                 control = self.control_rect(rect)
                 p.fillRect(control, G.QColor('#20352f'))
                 if self.search_mode:
-                    p.drawText(control, C.Qt.AlignmentFlag.AlignCenter, '+ Add')
+                    p.drawText(control, C.Qt.AlignmentFlag.AlignCenter, self.search_action_text)
                 else:
                     for delta, button in self.quantity_buttons(rect):
                         p.drawText(button, C.Qt.AlignmentFlag.AlignCenter, '+' if delta > 0 else '−')
@@ -194,7 +195,15 @@ class CardCanvas(W.QAbstractScrollArea):
     def control_rect(self, rect):
         # Narrow cards need a separate row so controls do not cover the badges.
         bottom_offset = 57 if rect.width() < 164 else 29
-        return C.QRect(rect.right()-65, rect.top()+3 if self.mode == 'Stacks' else rect.bottom()-bottom_offset, 60, 25)
+        width = min(rect.width()-8, 120) if self.search_mode and self.search_action_text != '+ Add' else 60
+        return C.QRect(rect.right()-width-5, rect.top()+3 if self.mode == 'Stacks' else rect.bottom()-bottom_offset, width, 25)
+
+    def hideEvent(self, event):
+        self.hover_timer.stop()
+        self.detail_timer.stop()
+        self.preview.hide()
+        self.thumbnails.set_visible(id(self), [])
+        super().hideEvent(event)
 
     def quantity_buttons(self, rect):
         control = self.control_rect(rect)

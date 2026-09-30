@@ -29,6 +29,28 @@ def card_facts(payload):
              'finishes', 'frame_effects', 'promo', 'textless', 'full_art', 'border_color')}
 
 
+def update_candidate_quantities(document, canvas):
+    """Presentation quantities come only from the active mainboard/commanders."""
+    entries = [entry for entry in document.deck.entries
+               if entry.section in (DeckSection.MAINBOARD, DeckSection.COMMANDER)]
+    oracles, prints, names, legacy = {}, {}, {}, {}
+    for entry in entries:
+        for mapping, key in ((oracles, entry.oracle_id), (prints, entry.card_id),
+                             (names, entry.name.strip().casefold())):
+            if key:
+                mapping[key] = mapping.get(key, 0) + entry.quantity
+        if not entry.oracle_id:
+            key = entry.name.strip().casefold()
+            legacy[key] = legacy.get(key, 0) + entry.quantity
+    for candidate in canvas.document.deck.entries:
+        name = candidate.name.strip().casefold()
+        candidate.quantity = (oracles.get(candidate.oracle_id, 0) + legacy.get(name, 0)
+                              if candidate.oracle_id else names.get(name, 0))
+        candidate.quantity = max(candidate.quantity, prints.get(candidate.card_id, 0))
+    canvas.in_deck_ids = in_deck_entries(document, canvas.document.deck.entries)
+    canvas.viewport().update()
+
+
 def group_key(entry, grouping):
     if entry.section == DeckSection.COMMANDER:
         return 'Commander'

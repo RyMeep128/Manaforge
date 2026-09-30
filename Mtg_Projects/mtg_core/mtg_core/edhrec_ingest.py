@@ -325,7 +325,19 @@ def main():
     )
     parser.add_argument("--max-commanders", type=int, default=10000)
     parser.add_argument("--reprocess-cached", action="store_true", help="Rebuild from cached pages without network requests")
+    parser.add_argument(
+        "--build-discovery",
+        action="store_true",
+        help="Build the offline theme/commander index from explicit cached tag counts; no network requests",
+    )
+    parser.add_argument(
+        "--with-discovery",
+        action="store_true",
+        help="Build discovery after the normal resumable commander collection",
+    )
     args = parser.parse_args()
+    if args.build_discovery and (args.reprocess_cached or args.with_discovery):
+        parser.error("--build-discovery is an independent offline operation")
     args.root.mkdir(parents=True, exist_ok=True)
     with open(args.root / "collector.lock", "a+b") as lock:
         lock.seek(0)
@@ -342,11 +354,29 @@ def main():
             import fcntl
 
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        if args.reprocess_cached:
+        if args.build_discovery:
+            from .edhrec_discovery_ingest import build_discovery
+
+            result = build_discovery(args.root, args.catalog)
+            print(
+                json.dumps(
+                    {
+                        k: v
+                        for k, v in result.items()
+                        if k not in ("completed", "invalid", "unresolved")
+                    },
+                    indent=2,
+                )
+            )
+        elif args.reprocess_cached:
             result = reprocess_cached(args.root, args.catalog)
             print(json.dumps({k: v for k, v in result.items() if k != "pages"}, indent=2))
         else:
             collect(args.root, args.catalog, max_commanders=args.max_commanders)
+        if args.with_discovery:
+            from .edhrec_discovery_ingest import build_discovery
+
+            build_discovery(args.root, args.catalog)
 
 
 if __name__ == "__main__":

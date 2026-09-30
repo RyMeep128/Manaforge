@@ -4,6 +4,7 @@ archidekt-run/
 archidekt.sqlite3*
 edhrec-run/
 edhrec.sqlite3*
+edhrec-discovery.sqlite3*
 *.py[cod]
 *$py.class
 

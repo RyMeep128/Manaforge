@@ -32,9 +32,16 @@ The editor shares Proxy's dark styling and green accents. **Grid** shows complet
 card images; **Stacks** overlaps cards within groups. The card canvas uses all
 remaining window space, and the toolbars wrap on smaller screens.
 
-- **Add Cards** opens a resizable visual search panel. Search names or Scryfall
+- **Quick Add** opens a resizable visual search panel. Search names or Scryfall
   syntax against the local Core catalog. Double-click a result or click its plus
   control to add that exact printing. Closing the panel retains its search and scroll.
+- **Add Cards** opens the full-width **Search**, **Recommendations**, and
+  **Commanders** workspace. It shares Quick Add's search and blended recommendations,
+  and edits the same deck session. **Back to Deck** restores the deck view.
+  Commander discovery supports local name/text/type/color-identity filters and
+  [explicit offline EDHREC themes](../../docs/edhrec-collection.md#offline-commandertheme-discovery).
+  Set a commander or add a compatible second commander with Undo/Redo; replacing
+  existing commanders requires confirmation.
 - Group by **Type**, **Mana Value**, **Color**, **Category**, or **Section**. Commander
   cards appear first. Group headings show quantities and can be collapsed.
 - Sort by **Name**, **Mana Value**, **Color**, **Quantity**, or **Import Order**. Color
@@ -267,7 +274,7 @@ Rule references: [Comprehensive Rules](https://magic.wizards.com/en/rules), sect
 ## Shortcuts and remaining work
 
 Ctrl+N: New; Ctrl+O: Open; Ctrl+S: Save; Ctrl+Z: Undo;
-Ctrl+Y/Ctrl+Shift+Z: Redo; Ctrl+F: deck filter; Ctrl+K: Add Cards;
+Ctrl+Y/Ctrl+Shift+Z: Redo; Ctrl+F: deck filter; Ctrl+K: Quick Add;
 Ctrl+A: select visible cards; Delete: remove selection; hold T: quick tagging;
 Tab in the radial menu: switch primary/category tag mode; Esc: cancel.
 
@@ -326,7 +333,7 @@ totals. Global Oracle tags and factual card-type statistics are unchanged.
 
 ## Deck filtering
 
-**Add Cards** searches the local catalog in the background. Typing a new query
+**Quick Add** and **Add Cards > Search** share local background search. Typing a new query
 cancels the previous search; **Cancel**, clearing the field, hiding the search
 panel, and closing the editor also stop outstanding searches. Obsolete results
 never replace the current query's results. Recent successful searches (including

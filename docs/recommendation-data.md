@@ -2,8 +2,18 @@
 
 ## Available workflow
 
-**Add Cards** has separate **Syntax Search** and **Recommendations** tabs.
-The existing search controls and results remain together in Syntax Search.
+**Quick Add** keeps the lightweight **Syntax Search** and **Recommendations**
+sidebar beside the deck. **Add Cards** opens a persistent full-width workspace
+with **Search**, **Recommendations**, and **Commanders**, while the deck header
+remains available. **Back to Deck** restores the deck view and previous sidebar
+visibility. Ctrl+K continues to open Quick Add; Ctrl+F returns to the deck filter.
+The empty deck's Add Cards action opens the full workspace.
+
+Both presentations host the same search and recommendation widgets/controllers,
+not independent engines or deck sessions. Query text, cached search results,
+selection, filters, dismissals and recommendation state survive switching.
+Each presentation retains its scroll positions. The full workspace provides
+larger cards, card-size control, Undo/Redo, and visible recommendation type tabs.
 The Recommendations tab shows a responsive card grid (about two columns at the normal sidebar width)
 with name, mainboard-plus-commander quantity across printings, **+ Add**, and a
 compact **Why?** popover containing reasons, provenance, and dismissal. Its type
@@ -15,6 +25,9 @@ preferences, and dismissals. Existing deck cards can remain visible so quantitie
 update immediately. A candidate does not count as evidence of its own
 co-occurrence. Search and recommendations call the same add-card command, keeping
 manual categories, dirty state, autosave, and Undo/Redo behavior consistent.
+Search, recommendations and commander discovery display mainboard-plus-commander
+quantities from the active document, including alternate printings. Temporary
+result entries remain display objects only.
 
 Loading and ranking run in a separate worker without disabling search. Changes
 to the deck debounce a refresh; results from an older deck/context are discarded.
@@ -25,6 +38,43 @@ not load full-resolution artwork into the browser. Missing-image behavior follow
 the existing thumbnail cache policy. Hiding the tab releases queued thumbnail
 interest. Advanced weighting and dismissal restoration remain available through
 **More > Recommendations**.
+
+## Commander discovery
+
+**Add Cards > Commanders** browses local cards using the existing search syntax
+backend and commander eligibility/pairing rules. Theme is an editable searchable
+catalog driven by the [offline discovery snapshot](edhrec-collection.md#offline-commandertheme-discovery),
+with a clear unavailable state when no snapshot exists. Local discovery still
+works without EDHREC. Refresh reads local data only.
+
+Filters include name, type/creature type, Oracle text, exact selected WUBRG color
+identity, colorless, color count (zero through five), and supported
+Partner/Background capabilities. These do not inherit the deck's color identity.
+An optional compatible-partner filter uses the current single commander's local
+rules. Combining a theme with the compatible-partner filter requires an explicitly
+cached association for the exact pair. The default legality filter includes only
+cards marked Commander-legal in the local catalog; disabling it allows inspection
+of other locally known cards.
+This does not claim current online legality. Results load asynchronously with
+debouncing, bounded recent caching, cancellation and stale-result suppression,
+and offer Show more up to 2,000 displayed cards. Only visible/nearby artwork is
+requested through the existing thumbnail cache.
+
+**Set as Commander** adds or moves one copy in one history edit. Existing copies,
+artwork, categories and print settings are retained; if an entry has multiple
+copies, one is separated into the commander section. Replacing a commander
+requires confirmation and moves the old commanders to the mainboard. **Add as
+Second Commander** validates the proposed pair with the same rules used by deck
+checks. Backgrounds cannot be set as standalone commanders. A change from a
+non-Commander/non-Custom format also requires confirmation. The existing
+**Commander / deck checks** dialog remains available for detailed legality,
+pregame color, companion and selection handling.
+
+All mutations use the active session's history, autosave and persistence path;
+counts and recommendation context refresh through the normal changed handler.
+Recommendation blending, source-specific statistics and contextual scoring are
+unchanged. Discovery theme membership is a separate data model and never becomes
+a new recommendation score or provider switch.
 
 **More > Deck guidance** loads local Oracle Tag/text evidence in a worker and
 shows quantity-weighted lands, ramp, draw, and interaction. Manual roles,
