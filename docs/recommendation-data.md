@@ -168,10 +168,25 @@ no hosted feed, automatic download, or redistribution is enabled.
 
 ## Acceptance and limits
 
-Phase 5's planned implementation is present; CI and representative public-corpus
-quality/performance acceptance are still pending. The collector can finish its
-authorized run independently. No local tests or CI monitoring were performed
-for this increment. Regression cases have been added for CI.
+Phase 5's planned implementation is present. The full application suite and lint
+passed on Windows/Python 3.12 and 3.13 for `6453d75`; its formatting failure was
+corrected separately. No local tests are run for this closeout; GitHub Actions
+owns acceptance.
+
+CI now includes an offline scale/reproducibility gate with 20,000 synthetic
+100-card decks, 4,000 candidate card identities, 20 commander cohorts, and a
+2,000-result query with co-occurrence evidence. It blocks socket connections,
+checks exact results after reopening the database, verifies sample counts and
+score explanations, and requires the initial query to finish within ten seconds
+on the CI runner. Fixture construction is outside that query budget. This
+complements existing ingestion, guidance, local-blend, archive, and Qt interaction
+regressions. The gate is pending its first CI run.
+
+Representative public-corpus recommendation quality and worst-case latency with
+200 co-occurrence seeds remain unvalidated. Synthetic acceptance does not replace
+that evidence or establish competitive deck quality. The collector can finish its
+authorized run independently; completing every source download is not required
+to use the offline feature.
 
 Global baselines do not yet correct for color eligibility or card release dates;
 do not interpret these rankings as EDHREC-equivalent or a representative measure

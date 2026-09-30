@@ -1,4 +1,6 @@
 import json
+from contextlib import closing
+from time import perf_counter
 from types import SimpleNamespace
 
 import pytest
@@ -6,6 +8,77 @@ import pytest
 from mtg_core.decks import DeckDocument, DeckEntry
 from mtg_core.recommendations import RecommendationStore
 from mtg_core.recommendation_sources import CachedSource, default_sources, recommend
+
+
+def test_phase5_offline_scale_acceptance(tmp_path, monkeypatch):
+    """CI-only synthetic query acceptance at the personal collection run limit.
+
+    Seed normalized tables in bulk; ingestion is covered separately. No public
+    deck data or user files are needed by CI. This is not a meta-quality claim.
+    """
+    store = RecommendationStore(tmp_path / "scale.sqlite3")
+    with closing(store.connect()) as db, db:
+        db.executemany(
+            "INSERT INTO decks VALUES (?, ?, ?, ?)",
+            (
+                (str(i), str(i), "synthetic acceptance corpus", 1.0)
+                for i in range(20000)
+            ),
+        )
+        db.executemany(
+            "INSERT INTO members VALUES (?, ?, ?)",
+            ((str(i), f"commander-{i % 20}", 1) for i in range(20000)),
+        )
+        db.executemany(
+            "INSERT INTO members VALUES (?, ?, ?)",
+            (
+                (str(i), f"card-{(i * 17 + offset) % 4000:04d}", 0)
+                for i in range(20000)
+                for offset in range(99)
+            ),
+        )
+        db.execute(
+            "INSERT INTO popularity SELECT oracle_id, count(*) FROM members GROUP BY oracle_id"
+        )
+        db.execute(
+            """INSERT INTO inclusion
+            SELECT c.oracle_id, m.oracle_id, count(*)
+            FROM members c JOIN members m ON c.deck_id=m.deck_id
+            WHERE c.commander=1 GROUP BY c.oracle_id, m.oracle_id"""
+        )
+
+    def no_network(*args, **kwargs):
+        pytest.fail("Offline recommendations attempted a network connection")
+
+    monkeypatch.setattr("socket.socket.connect", no_network)
+    source = CachedSource("synthetic", "primary", store)
+    arguments = dict(
+        commanders=["commander-0"],
+        exclude=["commander-0"],
+        limit=2000,
+        seeds=[f"card-{i:04d}" for i in range(5)],
+    )
+    started = perf_counter()
+    first = recommend([source], **arguments)
+    elapsed = perf_counter() - started
+    assert elapsed < 10, f"Offline ranking took {elapsed:.2f}s for 20,000 decks"
+    reopened = CachedSource("synthetic", "primary", RecommendationStore(store.path))
+    second = recommend([reopened], **arguments)
+    assert first == second
+    assert first["decks"] == 20000
+    assert first["relevant_decks"] == 1000
+    assert len(first["results"]) == 2000
+    assert first["source_status"][0]["source"] == "synthetic"
+    assert first["sources"] and first["formula"]
+    assert not first["local_enabled"]
+    for row in first["results"]:
+        assert row["sample"] == 1000
+        assert 0 <= row["inclusion"] <= 1
+        assert 0 <= row["baseline"] <= 1
+        assert row["synergy"] == pytest.approx(row["inclusion"] - row["baseline"])
+        assert row["association"]["seeds"] == 5 - int(
+            row["oracle_id"] in arguments["seeds"]
+        )
 
 
 def deck_file(tmp_path, number, commander="cmdr", card="card"):
