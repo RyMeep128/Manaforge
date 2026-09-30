@@ -25,6 +25,7 @@ class CardCanvas(W.QAbstractScrollArea):
         self.mode, self.grouping, self.sort, self.query = 'Grid', 'Type', 'Name', ''
         self.card_width = 180
         self.selected = set()
+        self.in_deck_ids = set()
         self.filtered_ids = None
         self.collapsed = set()
         self.items, self.headers = [], []
@@ -145,11 +146,16 @@ class CardCanvas(W.QAbstractScrollArea):
             if not rect.adjusted(0, 0, 0, 32).intersects(visible):
                 continue
             pixmap = self.thumbnails.get(entry.card_id, entry.image_asset_id)
-            rounded_card(p, rect, pixmap, entry.entry_id in self.selected, entry.entry_id == self.hovered)
+            in_deck = self.search_mode and entry.entry_id in self.in_deck_ids
+            rounded_card(p, rect, pixmap, entry.entry_id in self.selected or in_deck, entry.entry_id == self.hovered)
             badge = C.QRect(rect.x()+4, rect.bottom()-28, 32, 24)
             p.fillRect(badge, G.QColor('#20352f'))
             p.setPen(G.QColor('white'))
             p.drawText(badge, C.Qt.AlignmentFlag.AlignCenter, str(entry.quantity))
+            if in_deck:
+                marker = C.QRect(rect.x()+4, rect.top()+31, rect.width()-8, 22)
+                p.fillRect(marker, G.QColor('#20352f'))
+                p.drawText(marker, C.Qt.AlignmentFlag.AlignCenter, 'In deck')
             if not self.search_mode and (entry.category_ids or entry.extras.get('auto_categories')):
                 source = 'Manual' if is_manual(entry) else 'Auto'
                 source_rect = C.QRect(rect.x()+40, rect.bottom()-28, 54, 24)
@@ -158,7 +164,11 @@ class CardCanvas(W.QAbstractScrollArea):
             if entry.entry_id == self.hovered or entry.entry_id in self.selected:
                 control = self.control_rect(rect)
                 p.fillRect(control, G.QColor('#20352f'))
-                p.drawText(control, C.Qt.AlignmentFlag.AlignCenter, '+ Add' if self.search_mode else '−     +')
+                if self.search_mode:
+                    p.drawText(control, C.Qt.AlignmentFlag.AlignCenter, '+ Add')
+                else:
+                    for delta, button in self.quantity_buttons(rect):
+                        p.drawText(button, C.Qt.AlignmentFlag.AlignCenter, '+' if delta > 0 else '−')
             if self.mode != 'Stacks' or not any(r.y() > rect.y() and r.x() == rect.x() and k == key for _, r, k in self.items):
                 label = ('Oversized · ' if entry.oversized else '') + ('Owned · ' if entry.do_not_print else '') + entry.name
                 p.setPen(G.QColor(COLORS['text_secondary']))
@@ -186,6 +196,27 @@ class CardCanvas(W.QAbstractScrollArea):
         bottom_offset = 57 if rect.width() < 164 else 29
         return C.QRect(rect.right()-65, rect.top()+3 if self.mode == 'Stacks' else rect.bottom()-bottom_offset, 60, 25)
 
+    def quantity_buttons(self, rect):
+        control = self.control_rect(rect)
+        if self.search_mode:
+            return [(1, control)]
+        half = control.width() // 2
+        return [(-1, C.QRect(control.x(), control.y(), half, control.height())),
+                (1, C.QRect(control.x()+half, control.y(), control.width()-half, control.height()))]
+
+    def activate_quantity(self, item, position):
+        if item is None:
+            return False
+        entry, rect, _ = item
+        point = position + C.QPoint(0, self.verticalScrollBar().value())
+        for delta, button in self.quantity_buttons(rect):
+            if button.contains(point):
+                self.press_position = None
+                self.detail_entry = None
+                self.quantityRequested.emit(entry.entry_id, delta)
+                return True
+        return False
+
     def mousePressEvent(self, event):
         self.detail_timer.stop()
         self.detail_entry = None
@@ -210,9 +241,7 @@ class CardCanvas(W.QAbstractScrollArea):
             self.viewport().update()
             return
         entry, rect, _ = item
-        point = event.position().toPoint() + C.QPoint(0, self.verticalScrollBar().value())
-        if self.control_rect(rect).contains(point):
-            self.quantityRequested.emit(entry.entry_id, 1 if self.search_mode or point.x() > rect.right()-35 else -1)
+        if self.activate_quantity(item, event.position().toPoint()):
             return
         mods = event.modifiers()
         visible_ids = [e.entry_id for e, _, _ in self.items]
@@ -274,6 +303,8 @@ class CardCanvas(W.QAbstractScrollArea):
         if event.button() != C.Qt.MouseButton.LeftButton:
             return
         item = self.hit(event.position().toPoint())
+        if self.activate_quantity(item, event.position().toPoint()):
+            return
         if item:
             if self.search_mode:
                 self.quantityRequested.emit(item[0].entry_id, 1)

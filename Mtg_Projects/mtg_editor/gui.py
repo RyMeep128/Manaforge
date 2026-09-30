@@ -503,6 +503,7 @@ class EditorWindow(W.QMainWindow):
             self.changed()
 
     def changed(self):
+        self.update_search_membership()
         self.recommendation_panel.deck_changed()
         if self.readiness_snapshot is not None and self.document.to_dict() != self.readiness_snapshot:
             self.grid.filtered_ids = None
@@ -565,6 +566,12 @@ class EditorWindow(W.QMainWindow):
                     classify(getattr(r, 'payload', {}) or {}))}) for r in results]
         self.results.refresh()
         self.search_status.setText(error or f'{len(results)} local matches (up to 100). Double-click or + to add.')
+        self.update_search_membership()
+
+    def update_search_membership(self):
+        from .organization import in_deck_entries
+        self.results.in_deck_ids = in_deck_entries(self.document, self.search_document.deck.entries)
+        self.results.viewport().update()
 
     def add_result(self, entry_id, delta=1):
         result = next((e for e in self.search_document.deck.entries if e.entry_id == entry_id), None)
@@ -591,11 +598,15 @@ class EditorWindow(W.QMainWindow):
         if not entry_id and delta == 0:
             self.remove_selected()
             return
-        ids = self.grid.selected if entry_id in self.grid.selected else {entry_id}
+        ids = set(self.grid.selected) if entry_id in self.grid.selected else {entry_id}
         def action(document):
             for entry in document.deck.entries:
                 if entry.entry_id in ids:
-                    entry.quantity = max(1, entry.quantity+delta)
+                    entry.quantity = max(0, entry.quantity+delta)
+            removed = {entry.entry_id for entry in document.deck.entries
+                       if entry.entry_id in ids and entry.quantity == 0}
+            document.deck.entries = [entry for entry in document.deck.entries if entry.entry_id not in removed]
+            document.deck.commander_entry_ids = [key for key in document.deck.commander_entry_ids if key not in removed]
         self.edit(action)
 
     def remove_selected(self):

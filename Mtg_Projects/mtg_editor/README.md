@@ -1,5 +1,10 @@
 # Manaforge Deck Editor
 
+Card **+ / −** controls change quantities in Grid and Stacks; reducing the last
+copy removes that entry and supports Undo. Syntax Search and Recommendations
+highlight cards already in any deck section with a green outline and **In deck**
+label, including alternate printings. Highlights refresh after edits and Undo/Redo.
+
 Run `Launch Manaforge Deck Editor.cmd` after installing dependencies with the
 Proxy setup script. Alternatively run `python Mtg_Projects/mtg_editor/run_editor.py`
 from the repository root with application dependencies installed.

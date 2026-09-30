@@ -16,6 +16,7 @@ from .recommendations import (
     recommendation_reason,
 )
 from .tasks import Task
+from .organization import in_deck_entries
 
 
 CARD_TYPES = (
@@ -278,6 +279,9 @@ class RecommendationPanel(W.QWidget):
         self.canvas.refresh()
 
     def update_quantities(self):
+        self.canvas.in_deck_ids = in_deck_entries(
+            self.editor.document, [row["entry"] for row in self.rows]
+        )
         quantities = {}
         for entry in self.editor.document.deck.entries:
             if entry.section in (DeckSection.MAINBOARD, DeckSection.COMMANDER):
