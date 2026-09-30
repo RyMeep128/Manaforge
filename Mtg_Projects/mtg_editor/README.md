@@ -375,6 +375,11 @@ local data never replaces the public dataset and requires 15 relevant decks.
 See [source policy, scoring, and remaining work](../../docs/recommendation-data.md).
 # Token suggestions when printing
 
+**Print Deck** includes basic lands by default. Uncheck **Include basic lands**
+to omit them from this print job, including snow-covered basics and Wastes.
+Cards with unknown types remain included. Saved deck quantities and printing
+exclusions are unchanged.
+
 After choosing sections in **Print Deck**, Manaforge offers related tokens for
 the included cards. Choose **Add Selected** to include one copy of each selected
 token, or **Not Now** to continue without them. Tokens are added to the print

@@ -948,7 +948,8 @@ class EditorWindow(W.QMainWindow):
         self.run_task(lambda: apply_art(selection), apply)
 
     def print_deck(self):
-        from .proxy_adapter import prepare_print, launch_print, print_token_suggestions, include_print_tokens
+        from .proxy_adapter import (prepare_print, launch_print, print_token_suggestions,
+                                    include_print_tokens, exclude_basic_lands)
         dialog = W.QDialog(self)
         dialog.setWindowTitle('Print Deck — sections')
         layout = W.QVBoxLayout(dialog)
@@ -959,6 +960,10 @@ class EditorWindow(W.QMainWindow):
             check.setChecked(key in (DeckSection.MAINBOARD, DeckSection.COMMANDER))
             layout.addWidget(check)
             checks[key] = check
+        include_basics = W.QCheckBox('Include basic lands')
+        include_basics.setChecked(True)
+        include_basics.setToolTip('Uncheck to omit basic lands, including snow-covered basics and Wastes, from this print job.')
+        layout.addWidget(include_basics)
         buttons = W.QDialogButtonBox(W.QDialogButtonBox.StandardButton.Ok | W.QDialogButtonBox.StandardButton.Cancel)
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
@@ -967,6 +972,7 @@ class EditorWindow(W.QMainWindow):
             return
         snapshot = DeckDocument.from_dict(self.document.to_dict())
         sections = {key for key, check in checks.items() if check.isChecked()}
+        print_basics = include_basics.isChecked()
         def launch(project):
             self.document.extras['proxy_project_id'] = project['id']
             self.changed()
@@ -991,7 +997,11 @@ class EditorWindow(W.QMainWindow):
                 prepare()
             else:
                 self.task.finished.connect(lambda: QtCore.QTimer.singleShot(0, prepare))
-        self.run_task(lambda: print_token_suggestions(snapshot, self.service, sections), choose_tokens)
+        def find_tokens():
+            if not print_basics:
+                exclude_basic_lands(snapshot, self.service, sections)
+            return print_token_suggestions(snapshot, self.service, sections)
+        self.run_task(find_tokens, choose_tokens)
 
     def undo(self):
         if self.task is not None:

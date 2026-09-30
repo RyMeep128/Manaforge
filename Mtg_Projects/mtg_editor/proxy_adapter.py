@@ -110,6 +110,19 @@ def prepare_print(document, service, sections):
         lock.unlock()
 
 
+def exclude_basic_lands(document, service, sections):
+    """Mark basic lands excluded in a print snapshot, retaining deck quantities."""
+    for entry in document.deck.entries:
+        if entry.quantity <= 0 or entry.section not in sections or entry.do_not_print:
+            continue
+        type_line = entry.extras.get('facts', {}).get('type_line')
+        if not type_line and entry.card_id:
+            type_line = (service.get_card(card_id=entry.card_id) or {}).get('type_line')
+        types = (type_line or '').split('\u2014', 1)[0].split()
+        if 'Basic' in types and 'Land' in types:
+            entry.do_not_print = True
+
+
 def print_token_suggestions(document, service, sections):
     """Suggest missing tokens for only the cards included in this print job."""
     from mtg_print.services.deck_import_service import unadded_token_suggestions
