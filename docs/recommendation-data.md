@@ -45,11 +45,13 @@ interest. Advanced weighting and dismissal restoration remain available through
 backend and commander eligibility/pairing rules. Theme is an editable searchable
 catalog driven by the [offline discovery snapshot](edhrec-collection.md#offline-commandertheme-discovery),
 with a clear unavailable state when no snapshot exists. Local discovery still
-works without EDHREC. Refresh reads local data only.
+works without EDHREC. Refresh reads local data only. **Import cached themes**
+builds the catalog from previously collected responses in a cancellable background
+task. Type in Theme and choose a matching entry to apply its stored theme identity;
+typing alone does not change the active filter.
 
-Filters include name, type/creature type, Oracle text, exact selected WUBRG color
-identity, colorless, color count (zero through five), and supported
-Partner/Background capabilities. These do not inherit the deck's color identity.
+Filters include name, type/creature type, Oracle text, and supported
+Partner/Background capabilities. Discovery does not restrict color identity.
 An optional compatible-partner filter uses the current single commander's local
 rules. Combining a theme with the compatible-partner filter requires an explicitly
 cached association for the exact pair. The default legality filter includes only

@@ -38,8 +38,10 @@ remaining window space, and the toolbars wrap on smaller screens.
 - **Add Cards** opens the full-width **Search**, **Recommendations**, and
   **Commanders** workspace. It shares Quick Add's search and blended recommendations,
   and edits the same deck session. **Back to Deck** restores the deck view.
-  Commander discovery supports local name/text/type/color-identity filters and
+  Commander discovery supports local name/text/type filters and
   [explicit offline EDHREC themes](../../docs/edhrec-collection.md#offline-commandertheme-discovery).
+  Use **Import cached themes** to build the theme catalog from previously collected
+  responses, then type in Theme and choose a match to filter commanders.
   Set a commander or add a compatible second commander with Undo/Redo; replacing
   existing commanders requires confirmation.
 - Group by **Type**, **Mana Value**, **Color**, **Category**, or **Section**. Commander

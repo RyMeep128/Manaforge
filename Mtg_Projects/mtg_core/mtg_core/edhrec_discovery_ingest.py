@@ -10,10 +10,26 @@ import sqlite3
 import uuid
 
 from .edhrec_discovery import normalize_discovery, save_discovery_page
-from .edhrec_ingest import MAX_BYTES, catalog_index, page_path, write_json
+from .edhrec_ingest import MAX_BYTES, catalog_index, collector_lock, page_path, write_json
+from .paths import core_data_root
 
 
-def build_discovery(root, catalog):
+def import_cached_discovery(root=None, catalog=None, *, should_cancel=None):
+    """User-triggered offline import, using the same lock as the CLI collector."""
+    root = Path(root) if root is not None else core_data_root() / "recommendations" / "edhrec-run"
+    catalog = Path(catalog) if catalog is not None else core_data_root() / "card_data.sqlite3"
+    if not (root / "state.json").exists():
+        raise ValueError("No collected EDHREC responses are available. Collect an offline EDHREC snapshot first, then import cached themes.")
+    with collector_lock(root):
+        try:
+            return build_discovery(root, catalog, should_cancel=should_cancel)
+        except InterruptedError:
+            if should_cancel and should_cancel():
+                return dict(status="cancelled")
+            raise
+
+
+def build_discovery(root, catalog, *, should_cancel=None):
     """Normalize explicit cached tag counts without any network requests.
 
     The existing collector supplies bounded raw responses, polite pacing and
@@ -27,6 +43,8 @@ def build_discovery(root, catalog):
     source = json.loads((root / "state.json").read_text(encoding="utf-8"))
 
     def check_stop():
+        if should_cancel and should_cancel():
+            raise InterruptedError("Theme import cancelled")
         if (root / "STOP").exists():
             raise InterruptedError("STOP file present")
 

@@ -25,8 +25,11 @@ For a new or resumed collection followed by discovery normalization, use
 `--with-discovery`. Both modes use the existing collector lock and STOP file.
 `--build-discovery` makes **no network requests**, works after a completed
 recommendation run, and leaves its database and checkpoint unchanged. The editor
-never collects EDHREC data. In **Add Cards > Commanders**, use **Refresh local
-data** after publishing a snapshot.
+never downloads EDHREC data. In **Add Cards > Commanders**, **Import cached themes**
+runs the same offline build with the collector lock and a cancellable progress
+dialog, then refreshes the theme catalog. Cancellation preserves the previous
+snapshot and checkpoints work for resume. Use **Refresh local data** after
+publishing a snapshot through the command line.
 
 The raw commander frontend responses contain explicit `tag_counts` records
 (`panels.taglinks` is the equivalent supported representation), with theme slug,
@@ -70,8 +73,8 @@ previous snapshot throughout normalization. Raw response reads retain the 8 MiB
 bound; network collection retains all existing pacing, retry, and access-denial
 behavior.
 
-Without a usable discovery snapshot, name, type/subtype, Oracle text, color
-identity, and commander capability filters remain available from the local card
+Without a usable discovery snapshot, name, type/subtype, Oracle text,
+and commander capability filters remain available from the local card
 catalog. The Theme control explicitly reports unavailable data. Refresh does
 not download themes or change recommendation-source preferences.
 

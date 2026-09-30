@@ -1,7 +1,7 @@
 """Explicit, resumable one-time EDHREC download, independent of Archidekt."""
 
 import argparse
-from contextlib import closing
+from contextlib import closing, contextmanager
 import gzip
 import hashlib
 import http.client
@@ -21,6 +21,34 @@ from .paths import core_data_root
 
 BASE = "https://json.edhrec.com/pages/"
 MAX_BYTES = 8 * 1024**2
+
+
+@contextmanager
+def collector_lock(root):
+    """Share the collector's exclusive lock with explicit offline UI imports."""
+    import sys
+
+    root = Path(root)
+    root.mkdir(parents=True, exist_ok=True)
+    with open(root / "collector.lock", "a+b") as lock:
+        lock.seek(0)
+        lock.write(b"0")
+        lock.flush()
+        lock.seek(0)
+        try:
+            if sys.platform == "win32":
+                import msvcrt
+
+                msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError as exc:
+            raise RuntimeError(
+                "The EDHREC collector or another import is using this cache. Retry after it finishes."
+            ) from exc
+        yield
 
 
 def page_path(value):
@@ -338,22 +366,7 @@ def main():
     args = parser.parse_args()
     if args.build_discovery and (args.reprocess_cached or args.with_discovery):
         parser.error("--build-discovery is an independent offline operation")
-    args.root.mkdir(parents=True, exist_ok=True)
-    with open(args.root / "collector.lock", "a+b") as lock:
-        lock.seek(0)
-        lock.write(b"0")
-        lock.flush()
-        lock.seek(0)
-        import sys
-
-        if sys.platform == "win32":
-            import msvcrt
-
-            msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
-        else:
-            import fcntl
-
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    with collector_lock(args.root):
         if args.build_discovery:
             from .edhrec_discovery_ingest import build_discovery
 

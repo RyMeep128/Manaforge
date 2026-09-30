@@ -47,12 +47,6 @@ def search_commanders(service, filters, store, *, should_cancel=None):
         if value:
             escaped = value.replace("\\", "\\\\").replace('"', '\\"')
             terms.append(f'{operator}:"{escaped}"')
-    colors = filters.get("colors")
-    if colors is not None:
-        terms.append("id=" + ("".join(c for c in "WUBRG" if c in colors) or "c"))
-    count = filters.get("color_count")
-    if count is not None:
-        terms.append(f"id={int(count)}")
     query = " ".join(terms)
     partner = None
     if filters.get("partner_card_id"):
@@ -86,10 +80,6 @@ def search_commanders(service, filters, store, *, should_cancel=None):
                 pair = commander_key([partner.get("oracle_id") or "", result.oracle_id])
                 evidence = [row for row in evidence if row["commander_key"] == pair]
             if theme and not evidence:
-                continue
-            # Identity-less records must not pass a colorless query.
-            identity = payload.get("color_identity")
-            if (colors is not None or count is not None) and identity is None:
                 continue
             results.append(dict(card=result, associations=evidence))
         offset += len(batch)

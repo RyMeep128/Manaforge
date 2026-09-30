@@ -33,6 +33,8 @@ class DiscoveryCanvas(CardCanvas):
 
     def paintEvent(self, event):
         super().paintEvent(event)
+        if not self.theme_name:
+            return
         painter = G.QPainter(self.viewport())
         offset = self.verticalScrollBar().value()
         painter.translate(0, -offset)
@@ -40,14 +42,11 @@ class DiscoveryCanvas(CardCanvas):
         for entry, rect, _ in self.items:
             if not rect.intersects(visible):
                 continue
-            colors = entry.extras.get("facts", {}).get("color_identity")
-            identity = "Identity unknown" if colors is None else " / ".join(colors) or "Colorless"
-            label = identity + (" · " + self.theme_name if self.theme_name else "")
             badge = C.QRect(rect.x()+4, rect.y()+4, rect.width()-8, 24)
             painter.fillRect(badge, G.QColor("#20352f"))
             painter.setPen(G.QColor("white"))
             painter.drawText(badge, C.Qt.AlignmentFlag.AlignCenter,
-                             painter.fontMetrics().elidedText(label, C.Qt.TextElideMode.ElideRight, badge.width()-6))
+                             painter.fontMetrics().elidedText(self.theme_name, C.Qt.TextElideMode.ElideRight, badge.width()-6))
         painter.end()
 
 
@@ -60,6 +59,8 @@ class CommanderDiscovery(W.QWidget):
         self.loaded_query = None
         self.result_status = ""
         self.context = None
+        self.theme_slug = ""
+        self.theme_catalog = []
         self.controller = SearchController(DiscoverySearch(editor.service), self)
         layout = W.QVBoxLayout(self)
         theme_row = W.QHBoxLayout()
@@ -74,6 +75,7 @@ class CommanderDiscovery(W.QWidget):
         self.theme.setToolTip("Type to find an imported theme, then choose a match.")
         self.theme.completer().setFilterMode(C.Qt.MatchFlag.MatchContains)
         self.theme.completer().setCaseSensitivity(C.Qt.CaseSensitivity.CaseInsensitive)
+        self.theme.completer().setCompletionMode(W.QCompleter.CompletionMode.PopupCompletion)
         theme_row.addWidget(self.theme, 1)
         refresh = W.QPushButton("Refresh local data")
         refresh.clicked.connect(lambda: self.search(refresh=True))
@@ -82,6 +84,10 @@ class CommanderDiscovery(W.QWidget):
         self.theme_status = W.QLabel("EDHREC themes load from the local snapshot. No collection runs in the editor.")
         self.theme_status.setWordWrap(True)
         layout.addWidget(self.theme_status)
+        self.import_themes_button = W.QPushButton("Import cached themes")
+        self.import_themes_button.setToolTip("Build the theme index from previously collected EDHREC responses. No downloads.")
+        self.import_themes_button.clicked.connect(self.import_themes)
+        layout.addWidget(self.import_themes_button, 0, C.Qt.AlignmentFlag.AlignLeft)
         fields = W.QHBoxLayout()
         self.name = W.QLineEdit()
         self.name.setPlaceholderText("Commander name")
@@ -94,27 +100,6 @@ class CommanderDiscovery(W.QWidget):
             fields.addWidget(field, 1)
             field.textChanged.connect(self.filters_changed)
         layout.addLayout(fields)
-        colors = W.QHBoxLayout()
-        colors.addWidget(W.QLabel("Color identity"))
-        self.color_mode = W.QComboBox()
-        self.color_mode.addItems(["Any colors", "Exactly selected", "Colorless"])
-        colors.addWidget(self.color_mode)
-        self.color_count = W.QComboBox()
-        self.color_count.addItem("Any number", None)
-        for count in range(6):
-            self.color_count.addItem(f"{count} colors", count)
-        colors.addWidget(self.color_count)
-        colors.addStretch()
-        layout.addLayout(colors)
-        swatches = W.QHBoxLayout()
-        self.colors = {}
-        for code, name in zip("WUBRG", ("White", "Blue", "Black", "Red", "Green")):
-            button = W.QCheckBox(name)
-            self.colors[code] = button
-            button.toggled.connect(self.color_changed)
-            swatches.addWidget(button)
-        swatches.addStretch()
-        layout.addLayout(swatches)
         options = W.QHBoxLayout()
         self.capability = W.QComboBox()
         for label, value in [("Any capability", ""), ("Partner / Partner with", "partner"),
@@ -144,12 +129,12 @@ class CommanderDiscovery(W.QWidget):
         self.canvas.search_action_text = "Set commander"
         self.canvas.card_width = 190
         self.canvas.setAccessibleName("Commander discovery results")
-        self.canvas.setToolTip("Select for color identity and theme evidence. Double-click to set as commander.")
+        self.canvas.setToolTip("Select for theme evidence. Double-click to set as commander.")
         self.canvas.quantityRequested.connect(self.set_commander)
         self.canvas.selectionChanged.connect(self.selection_changed)
         self.canvas.menuRequested.connect(self.card_menu)
         layout.addWidget(self.canvas, 1)
-        self.details = W.QLabel("Select a card to see its color identity and theme evidence.")
+        self.details = W.QLabel("Select a card to see its theme evidence.")
         self.details.setTextFormat(C.Qt.TextFormat.PlainText)
         self.details.setWordWrap(True)
         self.details.setMaximumHeight(100)
@@ -174,8 +159,10 @@ class CommanderDiscovery(W.QWidget):
         self.more.hide()
         secondary.addWidget(self.more)
         layout.addLayout(secondary)
-        for combo in (self.theme, self.color_mode, self.color_count, self.capability):
-            combo.currentIndexChanged.connect(self.filters_changed)
+        self.theme.currentIndexChanged.connect(self.theme_selected)
+        self.theme.activated.connect(self.theme_selected)
+        self.theme.completer().activated[str].connect(self.complete_theme)
+        self.capability.currentIndexChanged.connect(self.filters_changed)
         self.partner.toggled.connect(self.filters_changed)
         self.legal.toggled.connect(self.filters_changed)
         self.controller.resultsReady.connect(self.completed)
@@ -185,21 +172,60 @@ class CommanderDiscovery(W.QWidget):
 
     def filters(self):
         selected = commanders(self.editor.document)
-        return dict(theme=self.theme.currentData() or "", name=self.name.text(), type=self.type.text(),
-                    text=self.text.text(), colors=None if self.color_mode.currentIndex() == 0 else
-                    [code for code, button in self.colors.items() if button.isChecked()] if self.color_mode.currentIndex() == 1 else [],
-                    color_count=self.color_count.currentData(), capability=self.capability.currentData(),
+        return dict(theme=self.theme_slug, name=self.name.text(), type=self.type.text(),
+                    text=self.text.text(), capability=self.capability.currentData(),
                     legal_only=self.legal.isChecked(), limit=self.limit,
                     partner_card_id=selected[0].card_id if self.partner.isChecked() and len(selected) == 1 else None)
 
     def query(self):
         return json.dumps(self.filters(), sort_keys=True)
 
-    def color_changed(self):
-        blocker = C.QSignalBlocker(self.color_mode)
-        self.color_mode.setCurrentIndex(1)
-        del blocker
-        self.filters_changed()
+    def theme_selected(self, index):
+        if index < 0:
+            return
+        slug = self.theme.itemData(index) or ""
+        if slug != self.theme_slug:
+            self.theme_slug = slug
+            self.filters_changed()
+
+    def complete_theme(self, text):
+        index = self.theme.findText(text, C.Qt.MatchFlag.MatchFixedString)
+        if index >= 0:
+            self.theme.setCurrentIndex(index)
+            self.theme_selected(index)
+
+    def import_themes(self):
+        from threading import Event
+        from mtg_core.edhrec_discovery_ingest import import_cached_discovery
+
+        if self.editor.closing or self.editor.task is not None:
+            return
+        self.controller.cancel()
+        self.loaded_query = None
+        cancelled = Event()
+        progress = W.QProgressDialog("Importing cached EDHREC themes…", "Cancel", 0, 0, self.editor)
+        progress.canceled.connect(cancelled.set)
+        self.editor.task_runner.failed.connect(progress.close)
+        self.editor.task_runner.failed.connect(progress.deleteLater)
+        progress.show()
+
+        def imported(result):
+            progress.close()
+            progress.deleteLater()
+            # Replace rather than mutate a cache an exiting search worker may
+            # still hold. All subsequent searches see the newly published data.
+            from .search import SearchCache
+
+            self.controller.cache = SearchCache()
+            if result["status"] == "cancelled":
+                self.editor.statusBar().showMessage("Theme import cancelled. The previous snapshot is preserved.")
+            else:
+                self.editor.statusBar().showMessage(
+                    f"Imported {result['themes']} themes from {result['cohorts']} commander cohorts.")
+            self.search(refresh=True)
+
+        self.editor.run_task(lambda: import_cached_discovery(should_cancel=cancelled.is_set), imported)
+        self.editor.statusBar().showMessage("Importing cached EDHREC themes…")
 
     def filters_changed(self, *_):
         self.limit = 200
@@ -224,21 +250,28 @@ class CommanderDiscovery(W.QWidget):
             self.status.setToolTip(error)
             return
         self.loaded_query = query
-        selected_theme = self.theme.currentData()
-        with C.QSignalBlocker(self.theme):
-            self.theme.clear()
-            self.theme.addItem("All themes / local discovery", "")
-            for theme in snapshot["themes"]:
-                self.theme.addItem(theme["name"], theme["slug"])
-            self.theme.setCurrentIndex(max(0, self.theme.findData(selected_theme)))
+        catalog = [(theme["slug"], theme["name"]) for theme in snapshot["themes"]]
+        if catalog != self.theme_catalog:
+            typed = self.theme.currentText()
+            editing = typed != self.theme.itemText(self.theme.currentIndex())
+            with C.QSignalBlocker(self.theme):
+                self.theme.clear()
+                self.theme.addItem("All themes / local discovery", "")
+                for slug, name in catalog:
+                    self.theme.addItem(name, slug)
+                self.theme.setCurrentIndex(max(0, self.theme.findData(self.theme_slug)))
+                if editing:
+                    self.theme.setEditText(typed)
+            self.theme_catalog = catalog
         self.theme.setEnabled(bool(snapshot["themes"]))
         self.theme_status.setText(snapshot["status"])
-        if selected_theme and self.theme.findData(selected_theme) < 0:
+        if self.theme_slug and self.theme.findData(self.theme_slug) < 0:
             # A removed/unavailable snapshot must not leave a hidden theme filter
             # blocking the local fallback.
+            self.theme_slug = ""
             self.filters_changed()
             return
-        self.canvas.theme_name = self.theme.currentText() if self.theme.currentData() else ""
+        self.canvas.theme_name = dict(catalog).get(self.theme_slug, "")
         self.rows = {}
         entries = []
         for row in snapshot["results"]:
@@ -259,7 +292,7 @@ class CommanderDiscovery(W.QWidget):
                 suffix = "Select a card to inspect or set as commander."
             self.status.setText(f"{len(entries)} commanders / Backgrounds. {suffix}")
         else:
-            self.status.setText("No commanders match these filters. Try broader colors, text, or a different theme.")
+            self.status.setText("No commanders match these filters. Try broader text or a different theme.")
         self.more.setVisible(snapshot["more"] and self.limit < 2000)
         self.result_status = self.status.text()
         self.selection_changed()
@@ -272,15 +305,13 @@ class CommanderDiscovery(W.QWidget):
         self.set_button.setEnabled(row is not None)
         self.second_button.setEnabled(row is not None and len(commanders(self.editor.document)) == 1)
         if not row:
-            self.details.setText("Select a card to see its color identity and theme evidence.")
+            self.details.setText("Select a card to see its theme evidence.")
             return
         entry = row["entry"]
-        colors = entry.extras["facts"].get("color_identity")
-        identity = "Unknown" if colors is None else " / ".join(colors) or "Colorless"
-        lines = [f"{entry.name} · Color identity: {identity}"]
+        lines = [entry.name]
         for association in row["associations"][:3]:
             stamp = datetime.fromtimestamp(association["imported"]).strftime("%Y-%m-%d")
-            lines.append(f"{self.theme.currentText()}: {association['num_decks']} of {association['sample']} decks "
+            lines.append(f"{self.canvas.theme_name}: {association['num_decks']} of {association['sample']} decks "
                          f"in {association['name']} cohort (cached {stamp})")
         self.details.setText("\n".join(lines))
         if len(row["associations"]) > 3:
