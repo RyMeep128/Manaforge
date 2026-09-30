@@ -109,7 +109,11 @@ def score(row, deck_context, weights):
     association = row.get("association", {})
     components = dict(
         statistics=row["statistical_score"],
-        cooccurrence=max(0, association.get("value", 0) - row["baseline"]),
+        cooccurrence=max(
+            0,
+            association.get("value", 0)
+            - association.get("baseline", row.get("baseline", 0)),
+        ),
         roles=max(gaps.values(), default=0),
         themes=float(bool(themes)),
         archetype=float(bool(archetypes)),

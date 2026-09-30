@@ -51,8 +51,8 @@ imported samples; dataset removal/editing is not yet exposed in the UI.
 
 **More > Recommendations** provides optional local Scryfall-style filtering,
 statistics/reasons, roles/themes, Inspect/preview, and explicit Add to Deck with
-Undo. It uses the cached Archidekt dataset when present and shows an unavailable-source
-message when no primary cache exists; it does not substitute local-only recommendations. Candidate
+Undo. It combines available Archidekt and EDHREC caches into one list and shows an
+unavailable-data message when neither can contribute; local-only recommendations never replace them. Candidate
 resolution examines at most 2,000 statistical candidates and keeps up to 200
 with local card data; local search is capped at 10,000 matches. Adjustable
 context weights rerank that resolved pool, not the entire corpus. Image previews
@@ -62,9 +62,9 @@ reuse the normal card-detail behavior, which can fetch uncached images.
 
 | Source | Role | Current access status |
 | --- | --- | --- |
-| Archidekt public Commander decks | Designated primary dataset | User-authorized one-time personal/noncommercial collection; conservative caching collector available |
-| EDHREC | Optional offline primary recommendation source | Explicit one-time commander JSON download; separate cache, no runtime network dependency |
-| BlueprintMTG | Optional secondary public source | Disabled; API and data-reuse terms not verified |
+| Archidekt public Commander decks | Public recommendation evidence | User-authorized one-time personal/noncommercial collection; conservative caching collector available |
+| EDHREC | Public recommendation evidence | Explicit one-time commander JSON download; separate cache, no runtime network dependency |
+| BlueprintMTG | Future public source (unavailable) | Disabled; API and data-reuse terms not verified |
 | User-imported local Commander decks | Supplementary signal | Enabled only alongside public results and at least 15 relevant local decks |
 
 [Archidekt's published terms](https://archidekt.com/terms), sections 2 and 3,
@@ -98,18 +98,40 @@ the same versioned store. Personal aggregate archives can be transferred manuall
 no public distribution or recurring feed is configured, and this permission
 must not be treated as redistribution permission.
 
-Relevant local decks contain every selected commander as a commander. Thus a
-partner pair needs 15 decks with that pair, not 15 unrelated Commander decks.
-Below this threshold, the local signal is inactive. At or above it, local scores
-contribute 20% and public scores 80%, over the primary candidate set. Local
-data never supplies a replacement primary corpus. Secondary-source blending
-remains disabled until an explicit policy and a verified source are available.
+Public candidates are the union of Archidekt and EDHREC Oracle IDs, including
+cards present in only one source. Each adapter supplies up to 2,000 compact rows.
+Weighted reciprocal-rank fusion uses `weight / (60 + rank)` with one-based ranks
+and initial weights of 1.0 for both datasets. The sum is divided by the maximum
+possible sum for sources with usable results (`sum(weight / 61)`). This bounded
+0?1 value is a ranking signal, not a probability. Ties use Oracle ID. Raw source
+scores are never averaged; source ranks and all statistical metadata remain in
+`source_evidence`. Weights are internal constants, with no source-weight sliders.
 
-Current cached scores are `inclusion + 0.5 * (inclusion - baseline) + 0.25 *
-baseline`, with baseline-only ranking when no commander sample exists.
-Inclusion uses distinct decks, not card quantities. Partner samples use the
-joint commander cohort for both ranking and the 15-deck local eligibility check.
-Refresh is manual via reimport, and source file paths/import times remain local.
+The top 2,000 fused rows are retained before resolving printings; at most 200
+available, color-compatible cards are retained for contextual ranking. Failed,
+missing, empty, and disabled sources have their own status. One broken cache
+cannot suppress another working source. Provenance and per-source sample sizes
+are retained; overlapping corpus sizes are never added into a combined total.
+
+Relevant local decks contain every selected commander as a commander. A partner
+pair therefore needs 15 decks with the complete pair. Below 15, with the per-deck
+local toggle disabled, or without public candidates, the local signal is inactive.
+Eligible local ranks normalize to `61 / (60 + rank)`; absent candidates receive
+zero. The statistical component becomes `0.8 * public_score + 0.2 * local_score`.
+Local-only candidates never enter the public union.
+
+Archidekt preserves its raw `inclusion + 0.5 * (inclusion - baseline) + 0.25 *
+baseline` ordering, with baseline-only ranking when no cohort sample exists.
+EDHREC preserves eligible-deck inclusion, categories, and uninterpreted reported
+synergy. Exact cached EDHREC pairs use order-independent keys; missing pairs
+never fall back to individual commander pages. Archidekt may still contribute.
+Manaforge does not reproduce EDHREC rankings or equate these statistics with lift.
+
+Association providers are selected by their optional `associations()` capability.
+Currently the live Archidekt store supplies conditional inclusion and its own
+baseline, including for EDHREC-only candidates. Portable Archidekt and EDHREC do
+not fabricate co-occurrence. Candidates exclude themselves from seed evidence.
+Missing association evidence earns zero while other ranking components continue.
 
 ## Context scoring and controls
 
@@ -117,7 +139,7 @@ The final score is the sum of individually displayed weighted components:
 
 | Component | Default weight | Evidence |
 | --- | --- | --- |
-| Statistics | 1.0 | Public commander inclusion, synergy difference and popularity, with optional eligible local blend |
+| Statistics | 1.0 | Normalized public rank fusion, with optional eligible normalized local blend |
 | Co-occurrence | 0.25 | Mean conditional inclusion across known, distinct nonbasic mainboard cards, minus global popularity, floored at zero |
 | Roles | 0.25 | Largest matching proportional shortage against guidance targets; respects manual roles and dismissed shortages |
 | Themes | 0.15 | Match to a threshold-qualified, nondismissed guidance theme |
@@ -140,16 +162,24 @@ is available locally; its availability is shown explicitly.
 
 ## Personal offline cache
 
-**More > Recommendation cache** selects the live collected dataset, an imported
-personal archive, the offline EDHREC cache, or disabled primary recommendations. Switching sources does
-not alter, stop, or restart the collector. The local supplement can be disabled
-independently in ranking preferences.
+**More > Recommendation cache > Configure recommendation sources** independently
+enables Archidekt and EDHREC. Archidekt can use its live collected cache or a
+portable personal aggregate without switching off EDHREC. Local-supplement
+preferences remain per-deck. Refresh reranks cached data in the existing worker;
+opening recommendations never downloads or recollects either public dataset.
 
-The [EDHREC downloader](edhrec-collection.md) uses a separate database and response
-cache. Select **Use offline EDHREC cache** after downloading. EDHREC ranking uses
-the published card inclusion fraction, with each card's own eligible-deck count.
-It does not fabricate global popularity, co-occurrence, or partner cohorts.
-Existing contextual ranking and optional eligible local blending still apply.
+`source-settings.json` version 2 stores `archidekt: {enabled, cache}` and
+`edhrec: {enabled}`. New installations enable both. Legacy `live`/`portable`
+settings retain that Archidekt choice and enable EDHREC when its cache exists.
+Legacy `edhrec` enables EDHREC plus a valid existing Archidekt cache (live preferred,
+otherwise portable). Legacy `disabled` keeps both off. Migration saves version 2;
+no dataset regeneration is required. Explicit per-source disables remain saved.
+
+The [EDHREC downloader](edhrec-collection.md) retains its separate database and
+response cache. Why? shows every contributing source's rank and statistics,
+EDHREC categories and exact pair identity, the fused ranking signal, local
+supplement state, and the existing context reasons. Unavailable-source messages
+are displayed separately from absent evidence for a particular candidate.
 
 Export creates a schema-versioned gzip JSON archive from a consistent snapshot
 of the collected public dataset. It includes global popularity, collection time,

@@ -327,4 +327,13 @@ class RecommendationStore:
                 )
             for oid, association in result.items():
                 association["seeds"] -= int(oid in sizes)
+            total = db.execute("SELECT count(*) FROM decks").fetchone()[0]
+            popularity = dict(
+                db.execute(
+                    f"SELECT oracle_id, decks FROM popularity WHERE oracle_id IN ({candidate_marks})",
+                    candidates,
+                )
+            )
+            for oid, association in result.items():
+                association["baseline"] = popularity.get(oid, 0) / total if total else 0
             return result

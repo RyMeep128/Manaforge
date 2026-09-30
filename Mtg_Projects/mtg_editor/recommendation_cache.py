@@ -9,6 +9,8 @@ from mtg_core.recommendation_cache import (
     export_cache,
     read_cache,
     set_mode,
+    source_settings,
+    save_source_settings,
     write_cache,
 )
 from mtg_core.recommendations import RecommendationStore
@@ -16,13 +18,10 @@ from mtg_core.recommendations import RecommendationStore
 
 def manage_cache(editor):
     actions = [
-        "Use live collected cache",
-        "Use imported personal cache",
-        "Disable primary recommendations",
+        "Configure recommendation sources",
         "Export personal aggregate cache",
         "Import personal aggregate cache",
         "Download personal aggregate cache",
-        "Use offline EDHREC cache",
     ]
     action, accepted = W.QInputDialog.getItem(
         editor,
@@ -35,28 +34,10 @@ def manage_cache(editor):
         return
     root = editor.recommendation_store().path.parent
     destination = root / "archidekt.aggregate.json.gz"
-    if action == "Use offline EDHREC cache":
-
-        def select_edhrec():
-            if not (root / "edhrec.sqlite3").exists():
-                raise ValueError(
-                    "Run tools/collect_edhrec.py to download the one-time snapshot first."
-                )
-            set_mode(root, "edhrec")
-            return "Offline EDHREC selected. Reopen recommendations to apply."
-
-        work = select_edhrec
-    elif action in actions[:3]:
-        mode = ["live", "portable", "disabled"][actions.index(action)]
-
-        def select():
-            if mode == "portable":
-                read_cache(destination)
-            set_mode(root, mode)
-            return "Primary source selection saved. Reopen recommendations to apply."
-
-        work = select
-    elif action == actions[3]:
+    if action == actions[0]:
+        configure_sources(editor, root)
+        return
+    elif action == actions[1]:
         path, _ = W.QFileDialog.getSaveFileName(
             editor,
             "Export personal aggregates",
@@ -76,7 +57,7 @@ def manage_cache(editor):
             return f"Personal aggregate archive saved. No raw decks were exported.\nSHA-256: {digest}"
 
         work = export
-    elif action == actions[4]:
+    elif action == actions[2]:
         path, _ = W.QFileDialog.getOpenFileName(
             editor, "Import personal aggregates", "", "Aggregate cache (*.json.gz)"
         )
@@ -115,3 +96,52 @@ def manage_cache(editor):
             editor, "Recommendation cache", message
         ),
     )
+
+
+def configure_sources(editor, root):
+    """Independent public switches; local preferences remain saved per deck."""
+
+    def show(config):
+        dialog = W.QDialog(editor)
+        dialog.setWindowTitle("Recommendation sources")
+        layout = W.QFormLayout(dialog)
+        archidekt = W.QCheckBox("Enable Archidekt recommendations")
+        archidekt.setChecked(config["archidekt"]["enabled"])
+        cache = W.QComboBox()
+        cache.addItem("Live collected cache", "live")
+        cache.addItem("Portable personal aggregate", "portable")
+        cache.setCurrentIndex(cache.findData(config["archidekt"]["cache"]))
+        edhrec = W.QCheckBox("Enable offline EDHREC recommendations")
+        edhrec.setChecked(config["edhrec"]["enabled"])
+        layout.addRow(archidekt)
+        layout.addRow("Archidekt data source", cache)
+        layout.addRow(edhrec)
+        note = W.QLabel(
+            "Available datasets contribute to one list. These controls never download data. Local supplement preferences are saved with each deck."
+        )
+        note.setWordWrap(True)
+        layout.addRow(note)
+        buttons = W.QDialogButtonBox(
+            W.QDialogButtonBox.StandardButton.Save
+            | W.QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addRow(buttons)
+        if dialog.exec() != W.QDialog.DialogCode.Accepted:
+            return
+        updated = dict(
+            version=2,
+            archidekt=dict(enabled=archidekt.isChecked(), cache=cache.currentData()),
+            edhrec=dict(enabled=edhrec.isChecked()),
+        )
+        editor.run_task(
+            lambda: save_source_settings(root, updated),
+            lambda _: W.QMessageBox.information(
+                editor,
+                "Recommendation sources",
+                "Sources saved. Refresh recommendations to apply.",
+            ),
+        )
+
+    editor.run_task(lambda: source_settings(root), show)

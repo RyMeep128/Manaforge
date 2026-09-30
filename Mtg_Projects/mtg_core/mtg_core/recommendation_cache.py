@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import gzip
 import hashlib
 import json
+import sqlite3
 from pathlib import Path
 import time
 import urllib.parse
@@ -203,7 +204,7 @@ def download_cache(url, digest, destination):
 class AggregateSource:
     path: Path
     source_id: str = "archidekt"
-    role: str = "primary"
+    role: str = "public"
 
     def snapshot(self, commanders=(), *, exclude=(), limit=200):
         data = read_cache(self.path)
@@ -250,12 +251,84 @@ class AggregateSource:
         )
 
 
-def set_mode(root, mode):
-    if mode not in ("live", "portable", "disabled", "edhrec"):
-        raise ValueError("Unknown primary source mode")
+def valid_live_cache(path):
+    try:
+        with closing(
+            sqlite3.connect(Path(path).resolve().as_uri() + "?mode=ro", uri=True)
+        ) as db:
+            for table in ("decks", "members", "popularity", "inclusion"):
+                db.execute(f"SELECT * FROM {table} LIMIT 1").fetchone()
+        return True
+    except (OSError, sqlite3.Error):
+        return False
+
+
+def source_settings(root):
+    root = Path(root)
+    path = root / "source-settings.json"
+    if not path.exists():
+        return dict(
+            version=2,
+            archidekt=dict(enabled=True, cache="live"),
+            edhrec=dict(enabled=True),
+        )
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    if raw.get("version", 1) == 2:
+        if (
+            type(raw.get("archidekt", {}).get("enabled")) is not bool
+            or raw["archidekt"].get("cache") not in {"live", "portable"}
+            or type(raw.get("edhrec", {}).get("enabled")) is not bool
+        ):
+            raise ValueError("Invalid recommendation source settings")
+        return raw
+    if raw.get("version", 1) != 1:
+        raise ValueError("Unsupported recommendation source settings version")
+    mode = raw.get("primary", "live")
+    if mode not in {"live", "portable", "edhrec", "disabled"}:
+        raise ValueError("Unknown legacy recommendation mode")
+    cache = "portable" if mode == "portable" else "live"
+    arch_enabled = mode in {"live", "portable"}
+    if mode == "edhrec":
+        arch_enabled = valid_live_cache(root / "archidekt.sqlite3")
+        if not arch_enabled and (root / "archidekt.aggregate.json.gz").exists():
+            try:
+                read_cache(root / "archidekt.aggregate.json.gz")
+                cache, arch_enabled = "portable", True
+            except (OSError, ValueError, EOFError):
+                pass
+    migrated = dict(
+        version=2,
+        archidekt=dict(enabled=arch_enabled, cache=cache),
+        edhrec=dict(
+            enabled=mode != "disabled"
+            and (mode == "edhrec" or (root / "edhrec.sqlite3").exists())
+        ),
+    )
+    save_source_settings(root, migrated)
+    return migrated
+
+
+def save_source_settings(root, settings):
     root = Path(root)
     root.mkdir(parents=True, exist_ok=True)
     target = root / "source-settings.json"
-    temporary = target.with_suffix(".tmp")
-    temporary.write_text(json.dumps(dict(primary=mode)), encoding="utf-8")
-    temporary.replace(target)
+    temporary = target.with_suffix(f".{uuid.uuid4().hex}.tmp")
+    try:
+        temporary.write_text(json.dumps(settings, indent=2), encoding="utf-8")
+        temporary.replace(target)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def set_mode(root, mode):
+    """Compatibility helper: change one source without disabling the other."""
+    if mode not in ("live", "portable", "disabled", "edhrec"):
+        raise ValueError("Unknown source mode")
+    config = source_settings(root)
+    if mode == "disabled":
+        config["archidekt"]["enabled"] = config["edhrec"]["enabled"] = False
+    elif mode == "edhrec":
+        config["edhrec"]["enabled"] = True
+    else:
+        config["archidekt"].update(enabled=True, cache=mode)
+    save_source_settings(root, config)

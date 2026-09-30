@@ -68,12 +68,13 @@ def test_normalize_and_offline_source(tmp_path):
     set_mode(tmp_path, "edhrec")
     sources = default_sources(RecommendationStore(tmp_path / "local.sqlite3"))
     snapshot = recommend(sources, ["commander-oracle"])
-    assert snapshot["source"] == "edhrec"
+    assert snapshot["public_sources"] == ["edhrec"]
     assert snapshot["decks"] == 100
-    assert snapshot["results"][0]["score"] == 0.5
+    assert snapshot["results"][0]["public_score"] == 1.0
+    assert snapshot["results"][0]["source_evidence"]["edhrec"]["raw_score"] == 0.5
     assert snapshot["results"][0]["association"] == {}
     assert not (tmp_path / "archidekt.sqlite3").exists()
-    source = sources[0]
+    source = next(s for s in sources if s.source_id == "edhrec")
     assert not source.snapshot(["commander-oracle"], exclude=["card-oracle"])["results"]
     assert not source.snapshot(["commander-oracle", "partner"])["results"]
     assert not source.snapshot()["results"]

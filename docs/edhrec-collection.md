@@ -44,9 +44,10 @@ and rerun the command to resume. Do not manipulate Archidekt's STOP file.
 For a background launch, record the process ID and redirect stdout/stderr to
 files in `edhrec-run`; use a hidden window on Windows.
 
-In Manaforge, choose **More > Recommendation cache > Use offline EDHREC cache**.
-Reopen recommendations to apply the selection. Switching back to the live
-Archidekt cache does not interrupt either downloader. Missing commander pages
+In Manaforge, use **More > Recommendation cache > Configure recommendation sources**
+to enable EDHREC independently of Archidekt. Refresh recommendations to apply;
+both available caches contribute to one list. These settings do not interrupt
+either downloader. Missing commander pages
 produce an explicit unavailable status. Partner pairs use only their exact cached
 joint page, independent of commander order; they never fall back to individual
 pages. Commander-free decks remain unavailable.

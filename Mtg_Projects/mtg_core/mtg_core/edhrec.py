@@ -25,7 +25,11 @@ def normalize(payload, resolve, slug):
         parts = card["name"].split(" // ")
         if len(parts) == 2:
             commanders = [resolve(part) for part in parts]
-        if not commanders or not all(commanders) or len(set(commanders)) != len(commanders):
+        if (
+            not commanders
+            or not all(commanders)
+            or len(set(commanders)) != len(commanders)
+        ):
             raise ValueError(f"Unresolved commander: {card['name']}")
     commander = commander_key(commanders)
     sample = card["num_decks"]
@@ -97,7 +101,7 @@ def save_page(path, data, imported):
 class EdhrecSource:
     path: Path
     source_id: str = "edhrec"
-    role: str = "primary"
+    role: str = "public"
 
     def snapshot(self, commanders=(), *, exclude=(), limit=200):
         result = dict(
@@ -111,6 +115,10 @@ class EdhrecSource:
             formula="EDHREC card inclusion = num_decks / potential_decks; no global baseline or co-occurrence",
         )
         selected = set(commanders)
+        if len(selected) == 2:
+            result["status"] = (
+                "No exact cached pair cohort available. Individual commander pages were not combined."
+            )
         if not 1 <= len(selected) <= 2:
             result["status"] = (
                 "EDHREC cache requires one commander or an exact cached commander pair."
@@ -143,6 +151,6 @@ class EdhrecSource:
                     imported=row[1],
                 )
             ],
-            status=f"Offline EDHREC commander page; {len(data['unresolved'])} unresolved card names omitted; category lists may be incomplete.",
+            status=f"Offline EDHREC {'exact cached pair cohort' if len(selected) == 2 else 'commander page'}; {len(data['unresolved'])} unresolved card names omitted; category lists may be incomplete.",
         )
         return result

@@ -239,9 +239,10 @@ class RecommendationPanel(W.QWidget):
             else "never"
         )
         self.provenance = (
-            f"{snapshot['source']} · {snapshot['decks']} decks · updated {stamp}\n"
+            f"{snapshot['source']} - updated {stamp}\n"
             + "\n".join(
-                f"{s['source']}: {s['status']}" for s in snapshot["source_status"]
+                f"{s['source']}: {s['status']} (source sample: {s.get('decks', 0)} decks)"
+                for s in snapshot["source_status"]
             )
             + "\n"
             + snapshot["formula"]

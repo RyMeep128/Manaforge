@@ -28,6 +28,7 @@ def load_recommendations(
         commander_ids,
         exclude=[] if include_present else [e.oracle_id for e in document.deck.entries],
         limit=2000,
+        use_local=settings(document)["local_enabled"],
         seeds=[
             e.oracle_id
             for e in document.deck.entries
@@ -73,7 +74,9 @@ def load_recommendations(
             pre_cropped=True,
             extras={"facts": card_facts(payload)},
         )
-        rows.append(dict(row, entry=entry))
+        rows.append(
+            dict(row, entry=entry, commander_names=[e.name for e in commanders])
+        )
         if len(rows) >= 200:
             break
     proposals = service.analyze_entries([row["entry"] for row in rows])
@@ -103,28 +106,72 @@ def rank_recommendations(rows, deck_context, preferences, query=""):
         text = row["entry"].name + " " + " ".join(item["name"] for item in row["roles"])
         if query.casefold().strip() not in text.casefold():
             continue
-        raw = dict(
-            row,
-            statistical_score=row["score"]
-            if preferences["local_enabled"]
-            else row["primary_score"],
-        )
+        public = row.get("public_score", row.get("primary_score", row["score"]))
+        eligible = row.get("local_eligible", row.get("local_enabled", False))
+        enabled = eligible and preferences["local_enabled"]
+        statistical = (0.8 * public + 0.2 * row["local_score"]) if enabled else public
+        raw = dict(row, statistical_score=statistical, local_enabled=enabled)
         ranked.append(score(raw, deck_context, preferences["weights"]))
     return sorted(ranked, key=lambda row: (-row["score"], row["oracle_id"]))
 
 
 def statistical_reason(row):
-    if row.get("statistics_source") == "edhrec":
-        return (
-            f"EDHREC inclusion: {row['inclusion']:.1%} ({row['num_decks']} / {row['sample']} eligible decks)\n"
-            f"Categories: {', '.join(row['categories'])}\n"
-            f"EDHREC reported synergy (uninterpreted): {row.get('edhrec_synergy')}\n"
-            "Global popularity and deck-card co-occurrence unavailable."
+    evidence = row.get("source_evidence")
+    if evidence is None:  # Older snapshots remain inspectable.
+        key = row.get("statistics_source", "archidekt")
+        evidence = {key: row}
+    lines = ["Public recommendation evidence"]
+    for source_id, item in sorted(evidence.items()):
+        lines.append(
+            {"edhrec": "EDHREC", "archidekt": "Archidekt"}.get(source_id, source_id)
         )
-    return (
-        f"Commander inclusion: {row['inclusion']:.1%} ({row['sample']} decks)\n"
-        f"Global popularity: {row['baseline']:.1%}; synergy: {row['synergy']:+.1%}"
-    )
+        if "rank" in item:
+            lines.append(f"Rank: #{item['rank']}")
+        if source_id == "edhrec":
+            if len(item.get("commanders", [])) == 2:
+                lines.append(
+                    "Exact cached pair cohort: "
+                    + " + ".join(row.get("commander_names") or item["commanders"])
+                )
+            lines.extend(
+                [
+                    f"EDHREC inclusion: {item['inclusion']:.1%} ({item['num_decks']} / {item['sample']} eligible decks)",
+                    "Categories: " + ", ".join(item.get("categories", [])),
+                    f"EDHREC reported synergy (uninterpreted): {item.get('edhrec_synergy')}",
+                    "EDHREC global popularity and deck-card co-occurrence unavailable.",
+                ]
+            )
+        elif source_id == "archidekt" and "inclusion" in item:
+            lines.extend(
+                [
+                    f"Commander inclusion: {item['inclusion']:.1%} ({item['sample']} decks)",
+                    f"Global popularity: {item['baseline']:.1%}; Manaforge/Archidekt synergy signal: {item['synergy']:+.1%}",
+                ]
+            )
+        else:
+            lines.append(
+                f"Source ranking score: {item.get('raw_score', item.get('score', 0))}"
+            )
+    for status in row.get("source_status", []):
+        if status.get("role") != "local" and status["source"] not in evidence:
+            message = (
+                status["status"]
+                if status.get("state") != "active"
+                else "No cached evidence for this candidate"
+            )
+            lines.append(f"{status['source']}: {message}")
+    if "public_score" in row:
+        lines.extend(
+            [
+                f"Supported by {len(evidence)} public recommendation source(s)",
+                f"Combined public ranking signal: {row['public_score']:.3f}",
+                f"Local Manaforge: {row.get('local_relevant', 0)} relevant decks; supplement {'active' if row.get('local_enabled') else 'inactive'}",
+                "Public contribution: 80%; local contribution: 20%"
+                if row.get("local_enabled")
+                else "Public contribution: 100%",
+            ]
+        )
+    return "\n".join(lines)
 
 
 def recommendation_reason(row):
@@ -157,7 +204,7 @@ class RecommendationsDialog(W.QDialog):
             else "never"
         )
         text = (
-            f"{snapshot['source']} · {snapshot['decks']} decks · last import {stamp}\n"
+            f"{snapshot['source']} - last import {stamp}\n"
             "Heuristics, not legality advice. Small samples can be misleading. "
             "Ranking up to 200 resolved cards from 2,000 statistical candidates; search matches are capped at 10,000.\n"
             + (
@@ -167,15 +214,15 @@ class RecommendationsDialog(W.QDialog):
             )
         )
         text += "\n" + "\n".join(
-            f"{item['source']}: {item['status']}" for item in snapshot["source_status"]
+            f"{item['source']}: {item['status']} (source sample: {item.get('decks', 0)} decks)"
+            for item in snapshot["source_status"]
+            if item.get("role") != "local"
         )
-        text += (
-            f"\nRelevant local decks: {snapshot['local_relevant']} / 15 minimum; "
-            f"local signal {'active' if snapshot['local_enabled'] else 'inactive'}."
-        )
-        label = W.QLabel(text)
-        label.setWordWrap(True)
-        layout.addWidget(label)
+        self.status_base = text
+        self.local_relevant = snapshot["local_relevant"]
+        self.status_label = W.QLabel(text)
+        self.status_label.setWordWrap(True)
+        layout.addWidget(self.status_label)
         toggle = W.QPushButton("Adjust ranking weights")
         toggle.setCheckable(True)
         layout.addWidget(toggle)
@@ -220,7 +267,7 @@ class RecommendationsDialog(W.QDialog):
             buttons.addWidget(button)
         layout.addLayout(buttons)
         self.notice = W.QLabel(
-            "The selected public cache is the primary dataset. Local imports supplement it only at 15 relevant decks; local data never replaces it."
+            "Recommendations combine available cached public datasets. Local imports supplement them at 15 relevant decks and never introduce local-only candidates."
         )
         self.notice.setWordWrap(True)
         layout.addWidget(self.notice)
@@ -239,6 +286,15 @@ class RecommendationsDialog(W.QDialog):
             key: spin.value() for key, spin in self.weights.items()
         }
         self.preferences["local_enabled"] = self.use_local.isChecked()
+        active = (
+            self.use_local.isChecked()
+            and self.local_relevant >= 15
+            and bool(self.all_rows)
+        )
+        self.status_label.setText(
+            self.status_base
+            + f"\nRelevant local decks: {self.local_relevant} / 15 minimum; local signal {'active' if active else 'inactive'}."
+        )
         self.rows = rank_recommendations(
             self.all_rows, self.deck_context, self.preferences, self.filter.text()
         )
@@ -252,7 +308,7 @@ class RecommendationsDialog(W.QDialog):
             self.details.setPlainText(
                 "No candidates match the filter or dismissal preferences. Clear the filter or restore dismissed cards."
                 if self.all_rows
-                else "No resolved public candidates are available for this deck/search. Check the primary source status and local card catalog."
+                else "No resolved public candidates are available for this deck/search. Check the public source status and local card catalog."
             )
 
     def selected(self):
@@ -265,7 +321,7 @@ class RecommendationsDialog(W.QDialog):
             self.details.setPlainText(
                 statistical_reason(row)
                 + "\n"
-                + f"Available statistical formula: {self.formula}\nPublic component: {row['primary_score']:.3f}; local component: {row['local_score']:.3f}\n"
+                + f"Available statistical formula: {self.formula}\nPublic component: {row.get('public_score', row.get('primary_score', 0)):.3f}; local component: {row['local_score']:.3f}\n"
                 + f"Local blend used: {bool(row['local_enabled'] and self.use_local.isChecked())}\n"
                 + "\nRoles / themes:\n"
                 + "\n".join(
