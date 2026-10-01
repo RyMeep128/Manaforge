@@ -627,6 +627,10 @@ class AddCardDialog(QDialog):
             return
         menu = QMenu(self)
         view_tags = menu.addAction('View Tags')
+        from mtg_ui.rulings import add_card_reference_action
+        add_card_reference_action(menu, get_default_card_service(), name=candidate.name,
+                                  oracle_id=candidate.oracle_id,
+                                  card_id=candidate.card_id, parent=self)
         chosen = menu.exec(self._card_results_list.viewport().mapToGlobal(position))
         if chosen == view_tags:
             self._show_card_tags(candidate)

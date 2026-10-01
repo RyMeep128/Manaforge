@@ -267,7 +267,14 @@ timestamps and publication dates. Explicit background refresh uses Scryfall, lab
 Wizards rulings separately from Scryfall notes, and preserves the previous snapshot
 if the response fails or is incomplete. Successfully downloaded empty lists are
 distinguished from cards that have never been downloaded. CI validation is pending;
-Comprehensive Rules, indexes, and access from other application surfaces remain open.
+Comprehensive Rules and indexes remain open.
+
+The shared reference now includes local Oracle text for all faces and stored keywords.
+Direct card-context actions are available in Editor deck/search cards, Proxy project
+cards and Add Card results, and Core Admin Cards/Prints tables. Local identity lookup
+runs in the background and resolves a canonical printing for Oracle-only records;
+opening the reference does not download data. Rulings refresh remains explicit.
+Print-layout preview and future match surfaces still need reference entry points.
 
 - [ ] Add a local Rules section with Oracle text, official card rulings, keywords, and related Comprehensive Rules links.
 - [ ] Support full-text/rule-number search, section navigation, keyword indexes, and cross-links.

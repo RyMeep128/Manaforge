@@ -683,6 +683,7 @@ class EditorWindow(W.QMainWindow):
         entry = next(e for e in self.document.deck.entries if e.entry_id == entry_id)
         menu = W.QMenu(self)
         menu.addAction('Quick category / tags', lambda: self.quick_tag(position))
+        self.add_reference_action(menu, entry)
         menu.addAction('Replace artwork…', lambda: self.replace_artwork(entry_id)).setEnabled(len(ids) == 1)
         menu.addAction('View Oracle tags…', lambda: self.view_tags(entry))
         menu.addAction('Edit user tags…', lambda: self.edit_tags(ids, entry.tags))
@@ -712,9 +713,15 @@ class EditorWindow(W.QMainWindow):
         entry = next(e for e in self.search_document.deck.entries if e.entry_id == entry_id)
         menu = W.QMenu(self)
         menu.addAction('Add card', lambda: self.add_result(entry_id))
+        self.add_reference_action(menu, entry)
         menu.addAction('View Oracle tags…', lambda: self.view_tags(entry))
         menu.addAction('Retry artwork', lambda: self.thumbnails.retry(entry.card_id, entry.image_asset_id))
         menu.exec(position)
+
+    def add_reference_action(self, menu, entry):
+        from mtg_ui.rulings import add_card_reference_action
+        add_card_reference_action(menu, self.service, name=entry.name,
+                                  oracle_id=entry.oracle_id, card_id=entry.card_id, parent=self)
 
     def edit_owned_copies(self, ids):
         entries = [entry for entry in self.document.deck.entries if entry.entry_id in ids]

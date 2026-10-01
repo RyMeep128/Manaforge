@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMainWindow,
+    QMenu,
     QMessageBox,
     QPushButton,
     QPlainTextEdit,
@@ -28,6 +29,24 @@ from mtg_core.admin_service import CardAdminService
 from mtg_core.models import CardRecord, ImageAssetRecord, ImageManifestView, PrintRecord, SyncMetadata
 from mtg_core.services import FIXED_CATALOG_QUERY
 from mtg_core.sync_status import SyncStatus
+
+
+def _show_reference_menu(tab, position, *, prints=False):
+    """Use the clicked persisted row, not unsaved admin form fields."""
+    item = tab.table.itemAt(position)
+    if item is None:
+        return
+    identity = tab.table.item(item.row(), 0).data(Qt.ItemDataRole.UserRole)
+    service = tab.admin_service
+    record = service.get_print(identity) if prints else service.get_card(identity)
+    if record is None:
+        return
+    from mtg_ui.rulings import add_card_reference_action
+    menu = QMenu(tab)
+    add_card_reference_action(menu, service.card_service, name=record.name,
+                              oracle_id=record.oracle_id,
+                              card_id=record.card_id if prints else None, parent=tab)
+    menu.exec(tab.table.viewport().mapToGlobal(position))
 
 
 class BulkDownloadWorker(QObject):
@@ -98,6 +117,8 @@ class CardsTab(QWidget):
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.table.itemSelectionChanged.connect(self._load_selected_row)
+        self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.table.customContextMenuRequested.connect(lambda position: _show_reference_menu(self, position))
 
         self.oracle_id_edit = QLineEdit()
         self.name_edit = QLineEdit()
@@ -316,6 +337,9 @@ class PrintsTab(QWidget):
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.table.itemSelectionChanged.connect(self._load_selected_row)
+        self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.table.customContextMenuRequested.connect(
+            lambda position: _show_reference_menu(self, position, prints=True))
 
         self.card_id_edit = QLineEdit()
         self.oracle_id_edit = QLineEdit()

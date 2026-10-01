@@ -825,9 +825,13 @@ class CardWidget(QWidget):
                 application._open_add_card_search(query)
 
         def show_card_menu(position):
+            from mtg_core import get_default_card_service
+            from mtg_ui.rulings import add_card_reference_action
             menu = QMenu(self)
             menu.addAction('View Tags', view_tags)
             entry = state._ensure_card_entry(card_name)
+            add_card_reference_action(menu, get_default_card_service(), name=display_name,
+                                      oracle_id=entry.oracle_id, card_id=entry.card_id, parent=self)
             suggestions = deck_import_service.component_suggestions_for_card_ids(
                 [entry.card_id])
             application = QApplication.instance()

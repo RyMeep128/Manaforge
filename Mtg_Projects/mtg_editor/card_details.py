@@ -79,8 +79,8 @@ class CardDetails(W.QDialog):
         self.text = W.QTextBrowser()
         self.text.setPlainText(entry.name + '\n\nLoading card details…')
         info.addWidget(self.text, 1)
-        self.rulings = W.QPushButton('View card rulings…')
-        self.rulings.setEnabled(bool(entry.oracle_id))
+        self.rulings = W.QPushButton('View Oracle text and rulings…')
+        self.rulings.setEnabled(bool(entry.oracle_id or entry.card_id))
         self.rulings.clicked.connect(self.show_rulings)
         info.addWidget(self.rulings)
         info.addWidget(W.QLabel('Scryfall printing'))
@@ -146,7 +146,8 @@ class CardDetails(W.QDialog):
 
     def preview_printing(self, *_):
         self.payload = self.printings.currentData() or {}
-        self.rulings.setEnabled(bool(self.payload.get('oracle_id') or self.entry.oracle_id))
+        self.rulings.setEnabled(bool(self.payload.get('oracle_id') or self.entry.oracle_id
+                                    or self.payload.get('id') or self.entry.card_id))
         self.face = 0
         self.use.setEnabled(bool(self.payload.get('id')) and self.payload.get('id') != self.entry.card_id)
         self.render_face()
