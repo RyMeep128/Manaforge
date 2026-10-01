@@ -15,6 +15,16 @@ to versioned storage when saved. Invalid profiles or profiles from an unsupporte
 version report an error and remain unchanged. Unknown preference fields survive
 edits, and Cancel never upgrades or rewrites a profile.
 
+In an already-open artwork picker, **Search** reloads shared rules and the card's
+favorite printing before fetching results. Page navigation does the same; if
+preferences changed in another app, results restart at page one and show an update
+notice. A Min DPI value you adjusted in this picker is retained. Otherwise the
+latest shared minimum is used, with Max DPI raised if needed to keep the range
+valid. Saving through **Preferences** resumes using the shared minimum. Refreshing
+results does not replace project artwork; **Apply** or **Select Art** is still
+required. Failed preference reads/searches report the error and clear selectable
+results so an earlier search cannot be mistaken for the refreshed one.
+
 ## Global printing defaults
 
 Open **Global printing defaults** from Core's **Preferences** menu, Editor's

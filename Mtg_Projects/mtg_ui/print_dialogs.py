@@ -1213,6 +1213,8 @@ class HighResPickerDialog(QDialog):
         from mtg_core import get_default_card_service
         self._card_service = get_default_card_service()
         self._preferences = self._card_service.get_artwork_preferences()
+        self._minimum_dpi_overridden = False
+        self._search_in_progress = False
         self._favorite_card_id = (
             self._card_service.get_artwork_favorite(self._oracle_id)
             if self._oracle_id else None)
@@ -1278,15 +1280,16 @@ class HighResPickerDialog(QDialog):
         self._scryfall_set_filter_widget = WidgetWithLabel("Set Filter", scryfall_set_filter_edit)
 
         min_dpi = QSpinBox()
-        min_dpi.setRange(0, 5000)
+        min_dpi.setRange(0, 2147483647)
         min_dpi.setSingleStep(50)
         min_dpi.setValue(300)
         min_dpi.setValue(self._preferences.minimum_dpi)
         max_dpi = QSpinBox()
-        max_dpi.setRange(0, 5000)
+        max_dpi.setRange(0, 2147483647)
         max_dpi.setSingleStep(50)
         max_dpi.setValue(1500)
         search_button = QPushButton("Search")
+        search_button.setToolTip('Reload shared artwork preferences and favorites, then search.')
         search_button.clicked.connect(lambda: self.refresh_results(reset_page=True))
         preferences_button = QPushButton("Preferences…")
         preferences_button.clicked.connect(self._edit_artwork_preferences)
@@ -1301,6 +1304,7 @@ class HighResPickerDialog(QDialog):
         filters_layout.addWidget(preferences_button)
         filters_layout.addStretch()
         self._min_dpi = min_dpi
+        min_dpi.valueChanged.connect(self._mark_minimum_dpi_override)
         self._max_dpi = max_dpi
         self._min_dpi_widget = min_dpi_widget
         self._max_dpi_widget = max_dpi_widget
@@ -1407,7 +1411,11 @@ class HighResPickerDialog(QDialog):
         if rules is not None:
             self._preferences = rules
             self._min_dpi.setValue(rules.minimum_dpi)
+            self._minimum_dpi_overridden = False
             self.refresh_results(reset_page=True)
+
+    def _mark_minimum_dpi_override(self, _value):
+        self._minimum_dpi_overridden = True
 
     def selected_candidate(self):
         return self._selected_candidate_value
@@ -1529,14 +1537,22 @@ class HighResPickerDialog(QDialog):
                 self._manual_search_edit.setText(target_text)
 
     def _clear_results(self):
-        self._stop_thumbnail_loader()
+        # Invalidate queued thumbnails without blocking the GUI on a download.
+        # Keep the worker reference until finished; close/reject still wait.
+        self._page_token += 1
+        self._pending_thumbnail_candidates = []
+        if self._thumbnail_loader is not None:
+            self._thumbnail_loader.cancel()
         self._candidates = []
         self._results_list.clear()
         self._apply_button.setEnabled(False)
+        self._favorite_checkbox.setEnabled(False)
+        self._favorite_checkbox.setChecked(False)
         self._preview_label.setText("Select a result to preview it here.")
         self._preview_label.setPixmap(QPixmap())
         self._details_label.setText("")
         self._total_result_count = 0
+        self._results_have_more = False
         self._update_pagination_controls()
 
     def _auto_refresh_initial_results(self):
@@ -1668,6 +1684,16 @@ class HighResPickerDialog(QDialog):
         self.refresh_results(reset_page=False)
 
     def refresh_results(self, reset_page=False, warn_on_missing_backend=True):
+        # The initial timer can fire inside a popup's nested event loop.
+        if self._search_in_progress:
+            return
+        self._search_in_progress = True
+        try:
+            self._refresh_results(reset_page, warn_on_missing_backend)
+        finally:
+            self._search_in_progress = False
+
+    def _refresh_results(self, reset_page, warn_on_missing_backend):
         source = self._selected_source()
         search_mode = self._selected_search_mode()
         search_text = self._manual_search_edit.text()
@@ -1681,45 +1707,64 @@ class HighResPickerDialog(QDialog):
             self._status_label.setText("MPCFill art is disabled until a backend URL is configured.")
             return
 
-        if reset_page:
-            self._page_start = 0
+        page_start = 0 if reset_page else self._page_start
         min_dpi = self._min_dpi.value()
         max_dpi = self._max_dpi.value()
-        if min_dpi > max_dpi:
-            max_dpi = min_dpi
-            self._max_dpi.setValue(max_dpi)
+        minimum_overridden = self._minimum_dpi_overridden
+        previous_preferences = self._preferences
+        previous_favorite = self._favorite_card_id
+        preferences, favorite = previous_preferences, previous_favorite
+        preferences_changed = False
 
         search_page = None
         error = None
 
         def do_search():
-            nonlocal search_page, error
+            nonlocal search_page, error, preferences, favorite, preferences_changed
+            nonlocal min_dpi, max_dpi, page_start
             try:
+                # Read shared state in the search worker, not on the GUI thread.
+                preferences = self._card_service.get_artwork_preferences()
+                favorite = (self._card_service.get_artwork_favorite(self._oracle_id)
+                            if self._oracle_id else None)
+                preferences_changed = (preferences != previous_preferences or
+                                       favorite != previous_favorite)
+                if preferences_changed:
+                    page_start = 0
+                if not minimum_overridden:
+                    min_dpi = preferences.minimum_dpi
+                max_dpi = max(min_dpi, max_dpi)
                 search_page = high_res_service.search_new_art_page(
                     self._context,
                     source,
                     CFG.HighResBackendURL,
                     min_dpi,
                     max_dpi,
-                    page_start=self._page_start,
+                    page_start=page_start,
                     page_size=self._page_size,
                     search_text=search_text,
                     search_mode=search_mode,
                     set_filter=set_filter,
                 )
-            except ValueError as exc:
+            except Exception as exc:
+                logger.exception('Artwork search failed card=%s source=%s',
+                                 self._card_name, source)
                 error = exc
 
         popup_title = "Searching MPCFill..." if source == "mpcfill" else "Searching Scryfall..."
         self._run_with_popup(popup_title, do_search)
         if error is not None:
+            self._clear_results()
             self._warn("New Art Search Failed", str(error))
             self._status_label.setText("Search failed. Check the warning for details.")
-            self._total_result_count = 0
-            self._results_have_more = False
-            self._update_pagination_controls()
             return
 
+        self._preferences, self._favorite_card_id = preferences, favorite
+        self._page_start = page_start
+        blocker = QtCore.QSignalBlocker(self._min_dpi)
+        self._min_dpi.setValue(min_dpi)
+        del blocker
+        self._max_dpi.setValue(max_dpi)
         results = [] if search_page is None else search_page.candidates
         if source == 'scryfall':
             from mtg_core.preferences import rank_prints
@@ -1740,20 +1785,17 @@ class HighResPickerDialog(QDialog):
                 favorite_card_id=self._favorite_card_id,
                 rules=self._preferences)
             results = [by_id[item['id']] for item in ranked]
+        self._clear_results()
         self._total_result_count = 0 if search_page is None else search_page.total_count
         # High-resolution providers return an exact total using the existing
         # HighResSearchPage model, which has no has_more field.
         self._results_have_more = False
         self._candidates = results
-        self._results_list.clear()
-        self._apply_button.setEnabled(False)
-        self._preview_label.setText("Select a result to preview it here.")
-        self._preview_label.setPixmap(QPixmap())
-        self._details_label.setText("")
         self._update_pagination_controls()
 
+        preference_notice = 'Shared artwork preferences updated. ' if preferences_changed else ''
         if not results:
-            self._status_label.setText("No new art matches found for this card.")
+            self._status_label.setText(preference_notice + "No new art matches found for this card.")
             return
 
         page_number = (self._page_start // self._page_size) + 1
@@ -1761,6 +1803,7 @@ class HighResPickerDialog(QDialog):
         start_index = self._page_start + 1
         end_index = min(self._page_start + len(results), self._total_result_count)
         self._status_label.setText(
+            preference_notice +
             f"Showing {start_index}-{end_index} of {self._total_result_count} new art options (page {page_number}/{total_pages})."
         )
         for candidate in results:
