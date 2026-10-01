@@ -25,6 +25,13 @@ results does not replace project artwork; **Apply** or **Select Art** is still
 required. Failed preference reads/searches report the error and clear selectable
 results so an earlier search cannot be mistaken for the refreshed one.
 
+Returning focus to the artwork picker checks shared preferences in the background.
+If another app changed the rules or favorite printing, a notice offers **Search**
+to refresh. The check is local and leaves the current selection, filters, and
+artwork unchanged. A failed check shows a retry notice rather than opening a
+warning dialog. Results from a check started before a newer search, focus change,
+or dialog closure cannot replace the current notice.
+
 ## Global printing defaults
 
 Open **Global printing defaults** from Core's **Preferences** menu, Editor's

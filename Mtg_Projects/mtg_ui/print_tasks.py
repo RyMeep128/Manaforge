@@ -203,4 +203,27 @@ class CardSearchThumbnailLoader(QtCore.QThread):
             self.thumbnail_loaded.emit(self._page_token, identifier, data)
 
 
-__all__ = ["CardSearchThumbnailLoader", "HighResThumbnailLoader", "make_popup_print_fn", "popup"]
+class _ArtworkPreferenceSignals(QtCore.QObject):
+    ready = QtCore.pyqtSignal(int, object, str)
+
+
+class ArtworkPreferencesCheck(QtCore.QRunnable):
+    """Local-only read owned by the thread pool, independent of a dialog's life."""
+    def __init__(self, service, oracle_id, revision, callback):
+        super().__init__()
+        self.service, self.oracle_id, self.revision = service, oracle_id, revision
+        self.signals = _ArtworkPreferenceSignals()
+        self.signals.ready.connect(callback, QtCore.Qt.ConnectionType.QueuedConnection)
+
+    def run(self):
+        try:
+            rules = self.service.get_artwork_preferences()
+            favorite = self.service.get_artwork_favorite(self.oracle_id) if self.oracle_id else None
+            self.signals.ready.emit(self.revision, (rules, favorite), '')
+        except Exception as exc:
+            from mtg_core.diagnostics import get_logger
+            get_logger(__name__).exception('Artwork preference check failed oracle_id=%s', self.oracle_id)
+            self.signals.ready.emit(self.revision, None, str(exc))
+
+
+__all__ = ["ArtworkPreferencesCheck", "CardSearchThumbnailLoader", "HighResThumbnailLoader", "make_popup_print_fn", "popup"]

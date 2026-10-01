@@ -38,7 +38,7 @@ from PyQt6.QtWidgets import (
 
 from mtg_print import image
 from mtg_print import library as project_library
-from mtg_ui.print_tasks import CardSearchThumbnailLoader, HighResThumbnailLoader, make_popup_print_fn, popup
+from mtg_ui.print_tasks import ArtworkPreferencesCheck, CardSearchThumbnailLoader, HighResThumbnailLoader, make_popup_print_fn, popup
 from mtg_print.config import CFG, save_config
 from mtg_proxy.constants import APP_VERSION, app_dir, cwd, page_sizes
 from mtg_print.models import ProjectState, as_project_state, project_to_dict
@@ -1215,6 +1215,8 @@ class HighResPickerDialog(QDialog):
         self._preferences = self._card_service.get_artwork_preferences()
         self._minimum_dpi_overridden = False
         self._search_in_progress = False
+        self._preference_revision = 0
+        self._preference_check_pending = False
         self._favorite_card_id = (
             self._card_service.get_artwork_favorite(self._oracle_id)
             if self._oracle_id else None)
@@ -1396,15 +1398,66 @@ class HighResPickerDialog(QDialog):
         layout.addLayout(search_controls_layout)
         layout.addLayout(pagination_layout)
         layout.addWidget(self._status_label)
+        self._preference_notice = QLabel()
+        self._preference_notice.setWordWrap(True)
+        self._preference_notice.hide()
+        layout.addWidget(self._preference_notice)
         layout.addLayout(content_layout, 1)
         layout.addLayout(button_row)
         self.setLayout(layout)
 
+        self._preference_check_timer = QtCore.QTimer(self)
+        self._preference_check_timer.setSingleShot(True)
+        self._preference_check_timer.setInterval(150)
+        self._preference_check_timer.timeout.connect(self._check_shared_preferences)
         self._apply_source_mode_ui()
         QtCore.QTimer.singleShot(0, lambda: self._auto_refresh_initial_results())
 
     def was_applied(self):
         return self._applied
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if (event.type() == QtCore.QEvent.Type.ActivationChange
+                and hasattr(self, '_preference_check_timer')):
+            if self.isActiveWindow():
+                self._preference_check_timer.start()
+            else:
+                self._preference_revision += 1
+                self._preference_check_timer.stop()
+
+    def _check_shared_preferences(self):
+        if (self._preference_check_pending or self._search_in_progress
+                or not self.isVisible() or not self.isActiveWindow()
+                or QApplication.activeModalWidget() not in (None, self)):
+            return
+        self._preference_check_pending = True
+        task = ArtworkPreferencesCheck(self._card_service, self._oracle_id,
+                                       self._preference_revision, self._shared_preferences_checked)
+        QtCore.QThreadPool.globalInstance().start(task)
+
+    @QtCore.pyqtSlot(int, object, str)
+    def _shared_preferences_checked(self, revision, result, error):
+        self._preference_check_pending = False
+        # A newer search or a closed dialog makes this background result obsolete.
+        if revision != self._preference_revision or not self.isVisible():
+            if self.isVisible() and self.isActiveWindow() and not self._search_in_progress:
+                self._preference_check_timer.start()
+            return
+        if error:
+            message = 'Could not check shared artwork preferences. Click Search to retry.'
+        elif result != (self._preferences, self._favorite_card_id):
+            message = 'Shared artwork preferences changed. Click Search to refresh results.'
+        else:
+            message = ''
+        self._preference_notice.setText(message)
+        self._preference_notice.setToolTip(error)
+        self._preference_notice.setVisible(bool(message))
+
+    def done(self, result):
+        self._preference_revision += 1
+        self._preference_check_timer.stop()
+        super().done(result)
 
     def _edit_artwork_preferences(self):
         rules = edit_artwork_preferences(self, self._card_service)
@@ -1688,6 +1741,7 @@ class HighResPickerDialog(QDialog):
         if self._search_in_progress:
             return
         self._search_in_progress = True
+        self._preference_revision += 1
         try:
             self._refresh_results(reset_page, warn_on_missing_backend)
         finally:
@@ -1760,6 +1814,7 @@ class HighResPickerDialog(QDialog):
             return
 
         self._preferences, self._favorite_card_id = preferences, favorite
+        self._preference_notice.hide()
         self._page_start = page_start
         blocker = QtCore.QSignalBlocker(self._min_dpi)
         self._min_dpi.setValue(min_dpi)
