@@ -20,7 +20,8 @@ favorite printing before fetching results. Page navigation does the same; if
 preferences changed in another app, results restart at page one and show an update
 notice. A Min DPI value you adjusted in this picker is retained. Otherwise the
 latest shared minimum is used, with Max DPI raised if needed to keep the range
-valid. Saving through **Preferences** resumes using the shared minimum. Refreshing
+valid. Saving through **Preferences** resumes using the active rules' minimum
+(the project minimum when an override exists). Refreshing
 results does not replace project artwork; **Apply** or **Select Art** is still
 required. Failed preference reads/searches report the error and clear selectable
 results so an earlier search cannot be mistaken for the refreshed one.
@@ -31,6 +32,28 @@ to refresh. The check is local and leaves the current selection, filters, and
 artwork unchanged. A failed check shows a retry notice rather than opening a
 warning dialog. Results from a check started before a newer search, focus change,
 or dialog closure cannot replace the current notice.
+
+## Deck and project artwork rules
+
+Use **More > Deck artwork preferences** in Editor or **Print Settings > Project
+artwork preferences** in Proxy. Uncheck **Use global preferences** to edit a full
+set of rules for this deck/project. Save stores the override with the document;
+Cancel leaves it unchanged. Check **Use global preferences** and Save to remove
+the override and inherit the latest global rules again. Editor changes and resets
+are one Undo/Redo step.
+
+These rules affect artwork-picker ranking and DPI defaults, preferred-artwork
+replacement previews, and the printings chosen for recommendations. They never
+replace already-selected card artwork automatically. An explicit printing choice
+and a global favorite still take precedence, including when a favorite matches
+an avoidance rule. The picker identifies when project rules are active; its
+**Preferences** button continues to edit global rules for other projects.
+
+Overrides survive deck saves, print handoff, Proxy saves, and opening a print
+project as a deck. A repeat **Print Deck** copies the deck's current artwork-rule
+override (or global inheritance) into the linked print project. Existing print
+settings still follow their separate linked-project behavior. Global rules may
+change without affecting an override; favorite changes still trigger picker notices.
 
 ## Global printing defaults
 

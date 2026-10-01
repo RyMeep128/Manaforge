@@ -396,8 +396,9 @@ class ComponentSuggestionsDialog(QDialog):
 
 
 class AddCardDialog(QDialog):
-    def __init__(self, parent, image_dir, initial_query=None):
+    def __init__(self, parent, image_dir, initial_query=None, *, document=None):
         super().__init__(parent)
+        self._project_document = document
         self.setWindowTitle("Add Card")
         self.resize(960, 700)
 
@@ -984,7 +985,10 @@ class AddCardDialog(QDialog):
             QToolTip.showText(QCursor.pos(), "Choose a card printing first")
             return
         temp_state = ProjectState()
+        temp_state.deck_document = self._project_document
         temp_state.image_dir = self._image_dir
+        temp_state.set_card_image_refs(self._selected_card_value.filename,
+            card_id=self._selected_card_value.card_id, oracle_id=self._selected_card_value.oracle_id)
         dialog = HighResPickerDialog(
             self,
             temp_state,
@@ -1212,7 +1216,9 @@ class HighResPickerDialog(QDialog):
         self._oracle_id = None if entry is None else entry.oracle_id
         from mtg_core import get_default_card_service
         self._card_service = get_default_card_service()
-        self._preferences = self._card_service.get_artwork_preferences()
+        document = self._state.deck_document
+        self._project_preferences = document.artwork_preferences if document is not None else None
+        self._preferences = self._project_preferences or self._card_service.get_artwork_preferences()
         self._minimum_dpi_overridden = False
         self._search_in_progress = False
         self._preference_revision = 0
@@ -1394,6 +1400,10 @@ class HighResPickerDialog(QDialog):
         layout.addWidget(info_text)
         layout.addWidget(helper_text)
         layout.addWidget(self._current_source_label)
+        if self._project_preferences is not None:
+            project_note = QLabel('Using project artwork rules. Global favorite printings still take precedence.')
+            project_note.setWordWrap(True)
+            layout.addWidget(project_note)
         layout.addLayout(filters_layout)
         layout.addLayout(search_controls_layout)
         layout.addLayout(pagination_layout)
@@ -1433,7 +1443,8 @@ class HighResPickerDialog(QDialog):
             return
         self._preference_check_pending = True
         task = ArtworkPreferencesCheck(self._card_service, self._oracle_id,
-                                       self._preference_revision, self._shared_preferences_checked)
+                                       self._preference_revision, self._shared_preferences_checked,
+                                       project_rules=self._project_preferences)
         QtCore.QThreadPool.globalInstance().start(task)
 
     @QtCore.pyqtSlot(int, object, str)
@@ -1462,6 +1473,7 @@ class HighResPickerDialog(QDialog):
     def _edit_artwork_preferences(self):
         rules = edit_artwork_preferences(self, self._card_service)
         if rules is not None:
+            rules = getattr(self, '_project_preferences', None) or rules
             self._preferences = rules
             self._min_dpi.setValue(rules.minimum_dpi)
             self._minimum_dpi_overridden = False
@@ -1778,7 +1790,7 @@ class HighResPickerDialog(QDialog):
             nonlocal min_dpi, max_dpi, page_start
             try:
                 # Read shared state in the search worker, not on the GUI thread.
-                preferences = self._card_service.get_artwork_preferences()
+                preferences = self._project_preferences or self._card_service.get_artwork_preferences()
                 favorite = (self._card_service.get_artwork_favorite(self._oracle_id)
                             if self._oracle_id else None)
                 preferences_changed = (preferences != previous_preferences or

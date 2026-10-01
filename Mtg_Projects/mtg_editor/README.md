@@ -221,6 +221,13 @@ This is a snapshot: reopen it after editing the deck.
 
 ## Print Deck
 
+**More > Deck artwork preferences** saves artwork rules for this deck, with
+Undo/Redo. Uncheck **Use global preferences** to customize rules, or check it and
+Save to reset to global inheritance. This influences artwork browsing and
+recommendation printings while retaining existing art and global favorites.
+Rules travel with Print Deck; repeat handoffs copy the deck's current override
+or reset into the linked print project.
+
 **More > Global printing defaults** opens the shared Core-owned preference editor.
 Saved defaults initialize a deck's first new print project. Existing linked print
 projects and settings imported from Proxy keep their overrides. To reset those

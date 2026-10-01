@@ -61,10 +61,16 @@ def load_recommendations(
     identities = [row["oracle_id"] for row in candidates]
     # Retain support for service adapters that only expose single-card lookup.
     batch_lookup = getattr(service, "iter_preferred_prints", None)
+    preference_options = (
+        {"document": document} if document.artwork_preferences is not None else {}
+    )
     payloads = (
-        batch_lookup(identities)
+        batch_lookup(identities, **preference_options)
         if batch_lookup
-        else (service.choose_preferred_print(oracle_id) for oracle_id in identities)
+        else (
+            service.choose_preferred_print(oracle_id, **preference_options)
+            for oracle_id in identities
+        )
     )
     for row, payload in zip(candidates, payloads):
         if not payload:

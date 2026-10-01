@@ -153,7 +153,9 @@ def rank_prints(payloads: Iterable[dict], *, favorite_card_id=None, rules=None):
     if not candidates:
         return []
     rules = rules or ArtworkPreferenceRules()
-    allowed = [item for item in candidates if not avoided(item, rules)]
+    allowed = [item for item in candidates
+               if (favorite_card_id and str(item.get('id')) == str(favorite_card_id))
+               or not avoided(item, rules)]
     pool = allowed or candidates
     return sorted(pool, key=lambda item: (
         str(item.get('id')) == str(favorite_card_id),

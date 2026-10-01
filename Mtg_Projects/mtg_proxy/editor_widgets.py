@@ -1441,7 +1441,7 @@ class CardScrollArea(QScrollArea):
             entry = state.get_card_entry(name)
             if entry is None or not entry.oracle_id or entry.do_not_print:
                 continue
-            payload = card_service.choose_preferred_print(entry.oracle_id)
+            payload = card_service.choose_preferred_print(entry.oracle_id, document=state.deck_document)
             if not payload or payload.get('id') == entry.card_id:
                 continue
             candidate = high_res_service.scryfall_candidate_from_payload(payload)
@@ -2716,7 +2716,8 @@ class ActionsWidget(QGroupBox):
             dialog = None
             selected_card = selected_card_override
             if selected_card is None:
-                dialog = AddCardDialog(self, state.image_dir, initial_query=initial_query)
+                dialog = AddCardDialog(self, state.image_dir, initial_query=initial_query,
+                                       document=state.deck_document)
                 if dialog.exec() != QDialog.DialogCode.Accepted:
                     return
                 selected_card = dialog.selected_card()
@@ -2974,6 +2975,20 @@ class PrintOptionsWidget(QGroupBox):
             from mtg_ui.printing_preferences import edit_printing_preferences
             edit_printing_preferences(self, get_default_card_service())
         defaults_button.clicked.connect(edit_defaults)
+        artwork_button = QPushButton("Project artwork preferences...")
+        layout.addWidget(artwork_button)
+        def edit_project_artwork():
+            from mtg_core import get_default_card_service
+            from mtg_core.decks import DeckDocument
+            from mtg_ui.artwork_preferences import choose_project_artwork_preferences
+            document = state.deck_document or DeckDocument()
+            accepted, rules = choose_project_artwork_preferences(
+                self, get_default_card_service(), document)
+            if accepted:
+                document.artwork_preferences = rules
+                state.deck_document = document
+                autosave_managed_session()
+        artwork_button.clicked.connect(edit_project_artwork)
         calibration_button = QPushButton("Calibrate printer…")
         layout.addWidget(calibration_button)
         from services.printer_profiles import DUPLEX

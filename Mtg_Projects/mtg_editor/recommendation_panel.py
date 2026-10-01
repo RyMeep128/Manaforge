@@ -48,6 +48,7 @@ def context_key(document):
         data["deck"],
         deepcopy(document.editor_preferences.get("guidance")),
         deepcopy(document.editor_preferences.get("recommendations")),
+        deepcopy(data.get("artwork_preferences")),
     )
 
 

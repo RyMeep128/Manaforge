@@ -209,15 +209,16 @@ class _ArtworkPreferenceSignals(QtCore.QObject):
 
 class ArtworkPreferencesCheck(QtCore.QRunnable):
     """Local-only read owned by the thread pool, independent of a dialog's life."""
-    def __init__(self, service, oracle_id, revision, callback):
+    def __init__(self, service, oracle_id, revision, callback, *, project_rules=None):
         super().__init__()
         self.service, self.oracle_id, self.revision = service, oracle_id, revision
+        self.project_rules = project_rules
         self.signals = _ArtworkPreferenceSignals()
         self.signals.ready.connect(callback, QtCore.Qt.ConnectionType.QueuedConnection)
 
     def run(self):
         try:
-            rules = self.service.get_artwork_preferences()
+            rules = self.project_rules or self.service.get_artwork_preferences()
             favorite = self.service.get_artwork_favorite(self.oracle_id) if self.oracle_id else None
             self.signals.ready.emit(self.revision, (rules, favorite), '')
         except Exception as exc:

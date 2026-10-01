@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from mtg_core.sections import DeckSection
 from mtg_core.artwork import HighResOverride
+from mtg_core.preferences import ArtworkPreferenceRules, artwork_profile_payload, artwork_profile_rules
 
 from copy import deepcopy
 from dataclasses import dataclass, field
@@ -204,6 +205,24 @@ class DeckDocument:
     editor_preferences: dict[str, Any] = field(default_factory=dict)
     schema_version: int = DECK_SCHEMA_VERSION
     extras: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def artwork_preferences(self) -> ArtworkPreferenceRules | None:
+        """A complete project rule override; absence inherits current global rules."""
+        if 'artwork_preferences' not in self.extras:
+            return None
+        return ArtworkPreferenceRules.from_dict(
+            artwork_profile_rules(self.extras['artwork_preferences']))
+
+    @artwork_preferences.setter
+    def artwork_preferences(self, rules: ArtworkPreferenceRules | None) -> None:
+        if rules is None:
+            self.extras.pop('artwork_preferences', None)
+            return
+        previous = self.extras.get('artwork_preferences')
+        if 'artwork_preferences' in self.extras:
+            artwork_profile_rules(previous)
+        self.extras['artwork_preferences'] = artwork_profile_payload(rules.to_dict(), previous)
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any] | None) -> "DeckDocument":

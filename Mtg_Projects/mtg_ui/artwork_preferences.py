@@ -7,11 +7,12 @@ from mtg_core.diagnostics import get_logger
 
 
 class ArtworkPreferencesDialog(QDialog):
-    def __init__(self, parent, card_service):
+    def __init__(self, parent, card_service, *, initial_rules=None, project=False, inherit=False):
         super().__init__(parent)
         self._card_service = card_service
-        rules = card_service.get_artwork_preferences()
-        self.setWindowTitle('Artwork Preferences')
+        self._project_scope = project
+        rules = initial_rules if initial_rules is not None else card_service.get_artwork_preferences()
+        self.setWindowTitle('Project Artwork Preferences' if project else 'Artwork Preferences')
         self.resize(520, 560)
         self.language = QLineEdit(rules.language)
         self.sets = QLineEdit(', '.join(rules.preferred_sets))
@@ -37,10 +38,16 @@ class ArtworkPreferencesDialog(QDialog):
         self.avoid_foil.setChecked(rules.avoid_foil_only)
         layout = QVBoxLayout()
         intro = QLabel(
-            'These preferences are shared by Manaforge apps. Lists use commas; '
+            'These rules apply only to this deck or print project. Existing artwork and global '
+            'favorites are unchanged. Save with Use global preferences checked to remove the override.'
+            if project else 'These preferences are shared by Manaforge apps. Lists use commas; '
             'earlier values have higher priority.')
         intro.setWordWrap(True)
         layout.addWidget(intro)
+        self.inherit = QCheckBox('Use global preferences (reset project override)')
+        self.inherit.setChecked(inherit)
+        self.inherit.setVisible(project)
+        layout.addWidget(self.inherit)
         for label, widget in (
             ('Language code', self.language), ('Preferred sets', self.sets),
             ('Preferred year', self.year), ('Preferred artists', self.artists),
@@ -58,6 +65,15 @@ class ArtworkPreferencesDialog(QDialog):
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
         self.setLayout(layout)
+        if project:
+            controls = (self.language, self.sets, self.year, self.artists, self.frames,
+                        self.borders, self.sources, self.minimum_dpi, self.avoid_promos,
+                        self.avoid_textless, self.avoid_ub, self.avoid_foil)
+            def toggle(inheriting):
+                for control in controls:
+                    control.setEnabled(not inheriting)
+            self.inherit.toggled.connect(toggle)
+            toggle(inherit)
 
     @staticmethod
     def _list(text):
@@ -80,6 +96,8 @@ class ArtworkPreferencesDialog(QDialog):
             avoid_foil_only=self.avoid_foil.isChecked())
 
     def save(self):
+        if self._project_scope:
+            return None if self.inherit.isChecked() else self.rules()
         return self._card_service.set_artwork_preferences(self.rules())
 
 
@@ -97,3 +115,21 @@ def edit_artwork_preferences(parent, card_service):
         if dialog is not None:
             dialog.deleteLater()
     return None
+
+
+def choose_project_artwork_preferences(parent, card_service, document):
+    """Return (accepted, override); callers own Undo and project persistence."""
+    dialog = None
+    try:
+        override = document.artwork_preferences
+        dialog = ArtworkPreferencesDialog(parent, card_service,
+            initial_rules=override, project=True, inherit=override is None)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            return True, dialog.save()
+    except Exception as exc:
+        get_logger(__name__).exception('Project artwork preferences could not be edited')
+        QMessageBox.critical(parent, 'Project Artwork Preferences', str(exc))
+    finally:
+        if dialog is not None:
+            dialog.deleteLater()
+    return False, None

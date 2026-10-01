@@ -15,6 +15,14 @@ Internal operation groups follow the same pattern as `CardDatabase`:
 | `catalog_sync.py` | Bulk catalog and Oracle-tag sync, resumable download state |
 | `constants.py` | Existing persistent sync identifiers and defaults |
 
+`effective_artwork_preferences(document)` resolves a deck's optional full artwork
+rule override before reading global rules. Single and batched preferred-print
+selection accept the optional document while preserving explicit printing and
+global-favorite precedence. The `DeckDocument.artwork_preferences` accessor stores
+a versioned profile in forward-compatible document metadata; setting it to `None`
+restores inheritance. It travels in the embedded deck document through printing
+and supports ordinary deck history without adding rendering state to card records.
+
 Instantiate the facade, not the operation groups. All groups share the same
 instance and call other operations through `self`; subclass overrides and
 replacement fetch functions therefore remain effective across groups. Modules
