@@ -66,7 +66,7 @@ remaining window space, and the toolbars wrap on smaller screens.
   **More…** includes other roles, custom categories/tags, and creating a new one.
   Release in the center or outside the ring to cancel a mouse hold. **Esc** cancels. The six common roles keep fixed positions for muscle memory.
 - A quick right-click (or Shift+right-click) opens artwork, Oracle/user tags, section/category assignment, commander
-  assignment, oversized/normal size, owned/do-not-print, retry artwork, and removal.
+  assignment, oversized/normal size, owned-copy counts, do-not-print, retry artwork, and removal.
   Bulk actions affect all selected entries in one Undo step.
 - **More > Manage categories** creates, renames, reorders, and deletes categories.
   Deleting a category preserves its cards. The first category association is primary;
@@ -225,6 +225,20 @@ This is a snapshot: reopen it after editing the deck.
 by default; cards marked do-not-print are excluded. The deck is saved, printable
 assets and paired backs are resolved using Proxy's import workflow, and a managed
 Proxy project opens in a separate process.
+
+Use a card's context menu **Owned copies** to record how many copies of that entry
+you own. With multiple entries selected, **Set owned copies** applies the entered
+count to each selected entry in one Undo step; Cancel leaves all counts unchanged.
+Counts are saved with the deck and can exceed its current quantity. They are per
+entry, not shared across alternate printings or other decks.
+
+Enable **Print only missing copies** to print `max(0, quantity - owned)` for each
+included entry. For example, a four-copy entry with three owned copies prints one.
+The option is off by default. **Do not print** still excludes the entire entry,
+and basic-land and section exclusions still apply. Only the print snapshot changes;
+saved deck quantities and ownership counts stay intact. Token suggestions use the
+remaining printable cards. If no copies remain, no print project is created or
+updated. Repeating a handoff starts from the deck's full quantities each time.
 
 Handoffs preserve explicit front/back pre-cropped metadata alongside stable unique
 entry filenames. Catalog artwork is not cropped again; custom artwork retains its

@@ -110,6 +110,18 @@ def prepare_print(document, service, sections):
         lock.unlock()
 
 
+def subtract_owned_copies(document, sections):
+    """Reduce only a handoff snapshot to missing copies, once before token lookup.
+
+    Ownership belongs to each entry, not an Oracle-wide collection: duplicate
+    entries and alternate printings must not consume each other's owned copies.
+    Keep zero-count entries so stable identities survive subsequent handoffs.
+    """
+    for entry in document.deck.entries:
+        if entry.section in sections and not entry.do_not_print:
+            entry.quantity = max(0, entry.quantity - max(0, entry.owned))
+
+
 def exclude_basic_lands(document, service, sections):
     """Mark basic lands excluded in a print snapshot, retaining deck quantities."""
     for entry in document.deck.entries:

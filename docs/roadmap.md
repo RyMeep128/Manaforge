@@ -213,7 +213,7 @@ and ambiguous rules are not presented as verified. Phase 3 starts with filters a
 
 - [x] Pass quantities, exact printings, artwork, backs, and oversized flags to Print Proxy Prep.
 - [x] Preserve manual print layout when compatible and reconcile it predictably when the deck changes.
-- [~] Section inclusion, basic-land inclusion, token suggestions, and do-not-print exclusions exist; ownership-count controls remain.
+- [x] Section inclusion, basic-land inclusion, token suggestions, and do-not-print exclusions; per-entry owned-copy editing with bulk Undo/Redo and an opt-in **Print only missing copies** handoff. Ownership subtraction affects only the print snapshot before token suggestions; CI acceptance pending.
 - [x] Suggest related tokens for included cards before opening print preview; selected tokens are added only to the print handoff.
 - [~] Shared artwork picker and linked Proxy print settings are reused; unified preference editing remains.
 - [x] Return from print preparation without losing editor selection, scroll, filters, or Undo history.

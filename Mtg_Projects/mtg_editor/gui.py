@@ -685,8 +685,10 @@ class EditorWindow(W.QMainWindow):
         categories.addSeparator()
         categories.addAction('Manage categories…', self.manage_categories)
         menu.addAction('Make commander', lambda: self.edit(lambda d: assign(d, ids, 'section', DeckSection.COMMANDER)))
+        owned_label = f'Owned copies ({entry.owned})...' if len(ids) == 1 else 'Set owned copies...'
+        menu.addAction(owned_label, lambda: self.edit_owned_copies(ids))
         for label, field, value in [('Make oversized', 'oversized', True), ('Make normal size', 'oversized', False),
-                                    ('Owned / do not print', 'do_not_print', True), ('Include in printing', 'do_not_print', False)]:
+                                    ('Do not print', 'do_not_print', True), ('Include in printing', 'do_not_print', False)]:
             menu.addAction(label, lambda checked=False, f=field, v=value: self.edit(lambda d: assign(d, ids, f, v)))
         menu.addAction('Retry artwork', lambda: self.thumbnails.retry(entry.card_id, entry.image_asset_id))
         menu.addSeparator()
@@ -701,6 +703,22 @@ class EditorWindow(W.QMainWindow):
         menu.addAction('View Oracle tags…', lambda: self.view_tags(entry))
         menu.addAction('Retry artwork', lambda: self.thumbnails.retry(entry.card_id, entry.image_asset_id))
         menu.exec(position)
+
+    def edit_owned_copies(self, ids):
+        entries = [entry for entry in self.document.deck.entries if entry.entry_id in ids]
+        if not entries:
+            return
+        counts = {entry.owned for entry in entries}
+        label = (f'Owned copies of {entries[0].name}:' if len(entries) == 1 else
+                 f'Owned copies per entry (replaces counts on {len(entries)} selected entries):')
+        if len(counts) > 1:
+            label += '\nCurrent counts differ.'
+        label += '\nUsed by Print only missing copies. Do not print remains a separate exclusion.'
+        count, accepted = W.QInputDialog.getInt(
+            self, 'Owned copies', label, min(entries[0].owned, 2147483647) if len(counts) == 1 else 0,
+            0, 2147483647)
+        if accepted:
+            self.edit(lambda document: assign(document, ids, 'owned', count))
 
     def edit_tags(self, ids, tags):
         text, ok = W.QInputDialog.getText(self, 'User tags', 'Comma-separated tags (applies to selected cards):', text=', '.join(tags))
@@ -987,7 +1005,7 @@ class EditorWindow(W.QMainWindow):
 
     def print_deck(self):
         from .proxy_adapter import (prepare_print, launch_print, print_token_suggestions,
-                                    include_print_tokens, exclude_basic_lands)
+                                    include_print_tokens, exclude_basic_lands, subtract_owned_copies)
         dialog = W.QDialog(self)
         dialog.setWindowTitle('Print Deck — sections')
         layout = W.QVBoxLayout(dialog)
@@ -1002,6 +1020,9 @@ class EditorWindow(W.QMainWindow):
         include_basics.setChecked(True)
         include_basics.setToolTip('Uncheck to omit basic lands, including snow-covered basics and Wastes, from this print job.')
         layout.addWidget(include_basics)
+        missing_only = W.QCheckBox('Print only missing copies')
+        missing_only.setToolTip('Subtract owned copies from each included entry. Edit owned counts from the card context menu.')
+        layout.addWidget(missing_only)
         buttons = W.QDialogButtonBox(W.QDialogButtonBox.StandardButton.Ok | W.QDialogButtonBox.StandardButton.Cancel)
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
@@ -1011,6 +1032,8 @@ class EditorWindow(W.QMainWindow):
         snapshot = DeckDocument.from_dict(self.document.to_dict())
         sections = {key for key, check in checks.items() if check.isChecked()}
         print_basics = include_basics.isChecked()
+        if missing_only.isChecked():
+            subtract_owned_copies(snapshot, sections)
         def launch(project):
             self.document.extras['proxy_project_id'] = project['id']
             self.changed()
