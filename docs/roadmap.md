@@ -222,7 +222,7 @@ and ambiguous rules are not presented as verified. Phase 3 starts with filters a
 
 ### 14. Shared preference ownership
 
-- [~] Core owns global artwork preferences and versioned global printing defaults. Database migration 2 adds printing-default storage; printing payload version 1 validates paper, orientation, duplex, back offsets, and output ordering. Artwork payload versioning remains.
+- [x] Core owns versioned global artwork preferences and printing defaults. Database migration 2 adds printing-default storage; printing payload version 1 validates paper, orientation, duplex, back offsets, and output ordering. Artwork profile version 1 reads legacy flat rules and upgrades them on explicit save, preserving unknown fields and rejecting invalid/future payloads before replacement. Artwork schema acceptance remains pending CI.
 - [x] Share artwork and global printing preference editors through `mtg_ui`. Core exposes **Preferences**, Editor exposes **More**, and Proxy exposes artwork-picker **Preferences** and **Print Settings > Global printing defaults**. Editors reload on open; Cancel performs no writes.
 - [~] Saved print settings override global defaults; new managed projects and drafts inherit current defaults. **Printer profiles > Reset project to global defaults** previews changes and reconciles placement before applying. Project artwork-rule overrides/reset remain.
 - [~] Printing defaults are read afresh when editing defaults, creating a project/draft, or resetting a project; open jobs are never silently changed. Artwork-rule refresh in already-open pickers remains.

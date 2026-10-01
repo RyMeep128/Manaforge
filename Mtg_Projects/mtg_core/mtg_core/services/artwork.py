@@ -19,8 +19,8 @@ class ArtworkOperations:
             self.database.get_artwork_preference_profile())
 
     def set_artwork_preferences(self, rules) -> ArtworkPreferenceRules:
-        normalized = (rules if isinstance(rules, ArtworkPreferenceRules)
-                      else ArtworkPreferenceRules.from_dict(rules))
+        normalized = ArtworkPreferenceRules.from_dict(
+            rules.to_dict() if isinstance(rules, ArtworkPreferenceRules) else rules)
         self.database.set_artwork_preference_profile(normalized.to_dict())
         return normalized
 

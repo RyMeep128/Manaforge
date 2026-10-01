@@ -6,6 +6,15 @@ Manaforge supports PDF export and direct printing through the operating-system p
 
 **Save Project** persists page size, orientation, bleed, backside enablement, horizontal and vertical backside offsets in millimetres, per-card short-edge rotation, and backside output ordering/separate-file settings. Reopening the project restores them. Printer-driver settings such as duplex mode and scaling are not controlled by the app.
 
+## Shared artwork preferences
+
+Artwork choices have their own shared preference editor: **Preferences > Artwork
+preferences** in Core, **More > Artwork preferences** in Editor, and **Preferences**
+in the artwork picker. Existing artwork profiles remain readable and are upgraded
+to versioned storage when saved. Invalid profiles or profiles from an unsupported
+version report an error and remain unchanged. Unknown preference fields survive
+edits, and Cancel never upgrades or rewrites a profile.
+
 ## Global printing defaults
 
 Open **Global printing defaults** from Core's **Preferences** menu, Editor's

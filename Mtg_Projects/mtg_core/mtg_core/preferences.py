@@ -1,7 +1,8 @@
 """Shared artwork preference rules and deterministic print selection."""
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from copy import deepcopy
+from dataclasses import asdict, dataclass
 from typing import Iterable
 
 
@@ -22,11 +23,26 @@ class ArtworkPreferenceRules:
 
     @classmethod
     def from_dict(cls, value):
+        if value is not None and not isinstance(value, dict):
+            raise ValueError('Artwork preferences must be an object.')
         data = dict(value or {})
         tuple_fields = ('preferred_sets', 'preferred_artists', 'preferred_frames',
                         'preferred_borders', 'preferred_sources')
         for key in tuple_fields:
+            if data.get(key) is not None and not isinstance(data[key], (list, tuple)):
+                raise ValueError(f'{key.replace("_", " ").capitalize()} must be a list.')
             data[key] = tuple(str(item) for item in (data.get(key) or ()))
+        if 'language' in data and (not isinstance(data['language'], str) or not data['language'].strip()):
+            raise ValueError('Artwork language must be a nonempty string.')
+        for key in ('minimum_dpi', 'preferred_year'):
+            if key not in data or (key == 'preferred_year' and data[key] is None):
+                continue
+            if type(data[key]) is not int or not 0 <= data[key] <= 2147483647:
+                label = 'Minimum DPI' if key == 'minimum_dpi' else 'Preferred year'
+                raise ValueError(f'{label} must be a nonnegative integer up to 2147483647.')
+        for key in ('avoid_promos', 'avoid_textless', 'avoid_universes_beyond', 'avoid_foil_only'):
+            if key in data and not isinstance(data[key], bool):
+                raise ValueError(f'{key.replace("_", " ").capitalize()} must be true or false.')
         allowed = cls.__dataclass_fields__
         return cls(**{key: value for key, value in data.items() if key in allowed})
 
@@ -36,6 +52,42 @@ class ArtworkPreferenceRules:
                     'preferred_borders', 'preferred_sources'):
             result[key] = list(result[key])
         return result
+
+
+ARTWORK_PROFILE_VERSION = 1
+
+
+def artwork_profile_rules(payload):
+    """Decode version 1 or legacy flat storage without discarding extensions.
+
+    Only a missing database row means default preferences. Invalid stored data
+    must be reported instead of silently choosing different artwork.
+    """
+    if not isinstance(payload, dict):
+        raise ValueError('Stored artwork preferences must be an object.')
+    if 'version' in payload:
+        if type(payload['version']) is not int or payload['version'] != ARTWORK_PROFILE_VERSION:
+            raise ValueError('Unsupported artwork preference profile version.')
+        rules = payload.get('rules')
+        if not isinstance(rules, dict):
+            raise ValueError('Stored artwork preference rules must be an object.')
+    else:
+        rules = payload
+    ArtworkPreferenceRules.from_dict(rules)
+    return deepcopy(rules)
+
+
+def artwork_profile_payload(rules, previous=None):
+    """Replace known rules while retaining stored fields this version cannot edit."""
+    normalized = ArtworkPreferenceRules.from_dict(rules).to_dict()
+    stored_rules = artwork_profile_rules(previous) if previous is not None else {}
+    result = deepcopy(previous) if previous is not None and 'version' in previous else {}
+    known = ArtworkPreferenceRules.__dataclass_fields__
+    extensions = {key: value for key, value in stored_rules.items() if key not in known}
+    extensions.update(deepcopy(rules))
+    extensions.update(normalized)
+    result.update(version=ARTWORK_PROFILE_VERSION, rules=extensions)
+    return result
 
 
 def _is_universes_beyond(payload):

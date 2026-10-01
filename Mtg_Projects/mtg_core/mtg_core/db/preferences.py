@@ -5,6 +5,7 @@ import json
 import time
 
 from mtg_core.printing_preferences import PrintingPreferences
+from mtg_core.preferences import artwork_profile_payload, artwork_profile_rules
 
 
 class PreferenceOperations:
@@ -56,14 +57,23 @@ class PreferenceOperations:
 
     def set_artwork_preference_profile(self, payload: dict,
                                        profile_key: str = 'default') -> None:
+        # Keep the public flat-rule API while storing a versioned envelope.
         with self.connect() as connection:
+            connection.execute('BEGIN IMMEDIATE')
+            row = connection.execute(
+                'SELECT payload_json FROM artwork_preference_profiles WHERE profile_key = ?',
+                (profile_key,)).fetchone()
+            previous = None if row is None else json.loads(row['payload_json'])
+            if row is not None:
+                artwork_profile_rules(previous)
+            stored = artwork_profile_payload(payload, previous)
             connection.execute(
                 """INSERT INTO artwork_preference_profiles
                      (profile_key, payload_json, updated_at) VALUES (?, ?, ?)
                    ON CONFLICT(profile_key) DO UPDATE SET
                      payload_json=excluded.payload_json,
                      updated_at=excluded.updated_at""",
-                (profile_key, json.dumps(payload, ensure_ascii=False,
+                (profile_key, json.dumps(stored, ensure_ascii=False,
                                          sort_keys=True), time.time()))
 
     def get_artwork_preference_profile(
@@ -74,8 +84,4 @@ class PreferenceOperations:
                    WHERE profile_key = ?""", (profile_key,)).fetchone()
         if row is None:
             return None
-        try:
-            value = json.loads(row['payload_json'])
-        except (TypeError, ValueError):
-            return None
-        return value if isinstance(value, dict) else None
+        return artwork_profile_rules(json.loads(row['payload_json']))

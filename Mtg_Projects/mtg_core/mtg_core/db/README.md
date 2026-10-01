@@ -35,6 +35,15 @@ the print application's existing fallback configuration still applies. Reads do
 not cache defaults; writes validate incoming settings before opening a transaction
 and check the stored payload version under a write lock before replacing the row.
 
+Artwork profiles use a separate JSON envelope: `{"version": 1, "rules": {...}}`.
+The database's existing flat-rule getter/setter API remains unchanged. Legacy
+flat JSON is read without rewriting the row and upgraded on the next explicit
+save; no database migration is needed. Saves acquire an immediate transaction,
+validate the existing profile, and preserve unknown envelope/rule fields while
+replacing the supported rules. Malformed JSON, invalid known rule values, and
+unsupported versions raise errors rather than falling back to defaults or being
+overwritten. An absent profile still supplies the normal artwork defaults.
+
 Startup holds an immediate transaction while reading the version and applying
 ordered migrations. Schema changes and version updates roll back together on
 failure. Newer versions are rejected before schema changes. Connections close
