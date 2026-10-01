@@ -6,6 +6,27 @@ Manaforge supports PDF export and direct printing through the operating-system p
 
 **Save Project** persists page size, orientation, bleed, backside enablement, horizontal and vertical backside offsets in millimetres, per-card short-edge rotation, and backside output ordering/separate-file settings. Reopening the project restores them. Printer-driver settings such as duplex mode and scaling are not controlled by the app.
 
+## Global printing defaults
+
+Open **Global printing defaults** from Core's **Preferences** menu, Editor's
+**More** menu, or Proxy's **Print Settings**. This shared editor saves paper size,
+orientation, duplex preference, back enablement, X/Y back offsets, and back-page
+ordering/separate-file options in Core. Save validates the values; Cancel leaves
+them unchanged. Failed saves keep the dialog open for correction or retry.
+
+New managed print projects and new Proxy drafts read the latest saved defaults.
+Until defaults are saved, existing configuration supplies the initial paper size.
+Existing projects, recovered drafts, imported project settings, and repeat Editor
+handoffs retain their own settings. Bleed, artwork, guides, and driver-controlled
+copies/color are outside these defaults.
+
+To copy current global defaults into an existing print project, open **Print
+Settings > Printer profiles > Reset project to global defaults**. Review the
+changes before applying. The normal profile workflow reconciles placements and
+rejects impossible layouts before changing the project. This copies settings;
+it does not create a live link to future global edits. Reopen the defaults editor
+to see changes saved by another Manaforge app.
+
 ## Named printer profiles
 
 Open **Print Settings > Printer profiles...** to save the current paper size, orientation, backside enablement, horizontal and vertical backside offsets, backside output ordering/separate-file settings, and duplex preference under a reusable name. Saving with an existing name offers to replace it; profiles can also be deleted.

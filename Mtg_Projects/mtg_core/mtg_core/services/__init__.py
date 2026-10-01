@@ -10,6 +10,7 @@ from .artwork import ArtworkOperations
 from .catalog_sync import CatalogSyncOperations
 from .images import ImageOperations
 from .search import SearchOperations
+from .preferences import PreferenceOperations
 from .constants import (
     FIXED_CATALOG_QUERY, FIXED_CATALOG_SOURCE, FIXED_CATALOG_ITEM_SOURCE,
     FIXED_CATALOG_VERSION, FIXED_CATALOG_CHUNK_SIZE, FIXED_CATALOG_MIN_IMAGE_BYTES,
@@ -17,7 +18,8 @@ from .constants import (
 )
 
 
-class CardService(SearchOperations, ArtworkOperations, ImageOperations, CatalogSyncOperations):
+class CardService(SearchOperations, ArtworkOperations, ImageOperations, CatalogSyncOperations,
+                  PreferenceOperations):
     """Shared dependencies and lifecycle for search, artwork, images, and sync.
 
     Internal groups call through self so subclass overrides and injected fetch

@@ -29,6 +29,7 @@ class PrinterProfileDialog(QtWidgets.QDialog):
         for label, callback in [('Save current settings as…', self.save_current),
                                 ('Delete selected profile', self.delete_selected),
                                 ('Apply selected profile', self.apply_selected),
+                                ('Reset project to global defaults', self.reset_to_global),
                                 ('Close', self.reject)]:
             button = QtWidgets.QPushButton(label)
             button.clicked.connect(callback)
@@ -81,9 +82,27 @@ class PrinterProfileDialog(QtWidgets.QDialog):
         settings = self.profiles.get(self.names.currentText())
         if settings is None:
             return
+        self.apply_settings(settings, 'Apply printer profile?')
+
+    def reset_to_global(self):
+        from mtg_core import get_default_card_service
+        try:
+            preferences = get_default_card_service().get_printing_preferences()
+        except Exception as exc:
+            from mtg_core.diagnostics import get_logger
+            get_logger(__name__).exception('Could not load global printing defaults')
+            QtWidgets.QMessageBox.warning(self, 'Could not load printing defaults', str(exc))
+            return
+        if preferences is None:
+            QtWidgets.QMessageBox.information(self, 'No global printing defaults',
+                'Save global printing defaults in Print Settings before resetting this project.')
+            return
+        self.apply_settings(preferences.settings(), 'Reset project to global defaults?')
+
+    def apply_settings(self, settings, title):
         changes = '\n'.join(f'{key.replace("_", " ")}: {getattr(self.state, key)} → {settings[key]}'
                             for key in profiles.FIELDS if getattr(self.state, key) != settings[key])
-        if QtWidgets.QMessageBox.question(self, 'Apply printer profile?', changes or 'These settings already match the project.') != QtWidgets.QMessageBox.StandardButton.Yes:
+        if QtWidgets.QMessageBox.question(self, title, changes or 'These settings already match the project.') != QtWidgets.QMessageBox.StandardButton.Yes:
             return
         try:
             self.relocated = profiles.apply(self.state, settings)

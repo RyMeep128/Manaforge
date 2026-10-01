@@ -215,18 +215,18 @@ and ambiguous rules are not presented as verified. Phase 3 starts with filters a
 - [x] Preserve manual print layout when compatible and reconcile it predictably when the deck changes.
 - [x] Section inclusion, basic-land inclusion, token suggestions, and do-not-print exclusions; per-entry owned-copy editing with bulk Undo/Redo and an opt-in **Print only missing copies** handoff. Ownership subtraction affects only the print snapshot before token suggestions; CI acceptance pending.
 - [x] Suggest related tokens for included cards before opening print preview; selected tokens are added only to the print handoff.
-- [~] Shared artwork picker and linked Proxy print settings are reused; unified preference editing remains.
+- [x] Shared artwork picker, linked Proxy print settings, and shared global artwork/printing preference editors are available across the apps. Printing defaults initialize new jobs; existing linked projects retain their settings.
 - [x] Return from print preparation without losing editor selection, scroll, filters, or Undo history.
 
 **Exit gate:** A deck can move from editor to calibrated physical print without reselecting cards or artwork.
 
 ### 14. Shared preference ownership
 
-- [ ] Put global printing/art preferences in Core with a versioned schema.
-- [~] Share the artwork preference editor across Core (**Preferences > Artwork preferences**), Deck Editor (**More > Artwork preferences**), and Proxy's artwork picker (**Preferences**). The standalone `mtg_ui` dialog reloads shared rules on open and saves only on acceptance; printing preference editing remains.
-- [ ] Define project overrides and a reset-to-global action.
-- [ ] Notify open apps when shared preferences change or refresh on focus safely.
-- [~] Added integration coverage for shared artwork-dialog entry points, cross-service print selection, reload, Cancel, and save errors; acceptance awaits CI. Global printing preference resolution remains.
+- [~] Core owns global artwork preferences and versioned global printing defaults. Database migration 2 adds printing-default storage; printing payload version 1 validates paper, orientation, duplex, back offsets, and output ordering. Artwork payload versioning remains.
+- [x] Share artwork and global printing preference editors through `mtg_ui`. Core exposes **Preferences**, Editor exposes **More**, and Proxy exposes artwork-picker **Preferences** and **Print Settings > Global printing defaults**. Editors reload on open; Cancel performs no writes.
+- [~] Saved print settings override global defaults; new managed projects and drafts inherit current defaults. **Printer profiles > Reset project to global defaults** previews changes and reconciles placement before applying. Project artwork-rule overrides/reset remain.
+- [~] Printing defaults are read afresh when editing defaults, creating a project/draft, or resetting a project; open jobs are never silently changed. Artwork-rule refresh in already-open pickers remains.
+- [~] Existing integration coverage covers shared artwork-dialog entry points, cross-service print selection, reload, Cancel, and save errors. Global printing defaults and reset are implemented; focused regression coverage and CI acceptance remain outstanding.
 
 ## Phase 5 — Intelligence after the editor is solid
 

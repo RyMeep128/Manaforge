@@ -6,9 +6,9 @@ from contextlib import closing
 import sqlite3
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 # Append migrations; never change the order of already published versions.
-MIGRATIONS = ("_migrate_to_v1",)
+MIGRATIONS = ("_migrate_to_v1", "_migrate_to_v2")
 
 
 SCHEMA = """
@@ -153,6 +153,15 @@ class SchemaOperations:
         for sql in statements:
             if not sql.startswith("CREATE TABLE"):
                 connection.execute(sql)
+
+    def _migrate_to_v2(self, connection: sqlite3.Connection) -> None:
+        connection.execute(
+            """CREATE TABLE printing_preferences (
+                preference_key TEXT PRIMARY KEY,
+                payload_json TEXT NOT NULL,
+                updated_at REAL NOT NULL
+            )"""
+        )
 
     @staticmethod
     def _ensure_column(

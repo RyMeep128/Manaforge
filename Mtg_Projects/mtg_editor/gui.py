@@ -118,6 +118,7 @@ class EditorWindow(W.QMainWindow):
         more.setPopupMode(W.QToolButton.ToolButtonPopupMode.InstantPopup)
         menu = W.QMenu(more)
         menu.addAction('Artwork preferences?', self.artwork_preferences)
+        menu.addAction('Global printing defaults...', self.printing_preferences)
         menu.addAction('Deck guidance…', self.deck_guidance)
         menu.addAction('Recommendations…', self.recommendations)
         menu.addAction('Import recommendation decks…', self.import_recommendation_decks)
@@ -372,6 +373,10 @@ class EditorWindow(W.QMainWindow):
     def artwork_preferences(self):
         from mtg_ui.artwork_preferences import edit_artwork_preferences
         edit_artwork_preferences(self, self.service)
+
+    def printing_preferences(self):
+        from mtg_ui.printing_preferences import edit_printing_preferences
+        edit_printing_preferences(self, self.service)
 
     def focus_filter(self):
         self.add_cards_workspace.back()

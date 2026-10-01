@@ -2967,6 +2967,13 @@ class PrintOptionsWidget(QGroupBox):
 
         profiles_button = QPushButton("Printer profiles…")
         layout.addWidget(profiles_button)
+        defaults_button = QPushButton("Global printing defaults...")
+        layout.addWidget(defaults_button)
+        def edit_defaults():
+            from mtg_core import get_default_card_service
+            from mtg_ui.printing_preferences import edit_printing_preferences
+            edit_printing_preferences(self, get_default_card_service())
+        defaults_button.clicked.connect(edit_defaults)
         calibration_button = QPushButton("Calibrate printer…")
         layout.addWidget(calibration_button)
         from services.printer_profiles import DUPLEX

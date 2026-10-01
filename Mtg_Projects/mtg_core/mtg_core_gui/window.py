@@ -1069,6 +1069,7 @@ class CoreAdminMainWindow(QMainWindow):
         self.admin_service = admin_service or CardAdminService()
         preferences = self.menuBar().addMenu("Preferences")
         preferences.addAction("Artwork preferences?", self.artwork_preferences)
+        preferences.addAction("Global printing defaults...", self.printing_preferences)
         self.setWindowTitle("MTG Core Database Admin")
         self.resize(1360, 820)
 
@@ -1096,6 +1097,10 @@ class CoreAdminMainWindow(QMainWindow):
     def artwork_preferences(self):
         from mtg_ui.artwork_preferences import edit_artwork_preferences
         edit_artwork_preferences(self, self.admin_service.card_service)
+
+    def printing_preferences(self):
+        from mtg_ui.printing_preferences import edit_printing_preferences
+        edit_printing_preferences(self, self.admin_service.card_service)
 
     def _set_status(self, message: str) -> None:
         self.statusBar().showMessage(message, 6000)

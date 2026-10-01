@@ -571,7 +571,9 @@ class AppShellWindow(QMainWindow):
                 return None
             if confirm == QMessageBox.StandardButton.Yes:
                 return project_library.load_draft_project_dict()
-            return project_library.reset_draft_workspace()
+            defaults = project_library.create_draft_project_dict()
+            project_library.reset_draft_workspace()
+            return defaults
         return project_library.create_draft_project_dict()
 
     def _autosave_managed_session(self):
@@ -613,7 +615,12 @@ class AppShellWindow(QMainWindow):
         if not self._leave_active_session():
             return
 
-        draft_defaults = self._prepare_new_draft_workspace()
+        try:
+            draft_defaults = self._prepare_new_draft_workspace()
+        except Exception as exc:
+            logger.exception('Could not prepare a draft with global printing defaults')
+            self._application.warn_nonfatal('Could not prepare draft', str(exc))
+            return
         if draft_defaults is None:
             return
 

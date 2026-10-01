@@ -393,7 +393,7 @@ def draft_has_user_content():
 
 
 def create_draft_project_dict():
-    return ensure_draft_workspace()
+    return {**ensure_draft_workspace(), **_global_printing_defaults()}
 
 
 def save_draft_project(print_dict):
@@ -431,8 +431,13 @@ def load_draft_project_dict():
     return data
 
 
+def _global_printing_defaults():
+    preferences = get_default_card_service().get_printing_preferences()
+    return preferences.settings() if preferences is not None else {}
+
+
 def _initial_project_dict(project_path):
-    state = ProjectState()
+    state = ProjectState.from_dict(_global_printing_defaults())
     default_back_name = "__back.png"
     default_back_source = _shared_default_back_path()
     if default_back_source is not None:

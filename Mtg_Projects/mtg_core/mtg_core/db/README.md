@@ -12,7 +12,7 @@ values, transaction behavior, and persisted formats are unchanged by this split.
 | `catalog.py` | Transactional admin mutations and dependent-record cleanup |
 | `search.py` | Local queries, FTS, structured search data, and index maintenance |
 | `images.py` | Image manifests, blobs, verified asset files, and materialization |
-| `preferences.py` | Artwork favorites and preference profiles |
+| `preferences.py` | Artwork favorites/profiles and versioned global printing defaults |
 | `sync_state.py` | Persisted synchronization checkpoints |
 
 The facade composes internal operation groups through inheritance. These groups
@@ -28,6 +28,12 @@ databases. SQLite `PRAGMA user_version` records the schema version. Version zero
 covers empty and historical unversioned databases; migration 1 creates missing
 tables, adds compatibility columns, and then creates dependent indexes without
 replacing user tables or artwork.
+
+Migration 2 adds `printing_preferences`. Its default row holds a versioned JSON
+payload validated by Core's `PrintingPreferences` model. No defaults row means
+the print application's existing fallback configuration still applies. Reads do
+not cache defaults; writes validate incoming settings before opening a transaction
+and check the stored payload version under a write lock before replacing the row.
 
 Startup holds an immediate transaction while reading the version and applying
 ordered migrations. Schema changes and version updates roll back together on

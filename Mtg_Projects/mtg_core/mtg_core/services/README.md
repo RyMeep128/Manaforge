@@ -10,6 +10,7 @@ Internal operation groups follow the same pattern as `CardDatabase`:
 | --- | --- |
 | `search.py` | Local/remote search, card and printing lookup, editor analysis reads |
 | `artwork.py` | Artwork favorites, preference profiles, preferred-print selection |
+| `preferences.py` | Fresh reads and validated writes of global printing defaults |
 | `images.py` | Image lookup, download, asset storage/materialization, local validation |
 | `catalog_sync.py` | Bulk catalog and Oracle-tag sync, resumable download state |
 | `constants.py` | Existing persistent sync identifiers and defaults |

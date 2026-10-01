@@ -221,6 +221,13 @@ This is a snapshot: reopen it after editing the deck.
 
 ## Print Deck
 
+**More > Global printing defaults** opens the shared Core-owned preference editor.
+Saved defaults initialize a deck's first new print project. Existing linked print
+projects and settings imported from Proxy keep their overrides. To reset those
+settings, use Proxy's **Print Settings > Printer profiles > Reset project to
+global defaults**. Changes saved in another app are read on the next defaults
+dialog opening or new project creation.
+
 **Print Deck** asks which sections to include. Mainboard and Commander are selected
 by default; cards marked do-not-print are excluded. The deck is saved, printable
 assets and paired backs are resolved using Proxy's import workflow, and a managed
