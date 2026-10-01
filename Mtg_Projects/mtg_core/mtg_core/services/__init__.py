@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 from typing import Callable
+from pathlib import Path
 
 from mtg_core.db import CardDatabase
 from mtg_core.paths import core_data_root
+from mtg_core.rulings import RulingsOperations
 from mtg_core.sync import RemoteLookupUnavailable, fetch_bytes, fetch_json
 from .artwork import ArtworkOperations
 from .catalog_sync import CatalogSyncOperations
@@ -19,7 +21,7 @@ from .constants import (
 
 
 class CardService(SearchOperations, ArtworkOperations, ImageOperations, CatalogSyncOperations,
-                  PreferenceOperations):
+                  PreferenceOperations, RulingsOperations):
     """Shared dependencies and lifecycle for search, artwork, images, and sync.
 
     Internal groups call through self so subclass overrides and injected fetch
@@ -30,11 +32,14 @@ class CardService(SearchOperations, ArtworkOperations, ImageOperations, CatalogS
         *,
         db_path: str | None = None,
         image_root: str | None = None,
+        rulings_path: str | None = None,
         fetch_json_fn: Callable[[str], dict] | None = None,
         fetch_bytes_fn: Callable[[str], bytes] | None = None,
         fetch_bulk_fn: Callable[[], list[dict]] | None = None,
     ):
         self.database = CardDatabase(db_path)
+        self.rulings_path = rulings_path or str(
+            Path(self.database.db_path).with_suffix('.rulings.sqlite3'))
         self.image_root = image_root or str(core_data_root() / "images")
         self.fetch_json_fn = fetch_json_fn or fetch_json
         self.fetch_bytes_fn = fetch_bytes_fn or fetch_bytes

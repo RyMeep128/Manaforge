@@ -79,6 +79,10 @@ class CardDetails(W.QDialog):
         self.text = W.QTextBrowser()
         self.text.setPlainText(entry.name + '\n\nLoading card details…')
         info.addWidget(self.text, 1)
+        self.rulings = W.QPushButton('View card rulings…')
+        self.rulings.setEnabled(bool(entry.oracle_id))
+        self.rulings.clicked.connect(self.show_rulings)
+        info.addWidget(self.rulings)
         info.addWidget(W.QLabel('Scryfall printing'))
         self.printings = W.QComboBox()
         self.printings.setMinimumContentsLength(25)
@@ -142,9 +146,16 @@ class CardDetails(W.QDialog):
 
     def preview_printing(self, *_):
         self.payload = self.printings.currentData() or {}
+        self.rulings.setEnabled(bool(self.payload.get('oracle_id') or self.entry.oracle_id))
         self.face = 0
         self.use.setEnabled(bool(self.payload.get('id')) and self.payload.get('id') != self.entry.card_id)
         self.render_face()
+
+    def show_rulings(self):
+        from mtg_ui.rulings import RulingsDialog
+        RulingsDialog(self.service, name=self.entry.name,
+                      oracle_id=self.payload.get('oracle_id') or self.entry.oracle_id,
+                      card_id=self.payload.get('id') or self.entry.card_id, parent=self).exec()
 
     def flip_face(self):
         self.face = 1 - self.face

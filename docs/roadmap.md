@@ -261,6 +261,14 @@ Archidekt is the primary source. The user authorized one personal/noncommercial 
 
 ## Phase 6 - Rules and rulings reference
 
+Implemented first slice: Editor card details now opens a shared offline rulings viewer.
+Card rulings use a separate versioned SQLite cache keyed by Oracle ID, with download
+timestamps and publication dates. Explicit background refresh uses Scryfall, labels
+Wizards rulings separately from Scryfall notes, and preserves the previous snapshot
+if the response fails or is incomplete. Successfully downloaded empty lists are
+distinguished from cards that have never been downloaded. CI validation is pending;
+Comprehensive Rules, indexes, and access from other application surfaces remain open.
+
 - [ ] Add a local Rules section with Oracle text, official card rulings, keywords, and related Comprehensive Rules links.
 - [ ] Support full-text/rule-number search, section navigation, keyword indexes, and cross-links.
 - [ ] Version rules/rulings separately from decks/artwork, show installed version/date, and support updates.
