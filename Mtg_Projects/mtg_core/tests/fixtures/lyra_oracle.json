@@ -1,0 +1,1256 @@
+{
+  "source": "https://api.scryfall.com/cards/collection",
+  "cards": {
+    "Airbender Ascension": {
+      "id": "99a90d13-891c-45cc-b1d5-6080ebae5862",
+      "oracle_id": "c4d2fdf9-637d-4e97-ae33-45f2d27bf8cd",
+      "name": "Airbender Ascension",
+      "type_line": "Enchantment",
+      "oracle_text": "When this enchantment enters, airbend up to one target creature.\nWhenever a creature you control enters, put a quest counter on this enchantment.\nAt the beginning of your end step, if this enchantment has four or more quest counters on it, exile up to one target creature you control, then return it to the battlefield under its owner's control.",
+      "keywords": [
+        "Airbend"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 2.0
+    },
+    "Ajani Resolute": {
+      "id": "a5e1a7dd-8c49-4435-935c-bcc78704082b",
+      "oracle_id": "0d60c095-4c6c-4618-8ef3-508f3d454efa",
+      "name": "Ajani Resolute",
+      "type_line": "Legendary Planeswalker — Ajani",
+      "oracle_text": "Whenever you gain life, put a loyalty counter on Ajani.\n0: You gain 1 life.\n−4: Create a 2/2 white Cat Soldier creature token named Ajani's Pridemate with \"Whenever you gain life, put a +1/+1 counter on this token.\"\n−10: You get an emblem with \"Creatures you control get +2/+2.\"",
+      "keywords": [],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 2.0
+    },
+    "Ajani, Strength of the Pride": {
+      "id": "79883468-a37c-4894-8d05-6a4d150b7d59",
+      "oracle_id": "c3974ec7-7af0-4b65-baf6-4c1c4fe8a5c4",
+      "name": "Ajani, Strength of the Pride",
+      "type_line": "Legendary Planeswalker — Ajani",
+      "oracle_text": "+1: You gain life equal to the number of creatures you control plus the number of planeswalkers you control.\n−2: Create a 2/2 white Cat Soldier creature token named Ajani's Pridemate with \"Whenever you gain life, put a +1/+1 counter on this token.\"\n0: If you have at least 15 life more than your starting life total, exile Ajani and each artifact and creature your opponents control.",
+      "keywords": [],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 4.0
+    },
+    "Akroma's Will": {
+      "id": "608cdbdb-6f7e-438a-bab0-0e7782435f0f",
+      "oracle_id": "fd949f82-fc10-4e37-8aa9-6c7569fe3c55",
+      "name": "Akroma's Will",
+      "type_line": "Instant",
+      "oracle_text": "Choose one. If you control a commander as you cast this spell, you may choose both instead.\n• Creatures you control gain flying, vigilance, and double strike until end of turn.\n• Creatures you control gain lifelink, indestructible, and protection from each color until end of turn.",
+      "keywords": [],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 4.0
+    },
+    "Angel of Destiny": {
+      "id": "9897074a-0ac4-4d1a-9aac-e77830cc5c78",
+      "oracle_id": "02f46271-c90d-4318-9004-74e7bee64a89",
+      "name": "Angel of Destiny",
+      "type_line": "Creature — Angel Cleric",
+      "oracle_text": "Flying, double strike\nWhenever a creature you control deals combat damage to a player, you and that player each gain that much life.\nAt the beginning of your end step, if you have at least 15 life more than your starting life total, each player this creature attacked this turn loses the game.",
+      "keywords": [
+        "Flying",
+        "Double strike"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 5.0
+    },
+    "Angel of Finality": {
+      "id": "baaabd52-3aa9-4e2f-9369-d4db8b405ba8",
+      "oracle_id": "48d14b5c-711a-4f8a-9de5-55415cb7a79a",
+      "name": "Angel of Finality",
+      "type_line": "Creature — Angel",
+      "oracle_text": "Flying\nWhen this creature enters, exile target player's graveyard.",
+      "keywords": [
+        "Flying"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 4.0
+    },
+    "Angel of Jubilation": {
+      "id": "16c5dfed-4dee-4e48-a445-89f03d7794e6",
+      "oracle_id": "36c2fc4c-7d8b-47c2-91c3-e356df60b219",
+      "name": "Angel of Jubilation",
+      "type_line": "Creature — Angel",
+      "oracle_text": "Flying\nOther nonblack creatures you control get +1/+1.\nPlayers can't pay life or sacrifice creatures to cast spells or activate abilities.",
+      "keywords": [
+        "Flying"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 4.0
+    },
+    "Angelic Field Marshal": {
+      "id": "496e9fe2-843c-4dfe-b94a-b542a2ddaae4",
+      "oracle_id": "502575f4-7c56-44bc-a77f-ae28d66c8e1f",
+      "name": "Angelic Field Marshal",
+      "type_line": "Creature — Angel",
+      "oracle_text": "Flying\nLieutenant — As long as you control your commander, this creature gets +2/+2 and creatures you control have vigilance.",
+      "keywords": [
+        "Flying",
+        "Lieutenant"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 4.0
+    },
+    "Angelic Skirmisher": {
+      "id": "beb04702-5cb2-4590-b675-9409ba52a395",
+      "oracle_id": "29e07d57-0f05-441c-844f-cf1d71102b2d",
+      "name": "Angelic Skirmisher",
+      "type_line": "Creature — Angel",
+      "oracle_text": "Flying\nAt the beginning of each combat, choose first strike, vigilance, or lifelink. Creatures you control gain that ability until end of turn.",
+      "keywords": [
+        "Flying",
+        "Vigilance"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 6.0
+    },
+    "Archaeomancer's Map": {
+      "id": "3679b9c8-ebae-474a-b862-6397edbcc4ea",
+      "oracle_id": "ef833546-f755-4ac5-867a-3926984e68a0",
+      "name": "Archaeomancer's Map",
+      "type_line": "Artifact",
+      "oracle_text": "When this artifact enters, search your library for up to two basic Plains cards, reveal them, put them into your hand, then shuffle.\nWhenever a land an opponent controls enters, if that player controls more lands than you, you may put a land card from your hand onto the battlefield.",
+      "keywords": [],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 3.0
+    },
+    "Archangel of Thune": {
+      "id": "15c34447-b0f4-4fcc-b557-23c92850b31b",
+      "oracle_id": "4f2d4538-dc1d-4c09-964b-b0d7c240fb7d",
+      "name": "Archangel of Thune",
+      "type_line": "Creature — Angel",
+      "oracle_text": "Flying\nLifelink (Damage dealt by this creature also causes you to gain that much life.)\nWhenever you gain life, put a +1/+1 counter on each creature you control.",
+      "keywords": [
+        "Flying",
+        "Lifelink"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 5.0
+    },
+    "Archangel of Tithes": {
+      "id": "c853d04c-864b-491c-8c6f-72d2d4874d2f",
+      "oracle_id": "ff5caed4-0276-476d-8fae-edae2536df7f",
+      "name": "Archangel of Tithes",
+      "type_line": "Creature — Angel",
+      "oracle_text": "Flying\nAs long as this creature is untapped, creatures can't attack you or planeswalkers you control unless their controller pays {1} for each of those creatures.\nAs long as this creature is attacking, creatures can't block unless their controller pays {1} for each of those creatures.",
+      "keywords": [
+        "Flying"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 4.0
+    },
+    "Auriok Champion": {
+      "id": "74b769c1-48a0-448b-98d9-0d86526ef51e",
+      "oracle_id": "633fd158-19d0-4d97-a076-2ad897bbed19",
+      "name": "Auriok Champion",
+      "type_line": "Creature — Human Cleric",
+      "oracle_text": "Protection from black and from red\nWhenever another creature enters, you may gain 1 life.",
+      "keywords": [
+        "Protection"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 2.0
+    },
+    "Authority of the Consuls": {
+      "id": "42ce2d7f-5924-47c0-b5ed-dacf9f9617a0",
+      "oracle_id": "55f3c721-e13a-406e-bc8e-d6cdc91ac477",
+      "name": "Authority of the Consuls",
+      "type_line": "Enchantment",
+      "oracle_text": "Creatures your opponents control enter tapped.\nWhenever a creature an opponent controls enters, you gain 1 life.",
+      "keywords": [],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 1.0
+    },
+    "Battle Angels of Tyr": {
+      "id": "4c91dbf4-94fa-45d0-b8ed-a778b11d789b",
+      "oracle_id": "c2bd0c24-3973-48bc-a591-3779e3640c5d",
+      "name": "Battle Angels of Tyr",
+      "type_line": "Creature — Angel Knight",
+      "oracle_text": "Flying, myriad\nWhenever this creature deals combat damage to a player, draw a card if that player has more cards in hand than each other player. Then you create a Treasure token if that player controls more lands than each other player. Then you gain 3 life if that player has more life than each other player.",
+      "keywords": [
+        "Myriad",
+        "Flying",
+        "Treasure"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 4.0
+    },
+    "Bishop of Wings": {
+      "id": "ca42da05-330d-4050-a580-dc00f6faff24",
+      "oracle_id": "af4684cf-f109-44be-adfb-7c551a36635e",
+      "name": "Bishop of Wings",
+      "type_line": "Creature — Human Cleric",
+      "oracle_text": "Whenever an Angel you control enters, you gain 4 life.\nWhenever an Angel you control dies, create a 1/1 white Spirit creature token with flying.",
+      "keywords": [],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 2.0
+    },
+    "Blind Obedience": {
+      "id": "d859e1f9-feb3-497a-af0b-f74fee46861f",
+      "oracle_id": "5d998c09-7d89-4265-ada4-6d80cbf56dae",
+      "name": "Blind Obedience",
+      "type_line": "Enchantment",
+      "oracle_text": "Extort (Whenever you cast a spell, you may pay {W/B}. If you do, each opponent loses 1 life and you gain that much life.)\nArtifacts and creatures your opponents control enter tapped.",
+      "keywords": [
+        "Extort"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 2.0
+    },
+    "Bruna, the Fading Light": {
+      "id": "6fccdb60-5fce-4a6e-a709-b986f9a4b653",
+      "oracle_id": "bce7e45d-b2c5-43aa-91a6-3a3c24f30850",
+      "name": "Bruna, the Fading Light",
+      "type_line": "Legendary Creature — Angel Horror",
+      "oracle_text": "When you cast this spell, you may return target Angel or Human creature card from your graveyard to the battlefield.\nFlying, vigilance\n(Melds with Gisela, the Broken Blade.)",
+      "keywords": [
+        "Flying",
+        "Vigilance"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 7.0
+    },
+    "Clever Concealment": {
+      "id": "41d45a8a-ea1d-4fbc-86d2-5d6340f3b639",
+      "oracle_id": "42bb7ea9-f6e4-4551-8d93-3b1eae84b865",
+      "name": "Clever Concealment",
+      "type_line": "Instant",
+      "oracle_text": "Convoke (Your creatures can help cast this spell. Each creature you tap while casting this spell pays for {1} or one mana of that creature's color.)\nAny number of target nonland permanents you control phase out. (Treat them and anything attached to them as though they don't exist until your next turn.)",
+      "keywords": [
+        "Convoke"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 4.0
+    },
+    "Crib Swap": {
+      "id": "8f2fb3c6-af75-47a3-9f97-521872c32890",
+      "oracle_id": "2987c385-011a-4032-a516-a46d1e9dc9e8",
+      "name": "Crib Swap",
+      "type_line": "Kindred Instant — Shapeshifter",
+      "oracle_text": "Changeling (This card is every creature type.)\nExile target creature. Its controller creates a 1/1 colorless Shapeshifter creature token with changeling.",
+      "keywords": [
+        "Changeling"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 3.0
+    },
+    "Crush Contraband": {
+      "id": "08c5cdbe-2142-4ddc-b9b5-35ca60eb9970",
+      "oracle_id": "ecbc234d-e1d3-4bcc-81d4-fffc2c7ea16a",
+      "name": "Crush Contraband",
+      "type_line": "Instant",
+      "oracle_text": "Choose one or both —\n• Exile target artifact.\n• Exile target enchantment.",
+      "keywords": [],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 4.0
+    },
+    "Cut a Deal": {
+      "id": "088388a6-1cc3-4782-91af-504e70f40a97",
+      "oracle_id": "8b5cffd5-5db3-4151-9275-d91387554412",
+      "name": "Cut a Deal",
+      "type_line": "Sorcery",
+      "oracle_text": "Each opponent draws a card, then you draw a card for each opponent who drew a card this way.",
+      "keywords": [],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 3.0
+    },
+    "Damning Verdict": {
+      "id": "5be40c34-6df0-4471-b99b-850ae2be9923",
+      "oracle_id": "355ed7ef-bfa6-4538-99fb-a2d203eb7005",
+      "name": "Damning Verdict",
+      "type_line": "Sorcery",
+      "oracle_text": "Destroy all creatures with no counters on them.",
+      "keywords": [],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 5.0
+    },
+    "Dawn's Truce": {
+      "id": "8f72bfa0-efef-48ce-aff8-d5818ed71ba6",
+      "oracle_id": "37c06f89-db36-4937-9404-2b07cd22e1a6",
+      "name": "Dawn's Truce",
+      "type_line": "Instant",
+      "oracle_text": "Gift a card (You may promise an opponent a gift as you cast this spell. If you do, they draw a card before its other effects.)\nYou and permanents you control gain hexproof until end of turn. If the gift was promised, permanents you control also gain indestructible until end of turn.",
+      "keywords": [
+        "Gift"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 2.0
+    },
+    "Dazzling Angel": {
+      "id": "a0bdf4d1-576f-41b6-a077-8725be608331",
+      "oracle_id": "7de464e3-fae3-44cc-8233-776fc727c00a",
+      "name": "Dazzling Angel",
+      "type_line": "Creature — Angel",
+      "oracle_text": "Flying\nWhenever another creature you control enters, you gain 1 life.",
+      "keywords": [
+        "Flying"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 3.0
+    },
+    "Emeria, the Sky Ruin": {
+      "id": "90f148e6-1a5e-46fc-9557-40c5c0038069",
+      "oracle_id": "cc999cf2-c99b-4911-8c52-6cc4a99fcc7b",
+      "name": "Emeria, the Sky Ruin",
+      "type_line": "Land",
+      "oracle_text": "This land enters tapped.\nAt the beginning of your upkeep, if you control seven or more Plains, you may return target creature card from your graveyard to the battlefield.\n{T}: Add {W}.",
+      "keywords": [],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [],
+      "cmc": 0.0
+    },
+    "Excise the Imperfect": {
+      "id": "ec4d501d-dacf-4f49-8756-f1190e244405",
+      "oracle_id": "d3264482-2a5a-45e8-987f-593b8aceac12",
+      "name": "Excise the Imperfect",
+      "type_line": "Instant",
+      "oracle_text": "Exile target nonland permanent. Its controller incubates X, where X is its mana value. (They create an Incubator token with X +1/+1 counters on it and \"{2}: Transform this token.\" It transforms into a 0/0 Phyrexian artifact creature.)",
+      "keywords": [
+        "Incubate",
+        "Transform"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 3.0
+    },
+    "Exemplar of Light": {
+      "id": "b7393efb-da40-4b55-a6ff-ce774f0815f9",
+      "oracle_id": "9ad730b5-8950-4215-9319-387e2970dd22",
+      "name": "Exemplar of Light",
+      "type_line": "Creature — Angel",
+      "oracle_text": "Flying\nWhenever you gain life, put a +1/+1 counter on this creature.\nWhenever you put one or more +1/+1 counters on this creature, draw a card. This ability triggers only once each turn.",
+      "keywords": [
+        "Flying"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 4.0
+    },
+    "Farewell": {
+      "id": "114d2180-093b-4838-97ad-badbc8ee50b0",
+      "oracle_id": "4eb813fd-2d5a-4b02-8193-662681ef4e7d",
+      "name": "Farewell",
+      "type_line": "Sorcery",
+      "oracle_text": "Choose one or more —\n• Exile all artifacts.\n• Exile all creatures.\n• Exile all enchantments.\n• Exile all graveyards.",
+      "keywords": [],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 6.0
+    },
+    "Firemane Commando": {
+      "id": "c86269cc-bf4d-44b4-ad4b-8356857c532f",
+      "oracle_id": "ac675899-25bb-4f06-9c8c-bf188024495f",
+      "name": "Firemane Commando",
+      "type_line": "Creature — Angel Soldier",
+      "oracle_text": "Flying\nWhenever you attack with two or more creatures, draw a card.\nWhenever another player attacks with two or more creatures, they draw a card if none of those creatures attacked you.",
+      "keywords": [
+        "Flying"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 4.0
+    },
+    "Flare of Fortitude": {
+      "id": "37b41b59-0296-443b-8a62-8d5c4641ef66",
+      "oracle_id": "4ff07b7c-e97a-4b57-bcf1-2f22c37a8bd6",
+      "name": "Flare of Fortitude",
+      "type_line": "Instant",
+      "oracle_text": "You may sacrifice a nontoken white creature rather than pay this spell's mana cost.\nUntil end of turn, your life total can't change, and permanents you control gain hexproof and indestructible.",
+      "keywords": [],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 4.0
+    },
+    "Flawless Maneuver": {
+      "id": "3ffe82a4-584e-4ebd-9551-a745bed01e26",
+      "oracle_id": "4e183439-17d2-47ff-9d99-5e22821d91e3",
+      "name": "Flawless Maneuver",
+      "type_line": "Instant",
+      "oracle_text": "If you control a commander, you may cast this spell without paying its mana cost.\nCreatures you control gain indestructible until end of turn.",
+      "keywords": [],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 3.0
+    },
+    "Folk Hero": {
+      "id": "85bf7c95-4534-435b-bb25-f39340ecf9be",
+      "oracle_id": "c5126d6e-969c-4034-98e3-f8653163346f",
+      "name": "Folk Hero",
+      "type_line": "Legendary Enchantment — Background",
+      "oracle_text": "Commander creatures you own have \"Whenever you cast a spell that shares a creature type with this creature, draw a card. This ability triggers only once each turn.\"",
+      "keywords": [],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 2.0
+    },
+    "Giada, Font of Hope": {
+      "id": "8ae6fc26-cfad-4da8-98d9-49c27c24d293",
+      "oracle_id": "48e6d3d8-2f27-4017-acdd-40bce8cdbc02",
+      "name": "Giada, Font of Hope",
+      "type_line": "Legendary Creature — Angel",
+      "oracle_text": "Flying, vigilance\nEach other Angel you control enters with an additional +1/+1 counter on it for each Angel you already control.\n{T}: Add {W}. Spend this mana only to cast an Angel spell.",
+      "keywords": [
+        "Flying",
+        "Vigilance"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 2.0
+    },
+    "Gisela, the Broken Blade": {
+      "id": "04506bad-3856-4184-8dda-941ded60f41a",
+      "oracle_id": "f3e23d5e-bd88-4e7c-a3fb-db2a8cb05b22",
+      "name": "Gisela, the Broken Blade",
+      "type_line": "Legendary Creature — Angel Horror",
+      "oracle_text": "Flying, first strike, lifelink\nAt the beginning of your end step, if you both own and control Gisela and a creature named Bruna, the Fading Light, exile them, then meld them into Brisela, Voice of Nightmares.",
+      "keywords": [
+        "Flying",
+        "Lifelink",
+        "First strike",
+        "Meld"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 4.0
+    },
+    "Gleaming Splendor": {
+      "id": "3b087bd4-bbb7-4963-bdb6-0a700ff19a04",
+      "oracle_id": "c01aeaa5-1d3b-4493-9575-30175dcd780d",
+      "name": "Gleaming Splendor",
+      "type_line": "Enchantment",
+      "oracle_text": "Whenever an opponent draws their second card each turn, you create a Treasure token.\n{2}{W}: Two target players each draw a card.",
+      "keywords": [
+        "Treasure"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 2.0
+    },
+    "Guide of Souls": {
+      "id": "76c3cad2-1e25-4abe-878d-9194de6fcc27",
+      "oracle_id": "b304ac72-7f40-40de-b8d6-6392909b6029",
+      "name": "Guide of Souls",
+      "type_line": "Creature — Human Cleric",
+      "oracle_text": "Whenever another creature you control enters, you gain 1 life and get {E} (an energy counter).\nWhenever you attack, you may pay {E}{E}{E}. When you do, put two +1/+1 counters and a flying counter on target attacking creature. It becomes an Angel in addition to its other types.",
+      "keywords": [],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 1.0
+    },
+    "Haliya, Guided by Light": {
+      "id": "6f7c63ae-5df3-410f-8643-b8c69133ca9d",
+      "oracle_id": "9b0af3ad-1b4d-4480-af91-fe9baee5d1c5",
+      "name": "Haliya, Guided by Light",
+      "type_line": "Legendary Creature — Human Soldier",
+      "oracle_text": "Whenever Haliya or another creature or artifact you control enters, you gain 1 life.\nAt the beginning of your end step, draw a card if you've gained 3 or more life this turn.\nWarp {W} (You may cast this card from your hand for its warp cost. Exile this creature at the beginning of the next end step, then you may cast it from exile on a later turn.)",
+      "keywords": [
+        "Warp"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 3.0
+    },
+    "Heliod, Sun-Crowned": {
+      "id": "3245ff74-1f9c-4518-a23f-1579f338f232",
+      "oracle_id": "63e596a2-9126-4af6-8782-c38687d664ad",
+      "name": "Heliod, Sun-Crowned",
+      "type_line": "Legendary Enchantment Creature — God",
+      "oracle_text": "Indestructible\nAs long as your devotion to white is less than five, Heliod isn't a creature.\nWhenever you gain life, put a +1/+1 counter on target creature or enchantment you control.\n{1}{W}: Another target creature gains lifelink until end of turn.",
+      "keywords": [
+        "Indestructible"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 3.0
+    },
+    "Inspiring Overseer": {
+      "id": "79016cf3-6eea-4b21-9ff3-f187d606e19a",
+      "oracle_id": "d646e42b-5635-4798-b633-29c093b66a55",
+      "name": "Inspiring Overseer",
+      "type_line": "Creature — Angel Cleric",
+      "oracle_text": "Flying\nWhen this creature enters, you gain 1 life and draw a card.",
+      "keywords": [
+        "Flying"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 3.0
+    },
+    "Karmic Guide": {
+      "id": "b26d50dd-54a1-43ce-9884-3999f698d97b",
+      "oracle_id": "8c31fec9-e4b3-4761-990e-7be38eb05604",
+      "name": "Karmic Guide",
+      "type_line": "Creature — Angel Spirit",
+      "oracle_text": "Flying, protection from black\nEcho {3}{W}{W} (At the beginning of your upkeep, if this came under your control since the beginning of your last upkeep, sacrifice it unless you pay its echo cost.)\nWhen this creature enters, return target creature card from your graveyard to the battlefield.",
+      "keywords": [
+        "Echo",
+        "Flying",
+        "Protection"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 5.0
+    },
+    "Land Tax": {
+      "id": "c70d3706-9d28-49ac-8718-4a516413e727",
+      "oracle_id": "d2d9ecea-7925-420e-98b9-2f87f41f387c",
+      "name": "Land Tax",
+      "type_line": "Enchantment",
+      "oracle_text": "At the beginning of your upkeep, if an opponent controls more lands than you, you may search your library for up to three basic land cards, reveal them, put them into your hand, then shuffle.",
+      "keywords": [],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 1.0
+    },
+    "Liliana the Faultless": {
+      "id": "70d8c400-87dc-4f15-808f-e54a95d779fc",
+      "oracle_id": "22c2e66d-a2a1-46db-a70a-dff5ad5d6c14",
+      "name": "Liliana the Faultless",
+      "type_line": "Legendary Creature — Human Cleric",
+      "oracle_text": "Whenever another creature or planeswalker you control enters, you gain 1 life.\n{1}, {T}, Discard a card: Another target creature or planeswalker you control gains hexproof until end of turn.",
+      "keywords": [],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 1.0
+    },
+    "Linvala, Keeper of Silence": {
+      "id": "dded98c3-17cb-4a43-a209-289ceb11df39",
+      "oracle_id": "88dadc31-dfac-41b3-bf2a-65fa89e3c16d",
+      "name": "Linvala, Keeper of Silence",
+      "type_line": "Legendary Creature — Angel",
+      "oracle_text": "Flying\nActivated abilities of creatures your opponents control can't be activated.",
+      "keywords": [
+        "Flying"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 4.0
+    },
+    "Lyra Dawnbringer": {
+      "id": "f9fa30b6-3a33-46fd-8b32-ac1cfa41500d",
+      "oracle_id": "592c91fc-6430-4c76-9460-65f047350f67",
+      "name": "Lyra Dawnbringer",
+      "type_line": "Legendary Creature — Angel",
+      "oracle_text": "Flying\nFirst strike (This creature deals combat damage before creatures without first strike.)\nLifelink (Damage dealt by this creature also causes you to gain that much life.)\nOther Angels you control get +1/+1 and have lifelink.",
+      "keywords": [
+        "Flying",
+        "Lifelink",
+        "First strike"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 5.0
+    },
+    "Lyra, Archangel of Dawn": {
+      "id": "86a3866e-68a8-402c-baf0-1908e98e3995",
+      "oracle_id": "0fca3328-484f-4050-925e-91840710b5d6",
+      "name": "Lyra, Archangel of Dawn",
+      "type_line": "Legendary Creature — Angel Knight",
+      "oracle_text": "Flying\nWhenever you gain life, put a +1/+1 counter on each Angel you control.",
+      "keywords": [
+        "Flying"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 3.0
+    },
+    "Metropolis Reformer": {
+      "id": "a61a3ba1-af6c-4ddc-aa82-34bfc30867d0",
+      "oracle_id": "baec04a1-3bc9-4618-afab-e42013e36648",
+      "name": "Metropolis Reformer",
+      "type_line": "Creature — Angel Cleric",
+      "oracle_text": "Flying, vigilance\nYou have hexproof.\nWhenever this creature is dealt damage, you gain that much life.",
+      "keywords": [
+        "Flying",
+        "Vigilance"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 3.0
+    },
+    "Parting Gust": {
+      "id": "1086e826-94b8-4398-8a38-d8eacca56a43",
+      "oracle_id": "367bb252-41e1-4f98-9d22-442dd332cccf",
+      "name": "Parting Gust",
+      "type_line": "Instant",
+      "oracle_text": "Gift a tapped Fish (You may promise an opponent a gift as you cast this spell. If you do, they create a tapped 1/1 blue Fish creature token before its other effects.)\nExile target nontoken creature. If the gift wasn't promised, return that card to the battlefield under its owner's control with a +1/+1 counter on it at the beginning of the next end step.",
+      "keywords": [
+        "Gift"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 2.0
+    },
+    "Path to Exile": {
+      "id": "22e08a78-55b7-46b0-bd1a-a51548fc1861",
+      "oracle_id": "d683d985-9888-4d21-8b5f-69e69ce4a03b",
+      "name": "Path to Exile",
+      "type_line": "Instant",
+      "oracle_text": "Exile target creature. Its controller may search their library for a basic land card, put that card onto the battlefield tapped, then shuffle.",
+      "keywords": [],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 1.0
+    },
+    "Plains": {
+      "id": "09ac862f-0a51-44dd-b86f-9412b8218b13",
+      "oracle_id": "bc71ebf6-2056-41f7-be35-b2e5c34afa99",
+      "name": "Plains",
+      "type_line": "Basic Land — Plains",
+      "oracle_text": "({T}: Add {W}.)",
+      "keywords": [],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [],
+      "cmc": 0.0
+    },
+    "Pristine Talisman": {
+      "id": "6b6307f3-bc63-463c-8ffc-a8b8b829e5d7",
+      "oracle_id": "1b3d7fce-e9fe-4176-9d9a-472415826cdd",
+      "name": "Pristine Talisman",
+      "type_line": "Artifact",
+      "oracle_text": "{T}: Add {C}. You gain 1 life.",
+      "keywords": [],
+      "color_identity": [],
+      "colors": [],
+      "cmc": 3.0
+    },
+    "Reprieve": {
+      "id": "1bd3fa8a-6c50-4f7f-9ae3-0810eec5e3db",
+      "oracle_id": "f0449cbd-855c-4c20-a1f5-f76a395d8d39",
+      "name": "Reprieve",
+      "type_line": "Instant",
+      "oracle_text": "Return target spell to its owner's hand.\nDraw a card.",
+      "keywords": [],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 2.0
+    },
+    "Resplendent Angel": {
+      "id": "59adbd35-9959-4a0f-babf-46ea3c15f018",
+      "oracle_id": "2ac93092-1a57-4cf7-8f03-1dca86d5c476",
+      "name": "Resplendent Angel",
+      "type_line": "Creature — Angel",
+      "oracle_text": "Flying\nAt the beginning of each end step, if you gained 5 or more life this turn, create a 4/4 white Angel creature token with flying and vigilance.\n{3}{W}{W}{W}: Until end of turn, this creature gets +2/+2 and gains lifelink.",
+      "keywords": [
+        "Flying"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 3.0
+    },
+    "Righteous Valkyrie": {
+      "id": "02fb5f9f-8750-4eb5-a03a-6dacc60e0b90",
+      "oracle_id": "891d2690-7144-4f87-b6ef-96f2469780a9",
+      "name": "Righteous Valkyrie",
+      "type_line": "Creature — Angel Cleric",
+      "oracle_text": "Flying\nWhenever another Angel or Cleric you control enters, you gain life equal to that creature's toughness.\nAs long as you have at least 7 life more than your starting life total, creatures you control get +2/+2.",
+      "keywords": [
+        "Flying"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 3.0
+    },
+    "Secret Rendezvous": {
+      "id": "9be712b3-14ed-4a73-b3d3-5b76b2c5db64",
+      "oracle_id": "34b90d3e-f48c-41ff-b3e4-5cab7a9cd597",
+      "name": "Secret Rendezvous",
+      "type_line": "Sorcery",
+      "oracle_text": "You and target opponent each draw three cards.",
+      "keywords": [],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 3.0
+    },
+    "Sephara, Sky's Blade": {
+      "id": "729ee848-6c27-4202-b2bc-605f45209468",
+      "oracle_id": "ac8952c9-bd30-48cd-b964-7e6271f9cbc8",
+      "name": "Sephara, Sky's Blade",
+      "type_line": "Legendary Creature — Angel",
+      "oracle_text": "You may pay {W} and tap four untapped creatures you control with flying rather than pay this spell's mana cost.\nFlying, lifelink\nOther creatures you control with flying have indestructible. (Damage and effects that say \"destroy\" don't destroy them.)",
+      "keywords": [
+        "Flying",
+        "Lifelink"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 7.0
+    },
+    "Seraph Sanctuary": {
+      "id": "e1c1fa29-362f-40b4-b67f-513f6592fb3b",
+      "oracle_id": "0b504dc6-61cc-4a72-907c-145fa4c72466",
+      "name": "Seraph Sanctuary",
+      "type_line": "Land",
+      "oracle_text": "When this land enters, you gain 1 life.\nWhenever an Angel you control enters, you gain 1 life.\n{T}: Add {C}.",
+      "keywords": [],
+      "color_identity": [],
+      "colors": [],
+      "cmc": 0.0
+    },
+    "Serra Ascendant": {
+      "id": "0a22ee47-fc56-436d-8570-88fbff421027",
+      "oracle_id": "27ad3e00-6ffb-48f7-8469-8868d066d1e2",
+      "name": "Serra Ascendant",
+      "type_line": "Creature — Human Monk",
+      "oracle_text": "Lifelink (Damage dealt by this creature also causes you to gain that much life.)\nAs long as you have 30 or more life, this creature gets +5/+5 and has flying.",
+      "keywords": [
+        "Lifelink"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 1.0
+    },
+    "Serra Paragon": {
+      "id": "8e77a410-a053-4349-950c-d59e76b17923",
+      "oracle_id": "ecd8d7f4-7b11-4097-afc0-ef3c81edd90c",
+      "name": "Serra Paragon",
+      "type_line": "Creature — Angel",
+      "oracle_text": "Flying\nOnce during each of your turns, you may play a land from your graveyard or cast a permanent spell with mana value 3 or less from your graveyard. If you do, it gains \"When this permanent is put into a graveyard from the battlefield, exile it and you gain 2 life.\"",
+      "keywords": [
+        "Flying"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 4.0
+    },
+    "Serra the Benevolent": {
+      "id": "88bf4af9-4b14-43e7-9d50-0e6a895cece1",
+      "oracle_id": "8b0e2382-dd91-42e6-aba3-5e8a15418a49",
+      "name": "Serra the Benevolent",
+      "type_line": "Legendary Planeswalker — Serra",
+      "oracle_text": "+2: Creatures you control with flying get +1/+1 until end of turn.\n−3: Create a 4/4 white Angel creature token with flying and vigilance.\n−6: You get an emblem with \"If you control a creature, damage that would reduce your life total to less than 1 reduces it to 1 instead.\"",
+      "keywords": [],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 4.0
+    },
+    "Shattered Angel": {
+      "id": "58e4fb9b-76bc-4daf-b0a3-4bf62757902d",
+      "oracle_id": "e339c6cb-c75d-4dd4-8c1a-78f844983242",
+      "name": "Shattered Angel",
+      "type_line": "Creature — Phyrexian Angel",
+      "oracle_text": "Flying\nWhenever a land an opponent controls enters, you may gain 3 life.",
+      "keywords": [
+        "Flying"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 5.0
+    },
+    "Sheltered by Ghosts": {
+      "id": "8e8a5cfe-1b3f-4414-b9a4-078bdb4072a7",
+      "oracle_id": "d13fc657-c6fc-4394-bc70-691050550226",
+      "name": "Sheltered by Ghosts",
+      "type_line": "Enchantment — Aura",
+      "oracle_text": "Enchant creature you control\nWhen this Aura enters, exile target nonland permanent an opponent controls until this Aura leaves the battlefield.\nEnchanted creature gets +1/+0 and has lifelink and ward {2}.",
+      "keywords": [
+        "Enchant"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 2.0
+    },
+    "Soul Warden": {
+      "id": "d96266b3-a7cb-40ce-a328-ac13719fe5f0",
+      "oracle_id": "f3fad295-1af2-4ecc-8546-b121ad6be27b",
+      "name": "Soul Warden",
+      "type_line": "Creature — Human Cleric",
+      "oracle_text": "Whenever another creature enters, you gain 1 life.",
+      "keywords": [],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 1.0
+    },
+    "Soul's Attendant": {
+      "id": "3223c0ac-cc22-4886-8919-11273b477cc7",
+      "oracle_id": "045a9d3d-c20d-427f-a77b-0bffc6f55526",
+      "name": "Soul's Attendant",
+      "type_line": "Creature — Human Cleric",
+      "oracle_text": "Whenever another creature enters, you may gain 1 life.",
+      "keywords": [],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 1.0
+    },
+    "Speaker of the Heavens": {
+      "id": "1f44b96a-8498-414a-a4ac-54c80dfa9f23",
+      "oracle_id": "e4bacf1b-0a45-4c73-857d-dffadb7e6fa5",
+      "name": "Speaker of the Heavens",
+      "type_line": "Creature — Human Cleric",
+      "oracle_text": "Vigilance, lifelink (Attacking doesn't cause this creature to tap. Damage dealt by this creature also causes you to gain that much life.)\n{T}: Create a 4/4 white Angel creature token with flying. Activate only if you have at least 7 life more than your starting life total and only as a sorcery.",
+      "keywords": [
+        "Lifelink",
+        "Vigilance"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 1.0
+    },
+    "Steel Seraph": {
+      "id": "1b6ef5f5-4058-4f89-a573-9e2da87a9f2e",
+      "oracle_id": "7ff8940f-d798-41eb-b82e-a1eba2163fe7",
+      "name": "Steel Seraph",
+      "type_line": "Artifact Creature — Angel",
+      "oracle_text": "Prototype {1}{W}{W} — 3/3 (You may cast this spell with different mana cost, color, and size. It keeps its abilities and types.)\nFlying\nAt the beginning of combat on your turn, target creature you control gains your choice of flying, vigilance, or lifelink until end of turn.",
+      "keywords": [
+        "Prototype",
+        "Flying",
+        "Vigilance"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [],
+      "cmc": 6.0
+    },
+    "Swords to Plowshares": {
+      "id": "f7e12477-d59f-442b-a678-1be746d0b7be",
+      "oracle_id": "b1544f21-7e98-461b-aed5-e748b0168c52",
+      "name": "Swords to Plowshares",
+      "type_line": "Instant",
+      "oracle_text": "Exile target creature. Its controller gains life equal to its power.",
+      "keywords": [],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 1.0
+    },
+    "Teferi's Protection": {
+      "id": "483fa1cb-1e35-44f2-a143-98c0f107f5ca",
+      "oracle_id": "0d4ecdb1-ec90-497f-a7a4-1c68092b8757",
+      "name": "Teferi's Protection",
+      "type_line": "Instant",
+      "oracle_text": "Until your next turn, your life total can't change and you gain protection from everything. All permanents you control phase out. (While they're phased out, they're treated as though they don't exist. They phase in before you untap during your untap step.)\nExile Teferi's Protection.",
+      "keywords": [],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 3.0
+    },
+    "The Ozolith": {
+      "id": "9341ed06-53db-4604-b60a-3ea9129afbc2",
+      "oracle_id": "1946ded1-5f53-409f-b0a6-5433bb0357d2",
+      "name": "The Ozolith",
+      "type_line": "Legendary Artifact",
+      "oracle_text": "Whenever a creature you control leaves the battlefield, if it had counters on it, put those counters on The Ozolith.\nAt the beginning of combat on your turn, if The Ozolith has counters on it, you may move all counters from The Ozolith onto target creature.",
+      "keywords": [],
+      "color_identity": [],
+      "colors": [],
+      "cmc": 1.0
+    },
+    "Thraben Watcher": {
+      "id": "5b4e0e11-2f16-42ad-b835-c9410c4bd7e3",
+      "oracle_id": "53cd9d9f-c1a7-404e-9934-4542415e3431",
+      "name": "Thraben Watcher",
+      "type_line": "Creature — Angel",
+      "oracle_text": "Flying, vigilance\nOther nontoken creatures you control get +1/+1 and have vigilance.",
+      "keywords": [
+        "Flying",
+        "Vigilance"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 4.0
+    },
+    "Trapped in the Screen": {
+      "id": "1fe95bfb-8ca7-434f-a2e7-a6b2e699584e",
+      "oracle_id": "20f2fc0e-b1d4-4f80-9c7a-a9fb25fef7b8",
+      "name": "Trapped in the Screen",
+      "type_line": "Enchantment",
+      "oracle_text": "Ward {2} (Whenever this enchantment becomes the target of a spell or ability an opponent controls, counter it unless that player pays {2}.)\nWhen this enchantment enters, exile target artifact, creature, or enchantment an opponent controls until this enchantment leaves the battlefield.",
+      "keywords": [
+        "Ward"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 3.0
+    },
+    "Trouble in Pairs": {
+      "id": "0f61e93f-5f97-4c7d-b3d5-0e05242faeb3",
+      "oracle_id": "f349f58b-8cc8-45e4-9565-2b46fdf976c9",
+      "name": "Trouble in Pairs",
+      "type_line": "Enchantment",
+      "oracle_text": "If an opponent would begin an extra turn, that player skips that turn instead.\nWhenever an opponent attacks you with two or more creatures, draws their second card each turn, or casts their second spell each turn, you draw a card.",
+      "keywords": [],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 4.0
+    },
+    "Valkyrie Harbinger": {
+      "id": "edab83a9-35b5-4312-b8ee-1c042c02aa31",
+      "oracle_id": "18a5e71e-eb75-4ac7-bedd-2220aaa24f78",
+      "name": "Valkyrie Harbinger",
+      "type_line": "Creature — Angel Cleric",
+      "oracle_text": "Flying\nLifelink (Damage dealt by this creature also causes you to gain that much life.)\nAt the beginning of each end step, if you gained 4 or more life this turn, create a 4/4 white Angel creature token with flying and vigilance.",
+      "keywords": [
+        "Flying",
+        "Lifelink"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 6.0
+    },
+    "Well of Lost Dreams": {
+      "id": "a8c10535-c77e-4a40-b19f-23f7cb691230",
+      "oracle_id": "b0394cf2-12a0-4d4f-87e0-fe8937e6faff",
+      "name": "Well of Lost Dreams",
+      "type_line": "Artifact",
+      "oracle_text": "Whenever you gain life, you may pay {X}, where X is less than or equal to the amount of life you gained. If you do, draw X cards.",
+      "keywords": [],
+      "color_identity": [],
+      "colors": [],
+      "cmc": 4.0
+    },
+    "Winds of Abandon": {
+      "id": "3bb17913-fe4d-4acd-9b75-71f5a90f898b",
+      "oracle_id": "499a4715-6776-461b-bee4-22ed172d455e",
+      "name": "Winds of Abandon",
+      "type_line": "Sorcery",
+      "oracle_text": "Exile target creature you don't control. For each creature exiled this way, its controller searches their library for a basic land card. Those players put those cards onto the battlefield tapped, then shuffle.\nOverload {4}{W}{W} (You may cast this spell for its overload cost. If you do, change \"target\" in its text to \"each.\")",
+      "keywords": [
+        "Overload"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 2.0
+    },
+    "Wojek Investigator": {
+      "id": "296574c6-3933-4ab3-b591-72514b244da9",
+      "oracle_id": "ab41243d-b178-4ebe-a7ac-bea37427be99",
+      "name": "Wojek Investigator",
+      "type_line": "Creature — Angel Detective",
+      "oracle_text": "Flying, vigilance\nAt the beginning of your upkeep, investigate once for each opponent who has more cards in hand than you. (To investigate, create a Clue token. It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")",
+      "keywords": [
+        "Flying",
+        "Investigate",
+        "Vigilance"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 3.0
+    },
+    "Youthful Valkyrie": {
+      "id": "9d795f79-c3a5-4ea1-a5cf-1ce73d6837b6",
+      "oracle_id": "6d37ba4b-ff56-4eec-9dc2-2d7f357dc9c9",
+      "name": "Youthful Valkyrie",
+      "type_line": "Creature — Angel",
+      "oracle_text": "Flying\nWhenever another Angel you control enters, put a +1/+1 counter on this creature.",
+      "keywords": [
+        "Flying"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 2.0
+    }
+  },
+  "not_found": []
+}

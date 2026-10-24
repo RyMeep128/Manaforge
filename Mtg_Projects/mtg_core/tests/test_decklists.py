@@ -44,7 +44,8 @@ def test_import_undo_merge_manual_protection_export_roundtrip():
     history.execute(lambda d: apply_decklist(d, result))
     assert len(doc.deck.entries) == 3
     assert doc.deck.commander_entry_ids == [doc.deck.entries[0].entry_id]
-    assert all(e.category_ids == ['auto:ramp'] for e in doc.deck.entries)
+    assert all(e.category_ids == ['auto:commander' if e.section == 'commander' else 'auto:ramp']
+               for e in doc.deck.entries)
     parsed, errors = parse_decklist(export_decklist(doc))
     assert not errors
     assert {(e.count, e.section, e.set_code, e.collector_number) for e in parsed} == {

@@ -13,8 +13,7 @@ from mtg_core.paths import data_root
 from mtg_core import get_default_card_service
 from mtg_editor.card_views import Thumbnails
 from mtg_editor.canvas import CardCanvas
-from mtg_editor.organization import SECTIONS, GROUPS, SORTS, card_facts, assign, remove_category, move_entries
-from mtg_core.decks import DeckCategory
+from mtg_editor.organization import SECTIONS, GROUPS, SORTS, card_facts, assign, move_entries
 from mtg_ui.theme import application_stylesheet
 from copy import deepcopy
 from mtg_core.categorization import classify, apply_categories
@@ -112,6 +111,7 @@ class EditorWindow(W.QMainWindow):
         self.add_button = self.button(bar, 'Quick Add', self.toggle_search)
         self.workspace_button = self.button(bar, 'Add Cards', self.open_add_cards, True)
         self.button(bar, 'Import', self.import_decklist)
+        self.add_tag_button = self.button(bar, '+ Add Tag', self.add_tag)
         self.button(bar, 'Print Deck', self.print_deck, True)
         more = W.QToolButton()
         more.setText('More')
@@ -131,7 +131,7 @@ class EditorWindow(W.QMainWindow):
         menu.addAction('Print readiness…', self.print_readiness)
         menu.addAction('Export decklist…', self.export_decklist)
         menu.addAction('Commander / format deck checks…', self.commander_checks)
-        menu.addAction('Manage categories…', self.manage_categories)
+        menu.addAction('Manage Tags…', self.manage_categories)
         menu.addAction('Category templates…', self.category_templates)
         menu.addAction('Auto Categorize…', self.auto_categorize)
         menu.addAction('Quick category / tags (hold T)', lambda: self.quick_tag(QtGui.QCursor.pos()))
@@ -193,6 +193,18 @@ class EditorWindow(W.QMainWindow):
         row.addWidget(self.selection_label)
         self.quick_tag_button = self.button(row, 'Quick tags', lambda: self.quick_tag(QtGui.QCursor.pos()))
         self.quick_tag_button.setToolTip('Replace primary category or toggle secondary tags for selected cards')
+        self.organization_overflow = W.QToolButton()
+        self.organization_overflow.setText('Tags +')
+        self.organization_overflow.setToolTip('Add Tag, Quick Tags, and organization settings')
+        self.organization_overflow.setPopupMode(W.QToolButton.ToolButtonPopupMode.InstantPopup)
+        organization_menu = W.QMenu(self.organization_overflow)
+        organization_menu.addAction('+ Add Tag', self.add_tag)
+        self.compact_quick_tags = organization_menu.addAction('Quick Tags', lambda: self.quick_tag(QtGui.QCursor.pos()))
+        organization_menu.addAction('Manage Tags', self.manage_categories)
+        organization_menu.addAction('Customize Quick Menu', lambda: self.manage_categories(customize=True))
+        self.organization_overflow.setMenu(organization_menu)
+        row.addWidget(self.organization_overflow)
+        self.organization_overflow.hide()
         self.control_overflow = [self.filter, self.filter_help, self.readiness_filter, self.zoom, self.selection_label]
         layout.addWidget(controls)
         self.splitter = W.QSplitter()
@@ -258,9 +270,11 @@ class EditorWindow(W.QMainWindow):
         self.table.installEventFilter(self)
         self.table.viewport().installEventFilter(self)
         from .quick_tags import HoldTagGesture
+        from .tag_model import hold_delay
         self.tag_gestures = [HoldTagGesture(view,
             lambda position, v=view: self.select_tag_target(v, position),
-            lambda entry_id, position: self.card_menu(entry_id, position), self.quick_tag)
+            lambda entry_id, position: self.card_menu(entry_id, position), self.quick_tag,
+            delay=lambda: hold_delay(self.document))
             for view in (self.grid, self.table)]
         self.table.setToolTip(self.grid.toolTip())
         self._refreshing_table = False
@@ -350,6 +364,9 @@ class EditorWindow(W.QMainWindow):
         if not hasattr(self, 'control_overflow'):
             return
         narrow = self.width() < 1050
+        self.organization_overflow.setVisible(narrow)
+        self.add_tag_button.setVisible(not narrow)
+        self.quick_tag_button.setVisible(not narrow)
         short = self.height() < 560
         self.search_heading.setVisible(not short)
         self.search_close.setVisible(not short)
@@ -478,6 +495,7 @@ class EditorWindow(W.QMainWindow):
         count = len(self.grid.selected)
         self.selection_label.setText(f'{count} selected' if count else '')
         self.quick_tag_button.setEnabled(bool(count))
+        self.compact_quick_tags.setEnabled(bool(count))
 
     def eventFilter(self, watched, event):
         if watched in (self.table, self.table.viewport()):
@@ -536,10 +554,20 @@ class EditorWindow(W.QMainWindow):
         self._refreshing_table = False
 
     def edit(self, action):
-        if self.session.edit(action):
+        from .tag_model import retain_tag_definitions
+        def command(document):
+            retain_tag_definitions(document)
+            action(document)
+            retain_tag_definitions(document)
+        if self.session.edit(command):
             self.changed()
 
     def changed(self):
+        for gesture in getattr(self, 'tag_gestures', []):
+            gesture.cancel()
+        previous = getattr(self, 'quick_menu', None)
+        if previous is not None:
+            previous.close()
         self.update_search_membership()
         self.recommendation_panel.deck_changed()
         self.add_cards_workspace.discovery.deck_changed()
@@ -658,9 +686,9 @@ class EditorWindow(W.QMainWindow):
     def move_cards(self, ids, target, before):
         self.edit(lambda d: move_entries(d, ids, self.grid.grouping, target, before))
 
-    def quick_tag(self, position, *, hold=False):
+    def quick_tag(self, position, *, hold=False, tags=None):
         from .quick_tags import QuickTagMenu, apply_quick_role
-        ids = set(self.grid.selected)
+        ids = set(self.grid.selected) & {e.entry_id for e in self.document.deck.entries}
         if not ids:
             self.statusBar().showMessage('Select cards to categorize or tag.', 4000)
             return
@@ -670,8 +698,16 @@ class EditorWindow(W.QMainWindow):
         if previous is not None:
             previous.close()
             previous.deleteLater()
-        self.quick_menu = QuickTagMenu(self.document, ids, self, hold=hold)
+        self.quick_menu = QuickTagMenu(self.document, ids, self, hold=hold, tags=tags)
+        target = self.grid.context_target or self.grid.hovered
+        self.grid.pin_context_target(target if target in ids else next(iter(ids)))
+        self.quick_menu.closed.connect(self.grid.release_context_target)
+        self.quick_menu.managementRequested.connect(lambda tab: QtCore.QTimer.singleShot(0,
+            lambda: self.manage_categories(customize=tab == 'customize')))
+        snapshot = self.document.to_dict()
         def apply(name, tags):
+            if self.document.to_dict() != snapshot:
+                return
             self.edit(lambda d: apply_quick_role(d, ids, name, tags))
             self.statusBar().showMessage(f'Updated {len(ids)} cards: ' +
                 ('secondary tags' if tags else 'manual primary category') + '. Undo is available.', 5000)
@@ -682,21 +718,16 @@ class EditorWindow(W.QMainWindow):
         ids = set(self.grid.selected) or {entry_id}
         entry = next(e for e in self.document.deck.entries if e.entry_id == entry_id)
         menu = W.QMenu(self)
-        menu.addAction('Quick category / tags', lambda: self.quick_tag(position))
+        menu.addAction('Set Primary Role…', lambda: self.add_tag(tags=False))
+        menu.addAction('Add / Remove Tags…', lambda: self.quick_tag(position, tags=True))
+        menu.addAction('Customize Quick Menu…', lambda: self.manage_categories(customize=True))
         self.add_reference_action(menu, entry)
         menu.addAction('Replace artwork…', lambda: self.replace_artwork(entry_id)).setEnabled(len(ids) == 1)
         menu.addAction('View Oracle tags…', lambda: self.view_tags(entry))
-        menu.addAction('Edit user tags…', lambda: self.edit_tags(ids, entry.tags))
-        menu.addAction('Edit roles/categories…', lambda: self.edit_roles(ids))
+        menu.addAction('Advanced role memberships…', lambda: self.edit_roles(ids))
         sections = menu.addMenu('Move to section')
         for key, label in SECTIONS.items():
             sections.addAction(label, lambda checked=False, k=key: self.edit(lambda d: assign(d, ids, 'section', k)))
-        categories = menu.addMenu('Primary category')
-        categories.addAction('Uncategorized', lambda: self.edit(lambda d: assign(d, ids, 'category', None)))
-        for category in self.document.deck.categories:
-            categories.addAction(category.name, lambda checked=False, cid=category.category_id: self.edit(lambda d: assign(d, ids, 'category', cid)))
-        categories.addSeparator()
-        categories.addAction('Manage categories…', self.manage_categories)
         menu.addAction('Make commander', lambda: self.edit(lambda d: assign(d, ids, 'section', DeckSection.COMMANDER)))
         owned_label = f'Owned copies ({entry.owned})...' if len(ids) == 1 else 'Set owned copies...'
         menu.addAction(owned_label, lambda: self.edit_owned_copies(ids))
@@ -891,57 +922,31 @@ class EditorWindow(W.QMainWindow):
             names = dialog.selected_names()
             self.edit(lambda d: apply_template(d, names))
             self.group.setCurrentText('Category')
-            self.show_empty_categories.setChecked(True)
             self.statusBar().showMessage('Category template applied. Card assignments preserved; Undo is available.', 6000)
 
-    def manage_categories(self):
-        dialog = W.QDialog(self)
-        dialog.setWindowTitle('Deck categories')
-        dialog.resize(420, 430)
-        layout = W.QVBoxLayout(dialog)
-        listing = W.QListWidget()
-        categories = deepcopy(sorted(self.document.deck.categories, key=lambda c: c.sort_order))
-        def refresh():
-            row = listing.currentRow()
-            listing.clear()
-            listing.addItems([c.name for c in categories])
-            listing.setCurrentRow(max(0, min(row, len(categories)-1)))
-        refresh()
-        layout.addWidget(listing, 1)
-        buttons = W.QHBoxLayout()
-        def change(action):
-            row = listing.currentRow()
-            if action == 'Add' or (action == 'Rename' and row >= 0):
-                name, ok = W.QInputDialog.getText(dialog, action+' category', 'Name:', text=categories[row].name if action == 'Rename' else '')
-                if ok and name.strip():
-                    if action == 'Add':
-                        categories.append(DeckCategory(str(uuid.uuid4()), name.strip()))
-                    else:
-                        categories[row].name = name.strip()
-            elif row >= 0:
-                if action == 'Delete':
-                    categories.pop(row)
-                else:
-                    target = row + (-1 if action == 'Up' else 1)
-                    if 0 <= target < len(categories):
-                        categories[row], categories[target] = categories[target], categories[row]
-            refresh()
-        for action in ('Add', 'Rename', 'Delete', 'Up', 'Down'):
-            self.button(buttons, action, lambda a=action: change(a))
-        layout.addLayout(buttons)
-        box = W.QDialogButtonBox(W.QDialogButtonBox.StandardButton.Ok | W.QDialogButtonBox.StandardButton.Cancel)
-        box.accepted.connect(dialog.accept)
-        box.rejected.connect(dialog.reject)
-        layout.addWidget(box)
+    def add_tag(self, *, tags=False):
+        from .tag_management import TagPicker
+        ids = set(self.grid.selected) & {e.entry_id for e in self.document.deck.entries}
+        snapshot = self.document.to_dict()
+        dialog = TagPicker(self.document, ids, self, tags=tags)
+        accepted = dialog.exec() == W.QDialog.DialogCode.Accepted
+        if dialog.manage_requested:
+            self.manage_categories()
+        elif accepted and self.document.to_dict() == snapshot:
+            self.edit(dialog.apply)
+            self.statusBar().showMessage('Organization updated. Undo is available.', 4000)
+
+    def manage_categories(self, *, customize=False):
+        from .tag_management import OrganizationManager
+        snapshot = self.document.to_dict()
+        dialog = OrganizationManager(self.document, self, customize=customize)
         if dialog.exec() == W.QDialog.DialogCode.Accepted:
+            if self.document.to_dict() != snapshot:
+                self.statusBar().showMessage('Deck changed; reopen Manage Tags.', 4000)
+                return
             def apply(document):
-                keep = {c.category_id for c in categories}
-                for old in list(document.deck.categories):
-                    if old.category_id not in keep:
-                        remove_category(document, old.category_id)
-                for i, category in enumerate(categories):
-                    category.sort_order = i
-                document.deck.categories = categories
+                document.deck = deepcopy(dialog.draft.deck)
+                document.editor_preferences = deepcopy(dialog.draft.editor_preferences)
             self.edit(apply)
 
     def edit_roles(self, ids):
@@ -957,6 +962,7 @@ class EditorWindow(W.QMainWindow):
     def auto_categorize(self):
         from .category_review import CategoryReview
         entries = deepcopy(self.document.deck.entries)
+        commander_ids = tuple(self.document.deck.commander_entry_ids)
         def review(proposals):
             dialog = CategoryReview(self.document, proposals, self)
             if dialog.exec() == W.QDialog.DialogCode.Accepted:
@@ -965,7 +971,8 @@ class EditorWindow(W.QMainWindow):
                           reconsider_manual=dialog.reconsider.isChecked()))
                 self.group.setCurrentText('Category')
                 self.statusBar().showMessage(f'Categorized {len(selected)} entries. Undo is available.', 8000)
-        self.run_task(lambda: self.service.analyze_entries(entries), review)
+        self.run_task(lambda: self.service.analyze_entries(entries,
+                      commander_entry_ids=commander_ids), review)
 
     def run_task(self, work, callback):
         context = {'deck_id': self.document.deck.deck_id, 'path': str(self.path) if self.path else None}
@@ -1151,6 +1158,8 @@ class EditorWindow(W.QMainWindow):
                    for e in document.deck.entries if (e.card_id and 'legalities' not in e.extras.get('facts', {})) or (legacy_folder and not e.image_asset_id)]
         uncategorized = [deepcopy(e) for e in document.deck.entries
                          if not e.category_ids and not e.extras.get('auto_categories')]
+        analysis_context = deepcopy(document.deck.entries)
+        commander_ids = tuple(document.deck.commander_entry_ids)
         can_analyze = callable(getattr(self.service, 'analyze_entries', None))
         if (missing and hasattr(self.service, 'get_card')) or (uncategorized and can_analyze):
             def resolve():
@@ -1163,7 +1172,8 @@ class EditorWindow(W.QMainWindow):
                             asset = self.service.store_image_bytes(path.read_bytes(),
                                 extension=path.suffix.lstrip('.') or 'png', source='editor_legacy')
                     result[eid] = facts, asset
-                proposals = self.service.analyze_entries(uncategorized) if can_analyze else {}
+                proposals = self.service.analyze_entries(uncategorized, context_entries=analysis_context,
+                    commander_entry_ids=commander_ids) if can_analyze else {}
                 return result, proposals
             def apply(resolved):
                 resolved, proposals = resolved

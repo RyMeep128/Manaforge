@@ -81,8 +81,8 @@ def text_roles(payload):
             selection = search[1].split(',')[0]
             land_search = bool(re.search(r'\b(?:basic land|land|forest|island|swamp|mountain|plains) cards?\b', selection))
             land_search = land_search and not re.search(r'\b(?:creature|artifact|enchantment|instant|sorcery|planeswalker|battle)\b', selection)
-            if land_search and 'battlefield' in search[1]:
-                add('Ramp', 'library lands enter the battlefield')
+            if land_search and ('battlefield' in search[1] or re.search(r'\b(?:into|in) your hand\b', search[1])):
+                add('Ramp', 'library lands provide mana or consistent land drops')
             else:
                 add('Tutors', 'searches your library for a card')
         if re.search(r'\badd (?:\{[wubrgc0-9]+\}|[^.]{0,60}\bmana\b)', text):
@@ -99,7 +99,7 @@ def text_roles(payload):
     keywords = {str(k).casefold() for k in payload.get('keywords') or []}
     for role, known in (('Protection', {'hexproof', 'shroud', 'ward', 'indestructible', 'protection', 'phasing'}),
                         ('Recursion', {'flashback', 'escape', 'disturb', 'unearth', 'aftermath', 'retrace'}),
-                        ('Lifegain', {'lifelink'}), ('Graveyard', {'dredge', 'delve', 'surveil'})):
+                        ('Lifegain', {'lifelink', 'extort'}), ('Graveyard', {'dredge', 'delve', 'surveil'})):
         found = keywords.intersection(known)
         if found:
             reasons.setdefault(role, []).append('Keywords: ' + ', '.join(sorted(found)))

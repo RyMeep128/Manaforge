@@ -4,6 +4,14 @@ from mtg_core.categorization import apply_categories, classify, is_manual
 from mtg_editor.quick_tags import QuickTagMenu, apply_quick_role
 
 
+def menu_point(menu, index=0):
+    import math
+    center, outer, inner = menu.geometry_values()
+    angle = -math.pi / 2 + index * 2 * math.pi / len(menu.options)
+    radius = (outer + inner) / 2
+    return C.QPoint(round(center.x() + math.cos(angle) * radius), round(center.y() + math.sin(angle) * radius))
+
+
 def test_batch_roles_tags_undo_and_persistence():
     doc = DeckDocument()
     doc.deck.entries = [DeckEntry('a', 'One'), DeckEntry('b', 'Two', tags=['Draw'])]
@@ -39,15 +47,17 @@ def test_radial_release_modes_cancel_and_custom(tmp_path):
     app = W.QApplication.instance() or W.QApplication([])
     doc = DeckDocument()
     doc.deck.entries = [DeckEntry('a', 'Card')]
+    apply_quick_role(doc, {'a'}, 'Ramp')
+    apply_quick_role(doc, {'a'}, 'Ramp', tags=True)
     menu = QuickTagMenu(doc, {'a'})
     chosen = []
     menu.chosen.connect(lambda *args: chosen.append(args))
     menu.popup(C.QPoint(400, 400))
-    QtTest.QTest.mouseRelease(menu, C.Qt.MouseButton.RightButton, pos=C.QPoint(220, 75))
+    QtTest.QTest.mouseRelease(menu, C.Qt.MouseButton.RightButton, pos=menu_point(menu))
     assert chosen == [('Ramp', False)]
     menu.popup(C.QPoint(400, 400))
     QtTest.QTest.keyClick(menu, C.Qt.Key.Key_Tab)
-    QtTest.QTest.mouseRelease(menu, C.Qt.MouseButton.LeftButton, pos=C.QPoint(220, 75))
+    QtTest.QTest.mouseRelease(menu, C.Qt.MouseButton.LeftButton, pos=menu_point(menu))
     assert chosen[-1] == ('Ramp', True)
     menu.popup(C.QPoint(400, 400))
     QtTest.QTest.keyClick(menu, C.Qt.Key.Key_Escape)
@@ -61,6 +71,7 @@ def test_right_press_preserves_batch_selection_and_history(tmp_path):
     app = W.QApplication.instance() or W.QApplication([])
     window = EditorWindow(service=object(), root=tmp_path)
     window.document.deck.entries = [DeckEntry('a', 'One'), DeckEntry('b', 'Two')]
+    apply_categories(window.document, {e.entry_id: classify({}, ['ramp']) for e in window.document.deck.entries})
     window.changed()
     window.show()
     app.processEvents()
@@ -70,14 +81,14 @@ def test_right_press_preserves_batch_selection_and_history(tmp_path):
     assert not hasattr(window, 'quick_menu')
     QtTest.QTest.qWait(300)
     assert window.quick_menu.ids == {'a', 'b'}
-    QtTest.QTest.mouseRelease(window.quick_menu, C.Qt.MouseButton.RightButton, pos=C.QPoint(220, 75))
+    QtTest.QTest.mouseRelease(window.quick_menu, C.Qt.MouseButton.RightButton, pos=menu_point(window.quick_menu))
     assert all(is_manual(e) for e in window.document.deck.entries)
     window.undo()
-    assert all(not e.category_ids for e in window.document.deck.entries)
+    assert all(not is_manual(e) for e in window.document.deck.entries)
     G.QCursor.setPos(window.grid.viewport().mapToGlobal(C.QPoint(240, 240)))
     QtTest.QTest.keyPress(window.grid, C.Qt.Key.Key_T)
     assert window.quick_menu.isVisible()
-    G.QCursor.setPos(window.quick_menu.mapToGlobal(C.QPoint(220, 75)))
+    G.QCursor.setPos(window.quick_menu.mapToGlobal(menu_point(window.quick_menu)))
     QtTest.QTest.keyRelease(window.quick_menu, C.Qt.Key.Key_T)
     assert all(is_manual(e) for e in window.document.deck.entries)
     window.undo()
@@ -90,7 +101,7 @@ def test_open_import_categorizes_without_overwriting_manual(tmp_path):
     from types import SimpleNamespace
     from mtg_editor.gui import EditorWindow
     app = W.QApplication.instance() or W.QApplication([])
-    service = SimpleNamespace(analyze_entries=lambda entries: {
+    service = SimpleNamespace(analyze_entries=lambda entries, **kwargs: {
         entry.entry_id: classify({'type_line': 'Artifact', 'oracle_text': '{T}: Add {G}.'})
         for entry in entries})
     window = EditorWindow(service=service, root=tmp_path)
@@ -169,7 +180,7 @@ def test_click_hold_and_cancellation_in_both_views(tmp_path):
         QtTest.QTest.mousePress(surface, C.Qt.MouseButton.RightButton, pos=point)
         QtTest.QTest.qWait(300)
         assert window.quick_menu.isVisible()
-        QtTest.QTest.mouseRelease(window.quick_menu, C.Qt.MouseButton.RightButton, pos=C.QPoint(220, 220))
+        QtTest.QTest.mouseRelease(window.quick_menu, C.Qt.MouseButton.RightButton, pos=window.quick_menu.geometry_values()[0].toPoint())
         assert not window.quick_menu.isVisible()
         assert not actions and all(not e.category_ids for e in window.document.deck.entries)
     window.saved = window.document.to_dict()

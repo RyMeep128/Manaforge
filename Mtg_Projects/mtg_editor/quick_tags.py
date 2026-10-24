@@ -1,23 +1,19 @@
 """Small, cursor-centered marking menu for primary roles and secondary tags."""
 import math
-import uuid
 from PyQt6 import QtCore as C, QtGui as G, QtWidgets as W
-from mtg_core.decks import DeckCategory
-from mtg_core.categorization import ROLE_TAGS
-from .organization import assign
-
-COMMON = ('Ramp', 'Draw', 'Removal', 'Protection', 'Board Wipes', 'Win Conditions')
-
+from .tag_model import apply_choice, radial_choices, preferences
 
 class HoldTagGesture(C.QObject):
     """Shared right-button gesture for canvas and table viewports."""
-    def __init__(self, view, select, actions, radial):
+    def __init__(self, view, select, actions, radial, delay=None):
         super().__init__(view)
+        self.view = view
+        self.delay = delay
         self.select, self.actions, self.radial = select, actions, radial
         self.pending = None
         self.timer = C.QTimer(self)
         self.timer.setSingleShot(True)
-        self.timer.setInterval(100)
+        self.timer.setInterval(250)
         self.timer.timeout.connect(self.open_radial)
         view.installEventFilter(self)
         view.viewport().installEventFilter(self)
@@ -26,6 +22,8 @@ class HoldTagGesture(C.QObject):
 
     def cancel(self, *_):
         self.timer.stop()
+        if self.pending and hasattr(self.view, 'release_context_target'):
+            self.view.release_context_target()
         self.pending = None
 
     def open_radial(self):
@@ -43,7 +41,11 @@ class HoldTagGesture(C.QObject):
             entry_id = self.select(event.globalPosition().toPoint())
             if entry_id:
                 self.pending = (entry_id, event.globalPosition().toPoint())
+                if hasattr(self.view, 'pin_context_target'):
+                    self.view.pin_context_target(entry_id)
                 if not event.modifiers() & C.Qt.KeyboardModifier.ShiftModifier:
+                    if self.delay:
+                        self.timer.setInterval(self.delay())
                     self.timer.start()
             return True
         if kind == C.QEvent.Type.MouseButtonRelease and event.button() == C.Qt.MouseButton.RightButton:
@@ -63,48 +65,70 @@ class HoldTagGesture(C.QObject):
 
 
 def apply_quick_role(document, ids, name, tags=False):
-    entries = [e for e in document.deck.entries if e.entry_id in ids]
-    if not entries:
-        return
-    if tags:
-        # Mixed selections converge: add to all unless all already have the tag.
-        remove = all(name in e.tags for e in entries)
-        for entry in entries:
-            if remove:
-                entry.tags = [t for t in entry.tags if t != name]
-            elif name not in entry.tags:
-                entry.tags.append(name)
-        return
-    if not name:
-        assign(document, ids, 'category', None)
-        return
-    category = next((c for c in document.deck.categories if c.name.casefold() == name.casefold()), None)
-    if category is None:
-        category = DeckCategory(str(uuid.uuid4()), name,
-                                max((c.sort_order for c in document.deck.categories), default=-1) + 1)
-        document.deck.categories.append(category)
-    assign(document, ids, 'category', category.category_id)
+    """Shared marking-menu command: replace primary role or toggle extra tags."""
+    apply_choice(document, ids, name, tags, toggle=tags)
 
 
 class QuickTagMenu(W.QWidget):
     chosen = C.pyqtSignal(str, bool)
+    managementRequested = C.pyqtSignal(str)
+    closed = C.pyqtSignal()
 
-    def __init__(self, document, ids, parent=None, *, hold=False):
+    def __init__(self, document, ids, parent=None, *, hold=False, tags=None):
         super().__init__(parent, C.Qt.WindowType.Popup | C.Qt.WindowType.FramelessWindowHint)
         self.document, self.ids = document, set(ids)
-        self.tags = False
+        self.tags = preferences(document).get('initial_mode') == 'tags' if tags is None else tags
         self.active = None
         self.hold = hold
-        self.setFixedSize(440, 440)
+        self.models = {mode: radial_choices(document, mode) for mode in (False, True)}
+        selected = [e for e in document.deck.entries if e.entry_id in self.ids]
+        self.shared_tags = set.intersection(*({t.casefold() for t in e.tags} for e in selected)) if selected else set()
+        self.setFixedSize(380, 380)
         self.setMouseTracking(True)
         self.setFocusPolicy(C.Qt.FocusPolicy.StrongFocus)
-        self.setAccessibleName('Quick tagging: primary category. Tab switches to secondary tags.')
+        self.setAccessibleName('Quick organization: Primary Role or Additional Tags')
+        self.setToolTip('Move and release to assign. Center or Esc: cancel. Tab: switch mode. Arrow keys and Enter: select.')
+        self.mode_button = W.QPushButton(self)
+        self.mode_button.clicked.connect(self.switch_mode)
+        self.more_button = W.QPushButton('More', self)
+        self.more_button.clicked.connect(self.more)
+        self.manage_button = W.QPushButton('Manage', self)
+        self.manage_button.clicked.connect(lambda: self.manage('manage'))
+        self.update_mode()
+
+    @property
+    def options(self):
+        return self.models[self.tags][0]
+
+    def update_mode(self):
+        self.active = None
+        self.mode_button.setText('Roles [Tab]' if self.tags else 'Tags [Tab]')
+        self.more_button.setVisible(bool(self.models[self.tags][1]))
+        self.setAccessibleDescription('Additional Tags' if self.tags else 'Primary Role')
+        self.update()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if not hasattr(self, 'mode_button'):
+            return
+        width = (self.width() - 24) // 3
+        for index, button in enumerate((self.mode_button, self.more_button, self.manage_button)):
+            button.setGeometry(8 + index * (width + 4), self.height() - 38, width, 30)
+
+    def geometry_values(self):
+        center = C.QPointF(self.width() / 2, (self.height() - 44) / 2)
+        outer = min(center.x(), center.y()) - 8
+        return center, outer, min(52, outer * .36)
 
     def popup(self, position):
+        self.snapshot = self.document.to_dict()
         self.press_origin = C.QPoint(position)
         screen = W.QApplication.screenAt(position) or W.QApplication.primaryScreen()
         bounds = screen.availableGeometry()
-        origin = position - C.QPoint(220, 220)
+        side = min(380, bounds.width() - 16, bounds.height() - 16)
+        self.setFixedSize(side, side)
+        center, _, _ = self.geometry_values()
+        origin = position - center.toPoint()
         origin.setX(max(bounds.left(), min(origin.x(), bounds.right() - self.width() + 1)))
         origin.setY(max(bounds.top(), min(origin.y(), bounds.bottom() - self.height() + 1)))
         self.move(origin)
@@ -112,60 +136,66 @@ class QuickTagMenu(W.QWidget):
         self.setFocus()
 
     def sector(self, position):
-        dx, dy = position.x() - 220, position.y() - 220
-        if not 68 <= math.hypot(dx, dy) <= 214:
+        center, outer, inner = self.geometry_values()
+        dx, dy = position.x() - center.x(), position.y() - center.y()
+        count = len(self.options)
+        if not count or not inner <= math.hypot(dx, dy) <= outer:
             return None
-        return int(((math.atan2(dy, dx) + math.pi / 2 + math.pi / 8) % (2 * math.pi)) / (math.pi / 4))
+        step = 2 * math.pi / count
+        return int(((math.atan2(dy, dx) + math.pi / 2 + step / 2) % (2 * math.pi)) / step) % count
 
     def label(self, index):
-        if index == 6:
-            return 'More…'
-        if index == 7:
-            return 'Primary mode' if self.tags else 'Tags mode'
-        name = COMMON[index]
-        if self.tags:
-            entries = [e for e in self.document.deck.entries if e.entry_id in self.ids]
-            return ('− ' if entries and all(name in e.tags for e in entries) else '+ ') + name
-        return name
+        choice = self.options[index]
+        if not self.tags:
+            return choice.name
+        remove = choice.name.casefold() in self.shared_tags
+        return ('− ' if remove else '+ ') + choice.name
 
     def paintEvent(self, event):
         p = G.QPainter(self)
         p.setRenderHint(G.QPainter.RenderHint.Antialiasing)
         p.fillRect(self.rect(), G.QColor('#171b22'))
+        center, outer, inner = self.geometry_values()
         accent = '#9865c9' if self.tags else '#2f9e72'
-        for i in range(8):
+        count = len(self.options)
+        circle = C.QRectF(center.x()-outer, center.y()-outer, outer*2, outer*2)
+        for i in range(count):
+            step = 360 / count
             p.setPen(G.QPen(G.QColor('#171b22'), 3))
             p.setBrush(G.QColor(accent if i == self.active else '#29333e'))
-            p.drawPie(C.QRectF(6, 6, 428, 428), int((67.5-i*45)*16), 45*16)
-            angle = -math.pi / 2 + i * math.pi / 4
-            rect = C.QRectF(220+math.cos(angle)*145-58, 220+math.sin(angle)*145-28, 116, 56)
+            p.drawPie(circle, round((90-step/2-i*step)*16), round(step*16))
+            angle = -math.pi / 2 + i * 2 * math.pi / count
+            radius = (inner + outer) / 2
+            label_width = min(112, 2 * radius * math.sin(math.pi / max(2, count)) - 10)
+            rect = C.QRectF(center.x()+math.cos(angle)*radius-label_width/2,
+                            center.y()+math.sin(angle)*radius-22, label_width, 44)
             p.setPen(G.QColor('white'))
-            p.drawText(rect, C.Qt.AlignmentFlag.AlignCenter | C.Qt.TextFlag.TextWordWrap, self.label(i))
-        p.setPen(G.QPen(G.QColor(accent), 3))
+            label = p.fontMetrics().elidedText(self.label(i), C.Qt.TextElideMode.ElideRight, max(20, int(label_width)))
+            p.drawText(rect, C.Qt.AlignmentFlag.AlignCenter, label)
+        p.setPen(G.QPen(G.QColor(accent), 2))
         p.setBrush(G.QColor('#171b22'))
-        p.drawEllipse(C.QPointF(220, 220), 68, 68)
+        p.drawEllipse(center, inner, inner)
         p.setPen(G.QColor('white'))
-        font = p.font()
-        font.setPointSize(8)
-        p.setFont(font)
-        title = 'SECONDARY TAGS\nAdd / remove' if self.tags else 'PRIMARY\nReplace category'
-        p.drawText(C.QRectF(155, 174, 130, 92), C.Qt.AlignmentFlag.AlignCenter,
-                   f'{title}\n{len(self.ids)} selected\nTab: switch\nEsc: cancel')
+        title = 'Tags' if self.tags else 'Primary role'
+        text = f'{title}\n{len(self.ids)} selected' if count else 'No active tags\nUse Manage'
+        p.drawText(C.QRectF(center.x()-inner, center.y()-inner, inner*2, inner*2), C.Qt.AlignmentFlag.AlignCenter, text)
         p.end()
 
     def mouseMoveEvent(self, event):
         self.active = self.sector(event.position())
+        self.setToolTip(self.label(self.active) if self.active is not None else 'Center: cancel · Tab: switch mode · Esc: close')
         self.update()
 
     def mouseReleaseEvent(self, event):
-        if event.button() in (C.Qt.MouseButton.LeftButton, C.Qt.MouseButton.RightButton):
-            index = self.sector(event.position())
-            unmoved = (event.globalPosition().toPoint() - self.press_origin).manhattanLength() < W.QApplication.startDragDistance()
-            if self.hold and (index is None or unmoved):
-                self.close()
-            else:
-                self.activate(index)
-            self.hold = False
+        if event.button() not in (C.Qt.MouseButton.LeftButton, C.Qt.MouseButton.RightButton):
+            return
+        index = self.sector(event.position())
+        unmoved = (event.globalPosition().toPoint() - self.press_origin).manhattanLength() < W.QApplication.startDragDistance()
+        if index is None or (self.hold and unmoved):
+            self.close()
+        else:
+            self.activate(index)
+        self.hold = False
 
     def contextMenuEvent(self, event):
         event.accept()
@@ -175,6 +205,12 @@ class QuickTagMenu(W.QWidget):
             self.close()
         elif event.key() == C.Qt.Key.Key_Tab and not event.isAutoRepeat():
             self.switch_mode()
+        elif event.key() in (C.Qt.Key.Key_Left, C.Qt.Key.Key_Up, C.Qt.Key.Key_Right, C.Qt.Key.Key_Down) and self.options:
+            delta = -1 if event.key() in (C.Qt.Key.Key_Left, C.Qt.Key.Key_Up) else 1
+            self.active = ((self.active if self.active is not None else -delta) + delta) % len(self.options)
+            self.update()
+        elif event.key() in (C.Qt.Key.Key_Return, C.Qt.Key.Key_Enter):
+            self.activate(self.active)
         else:
             super().keyPressEvent(event)
 
@@ -188,36 +224,27 @@ class QuickTagMenu(W.QWidget):
 
     def switch_mode(self):
         self.tags = not self.tags
-        self.setAccessibleName('Quick tagging: ' + ('secondary tags' if self.tags else 'primary category'))
-        self.update()
+        self.update_mode()
 
     def activate(self, index):
-        if index is None:
-            return  # Button-opened menus remain available for a subsequent click.
-        if index == 7:
-            self.switch_mode()
-        elif index == 6:
-            self.more()
-        else:
-            self.choose(COMMON[index])
+        if index is not None and 0 <= index < len(self.options):
+            self.choose(self.options[index].name)
 
     def choose(self, name):
-        self.chosen.emit(name, self.tags)
+        if self.document.to_dict() == self.snapshot and self.ids <= {e.entry_id for e in self.document.deck.entries}:
+            self.chosen.emit(name, self.tags)
         self.close()
 
     def more(self):
         menu = W.QMenu(self)
-        names = {c.name for c in self.document.deck.categories} | {name for name, _ in ROLE_TAGS} | {'Lands'}
-        if self.tags:
-            names.update(t for e in self.document.deck.entries for t in e.tags)
-        for name in sorted(names.difference(COMMON), key=str.casefold):
-            menu.addAction(name, lambda checked=False, n=name: self.choose(n))
-        menu.addAction('New tag…' if self.tags else 'New category…', self.new_name)
-        if not self.tags:
-            menu.addAction('Uncategorized', lambda: self.choose(''))
-        menu.exec(G.QCursor.pos())
+        for choice in self.models[self.tags][1]:
+            menu.addAction(choice.name, lambda checked=False, n=choice.name: self.choose(n))
+        menu.exec(self.more_button.mapToGlobal(C.QPoint(0, self.more_button.height())))
 
-    def new_name(self):
-        name, ok = W.QInputDialog.getText(self, 'New tag' if self.tags else 'New category', 'Name:')
-        if ok and name.strip():
-            self.choose(name.strip())
+    def manage(self, tab):
+        self.close()
+        self.managementRequested.emit(tab)
+
+    def hideEvent(self, event):
+        self.closed.emit()
+        super().hideEvent(event)

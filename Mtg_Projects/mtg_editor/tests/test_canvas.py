@@ -85,6 +85,26 @@ def test_grid_keeps_hover_preview(window):
     assert not window.grid.preview.pixmap().isNull()
 
 
+def test_context_menu_pins_highlight_and_pauses_stack(window):
+    window.view_mode.setCurrentText('Stacks')
+    canvas = window.grid
+    canvas.pin_context_target('1')
+    original = {e.entry_id: C.QRect(r) for e, r, _ in canvas.items}
+    canvas.leaveEvent(C.QEvent(C.QEvent.Type.Leave))
+    assert canvas.hovered == '1'
+    assert canvas.stack_animation.state() == C.QAbstractAnimation.State.Stopped
+    menu = W.QMenu(window)
+    menu.addAction('Card action')
+    menu.popup(canvas.viewport().mapToGlobal(point(window, '1', title=True)))
+    canvas.release_context_target()
+    QtTest.QTest.qWait(80)
+    assert canvas.context_target == '1'
+    assert {e.entry_id: r for e, r, _ in canvas.items} == original
+    menu.close()
+    QtTest.QTest.qWait(80)
+    assert canvas.context_target is None
+
+
 def test_quantity_controls_and_artwork_double_click(window):
     requests = []
     window.grid.artworkRequested.disconnect()

@@ -58,31 +58,38 @@ remaining window space, and the toolbars wrap on smaller screens.
   (Undo is available). Double-faced cards have a **Flip card** control for both image
   and rules text. Ctrl/Shift-click still selects cards without opening details.
   Double-click a deck card to open the shared Proxy artwork picker.
-- Hold the right mouse button on a card for **100 ms**, hold **T** with cards selected, or click **Quick tags** to open
-  the radial menu. Move toward a role and release, or click a role after opening.
-  **Primary** mode replaces the primary category; **Tab** or the mode wedge switches
-  to purple **Secondary tags** mode, which adds/removes tags without changing categories.
-  Mixed selections add a tag to all; when all have it, the same action removes it.
-  **More…** includes other roles, custom categories/tags, and creating a new one.
-  Release in the center or outside the ring to cancel a mouse hold. **Esc** cancels. The six common roles keep fixed positions for muscle memory.
-- A quick right-click (or Shift+right-click) opens artwork, Oracle/user tags, section/category assignment, commander
-  assignment, oversized/normal size, owned-copy counts, do-not-print, retry artwork, and removal.
-  Bulk actions affect all selected entries in one Undo step.
-- **More > Manage categories** creates, renames, reorders, and deletes categories.
-  Deleting a category preserves its cards. The first category association is primary;
-  additional associations survive changing the primary category.
+- **+ Add Tag** creates or reuses a Primary Role or Additional Tag, with optional
+  bulk assignment to selected cards. Without a selection, it saves an unused
+  definition. Narrow windows group organization actions under **Tags +**.
+- Hold right mouse for **250 ms** (configurable), hold **T**, or click **Quick tags**.
+  Active deck roles fill up to eight clockwise wedges; remaining active choices
+  use **More**. No global role catalog is added. **Tab** switches Primary Role /
+  Additional Tags; arrows and Enter also select. Center release or Esc cancels.
+  Additional Tags toggle without replacing or locking an automatic primary role.
+- Quick right-click or Shift+right-click opens normal card actions. The card stays
+  highlighted and the stack pauses until the interaction ends.
+- **Manage Tags**, accessible from Add Tag and the quick menu, separates **In Use**
+  and **Available** definitions with usage counts. Rename, delete, or reorder roles
+  without deleting cards. **Customize Quick Menu** sets clockwise order, ring versus
+  overflow, initial mode, and hold delay for this deck. Inactive choices retain
+  their configuration without empty wedges. Preview and Restore defaults are available.
+- Empty decks suggest only **Plan, Interact, Ramp, Draw**. These do not create
+  category definitions until used. Manage Tags can rename/remove suggestions;
+  Add Tag can explicitly offer a custom role in the empty-deck palette.
+  Removing the last assignment hides a choice from the quick menu, while retaining
+  its definition for reuse. These edits participate in Undo/Redo and deck persistence.
 - **More > Category templates** provides **Commander essentials** and saved personal
   layouts. Save the current deck's category list to reuse its names and order in
   another deck; save under the same name to update a template after editing categories.
   Applying adds missing categories, preserves existing categories and assignments,
-  and shows empty category columns. Apply is one Undo step. Saving a personal template
+  and keeps empty category columns hidden unless requested. Apply is one Undo step. Saving a personal template
   takes effect immediately, independently of applying it to a deck.
 - Drag selections onto section/category headings or cards to assign them. With
   Import Order sorting, dropping before a card also reorders the selection. Derived
   groups such as Type do not accept reassignment; reordering within the same group
   remains available in Import Order.
 - **View Oracle tags** reuses Proxy's tag dialog. Clicking a tag opens its local
-  search in the side panel. **Edit user tags** applies a comma-separated list to
+  search in the side panel. **Add / Remove Tags** applies deck-local organization to
   every selected card.
 
 Images load from Core's cache first. Only visible images and a small prefetch margin
@@ -170,12 +177,14 @@ Use **More → Show empty categories** to reveal them as drag destinations; this
 preference is saved with the deck. Categories reappear when cards are assigned to them.
 
 This uses only local database data: no AI, remote inference, or popularity guesses.
-The explicit rules live in `mtg_core/categorization.py` and `category_rules.py`.
+The explicit rules live in `mtg_core/categorization.py`, `category_rules.py`, and
+`role_analysis.py`.
 Roles include Board Wipes, Counterspells, Interaction, Ramp, Removal, Tutors, Protection,
-Recursion, Win Conditions, Draw, Card Advantage, Tokens, Lifegain, Graveyard,
-Sacrifice / Aristocrats, and Utility. Every matching role is retained; the first
-is primary. Front-face Lands take precedence, followed by functional roles in
-the listed order. Removal and other stronger roles stay ahead of incidental
+Recursion, Win Conditions, Draw, Card Advantage, Tokens, Lifegain, Stax, Anthem,
+Counters, Blink, Equipment, Spellslinger, Graveyard, Sacrifice / Aristocrats,
+and Utility. Every matching role is retained; the first is primary. Commanders
+and front-face Lands take precedence. Effect evidence is weighted by strategic
+role rather than a fixed category order. Removal stays ahead of incidental
 cantrip draw. Other cards fall back to their front-face type. A spell with a land back
 is not classified as a land merely because of that back.
 
@@ -189,8 +198,22 @@ experience-counter-based reductions. A discount solely on the card itself does n
 Functional roles use locally synchronized Oracle Tags, explicit Oracle wording
 patterns, and structured keywords. Text rules work even without the tag dataset.
 Reminder text is excluded, faces are evaluated independently, and land-only
-library searches putting lands onto the battlefield count as Ramp rather than
-Tutors. The review displays the matching tags, text rule, keyword, or type fallback.
+library searches putting lands onto the battlefield or into your hand count as
+Ramp rather than Tutors. Overload removal can count as a Board Wipe, and returning
+a spell from the stack counts as Counterspells. Restrictions on opponents count
+as Stax; attack taxes protecting you count as Protection. Self-only defensive
+keywords, incidental life gain, and conditional mana-token rewards have less
+weight than a card's main functional engine. Repeated draw, life-gain rewards,
+team buffs, and counter movement receive distinct evidence.
+
+Batch analysis uses commander abilities and repeated mainboard mechanics for
+small score adjustments (at most eight points). Sideboards and maybeboards do
+not contribute to deck themes. Strong functional differences outweigh these
+adjustments. Among supported roles, existing custom categories are preferred;
+known aliases such as Land/Lands and Life Gain/Lifegain are recognized. Unrecognized
+custom category names require manual assignment. Automatically generated secondary
+categories do not become preferences on subsequent runs. The review displays the
+matching tags, text rule, keyword, deck adjustment, or type fallback.
 Missing data leaves an entry unchanged. Scores in saved evidence are explicit
 rule priorities, not confidence estimates. Arbitrary user tags are not interpreted
 as functional roles. These conservative role hints are not a complete Magic rules
@@ -202,6 +225,13 @@ assigned category, are protected from subsequent automatic passes. Additional
 category associations remain intact. Renaming an automatically created category
 keeps its identity. Existing legacy categories count as manual assignments.
 Deck-wide analysis runs in a worker and reads the database in batches.
+Effect parsing uses a bounded cache shared across unchanged card metadata.
+
+Offline CI fixtures live in `mtg_core/tests/fixtures`, including the supplied Lyra
+list and Scryfall Oracle snapshots. The supplied list contains **110 cards across
+77 distinct entries**, including 34 Plains; its parsed counts include 11 Draw
+and 9 Protection cards. These quantities take precedence over the story's summary.
+Card names appear in regression expectations, not production classification rules.
 
 A local statistics store and source interface now support Phase 5 development;
 the primary public corpus is populated by the authorized one-time Archidekt collector. See the guidance and

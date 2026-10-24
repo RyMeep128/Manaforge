@@ -67,7 +67,7 @@ def test_dialog_save_preview_cancel_and_window_apply(tmp_path, monkeypatch):
     monkeypatch.setattr(CategoryTemplates, 'exec', lambda self: W.QDialog.DialogCode.Accepted)
     window.category_templates()
     assert len(window.document.deck.categories) == 9
-    assert window.show_empty_categories.isChecked()
+    assert not window.show_empty_categories.isChecked()
     assert window.grid.grouping == 'Category'
     window.undo()
     assert [c.name for c in window.document.deck.categories] == ['Custom role']

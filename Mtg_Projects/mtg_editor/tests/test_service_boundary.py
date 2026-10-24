@@ -13,7 +13,7 @@ def test_editor_actions_use_service_without_database_access(tmp_path):
         def database(self):
             raise AssertionError('Editor must not access persistence')
 
-        def analyze_entries(self, entries):
+        def analyze_entries(self, entries, **kwargs):
             calls.append(('analysis', [e.entry_id for e in entries]))
             return {}
 

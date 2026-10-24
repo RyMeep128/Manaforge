@@ -154,13 +154,14 @@ class SearchOperations:
                 '_category_evidence': classify(result.payload or {}, data['tags'].get(result.oracle_id, []))}))
         return enriched
 
-    def analyze_entries(self, entries):
+    def analyze_entries(self, entries, *, context_entries=None, commander_entry_ids=()):
         """Return explainable role proposals without mutating entries or global tags.
 
         Reads are batched and local; GUI callers should run this in a worker.
         """
         from mtg_core.categorization import analyze_entries
-        return analyze_entries(self.database, entries)
+        return analyze_entries(self.database, entries, context_entries=context_entries,
+                               commander_entry_ids=commander_entry_ids)
 
     def get_deck_legality_data(self, entries):
         """Load dated local facts for deck checks, preserving missing-data signals."""

@@ -40,6 +40,10 @@ class CardCanvas(W.QAbstractScrollArea):
         self.stack_animation.setEndValue(1.0)
         self.stack_animation.setEasingCurve(C.QEasingCurve.Type.OutCubic)
         self.stack_animation.valueChanged.connect(self.animate_stack_frame)
+        self.context_target = None
+        self.context_resume_timer = C.QTimer(self)
+        self.context_resume_timer.setSingleShot(True)
+        self.context_resume_timer.timeout.connect(self.resume_context_hover)
         self.anchor = None
         self.press_position = None
         self.detail_entry = None
@@ -123,6 +127,33 @@ class CardCanvas(W.QAbstractScrollArea):
         self.stack_animation_start = dict(self.stack_expansion)
         self.stack_animation_target = {self.hovered: 1.0} if self.hovered else {}
         self.stack_animation.start()
+
+    def pin_context_target(self, entry_id):
+        self.context_resume_timer.stop()
+        self.context_target = entry_id
+        self.hovered = entry_id
+        self.hover_timer.stop()
+        self.detail_timer.stop()
+        self.preview.hide()
+        self.stack_animation.stop()
+        self.viewport().update()
+
+    def release_context_target(self):
+        # Popups may enter a nested event loop or take over the mouse grab.
+        self.context_resume_timer.start(0)
+
+    def resume_context_hover(self):
+        if W.QApplication.activePopupWidget() is not None or W.QApplication.mouseButtons() & C.Qt.MouseButton.RightButton:
+            self.context_resume_timer.start(50)
+            return
+        self.context_target = None
+        point = self.viewport().mapFromGlobal(G.QCursor.pos())
+        item = self.hit(point) if self.viewport().rect().contains(point) else None
+        self.hovered = item[0].entry_id if item else None
+        if self.mode == 'Stacks' and not self.search_mode:
+            self.animate_stack()
+        else:
+            self.viewport().update()
 
     def animate_stack_frame(self, progress):
         start, target = self.stack_animation_start, self.stack_animation_target
@@ -232,6 +263,8 @@ class CardCanvas(W.QAbstractScrollArea):
         return C.QRect(rect.right()-width-5, rect.top()+3 if self.mode == 'Stacks' else rect.bottom()-bottom_offset, width, 25)
 
     def hideEvent(self, event):
+        self.context_resume_timer.stop()
+        self.context_target = None
         self.hover_timer.stop()
         self.detail_timer.stop()
         self.preview.hide()
@@ -302,6 +335,8 @@ class CardCanvas(W.QAbstractScrollArea):
         self.viewport().update()
 
     def mouseMoveEvent(self, event):
+        if self.context_target is not None:
+            return
         item = self.hit(event.position().toPoint())
         hovered = item[0].entry_id if item else None
         if hovered != self.hovered:
@@ -360,6 +395,8 @@ class CardCanvas(W.QAbstractScrollArea):
     def leaveEvent(self, event):
         self.hover_timer.stop()
         self.preview.hide()
+        if self.context_target is not None:
+            return
         self.hovered = None
         if self.mode == 'Stacks' and not self.search_mode:
             self.animate_stack()

@@ -1,6 +1,6 @@
 """Review deterministic role assignments before changing an existing deck."""
 from PyQt6 import QtCore, QtWidgets as W
-from mtg_core.categorization import is_manual
+from mtg_core.categorization import is_manual, select_categories
 
 
 class CategoryReview(W.QDialog):
@@ -8,10 +8,12 @@ class CategoryReview(W.QDialog):
         super().__init__(parent)
         self.setWindowTitle('Auto Categorize')
         self.resize(850, 520)
+        proposals = {eid: select_categories(evidence, document.deck.categories)
+                     for eid, evidence in proposals.items()}
         self.proposals = proposals
         self.rows = []
         layout = W.QVBoxLayout(self)
-        explanation = W.QLabel('Uses local Oracle Tags, Oracle text, keywords, and card types. First role is primary. '
+        explanation = W.QLabel('Uses local card effects, Oracle Tags, and commander/deck synergies. First role is primary. '
                               'Manual categories are preserved. Rule matches are explained below; no AI is used.')
         explanation.setWordWrap(True)
         layout.addWidget(explanation)
