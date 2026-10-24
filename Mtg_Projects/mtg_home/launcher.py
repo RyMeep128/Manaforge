@@ -1,8 +1,7 @@
-"""One homepage, reusable in-process tools, and an independent Print Studio."""
+"""One application window with persistent, lazily created module workspaces."""
 from hashlib import sha256
 import os
 from pathlib import Path
-import subprocess
 import sys
 from PyQt6 import QtCore as C, QtNetwork as N, QtWidgets as W
 from mtg_core.diagnostics import get_logger
@@ -10,7 +9,7 @@ from mtg_core.paths import data_root
 from mtg_ui.theme import application_stylesheet
 from mtg_ui.tooltips import disable_hover_tooltips
 from .modules import MODULES
-from .navigation import add_home_action, print_studio_command, request_home
+from .navigation import request_home
 
 
 class ModuleController(C.QObject):
@@ -19,11 +18,7 @@ class ModuleController(C.QObject):
         self.home, self._service = home, service
         self.windows = {}
         self.factories = factories or {}
-        self.printer = None
-        self.printer_log = None
-        self.poll = C.QTimer(self)
-        self.poll.setInterval(500)
-        self.poll.timeout.connect(self.printer_finished)
+        home.shutdown_guard = self.shutdown
         home.moduleRequested.connect(self.open_module)
         home.settingsRequested.connect(self.settings)
 
@@ -35,18 +30,21 @@ class ModuleController(C.QObject):
         return self._service
 
     def show_home(self):
-        self.home.showNormal()
+        self.home.show_workspace('home')
+        if self.home.isMinimized():
+            self.home.setWindowState(self.home.windowState() & ~C.Qt.WindowState.WindowMinimized)
+        self.home.show()
         self.home.raise_()
         self.home.activateWindow()
 
     def open_module(self, key):
+        if key == 'home':
+            self.show_home()
+            return
         module = next((item for item in MODULES if item.key == key), None)
         if module is None or not module.available:
             return
         try:
-            if module.action == 'printer':
-                self.open_printer()
-                return
             window = self.windows.get(key)
             if window is not None:
                 if getattr(window, 'closing', False):
@@ -59,64 +57,68 @@ class ModuleController(C.QObject):
                 elif module.action == 'editor':
                     from mtg_editor.gui import EditorWindow
                     window = EditorWindow(service=self.service)
-                    add_home_action(window, self.show_home)
+                    window.print_project_handler = self.open_print_project
+                elif module.action == 'printer':
+                    from .printing import create_print_workspace
+                    window = create_print_workspace(self.home)
                 elif module.action == 'rules':
                     from .rules_workspace import RulesWorkspace
                     window = RulesWorkspace(self.service, self.show_home)
                 else:
                     return
-                window.setAttribute(C.Qt.WidgetAttribute.WA_DeleteOnClose)
+                self.home.add_workspace(key, window)
                 self.windows[key] = window
-                window.destroyed.connect(lambda obj=None, module_key=key: self.windows.pop(module_key, None))
-            window.showNormal()
-            window.raise_()
-            window.activateWindow()
+            self.home.show_workspace(key)
         except Exception as exc:
+            self.home.navigation[self.home.current_workspace].setChecked(True)
             get_logger(__name__).exception('Module startup failed module=%s', key)
             W.QMessageBox.warning(self.home, 'Could not open ' + module.title, str(exc))
 
-    def open_printer(self):
-        address = os.environ.get('MANAFORGE_HOME_SOCKET', '') + '-print'
-        if request_home(address):
-            return
-        if self.printer is not None and self.printer.poll() is None:
-            self.home.statusBar().showMessage('Print Studio is already open. Switch to its window to continue.', 5000)
-            return
-        command, directory = print_studio_command()
-        if not getattr(sys, 'frozen', False) and not Path(command[1]).is_file():
-            raise FileNotFoundError('The Print Studio entry point could not be found: ' + command[1])
-        logs = data_root() / 'logs'
-        logs.mkdir(parents=True, exist_ok=True)
-        self.printer_log = logs / 'print-studio-launch.log'
-        environment = os.environ.copy()
-        environment['MANAFORGE_PRINTER_SOCKET'] = address
-        products = Path(__file__).resolve().parents[1]
-        paths = [str(products), str(products / 'mtg_core'), environment.get('PYTHONPATH', '')]
-        environment['PYTHONPATH'] = os.pathsep.join(path for path in paths if path)
-        with self.printer_log.open('wb') as output:
-            self.printer = subprocess.Popen(command, cwd=str(directory), env=environment,
-                stdout=output, stderr=subprocess.STDOUT,
-                creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
-        self.poll.start()
-        self.home.statusBar().showMessage('Opening Print Studio…', 4000)
+    def open_print_project(self, project):
+        self.open_module('print')
+        printer = self.windows.get('print')
+        if printer is None:
+            raise OSError('Print Studio could not be opened.')
+        printer.open_managed_project(project['id'])
 
-    def printer_finished(self):
-        if self.printer is None or self.printer.poll() is None:
-            return
-        code = self.printer.returncode
-        self.poll.stop()
-        self.printer = None
-        if code:
-            details = ''
-            try:
-                with self.printer_log.open('rb') as log:
-                    log.seek(0, 2)
-                    log.seek(max(0, log.tell()-3000))
-                    details = log.read().decode('utf-8', errors='replace')
-            except OSError:
-                pass
-            W.QMessageBox.warning(self.home, 'Print Studio closed unexpectedly',
-                                 f'Exit code {code}.\n\n{details}\n\nLog: {self.printer_log}')
+    def shutdown(self):
+        editor = self.windows.get('editor')
+        if editor is not None and hasattr(editor, 'session'):
+            busy = (editor.worker is not None or editor.task is not None or editor.thumbnails.worker is not None
+                    or editor.recommendation_panel.worker is not None
+                    or editor.add_cards_workspace.discovery.controller.worker is not None)
+            if busy:
+                self.home.statusBar().showMessage('Finishing background work before closing...')
+                C.QTimer.singleShot(250, self.home.close)
+                return False
+            if editor.session.dirty and not editor.save():
+                return False
+        rules = self.windows.get('rules')
+        if rules is not None and getattr(rules, 'busy', False):
+            self.home.statusBar().showMessage('Finishing the rules update before closing...')
+            C.QTimer.singleShot(250, self.home.close)
+            return False
+        printer = self.windows.get('print')
+        if printer is not None and hasattr(printer, 'prepare_to_close'):
+            if not printer.prepare_to_close():
+                self.home.show_workspace('print')
+                return False
+            printer.setProperty('manaforgePreparedToClose', True)
+        # Close the editor first: its asynchronous shutdown can defer the exit.
+        ordered = [self.windows[key] for key in ('editor', 'print', 'rules') if key in self.windows]
+        for window in ordered:
+            window.setProperty('manaforgeQuitting', True)
+            if not window.close():
+                if getattr(window, 'closing', False):
+                    C.QTimer.singleShot(250, self.home.close)
+                return False
+        context = getattr(printer, '_manaforge_context', None)
+        if context is not None:
+            context.save()
+            app = W.QApplication.instance()
+            if getattr(app, '_manaforge_print_context', None) is context:
+                del app._manaforge_print_context
+        return True
 
     def settings(self, key):
         try:

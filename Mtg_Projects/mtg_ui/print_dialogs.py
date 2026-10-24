@@ -1,4 +1,5 @@
 from mtg_ui.artwork_preferences import ArtworkPreferencesDialog, edit_artwork_preferences
+from mtg_ui.workspaces import print_application
 
 import datetime
 import logging
@@ -575,14 +576,14 @@ class AddCardDialog(QDialog):
         return self._selected_art_source_value
 
     def _warn(self, title, message):
-        application = QApplication.instance()
+        application = print_application()
         if application is not None and hasattr(application, "warn_nonfatal"):
             application.warn_nonfatal(title, message)
         else:
             QMessageBox.warning(self, title, message)
 
     def _run_with_popup(self, title, work):
-        application = QApplication.instance()
+        application = print_application()
         debug_mode = getattr(application, "_debug_mode", False)
         window = self.window() if self.window() is not None else self
         loading_window = popup(window, title, debug_mode)
@@ -1493,14 +1494,14 @@ class HighResPickerDialog(QDialog):
         return self._selected_source_value
 
     def _warn(self, title, message):
-        application = QApplication.instance()
+        application = print_application()
         if application is not None and hasattr(application, "warn_nonfatal"):
             application.warn_nonfatal(title, message)
         else:
             QMessageBox.warning(self, title, message)
 
     def _run_with_popup(self, title, work):
-        application = QApplication.instance()
+        application = print_application()
         debug_mode = getattr(application, "_debug_mode", False)
         window = self.window() if self.window() is not None else self
         loading_window = popup(window, title, debug_mode)
@@ -1958,7 +1959,7 @@ class HighResPickerDialog(QDialog):
             self._applied = True
             self.accept()
             return
-        application = QApplication.instance()
+        application = print_application()
         error = None
         backside_match = None
 

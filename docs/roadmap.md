@@ -38,7 +38,8 @@ This workstream tracks the [architecture cleanup epic](architecture-cleanup-epic
 
 - [x] Unified Manaforge homepage and module registry with Deck Editor, Rules & Rulings,
   Print Studio, shared settings, and a disabled future Play tile. Source and packaged
-  launch entry points are implemented; CI/build acceptance is pending. Existing
+  launch entry points are implemented; modules share one window and QApplication,
+  with persistent workspaces and an in-process Print Deck handoff. CI/build acceptance is pending. Existing
   standalone entry points and data paths remain supported.
 
 - [x] Shared SQLite card, printing, image, and Oracle Tag data in MTG Core.

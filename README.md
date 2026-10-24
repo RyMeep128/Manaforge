@@ -10,20 +10,23 @@ and Print Studio; Play is visibly unavailable until implemented. The Windows
 launcher reuses the printer's existing environment and setup. Existing standalone
 launchers remain supported.
 
-The homepage stays open while tools run. Editor and Rules reuse their existing
-windows; Print Studio runs in its own process with the same Python environment
-and shared data paths. Reopening a tile focuses its existing window. Use **Home**
-to return without closing an active deck or print project. Launching Manaforge
-again brings back the existing homepage. Settings opens the shared printing and
-artwork preference editors. Rules includes the offline Comprehensive Rules browser
-and exact-name lookup of locally cached Oracle text/card rulings; downloads remain
-explicit.
+The launcher is the Home page of one application window. Persistent top navigation
+switches between Home, Deck Editor, Rules & Rulings, and Print Studio without
+opening another tool window or process. Workspaces remain loaded as you switch,
+including unsaved deck edits and print layouts. Print Deck opens its linked
+project in the same Print Studio workspace. Closing Manaforge saves/checks active
+workspaces before releasing their resources; a failed save keeps the app open.
+Existing standalone launchers retain their original behavior.
+
+Settings opens the shared printing and artwork preference editors. Rules includes
+the offline Comprehensive Rules browser and exact-name lookup of locally cached
+Oracle text/card rulings; downloads remain explicit. Launching Manaforge again
+returns to its existing Home page.
 
 **Build Manaforge.cmd** creates the unified packaged entry point at
 `Mtg_Projects/dist/Manaforge/Manaforge.exe`, including its Print Studio launch mode.
 The existing **Mtg_Projects/Build EXE.cmd** printer build path is unchanged.
-Print Studio startup failures are reported on the homepage and recorded under the
-existing application data directory's `logs/print-studio-launch.log`.
+Workspace startup failures are reported in the shared application and diagnostic log.
 
 The existing tools share one card-data layer:
 

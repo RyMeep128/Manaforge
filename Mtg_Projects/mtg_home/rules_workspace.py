@@ -26,6 +26,7 @@ class _FindCard(C.QRunnable):
 class RulesWorkspace(RulesBrowser):
     def __init__(self, service, home):
         super().__init__(service)
+        self._home = home
         self.setWindowTitle('Rules & Rulings — Manaforge')
         row = W.QHBoxLayout()
         back = W.QPushButton('Home')
@@ -40,6 +41,12 @@ class RulesWorkspace(RulesBrowser):
         self.card_button.clicked.connect(self.find_card)
         row.addWidget(self.card_button)
         self.layout().insertLayout(0, row)
+
+    def reject(self):
+        if self.property('manaforgeEmbedded') and not self.property('manaforgeQuitting'):
+            self._home()
+            return
+        super().reject()
 
     def find_card(self):
         name = self.card_name.text().strip()

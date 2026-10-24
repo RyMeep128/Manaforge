@@ -1103,7 +1103,11 @@ class EditorWindow(W.QMainWindow):
             self.changed()
             if self.save():
                 try:
-                    launch_print(project)
+                    handler = getattr(self, 'print_project_handler', None)
+                    if handler is not None:
+                        handler(project)
+                    else:
+                        launch_print(project)
                     relocated = project.get('relocated_copies', 0)
                     self.statusBar().showMessage('Deck opened in Proxy.' +
                         (f' {relocated} copies relocated to fit the sheet.' if relocated else ''))

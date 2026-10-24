@@ -142,6 +142,29 @@ class HomeWindow(W.QMainWindow):
         layout.addLayout(footer)
         outer.addWidget(content)
         scroll.setWidget(wrapper)
+        self.takeCentralWidget()
+        self.home_page = scroll
+        self.pages = W.QStackedWidget()
+        self.pages.addWidget(scroll)
+        self.setCentralWidget(self.pages)
+        self.workspaces = {}
+        self.current_workspace = 'home'
+        self.shutdown_guard = None
+        navigation = self.addToolBar('Manaforge')
+        navigation.setMovable(False)
+        self.navigation = {}
+        group = G.QActionGroup(self)
+        group.setExclusive(True)
+        for key, title, enabled in [('home', 'Home', True)] + [
+                (module.key, module.title, module.available) for module in MODULES]:
+            action = navigation.addAction(title)
+            action.setCheckable(True)
+            action.setEnabled(enabled)
+            group.addAction(action)
+            self.navigation[key] = action
+            action.triggered.connect(lambda checked=False, target=key: self.moduleRequested.emit(target))
+        self.navigation['home'].setChecked(True)
+        self.navigation['home'].setShortcut('Ctrl+Shift+H')
         self._columns = None
         self.reflow()
 
@@ -161,3 +184,37 @@ class HomeWindow(W.QMainWindow):
         for column in range(2):
             self.grid.setColumnStretch(column, 1 if column < columns else 0)
         self._columns = columns
+
+    def add_workspace(self, key, widget):
+        widget.setProperty('manaforgeEmbedded', True)
+        scroll = W.QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(W.QFrame.Shape.NoFrame)
+        widget.setParent(scroll)
+        widget.setWindowFlags(C.Qt.WindowType.Widget)
+        scroll.setWidget(widget)
+        self.pages.addWidget(scroll)
+        self.workspaces[key] = (scroll, widget)
+        widget.windowTitleChanged.connect(lambda title: self.update_workspace_title(key, title))
+
+    def show_workspace(self, key):
+        self.current_workspace = key
+        if key == 'home':
+            self.pages.setCurrentWidget(self.home_page)
+            self.setWindowTitle('Manaforge')
+        else:
+            scroll, widget = self.workspaces[key]
+            self.pages.setCurrentWidget(scroll)
+            widget.show()
+            self.update_workspace_title(key, widget.windowTitle())
+        self.navigation[key].setChecked(True)
+
+    def update_workspace_title(self, key, title):
+        if key in self.workspaces and self.pages.currentWidget() is self.workspaces[key][0]:
+            self.setWindowTitle('Manaforge — ' + title)
+
+    def closeEvent(self, event):
+        if self.shutdown_guard is not None and not self.shutdown_guard():
+            event.ignore()
+            return
+        super().closeEvent(event)

@@ -143,15 +143,10 @@ def install_exception_handlers():
         threading.excepthook = thread_excepthook
 
 
-class PrintProxyPrepApplication(QApplication):
-    _nonfatal_error = QtCore.pyqtSignal(str, str)
+class _PrintApplicationState:
+    """Printer state shared by standalone and embedded application contexts."""
 
-    def __init__(self, argv):
-        super().__init__(argv)
-
-        self.setApplicationName("Print Proxy Prep")
-        self.setStyle("Fusion")
-        self.setStyleSheet(ui_theme.application_stylesheet())
+    def initialize_print_state(self):
 
         self._settings_loaded = False
         self._debug_mode = "--debug" in sys.argv
@@ -166,7 +161,7 @@ class PrintProxyPrepApplication(QApplication):
 
     def set_window(self, window):
         self._window = window
-        if self._settings_loaded:
+        if self._settings_loaded and not window.property("manaforgeEmbedded"):
             window.restoreGeometry(self._window_geometry)
             window.restoreState(self._window_state)
             self._window_geometry = None
@@ -189,8 +184,9 @@ class PrintProxyPrepApplication(QApplication):
     def save(self):
         settings = QtCore.QSettings("Proxy", "PDF Proxy Printer")
         settings.setValue("version", APP_VERSION)
-        settings.setValue("geometry", self._window.saveGeometry())
-        settings.setValue("state", self._window.saveState())
+        if not self._window.property("manaforgeEmbedded"):
+            settings.setValue("geometry", self._window.saveGeometry())
+            settings.setValue("state", self._window.saveState())
 
     def load(self):
         settings = QtCore.QSettings("Proxy", "PDF Proxy Printer")
@@ -251,7 +247,6 @@ class PrintProxyPrepApplication(QApplication):
         if hasattr(self, "_window"):
             self._window.statusBar().showMessage(message, timeout)
 
-    @QtCore.pyqtSlot(str, str)
     def _show_nonfatal_error(self, title, message):
         parent = getattr(self, "_window", None)
         if parent is None:
@@ -260,13 +255,34 @@ class PrintProxyPrepApplication(QApplication):
         QMessageBox.warning(parent, title, message)
 
 
+class PrintApplicationContext(QtCore.QObject, _PrintApplicationState):
+    _nonfatal_error = QtCore.pyqtSignal(str, str)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.initialize_print_state()
+
+
+class PrintProxyPrepApplication(QApplication, _PrintApplicationState):
+    _nonfatal_error = QtCore.pyqtSignal(str, str)
+
+    def __init__(self, argv):
+        super().__init__(argv)
+        self.setApplicationName("Print Proxy Prep")
+        self.setStyle("Fusion")
+        self.setStyleSheet(ui_theme.application_stylesheet())
+        self.initialize_print_state()
+
+
 def init():
     return PrintProxyPrepApplication(sys.argv)
 
 
 class AppShellWindow(QMainWindow):
-    def __init__(self, application):
+    def __init__(self, application, *, embedded=False):
         super().__init__()
+        self.setProperty("manaforgeEmbedded", embedded)
+        self.setProperty("printWorkspace", True)
         from mtg_ui.tooltips import disable_hover_tooltips
         disable_hover_tooltips()
 
@@ -274,7 +290,7 @@ class AppShellWindow(QMainWindow):
         self.setMinimumSize(980, 680)
         icon = QIcon(resource_path() + "/proxy.png")
         self.setWindowIcon(icon)
-        if sys.platform == "win32":
+        if sys.platform == "win32" and not embedded:
             import ctypes
 
             myappid = "proxy.printer"
@@ -316,6 +332,9 @@ class AppShellWindow(QMainWindow):
         ]
         self._shortcuts[0].activated.connect(self.open_blank_editor)
         self._shortcuts[1].activated.connect(self._dashboard_page.import_project)
+        if embedded:
+            for shortcut in self._shortcuts:
+                shortcut.setContext(QtCore.Qt.ShortcutContext.WidgetWithChildrenShortcut)
 
     def current_project_path(self):
         if self._active_session is not None and self._active_session.get("project_path"):
@@ -816,22 +835,26 @@ class AppShellWindow(QMainWindow):
         self._mark_project_saved(self._project_snapshot(state))
         return created
 
-    def closeEvent(self, event):
+    def prepare_to_close(self):
         # Flush before Qt exits so a failed write cannot silently close the project.
         if not self.isEnabled():
-            event.ignore()
-            return
+            return False
         if self._active_session is not None and self._active_session.get('managed'):
             if self.save_active_project(self._active_session['state']) is None:
-                event.ignore()
-                return
+                return False
         elif self._active_session is not None and self._active_session.get('is_draft'):
             try:
                 project_library.save_draft_project(self._active_session['state'])
             except (OSError, ValueError, TypeError) as exc:
                 self._application.warn_nonfatal('Draft Recovery Save Failed', str(exc))
-                event.ignore()
-                return
+                return False
+        return True
+
+    def closeEvent(self, event):
+        if not self.property('manaforgePreparedToClose') and not self.prepare_to_close():
+            event.ignore()
+            return
+        self.setProperty('manaforgePreparedToClose', False)
         self._autosave_timer.stop()
         if self._project_file_lock is not None:
             self._project_file_lock.unlock()

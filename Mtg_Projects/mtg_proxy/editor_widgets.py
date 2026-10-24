@@ -1,4 +1,5 @@
 import os
+from mtg_ui.workspaces import print_application, print_workspace
 import re
 import math
 import json
@@ -202,7 +203,7 @@ def project_thumbnail_pixmap(image_path, width=120, height=160):
 
 
 def autosave_managed_session():
-    application = QApplication.instance()
+    application = print_application()
     if application is not None and hasattr(application, "autosave_managed_session"):
         application.autosave_managed_session()
 
@@ -544,7 +545,7 @@ class CardWidget(QWidget):
         def open_high_res_picker():
             dialog = HighResPickerDialog(self, state, img_dict, card_name)
             if dialog.exec() == QDialog.DialogCode.Accepted and dialog.was_applied():
-                self.window().refresh(state, img_dict)
+                print_workspace(self).refresh(state, img_dict)
                 autosave_managed_session()
 
         if card_name is not None:
@@ -596,7 +597,7 @@ class CardWidget(QWidget):
         thumbnail_button.setFixedHeight(24)
 
         def set_project_thumbnail():
-            app = QApplication.instance()
+            app = print_application()
             if app is not None and hasattr(app, "set_project_thumbnail"):
                 app.set_project_thumbnail(card_name)
 
@@ -632,7 +633,7 @@ class CardWidget(QWidget):
                 if confirm != QMessageBox.StandardButton.Yes:
                     return
 
-                application = QApplication.instance()
+                application = print_application()
                 try:
                     project_service.delete_card_files(state, img_dict, card_name)
                 except OSError as exc:
@@ -648,12 +649,12 @@ class CardWidget(QWidget):
                             f"The card image could not be fully deleted from disk.\n\n{exc}",
                         )
                     return
-                window = self.window()
+                window = print_workspace(self)
                 if window is not None and hasattr(
                     window, "clear_project_thumbnail_if_matches"
                 ):
                     window.clear_project_thumbnail_if_matches(card_name)
-                self.window().refresh(state, img_dict)
+                print_workspace(self).refresh(state, img_dict)
 
             delete_button.clicked.connect(delete_card)
 
@@ -819,7 +820,7 @@ class CardWidget(QWidget):
                     not dialog.selected_tag):
                 return
             query = AddCardDialog._oracle_tag_query(dialog.selected_tag)
-            application = QApplication.instance()
+            application = print_application()
             if application is not None and hasattr(
                     application, '_open_add_card_search'):
                 application._open_add_card_search(query)
@@ -834,7 +835,7 @@ class CardWidget(QWidget):
                                       oracle_id=entry.oracle_id, card_id=entry.card_id, parent=self)
             suggestions = deck_import_service.component_suggestions_for_card_ids(
                 [entry.card_id])
-            application = QApplication.instance()
+            application = print_application()
             if (suggestions and application is not None and
                     hasattr(application, '_offer_component_suggestions')):
                 menu.addAction(
@@ -909,8 +910,8 @@ class CardWidget(QWidget):
         # Keep the persisted entry in sync: preview/history serialization rebuilds
         # the legacy cards map from these entries.
         state.set_card_count(self._card_name, number)
-        if hasattr(self.window(), 'project_changed'):
-            self.window().project_changed()
+        if hasattr(print_workspace(self), 'project_changed'):
+            print_workspace(self).project_changed()
 
     def edit_number(self, state):
         number = int(self._number_edit.text())
@@ -945,7 +946,7 @@ class CardWidget(QWidget):
 
     def set_do_not_print(self, state, excluded):
         state._ensure_card_entry(self._card_name).do_not_print = bool(excluded)
-        window = self.window()
+        window = print_workspace(self)
         if window is not None and hasattr(window, 'refresh'):
             window.refresh(state, self._img_dict)
         autosave_managed_session()
@@ -1303,7 +1304,7 @@ class CardScrollArea(QScrollArea):
 
         def change_sort(t):
             state.card_sort = t
-            self.window().refresh(state, self._img_dict)
+            print_workspace(self).refresh(state, self._img_dict)
 
         decrement_button.clicked.connect(dec_number)
         increment_button.clicked.connect(inc_number)
@@ -1349,7 +1350,7 @@ class CardScrollArea(QScrollArea):
         except ValueError as exc:
             QMessageBox.warning(self, "Cards Do Not Fit", str(exc))
             return
-        window = self.window()
+        window = print_workspace(self)
         scroll_value = self.verticalScrollBar().value()
         if window is not self and hasattr(window, 'refresh'):
             if hasattr(window, 'refresh_widgets'):
@@ -1369,7 +1370,7 @@ class CardScrollArea(QScrollArea):
             state._ensure_card_entry(name).do_not_print = bool(excluded)
         if not names:
             return
-        window = self.window()
+        window = print_workspace(self)
         if window is not self and hasattr(window, 'refresh'):
             window.refresh(state, self._img_dict)
         else:
@@ -1427,7 +1428,7 @@ class CardScrollArea(QScrollArea):
             if dialog.was_applied():
                 applied += 1
         if applied:
-            window = self.window()
+            window = print_workspace(self)
             if window is not self and hasattr(window, 'refresh'):
                 window.refresh(state, self._img_dict)
             else:
@@ -1465,7 +1466,7 @@ class CardScrollArea(QScrollArea):
         chosen = dialog.selected_proposals()
         if not chosen:
             return
-        application = QApplication.instance()
+        application = print_application()
         applied, failures = 0, []
         def work():
             nonlocal applied
@@ -1479,11 +1480,11 @@ class CardScrollArea(QScrollArea):
                     applied += 1
                 except (OSError, ValueError) as exc:
                     failures.append(f"{proposal['display_name']}: {exc}")
-        progress = popup(self.window(), 'Applying preferred artwork…',
+        progress = popup(print_workspace(self), 'Applying preferred artwork…',
                          getattr(application, '_debug_mode', False))
         progress.show_during_work(work)
         if applied:
-            self.window().refresh(state, self._img_dict)
+            print_workspace(self).refresh(state, self._img_dict)
             autosave_managed_session()
         if failures:
             QMessageBox.warning(
@@ -1500,7 +1501,7 @@ class CardScrollArea(QScrollArea):
         state.backside_enabled = True
         for name in names:
             state.set_backside(name, backside_choice)
-        window = self.window()
+        window = print_workspace(self)
         if window is not self and hasattr(window, 'refresh'):
             window.refresh(state, self._img_dict)
         else:
@@ -1516,7 +1517,7 @@ class CardScrollArea(QScrollArea):
             state, self._img_dict, names,
             ensure_preview=runtime_images.ensure_preview_entry)
         if repaired:
-            window = self.window()
+            window = print_workspace(self)
             if window is not self and hasattr(window, 'refresh'):
                 window.refresh(state, self._img_dict)
             else:
@@ -1525,7 +1526,7 @@ class CardScrollArea(QScrollArea):
         message = f'Recovered {len(repaired)} cached back(s).'
         if unresolved:
             message += f' {len(unresolved)} still need a custom back or reimport.'
-        window = self.window()
+        window = print_workspace(self)
         if hasattr(window, 'statusBar'):
             window.statusBar().showMessage(message, 5000)
 
@@ -1934,7 +1935,7 @@ class PrintPreview(QScrollArea):
             overlay.update()
 
     def refresh_after_edit(self):
-        window = self.window()
+        window = print_workspace(self)
         if window is not self and hasattr(window, "refresh"):
             if hasattr(window, "refresh_widgets"):
                 window.refresh_widgets(self._state)
@@ -1961,7 +1962,7 @@ class PrintPreview(QScrollArea):
         self._set_page(target)
 
     def add_at_slot(self, destination, selected_card=None):
-        actions = self.window().findChildren(ActionsWidget)
+        actions = print_workspace(self).findChildren(ActionsWidget)
         if not actions:
             return
         history_before = self.layout_snapshot()
@@ -2042,8 +2043,8 @@ class PrintPreview(QScrollArea):
             return
         self._history.push(before, self.layout_snapshot())
         self.refresh_after_edit()
-        if relocated and hasattr(self.window(), 'statusBar'):
-            self.window().statusBar().showMessage(f"{relocated} copies moved to fit the new card size", 3500)
+        if relocated and hasattr(print_workspace(self), 'statusBar'):
+            print_workspace(self).statusBar().showMessage(f"{relocated} copies moved to fit the new card size", 3500)
 
     def _restore_layout(self, snapshot):
         if snapshot is None:
@@ -2304,7 +2305,7 @@ class ActionsWidget(QGroupBox):
         self.setLayout(layout)
 
         def select_preflight_cards(names):
-            window = self.window()
+            window = print_workspace(self)
             editor = getattr(window, '_editor_page', None)
             scroll = getattr(editor, '_scroll_area', None)
             tabs = getattr(editor, '_tabs', None)
@@ -2342,13 +2343,13 @@ class ActionsWidget(QGroupBox):
                 placements, _ = layout_service.resolve(state, cols, rows)
             except ValueError as exc:
                 confirm_print_preflight(
-                    self.window(), [print_preflight.invalid_layout_issue(exc)])
+                    print_workspace(self), [print_preflight.invalid_layout_issue(exc)])
                 return
 
             issues = print_preflight.analyze(
                 state, img_dict, placements, cols, rows)
             if not confirm_print_preflight(
-                    self.window(), issues, on_fix=select_preflight_cards):
+                    print_workspace(self), issues, on_fix=select_preflight_cards):
                 return
 
             state.filename = os.path.splitext(os.path.basename(pdf_path))[0]
@@ -2374,11 +2375,11 @@ class ActionsWidget(QGroupBox):
                         f"The PDF was saved, but the app could not open it automatically.\n\n{e}",
                     )
 
-            self.window().setEnabled(False)
-            render_window = popup(self.window(), "Saving PDF...", application._debug_mode)
+            print_workspace(self).setEnabled(False)
+            render_window = popup(print_workspace(self), "Saving PDF...", application._debug_mode)
             render_window.show_during_work(render_work)
             del render_window
-            self.window().setEnabled(True)
+            print_workspace(self).setEnabled(True)
             saved_paths = pdf_path
             if render_result is not None and render_result.backside_pdf_path:
                 saved_paths += f"\n{render_result.backside_pdf_path}"
@@ -2390,7 +2391,7 @@ class ActionsWidget(QGroupBox):
 
         def direct_print():
             side_dialog = DirectPrintOptionsDialog(
-                self.window(), backs_enabled=state.backside_enabled)
+                print_workspace(self), backs_enabled=state.backside_enabled)
             if side_dialog.exec() != QDialog.DialogCode.Accepted:
                 return
             page_side = side_dialog.page_side()
@@ -2406,13 +2407,13 @@ class ActionsWidget(QGroupBox):
                 placements, _ = layout_service.resolve(state, cols, rows)
             except ValueError as exc:
                 confirm_print_preflight(
-                    self.window(), [print_preflight.invalid_layout_issue(exc)],
+                    print_workspace(self), [print_preflight.invalid_layout_issue(exc)],
                     action='print')
                 return
             issues = print_preflight.analyze(
                 state, img_dict, placements, cols, rows)
             if not confirm_print_preflight(
-                    self.window(), issues, action='print',
+                    print_workspace(self), issues, action='print',
                     on_fix=select_preflight_cards):
                 return
 
@@ -2431,19 +2432,19 @@ class ActionsWidget(QGroupBox):
                     except (OSError, ValueError, TypeError) as exc:
                         render_error = exc
 
-                self.window().setEnabled(False)
+                print_workspace(self).setEnabled(False)
                 render_window = popup(
-                    self.window(), 'Preparing print job...', application._debug_mode)
+                    print_workspace(self), 'Preparing print job...', application._debug_mode)
                 render_window.show_during_work(render_print_job)
                 del render_window
-                self.window().setEnabled(True)
+                print_workspace(self).setEnabled(True)
                 if render_error is not None:
                     application.warn_nonfatal('Could Not Prepare Print Job', str(render_error))
                     return
 
                 printer = QPrinter(QPrinter.PrinterMode.HighResolution)
                 direct_print_service.configure_printer(printer, state)
-                printer_dialog = QPrintDialog(printer, self.window())
+                printer_dialog = QPrintDialog(printer, print_workspace(self))
                 printer_dialog.setWindowTitle('Print from Manaforge')
                 printer_dialog.setOption(QPrintDialog.PrintDialogOption.PrintPageRange, True)
                 try:
@@ -2476,12 +2477,12 @@ class ActionsWidget(QGroupBox):
                 placements, _ = layout_service.resolve(state, columns, rows)
             except ValueError as exc:
                 confirm_print_preflight(
-                    self.window(), [print_preflight.invalid_layout_issue(exc)])
+                    print_workspace(self), [print_preflight.invalid_layout_issue(exc)])
                 return
             issues = print_preflight.analyze(
                 state, img_dict, placements, columns, rows)
             if not confirm_print_preflight(
-                    self.window(), issues, on_fix=select_preflight_cards):
+                    print_workspace(self), issues, on_fix=select_preflight_cards):
                 return
             dpi, quality, transparent = 300, 90, False
             if choice != 'Individual prepared cards':
@@ -2535,7 +2536,7 @@ class ActionsWidget(QGroupBox):
                 except (OSError, ValueError, TypeError) as exc:
                     export_error = exc
             export_window = popup(
-                self.window(), 'Exporting...', application._debug_mode)
+                print_workspace(self), 'Exporting...', application._debug_mode)
             export_window.show_during_work(export_work)
             if export_error is not None:
                 application.warn_nonfatal('Export Failed', str(export_error))
@@ -2562,7 +2563,7 @@ class ActionsWidget(QGroupBox):
             except ValueError as exc:
                 application.warn_nonfatal('Could Not Apply Preset', str(exc))
                 return
-            self.window().refresh(state, img_dict)
+            print_workspace(self).refresh(state, img_dict)
             message = f'Applied {name}'
             if relocated:
                 message += f'; relocated {relocated} card copy/copies'
@@ -2576,12 +2577,12 @@ class ActionsWidget(QGroupBox):
                 card_names = [name for name in state.cards.keys() if not name.startswith("__")]
                 runtime_images.warm_preview_entries(state, img_dict, card_names)
 
-            self.window().setEnabled(False)
-            crop_window = popup(self.window(), "Refreshing previews...", application._debug_mode)
+            print_workspace(self).setEnabled(False)
+            crop_window = popup(print_workspace(self), "Refreshing previews...", application._debug_mode)
             crop_window.show_during_work(refresh_work)
             del crop_window
-            self.window().refresh(state, img_dict)
-            self.window().setEnabled(True)
+            print_workspace(self).refresh(state, img_dict)
+            print_workspace(self).setEnabled(True)
             if hasattr(application, "show_status"):
                 application.show_status("Images prepared")
 
@@ -2607,13 +2608,13 @@ class ActionsWidget(QGroupBox):
 
                 project_service.init_dict(state, img_dict, application.warn_nonfatal)
                 runtime_images.invalidate_all(state, img_dict)
-                self.window().refresh(state, img_dict)
+                print_workspace(self).refresh(state, img_dict)
 
         def open_images_folder():
             open_folder(state.image_dir)
 
         def restore_recovery_snapshot():
-            window = self.window()
+            window = print_workspace(self)
             session = getattr(window, '_active_session', None) or {}
             project_id = session.get('project_id')
             if not project_id:
@@ -2668,17 +2669,17 @@ class ActionsWidget(QGroupBox):
 
             dialog.apply()
             if prior_values["DisplayColumns"] != CFG.DisplayColumns:
-                self.window().refresh(state, img_dict)
+                print_workspace(self).refresh(state, img_dict)
             elif (
                 prior_values["VibranceBump"] != CFG.VibranceBump
                 or prior_values["DefaultPageSize"] != CFG.DefaultPageSize
             ):
-                self.window().refresh_preview(state, img_dict)
+                print_workspace(self).refresh_preview(state, img_dict)
 
         def offer_component_suggestions(suggestions):
             if not suggestions:
                 return
-            dialog = ComponentSuggestionsDialog(self.window(), suggestions)
+            dialog = ComponentSuggestionsDialog(print_workspace(self), suggestions)
             if dialog.exec() != QDialog.DialogCode.Accepted:
                 return
             selected = dialog.selected_suggestions()
@@ -2700,13 +2701,13 @@ class ActionsWidget(QGroupBox):
                     except (OSError, ValueError) as exc:
                         errors.append(f'{suggestion.candidate.name}: {exc}')
 
-            self.window().setEnabled(False)
+            print_workspace(self).setEnabled(False)
             component_window = popup(
-                self.window(), 'Adding related tokens...', application._debug_mode)
+                print_workspace(self), 'Adding related tokens...', application._debug_mode)
             component_window.show_during_work(add_components)
             del component_window
-            self.window().setEnabled(True)
-            self.window().refresh(state, img_dict)
+            print_workspace(self).setEnabled(True)
+            print_workspace(self).refresh(state, img_dict)
             autosave_managed_session()
             if errors:
                 application.warn_nonfatal(
@@ -2750,13 +2751,13 @@ class ActionsWidget(QGroupBox):
                 except (OSError, ValueError) as exc:
                     add_error = exc
 
-            self.window().setEnabled(False)
+            print_workspace(self).setEnabled(False)
             add_window = popup(
-                self.window(), "Adding card...", application._debug_mode
+                print_workspace(self), "Adding card...", application._debug_mode
             )
             add_window.show_during_work(add_work)
             del add_window
-            self.window().setEnabled(True)
+            print_workspace(self).setEnabled(True)
 
             if on_added is not None:
                 if workflow_result is not None and add_error is None:
@@ -2768,7 +2769,7 @@ class ActionsWidget(QGroupBox):
                     state.copy_from(snapshot)
 
             if workflow_result is not None or add_error is not None:
-                self.window().refresh(state, img_dict)
+                print_workspace(self).refresh(state, img_dict)
 
             if add_error is not None:
                 application.warn_nonfatal("Add Card Failed", str(add_error))
@@ -2825,13 +2826,13 @@ class ActionsWidget(QGroupBox):
                     import_error = exc
                     return
 
-            self.window().setEnabled(False)
+            print_workspace(self).setEnabled(False)
             import_window = popup(
-                self.window(), "Importing cards...", application._debug_mode
+                print_workspace(self), "Importing cards...", application._debug_mode
             )
             import_window.show_during_work(import_work)
             del import_window
-            self.window().setEnabled(True)
+            print_workspace(self).setEnabled(True)
 
             if import_error is not None:
                 application.warn_nonfatal(
@@ -2844,7 +2845,7 @@ class ActionsWidget(QGroupBox):
                 return
 
             if import_result.imported:
-                self.window().refresh(state, img_dict)
+                print_workspace(self).refresh(state, img_dict)
                 if hasattr(application, "show_status"):
                     application.show_status(
                         f"Imported {import_result.imported_count} cards"
@@ -2893,7 +2894,7 @@ class ActionsWidget(QGroupBox):
                 )
                 return
 
-            self.window().refresh(state, img_dict)
+            print_workspace(self).refresh(state, img_dict)
             QMessageBox.information(
                 self,
                 "Old Card Images Removed",
@@ -3015,7 +3016,7 @@ class PrintOptionsWidget(QGroupBox):
                 QMessageBox.warning(self, "Could not load printer profiles", str(exc))
                 return
             if dialog.exec() == QDialog.DialogCode.Accepted and dialog.applied:
-                window = self.window()
+                window = print_workspace(self)
                 window.refresh_widgets(state)
                 window.refresh(state, img_dict)
                 autosave_managed_session()
@@ -3028,7 +3029,7 @@ class PrintOptionsWidget(QGroupBox):
             dialog = PrinterCalibrationDialog(self, state)
             dialog.exec()
             if dialog.applied:
-                window = self.window()
+                window = print_workspace(self)
                 window.refresh_widgets(state)
                 window.refresh_preview(state, img_dict)
                 autosave_managed_session()
@@ -3041,11 +3042,11 @@ class PrintOptionsWidget(QGroupBox):
 
         def change_papersize(t):
             state.pagesize = t
-            self.window().refresh_preview(state, img_dict)
+            print_workspace(self).refresh_preview(state, img_dict)
 
         def change_orientation(t):
             state.orient = t
-            self.window().refresh_preview(state, img_dict)
+            print_workspace(self).refresh_preview(state, img_dict)
 
         def change_guides(s):
             enabled = s == QtCore.Qt.CheckState.Checked
@@ -3239,7 +3240,7 @@ class CardOptionsWidget(QGroupBox):
 
         def change_bleed_edge(v):
             state.bleed_edge = v
-            self.window().refresh_preview(state, img_dict)
+            print_workspace(self).refresh_preview(state, img_dict)
 
         def switch_backside_enabled(s):
             enabled = s == QtCore.Qt.CheckState.Checked
@@ -3251,12 +3252,12 @@ class CardOptionsWidget(QGroupBox):
             backside_pages_at_end_checkbox.setEnabled(enabled)
             backside_separate_file_checkbox.setEnabled(enabled)
             backside_reverse_page_order_checkbox.setEnabled(enabled)
-            self.window().refresh(state, img_dict)
+            print_workspace(self).refresh(state, img_dict)
 
         def switch_backside_pages_at_end(s):
             enabled = s == QtCore.Qt.CheckState.Checked
             state.backside_pages_at_end = enabled
-            self.window().refresh_preview(state, img_dict)
+            print_workspace(self).refresh_preview(state, img_dict)
 
         def switch_backside_separate_file(s):
             state.backside_separate_file = s == QtCore.Qt.CheckState.Checked
@@ -3265,7 +3266,7 @@ class CardOptionsWidget(QGroupBox):
             state.backside_reverse_page_order = (
                 s == QtCore.Qt.CheckState.Checked
             )
-            self.window().refresh_preview(state, img_dict)
+            print_workspace(self).refresh_preview(state, img_dict)
 
         def pick_backside():
             default_backside_choice = image_file_dialog(self, state.image_dir)
@@ -3274,20 +3275,20 @@ class CardOptionsWidget(QGroupBox):
                 backside_default_preview.refresh(
                     state.backside_default, img_dict
                 )
-                self.window().refresh(state, img_dict)
+                print_workspace(self).refresh(state, img_dict)
 
         def change_backside_offset(v):
             state.backside_offset = v
-            self.window().refresh_preview(state, img_dict)
+            print_workspace(self).refresh_preview(state, img_dict)
 
         def change_backside_vertical_offset(v):
             state.backside_vertical_offset = v
-            self.window().refresh_preview(state, img_dict)
+            print_workspace(self).refresh_preview(state, img_dict)
 
         def switch_oversized_enabled(s):
             enabled = s == QtCore.Qt.CheckState.Checked
             state.oversized_enabled = enabled
-            self.window().refresh(state, img_dict)
+            print_workspace(self).refresh(state, img_dict)
 
         bleed_edge_spin.valueChanged.connect(change_bleed_edge)
         backside_checkbox.checkStateChanged.connect(switch_backside_enabled)
@@ -3371,12 +3372,12 @@ class GlobalOptionsWidget(QGroupBox):
 
             dialog.apply()
             if prior_values["DisplayColumns"] != CFG.DisplayColumns:
-                self.window().refresh(state, img_dict)
+                print_workspace(self).refresh(state, img_dict)
             elif (
                 prior_values["VibranceBump"] != CFG.VibranceBump
                 or prior_values["DefaultPageSize"] != CFG.DefaultPageSize
             ):
-                self.window().refresh_preview(state, img_dict)
+                print_workspace(self).refresh_preview(state, img_dict)
 
         open_settings_button.clicked.connect(open_settings)
 
@@ -3410,7 +3411,7 @@ class OptionsWidget(QWidget):
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(10)
         # ActionsWidget owns the established workflow callbacks. Keep it in the
-        # Qt parent hierarchy so self.window() continues to resolve to the app
+        # Qt parent hierarchy so print_workspace(self) continues to resolve to the app
         # shell, while its controls are presented by EditorPage's command bar.
         layout.addWidget(actions_widget)
         actions_widget.hide()
