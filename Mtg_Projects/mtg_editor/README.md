@@ -1,6 +1,6 @@
 # Manaforge Deck Editor
 
-Card **+ / −** controls change quantities in Grid and Stacks; reducing the last
+Card **+ / −** controls change quantities in Grid, Stacks, and Text; reducing the last
 copy removes that entry and supports Undo. Syntax Search and Recommendations
 highlight cards already in any deck section with a green outline and **In deck**
 label, including alternate printings. Highlights refresh after edits and Undo/Redo.
@@ -31,6 +31,20 @@ application; controller lifecycle coverage is in `tests/test_controllers.py`.
 The editor shares Proxy's dark styling and green accents. **Grid** shows complete
 card images; **Stacks** overlaps cards within groups. The card canvas uses all
 remaining window space, and the toolbars wrap on smaller screens.
+
+**View As > Text** presents compact, collapsible groups in up to four responsive
+columns. Rows show quantity, card name, and colored mana symbols, with **+ / −**
+on hover and a **⋯** menu for the existing editing actions. Click a name for card
+details; Ctrl/Shift-click selects multiple cards for bulk actions. Group counts
+include multiple copies, and the Commander group stays separate above the others.
+Text respects the same grouping, sorting, and local filters as Grid and Stacks.
+
+The optional left **Card preview** follows hovered or selected cards using their
+current printing and the shared image cache. It automatically hides on narrower
+windows. Mana costs missing from older deck files are read from the local catalog
+in background batches. View choice, collapsed groups, and preview preference are
+saved with the deck, and Grid, Stacks, and Text keep separate scroll positions.
+**More > Text view** opens the same layout.
 
 Card Search, Syntax Search, and Quick Add load 50 results at a time; **Load More**
 continues through all matching local results. Cards present anywhere in the deck,

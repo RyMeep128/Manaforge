@@ -130,7 +130,7 @@ class EditorWindow(W.QMainWindow):
         menu.addAction('Import recommendation decks…', self.import_recommendation_decks)
         from .recommendation_cache import manage_cache
         menu.addAction('Recommendation cache…', lambda: manage_cache(self))
-        menu.addAction('Compact table', self.show_table)
+        menu.addAction('Text view', self.show_table)
         menu.addAction('Deck insights…', self.deck_insights)
         menu.addAction('Opening-hand playtest…', self.playtest)
         menu.addAction('Print readiness…', self.print_readiness)
@@ -183,7 +183,7 @@ class EditorWindow(W.QMainWindow):
 
         view_group, view_row = self.toolbar_group('View As')
         self.view_mode = W.QComboBox()
-        self.view_mode.addItems(['Grid', 'Stacks'])
+        self.view_mode.addItems(['Grid', 'Stacks', 'Text'])
         view_row.addWidget(self.view_mode)
         group_group, group_row = self.toolbar_group('Group By')
         self.group = W.QComboBox()
@@ -348,6 +348,11 @@ class EditorWindow(W.QMainWindow):
         self.views = W.QStackedWidget()
         self.views.addWidget(self.grid)
         self.views.addWidget(self.table)
+        from .text_view import TextDeckView
+        self.text_view = TextDeckView(self)
+        self.views.addWidget(self.text_view)
+        self.view_scrolls = {}
+        self._active_view = 'Stacks'
         self.splitter.addWidget(self.views)
         self.splitter.setStretchFactor(0, 0)
         self.splitter.setStretchFactor(1, 1)
@@ -587,6 +592,7 @@ class EditorWindow(W.QMainWindow):
         self.filter.setToolTip(FILTER_HELP)
         self.grid.query = self.filter.text()
         self.grid.relayout()
+        self.text_view.refresh()
         visible = self.apply_table_filter()
         active = bool(self.grid.query) or self.grid.filtered_ids is not None
         self.statusBar().showMessage(f'{visible} of {len(self.document.deck.entries)} entries match' if active else 'Deck filter cleared')
@@ -607,23 +613,43 @@ class EditorWindow(W.QMainWindow):
         self.selection_changed()
         return len(visible_ids)
 
+    def view_scrollbar(self, mode):
+        return self.text_view.rows.verticalScrollBar() if mode == 'Text' else self.grid.verticalScrollBar()
+
     def preferences_changed(self, *_):
-        self.views.setCurrentWidget(self.grid)
-        self.grid.mode = self.view_mode.currentText()
+        mode = self.view_mode.currentText()
+        switched = mode != self._active_view
+        if switched:
+            self.view_scrolls[self._active_view] = self.view_scrollbar(self._active_view).value()
+            self.grid.detail_timer.stop()
+            self.grid.hover_timer.stop()
+            self.grid.preview.hide()
+        if mode != 'Text':
+            self.grid.mode = mode
+        self._active_view = mode
         self.grid.grouping = self.group.currentText()
         self.grid.sort = self.sort.currentText()
         self.grid.card_width = self.zoom.value()
-        self.document.editor_preferences.update(view=self.grid.mode, group=self.grid.grouping,
-            sort=self.grid.sort, card_width=self.grid.card_width, collapsed=sorted(self.grid.collapsed))
+        self.views.setCurrentWidget(self.text_view if mode == 'Text' else self.grid)
+        self.document.editor_preferences.update(view=mode, group=self.grid.grouping,
+            sort=self.grid.sort, card_width=self.grid.card_width, collapsed=sorted(self.grid.collapsed),
+            view_scrolls=dict(self.view_scrolls))
         if not self.search_panel.isHidden():
             self.document.editor_preferences['panel_width'] = self.splitter.sizes()[0]
         self.changed()
+        if switched:
+            position = self.view_scrolls.get(mode, 0)
+            self.view_scrollbar(mode).setValue(position)
+            QtCore.QTimer.singleShot(0, lambda: self.view_scrollbar(mode).setValue(position)
+                                    if self._active_view == mode else None)
 
     def selection_changed(self):
         count = len(self.grid.selected)
         self.selection_label.setText(f'{count} selected' if count else '')
         self.quick_tag_button.setEnabled(bool(count))
         self.compact_quick_tags.setEnabled(bool(count))
+        self.text_view.rows.viewport().update()
+        self.text_view.update_preview()
 
     def eventFilter(self, watched, event):
         if watched in (self.table, self.table.viewport()):
@@ -660,8 +686,10 @@ class EditorWindow(W.QMainWindow):
 
     def show_table(self):
         self.add_cards_workspace.back()
-        self.views.setCurrentWidget(self.table)
-        self.restore_table_selection()
+        if self.view_mode.currentText() == 'Text':
+            self.views.setCurrentWidget(self.text_view)
+        else:
+            self.view_mode.setCurrentText('Text')
 
     def table_selection_changed(self, *_):
         if self._refreshing_table or self.views.currentWidget() is not self.table:
@@ -717,6 +745,7 @@ class EditorWindow(W.QMainWindow):
         self._refreshing_table = False
         self.grid.refresh()
         self.apply_table_filter()
+        self.text_view.refresh()
         if self.views.currentWidget() is self.table:
             self.restore_table_selection()
         dirty = self.session.dirty
@@ -1345,6 +1374,10 @@ class EditorWindow(W.QMainWindow):
         self.changed()
 
     def sync_fields(self):
+        same_deck = getattr(self, '_view_deck_id', None) == self.document.deck.deck_id
+        previous_mode = self._active_view
+        current_position = self.view_scrollbar(previous_mode).value()
+        self._view_deck_id = self.document.deck.deck_id
         blockers = [QtCore.QSignalBlocker(w) for w in (self.name, self.format, self.view_mode, self.group, self.sort, self.zoom, self.show_empty_categories)]
         self.name.setText(self.document.deck.name)
         if self.format.findText(self.document.deck.format) < 0:
@@ -1356,12 +1389,26 @@ class EditorWindow(W.QMainWindow):
         self.group.setCurrentText(prefs.get('group', 'Category'))
         self.sort.setCurrentText(prefs.get('sort', 'Name'))
         self.zoom.setValue(prefs.get('card_width', 180))
-        self.grid.mode, self.grid.grouping, self.grid.sort = self.view_mode.currentText(), self.group.currentText(), self.sort.currentText()
+        mode = self.view_mode.currentText()
+        self.grid.mode = mode if mode != 'Text' else 'Grid'
+        self.grid.grouping, self.grid.sort = self.group.currentText(), self.sort.currentText()
+        self._active_view = mode
+        self.view_scrolls = dict(prefs.get('view_scrolls', {}))
+        self.text_view.rows.collapsed = set(prefs.get('text_collapsed', []))
+        with QtCore.QSignalBlocker(self.text_view.preview_toggle):
+            self.text_view.preview_toggle.setChecked(prefs.get('text_preview', True))
+        self.text_view.preview.setVisible(self.text_view.preview_toggle.isChecked() and self.text_view.width() >= 900)
+        self.views.setCurrentWidget(self.text_view if mode == 'Text' else self.grid)
         self.grid.card_width = self.zoom.value()
         self.grid.collapsed = set(prefs.get('collapsed', []))
+        position = current_position if same_deck and previous_mode == mode else self.view_scrolls.get(mode, 0)
+        QtCore.QTimer.singleShot(0, lambda: self.view_scrollbar(mode).setValue(position)
+                                if self._active_view == mode else None)
         del blockers
 
     def save(self):
+        self.view_scrolls[self._active_view] = self.view_scrollbar(self._active_view).value()
+        self.document.editor_preferences['view_scrolls'] = dict(self.view_scrolls)
         if (self.name.text().strip() or 'Untitled Deck') != self.document.deck.name or self.format.currentText() != self.document.deck.format:
             self.edit_metadata()
         self.autosave.stop()
@@ -1491,13 +1538,14 @@ class EditorWindow(W.QMainWindow):
 
     def closeEvent(self, event):
         self.closing = True
+        self.text_view.stopping = True
         self.search_controller.shutdown()
         self.add_cards_workspace.discovery.controller.shutdown()
         self.add_cards_workspace.card_search.controller.shutdown()
         self.recommendation_panel.suspend()
         if (self.worker is not None or self.task is not None or self.thumbnails.worker is not None
                 or self.recommendation_panel.worker is not None or self.add_cards_workspace.discovery.controller.worker is not None
-                or self.add_cards_workspace.card_search.controller.worker is not None):
+                or self.add_cards_workspace.card_search.controller.worker is not None or self.text_view.worker is not None):
             self.thumbnails.stopping = True
             self.thumbnails.pending.clear()
             self.statusBar().showMessage('Finishing background work before closing…')
@@ -1507,6 +1555,7 @@ class EditorWindow(W.QMainWindow):
         if self.session.dirty and not self.save():
             self.thumbnails.stopping = False
             self.closing = False
+            self.text_view.stopping = False
             self.search_controller.resume()
             self.add_cards_workspace.discovery.controller.resume()
             self.add_cards_workspace.card_search.controller.resume()
