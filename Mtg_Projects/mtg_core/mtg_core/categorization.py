@@ -54,7 +54,9 @@ def select_categories(evidence, categories):
                  category_key(c.name) != category_key(c.category_id[5:].replace('-', ' '))]
     available = {category_key(c.name) for c in preferred}
     available.update(c.category_id[5:].replace('-', ' ') for c in preferred if c.category_id.startswith('auto:'))
-    candidates = [m for m in evidence if m['score'] >= 100 and category_key(m['name']) in available]
+    # Older saved suggestions and recommendation providers may omit scores.
+    # Treat those roles as ordinary functional evidence without mutating them.
+    candidates = [m for m in evidence if m.get('score', 100) >= 100 and category_key(m['name']) in available]
     if not candidates or evidence[0]['name'] in ('Lands', 'Commander'):
         return evidence
     primary = candidates[0]

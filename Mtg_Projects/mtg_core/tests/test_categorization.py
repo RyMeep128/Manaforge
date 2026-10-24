@@ -22,6 +22,20 @@ def test_front_face_and_missing_data():
     assert classify({}) == []
 
 
+def test_unscored_role_suggestions_remain_supported():
+    doc = DeckDocument()
+    doc.deck.entries = [DeckEntry('a', 'Recommended card')]
+    evidence = [{'name': 'Ramp', 'reason': 'legacy recommendation'}]
+    original = deepcopy(evidence)
+    apply_categories(doc, {'a': evidence})
+    assert doc.deck.entries[0].category_ids == ['auto:ramp']
+    assert evidence == original
+    # Existing custom categories must also support older unscored evidence.
+    doc.deck.categories = [DeckCategory('custom', 'Ramp')]
+    apply_categories(doc, {'a': evidence})
+    assert doc.deck.entries[0].category_ids == ['custom']
+
+
 def test_manual_protection_idempotence_history_and_serialization():
     doc = DeckDocument()
     doc.deck.categories = [DeckCategory('custom-ramp', 'Ramp')]
