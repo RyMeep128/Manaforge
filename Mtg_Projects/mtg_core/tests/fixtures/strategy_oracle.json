@@ -1,0 +1,221 @@
+{
+  "source": "https://api.scryfall.com/cards/collection",
+  "cards": {
+    "Sol Ring": {
+      "id": "8ee443cc-e17a-493b-9c93-1f9e141a30e4",
+      "oracle_id": "6ad8011d-3471-4369-9d68-b264cc027487",
+      "name": "Sol Ring",
+      "type_line": "Artifact",
+      "oracle_text": "{T}: Add {C}{C}.",
+      "keywords": [],
+      "color_identity": [],
+      "colors": [],
+      "cmc": 1.0
+    },
+    "Cultivate": {
+      "id": "e60deb92-f7dd-4f4e-9036-e47dd586f985",
+      "oracle_id": "8b755881-a72d-4e21-a369-d2924eb4585a",
+      "name": "Cultivate",
+      "type_line": "Sorcery",
+      "oracle_text": "Search your library for up to two basic land cards, reveal those cards, put one onto the battlefield tapped and the other into your hand, then shuffle.",
+      "keywords": [],
+      "color_identity": [
+        "G"
+      ],
+      "colors": [
+        "G"
+      ],
+      "cmc": 3.0
+    },
+    "Beast Whisperer": {
+      "id": "daf4bcd2-3ae4-4803-9ea1-3bcc3de5ca59",
+      "oracle_id": "5da7eea8-bb9e-47ce-a554-8a1ee058bd7a",
+      "name": "Beast Whisperer",
+      "type_line": "Creature — Elf Druid",
+      "oracle_text": "Whenever you cast a creature spell, draw a card.",
+      "keywords": [],
+      "color_identity": [
+        "G"
+      ],
+      "colors": [
+        "G"
+      ],
+      "cmc": 4.0
+    },
+    "Eternal Witness": {
+      "id": "39704000-65d3-4d39-849e-a3b617376bbc",
+      "oracle_id": "30b24e8e-3b0e-4d8e-90f3-f66eb7c1858c",
+      "name": "Eternal Witness",
+      "type_line": "Creature — Human Shaman",
+      "oracle_text": "When this creature enters, you may return target card from your graveyard to your hand.",
+      "keywords": [],
+      "color_identity": [
+        "G"
+      ],
+      "colors": [
+        "G"
+      ],
+      "cmc": 3.0
+    },
+    "Rest in Peace": {
+      "id": "d108c2b1-236e-4b8d-8445-d9749ccc4fea",
+      "oracle_id": "087f9ad7-e74f-40e2-8102-1ed2925d0418",
+      "name": "Rest in Peace",
+      "type_line": "Enchantment",
+      "oracle_text": "When this enchantment enters, exile all graveyards.\nIf a card or token would be put into a graveyard from anywhere, exile it instead.",
+      "keywords": [],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 2.0
+    },
+    "Avenger of Zendikar": {
+      "id": "c6f1e60f-a195-4590-80b0-86767de6c423",
+      "oracle_id": "4ba5b3f6-503b-43e6-b66e-4f8c55cffed7",
+      "name": "Avenger of Zendikar",
+      "type_line": "Creature — Elemental",
+      "oracle_text": "When this creature enters, create a 0/1 green Plant creature token for each land you control.\nLandfall — Whenever a land you control enters, you may put a +1/+1 counter on each Plant creature you control.",
+      "keywords": [
+        "Landfall"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "colors": [
+        "G"
+      ],
+      "cmc": 7.0
+    },
+    "Viscera Seer": {
+      "id": "f511830b-1c1f-4d30-aa5d-4314726d142e",
+      "oracle_id": "f82a4e85-526d-4456-b700-7760043a31be",
+      "name": "Viscera Seer",
+      "type_line": "Creature — Vampire Wizard",
+      "oracle_text": "Sacrifice a creature: Scry 1. (Look at the top card of your library. You may put that card on the bottom.)",
+      "keywords": [
+        "Scry"
+      ],
+      "color_identity": [
+        "B"
+      ],
+      "colors": [
+        "B"
+      ],
+      "cmc": 1.0
+    },
+    "Blood Artist": {
+      "id": "b5275d76-2947-4219-be21-614c7421614a",
+      "oracle_id": "310f141c-7f37-4729-aed6-dd9c09db448d",
+      "name": "Blood Artist",
+      "type_line": "Creature — Vampire",
+      "oracle_text": "Whenever this creature or another creature dies, target player loses 1 life and you gain 1 life.",
+      "keywords": [],
+      "color_identity": [
+        "B"
+      ],
+      "colors": [
+        "B"
+      ],
+      "cmc": 2.0
+    },
+    "Hardened Scales": {
+      "id": "99cfd1a8-49fd-4cc0-96f2-f9f159ce5d55",
+      "oracle_id": "a1f3da21-af6d-450e-bf0b-985d158418e6",
+      "name": "Hardened Scales",
+      "type_line": "Enchantment",
+      "oracle_text": "If one or more +1/+1 counters would be put on a creature you control, that many plus one +1/+1 counters are put on it instead.",
+      "keywords": [],
+      "color_identity": [
+        "G"
+      ],
+      "colors": [
+        "G"
+      ],
+      "cmc": 1.0
+    },
+    "Sigarda's Aid": {
+      "id": "531da950-dc96-4050-94a8-e01b73ddd965",
+      "oracle_id": "4f5f2792-0cc4-4caa-b798-2ee9597f2524",
+      "name": "Sigarda's Aid",
+      "type_line": "Enchantment",
+      "oracle_text": "You may cast Aura and Equipment spells as though they had flash.\nWhenever an Equipment you control enters, you may attach it to target creature you control.",
+      "keywords": [],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 1.0
+    },
+    "Young Pyromancer": {
+      "id": "c0d74ecd-a595-4012-81b4-083264b40c94",
+      "oracle_id": "5fac139a-07d3-4e6c-98e3-d98b199f7a6f",
+      "name": "Young Pyromancer",
+      "type_line": "Creature — Human Shaman",
+      "oracle_text": "Whenever you cast an instant or sorcery spell, create a 1/1 red Elemental creature token.",
+      "keywords": [],
+      "color_identity": [
+        "R"
+      ],
+      "colors": [
+        "R"
+      ],
+      "cmc": 2.0
+    },
+    "Austere Command": {
+      "id": "a8bc7912-e201-468a-b251-140205cb741c",
+      "oracle_id": "09cc8709-fe10-472a-b05c-e89f3523018d",
+      "name": "Austere Command",
+      "type_line": "Sorcery",
+      "oracle_text": "Choose two —\n• Destroy all artifacts.\n• Destroy all enchantments.\n• Destroy all creatures with mana value 3 or less.\n• Destroy all creatures with mana value 4 or greater.",
+      "keywords": [],
+      "color_identity": [
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 6.0
+    },
+    "Cyclonic Rift": {
+      "id": "dfb7c4b9-f2f4-4d4e-baf2-86551c8150fe",
+      "oracle_id": "d75b9c82-1b49-4c3e-a1b5-aeef57d6644b",
+      "name": "Cyclonic Rift",
+      "type_line": "Instant",
+      "oracle_text": "Return target nonland permanent you don't control to its owner's hand.\nOverload {6}{U} (You may cast this spell for its overload cost. If you do, change \"target\" in its text to \"each.\")",
+      "keywords": [
+        "Overload"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "colors": [
+        "U"
+      ],
+      "cmc": 2.0
+    },
+    "Kenrith, the Returned King": {
+      "id": "0e259db1-14db-4314-998c-6a076a28d8cb",
+      "oracle_id": "d209b948-9afb-4fd1-a961-72c87282878c",
+      "name": "Kenrith, the Returned King",
+      "type_line": "Legendary Creature — Human Noble",
+      "oracle_text": "{R}: All creatures gain trample and haste until end of turn.\n{1}{G}: Put a +1/+1 counter on target creature.\n{2}{W}: Target player gains 5 life.\n{3}{U}: Target player draws a card.\n{4}{B}: Put target creature card from a graveyard onto the battlefield under its owner's control.",
+      "keywords": [],
+      "color_identity": [
+        "B",
+        "G",
+        "R",
+        "U",
+        "W"
+      ],
+      "colors": [
+        "W"
+      ],
+      "cmc": 5.0
+    }
+  }
+}

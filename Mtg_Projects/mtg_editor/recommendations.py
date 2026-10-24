@@ -1,0 +1,407 @@
+"""Local recommendation browsing with inspectable statistics and explicit Add."""
+
+from datetime import datetime
+import uuid
+
+from PyQt6 import QtWidgets as W
+from mtg_core.decks import DeckEntry
+from mtg_core.categorization import apply_categories
+from mtg_core.sections import DeckSection
+from .organization import card_facts
+from mtg_core.recommendation_scoring import context, score, settings
+
+
+def load_recommendations(
+    service, document, store, query="", *, sources=None, include_present=False
+):
+    commanders = [
+        e
+        for e in document.deck.entries
+        if e.entry_id in document.deck.commander_entry_ids
+        or e.section == DeckSection.COMMANDER
+    ]
+    commander_ids = [e.oracle_id for e in commanders if e.oracle_id]
+    from mtg_core.recommendation_sources import default_sources, recommend
+
+    snapshot = recommend(
+        default_sources(store) if sources is None else sources,
+        commander_ids,
+        exclude=[] if include_present else [e.oracle_id for e in document.deck.entries],
+        limit=2000,
+        use_local=settings(document)["local_enabled"],
+        seeds=[
+            e.oracle_id
+            for e in document.deck.entries
+            if e.oracle_id
+            and e.quantity > 0
+            and e.section == DeckSection.MAINBOARD
+            and "Basic Land" not in (e.extras.get("facts", {}).get("type_line") or "")
+        ],
+    )
+    color_identity = set()
+    color_known = bool(commanders)
+    for entry in commanders:
+        payload = service.get_card(card_id=entry.card_id) if entry.card_id else None
+        if payload is None or "color_identity" not in payload:
+            color_known = False
+        else:
+            color_identity.update(payload["color_identity"])
+    allowed = None
+    if query.strip():
+        matches = service.search_cards(
+            query, dict(scryfall_syntax=True, allow_remote=False, limit=10000)
+        )
+        allowed = {row.oracle_id for row in matches}
+    rows = []
+    candidates = [
+        row
+        for row in snapshot["results"]
+        if allowed is None or row["oracle_id"] in allowed
+    ]
+    identities = [row["oracle_id"] for row in candidates]
+    # Retain support for service adapters that only expose single-card lookup.
+    batch_lookup = getattr(service, "iter_preferred_prints", None)
+    preference_options = (
+        {"document": document} if document.artwork_preferences is not None else {}
+    )
+    payloads = (
+        batch_lookup(identities, **preference_options)
+        if batch_lookup
+        else (
+            service.choose_preferred_print(oracle_id, **preference_options)
+            for oracle_id in identities
+        )
+    )
+    for row, payload in zip(candidates, payloads):
+        if not payload:
+            continue
+        if color_known and (
+            "color_identity" not in payload
+            or not set(payload["color_identity"]) <= color_identity
+        ):
+            continue
+        entry = DeckEntry(
+            str(uuid.uuid4()),
+            payload["name"],
+            card_id=payload["id"],
+            oracle_id=row["oracle_id"],
+            set_code=payload.get("set"),
+            collector_number=payload.get("collector_number"),
+            pre_cropped=True,
+            extras={"facts": card_facts(payload)},
+        )
+        rows.append(
+            dict(row, entry=entry, commander_names=[e.name for e in commanders])
+        )
+        if len(rows) >= 200:
+            break
+    proposals = service.analyze_entries([row["entry"] for row in rows])
+    for row in rows:
+        row["roles"] = proposals.get(row["entry"].entry_id, [])
+        row["statistical_score"] = row["score"]
+    current_proposals = service.analyze_entries(document.deck.entries)
+    records = {
+        entry.card_id: service.get_card(card_id=entry.card_id) or {}
+        for entry in document.deck.entries
+        if entry.card_id
+    }
+    snapshot.update(
+        results=rows,
+        color_filtered=color_known,
+        deck_context=context(document, current_proposals, records),
+    )
+    return snapshot
+
+
+def rank_recommendations(rows, deck_context, preferences, query=""):
+    """Shared presentation ranking; preserve source scores and saved dismissals."""
+    ranked = []
+    for row in rows:
+        if row["oracle_id"] in preferences["dismissed"]:
+            continue
+        text = row["entry"].name + " " + " ".join(item["name"] for item in row["roles"])
+        if query.casefold().strip() not in text.casefold():
+            continue
+        public = row.get("public_score", row.get("primary_score", row["score"]))
+        eligible = row.get("local_eligible", row.get("local_enabled", False))
+        enabled = eligible and preferences["local_enabled"]
+        statistical = (0.8 * public + 0.2 * row["local_score"]) if enabled else public
+        raw = dict(row, statistical_score=statistical, local_enabled=enabled)
+        ranked.append(score(raw, deck_context, preferences["weights"]))
+    return sorted(ranked, key=lambda row: (-row["score"], row["oracle_id"]))
+
+
+def statistical_reason(row):
+    evidence = row.get("source_evidence")
+    if evidence is None:  # Older snapshots remain inspectable.
+        key = row.get("statistics_source", "archidekt")
+        evidence = {key: row}
+    lines = ["Public recommendation evidence"]
+    for source_id, item in sorted(evidence.items()):
+        lines.append(
+            {"edhrec": "EDHREC", "archidekt": "Archidekt"}.get(source_id, source_id)
+        )
+        if "rank" in item:
+            lines.append(f"Rank: #{item['rank']}")
+        if source_id == "edhrec":
+            if len(item.get("commanders", [])) == 2:
+                lines.append(
+                    "Exact cached pair cohort: "
+                    + " + ".join(row.get("commander_names") or item["commanders"])
+                )
+            lines.extend(
+                [
+                    f"EDHREC inclusion: {item['inclusion']:.1%} ({item['num_decks']} / {item['sample']} eligible decks)",
+                    "Categories: " + ", ".join(item.get("categories", [])),
+                    f"EDHREC reported synergy (uninterpreted): {item.get('edhrec_synergy')}",
+                    "EDHREC global popularity and deck-card co-occurrence unavailable.",
+                ]
+            )
+        elif source_id == "archidekt" and "inclusion" in item:
+            lines.extend(
+                [
+                    f"Commander inclusion: {item['inclusion']:.1%} ({item['sample']} decks)",
+                    f"Global popularity: {item['baseline']:.1%}; Manaforge/Archidekt synergy signal: {item['synergy']:+.1%}",
+                ]
+            )
+        else:
+            lines.append(
+                f"Source ranking score: {item.get('raw_score', item.get('score', 0))}"
+            )
+    for status in row.get("source_status", []):
+        if status.get("role") != "local" and status["source"] not in evidence:
+            message = (
+                status["status"]
+                if status.get("state") != "active"
+                else "No cached evidence for this candidate"
+            )
+            lines.append(f"{status['source']}: {message}")
+    if "public_score" in row:
+        lines.extend(
+            [
+                f"Supported by {len(evidence)} public recommendation source(s)",
+                f"Combined public ranking signal: {row['public_score']:.3f}",
+                f"Local Manaforge: {row.get('local_relevant', 0)} relevant decks; supplement {'active' if row.get('local_enabled') else 'inactive'}",
+                "Public contribution: 80%; local contribution: 20%"
+                if row.get("local_enabled")
+                else "Public contribution: 100%",
+            ]
+        )
+    return "\n".join(lines)
+
+
+def recommendation_reason(row):
+    return "\n".join(
+        [
+            statistical_reason(row),
+            "Weighted components: "
+            + ", ".join(f"{k} {v:+.3f}" for k, v in row["contributions"].items()),
+            *row["context_reasons"],
+            *(f"{item['name']}: {item['reason']}" for item in row["roles"]),
+            "Heuristic guidance, not legality advice.",
+        ]
+    )
+
+
+class RecommendationsDialog(W.QDialog):
+    def __init__(self, snapshot, editor):
+        super().__init__(editor)
+        self.editor, self.rows = editor, list(snapshot["results"])
+        self.preferences = settings(editor.document)
+        self.deck_context = snapshot["deck_context"]
+        self.all_rows = list(self.rows)
+        self.setWindowTitle("Deck recommendations")
+        self.resize(800, 640)
+        layout = W.QVBoxLayout(self)
+        latest = max((item["imported"] for item in snapshot["sources"]), default=None)
+        stamp = (
+            datetime.fromtimestamp(latest).isoformat(timespec="seconds")
+            if latest
+            else "never"
+        )
+        text = (
+            f"{snapshot['source']} - last import {stamp}\n"
+            "Heuristics, not legality advice. Small samples can be misleading. "
+            "Ranking up to 200 resolved cards from 2,000 statistical candidates; search matches are capped at 10,000.\n"
+            + (
+                "Commander color identity applied."
+                if snapshot["color_filtered"]
+                else "Commander color identity unavailable; no color restriction applied."
+            )
+        )
+        text += "\n" + "\n".join(
+            f"{item['source']}: {item['status']} (source sample: {item.get('decks', 0)} decks)"
+            for item in snapshot["source_status"]
+            if item.get("role") != "local"
+        )
+        self.status_base = text
+        self.local_relevant = snapshot["local_relevant"]
+        self.status_label = W.QLabel(text)
+        self.status_label.setWordWrap(True)
+        layout.addWidget(self.status_label)
+        toggle = W.QPushButton("Adjust ranking weights")
+        toggle.setCheckable(True)
+        layout.addWidget(toggle)
+        panel = W.QWidget()
+        controls = W.QFormLayout(panel)
+        panel.setVisible(False)
+        toggle.toggled.connect(panel.setVisible)
+        self.weights = {}
+        for key, value in self.preferences["weights"].items():
+            spin = W.QDoubleSpinBox()
+            spin.setRange(0, 2)
+            spin.setSingleStep(0.05)
+            spin.setValue(value)
+            controls.addRow(key.title() + " weight", spin)
+            self.weights[key] = spin
+        self.use_local = W.QCheckBox(
+            "Use local supplement when at least 15 relevant decks are available"
+        )
+        self.use_local.setChecked(self.preferences["local_enabled"])
+        controls.addRow(self.use_local)
+        layout.addWidget(panel)
+        self.filter = W.QLineEdit()
+        self.filter.setPlaceholderText(
+            "Filter loaded candidates by name, role, or theme"
+        )
+        layout.addWidget(self.filter)
+        self.list = W.QListWidget()
+        layout.addWidget(self.list, 1)
+        self.details = W.QPlainTextEdit()
+        self.details.setReadOnly(True)
+        layout.addWidget(self.details, 1)
+        buttons = W.QHBoxLayout()
+        for label, callback in [
+            ("Inspect / preview", self.inspect),
+            ("Add to Deck", self.add),
+            ("Dismiss card", self.dismiss),
+            ("Restore dismissed", self.restore),
+            ("Save preferences", self.save_preferences),
+        ]:
+            button = W.QPushButton(label)
+            button.clicked.connect(callback)
+            buttons.addWidget(button)
+        layout.addLayout(buttons)
+        self.notice = W.QLabel(
+            "Recommendations combine available cached public datasets. Local imports supplement them at 15 relevant decks and never introduce local-only candidates."
+        )
+        self.notice.setWordWrap(True)
+        layout.addWidget(self.notice)
+        self.formula = snapshot["formula"]
+        self.sources = "\n".join(item["source"] for item in snapshot["sources"])
+        self.list.currentRowChanged.connect(self.selection)
+        self.list.itemDoubleClicked.connect(lambda _: self.inspect())
+        for spin in self.weights.values():
+            spin.valueChanged.connect(self.refresh)
+        self.use_local.toggled.connect(self.refresh)
+        self.filter.textChanged.connect(self.refresh)
+        self.refresh()
+
+    def refresh(self):
+        self.preferences["weights"] = {
+            key: spin.value() for key, spin in self.weights.items()
+        }
+        self.preferences["local_enabled"] = self.use_local.isChecked()
+        active = (
+            self.use_local.isChecked()
+            and self.local_relevant >= 15
+            and bool(self.all_rows)
+        )
+        self.status_label.setText(
+            self.status_base
+            + f"\nRelevant local decks: {self.local_relevant} / 15 minimum; local signal {'active' if active else 'inactive'}."
+        )
+        self.rows = rank_recommendations(
+            self.all_rows, self.deck_context, self.preferences, self.filter.text()
+        )
+        self.list.clear()
+        self.list.addItems(
+            [f"{row['entry'].name} — {row['score']:.3f}" for row in self.rows]
+        )
+        if self.rows:
+            self.list.setCurrentRow(0)
+        else:
+            self.details.setPlainText(
+                "No candidates match the filter or dismissal preferences. Clear the filter or restore dismissed cards."
+                if self.all_rows
+                else "No resolved public candidates are available for this deck/search. Check the public source status and local card catalog."
+            )
+
+    def selected(self):
+        index = self.list.currentRow()
+        return self.rows[index] if 0 <= index < len(self.rows) else None
+
+    def selection(self, _index):
+        row = self.selected()
+        if row:
+            self.details.setPlainText(
+                statistical_reason(row)
+                + "\n"
+                + f"Available statistical formula: {self.formula}\nPublic component: {row.get('public_score', row.get('primary_score', 0)):.3f}; local component: {row['local_score']:.3f}\n"
+                + f"Local blend used: {bool(row['local_enabled'] and self.use_local.isChecked())}\n"
+                + "\nRoles / themes:\n"
+                + "\n".join(
+                    f"{item['name']}: {item['reason']}" for item in row["roles"]
+                )
+                + "\n\nCached sources (no automatic refresh):\n"
+                + self.sources
+                + "\n\nWeighted score components:\n"
+                + "\n".join(
+                    f"{key}: {value:+.3f}"
+                    for key, value in row["contributions"].items()
+                )
+                + "\n\n"
+                + "\n".join(row["context_reasons"])
+            )
+
+    def inspect(self):
+        row = self.selected()
+        if row:
+            from .card_details import CardDetails
+
+            CardDetails(self.editor.service, row["entry"], self).exec()
+
+    def add(self):
+        row = self.selected()
+        if row is None:
+            return
+        entry = row["entry"]
+
+        def apply(document):
+            entry.sort_order = (
+                max((e.sort_order for e in document.deck.entries), default=-1) + 1
+            )
+            document.deck.entries.append(entry)
+            apply_categories(document, {entry.entry_id: row["roles"]})
+
+        self.editor.edit(apply)
+        self.all_rows = [
+            item for item in self.all_rows if item["oracle_id"] != row["oracle_id"]
+        ]
+        self.notice.setText(
+            f"Added {entry.name}. Undo is available. Reopen to update deck-context scores."
+        )
+        self.refresh()
+
+    def save_preferences(self):
+        from copy import deepcopy
+
+        saved = deepcopy(self.preferences)
+        self.editor.edit(
+            lambda document: document.editor_preferences.update(recommendations=saved)
+        )
+        self.notice.setText(
+            "Recommendation preferences saved with the deck. Undo is available."
+        )
+
+    def dismiss(self):
+        row = self.selected()
+        if row:
+            self.preferences["dismissed"].append(row["oracle_id"])
+            self.save_preferences()
+            self.refresh()
+
+    def restore(self):
+        self.preferences["dismissed"].clear()
+        self.save_preferences()
+        self.refresh()

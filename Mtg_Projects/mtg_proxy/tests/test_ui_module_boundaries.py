@@ -1,13 +1,15 @@
 import dialogs
 import editor_widgets
+from mtg_ui import print_dialogs
 
 
 def test_dialogs_exports_real_helpers():
     assert callable(dialogs.load_project_file)
     assert callable(dialogs.delete_project_with_confirmation)
     assert callable(dialogs.remove_card_from_project_state)
-    assert dialogs.AddCardDialog.__module__ == "dialogs"
-    assert dialogs.HighResPickerDialog.__module__ == "dialogs"
+    assert dialogs is print_dialogs
+    assert dialogs.AddCardDialog is print_dialogs.AddCardDialog
+    assert dialogs.HighResPickerDialog is print_dialogs.HighResPickerDialog
 
 
 def test_editor_widgets_exports_real_widgets():

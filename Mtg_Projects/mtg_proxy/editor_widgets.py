@@ -344,7 +344,7 @@ class EditorPage(QWidget):
         unprepared = [
             name for name in printable_names
             if name in self._tabs._img_dict
-            and not image.is_pre_cropped_image_name(name)
+            and not runtime_images.is_pre_cropped(state, name)
             and "uncropped" not in self._tabs._img_dict[name]
         ]
         low_res = [
@@ -825,9 +825,13 @@ class CardWidget(QWidget):
                 application._open_add_card_search(query)
 
         def show_card_menu(position):
+            from mtg_core import get_default_card_service
+            from mtg_ui.rulings import add_card_reference_action
             menu = QMenu(self)
             menu.addAction('View Tags', view_tags)
             entry = state._ensure_card_entry(card_name)
+            add_card_reference_action(menu, get_default_card_service(), name=display_name,
+                                      oracle_id=entry.oracle_id, card_id=entry.card_id, parent=self)
             suggestions = deck_import_service.component_suggestions_for_card_ids(
                 [entry.card_id])
             application = QApplication.instance()
@@ -1441,7 +1445,7 @@ class CardScrollArea(QScrollArea):
             entry = state.get_card_entry(name)
             if entry is None or not entry.oracle_id or entry.do_not_print:
                 continue
-            payload = card_service.choose_preferred_print(entry.oracle_id)
+            payload = card_service.choose_preferred_print(entry.oracle_id, document=state.deck_document)
             if not payload or payload.get('id') == entry.card_id:
                 continue
             candidate = high_res_service.scryfall_candidate_from_payload(payload)
@@ -1801,7 +1805,7 @@ class PrintPreview(QScrollArea):
             card_img = runtime_images.ensure_preview_entry(state, img_dict, card_name)
             if card_img is None:
                 return None, None
-            if bleed_edge > 0 and "uncropped" in card_img:
+            if bleed_edge > 0 and "uncropped" in card_img and not runtime_images.is_pre_cropped(state, card_name):
                 uncropped_data = cached_preview_bytes(card_img["uncropped"])
                 img = image.image_from_bytes(uncropped_data)
                 img_crop = image.crop_image(img, card_name, bleed_edge, None)
@@ -2716,7 +2720,8 @@ class ActionsWidget(QGroupBox):
             dialog = None
             selected_card = selected_card_override
             if selected_card is None:
-                dialog = AddCardDialog(self, state.image_dir, initial_query=initial_query)
+                dialog = AddCardDialog(self, state.image_dir, initial_query=initial_query,
+                                       document=state.deck_document)
                 if dialog.exec() != QDialog.DialogCode.Accepted:
                     return
                 selected_card = dialog.selected_card()
@@ -2967,6 +2972,27 @@ class PrintOptionsWidget(QGroupBox):
 
         profiles_button = QPushButton("Printer profiles…")
         layout.addWidget(profiles_button)
+        defaults_button = QPushButton("Global printing defaults...")
+        layout.addWidget(defaults_button)
+        def edit_defaults():
+            from mtg_core import get_default_card_service
+            from mtg_ui.printing_preferences import edit_printing_preferences
+            edit_printing_preferences(self, get_default_card_service())
+        defaults_button.clicked.connect(edit_defaults)
+        artwork_button = QPushButton("Project artwork preferences...")
+        layout.addWidget(artwork_button)
+        def edit_project_artwork():
+            from mtg_core import get_default_card_service
+            from mtg_core.decks import DeckDocument
+            from mtg_ui.artwork_preferences import choose_project_artwork_preferences
+            document = state.deck_document or DeckDocument()
+            accepted, rules = choose_project_artwork_preferences(
+                self, get_default_card_service(), document)
+            if accepted:
+                document.artwork_preferences = rules
+                state.deck_document = document
+                autosave_managed_session()
+        artwork_button.clicked.connect(edit_project_artwork)
         calibration_button = QPushButton("Calibrate printer…")
         layout.addWidget(calibration_button)
         from services.printer_profiles import DUPLEX
@@ -3576,6 +3602,9 @@ class ProjectDashboardPage(QWidget):
         new_button.setToolTip("Start a new project draft")
         check_updates_button = QPushButton("Check for updates")
         check_updates_button.clicked.connect(lambda: application.check_for_updates(manual=True))
+        deck_library_button = QPushButton('Decks and print projects')
+        deck_library_button.clicked.connect(self.open_deck_library)
+        self._deck_windows = []
 
         import_button.clicked.connect(self.import_project)
         new_button.clicked.connect(application.open_blank_editor)
@@ -3587,6 +3616,7 @@ class ProjectDashboardPage(QWidget):
         top_row.addWidget(title)
         top_row.addStretch()
         top_row.addWidget(check_updates_button)
+        top_row.addWidget(deck_library_button)
         top_row.addWidget(import_button)
         top_row.addWidget(resume_draft_button)
         top_row.addWidget(new_button)
@@ -3600,6 +3630,20 @@ class ProjectDashboardPage(QWidget):
         layout.addWidget(empty_state)
         layout.addWidget(project_list)
         self.setLayout(layout)
+
+    def open_deck_library(self):
+        from mtg_core.paths import data_root
+        from mtg_editor.project_browser import ProjectBrowser
+        from mtg_editor.gui import EditorWindow
+        dialog = ProjectBrowser(data_root() / 'decks', project_library.projects_root(), self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            window = EditorWindow()
+            window.setAttribute(QtCore.Qt.WidgetAttribute.WA_DeleteOnClose)
+            self._deck_windows.append(window)
+            window.destroyed.connect(lambda: self._deck_windows.remove(window))
+            if dialog.path:
+                window.open_path(dialog.path)
+            window.show()
 
     def refresh_projects(self):
         self._resume_draft_button.setVisible(project_library.draft_has_user_content())

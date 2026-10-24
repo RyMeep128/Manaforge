@@ -1,0 +1,42 @@
+# Expand this allowlist in small, reviewed increments; do not reformat the suite.
+required-version = "==0.16.9"
+target-version = "py312"
+line-length = 88
+include = [
+    "Mtg_Projects/mtg_core/mtg_core/recommendation_fusion.py",
+    "Mtg_Projects/mtg_core/tests/test_recommendation_fusion.py",
+    "Mtg_Projects/mtg_core/mtg_core/edhrec.py",
+    "Mtg_Projects/mtg_core/mtg_core/edhrec_ingest.py",
+    "Mtg_Projects/mtg_core/tests/test_edhrec.py",
+    "Mtg_Projects/mtg_editor/recommendation_panel.py",
+    "Mtg_Projects/mtg_editor/tests/test_recommendation_panel.py",
+    "Mtg_Projects/mtg_core/mtg_core/recommendation_cache.py",
+    "Mtg_Projects/mtg_core/mtg_core/recommendation_scoring.py",
+    "Mtg_Projects/mtg_core/tests/test_recommendation_cache.py",
+    "Mtg_Projects/mtg_core/tests/test_recommendation_scoring.py",
+    "Mtg_Projects/mtg_editor/recommendation_cache.py",
+    "Mtg_Projects/mtg_editor/tests/test_recommendations_dialog.py",
+    "Mtg_Projects/mtg_core/mtg_core/archidekt_ingest.py",
+    "Mtg_Projects/mtg_core/tests/test_archidekt_ingest.py",
+    "Mtg_Projects/mtg_core/mtg_core/guidance.py",
+    "Mtg_Projects/mtg_core/mtg_core/recommendations.py",
+    "Mtg_Projects/mtg_core/mtg_core/recommendation_sources.py",
+    "Mtg_Projects/mtg_core/tests/test_guidance.py",
+    "Mtg_Projects/mtg_core/tests/test_recommendations.py",
+    "Mtg_Projects/mtg_editor/guidance.py",
+    "Mtg_Projects/mtg_editor/recommendations.py",
+    "Mtg_Projects/mtg_editor/tests/test_guidance_dialog.py",
+    "Mtg_Projects/mtg_core/mtg_core/artwork.py",
+    "Mtg_Projects/mtg_core/mtg_core/sections.py",
+    "Mtg_Projects/mtg_core/mtg_core/sync_status.py",
+    "Mtg_Projects/mtg_core/mtg_core/db/schema.py",
+    "Mtg_Projects/mtg_core/tests/test_entry_print_state.py",
+    "Mtg_Projects/mtg_core/tests/test_migrations.py",
+    "Mtg_Projects/mtg_core/tests/test_sections.py",
+    "Mtg_Projects/mtg_core/tests/test_sync_status.py",
+]
+force-exclude = true
+
+[lint]
+# Basic syntax/style errors and Pyflakes (undefined names, unused imports, etc.).
+select = ["E4", "E7", "E9", "F"]

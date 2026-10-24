@@ -13,9 +13,23 @@ Deck Editor, integration, and recommendation roadmap.
 | --- | --- | --- |
 | **Print Proxy Prep** | Import cards, prepare images, arrange print sheets, and export PDFs with paired backs and oversized cards. | Runnable; Windows launchers and app-bundle build included. |
 | **MTG Core Database Admin** | Browse and manage cards, printings, images, and catalog synchronization. | Runnable Qt app backed by the shared `mtg_core` library. |
-| **MTG Deck Editor** | Planned visual deckbuilding, grouping, statistics, and handoff to print preparation. | Specification stage; no runnable editor yet. [Read the epic](Mtg_Projects/mtg_editor/docs/deck-editor-epic.md). |
+| **MTG Deck Editor** | Build and organize decks with visual search, grouped grids/stacks, categories, Undo/Redo, autosave, and Print Deck. | Runnable Qt editor sharing Proxy styling, artwork tools, and print preparation. [Guide](Mtg_Projects/mtg_editor/README.md). |
 
 ## See the apps
+
+### MTG Deck Editor
+
+![Deck Editor with visual search and grouped card images](docs/images/deck-editor-search.png)
+
+Use **Add Cards** to open local visual search, then arrange your deck in **Grid** or **Stacks**.
+Group by type, mana value, color, category, or section. Hold the right mouse button for quick
+radial categories/tags; quick right-click for artwork and bulk card actions. **Print Deck** opens a linked
+Proxy project while keeping your deck workspace in place.
+
+![Deck Editor with overlapping category stacks](docs/images/deck-editor-stacks.png)
+
+These captures use original demonstration cards. Regenerate them with
+`python tools/capture_editor.py`; set `QT_SCALE_FACTOR=2` to capture 200% scaling.
 
 ### Print Proxy Prep
 
@@ -52,7 +66,13 @@ Setup creates `Mtg_Projects/mtg_proxy/venv` and installs the shared runtime depe
 & '.\Mtg_Projects\mtg_core\Launch MTG Core Admin.cmd'
 ```
 
-The Deck Editor has no launch command yet. Windows is the packaged target; the code includes data-path handling for other platforms, but this repository does not provide macOS/Linux bundles or CI coverage for them.
+Launch the early Deck Editor using the same environment:
+
+```powershell
+& '.\Mtg_Projects\mtg_editor\Launch Manaforge Deck Editor.cmd'
+```
+
+Windows is the packaged target; the code includes data-path handling for other platforms, but this repository does not provide macOS/Linux bundles or CI coverage for them.
 
 ### First print project
 
@@ -85,7 +105,7 @@ The script installs PyInstaller, rebuilds the product `build` and `dist` directo
 - `Mtg_Projects/dist/Print Proxy Prep/Print Proxy Prep.exe`
 - `Mtg_Projects/dist/PrintProxyPrep-<version>-win.zip`
 
-This bundle packages **Print Proxy Prep** and its shared dependencies. Core Admin currently runs from source; Deck Editor is not yet implemented.
+This bundle packages **Print Proxy Prep** and its shared dependencies. Core Admin and the early Deck Editor currently run from source.
 
 ## Shared architecture
 
@@ -116,6 +136,14 @@ flowchart TD
 On Windows, runtime data defaults to `%LOCALAPPDATA%\PrintProxyPrep`; the shared catalog and assets live beneath its `mtg_core` directory. Set `PRINT_PROXY_PREP_DATA_DIR` to isolate development/test data. Project JSON references shared assets rather than embedding full-resolution images. Keep runtime databases, caches, virtual environments, and generated bundles out of commits.
 
 ## Development and tests
+
+CI runs `python -m ruff check .` and `python -m ruff format --check .` on
+Python 3.12 and 3.13 alongside pytest. The pinned Ruff version is installed by
+`requirements-dev.txt`. The explicit allowlist in `ruff.toml` initially covers
+Core's typed artwork/section/sync state, SQLite migrations, and their tests.
+Broader adoption should expand that list in small changes, without a suite-wide
+formatting rewrite. To format only these files, run `python -m ruff format .`
+from the repository root. CI reports lint and formatting failures separately.
 
 Manaforge is in alpha/beta development. Commits increment the patch version (for example, `0.2.1-alpha.1` → `0.2.2-alpha.1`); merges into `main` increment the minor version and reset patch (`0.2.2-alpha.1` → `0.3.0-alpha.1`). `APP_VERSION` in `Mtg_Projects/mtg_proxy/constants.py` is the source for the app and build archive name. Alpha/beta builds stay marked as prereleases; tagging or publishing a release is a separate step. See [versioning instructions](AGENTS.md).
 

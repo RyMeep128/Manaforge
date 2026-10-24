@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 TEMP = tempfile.TemporaryDirectory(prefix="mtg-suite-docs-")
 os.environ['QT_QPA_PLATFORM'] = 'offscreen'
 os.environ['PRINT_PROXY_PREP_DATA_DIR'] = TEMP.name
-sys.path[:0] = [str(ROOT / 'Mtg_Projects/mtg_proxy'), str(ROOT / 'Mtg_Projects/mtg_core')]
+sys.path[:0] = [str(ROOT / 'Mtg_Projects'), str(ROOT / 'Mtg_Projects/mtg_proxy'), str(ROOT / 'Mtg_Projects/mtg_core')]
 
 from PyQt6 import QtCore, QtGui, QtWidgets
 from PIL import Image

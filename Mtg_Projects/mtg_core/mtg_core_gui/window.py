@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMainWindow,
+    QMenu,
     QMessageBox,
     QPushButton,
     QPlainTextEdit,
@@ -27,6 +28,25 @@ from PyQt6.QtWidgets import (
 from mtg_core.admin_service import CardAdminService
 from mtg_core.models import CardRecord, ImageAssetRecord, ImageManifestView, PrintRecord, SyncMetadata
 from mtg_core.services import FIXED_CATALOG_QUERY
+from mtg_core.sync_status import SyncStatus
+
+
+def _show_reference_menu(tab, position, *, prints=False):
+    """Use the clicked persisted row, not unsaved admin form fields."""
+    item = tab.table.itemAt(position)
+    if item is None:
+        return
+    identity = tab.table.item(item.row(), 0).data(Qt.ItemDataRole.UserRole)
+    service = tab.admin_service
+    record = service.get_print(identity) if prints else service.get_card(identity)
+    if record is None:
+        return
+    from mtg_ui.rulings import add_card_reference_action
+    menu = QMenu(tab)
+    add_card_reference_action(menu, service.card_service, name=record.name,
+                              oracle_id=record.oracle_id,
+                              card_id=record.card_id if prints else None, parent=tab)
+    menu.exec(tab.table.viewport().mapToGlobal(position))
 
 
 class BulkDownloadWorker(QObject):
@@ -52,7 +72,7 @@ class BulkDownloadWorker(QObject):
                     should_pause=lambda: self._pause_requested
                 )
                 self.progress.emit(status)
-                if status.status in {"completed", "failed", "paused"}:
+                if status.status in {SyncStatus.COMPLETED, SyncStatus.FAILED, SyncStatus.PAUSED}:
                     self.finished.emit(status)
                     return
         except Exception as exc:  # pragma: no cover - defensive GUI guard
@@ -97,6 +117,8 @@ class CardsTab(QWidget):
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.table.itemSelectionChanged.connect(self._load_selected_row)
+        self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.table.customContextMenuRequested.connect(lambda position: _show_reference_menu(self, position))
 
         self.oracle_id_edit = QLineEdit()
         self.name_edit = QLineEdit()
@@ -315,6 +337,9 @@ class PrintsTab(QWidget):
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.table.itemSelectionChanged.connect(self._load_selected_row)
+        self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.table.customContextMenuRequested.connect(
+            lambda position: _show_reference_menu(self, position, prints=True))
 
         self.card_id_edit = QLineEdit()
         self.oracle_id_edit = QLineEdit()
@@ -909,16 +934,16 @@ class SyncTab(QWidget):
         return self.query_edit.text().strip()
 
     def _display_status(self, status) -> str:
-        if not self.is_download_running() and status.status == "running":
+        if not self.is_download_running() and status.status == SyncStatus.RUNNING:
             return "paused"
         return status.status
 
     def _sync_buttons(self, status) -> None:
         running = self.is_download_running()
-        stale_running = (not running) and status.status == "running"
+        stale_running = (not running) and status.status == SyncStatus.RUNNING
         query_changed = self._query_text() != status.query
         self.start_button.setEnabled(
-            not running and (query_changed or status.status in {"idle", "completed", "failed"})
+            not running and (query_changed or status.status in {SyncStatus.IDLE, SyncStatus.COMPLETED, SyncStatus.FAILED})
         )
         self.pause_button.setEnabled(running)
         self.resume_button.setEnabled(not running and not query_changed and (status.can_resume or stale_running))
@@ -937,7 +962,7 @@ class SyncTab(QWidget):
             return False
         if not self.is_download_running():
             status = self.admin_service.get_bulk_download_status()
-            if status.status == "running" and not status.completed:
+            if status.status == SyncStatus.RUNNING and not status.completed:
                 self.admin_service.pause_bulk_download(query=status.query)
             return True
         self._close_requested = True
@@ -975,7 +1000,7 @@ class SyncTab(QWidget):
     def _pause_download_job(self) -> None:
         if self._worker is None:
             status = self.admin_service.get_bulk_download_status()
-            if status.status == "running" and not status.completed:
+            if status.status == SyncStatus.RUNNING and not status.completed:
                 status = self.admin_service.pause_bulk_download(query=status.query)
             self._apply_download_status(status)
             return
@@ -1066,6 +1091,9 @@ class CoreAdminMainWindow(QMainWindow):
     def __init__(self, admin_service: CardAdminService | None = None) -> None:
         super().__init__()
         self.admin_service = admin_service or CardAdminService()
+        preferences = self.menuBar().addMenu("Preferences")
+        preferences.addAction("Artwork preferences?", self.artwork_preferences)
+        preferences.addAction("Global printing defaults...", self.printing_preferences)
         self.setWindowTitle("MTG Core Database Admin")
         self.resize(1360, 820)
 
@@ -1089,6 +1117,14 @@ class CoreAdminMainWindow(QMainWindow):
         self.setCentralWidget(tabs)
         self._set_status("Ready")
         self._load_current_tab(tabs.currentIndex())
+
+    def artwork_preferences(self):
+        from mtg_ui.artwork_preferences import edit_artwork_preferences
+        edit_artwork_preferences(self, self.admin_service.card_service)
+
+    def printing_preferences(self):
+        from mtg_ui.printing_preferences import edit_printing_preferences
+        edit_printing_preferences(self, self.admin_service.card_service)
 
     def _set_status(self, message: str) -> None:
         self.statusBar().showMessage(message, 6000)

@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Generic, TypeVar
 
+from mtg_core.sync_status import SyncStatus, normalize_sync_status
+
 
 T = TypeVar("T")
 
@@ -100,7 +102,7 @@ class BulkDownloadStatus:
     query: str
     chunk_size: int
     min_image_bytes: int
-    status: str
+    status: SyncStatus | str
     total_scanned: int
     total_downloaded: int
     total_skipped: int
@@ -114,13 +116,16 @@ class BulkDownloadStatus:
     last_error: str | None = None
     last_sync_at: float | None = None
 
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "status", normalize_sync_status(self.status))
+
     @property
     def is_running(self) -> bool:
-        return self.status == "running"
+        return self.status == SyncStatus.RUNNING
 
     @property
     def can_resume(self) -> bool:
-        return self.status in {"paused", "failed"} and not self.completed
+        return self.status in {SyncStatus.PAUSED, SyncStatus.FAILED} and not self.completed
 
 
 @dataclass(frozen=True)

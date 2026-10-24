@@ -1,0 +1,167 @@
+"""Deck organization commands and deterministic visual groups."""
+
+from mtg_core.sections import DeckSection
+from .filtering import compile_filter, matches
+SECTIONS = {DeckSection.MAINBOARD: 'Mainboard', DeckSection.COMMANDER: 'Commander', DeckSection.SIDEBOARD: 'Sideboard',
+            DeckSection.CONSIDERING: 'Considering', DeckSection.EXCLUDED: 'Excluded'}
+GROUPS = ['Type', 'Mana Value', 'Color', 'Category', 'Section']
+SORTS = ['Name', 'Mana Value', 'Color', 'Quantity', 'Import Order']
+
+
+def in_deck_entries(document, candidates):
+    """Recognize alternate printings and legacy entries without changing selection."""
+    entries = [entry for entry in document.deck.entries if entry.quantity > 0]
+    oracles = {entry.oracle_id for entry in entries if entry.oracle_id}
+    prints = {entry.card_id for entry in entries if entry.card_id}
+    legacy_names = {entry.name.strip().casefold() for entry in entries if not entry.oracle_id}
+    names = {entry.name.strip().casefold() for entry in entries}
+    return {entry.entry_id for entry in candidates
+            if (entry.oracle_id and entry.oracle_id in oracles)
+            or (entry.card_id and entry.card_id in prints)
+            or entry.name.strip().casefold() in (legacy_names if entry.oracle_id else names)}
+
+
+def card_facts(payload):
+    face = (payload.get('card_faces') or [{}])[0]
+    return {key: payload.get(key, face.get(key)) for key in
+            ('type_line', 'cmc', 'colors', 'oracle_text', 'keywords', 'layout', 'card_faces',
+             'color_identity', 'power', 'toughness', 'rarity', 'artist', 'legalities',
+             'finishes', 'frame_effects', 'promo', 'textless', 'full_art', 'border_color')}
+
+
+def update_candidate_quantities(document, canvas):
+    """Presentation quantities come only from the active mainboard/commanders."""
+    entries = [entry for entry in document.deck.entries
+               if entry.section in (DeckSection.MAINBOARD, DeckSection.COMMANDER)]
+    oracles, prints, names, legacy = {}, {}, {}, {}
+    for entry in entries:
+        for mapping, key in ((oracles, entry.oracle_id), (prints, entry.card_id),
+                             (names, entry.name.strip().casefold())):
+            if key:
+                mapping[key] = mapping.get(key, 0) + entry.quantity
+        if not entry.oracle_id:
+            key = entry.name.strip().casefold()
+            legacy[key] = legacy.get(key, 0) + entry.quantity
+    for candidate in canvas.document.deck.entries:
+        name = candidate.name.strip().casefold()
+        candidate.quantity = (oracles.get(candidate.oracle_id, 0) + legacy.get(name, 0)
+                              if candidate.oracle_id else names.get(name, 0))
+        candidate.quantity = max(candidate.quantity, prints.get(candidate.card_id, 0))
+    canvas.in_deck_ids = in_deck_entries(document, canvas.document.deck.entries)
+    canvas.viewport().update()
+
+
+def group_key(entry, grouping):
+    if entry.section == DeckSection.COMMANDER:
+        return 'Commander'
+    facts = entry.extras.get('facts', {})
+    if grouping == 'Category':
+        return entry.category_ids[0] if entry.category_ids else 'Uncategorized'
+    if grouping == 'Section':
+        return SECTIONS.get(entry.section, entry.section.title())
+    if grouping == 'Mana Value':
+        value = facts.get('cmc')
+        return 'Unknown' if value is None else f'MV {value:g}'
+    if grouping == 'Color':
+        colors = facts.get('colors')
+        if colors is None:
+            return 'Unknown'
+        return {'W': 'White', 'U': 'Blue', 'B': 'Black', 'R': 'Red', 'G': 'Green'}.get(
+            ''.join(colors), 'Multicolor' if colors else 'Colorless')
+    line = facts.get('type_line') or ''
+    return next((t for t in ('Land', 'Creature', 'Planeswalker', 'Battle', 'Instant',
+                            'Sorcery', 'Artifact', 'Enchantment') if t in line), 'Other')
+
+
+def grouped_entries(deck, grouping='Type', sort='Name', query='', show_empty_categories=False, entry_ids=None):
+    categories = {c.category_id: c for c in deck.categories}
+    terms = compile_filter(query)
+    category_names = {key: c.name for key, c in categories.items()}
+    groups = {}
+    for entry in deck.entries:
+        if entry_ids is not None and entry.entry_id not in entry_ids:
+            continue
+        if not matches(entry, terms, category_names):
+            continue
+        groups.setdefault(group_key(entry, grouping), []).append(entry)
+    if grouping == 'Section':
+        for label in SECTIONS.values():
+            groups.setdefault(label, [])
+    if grouping == 'Category' and show_empty_categories:
+        for key in categories:
+            groups.setdefault(key, [])
+        groups.setdefault('Uncategorized', [])
+    def order(key):
+        if key == 'Commander':
+            return (-1, 0, '')
+        if grouping == 'Category':
+            return (0, categories[key].sort_order if key in categories else 100000, key)
+        if grouping == 'Mana Value' and key.startswith('MV '):
+            return (0, float(key[3:]), '')
+        if grouping == 'Type':
+            order = ['Creature', 'Planeswalker', 'Battle', 'Instant', 'Sorcery', 'Artifact', 'Enchantment', 'Land', 'Other']
+            return (0, order.index(key) if key in order else len(order), key)
+        return (0, 0, key)
+    def entry_order(e):
+        if sort == 'Color':
+            colors = e.extras.get('facts', {}).get('colors')
+            ranks = tuple(i for i, color in enumerate('WUBRG') if color in (colors or []))
+            group = 3 if colors is None else (0 if len(ranks) == 1 else 1 if ranks else 2)
+            return (group, ranks, e.name.casefold(), e.entry_id)
+        if sort == 'Quantity':
+            return (-e.quantity, e.name.casefold(), e.entry_id)
+        if sort == 'Mana Value':
+            return (e.extras.get('facts', {}).get('cmc') or 0, e.name.casefold(), e.entry_id)
+        if sort == 'Import Order':
+            return (e.sort_order, e.name.casefold(), e.entry_id)
+        return (e.name.casefold(), e.sort_order, e.entry_id)
+    return [(key, categories[key].name if key in categories else key,
+             sorted(groups[key], key=entry_order)) for key in sorted(groups, key=order)]
+
+
+def assign(document, ids, field, value):
+    for entry in document.deck.entries:
+        if entry.entry_id not in ids:
+            continue
+        if field == 'category':
+            entry.extras['auto_categories'] = {'manual': True}
+            entry.category_ids = ([value] + [c for c in entry.category_ids if c != value]) if value else []
+        else:
+            setattr(entry, field, value.copy() if isinstance(value, list) else value)
+    document.deck.commander_entry_ids = [e.entry_id for e in document.deck.entries if e.section == DeckSection.COMMANDER]
+
+
+def remove_category(document, category_id):
+    document.deck.categories = [c for c in document.deck.categories if c.category_id != category_id]
+    for entry in document.deck.entries:
+        if category_id in entry.category_ids:
+            entry.extras['auto_categories'] = {'manual': True}
+        entry.category_ids = [c for c in entry.category_ids if c != category_id]
+
+
+def move_entries(document, ids, grouping, target, before_id=None):
+    if before_id in ids and all(group_key(e, grouping) == target for e in document.deck.entries if e.entry_id in ids):
+        return
+    if grouping == 'Section':
+        section = next((s for s, name in SECTIONS.items() if name == target), None)
+        if section is None:
+            raise ValueError('Unknown section')
+        assign(document, ids, 'section', section)
+    elif grouping == 'Category':
+        if target == 'Commander':
+            assign(document, ids, 'section', DeckSection.COMMANDER)
+        else:
+            if target != 'Uncategorized' and target not in {c.category_id for c in document.deck.categories}:
+                raise ValueError('Unknown category')
+            assign(document, ids, 'category', None if target == 'Uncategorized' else target)
+            for entry in document.deck.entries:
+                if entry.entry_id in ids and entry.section == DeckSection.COMMANDER:
+                    entry.section = DeckSection.MAINBOARD
+            document.deck.commander_entry_ids = [e.entry_id for e in document.deck.entries if e.section == DeckSection.COMMANDER]
+    ordered = sorted(document.deck.entries, key=lambda e: e.sort_order)
+    moving = [e for e in ordered if e.entry_id in ids]
+    remaining = [e for e in ordered if e.entry_id not in ids]
+    position = next((i for i, e in enumerate(remaining) if e.entry_id == before_id), len(remaining))
+    ordered = remaining[:position] + moving + remaining[position:]
+    for index, entry in enumerate(ordered):
+        entry.sort_order = index
