@@ -15,7 +15,7 @@ selection, filters, dismissals and recommendation state survive switching.
 Each presentation retains its scroll positions. The full workspace provides
 larger cards, card-size control, Undo/Redo, and visible recommendation type tabs.
 The Recommendations tab shows a responsive card grid (about two columns at the normal sidebar width)
-with name, mainboard-plus-commander quantity across printings, **+ Add**, and a
+with name, mainboard-plus-commander quantity across printings, shared **+ / −** controls, and a
 compact **Why?** popover containing reasons, provenance, and dismissal. Its type
 filter matches normalized type tokens, including multi-type cards and card faces;
 it preserves recommendation rank within each filter.

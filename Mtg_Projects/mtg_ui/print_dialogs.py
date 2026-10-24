@@ -1,5 +1,6 @@
 from mtg_ui.artwork_preferences import ArtworkPreferencesDialog, edit_artwork_preferences
 from mtg_ui.workspaces import print_application
+from mtg_ui.quantity_preview import QuantityPreview
 
 import datetime
 import logging
@@ -400,6 +401,8 @@ class AddCardDialog(QDialog):
     def __init__(self, parent, image_dir, initial_query=None, *, document=None):
         super().__init__(parent)
         self._project_document = document
+        self._quantity_change = None
+        self._quantity_count = None
         self.setWindowTitle("Add Card")
         self.resize(960, 700)
 
@@ -496,7 +499,8 @@ class AddCardDialog(QDialog):
             self._show_card_result_menu)
         self._card_results_list = card_results_list
 
-        card_preview_label = QLabel("Select a card to preview it here.")
+        card_preview_label = QuantityPreview("Select a card to preview it here.")
+        card_preview_label.quantityRequested.connect(self._change_preview_quantity)
         card_preview_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         # Ignore the pixmap's native size hint. Large card images otherwise make
         # the dialog taller than the screen and push its action buttons off-screen.
@@ -896,6 +900,7 @@ class AddCardDialog(QDialog):
     def _handle_card_selection_changed(self, row):
         candidate = self._selected_card_candidate(row)
         self._selected_card_value = candidate
+        self._refresh_preview_quantity()
         if candidate is None:
             self._card_next_button.setEnabled(False)
             self._card_details_label.setPlainText("")
@@ -905,6 +910,27 @@ class AddCardDialog(QDialog):
         self._selected_art_candidate_value = None
         self._selected_art_source_value = None
         self._update_card_preview(candidate)
+
+    def set_quantity_handlers(self, change, count):
+        self._quantity_change, self._quantity_count = change, count
+        self._card_cancel_button.setText('Done')
+        self._refresh_preview_quantity()
+
+    def _refresh_preview_quantity(self):
+        preview = self._card_preview_label
+        candidate = self._selected_card_value
+        preview.quantity_active = candidate is not None and self._quantity_count is not None
+        preview.quantity = self._quantity_count(candidate) if preview.quantity_active else 0
+        preview.update()
+
+    def _change_preview_quantity(self, delta):
+        candidate = self._selected_card_value
+        if candidate is not None and self._quantity_change is not None:
+            if delta < 0 and self._quantity_count(candidate) <= 0:
+                return
+            self._quantity_change(candidate, delta)
+            self._refresh_preview_quantity()
+            self._card_status_label.setText(f'{self._card_preview_label.quantity} copies in this print project.')
 
     def _update_card_preview(self, candidate):
         local_path = candidate.local_image_path

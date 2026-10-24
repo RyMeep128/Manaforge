@@ -20,6 +20,11 @@ The app can:
 - Run `Launch Print Proxy Prep.cmd`
 - Optional: run `Create Desktop Shortcut.ps1` once
 
+The Add Card preview uses the same top-left count and translucent right-side
+**+ / −** controls as Deck Editor. Changes apply to the print project immediately;
+**Done** closes the picker without discarding those changes. The existing Add Card
+button and custom artwork selection remain available.
+
 ## Build a Windows App Bundle
 If you want to hand this to someone without requiring Python on their machine, run `Mtg_Projects\Build EXE.cmd` from the product root.
 

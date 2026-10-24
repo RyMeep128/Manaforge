@@ -62,7 +62,7 @@ class RecommendationCanvas(CardCanvas):
         self.setToolTip("Double-click or + to add. Why? explains the recommendation.")
 
     def why_rect(self, rect):
-        return C.QRect(rect.x() + 4, rect.y() + 4, 42, 23)
+        return C.QRect(rect.x() + 4, rect.bottom() - 27, 42, 23)
 
     def paintEvent(self, event):
         if not self.document.deck.entries:
@@ -79,13 +79,10 @@ class RecommendationCanvas(CardCanvas):
         for entry, rect, _ in self.items:
             if not rect.intersects(visible):
                 continue
-            for control, text in (
-                (self.why_rect(rect), "Why?"),
-                (self.control_rect(rect), "+ Add"),
-            ):
-                p.fillRect(control, G.QColor("#20352f"))
-                p.setPen(G.QColor("white"))
-                p.drawText(control, C.Qt.AlignmentFlag.AlignCenter, text)
+            control = self.why_rect(rect)
+            p.fillRect(control, G.QColor("#20352f"))
+            p.setPen(G.QColor("white"))
+            p.drawText(control, C.Qt.AlignmentFlag.AlignCenter, "Why?")
         p.end()
 
     def mousePressEvent(self, event):
@@ -300,7 +297,7 @@ class RecommendationPanel(W.QWidget):
         if row:
             entry = deepcopy(row["entry"])
             entry.extras["category_suggestion"] = row["roles"]
-            self.editor.add_card(entry)
+            self.editor.change_candidate_quantity(entry, _delta)
 
     def why(self, entry_id, position):
         row = next((r for r in self.rows if r["entry"].entry_id == entry_id), None)

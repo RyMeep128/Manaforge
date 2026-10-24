@@ -12,6 +12,25 @@ class _FakeLabel:
         self.value = value
 
 
+def test_add_card_preview_quantity_callbacks_and_zero_guard():
+    from types import SimpleNamespace
+    counts = {'value': 1}
+    changes = []
+    def adjust(candidate, delta):
+        changes.append(delta)
+        counts['value'] += delta
+    preview = SimpleNamespace(quantity_active=False, quantity=0, update=lambda: None)
+    state = SimpleNamespace(_selected_card_value=object(), _card_preview_label=preview,
+                            _card_cancel_button=_FakeLabel(), _card_status_label=_FakeLabel())
+    state._refresh_preview_quantity = lambda: dialogs.AddCardDialog._refresh_preview_quantity(state)
+    dialogs.AddCardDialog.set_quantity_handlers(state, adjust, lambda candidate: counts['value'])
+    assert preview.quantity == 1 and state._card_cancel_button.value == 'Done'
+    for delta in (1, -1, -1, -1):
+        dialogs.AddCardDialog._change_preview_quantity(state, delta)
+    assert changes == [1, -1, -1]
+    assert preview.quantity == 0
+
+
 class _FakePageStack:
     def __init__(self):
         self.index = 0

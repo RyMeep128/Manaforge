@@ -186,6 +186,10 @@ colored top-left corner. The primary role sets its color, with small top-edge
 accents for additional tags; category headers show the matching color. Hovered or
 selected cards reveal translucent vertical +/− controls on the right. Automatic
 and manual assignment records remain intact without on-card text badges.
+Syntax Search, Recommendations, and commander discovery use the same controls
+and corner count. Minus reduces one matching mainboard copy first, then commander
+copies, with Undo/Redo; quantities shown in discovery include alternate printings.
+Commander designation remains available through its dedicated button or double-click.
 Manual corrections survive subsequent categorization and saving.
 To explicitly replace them, enable **Reconsider manual assignments** in the review.
 For an existing

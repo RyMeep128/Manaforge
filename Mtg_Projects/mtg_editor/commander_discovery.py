@@ -27,9 +27,20 @@ class DiscoverySearch:
 
 
 class DiscoveryCanvas(CardCanvas):
+    commanderRequested = C.pyqtSignal(str)
+
     def __init__(self, document, thumbnails, parent):
         super().__init__(document, thumbnails, parent, search=True)
         self.theme_name = ""
+
+    def mouseDoubleClickEvent(self, event):
+        if event.button() != C.Qt.MouseButton.LeftButton:
+            return
+        item = self.hit(event.position().toPoint())
+        if self.activate_quantity(item, event.position().toPoint()):
+            return
+        if item:
+            self.commanderRequested.emit(item[0].entry_id)
 
 
 class CommanderDiscovery(W.QWidget):
@@ -113,11 +124,11 @@ class CommanderDiscovery(W.QWidget):
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
         self.canvas = DiscoveryCanvas(DeckDocument(), editor.thumbnails, self)
-        self.canvas.search_action_text = "Set commander"
         self.canvas.card_width = 190
         self.canvas.setAccessibleName("Commander discovery results")
         self.canvas.setToolTip("Select for theme evidence. Double-click to set as commander.")
-        self.canvas.quantityRequested.connect(self.set_commander)
+        self.canvas.quantityRequested.connect(self.change_quantity)
+        self.canvas.commanderRequested.connect(self.set_commander)
         self.canvas.selectionChanged.connect(self.selection_changed)
         self.canvas.menuRequested.connect(self.card_menu)
         layout.addWidget(self.canvas, 1)
@@ -310,6 +321,11 @@ class CommanderDiscovery(W.QWidget):
         if len(row["associations"]) > 3:
             lines.append(f"Plus {len(row['associations']) - 3} other cached cohorts.")
         self.details.setToolTip("\n".join(lines + ["https://edhrec.com/commanders/" + a["slug"] for a in row["associations"][:3]]))
+
+    def change_quantity(self, entry_id, delta):
+        row = self.rows.get(entry_id)
+        if row:
+            self.editor.change_candidate_quantity(row['entry'], delta)
 
     def set_commander(self, entry_id=None, _delta=1, *, second=False):
         row = self.rows.get(entry_id) if entry_id else self.selected()

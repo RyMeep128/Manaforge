@@ -658,7 +658,27 @@ class EditorWindow(W.QMainWindow):
         result = next((e for e in self.search_document.deck.entries if e.entry_id == entry_id), None)
         if result is None:
             return
-        self.add_card(result)
+        self.change_candidate_quantity(result, delta)
+
+    def change_candidate_quantity(self, result, delta=1):
+        if delta > 0:
+            self.add_card(result)
+            return
+        if delta >= 0:
+            return
+        matches = [entry for entry in self.document.deck.entries
+                   if entry.quantity > 0 and entry.section in (DeckSection.MAINBOARD, DeckSection.COMMANDER)
+                   and ((result.card_id and entry.card_id == result.card_id)
+                        or (result.oracle_id and entry.oracle_id == result.oracle_id)
+                        or (entry.name.casefold() == result.name.casefold()
+                            and (not result.oracle_id or not entry.oracle_id)))]
+        if not matches:
+            return
+        # Prefer mainboard copies and the visible printing before alternatives.
+        target = min(matches, key=lambda entry: (entry.section == DeckSection.COMMANDER,
+                                                 entry.card_id != result.card_id, entry.sort_order))
+        from .card_details import apply_quantity
+        self.edit(lambda d: apply_quantity(d, target.entry_id, target.quantity-1))
 
     def add_card(self, result):
         """Shared Add Card command for search and recommendation discovery."""

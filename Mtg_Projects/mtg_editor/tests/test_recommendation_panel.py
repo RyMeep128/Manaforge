@@ -152,7 +152,7 @@ def test_virtual_grid_resizes_and_only_requests_visible_thumbnails():
     QtTest.QTest.mouseClick(
         canvas.viewport(),
         C.Qt.MouseButton.LeftButton,
-        pos=canvas.control_rect(rect).center(),
+        pos=dict(canvas.quantity_buttons(rect))[1].center(),
     )
     assert adds == ["e0"]
     canvas.resize(700, 330)

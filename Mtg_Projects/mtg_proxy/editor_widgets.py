@@ -2717,13 +2717,42 @@ class ActionsWidget(QGroupBox):
                     f'Added {len(selected)} related token/card(s)')
 
         def add_single_card(checked=False, *, on_added=None, initial_query=None,
-                            selected_card_override=None):
-            dialog = None
+                            selected_card_override=None, source_dialog=None, quiet=False):
+            dialog = source_dialog
             selected_card = selected_card_override
             if selected_card is None:
                 dialog = AddCardDialog(self, state.image_dir, initial_query=initial_query,
                                        document=state.deck_document)
-                if dialog.exec() != QDialog.DialogCode.Accepted:
+                changed_quantities = [False]
+                def matching_entries(candidate):
+                    return [entry for entry in state.card_entries_store.values()
+                            if not entry.front_name.startswith('__') and ((candidate.card_id and entry.card_id == candidate.card_id)
+                            or (candidate.oracle_id and entry.oracle_id == candidate.oracle_id)
+                            or entry.front_name == candidate.filename)]
+                def count(candidate):
+                    return sum(max(0, state.get_card_count(entry.front_name)) for entry in matching_entries(candidate))
+                def adjust(candidate, delta):
+                    entries = matching_entries(candidate)
+                    exact = [entry for entry in entries if entry.card_id == candidate.card_id]
+                    if delta < 0:
+                        entries = [entry for entry in entries if state.get_card_count(entry.front_name) > 0]
+                        if not entries:
+                            return
+                        target = min(entries, key=lambda entry: entry.card_id != candidate.card_id)
+                        state.set_card_count(target.front_name, state.get_card_count(target.front_name)-1)
+                    elif exact and dialog.selected_art_candidate() is None:
+                        target = exact[0]
+                        state.set_card_count(target.front_name, state.get_card_count(target.front_name)+1)
+                    else:
+                        add_single_card(selected_card_override=candidate, source_dialog=dialog, quiet=True)
+                    changed_quantities[0] = True
+                    print_workspace(self).project_changed()
+                    autosave_managed_session()
+                dialog.set_quantity_handlers(adjust, count)
+                accepted = dialog.exec() == QDialog.DialogCode.Accepted
+                if changed_quantities[0]:
+                    print_workspace(self).refresh(state, img_dict)
+                if not accepted:
                     return
                 selected_card = dialog.selected_card()
                 if selected_card is None:
@@ -2768,7 +2797,7 @@ class ActionsWidget(QGroupBox):
                 if add_error is not None:
                     state.copy_from(snapshot)
 
-            if workflow_result is not None or add_error is not None:
+            if not quiet and (workflow_result is not None or add_error is not None):
                 print_workspace(self).refresh(state, img_dict)
 
             if add_error is not None:
@@ -2780,6 +2809,8 @@ class ActionsWidget(QGroupBox):
 
             if on_added is not None:
                 return
+            if quiet:
+                return workflow_result
             autosave_managed_session()
 
             art_message = (
