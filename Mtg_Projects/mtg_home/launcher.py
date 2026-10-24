@@ -86,7 +86,8 @@ class ModuleController(C.QObject):
         if editor is not None and hasattr(editor, 'session'):
             busy = (editor.worker is not None or editor.task is not None or editor.thumbnails.worker is not None
                     or editor.recommendation_panel.worker is not None
-                    or editor.add_cards_workspace.discovery.controller.worker is not None)
+                    or editor.add_cards_workspace.discovery.controller.worker is not None
+                    or editor.add_cards_workspace.card_search.controller.worker is not None)
             if busy:
                 self.home.statusBar().showMessage('Finishing background work before closing...')
                 C.QTimer.singleShot(250, self.home.close)

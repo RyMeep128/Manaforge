@@ -249,11 +249,13 @@ class EditorWindow(W.QMainWindow):
             self.control_bar.addWidget(widget)
         self.control_bar.addStretch(1)
         self.control_extra_rows = []
-        self.name.setFixedHeight(32)
+        self.name.setMinimumHeight(34)
         for widget in (self.format, self.view_mode, self.group, self.sort, self.filter, self.quick_add,
                        self.filter_help, self.workspace_button, self.import_button, self.organization_overflow,
                        *self.header_actions):
-            widget.setFixedHeight(32)
+            # The theme's 32px content minimum also needs room for its borders.
+            # Let Qt honor the styled size hint instead of clipping it at 32px.
+            widget.setMinimumHeight(34)
         layout.addWidget(controls)
         self.splitter = W.QSplitter()
         self.search_panel = W.QWidget()
@@ -275,15 +277,22 @@ class EditorWindow(W.QMainWindow):
         self.query = W.QLineEdit()
         self.query.setPlaceholderText('Local search: o:flying c=g')
         self.query.textChanged.connect(self.search_changed)
+        self.query.setMinimumHeight(38)
         self.query.returnPressed.connect(self.search)
         self.query.setClearButtonEnabled(True)
         search_layout.addWidget(self.query)
         search_controls = W.QHBoxLayout()
+        self.syntax_search_button = self.button(search_controls, 'Search', self.search, True)
         self.cancel_search_button = self.button(search_controls, 'Cancel', self.cancel_search)
         self.cancel_search_button.setEnabled(False)
         self.refresh_search_button = self.button(search_controls, 'Refresh', self.refresh_results)
         self.refresh_search_button.setToolTip('Bypass recent results. Cached searches expire after 30 seconds.')
+        self.syntax_membership = W.QComboBox()
+        self.syntax_membership.addItems(['All cards', 'Not in deck', 'In deck'])
+        self.syntax_membership.currentIndexChanged.connect(self.filter_syntax_results)
+        self.syntax_all_entries = []
         search_layout.addLayout(search_controls)
+        search_layout.addWidget(self.syntax_membership)
         self.search_status = W.QLabel('Search by name or Scryfall syntax')
         self.search_status.setWordWrap(True)
         search_layout.addWidget(self.search_status)
@@ -292,6 +301,7 @@ class EditorWindow(W.QMainWindow):
         self.results.card_width = 130
         self.results.quantityRequested.connect(self.add_result)
         self.results.menuRequested.connect(self.search_menu)
+        self.results.detailsRequested.connect(lambda key: self.candidate_details(self.results, key))
         search_layout.addWidget(self.results, 1)
         from .recommendation_panel import RecommendationPanel
         self.recommendation_panel = RecommendationPanel(self)
@@ -463,7 +473,7 @@ class EditorWindow(W.QMainWindow):
         frame.setStyleSheet('QFrame#' + name + ' {border-right:1px solid #303743;}')
         frame.setSizePolicy(W.QSizePolicy.Policy.Fixed, W.QSizePolicy.Policy.Fixed)
         layout = W.QVBoxLayout(frame)
-        layout.setContentsMargins(0, 0, 8, 0)
+        layout.setContentsMargins(0, 0, 8, 2)
         layout.setSpacing(2)
         label = W.QLabel(title)
         label.setStyleSheet('font-size:9pt;color:#b5bdc9;')
@@ -529,7 +539,7 @@ class EditorWindow(W.QMainWindow):
         self.add_cards_workspace.open()
 
     def add_card_tab_changed(self, index):
-        if index == 0:
+        if self.add_card_tabs.widget(index) is self.syntax_search_page:
             self.query.setFocus()
             if (self.query.text().strip() and not self.search_document.deck.entries
                     and not self.pending_search
@@ -683,6 +693,7 @@ class EditorWindow(W.QMainWindow):
         self.update_search_membership()
         self.recommendation_panel.deck_changed()
         self.add_cards_workspace.discovery.deck_changed()
+        self.add_cards_workspace.card_search.update_quantities()
         if self.readiness_snapshot is not None and self.document.to_dict() != self.readiness_snapshot:
             self.grid.filtered_ids = None
             self.readiness_snapshot = None
@@ -726,6 +737,7 @@ class EditorWindow(W.QMainWindow):
             self.edit(lambda d: setattr(d.deck, 'description', text))
 
     def clear_search_results(self):
+        self.syntax_all_entries = []
         self.search_document.deck.entries.clear()
         self.results.refresh()
 
@@ -753,10 +765,22 @@ class EditorWindow(W.QMainWindow):
                     classify(getattr(r, 'payload', {}) or {}))}) for r in results]
         self.results.refresh()
         self.search_status.setText(error or f'{len(results)} local matches (up to 100). Double-click or + to add.')
-        self.update_search_membership()
+        self.syntax_all_entries = list(self.search_document.deck.entries)
+        self.filter_syntax_results()
+
+    def filter_syntax_results(self, *_):
+        from .organization import in_deck_entries, update_candidate_quantities
+        present = in_deck_entries(self.document, self.syntax_all_entries)
+        membership = self.syntax_membership.currentIndex()
+        self.search_document.deck.entries = [entry for entry in self.syntax_all_entries
+            if membership == 0 or (entry.entry_id in present) == (membership == 2)]
+        update_candidate_quantities(self.document, self.results)
+        self.results.refresh()
 
     def update_search_membership(self):
         from .organization import update_candidate_quantities
+        if self.syntax_membership.currentIndex():
+            self.filter_syntax_results()
         update_candidate_quantities(self.document, self.results)
 
     def add_result(self, entry_id, delta=1):
@@ -896,13 +920,45 @@ class EditorWindow(W.QMainWindow):
         menu.exec(position)
 
     def search_menu(self, entry_id, position):
-        entry = next(e for e in self.search_document.deck.entries if e.entry_id == entry_id)
+        self.candidate_menu(self.results, entry_id, position, self.add_result)
+
+    def candidate_menu(self, canvas, entry_id, position, add):
+        entry = next((entry for entry in canvas.document.deck.entries if entry.entry_id == entry_id), None)
+        if entry is None:
+            return
         menu = W.QMenu(self)
-        menu.addAction('Add card', lambda: self.add_result(entry_id))
+        menu.addAction('Add card', lambda: add(entry_id))
+        menu.addAction('Details / alternate printings', lambda: self.candidate_details(canvas, entry_id))
         self.add_reference_action(menu, entry)
-        menu.addAction('View Oracle tags…', lambda: self.view_tags(entry))
+        menu.addAction('View Oracle tags?', lambda: self.view_tags(entry))
         menu.addAction('Retry artwork', lambda: self.thumbnails.retry(entry.card_id, entry.image_asset_id))
+        canvas.preview.hide()
         menu.exec(position)
+
+    def candidate_details(self, canvas, entry_id):
+        from .card_details import CardDetails, apply_printing
+        entry = next((entry for entry in canvas.document.deck.entries if entry.entry_id == entry_id), None)
+        if entry is None:
+            return
+        previous = getattr(self, 'details_dialog', None)
+        if previous is not None:
+            previous.close()
+            previous.deleteLater()
+        document = self.document
+        candidate = deepcopy(entry)
+        self.details_dialog = CardDetails(self.service, candidate, self)
+        self.details_dialog.quantity.setReadOnly(True)
+        self.details_dialog.apply_quantity_button.hide()
+        self.details_dialog.use.setText('Add this printing')
+        def add_printing(target, payload):
+            if self.document is not document:
+                return
+            temporary = DeckDocument()
+            temporary.deck.entries = [candidate]
+            apply_printing(temporary, target, payload)
+            self.change_candidate_quantity(candidate, 1)
+        self.details_dialog.printingChosen.connect(add_printing)
+        self.details_dialog.show()
 
     def add_reference_action(self, menu, entry):
         from mtg_ui.rulings import add_card_reference_action
@@ -1000,18 +1056,8 @@ class EditorWindow(W.QMainWindow):
         self.run_task(lambda: self.recommendation_store().import_files(paths, should_cancel=cancelled.is_set), complete)
 
     def recommendations(self):
-        from .recommendations import RecommendationsDialog, load_recommendations
-        query, accepted = W.QInputDialog.getText(self, 'Recommendations',
-            'Optional local Scryfall-style filter (for example t:creature c:g):')
-        if not accepted:
-            return
-        snapshot = DeckDocument.from_dict(self.document.to_dict())
-        def show(result):
-            if self.document.to_dict() != snapshot.to_dict():
-                self.statusBar().showMessage('Deck changed; reopen recommendations.', 6000)
-                return
-            RecommendationsDialog(result, self).exec()
-        self.run_task(lambda: load_recommendations(self.service, snapshot, self.recommendation_store(), query), show)
+        self.open_add_cards()
+        self.add_card_tabs.setCurrentWidget(self.recommendation_panel)
 
     def deck_guidance(self):
         from .guidance import GuidanceDialog
@@ -1424,9 +1470,11 @@ class EditorWindow(W.QMainWindow):
         self.closing = True
         self.search_controller.shutdown()
         self.add_cards_workspace.discovery.controller.shutdown()
+        self.add_cards_workspace.card_search.controller.shutdown()
         self.recommendation_panel.suspend()
         if (self.worker is not None or self.task is not None or self.thumbnails.worker is not None
-                or self.recommendation_panel.worker is not None or self.add_cards_workspace.discovery.controller.worker is not None):
+                or self.recommendation_panel.worker is not None or self.add_cards_workspace.discovery.controller.worker is not None
+                or self.add_cards_workspace.card_search.controller.worker is not None):
             self.thumbnails.stopping = True
             self.thumbnails.pending.clear()
             self.statusBar().showMessage('Finishing background work before closing…')
@@ -1438,6 +1486,7 @@ class EditorWindow(W.QMainWindow):
             self.closing = False
             self.search_controller.resume()
             self.add_cards_workspace.discovery.controller.resume()
+            self.add_cards_workspace.card_search.controller.resume()
             self.recommendation_panel.deck_changed()
             event.ignore()
             return
@@ -1448,6 +1497,7 @@ class EditorWindow(W.QMainWindow):
         self.results.preview.close()
         self.recommendation_panel.canvas.preview.close()
         self.add_cards_workspace.discovery.canvas.preview.close()
+        self.add_cards_workspace.card_search.canvas.preview.close()
         super().closeEvent(event)
 
 

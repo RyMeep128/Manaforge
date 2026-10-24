@@ -42,8 +42,15 @@ then Enter again once results load to add the selected or first match.
 - **Quick Add** opens a resizable visual search panel. Search names or Scryfall
   syntax against the local Core catalog. Double-click a result or click its plus
   control to add that exact printing. Closing the panel retains its search and scroll.
-- **Card Search** opens the full-width **Search**, **Recommendations**, and
-  **Commanders** workspace. It shares Quick Add's search and blended recommendations,
+- **Card Search** opens the full-width **Card Search**, **Syntax Search**,
+  **Recommendations**, and **Commanders** workspace. Plain Card Search has name,
+  color, type, mana value, and in-deck filters; Syntax Search retains advanced local
+  queries. Both use the existing cancellable, cached local search controller.
+  Recommendations offer text, type, role, and in-deck filters without explanations
+  or scoring displays. All three result grids share quantity controls and a
+  right-click **Details / alternate printings** action. Adding cards keeps queries,
+  filters, scroll position, and the current workspace open.
+  It shares Quick Add's search services and blended recommendations,
   and edits the same deck session. **Back to Deck** restores the deck view.
   Commander discovery supports local name/text/type filters and
   [explicit offline EDHREC themes](../../docs/edhrec-collection.md#offline-commandertheme-discovery).
@@ -475,7 +482,7 @@ retained. Already-open pickers can reopen Preferences to load another app's chan
 **More > Deck guidance** provides configurable, explainable composition checks
 with saved dismissals and Undo/Redo. **More > Import recommendation decks**
 imports your native Commander decks as a supplementary local signal.
-**More > Recommendations** exposes dataset status and the recommendation browser.
+**More > Recommendations** opens the Recommendations tab in the discovery workspace.
 Archidekt is the primary source, using the authorized one-time local cache;
 local data never replaces the public dataset and requires 15 relevant decks.
 See [source policy, scoring, and remaining work](../../docs/recommendation-data.md).

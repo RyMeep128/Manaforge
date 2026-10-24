@@ -91,6 +91,23 @@ def test_multitype_and_faces_filter_without_reordering_or_changing_search(editor
     assert [e.entry_id for e in panel.canvas.document.deck.entries] == ["e2", "e3"]
 
 
+def test_recommendation_filters_preserve_order_and_follow_deck_edits(editor):
+    panel = editor.recommendation_panel
+    panel.rows = [recommendation(2), recommendation(1), recommendation(3)]
+    panel.rows[2]['roles'] = [dict(name='Draw')]
+    panel.role_filter.addItems(['Ramp', 'Draw'])
+    panel.role_filter.setCurrentText('Ramp')
+    assert [entry.entry_id for entry in panel.canvas.document.deck.entries] == ['e2', 'e1']
+    panel.text_filter.setText('Card 1')
+    assert [entry.entry_id for entry in panel.canvas.document.deck.entries] == ['e1']
+    panel.membership.setCurrentIndex(1)
+    panel.add('e1')
+    assert not panel.canvas.document.deck.entries
+    editor.undo()
+    assert [entry.entry_id for entry in panel.canvas.document.deck.entries] == ['e1']
+    assert panel.text_filter.text() == 'Card 1'
+
+
 def test_shared_ranking_and_stale_completion_after_deck_change(editor, monkeypatch):
     panel = editor.recommendation_panel
     ctx = dict(gaps={}, themes=[], archetypes=[], average=None, known=0)
@@ -139,16 +156,10 @@ def test_virtual_grid_resizes_and_only_requests_visible_thumbnails():
     assert len(first_row) == 2
     assert abs(first_row[0].height() / first_row[0].width() - 1.4) < 0.01
     assert 0 < len(thumbs.requested) < 20
-    reasons, adds = [], []
-    canvas.whyRequested.connect(lambda entry, point: reasons.append(entry))
+    adds = []
+    assert not hasattr(canvas, 'whyRequested')
     canvas.quantityRequested.connect(lambda entry, delta: adds.append(entry))
     rect = canvas.items[0][1]
-    QtTest.QTest.mouseClick(
-        canvas.viewport(),
-        C.Qt.MouseButton.LeftButton,
-        pos=canvas.why_rect(rect).center(),
-    )
-    assert reasons == ["e0"] and not adds
     QtTest.QTest.mouseClick(
         canvas.viewport(),
         C.Qt.MouseButton.LeftButton,

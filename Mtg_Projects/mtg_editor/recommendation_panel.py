@@ -1,7 +1,6 @@
 """Visual discovery inside Add Card, using the existing engine and card canvas."""
 
 from copy import deepcopy
-from datetime import datetime
 
 from PyQt6 import QtCore as C, QtGui as G, QtWidgets as W
 from mtg_core.decks import DeckDocument
@@ -12,7 +11,6 @@ from .canvas import CardCanvas
 from .recommendations import (
     load_recommendations,
     rank_recommendations,
-    recommendation_reason,
 )
 from .tasks import Task
 from .organization import update_candidate_quantities
@@ -53,62 +51,19 @@ def context_key(document):
 
 
 class RecommendationCanvas(CardCanvas):
-    whyRequested = C.pyqtSignal(str, object)
-
     def __init__(self, thumbnails, parent=None):
         super().__init__(DeckDocument(), thumbnails, parent, search=True)
-        self.card_width = 150
+        self.card_width = 190
         self.setAccessibleName("Recommended cards")
-        self.setToolTip("Double-click or + to add. Why? explains the recommendation.")
-
-    def why_rect(self, rect):
-        return C.QRect(rect.x() + 4, rect.bottom() - 27, 42, 23)
 
     def paintEvent(self, event):
-        if not self.document.deck.entries:
-            p = G.QPainter(self.viewport())
-            p.fillRect(self.viewport().rect(), G.QColor(COLORS["canvas"]))
-            p.end()
+        if self.document.deck.entries:
+            super().paintEvent(event)
+        else:
+            painter = G.QPainter(self.viewport())
+            painter.fillRect(self.viewport().rect(), G.QColor(COLORS["canvas"]))
+            painter.end()
             self.thumbnails.set_visible(id(self), [])
-            return
-        super().paintEvent(event)
-        p = G.QPainter(self.viewport())
-        offset = self.verticalScrollBar().value()
-        p.translate(0, -offset)
-        visible = C.QRect(0, offset, self.viewport().width(), self.viewport().height())
-        for entry, rect, _ in self.items:
-            if not rect.intersects(visible):
-                continue
-            control = self.why_rect(rect)
-            p.fillRect(control, G.QColor("#20352f"))
-            p.setPen(G.QColor("white"))
-            p.drawText(control, C.Qt.AlignmentFlag.AlignCenter, "Why?")
-        p.end()
-
-    def mousePressEvent(self, event):
-        item = self.hit(event.position().toPoint())
-        point = event.position().toPoint() + C.QPoint(
-            0, self.verticalScrollBar().value()
-        )
-        if (
-            item
-            and event.button() == C.Qt.MouseButton.LeftButton
-            and self.why_rect(item[1]).contains(point)
-        ):
-            self.hover_timer.stop()
-            self.preview.hide()
-            self.whyRequested.emit(item[0].entry_id, event.globalPosition().toPoint())
-            return
-        super().mousePressEvent(event)
-
-    def mouseDoubleClickEvent(self, event):
-        item = self.hit(event.position().toPoint())
-        point = event.position().toPoint() + C.QPoint(
-            0, self.verticalScrollBar().value()
-        )
-        if item and self.why_rect(item[1]).contains(point):
-            return
-        super().mouseDoubleClickEvent(event)
 
     def hideEvent(self, event):
         self.hover_timer.stop()
@@ -126,7 +81,6 @@ class RecommendationPanel(W.QWidget):
         self.key = None
         self.loaded_key = None
         self.rows = []
-        self.provenance = ""
         self.pending = False
         self.timer = C.QTimer(self)
         self.timer.setSingleShot(True)
@@ -135,6 +89,8 @@ class RecommendationPanel(W.QWidget):
         layout = W.QVBoxLayout(self)
         layout.setContentsMargins(0, 8, 0, 0)
         header = W.QHBoxLayout()
+        self.filter_layout = header
+        header.setDirection(W.QBoxLayout.Direction.TopToBottom)
         refresh = W.QToolButton()
         refresh.setText("Refresh")
         refresh.setToolTip("Refresh recommendations from local caches")
@@ -149,6 +105,20 @@ class RecommendationPanel(W.QWidget):
         header.addWidget(self.type_filter, 1)
         header.addWidget(refresh)
         body.addLayout(header)
+        self.text_filter = W.QLineEdit()
+        self.text_filter.setPlaceholderText("Find a recommended card")
+        self.text_filter.setMinimumHeight(38)
+        self.text_filter.setClearButtonEnabled(True)
+        self.text_filter.textChanged.connect(self.filter_rows)
+        body.insertWidget(0, self.text_filter)
+        self.membership = W.QComboBox()
+        self.membership.addItems(["All cards", "Not in deck", "In deck"])
+        self.membership.currentIndexChanged.connect(self.filter_rows)
+        header.insertWidget(1, self.membership)
+        self.role_filter = W.QComboBox()
+        self.role_filter.addItem("All roles")
+        self.role_filter.currentTextChanged.connect(self.filter_rows)
+        header.insertWidget(2, self.role_filter)
         self.type_tabs = W.QTabBar()
         self.type_tabs.setExpanding(False)
         self.type_tabs.setUsesScrollButtons(True)
@@ -163,7 +133,8 @@ class RecommendationPanel(W.QWidget):
         body.addWidget(self.status)
         self.canvas = RecommendationCanvas(editor.thumbnails, self)
         self.canvas.quantityRequested.connect(self.add)
-        self.canvas.whyRequested.connect(self.why)
+        self.canvas.detailsRequested.connect(lambda key: self.inspect(key))
+        self.canvas.menuRequested.connect(self.card_menu)
         body.addWidget(self.canvas, 1)
         layout.addWidget(self.content, 1)
 
@@ -171,8 +142,10 @@ class RecommendationPanel(W.QWidget):
         return self.isVisible() and not self.editor.closing
 
     def set_expanded(self, expanded):
-        self.type_tabs.setVisible(expanded)
-        self.type_filter.setVisible(not expanded)
+        self.type_tabs.hide()
+        self.type_filter.show()
+        self.filter_layout.setDirection(W.QBoxLayout.Direction.LeftToRight if expanded
+                                        else W.QBoxLayout.Direction.TopToBottom)
 
     def deck_changed(self):
         key = context_key(self.editor.document)
@@ -185,7 +158,7 @@ class RecommendationPanel(W.QWidget):
             if switched:
                 self.rows = []
                 self.filter_rows()
-        self.update_quantities()
+        self.filter_rows()
         if self.active() and self.loaded_key != key:
             self.pending = True
             self.timer.start()
@@ -240,29 +213,12 @@ class RecommendationPanel(W.QWidget):
             return
         self.loaded_key = key
         self.rows = snapshot["ranked"]
-        latest = max(
-            (source["imported"] for source in snapshot["sources"]), default=None
-        )
-        stamp = (
-            datetime.fromtimestamp(latest).isoformat(timespec="minutes")
-            if latest
-            else "never"
-        )
-        self.provenance = (
-            f"{snapshot['source']} - updated {stamp}\n"
-            + "\n".join(
-                f"{s['source']}: {s['status']} (source sample: {s.get('decks', 0)} decks)"
-                for s in snapshot["source_status"]
-            )
-            + "\n"
-            + snapshot["formula"]
-        )
-        self.provenance += "\nCommander color identity " + (
-            "applied."
-            if snapshot["color_filtered"]
-            else "unavailable; no color restriction applied."
-        )
-        self.status.setToolTip(self.provenance)
+        current = self.role_filter.currentText()
+        roles = sorted({role["name"] for row in self.rows for role in row["roles"]})
+        with C.QSignalBlocker(self.role_filter):
+            self.role_filter.clear()
+            self.role_filter.addItems(["All roles", *roles])
+            self.role_filter.setCurrentText(current if current in roles else "All roles")
         self.filter_rows()
 
     def finished(self):
@@ -272,13 +228,23 @@ class RecommendationPanel(W.QWidget):
             self.timer.start()
 
     def filter_rows(self):
+        for row in self.rows:
+            row['entry'].extras['category_suggestion'] = row['roles']
         kind = self.type_filter.currentText()
+        from .organization import in_deck_entries
+        present = in_deck_entries(self.editor.document, [row["entry"] for row in self.rows])
+        text = self.text_filter.text().strip().casefold()
+        role = self.role_filter.currentText()
+        membership = self.membership.currentIndex()
         dismissed = settings(self.editor.document)["dismissed"]
         self.canvas.document.deck.entries = [
             row["entry"]
             for row in self.rows
             if row["oracle_id"] not in dismissed
             and (kind == "All Card Types" or kind in card_types(row["entry"]))
+            and (not text or text in (row["entry"].name + " " + str(row["entry"].extras.get("facts", {}).get("oracle_text") or "")).casefold())
+            and (role == "All roles" or any(item["name"] == role for item in row["roles"]))
+            and (membership == 0 or (row["entry"].entry_id in present) == (membership == 2))
         ]
         count = len(self.canvas.document.deck.entries)
         self.status.setText(
@@ -299,31 +265,11 @@ class RecommendationPanel(W.QWidget):
             entry.extras["category_suggestion"] = row["roles"]
             self.editor.change_candidate_quantity(entry, _delta)
 
-    def why(self, entry_id, position):
-        row = next((r for r in self.rows if r["entry"].entry_id == entry_id), None)
-        if not row:
-            return
-        menu = W.QMenu(self)
-        info = W.QLabel(recommendation_reason(row) + "\n\n" + self.provenance)
-        info.setTextFormat(C.Qt.TextFormat.PlainText)
-        info.setWordWrap(True)
-        info.setMaximumWidth(360)
-        info.setMargin(10)
-        scroll = W.QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFixedSize(380, 280)
-        scroll.setWidget(info)
-        action = W.QWidgetAction(menu)
-        action.setDefaultWidget(scroll)
-        menu.addAction(action)
-        dismiss = menu.addAction("Dismiss recommendation")
-        if menu.exec(position) is dismiss:
-            prefs = settings(self.editor.document)
-            prefs["dismissed"].append(row["oracle_id"])
-            self.editor.edit(
-                lambda d: d.editor_preferences.update(recommendations=prefs)
-            )
-            self.filter_rows()
+    def inspect(self, entry_id):
+        self.editor.candidate_details(self.canvas, entry_id)
+
+    def card_menu(self, entry_id, position):
+        self.editor.candidate_menu(self.canvas, entry_id, position, self.add)
 
     def suspend(self):
         self.timer.stop()

@@ -7,6 +7,7 @@ cache, result objects and selection. There is still only one active session.
 from PyQt6 import QtCore as C, QtWidgets as W
 
 from .commander_discovery import CommanderDiscovery
+from .discovery_search import CardSearchPanel
 
 
 class AddCardsWorkspace(W.QWidget):
@@ -16,8 +17,10 @@ class AddCardsWorkspace(W.QWidget):
         self.expanded = False
         self.quick_index = self.full_index = 0
         self.quick_visible = False
-        self.quick_scroll = [0, 0]
-        self.full_scroll = [0, 0]
+        self.quick_scroll = [0, 0, 0, 0]
+        self.full_scroll = [0, 0, 0, 0]
+        self.card_search = CardSearchPanel(editor)
+        self.card_search.hide()
         self.discovery = CommanderDiscovery(editor)
         self.discovery.hide()
         self.content_layout = W.QVBoxLayout(self)
@@ -55,7 +58,7 @@ class AddCardsWorkspace(W.QWidget):
         self.expanded = True
         with C.QSignalBlocker(tabs):
             self.content_layout.addWidget(tabs, 1)
-            tabs.setTabText(0, "Search")
+            tabs.insertTab(0, self.card_search, "Card Search")
             tabs.addTab(self.discovery, "Commanders")
             tabs.setCurrentIndex(self.full_index)
         editor.search_panel.hide()
@@ -77,6 +80,8 @@ class AddCardsWorkspace(W.QWidget):
         self.full_scroll = self.scroll_positions()
         self.expanded = False
         with C.QSignalBlocker(tabs):
+            tabs.removeTab(tabs.indexOf(self.card_search))
+            self.card_search.hide()
             tabs.removeTab(tabs.indexOf(self.discovery))
             self.discovery.hide()
             editor.search_panel.layout().addWidget(tabs, 1)
@@ -85,7 +90,7 @@ class AddCardsWorkspace(W.QWidget):
         editor.recommendation_panel.set_expanded(False)
         editor.results.card_width = 130
         editor.recommendation_panel.canvas.card_width = 150
-        editor.query.setMinimumHeight(0)
+        editor.query.setMinimumHeight(34)
         editor.workspace_stack.setCurrentWidget(editor.splitter)
         self.controls.show()
         editor.search_panel.setVisible(self.quick_visible)
@@ -100,18 +105,22 @@ class AddCardsWorkspace(W.QWidget):
 
     def scroll_positions(self):
         return [canvas.verticalScrollBar().value()
-                for canvas in (self.editor.results, self.editor.recommendation_panel.canvas)]
+                for canvas in self.canvases()]
 
     def restore_scroll(self, expanded):
         if expanded != self.expanded:
             return
         positions = self.full_scroll if expanded else self.quick_scroll
-        for canvas, position in zip((self.editor.results, self.editor.recommendation_panel.canvas), positions):
+        for canvas, position in zip(self.canvases(), positions):
             canvas.verticalScrollBar().setValue(position)
+
+    def canvases(self):
+        return (self.editor.results, self.editor.recommendation_panel.canvas,
+                self.card_search.canvas, self.discovery.canvas)
 
     def resize_cards(self, *_):
         if not self.expanded:
             return
-        for canvas in (self.editor.results, self.editor.recommendation_panel.canvas, self.discovery.canvas):
+        for canvas in self.canvases():
             canvas.card_width = self.zoom.value()
             canvas.refresh()
