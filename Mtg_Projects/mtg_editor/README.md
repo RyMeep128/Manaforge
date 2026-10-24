@@ -181,8 +181,12 @@ gameplay rules.
 
 New cards added through search and uncategorized cards in opened/imported decks
 receive categories automatically from local card data. New decks open in category
-stacks; saved view preferences remain respected. **Auto** and **Manual** badges show
-assignment sources. Manual corrections survive subsequent categorization and saving.
+stacks; saved view preferences remain respected. Deck cards show quantity in a
+colored top-left corner. The primary role sets its color, with small top-edge
+accents for additional tags; category headers show the matching color. Hovered or
+selected cards reveal translucent vertical +/− controls on the right. Automatic
+and manual assignment records remain intact without on-card text badges.
+Manual corrections survive subsequent categorization and saving.
 To explicitly replace them, enable **Reconsider manual assignments** in the review.
 For an existing
 deck, choose **More → Auto Categorize…**, review the proposed roles and their

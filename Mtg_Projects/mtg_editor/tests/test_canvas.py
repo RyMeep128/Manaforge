@@ -110,11 +110,25 @@ def test_quantity_controls_and_artwork_double_click(window):
     window.grid.artworkRequested.disconnect()
     window.grid.artworkRequested.connect(requests.append)
     rect = window.grid.items[0][1]
+    increase = dict(window.grid.quantity_buttons(rect))[1]
     QtTest.QTest.mouseClick(window.grid.viewport(), C.Qt.MouseButton.LeftButton,
-                           pos=C.QPoint(rect.right()-15, rect.bottom()-15))
+                           pos=increase.center()-C.QPoint(0, window.grid.verticalScrollBar().value()))
     assert window.document.deck.entries[0].quantity == 2
     QtTest.QTest.mouseDClick(window.grid.viewport(), C.Qt.MouseButton.LeftButton, pos=point(window, '0'))
     assert requests == ['0']
+
+
+@pytest.mark.parametrize('width', [120, 180, 260])
+def test_quantity_overlay_scales_and_uses_vertical_hit_targets(window, width):
+    window.zoom.setValue(width)
+    rect = window.grid.items[0][1]
+    control = window.grid.control_rect(rect)
+    buttons = dict(window.grid.quantity_buttons(rect))
+    assert rect.contains(control)
+    assert control.left() > rect.center().x()
+    assert control.top() > rect.top() + 30
+    assert buttons[1].bottom() < buttons[-1].top()
+    assert control.contains(buttons[1]) and control.contains(buttons[-1])
 
 
 def test_collapse_selection_scroll_preferences_survive_edits(window):

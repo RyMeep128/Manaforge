@@ -4,7 +4,8 @@ from PyQt6 import QtCore as C, QtGui as G, QtWidgets as W
 from mtg_ui.cards import rounded_card, drag_ghost
 from mtg_ui.theme import COLORS
 from .organization import grouped_entries
-from mtg_core.categorization import is_manual
+from .card_chrome import (marker_color, corner_colors, draw_quantity_corner,
+                          quantity_control_rect, draw_quantity_controls)
 
 
 class CardCanvas(W.QAbstractScrollArea):
@@ -195,6 +196,8 @@ class CardCanvas(W.QAbstractScrollArea):
         self.thumbnails.set_visible(id(self), visible_keys)
         for entry in nearby:
             self.thumbnails.get(entry.card_id, entry.image_asset_id)
+        category_colors = {category.category_id: marker_color('role:' + category.category_id)
+                           for category in self.document.deck.categories}
         for key, title, count, rect in self.headers:
             if not rect.intersects(visible):
                 continue
@@ -205,6 +208,8 @@ class CardCanvas(W.QAbstractScrollArea):
             p.setBrush(p.pen().color())
             p.drawPolygon(G.QPolygon([center+C.QPoint(*point) for point in offsets]))
             p.drawText(rect.adjusted(25, 0, -5, 0), C.Qt.AlignmentFlag.AlignVCenter, f'{title}   {count}')
+            if self.grouping == 'Category' and key in category_colors:
+                p.fillRect(C.QRect(rect.right()-7, rect.top()+10, 4, 18), G.QColor(category_colors[key]))
         for entry, rect, key in self.items:
             if not rect.adjusted(0, 0, 0, 32).intersects(visible):
                 continue
@@ -213,27 +218,26 @@ class CardCanvas(W.QAbstractScrollArea):
                 pixmap = self.thumbnails.get(entry.card_id, entry.image_asset_id, high_resolution=True)
             in_deck = self.search_mode and entry.entry_id in self.in_deck_ids
             rounded_card(p, rect, pixmap, entry.entry_id in self.selected or in_deck, entry.entry_id == self.hovered)
-            badge = C.QRect(rect.x()+4, rect.bottom()-28, 32, 24)
-            p.fillRect(badge, G.QColor('#20352f'))
-            p.setPen(G.QColor('white'))
-            p.drawText(badge, C.Qt.AlignmentFlag.AlignCenter, str(entry.quantity))
+            if self.search_mode:
+                badge = C.QRect(rect.x()+4, rect.bottom()-28, 32, 24)
+                p.fillRect(badge, G.QColor('#20352f'))
+                p.setPen(G.QColor('white'))
+                p.drawText(badge, C.Qt.AlignmentFlag.AlignCenter, str(entry.quantity))
+            else:
+                primary, tags = corner_colors(entry, category_colors)
+                draw_quantity_corner(p, rect, entry.quantity, primary, tags)
             if in_deck:
                 marker = C.QRect(rect.x()+4, rect.top()+31, rect.width()-8, 22)
                 p.fillRect(marker, G.QColor('#20352f'))
                 p.drawText(marker, C.Qt.AlignmentFlag.AlignCenter, 'In deck')
-            if not self.search_mode and (entry.category_ids or entry.extras.get('auto_categories')):
-                source = 'Manual' if is_manual(entry) else 'Auto'
-                source_rect = C.QRect(rect.x()+40, rect.bottom()-28, 54, 24)
-                p.fillRect(source_rect, G.QColor('#69458a' if source == 'Manual' else '#20352f'))
-                p.drawText(source_rect, C.Qt.AlignmentFlag.AlignCenter, source)
             if entry.entry_id == self.hovered or entry.entry_id in self.selected:
                 control = self.control_rect(rect)
-                p.fillRect(control, G.QColor('#20352f'))
                 if self.search_mode:
+                    p.fillRect(control, G.QColor('#20352f'))
+                    p.setPen(G.QColor('white'))
                     p.drawText(control, C.Qt.AlignmentFlag.AlignCenter, self.search_action_text)
                 else:
-                    for delta, button in self.quantity_buttons(rect):
-                        p.drawText(button, C.Qt.AlignmentFlag.AlignCenter, '+' if delta > 0 else '−')
+                    draw_quantity_controls(p, control, self.quantity_buttons(rect))
             if self.mode != 'Stacks' or not any(r.y() > rect.y() and r.x() == rect.x() and k == key for _, r, k in self.items):
                 label = ('Oversized · ' if entry.oversized else '') + ('Owned · ' if entry.do_not_print else '') + entry.name
                 p.setPen(G.QColor(COLORS['text_secondary']))
@@ -257,6 +261,8 @@ class CardCanvas(W.QAbstractScrollArea):
         p.end()
 
     def control_rect(self, rect):
+        if not self.search_mode:
+            return quantity_control_rect(rect)
         # Narrow cards need a separate row so controls do not cover the badges.
         bottom_offset = 57 if rect.width() < 164 else 29
         width = min(rect.width()-8, 120) if self.search_mode and self.search_action_text != '+ Add' else 60
@@ -275,9 +281,9 @@ class CardCanvas(W.QAbstractScrollArea):
         control = self.control_rect(rect)
         if self.search_mode:
             return [(1, control)]
-        half = control.width() // 2
-        return [(-1, C.QRect(control.x(), control.y(), half, control.height())),
-                (1, C.QRect(control.x()+half, control.y(), control.width()-half, control.height()))]
+        half = control.height() // 2
+        return [(1, C.QRect(control.x(), control.y(), control.width(), half)),
+                (-1, C.QRect(control.x(), control.y()+half, control.width(), control.height()-half))]
 
     def activate_quantity(self, item, position):
         if item is None:
