@@ -81,6 +81,9 @@ class RecommendationPanel(W.QWidget):
         self.key = None
         self.loaded_key = None
         self.rows = []
+        self.category_scroll = {}
+        self.selected_category = "Top Cards"
+        self.restore_category_position = None
         self.pages = None
         self.shown_limit = 50
         self.page_generation = 0
@@ -141,12 +144,65 @@ class RecommendationPanel(W.QWidget):
         self.canvas.quantityRequested.connect(self.add)
         self.canvas.detailsRequested.connect(lambda key: self.inspect(key))
         self.canvas.menuRequested.connect(self.card_menu)
-        body.addWidget(self.canvas, 1)
+        from .recommendation_categories import CATEGORIES
+        from .discovery_options import color_combo
+        self.identity = color_combo()
+        self.identity.currentIndexChanged.connect(self.filter_rows)
+        advanced = W.QHBoxLayout()
+        advanced.addWidget(self.identity)
+        self.mana_value = W.QSpinBox()
+        self.mana_value.setRange(-1, 20)
+        self.mana_value.setValue(-1)
+        self.mana_value.setSpecialValueText("Any mana value")
+        self.mana_value.setPrefix("MV ")
+        self.mana_value.valueChanged.connect(self.filter_rows)
+        advanced.addWidget(self.mana_value)
+        body.addLayout(advanced)
+        self.commander_header = W.QLabel()
+        self.commander_header.setWordWrap(True)
+        self.commander_header.setTextFormat(C.Qt.TextFormat.PlainText)
+        self.commander_art = RecommendationCanvas(editor.thumbnails, self)
+        self.commander_art.setFixedSize(140, 180)
+        self.commander_art.card_width = 110
+        self.commander_art.quantityRequested.connect(lambda *_: self.open_discovery())
+        hero = W.QHBoxLayout()
+        hero.addWidget(self.commander_art)
+        hero.addWidget(self.commander_header, 1)
+        discover = W.QPushButton("Discover Deck Ideas")
+        discover.clicked.connect(self.open_discovery)
+        hero.addWidget(discover)
+        body.insertLayout(0, hero)
+        results = W.QHBoxLayout()
+        self.categories = W.QListWidget()
+        self.categories.addItems(CATEGORIES)
+        self.categories.setMaximumWidth(170)
+        self.categories.setAccessibleName("Recommendation categories")
+        self.categories.setCurrentRow(0)
+        self.categories.currentTextChanged.connect(self.change_category)
+        results.addWidget(self.categories)
+        results.addWidget(self.canvas, 1)
+        body.addLayout(results, 1)
+        top = W.QPushButton("Back to Top")
+        top.clicked.connect(lambda: self.canvas.verticalScrollBar().setValue(0))
+        body.addWidget(top)
         self.more = W.QPushButton('Load More')
         self.more.hide()
         self.more.clicked.connect(self.load_more)
         body.addWidget(self.more)
         layout.addWidget(self.content, 1)
+
+    def open_discovery(self):
+        self.editor.add_cards_workspace.open()
+        tabs = self.editor.add_card_tabs
+        tabs.setCurrentWidget(self.editor.add_cards_workspace.discovery)
+
+    def change_category(self, category):
+        self.category_scroll[self.selected_category] = (self.canvas.verticalScrollBar().value(), self.shown_limit)
+        self.selected_category = category
+        position, self.shown_limit = self.category_scroll.get(category, (0, 50))
+        self.restore_category_position = position
+        self.filter_rows(reset=False)
+        self.canvas.verticalScrollBar().setValue(position)
 
     def active(self):
         return self.isVisible() and not self.editor.closing
@@ -158,6 +214,18 @@ class RecommendationPanel(W.QWidget):
                                         else W.QBoxLayout.Direction.TopToBottom)
 
     def deck_changed(self):
+        from .commander_selection import commanders
+        selected = commanders(self.editor.document)
+        discovery = getattr(getattr(self.editor, 'add_cards_workspace', None), 'discovery', None)
+        saved_theme = self.editor.document.editor_preferences.get('discovery', {}).get('theme', '')
+        theme = dict(discovery.theme_catalog).get(saved_theme, saved_theme) if discovery else saved_theme
+        theme = theme or 'No theme selected'
+        self.commander_header.setText((" + ".join(e.name for e in selected) or "Discover Deck Ideas")
+                                     + "\n" + " / ".join("".join((e.extras.get('facts') or {}).get('color_identity') or []) or "C" for e in selected)
+                                     + "\n" + theme)
+        self.commander_art.document.deck.entries = list(selected)
+        self.commander_art.setVisible(bool(selected))
+        self.commander_art.refresh()
         key = context_key(self.editor.document)
         if key != self.key:
             switched = (
@@ -167,6 +235,7 @@ class RecommendationPanel(W.QWidget):
             self.generation += 1
             self.cancelled.set()
             if switched:
+                self.category_scroll.clear()
                 self.pages = None
                 self.shown_limit = 50
                 self.rows = []
@@ -249,6 +318,8 @@ class RecommendationPanel(W.QWidget):
 
     def filter_rows(self, *_, reset=True):
         if reset:
+            self.category_scroll.clear()
+            self.restore_category_position = 0
             self.shown_limit = 50
         self.page_generation += 1
         self.render_rows()
@@ -267,7 +338,8 @@ class RecommendationPanel(W.QWidget):
         options = dict(limit=self.shown_limit, kind=self.type_filter.currentText(),
                        text=self.text_filter.text(), role=self.role_filter.currentText(),
                        membership=self.membership.currentIndex(),
-                       dismissed=settings(document)['dismissed'])
+                       dismissed=settings(document)['dismissed'], category=self.selected_category,
+                       identity=self.identity.currentData(), mana_value=self.mana_value.value())
         self.more.setEnabled(False)
         self.status.setText('Loading recommendations...')
         self.worker = Task(lambda: pages.page(document, **options), self, operation='recommendation page')
@@ -282,7 +354,12 @@ class RecommendationPanel(W.QWidget):
             for row in rows:
                 row['entry'] = previous.get(row['oracle_id'], row['entry'])
             self.rows = rows
+            position = self.restore_category_position
+            if position is None:
+                position = self.canvas.verticalScrollBar().value()
+            self.restore_category_position = None
             self.render_rows(more)
+            self.canvas.verticalScrollBar().setValue(position)
         self.worker.completed.connect(completed)
         self.worker.finished.connect(self.finished)
         self.worker.start()
@@ -297,10 +374,12 @@ class RecommendationPanel(W.QWidget):
         role = self.role_filter.currentText()
         membership = self.membership.currentIndex()
         dismissed = settings(self.editor.document)["dismissed"]
+        from .recommendation_categories import matches
         entries = [
             row["entry"]
             for row in self.rows
-            if row["oracle_id"] not in dismissed
+            if matches(row, self.selected_category, self.identity.currentData(), self.mana_value.value())
+            and row["oracle_id"] not in dismissed
             and (kind == "All Card Types" or kind in card_types(row["entry"]))
             and (not text or text in (row["entry"].name + " " + str(row["entry"].extras.get("facts", {}).get("oracle_text") or "")).casefold())
             and (role == "All roles" or any(item["name"] == role for item in row["roles"]))
@@ -324,6 +403,9 @@ class RecommendationPanel(W.QWidget):
     def add(self, entry_id, _delta=1):
         row = next((r for r in self.rows if r["entry"].entry_id == entry_id), None)
         if row:
+            from .organization import in_deck_entries
+            if _delta > 0 and self.membership.currentIndex() == 1 and in_deck_entries(self.editor.document, [row['entry']]):
+                return
             entry = deepcopy(row["entry"])
             entry.extras["category_suggestion"] = row["roles"]
             self.editor.change_candidate_quantity(entry, _delta)

@@ -54,7 +54,7 @@ def search_commanders(service, filters, store, *, should_cancel=None):
         if not partner:
             return dict(snapshot, results=[], more=False,
                         status="Current commander's local rules data is unavailable; cannot verify compatible partners.")
-    limit = min(2000, max(100, int(filters.get("limit", 200))))
+    limit = min(2000, max(50, int(filters.get("limit", 200))))
     results, offset = [], 0
     # Theme membership is an exact Oracle-ID prefilter, applied before the SQL
     # printing selection. Larger pages avoid repeating the catalog sort while
@@ -75,6 +75,9 @@ def search_commanders(service, filters, store, *, should_cancel=None):
             if not (eligible(payload) is True or background(payload)):
                 continue
             if filters.get("legal_only", True) and (payload.get("legalities") or {}).get("commander") != "legal":
+                continue
+            identity = filters.get("identity")
+            if identity is not None and ("color_identity" not in payload or set(payload["color_identity"]) != set(identity)):
                 continue
             if not capability_matches(payload, filters.get("capability", "")):
                 continue

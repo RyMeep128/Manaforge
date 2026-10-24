@@ -28,7 +28,7 @@ def in_deck_entries(document, candidates):
 def card_facts(payload):
     face = (payload.get('card_faces') or [{}])[0]
     return {key: payload.get(key, face.get(key)) for key in
-            ('type_line', 'mana_cost', 'cmc', 'colors', 'oracle_text', 'keywords', 'layout', 'card_faces',
+            ('released_at', 'type_line', 'mana_cost', 'cmc', 'colors', 'oracle_text', 'keywords', 'layout', 'card_faces',
              'color_identity', 'power', 'toughness', 'rarity', 'artist', 'legalities',
              'finishes', 'frame_effects', 'promo', 'textless', 'full_art', 'border_color')}
 

@@ -38,7 +38,7 @@ class RecommendationPages:
                 'SELECT DISTINCT value FROM cards, json_each(cards.roles) ORDER BY value')]
 
     def page(self, document, *, limit=50, kind='All Card Types', text='', role='All roles',
-             membership=1, dismissed=()):
+             membership=1, dismissed=(), category='Top Cards', identity=None, mana_value=-1):
         clauses, parameters = ['instr(text, ?) > 0'], [text.casefold().strip()]
         for column, value, all_value in [('types', kind, 'All Card Types'), ('roles', role, 'All roles')]:
             if value != all_value:
@@ -54,6 +54,9 @@ class RecommendationPages:
                 if row['oracle_id'] in dismissed:
                     continue
                 row['entry'] = DeckEntry.from_dict(row['entry'])
+                from .recommendation_categories import matches
+                if not matches(row, category, identity, mana_value):
+                    continue
                 present = bool(in_deck_entries(document, [row['entry']]))
                 if membership and present != (membership == 2):
                     continue

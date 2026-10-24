@@ -50,7 +50,7 @@ def apply_selection(document, candidate, *, second=False, change_format=False):
         document.deck.format = "Commander"
 
 
-def select_commander(editor, candidate, *, second=False):
+def select_commander(editor, candidate, *, second=False, on_selected=None):
     """Resolve rules off-thread, explicitly confirm replacement, then edit once."""
     candidate = deepcopy(candidate)
     document = editor.document
@@ -106,6 +106,8 @@ def select_commander(editor, candidate, *, second=False):
             return
         editor.edit(lambda d: apply_selection(d, candidate, second=second, change_format=change_format))
         editor.sync_fields()
+        if on_selected is not None:
+            on_selected()
         editor.statusBar().showMessage(f"Set {candidate.name} as commander. Undo is available.", 5000)
 
     editor.run_task(resolve, resolved)

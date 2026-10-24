@@ -59,8 +59,10 @@ class AddCardsWorkspace(W.QWidget):
         with C.QSignalBlocker(tabs):
             self.content_layout.addWidget(tabs, 1)
             tabs.insertTab(0, self.card_search, "Card Search")
-            tabs.addTab(self.discovery, "Commanders")
+            tabs.addTab(self.discovery, "Discover Deck Ideas")
             tabs.setCurrentIndex(self.full_index)
+            if not editor.document.deck.entries and self.full_index == 0:
+                tabs.setCurrentWidget(self.discovery)
         editor.search_panel.hide()
         self.controls.hide()
         editor.recommendation_panel.set_expanded(True)
