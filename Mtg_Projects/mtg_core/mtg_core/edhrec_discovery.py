@@ -81,6 +81,23 @@ class DiscoveryStore:
     def __init__(self, path):
         self.path = Path(path)
 
+    def rankings(self, *, should_cancel=None):
+        """Single-commander cohort counts only; pair totals never become individual ranks."""
+        if not self.path.exists():
+            return {}
+        from .search.cancellation import check_cancelled
+        with closing(sqlite3.connect(self.path.resolve().as_uri() + '?mode=ro', uri=True, timeout=0.1)) as db:
+            if should_cancel:
+                db.set_progress_handler(lambda: int(should_cancel()), 1000)
+            rows = db.execute("SELECT m.oracle_id, c.sample FROM commanders c JOIN commander_members m "
+                              "USING(commander_key) WHERE (SELECT count(*) FROM commander_members other "
+                              "WHERE other.commander_key=c.commander_key)=1")
+            result = {}
+            for oid, sample in rows:
+                check_cancelled(should_cancel)
+                result[oid] = sample
+            return result
+
     def snapshot(self, theme=None, *, should_cancel=None):
         if not self.path.exists():
             return dict(themes=[], members=[], status="EDHREC theme data unavailable. Local commander search is available.")
@@ -110,6 +127,7 @@ class DiscoveryStore:
                     members.append(dict(row))
             count, imported = db.execute("SELECT count(*), max(imported) FROM commanders").fetchone()
         check_cancelled(should_cancel)
-        return dict(themes=themes, members=members, imported=imported,
+        return dict(themes=themes, members=members, imported=imported, cohorts=count,
+                    coverage="starter" if self.path.parent.name == "starter" else "collected",
                     status=f"Offline EDHREC themes from {count} cached commander cohorts; coverage is limited to imported pages. Counts belong to each exact cohort, not global theme totals."
                     if themes else "No EDHREC theme associations in the local snapshot. Local commander search is available.")

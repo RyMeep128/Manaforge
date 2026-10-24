@@ -178,3 +178,20 @@ def test_virtual_grid_resizes_and_only_requests_visible_thumbnails():
     assert thumbs.visible[id(canvas)] == set()
     canvas.preview.close()
     canvas.close()
+
+
+def test_category_browsing_does_not_consume_card_undo_and_repeat_add_is_ignored(editor):
+    panel = editor.recommendation_panel
+    panel.rows = [recommendation(1, 'Creature'), recommendation(2, 'Instant')]
+    panel.change_category('Creatures')
+    panel.add('e1')
+    panel.add('e1')
+    assert len(editor.document.deck.entries) == 1
+    assert editor.document.deck.entries[0].quantity == 1
+    panel.change_category('Instants')
+    assert panel.selected_category == 'Instants'
+    editor.undo()
+    assert not editor.document.deck.entries
+    assert panel.selected_category == 'Instants'
+    editor.redo()
+    assert editor.document.deck.entries[0].quantity == 1

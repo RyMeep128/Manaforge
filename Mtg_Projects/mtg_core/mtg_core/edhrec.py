@@ -151,6 +151,6 @@ class EdhrecSource:
                     imported=row[1],
                 )
             ],
-            status=f"Offline EDHREC {'exact cached pair cohort' if len(selected) == 2 else 'commander page'}; {len(data['unresolved'])} unresolved card names omitted; category lists may be incomplete.",
+            status=("Limited bundled starter coverage. " if Path(self.path).parent.name == "starter" else "") + f"Offline EDHREC {'exact cached pair cohort' if len(selected) == 2 else 'commander page'}; {len(data['unresolved'])} unresolved card names omitted; category lists may be incomplete.",
         )
         return result

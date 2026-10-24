@@ -11,18 +11,69 @@ from mtg_core.paths import core_data_root
 from .canvas import CardCanvas
 from .commander_selection import commanders, select_commander
 from .organization import card_facts, update_candidate_quantities
-from .search import SearchController
+from .search import SearchCache, SearchController, SearchWorker
 
 
 class DiscoverySearch:
-    """Adapt discovery to the shared debounce/cache/cancellation controller."""
-
+    """Snapshot adapter sharing debounce, caching, and cancellation with local search."""
     def __init__(self, service):
         self.service = service
-        self.store = DiscoveryStore(core_data_root() / "recommendations" / "edhrec-discovery.sqlite3")
+        self.store = None
+        self.metadata = None
 
     def search_editor_cards(self, query, *, should_cancel=None):
-        return search_commanders(self.service, json.loads(query), self.store, should_cancel=should_cancel)
+        from mtg_core.discovery_starter import ensure_starter_catalog, snapshot_path
+        import sqlite3
+        root = core_data_root() / 'recommendations'
+        try:
+            ensure_starter_catalog(self.service, should_cancel=should_cancel)
+            path = snapshot_path(root, 'edhrec-discovery.sqlite3')
+        except (OSError, ValueError, sqlite3.DatabaseError):
+            path = root / 'edhrec-discovery.sqlite3'
+        self.store = DiscoveryStore(path)
+        if self.metadata is None:
+            database = getattr(self.service, 'database', None)
+            reader = getattr(database, 'discovery_metadata', None)
+            self.metadata = reader(should_cancel=should_cancel) if callable(reader) else {}
+        return search_commanders(self.service, json.loads(query), self.store,
+                                 metadata=self.metadata, should_cancel=should_cancel)
+
+
+class DiscoveryWorker(SearchWorker):
+    """Discovery returns a catalog/result snapshot, rather than SearchCardResult pages."""
+    def run(self):
+        from mtg_core.search.cancellation import SearchCancelled, check_cancelled
+        try:
+            check_cancelled(self.cancelled.is_set)
+            snapshot = None if self.refresh else self.cache.get(self.query)
+            if snapshot is None:
+                if self.refresh:
+                    self.service.metadata = None
+                snapshot = self.service.search_editor_cards(self.query, should_cancel=self.cancelled.is_set)
+                check_cancelled(self.cancelled.is_set)
+                self.cache.put(self.query, snapshot)
+            check_cancelled(self.cancelled.is_set)
+            self.completed.emit(self.query, snapshot, '')
+        except SearchCancelled:
+            pass
+        except Exception as exc:
+            if not self.cancelled.is_set():
+                self.completed.emit(self.query, {}, str(exc))
+
+
+class DiscoveryController(SearchController):
+    worker_type = DiscoveryWorker
+
+    def search(self, query=None, *, refresh=False, append=False):
+        if refresh:
+            self.cache = SearchCache()
+        super().search(query, refresh=refresh, append=append)
+
+    def _completed(self, query, snapshot, error):
+        worker = self.sender()
+        if (worker is self.worker and not worker.cancelled.is_set()
+                and not self.closing and query == self.query):
+            self.resultsReady.emit(query, snapshot, error)
 
 
 class DiscoveryCanvas(CardCanvas):
@@ -53,12 +104,13 @@ class CommanderDiscovery(W.QWidget):
         self.context = None
         self.theme_slug = ""
         self.theme_catalog = []
-        self.controller = SearchController(DiscoverySearch(editor.service), self)
+        self.theme_options = {}
+        self.controller = DiscoveryController(DiscoverySearch(editor.service), self)
         layout = W.QVBoxLayout(self)
         theme_row = W.QHBoxLayout()
-        label = W.QLabel("Theme")
-        label.setProperty("role", "title")
-        theme_row.addWidget(label)
+        theme_label = W.QLabel("Theme")
+        theme_label.setProperty("role", "title")
+        theme_row.addWidget(theme_label)
         self.theme = W.QComboBox()
         self.theme.setEditable(True)
         self.theme.setInsertPolicy(W.QComboBox.InsertPolicy.NoInsert)
@@ -97,21 +149,26 @@ class CommanderDiscovery(W.QWidget):
             fields.addWidget(field, 1)
             field.textChanged.connect(self.filters_changed)
         layout.addLayout(fields)
-        options = W.QHBoxLayout()
+        options = W.QGridLayout()
         self.capability = W.QComboBox()
         for label, value in [("Any capability", ""), ("Partner / Partner with", "partner"),
                              ("Friends Forever", "friends forever"), ("Choose a Background", "choose a background"),
                              ("Background cards", "background"), ("Doctor's companion", "doctor's companion")]:
             self.capability.addItem(label, value)
-        options.addWidget(self.capability)
+        self.browse_mode = W.QComboBox()
+        self.browse_mode.addItem('Commander Browser', 'all')
+        self.browse_mode.addItem('Top Commanders (cached coverage)', 'top')
+        self.browse_mode.model().item(1).setEnabled(False)
+        self.browse_mode.currentIndexChanged.connect(self.filters_changed)
+        options.addWidget(self.browse_mode, 0, 0)
+        options.addWidget(self.capability, 1, 0)
         from .discovery_options import color_combo
         self.identity = color_combo()
         self.identity.currentIndexChanged.connect(self.filters_changed)
-        options.addWidget(self.identity)
+        options.addWidget(self.identity, 0, 1)
         self.legal = W.QCheckBox("Locally legal in Commander")
         self.legal.setChecked(True)
-        options.addWidget(self.legal)
-        options.addStretch()
+        options.addWidget(self.legal, 1, 1)
         layout.addLayout(options)
         pairing = W.QHBoxLayout()
         self.partner = W.QCheckBox("Compatible with current commander")
@@ -154,6 +211,9 @@ class CommanderDiscovery(W.QWidget):
         checks = W.QPushButton("Commander / deck checks")
         checks.clicked.connect(editor.commander_checks)
         secondary.addWidget(checks)
+        manual = W.QPushButton('Build Manually')
+        manual.clicked.connect(lambda: self.editor.add_card_tabs.setCurrentWidget(self.editor.add_cards_workspace.card_search))
+        secondary.addWidget(manual)
         secondary.addStretch()
         self.more = W.QPushButton("Show more")
         self.more.clicked.connect(self.show_more)
@@ -191,38 +251,67 @@ class CommanderDiscovery(W.QWidget):
         browser.addWidget(clear)
         layout.insertLayout(0, browser)
         layout.insertWidget(1, self.theme_list)
+        # Keep the full theme catalog beside a large commander grid.
+        layout.removeItem(browser)
+        browser.removeWidget(self.theme_search)
+        layout.removeWidget(self.theme_list)
+        sidebar = W.QWidget()
+        sidebar.setMinimumWidth(220)
+        sidebar.setMaximumWidth(300)
+        sidebar_layout = W.QVBoxLayout(sidebar)
+        sidebar_layout.setContentsMargins(0, 0, 8, 0)
+        sidebar_layout.addLayout(browser)
+        sidebar_layout.addWidget(self.theme_search)
+        self.theme_list.setMaximumHeight(16777215)
+        self.theme_list.setFlow(W.QListView.Flow.TopToBottom)
+        self.theme_list.setWrapping(False)
+        self.theme_list.setSpacing(5)
+        sidebar_layout.addWidget(self.theme_list, 1)
+        self.theme.hide()
+        self.browse_themes.hide()
+        theme_label.setText('Discover Deck Ideas')
+        main = W.QWidget()
+        main_layout = W.QVBoxLayout(main)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        while layout.count():
+            item = layout.takeAt(0)
+            if item.widget() is not None:
+                main_layout.addWidget(item.widget(), 1 if item.widget() is self.canvas else 0)
+            elif item.layout() is not None:
+                main_layout.addLayout(item.layout())
+        workspace = W.QHBoxLayout()
+        workspace.addWidget(sidebar)
+        workspace.addWidget(main, 1)
+        layout.addLayout(workspace, 1)
         self.populate_themes()
 
     def populate_themes(self, *_):
         self.theme_list.clear()
-        # Group only actual snapshot entries; local type search remains available.
-        typal = {'angels', 'dragons', 'elves', 'zombies', 'goblins', 'humans', 'vampires',
-                 'slivers', 'dinosaurs', 'merfolk', 'wizards', 'cats', 'dogs', 'knights',
-                 'demons', 'spirits', 'elementals', 'soldiers', 'warriors', 'eldrazi'}
-        companions = {'companion', 'companions', 'lurrus', 'yorion', 'gyruda', 'kaheera',
-                      'keruga', 'jegantha', 'obosh', 'umori', 'zirda', 'lutri'}
         group = self.theme_group.currentText()
         needle = self.theme_search.text().strip().casefold()
         for slug, name in self.theme_catalog:
-            words = set(slug.split('-'))
-            kind = 'Companions' if words & companions else 'Typal' if words & typal else 'Themes'
-            if kind == group and (not needle or needle in name.casefold()):
+            option = self.theme_options.get(slug, {})
+            if (needle and needle in name.casefold()) or (not needle and option.get('group', 'Themes') == group):
                 item = W.QListWidgetItem(name)
                 item.setData(C.Qt.ItemDataRole.UserRole, slug)
+                item.setToolTip('Cached EDHREC commander associations' if option.get('origin') == 'edhrec'
+                                else 'Local card mechanics / type search')
                 self.theme_list.addItem(item)
         if not self.theme_list.count():
-            item = W.QListWidgetItem("No cached matches; use local type / text search below.")
+            item = W.QListWidgetItem('No matching themes. Try local type or Oracle text search below.')
             item.setFlags(C.Qt.ItemFlag.NoItemFlags)
             self.theme_list.addItem(item)
 
     def save_preferences(self):
-        value = dict(theme=self.theme_slug, identity=self.identity.currentData())
+        value = dict(theme=self.theme_slug, identity=self.identity.currentData(),
+                     theme_option=self.theme_options.get(self.theme_slug, {}))
         if self.editor.document.editor_preferences.get('discovery') != value:
-            self.editor.edit(lambda d: d.editor_preferences.update(discovery=value))
+            self.editor.document.editor_preferences.update(discovery=value)
+            self.editor.changed()
 
     def filters(self):
         selected = commanders(self.editor.document)
-        return dict(theme=self.theme_slug, identity=self.identity.currentData(), name=self.name.text(), type=self.type.text(),
+        return dict(theme=self.theme_slug, browse=self.browse_mode.currentData(), identity=self.identity.currentData(), name=self.name.text(), type=self.type.text(),
                     text=self.text.text(), capability=self.capability.currentData(),
                     legal_only=self.legal.isChecked(), limit=self.limit,
                     partner_card_id=selected[0].card_id if self.partner.isChecked() and len(selected) == 1 else None)
@@ -236,7 +325,16 @@ class CommanderDiscovery(W.QWidget):
         slug = self.theme.itemData(index) or ""
         if slug != self.theme_slug:
             self.theme_slug = slug
+            if slug:
+                with C.QSignalBlocker(self.browse_mode):
+                    self.browse_mode.setCurrentIndex(0)
+            self.sync_theme_selection()
             self.filters_changed()
+
+    def sync_theme_selection(self):
+        for index in range(self.theme_list.count()):
+            item = self.theme_list.item(index)
+            item.setSelected(item.data(C.Qt.ItemDataRole.UserRole) == self.theme_slug)
 
     def complete_theme(self, text):
         index = self.theme.findText(text, C.Qt.MatchFlag.MatchFixedString)
@@ -306,6 +404,8 @@ class CommanderDiscovery(W.QWidget):
             self.status.setToolTip(error)
             return
         self.loaded_query = query
+        self.theme_options = {theme['slug']: theme for theme in snapshot['themes']}
+        self.browse_mode.model().item(1).setEnabled(bool(snapshot.get('ranked')) and not self.theme_slug)
         catalog = [(theme["slug"], theme["name"]) for theme in snapshot["themes"]]
         if catalog != self.theme_catalog:
             typed = self.theme.currentText()
@@ -322,13 +422,20 @@ class CommanderDiscovery(W.QWidget):
             self.populate_themes()
         self.theme.setEnabled(bool(snapshot["themes"]))
         self.browse_themes.setEnabled(bool(snapshot["themes"]))
-        self.theme_status.setText(snapshot["status"])
+        prefix = 'Limited bundled starter snapshot. ' if snapshot.get('coverage') == 'starter' else ''
+        self.theme_status.setText(prefix + f"{snapshot.get('cards', 0):,} local cards; "
+                                  f"{len(snapshot['themes'])} themes and typal options.")
+        self.theme_status.setToolTip(snapshot['status'] + "\n" + f"{snapshot.get('cards', 0):,} local cards; "
+                                    f"{snapshot.get('cohorts', 0):,} cached commander cohorts.")
         if self.theme_slug and self.theme.findData(self.theme_slug) < 0:
             # A removed/unavailable snapshot must not leave a hidden theme filter
             # blocking the local fallback.
             self.theme_slug = ""
             self.filters_changed()
             return
+        self.sync_theme_selection()
+        if self.theme_slug:
+            self.save_preferences()
         self.canvas.theme_name = dict(catalog).get(self.theme_slug, "")
         self.rows = {}
         entries = []
@@ -339,19 +446,21 @@ class CommanderDiscovery(W.QWidget):
                               extras={"facts": card_facts(card.payload or {})})
             self.rows[entry.entry_id] = dict(row, entry=entry)
             entries.append(entry)
+        position = self.canvas.verticalScrollBar().value()
         self.canvas.document.deck.entries = entries
         update_candidate_quantities(self.editor.document, self.canvas)
         self.canvas.refresh()
+        self.canvas.verticalScrollBar().setValue(position)
         self.status.setToolTip("")
         if entries:
             if snapshot["more"]:
-                suffix = "Narrow the filters to see other matches." if self.limit >= 2000 else "More matches are available."
+                suffix = "More matches are available."
             else:
                 suffix = "Select a card to inspect or set as commander."
             self.status.setText(f"{len(entries)} commanders / Backgrounds. {suffix}")
         else:
             self.status.setText("No commanders match these filters. Try broader text or a different theme.")
-        self.more.setVisible(snapshot["more"] and self.limit < 2000)
+        self.more.setVisible(snapshot["more"])
         self.result_status = self.status.text()
         self.selection_changed()
 
@@ -367,12 +476,13 @@ class CommanderDiscovery(W.QWidget):
             return
         entry = row["entry"]
         self.details.setText(entry.name)
-        self.details.setToolTip("")
+        self.details.setToolTip('Companion deck restrictions must be checked separately.'
+                                if self.theme_options.get(self.theme_slug, {}).get('group') == 'Companions' else '')
 
     def change_quantity(self, entry_id, delta):
         row = self.rows.get(entry_id)
-        if row:
-            self.editor.change_candidate_quantity(row['entry'], delta)
+        if row and delta > 0:
+            self.set_commander(entry_id)
 
     def set_commander(self, entry_id=None, _delta=1, *, second=False):
         row = self.rows.get(entry_id) if entry_id else self.selected()
@@ -389,7 +499,7 @@ class CommanderDiscovery(W.QWidget):
         menu.exec(position)
 
     def show_more(self):
-        self.limit = min(2000, self.limit + 50)
+        self.limit += 50
         self.search()
 
     def deck_changed(self):
@@ -406,6 +516,7 @@ class CommanderDiscovery(W.QWidget):
             with C.QSignalBlocker(self.theme):
                 self.theme.setCurrentIndex(max(0, self.theme.findData(self.theme_slug)))
             self.loaded_query = None
+            self.sync_theme_selection()
         selected = commanders(self.editor.document)
         context = (self.editor.document.deck.deck_id, tuple((e.entry_id, e.card_id) for e in selected))
         changed = context != self.context

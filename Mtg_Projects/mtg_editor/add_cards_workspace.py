@@ -17,6 +17,7 @@ class AddCardsWorkspace(W.QWidget):
         self.expanded = False
         self.quick_index = self.full_index = 0
         self.quick_visible = False
+        self.last_discovery_deck = None
         self.quick_scroll = [0, 0, 0, 0]
         self.full_scroll = [0, 0, 0, 0]
         self.card_search = CardSearchPanel(editor)
@@ -61,8 +62,9 @@ class AddCardsWorkspace(W.QWidget):
             tabs.insertTab(0, self.card_search, "Card Search")
             tabs.addTab(self.discovery, "Discover Deck Ideas")
             tabs.setCurrentIndex(self.full_index)
-            if not editor.document.deck.entries and self.full_index == 0:
+            if not any(entry.quantity > 0 for entry in editor.document.deck.entries):
                 tabs.setCurrentWidget(self.discovery)
+                self.last_discovery_deck = editor.document.deck.deck_id
         editor.search_panel.hide()
         self.controls.hide()
         editor.recommendation_panel.set_expanded(True)

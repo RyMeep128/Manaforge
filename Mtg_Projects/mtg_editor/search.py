@@ -79,6 +79,8 @@ class SearchController(QtCore.QObject):
     Presentation subscribes to signals; workers never access widgets. A pending
     query starts only after the previous worker exits and its debounce expires.
     """
+    worker_type = SearchWorker
+
     resultsReady = QtCore.pyqtSignal(str, object, str)
     statusChanged = QtCore.pyqtSignal(str)
     busyChanged = QtCore.pyqtSignal(bool)
@@ -153,7 +155,7 @@ class SearchController(QtCore.QObject):
             return
         self.statusChanged.emit('Searching local database...')
         self.busyChanged.emit(True)
-        self.worker = SearchWorker(self.query, self.service, self,
+        self.worker = self.worker_type(self.query, self.service, self,
                                    cache=self.cache, refresh=self.refresh, offset=self.offset)
         self.refresh = False
         self.worker.completed.connect(self._completed)

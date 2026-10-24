@@ -1,0 +1,158 @@
+{
+  "version": 1,
+  "description": "Limited offline starter coverage exported from existing local caches; never a complete EDHREC ranking.",
+  "cards": 2551,
+  "commander_cohorts": 35,
+  "recommendation_pages": 35,
+  "themes": 360,
+  "sources": [
+    "https://scryfall.com/docs/api",
+    "https://edhrec.com/"
+  ],
+  "commander_pages": [
+    {
+      "url": "https://edhrec.com/commanders/baylen-the-haymaker",
+      "cached_at": 1790701551.2226262
+    },
+    {
+      "url": "https://edhrec.com/commanders/chatterfang-squirrel-general",
+      "cached_at": 1790701563.2439394
+    },
+    {
+      "url": "https://edhrec.com/commanders/the-wise-mothman",
+      "cached_at": 1790701479.2403984
+    },
+    {
+      "url": "https://edhrec.com/commanders/ms-bumbleflower",
+      "cached_at": 1790701390.4130342
+    },
+    {
+      "url": "https://edhrec.com/commanders/breya-etherium-shaper",
+      "cached_at": 1790701695.2547662
+    },
+    {
+      "url": "https://edhrec.com/commanders/urza-chief-artificer",
+      "cached_at": 1790702043.337317
+    },
+    {
+      "url": "https://edhrec.com/commanders/krenko-mob-boss",
+      "cached_at": 1790701354.4258888
+    },
+    {
+      "url": "https://edhrec.com/commanders/edgar-markov",
+      "cached_at": 1790701336.4323883
+    },
+    {
+      "url": "https://edhrec.com/commanders/storm-force-of-nature",
+      "cached_at": 1790702079.309496
+    },
+    {
+      "url": "https://edhrec.com/commanders/vivi-ornitier",
+      "cached_at": 1790701360.291426
+    },
+    {
+      "url": "https://edhrec.com/commanders/teval-the-balanced-scale",
+      "cached_at": 1790701378.4287953
+    },
+    {
+      "url": "https://edhrec.com/commanders/terra-herald-of-hope",
+      "cached_at": 1790701845.2662954
+    },
+    {
+      "url": "https://edhrec.com/commanders/oloro-ageless-ascetic",
+      "cached_at": 1790701689.2780364
+    },
+    {
+      "url": "https://edhrec.com/commanders/teysa-karlov",
+      "cached_at": 1790701731.2485945
+    },
+    {
+      "url": "https://edhrec.com/commanders/sephiroth-fabled-soldier",
+      "cached_at": 1790701533.2714744
+    },
+    {
+      "url": "https://edhrec.com/commanders/marina-vendrell",
+      "cached_at": 1790702193.3545165
+    },
+    {
+      "url": "https://edhrec.com/commanders/go-shintai-of-lifes-origin",
+      "cached_at": 1790701809.3064325
+    },
+    {
+      "url": "https://edhrec.com/commanders/brago-king-eternal",
+      "cached_at": 1790702157.322724
+    },
+    {
+      "url": "https://edhrec.com/commanders/niko-light-of-hope",
+      "cached_at": 1790702793.3499172
+    },
+    {
+      "url": "https://edhrec.com/commanders/omnath-locus-of-creation",
+      "cached_at": 1790701929.2702682
+    },
+    {
+      "url": "https://edhrec.com/commanders/aesi-tyrant-of-gyre-strait",
+      "cached_at": 1790702031.315563
+    },
+    {
+      "url": "https://edhrec.com/commanders/cloud-ex-soldier",
+      "cached_at": 1790701509.2307005
+    },
+    {
+      "url": "https://edhrec.com/commanders/kotis-the-fangkeeper",
+      "cached_at": 1790701851.2672336
+    },
+    {
+      "url": "https://edhrec.com/commanders/giada-font-of-hope",
+      "cached_at": 1790701473.0974774
+    },
+    {
+      "url": "https://edhrec.com/commanders/kaalia-of-the-vast",
+      "cached_at": 1790701372.4692862
+    },
+    {
+      "url": "https://edhrec.com/commanders/the-ur-dragon",
+      "cached_at": 1790701342.3511288
+    },
+    {
+      "url": "https://edhrec.com/commanders/miirym-sentinel-wyrm",
+      "cached_at": 1790701557.314936
+    },
+    {
+      "url": "https://edhrec.com/commanders/lathril-blade-of-the-elves",
+      "cached_at": 1790701467.1289492
+    },
+    {
+      "url": "https://edhrec.com/commanders/voja-jaws-of-the-conclave",
+      "cached_at": 1790701947.2754161
+    },
+    {
+      "url": "https://edhrec.com/commanders/wilhelt-the-rotcleaver",
+      "cached_at": 1790701683.287159
+    },
+    {
+      "url": "https://edhrec.com/commanders/the-scarab-god",
+      "cached_at": 1790702235.329479
+    },
+    {
+      "url": "https://edhrec.com/commanders/shorikai-genesis-engine",
+      "cached_at": 1790701773.262431
+    },
+    {
+      "url": "https://edhrec.com/commanders/greasefang-okiba-boss",
+      "cached_at": 1790704017.5073702
+    },
+    {
+      "url": "https://edhrec.com/commanders/frodo-adventurous-hobbit-sam-loyal-attendant",
+      "cached_at": 1790701581.311123
+    },
+    {
+      "url": "https://edhrec.com/commanders/atreus-impulsive-son-kratos-stoic-father",
+      "cached_at": 1790702325.318609
+    }
+  ],
+  "selection": "Two cached single-commander cohorts per starter theme and two cached partner cohorts; up to 150 source-ranked cards per page. Counts and associations are unchanged.",
+  "unavailable_card_rows_omitted": 0,
+  "sha256": "945f876d213aa7d9489bce5609d7b8b60c8a9426e2f985549b6ee5c9b0f0c68a",
+  "images": "Card image references are included. Artwork uses the existing thumbnail cache; image files are not bundled."
+}

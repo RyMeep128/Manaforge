@@ -14,6 +14,14 @@ from mtg_core.recommendation_scoring import context, score, settings
 def load_recommendations(
     service, document, store, query="", *, sources=None, include_present=False, sink=None, should_cancel=None
 ):
+    from mtg_core.discovery_starter import ensure_starter_catalog
+    if sources is None:
+        import sqlite3
+        try:
+            ensure_starter_catalog(service, should_cancel=should_cancel)
+        except (OSError, ValueError, sqlite3.DatabaseError):
+            # An unavailable starter must not prevent existing local sources.
+            pass
     commanders = [
         e
         for e in document.deck.entries
@@ -54,20 +62,20 @@ def load_recommendations(
         )
         allowed = {row.oracle_id for row in matches}
     from mtg_core.search.cancellation import check_cancelled
-    current_proposals = service.analyze_entries(document.deck.entries)
-    records = {entry.card_id: service.get_card(card_id=entry.card_id) or {}
-               for entry in document.deck.entries if entry.card_id}
-    deck_context = context(document, current_proposals, records)
+    deck_context = recommendation_context(service, document)
     rows = []
 
     def enrich(batch):
         check_cancelled(should_cancel)
         proposals = service.analyze_entries([row['entry'] for row in batch])
+        reader = getattr(getattr(service, 'database', None), 'recommendation_metadata', None)
+        metadata = reader([row['oracle_id'] for row in batch], should_cancel=should_cancel) if callable(reader) else {}
         for item in batch:
+            item['entry'].extras['facts'].update(metadata.get(item['oracle_id'], {}))
             item['roles'] = proposals.get(item['entry'].entry_id, [])
             item['statistical_score'] = item['score']
         if sink:
-            sink(rank_recommendations(batch, deck_context, settings(document)))
+            sink(rank_recommendations(batch, deck_context, dict(settings(document), dismissed=[])))
 
     candidates = [
         row
@@ -123,6 +131,13 @@ def load_recommendations(
         deck_context=deck_context,
     )
     return snapshot
+
+
+def recommendation_context(service, document):
+    proposals = service.analyze_entries(document.deck.entries)
+    records = {entry.card_id: service.get_card(card_id=entry.card_id) or {}
+               for entry in document.deck.entries if entry.card_id}
+    return context(document, proposals, records)
 
 
 def rank_recommendations(rows, deck_context, preferences, query=""):

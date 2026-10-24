@@ -12,6 +12,40 @@ from mtg_core.sync import extract_image_urls
 
 
 class CardOperations:
+    def discovery_metadata(self, *, should_cancel=None):
+        """Read actual creature subtypes and Companion options from the local catalog."""
+        creature_types, companions = set(), []
+        with search_connection(self, should_cancel) as db:
+            count = db.execute('SELECT count(*) FROM cards_oracle').fetchone()[0]
+            rows = db.execute("SELECT p.oracle_id, p.name, s.search_json FROM canonical_prints c "
+                              "JOIN prints p ON p.card_id=c.card_id JOIN print_search_data s ON s.card_id=p.card_id")
+            for row in rows:
+                payload = json.loads(row['search_json'])
+                for face in payload.get('card_faces') or [payload]:
+                    line = face.get('type_line') or ''
+                    if 'Creature' in line.split('\u2014')[0].split() and '\u2014' in line:
+                        creature_types.update(line.split('\u2014', 1)[1].strip().split())
+                if 'Companion' in (payload.get('keywords') or []):
+                    companions.append(dict(oracle_id=row['oracle_id'], name=row['name'],
+                                           color_identity=payload.get('color_identity'),
+                                           legal=(payload.get('legalities') or {}).get('commander')))
+        return dict(creature_types=sorted(creature_types), companions=companions, cards=count)
+
+    def recommendation_metadata(self, oracle_ids, *, should_cancel=None):
+        """First locally known release across printings, plus exact local Oracle tags."""
+        identities = list(dict.fromkeys(oid for oid in oracle_ids if oid))
+        result = {oid: {'first_released_at': None, 'oracle_tags': []} for oid in identities}
+        with search_connection(self, should_cancel) as db:
+            for offset in range(0, len(identities), 400):
+                batch = identities[offset:offset + 400]
+                marks = ','.join('?' for _ in batch)
+                for row in db.execute(f"SELECT oracle_id, min(coalesce(json_extract(payload_json, '$.first_released_at'), released_at)) FROM prints "
+                                      f"WHERE oracle_id IN ({marks}) AND length(coalesce(json_extract(payload_json, '$.first_released_at'), released_at))=10 GROUP BY oracle_id", batch):
+                    result[row[0]]['first_released_at'] = row[1]
+                for row in db.execute(f'SELECT oracle_id, tag FROM oracle_tags WHERE oracle_id IN ({marks})', batch):
+                    result[row[0]]['oracle_tags'].append(row[1])
+        return result
+
     def get_oracle_card(self, oracle_id: str) -> CardRecord | None:
         return self._catalog.get_card(oracle_id=oracle_id)
 

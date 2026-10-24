@@ -1,6 +1,7 @@
 """Background task execution and lifecycle for the editor."""
 from PyQt6 import QtCore
 from mtg_core.diagnostics import get_logger
+from mtg_core.search.cancellation import SearchCancelled
 
 
 class Task(QtCore.QThread):
@@ -15,6 +16,8 @@ class Task(QtCore.QThread):
     def run(self):
         try:
             self.completed.emit(self.work(), '')
+        except SearchCancelled:
+            pass
         except Exception as exc:
             get_logger(__name__).exception('Background task failed operation=%s context=%s',
                                            self.operation, self.context)

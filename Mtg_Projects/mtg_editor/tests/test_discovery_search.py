@@ -39,8 +39,9 @@ def test_workspace_keeps_four_tabs_and_addition_state(tmp_path):
     workspace.open()
     tabs = editor.add_card_tabs
     assert [tabs.tabText(i) for i in range(tabs.count())] == [
-        'Card Search', 'Syntax Search', 'Recommendations', 'Commanders']
+        'Card Search', 'Syntax Search', 'Recommendations', 'Discover Deck Ideas']
     panel = workspace.card_search
+    tabs.setCurrentWidget(panel)
     panel.rows = [DeckEntry('forest', 'Forest', card_id='forest')]
     panel.update_quantities()
     panel.add('forest')
