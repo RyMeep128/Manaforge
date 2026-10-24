@@ -155,7 +155,8 @@ def test_virtual_grid_resizes_and_only_requests_visible_thumbnails():
     canvas.show()
     app.processEvents()
     first_row = [r for _, r, _ in canvas.items if r.y() == canvas.items[0][1].y()]
-    assert len(first_row) == 2
+    assert len(first_row) == 1
+    assert first_row[0].width() >= 250
     assert abs(first_row[0].height() / first_row[0].width() - 1.4) < 0.01
     assert 0 < len(thumbs.requested) < 20
     adds = []
@@ -170,7 +171,18 @@ def test_virtual_grid_resizes_and_only_requests_visible_thumbnails():
     assert adds == ["e0"]
     canvas.resize(700, 330)
     app.processEvents()
-    assert len([r for _, r, _ in canvas.items if r.y() == canvas.items[0][1].y()]) >= 3
+    assert len([r for _, r, _ in canvas.items if r.y() == canvas.items[0][1].y()]) == 2
+    canvas.resize(1600, 600)
+    app.processEvents()
+    assert len([r for _, r, _ in canvas.items if r.y() == canvas.items[0][1].y()]) == 5
+    details = []
+    canvas.detailsRequested.connect(details.append)
+    QtTest.QTest.mouseClick(canvas.viewport(), C.Qt.MouseButton.LeftButton, pos=canvas.items[0][1].center())
+    assert canvas.detail_timer.isActive()
+    canvas.detail_timer.stop()
+    canvas.open_details()
+    assert details == ['e0']
+    assert adds == ['e0']
     canvas.verticalScrollBar().setValue(canvas.verticalScrollBar().maximum())
     app.processEvents()
     assert "p99" in thumbs.requested
@@ -195,3 +207,48 @@ def test_category_browsing_does_not_consume_card_undo_and_repeat_add_is_ignored(
     assert panel.selected_category == 'Instants'
     editor.redo()
     assert editor.document.deck.entries[0].quantity == 1
+
+
+def test_compact_recommendations_prioritize_grid_and_allow_collapsing_categories(editor, monkeypatch):
+    panel = editor.recommendation_panel
+    monkeypatch.setattr(panel, 'active', lambda: False)
+    panel.rows = [recommendation(i) for i in range(50)]
+    panel.filter_rows()
+    panel.setParent(None)
+    panel.resize(1300, 800)
+    panel.show()
+    W.QApplication.processEvents()
+    assert panel.canvas.card_width == 270
+    assert panel.canvas.height() >= panel.height() * .75
+    assert not hasattr(panel, 'commander_art')
+    assert not panel.categories.isHidden()
+    old_width = panel.canvas.width()
+    panel.sidebar_toggle.setChecked(False)
+    W.QApplication.processEvents()
+    assert panel.categories.isHidden()
+    assert panel.canvas.width() > old_width
+    assert not panel.category_combo.isHidden()
+    assert panel.selected_category == 'Top Cards'
+    panel.resize(500, 700)
+    panel.sidebar_toggle.setChecked(True)
+    W.QApplication.processEvents()
+    assert panel.categories.isHidden()
+    assert not panel.category_combo.isHidden()
+    panel.hide()
+    panel.setParent(editor)
+
+
+def test_workspace_card_size_survives_return_to_quick_panel(editor, monkeypatch):
+    workspace = editor.add_cards_workspace
+    panel = editor.recommendation_panel
+    monkeypatch.setattr(panel, 'active', lambda: False)
+    panel.deck_changed()
+    workspace.expanded = True
+    assert workspace.zoom.minimum() == 180
+    assert workspace.zoom.maximum() == 360
+    workspace.zoom.setValue(320)
+    assert panel.canvas.card_width == 320
+    workspace.expanded = False
+    panel.set_expanded(False)
+    assert panel.canvas.card_width == 320
+    assert editor.document.editor_preferences['recommendation_browse']['card_width'] == 320

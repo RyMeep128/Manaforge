@@ -25,6 +25,8 @@ class CardCanvas(W.QAbstractScrollArea):
         self.search_mode = search
         self.mode, self.grouping, self.sort, self.query = 'Grid', 'Type', 'Name', ''
         self.card_width = 180
+        self.minimum_search_card_width = None
+        self.card_aspect_ratio = 1.4
         self.selected = set()
         self.in_deck_ids = set()
         self.filtered_ids = None
@@ -76,11 +78,13 @@ class CardCanvas(W.QAbstractScrollArea):
 
     def relayout(self):
         self.items, self.headers = [], []
-        width = max(150, self.viewport().width())
+        width = max(1 if self.minimum_search_card_width is not None else 150, self.viewport().width())
         cw = min(self.card_width, width - 32)
-        if self.search_mode and width >= 270:
+        if self.search_mode and self.minimum_search_card_width is None and width >= 270:
             cw = min(cw, (width-48)//2)
-        ch = int(cw * 1.4)
+        elif self.search_mode and self.minimum_search_card_width is not None:
+            cw = min(max(self.minimum_search_card_width, self.card_width), max(1, width - 32))
+        ch = int(cw * self.card_aspect_ratio)
         groups = [('Search', 'Results', self.document.deck.entries)] if self.search_mode else grouped_entries(
             self.document.deck, self.grouping, self.sort, self.query,
             show_empty_categories=self.document.editor_preferences.get('show_empty_categories', False),

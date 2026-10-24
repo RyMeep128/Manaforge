@@ -30,54 +30,55 @@ def source_key(document):
             deepcopy(document.artwork_preferences))
 
 
-class CommanderArtwork(W.QWidget):
-    def __init__(self, thumbnails, parent=None):
+class CompactLabel(W.QLabel):
+    """Keep context and status to one line, with the complete text in a tooltip."""
+    def __init__(self, text='', parent=None):
         super().__init__(parent)
-        self.thumbnails, self.entries = thumbnails, []
-        self.setMinimumSize(180, 110)
-        self.setMaximumSize(280, 150)
-        self.setAccessibleName('Commander artwork')
-        thumbnails.updated.connect(self.update)
+        self.full_text = ''
+        self.setTextFormat(C.Qt.TextFormat.PlainText)
+        self.setSizePolicy(W.QSizePolicy.Policy.Ignored, W.QSizePolicy.Policy.Fixed)
+        self.setMaximumHeight(24)
+        self.setText(text)
 
-    def set_entries(self, entries):
-        self.entries = list(entries)
-        self.setVisible(bool(entries))
-        self.setToolTip(' + '.join(e.name for e in entries))
-        self.update()
+    def setText(self, text):
+        self.full_text = text
+        self.setToolTip(text)
+        self.elide()
 
-    def paintEvent(self, event):
-        keys = [(e.card_id, e.image_asset_id) for e in self.entries]
-        self.thumbnails.set_visible(id(self), keys)
-        painter = G.QPainter(self)
-        painter.fillRect(self.rect(), G.QColor(COLORS['surface']))
-        for index, entry in enumerate(self.entries):
-            image = self.thumbnails.get(entry.card_id, entry.image_asset_id)
-            if image is None or image.isNull():
-                continue
-            target = C.QRect(index * self.width() // len(self.entries), 0,
-                             self.width() // len(self.entries), self.height())
-            # Crop the cached card image to the artwork area; no second image loader.
-            artwork = image.copy(C.QRect(int(image.width() * .08), int(image.height() * .12),
-                                         int(image.width() * .84), int(image.height() * .40)))
-            scaled = artwork.scaled(target.size(), C.Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-                                    C.Qt.TransformationMode.SmoothTransformation)
-            painter.save()
-            painter.setClipRect(target)
-            painter.drawPixmap(target.center() - C.QPoint(scaled.width() // 2, scaled.height() // 2), scaled)
-            painter.restore()
-        painter.end()
+    def elide(self):
+        super().setText(self.fontMetrics().elidedText(self.full_text, C.Qt.TextElideMode.ElideRight, max(0, self.width())))
 
-    def hideEvent(self, event):
-        self.thumbnails.set_visible(id(self), [])
-        super().hideEvent(event)
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.elide()
 
 
 class RecommendationCanvas(CardCanvas):
     def __init__(self, thumbnails, parent=None):
         super().__init__(DeckDocument(), thumbnails, parent, search=True)
-        self.card_width = 210
+        self.card_width = 270
+        self.minimum_search_card_width = 180
+        self.card_aspect_ratio = 88 / 63
         self.empty_message = 'Choose a commander or browse local cards to start building.'
         self.setAccessibleName('Recommended cards')
+
+    def mousePressEvent(self, event):
+        super().mousePressEvent(event)
+        if (event.button() == C.Qt.MouseButton.LeftButton and not event.modifiers()
+                and self.press_position is not None):
+            item = self.hit(event.position().toPoint())
+            if item:
+                self.detail_entry = item[0].entry_id
+
+    def mouseDoubleClickEvent(self, event):
+        self.detail_timer.stop()
+        self.detail_entry = None
+        self.press_position = None
+        if event.button() != C.Qt.MouseButton.LeftButton:
+            return
+        item = self.hit(event.position().toPoint())
+        if not self.activate_quantity(item, event.position().toPoint()) and item:
+            self.detailsRequested.emit(item[0].entry_id)
 
     def paintEvent(self, event):
         if self.document.deck.entries:
@@ -124,46 +125,42 @@ class RecommendationPanel(W.QWidget):
         self.timer.setInterval(750)
         self.timer.timeout.connect(self.refresh)
         layout = W.QVBoxLayout(self)
-        layout.setContentsMargins(0, 8, 0, 0)
         self.content = W.QWidget()
         body = W.QVBoxLayout(self.content)
         body.setContentsMargins(0, 0, 0, 0)
-        hero = W.QHBoxLayout()
-        self.commander_art = CommanderArtwork(editor.thumbnails, self)
-        hero.addWidget(self.commander_art)
-        heading = W.QVBoxLayout()
-        self.commander_header = W.QLabel('Discover Deck Ideas')
-        self.commander_header.setTextFormat(C.Qt.TextFormat.PlainText)
-        self.commander_header.setWordWrap(True)
-        self.commander_header.setProperty('role', 'title')
-        heading.addWidget(self.commander_header)
-        actions = W.QHBoxLayout()
-        discover = W.QPushButton('Commander / Theme')
-        discover.clicked.connect(self.open_discovery)
-        actions.addWidget(discover)
-        search = W.QPushButton('Local Card Search')
-        search.clicked.connect(self.open_search)
-        actions.addWidget(search)
-        heading.addLayout(actions)
-        hero.addLayout(heading, 1)
-        body.addLayout(hero)
-        controls = W.QHBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+        body.setSpacing(4)
+        self.commander_header = CompactLabel('Discover Deck Ideas')
+        body.addWidget(self.commander_header)
+        self.controls_grid = W.QGridLayout()
+        self.controls_grid.setContentsMargins(0, 0, 0, 0)
+        self.controls_grid.setSpacing(4)
         self.text_filter = W.QLineEdit()
-        self.text_filter.setPlaceholderText('Find recommended cards')
+        self.text_filter.setPlaceholderText('Search recommendations')
         self.text_filter.setClearButtonEnabled(True)
-        self.text_filter.setMinimumHeight(34)
+        self.text_filter.setMinimumHeight(32)
+        self.text_filter.setMinimumWidth(0)
         self.text_filter.textChanged.connect(self.filter_rows)
-        controls.addWidget(self.text_filter, 1)
-        filters = W.QToolButton()
-        filters.setText('Filters')
-        filters.setCheckable(True)
-        controls.addWidget(filters)
-        refresh = W.QToolButton()
-        refresh.setText('Refresh')
-        refresh.setToolTip('Reload recommendations from local caches')
-        refresh.clicked.connect(self.request_refresh)
-        controls.addWidget(refresh)
-        body.addLayout(controls)
+        self.sidebar_toggle = W.QToolButton()
+        self.sidebar_toggle.setText('\u2630')
+        self.sidebar_toggle.setToolTip('Toggle category sidebar')
+        self.sidebar_toggle.setCheckable(True)
+        self.sidebar_toggle.setChecked(True)
+        self.sidebar_toggle.setAccessibleName('Show category sidebar')
+        self.sidebar_toggle.toggled.connect(self.toggle_categories)
+        self.filters_button = W.QToolButton()
+        self.filters_button.setText('Filters')
+        self.filters_button.setCheckable(True)
+        self.advanced_button = W.QToolButton()
+        self.advanced_button.setText('More')
+        self.advanced_button.setPopupMode(W.QToolButton.ToolButtonPopupMode.InstantPopup)
+        menu = W.QMenu(self.advanced_button)
+        menu.addAction('Change Commander / Theme', self.open_discovery)
+        menu.addAction('Local Card Search', self.open_search)
+        menu.addAction('Refresh cached recommendations', self.request_refresh)
+        self.advanced_button.setMenu(menu)
+        body.addLayout(self.controls_grid)
         self.filter_box = W.QWidget()
         self.filter_layout = W.QGridLayout(self.filter_box)
         self.filter_layout.setContentsMargins(0, 0, 0, 0)
@@ -190,7 +187,7 @@ class RecommendationPanel(W.QWidget):
         self.mana_value.valueChanged.connect(self.filter_rows)
         self.filter_widgets = [self.type_filter, self.membership, self.role_filter, self.identity, self.mana_value]
         self.reflow_filters()
-        filters.toggled.connect(self.filter_box.setVisible)
+        self.filters_button.toggled.connect(self.filter_box.setVisible)
         self.filter_box.hide()
         body.addWidget(self.filter_box)
         self.type_tabs = W.QTabBar()
@@ -199,14 +196,15 @@ class RecommendationPanel(W.QWidget):
         self.category_combo.addItems(CATEGORIES)
         self.category_combo.setAccessibleName('Recommendation category')
         self.category_combo.currentTextChanged.connect(self.change_category)
-        body.addWidget(self.category_combo)
-        self.status = W.QLabel('Recommendations use local cached data.')
-        self.status.setWordWrap(True)
-        body.addWidget(self.status)
+        self.category_combo.setMinimumWidth(0)
+        self.category_combo.setMaximumWidth(175)
+        self.category_combo.setSizeAdjustPolicy(W.QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self.category_combo.setMinimumContentsLength(10)
+        self.status = CompactLabel('Recommendations use local cached data.')
         results = W.QHBoxLayout()
         self.categories = W.QListWidget()
         self.categories.addItems(CATEGORIES)
-        self.categories.setMaximumWidth(175)
+        self.categories.setFixedWidth(152)
         self.categories.setAccessibleName('Recommendation categories')
         self.categories.setCurrentRow(0)
         self.categories.currentTextChanged.connect(self.change_category)
@@ -222,12 +220,18 @@ class RecommendationPanel(W.QWidget):
         self.more = W.QPushButton('Load More')
         self.more.hide()
         self.more.clicked.connect(self.load_more)
-        footer.addWidget(self.more, 1)
-        top = W.QPushButton('Back to Top')
+        footer.addWidget(self.status, 1)
+        self.more.setMaximumWidth(100)
+        footer.addWidget(self.more)
+        top = W.QToolButton()
+        top.setText('Top')
+        top.setToolTip('Back to Top')
         top.clicked.connect(lambda: self.canvas.verticalScrollBar().setValue(0))
         footer.addWidget(top)
         body.addLayout(footer)
         layout.addWidget(self.content, 1)
+        self.reflow_controls()
+        self.update_navigation()
 
     def reflow_filters(self):
         columns = 3 if self.width() >= 900 else 2 if self.width() >= 500 else 1
@@ -236,13 +240,36 @@ class RecommendationPanel(W.QWidget):
             widget.setMinimumWidth(0)
             self.filter_layout.addWidget(widget, index // columns, index % columns)
 
+    def reflow_controls(self):
+        widgets = [self.text_filter, self.sidebar_toggle, self.category_combo,
+                   self.filters_button, self.advanced_button]
+        for widget in widgets:
+            self.controls_grid.removeWidget(widget)
+        self.controls_grid.setColumnStretch(0, 0)
+        self.controls_grid.setColumnStretch(1, 0)
+        if self.width() < 600:
+            self.controls_grid.addWidget(self.text_filter, 0, 0, 1, 4)
+            for column, widget in enumerate(widgets[1:]):
+                self.controls_grid.addWidget(widget, 1, column)
+            self.controls_grid.setColumnStretch(1, 1)
+        else:
+            for column, widget in enumerate(widgets):
+                self.controls_grid.addWidget(widget, 0, column)
+            self.controls_grid.setColumnStretch(0, 1)
+
+    def update_navigation(self):
+        self.categories.setVisible(self.width() >= 850 and self.sidebar_toggle.isChecked())
+        self.category_combo.show()
+
+    def toggle_categories(self, *_):
+        self.update_navigation()
+        self.save_view()
+
     def resizeEvent(self, event):
         super().resizeEvent(event)
         self.reflow_filters()
-        compact = self.width() < 650
-        self.categories.setVisible(not compact)
-        self.category_combo.setVisible(compact)
-        self.commander_art.setVisible(not compact and bool(self.commander_art.entries))
+        self.reflow_controls()
+        self.update_navigation()
 
     def open_discovery(self):
         self.editor.add_cards_workspace.open()
@@ -282,7 +309,8 @@ class RecommendationPanel(W.QWidget):
         value = dict(text=self.text_filter.text(), kind=self.type_filter.currentText(),
                      role=self.role_filter.currentText(), membership=self.membership.currentIndex(),
                      identity=self.identity.currentData(), mana_value=self.mana_value.value(),
-                     category=self.selected_category, positions={key: list(item) for key, item in positions.items()})
+                     category=self.selected_category, card_width=self.canvas.card_width,
+                     sidebar=self.sidebar_toggle.isChecked(), positions={key: list(item) for key, item in positions.items()})
         self.view_snapshot = deepcopy(value)
         if self.editor.document.editor_preferences.get('recommendation_browse') != value:
             self.saving_view = True
@@ -310,6 +338,14 @@ class RecommendationPanel(W.QWidget):
             self.membership.setCurrentIndex(value.get('membership', 1))
             self.identity.setCurrentIndex(max(0, self.identity.findData(value.get('identity'))))
             self.mana_value.setValue(value.get('mana_value', -1))
+        self.canvas.card_width = max(180, min(360, int(value.get('card_width', 270))))
+        workspace = getattr(self.editor, 'add_cards_workspace', None)
+        if workspace is not None and workspace.expanded:
+            with C.QSignalBlocker(workspace.zoom):
+                workspace.zoom.setValue(self.canvas.card_width)
+        with C.QSignalBlocker(self.sidebar_toggle):
+            self.sidebar_toggle.setChecked(value.get('sidebar', True))
+        self.update_navigation()
         self.selected_category = value.get('category', 'Top Cards')
         self.category_scroll = {key: tuple(item) for key, item in value.get('positions', {}).items()
                                 if isinstance(item, (list, tuple)) and len(item) == 2}
@@ -327,8 +363,6 @@ class RecommendationPanel(W.QWidget):
             return
         restored = self.restore_view()
         selected = commanders(self.editor.document)
-        self.commander_art.set_entries(selected)
-        self.commander_art.setVisible(self.width() >= 650 and bool(selected))
         saved = self.editor.document.editor_preferences.get('discovery', {})
         theme = saved.get('theme_option') or ({'slug': saved['theme'], 'name': saved['theme']} if saved.get('theme') else None)
         discovery_identity = saved.get('identity')
@@ -343,8 +377,8 @@ class RecommendationPanel(W.QWidget):
         identity = ''.join(c for c in 'WUBRG' if any(c in colors for colors in identities if colors is not None))
         identity = identity or ('Colorless' if identities and all(colors is not None for colors in identities) else 'Color identity unavailable')
         self.commander_header.setText((' + '.join(e.name for e in selected) or 'Discover Deck Ideas')
-                                     + ('\n' + identity if selected else '')
-                                     + ('\n' + theme.get('name', theme.get('slug', '')) if theme else ''))
+                                     + (' | ' + identity if selected else '')
+                                     + (' | ' + theme.get('name', theme.get('slug', '')) if theme else ''))
         key = context_key(self.editor.document)
         changed = key != self.key
         switched = self.key is not None and key[0]['deck_id'] != self.key[0]['deck_id']
@@ -586,7 +620,6 @@ class RecommendationPanel(W.QWidget):
         self.generation += 1
         self.canvas.preview.hide()
         self.editor.thumbnails.set_visible(id(self.canvas), [])
-        self.editor.thumbnails.set_visible(id(self.commander_art), [])
 
     def discover_if_empty(self):
         if self.active() and not self.editor.document.deck.entries:

@@ -41,8 +41,8 @@ class AddCardsWorkspace(W.QWidget):
         navigation.addStretch()
         navigation.addWidget(W.QLabel("Card size"))
         self.zoom = W.QSlider(C.Qt.Orientation.Horizontal)
-        self.zoom.setRange(150, 260)
-        self.zoom.setValue(190)
+        self.zoom.setRange(180, 360)
+        self.zoom.setValue(270)
         self.zoom.setMaximumWidth(180)
         self.zoom.valueChanged.connect(self.resize_cards)
         navigation.addWidget(self.zoom)
@@ -93,7 +93,6 @@ class AddCardsWorkspace(W.QWidget):
             tabs.setCurrentIndex(self.quick_index)
         editor.recommendation_panel.set_expanded(False)
         editor.results.card_width = 130
-        editor.recommendation_panel.canvas.card_width = 150
         editor.query.setMinimumHeight(34)
         editor.workspace_stack.setCurrentWidget(editor.splitter)
         self.controls.show()
@@ -125,6 +124,14 @@ class AddCardsWorkspace(W.QWidget):
     def resize_cards(self, *_):
         if not self.expanded:
             return
+        panel = self.editor.recommendation_panel
+        if not _:
+            with C.QSignalBlocker(self.zoom):
+                self.zoom.setValue(panel.canvas.card_width)
         for canvas in self.canvases():
+            position = canvas.verticalScrollBar().value()
             canvas.card_width = self.zoom.value()
             canvas.refresh()
+            canvas.verticalScrollBar().setValue(position)
+        if _:
+            panel.save_view()
