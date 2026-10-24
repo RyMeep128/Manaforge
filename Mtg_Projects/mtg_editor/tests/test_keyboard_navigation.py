@@ -1,14 +1,33 @@
 """Regression coverage for layered Escape and text-field shortcut isolation."""
 from PyQt6 import QtCore as C, QtWidgets as W, QtTest
 from mtg_editor.gui import EditorWindow
+from mtg_core.decks import DeckEntry
 
 
 def editor(tmp_path):
     app = W.QApplication.instance() or W.QApplication([])
     window = EditorWindow(service=object(), root=tmp_path)
+    window.document.deck.entries = [DeckEntry('existing', 'Existing card', quantity=1)]
     window.show()
     app.processEvents()
     return app, window
+
+
+def test_empty_deck_search_defaults_to_ideas_even_after_another_tab(tmp_path):
+    app, window = editor(tmp_path)
+    window.document.deck.entries.clear()
+    workspace = window.add_cards_workspace
+    workspace.full_index = 2
+    window.open_search()
+    assert workspace.expanded
+    assert window.add_card_tabs.currentWidget() is workspace.discovery
+    window.add_card_tabs.setCurrentWidget(workspace.card_search)
+    workspace.back()
+    workspace.open()
+    assert window.add_card_tabs.currentWidget() is workspace.discovery
+    window.hide()
+    window.deleteLater()
+    app.processEvents()
 
 
 def test_escape_closes_preview_then_quick_add_without_changing_deck(tmp_path):

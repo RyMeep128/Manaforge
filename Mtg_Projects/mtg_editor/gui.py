@@ -545,6 +545,10 @@ class EditorWindow(W.QMainWindow):
         self.filter.selectAll()
 
     def open_search(self):
+        if not any(entry.quantity > 0 for entry in self.document.deck.entries):
+            self.open_add_cards()
+            self.add_card_tabs.setCurrentWidget(self.add_cards_workspace.discovery)
+            return
         self.add_cards_workspace.back()
         self.search_panel.show()
         with QtCore.QSignalBlocker(self.add_card_tabs):

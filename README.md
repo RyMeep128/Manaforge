@@ -23,6 +23,14 @@ the offline Comprehensive Rules browser and exact-name lookup of locally cached
 Oracle text/card rulings; downloads remain explicit. Launching Manaforge again
 returns to its existing Home page.
 
+Download or refresh offline rulings for every card in the local catalog with
+`Mtg_Projects\mtg_proxy\venv\Scripts\python.exe tools\sync_rulings.py`.
+This uses Scryfall's bulk rulings export, includes Wizards rulings and Scryfall
+notes, and records cards with no rulings. Run it again after catalog updates or
+to refresh existing rulings. `--db-path` and `--rulings-path` support alternate
+databases. Failed downloads or invalid exports preserve the previous cache.
+The existing card reference dialogs read the updated cache automatically.
+
 **Build Manaforge.cmd** creates the unified packaged entry point at
 `Mtg_Projects/dist/Manaforge/Manaforge.exe`, including its Print Studio launch mode.
 The existing **Mtg_Projects/Build EXE.cmd** printer build path is unchanged.
