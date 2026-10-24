@@ -15,6 +15,10 @@ def main():
     app = gui_qt.init()
     image.init()
     window = gui_qt.window_setup(app)
+    import os
+    if os.environ.get('MANAFORGE_HOME_SOCKET'):
+        from mtg_home.navigation import register_print_window
+        register_print_window(window, app)
     if '--open-project' in sys.argv:
         index = sys.argv.index('--open-project')
         if index + 1 < len(sys.argv):

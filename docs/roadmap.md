@@ -36,6 +36,11 @@ This workstream tracks the [architecture cleanup epic](architecture-cleanup-epic
 
 ## Foundations already in place
 
+- [x] Unified Manaforge homepage and module registry with Deck Editor, Rules & Rulings,
+  Print Studio, shared settings, and a disabled future Play tile. Source and packaged
+  launch entry points are implemented; CI/build acceptance is pending. Existing
+  standalone entry points and data paths remain supported.
+
 - [x] Shared SQLite card, printing, image, and Oracle Tag data in MTG Core.
 - [x] Fast local Scryfall-style search for common card properties and `otag:`.
 - [x] Local thumbnail/image asset reuse and configurable preview memory cache.
@@ -261,13 +266,22 @@ Archidekt is the primary source. The user authorized one personal/noncommercial 
 
 ## Phase 6 - Rules and rulings reference
 
+The Comprehensive Rules browser is implemented; CI acceptance is pending. Editor
+**More > Comprehensive Rules** provides offline section/keyword navigation,
+rule-number and indexed text search, rule cross-links, and an explicit official
+download/update or local TXT import. A separate versioned SQLite cache records
+effective date, installation time, source, and checksum, retaining the previous
+snapshot on failed updates. Card details and the shared Oracle/rulings viewer
+link into the browser. No rules document is bundled and opening the browser
+does not download one. This is a reference library, not rules enforcement.
+
 Implemented first slice: Editor card details now opens a shared offline rulings viewer.
 Card rulings use a separate versioned SQLite cache keyed by Oracle ID, with download
 timestamps and publication dates. Explicit background refresh uses Scryfall, labels
 Wizards rulings separately from Scryfall notes, and preserves the previous snapshot
 if the response fails or is incomplete. Successfully downloaded empty lists are
 distinguished from cards that have never been downloaded. CI validation is pending;
-Comprehensive Rules and indexes remain open.
+Comprehensive Rules browsing and indexes are now implemented as described above.
 
 The shared reference now includes local Oracle text for all faces and stored keywords.
 Direct card-context actions are available in Editor deck/search cards, Proxy project

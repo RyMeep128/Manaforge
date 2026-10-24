@@ -1,4 +1,6 @@
 """Shared offline rulings viewer with explicit background updates."""
+from html import escape
+from urllib.parse import quote
 from PyQt6 import QtCore as C, QtWidgets as W
 from mtg_core.diagnostics import get_logger
 from mtg_core.search import card_rules_text
@@ -70,6 +72,8 @@ class RulingsDialog(W.QDialog):
         self.text = W.QTextBrowser()
         self.text.setPlainText('Loading cached rulings…')
         self.oracle_text = W.QTextBrowser()
+        self.oracle_text.setOpenLinks(False)
+        self.oracle_text.anchorClicked.connect(self.open_rule_keyword)
         self.oracle_text.setPlainText('Loading local Oracle text…')
         tabs = W.QTabWidget()
         tabs.addTab(self.oracle_text, 'Oracle text')
@@ -83,6 +87,9 @@ class RulingsDialog(W.QDialog):
         self.refresh = W.QPushButton('Refresh rulings from Scryfall')
         self.refresh.clicked.connect(lambda: self.load(refresh=True))
         buttons.addWidget(self.refresh)
+        rules = W.QPushButton('Comprehensive Rules…')
+        rules.clicked.connect(lambda: self.open_rule_keyword())
+        buttons.addWidget(rules)
         close = W.QPushButton('Close')
         close.clicked.connect(self.reject)
         buttons.addWidget(close)
@@ -104,9 +111,11 @@ class RulingsDialog(W.QDialog):
             payload = result['payload']
             text = card_rules_text(payload) or 'Oracle text unavailable in the local catalog.'
             keywords = payload.get('keywords') or []
+            html = '<p>' + escape(text).replace('\n', '<br>') + '</p>'
             if keywords:
-                text += '\n\nKeywords: ' + ', '.join(str(keyword) for keyword in keywords)
-            self.oracle_text.setPlainText(text)
+                links = [f'<a href="keyword:{quote(str(keyword), safe="")}">{escape(str(keyword))}</a>' for keyword in keywords]
+                html += '<p>Keywords: ' + ', '.join(links) + '</p>'
+            self.oracle_text.setHtml(html)
         elif self.oracle_text.toPlainText() == 'Loading local Oracle text…':
             self.oracle_text.setPlainText('Oracle text unavailable in the local catalog.')
         self.refresh.setEnabled(bool(self.card_id and self.oracle_id))
@@ -138,6 +147,11 @@ class RulingsDialog(W.QDialog):
             paragraphs.append(f"{row['published_at']} · {source}\n\n{row['comment']}")
         self.text.setPlainText('\n\n────\n\n'.join(paragraphs) or
                                'Scryfall returned no rulings for this card at the last download.')
+
+    def open_rule_keyword(self, url=None):
+        from mtg_ui.rules_reference import RulesBrowser
+        query = url.path() if url is not None and url.scheme() == 'keyword' else ''
+        RulesBrowser(self.service, self, query=query).exec()
 
     def done(self, result):
         self._closed = True

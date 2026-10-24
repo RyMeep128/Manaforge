@@ -3,7 +3,6 @@ from copy import deepcopy
 import json
 from pathlib import Path
 import subprocess
-import sys
 import tempfile
 
 from mtg_print.project import project_payload
@@ -161,6 +160,7 @@ def include_print_tokens(document, suggestions, sections):
 
 
 def launch_print(project):
-    root = Path(__file__).resolve().parents[1] / 'mtg_proxy'
-    return subprocess.Popen([sys.executable, str(root / 'main.py'), '--open-project', project['path']],
+    from mtg_home.navigation import print_studio_command
+    command, root = print_studio_command(project['path'])
+    return subprocess.Popen(command,
                             cwd=str(root), creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))

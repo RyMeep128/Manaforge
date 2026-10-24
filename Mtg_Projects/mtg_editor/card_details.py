@@ -109,6 +109,9 @@ class CardDetails(W.QDialog):
         self.rulings.setEnabled(bool(entry.oracle_id or entry.card_id))
         self.rulings.clicked.connect(self.show_rulings)
         info.addWidget(self.rulings)
+        self.rules = W.QPushButton('Related Comprehensive Rules…')
+        self.rules.clicked.connect(self.show_rules)
+        info.addWidget(self.rules)
         info.addWidget(W.QLabel('Scryfall printing'))
         self.printings = W.QComboBox()
         self.printings.setMinimumContentsLength(25)
@@ -193,6 +196,20 @@ class CardDetails(W.QDialog):
     def flip_face(self):
         self.face = 1 - self.face
         self.render_face()
+
+    def show_rules(self):
+        from mtg_ui.rules_reference import RulesBrowser
+        keywords = sorted({str(keyword) for keyword in self.payload.get('keywords') or []}, key=str.casefold)
+        if not keywords:
+            RulesBrowser(self.service, self).exec()
+            return
+        menu = W.QMenu(self)
+        for keyword in keywords:
+            menu.addAction(keyword, lambda checked=False, query=keyword: RulesBrowser(
+                self.service, self, query=query).exec())
+        menu.addSeparator()
+        menu.addAction('Browse all rules', lambda: RulesBrowser(self.service, self).exec())
+        menu.exec(self.rules.mapToGlobal(C.QPoint(0, self.rules.height())))
 
     def render_face(self):
         faces = self.payload.get('card_faces') or []

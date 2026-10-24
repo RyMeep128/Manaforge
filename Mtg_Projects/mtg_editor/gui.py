@@ -134,6 +134,7 @@ class EditorWindow(W.QMainWindow):
         menu.addAction('Export decklist…', self.export_decklist)
         menu.addAction('Commander / format deck checks…', self.commander_checks)
         menu.addAction('Manage Tags…', self.manage_categories)
+        menu.addAction('Comprehensive Rules…', self.rules_reference)
         menu.addAction('Customize Quick Menu…', lambda: self.manage_categories(customize=True))
         menu.addAction('Quick Additional Tags', lambda: self.quick_tag(QtGui.QCursor.pos(), tags=True))
         tag_overflow = menu.addMenu('Other active roles / tags')
@@ -1020,6 +1021,10 @@ class EditorWindow(W.QMainWindow):
     def task_settled(self):
         if self.session.dirty:
             self.autosave.start()
+
+    def rules_reference(self):
+        from mtg_ui.rules_reference import RulesBrowser
+        RulesBrowser(self.service, self).exec()
 
     def card_details(self, entry_id):
         from .card_details import CardDetails, apply_printing, apply_quantity

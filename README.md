@@ -2,9 +2,30 @@
 
 [![Tests](https://github.com/RyMeep128/Manaforge/actions/workflows/tests.yml/badge.svg)](https://github.com/RyMeep128/Manaforge/actions/workflows/tests.yml)
 
-Manaforge is a Python / PyQt6 desktop suite for preparing Magic: The Gathering proxies, managing shared card data, and building toward a dedicated deck editor.
+Manaforge is a Python / PyQt6 desktop workspace for building Magic decks, consulting rules, and preparing proxies for print.
 
-Manaforge is organized around **three apps**, with a shared card-data layer.
+Launch **Launch Manaforge.cmd** at the repository root, or run `python run_manaforge.py`
+in the configured environment. The homepage opens Deck Editor, Rules & Rulings,
+and Print Studio; Play is visibly unavailable until implemented. The Windows
+launcher reuses the printer's existing environment and setup. Existing standalone
+launchers remain supported.
+
+The homepage stays open while tools run. Editor and Rules reuse their existing
+windows; Print Studio runs in its own process with the same Python environment
+and shared data paths. Reopening a tile focuses its existing window. Use **Home**
+to return without closing an active deck or print project. Launching Manaforge
+again brings back the existing homepage. Settings opens the shared printing and
+artwork preference editors. Rules includes the offline Comprehensive Rules browser
+and exact-name lookup of locally cached Oracle text/card rulings; downloads remain
+explicit.
+
+**Build Manaforge.cmd** creates the unified packaged entry point at
+`Mtg_Projects/dist/Manaforge/Manaforge.exe`, including its Print Studio launch mode.
+The existing **Mtg_Projects/Build EXE.cmd** printer build path is unchanged.
+Print Studio startup failures are reported on the homepage and recorded under the
+existing application data directory's `logs/print-studio-launch.log`.
+
+The existing tools share one card-data layer:
 
 See the [Manaforge delivery checklist](docs/roadmap.md) for the ordered printer,
 Deck Editor, integration, and recommendation roadmap.

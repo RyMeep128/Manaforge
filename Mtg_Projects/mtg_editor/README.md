@@ -160,6 +160,23 @@ its source. View/group/sort preferences and category collapse state are saved.
 Undo/Redo covers deck edits, including quantity, artwork, sections, categories, tags,
 and bulk changes. View changes do not roll back when undoing a deck edit.
 
+## Offline rules reference
+
+Open **More > Comprehensive Rules**, then use **Download / update from Wizards**
+or **Import rules TXT** to install an English rules snapshot. The download link is
+discovered from the [official rules page](https://magic.wizards.com/en/rules).
+Opening, searching, and navigating installed rules never require a download.
+Search by rule number (for example `702.9`), keyword, or words; use Sections and
+Keywords to browse. Rule references are clickable, with Back navigation.
+
+Card details offers **Related Comprehensive Rules**. Keyword names in the shared
+Oracle/rulings viewer link to the same browser. Installed effective date, download
+time, source, and checksum are shown separately. Updates replace the snapshot
+atomically and preserve cached rules on failure; deck files are unaffected.
+Only the English numbered rules and keyword-action/ability index are searched;
+the glossary remains in the retained source document. This viewer does not enforce
+gameplay rules.
+
 ## Automatic categories
 
 New cards added through search and uncategorized cards in opened/imported decks
