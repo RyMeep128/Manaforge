@@ -60,7 +60,10 @@ class HoldTagGesture(C.QObject):
         if kind in (C.QEvent.Type.FocusOut, C.QEvent.Type.Hide, C.QEvent.Type.Wheel):
             self.cancel()
         if kind == C.QEvent.Type.KeyPress and event.key() == C.Qt.Key.Key_Escape:
+            pending = self.pending is not None
             self.cancel()
+            if pending:
+                return True
         return False
 
 

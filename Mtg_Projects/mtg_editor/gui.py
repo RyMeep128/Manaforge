@@ -375,8 +375,12 @@ class EditorWindow(W.QMainWindow):
                                    ('Ctrl+Z', self.undo), ('Ctrl+Y', self.redo), ('Ctrl+Shift+Z', self.redo),
                                    ('Ctrl+F', self.focus_filter), ('Ctrl+K', self.open_search)]:
             shortcut = QtGui.QShortcut(QtGui.QKeySequence(sequence), self)
+            shortcut.setContext(QtCore.Qt.ShortcutContext.WidgetWithChildrenShortcut)
             shortcut.activated.connect(callback)
             self.shortcuts.append(shortcut)
+        from mtg_ui.keyboard import add_shortcuts_help
+        add_shortcuts_help(self)
+        self.search_close.setToolTip('Close Quick Add (Esc)')
         self.sync_fields()
         self.changed()
 
@@ -651,8 +655,42 @@ class EditorWindow(W.QMainWindow):
         self.text_view.rows.viewport().update()
         self.text_view.update_preview()
 
+    def keyPressEvent(self, event):
+        # Native popups and focused controls receive the event before it bubbles
+        # here. Do not register an Escape shortcut that preempts them.
+        if event.key() == QtCore.Qt.Key.Key_Escape and not event.modifiers():
+            canvases = (self.grid, *self.add_cards_workspace.canvases())
+            previews = [canvas for canvas in canvases if canvas.preview.isVisible()]
+            if previews:
+                for canvas in previews:
+                    canvas.hover_timer.stop()
+                    canvas.detail_timer.stop()
+                    canvas.preview.hide()
+            elif self.add_cards_workspace.expanded:
+                self.add_cards_workspace.back()
+                # Escape returns directly to the deck even if Quick Add was
+                # visible before entering the full discovery workspace.
+                if not self.search_panel.isHidden():
+                    self.toggle_search()
+                (self.text_view.rows if self.views.currentWidget() is self.text_view
+                 else self.views.currentWidget()).setFocus()
+            elif not self.search_panel.isHidden():
+                self.toggle_search()
+                (self.text_view.rows if self.views.currentWidget() is self.text_view
+                 else self.views.currentWidget()).setFocus()
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
     def eventFilter(self, watched, event):
         if watched in (self.table, self.table.viewport()):
+            if (event.type() == QtCore.QEvent.Type.KeyPress
+                    and event.key() in (QtCore.Qt.Key.Key_Delete, QtCore.Qt.Key.Key_Backspace)
+                    and not event.modifiers()
+                    and self.grid.selected
+                    and self.table.state() != W.QAbstractItemView.State.EditingState):
+                self.remove_selected()
+                return True
             if (event.type() == QtCore.QEvent.Type.KeyPress and event.key() == QtCore.Qt.Key.Key_T
                     and not event.modifiers() and self.grid.selected):
                 if not event.isAutoRepeat():

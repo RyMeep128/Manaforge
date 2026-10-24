@@ -425,14 +425,19 @@ class CardCanvas(W.QAbstractScrollArea):
 
     def keyPressEvent(self, event):
         self.detail_timer.stop()
-        if event.key() == C.Qt.Key.Key_T and not event.modifiers() and self.selected and not self.search_mode:
+        if event.key() == C.Qt.Key.Key_Escape and self.preview.isVisible():
+            self.hover_timer.stop()
+            self.preview.hide()
+            event.accept()
+        elif event.key() == C.Qt.Key.Key_T and not event.modifiers() and self.selected and not self.search_mode:
             if not event.isAutoRepeat():
                 self.quickTagRequested.emit(G.QCursor.pos())
         elif event.matches(G.QKeySequence.StandardKey.SelectAll):
             self.selected = {e.entry_id for e, _, _ in self.items}
             self.selectionChanged.emit()
             self.viewport().update()
-        elif event.key() == C.Qt.Key.Key_Delete and self.selected:
+        elif (event.key() in (C.Qt.Key.Key_Delete, C.Qt.Key.Key_Backspace)
+              and not event.modifiers() and self.selected and not self.search_mode):
             self.quantityRequested.emit('', 0)
         else:
             super().keyPressEvent(event)

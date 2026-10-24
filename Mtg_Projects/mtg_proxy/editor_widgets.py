@@ -324,11 +324,17 @@ class EditorPage(QWidget):
         self._print_button = print_button
         self._shortcuts = [
             QShortcut(QKeySequence.StandardKey.Save, self),
-            QShortcut(QKeySequence(QtCore.Qt.Key.Key_Escape), self),
         ]
+        self._shortcuts[0].setContext(QtCore.Qt.ShortcutContext.WidgetWithChildrenShortcut)
         self._shortcuts[0].activated.connect(save_button.click)
-        self._shortcuts[1].activated.connect(lambda: settings_button.setChecked(False))
         self._update_readiness(tabs._state)
+
+    def keyPressEvent(self, event):
+        if event.key() == QtCore.Qt.Key.Key_Escape and not event.modifiers():
+            self._settings_button.setChecked(False)
+            event.accept()
+            return
+        super().keyPressEvent(event)
 
     def set_project_name(self, name):
         self._project_label.setText(name or "Untitled Project")
@@ -1336,8 +1342,11 @@ class CardScrollArea(QScrollArea):
         self._selection_buttons = (decrement_button, increment_button, clear_selection_button)
         self._update_empty_state()
 
-        QShortcut(QKeySequence.StandardKey.Find, self, activated=search_edit.setFocus)
-        QShortcut(QKeySequence.StandardKey.SelectAll, self, activated=card_grid.select_all_visible)
+        find = QShortcut(QKeySequence.StandardKey.Find, self, activated=search_edit.setFocus)
+        find.setContext(QtCore.Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        select = QShortcut(QKeySequence.StandardKey.SelectAll, card_grid, activated=card_grid.select_all_visible)
+        select.setContext(QtCore.Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        card_grid.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
 
     def set_selected_oversized(self, enabled):
         from services.card_edit_service import set_oversized

@@ -332,6 +332,8 @@ class AppShellWindow(QMainWindow):
         ]
         self._shortcuts[0].activated.connect(self.open_blank_editor)
         self._shortcuts[1].activated.connect(self._dashboard_page.import_project)
+        from mtg_ui.keyboard import add_shortcuts_help
+        add_shortcuts_help(self)
         if embedded:
             for shortcut in self._shortcuts:
                 shortcut.setContext(QtCore.Qt.ShortcutContext.WidgetWithChildrenShortcut)

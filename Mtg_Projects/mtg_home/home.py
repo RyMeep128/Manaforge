@@ -165,6 +165,8 @@ class HomeWindow(W.QMainWindow):
             action.triggered.connect(lambda checked=False, target=key: self.moduleRequested.emit(target))
         self.navigation['home'].setChecked(True)
         self.navigation['home'].setShortcut('Ctrl+Shift+H')
+        from mtg_ui.keyboard import add_shortcuts_help
+        add_shortcuts_help(self)
         self._columns = None
         self.reflow()
 
