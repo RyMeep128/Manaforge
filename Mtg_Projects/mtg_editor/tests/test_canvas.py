@@ -184,6 +184,21 @@ def test_toolbar_wraps_without_offscreen_actions(window):
     assert window.grid.height() > 300
 
 
+def test_deck_toolbar_groups_wrap_in_workflow_order(window):
+    for width in (640, 1000, 1600):
+        window.resize(width, 800)
+        W.QApplication.processEvents()
+        previous = None
+        for widget in window.control_groups:
+            rect = C.QRect(widget.mapTo(window, C.QPoint()), widget.size())
+            assert rect.left() >= 0
+            assert rect.right() < window.width()
+            if previous is not None:
+                assert rect.top() > previous.top() or rect.left() > previous.left()
+            previous = rect
+        assert window.filter.width() <= 200
+
+
 def test_500_card_canvas_only_requests_visible_images_off_ui_thread(tmp_path):
     app = W.QApplication.instance() or W.QApplication([])
     calls = []

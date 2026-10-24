@@ -84,9 +84,12 @@ class EditorWindow(W.QMainWindow):
         header_layout.setContentsMargins(0, 0, 0, 0)
         bar = W.QHBoxLayout()
         header_layout.addLayout(bar)
-        self.header_extra = W.QHBoxLayout()
+        self.header_extra_container = W.QWidget()
+        self.header_extra = W.QHBoxLayout(self.header_extra_container)
         self.header_extra.setContentsMargins(14, 0, 14, 6)
-        header_layout.addLayout(self.header_extra)
+        self.header_extra.addStretch(1)
+        header_layout.addWidget(self.header_extra_container)
+        self.header_extra_container.hide()
         self.header_bar = bar
         bar.setContentsMargins(14, 10, 14, 10)
         decks = W.QToolButton()
@@ -96,8 +99,10 @@ class EditorWindow(W.QMainWindow):
         self.recent.aboutToShow.connect(self.refresh_recent)
         decks.setMenu(self.recent)
         bar.addWidget(decks)
+        self.decks_button = decks
         self.name = W.QLineEdit(self.document.deck.name)
         self.name.setMinimumWidth(130)
+        self.name.setStyleSheet('font-size:13pt;font-weight:600;')
         self.name.editingFinished.connect(self.edit_metadata)
         bar.addWidget(self.name, 1)
         self.format = W.QComboBox()
@@ -109,12 +114,10 @@ class EditorWindow(W.QMainWindow):
         self.save_status = W.QLabel('Saved')
         self.save_status.setProperty('role', 'muted')
         bar.addWidget(self.save_status)
-        self.button(bar, 'Save', self.save)
-        self.add_button = self.button(bar, 'Quick Add', self.toggle_search)
-        self.workspace_button = self.button(bar, 'Add Cards', self.open_add_cards, True)
-        self.button(bar, 'Import', self.import_decklist)
-        self.add_tag_button = self.button(bar, '+ Add Tag', self.add_tag)
-        self.button(bar, 'Print Deck', self.print_deck, True)
+        self.undo_button = self.button(bar, 'Undo', self.undo)
+        self.redo_button = self.button(bar, 'Redo', self.redo)
+        self.save_button = self.button(bar, 'Save', self.save)
+        self.print_button = self.button(bar, 'Print Deck', self.print_deck, True)
         more = W.QToolButton()
         more.setText('More')
         more.setPopupMode(W.QToolButton.ToolButtonPopupMode.InstantPopup)
@@ -150,69 +153,107 @@ class EditorWindow(W.QMainWindow):
         menu.addAction('Open deck…', self.open)
         more.setMenu(menu)
         bar.addWidget(more)
-        self.header_actions = [bar.itemAt(i).widget() for i in range(3, bar.count())]
+        self.header_actions = [self.undo_button, self.redo_button, self.save_button, self.print_button, more]
         layout.addWidget(header)
         controls = W.QFrame()
         controls.setProperty('role', 'toolbar')
         controls.setSizePolicy(W.QSizePolicy.Policy.Expanding, W.QSizePolicy.Policy.Fixed)
         control_layout = W.QVBoxLayout(controls)
-        control_layout.setContentsMargins(0, 0, 0, 0)
-        row = W.QHBoxLayout()
-        control_layout.addLayout(row)
-        self.control_extra = W.QHBoxLayout()
-        self.control_extra.setContentsMargins(14, 0, 14, 6)
-        control_layout.addLayout(self.control_extra)
-        self.control_bar = row
-        row.setContentsMargins(14, 8, 14, 8)
-        self.undo_button = self.button(row, 'Undo', self.undo)
-        self.redo_button = self.button(row, 'Redo', self.redo)
+        control_layout.setContentsMargins(14, 6, 14, 8)
+        control_layout.setSpacing(6)
+        self.control_bar = W.QHBoxLayout()
+        self.control_bar.setSpacing(10)
+        control_layout.addLayout(self.control_bar)
+        self.control_extra_container = W.QWidget()
+        self.control_extra = W.QVBoxLayout(self.control_extra_container)
+        self.control_extra.setContentsMargins(0, 0, 0, 0)
+        self.control_extra.setSpacing(10)
+        control_layout.addWidget(self.control_extra_container)
+        self.control_extra_container.hide()
+
+        add_group, add_row = self.toolbar_group('Add Cards')
+        self.workspace_button = self.button(add_row, 'Card Search', self.open_add_cards, True)
+        self.quick_add = W.QLineEdit()
+        self.quick_add.setPlaceholderText('Quick Add')
+        self.quick_add.setAccessibleName('Quick Add: Enter searches, then Enter adds a result')
+        self.quick_add.setFixedWidth(120)
+        self.quick_add.returnPressed.connect(self.quick_add_enter)
+        add_row.addWidget(self.quick_add)
+        self.import_button = self.button(add_row, 'Import', self.import_decklist)
+
+        view_group, view_row = self.toolbar_group('View As')
         self.view_mode = W.QComboBox()
         self.view_mode.addItems(['Grid', 'Stacks'])
-        row.addWidget(self.view_mode)
+        view_row.addWidget(self.view_mode)
+        group_group, group_row = self.toolbar_group('Group By')
         self.group = W.QComboBox()
         self.group.addItems(GROUPS)
-        self.group.setToolTip('Group cards by')
-        row.addWidget(self.group)
+        group_row.addWidget(self.group)
+        sort_group, sort_row = self.toolbar_group('Sort By')
         self.sort = W.QComboBox()
         self.sort.addItems(SORTS)
-        self.sort.setToolTip('Sort cards within groups')
-        row.addWidget(self.sort)
+        sort_row.addWidget(self.sort)
+        filter_group, filter_row = self.toolbar_group('Local Filter')
         self.filter = W.QLineEdit()
         self.filter.setClearButtonEnabled(True)
-        self.filter.setToolTip(FILTER_HELP)
-        self.filter.setPlaceholderText('Filter this deck…')
-        row.addWidget(self.filter, 1)
-        self.filter_help = W.QPushButton('Filter help')
+        self.filter.setPlaceholderText('Filter this deck')
+        self.filter.setMinimumWidth(140)
+        self.filter.setMaximumWidth(200)
+        filter_row.addWidget(self.filter)
+        self.filter_help = W.QToolButton()
+        self.filter_help.setText('?')
+        self.filter_help.setAccessibleName('Filter syntax help')
+        self.filter_help.setFixedWidth(28)
+        self.filter_help.setStyleSheet('padding:0 4px;')
         self.filter_help.clicked.connect(lambda: W.QMessageBox.information(self, 'Deck filters', FILTER_HELP))
-        row.addWidget(self.filter_help)
+        filter_row.addWidget(self.filter_help)
         self.readiness_filter = W.QPushButton()
         self.readiness_filter.hide()
         self.readiness_filter.clicked.connect(self.clear_readiness_filter)
-        row.addWidget(self.readiness_filter)
+        filter_row.addWidget(self.readiness_filter)
         self.readiness_snapshot = None
+
+        self.organization_overflow = W.QToolButton()
+        self.organization_overflow.setText('Display / Tags')
+        self.organization_overflow.setPopupMode(W.QToolButton.ToolButtonPopupMode.InstantPopup)
+        organization_menu = W.QMenu(self.organization_overflow)
+        self.add_tag_button = W.QPushButton('+ Add Tag')
+        self.add_tag_button.clicked.connect(lambda: self.add_tag())
+        add_action = W.QWidgetAction(organization_menu)
+        add_action.setDefaultWidget(self.add_tag_button)
+        organization_menu.addAction(add_action)
+        self.quick_tag_button = W.QPushButton('Quick Tags')
+        self.quick_tag_button.clicked.connect(lambda: self.quick_tag(QtGui.QCursor.pos()))
+        self.compact_quick_tags = W.QWidgetAction(organization_menu)
+        self.compact_quick_tags.setDefaultWidget(self.quick_tag_button)
+        organization_menu.addAction(self.compact_quick_tags)
+        organization_menu.addAction('Manage Tags', self.manage_categories)
+        organization_menu.addAction('Customize Quick Menu', lambda: self.manage_categories(customize=True))
+        organization_menu.addSeparator()
+        zoom_widget = W.QWidget()
+        zoom_row = W.QHBoxLayout(zoom_widget)
+        zoom_row.addWidget(W.QLabel('Card size'))
         self.zoom = W.QSlider(QtCore.Qt.Orientation.Horizontal)
         self.zoom.setRange(120, 260)
         self.zoom.setValue(180)
         self.zoom.setMaximumWidth(135)
-        self.zoom.setToolTip('Card size')
-        row.addWidget(self.zoom)
-        self.selection_label = W.QLabel('')
-        row.addWidget(self.selection_label)
-        self.quick_tag_button = self.button(row, 'Quick tags', lambda: self.quick_tag(QtGui.QCursor.pos()))
-        self.quick_tag_button.setToolTip('Replace primary category or toggle secondary tags for selected cards')
-        self.organization_overflow = W.QToolButton()
-        self.organization_overflow.setText('Tags +')
-        self.organization_overflow.setToolTip('Add Tag, Quick Tags, and organization settings')
-        self.organization_overflow.setPopupMode(W.QToolButton.ToolButtonPopupMode.InstantPopup)
-        organization_menu = W.QMenu(self.organization_overflow)
-        organization_menu.addAction('+ Add Tag', self.add_tag)
-        self.compact_quick_tags = organization_menu.addAction('Quick Tags', lambda: self.quick_tag(QtGui.QCursor.pos()))
-        organization_menu.addAction('Manage Tags', self.manage_categories)
-        organization_menu.addAction('Customize Quick Menu', lambda: self.manage_categories(customize=True))
+        zoom_row.addWidget(self.zoom)
+        zoom_action = W.QWidgetAction(organization_menu)
+        zoom_action.setDefaultWidget(zoom_widget)
+        organization_menu.addAction(zoom_action)
         self.organization_overflow.setMenu(organization_menu)
-        row.addWidget(self.organization_overflow)
-        self.organization_overflow.hide()
-        self.control_overflow = [self.filter, self.filter_help, self.readiness_filter, self.zoom, self.selection_label]
+        self.selection_label = W.QLabel('')
+        self.control_groups = [add_group, view_group, group_group, sort_group, filter_group]
+        self.control_overflow = self.control_groups
+        for widget in [*self.control_groups, self.organization_overflow, self.selection_label]:
+            self.control_bar.addWidget(widget)
+        self.control_bar.addStretch(1)
+        self.control_extra_rows = []
+        self.name.setFixedHeight(32)
+        for widget in (self.format, self.view_mode, self.group, self.sort, self.filter, self.quick_add,
+                       self.filter_help, self.workspace_button, self.import_button, self.organization_overflow,
+                       *self.header_actions):
+            widget.setFixedHeight(32)
         layout.addWidget(controls)
         self.splitter = W.QSplitter()
         self.search_panel = W.QWidget()
@@ -368,24 +409,86 @@ class EditorWindow(W.QMainWindow):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        if not hasattr(self, 'control_overflow'):
+        if not hasattr(self, 'control_groups'):
             return
-        narrow = self.width() < 1050
-        self.organization_overflow.setVisible(narrow)
-        self.add_tag_button.setVisible(not narrow)
-        self.quick_tag_button.setVisible(not narrow)
         short = self.height() < 560
         self.search_heading.setVisible(not short)
         self.search_close.setVisible(not short)
         self.search_status.setVisible(not short)
-        for widgets, primary, overflow in ((self.header_actions, self.header_bar, self.header_extra),
-                                           (self.control_overflow, self.control_bar, self.control_extra)):
-            target = overflow if narrow else primary
-            for widget in widgets:
-                if target.indexOf(widget) < 0:
-                    primary.removeWidget(widget)
-                    overflow.removeWidget(widget)
-                    target.addWidget(widget, 1 if widget in (self.filter, self.count) else 0)
+        self.reflow_toolbars()
+
+    def reflow_toolbars(self):
+        available = max(300, self.width()-28)
+        info = (self.decks_button.sizeHint().width() + self.name.minimumWidth() +
+                self.format.sizeHint().width() + self.count.sizeHint().width() +
+                self.save_status.sizeHint().width() + 36)
+        wrap_header = info + sum(widget.sizeHint().width()+6 for widget in self.header_actions) > available
+        target = self.header_extra if wrap_header else self.header_bar
+        for widget in self.header_actions:
+            if target.indexOf(widget) < 0:
+                self.header_bar.removeWidget(widget)
+                self.header_extra.removeWidget(widget)
+                target.addWidget(widget)
+        self.header_extra_container.setVisible(wrap_header)
+
+        rows = [[]]
+        used = 0
+        widgets = [*self.control_groups, self.organization_overflow, self.selection_label]
+        for widget in widgets:
+            width = widget.sizeHint().width() + 10
+            if rows[-1] and used + width > available:
+                rows.append([])
+                used = 0
+            rows[-1].append(widget)
+            used += width
+        while len(self.control_extra_rows) < len(rows)-1:
+            row = W.QHBoxLayout()
+            row.setSpacing(10)
+            row.addStretch(1)
+            self.control_extra.addLayout(row)
+            self.control_extra_rows.append(row)
+        layouts = [self.control_bar, *self.control_extra_rows]
+        for row, row_widgets in zip(layouts, rows):
+            for index, widget in enumerate(row_widgets):
+                if row.indexOf(widget) != index:
+                    for previous_row in layouts:
+                        previous_row.removeWidget(widget)
+                    row.insertWidget(index, widget)
+        self.control_extra_container.setVisible(len(rows) > 1)
+
+    def toolbar_group(self, title):
+        frame = W.QFrame()
+        name = 'deckTools' + title.replace(' ', '')
+        frame.setObjectName(name)
+        frame.setStyleSheet('QFrame#' + name + ' {border-right:1px solid #303743;}')
+        frame.setSizePolicy(W.QSizePolicy.Policy.Fixed, W.QSizePolicy.Policy.Fixed)
+        layout = W.QVBoxLayout(frame)
+        layout.setContentsMargins(0, 0, 8, 0)
+        layout.setSpacing(2)
+        label = W.QLabel(title)
+        label.setStyleSheet('font-size:9pt;color:#b5bdc9;')
+        layout.addWidget(label)
+        row = W.QHBoxLayout()
+        row.setSpacing(6)
+        layout.addLayout(row)
+        return frame, row
+
+    def quick_add_enter(self):
+        query = self.quick_add.text().strip()
+        if not query:
+            self.open_search()
+            return
+        if (getattr(self, '_quick_add_ready_query', None) == query and self.query.text().strip() == query
+                and self.search_document.deck.entries):
+            entry = next((entry for entry in self.search_document.deck.entries if entry.entry_id in self.results.selected),
+                         self.search_document.deck.entries[0])
+            self.add_result(entry.entry_id)
+            self.quick_add.setFocus()
+            return
+        self.query.setText(query)
+        self.open_search()
+        self.quick_add.setFocus()
+        self.statusBar().showMessage('Enter again after results load to add the selected or first match.', 4000)
 
     def button(self, layout, text, callback, primary=False):
         button = W.QPushButton(text)
@@ -602,6 +705,7 @@ class EditorWindow(W.QMainWindow):
         self.add_cards_workspace.undo_button.setEnabled(self.history.can_undo)
         self.add_cards_workspace.redo_button.setEnabled(self.history.can_redo)
         self.selection_changed()
+        self.reflow_toolbars()
         if dirty:
             self.autosave.start()
 
@@ -641,6 +745,7 @@ class EditorWindow(W.QMainWindow):
     def show_results(self, query, results, error):
         if query != self.query.text().strip():
             return
+        self._quick_add_ready_query = query if not error else None
         self.search_document.deck.entries = [DeckEntry(entry_id=r.card_id, name=r.name,
             card_id=r.card_id, oracle_id=r.oracle_id, set_code=r.set_code,
             collector_number=r.collector_number, pre_cropped=True, extras={'facts': card_facts(getattr(r, 'payload', {}) or {}),

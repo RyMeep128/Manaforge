@@ -32,10 +32,17 @@ The editor shares Proxy's dark styling and green accents. **Grid** shows complet
 card images; **Stacks** overlaps cards within groups. The card canvas uses all
 remaining window space, and the toolbars wrap on smaller screens.
 
+The compact deck header contains naming, format, count, save status, Undo/Redo,
+Save, Print Deck, and More. Below it, tools follow **Add Cards → View As → Group
+By → Sort By → Local Filter**. **Display / Tags** contains tag actions and card
+size. The filter stays compact, with syntax help available through **?**.
+Toolbar **Quick Add** uses the existing search panel: press Enter to search,
+then Enter again once results load to add the selected or first match.
+
 - **Quick Add** opens a resizable visual search panel. Search names or Scryfall
   syntax against the local Core catalog. Double-click a result or click its plus
   control to add that exact printing. Closing the panel retains its search and scroll.
-- **Add Cards** opens the full-width **Search**, **Recommendations**, and
+- **Card Search** opens the full-width **Search**, **Recommendations**, and
   **Commanders** workspace. It shares Quick Add's search and blended recommendations,
   and edits the same deck session. **Back to Deck** restores the deck view.
   Commander discovery supports local name/text/type filters and

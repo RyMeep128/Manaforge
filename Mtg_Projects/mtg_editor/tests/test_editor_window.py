@@ -7,6 +7,26 @@ from mtg_core.decks import DeckEntry
 import pytest
 
 
+def test_toolbar_quick_add_reuses_search_and_addition(tmp_path, monkeypatch):
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    window = EditorWindow(service=object(), root=tmp_path)
+    opened = []
+    monkeypatch.setattr(window, 'open_search', lambda: opened.append(True))
+    window.quick_add.setText('Forest')
+    window.quick_add_enter()
+    assert opened == [True]
+    assert window.query.text() == 'Forest'
+    result = SimpleNamespace(name='Forest', card_id='forest', oracle_id='forest',
+                             set_code='set', collector_number='1')
+    window.show_results('Forest', [result], '')
+    window.quick_add_enter()
+    assert window.document.deck.entries[0].quantity == 1
+    window.quick_add_enter()
+    assert window.document.deck.entries[0].quantity == 2
+    window.close()
+    app.processEvents()
+
+
 @pytest.mark.parametrize('mode', ['Grid', 'Stacks'])
 def test_quantity_buttons_click_remove_and_undo(tmp_path, mode):
     from PyQt6.QtTest import QTest
