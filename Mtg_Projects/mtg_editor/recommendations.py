@@ -12,11 +12,21 @@ from mtg_core.recommendation_scoring import context, score, settings
 
 
 def load_recommendations(
-    service, document, store, query="", *, sources=None, include_present=False, sink=None, should_cancel=None
+    service,
+    document,
+    store,
+    query="",
+    *,
+    sources=None,
+    include_present=False,
+    sink=None,
+    should_cancel=None,
 ):
     from mtg_core.discovery_starter import ensure_starter_catalog
+
     if sources is None:
         import sqlite3
+
         try:
             ensure_starter_catalog(service, should_cancel=should_cancel)
         except (OSError, ValueError, sqlite3.DatabaseError):
@@ -62,20 +72,31 @@ def load_recommendations(
         )
         allowed = {row.oracle_id for row in matches}
     from mtg_core.search.cancellation import check_cancelled
+
     deck_context = recommendation_context(service, document)
     rows = []
 
     def enrich(batch):
         check_cancelled(should_cancel)
-        proposals = service.analyze_entries([row['entry'] for row in batch])
-        reader = getattr(getattr(service, 'database', None), 'recommendation_metadata', None)
-        metadata = reader([row['oracle_id'] for row in batch], should_cancel=should_cancel) if callable(reader) else {}
+        proposals = service.analyze_entries([row["entry"] for row in batch])
+        reader = getattr(
+            getattr(service, "database", None), "recommendation_metadata", None
+        )
+        metadata = (
+            reader([row["oracle_id"] for row in batch], should_cancel=should_cancel)
+            if callable(reader)
+            else {}
+        )
         for item in batch:
-            item['entry'].extras['facts'].update(metadata.get(item['oracle_id'], {}))
-            item['roles'] = proposals.get(item['entry'].entry_id, [])
-            item['statistical_score'] = item['score']
+            item["entry"].extras["facts"].update(metadata.get(item["oracle_id"], {}))
+            item["roles"] = proposals.get(item["entry"].entry_id, [])
+            item["statistical_score"] = item["score"]
         if sink:
-            sink(rank_recommendations(batch, deck_context, dict(settings(document), dismissed=[])))
+            sink(
+                rank_recommendations(
+                    batch, deck_context, dict(settings(document), dismissed=[])
+                )
+            )
 
     candidates = [
         row
@@ -135,8 +156,11 @@ def load_recommendations(
 
 def recommendation_context(service, document):
     proposals = service.analyze_entries(document.deck.entries)
-    records = {entry.card_id: service.get_card(card_id=entry.card_id) or {}
-               for entry in document.deck.entries if entry.card_id}
+    records = {
+        entry.card_id: service.get_card(card_id=entry.card_id) or {}
+        for entry in document.deck.entries
+        if entry.card_id
+    }
     return context(document, proposals, records)
 
 

@@ -870,7 +870,7 @@ class EditorWindow(W.QMainWindow):
 
     def update_search_membership(self):
         from .organization import update_candidate_quantities
-        if self.syntax_membership.currentIndex():
+        if self.syntax_membership.currentIndex() and self.syntax_all_entries:
             self.filter_syntax_results()
         update_candidate_quantities(self.document, self.results)
 

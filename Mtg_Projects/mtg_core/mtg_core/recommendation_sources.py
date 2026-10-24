@@ -65,6 +65,7 @@ def default_sources(local_store):
         try:
             if source_id == "edhrec":
                 from .discovery_starter import snapshot_path
+
                 source = EdhrecSource(snapshot_path(root, "edhrec.sqlite3"))
             elif config["archidekt"]["cache"] == "portable":
                 source = AggregateSource(root / "archidekt.aggregate.json.gz")
