@@ -12,6 +12,7 @@ def test_toolbar_quick_add_reuses_search_and_addition(tmp_path, monkeypatch):
     window = EditorWindow(service=object(), root=tmp_path)
     opened = []
     monkeypatch.setattr(window, 'open_search', lambda: opened.append(True))
+    window.syntax_membership.setCurrentIndex(0)
     window.quick_add.setText('Forest')
     window.quick_add_enter()
     assert opened == [True]
@@ -62,6 +63,7 @@ def test_search_marks_alternate_printings_and_updates_after_undo(tmp_path):
     window = EditorWindow(service=object(), root=tmp_path)
     result = SimpleNamespace(name='Example', card_id='alternate', oracle_id='same',
                              set_code='set', collector_number='1')
+    window.syntax_membership.setCurrentIndex(0)
     window.show_results('', [result], '')
     assert not window.results.in_deck_ids
     window.add_card(DeckEntry('original', 'Example', card_id='original', oracle_id='same'))
@@ -150,6 +152,7 @@ def test_add_undo_redo_save_and_reopen(tmp_path):
     window = EditorWindow(service=object(), root=tmp_path)
     result = SimpleNamespace(name='Sol Ring', card_id='ring', oracle_id='oracle',
                              set_code='lea', collector_number='1')
+    window.syntax_membership.setCurrentIndex(0)
     window.show_results('', [result], '')
     window.add_result('ring')
     window.add_result('ring')

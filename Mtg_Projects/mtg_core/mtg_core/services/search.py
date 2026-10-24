@@ -136,13 +136,13 @@ class SearchOperations:
             filtered_rows = _filter_print_rows(local_rows, set_filter)
         return [_search_result_from_row(row) for row in filtered_rows]
 
-    def search_editor_cards(self, query, *, should_cancel=None):
+    def search_editor_cards(self, query, *, limit=50, offset=0, should_cancel=None):
         """Local editor search with role evidence and cooperative cancellation."""
         from mtg_core.categorization import classify
         from mtg_core.search.cancellation import check_cancelled
         check_cancelled(should_cancel)
         results = self.search_cards(query, {
-            'scryfall_syntax': True, 'allow_remote': False, 'limit': 100,
+            'scryfall_syntax': True, 'allow_remote': False, 'limit': limit, 'offset': offset,
             'should_cancel': should_cancel})
         check_cancelled(should_cancel)
         data = self.database.categorization_data(

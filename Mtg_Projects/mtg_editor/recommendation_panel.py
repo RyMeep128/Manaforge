@@ -1,6 +1,7 @@
 """Visual discovery inside Add Card, using the existing engine and card canvas."""
 
 from copy import deepcopy
+from threading import Event
 
 from PyQt6 import QtCore as C, QtGui as G, QtWidgets as W
 from mtg_core.decks import DeckDocument
@@ -10,7 +11,6 @@ from mtg_ui.theme import COLORS
 from .canvas import CardCanvas
 from .recommendations import (
     load_recommendations,
-    rank_recommendations,
 )
 from .tasks import Task
 from .organization import update_candidate_quantities
@@ -81,6 +81,11 @@ class RecommendationPanel(W.QWidget):
         self.key = None
         self.loaded_key = None
         self.rows = []
+        self.pages = None
+        self.shown_limit = 50
+        self.page_generation = 0
+        self.pending_page = False
+        self.cancelled = Event()
         self.pending = False
         self.timer = C.QTimer(self)
         self.timer.setSingleShot(True)
@@ -113,6 +118,7 @@ class RecommendationPanel(W.QWidget):
         body.insertWidget(0, self.text_filter)
         self.membership = W.QComboBox()
         self.membership.addItems(["All cards", "Not in deck", "In deck"])
+        self.membership.setCurrentIndex(1)
         self.membership.currentIndexChanged.connect(self.filter_rows)
         header.insertWidget(1, self.membership)
         self.role_filter = W.QComboBox()
@@ -136,6 +142,10 @@ class RecommendationPanel(W.QWidget):
         self.canvas.detailsRequested.connect(lambda key: self.inspect(key))
         self.canvas.menuRequested.connect(self.card_menu)
         body.addWidget(self.canvas, 1)
+        self.more = W.QPushButton('Load More')
+        self.more.hide()
+        self.more.clicked.connect(self.load_more)
+        body.addWidget(self.more)
         layout.addWidget(self.content, 1)
 
     def active(self):
@@ -155,15 +165,18 @@ class RecommendationPanel(W.QWidget):
             )
             self.key = key
             self.generation += 1
+            self.cancelled.set()
             if switched:
+                self.pages = None
+                self.shown_limit = 50
                 self.rows = []
-                self.filter_rows()
-        self.filter_rows()
+        self.filter_rows(reset=False)
         if self.active() and self.loaded_key != key:
             self.pending = True
             self.timer.start()
 
     def request_refresh(self):
+        self.cancelled.set()
         self.loaded_key = None
         self.generation += 1
         self.deck_changed()
@@ -179,24 +192,22 @@ class RecommendationPanel(W.QWidget):
         document = deepcopy(self.editor.document)
         service = self.editor.service
 
-        # All store/card resolution and scoring stays off the GUI thread.
-        def load():
-            snapshot = load_recommendations(
-                service,
-                document,
-                self.editor.recommendation_store(),
-                include_present=True,
-            )
-            snapshot["ranked"] = rank_recommendations(
-                snapshot["results"], snapshot["deck_context"], settings(document)
-            )
-            return snapshot
+        from .recommendation_pages import RecommendationPages
+        self.cancelled = Event()
+        cancelled = self.cancelled
 
-        self.status.setText("Updating recommendations…")
-        self.worker = Task(load, self, operation="sidebar recommendations")
+        def load():
+            pages = RecommendationPages()
+            load_recommendations(service, document, self.editor.recommendation_store(),
+                                 include_present=True, sink=pages.append,
+                                 should_cancel=cancelled.is_set)
+            return {'pages': pages, 'roles': pages.roles()}
+
+        self.status.setText("Loading recommendations...")
+        self.more.setEnabled(False)
+        self.worker = Task(load, self, operation="recommendation pages")
         self.worker.completed.connect(
-            lambda result, error: self.completed(generation, key, result, error)
-        )
+            lambda result, error: self.completed(generation, key, result, error))
         self.worker.finished.connect(self.finished)
         self.worker.start()
 
@@ -212,22 +223,71 @@ class RecommendationPanel(W.QWidget):
             self.status.setToolTip(error)
             return
         self.loaded_key = key
-        self.rows = snapshot["ranked"]
+        self.pages = snapshot["pages"]
         current = self.role_filter.currentText()
-        roles = sorted({role["name"] for row in self.rows for role in row["roles"]})
+        roles = snapshot["roles"]
         with C.QSignalBlocker(self.role_filter):
             self.role_filter.clear()
             self.role_filter.addItems(["All roles", *roles])
             self.role_filter.setCurrentText(current if current in roles else "All roles")
-        self.filter_rows()
+        self.filter_rows(reset=False)
 
     def finished(self):
         self.worker.deleteLater()
         self.worker = None
+        self.more.setEnabled(True)
         if self.pending and self.active() and self.loaded_key != self.key:
             self.timer.start()
+        elif self.pending_page:
+            self.request_page()
 
-    def filter_rows(self):
+    def load_more(self):
+        if self.worker is not None:
+            return
+        self.shown_limit += 50
+        self.filter_rows(reset=False)
+
+    def filter_rows(self, *_, reset=True):
+        if reset:
+            self.shown_limit = 50
+        self.page_generation += 1
+        self.render_rows()
+        if self.pages is not None:
+            self.pending_page = True
+            self.request_page()
+        if self.worker is not None:
+            self.status.setText('Loading recommendations...')
+
+    def request_page(self):
+        if not self.active() or self.worker is not None or self.pages is None:
+            return
+        self.pending_page = False
+        pages, generation = self.pages, self.page_generation
+        document = deepcopy(self.editor.document)
+        options = dict(limit=self.shown_limit, kind=self.type_filter.currentText(),
+                       text=self.text_filter.text(), role=self.role_filter.currentText(),
+                       membership=self.membership.currentIndex(),
+                       dismissed=settings(document)['dismissed'])
+        self.more.setEnabled(False)
+        self.status.setText('Loading recommendations...')
+        self.worker = Task(lambda: pages.page(document, **options), self, operation='recommendation page')
+        def completed(result, error):
+            if generation != self.page_generation or pages is not self.pages or not self.active():
+                return
+            if error:
+                self.status.setText('Could not load recommendations. Use Refresh to retry.')
+                return
+            rows, more = result
+            previous = {row['oracle_id']: row['entry'] for row in self.rows}
+            for row in rows:
+                row['entry'] = previous.get(row['oracle_id'], row['entry'])
+            self.rows = rows
+            self.render_rows(more)
+        self.worker.completed.connect(completed)
+        self.worker.finished.connect(self.finished)
+        self.worker.start()
+
+    def render_rows(self, more=None):
         for row in self.rows:
             row['entry'].extras['category_suggestion'] = row['roles']
         kind = self.type_filter.currentText()
@@ -237,7 +297,7 @@ class RecommendationPanel(W.QWidget):
         role = self.role_filter.currentText()
         membership = self.membership.currentIndex()
         dismissed = settings(self.editor.document)["dismissed"]
-        self.canvas.document.deck.entries = [
+        entries = [
             row["entry"]
             for row in self.rows
             if row["oracle_id"] not in dismissed
@@ -246,12 +306,15 @@ class RecommendationPanel(W.QWidget):
             and (role == "All roles" or any(item["name"] == role for item in row["roles"]))
             and (membership == 0 or (row["entry"].entry_id in present) == (membership == 2))
         ]
+        if more is None:
+            more = len(entries) > self.shown_limit or (self.pages is not None and not self.more.isHidden())
+        self.canvas.document.deck.entries = entries[:self.shown_limit]
+        self.more.setVisible(more)
         count = len(self.canvas.document.deck.entries)
-        self.status.setText(
-            f"{count} recommendations · quantities show mainboard + commander"
-            if count
-            else "No recommendations for this type or deck. Check the cache/source settings or refresh."
-        )
+        self.status.setText(f'Showing {count} recommendations. ' +
+                            ('Load More for additional results.' if more else 'All available results loaded.'))
+        if self.pages is None and not self.rows:
+            self.status.setText('No recommendations loaded. Use Refresh to search local data.')
         self.update_quantities()
         self.canvas.refresh()
 
@@ -269,9 +332,19 @@ class RecommendationPanel(W.QWidget):
         self.editor.candidate_details(self.canvas, entry_id)
 
     def card_menu(self, entry_id, position):
-        self.editor.candidate_menu(self.canvas, entry_id, position, self.add)
+        self.editor.candidate_menu(self.canvas, entry_id, position, self.add, self.dismiss)
+
+    def dismiss(self, entry_id):
+        row = next((row for row in self.rows if row['entry'].entry_id == entry_id), None)
+        if row is None:
+            return
+        preferences = settings(self.editor.document)
+        preferences['dismissed'].append(row['oracle_id'])
+        self.editor.edit(lambda document: document.editor_preferences.update(recommendations=preferences))
 
     def suspend(self):
+        self.cancelled.set()
+        self.page_generation += 1
         self.timer.stop()
         self.pending = False
         self.generation += 1

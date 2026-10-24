@@ -63,3 +63,29 @@ def test_search_controller_refresh_debounce_and_shutdown():
     controller.search('resumed')
     wait_until(app, lambda: controller.worker is None)
     assert calls == ['card', 'card', 'resumed']
+
+
+def test_search_pages_keep_order_cache_offsets_and_reject_overlap():
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    calls = []
+    cards = [SimpleNamespace(card_id=str(index)) for index in range(125)]
+    def search(query, *, limit, offset, should_cancel):
+        calls.append((query, limit, offset))
+        return cards[offset:offset+limit]
+    controller = SearchController(SimpleNamespace(search_editor_cards=search))
+    controller.search('all')
+    wait_until(app, lambda: controller.worker is None)
+    assert len(controller.rows) == 50 and controller.has_more
+    controller.load_more()
+    controller.load_more()
+    wait_until(app, lambda: controller.worker is None)
+    assert len(controller.rows) == 100 and controller.has_more
+    controller.load_more()
+    wait_until(app, lambda: controller.worker is None)
+    assert [row.card_id for row in controller.rows] == [str(index) for index in range(125)]
+    assert not controller.has_more
+    assert calls == [('all', 51, 0), ('all', 51, 50), ('all', 51, 100)]
+    controller.search('all')
+    wait_until(app, lambda: controller.worker is None)
+    assert len(calls) == 3 and len(controller.rows) == 50
+    controller.shutdown()

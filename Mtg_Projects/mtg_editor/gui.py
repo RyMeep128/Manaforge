@@ -289,8 +289,10 @@ class EditorWindow(W.QMainWindow):
         self.refresh_search_button.setToolTip('Bypass recent results. Cached searches expire after 30 seconds.')
         self.syntax_membership = W.QComboBox()
         self.syntax_membership.addItems(['All cards', 'Not in deck', 'In deck'])
+        self.syntax_membership.setCurrentIndex(1)
         self.syntax_membership.currentIndexChanged.connect(self.filter_syntax_results)
         self.syntax_all_entries = []
+        self.syntax_error = ''
         search_layout.addLayout(search_controls)
         search_layout.addWidget(self.syntax_membership)
         self.search_status = W.QLabel('Search by name or Scryfall syntax')
@@ -303,6 +305,12 @@ class EditorWindow(W.QMainWindow):
         self.results.menuRequested.connect(self.search_menu)
         self.results.detailsRequested.connect(lambda key: self.candidate_details(self.results, key))
         search_layout.addWidget(self.results, 1)
+        self.search_more = W.QPushButton('Load More')
+        self.search_more.hide()
+        self.search_more.clicked.connect(self.search_controller.load_more)
+        self.search_controller.pageStateChanged.connect(self.search_more.setVisible)
+        self.search_controller.busyChanged.connect(lambda busy: self.search_more.setEnabled(not busy))
+        search_layout.addWidget(self.search_more)
         from .recommendation_panel import RecommendationPanel
         self.recommendation_panel = RecommendationPanel(self)
         self.add_card_tabs.addTab(self.recommendation_panel, 'Recommendations')
@@ -548,7 +556,7 @@ class EditorWindow(W.QMainWindow):
             elif (self.search_document.deck.entries
                     and (self.worker is None or self.worker.cancelled.is_set())):
                 self.search_status.setText(
-                    f'{len(self.search_document.deck.entries)} local matches (up to 100). Double-click or + to add.')
+                    f'{len(self.search_document.deck.entries)} local matches loaded. Double-click or + to add.')
         else:
             self.cancel_search()
             self.results.hover_timer.stop()
@@ -683,6 +691,11 @@ class EditorWindow(W.QMainWindow):
             self.changed()
 
     def changed(self):
+        deck_id = self.document.deck.deck_id
+        if getattr(self, '_discovery_deck_id', deck_id) != deck_id:
+            self.search_controller.change_query(self.query.text())
+            self.add_cards_workspace.card_search.query_changed()
+        self._discovery_deck_id = deck_id
         if not self.name.isModified():
             self.name.setText(self.document.deck.name)
         for gesture in getattr(self, 'tag_gestures', []):
@@ -738,6 +751,7 @@ class EditorWindow(W.QMainWindow):
 
     def clear_search_results(self):
         self.syntax_all_entries = []
+        self.syntax_error = ''
         self.search_document.deck.entries.clear()
         self.results.refresh()
 
@@ -758,15 +772,18 @@ class EditorWindow(W.QMainWindow):
         if query != self.query.text().strip():
             return
         self._quick_add_ready_query = query if not error else None
-        self.search_document.deck.entries = [DeckEntry(entry_id=r.card_id, name=r.name,
+        self.syntax_error = error
+        previous = {entry.card_id: entry for entry in self.syntax_all_entries}
+        self.search_document.deck.entries = [previous.get(r.card_id) or DeckEntry(entry_id=r.card_id, name=r.name,
             card_id=r.card_id, oracle_id=r.oracle_id, set_code=r.set_code,
             collector_number=r.collector_number, pre_cropped=True, extras={'facts': card_facts(getattr(r, 'payload', {}) or {}),
                 'category_suggestion': (getattr(r, 'payload', {}) or {}).get('_category_evidence',
                     classify(getattr(r, 'payload', {}) or {}))}) for r in results]
         self.results.refresh()
-        self.search_status.setText(error or f'{len(results)} local matches (up to 100). Double-click or + to add.')
         self.syntax_all_entries = list(self.search_document.deck.entries)
         self.filter_syntax_results()
+        self.search_status.setText(error or (f'Showing {len(self.search_document.deck.entries)} local matches. ' +
+            ('Load More for additional results.' if self.search_controller.has_more else 'All available results loaded.')))
 
     def filter_syntax_results(self, *_):
         from .organization import in_deck_entries, update_candidate_quantities
@@ -776,6 +793,9 @@ class EditorWindow(W.QMainWindow):
             if membership == 0 or (entry.entry_id in present) == (membership == 2)]
         update_candidate_quantities(self.document, self.results)
         self.results.refresh()
+        if self.syntax_all_entries and not self.syntax_error:
+            self.search_status.setText(f'Showing {len(self.search_document.deck.entries)} local matches. ' +
+                ('Load More for additional results.' if self.search_controller.has_more else 'All available results loaded.'))
 
     def update_search_membership(self):
         from .organization import update_candidate_quantities
@@ -784,7 +804,8 @@ class EditorWindow(W.QMainWindow):
         update_candidate_quantities(self.document, self.results)
 
     def add_result(self, entry_id, delta=1):
-        result = next((e for e in self.search_document.deck.entries if e.entry_id == entry_id), None)
+        result = next((e for e in [*self.syntax_all_entries, *self.search_document.deck.entries]
+                       if e.entry_id == entry_id), None)
         if result is None:
             return
         self.change_candidate_quantity(result, delta)
@@ -922,13 +943,15 @@ class EditorWindow(W.QMainWindow):
     def search_menu(self, entry_id, position):
         self.candidate_menu(self.results, entry_id, position, self.add_result)
 
-    def candidate_menu(self, canvas, entry_id, position, add):
+    def candidate_menu(self, canvas, entry_id, position, add, dismiss=None):
         entry = next((entry for entry in canvas.document.deck.entries if entry.entry_id == entry_id), None)
         if entry is None:
             return
         menu = W.QMenu(self)
         menu.addAction('Add card', lambda: add(entry_id))
         menu.addAction('Details / alternate printings', lambda: self.candidate_details(canvas, entry_id))
+        if dismiss is not None:
+            menu.addAction('Dismiss recommendation', lambda: dismiss(entry_id))
         self.add_reference_action(menu, entry)
         menu.addAction('View Oracle tags?', lambda: self.view_tags(entry))
         menu.addAction('Retry artwork', lambda: self.thumbnails.retry(entry.card_id, entry.image_asset_id))

@@ -12,7 +12,7 @@ from mtg_core.recommendation_scoring import context, score, settings
 
 
 def load_recommendations(
-    service, document, store, query="", *, sources=None, include_present=False
+    service, document, store, query="", *, sources=None, include_present=False, sink=None, should_cancel=None
 ):
     commanders = [
         e
@@ -22,12 +22,13 @@ def load_recommendations(
     ]
     commander_ids = [e.oracle_id for e in commanders if e.oracle_id]
     from mtg_core.recommendation_sources import default_sources, recommend
+    from mtg_core.recommendation_fusion import CANDIDATE_LIMIT
 
     snapshot = recommend(
         default_sources(store) if sources is None else sources,
         commander_ids,
         exclude=[] if include_present else [e.oracle_id for e in document.deck.entries],
-        limit=2000,
+        limit=CANDIDATE_LIMIT,
         use_local=settings(document)["local_enabled"],
         seeds=[
             e.oracle_id
@@ -52,7 +53,22 @@ def load_recommendations(
             query, dict(scryfall_syntax=True, allow_remote=False, limit=10000)
         )
         allowed = {row.oracle_id for row in matches}
+    from mtg_core.search.cancellation import check_cancelled
+    current_proposals = service.analyze_entries(document.deck.entries)
+    records = {entry.card_id: service.get_card(card_id=entry.card_id) or {}
+               for entry in document.deck.entries if entry.card_id}
+    deck_context = context(document, current_proposals, records)
     rows = []
+
+    def enrich(batch):
+        check_cancelled(should_cancel)
+        proposals = service.analyze_entries([row['entry'] for row in batch])
+        for item in batch:
+            item['roles'] = proposals.get(item['entry'].entry_id, [])
+            item['statistical_score'] = item['score']
+        if sink:
+            sink(rank_recommendations(batch, deck_context, settings(document)))
+
     candidates = [
         row
         for row in snapshot["results"]
@@ -73,6 +89,7 @@ def load_recommendations(
         )
     )
     for row, payload in zip(candidates, payloads):
+        check_cancelled(should_cancel)
         if not payload:
             continue
         if color_known and (
@@ -93,22 +110,17 @@ def load_recommendations(
         rows.append(
             dict(row, entry=entry, commander_names=[e.name for e in commanders])
         )
-        if len(rows) >= 200:
-            break
-    proposals = service.analyze_entries([row["entry"] for row in rows])
-    for row in rows:
-        row["roles"] = proposals.get(row["entry"].entry_id, [])
-        row["statistical_score"] = row["score"]
-    current_proposals = service.analyze_entries(document.deck.entries)
-    records = {
-        entry.card_id: service.get_card(card_id=entry.card_id) or {}
-        for entry in document.deck.entries
-        if entry.card_id
-    }
+        if sink and len(rows) == 50:
+            enrich(rows)
+            rows = []
+    if rows:
+        enrich(rows)
+    if sink:
+        rows = []
     snapshot.update(
         results=rows,
         color_filtered=color_known,
-        deck_context=context(document, current_proposals, records),
+        deck_context=deck_context,
     )
     return snapshot
 

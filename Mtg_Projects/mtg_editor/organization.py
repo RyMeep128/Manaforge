@@ -8,17 +8,21 @@ GROUPS = ['Type', 'Mana Value', 'Color', 'Category', 'Section']
 SORTS = ['Name', 'Mana Value', 'Color', 'Quantity', 'Import Order']
 
 
+def normalized_card_name(name):
+    return ' '.join(name.split()).casefold()
+
+
 def in_deck_entries(document, candidates):
     """Recognize alternate printings and legacy entries without changing selection."""
     entries = [entry for entry in document.deck.entries if entry.quantity > 0]
     oracles = {entry.oracle_id for entry in entries if entry.oracle_id}
     prints = {entry.card_id for entry in entries if entry.card_id}
-    legacy_names = {entry.name.strip().casefold() for entry in entries if not entry.oracle_id}
-    names = {entry.name.strip().casefold() for entry in entries}
+    legacy_names = {normalized_card_name(entry.name) for entry in entries if not entry.oracle_id}
+    names = {normalized_card_name(entry.name) for entry in entries}
     return {entry.entry_id for entry in candidates
             if (entry.oracle_id and entry.oracle_id in oracles)
             or (entry.card_id and entry.card_id in prints)
-            or entry.name.strip().casefold() in (legacy_names if entry.oracle_id else names)}
+            or normalized_card_name(entry.name) in (legacy_names if entry.oracle_id else names)}
 
 
 def card_facts(payload):
@@ -36,14 +40,14 @@ def update_candidate_quantities(document, canvas):
     oracles, prints, names, legacy = {}, {}, {}, {}
     for entry in entries:
         for mapping, key in ((oracles, entry.oracle_id), (prints, entry.card_id),
-                             (names, entry.name.strip().casefold())):
+                             (names, normalized_card_name(entry.name))):
             if key:
                 mapping[key] = mapping.get(key, 0) + entry.quantity
         if not entry.oracle_id:
-            key = entry.name.strip().casefold()
+            key = normalized_card_name(entry.name)
             legacy[key] = legacy.get(key, 0) + entry.quantity
     for candidate in canvas.document.deck.entries:
-        name = candidate.name.strip().casefold()
+        name = normalized_card_name(candidate.name)
         candidate.quantity = (oracles.get(candidate.oracle_id, 0) + legacy.get(name, 0)
                               if candidate.oracle_id else names.get(name, 0))
         candidate.quantity = max(candidate.quantity, prints.get(candidate.card_id, 0))

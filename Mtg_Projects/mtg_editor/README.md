@@ -32,6 +32,21 @@ The editor shares Proxy's dark styling and green accents. **Grid** shows complet
 card images; **Stacks** overlaps cards within groups. The card canvas uses all
 remaining window space, and the toolbars wrap on smaller screens.
 
+Card Search, Syntax Search, and Quick Add load 50 results at a time; **Load More**
+continues through all matching local results. Cards present anywhere in the deck,
+including alternate printings, are hidden by default. Select **All cards** in the
+membership filter to show them. Adding or removing a card updates eligibility
+immediately, including Undo/Redo.
+
+Recommendations also show 50 at a time, with filters applied before pagination.
+The previous 200-card display cap is removed. The existing recommendation engine
+still generates a bounded pool of up to 2,000 fused candidates from configured
+sources; all eligible, locally resolvable candidates in that pool are browsable.
+Resolution and ranking run in background batches into a temporary disk-backed
+index; only requested pages become UI rows. Existing visible-thumbnail caching
+continues to control image requests. Right-click a recommendation to dismiss it;
+Undo restores eligibility.
+
 The compact deck header contains naming, format, count, save status, Undo/Redo,
 Save, Print Deck, and More. Below it, tools follow **Add Cards → View As → Group
 By → Sort By → Local Filter**. **Display / Tags** contains tag actions and card

@@ -46,6 +46,8 @@ def recommendation(number, line="Legendary Artifact Creature — Golem"):
 def test_search_and_recommendation_add_share_history_and_quantity(editor):
     panel = editor.recommendation_panel
     row = recommendation(1)
+    panel.membership.setCurrentIndex(0)
+    editor.syntax_membership.setCurrentIndex(0)
     panel.rows = [row]
     panel.filter_rows()
     editor.search_document.deck.entries = [deepcopy(row["entry"])]

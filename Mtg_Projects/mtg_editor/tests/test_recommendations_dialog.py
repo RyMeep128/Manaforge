@@ -182,7 +182,7 @@ def test_loader_resolves_bounded_union_offline(monkeypatch):
     worker.start()
     assert worker.wait(5000)
     snapshot = loaded[0]
-    assert len(calls) == len(snapshot["results"]) == 200
+    assert len(calls) == len(snapshot["results"]) == 2000
     assert {r["sources_present"][0] for r in snapshot["results"]} == {"a", "b"}
     assert (
         len(
@@ -190,7 +190,7 @@ def test_loader_resolves_bounded_union_offline(monkeypatch):
                 snapshot["results"], snapshot["deck_context"], settings(document)
             )
         )
-        == 200
+        == 2000
     )
 
 

@@ -6,6 +6,19 @@ from mtg_core.search import card_rules_text
 from mtg_core.search.syntax import LocalQueryError, compile_query
 
 
+def test_editor_search_pages_beyond_one_hundred_without_duplicates(tmp_path):
+    service = CardService(db_path=str(tmp_path / 'paged.sqlite3'),
+                          fetch_json_fn=lambda *args: pytest.fail('Must stay offline'))
+    for index in range(125):
+        service.database.upsert_card_payload(dict(
+            id=f'print-{index}', oracle_id=f'oracle-{index}', name=f'Paged Card {index:03}',
+            set='abc', collector_number=str(index), lang='en', type_line='Creature'))
+    pages = [service.search_editor_cards('name:"Paged Card"', limit=50, offset=offset)
+             for offset in (0, 50, 100, 150)]
+    assert [len(page) for page in pages] == [50, 50, 25, 0]
+    assert [card.name for page in pages for card in page] == [f'Paged Card {index:03}' for index in range(125)]
+
+
 @pytest.fixture
 def database(tmp_path):
     db = CardDatabase(str(tmp_path / 'cards.sqlite3'))

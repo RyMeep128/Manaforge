@@ -16,6 +16,7 @@ class CardSearchPanel(W.QWidget):
         super().__init__(editor)
         self.editor = editor
         self.rows = []
+        self.result_error = ''
         self.controller = SearchController(editor.service, self)
         layout = W.QVBoxLayout(self)
         layout.setContentsMargins(0, 8, 0, 0)
@@ -51,6 +52,7 @@ class CardSearchPanel(W.QWidget):
         self.mana.setAccessibleName('Mana value')
         self.membership = W.QComboBox()
         self.membership.addItems(['All cards', 'Not in deck', 'In deck'])
+        self.membership.setCurrentIndex(1)
         for control in (self.color, self.kind, self.mana, self.membership):
             filters.addWidget(control)
         layout.addLayout(filters)
@@ -70,6 +72,12 @@ class CardSearchPanel(W.QWidget):
         self.canvas.menuRequested.connect(
             lambda key, point: editor.candidate_menu(self.canvas, key, point, self.add))
         layout.addWidget(self.canvas, 1)
+        self.more = W.QPushButton('Load More')
+        self.more.hide()
+        self.more.clicked.connect(self.controller.load_more)
+        layout.addWidget(self.more)
+        self.controller.pageStateChanged.connect(self.more.setVisible)
+        self.controller.busyChanged.connect(lambda busy: self.more.setEnabled(not busy))
         self.controller.resultsReady.connect(self.completed)
         self.controller.cleared.connect(self.clear)
         self.controller.statusChanged.connect(self.status.setText)
@@ -96,17 +104,21 @@ class CardSearchPanel(W.QWidget):
     def completed(self, query, results, error):
         if query != self.query():
             return
-        self.rows = [DeckEntry(r.card_id, r.name, card_id=r.card_id, oracle_id=r.oracle_id,
+        self.result_error = error
+        previous = {entry.card_id: entry for entry in self.rows}
+        self.rows = [previous.get(r.card_id) or DeckEntry(r.card_id, r.name, card_id=r.card_id, oracle_id=r.oracle_id,
                               set_code=r.set_code, collector_number=r.collector_number,
                               pre_cropped=True, extras={'facts': card_facts(getattr(r, 'payload', {}) or {}),
                                   'category_suggestion': (getattr(r, 'payload', {}) or {}).get(
                                       '_category_evidence', classify(getattr(r, 'payload', {}) or {}))})
                      for r in results]
         self.update_quantities()
-        self.status.setText(error or f'{len(results)} local matches (up to 100).')
+        self.status.setText(error or (f'Showing {len(self.canvas.document.deck.entries)} results. ' +
+            ('Load More for additional results.' if self.controller.has_more else 'All available results loaded.')))
 
     def clear(self):
         self.rows = []
+        self.result_error = ''
         self.update_quantities()
 
     def update_quantities(self, *_):
@@ -116,6 +128,9 @@ class CardSearchPanel(W.QWidget):
             if membership == 0 or (entry.entry_id in present) == (membership == 2)]
         update_candidate_quantities(self.editor.document, self.canvas)
         self.canvas.refresh()
+        if self.rows and not self.result_error:
+            self.status.setText(f'Showing {len(self.canvas.document.deck.entries)} results. ' +
+                ('Load More for additional results.' if self.controller.has_more else 'All available results loaded.'))
 
     def add(self, entry_id, delta=1):
         entry = next((entry for entry in self.rows if entry.entry_id == entry_id), None)

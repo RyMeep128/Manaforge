@@ -66,7 +66,7 @@ def test_query_replacement_clear_and_close_cancel_running_work(tmp_path):
     started = Event()
     calls = []
 
-    def search(query, *, should_cancel):
+    def search(query, *, should_cancel, limit=50, offset=0):
         calls.append(query)
         if query == 'slow':
             started.set()
@@ -102,3 +102,29 @@ def test_query_replacement_clear_and_close_cancel_running_work(tmp_path):
     assert not window.pending_search and not window.search_timer.isActive()
     window.close()
     app.processEvents()
+
+
+def test_replacing_query_discards_an_inflight_later_page():
+    from mtg_editor.search import SearchController
+    app = W.QApplication.instance() or W.QApplication([])
+    started = Event()
+    cards = [SimpleNamespace(card_id=str(index)) for index in range(120)]
+    def search(query, *, should_cancel, limit, offset):
+        if offset:
+            started.set()
+            deadline = monotonic() + 3
+            while not should_cancel() and monotonic() < deadline:
+                Event().wait(0.005)
+            assert should_cancel()
+        return [SimpleNamespace(card_id='replacement')] if query == 'new' else cards[offset:offset+limit]
+    controller = SearchController(SimpleNamespace(search_editor_cards=search))
+    controller.search('old')
+    wait_until(app, lambda: controller.worker is None)
+    controller.load_more()
+    wait_until(app, started.is_set)
+    controller.change_query('new')
+    controller.search('new')
+    wait_until(app, lambda: controller.worker is None and not controller.pending)
+    assert [row.card_id for row in controller.rows] == ['replacement']
+    assert not controller.has_more
+    controller.shutdown()

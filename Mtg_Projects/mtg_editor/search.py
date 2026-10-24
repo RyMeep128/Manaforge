@@ -31,14 +31,21 @@ class SearchCache:
         while len(self.entries) > self.capacity:
             self.entries.popitem(last=False)
 
+    def invalidate(self, query):
+        for key in list(self.entries):
+            if isinstance(key, tuple) and key[0] == query:
+                del self.entries[key]
+
 
 class SearchWorker(QtCore.QThread):
     completed = QtCore.pyqtSignal(str, object, str)
 
-    def __init__(self, query, service, parent=None, *, cache=None, refresh=False):
+    def __init__(self, query, service, parent=None, *, cache=None, refresh=False, offset=0, page_size=50):
         super().__init__(parent)
         self.query, self.service = query, service
         self.cache, self.refresh = cache, refresh
+        self.offset, self.page_size = offset, page_size
+        self.has_more = False
         self.cancelled = Event()
 
     def cancel(self):
@@ -47,14 +54,17 @@ class SearchWorker(QtCore.QThread):
     def run(self):
         try:
             check_cancelled(self.cancelled.is_set)
-            results = None if self.refresh or self.cache is None else self.cache.get(self.query)
+            key = (self.query, self.offset, self.page_size)
+            results = None if self.refresh or self.cache is None else self.cache.get(key)
             if results is None:
-                results = self.service.search_editor_cards(self.query, should_cancel=self.cancelled.is_set)
+                results = self.service.search_editor_cards(self.query, limit=self.page_size+1, offset=self.offset,
+                                                           should_cancel=self.cancelled.is_set)
                 check_cancelled(self.cancelled.is_set)
                 if self.cache is not None:
-                    self.cache.put(self.query, results)
+                    self.cache.put(key, results)
             check_cancelled(self.cancelled.is_set)
-            self.completed.emit(self.query, results, '')
+            self.has_more = len(results) > self.page_size
+            self.completed.emit(self.query, results[:self.page_size], '')
         except SearchCancelled:
             pass
         except Exception as exc:
@@ -73,6 +83,7 @@ class SearchController(QtCore.QObject):
     statusChanged = QtCore.pyqtSignal(str)
     busyChanged = QtCore.pyqtSignal(bool)
     cleared = QtCore.pyqtSignal()
+    pageStateChanged = QtCore.pyqtSignal(bool)
 
     def __init__(self, service, parent=None):
         super().__init__(parent)
@@ -80,6 +91,9 @@ class SearchController(QtCore.QObject):
         self.cache = SearchCache()
         self.worker = None
         self.query = ''
+        self.offset = 0
+        self.rows = []
+        self.has_more = False
         self.pending = self.refresh = self.closing = False
         self.timer = QtCore.QTimer(self)
         self.timer.setSingleShot(True)
@@ -89,12 +103,24 @@ class SearchController(QtCore.QObject):
     def change_query(self, query):
         self.cancel()
         self.query = query.strip()
-        self.cleared.emit()
+        self.reset_pages()
         if self.query and not self.closing:
             self.pending = True
             self.timer.start(350)
         else:
             self.statusChanged.emit('Search by name or Scryfall syntax')
+
+    def reset_pages(self):
+        self.rows = []
+        self.offset = 0
+        self.has_more = False
+        self.pageStateChanged.emit(False)
+        self.cleared.emit()
+
+    def load_more(self):
+        if self.closing or self.worker is not None or self.pending or not self.has_more:
+            return
+        self.search(append=True)
 
     def cancel(self):
         self.timer.stop()
@@ -104,18 +130,22 @@ class SearchController(QtCore.QObject):
         self.busyChanged.emit(False)
         self.statusChanged.emit('Search cancelled')
 
-    def search(self, query=None, *, refresh=False):
+    def search(self, query=None, *, refresh=False, append=False):
         self.timer.stop()
         if self.closing:
             return
         if query is not None:
             self.query = query.strip()
+        if refresh:
+            self.cache.invalidate(self.query)
         self.refresh = self.refresh or refresh
         if self.worker is not None:
             self.worker.cancel()
             self.pending = True
             return
         self.pending = False
+        if not append:
+            self.reset_pages()
         if not self.query:
             self.refresh = False
             self.cleared.emit()
@@ -124,7 +154,7 @@ class SearchController(QtCore.QObject):
         self.statusChanged.emit('Searching local database...')
         self.busyChanged.emit(True)
         self.worker = SearchWorker(self.query, self.service, self,
-                                   cache=self.cache, refresh=self.refresh)
+                                   cache=self.cache, refresh=self.refresh, offset=self.offset)
         self.refresh = False
         self.worker.completed.connect(self._completed)
         self.worker.finished.connect(self._finished)
@@ -134,7 +164,16 @@ class SearchController(QtCore.QObject):
         worker = self.sender()
         if (worker is self.worker and not worker.cancelled.is_set()
                 and not self.closing and query == self.query):
-            self.resultsReady.emit(query, results, error)
+            if not error:
+                seen = {row.card_id for row in self.rows}
+                for row in results:
+                    if row.card_id not in seen:
+                        self.rows.append(row)
+                        seen.add(row.card_id)
+                self.offset += len(results)
+                self.has_more = worker.has_more
+            self.pageStateChanged.emit(self.has_more)
+            self.resultsReady.emit(query, self.rows, error)
 
     def _finished(self):
         if self.sender() is not self.worker:
