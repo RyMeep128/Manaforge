@@ -62,13 +62,14 @@ remaining window space, and the toolbars wrap on smaller screens.
   bulk assignment to selected cards. Without a selection, it saves an unused
   definition. Narrow windows group organization actions under **Tags +**.
 - Hold right mouse for **250 ms** (configurable), hold **T**, or click **Quick tags**.
-  Active deck roles fill up to eight clockwise wedges; remaining active choices
-  use **More**. No global role catalog is added. **Tab** switches Primary Role /
+  Active deck roles share one ring with smaller clockwise wedges; choices explicitly moved out of the ring
+  use the toolbar's **More > Other active roles / tags**. The popup contains only
+  the radial ring, with a transparent background. No global role catalog is added. **Tab** switches Primary Role /
   Additional Tags; arrows and Enter also select. Center release or Esc cancels.
   Additional Tags toggle without replacing or locking an automatic primary role.
 - Quick right-click or Shift+right-click opens normal card actions. The card stays
   highlighted and the stack pauses until the interaction ends.
-- **Manage Tags**, accessible from Add Tag and the quick menu, separates **In Use**
+- **Manage Tags**, accessible from Add Tag and the toolbar's **More** menu, separates **In Use**
   and **Available** definitions with usage counts. Rename, delete, or reorder roles
   without deleting cards. **Customize Quick Menu** sets clockwise order, ring versus
   overflow, initial mode, and hold delay for this deck. Inactive choices retain

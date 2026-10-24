@@ -71,7 +71,6 @@ def apply_quick_role(document, ids, name, tags=False):
 
 class QuickTagMenu(W.QWidget):
     chosen = C.pyqtSignal(str, bool)
-    managementRequested = C.pyqtSignal(str)
     closed = C.pyqtSignal()
 
     def __init__(self, document, ids, parent=None, *, hold=False, tags=None):
@@ -84,16 +83,11 @@ class QuickTagMenu(W.QWidget):
         selected = [e for e in document.deck.entries if e.entry_id in self.ids]
         self.shared_tags = set.intersection(*({t.casefold() for t in e.tags} for e in selected)) if selected else set()
         self.setFixedSize(380, 380)
+        self.setAttribute(C.Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setMouseTracking(True)
         self.setFocusPolicy(C.Qt.FocusPolicy.StrongFocus)
         self.setAccessibleName('Quick organization: Primary Role or Additional Tags')
-        self.setToolTip('Move and release to assign. Center or Esc: cancel. Tab: switch mode. Arrow keys and Enter: select.')
-        self.mode_button = W.QPushButton(self)
-        self.mode_button.clicked.connect(self.switch_mode)
-        self.more_button = W.QPushButton('More', self)
-        self.more_button.clicked.connect(self.more)
-        self.manage_button = W.QPushButton('Manage', self)
-        self.manage_button.clicked.connect(lambda: self.manage('manage'))
+        self.setToolTip('Move and release to assign. Tab: switch mode. Center or Esc: cancel. Arrow keys and Enter: select.')
         self.update_mode()
 
     @property
@@ -102,21 +96,11 @@ class QuickTagMenu(W.QWidget):
 
     def update_mode(self):
         self.active = None
-        self.mode_button.setText('Roles [Tab]' if self.tags else 'Tags [Tab]')
-        self.more_button.setVisible(bool(self.models[self.tags][1]))
         self.setAccessibleDescription('Additional Tags' if self.tags else 'Primary Role')
         self.update()
 
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        if not hasattr(self, 'mode_button'):
-            return
-        width = (self.width() - 24) // 3
-        for index, button in enumerate((self.mode_button, self.more_button, self.manage_button)):
-            button.setGeometry(8 + index * (width + 4), self.height() - 38, width, 30)
-
     def geometry_values(self):
-        center = C.QPointF(self.width() / 2, (self.height() - 44) / 2)
+        center = C.QPointF(self.width() / 2, self.height() / 2)
         outer = min(center.x(), center.y()) - 8
         return center, outer, min(52, outer * .36)
 
@@ -154,7 +138,6 @@ class QuickTagMenu(W.QWidget):
     def paintEvent(self, event):
         p = G.QPainter(self)
         p.setRenderHint(G.QPainter.RenderHint.Antialiasing)
-        p.fillRect(self.rect(), G.QColor('#171b22'))
         center, outer, inner = self.geometry_values()
         accent = '#9865c9' if self.tags else '#2f9e72'
         count = len(self.options)
@@ -166,18 +149,25 @@ class QuickTagMenu(W.QWidget):
             p.drawPie(circle, round((90-step/2-i*step)*16), round(step*16))
             angle = -math.pi / 2 + i * 2 * math.pi / count
             radius = (inner + outer) / 2
-            label_width = min(112, 2 * radius * math.sin(math.pi / max(2, count)) - 10)
-            rect = C.QRectF(center.x()+math.cos(angle)*radius-label_width/2,
-                            center.y()+math.sin(angle)*radius-22, label_width, 44)
+            label_width = outer - inner - 16
+            label_height = max(14, min(38, 2 * radius * math.sin(math.pi / max(2, count)) - 5))
+            p.save()
+            p.translate(center.x()+math.cos(angle)*radius, center.y()+math.sin(angle)*radius)
+            rotation = math.degrees(angle)
+            if math.cos(angle) < 0:
+                rotation += 180
+            p.rotate(rotation)
+            rect = C.QRectF(-label_width/2, -label_height/2, label_width, label_height)
             p.setPen(G.QColor('white'))
             label = p.fontMetrics().elidedText(self.label(i), C.Qt.TextElideMode.ElideRight, max(20, int(label_width)))
             p.drawText(rect, C.Qt.AlignmentFlag.AlignCenter, label)
+            p.restore()
         p.setPen(G.QPen(G.QColor(accent), 2))
         p.setBrush(G.QColor('#171b22'))
         p.drawEllipse(center, inner, inner)
         p.setPen(G.QColor('white'))
         title = 'Tags' if self.tags else 'Primary role'
-        text = f'{title}\n{len(self.ids)} selected' if count else 'No active tags\nUse Manage'
+        text = f'{title}\n{len(self.ids)} selected' if count else 'No active tags\nMore settings'
         p.drawText(C.QRectF(center.x()-inner, center.y()-inner, inner*2, inner*2), C.Qt.AlignmentFlag.AlignCenter, text)
         p.end()
 
@@ -234,16 +224,6 @@ class QuickTagMenu(W.QWidget):
         if self.document.to_dict() == self.snapshot and self.ids <= {e.entry_id for e in self.document.deck.entries}:
             self.chosen.emit(name, self.tags)
         self.close()
-
-    def more(self):
-        menu = W.QMenu(self)
-        for choice in self.models[self.tags][1]:
-            menu.addAction(choice.name, lambda checked=False, n=choice.name: self.choose(n))
-        menu.exec(self.more_button.mapToGlobal(C.QPoint(0, self.more_button.height())))
-
-    def manage(self, tab):
-        self.close()
-        self.managementRequested.emit(tab)
 
     def hideEvent(self, event):
         self.closed.emit()

@@ -56,13 +56,28 @@ def test_active_choices_use_all_sections_and_retain_unused_definitions():
     assert 'nonexistent' not in {c.key for c in choices(doc)}
 
 
+def test_radial_matches_primary_groups_not_secondary_auto_roles():
+    doc = DeckDocument()
+    doc.deck.categories = [DeckCategory('draw', 'Draw'), DeckCategory('tutor', 'Tutors'),
+                           DeckCategory('stax', 'Stax'), DeckCategory('blink', 'Blink'),
+                           DeckCategory('commander', 'Commander'), DeckCategory('unused', 'Unused')]
+    doc.deck.entries = [DeckEntry('a', 'Draw engine', category_ids=['draw', 'tutor']),
+                        DeckEntry('b', 'Restricts opponents', category_ids=['stax']),
+                        DeckEntry('c', 'Blinks creatures', category_ids=['blink']),
+                        DeckEntry('d', 'Commander', section='commander', category_ids=['commander', 'tutor'])]
+    ring, overflow = radial_choices(doc)
+    assert {choice.name for choice in ring} == {'Draw', 'Stax', 'Blink'}
+    assert not overflow
+    assert doc.deck.entries[0].category_ids == ['draw', 'tutor']
+
+
 def test_order_overflow_inactive_preferences_and_deck_isolation():
     doc = populated(15)
     doc.editor_preferences['quick_menu'] = {'roles_order': ['3', '0', '2', '1'], 'roles_overflow': ['0'],
                                              'hold_delay': 650, 'initial_mode': 'tags'}
     ring, overflow = radial_choices(doc)
     assert [c.key for c in ring][:3] == ['3', '2', '1']
-    assert len(ring) == 8
+    assert len(ring) == 14
     assert '0' in {c.key for c in overflow}
     doc.deck.entries = [e for e in doc.deck.entries if e.entry_id != '3']
     assert '3' not in {c.key for c in radial_choices(doc)[0]}
@@ -119,7 +134,8 @@ def test_radial_dynamic_geometry_and_center_cancellation(app, count):
     chosen = []
     menu.chosen.connect(lambda *args: chosen.append(args))
     menu.popup(C.QPoint(1, 1))
-    assert len(menu.options) == min(count, 8)
+    assert not menu.findChildren(W.QPushButton)
+    assert len(menu.options) == count
     center, outer, inner = menu.geometry_values()
     for i in range(len(menu.options)):
         angle = -math.pi / 2 + i * 2 * math.pi / len(menu.options)

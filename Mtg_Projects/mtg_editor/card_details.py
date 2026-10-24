@@ -50,15 +50,27 @@ def apply_printing(document, entry_id, payload):
     entry.extras['facts'] = card_facts(payload)
 
 
+def apply_quantity(document, entry_id, quantity):
+    entry = next((e for e in document.deck.entries if e.entry_id == entry_id), None)
+    if entry is None:
+        return
+    entry.quantity = max(0, int(quantity))
+    if entry.quantity == 0:
+        document.deck.entries = [e for e in document.deck.entries if e.entry_id != entry_id]
+        document.deck.commander_entry_ids = [key for key in document.deck.commander_entry_ids if key != entry_id]
+
+
 class CardDetails(W.QDialog):
     printingChosen = C.pyqtSignal(str, object)
+    quantityChosen = C.pyqtSignal(str, int)
 
     def __init__(self, service, entry, parent=None):
         super().__init__(parent)
         self.service, self.entry = service, deepcopy(entry)
         self.token = 0
         self.face = 0
-        self.payload = {}
+        self.payload = {**(entry.extras.get('facts') or {}), 'name': entry.name,
+                        'id': entry.card_id, 'oracle_id': entry.oracle_id}
         self.cache = {}
         self.image_keys = {}
         self.catalog_notice = ''
@@ -77,8 +89,22 @@ class CardDetails(W.QDialog):
         layout.addLayout(art, 1)
         info = W.QVBoxLayout()
         self.text = W.QTextBrowser()
-        self.text.setPlainText(entry.name + '\n\nLoading card details…')
+        facts = entry.extras.get('facts') or {}
+        self.text.setPlainText('\n\n'.join(filter(None, [entry.name, facts.get('type_line'),
+                               facts.get('oracle_text') or 'Oracle text unavailable in the local catalog.'])))
         info.addWidget(self.text, 1)
+        quantity_row = W.QHBoxLayout()
+        quantity_row.addWidget(W.QLabel('Quantity in deck'))
+        self.quantity = W.QSpinBox()
+        self.quantity.setRange(0, 2147483647)
+        self.quantity.setValue(entry.quantity)
+        self.quantity.setKeyboardTracking(False)
+        quantity_row.addWidget(self.quantity)
+        self.apply_quantity_button = W.QPushButton('Apply quantity')
+        self.apply_quantity_button.setAutoDefault(False)
+        self.apply_quantity_button.clicked.connect(self.choose_quantity)
+        quantity_row.addWidget(self.apply_quantity_button)
+        info.addLayout(quantity_row)
         self.rulings = W.QPushButton('View Oracle text and rulings…')
         self.rulings.setEnabled(bool(entry.oracle_id or entry.card_id))
         self.rulings.clicked.connect(self.show_rulings)
@@ -90,6 +116,9 @@ class CardDetails(W.QDialog):
         self.printings.setEnabled(False)
         self.printings.currentIndexChanged.connect(self.preview_printing)
         info.addWidget(self.printings)
+        self.load_more = W.QPushButton('Load more printings from Scryfall')
+        self.load_more.clicked.connect(lambda: self.load_catalog(remote=True))
+        info.addWidget(self.load_more)
         self.use = W.QPushButton('Use this printing')
         self.use.setEnabled(False)
         self.use.clicked.connect(self.choose)
@@ -108,18 +137,21 @@ class CardDetails(W.QDialog):
         C.QThreadPool.globalInstance().start(Load(self.token, work, callback, context={
             'entry_id': self.entry.entry_id, 'card_id': self.entry.card_id, 'oracle_id': self.entry.oracle_id}))
 
-    def load_catalog(self):
+    def load_catalog(self, *, remote=False):
+        if remote:
+            self.status.setText('Loading additional printings from Scryfall…')
         def work():
             payload = self.service.get_card(card_id=self.entry.card_id) if self.entry.card_id else None
             if not payload:
                 payload = self.service.get_card(exact_name=self.entry.name)
-            if not payload and hasattr(self.service, 'fetch_missing_card'):
+            if remote and not payload and hasattr(self.service, 'fetch_missing_card'):
                 payload = self.service.fetch_missing_card(card_id=self.entry.card_id) if self.entry.card_id else self.service.fetch_missing_card(exact_name=self.entry.name)
             payload = payload or dict(self.entry.extras.get('facts', {}), name=self.entry.name)
             oracle = payload.get('oracle_id') or self.entry.oracle_id
             notice = ''
             try:
-                prints = self.service.get_prints(oracle, allow_remote=True) if oracle else []
+                prints = self.service.get_prints(oracle, allow_remote=True) if oracle and remote else (
+                    self.service.get_prints(oracle) if oracle else [])
             except (OSError, ValueError) as exc:
                 prints = self.service.get_prints(oracle) if oracle else []
                 notice = 'Could not load other Scryfall printings; showing cached choices. ' + str(exc)
@@ -224,6 +256,14 @@ class CardDetails(W.QDialog):
     def choose(self):
         if self.payload.get('id'):
             self.printingChosen.emit(self.entry.entry_id, self.payload)
+            self.close()
+
+    def choose_quantity(self):
+        quantity = self.quantity.value()
+        self.quantityChosen.emit(self.entry.entry_id, quantity)
+        self.entry.quantity = quantity
+        self.status.setText('Deck quantity updated. Undo is available.')
+        if quantity == 0:
             self.close()
 
     def closeEvent(self, event):

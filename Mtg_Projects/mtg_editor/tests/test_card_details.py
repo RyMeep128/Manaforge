@@ -133,6 +133,7 @@ def test_catalog_fetches_missing_reprints_and_applies_to_deck(monkeypatch, tmp_p
     window.changed()
     window.card_details('a')
     dialog = window.details_dialog
+    dialog.load_more.click()
     assert dialog.printings.count() == 2 and dialog.printings.isEnabled()
     dialog.printings.setCurrentIndex(1)
     dialog.use.click()
@@ -162,9 +163,59 @@ def test_offline_printings_keep_cached_choices(monkeypatch):
     service = SimpleNamespace(get_card=lambda **kw: payload, get_prints=prints,
                               ensure_image=lambda *a, **kw: None)
     dialog = CardDetails(service, DeckEntry('a', 'Card', card_id='one'))
+    dialog.load_catalog(remote=True)
     assert dialog.printings.count() == 2 and dialog.printings.isEnabled()
     assert 'cached choices' in dialog.status.text()
     dialog.printings.setCurrentIndex(1)
     assert dialog.use.isEnabled() and 'cached choices' in dialog.status.text()
     dialog.close()
     app.processEvents()
+
+
+def test_forest_uses_local_printings_and_quantity_is_available_immediately(monkeypatch):
+    app = W.QApplication.instance() or W.QApplication([])
+    calls = []
+    payload = {'id': 'forest', 'name': 'Forest', 'oracle_id': 'forest-oracle',
+               'type_line': 'Basic Land — Forest', 'oracle_text': '({T}: Add {G}.)'}
+    def prints(oracle, *, allow_remote=False):
+        calls.append(allow_remote)
+        assert not allow_remote
+        return [payload]
+    def synchronous(self, work, callback):
+        self.token += 1
+        callback(self.token, work(), '')
+    monkeypatch.setattr(CardDetails, 'submit', synchronous)
+    service = SimpleNamespace(get_card=lambda **kw: payload, get_prints=prints,
+                              ensure_image=lambda *a, **kw: None)
+    dialog = CardDetails(service, DeckEntry('a', 'Forest', quantity=12, card_id='forest',
+                                          extras={'facts': payload}))
+    assert calls == [False]
+    assert 'Loading card details' not in dialog.text.toPlainText()
+    assert 'Forest' in dialog.text.toPlainText()
+    assert dialog.quantity.value() == 12
+    picked = []
+    dialog.quantityChosen.connect(lambda *args: picked.append(args))
+    dialog.quantity.setValue(24)
+    dialog.apply_quantity_button.click()
+    assert picked == [('a', 24)]
+    dialog.close()
+    app.processEvents()
+
+
+def test_quantity_preserves_metadata_and_removal_is_undoable():
+    from mtg_editor.card_details import apply_quantity
+    doc = DeckDocument()
+    doc.deck.entries = [DeckEntry('a', 'Forest', quantity=12, card_id='printing',
+                                 category_ids=['lands'], tags=['Favorite'], image_asset_id='art')]
+    history = DeckHistory(doc)
+    original = deepcopy(doc.to_dict())
+    history.execute(lambda d: apply_quantity(d, 'a', 24))
+    assert doc.deck.entries[0].quantity == 24
+    assert doc.deck.entries[0].image_asset_id == 'art'
+    assert doc.deck.entries[0].tags == ['Favorite']
+    history.undo()
+    assert doc.to_dict() == original
+    history.execute(lambda d: apply_quantity(d, 'a', 0))
+    assert not doc.deck.entries
+    history.undo()
+    assert doc.to_dict() == original

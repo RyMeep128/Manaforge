@@ -101,7 +101,7 @@ class OrganizationManager(W.QDialog):
             self.tabs.addTab(listing, title)
         panel = W.QWidget()
         form = W.QVBoxLayout(panel)
-        note = W.QLabel('Drag to order clockwise from the top. Checked choices enter the ring (up to 8); others use More. Inactive choices keep their settings without taking a slot.')
+        note = W.QLabel('Drag to order clockwise from the top. Checked choices enter the ring; others use More settings. Inactive choices keep their settings without taking a slot.')
         note.setWordWrap(True)
         form.addWidget(note)
         self.mode = W.QComboBox()

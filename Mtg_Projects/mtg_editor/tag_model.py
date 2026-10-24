@@ -3,10 +3,9 @@ from dataclasses import dataclass
 import uuid
 
 from mtg_core.decks import DeckCategory
-from .organization import assign, remove_category
+from .organization import assign, remove_category, group_key
 
 STARTERS = ('Plan', 'Interact', 'Ramp', 'Draw')
-MAX_RING = 8
 
 
 @dataclass(frozen=True)
@@ -77,8 +76,16 @@ def choices(document, tags=False, *, active=True, configured=True):
 
 def radial_choices(document, tags=False):
     options = choices(document, tags)
+    if not tags:
+        commanders = set(document.deck.commander_entry_ids)
+        primary_groups = {group_key(entry, 'Category') for entry in document.deck.entries
+                          if entry.quantity > 0 and entry.entry_id not in commanders}
+        if document.deck.entries:
+            options = [choice for choice in options if choice.key in primary_groups]
+        options = [choice for choice in options if choice.name.casefold() != 'commander'
+                   and choice.key != 'auto:commander']
     hidden = set(preferences(document).get('tags_overflow' if tags else 'roles_overflow', []))
-    ring = [c for c in options if c.key not in hidden][:MAX_RING]
+    ring = [c for c in options if c.key not in hidden]
     keys = {c.key for c in ring}
     return ring, [c for c in options if c.key not in keys]
 

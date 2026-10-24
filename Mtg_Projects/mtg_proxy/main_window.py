@@ -267,6 +267,8 @@ def init():
 class AppShellWindow(QMainWindow):
     def __init__(self, application):
         super().__init__()
+        from mtg_ui.tooltips import disable_hover_tooltips
+        disable_hover_tooltips()
 
         self.setWindowTitle("Print Proxy Prep")
         self.setMinimumSize(980, 680)

@@ -9,6 +9,27 @@ import uuid
 from mtg_core.decks import DeckDocument, DeckHistory, DeckStore
 
 
+def update_default_name(document):
+    """Follow the commander/first-added card until the user supplies a name."""
+    deck = document.deck
+    record = deck.extras.get('default_name', {})
+    if deck.extras.get('manual_name') or (deck.name.strip() not in ('', 'Untitled Deck')
+                                         and deck.name != record.get('value')):
+        return
+    entries = [entry for entry in deck.entries if entry.quantity > 0]
+    first = next((entry for entry in entries if entry.entry_id == record.get('first_entry_id')), None)
+    first = first or next(iter(entries), None)
+    commander = next((entry for key in deck.commander_entry_ids for entry in entries if entry.entry_id == key), None)
+    commander = commander or next((entry for entry in entries if entry.section == 'commander'), None)
+    source = commander or first
+    if source is not None:
+        deck.name = source.name
+        deck.extras['default_name'] = {'value': deck.name, 'first_entry_id': first.entry_id}
+    elif record:
+        deck.name = 'Untitled Deck'
+        deck.extras.pop('default_name', None)
+
+
 class DeckSession:
     """Own one document and its history; callers decide when to save or prompt.
 
@@ -30,12 +51,16 @@ class DeckSession:
         self.path = Path(path) if path is not None else None
         self.history = DeckHistory(document)
         self.saved = document.to_dict()
+        update_default_name(document)
 
     def new(self):
         self.replace_document(DeckDocument())
 
     def edit(self, action) -> bool:
-        return self.history.execute(action)
+        def command(document):
+            action(document)
+            update_default_name(document)
+        return self.history.execute(command)
 
     def _move_history(self, action) -> bool:
         preferences = deepcopy(self.document.editor_preferences)

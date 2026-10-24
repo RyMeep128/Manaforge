@@ -53,6 +53,8 @@ class DeckTable(QtCore.QAbstractTableModel):
 class EditorWindow(W.QMainWindow):
     def __init__(self, service=None, root=None):
         super().__init__()
+        from mtg_ui.tooltips import disable_hover_tooltips
+        disable_hover_tooltips()
         self.service = service or get_default_card_service()
         self.root = Path(root) if root else data_root() / 'decks'
         self.session = DeckSession(self.root)
@@ -132,6 +134,10 @@ class EditorWindow(W.QMainWindow):
         menu.addAction('Export decklist…', self.export_decklist)
         menu.addAction('Commander / format deck checks…', self.commander_checks)
         menu.addAction('Manage Tags…', self.manage_categories)
+        menu.addAction('Customize Quick Menu…', lambda: self.manage_categories(customize=True))
+        menu.addAction('Quick Additional Tags', lambda: self.quick_tag(QtGui.QCursor.pos(), tags=True))
+        tag_overflow = menu.addMenu('Other active roles / tags')
+        tag_overflow.aboutToShow.connect(lambda: self.populate_tag_overflow(tag_overflow))
         menu.addAction('Category templates…', self.category_templates)
         menu.addAction('Auto Categorize…', self.auto_categorize)
         menu.addAction('Quick category / tags (hold T)', lambda: self.quick_tag(QtGui.QCursor.pos()))
@@ -563,6 +569,8 @@ class EditorWindow(W.QMainWindow):
             self.changed()
 
     def changed(self):
+        if not self.name.isModified():
+            self.name.setText(self.document.deck.name)
         for gesture in getattr(self, 'tag_gestures', []):
             gesture.cancel()
         previous = getattr(self, 'quick_menu', None)
@@ -597,10 +605,15 @@ class EditorWindow(W.QMainWindow):
             self.autosave.start()
 
     def edit_metadata(self):
+        name_edited = self.name.isModified()
         def action(document):
             document.deck.name = self.name.text().strip() or 'Untitled Deck'
+            if name_edited:
+                document.deck.extras['manual_name'] = bool(self.name.text().strip())
             document.deck.format = self.format.currentText()
         self.edit(action)
+        self.name.setModified(False)
+        self.name.setText(self.document.deck.name)
 
     def edit_description(self):
         text, ok = W.QInputDialog.getMultiLineText(self, 'Deck description', 'Description:', self.document.deck.description)
@@ -702,8 +715,6 @@ class EditorWindow(W.QMainWindow):
         target = self.grid.context_target or self.grid.hovered
         self.grid.pin_context_target(target if target in ids else next(iter(ids)))
         self.quick_menu.closed.connect(self.grid.release_context_target)
-        self.quick_menu.managementRequested.connect(lambda tab: QtCore.QTimer.singleShot(0,
-            lambda: self.manage_categories(customize=tab == 'customize')))
         snapshot = self.document.to_dict()
         def apply(name, tags):
             if self.document.to_dict() != snapshot:
@@ -713,6 +724,24 @@ class EditorWindow(W.QMainWindow):
                 ('secondary tags' if tags else 'manual primary category') + '. Undo is available.', 5000)
         self.quick_menu.chosen.connect(apply)
         self.quick_menu.popup(position)
+
+    def populate_tag_overflow(self, menu):
+        from .tag_model import radial_choices
+        from .quick_tags import apply_quick_role
+        menu.clear()
+        ids = set(self.grid.selected) & {e.entry_id for e in self.document.deck.entries}
+        snapshot = self.document.to_dict()
+        def apply(name, tags):
+            if ids and self.document.to_dict() == snapshot:
+                self.edit(lambda d: apply_quick_role(d, ids, name, tags))
+        for tags, title in ((False, 'Primary Roles'), (True, 'Additional Tags')):
+            submenu = menu.addMenu(title)
+            overflow = radial_choices(self.document, tags)[1]
+            if not overflow:
+                submenu.addAction('All active choices are in the ring').setEnabled(False)
+            for choice in overflow:
+                action = submenu.addAction(choice.name, lambda checked=False, n=choice.name, t=tags: apply(n, t))
+                action.setEnabled(bool(ids))
 
     def card_menu(self, entry_id, position):
         ids = set(self.grid.selected) or {entry_id}
@@ -993,7 +1022,7 @@ class EditorWindow(W.QMainWindow):
             self.autosave.start()
 
     def card_details(self, entry_id):
-        from .card_details import CardDetails, apply_printing
+        from .card_details import CardDetails, apply_printing, apply_quantity
         entry = next((e for e in self.document.deck.entries if e.entry_id == entry_id), None)
         if entry is None:
             return
@@ -1007,6 +1036,10 @@ class EditorWindow(W.QMainWindow):
             if self.document is document:
                 self.edit(lambda d: apply_printing(d, target, payload))
         self.details_dialog.printingChosen.connect(choose)
+        def quantity(target, value):
+            if self.document is document:
+                self.edit(lambda d: apply_quantity(d, target, value))
+        self.details_dialog.quantityChosen.connect(quantity)
         self.details_dialog.show()
 
     def replace_artwork(self, entry_id):
