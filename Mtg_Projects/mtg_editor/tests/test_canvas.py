@@ -48,11 +48,12 @@ def test_ctrl_shift_selection_delete_and_undo(window):
     assert len(window.document.deck.entries) == 12
 
 
-def test_stacks_hit_test_exposed_titles_hover_preview_and_size(window):
+def test_stacks_hover_reveals_card_and_pushes_following_cards(window):
     window.view_mode.setCurrentText('Stacks')
     W.QApplication.processEvents()
     assert window.grid.hit(point(window, '1', title=True))[0].entry_id == '1'
     local = point(window, '1', title=True)
+    original = {e.entry_id: C.QRect(r) for e, r, _ in window.grid.items}
     # Explicit viewport event avoids dependence on another test's global cursor
     # position or active offscreen top-level window.
     event = G.QMouseEvent(C.QEvent.Type.MouseMove, C.QPointF(local),
@@ -61,11 +62,27 @@ def test_stacks_hit_test_exposed_titles_hover_preview_and_size(window):
                          C.Qt.KeyboardModifier.NoModifier)
     W.QApplication.sendEvent(window.grid.viewport(), event)
     assert window.grid.hovered == '1'
+    QtTest.QTest.qWait(window.grid.stack_animation.duration() + 50)
+    expanded = {e.entry_id: r for e, r, _ in window.grid.items}
+    assert expanded['0'] == original['0']
+    assert expanded['1'] == original['1']
+    assert expanded['2'].top() > expanded['1'].bottom()
+    assert expanded['3'].top() - expanded['2'].top() == 34
+    assert window.grid.hit(point(window, '1'))[0].entry_id == '1'
     window.grid.show_preview()
-    assert not window.grid.preview.pixmap().isNull()
+    assert not window.grid.preview.isVisible()
+    window.grid.leaveEvent(C.QEvent(C.QEvent.Type.Leave))
+    QtTest.QTest.qWait(window.grid.stack_animation.duration() + 50)
+    assert {e.entry_id: r for e, r, _ in window.grid.items} == original
     before = window.grid.items[0][1].width()
     window.zoom.setValue(240)
     assert window.grid.items[0][1].width() > before
+
+
+def test_grid_keeps_hover_preview(window):
+    window.grid.hovered = '1'
+    window.grid.show_preview()
+    assert not window.grid.preview.pixmap().isNull()
 
 
 def test_quantity_controls_and_artwork_double_click(window):

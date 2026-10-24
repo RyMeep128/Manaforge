@@ -20,7 +20,8 @@ class ImageReader(QtCore.QThread):
     def run(self):
         image = QtGui.QImage()
         try:
-            card_id, asset_id = self.key
+            card_id, asset_id = self.key[:2]
+            resolution = self.key[2] if len(self.key) > 2 else 300
             if asset_id:
                 data = self.service.get_image_bytes(asset_id)
                 buffer = QtCore.QBuffer()
@@ -36,14 +37,15 @@ class ImageReader(QtCore.QThread):
                 reader = QtGui.QImageReader(str(path or ''))
             size = reader.size()
             if size.isValid():
-                size.scale(300, 420, QtCore.Qt.AspectRatioMode.KeepAspectRatio)
+                size.scale(min(size.width(), resolution), min(size.height(), int(resolution * 1.4)),
+                           QtCore.Qt.AspectRatioMode.KeepAspectRatio)
                 reader.setScaledSize(size)
             image = reader.read()
             if image.isNull():
                 get_logger(__name__).warning('Image decode failed card_id=%s asset_id=%s error=%s',
                                              card_id, asset_id, reader.errorString())
         except Exception as exc:
-            get_logger(__name__).exception('Image load failed card_id=%s asset_id=%s', *self.key)
+            get_logger(__name__).exception('Image load failed card_id=%s asset_id=%s', *self.key[:2])
             delay = 0
             cause = exc
             while cause:
@@ -89,10 +91,12 @@ class Thumbnails(QtCore.QObject):
         key = (card_id, asset_id)
         self.cache.pop(key, None)
         self.errors.pop(key, None)
+        self.cache.pop((*key, 600), None)
+        self.errors.pop((*key, 600), None)
         self.updated.emit()
 
-    def get(self, card_id, asset_id=None):
-        key = (card_id, asset_id)
+    def get(self, card_id, asset_id=None, *, high_resolution=False):
+        key = (card_id, asset_id, 600) if high_resolution else (card_id, asset_id)
         if key in self.cache:
             self.cache.move_to_end(key)
             return self.cache[key]
@@ -101,7 +105,7 @@ class Thumbnails(QtCore.QObject):
             while len(self.pending) > 100:
                 self.pending.popitem(last=False)
             self.start_next()
-        return None
+        return self.cache.get((card_id, asset_id)) if high_resolution else None
 
     def start_next(self):
         if self.stopping or self.worker is not None or not self.pending:
@@ -122,6 +126,9 @@ class Thumbnails(QtCore.QObject):
 
     def loaded(self, key, image):
         self.cache[key] = QtGui.QPixmap.fromImage(image)
+        detailed = [k for k in self.cache if len(k) > 2]
+        for stale in detailed[:-8]:
+            self.cache.pop(stale, None)
         while len(self.cache) > 128:
             self.cache.popitem(last=False)
         self.updated.emit()

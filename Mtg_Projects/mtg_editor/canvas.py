@@ -31,6 +31,15 @@ class CardCanvas(W.QAbstractScrollArea):
         self.collapsed = set()
         self.items, self.headers = [], []
         self.hovered = None
+        self.stack_expansion = {}
+        self.stack_animation_start = {}
+        self.stack_animation_target = {}
+        self.stack_animation = C.QVariantAnimation(self)
+        self.stack_animation.setDuration(720)
+        self.stack_animation.setStartValue(0.0)
+        self.stack_animation.setEndValue(1.0)
+        self.stack_animation.setEasingCurve(C.QEasingCurve.Type.OutCubic)
+        self.stack_animation.valueChanged.connect(self.animate_stack_frame)
         self.anchor = None
         self.press_position = None
         self.detail_entry = None
@@ -84,10 +93,13 @@ class CardCanvas(W.QAbstractScrollArea):
                 header = C.QRect(x, y, cw, 38)
                 bottom = y + 50
                 if key not in self.collapsed:
+                    expanded_offset = 0
                     for n, entry in enumerate(entries):
-                        rect = C.QRect(x, y + 44 + n * 34, cw, ch)
+                        rect = C.QRect(x, y + 44 + n * 34 + expanded_offset, cw, ch)
                         self.items.append((entry, rect, key))
                         bottom = rect.bottom() + 40
+                        expanded_offset += round(max(0, ch + 6 - 34) *
+                                                 self.stack_expansion.get(entry.entry_id, 0.0))
                 row_bottom = max(row_bottom, bottom)
             else:
                 header = C.QRect(16, y, width - 32, 38)
@@ -104,6 +116,22 @@ class CardCanvas(W.QAbstractScrollArea):
         self.verticalScrollBar().setRange(0, max(0, row_bottom + 16 - self.viewport().height()))
         self.verticalScrollBar().setPageStep(self.viewport().height())
         self.viewport().update()
+
+    def animate_stack(self):
+        # Retarget from the current positions when moving between cards quickly.
+        self.stack_animation.stop()
+        self.stack_animation_start = dict(self.stack_expansion)
+        self.stack_animation_target = {self.hovered: 1.0} if self.hovered else {}
+        self.stack_animation.start()
+
+    def animate_stack_frame(self, progress):
+        start, target = self.stack_animation_start, self.stack_animation_target
+        self.stack_expansion = {
+            key: start.get(key, 0.0) + (target.get(key, 0.0) - start.get(key, 0.0)) * progress
+            for key in start.keys() | target.keys()
+        }
+        self.stack_expansion = {key: value for key, value in self.stack_expansion.items() if value > .0001}
+        self.relayout()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -130,7 +158,10 @@ class CardCanvas(W.QAbstractScrollArea):
         visible = C.QRect(0, offset, self.viewport().width(), self.viewport().height())
         near = visible.adjusted(0, -60, 0, 60)
         nearby = [e for e, r, _ in self.items if r.intersects(near)]
-        self.thumbnails.set_visible(id(self), [(e.card_id, e.image_asset_id) for e in nearby])
+        visible_keys = [(e.card_id, e.image_asset_id) for e in nearby]
+        if self.mode == 'Stacks' and not self.search_mode:
+            visible_keys.extend((e.card_id, e.image_asset_id, 600) for e in nearby if e.entry_id == self.hovered)
+        self.thumbnails.set_visible(id(self), visible_keys)
         for entry in nearby:
             self.thumbnails.get(entry.card_id, entry.image_asset_id)
         for key, title, count, rect in self.headers:
@@ -147,6 +178,8 @@ class CardCanvas(W.QAbstractScrollArea):
             if not rect.adjusted(0, 0, 0, 32).intersects(visible):
                 continue
             pixmap = self.thumbnails.get(entry.card_id, entry.image_asset_id)
+            if self.mode == 'Stacks' and not self.search_mode and entry.entry_id == self.hovered:
+                pixmap = self.thumbnails.get(entry.card_id, entry.image_asset_id, high_resolution=True)
             in_deck = self.search_mode and entry.entry_id in self.in_deck_ids
             rounded_card(p, rect, pixmap, entry.entry_id in self.selected or in_deck, entry.entry_id == self.hovered)
             badge = C.QRect(rect.x()+4, rect.bottom()-28, 32, 24)
@@ -274,8 +307,12 @@ class CardCanvas(W.QAbstractScrollArea):
         if hovered != self.hovered:
             self.hovered = hovered
             self.preview.hide()
-            self.hover_timer.start()
-            self.viewport().update()
+            if self.mode == 'Stacks' and not self.search_mode:
+                self.hover_timer.stop()
+                self.animate_stack()
+            else:
+                self.hover_timer.start()
+                self.viewport().update()
         if (not self.search_mode and event.buttons() & C.Qt.MouseButton.LeftButton and self.press_position is not None
                 and (event.position().toPoint()-self.press_position).manhattanLength() >= W.QApplication.startDragDistance()):
             self.press_position = None
@@ -324,9 +361,14 @@ class CardCanvas(W.QAbstractScrollArea):
         self.hover_timer.stop()
         self.preview.hide()
         self.hovered = None
-        self.viewport().update()
+        if self.mode == 'Stacks' and not self.search_mode:
+            self.animate_stack()
+        else:
+            self.viewport().update()
 
     def show_preview(self):
+        if self.mode == 'Stacks' and not self.search_mode:
+            return
         if not self.isVisible() or W.QApplication.activePopupWidget() is not None:
             return
         entry = next((e for e in self.document.deck.entries if e.entry_id == self.hovered), None)
