@@ -46,7 +46,7 @@ def collector_lock(root):
                 fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError as exc:
             raise RuntimeError(
-                "The EDHREC collector or another import is using this cache. Retry after it finishes."
+                "A collector or another import is using this cache. Retry after it finishes."
             ) from exc
         yield
 
@@ -230,8 +230,9 @@ def reprocess_cached(root, catalog):
 
 
 class Downloader:
-    def __init__(self, root, delay=6):
+    def __init__(self, root, delay=6, *, source="EDHREC"):
         self.root = Path(root)
+        self.source = source
         self.delay = max(6, delay)
         self.last = 0.0
         (self.root / "responses").mkdir(parents=True, exist_ok=True)
@@ -285,7 +286,7 @@ class Downloader:
                     exc.close()
                 wait = max(backoff, retry_after)
                 print(
-                    f"EDHREC retry in {wait:.0f}s: {request.full_url}: {exc}",
+                    f"{self.source} retry in {wait:.0f}s: {request.full_url}: {exc}",
                     flush=True,
                 )
                 self.wait(wait)
