@@ -272,7 +272,7 @@ def source_settings(root):
         return dict(
             version=2,
             archidekt=dict(enabled=True, cache="live"),
-            edhrec=dict(enabled=True),
+            edhrec=dict(enabled=True, cohort='auto'),
             moxfield=dict(enabled=True),
             **{source: dict(enabled=True) for source in DATASET_LABELS},
         )

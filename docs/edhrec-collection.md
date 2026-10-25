@@ -185,8 +185,9 @@ For a background launch, record the process ID and redirect stdout/stderr to
 files in `edhrec-run`; use a hidden window on Windows.
 
 In Manaforge, use **More > Recommendation cache > Configure recommendation sources**
-to enable EDHREC independently of Archidekt. Refresh recommendations to apply;
-both available caches contribute to one list. These settings do not interrupt
+to enable EDHREC independently of Archidekt. Saving source settings refreshes
+recommendations automatically. Both available
+caches contribute to one list. These settings do not interrupt
 either downloader. Missing commander pages
 produce an explicit unavailable status. Partner pairs use only their exact cached
 joint page, independent of commander order; they never fall back to individual
@@ -222,3 +223,17 @@ Existing context bonuses and the optional 15-deck local supplement still apply.
 
 The downloaded data stays outside the repository and is ignored by Git. No
 redistribution, publishing, emailing, or recurring refresh is configured.
+
+## Automatic cohorts
+
+The source dialog offers **Automatic: match deck theme** alongside General and
+specific collected cohorts. In the recommendation panel, **More > EDHREC audience**
+adds a per-deck override for Automatic, General, or a cached bracket/budget; Follow
+global setting is the default. Automatic selects the saved discovery theme for
+the exact commander or pair. A missing filtered cohort falls back to that same
+commander/pair's general page, with an explanation in the panel. Only one EDHREC
+cohort contributes to each run; other enabled sources still contribute normally.
+
+Returning to recommendations checks source settings and database/WAL publication
+metadata. Deck context changes and explicit Refresh also update the list. There
+is no polling while browsing and no collector restart or download on refresh.

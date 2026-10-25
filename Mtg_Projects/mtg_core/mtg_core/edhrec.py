@@ -1,7 +1,7 @@
 """Offline EDHREC recommendation adapter. Never performs network requests."""
 
 from contextlib import closing
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import json
 from pathlib import Path
 import sqlite3
@@ -105,6 +105,7 @@ class EdhrecSource:
     role: str = "public"
     cohort: str = "general"
     cohort_database: Path | None = None
+    selection_note: str = ''
 
     def __post_init__(self):
         if self.cohort != "general" and not re.fullmatch(
@@ -113,6 +114,7 @@ class EdhrecSource:
             raise ValueError("Invalid EDHREC cohort selection")
 
     def snapshot(self, commanders=(), *, exclude=(), limit=200):
+        commanders, exclude = tuple(commanders), tuple(exclude)
         result = dict(
             version=1,
             source=self.source_id,
@@ -138,6 +140,8 @@ class EdhrecSource:
             database = Path(self.cohort_database) if self.cohort_database else database.with_name("edhrec-cohorts.sqlite3")
             result["status"] = f"No exact cached EDHREC {self.cohort} cohort for this commander/pair."
         if not database.exists():
+            if self.cohort != 'general':
+                return self.general_fallback(commanders, exclude, limit)
             return result
         with closing(
             sqlite3.connect(database.resolve().as_uri() + "?mode=ro", uri=True)
@@ -154,6 +158,8 @@ class EdhrecSource:
                     (commander_key(selected), kind, value),
                 ).fetchone()
         if row is None:
+            if self.cohort != 'general':
+                return self.general_fallback(commanders, exclude, limit)
             return result
         data = json.loads(row[0])
         excluded = set(exclude)
@@ -171,13 +177,20 @@ class EdhrecSource:
                     imported=row[1],
                 )
             ],
-            status=(
+            status=self.selection_note + (
                 "Limited bundled starter coverage. "
                 if Path(self.path).parent.name == "starter"
                 else ""
             )
             + f"Offline EDHREC {'exact cached pair cohort' if len(selected) == 2 else 'commander page'}"
-            + (f"; {data['cohort']['label']} ({data['cohort']['kind']})" if "cohort" in data else "")
+            + (f"; {data['cohort']['label']} ({data['cohort']['kind']})" if "cohort" in data else "; general audience")
             + f"; {len(data['unresolved'])} unresolved card names omitted; category lists may be incomplete.",
         )
+        return result
+
+    def general_fallback(self, commanders, exclude, limit):
+        result = replace(self, cohort='general', selection_note='').snapshot(
+            commanders, exclude=exclude, limit=limit)
+        result['status'] = (f'{self.cohort} unavailable for this commander/pair; '
+                            f'using general. {result["status"]}')
         return result

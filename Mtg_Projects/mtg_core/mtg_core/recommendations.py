@@ -30,7 +30,8 @@ class RecommendationStore:
                 "CREATE TABLE IF NOT EXISTS inclusion (commander TEXT, oracle_id TEXT, decks INTEGER NOT NULL, PRIMARY KEY(commander, oracle_id))",
             ):
                 db.execute(sql)
-            db.execute("PRAGMA user_version = 1")
+            if version == 0:
+                db.execute("PRAGMA user_version = 1")
 
     def connect(self):
         db = sqlite3.connect(self.path, timeout=30)

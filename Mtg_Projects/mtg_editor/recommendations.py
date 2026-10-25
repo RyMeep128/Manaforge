@@ -44,7 +44,7 @@ def load_recommendations(
     from mtg_core.recommendation_fusion import CANDIDATE_LIMIT
 
     snapshot = recommend(
-        default_sources(store) if sources is None else sources,
+        default_sources(store, document=document) if sources is None else sources,
         commander_ids,
         exclude=[] if include_present else [e.oracle_id for e in document.deck.entries],
         limit=CANDIDATE_LIMIT,

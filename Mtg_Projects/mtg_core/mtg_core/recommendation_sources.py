@@ -49,7 +49,25 @@ class UnavailableSource:
         )
 
 
-def default_sources(local_store):
+def source_signature(root):
+    """Cheap publication signature, checked on user actions rather than polling."""
+    from pathlib import Path
+
+    root = Path(root)
+    paths = [root / 'source-settings.json', root / 'archidekt.aggregate.json.gz']
+    for name in ('local', 'archidekt', 'edhrec', 'edhrec-cohorts', 'moxfield', *DATASET_LABELS):
+        paths.extend(root / f'{name}.sqlite3{suffix}' for suffix in ('', '-wal'))
+    signature = []
+    for path in paths:
+        try:
+            stat = path.stat()
+            signature.append((str(path), stat.st_mtime_ns, stat.st_size))
+        except OSError:
+            signature.append((str(path), None, None))
+    return tuple(signature)
+
+
+def default_sources(local_store, *, document=None):
     from .recommendations import RecommendationStore
     from .recommendation_cache import AggregateSource, source_settings
     from .edhrec import EdhrecSource
@@ -67,10 +85,22 @@ def default_sources(local_store):
             if source_id == "edhrec":
                 from .discovery_starter import snapshot_path
 
+                cohort = (document.editor_preferences.get('edhrec_cohort', 'inherit')
+                          if document is not None else 'inherit')
+                if cohort == 'inherit':
+                    cohort = config['edhrec'].get('cohort', 'auto')
+                note = ''
+                if cohort == 'auto':
+                    discovery = document.editor_preferences.get('discovery', {}) if document is not None else {}
+                    theme = (discovery.get('theme_option') or {}).get('slug') or discovery.get('theme')
+                    cohort = f'theme:{theme}' if theme else 'general'
+                    if not theme:
+                        note = 'Automatic: no saved theme; using general. '
                 source = EdhrecSource(
                     snapshot_path(root, "edhrec.sqlite3"),
-                    cohort=config["edhrec"].get("cohort", "general"),
+                    cohort=cohort,
                     cohort_database=root / "edhrec-cohorts.sqlite3",
+                    selection_note=note,
                 )
             elif source_id == "archidekt" and config["archidekt"]["cache"] == "portable":
                 source = AggregateSource(root / "archidekt.aggregate.json.gz")

@@ -16,6 +16,14 @@ open a selected tile. **Projects** returns to the dashboard; **Resume deck** ret
 to the current deck. Print projects open as separate editable decks. Unavailable
 files appear in the dashboard's error details without hiding other projects.
 
+Recommendations refresh when you return to the panel or change the commander,
+theme, audience, or source settings. **More > EDHREC audience** chooses a per-deck
+bracket/budget or automatic theme matching. Automatic uses the saved discovery
+theme for the exact commander or pair; unavailable cohorts fall back to general
+recommendations. The panel shows the applied audience and fallback reason.
+Newly collected data is picked up on return or **Refresh cached recommendations**;
+the list does not periodically reload while you browse.
+
 ## Internal session boundary
 
 `session.DeckSession` owns the current document, history, path, saved snapshot,

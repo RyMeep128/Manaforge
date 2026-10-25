@@ -71,6 +71,10 @@ def theme_matches(row, theme):
                                                  [entry], {entry.entry_id: facts})
         return not bad and not unknown
     key = theme.get('slug', '')
+    cohort = (row.get('source_evidence', {}).get('edhrec', {}).get('edhrec_cohort')
+              or row.get('edhrec_cohort') or {})
+    if key and cohort.get('kind') == 'theme' and cohort.get('value') == key:
+        return True
     roles = {r['name'].casefold() for r in row.get('roles', [])}
     tags = {slug(tag) for tag in facts.get('oracle_tags', [])}
     keywords = {slug(word) for word in facts.get('keywords') or []}

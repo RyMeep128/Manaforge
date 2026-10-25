@@ -116,10 +116,11 @@ def configure_sources(editor, root):
         edhrec = W.QCheckBox("Enable offline EDHREC recommendations")
         edhrec.setChecked(config["edhrec"]["enabled"])
         cohort = W.QComboBox()
+        cohort.addItem('Automatic: match deck theme', 'auto')
         cohort.addItem("General commander recommendations", "general")
         for kind, value, label in cohort_choices:
             cohort.addItem(f"{kind.title()}: {label}", f"{kind}:{value}")
-        selected = config["edhrec"].get("cohort", "general")
+        selected = config["edhrec"].get("cohort", "auto")
         if cohort.findData(selected) < 0:
             cohort.addItem(f"{selected} (not cached yet)", selected)
         cohort.setCurrentIndex(cohort.findData(selected))
@@ -160,11 +161,7 @@ def configure_sources(editor, root):
         )
         editor.run_task(
             lambda: save_source_settings(root, updated),
-            lambda _: W.QMessageBox.information(
-                editor,
-                "Recommendation sources",
-                "Sources saved. Refresh recommendations to apply.",
-            ),
+            lambda _: editor.recommendation_panel.request_refresh(),
         )
 
     def load():

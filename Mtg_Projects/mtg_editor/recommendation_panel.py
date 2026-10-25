@@ -33,15 +33,21 @@ def context_key(document):
         deepcopy(document.editor_preferences.get("guidance")),
         deepcopy(document.editor_preferences.get("recommendations")),
         deepcopy(data.get("artwork_preferences")),
+        deepcopy(document.editor_preferences.get('discovery', {})),
+        document.editor_preferences.get('edhrec_cohort', 'inherit'),
     )
 
 
-def source_key(document):
+def source_key(document, signature=()):
     """Changes requiring new sources/printings rather than just cached-candidate ranking."""
     return (
         document.deck.deck_id,
         tuple((e.entry_id, e.oracle_id, e.card_id) for e in commanders(document)),
         deepcopy(document.artwork_preferences),
+        deepcopy(document.editor_preferences.get('discovery', {}).get('theme_option')),
+        document.editor_preferences.get('discovery', {}).get('theme'),
+        document.editor_preferences.get('edhrec_cohort', 'inherit'),
+        signature,
     )
 
 
@@ -142,6 +148,8 @@ class RecommendationPanel(W.QWidget):
         self.pending_page = self.pending = False
         self.cancelled, self.page_cancelled = Event(), Event()
         self.coverage = ""
+        self.edhrec_status = ''
+        self.load_error = ''
         self.theme_option = None
         self.last_discovery_identity = None
         self.preference_deck = None
@@ -187,9 +195,14 @@ class RecommendationPanel(W.QWidget):
         )
         menu = W.QMenu(self.advanced_button)
         menu.addAction("Change Commander / Theme", self.open_discovery)
+        menu.addAction('EDHREC audience…', self.choose_audience)
         menu.addAction("Local Card Search", self.open_search)
         menu.addAction("Refresh cached recommendations", self.request_refresh)
         self.advanced_button.setMenu(menu)
+        self.cohort_status = W.QLabel('EDHREC audience follows recommendation source settings.')
+        self.cohort_status.setWordWrap(True)
+        self.cohort_status.setProperty('role', 'muted')
+        body.addWidget(self.cohort_status)
         body.addLayout(self.controls_grid)
         self.filter_box = W.QWidget()
         self.filter_layout = W.QGridLayout(self.filter_box)
@@ -350,6 +363,39 @@ class RecommendationPanel(W.QWidget):
     def active(self):
         return self.isVisible() and not self.editor.closing
 
+    def choose_audience(self):
+        from mtg_core.edhrec_cohorts import cohort_options
+        from mtg_core.paths import core_data_root
+
+        def show(options):
+            choices = [('Follow global setting', 'inherit'), ('Automatic: match deck theme', 'auto'),
+                       ('General commander recommendations', 'general')]
+            choices.extend((f'{kind.title()}: {label}', f'{kind}:{value}')
+                           for kind, value, label in options if kind in ('bracket', 'budget'))
+            dialog = W.QDialog(self)
+            dialog.setWindowTitle('EDHREC audience for this deck')
+            layout = W.QFormLayout(dialog)
+            combo = W.QComboBox()
+            combo.setAccessibleName('EDHREC audience')
+            for label, value in choices:
+                combo.addItem(label, value)
+            selected = self.editor.document.editor_preferences.get('edhrec_cohort', 'inherit')
+            if combo.findData(selected) < 0:
+                combo.addItem(f'{selected} (not cached yet)', selected)
+            combo.setCurrentIndex(combo.findData(selected))
+            layout.addRow('Audience', combo)
+            note = W.QLabel('Automatic uses the saved deck theme. Missing cohorts use general recommendations. Source enable/disable settings still apply.')
+            note.setWordWrap(True)
+            layout.addRow(note)
+            buttons = W.QDialogButtonBox(W.QDialogButtonBox.StandardButton.Save | W.QDialogButtonBox.StandardButton.Cancel)
+            buttons.accepted.connect(dialog.accept)
+            buttons.rejected.connect(dialog.reject)
+            layout.addRow(buttons)
+            if dialog.exec() == W.QDialog.DialogCode.Accepted:
+                self.editor.edit(lambda document: document.editor_preferences.update(edhrec_cohort=combo.currentData()))
+
+        self.editor.run_task(lambda: cohort_options(core_data_root() / 'recommendations' / 'edhrec-cohorts.sqlite3'), show)
+
     def set_expanded(self, expanded):
         self.expanded = expanded
         self.reflow_filters()
@@ -490,23 +536,33 @@ class RecommendationPanel(W.QWidget):
             + (" | " + identity if selected else "")
             + (" | " + theme.get("name", theme.get("slug", "")) if theme else "")
         )
-        key = context_key(self.editor.document)
+        from mtg_core.paths import core_data_root
+        from mtg_core.recommendation_sources import source_signature
+        signature = source_signature(core_data_root() / 'recommendations') if self.active() else (
+            self.key[1][-1] if self.key is not None else ())
+        current_source = source_key(self.editor.document, signature)
+        key = (context_key(self.editor.document), current_source)
         changed = key != self.key
-        switched = self.key is not None and key[0]["deck_id"] != self.key[0]["deck_id"]
+        switched = self.key is not None and key[0][0]['deck_id'] != self.key[0][0]['deck_id']
         if changed:
             previous_source = self.loaded_source_key
             self.key = key
             self.generation += 1
             self.cancelled.set()
+            self.page_cancelled.set()
+            self.load_error = ''
             if switched or (
                 previous_source is not None
-                and previous_source != source_key(self.editor.document)
+                and previous_source != current_source
             ):
                 self.pages, self.rows = None, []
+                self.cohort_status.setText('EDHREC: updating audience…')
                 if not restored:
                     self.category_scroll.clear()
                     self.shown_limit = 50
                 self.loaded_key = None
+        if self.loaded_key != key:
+            self.pending = True
         self.filter_rows(reset=(theme_changed or identity_changed) and not restored)
         if self.active() and self.loaded_key != key:
             self.pending = True
@@ -516,6 +572,8 @@ class RecommendationPanel(W.QWidget):
         self.loaded_source_key = None
         self.loaded_key = None
         self.cancelled.set()
+        self.page_cancelled.set()
+        self.load_error = ''
         self.generation += 1
         self.deck_changed()
 
@@ -525,14 +583,18 @@ class RecommendationPanel(W.QWidget):
         if self.worker is not None:
             self.pending = True
             return
+        if self.loaded_key == self.key and not self.pending:
+            return
+        self.timer.stop()
         self.pending = False
         generation, key = self.generation, deepcopy(self.key)
         document = deepcopy(self.editor.document)
         service = self.editor.service
-        reuse = self.pages if self.loaded_source_key == source_key(document) else None
+        reuse = self.pages if self.loaded_source_key == key[1] else None
         self.cancelled = Event()
         cancelled = self.cancelled
         coverage = self.coverage
+        edhrec_status = self.edhrec_status
 
         def load():
             from .recommendation_pages import RecommendationPages
@@ -540,11 +602,12 @@ class RecommendationPanel(W.QWidget):
             if reuse is not None:
                 from mtg_core.recommendation_sources import default_sources
 
-                sources = default_sources(self.editor.recommendation_store())
+                sources = default_sources(self.editor.recommendation_store(), document=document)
                 pages = reuse.reranked(
                     service, document, sources=sources, should_cancel=cancelled.is_set
                 )
                 label = coverage
+                cohort_status = edhrec_status
             else:
                 pages = RecommendationPages()
                 snapshot = load_recommendations(
@@ -560,6 +623,8 @@ class RecommendationPanel(W.QWidget):
                     for s in snapshot.get("source_status", [])
                     if s.get("role") != "local" and s.get("state") == "active"
                 ]
+                cohort_status = next((s['status'] for s in snapshot.get('source_status', [])
+                                      if s['source'] == 'edhrec'), 'EDHREC unavailable')
                 starter = any(
                     "starter" in s.get("status", "").casefold() for s in active
                 )
@@ -577,6 +642,7 @@ class RecommendationPanel(W.QWidget):
                 roles=pages.roles(),
                 categories=pages.available_categories(),
                 coverage=label,
+                edhrec_status=cohort_status,
             )
 
         self.status.setText(
@@ -596,19 +662,23 @@ class RecommendationPanel(W.QWidget):
         if (
             generation != self.generation
             or not self.active()
-            or key != context_key(self.editor.document)
+            or key != self.key
+            or key[0] != context_key(self.editor.document)
         ):
             return
+        self.pending = False
+        self.timer.stop()
         if error:
-            self.status.setText(
-                "Could not load recommendations. Refresh or use Local Card Search."
-            )
+            self.load_error = 'Could not load recommendations. Refresh or use Local Card Search.'
+            self.status.setText(self.load_error)
             self.status.setToolTip(error)
             return
         self.loaded_key = key
-        self.loaded_source_key = source_key(self.editor.document)
+        self.loaded_source_key = key[1]
         self.pages = snapshot["pages"]
         self.coverage = snapshot.get("coverage", "")
+        self.edhrec_status = snapshot.get('edhrec_status', '')
+        self.cohort_status.setText('EDHREC: ' + self.edhrec_status)
         self.status.setToolTip("")
         current = self.role_filter.currentText()
         roles = snapshot["roles"]
@@ -645,9 +715,12 @@ class RecommendationPanel(W.QWidget):
         self.worker.deleteLater()
         self.worker = None
         self.more.setEnabled(True)
-        if self.pending and self.active() and self.loaded_key != self.key:
-            self.timer.start()
-        elif self.pending_page:
+        if self.pending and self.loaded_key != self.key:
+            if self.active():
+                self.timer.start()
+            return
+        self.pending = False
+        if self.pending_page:
             self.request_page()
 
     def near_bottom(self, value):
@@ -674,6 +747,13 @@ class RecommendationPanel(W.QWidget):
         self.page_cancelled.set()
         self.page_generation += 1
         self.render_rows()
+        if self.pending or (self.worker is not None and self.loaded_key != self.key):
+            self.status.setText('Loading cached recommendations…')
+            if self.pages is None:
+                self.canvas.empty_message = 'Loading cached recommendations…'
+        elif self.load_error:
+            self.status.setText(self.load_error)
+            self.canvas.empty_message = self.load_error
         if self.pages is not None:
             self.pending_page = True
             self.request_page()
@@ -681,7 +761,8 @@ class RecommendationPanel(W.QWidget):
             self.save_view()
 
     def request_page(self):
-        if not self.active() or self.worker is not None or self.pages is None:
+        if (not self.active() or self.worker is not None or self.pages is None
+                or self.pending or self.loaded_key != self.key):
             return
         self.pending_page = False
         pages, generation = self.pages, self.page_generation
@@ -797,7 +878,7 @@ class RecommendationPanel(W.QWidget):
             label += (
                 " Companion card restrictions applied; use deck checks for complete requirements."
                 if self.theme_option.get("companion")
-                else " Theme filters use local card mechanics and tags."
+                else " Theme matching uses EDHREC cohort membership and local mechanics/tags."
             )
         self.status.setText(label + (" " + self.coverage if self.coverage else ""))
         self.canvas.empty_message = (
