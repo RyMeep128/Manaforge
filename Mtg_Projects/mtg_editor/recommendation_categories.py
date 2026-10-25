@@ -64,7 +64,7 @@ def categories(row):
     for source, evidence in row.get('source_evidence', {}).items():
         if source == 'edhrec':
             result.update('EDHREC: ' + label for label in evidence.get('categories', []) if isinstance(label, str) and label)
-        if source != 'archidekt':
+        if source not in {'archidekt', 'moxfield'}:
             continue
         baseline, inclusion, sample = evidence.get('baseline'), evidence.get('inclusion'), evidence.get('sample')
         if (all(isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)

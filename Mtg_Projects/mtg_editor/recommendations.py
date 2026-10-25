@@ -190,7 +190,7 @@ def statistical_reason(row):
     lines = ["Public recommendation evidence"]
     for source_id, item in sorted(evidence.items()):
         lines.append(
-            {"edhrec": "EDHREC", "archidekt": "Archidekt"}.get(source_id, source_id)
+            {"edhrec": "EDHREC", "archidekt": "Archidekt", "moxfield": "Moxfield"}.get(source_id, source_id)
         )
         if "rank" in item:
             lines.append(f"Rank: #{item['rank']}")
@@ -208,11 +208,11 @@ def statistical_reason(row):
                     "EDHREC global popularity and deck-card co-occurrence unavailable.",
                 ]
             )
-        elif source_id == "archidekt" and "inclusion" in item:
+        elif source_id in {"archidekt", "moxfield"} and "inclusion" in item:
             lines.extend(
                 [
                     f"Commander inclusion: {item['inclusion']:.1%} ({item['sample']} decks)",
-                    f"Global popularity: {item['baseline']:.1%}; Manaforge/Archidekt synergy signal: {item['synergy']:+.1%}",
+                    f"Global popularity: {item['baseline']:.1%}; Manaforge/{source_id.title()} synergy signal: {item['synergy']:+.1%}",
                 ]
             )
         else:

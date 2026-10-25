@@ -113,9 +113,12 @@ def configure_sources(editor, root):
         cache.setCurrentIndex(cache.findData(config["archidekt"]["cache"]))
         edhrec = W.QCheckBox("Enable offline EDHREC recommendations")
         edhrec.setChecked(config["edhrec"]["enabled"])
+        moxfield = W.QCheckBox("Enable Moxfield recommendations")
+        moxfield.setChecked(config["moxfield"]["enabled"])
         layout.addRow(archidekt)
         layout.addRow("Archidekt data source", cache)
         layout.addRow(edhrec)
+        layout.addRow(moxfield)
         note = W.QLabel(
             "Available datasets contribute to one list. These controls never download data. Local supplement preferences are saved with each deck."
         )
@@ -134,6 +137,7 @@ def configure_sources(editor, root):
             version=2,
             archidekt=dict(enabled=archidekt.isChecked(), cache=cache.currentData()),
             edhrec=dict(enabled=edhrec.isChecked()),
+            moxfield=dict(enabled=moxfield.isChecked()),
         )
         editor.run_task(
             lambda: save_source_settings(root, updated),

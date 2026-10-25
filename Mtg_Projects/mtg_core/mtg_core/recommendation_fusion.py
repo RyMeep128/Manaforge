@@ -2,7 +2,7 @@
 
 import math
 
-PUBLIC_SOURCE_WEIGHTS = {"archidekt": 1.0, "edhrec": 1.0}
+PUBLIC_SOURCE_WEIGHTS = {"archidekt": 1.0, "edhrec": 1.0, "moxfield": 1.0}
 RRF_K = 60
 CANDIDATE_LIMIT = 2000
 

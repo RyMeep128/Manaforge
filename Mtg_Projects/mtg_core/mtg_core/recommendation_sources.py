@@ -56,7 +56,7 @@ def default_sources(local_store):
     root = local_store.path.parent
     config = source_settings(root)
     sources = []
-    for source_id in ("archidekt", "edhrec"):
+    for source_id in ("archidekt", "edhrec", "moxfield"):
         if not config[source_id]["enabled"]:
             sources.append(
                 UnavailableSource(source_id, "public", "Disabled in source settings")
@@ -67,17 +67,17 @@ def default_sources(local_store):
                 from .discovery_starter import snapshot_path
 
                 source = EdhrecSource(snapshot_path(root, "edhrec.sqlite3"))
-            elif config["archidekt"]["cache"] == "portable":
+            elif source_id == "archidekt" and config["archidekt"]["cache"] == "portable":
                 source = AggregateSource(root / "archidekt.aggregate.json.gz")
-            elif (root / "archidekt.sqlite3").exists():
+            elif (root / f"{source_id}.sqlite3").exists():
                 source = CachedSource(
-                    "archidekt",
+                    source_id,
                     "public",
-                    RecommendationStore(root / "archidekt.sqlite3"),
+                    RecommendationStore(root / f"{source_id}.sqlite3"),
                 )
             else:
                 source = UnavailableSource(
-                    "archidekt", "public", "No collected Archidekt cache available"
+                    source_id, "public", f"No collected {source_id.title()} cache available"
                 )
         except Exception as exc:
             source = UnavailableSource(

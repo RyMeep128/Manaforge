@@ -44,10 +44,20 @@ Default output under the configured core data directory:
 - `recommendations/moxfield.sqlite3`: normalized membership, provenance URLs,
   popularity, and commander inclusion, using `RecommendationStore`.
 
-This change collects a separate dataset; the application's recommendation-source
-configuration does not yet consume Moxfield automatically. Archidekt and EDHREC
-data and checkpoints are unaffected. Keep response caches and per-deck data
-private and outside the repository.
+Manaforge reads this database as an independent public recommendation source.
+After collecting, open **More > Recommendation cache > Configure recommendation
+sources**, enable **Moxfield recommendations**, and refresh recommendations.
+Available Moxfield, Archidekt, and EDHREC datasets contribute to one combined list
+with equal source weights. Evidence identifies each contributing source, and
+Moxfield's commander inclusion and baseline statistics also support High Lift
+browsing. Missing caches report unavailable; opening the app never downloads data.
+
+Moxfield is enabled by default for new settings. Existing version-2 settings that
+lack a Moxfield preference enable it when either existing public source is enabled;
+if both are disabled, Moxfield stays disabled. The preference is saved independently
+by the source dialog. Legacy disable-all mode also disables Moxfield.
+Archidekt and EDHREC data and checkpoints are unaffected. Keep response caches
+and per-deck data private and outside the repository.
 
 One collector lock protects each run directory. Requests are serial, at least six
 seconds apart, with an 8 MiB response bound and 10 GiB compressed-cache bound.

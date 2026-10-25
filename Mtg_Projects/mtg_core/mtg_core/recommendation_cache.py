@@ -271,13 +271,20 @@ def source_settings(root):
             version=2,
             archidekt=dict(enabled=True, cache="live"),
             edhrec=dict(enabled=True),
+            moxfield=dict(enabled=True),
         )
     raw = json.loads(path.read_text(encoding="utf-8"))
     if raw.get("version", 1) == 2:
+        raw.setdefault("moxfield", dict(enabled=bool(
+            raw.get("archidekt", {}).get("enabled")
+            or raw.get("edhrec", {}).get("enabled")
+        )))
         if (
             type(raw.get("archidekt", {}).get("enabled")) is not bool
             or raw["archidekt"].get("cache") not in {"live", "portable"}
             or type(raw.get("edhrec", {}).get("enabled")) is not bool
+            or not isinstance(raw["moxfield"], dict)
+            or type(raw["moxfield"].get("enabled")) is not bool
         ):
             raise ValueError("Invalid recommendation source settings")
         return raw
@@ -303,6 +310,7 @@ def source_settings(root):
             enabled=mode != "disabled"
             and (mode == "edhrec" or (root / "edhrec.sqlite3").exists())
         ),
+        moxfield=dict(enabled=mode != "disabled"),
     )
     save_source_settings(root, migrated)
     return migrated
@@ -321,12 +329,13 @@ def save_source_settings(root, settings):
 
 
 def set_mode(root, mode):
-    """Compatibility helper: change one source without disabling the other."""
+    """Compatibility helper: change one source or disable all public sources."""
     if mode not in ("live", "portable", "disabled", "edhrec"):
         raise ValueError("Unknown source mode")
     config = source_settings(root)
     if mode == "disabled":
         config["archidekt"]["enabled"] = config["edhrec"]["enabled"] = False
+        config["moxfield"]["enabled"] = False
     elif mode == "edhrec":
         config["edhrec"]["enabled"] = True
     else:
