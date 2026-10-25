@@ -206,6 +206,19 @@ class Collector:
         self.state["seen"] = sorted(self.seen)
         atomic_json(self.state_path, self.state)
 
+    def add_decks(self, deck_ids):
+        """Extend the existing run without clearing its cache, limits, or history."""
+        deck_ids = list(dict.fromkeys(int(value) for value in deck_ids))
+        if any(value <= 0 for value in deck_ids):
+            raise ValueError("Deck IDs must be positive integers")
+        pending = set(self.state["queue"])
+        additional = [
+            value for value in deck_ids if value not in self.seen and value not in pending
+        ]
+        if additional:
+            self.state["queue"].extend(additional)
+            self.save("ready", last_error=None)
+
     def check_stop(self):
         if (self.root / "STOP").exists():
             raise InterruptedError("Stopped by STOP file")
@@ -370,10 +383,20 @@ def main():
     )
     parser.add_argument("--max-hours", type=float, default=24)
     parser.add_argument("--max-decks", type=int, default=20000)
+    parser.add_argument(
+        "--deck-id", type=int, action="append", default=[],
+        help="Add a public Commander deck ID to the existing run (repeatable)",
+    )
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--audit-cached", action="store_true")
     mode.add_argument("--replay-cached", action="store_true")
     args = parser.parse_args()
+    if args.deck_id and (args.audit_cached or args.replay_cached):
+        parser.error("--deck-id requires network collection mode")
+    if any(value <= 0 for value in args.deck_id):
+        parser.error("--deck-id must be positive")
+    if args.max_hours <= 0 or args.max_decks <= 0:
+        parser.error("Collection limits must be positive")
     args.root.mkdir(parents=True, exist_ok=True)
     # OS-held lock is released after crashes; no second request stream can start.
     with open(args.root / "collector.lock", "a+b") as lock:
@@ -401,6 +424,7 @@ def main():
         collector = Collector(
             args.root, max_hours=args.max_hours, max_decks=args.max_decks
         )
+        collector.add_decks(args.deck_id)
         collector.run()
         print(
             json.dumps(

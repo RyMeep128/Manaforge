@@ -35,6 +35,28 @@ Manaforge. Completed checkpoints do not start a new collection on rerun.
 
 ## Files and controls
 
+### Expand an existing collection
+
+Use repeatable `--deck-id` arguments to include specific public Commander decks
+that listing pagination did not discover:
+
+```powershell
+& '.\Mtg_Projects\mtg_proxy\venv\Scripts\python.exe' tools/collect_archidekt.py --deck-id 123456 --deck-id 234567
+```
+
+Use actual IDs from public Archidekt deck URLs. New IDs are appended to the
+checkpoint queue, even after listing collection completed. Existing queued or
+processed IDs are deduplicated. Resume without repeating these arguments;
+the pending queue is persisted before collection. The same public-deck checks,
+100-card normalization, cache, lock, pacing, STOP file, and aggregate database
+apply. Offline audit/replay modes cannot accept new IDs.
+
+Limits still apply to the entire original run. If its original 24-hour window
+has elapsed, explicitly set `--max-hours` to the desired total hours since the
+first launch; `--max-decks` likewise bounds the total accepted sample. Adding IDs
+does not reset the clock, counters, listing progress, or processed-deck history.
+It does not refresh previously processed decks.
+
 Windows default directory:
 `%LOCALAPPDATA%\PrintProxyPrep\mtg_core\recommendations\archidekt-run`
 

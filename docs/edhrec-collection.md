@@ -13,6 +13,23 @@ public API contract. The recommendation snapshot captures available commander ca
 raw decks, every possible card, separate theme pages, average decks, or combos.
 It does not follow category-list continuation pages within commander pages.
 
+## Expand an existing collection
+
+Add commander pages missing from the yearly index using their EDHREC URL slugs:
+
+```powershell
+& '.\Mtg_Projects\mtg_proxy\venv\Scripts\python.exe' tools/collect_edhrec.py --commander-slug atraxa-praetors-voice --commander-slug the-ur-dragon --with-discovery
+```
+
+The repeatable `--commander-slug` option adds pages to the existing checkpoint,
+including a completed run. Previously imported or skipped pages are not retried;
+cached responses, pacing, locking, and STOP behavior are retained. Added slugs
+remain in the checkpoint for ordinary resume. The normal yearly-index collection
+still runs for a new snapshot. `--max-commanders` remains a total imported-page
+bound; raise it explicitly if the existing snapshot has reached that limit.
+Supplemental pages use the same normalization and feed the same recommendation
+and optional discovery snapshots. Offline rebuild modes cannot accept new slugs.
+
 ## Offline commander/theme discovery
 
 Build the discovery snapshot explicitly from responses already collected:

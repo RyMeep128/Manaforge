@@ -321,7 +321,10 @@ class Downloader:
         return json.loads(raw)
 
 
-def collect(root, catalog, *, max_commanders=10000, delay=6):
+def collect(root, catalog, *, max_commanders=10000, delay=6, commander_slugs=()):
+    commander_slugs = list(dict.fromkeys(commander_slugs))
+    for slug in commander_slugs:
+        page_path(f"commanders/{slug}.json")
     root = Path(root)
     root.mkdir(parents=True, exist_ok=True)
     state_path = root / "state.json"
@@ -330,7 +333,8 @@ def collect(root, catalog, *, max_commanders=10000, delay=6):
         if state_path.exists()
         else dict(status="new", completed=[], skipped={}, imported=0)
     )
-    if state["status"] == "complete":
+    additional = [slug for slug in commander_slugs if slug not in state.get("slugs", [])]
+    if state["status"] == "complete" and not additional:
         return state
     state.setdefault("started_at", time.time())
     downloader = Downloader(root, delay)
@@ -357,6 +361,7 @@ def collect(root, catalog, *, max_commanders=10000, delay=6):
                         slugs.append(slug)
                 page = group.get("more")
             state["slugs"] = slugs
+        state["slugs"].extend(slug for slug in additional if slug not in state["slugs"])
         state.update(status="running", last_error=None)
         write_json(state_path, state)
         done = set(state["completed"]) | set(state["skipped"])
@@ -407,6 +412,10 @@ def main():
     )
     parser.add_argument("--max-commanders", type=int, default=10000)
     parser.add_argument(
+        "--commander-slug", action="append", default=[],
+        help="Add a commander page slug to this snapshot (repeatable; cached pages are reused)",
+    )
+    parser.add_argument(
         "--reprocess-cached",
         action="store_true",
         help="Rebuild from cached pages without network requests",
@@ -422,6 +431,15 @@ def main():
         help="Build discovery after the normal resumable commander collection",
     )
     args = parser.parse_args()
+    if args.commander_slug and (args.build_discovery or args.reprocess_cached):
+        parser.error("--commander-slug requires network collection mode")
+    if args.max_commanders <= 0:
+        parser.error("--max-commanders must be positive")
+    for slug in args.commander_slug:
+        try:
+            page_path(f"commanders/{slug}.json")
+        except ValueError as exc:
+            parser.error(str(exc))
     if args.build_discovery and (args.reprocess_cached or args.with_discovery):
         parser.error("--build-discovery is an independent offline operation")
     with collector_lock(args.root):
@@ -445,7 +463,10 @@ def main():
                 json.dumps({k: v for k, v in result.items() if k != "pages"}, indent=2)
             )
         else:
-            collect(args.root, args.catalog, max_commanders=args.max_commanders)
+            collect(
+                args.root, args.catalog, max_commanders=args.max_commanders,
+                commander_slugs=args.commander_slug,
+            )
         if args.with_discovery:
             from .edhrec_discovery_ingest import build_discovery
 
