@@ -58,18 +58,11 @@ def load_recommendations(
             and "Basic Land" not in (e.extras.get("facts", {}).get("type_line") or "")
         ],
     )
-    color_identity = set()
-    color_known = bool(commanders)
-    for entry in commanders:
-        payload = service.get_card(card_id=entry.card_id) if entry.card_id else None
-        if payload is None or "color_identity" not in payload:
-            color_known = False
-        else:
-            color_identity.update(payload["color_identity"])
+    from mtg_core.card_pool import deck_query, in_card_pool, pool_context
     allowed = None
     if query.strip():
         matches = service.search_cards(
-            query, dict(scryfall_syntax=True, allow_remote=False, limit=10000)
+            deck_query(query, document), dict(scryfall_syntax=True, allow_remote=False, limit=10000)
         )
         allowed = {row.oracle_id for row in matches}
     from mtg_core.search.cancellation import check_cancelled
@@ -122,10 +115,7 @@ def load_recommendations(
         check_cancelled(should_cancel)
         if not payload:
             continue
-        if color_known and (
-            "color_identity" not in payload
-            or not set(payload["color_identity"]) <= color_identity
-        ):
+        if allowed is None and not in_card_pool(payload, document):
             continue
         entry = DeckEntry(
             str(uuid.uuid4()),
@@ -149,7 +139,7 @@ def load_recommendations(
         rows = []
     snapshot.update(
         results=rows,
-        color_filtered=color_known,
+        color_filtered=pool_context(document)[1] is not None and not pool_context(document)[2],
         deck_context=deck_context,
     )
     return snapshot

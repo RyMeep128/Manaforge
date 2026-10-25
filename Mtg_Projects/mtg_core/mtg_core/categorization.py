@@ -5,7 +5,7 @@ Scores are rule priorities, not probabilities. No AI or remote classification.
 from .decks import DeckCategory
 from .role_analysis import analyze_effects, deck_context
 
-RULE_VERSION = 5
+RULE_VERSION = 6
 # Earlier functional roles win primary-category ties; all matches are retained.
 ROLE_TAGS = (
     ('Board Wipes', ('board-wipe', 'boardwipe', 'sweeper', 'mass-removal')),
@@ -26,6 +26,7 @@ ROLE_TAGS = (
     ('Anthem', ('anthem',)),
     ('Counters', ('counters', '+1/+1-counters', 'proliferate')),
     ('Equipment', ('equipment', 'equipment-synergy')),
+    ('Keyword Soup', ('keyword-soup',)),
     ('Spellslinger', ('spellslinger', 'magecraft')),
     ('Graveyard', ('graveyard', 'self-mill', 'mill', 'graveyard-hate')),
     ('Sacrifice / Aristocrats', ('sacrifice-outlet', 'aristocrats', 'sacrifice-payoff')),
@@ -103,6 +104,23 @@ def is_manual(entry):
     return bool(record.get('manual') or (entry.category_ids and not record))
 
 
+def theme_priorities(document, evidence):
+    """Manual themes break functional-role ties without replacing role evidence."""
+    roles = {role.casefold() for theme in document.editor_preferences.get('manual_themes', [])
+             for role in theme.get('roles', [])}
+    if not roles or not evidence or evidence[0]['name'] in ('Lands', 'Commander'):
+        return evidence
+    result = []
+    for match in evidence:
+        item = dict(match)
+        if (item['name'].casefold() in roles and item.get('score', 100) >= 100
+                and 'Manual deck theme priority' not in item.get('reason', '')):
+            item['score'] = item.get('score', 100) + 8
+            item['reason'] = item.get('reason', '') + '; Manual deck theme priority (+8)'
+        result.append(item)
+    return sorted(result, key=lambda item: -item.get('score', 100))
+
+
 def apply_categories(document, proposals, reconsider_manual=False):
     """Apply entry-id -> evidence in the caller's transaction, protecting manual work."""
     available_categories = list(document.deck.categories)
@@ -113,7 +131,7 @@ def apply_categories(document, proposals, reconsider_manual=False):
         categories = document.deck.categories
         if entry.section == 'commander' or entry.entry_id in document.deck.commander_entry_ids:
             evidence = [{'name': 'Commander', 'score': 250, 'reason': 'Deck commander designation'}]
-        evidence = select_categories(evidence, available_categories)
+        evidence = select_categories(theme_priorities(document, evidence), available_categories)
         previous = entry.extras.get('auto_categories', {}).get('managed_ids', [])
         managed = []
         for match in evidence:

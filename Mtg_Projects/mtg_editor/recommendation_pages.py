@@ -12,6 +12,7 @@ from mtg_core.search.cancellation import check_cancelled
 from .organization import in_deck_entries
 from .recommendation_categories import categories, card_types
 from mtg_core.discovery_themes import theme_matches
+from mtg_core.card_pool import in_card_pool, pool_context
 
 
 class RecommendationPages:
@@ -104,7 +105,7 @@ class RecommendationPages:
         # Quantity/printing changes that do not change membership can reuse pages.
         deck_key = tuple(sorted((e.oracle_id or '', e.card_id or '', ' '.join(e.name.casefold().split()))
                                 for e in document.deck.entries if e.quantity > 0))
-        key = (deck_key, limit, kind, text, role, membership, tuple(sorted(dismissed)), category,
+        key = (deck_key, pool_context(document), limit, kind, text, role, membership, tuple(sorted(dismissed)), category,
                identity, mana_value, json.dumps(theme, sort_keys=True))
         if key in self.cache:
             self.cache.move_to_end(key)
@@ -135,6 +136,8 @@ class RecommendationPages:
                     if row['oracle_id'] in dismissed:
                         continue
                     row['entry'] = DeckEntry.from_dict(row['entry'])
+                    if not in_card_pool(row['entry'].extras.get('facts') or {}, document):
+                        continue
                     if not theme_matches(row, theme):
                         continue
                     present = bool(in_deck_entries(document, [row['entry']]))

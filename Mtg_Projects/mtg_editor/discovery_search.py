@@ -6,12 +6,13 @@ from mtg_core.decks import DeckDocument, DeckEntry
 from mtg_core.categorization import classify
 
 from .canvas import CardCanvas
+from .card_drop import CardDropPanel
 from .search import SearchController
 from .organization import card_facts, in_deck_entries, update_candidate_quantities
 from .recommendation_panel import CARD_TYPES
 
 
-class CardSearchPanel(W.QWidget):
+class CardSearchPanel(CardDropPanel):
     def __init__(self, editor):
         super().__init__(editor)
         self.editor = editor
@@ -56,6 +57,12 @@ class CardSearchPanel(W.QWidget):
         for control in (self.color, self.kind, self.mana, self.membership):
             filters.addWidget(control)
         layout.addLayout(filters)
+        include_illegal = W.QCheckBox('Include illegal cards')
+        include_illegal.setAccessibleDescription('Ignore deck format and commander color identity defaults')
+        include_illegal.setChecked(editor.document.editor_preferences.get('include_illegal_cards', False))
+        include_illegal.toggled.connect(editor.set_include_illegal)
+        self.include_illegal = include_illegal
+        layout.addWidget(include_illegal)
         self.color.setAccessibleName('Card color')
         self.kind.setAccessibleName('Card type')
         self.color.currentIndexChanged.connect(self.query_changed)
@@ -93,7 +100,8 @@ class CardSearchPanel(W.QWidget):
             parts.append('t:' + self.kind.currentText().lower())
         if self.mana.value() >= 0:
             parts.append('mv=' + str(self.mana.value()))
-        return ' '.join(parts)
+        from mtg_core.card_pool import deck_query
+        return deck_query(' '.join(parts), self.editor.document)
 
     def query_changed(self, *_):
         self.controller.change_query(self.query())
@@ -122,6 +130,9 @@ class CardSearchPanel(W.QWidget):
         self.update_quantities()
 
     def update_quantities(self, *_):
+        from PyQt6.QtCore import QSignalBlocker
+        with QSignalBlocker(self.include_illegal):
+            self.include_illegal.setChecked(self.editor.document.editor_preferences.get('include_illegal_cards', False))
         present = in_deck_entries(self.editor.document, self.rows)
         membership = self.membership.currentIndex()
         self.canvas.document.deck.entries = [entry for entry in self.rows

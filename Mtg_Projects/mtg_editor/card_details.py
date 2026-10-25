@@ -3,6 +3,7 @@ from copy import deepcopy
 from pathlib import Path
 from PyQt6 import QtCore as C, QtGui as G, QtWidgets as W
 from .organization import card_facts
+from .card_views import orient_face_image
 from mtg_core.diagnostics import get_logger
 
 
@@ -64,11 +65,11 @@ class CardDetails(W.QDialog):
     printingChosen = C.pyqtSignal(str, object)
     quantityChosen = C.pyqtSignal(str, int)
 
-    def __init__(self, service, entry, parent=None):
+    def __init__(self, service, entry, parent=None, *, face=0):
         super().__init__(parent)
         self.service, self.entry = service, deepcopy(entry)
         self.token = 0
-        self.face = 0
+        self.face = face
         self.payload = {**(entry.extras.get('facts') or {}), 'name': entry.name,
                         'id': entry.card_id, 'oracle_id': entry.oracle_id}
         self.cache = {}
@@ -133,6 +134,8 @@ class CardDetails(W.QDialog):
         close.clicked.connect(self.close)
         info.addWidget(close)
         layout.addLayout(info, 1)
+        shortcut = G.QShortcut(G.QKeySequence('F'), self)
+        shortcut.activated.connect(lambda: self.flip_face() if self.flip.isVisible() else None)
         self.load_catalog()
 
     def submit(self, work, callback):
@@ -180,10 +183,12 @@ class CardDetails(W.QDialog):
         self.preview_printing()
 
     def preview_printing(self, *_):
+        previous_id = self.payload.get('id')
         self.payload = self.printings.currentData() or {}
         self.rulings.setEnabled(bool(self.payload.get('oracle_id') or self.entry.oracle_id
                                     or self.payload.get('id') or self.entry.card_id))
-        self.face = 0
+        if previous_id != self.payload.get('id'):
+            self.face = 0
         self.use.setEnabled(bool(self.payload.get('id')) and self.payload.get('id') != self.entry.card_id)
         self.render_face()
 
@@ -194,7 +199,7 @@ class CardDetails(W.QDialog):
                       card_id=self.payload.get('id') or self.entry.card_id, parent=self).exec()
 
     def flip_face(self):
-        self.face = 1 - self.face
+        self.face = (self.face + 1) % max(1, len(self.payload.get('card_faces') or []))
         self.render_face()
 
     def show_rules(self):
@@ -213,9 +218,10 @@ class CardDetails(W.QDialog):
 
     def render_face(self):
         faces = self.payload.get('card_faces') or []
-        dfc = len(faces) == 2 and all(f.get('image_uris') for f in faces)
+        dfc = len(faces) > 1
+        self.face %= max(1, len(faces))
         self.flip.setVisible(dfc)
-        self.flip.setText('↻ Show front' if self.face else '↻ Show back')
+        self.flip.setText(f'↻ Next face (F) · {self.face + 1}/{len(faces)}' if dfc else 'Flip card')
         shown = [faces[self.face]] if dfc else faces or [self.payload]
         paragraphs = []
         for face in shown:
@@ -241,7 +247,10 @@ class CardDetails(W.QDialog):
         def work():
             if asset:
                 data = self.service.get_image_bytes(asset)
-            elif face_index:
+            elif face_index and hasattr(self.service, 'ensure_face_image'):
+                path = self.service.ensure_face_image(payload.get('id'), face_index, allow_remote=True)
+                data = Path(path).read_bytes() if path else None
+            elif face_index and faces[face_index].get('image_uris'):
                 urls = faces[face_index].get('image_uris', {})
                 url = urls.get('normal') or urls.get('large') or urls.get('png')
                 data = self.service.fetch_bytes_fn(url) if url else None
@@ -249,7 +258,7 @@ class CardDetails(W.QDialog):
                 path = self.service.ensure_image(payload.get('id'), allow_remote=True) if payload.get('id') else None
                 data = Path(path).read_bytes() if path else None
             image = G.QImage.fromData(data or b'')
-            return image
+            return orient_face_image(image, payload, face_index) if not asset else image
         self.image_keys[self.token + 1] = key
         self.submit(work, self.image_loaded)
 

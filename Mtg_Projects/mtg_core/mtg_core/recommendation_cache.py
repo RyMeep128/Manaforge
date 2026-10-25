@@ -208,6 +208,11 @@ class AggregateSource:
     source_id: str = "archidekt"
     role: str = "public"
 
+    def commanders_using(self, oracle_id, *, should_cancel=None):
+        data = read_cache(self.path)
+        return [dict(commanders=c['commanders'], count=c['counts'][oracle_id], sample=c['sample'])
+                for c in data['cohorts'] if c['counts'].get(oracle_id)]
+
     def snapshot(self, commanders=(), *, exclude=(), limit=200):
         data = read_cache(self.path)
         selected = set(commanders)

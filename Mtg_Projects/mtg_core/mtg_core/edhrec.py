@@ -107,6 +107,26 @@ class EdhrecSource:
     cohort_database: Path | None = None
     selection_note: str = ''
 
+    def commanders_using(self, oracle_id, *, should_cancel=None):
+        """General cached pages only, keeping exact partner cohorts labeled."""
+        path = Path(self.path)
+        if not path.is_file():
+            return []
+        from .search.cancellation import check_cancelled
+        rows = []
+        with closing(sqlite3.connect(path.resolve().as_uri() + '?mode=ro', uri=True)) as db:
+            if should_cancel:
+                db.set_progress_handler(lambda: int(should_cancel()), 1000)
+            for commander, payload in db.execute(
+                    "SELECT pages.commander, j.value FROM pages, json_each(pages.payload, '$.results') j "
+                    "WHERE json_extract(j.value, '$.oracle_id')=?", (oracle_id,)):
+                check_cancelled(should_cancel)
+                item = json.loads(payload)
+                count, sample = item.get('num_decks'), item.get('sample')
+                if isinstance(count, int) and isinstance(sample, int) and sample > 0 and 0 < count <= sample:
+                    rows.append(dict(commanders=commander.split('|'), count=count, sample=sample))
+        return rows
+
     def __post_init__(self):
         if self.cohort != "general" and not re.fullmatch(
             r"(?:theme|bracket|budget):[a-z0-9-]+", self.cohort

@@ -90,8 +90,15 @@ def search_commanders(service, filters, store, *, metadata=None, should_cancel=N
                 continue
             if not (eligible(payload) is True or background(payload)):
                 continue
-            if filters.get("legal_only", True) and (payload.get("legalities") or {}).get("commander") != "legal":
-                continue
+            if filters.get("legal_only", True):
+                format_name = filters.get('deck_format') or 'commander'
+                allowed = ('legal', 'restricted') if format_name == 'vintage' else ('legal',)
+                if (payload.get('legalities') or {}).get(format_name) not in allowed:
+                    continue
+                deck_identity = filters.get('deck_identity')
+                if (deck_identity is not None and (payload.get('color_identity') is None
+                        or not set(payload['color_identity']) <= set(deck_identity))):
+                    continue
             identity = filters.get("identity")
             if identity is not None:
                 if payload.get('color_identity') is None or (partner and partner.get('color_identity') is None):

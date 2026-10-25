@@ -9,6 +9,7 @@ from mtg_core.edhrec_discovery import DiscoveryStore
 from mtg_core.paths import core_data_root
 
 from .canvas import CardCanvas
+from .card_drop import CardDropPanel
 from .commander_selection import commanders, select_commander
 from .organization import card_facts, update_candidate_quantities
 from .search import SearchCache, SearchController, SearchWorker
@@ -93,7 +94,7 @@ class DiscoveryCanvas(CardCanvas):
             self.commanderRequested.emit(item[0].entry_id)
 
 
-class CommanderDiscovery(W.QWidget):
+class CommanderDiscovery(CardDropPanel):
     def __init__(self, editor):
         super().__init__(editor)
         self.editor = editor
@@ -166,7 +167,8 @@ class CommanderDiscovery(W.QWidget):
         self.identity = color_combo()
         self.identity.currentIndexChanged.connect(self.filters_changed)
         options.addWidget(self.identity, 0, 1)
-        self.legal = W.QCheckBox("Locally legal in Commander")
+        self.legal = W.QCheckBox("Legal cards only")
+        self.legal.setAccessibleDescription('Use deck format and commander color identity defaults')
         self.legal.setChecked(True)
         options.addWidget(self.legal, 1, 1)
         layout.addLayout(options)
@@ -191,6 +193,7 @@ class CommanderDiscovery(W.QWidget):
         self.canvas.commanderRequested.connect(self.set_commander)
         self.canvas.selectionChanged.connect(self.selection_changed)
         self.canvas.menuRequested.connect(self.card_menu)
+        self.canvas.detailsRequested.connect(lambda key: editor.candidate_details(self.canvas, key))
         layout.addWidget(self.canvas, 1)
         self.details = W.QLabel("Choose a commander to start building.")
         self.details.setTextFormat(C.Qt.TextFormat.PlainText)
@@ -225,7 +228,7 @@ class CommanderDiscovery(W.QWidget):
         self.theme.completer().activated[str].connect(self.complete_theme)
         self.capability.currentIndexChanged.connect(self.filters_changed)
         self.partner.toggled.connect(self.filters_changed)
-        self.legal.toggled.connect(self.filters_changed)
+        self.legal.toggled.connect(lambda checked: editor.set_include_illegal(not checked))
         self.controller.resultsReady.connect(self.completed)
         self.controller.statusChanged.connect(self.status.setText)
         self.controller.busyChanged.connect(self.cancel.setEnabled)
@@ -236,7 +239,7 @@ class CommanderDiscovery(W.QWidget):
         self.theme_search.setClearButtonEnabled(True)
         self.theme_search.textChanged.connect(self.populate_themes)
         self.theme_group = W.QComboBox()
-        self.theme_group.addItems(["Themes", "Typal", "Companions"])
+        self.theme_group.addItems(["Mechanics", "Strategies", "Archetypes", "Typal", "Companions"])
         self.theme_group.currentTextChanged.connect(self.populate_themes)
         self.theme_list = W.QListWidget()
         self.theme_list.setMaximumHeight(145)
@@ -303,17 +306,20 @@ class CommanderDiscovery(W.QWidget):
             self.theme_list.addItem(item)
 
     def save_preferences(self):
-        value = dict(theme=self.theme_slug, identity=self.identity.currentData(),
+        value = dict(self.editor.document.editor_preferences.get('discovery', {}),
+                     theme=self.theme_slug, identity=self.identity.currentData(),
                      theme_option=self.theme_options.get(self.theme_slug, {}))
         if self.editor.document.editor_preferences.get('discovery') != value:
             self.editor.document.editor_preferences.update(discovery=value)
             self.editor.changed()
 
     def filters(self):
+        from mtg_core.card_pool import pool_context
+        format_name, deck_identity, include_illegal = pool_context(self.editor.document)
         selected = commanders(self.editor.document)
         return dict(theme=self.theme_slug, browse=self.browse_mode.currentData(), identity=self.identity.currentData(), name=self.name.text(), type=self.type.text(),
                     text=self.text.text(), capability=self.capability.currentData(),
-                    legal_only=self.legal.isChecked(), limit=self.limit,
+                    legal_only=not include_illegal, deck_format=format_name, deck_identity=deck_identity, limit=self.limit,
                     partner_card_id=selected[0].card_id if self.partner.isChecked() and len(selected) == 1 else None)
 
     def query(self):
@@ -493,6 +499,11 @@ class CommanderDiscovery(W.QWidget):
 
     def card_menu(self, entry_id, position):
         menu = W.QMenu(self)
+        menu.addAction("Inspect card", lambda: self.editor.candidate_details(self.canvas, entry_id))
+        entry = self.rows[entry_id]["entry"]
+        menu.addAction("Discover similar cards / popular commanders", lambda: self.editor.discover_card(entry))
+        if self.canvas.face_count(entry) > 1:
+            menu.addAction("Flip preview", lambda: self.canvas.flip_entry(entry))
         menu.addAction("Set as Commander", lambda: self.set_commander(entry_id))
         second = menu.addAction("Add as Second Commander", lambda: self.set_commander(entry_id, second=True))
         second.setEnabled(len(commanders(self.editor.document)) == 1)
@@ -503,6 +514,12 @@ class CommanderDiscovery(W.QWidget):
         self.search()
 
     def deck_changed(self):
+        from mtg_core.card_pool import pool_context
+        pool = pool_context(self.editor.document)
+        pool_changed = getattr(self, '_pool', None) != pool
+        self._pool = pool
+        with C.QSignalBlocker(self.legal):
+            self.legal.setChecked(not pool[2])
         deck_id = self.editor.document.deck.deck_id
         saved = self.editor.document.editor_preferences.get('discovery', {})
         preferences_changed = (self.preference_deck != deck_id or self.theme_slug != saved.get('theme', '')
@@ -521,6 +538,12 @@ class CommanderDiscovery(W.QWidget):
         context = (self.editor.document.deck.deck_id, tuple((e.entry_id, e.card_id) for e in selected))
         changed = context != self.context
         self.context = context
+        if pool_changed or preferences_changed:
+            self.controller.cancel()
+            self.rows.clear()
+            self.canvas.document.deck.entries.clear()
+            self.canvas.refresh()
+            self.loaded_query = None
         self.partner.setEnabled(len(selected) == 1 and bool(selected[0].card_id))
         if not self.partner.isEnabled():
             self.partner.setChecked(False)
@@ -528,7 +551,7 @@ class CommanderDiscovery(W.QWidget):
         self.selection_changed()
         if changed and self.partner.isChecked():
             self.filters_changed()
-        elif preferences_changed and self.isVisible():
+        elif (preferences_changed or pool_changed) and self.isVisible():
             self.controller.change_query(self.query())
 
     def showEvent(self, event):

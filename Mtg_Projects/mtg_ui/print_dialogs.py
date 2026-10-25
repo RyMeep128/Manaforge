@@ -620,8 +620,8 @@ class AddCardDialog(QDialog):
 
     @staticmethod
     def _oracle_tag_query(tag):
-        escaped = str(tag).replace('\\', '\\\\').replace('"', '\\"')
-        return f'otag:"{escaped}"'
+        from mtg_core.card_pool import oracle_tag_query
+        return oracle_tag_query(tag)
 
     def _show_card_result_menu(self, position):
         item = self._card_results_list.itemAt(position)

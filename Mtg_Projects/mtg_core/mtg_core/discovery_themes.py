@@ -41,6 +41,9 @@ def theme_catalog(cached, metadata):
     types = {plural(slug(t)): t for t in metadata.get('creature_types', [])}
     local = {key: dict(slug=key, name=name, group=group, query=query, roles=list(roles), origin='local')
              for key, name, group, query, roles in LOCAL_THEMES}
+    for key, option in local.items():
+        option['group'] = ('Mechanics' if key in {'tokens', 'plus-1-plus-1-counters', 'landfall', 'blink'}
+                           else 'Archetypes' if key in {'aggro', 'combo', 'reanimator', 'aristocrats'} else 'Strategies')
     for key, name in types.items():
         local[key] = dict(slug=key, name=key.replace('-', ' ').title(), group='Typal',
                           query=f't:"{name}"', roles=[], subtype=name, origin='local')
@@ -52,7 +55,7 @@ def theme_catalog(cached, metadata):
                           companion_legal=card.get('legal'))
     for item in cached:
         key = item['slug']
-        item = dict(item, group=local.get(key, {}).get('group', 'Themes'), origin='edhrec')
+        item = dict(item, group=local.get(key, {}).get('group', 'Strategies'), origin='edhrec')
         local[key] = {**local.get(key, {}), **item}
     return sorted(local.values(), key=lambda row: row['name'].casefold())
 
@@ -60,6 +63,8 @@ def theme_catalog(cached, metadata):
 def theme_matches(row, theme):
     if not theme:
         return True
+    if 'selected_themes' in theme:
+        return any(theme_matches(row, option) for option in theme['selected_themes'])
     facts = row['entry'].extras.get('facts') or {}
     if theme.get('companion'):
         # Companion selection is an idea filter, not an assertion of deck legality.

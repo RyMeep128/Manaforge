@@ -56,6 +56,29 @@ RULES = (
 COMPILED_RULES = tuple((role, label, re.compile(pattern)) for role, label, pattern in RULES)
 
 
+SOUP_KEYWORDS = frozenset(('flying', 'vigilance', 'trample', 'lifelink', 'deathtouch',
+                          'menace', 'first strike', 'double strike', 'haste', 'reach',
+                          'hexproof', 'indestructible', 'ward', 'prowess', 'skulk',
+                          'fear', 'intimidate', 'shadow', 'horsemanship', 'protection'))
+
+
+def keyword_profile(payload):
+    """Collect structured keywords and positive keyword grants in one place."""
+    possessed, granted = set(), set()
+    for face in payload.get('card_faces') or [payload]:
+        possessed.update(str(k).casefold() for k in face.get('keywords') or [])
+        text = clean_text(face.get('oracle_text'))
+        for sentence in re.split(r'[.!?\n]', text):
+            if not re.search(r'\b(?:gain|gains|have|has|with)\b', sentence):
+                continue
+            for keyword in SOUP_KEYWORDS:
+                if re.search(r'\b' + re.escape(keyword) + r'\b', sentence) and not re.search(
+                        r"\b(?:lose|loses|without|can't have|can't gain)\b", sentence):
+                    granted.add(keyword)
+    possessed.update(str(k).casefold() for k in payload.get('keywords') or [])
+    return possessed & SOUP_KEYWORDS, granted
+
+
 def text_roles(payload):
     reasons = {}
     def add(role, reason):
@@ -105,4 +128,7 @@ def text_roles(payload):
             reasons.setdefault(role, []).append('Keywords: ' + ', '.join(sorted(found)))
     if 'Board Wipes' in reasons:
         add('Removal', 'mass removal')
+    possessed, granted = keyword_profile(payload)
+    if len(possessed) >= 3 or len(granted) >= 2:
+        reasons['Keyword Soup'] = ['Multiple relevant keywords: ' + ', '.join(sorted(possessed | granted))]
     return reasons

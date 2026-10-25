@@ -3,9 +3,9 @@
 from mtg_core.sections import DeckSection
 from collections import Counter
 import math
-import re
 
 from .categorization import ROLE_TAGS, TYPES
+from .basic_lands import mana_pips
 
 
 def deck_insights(document, records=None, sections=(DeckSection.MAINBOARD, DeckSection.COMMANDER)):
@@ -59,9 +59,8 @@ def deck_insights(document, records=None, sections=(DeckSection.MAINBOARD, DeckS
             if not land:
                 unknown['mana cost'] += qty
         else:
-            for symbol in re.findall(r'\{([^}]+)\}', cost):
-                for color in set(symbol.split('/')) & set('WUBRGC'):
-                    pips[color] += qty
+            for color, weight in mana_pips(cost).items():
+                pips[color] += weight * qty
         # Categories and tags are authoritative deck-local choices. Do not
         # reclassify or resurrect roles a user has removed.
         names = [categories[c] for c in entry.category_ids if c in categories] + entry.tags

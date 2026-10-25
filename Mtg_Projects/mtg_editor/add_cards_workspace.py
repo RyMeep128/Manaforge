@@ -41,7 +41,7 @@ class AddCardsWorkspace(W.QWidget):
         navigation.addStretch()
         navigation.addWidget(W.QLabel("Card size"))
         self.zoom = W.QSlider(C.Qt.Orientation.Horizontal)
-        self.zoom.setRange(180, 360)
+        self.zoom.setRange(100, 360)
         self.zoom.setValue(270)
         self.zoom.setMaximumWidth(180)
         self.zoom.valueChanged.connect(self.resize_cards)
@@ -62,9 +62,6 @@ class AddCardsWorkspace(W.QWidget):
             tabs.insertTab(0, self.card_search, "Card Search")
             tabs.addTab(self.discovery, "Discover Deck Ideas")
             tabs.setCurrentIndex(self.full_index)
-            if not any(entry.quantity > 0 for entry in editor.document.deck.entries):
-                tabs.setCurrentWidget(self.discovery)
-                self.last_discovery_deck = editor.document.deck.deck_id
         editor.search_panel.hide()
         self.controls.hide()
         editor.recommendation_panel.set_expanded(True)
@@ -92,6 +89,8 @@ class AddCardsWorkspace(W.QWidget):
             tabs.setTabText(0, "Syntax Search")
             tabs.setCurrentIndex(self.quick_index)
         editor.recommendation_panel.set_expanded(False)
+        editor.results.minimum_search_card_width = None
+        editor.results.fit_height = False
         editor.results.card_width = 130
         editor.query.setMinimumHeight(34)
         editor.workspace_stack.setCurrentWidget(editor.splitter)
@@ -130,6 +129,8 @@ class AddCardsWorkspace(W.QWidget):
                 self.zoom.setValue(panel.canvas.card_width)
         for canvas in self.canvases():
             position = canvas.verticalScrollBar().value()
+            canvas.minimum_search_card_width = 1
+            canvas.fit_height = True
             canvas.card_width = self.zoom.value()
             canvas.refresh()
             canvas.verticalScrollBar().setValue(position)

@@ -9,6 +9,7 @@ from mtg_core.recommendation_scoring import settings
 from mtg_ui.theme import COLORS
 
 from .canvas import CardCanvas
+from .card_drop import CardDropPanel
 from .commander_selection import commanders
 from .organization import in_deck_entries, update_candidate_quantities
 from .recommendation_categories import CATEGORIES, card_types, matches
@@ -31,6 +32,7 @@ def context_key(document):
     return (
         data["deck"],
         deepcopy(document.editor_preferences.get("guidance")),
+        deepcopy(document.editor_preferences.get("manual_themes")),
         deepcopy(document.editor_preferences.get("recommendations")),
         deepcopy(data.get("artwork_preferences")),
         deepcopy(document.editor_preferences.get('discovery', {})),
@@ -40,8 +42,10 @@ def context_key(document):
 
 def source_key(document, signature=()):
     """Changes requiring new sources/printings rather than just cached-candidate ranking."""
+    from mtg_core.card_pool import pool_context
     return (
         document.deck.deck_id,
+        pool_context(document),
         tuple((e.entry_id, e.oracle_id, e.card_id) for e in commanders(document)),
         deepcopy(document.artwork_preferences),
         deepcopy(document.editor_preferences.get('discovery', {}).get('theme_option')),
@@ -112,7 +116,7 @@ class RecommendationCanvas(CardCanvas):
             self.detailsRequested.emit(item[0].entry_id)
 
     def paintEvent(self, event):
-        if self.document.deck.entries:
+        if self.document.deck.entries or self.discovery_drop:
             super().paintEvent(event)
         else:
             painter = G.QPainter(self.viewport())
@@ -133,7 +137,7 @@ class RecommendationCanvas(CardCanvas):
         super().hideEvent(event)
 
 
-class RecommendationPanel(W.QWidget):
+class RecommendationPanel(CardDropPanel):
     def __init__(self, editor):
         super().__init__(editor)
         self.editor = editor
@@ -229,7 +233,10 @@ class RecommendationPanel(W.QWidget):
         self.mana_value.setPrefix("MV ")
         self.mana_value.setAccessibleName("Mana value")
         self.mana_value.valueChanged.connect(self.filter_rows)
+        self.include_illegal = W.QCheckBox('Include illegal cards')
+        self.include_illegal.toggled.connect(editor.set_include_illegal)
         self.filter_widgets = [
+            self.include_illegal,
             self.type_filter,
             self.membership,
             self.role_filter,
@@ -467,11 +474,12 @@ class RecommendationPanel(W.QWidget):
                 max(0, self.identity.findData(value.get("identity")))
             )
             self.mana_value.setValue(value.get("mana_value", -1))
-        self.canvas.card_width = max(180, min(360, int(value.get("card_width", 270))))
+        self.canvas.card_width = max(100, min(360, int(value.get("card_width", 270))))
         workspace = getattr(self.editor, "add_cards_workspace", None)
         if workspace is not None and workspace.expanded:
             with C.QSignalBlocker(workspace.zoom):
                 workspace.zoom.setValue(self.canvas.card_width)
+            workspace.resize_cards()
         with C.QSignalBlocker(self.sidebar_toggle):
             self.sidebar_toggle.setChecked(value.get("sidebar", True))
         self.update_navigation()
@@ -495,6 +503,8 @@ class RecommendationPanel(W.QWidget):
         return True
 
     def deck_changed(self):
+        with C.QSignalBlocker(self.include_illegal):
+            self.include_illegal.setChecked(self.editor.document.editor_preferences.get('include_illegal_cards', False))
         if self.saving_view:
             return
         restored = self.restore_view()
@@ -516,6 +526,9 @@ class RecommendationPanel(W.QWidget):
                     max(0, self.identity.findData(discovery_identity))
                 )
         self.last_discovery_identity = discovery_identity
+        manual = self.editor.document.editor_preferences.get('manual_themes', [])
+        if manual:
+            theme = {'name': 'Manual: ' + ', '.join(t['name'] for t in manual), 'selected_themes': manual}
         theme_changed = theme != self.theme_option
         self.theme_option = deepcopy(theme)
         identities = [
@@ -823,6 +836,7 @@ class RecommendationPanel(W.QWidget):
         self.worker.start()
 
     def render_rows(self, more=None):
+        from mtg_core.card_pool import in_card_pool
         position = self.canvas.verticalScrollBar().value()
         present = in_deck_entries(
             self.editor.document, [row["entry"] for row in self.rows]
@@ -837,6 +851,7 @@ class RecommendationPanel(W.QWidget):
             entry.extras["category_suggestion"] = row["roles"]
             if (
                 row["oracle_id"] not in dismissed
+                and in_card_pool(entry.extras.get("facts") or {}, self.editor.document)
                 and matches(
                     row,
                     self.selected_category,

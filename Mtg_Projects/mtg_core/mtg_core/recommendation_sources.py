@@ -30,6 +30,9 @@ class CachedSource:
     def associations(self, seeds, candidates):
         return self.store.associations(seeds, candidates)
 
+    def commanders_using(self, oracle_id, *, should_cancel=None):
+        return self.store.commanders_using(oracle_id, should_cancel=should_cancel)
+
 
 @dataclass
 class UnavailableSource:

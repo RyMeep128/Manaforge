@@ -133,6 +133,8 @@ class EditorWindow(W.QMainWindow):
         from .recommendation_cache import manage_cache
         menu.addAction('Recommendation cache…', lambda: manage_cache(self))
         menu.addAction('Text view', self.show_table)
+        menu.addAction('Auto Add Basic Lands...', self.auto_add_basic_lands)
+        menu.addAction('Deck themes...', self.edit_themes)
         menu.addAction('Deck insights…', self.deck_insights)
         menu.addAction('Opening-hand playtest…', self.playtest)
         menu.addAction('Print readiness…', self.print_readiness)
@@ -175,6 +177,7 @@ class EditorWindow(W.QMainWindow):
 
         add_group, add_row = self.toolbar_group('Add Cards')
         self.workspace_button = self.button(add_row, 'Card Search', self.open_add_cards, True)
+        self.button(add_row, 'Themes', self.edit_themes)
         self.quick_add = W.QLineEdit()
         self.quick_add.setPlaceholderText('Quick Add')
         self.quick_add.setAccessibleName('Quick Add: Enter searches, then Enter adds a result')
@@ -260,7 +263,8 @@ class EditorWindow(W.QMainWindow):
             widget.setMinimumHeight(34)
         layout.addWidget(controls)
         self.splitter = W.QSplitter()
-        self.search_panel = W.QWidget()
+        from .card_drop import CardDropPanel
+        self.search_panel = CardDropPanel(self)
         self.search_panel.setMinimumWidth(270)
         search_layout = W.QVBoxLayout(self.search_panel)
         search_header = W.QHBoxLayout()
@@ -297,6 +301,10 @@ class EditorWindow(W.QMainWindow):
         self.syntax_error = ''
         search_layout.addLayout(search_controls)
         search_layout.addWidget(self.syntax_membership)
+        self.include_illegal = W.QCheckBox('Include illegal cards')
+        self.include_illegal.setAccessibleDescription('Ignore deck format and commander color identity defaults')
+        self.include_illegal.toggled.connect(self.set_include_illegal)
+        search_layout.addWidget(self.include_illegal)
         self.search_status = W.QLabel('Search by name or Scryfall syntax')
         self.search_status.setWordWrap(True)
         search_layout.addWidget(self.search_status)
@@ -367,6 +375,8 @@ class EditorWindow(W.QMainWindow):
         self.add_cards_workspace = AddCardsWorkspace(self, controls)
         self.workspace_stack.addWidget(self.add_cards_workspace)
         layout.addWidget(self.workspace_stack, 1)
+        for canvas in (self.grid, *self.add_cards_workspace.canvases()):
+            canvas.discoverRequested.connect(self.discover_card)
         from .project_browser import ProjectDashboard
         self.editor_body = body
         self.dashboard = ProjectDashboard(self.root, data_root() / 'projects', self.thumbnails, self)
@@ -537,6 +547,20 @@ class EditorWindow(W.QMainWindow):
         layout.addWidget(button)
         return button
 
+    def discover_card(self, entry):
+        from .card_discovery import CardDiscoveryDialog
+        if not hasattr(self, 'card_discovery_dialog'):
+            self.card_discovery_dialog = CardDiscoveryDialog(self)
+        self.card_discovery_dialog.open_card(entry)
+
+    def auto_add_basic_lands(self):
+        from .basic_lands import add_basic_lands
+        add_basic_lands(self)
+
+    def edit_themes(self):
+        from .themes import edit_themes
+        edit_themes(self)
+
     def artwork_preferences(self):
         from mtg_ui.artwork_preferences import edit_artwork_preferences
         edit_artwork_preferences(self, self.service)
@@ -557,10 +581,6 @@ class EditorWindow(W.QMainWindow):
         self.filter.selectAll()
 
     def open_search(self):
-        if not any(entry.quantity > 0 for entry in self.document.deck.entries):
-            self.open_add_cards()
-            self.add_card_tabs.setCurrentWidget(self.add_cards_workspace.discovery)
-            return
         self.add_cards_workspace.back()
         self.search_panel.show()
         with QtCore.QSignalBlocker(self.add_card_tabs):
@@ -774,10 +794,15 @@ class EditorWindow(W.QMainWindow):
 
     def changed(self):
         deck_id = self.document.deck.deck_id
-        if getattr(self, '_discovery_deck_id', deck_id) != deck_id:
-            self.search_controller.change_query(self.query.text())
+        from mtg_core.card_pool import pool_context
+        pool_key = (deck_id, pool_context(self.document))
+        if getattr(self, '_search_pool_key', None) != pool_key:
+            self._search_pool_key = pool_key
+            self.search_controller.change_query(self.effective_search_query())
             self.add_cards_workspace.card_search.query_changed()
         self._discovery_deck_id = deck_id
+        with QtCore.QSignalBlocker(self.include_illegal):
+            self.include_illegal.setChecked(self.document.editor_preferences.get('include_illegal_cards', False))
         if not self.name.isModified():
             self.name.setText(self.document.deck.name)
         for gesture in getattr(self, 'tag_gestures', []):
@@ -785,6 +810,8 @@ class EditorWindow(W.QMainWindow):
         previous = getattr(self, 'quick_menu', None)
         if previous is not None:
             previous.close()
+        if hasattr(self, 'card_discovery_dialog'):
+            self.card_discovery_dialog.deck_changed()
         self.update_search_membership()
         self.recommendation_panel.deck_changed()
         self.add_cards_workspace.discovery.deck_changed()
@@ -838,23 +865,30 @@ class EditorWindow(W.QMainWindow):
         self.search_document.deck.entries.clear()
         self.results.refresh()
 
+    def set_include_illegal(self, checked):
+        self.edit(lambda d: d.editor_preferences.update(include_illegal_cards=checked))
+
+    def effective_search_query(self):
+        from mtg_core.card_pool import deck_query
+        return deck_query(self.query.text(), self.document)
+
     def search_changed(self):
-        self.search_controller.change_query(self.query.text())
+        self.search_controller.change_query(self.effective_search_query())
 
     def cancel_search(self):
         self.search_controller.cancel()
 
     def refresh_results(self):
-        self.search_controller.search(self.query.text(), refresh=True)
+        self.search_controller.search(self.effective_search_query(), refresh=True)
 
     def search(self):
         if not self.closing:
-            self.search_controller.search(self.query.text())
+            self.search_controller.search(self.effective_search_query())
 
     def show_results(self, query, results, error):
-        if query != self.query.text().strip():
+        if query != self.effective_search_query():
             return
-        self._quick_add_ready_query = query if not error else None
+        self._quick_add_ready_query = self.query.text().strip() if not error else None
         self.syntax_error = error
         previous = {entry.card_id: entry for entry in self.syntax_all_entries}
         self.search_document.deck.entries = [previous.get(r.card_id) or DeckEntry(entry_id=r.card_id, name=r.name,
@@ -1001,9 +1035,14 @@ class EditorWindow(W.QMainWindow):
         ids = set(self.grid.selected) or {entry_id}
         entry = next(e for e in self.document.deck.entries if e.entry_id == entry_id)
         menu = W.QMenu(self)
+        if self.grid.face_count(entry) > 1:
+            menu.addAction('Flip preview', lambda: self.grid.flip_entry(entry))
+        if self.grid.mode == 'Stacks':
+            menu.addAction('Expand / collapse stack', lambda: self.grid.toggle_stack(entry))
         menu.addAction('Set Primary Role…', lambda: self.add_tag(tags=False))
         menu.addAction('Add / Remove Tags…', lambda: self.quick_tag(position, tags=True))
         menu.addAction('Customize Quick Menu…', lambda: self.manage_categories(customize=True))
+        menu.addAction('Discover similar cards / popular commanders', lambda: self.discover_card(entry))
         self.add_reference_action(menu, entry)
         menu.addAction('Replace artwork…', lambda: self.replace_artwork(entry_id)).setEnabled(len(ids) == 1)
         menu.addAction('View Oracle tags…', lambda: self.view_tags(entry))
@@ -1032,9 +1071,12 @@ class EditorWindow(W.QMainWindow):
             return
         menu = W.QMenu(self)
         menu.addAction('Add card', lambda: add(entry_id))
+        if canvas.face_count(entry) > 1:
+            menu.addAction('Flip preview', lambda: canvas.flip_entry(entry))
         menu.addAction('Details / alternate printings', lambda: self.candidate_details(canvas, entry_id))
         if dismiss is not None:
             menu.addAction('Dismiss recommendation', lambda: dismiss(entry_id))
+        menu.addAction('Discover similar cards / popular commanders', lambda: self.discover_card(entry))
         self.add_reference_action(menu, entry)
         menu.addAction('View Oracle tags?', lambda: self.view_tags(entry))
         menu.addAction('Retry artwork', lambda: self.thumbnails.retry(entry.card_id, entry.image_asset_id))
@@ -1052,7 +1094,7 @@ class EditorWindow(W.QMainWindow):
             previous.deleteLater()
         document = self.document
         candidate = deepcopy(entry)
-        self.details_dialog = CardDetails(self.service, candidate, self)
+        self.details_dialog = CardDetails(self.service, candidate, self, face=canvas.faces.get(entry_id, 0))
         self.details_dialog.quantity.setReadOnly(True)
         self.details_dialog.apply_quantity_button.hide()
         self.details_dialog.use.setText('Add this printing')
@@ -1098,7 +1140,8 @@ class EditorWindow(W.QMainWindow):
             dialog = CardTagsDialog(self, entry.name, tags)
             if dialog.exec() == W.QDialog.DialogCode.Accepted and dialog.selected_tag:
                 self.open_search()
-                self.query.setText('otag:' + dialog.selected_tag)
+                from mtg_core.card_pool import oracle_tag_query
+                self.query.setText(oracle_tag_query(dialog.selected_tag))
         self.run_task(lambda: self.service.get_oracle_tags(entry.oracle_id), show)
 
     def clear_readiness_filter(self):
@@ -1271,6 +1314,8 @@ class EditorWindow(W.QMainWindow):
         entries = deepcopy(self.document.deck.entries)
         commander_ids = tuple(self.document.deck.commander_entry_ids)
         def review(proposals):
+            from mtg_core.categorization import theme_priorities
+            proposals = {key: theme_priorities(self.document, evidence) for key, evidence in proposals.items()}
             dialog = CategoryReview(self.document, proposals, self)
             if dialog.exec() == W.QDialog.DialogCode.Accepted:
                 selected = dialog.selected_proposals()
@@ -1313,7 +1358,7 @@ class EditorWindow(W.QMainWindow):
             previous.close()
             previous.deleteLater()
         document = self.document
-        self.details_dialog = CardDetails(self.service, entry, self)
+        self.details_dialog = CardDetails(self.service, entry, self, face=self.grid.faces.get(entry_id, 0))
         def choose(target, payload):
             if self.document is document:
                 self.edit(lambda d: apply_printing(d, target, payload))
@@ -1601,6 +1646,11 @@ class EditorWindow(W.QMainWindow):
 
     def closeEvent(self, event):
         self.closing = True
+        discovery = getattr(self, 'card_discovery_dialog', None)
+        if discovery is not None:
+            discovery.controller.shutdown()
+            discovery.hide()
+            discovery.canvas.preview.close()
         self.dashboard.stop()
         self.text_view.stopping = True
         self.search_controller.shutdown()
@@ -1610,7 +1660,8 @@ class EditorWindow(W.QMainWindow):
         if (self.worker is not None or self.task is not None or self.thumbnails.worker is not None
                 or self.recommendation_panel.worker is not None or self.add_cards_workspace.discovery.controller.worker is not None
                 or self.add_cards_workspace.card_search.controller.worker is not None or self.text_view.worker is not None
-                or self.dashboard.worker is not None):
+                or self.dashboard.worker is not None
+                or (discovery is not None and discovery.controller.worker is not None)):
             self.thumbnails.stopping = True
             self.thumbnails.pending.clear()
             self.statusBar().showMessage('Finishing background work before closing…')

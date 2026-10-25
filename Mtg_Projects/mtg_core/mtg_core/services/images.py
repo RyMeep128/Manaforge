@@ -33,6 +33,32 @@ def _extension_from_url(url: str | None) -> str | None:
 class ImageOperations:
     """Operation group sharing the facade dependencies; not instantiated alone."""
 
+    def ensure_face_image(self, card_id: str, face_index: int = 0, *, allow_remote=True):
+        """Cache alternate-face artwork without changing the printing's front."""
+        if not face_index:
+            return self.ensure_image(card_id, allow_remote=allow_remote)
+        variant = f'face-{face_index}'
+        path = self.get_image_path(card_id, variant)
+        if path and os.path.isfile(path):
+            return path
+        payload = self.get_card(card_id=card_id) or {}
+        faces = payload.get('card_faces') or []
+        if not 0 <= face_index < len(faces):
+            return None
+        urls = faces[face_index].get('image_uris') or {}
+        if not urls:
+            return self.ensure_image(card_id, allow_remote=allow_remote)
+        url = urls.get('normal') or urls.get('large') or urls.get('png')
+        if not url or not allow_remote or self.fetch_bytes_fn is None:
+            return None
+        data = self.fetch_bytes_fn(url)
+        asset = self.store_image_bytes(data, extension=_extension_from_url(url) or 'png',
+                                      source='scryfall', source_url=url)
+        path = self.materialize_image_asset(asset, preferred_name=f'{card_id}_{variant}')
+        self.database.upsert_image_record(card_id, variant=variant, asset_id=asset, path=path,
+                                          status='ready', source='scryfall', checksum=checksum_bytes(data))
+        return path
+
     def get_image_path(self, card_id: str, variant: str = "default") -> str | None:
         record = self.database.get_image_record(card_id, variant)
         if record is None:

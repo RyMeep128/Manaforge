@@ -9,6 +9,11 @@ from PyQt6 import QtCore, QtGui
 from mtg_core.diagnostics import get_logger
 
 
+def orient_face_image(image, payload, face_index):
+    """Classic flip cards share one image; their alternate face is upside down."""
+    return image.transformed(QtGui.QTransform().rotate(180)) if face_index and payload.get('layout') == 'flip' else image
+
+
 class ImageReader(QtCore.QThread):
     loaded = QtCore.pyqtSignal(object, QtGui.QImage)
     failed = QtCore.pyqtSignal(object, str, float)
@@ -22,7 +27,21 @@ class ImageReader(QtCore.QThread):
         try:
             card_id, asset_id = self.key[:2]
             resolution = self.key[2] if len(self.key) > 2 else 300
-            if asset_id:
+            face_index = self.key[3] if len(self.key) > 3 else 0
+            if face_index and not asset_id and hasattr(self.service, 'ensure_face_image'):
+                path = self.service.ensure_face_image(card_id, face_index, allow_remote=True)
+                reader = QtGui.QImageReader(str(path or ''))
+            elif face_index and not asset_id:
+                payload = self.service.get_card(card_id=card_id) or {}
+                faces = payload.get("card_faces") or []
+                urls = (faces[face_index].get("image_uris") or payload.get("image_uris") or {}) if face_index < len(faces) else {}
+                url = urls.get("normal") or urls.get("large") or urls.get("png")
+                data = self.service.fetch_bytes_fn(url) if url else None
+                buffer = QtCore.QBuffer()
+                buffer.setData(data or b"")
+                buffer.open(QtCore.QIODevice.OpenModeFlag.ReadOnly)
+                reader = QtGui.QImageReader(buffer)
+            elif asset_id:
                 data = self.service.get_image_bytes(asset_id)
                 buffer = QtCore.QBuffer()
                 buffer.setData(data or b'')
@@ -41,6 +60,8 @@ class ImageReader(QtCore.QThread):
                            QtCore.Qt.AspectRatioMode.KeepAspectRatio)
                 reader.setScaledSize(size)
             image = reader.read()
+            if face_index and not asset_id:
+                image = orient_face_image(image, self.service.get_card(card_id=card_id) or {}, face_index)
             if image.isNull():
                 get_logger(__name__).warning('Image decode failed card_id=%s asset_id=%s error=%s',
                                              card_id, asset_id, reader.errorString())
@@ -89,14 +110,20 @@ class Thumbnails(QtCore.QObject):
 
     def retry(self, card_id, asset_id=None):
         key = (card_id, asset_id)
-        self.cache.pop(key, None)
-        self.errors.pop(key, None)
-        self.cache.pop((*key, 600), None)
-        self.errors.pop((*key, 600), None)
+        for mapping in (self.cache, self.errors):
+            for cached in list(mapping):
+                if cached[:2] == key or (cached[0] == card_id and len(cached) > 3):
+                    mapping.pop(cached, None)
         self.updated.emit()
 
-    def get(self, card_id, asset_id=None, *, high_resolution=False):
-        key = (card_id, asset_id, 600) if high_resolution else (card_id, asset_id)
+    @staticmethod
+    def key(card_id, asset_id=None, *, high_resolution=False, face=0):
+        if face:
+            return (card_id, asset_id, 600 if high_resolution else 300, face)
+        return (card_id, asset_id, 600) if high_resolution else (card_id, asset_id)
+
+    def get(self, card_id, asset_id=None, *, high_resolution=False, face=0):
+        key = self.key(card_id, asset_id, high_resolution=high_resolution, face=face)
         if key in self.cache:
             self.cache.move_to_end(key)
             return self.cache[key]
@@ -105,7 +132,7 @@ class Thumbnails(QtCore.QObject):
             while len(self.pending) > 100:
                 self.pending.popitem(last=False)
             self.start_next()
-        return self.cache.get((card_id, asset_id)) if high_resolution else None
+        return self.cache.get(self.key(card_id, asset_id, face=face)) if high_resolution else None
 
     def start_next(self):
         if self.stopping or self.worker is not None or not self.pending:
@@ -126,7 +153,7 @@ class Thumbnails(QtCore.QObject):
 
     def loaded(self, key, image):
         self.cache[key] = QtGui.QPixmap.fromImage(image)
-        detailed = [k for k in self.cache if len(k) > 2]
+        detailed = [k for k in self.cache if len(k) > 2 and k[2] == 600]
         for stale in detailed[:-8]:
             self.cache.pop(stale, None)
         while len(self.cache) > 128:
