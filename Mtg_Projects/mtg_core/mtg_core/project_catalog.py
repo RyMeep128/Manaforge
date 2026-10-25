@@ -2,6 +2,7 @@
 import json
 from pathlib import Path
 from mtg_core.diagnostics import get_logger
+from mtg_core.decks import DeckDocument
 
 
 def project_catalog(deck_root, project_root):
@@ -26,11 +27,19 @@ def project_catalog(deck_root, project_root):
         seen.add(key)
         try:
             raw = json.loads(path.read_text(encoding='utf-8'))
-            deck = raw.get('deck') or raw.get('deck_document', {}).get('deck', {})
-            name = title or deck.get('name') or path.stem
+            native = raw if 'deck' in raw else raw.get('deck_document')
+            document = (DeckDocument.from_dict(native) if isinstance(native, dict)
+                        else DeckDocument.from_legacy_proxy(raw, name=path.stem))
+            deck = document.deck
+            entries = deck.entries
+            cover = next((entry for entry in entries if entry.entry_id in deck.commander_entry_ids
+                          or entry.section == 'commander'), entries[0] if entries else None)
+            name = title or deck.name or path.stem
             rows.append({'path': str(path.resolve()), 'kind': kind, 'name': name,
-                         'modified': path.stat().st_mtime})
-        except (OSError, ValueError, AttributeError) as exc:
+                         'modified': path.stat().st_mtime, 'format': deck.format,
+                         'card_count': sum(entry.quantity for entry in entries),
+                         'cover': (cover.card_id, cover.image_asset_id) if cover else (None, None)})
+        except (OSError, ValueError, TypeError, AttributeError) as exc:
             get_logger(__name__).exception('Project read failed path=%s kind=%s', path, kind)
             errors.append(f'{path.name}: {exc}')
     return sorted(rows, key=lambda row: -row['modified']), errors

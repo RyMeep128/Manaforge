@@ -88,7 +88,8 @@ class ModuleController(C.QObject):
                     or editor.recommendation_panel.worker is not None
                     or editor.add_cards_workspace.discovery.controller.worker is not None
                     or editor.add_cards_workspace.card_search.controller.worker is not None
-                    or editor.text_view.worker is not None)
+                    or editor.text_view.worker is not None
+                    or editor.dashboard.worker is not None)
             if busy:
                 self.home.statusBar().showMessage('Finishing background work before closing...')
                 C.QTimer.singleShot(250, self.home.close)

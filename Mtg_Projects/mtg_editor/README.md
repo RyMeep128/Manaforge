@@ -9,6 +9,13 @@ Run `Launch Manaforge Deck Editor.cmd` after installing dependencies with the
 Proxy setup script. Alternatively run `python Mtg_Projects/mtg_editor/run_editor.py`
 from the repository root with application dependencies installed.
 
+The editor opens on **Your decks**, a cover-tile dashboard of saved decks and print
+projects. Search by name, type, or format, sort by updated date or name, and use
+**New deck**, **Open file**, or **Open selected**. Double-click or press Enter to
+open a selected tile. **Projects** returns to the dashboard; **Resume deck** returns
+to the current deck. Print projects open as separate editable decks. Unavailable
+files appear in the dashboard's error details without hiding other projects.
+
 ## Internal session boundary
 
 `session.DeckSession` owns the current document, history, path, saved snapshot,

@@ -58,6 +58,7 @@ class EditorWindow(W.QMainWindow):
         self.service = service or get_default_card_service()
         self.root = Path(root) if root else data_root() / 'decks'
         self.session = DeckSession(self.root)
+        self._has_active_deck = False
         self.closing = False
         self.task_runner = EditorTaskRunner(self)
         self.task_runner.busyChanged.connect(self.task_busy_changed)
@@ -93,8 +94,9 @@ class EditorWindow(W.QMainWindow):
         self.header_bar = bar
         bar.setContentsMargins(14, 10, 14, 10)
         decks = W.QToolButton()
-        decks.setText('< Decks')
-        decks.setPopupMode(W.QToolButton.ToolButtonPopupMode.InstantPopup)
+        decks.setText('< Projects')
+        decks.setPopupMode(W.QToolButton.ToolButtonPopupMode.MenuButtonPopup)
+        decks.clicked.connect(self.project_browser)
         self.recent = W.QMenu(decks)
         self.recent.aboutToShow.connect(self.refresh_recent)
         decks.setMenu(self.recent)
@@ -365,7 +367,16 @@ class EditorWindow(W.QMainWindow):
         self.add_cards_workspace = AddCardsWorkspace(self, controls)
         self.workspace_stack.addWidget(self.add_cards_workspace)
         layout.addWidget(self.workspace_stack, 1)
-        self.setCentralWidget(body)
+        from .project_browser import ProjectDashboard
+        self.editor_body = body
+        self.dashboard = ProjectDashboard(self.root, data_root() / 'projects', self.thumbnails, self)
+        self.dashboard.newRequested.connect(self.new)
+        self.dashboard.openRequested.connect(self.open_path)
+        self.dashboard.resumeRequested.connect(self.resume_deck)
+        self.project_stack = W.QStackedWidget()
+        self.project_stack.addWidget(self.dashboard)
+        self.project_stack.addWidget(body)
+        self.setCentralWidget(self.project_stack)
         for combo in (self.view_mode, self.group, self.sort):
             combo.currentTextChanged.connect(self.preferences_changed)
         self.zoom.valueChanged.connect(self.preferences_changed)
@@ -374,7 +385,8 @@ class EditorWindow(W.QMainWindow):
         for sequence, callback in [('Ctrl+S', self.save), ('Ctrl+N', self.new), ('Ctrl+O', self.open),
                                    ('Ctrl+Z', self.undo), ('Ctrl+Y', self.redo), ('Ctrl+Shift+Z', self.redo),
                                    ('Ctrl+F', self.focus_filter), ('Ctrl+K', self.open_search)]:
-            shortcut = QtGui.QShortcut(QtGui.QKeySequence(sequence), self)
+            shortcut = QtGui.QShortcut(QtGui.QKeySequence(sequence),
+                                       self if sequence in ('Ctrl+S', 'Ctrl+N', 'Ctrl+O') else body)
             shortcut.setContext(QtCore.Qt.ShortcutContext.WidgetWithChildrenShortcut)
             shortcut.activated.connect(callback)
             self.shortcuts.append(shortcut)
@@ -1449,6 +1461,8 @@ class EditorWindow(W.QMainWindow):
         del blockers
 
     def save(self):
+        if not self._has_active_deck:
+            return True
         self.view_scrolls[self._active_view] = self.view_scrollbar(self._active_view).value()
         self.document.editor_preferences['view_scrolls'] = dict(self.view_scrolls)
         if (self.name.text().strip() or 'Untitled Deck') != self.document.deck.name or self.format.currentText() != self.document.deck.format:
@@ -1471,6 +1485,8 @@ class EditorWindow(W.QMainWindow):
         self._document_replaced()
 
     def _document_replaced(self):
+        self._has_active_deck = True
+        self.project_stack.setCurrentWidget(self.editor_body)
         document = self.document
         self.model.document = self.grid.document = document
         self.grid.selected.clear()
@@ -1512,7 +1528,7 @@ class EditorWindow(W.QMainWindow):
             self.run_task(resolve, apply)
 
     def new(self):
-        if self.task is not None or (self.session.dirty and not self.save()):
+        if self.task is not None or (self._has_active_deck and self.session.dirty and not self.save()):
             return
         self.session.new()
         self._document_replaced()
@@ -1523,7 +1539,7 @@ class EditorWindow(W.QMainWindow):
             self.open_path(Path(path))
 
     def open_path(self, path):
-        if self.task is not None or (self.session.dirty and not self.save()):
+        if self.task is not None or (self._has_active_deck and self.session.dirty and not self.save()):
             return
         try:
             self.session.open(path)
@@ -1568,18 +1584,24 @@ class EditorWindow(W.QMainWindow):
             self.recent.addAction(name, lambda checked=False, p=path: self.open_path(p))
 
     def project_browser(self):
-        from .project_browser import ProjectBrowser
         if self.task is not None:
             return
-        dialog = ProjectBrowser(self.root, data_root() / 'projects', self)
-        if dialog.exec() == W.QDialog.DialogCode.Accepted:
-            if dialog.new_deck:
-                self.new()
-            elif dialog.path:
-                self.open_path(dialog.path)
+        if self._has_active_deck and self.session.dirty and not self.save():
+            return
+        self.dashboard.resume_button.setVisible(self._has_active_deck)
+        self.project_stack.setCurrentWidget(self.dashboard)
+        self.grid.preview.hide()
+        self.results.preview.hide()
+        self.dashboard.refresh()
+        self.dashboard.filter.setFocus()
+
+    def resume_deck(self):
+        if self._has_active_deck and self.task is None:
+            self.project_stack.setCurrentWidget(self.editor_body)
 
     def closeEvent(self, event):
         self.closing = True
+        self.dashboard.stop()
         self.text_view.stopping = True
         self.search_controller.shutdown()
         self.add_cards_workspace.discovery.controller.shutdown()
@@ -1587,7 +1609,8 @@ class EditorWindow(W.QMainWindow):
         self.recommendation_panel.suspend()
         if (self.worker is not None or self.task is not None or self.thumbnails.worker is not None
                 or self.recommendation_panel.worker is not None or self.add_cards_workspace.discovery.controller.worker is not None
-                or self.add_cards_workspace.card_search.controller.worker is not None or self.text_view.worker is not None):
+                or self.add_cards_workspace.card_search.controller.worker is not None or self.text_view.worker is not None
+                or self.dashboard.worker is not None):
             self.thumbnails.stopping = True
             self.thumbnails.pending.clear()
             self.statusBar().showMessage('Finishing background work before closing…')
@@ -1597,6 +1620,8 @@ class EditorWindow(W.QMainWindow):
         if self.session.dirty and not self.save():
             self.thumbnails.stopping = False
             self.closing = False
+            self.dashboard.stopping = False
+            self.dashboard.update_visible()
             self.text_view.stopping = False
             self.search_controller.resume()
             self.add_cards_workspace.discovery.controller.resume()

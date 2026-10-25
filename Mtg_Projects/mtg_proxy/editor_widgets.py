@@ -3684,6 +3684,8 @@ class ProjectDashboardPage(QWidget):
             window.destroyed.connect(lambda: self._deck_windows.remove(window))
             if dialog.path:
                 window.open_path(dialog.path)
+            elif dialog.new_deck:
+                window.new()
             window.show()
 
     def refresh_projects(self):
