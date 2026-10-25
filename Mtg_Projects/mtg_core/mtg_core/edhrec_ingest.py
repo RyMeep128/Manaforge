@@ -230,9 +230,10 @@ def reprocess_cached(root, catalog):
 
 
 class Downloader:
-    def __init__(self, root, delay=6, *, source="EDHREC"):
+    def __init__(self, root, delay=6, *, source="EDHREC", max_bytes=MAX_BYTES):
         self.root = Path(root)
         self.source = source
+        self.max_bytes = max_bytes
         self.delay = max(6, delay)
         self.last = 0.0
         (self.root / "responses").mkdir(parents=True, exist_ok=True)
@@ -260,7 +261,7 @@ class Downloader:
                 with urllib.request.build_opener(NoRedirect).open(
                     request, timeout=45
                 ) as response:
-                    return response.read(MAX_BYTES + 1)
+                    return response.read(self.max_bytes + 1)
             except (
                 urllib.error.URLError,
                 TimeoutError,

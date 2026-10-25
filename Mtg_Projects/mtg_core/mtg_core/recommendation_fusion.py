@@ -1,8 +1,9 @@
 """Deterministic fusion of compact ranked rows, independent of score scales."""
 
 import math
+from .public_deck_datasets import SOURCE_LABELS
 
-PUBLIC_SOURCE_WEIGHTS = {"archidekt": 1.0, "edhrec": 1.0, "moxfield": 1.0}
+PUBLIC_SOURCE_WEIGHTS = dict.fromkeys(SOURCE_LABELS, 1.0)
 RRF_K = 60
 CANDIDATE_LIMIT = 2000
 

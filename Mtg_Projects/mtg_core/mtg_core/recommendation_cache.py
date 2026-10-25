@@ -13,6 +13,8 @@ import urllib.parse
 import urllib.request
 import uuid
 
+from .public_deck_datasets import DATASET_LABELS
+
 
 MAX_BYTES = 40 * 1024**2
 MIN_COHORT = 15
@@ -272,6 +274,7 @@ def source_settings(root):
             archidekt=dict(enabled=True, cache="live"),
             edhrec=dict(enabled=True),
             moxfield=dict(enabled=True),
+            **{source: dict(enabled=True) for source in DATASET_LABELS},
         )
     raw = json.loads(path.read_text(encoding="utf-8"))
     if raw.get("version", 1) == 2:
@@ -279,12 +282,20 @@ def source_settings(root):
             raw.get("archidekt", {}).get("enabled")
             or raw.get("edhrec", {}).get("enabled")
         )))
+        enabled = any(
+            isinstance(raw.get(source), dict) and raw[source].get("enabled") is True
+            for source in ("archidekt", "edhrec", "moxfield")
+        )
+        for source in DATASET_LABELS:
+            raw.setdefault(source, dict(enabled=enabled))
         if (
             type(raw.get("archidekt", {}).get("enabled")) is not bool
             or raw["archidekt"].get("cache") not in {"live", "portable"}
             or type(raw.get("edhrec", {}).get("enabled")) is not bool
             or not isinstance(raw["moxfield"], dict)
             or type(raw["moxfield"].get("enabled")) is not bool
+            or any(not isinstance(raw[source], dict) or type(raw[source].get("enabled")) is not bool
+                   for source in DATASET_LABELS)
         ):
             raise ValueError("Invalid recommendation source settings")
         return raw
@@ -311,6 +322,7 @@ def source_settings(root):
             and (mode == "edhrec" or (root / "edhrec.sqlite3").exists())
         ),
         moxfield=dict(enabled=mode != "disabled"),
+        **{source: dict(enabled=mode != "disabled") for source in DATASET_LABELS},
     )
     save_source_settings(root, migrated)
     return migrated
@@ -336,6 +348,8 @@ def set_mode(root, mode):
     if mode == "disabled":
         config["archidekt"]["enabled"] = config["edhrec"]["enabled"] = False
         config["moxfield"]["enabled"] = False
+        for source in DATASET_LABELS:
+            config[source]["enabled"] = False
     elif mode == "edhrec":
         config["edhrec"]["enabled"] = True
     else:

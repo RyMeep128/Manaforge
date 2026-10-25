@@ -14,6 +14,7 @@ from mtg_core.recommendation_cache import (
     write_cache,
 )
 from mtg_core.recommendations import RecommendationStore
+from mtg_core.public_deck_datasets import DATASET_LABELS
 
 
 def manage_cache(editor):
@@ -119,6 +120,12 @@ def configure_sources(editor, root):
         layout.addRow("Archidekt data source", cache)
         layout.addRow(edhrec)
         layout.addRow(moxfield)
+        dataset_controls = {}
+        for source, label in DATASET_LABELS.items():
+            checkbox = W.QCheckBox(f"Enable {label} recommendations")
+            checkbox.setChecked(config[source]["enabled"])
+            layout.addRow(checkbox)
+            dataset_controls[source] = checkbox
         note = W.QLabel(
             "Available datasets contribute to one list. These controls never download data. Local supplement preferences are saved with each deck."
         )
@@ -138,6 +145,8 @@ def configure_sources(editor, root):
             archidekt=dict(enabled=archidekt.isChecked(), cache=cache.currentData()),
             edhrec=dict(enabled=edhrec.isChecked()),
             moxfield=dict(enabled=moxfield.isChecked()),
+            **{source: dict(enabled=checkbox.isChecked())
+               for source, checkbox in dataset_controls.items()},
         )
         editor.run_task(
             lambda: save_source_settings(root, updated),

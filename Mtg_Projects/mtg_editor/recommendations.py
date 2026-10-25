@@ -9,6 +9,7 @@ from mtg_core.categorization import apply_categories
 from mtg_core.sections import DeckSection
 from .organization import card_facts
 from mtg_core.recommendation_scoring import context, score, settings
+from mtg_core.public_deck_datasets import SOURCE_LABELS, STATISTICAL_SOURCES
 
 
 def load_recommendations(
@@ -190,7 +191,7 @@ def statistical_reason(row):
     lines = ["Public recommendation evidence"]
     for source_id, item in sorted(evidence.items()):
         lines.append(
-            {"edhrec": "EDHREC", "archidekt": "Archidekt", "moxfield": "Moxfield"}.get(source_id, source_id)
+            SOURCE_LABELS.get(source_id, source_id)
         )
         if "rank" in item:
             lines.append(f"Rank: #{item['rank']}")
@@ -208,11 +209,11 @@ def statistical_reason(row):
                     "EDHREC global popularity and deck-card co-occurrence unavailable.",
                 ]
             )
-        elif source_id in {"archidekt", "moxfield"} and "inclusion" in item:
+        elif source_id in STATISTICAL_SOURCES and "inclusion" in item:
             lines.extend(
                 [
                     f"Commander inclusion: {item['inclusion']:.1%} ({item['sample']} decks)",
-                    f"Global popularity: {item['baseline']:.1%}; Manaforge/{source_id.title()} synergy signal: {item['synergy']:+.1%}",
+                    f"Global popularity: {item['baseline']:.1%}; Manaforge/{SOURCE_LABELS[source_id]} synergy signal: {item['synergy']:+.1%}",
                 ]
             )
         else:

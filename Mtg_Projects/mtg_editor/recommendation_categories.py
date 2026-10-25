@@ -6,6 +6,7 @@ import re
 from mtg_core.category_rules import clean_text
 from mtg_core.role_analysis import analyze_effects
 from mtg_core.discovery_themes import theme_matches
+from mtg_core.public_deck_datasets import STATISTICAL_SOURCES
 
 CATEGORIES = ("Top Cards", "New Cards", "High Lift", "Creatures", "Instants",
               "Sorceries", "Utility Artifacts", "Enchantments", "Planeswalkers",
@@ -64,7 +65,7 @@ def categories(row):
     for source, evidence in row.get('source_evidence', {}).items():
         if source == 'edhrec':
             result.update('EDHREC: ' + label for label in evidence.get('categories', []) if isinstance(label, str) and label)
-        if source not in {'archidekt', 'moxfield'}:
+        if source not in STATISTICAL_SOURCES:
             continue
         baseline, inclusion, sample = evidence.get('baseline'), evidence.get('inclusion'), evidence.get('sample')
         if (all(isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)

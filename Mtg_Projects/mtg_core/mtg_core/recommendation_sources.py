@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from typing import Protocol
+from .public_deck_datasets import DATASET_LABELS, SOURCE_LABELS
 
 
 class RecommendationSource(Protocol):
@@ -56,7 +57,7 @@ def default_sources(local_store):
     root = local_store.path.parent
     config = source_settings(root)
     sources = []
-    for source_id in ("archidekt", "edhrec", "moxfield"):
+    for source_id in ("archidekt", "edhrec", "moxfield", *DATASET_LABELS):
         if not config[source_id]["enabled"]:
             sources.append(
                 UnavailableSource(source_id, "public", "Disabled in source settings")
@@ -77,7 +78,7 @@ def default_sources(local_store):
                 )
             else:
                 source = UnavailableSource(
-                    source_id, "public", f"No collected {source_id.title()} cache available"
+                    source_id, "public", f"No collected {SOURCE_LABELS[source_id]} cache available"
                 )
         except Exception as exc:
             source = UnavailableSource(
