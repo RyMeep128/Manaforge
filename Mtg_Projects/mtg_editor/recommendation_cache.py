@@ -102,7 +102,8 @@ def manage_cache(editor):
 def configure_sources(editor, root):
     """Independent public switches; local preferences remain saved per deck."""
 
-    def show(config):
+    def show(loaded):
+        config, cohort_choices = loaded
         dialog = W.QDialog(editor)
         dialog.setWindowTitle("Recommendation sources")
         layout = W.QFormLayout(dialog)
@@ -114,11 +115,20 @@ def configure_sources(editor, root):
         cache.setCurrentIndex(cache.findData(config["archidekt"]["cache"]))
         edhrec = W.QCheckBox("Enable offline EDHREC recommendations")
         edhrec.setChecked(config["edhrec"]["enabled"])
+        cohort = W.QComboBox()
+        cohort.addItem("General commander recommendations", "general")
+        for kind, value, label in cohort_choices:
+            cohort.addItem(f"{kind.title()}: {label}", f"{kind}:{value}")
+        selected = config["edhrec"].get("cohort", "general")
+        if cohort.findData(selected) < 0:
+            cohort.addItem(f"{selected} (not cached yet)", selected)
+        cohort.setCurrentIndex(cohort.findData(selected))
         moxfield = W.QCheckBox("Enable Moxfield recommendations")
         moxfield.setChecked(config["moxfield"]["enabled"])
         layout.addRow(archidekt)
         layout.addRow("Archidekt data source", cache)
         layout.addRow(edhrec)
+        layout.addRow("EDHREC cohort", cohort)
         layout.addRow(moxfield)
         dataset_controls = {}
         for source, label in DATASET_LABELS.items():
@@ -143,7 +153,7 @@ def configure_sources(editor, root):
         updated = dict(
             version=2,
             archidekt=dict(enabled=archidekt.isChecked(), cache=cache.currentData()),
-            edhrec=dict(enabled=edhrec.isChecked()),
+            edhrec=dict(enabled=edhrec.isChecked(), cohort=cohort.currentData()),
             moxfield=dict(enabled=moxfield.isChecked()),
             **{source: dict(enabled=checkbox.isChecked())
                for source, checkbox in dataset_controls.items()},
@@ -157,4 +167,9 @@ def configure_sources(editor, root):
             ),
         )
 
-    editor.run_task(lambda: source_settings(root), show)
+    def load():
+        from mtg_core.edhrec_cohorts import cohort_options
+
+        return source_settings(root), cohort_options(root / "edhrec-cohorts.sqlite3")
+
+    editor.run_task(load, show)

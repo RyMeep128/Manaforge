@@ -5,6 +5,7 @@ from dataclasses import dataclass
 import json
 from pathlib import Path
 import sqlite3
+import re
 
 
 def cardlists(payload):
@@ -102,6 +103,14 @@ class EdhrecSource:
     path: Path
     source_id: str = "edhrec"
     role: str = "public"
+    cohort: str = "general"
+    cohort_database: Path | None = None
+
+    def __post_init__(self):
+        if self.cohort != "general" and not re.fullmatch(
+            r"(?:theme|bracket|budget):[a-z0-9-]+", self.cohort
+        ):
+            raise ValueError("Invalid EDHREC cohort selection")
 
     def snapshot(self, commanders=(), *, exclude=(), limit=200):
         result = dict(
@@ -124,15 +133,26 @@ class EdhrecSource:
                 "EDHREC cache requires one commander or an exact cached commander pair."
             )
             return result
-        if not Path(self.path).exists():
+        database = Path(self.path)
+        if self.cohort != "general":
+            database = Path(self.cohort_database) if self.cohort_database else database.with_name("edhrec-cohorts.sqlite3")
+            result["status"] = f"No exact cached EDHREC {self.cohort} cohort for this commander/pair."
+        if not database.exists():
             return result
         with closing(
-            sqlite3.connect(Path(self.path).resolve().as_uri() + "?mode=ro", uri=True)
+            sqlite3.connect(database.resolve().as_uri() + "?mode=ro", uri=True)
         ) as db:
-            row = db.execute(
-                "SELECT payload, imported FROM pages WHERE commander=?",
-                (commander_key(selected),),
-            ).fetchone()
+            if self.cohort == "general":
+                row = db.execute(
+                    "SELECT payload, imported FROM pages WHERE commander=?",
+                    (commander_key(selected),),
+                ).fetchone()
+            else:
+                kind, value = self.cohort.split(":", 1)
+                row = db.execute(
+                    "SELECT payload, imported FROM cohorts WHERE commander=? AND kind=? AND value=?",
+                    (commander_key(selected), kind, value),
+                ).fetchone()
         if row is None:
             return result
         data = json.loads(row[0])
@@ -147,7 +167,7 @@ class EdhrecSource:
             results=rows[: max(0, limit)],
             sources=[
                 dict(
-                    source="https://edhrec.com/commanders/" + data["slug"],
+                    source="https://edhrec.com/" + data.get("source_path", "commanders/" + data["slug"]),
                     imported=row[1],
                 )
             ],
@@ -156,6 +176,8 @@ class EdhrecSource:
                 if Path(self.path).parent.name == "starter"
                 else ""
             )
-            + f"Offline EDHREC {'exact cached pair cohort' if len(selected) == 2 else 'commander page'}; {len(data['unresolved'])} unresolved card names omitted; category lists may be incomplete.",
+            + f"Offline EDHREC {'exact cached pair cohort' if len(selected) == 2 else 'commander page'}"
+            + (f"; {data['cohort']['label']} ({data['cohort']['kind']})" if "cohort" in data else "")
+            + f"; {len(data['unresolved'])} unresolved card names omitted; category lists may be incomplete.",
         )
         return result

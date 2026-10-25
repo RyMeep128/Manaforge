@@ -196,6 +196,9 @@ def statistical_reason(row):
         if "rank" in item:
             lines.append(f"Rank: #{item['rank']}")
         if source_id == "edhrec":
+            if item.get("edhrec_cohort"):
+                cohort = item["edhrec_cohort"]
+                lines.append(f"Exact EDHREC cohort: {cohort['kind']} / {cohort['label']}")
             if len(item.get("commanders", [])) == 2:
                 lines.append(
                     "Exact cached pair cohort: "

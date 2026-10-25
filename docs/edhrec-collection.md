@@ -30,6 +30,64 @@ bound; raise it explicitly if the existing snapshot has reached that limit.
 Supplemental pages use the same normalization and feed the same recommendation
 and optional discovery snapshots. Offline rebuild modes cannot accept new slugs.
 
+## Expanded theme, bracket, and budget recommendation cohorts
+
+Collect every nonempty single-filter cohort advertised in the existing cached
+commander responses:
+
+```powershell
+& '.\Mtg_Projects\mtg_proxy\venv\Scripts\python.exe' tools/collect_edhrec_cohorts.py
+```
+
+The expansion reads all completed commander pages from the original checkpoint.
+It queues explicit theme/tag slugs, nonempty brackets 1–5 (exhibition, core,
+upgraded, optimized, cEDH), and advertised `budget` / `expensive` cohorts. These
+routes and their filtered deck counts were inspected on EDHREC. It does not guess
+theme combinations, bracket/budget cross-products, an unsupported middle-budget
+route, or arbitrary advanced filters. Average decks, raw decks, and combos are
+not presented as recommendation inclusion statistics.
+
+`edhrec-cohorts.sqlite3` is a separate schema-versioned database beside
+`edhrec.sqlite3`. Its normalized `cohorts` table is keyed by the exact sorted
+commander identity, filter kind, and filter value; the `crawl` and `seeds` tables
+checkpoint queued pages and indexed commanders. Page identity must match the
+existing exact commander/pair. Publication is atomic per cohort. General
+recommendations and offline commander/theme discovery snapshots are preserved,
+including when the original snapshot is rebuilt later.
+
+Raw frontend responses retain every returned field in the existing compressed
+response cache. Normalized cohorts retain category membership, filtered samples,
+per-card eligible counts, unresolved-name reports, source paths, and timestamps.
+Invalid or missing pages are recorded in `crawl.error` and skipped; access denial
+and other terminal failures stop with a visible reason. Missing parent responses
+stop indexing rather than silently losing coverage.
+
+Use **More > Recommendation cache > Configure recommendation sources > EDHREC
+cohort** to choose a collected theme, bracket, or budget filter. Save and refresh
+recommendations to apply it. Choices appear as cohorts finish collecting. General
+commander recommendations remain the default. An unavailable exact filtered
+commander/pair reports unavailable; it never silently substitutes a general page
+or a different cohort. Only one EDHREC cohort contributes to a ranking at a time;
+overlapping cohort sample counts are never summed. Evidence identifies the exact
+selected cohort and its public EDHREC URL. Other recommendation sources continue
+contributing independently.
+
+The expansion shares the original `edhrec-run/collector.lock`, `responses/`, and
+`STOP` file. Run only one EDHREC downloader at a time. It reuses the same serial
+six-second pacing, 8 MiB response limit, Retry-After behavior, and backoff.
+`edhrec-run/cohort-state.json` reports imported/skipped/pending counts and current
+work. Create `edhrec-run/STOP` to pause; remove that file and rerun to resume.
+The queue survives crashes without duplicate counts. Completed/skipped pages are
+not automatically refreshed or retried. Newly completed general commander pages
+are indexed on the next expansion run.
+
+Defaults allow 250,000 successfully processed cohort pages and 20 GiB of total
+compressed EDHREC response storage. `--max-pages` and `--max-gb` can be raised
+explicitly to continue a bounded run. At six seconds per request, 100,000 uncached
+pages take at least seven days; leave the computer running. No recurring refresh
+is installed. Local tests, linting, and formatting were not run for this change;
+offline regression coverage is supplied for CI.
+
 ## Offline commander/theme discovery
 
 Build the discovery snapshot explicitly from responses already collected:

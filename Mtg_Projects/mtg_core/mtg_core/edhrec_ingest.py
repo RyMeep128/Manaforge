@@ -230,6 +230,8 @@ def reprocess_cached(root, catalog):
 
 
 class Downloader:
+    validate_page = staticmethod(page_path)
+
     def __init__(self, root, delay=6, *, source="EDHREC", max_bytes=MAX_BYTES):
         self.root = Path(root)
         self.source = source
@@ -294,7 +296,7 @@ class Downloader:
                 backoff = min(backoff * 2, 900)
 
     def fetch(self, page):
-        page_path(page)
+        self.validate_page(page)
         if (self.root / "STOP").exists():
             raise InterruptedError("STOP file present")
         path = (
