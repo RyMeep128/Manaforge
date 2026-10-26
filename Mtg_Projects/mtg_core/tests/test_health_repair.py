@@ -138,6 +138,13 @@ def test_artwork_verification_and_repair_preserve_custom_and_reuse_valid_bytes(s
     service.database.upsert_card_payload(dict(id='custom', oracle_id='o2', name='Custom'))
     remote_asset = service.store_image_bytes(b'remote image', source='scryfall')
     service.set_print_image_asset('remote', remote_asset, source='scryfall')
+    # Model an upgraded library with a genuinely independent legacy cache copy.
+    # Normal image requests now intentionally return the sole canonical file.
+    legacy = service.materialize_image_asset(
+        remote_asset, output_root=str(Path(service.image_root) / 'mtg_core_cache'))
+    service.database.upsert_image_record(
+        'remote', asset_id=remote_asset, path=legacy, status='ready', source='scryfall',
+        checksum=service.database.get_image_asset(remote_asset).checksum)
     custom_asset = service.store_image_bytes(b'custom image', source='custom')
     service.set_print_image_asset('custom', custom_asset, source='custom')
     custom_record = service.database.get_image_record('custom')

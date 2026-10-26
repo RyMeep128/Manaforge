@@ -147,6 +147,14 @@ class RepairService:
                 valid = candidate and candidate.is_file() and checksum and file_sha256(candidate) == checksum
                 asset = service.database.get_image_asset(asset_id) if asset_id else None
                 canonical_valid = bool(asset and asset.payload and hashlib.sha256(asset.payload).hexdigest() == asset.checksum)
+                if canonical_valid and not valid and repair:
+                    restored = service.materialize_image_asset(asset_id)
+                    if restored:
+                        service.database.upsert_image_record(
+                            card, variant=variant, asset_id=asset_id, path=restored,
+                            status='ready', source='scryfall', checksum=asset.checksum)
+                        candidate = Path(restored)
+                        valid = True
                 if valid and not canonical_valid and asset and repair:
                     service.database.store_image_asset(candidate.read_bytes(), extension=asset.extension,
                         source='scryfall', source_url=asset.source_url)

@@ -99,6 +99,19 @@ def test_explicit_exports_are_independent_files(library, tmp_path):
     assert not os.path.samefile(canonical, export)
 
 
+def test_repair_restores_manifest_path_without_a_cache_copy_or_downloader(library):
+    from types import SimpleNamespace
+    from mtg_core.repair import RepairService
+
+    service, canonical, legacy, _ = library
+    legacy.unlink()
+    engine = SimpleNamespace(service=service)
+    RepairService(engine).artwork(threading.Event(), lambda progress: None, repair=True)
+    assert service.database.get_image_record("card").path == str(canonical)
+    assert not legacy.exists()
+    assert canonical.read_bytes() == b"artwork"
+
+
 @pytest.mark.parametrize("target", ["canonical", "legacy"])
 @pytest.mark.parametrize("failure", ["missing", "corrupt"])
 def test_missing_or_corrupt_artwork_is_preserved(library, target, failure):
