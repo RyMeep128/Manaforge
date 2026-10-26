@@ -111,6 +111,8 @@ class ArtworkStorage:
             # Windows volume IDs are unsigned 64-bit values. INTEGER affinity can
             # also coerce decimal strings to lossy REALs, so change the column type.
             with db:
+                db.execute("BEGIN IMMEDIATE")
+                db.execute("DROP TABLE IF EXISTS files_device_text")
                 db.execute("""CREATE TABLE files_device_text (
                     path TEXT PRIMARY KEY, signature TEXT, device TEXT, inode TEXT,
                     bytes INTEGER, links INTEGER, checksum TEXT, seen TEXT,
