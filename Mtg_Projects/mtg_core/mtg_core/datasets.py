@@ -115,7 +115,8 @@ class InstallationState:
             db.execute("""CREATE TABLE IF NOT EXISTS installed (
                 dataset_id TEXT PRIMARY KEY, manifest TEXT NOT NULL,
                 path TEXT NOT NULL, previous TEXT, updated REAL NOT NULL)""")
-            db.execute("PRAGMA user_version=1")
+            if version == 0:
+                db.execute("PRAGMA user_version=1")
 
     def connect(self):
         db = sqlite3.connect(self.path, timeout=30)

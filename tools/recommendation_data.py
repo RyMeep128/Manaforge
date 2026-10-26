@@ -13,8 +13,9 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO_ROOT / "Mtg_Projects" / "mtg_core"))
+sys.path.insert(
+    0, str(Path(__file__).resolve().parents[1] / "Mtg_Projects" / "mtg_core")
+)
 
 from mtg_core.datasets import DatasetInstaller, parse_manifest
 from mtg_core.downloads import file_sha256
@@ -23,6 +24,7 @@ from mtg_core.recommendation_distribution import APPROVED_SOURCES, validate_bund
 from mtg_core.recommendation_packaging import build_distribution
 
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
 REPOSITORY = "RyMeep128/Manaforge"
 FEED_TAG = "recommendation-data-latest-alpha.1"
 

@@ -215,6 +215,15 @@ def publisher_module():
     return module
 
 
+def test_reopening_install_registry_does_not_invalidate_recommendation_cache(tmp_path):
+    state = InstallationState(tmp_path / "state.sqlite3")
+    state.set("setup_complete", True)
+    before = state.path.read_bytes()
+    reopened = InstallationState(state.path)
+    assert reopened.get("setup_complete") is True
+    assert reopened.path.read_bytes() == before
+
+
 def test_staging_uses_draft_prerelease_and_manifest_asset_allowlist(tmp_path):
     root, output = tmp_path / "private", tmp_path / "output"
     collected(root)
