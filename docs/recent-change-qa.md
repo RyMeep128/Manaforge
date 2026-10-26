@@ -50,3 +50,7 @@ No local tests, linting, formatting, or runtime validation were run; existing te
 CI confirmed the previously documented empty-deck redirect expectation is obsolete: `test_empty_deck_search_defaults_to_ideas_even_after_another_tab` still requires the intentionally removed redirect. Preserve the current behavior unless that requirement is explicitly changed.
 
 Additional complete-suite findings repaired: preserve row-based modal ProjectBrowser access over the tile list, restore the workspace card-size range to 180-360, and save source settings when no embedded recommendation panel exists. GitHub CI passed the repaired hover, saving, category-only deck, toolbar, keyword, and EDHREC-cohort scenarios. The obsolete redirect expectation remains subject to the explicit instruction to leave existing tests unchanged.
+
+## Redirect expectation resolved
+
+With explicit user approval, the obsolete empty-deck redirect test now verifies that opening quick search stays in Syntax Search and that explicitly reopening the full workspace remembers the selected Card Search tab. This supersedes the earlier instruction to preserve that single obsolete expectation. No local tests, linting, or formatter commands were run.

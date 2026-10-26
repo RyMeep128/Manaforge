@@ -13,18 +13,19 @@ def editor(tmp_path):
     return app, window
 
 
-def test_empty_deck_search_defaults_to_ideas_even_after_another_tab(tmp_path):
+def test_empty_deck_search_keeps_syntax_and_remembers_workspace_tab(tmp_path):
     app, window = editor(tmp_path)
     window.document.deck.entries.clear()
     workspace = window.add_cards_workspace
-    workspace.full_index = 2
-    window.open_search()
-    assert workspace.expanded
-    assert window.add_card_tabs.currentWidget() is workspace.discovery
+    workspace.open()
     window.add_card_tabs.setCurrentWidget(workspace.card_search)
     workspace.back()
+    window.open_search()
+    assert not workspace.expanded
+    assert not window.search_panel.isHidden()
+    assert window.add_card_tabs.currentWidget() is window.syntax_search_page
     workspace.open()
-    assert window.add_card_tabs.currentWidget() is workspace.discovery
+    assert window.add_card_tabs.currentWidget() is workspace.card_search
     window.hide()
     window.deleteLater()
     app.processEvents()
