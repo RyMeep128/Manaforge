@@ -193,7 +193,7 @@ class EditorWindow(W.QMainWindow):
 
         view_group, view_row = self.toolbar_group('View As')
         self.view_mode = W.QComboBox()
-        self.view_mode.addItems(['Grid', 'Stacks', 'Text'])
+        self.view_mode.addItems(['Grid', 'Stacks', 'Expanded Stacks', 'Text'])
         view_row.addWidget(self.view_mode)
         group_group, group_row = self.toolbar_group('Group By')
         self.group = W.QComboBox()
@@ -1098,8 +1098,6 @@ class EditorWindow(W.QMainWindow):
         menu = W.QMenu(self)
         if self.grid.face_count(entry) > 1:
             menu.addAction('Flip preview', lambda: self.grid.flip_entry(entry))
-        if self.grid.mode == 'Stacks':
-            menu.addAction('Expand / collapse stack', lambda: self.grid.toggle_stack(entry))
         menu.addAction('Set Primary Role…', lambda: self.add_tag(tags=False))
         menu.addAction('Add / Remove Tags…', lambda: self.quick_tag(position, tags=True))
         menu.addAction('Customize Quick Menu…', lambda: self.manage_categories(customize=True))

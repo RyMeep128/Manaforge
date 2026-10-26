@@ -26,3 +26,13 @@ Validation is deferred to CI/CD and manual review; no local tests, linting, form
 - Flip a double-faced card using its button and F shortcut in deck, search, discovery, and recommendation canvases. The 420 ms perspective turn swaps faces at its midpoint, shades the artwork, and transforms its selection border. Quantity controls, flip controls, and labels stay in place.
 - Repeated flips on one animating card are ignored; different cards can animate together. Scrolling, resizing, stack expansion, and selecting cards remain responsive. Missing destination artwork uses the standard loading/unavailable placeholder without blocking.
 - Hide or close a canvas during a flip: it finishes on the intended face and clears animation state. Replace the document, undo/redo a replacement, or remove an animating card: stale animation state is discarded. Classic flip-card alternate artwork keeps its existing orientation rules.
+
+## Expanded Stacks view
+
+- Select Expanded Stacks: grouped columns retain overlapping cards, with each card showing its name and artwork. Card size controls scale the spacing. Regular Stacks remains compact.
+- Hover in both stack views: the existing animated full-card reveal still works and settles when the pointer leaves. Flip controls, quantity changes, selection, drag/drop, filters, sorting, and group collapse remain available.
+- The former per-stack + expansion, context-menu expansion action, and E shortcut are removed. Header clicks retain group collapse behavior.
+- Switch between Grid, Stacks, Expanded Stacks, and Text; confirm separate scroll positions and persistence of the selected view after reopening the deck.
+- Review narrow windows, empty groups, multiple columns, and double-faced card animation in both stack views.
+
+No local tests, linting, formatting, or runtime validation were run; existing tests are unchanged.

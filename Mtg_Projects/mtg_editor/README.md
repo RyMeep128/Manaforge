@@ -44,7 +44,10 @@ application; controller lifecycle coverage is in `tests/test_controllers.py`.
 ## Visual workspace
 
 The editor shares Proxy's dark styling and green accents. **Grid** shows complete
-card images; **Stacks** overlaps cards within groups. The card canvas uses all
+card images; **Stacks** overlaps cards within groups. **Expanded Stacks** keeps
+the same grouped columns with wider overlap spacing so each card reveals its
+name and artwork. Both stack views retain the animated hover reveal; choose the
+view from the selector instead of expanding individual stacks with a + button. The card canvas uses all
 remaining window space, and the toolbars wrap on smaller screens.
 
 **View As > Text** presents compact, collapsible groups in up to four responsive
@@ -58,7 +61,7 @@ The optional left **Card preview** follows hovered or selected cards using their
 current printing and the shared image cache. It automatically hides on narrower
 windows. Mana costs missing from older deck files are read from the local catalog
 in background batches. View choice, collapsed groups, and preview preference are
-saved with the deck, and Grid, Stacks, and Text keep separate scroll positions.
+saved with the deck, and Grid, Stacks, Expanded Stacks, and Text keep separate scroll positions.
 **More > Text view** opens the same layout.
 
 Card Search, Syntax Search, and Quick Add load 50 results at a time; **Load More**

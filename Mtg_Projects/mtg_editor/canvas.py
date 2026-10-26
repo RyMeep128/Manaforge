@@ -31,7 +31,6 @@ class CardCanvas(W.QAbstractScrollArea):
         self.fit_height = False
         self.faces = {}
         self.flip_animations = {}
-        self.expanded_stacks = set()
         self.discovery_drop = False
         self.minimum_search_card_width = None
         self.card_aspect_ratio = 1.4
@@ -105,7 +104,7 @@ class CardCanvas(W.QAbstractScrollArea):
         columns = max(1, (width - 16) // (cw + 16))
         row_bottom = y
         for group_index, (key, title, entries) in enumerate(groups):
-            if self.mode == 'Stacks' and not self.search_mode:
+            if self.mode in ('Stacks', 'Expanded Stacks') and not self.search_mode:
                 if group_index % columns == 0:
                     y, x = row_bottom + (16 if group_index else 0), 16
                 else:
@@ -114,11 +113,12 @@ class CardCanvas(W.QAbstractScrollArea):
                 bottom = y + 50
                 if key not in self.collapsed:
                     expanded_offset = 0
+                    step = max(34, round(ch * 0.62)) if self.mode == 'Expanded Stacks' else 34
                     for n, entry in enumerate(entries):
-                        rect = C.QRect(x, y + 44 + n * (ch + 36 if key in self.expanded_stacks else 34) + expanded_offset, cw, ch)
+                        rect = C.QRect(x, y + 44 + n * step + expanded_offset, cw, ch)
                         self.items.append((entry, rect, key))
                         bottom = rect.bottom() + 40
-                        expanded_offset += round((0 if key in self.expanded_stacks else max(0, ch + 6 - 34)) *
+                        expanded_offset += round(max(0, ch + 6 - step) *
                                                  self.stack_expansion.get(entry.entry_id, 0.0))
                 row_bottom = max(row_bottom, bottom)
             else:
@@ -166,7 +166,7 @@ class CardCanvas(W.QAbstractScrollArea):
         point = self.viewport().mapFromGlobal(G.QCursor.pos())
         item = self.hit(point) if self.viewport().rect().contains(point) else None
         self.hovered = item[0].entry_id if item else None
-        if self.mode == 'Stacks' and not self.search_mode:
+        if self.mode in ('Stacks', 'Expanded Stacks') and not self.search_mode:
             self.animate_stack()
         else:
             self.viewport().update()
@@ -207,7 +207,7 @@ class CardCanvas(W.QAbstractScrollArea):
         near = visible.adjusted(0, -60, 0, 60)
         nearby = [e for e, r, _ in self.items if r.intersects(near)]
         visible_keys = [self.image_key(e) for e in nearby]
-        if self.mode == 'Stacks' and not self.search_mode:
+        if self.mode in ('Stacks', 'Expanded Stacks') and not self.search_mode:
             visible_keys.extend(self.image_key(e, high_resolution=True) for e in nearby if e.entry_id == self.hovered)
         for entry in nearby:
             state = self.flip_animations.get(entry.entry_id)
@@ -228,23 +228,20 @@ class CardCanvas(W.QAbstractScrollArea):
             offsets = [(0, -4), (5, 0), (0, 4)] if key in self.collapsed else [(-4, -2), (4, -2), (0, 3)]
             p.setBrush(p.pen().color())
             p.drawPolygon(G.QPolygon([center+C.QPoint(*point) for point in offsets]))
-            text_rect = rect.adjusted(25, 0, -34 if self.mode == 'Stacks' else -5, 0)
+            text_rect = rect.adjusted(25, 0, -5, 0)
             count_width = p.fontMetrics().horizontalAdvance(str(count)) + 12
             count_rect = C.QRect(text_rect.right()-count_width, text_rect.top(), count_width, text_rect.height())
             text_rect.setRight(count_rect.left()-4)
             p.drawText(text_rect, C.Qt.AlignmentFlag.AlignVCenter,
                        p.fontMetrics().elidedText(title, C.Qt.TextElideMode.ElideRight, max(0, text_rect.width())))
             p.drawText(count_rect, C.Qt.AlignmentFlag.AlignVCenter | C.Qt.AlignmentFlag.AlignRight, str(count))
-            if self.mode == 'Stacks':
-                p.drawText(self.expand_rect(rect), C.Qt.AlignmentFlag.AlignCenter,
-                           '-' if key in self.expanded_stacks else '+')
             if self.grouping == 'Category' and key in category_colors:
                 p.fillRect(C.QRect(rect.right()-7, rect.top()+10, 4, 18), G.QColor(category_colors[key]))
         for entry, rect, key in self.items:
             if not rect.adjusted(0, 0, 0, 32).intersects(visible):
                 continue
             pixmap = self.card_image(entry)
-            if self.mode == 'Stacks' and not self.search_mode and entry.entry_id == self.hovered:
+            if self.mode in ('Stacks', 'Expanded Stacks') and not self.search_mode and entry.entry_id == self.hovered:
                 pixmap = self.card_image(entry, high_resolution=True)
             in_deck = self.search_mode and entry.entry_id in self.in_deck_ids
             state = self.flip_animations.get(entry.entry_id)
@@ -260,7 +257,7 @@ class CardCanvas(W.QAbstractScrollArea):
             if entry.entry_id == self.hovered or entry.entry_id in self.selected:
                 control = self.control_rect(rect)
                 draw_quantity_controls(p, control, self.quantity_buttons(rect), can_decrease=entry.quantity > 0)
-            if self.mode != 'Stacks' or key in self.expanded_stacks or not any(r.y() > rect.y() and r.x() == rect.x() and k == key for _, r, k in self.items):
+            if self.mode not in ('Stacks', 'Expanded Stacks') or not any(r.y() > rect.y() and r.x() == rect.x() and k == key for _, r, k in self.items):
                 label = ('Oversized · ' if entry.oversized else '') + ('Owned · ' if entry.do_not_print else '') + self.shown_facts(entry).get('name', entry.name)
                 p.setPen(G.QColor(COLORS['text_secondary']))
                 p.drawText(C.QRect(rect.x(), rect.bottom()+4, rect.width(), 28), C.Qt.AlignmentFlag.AlignCenter,
@@ -346,17 +343,6 @@ class CardCanvas(W.QAbstractScrollArea):
         painter.drawPolygon(G.QPolygonF([C.QPointF(24, 7), C.QPointF(24, 15), C.QPointF(17, 13)]))
         painter.drawPolygon(G.QPolygonF([C.QPointF(8, 25), C.QPointF(8, 17), C.QPointF(15, 19)]))
         painter.restore()
-
-    @staticmethod
-    def expand_rect(rect):
-        return C.QRect(rect.right()-32, rect.top(), 28, rect.height())
-
-    def toggle_stack(self, entry):
-        key = next((k for e, _, k in self.items if e.entry_id == entry.entry_id), None)
-        if key is not None:
-            self.expanded_stacks.symmetric_difference_update({key})
-            self.collapsed.discard(key)
-            self.relayout()
 
     def flip_entry(self, entry):
         count = self.face_count(entry)
@@ -480,12 +466,6 @@ class CardCanvas(W.QAbstractScrollArea):
         header = self.header_at(event.position().toPoint())
         if header:
             key = header[0]
-            point = event.position().toPoint() + C.QPoint(0, self.verticalScrollBar().value())
-            if self.mode == 'Stacks' and self.expand_rect(header[3]).contains(point):
-                self.expanded_stacks.symmetric_difference_update({key})
-                self.collapsed.discard(key)
-                self.relayout()
-                return
             self.collapsed.symmetric_difference_update({key})
             self.preferencesChanged.emit()
             self.relayout()
@@ -530,9 +510,9 @@ class CardCanvas(W.QAbstractScrollArea):
         if hovered != self.hovered:
             self.hovered = hovered
             facts = self.shown_facts(item[0]) if item else {}
-            self.setToolTip('\n'.join(str(facts.get(k) or '') for k in ('name', 'mana_cost', 'type_line', 'oracle_text')) + ('\nF: flip card; D: discover similar cards; E: expand stack' if item else ''))
+            self.setToolTip('\n'.join(str(facts.get(k) or '') for k in ('name', 'mana_cost', 'type_line', 'oracle_text')) + ('\nF: flip card; D: discover similar cards' if item else ''))
             self.preview.hide()
-            if self.mode == 'Stacks' and not self.search_mode:
+            if self.mode in ('Stacks', 'Expanded Stacks') and not self.search_mode:
                 self.hover_timer.stop()
                 self.animate_stack()
             else:
@@ -589,13 +569,13 @@ class CardCanvas(W.QAbstractScrollArea):
         if self.context_target is not None:
             return
         self.hovered = None
-        if self.mode == 'Stacks' and not self.search_mode:
+        if self.mode in ('Stacks', 'Expanded Stacks') and not self.search_mode:
             self.animate_stack()
         else:
             self.viewport().update()
 
     def show_preview(self):
-        if self.mode == 'Stacks' and not self.search_mode:
+        if self.mode in ('Stacks', 'Expanded Stacks') and not self.search_mode:
             return
         if not self.isVisible() or W.QApplication.activePopupWidget() is not None:
             return
@@ -638,16 +618,12 @@ class CardCanvas(W.QAbstractScrollArea):
         elif event.key() == C.Qt.Key.Key_T and not event.modifiers() and self.selected and not self.search_mode:
             if not event.isAutoRepeat():
                 self.quickTagRequested.emit(G.QCursor.pos())
-        elif event.key() in (C.Qt.Key.Key_F, C.Qt.Key.Key_D, C.Qt.Key.Key_E) and not event.modifiers() and self.selected:
+        elif event.key() in (C.Qt.Key.Key_F, C.Qt.Key.Key_D) and not event.modifiers() and self.selected:
             entry = next((e for e, _, _ in self.items if e.entry_id in self.selected), None)
             if entry and event.key() == C.Qt.Key.Key_F:
                 self.flip_entry(entry)
             elif entry and event.key() == C.Qt.Key.Key_D:
                 self.discoverRequested.emit(entry)
-            elif entry and self.mode == 'Stacks':
-                key = next(k for e, _, k in self.items if e.entry_id == entry.entry_id)
-                self.expanded_stacks.symmetric_difference_update({key})
-                self.relayout()
         elif event.matches(G.QKeySequence.StandardKey.SelectAll):
             self.selected = {e.entry_id for e, _, _ in self.items}
             self.selectionChanged.emit()
