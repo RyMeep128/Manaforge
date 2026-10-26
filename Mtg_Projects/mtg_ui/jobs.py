@@ -6,6 +6,7 @@ owner alive until shutdown() returns True. Workers never manipulate widgets.
 
 from collections import deque
 import threading
+import time
 import uuid
 
 from PyQt6 import QtCore as C
@@ -21,14 +22,33 @@ class _Job(C.QThread):
         super().__init__(parent)
         self.job_id, self.work = job_id, work
         self.cancel_event = threading.Event()
+        self._last_progress = 0.0
+        self._last_phase = None
+
+    def report(self, value):
+        if isinstance(value, dict):
+            phase = (value.get("operation"), value.get("phase"))
+            current, total = value.get("current"), value.get("total")
+        else:
+            phase = getattr(value, "phase", None)
+            current, total = (
+                getattr(value, "downloaded", None),
+                getattr(value, "total", None),
+            )
+        now = time.monotonic()
+        if (
+            phase != self._last_phase
+            or now - self._last_progress >= 0.1
+            or (total is not None and current == total)
+        ):
+            self.progress.emit(self.job_id, value)
+            self._last_progress, self._last_phase = now, phase
 
     def run(self):
         try:
             if self.cancel_event.is_set():
                 raise DownloadCancelled()
-            result = self.work(
-                self.cancel_event, lambda value: self.progress.emit(self.job_id, value)
-            )
+            result = self.work(self.cancel_event, self.report)
             self.outcome.emit(self.job_id, "completed", result)
         except DownloadCancelled:
             self.outcome.emit(self.job_id, "cancelled", None)

@@ -105,3 +105,20 @@ def test_closing_settings_does_not_cancel_an_existing_background_job(app, tmp_pa
     assert jobs.busy
     stop.set()
     drain(app, jobs)
+
+
+def test_large_cached_scans_throttle_gui_progress_but_keep_completion(app):
+    jobs = JobQueue()
+    seen = []
+    jobs.progress.connect(lambda job_id, value: seen.append(value))
+
+    def scan(cancel, report):
+        for current in range(10001):
+            report(
+                dict(operation="Artwork", phase="artwork", current=current, total=10000)
+            )
+
+    jobs.submit(scan)
+    drain(app, jobs)
+    assert seen[-1]["current"] == 10000
+    assert len(seen) < 10000

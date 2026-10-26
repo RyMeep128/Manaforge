@@ -9,6 +9,7 @@ import uuid
 from pathlib import Path
 from mtg_core.images import checksum_bytes, ensure_parent_dir
 from mtg_core.models import ImageAssetRecord
+from mtg_core.sync import fetch_bytes
 
 
 _image_locks = [threading.RLock() for _ in range(64)]
@@ -61,7 +62,7 @@ class ImageOperations:
         """Cache alternate-face artwork without changing the printing's front."""
         if not face_index:
             return self.ensure_image(card_id, allow_remote=allow_remote)
-        if getattr(self,'streaming_artwork',False) and allow_remote:
+        if getattr(self,'streaming_artwork',False) and self.fetch_bytes_fn is fetch_bytes and allow_remote:
             return self.cache_artwork(card_id,face_index,cancel=threading.Event())
         variant = f'face-{face_index}'
         path = self.get_image_path(card_id, variant)
@@ -107,7 +108,7 @@ class ImageOperations:
         existing=self.get_image_path(card_id,variant)
         if existing:
             return existing
-        if variant=='default' and getattr(self,'streaming_artwork',False) and allow_remote:
+        if variant=='default' and getattr(self,'streaming_artwork',False) and self.fetch_bytes_fn is fetch_bytes and allow_remote:
             return self.cache_artwork(card_id,cancel=threading.Event())
         record = self.database.get_image_record(card_id, variant)
         if record is not None:

@@ -258,6 +258,10 @@ class DatasetInstaller:
                         raise ValueError("Staged dataset checksum mismatch")
                 if cancel.is_set():
                     raise DownloadCancelled("Dataset installation cancelled")
+                if progress:
+                    from .downloads import DownloadProgress
+
+                    progress(DownloadProgress(0, None, 0, "initializing"))
                 validate(result)
                 if cancel.is_set():
                     raise DownloadCancelled("Dataset installation cancelled")

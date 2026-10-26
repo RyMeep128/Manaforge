@@ -244,7 +244,14 @@ class DataManagementDialog(W.QDialog):
     def on_progress(self, job_id, value):
         if job_id != self.job_id or not isinstance(value, dict):
             return
-        self.operation_label.setText(value.get("operation", "Working"))
+        operation = value.get("operation", "Working")
+        phase = value.get("phase", "")
+        if (
+            phase in ("downloading", "verifying", "extracting", "initializing")
+            and phase not in operation.lower()
+        ):
+            operation += " · " + phase.title()
+        self.operation_label.setText(operation)
         current, total = value.get("current", 0), value.get("total")
         self.progress.setRange(0, 100 if total else 0)
         if total:
