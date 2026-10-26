@@ -91,17 +91,33 @@ Home → **Settings → Data Management** provides:
 - **Check for Updates**, estimated sizes and **Apply updates**.
 - Artwork mode and future data/artwork storage selection.
 - **Download missing artwork**, including resumable fills and changed-image retries.
-- Artwork asset count/size and **Clear optional artwork copies**.
+- Artwork asset count/size and **Audit artwork storage**.
 - Pause/Resume with current operation, byte/item progress, transfer speed, time estimate
   when calculable, and overall installation stage progress.
 
 Changing locations affects new generations/assets. Previously referenced artwork
 remains accessible at its stored path; this UI does not automatically move 100–200 GB
 of existing data. Catalogs already containing user preferences are kept in place.
-Clearing optional copies removes only verified reproducible materializations with an
-intact canonical asset. Canonical artwork is retained because saved decks and print
-projects can refer to its IDs outside the catalog. No cleanup deletes decks, settings,
-arbitrary files, active datasets or canonical artwork.
+**Audit artwork storage** inventories the selected artwork folder, verifies recorded
+checksums, and shows logical file sizes, unique file storage (hard links counted
+once), verified reclaimable bytes, existing hard links, and preserved/problem files.
+These file-byte totals exclude filesystem compression, sparse allocation, and
+metadata overhead. The first audit reads the artwork and can take hours for a large
+offline collection. Verification checkpoints live in a separate SQLite audit journal
+beside the card catalog; pause/restart reuses hashes only while file signatures match.
+The selected root can be an existing junction such as C: artwork redirected to E:;
+unexpected links inside managed artwork directories are excluded.
+
+After reviewing a completed audit, choose **Reclaim verified duplicates** and confirm.
+The operation rechecks ownership and both checksums, then atomically replaces each
+eligible Scryfall cache copy with a hard link to its canonical asset. Legacy file paths
+continue working for saved decks and print projects. Changed/custom/unknown files,
+unsupported links, other-volume files, and locked destinations are preserved and
+reported. No canonical artwork, deck, setting, or arbitrary file is deleted. The
+journal supports interruption recovery without another full artwork backup. Normal
+image requests now return canonical paths; explicit exports still create independent
+copies. Managed artwork publication replaces files atomically instead of writing
+through hard links. Audit again after reclaiming to refresh the storage totals.
 
 Closing a dialog that owns a running setup/update first cancels safely and waits for
 its worker to settle. Closing a dialog that is merely observing an automatic update

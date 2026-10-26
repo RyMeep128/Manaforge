@@ -24,6 +24,19 @@ class ImageOperations:
         source: str | None = None,
         checksum: str | None = None,
     ) -> ImageRecord:
+        from mtg_core.artwork_storage_lock import storage_lock
+
+        with storage_lock(self._image_asset_storage_root().parent):
+            return self._upsert_image_record(
+                card_id, variant=variant, asset_id=asset_id, path=path,
+                status=status, source=source, checksum=checksum,
+            )
+
+    def _upsert_image_record(
+        self, card_id: str, *, variant: str = "default",
+        asset_id: str | None = None, path: str | None, status: str,
+        source: str | None = None, checksum: str | None = None,
+    ) -> ImageRecord:
         updated_at = time.time()
         with self.connect() as connection:
             connection.execute(
@@ -131,6 +144,13 @@ class ImageOperations:
 
     @staticmethod
     def _write_verified_image_asset_file(path: Path, payload: bytes, checksum: str) -> None:
+        from mtg_core.artwork_storage_lock import artwork_root, storage_lock
+
+        with storage_lock(artwork_root(path)):
+            ImageOperations._publish_image_asset_file(path, payload, checksum)
+
+    @staticmethod
+    def _publish_image_asset_file(path: Path, payload: bytes, checksum: str) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         temp_path = path.with_name(f"{path.name}.{uuid.uuid4().hex}.tmp")
         try:
@@ -191,6 +211,19 @@ class ImageOperations:
         extension: str | None = "png",
         mime_type: str | None = None,
         source: str | None = None,
+        source_url: str | None = None,
+    ) -> ImageAssetRecord:
+        from mtg_core.artwork_storage_lock import storage_lock
+
+        with storage_lock(self._image_asset_storage_root().parent):
+            return self._store_image_asset(
+                payload, extension=extension, mime_type=mime_type,
+                source=source, source_url=source_url,
+            )
+
+    def _store_image_asset(
+        self, payload: bytes, *, extension: str | None = "png",
+        mime_type: str | None = None, source: str | None = None,
         source_url: str | None = None,
     ) -> ImageAssetRecord:
         checksum = hashlib.sha256(payload).hexdigest()

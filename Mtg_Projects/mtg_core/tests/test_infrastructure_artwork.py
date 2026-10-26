@@ -52,7 +52,9 @@ def test_missing_asset_is_not_materialized_as_empty_artwork(tmp_path):
     from pathlib import Path
 
     Path(path).unlink()
-    service.database._resolve_image_asset_storage_path(asset.storage_path).unlink()
+    service.database._resolve_image_asset_storage_path(asset.storage_path).unlink(
+        missing_ok=True
+    )
     assert service.get_image_path("printing") is None
     assert service.ensure_image("printing", allow_remote=False) is None
     restored = service.ensure_image("printing")

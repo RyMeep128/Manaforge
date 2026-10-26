@@ -90,17 +90,14 @@ class ImageOperations:
         record = self.database.get_image_record(card_id, variant)
         if record is None:
             return None
+        if record.asset_id:
+            canonical = self.materialize_image_asset(record.asset_id)
+            if canonical:
+                return canonical
         if record.path and Path(record.path).is_file():
             from mtg_core.downloads import file_sha256
             if not record.checksum or file_sha256(record.path)==record.checksum:
                 return record.path
-        if record.asset_id:
-            return self.materialize_image_asset(
-                record.asset_id,
-                preferred_name=f"{card_id}_{variant}",
-            )
-        if record.path and os.path.exists(record.path):
-            return record.path
         return None
 
     @_serialized_image
@@ -184,9 +181,31 @@ class ImageOperations:
         preferred_name: str | None = None,
         output_root: str | None = None,
     ) -> str | None:
+        from mtg_core.artwork_storage_lock import storage_lock
+
+        with storage_lock(self.database._image_asset_storage_root().parent):
+            return self._materialize_image_asset(
+                asset_id, preferred_name=preferred_name, output_root=output_root,
+            )
+
+    def _materialize_image_asset(
+        self, asset_id: str, *, preferred_name: str | None = None,
+        output_root: str | None = None,
+    ) -> str | None:
         asset = self.database.get_image_asset(asset_id)
         if asset is None or not asset.payload or checksum_bytes(asset.payload) != asset.checksum:
             return None
+        if output_root is None:
+            canonical = self.database._resolve_image_asset_storage_path(asset.storage_path)
+            from mtg_core.downloads import file_sha256
+            if canonical is None or not canonical.is_file() or file_sha256(canonical) != asset.checksum:
+                # Legacy SQLite blobs are published once into the canonical store.
+                asset = self.database.store_image_asset(
+                    asset.payload, extension=asset.extension, mime_type=asset.mime_type,
+                    source=asset.source, source_url=asset.source_url,
+                )
+                canonical = self.database._resolve_image_asset_storage_path(asset.storage_path)
+            return str(canonical) if canonical is not None else None
         filename = _materialized_asset_filename(asset, preferred_name)
         root = output_root or os.path.join(self.image_root, "mtg_core_cache")
         path = os.path.join(root, filename)

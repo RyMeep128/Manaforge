@@ -157,7 +157,7 @@ class DataManagementDialog(W.QDialog):
                     "usage", lambda cancel, report: self.engine.usage(cancel=cancel)
                 )
             )
-            self.clear = W.QPushButton("Clear optional artwork copies")
+            self.clear = W.QPushButton("Audit artwork storage…")
             self.clear.clicked.connect(self.clear_cache)
             for button in (self.missing, self.usage, self.clear):
                 actions.addWidget(button)
@@ -473,20 +473,14 @@ class DataManagementDialog(W.QDialog):
             self.check_updates()
 
     def clear_cache(self):
-        if (
-            W.QMessageBox.question(
-                self,
-                "Clear optional artwork copies",
-                "Remove reproducible artwork copies? Canonical artwork and all decks and preferences will be kept.",
+        from .artwork_storage import ArtworkStorageDialog
+
+        if self.jobs.busy:
+            self.status.setText(
+                "Wait for the active library operation before auditing artwork."
             )
-            == W.QMessageBox.StandardButton.Yes
-        ):
-            self.start_job(
-                "clear",
-                lambda cancel, report: self.engine.clear_optional(
-                    cancel=cancel, report=report
-                ),
-            )
+            return
+        ArtworkStorageDialog(self, self.engine.service, self.jobs).exec()
 
     def finish_or_close(self):
         if self._ready:

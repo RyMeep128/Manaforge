@@ -189,10 +189,8 @@ def test_artwork_pause_checkpoints_resume_and_cleanup_preserves_canonical_assets
     with closing(svc.database.connect()) as db:
         asset = db.execute("SELECT asset_id FROM image_manifest LIMIT 1").fetchone()[0]
     canonical = svc.get_image_path(card()["id"])
-    assert (
+    with pytest.raises(ValueError, match="Audit artwork storage"):
         clear_optional_artwork(svc, cancel=threading.Event(), report=lambda p: None)
-        == 0
-    )
     assert Path(canonical).exists() and svc.get_image_bytes(asset)
 
 

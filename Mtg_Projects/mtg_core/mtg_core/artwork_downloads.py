@@ -231,54 +231,9 @@ def artwork_usage(service, *, cancel):
 
 
 def clear_optional_artwork(service, *, cancel, report):
-    """Only Scryfall assets unreferenced by manifests/favorites are candidates.
-
-    Referenced image IDs can also live in user documents outside the catalog;
-    retain canonical assets. Clear only reproducible materialized copies that
-    differ from their canonical asset path. No deck or asset record is deleted.
-    """
-    root = (Path(service.image_root) / "mtg_core_cache").resolve()
-    if not root.exists():
-        return 0
-    removed = 0
-    with closing(service.database.connect()) as db:
-        cursor = db.execute(
-            "SELECT path,asset_id FROM image_manifest WHERE source='scryfall' AND asset_id IS NOT NULL"
-        )
-        for path, asset_id in cursor:
-            cancelled(cancel)
-            if not path:
-                continue
-            candidate = Path(path).resolve()
-            if (
-                candidate.parent != root
-                or not candidate.is_file()
-                or candidate.is_symlink()
-            ):
-                continue
-            row = db.execute(
-                "SELECT storage_path,checksum FROM image_assets WHERE asset_id=?",
-                (asset_id,),
-            ).fetchone()
-            canonical = (
-                service.database._resolve_image_asset_storage_path(row[0])
-                if row
-                else None
-            )
-            if (
-                canonical
-                and canonical.is_file()
-                and canonical.resolve() != candidate
-                and file_sha256(canonical) == row[1]
-            ):
-                candidate.unlink()
-                removed += 1
-                report(
-                    dict(
-                        operation="Clearing optional artwork copies",
-                        current=removed,
-                        total=None,
-                        phase="cleanup",
-                    )
-                )
-    return removed
+    """Legacy entry point cannot delete paths referenced by saved documents."""
+    cancelled(cancel)
+    raise ValueError(
+        "Use Data Management > Audit artwork storage, review the verified "
+        "duplicates, then choose Reclaim. Direct cache deletion is disabled."
+    )

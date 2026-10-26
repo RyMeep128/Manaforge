@@ -3,6 +3,11 @@ required-version = "==0.16.9"
 target-version = "py312"
 line-length = 88
 include = [
+    "Mtg_Projects/mtg_core/mtg_core/artwork_storage.py",
+    "Mtg_Projects/mtg_core/mtg_core/artwork_storage_lock.py",
+    "Mtg_Projects/mtg_ui/artwork_storage.py",
+    "Mtg_Projects/mtg_core/tests/test_artwork_storage.py",
+    "Mtg_Projects/integration_tests/test_artwork_storage_ui.py",
     "Mtg_Projects/mtg_core/mtg_core/installation.py",
     "Mtg_Projects/mtg_core/mtg_core/bulk_install.py",
     "Mtg_Projects/mtg_core/mtg_core/artwork_downloads.py",
