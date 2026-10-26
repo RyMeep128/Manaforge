@@ -165,6 +165,7 @@ class EditorWindow(W.QMainWindow):
         self.header_actions = [self.undo_button, self.redo_button, self.save_button, self.print_button, more]
         layout.addWidget(header)
         controls = W.QFrame()
+        self.deck_controls = controls
         controls.setProperty('role', 'toolbar')
         controls.setSizePolicy(W.QSizePolicy.Policy.Expanding, W.QSizePolicy.Policy.Fixed)
         control_layout = W.QVBoxLayout(controls)
@@ -477,6 +478,9 @@ class EditorWindow(W.QMainWindow):
 
     def reflow_toolbars(self):
         compact = self.height() < 650
+        self.deck_controls.layout().setContentsMargins(14, 2 if compact else 6, 14, 4 if compact else 8)
+        self.deck_controls.layout().setSpacing(0 if compact else 6)
+        self.control_extra.setSpacing(4 if compact else 10)
         for group in self.control_groups:
             group.title_label.setVisible(not compact)
             group.layout().setSpacing(0 if compact else 2)
