@@ -210,8 +210,15 @@ class AggregateSource:
 
     def commanders_using(self, oracle_id, *, should_cancel=None):
         data = read_cache(self.path)
-        return [dict(commanders=c['commanders'], count=c['counts'][oracle_id], sample=c['sample'])
-                for c in data['cohorts'] if c['counts'].get(oracle_id)]
+        return [
+            dict(
+                commanders=c["commanders"],
+                count=c["counts"][oracle_id],
+                sample=c["sample"],
+            )
+            for c in data["cohorts"]
+            if c["counts"].get(oracle_id)
+        ]
 
     def snapshot(self, commanders=(), *, exclude=(), limit=200):
         data = read_cache(self.path)
@@ -277,16 +284,21 @@ def source_settings(root):
         return dict(
             version=2,
             archidekt=dict(enabled=True, cache="live"),
-            edhrec=dict(enabled=True, cohort='auto'),
+            edhrec=dict(enabled=True, cohort="auto"),
             moxfield=dict(enabled=True),
             **{source: dict(enabled=True) for source in DATASET_LABELS},
         )
     raw = json.loads(path.read_text(encoding="utf-8"))
     if raw.get("version", 1) == 2:
-        raw.setdefault("moxfield", dict(enabled=bool(
-            raw.get("archidekt", {}).get("enabled")
-            or raw.get("edhrec", {}).get("enabled")
-        )))
+        raw.setdefault(
+            "moxfield",
+            dict(
+                enabled=bool(
+                    raw.get("archidekt", {}).get("enabled")
+                    or raw.get("edhrec", {}).get("enabled")
+                )
+            ),
+        )
         enabled = any(
             isinstance(raw.get(source), dict) and raw[source].get("enabled") is True
             for source in ("archidekt", "edhrec", "moxfield")
@@ -299,8 +311,11 @@ def source_settings(root):
             or type(raw.get("edhrec", {}).get("enabled")) is not bool
             or not isinstance(raw["moxfield"], dict)
             or type(raw["moxfield"].get("enabled")) is not bool
-            or any(not isinstance(raw[source], dict) or type(raw[source].get("enabled")) is not bool
-                   for source in DATASET_LABELS)
+            or any(
+                not isinstance(raw[source], dict)
+                or type(raw[source].get("enabled")) is not bool
+                for source in DATASET_LABELS
+            )
         ):
             raise ValueError("Invalid recommendation source settings")
         return raw

@@ -116,7 +116,7 @@ def configure_sources(editor, root):
         edhrec = W.QCheckBox("Enable offline EDHREC recommendations")
         edhrec.setChecked(config["edhrec"]["enabled"])
         cohort = W.QComboBox()
-        cohort.addItem('Automatic: match deck theme', 'auto')
+        cohort.addItem("Automatic: match deck theme", "auto")
         cohort.addItem("General commander recommendations", "general")
         for kind, value, label in cohort_choices:
             cohort.addItem(f"{kind.title()}: {label}", f"{kind}:{value}")
@@ -156,8 +156,10 @@ def configure_sources(editor, root):
             archidekt=dict(enabled=archidekt.isChecked(), cache=cache.currentData()),
             edhrec=dict(enabled=edhrec.isChecked(), cohort=cohort.currentData()),
             moxfield=dict(enabled=moxfield.isChecked()),
-            **{source: dict(enabled=checkbox.isChecked())
-               for source, checkbox in dataset_controls.items()},
+            **{
+                source: dict(enabled=checkbox.isChecked())
+                for source, checkbox in dataset_controls.items()
+            },
         )
         editor.run_task(
             lambda: save_source_settings(root, updated),

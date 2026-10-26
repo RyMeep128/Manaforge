@@ -45,8 +45,18 @@ def context(document, proposals, records=None):
     themes = [
         row["id"][6:] for row in result["suggestions"] if row["id"].startswith("theme:")
     ]
-    themes = list(dict.fromkeys([*themes, *[role for theme in document.editor_preferences.get('manual_themes', [])
-                                          for role in theme.get('roles', [])]]))
+    themes = list(
+        dict.fromkeys(
+            [
+                *themes,
+                *[
+                    role
+                    for theme in document.editor_preferences.get("manual_themes", [])
+                    for role in theme.get("roles", [])
+                ],
+            ]
+        )
+    )
     composition = deck_insights(document, records)
     # Archetypes describe dominant card types, not inferred competitive labels.
     types = Counter()

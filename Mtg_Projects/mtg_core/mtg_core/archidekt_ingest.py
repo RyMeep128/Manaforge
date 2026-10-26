@@ -213,7 +213,9 @@ class Collector:
             raise ValueError("Deck IDs must be positive integers")
         pending = set(self.state["queue"])
         additional = [
-            value for value in deck_ids if value not in self.seen and value not in pending
+            value
+            for value in deck_ids
+            if value not in self.seen and value not in pending
         ]
         if additional:
             self.state["queue"].extend(additional)
@@ -384,7 +386,10 @@ def main():
     parser.add_argument("--max-hours", type=float, default=24)
     parser.add_argument("--max-decks", type=int, default=20000)
     parser.add_argument(
-        "--deck-id", type=int, action="append", default=[],
+        "--deck-id",
+        type=int,
+        action="append",
+        default=[],
         help="Add a public Commander deck ID to the existing run (repeatable)",
     )
     mode = parser.add_mutually_exclusive_group()

@@ -43,11 +43,15 @@ class RecommendationStore:
         with closing(self.connect()) as db:
             if should_cancel:
                 db.set_progress_handler(lambda: int(should_cancel()), 1000)
-            return [dict(commanders=[row[0]], count=row[1], sample=row[2]) for row in db.execute(
-                'SELECT i.commander, i.decks, c.sample FROM inclusion i JOIN '
-                '(SELECT oracle_id, count(*) AS sample FROM members WHERE commander=1 GROUP BY oracle_id) c '
-                'ON c.oracle_id=i.commander WHERE i.oracle_id=? ORDER BY i.decks DESC, i.commander LIMIT 100',
-                (oracle_id,))]
+            return [
+                dict(commanders=[row[0]], count=row[1], sample=row[2])
+                for row in db.execute(
+                    "SELECT i.commander, i.decks, c.sample FROM inclusion i JOIN "
+                    "(SELECT oracle_id, count(*) AS sample FROM members WHERE commander=1 GROUP BY oracle_id) c "
+                    "ON c.oracle_id=i.commander WHERE i.oracle_id=? ORDER BY i.decks DESC, i.commander LIMIT 100",
+                    (oracle_id,),
+                )
+            ]
 
     def ingest_members(self, deck_id, digest, source, members):
         """Atomically replace one normalized sample and update compact counts."""

@@ -135,5 +135,6 @@ def text_roles(payload):
         add('Removal', 'mass removal')
     possessed, granted = keyword_profile(payload)
     if len(possessed) >= 3 or len(granted) >= 2:
-        reasons['Keyword Soup'] = ['Multiple relevant keywords: ' + ', '.join(sorted(possessed | granted))]
+        prefix = 'Oracle effect: grants multiple keywords: ' if len(granted) >= 2 else 'Keywords: '
+        reasons['Keyword Soup'] = [prefix + ', '.join(sorted(possessed | granted))]
     return reasons

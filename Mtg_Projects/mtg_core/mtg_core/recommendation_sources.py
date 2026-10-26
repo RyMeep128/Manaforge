@@ -57,9 +57,16 @@ def source_signature(root):
     from pathlib import Path
 
     root = Path(root)
-    paths = [root / 'source-settings.json', root / 'archidekt.aggregate.json.gz']
-    for name in ('local', 'archidekt', 'edhrec', 'edhrec-cohorts', 'moxfield', *DATASET_LABELS):
-        paths.extend(root / f'{name}.sqlite3{suffix}' for suffix in ('', '-wal'))
+    paths = [root / "source-settings.json", root / "archidekt.aggregate.json.gz"]
+    for name in (
+        "local",
+        "archidekt",
+        "edhrec",
+        "edhrec-cohorts",
+        "moxfield",
+        *DATASET_LABELS,
+    ):
+        paths.extend(root / f"{name}.sqlite3{suffix}" for suffix in ("", "-wal"))
     signature = []
     for path in paths:
         try:
@@ -88,24 +95,39 @@ def default_sources(local_store, *, document=None):
             if source_id == "edhrec":
                 from .discovery_starter import snapshot_path
 
-                cohort = (document.editor_preferences.get('edhrec_cohort', 'inherit')
-                          if document is not None else 'inherit')
-                if cohort == 'inherit':
-                    cohort = config['edhrec'].get('cohort', 'auto')
-                note = ''
-                if cohort == 'auto':
-                    discovery = document.editor_preferences.get('discovery', {}) if document is not None else {}
-                    theme = (discovery.get('theme_option') or {}).get('slug') or discovery.get('theme')
-                    cohort = f'theme:{theme}' if theme else 'general'
+                cohort = (
+                    document.editor_preferences.get("edhrec_cohort", "inherit")
+                    if document is not None
+                    else "inherit"
+                )
+                if cohort == "inherit":
+                    cohort = config["edhrec"].get("cohort", "auto")
+                note = ""
+                automatic = cohort == "auto"
+                if automatic:
+                    discovery = (
+                        document.editor_preferences.get("discovery", {})
+                        if document is not None
+                        else {}
+                    )
+                    theme = (discovery.get("theme_option") or {}).get(
+                        "slug"
+                    ) or discovery.get("theme")
+                    if (discovery.get("theme_option") or {}).get("origin") == "custom":
+                        theme = None
+                    cohort = f"theme:{theme}" if theme else "general"
                     if not theme:
-                        note = 'Automatic: no saved theme; using general. '
+                        note = "Automatic: no saved theme; using general. "
                 source = EdhrecSource(
                     snapshot_path(root, "edhrec.sqlite3"),
                     cohort=cohort,
                     cohort_database=root / "edhrec-cohorts.sqlite3",
                     selection_note=note,
+                    allow_general_fallback=automatic,
                 )
-            elif source_id == "archidekt" and config["archidekt"]["cache"] == "portable":
+            elif (
+                source_id == "archidekt" and config["archidekt"]["cache"] == "portable"
+            ):
                 source = AggregateSource(root / "archidekt.aggregate.json.gz")
             elif (root / f"{source_id}.sqlite3").exists():
                 source = CachedSource(
@@ -115,7 +137,9 @@ def default_sources(local_store, *, document=None):
                 )
             else:
                 source = UnavailableSource(
-                    source_id, "public", f"No collected {SOURCE_LABELS[source_id]} cache available"
+                    source_id,
+                    "public",
+                    f"No collected {SOURCE_LABELS[source_id]} cache available",
                 )
         except Exception as exc:
             source = UnavailableSource(

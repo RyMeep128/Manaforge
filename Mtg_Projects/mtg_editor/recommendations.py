@@ -63,7 +63,8 @@ def load_recommendations(
     allowed = None
     if query.strip():
         matches = service.search_cards(
-            deck_query(query, document), dict(scryfall_syntax=True, allow_remote=False, limit=10000)
+            deck_query(query, document),
+            dict(scryfall_syntax=True, allow_remote=False, limit=10000),
         )
         allowed = {row.oracle_id for row in matches}
     from mtg_core.search.cancellation import check_cancelled
@@ -140,7 +141,8 @@ def load_recommendations(
         rows = []
     snapshot.update(
         results=rows,
-        color_filtered=pool_context(document)[1] is not None and not pool_context(document)[2],
+        color_filtered=pool_context(document)[1] is not None
+        and not pool_context(document)[2],
         deck_context=deck_context,
     )
     return snapshot
@@ -181,15 +183,15 @@ def statistical_reason(row):
         evidence = {key: row}
     lines = ["Public recommendation evidence"]
     for source_id, item in sorted(evidence.items()):
-        lines.append(
-            SOURCE_LABELS.get(source_id, source_id)
-        )
+        lines.append(SOURCE_LABELS.get(source_id, source_id))
         if "rank" in item:
             lines.append(f"Rank: #{item['rank']}")
         if source_id == "edhrec":
             if item.get("edhrec_cohort"):
                 cohort = item["edhrec_cohort"]
-                lines.append(f"Exact EDHREC cohort: {cohort['kind']} / {cohort['label']}")
+                lines.append(
+                    f"Exact EDHREC cohort: {cohort['kind']} / {cohort['label']}"
+                )
             if len(item.get("commanders", [])) == 2:
                 lines.append(
                     "Exact cached pair cohort: "

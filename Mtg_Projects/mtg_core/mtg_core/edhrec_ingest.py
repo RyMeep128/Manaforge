@@ -337,7 +337,9 @@ def collect(root, catalog, *, max_commanders=10000, delay=6, commander_slugs=())
         if state_path.exists()
         else dict(status="new", completed=[], skipped={}, imported=0)
     )
-    additional = [slug for slug in commander_slugs if slug not in state.get("slugs", [])]
+    additional = [
+        slug for slug in commander_slugs if slug not in state.get("slugs", [])
+    ]
     if state["status"] == "complete" and not additional:
         return state
     state.setdefault("started_at", time.time())
@@ -416,7 +418,9 @@ def main():
     )
     parser.add_argument("--max-commanders", type=int, default=10000)
     parser.add_argument(
-        "--commander-slug", action="append", default=[],
+        "--commander-slug",
+        action="append",
+        default=[],
         help="Add a commander page slug to this snapshot (repeatable; cached pages are reused)",
     )
     parser.add_argument(
@@ -468,7 +472,9 @@ def main():
             )
         else:
             collect(
-                args.root, args.catalog, max_commanders=args.max_commanders,
+                args.root,
+                args.catalog,
+                max_commanders=args.max_commanders,
                 commander_slugs=args.commander_slug,
             )
         if args.with_discovery:

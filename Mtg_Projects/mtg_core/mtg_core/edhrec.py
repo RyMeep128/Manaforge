@@ -105,7 +105,8 @@ class EdhrecSource:
     role: str = "public"
     cohort: str = "general"
     cohort_database: Path | None = None
-    selection_note: str = ''
+    selection_note: str = ""
+    allow_general_fallback: bool = False
 
     def commanders_using(self, oracle_id, *, should_cancel=None):
         """General cached pages only, keeping exact partner cohorts labeled."""
@@ -113,18 +114,32 @@ class EdhrecSource:
         if not path.is_file():
             return []
         from .search.cancellation import check_cancelled
+
         rows = []
-        with closing(sqlite3.connect(path.resolve().as_uri() + '?mode=ro', uri=True)) as db:
+        with closing(
+            sqlite3.connect(path.resolve().as_uri() + "?mode=ro", uri=True)
+        ) as db:
             if should_cancel:
                 db.set_progress_handler(lambda: int(should_cancel()), 1000)
             for commander, payload in db.execute(
-                    "SELECT pages.commander, j.value FROM pages, json_each(pages.payload, '$.results') j "
-                    "WHERE json_extract(j.value, '$.oracle_id')=?", (oracle_id,)):
+                "SELECT pages.commander, j.value FROM pages, json_each(pages.payload, '$.results') j "
+                "WHERE json_extract(j.value, '$.oracle_id')=?",
+                (oracle_id,),
+            ):
                 check_cancelled(should_cancel)
                 item = json.loads(payload)
-                count, sample = item.get('num_decks'), item.get('sample')
-                if isinstance(count, int) and isinstance(sample, int) and sample > 0 and 0 < count <= sample:
-                    rows.append(dict(commanders=commander.split('|'), count=count, sample=sample))
+                count, sample = item.get("num_decks"), item.get("sample")
+                if (
+                    isinstance(count, int)
+                    and isinstance(sample, int)
+                    and sample > 0
+                    and 0 < count <= sample
+                ):
+                    rows.append(
+                        dict(
+                            commanders=commander.split("|"), count=count, sample=sample
+                        )
+                    )
         return rows
 
     def __post_init__(self):
@@ -157,10 +172,16 @@ class EdhrecSource:
             return result
         database = Path(self.path)
         if self.cohort != "general":
-            database = Path(self.cohort_database) if self.cohort_database else database.with_name("edhrec-cohorts.sqlite3")
-            result["status"] = f"No exact cached EDHREC {self.cohort} cohort for this commander/pair."
+            database = (
+                Path(self.cohort_database)
+                if self.cohort_database
+                else database.with_name("edhrec-cohorts.sqlite3")
+            )
+            result["status"] = (
+                f"No exact cached EDHREC {self.cohort} cohort for this commander/pair."
+            )
         if not database.exists():
-            if self.cohort != 'general':
+            if self.cohort != "general" and self.allow_general_fallback:
                 return self.general_fallback(commanders, exclude, limit)
             return result
         with closing(
@@ -178,7 +199,7 @@ class EdhrecSource:
                     (commander_key(selected), kind, value),
                 ).fetchone()
         if row is None:
-            if self.cohort != 'general':
+            if self.cohort != "general" and self.allow_general_fallback:
                 return self.general_fallback(commanders, exclude, limit)
             return result
         data = json.loads(row[0])
@@ -193,24 +214,33 @@ class EdhrecSource:
             results=rows[: max(0, limit)],
             sources=[
                 dict(
-                    source="https://edhrec.com/" + data.get("source_path", "commanders/" + data["slug"]),
+                    source="https://edhrec.com/"
+                    + data.get("source_path", "commanders/" + data["slug"]),
                     imported=row[1],
                 )
             ],
-            status=self.selection_note + (
+            status=self.selection_note
+            + (
                 "Limited bundled starter coverage. "
                 if Path(self.path).parent.name == "starter"
                 else ""
             )
             + f"Offline EDHREC {'exact cached pair cohort' if len(selected) == 2 else 'commander page'}"
-            + (f"; {data['cohort']['label']} ({data['cohort']['kind']})" if "cohort" in data else "; general audience")
+            + (
+                f"; {data['cohort']['label']} ({data['cohort']['kind']})"
+                if "cohort" in data
+                else "; general audience"
+            )
             + f"; {len(data['unresolved'])} unresolved card names omitted; category lists may be incomplete.",
         )
         return result
 
     def general_fallback(self, commanders, exclude, limit):
-        result = replace(self, cohort='general', selection_note='').snapshot(
-            commanders, exclude=exclude, limit=limit)
-        result['status'] = (f'{self.cohort} unavailable for this commander/pair; '
-                            f'using general. {result["status"]}')
+        result = replace(self, cohort="general", selection_note="").snapshot(
+            commanders, exclude=exclude, limit=limit
+        )
+        result["status"] = (
+            f"{self.cohort} unavailable for this commander/pair; "
+            f"using general. {result['status']}"
+        )
         return result
