@@ -140,3 +140,54 @@ def test_precon_uses_shared_exact_printing_resolver(tmp_path):
     assert [(entry.card_id, entry.quantity) for entry in document.deck.entries] == [
         (identities[0], 99), (identities[1], 1)]
     assert document.deck.commander_entry_ids == [document.deck.entries[1].entry_id]
+
+
+def test_browser_metadata_reuses_cache_and_invalidates_on_database_change(tmp_path, monkeypatch):
+    from mtg_core import precons
+    monkeypatch.setattr(precons, 'core_data_root', lambda: tmp_path)
+    db_path = tmp_path / 'catalog.db'
+    db_path.write_bytes(b'initial database')
+    class Database:
+        calls = 0
+        def precon_card_summaries(self, names, **kwargs):
+            self.calls += 1
+            return {name: dict(id=name, color_identity=['U', 'G']) for name in names}
+    database = Database()
+    database.db_path = str(db_path)
+    service = SimpleNamespace(database=database)
+    records = normalize_catalog(source())['decks']
+    first = list(precons.browser_metadata(service, records))
+    assert first[0][0][1:3] == ('UG', True)
+    assert first[0][0][3]['id'] == 'Partner A'
+    calls = database.calls
+    assert list(precons.browser_metadata(service, records)) == first
+    assert database.calls == calls
+    db_path.write_bytes(b'updated database with new cards')
+    assert list(precons.browser_metadata(service, records)) == first
+    assert database.calls > calls
+    calls = database.calls
+    assert list(precons.browser_metadata(service, records, cancelled=lambda: True)) == []
+    assert database.calls == calls
+
+
+def test_precon_summaries_select_latest_print_and_handle_missing_and_colorless(tmp_path):
+    import json
+    import sqlite3
+    from mtg_core.db.cards import CardOperations
+    path = tmp_path / 'summaries.sqlite3'
+    class Database(CardOperations):
+        def connect(self):
+            connection = sqlite3.connect(path)
+            connection.row_factory = sqlite3.Row
+            return connection
+    database = Database()
+    with database.connect() as connection:
+        connection.execute('CREATE TABLE prints (card_id TEXT, name TEXT, updated_at REAL, payload_json TEXT)')
+        connection.executemany('INSERT INTO prints VALUES (?, ?, ?, ?)', [
+            ('older', 'Commander', 1, json.dumps(dict(color_identity=['R']))),
+            ('newer', 'Commander', 2, json.dumps(dict(color_identity=['W', 'U']))),
+            ('land', 'Land', 1, json.dumps(dict(color_identity=[])))])
+    summaries = database.precon_card_summaries(['commander', 'Land', 'Missing'])
+    assert summaries == {'commander': dict(id='newer', color_identity=['W', 'U']),
+                         'Land': dict(id='land', color_identity=[]), 'Missing': None}
+    assert database.precon_card_summaries(['commander'], cancelled=lambda: True) == {}

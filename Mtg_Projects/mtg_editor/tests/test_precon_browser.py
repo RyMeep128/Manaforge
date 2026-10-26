@@ -26,7 +26,7 @@ def test_browser_filters_rename_and_original_preview(monkeypatch):
             return dict(id='card', color_identity=['U'], name=kwargs['exact_name'])
     dialog = precon_browser.PreconBrowser(Service(), Thumbnails())
     deadline = time.monotonic() + 3
-    while dialog.catalog_worker is not None and time.monotonic() < deadline:
+    while (dialog.catalog_worker is not None or dialog.metadata_worker is not None) and time.monotonic() < deadline:
         app.processEvents()
         QtTest.QTest.qWait(5)
     assert dialog.catalog_worker is None
@@ -37,10 +37,31 @@ def test_browser_filters_rename_and_original_preview(monkeypatch):
     assert dialog.record['name'] == 'Original precon'
     dialog.search.setText('Featured commander 2024')
     assert dialog.decks.count() == 1
-    dialog.color_filter.setCurrentIndex(dialog.color_filter.findData('R'))
+    dialog.color_buttons['R'].setChecked(True)
     assert dialog.decks.count() == 0 and not dialog.apply_button.isEnabled()
-    dialog.color_filter.setCurrentIndex(dialog.color_filter.findData('U'))
+    dialog.clear_colors()
+    dialog.color_buttons['U'].setChecked(True)
+    assert dialog.decks.count() == 1
+    dialog.color_buttons['R'].setChecked(True)
+    assert dialog.decks.count() == 0  # Selected colors are combined, not treated as alternatives.
+    dialog.clear_colors()
     assert dialog.decks.count() == 1
     dialog.search.setText('Not a product')
     assert dialog.record is None and not dialog.resolve_button.isEnabled()
     dialog.reject()
+
+
+def test_catalog_load_does_not_look_up_cards(monkeypatch):
+    from mtg_editor import precon_browser
+    records = normalize_catalog([dict(name='Fast deck', set_name='Product', set_code='abc',
+        release_date='2024-01-01', format='commander',
+        cards=[dict(name='Card', count=100)])])['decks']
+    monkeypatch.setattr(precon_browser, 'load_catalog', lambda: records)
+    class Service:
+        def get_card(self, **kwargs):
+            raise AssertionError('Initial catalog loading must not look up cards')
+    worker = precon_browser.CatalogWorker(Service(), None)
+    worker.run()
+    assert not worker.error
+    assert len(worker.records) == 1
+    assert worker.records[0]['metadata_ready'] is False

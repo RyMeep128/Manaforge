@@ -1,7 +1,7 @@
 """Precon selection reusing the cancellable deck import review dialog."""
 from mtg_ui.loading import LoadingThread
 from PyQt6 import QtCore as C, QtGui as G, QtWidgets as W
-from mtg_core.precons import load_catalog, decklist_entries, prepare_precon, cover_asset
+from mtg_core.precons import load_catalog, decklist_entries, prepare_precon, cover_asset, browser_metadata
 from .decklist_dialogs import ImportDecklist, ImportWorker
 from mtg_ui.theme import COLORS
 
@@ -70,7 +70,7 @@ class PreconTileDelegate(W.QStyledItemDelegate):
                                image_rect.center().y()-scaled.height()//2, scaled)
         else:
             painter.drawText(image_rect, C.Qt.AlignmentFlag.AlignCenter | C.Qt.TextFlag.TextWordWrap,
-                             'Card artwork unavailable')
+                             'Card artwork unavailable' if record.get('metadata_ready') else 'Loading card...')
         if option.state & W.QStyle.StateFlag.State_HasFocus:
             painter.setBrush(C.Qt.BrushStyle.NoBrush)
             painter.setPen(G.QPen(G.QColor(COLORS['accent_hover']), 1, C.Qt.PenStyle.DotLine))
@@ -85,31 +85,30 @@ class CatalogWorker(LoadingThread):
 
     def run(self):
         try:
-            cards = {}
-            for record in load_catalog():
+            self.records = load_catalog()
+            for record in self.records:
                 if self.isInterruptionRequested():
                     return
-                colors, complete, featured = set(), True, None
-                playable = [r for r in record['entries'] if r['section'] in ('commander', 'mainboard')]
-                playable.sort(key=lambda r: r['section'] != 'commander')
-                for row in playable:
-                    if self.isInterruptionRequested():
-                        return
-                    name = row['name']
-                    if name not in cards:
-                        cards[name] = self.service.get_card(exact_name=name)
-                    card = cards[name]
-                    if not card:
-                        complete = False
-                        continue
-                    colors.update(card.get('color_identity', []))
-                    if featured is None:
-                        featured = card
-                record['colors'] = ''.join(c for c in 'WUBRG' if c in colors)
-                record['colors_complete'] = complete
-                record['featured'] = featured
-                record['cover_asset_id'] = cover_asset(record, self.service, offline=True)
-                self.records.append(record)
+                record.update(colors='', colors_complete=False, featured=None, metadata_ready=False)
+                commanders = ' '.join(e['name'] for e in record['entries'] if e['section'] == 'commander')
+                record['_search_text'] = ' '.join([record['name'], record['set_name'], record['set_code'],
+                    record['product_type'], record['release_date'], commanders]).casefold()
+        except Exception as exc:
+            self.error = str(exc)
+
+
+class MetadataWorker(LoadingThread):
+    batchReady = C.pyqtSignal(object)
+
+    def __init__(self, service, records, parent):
+        super().__init__(parent)
+        self.service, self.records, self.error = service, records, ''
+
+    def run(self):
+        try:
+            for batch in browser_metadata(self.service, self.records,
+                                          cancelled=self.isInterruptionRequested):
+                self.batchReady.emit(batch)
         except Exception as exc:
             self.error = str(exc)
 
@@ -139,6 +138,12 @@ class PreconBrowser(ImportDecklist):
         self.resize(1000, 850)
         self.records, self.record, self.catalog_worker = [], None, None
         self.cover_asset_id = None
+        self.metadata_worker = None
+        self._closing = False
+        self.metadata_refresh = C.QTimer(self)
+        self.metadata_refresh.setSingleShot(True)
+        self.metadata_refresh.setInterval(150)
+        self.metadata_refresh.timeout.connect(self.filter_records)
         self.thumbnails = thumbnails
         self.input_mode.hide()
         self.file_button.hide()
@@ -166,15 +171,37 @@ class PreconBrowser(ImportDecklist):
         self.search.setAccessibleName('Search preconstructed decks')
         form.addWidget(self.search)
         filters = W.QHBoxLayout()
-        self.format_filter, self.year_filter, self.color_filter = W.QComboBox(), W.QComboBox(), W.QComboBox()
+        self.format_filter, self.year_filter = W.QComboBox(), W.QComboBox()
         self.format_filter.addItem('All formats', '')
         self.year_filter.addItem('All release years', '')
-        self.color_filter.addItem('All colors', '')
-        for label, value in [('White', 'W'), ('Blue', 'U'), ('Black', 'B'), ('Red', 'R'), ('Green', 'G'), ('Colorless', 'C')]:
-            self.color_filter.addItem(label, value)
-        for widget in (self.format_filter, self.year_filter, self.color_filter):
-            filters.addWidget(widget)
+        for widget in (self.format_filter, self.year_filter):
+            filters.addWidget(widget, 1)
             widget.currentIndexChanged.connect(self.filter_records)
+        filters.addSpacing(12)
+        filters.addWidget(W.QLabel('Colors'))
+        self.color_buttons = {}
+        for name, color, background in [('White', 'W', '#eee4c4'), ('Blue', 'U', '#80bddd'),
+                ('Black', 'B', '#b5a6bc'), ('Red', 'R', '#e99b87'), ('Green', 'G', '#91c4a2')]:
+            button = W.QPushButton(color)
+            button.setCheckable(True)
+            button.setFixedSize(30, 30)
+            button.setAccessibleName(f'Include {name.lower()} in deck color identity')
+            button.setToolTip(f'{name}: decks must contain every selected color. None selected shows all colors.')
+            button.setStyleSheet(f"""
+                QPushButton {{ background: {background}; color: #101318; border-radius: 15px;
+                    border: 3px solid {COLORS['canvas']}; padding: 0; font-weight: bold; }}
+                QPushButton:hover {{ border-color: {COLORS['text_secondary']}; }}
+                QPushButton:checked {{ border-color: {COLORS['accent_hover']}; }}
+                QPushButton:focus {{ border-style: dotted; }}
+                QPushButton:disabled {{ color: #6b7280; background: {COLORS['border']}; }}
+            """)
+            button.toggled.connect(self.filter_records)
+            self.color_buttons[color] = button
+            filters.addWidget(button)
+        self.clear_colors_button = clear_colors = W.QPushButton('Clear')
+        clear_colors.setToolTip('Clear selected colors')
+        clear_colors.clicked.connect(self.clear_colors)
+        filters.addWidget(clear_colors)
         form.addLayout(filters)
         self.decks = W.QListWidget()
         self.decks.setAccessibleName('Official preconstructed deck catalog')
@@ -219,31 +246,73 @@ class PreconBrowser(ImportDecklist):
         self.messages.setPlainText(worker.error or f'{len(self.records)} preconstructed products available. '
             'Colors and featured artwork use the local card catalog. Missing card data may limit filters.')
         worker.deleteLater()
+        self.format_filter.blockSignals(True)
+        self.year_filter.blockSignals(True)
         for fmt in sorted({r['format'] for r in self.records}):
             self.format_filter.addItem(fmt, fmt)
         for year in sorted({r['release_date'][:4] for r in self.records}, reverse=True):
             self.year_filter.addItem(year, year)
+        self.format_filter.blockSignals(False)
+        self.year_filter.blockSignals(False)
         self.filter_records()
+        if self.records:
+            self.metadata_worker = MetadataWorker(self.service, self.records, self)
+            self.metadata_worker.batchReady.connect(self.metadata_loaded)
+            self.metadata_worker.finished.connect(self.metadata_finished)
+            self.metadata_worker.start()
         if worker.error:
             self.catalog_status.setText('Could not load decks: ' + worker.error)
 
+    def clear_colors(self):
+        for button in self.color_buttons.values():
+            button.blockSignals(True)
+            button.setChecked(False)
+            button.blockSignals(False)
+        self.filter_records()
+
+    def metadata_loaded(self, batch):
+        changed = {index for index, *_ in batch}
+        for index, colors, complete, featured in batch:
+            self.records[index].update(colors=colors, colors_complete=complete,
+                                       featured=featured, metadata_ready=True)
+        if any(button.isChecked() for button in self.color_buttons.values()):
+            if not self.metadata_refresh.isActive():
+                self.metadata_refresh.start()
+        else:
+            # QListWidget stores a copy of dict data; refresh only the displayed metadata.
+            for row in range(self.decks.count()):
+                item = self.decks.item(row)
+                index = item.data(C.Qt.ItemDataRole.UserRole+1)
+                if index in changed:
+                    item.setData(C.Qt.ItemDataRole.UserRole, self.records[index])
+            self.update_cover()
+
+    def metadata_finished(self):
+        worker, self.metadata_worker = self.metadata_worker, None
+        error = worker.error
+        worker.deleteLater()
+        self.metadata_refresh.stop()
+        if not self.result:
+            self.filter_records()
+        if error:
+            self.catalog_status.setText('Decks loaded; some colors/artwork unavailable: ' + error)
+
     def filter_records(self):
-        if self.worker is not None:
+        if self.worker is not None or self._closing:
             return
         query = self.search.text().casefold().split()
         previous = self.record
+        scroll = self.decks.verticalScrollBar().value()
         self.decks.blockSignals(True)
         self.decks.clear()
-        for record in self.records:
-            commanders = ', '.join(e['name'] for e in record['entries'] if e['section'] == 'commander')
-            text = ' '.join([record['name'], record['set_name'], record['set_code'],
-                             record['product_type'], record['release_date'], commanders]).casefold()
-            color = self.color_filter.currentData()
+        selected_colors = {color for color, button in self.color_buttons.items() if button.isChecked()}
+        for record_index, record in enumerate(self.records):
+            text = record['_search_text']
             if (any(term not in text for term in query)
                 or self.format_filter.currentData() not in ('', record['format'])
                 or self.year_filter.currentData() not in ('', record['release_date'][:4])
-                or (color and (not record['colors_complete'] or
-                    (bool(record['colors']) if color == 'C' else color not in record['colors'])))):
+                or (selected_colors and (not record['colors_complete'] or
+                    not selected_colors.issubset(record['colors'])))):
                 continue
             colors = record['colors'] or ('Colorless' if record['colors_complete'] else 'Unknown colors')
             label = (f"{record['name']} \u00b7 {record['format']} \u00b7 {colors}\n"
@@ -251,15 +320,19 @@ class PreconBrowser(ImportDecklist):
             item = W.QListWidgetItem(label)
             item.setToolTip(label)
             item.setData(C.Qt.ItemDataRole.UserRole, record)
+            item.setData(C.Qt.ItemDataRole.UserRole+1, record_index)
             self.decks.addItem(item)
         selected = next((i for i in range(self.decks.count())
-                         if self.decks.item(i).data(C.Qt.ItemDataRole.UserRole) == previous), 0)
+                         if previous and self.decks.item(i).data(C.Qt.ItemDataRole.UserRole)['id'] == previous['id']), 0)
         self.decks.setCurrentRow(selected if self.decks.count() else -1)
         self.decks.blockSignals(False)
+        self.decks.verticalScrollBar().setValue(scroll)
         self.select_record(self.decks.currentRow())
         count = self.decks.count()
         self.catalog_status.setText(f'{count:,} decks - Select a card to create your deck'
                                     if count else 'No decks match. Try another search or clear the filters.')
+        if self.metadata_worker is not None:
+            self.catalog_status.setText(self.catalog_status.text() + ' - Updating colors...')
         C.QTimer.singleShot(0, self.update_cover)
 
     def select_record(self, index):
@@ -267,7 +340,9 @@ class PreconBrowser(ImportDecklist):
         item = self.decks.item(index)
         self.record = item.data(C.Qt.ItemDataRole.UserRole) if item else None
         self.resolve_button.setEnabled(bool(self.record))
-        self.deck_name.setText(self.record['name'] if self.record else '')
+        if self.record is None or self.record['id'] != getattr(self, '_selected_key', None):
+            self.deck_name.setText(self.record['name'] if self.record else '')
+        self._selected_key = self.record['id'] if self.record else None
         self.source.setPlainText('\n'.join(f'{r.count} {r.name} ({r.set_code or ""}) '
             f'{r.collector_number or ""} [{r.section}]' for r in decklist_entries(self.record)) if self.record else '')
         self.update_cover()
@@ -304,7 +379,7 @@ class PreconBrowser(ImportDecklist):
         self.progress.show()
         self.decks.setEnabled(False)
         self.deck_name.setEnabled(False)
-        for widget in (self.search, self.format_filter, self.year_filter, self.color_filter):
+        for widget in (self.search, self.format_filter, self.year_filter, self.clear_colors_button, *self.color_buttons.values()):
             widget.setEnabled(False)
         return PreconWorker(self.record, self.service, self.remote.isChecked(), self)
 
@@ -313,7 +388,7 @@ class PreconBrowser(ImportDecklist):
         super().resolved()
         self.decks.setEnabled(True)
         self.deck_name.setEnabled(True)
-        for widget in (self.search, self.format_filter, self.year_filter, self.color_filter):
+        for widget in (self.search, self.format_filter, self.year_filter, self.clear_colors_button, *self.color_buttons.values()):
             widget.setEnabled(True)
         if self.result and self.apply_button.isEnabled():
             self.accept()
@@ -323,20 +398,35 @@ class PreconBrowser(ImportDecklist):
     def accept(self):
         if self.worker is not None or self.catalog_worker is not None or not self.result:
             return
+        if self.metadata_worker is not None:
+            self._closing = True
+            self.metadata_worker.requestInterruption()
+            self.metadata_worker.finished.connect(self.accept)
+            return
         self.thumbnails.set_visible(id(self), [])
         super().accept()
 
     def closeEvent(self, event):
-        if self.catalog_worker is not None:
+        if self.catalog_worker is not None or self.metadata_worker is not None:
             self.reject()
             event.ignore()
         else:
             super().closeEvent(event)
 
     def reject(self):
+        if self.worker is not None:
+            if self.metadata_worker is not None:
+                self.metadata_worker.requestInterruption()
+            super().reject()
+            return
         if self.catalog_worker is not None:
             self.catalog_worker.requestInterruption()
             self.catalog_worker.finished.connect(self.reject)
+            return
+        if self.metadata_worker is not None:
+            self._closing = True
+            self.metadata_worker.requestInterruption()
+            self.metadata_worker.finished.connect(self.reject)
             return
         self.thumbnails.set_visible(id(self), [])
         super().reject()

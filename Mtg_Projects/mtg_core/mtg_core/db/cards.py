@@ -288,6 +288,30 @@ class CardOperations:
             ).fetchone()
         return self.row_to_print_record(row)
 
+    def precon_card_summaries(self, names, *, cancelled=lambda: False):
+        """Read only tile IDs and color identities, using one connection per batch."""
+        summaries = {}
+        names = list(dict.fromkeys(names))
+        with self.connect() as connection:
+            for offset in range(0, len(names), 250):
+                if cancelled():
+                    return summaries
+                batch = names[offset:offset+250]
+                values = ','.join('(?)' for _ in batch)
+                rows = connection.execute(f"""
+                    WITH requested(name) AS (VALUES {values})
+                    SELECT requested.name, p.card_id,
+                           json_extract(p.payload_json, '$.color_identity') AS colors
+                    FROM requested LEFT JOIN prints p ON p.card_id = (
+                        SELECT card_id FROM prints WHERE lower(name) = lower(requested.name)
+                        ORDER BY updated_at DESC LIMIT 1
+                    )
+                """, batch)
+                for row in rows:
+                    summaries[row['name']] = (dict(id=row['card_id'],
+                        color_identity=json.loads(row['colors'] or '[]')) if row['card_id'] else None)
+        return summaries
+
     def get_named_print(self, exact_name: str) -> PrintRecord | None:
         with self.connect() as connection:
             row = connection.execute(

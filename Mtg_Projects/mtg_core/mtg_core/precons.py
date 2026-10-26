@@ -120,9 +120,87 @@ def apply_precon(document, record, result, name=None, cover_asset_id=None):
     document.deck.format = record['format']
     document.deck.extras['manual_name'] = True
     original = {key: deepcopy(value) for key, value in record.items()
-                if key not in ('featured', 'colors', 'colors_complete', 'cover_asset_id')}
+                if key not in ('featured', 'colors', 'colors_complete', 'cover_asset_id', '_search_text', 'metadata_ready')}
     document.deck.extras['precon_origin'] = dict(schema_version=1, id=record['id'],
         name=record['name'], source_url=record['source_url'], release_date=record['release_date'],
         original=original, original_entries=[asdict(e) for e in decklist_entries(record)])
     if cover_asset_id:
         document.deck.extras['cover_image_asset_id'] = cover_asset_id
+
+
+def browser_metadata(service, records, *, cancelled=lambda: False):
+    """Yield small deck batches; cache summaries until the local catalog changes.
+
+    Database and WAL timestamps invalidate both found and missing card summaries.
+    Artwork is deliberately left to the browser's visible-thumbnail requests.
+    """
+    import os
+    import tempfile
+
+    database = getattr(service, 'database', None)
+    db_path = getattr(database, 'db_path', None)
+    cache_path, stamp, cards = None, None, {}
+    if db_path and db_path != ':memory:':
+        path = Path(db_path).resolve()
+        def file_stamp(path):
+            try:
+                stat = path.stat()
+                return [stat.st_mtime_ns, stat.st_size]
+            except OSError:
+                return None
+        stamp = [str(path), file_stamp(path), file_stamp(Path(str(path)+'-wal'))]
+        key = hashlib.sha256(str(path).encode()).hexdigest()[:20]
+        cache_path = core_data_root() / f'precon-summaries-v1-{key}.json'
+        try:
+            cached = json.loads(cache_path.read_text(encoding='utf-8'))
+            if cached.get('stamp') == stamp and isinstance(cached.get('cards'), dict):
+                cards = cached['cards']
+        except (OSError, ValueError):
+            pass
+    for offset in range(0, len(records), 40):
+        if cancelled():
+            return
+        batch = records[offset:offset+40]
+        playable = [[r for r in record['entries'] if r['section'] in ('commander', 'mainboard')]
+                    for record in batch]
+        for rows in playable:
+            rows.sort(key=lambda r: r['section'] != 'commander')
+        missing = list(dict.fromkeys(row['name'] for rows in playable for row in rows
+                                    if row['name'] not in cards))
+        if not missing:
+            pass
+        elif database is not None and hasattr(database, 'precon_card_summaries'):
+            cards.update(database.precon_card_summaries(missing, cancelled=cancelled))
+        else:
+            for name in missing:
+                if cancelled():
+                    return
+                card = service.get_card(exact_name=name)
+                cards[name] = (dict(id=card.get('id'), color_identity=card.get('color_identity', []))
+                               if card else None)
+        results = []
+        for index, rows in enumerate(playable, offset):
+            if cancelled():
+                return
+            found = [cards.get(row['name']) for row in rows]
+            colors = {color for card in found if card for color in card['color_identity']}
+            results.append((index, ''.join(c for c in 'WUBRG' if c in colors),
+                            all(found), next((card for card in found if card), None)))
+        yield results
+    if cache_path is not None and not cancelled():
+        temporary = None
+        try:
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
+            with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8',
+                    dir=cache_path.parent, delete=False) as stream:
+                temporary = stream.name
+                json.dump(dict(stamp=stamp, cards=cards), stream, separators=(',', ':'))
+            os.replace(temporary, cache_path)
+        except OSError:
+            pass  # A read-only cache must not prevent browsing.
+        finally:
+            if temporary:
+                try:
+                    os.unlink(temporary)
+                except OSError:
+                    pass

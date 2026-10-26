@@ -3,9 +3,16 @@
 Choose **New deck → Create from Precon** in the project browser, recent-deck
 menu, or Ctrl+N. Blank decks and normal imports remain available in that chooser.
 Search by product/deck name, commander, set code/name, or year; combine this with
-format, release-year, and color filters. Commander products appear first. The catalog uses a wrapping grid of commander/featured-card
+format and release-year filters. Toggle the W/U/B/R/G color circles to require
+every selected color (W + U includes decks containing both, including decks with
+additional colors); **Clear** or no selections shows all colors, including colorless. Commander products appear first. The catalog uses a wrapping grid of commander/featured-card
 tiles, with deck name, format, colors, source product, and release year above each
 card. Commander names remain searchable without repeating them in tile labels.
+The grid appears after reading catalog metadata, without waiting for card lookups.
+Colors and featured-card IDs fill in asynchronously using batched, minimal database
+reads. Compact card summaries are cached on disk and invalidated when the database
+or its WAL file changes. Artwork is requested only for visible tiles through the
+shared thumbnail service. Color-filtered matches fill in as enrichment completes.
 Color identity uses locally installed card data; products with incomplete color
 coverage do not appear under a specific color filter. They remain searchable.
 
