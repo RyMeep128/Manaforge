@@ -1,0 +1,20 @@
+name = "manaforge-feedback"
+main = "worker.mjs"
+compatibility_date = "2026-10-01"
+workers_dev = true
+
+[observability]
+enabled = false
+
+[vars]
+GITHUB_REPOSITORY = "RyMeep128/branch_print-proxy-prep-QtPort"
+
+[[d1_databases]]
+binding = "REPORTS"
+database_name = "manaforge-feedback"
+database_id = "REPLACE_WITH_DATABASE_ID"
+
+[[ratelimits]]
+name = "RATE_LIMITER"
+namespace_id = "1001"
+simple = { limit = 5, period = 60 }

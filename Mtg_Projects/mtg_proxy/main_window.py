@@ -252,7 +252,8 @@ class _PrintApplicationState:
         if parent is None:
             self._pending_warnings.append((title, message))
             return
-        QMessageBox.warning(parent, title, message)
+        from mtg_ui.feedback import report_problem
+        report_problem(parent, title, message)
 
 
 class PrintApplicationContext(QtCore.QObject, _PrintApplicationState):

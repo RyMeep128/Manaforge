@@ -31,6 +31,9 @@ Text fields retain their native editing and selection shortcuts.'''
 
 
 def add_shortcuts_help(window):
+    from .feedback import FeedbackDialog, pending_reports
     menu = window.menuBar().addMenu('Help')
+    menu.addAction('Send Feedback', lambda: FeedbackDialog(window).exec())
+    menu.addAction('Pending Feedback', lambda: pending_reports(window))
     menu.addAction('Keyboard Shortcuts', lambda: W.QMessageBox.information(
         window, 'Keyboard Shortcuts', SHORTCUTS))

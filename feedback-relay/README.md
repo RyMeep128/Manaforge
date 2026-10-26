@@ -1,0 +1,45 @@
+# In-app feedback relay
+
+Help → Send Feedback is available in Home, Deck Editor and Print Studio. Diagnostics also has a feedback button. Significant print, data update, installation and diagnostic/repair failures offer Report This Problem. Every report is reviewed before upload. No GitHub account is needed.
+
+## Architecture and privacy
+
+The Qt composer uses the existing JobQueue, diagnostics report generator, redactor and atomic JSON writer. No new Python dependency is required. Reports live under the Core data folder's `feedback` directory. Closing a nonempty composer saves it; Help → Pending Feedback lets the user review, retry or delete it. There is no background upload or connectivity polling: after reconnecting, users explicitly select Review / retry. Failed submissions retain input. Local drafts are plaintext and inherit the OS account's folder permissions; delete sensitive drafts when finished.
+
+A Cloudflare Worker authenticates a friend invitation code, applies an IP rate limit (5/minute), bounds and validates JSON, and reserves each report UUID in D1. All prose, optional contact, diagnostics and base64 screenshots stay in private D1 storage. GitHub receives only the reference UUID, category and version, with labels. This avoids public attachment hosting and accidental publication of private logs or personal prose, even if the GitHub repository is public. Do not copy private reports to public issues without review and permission. Anonymous reports leave contact empty. Screenshots are never automatically captured or scrubbed: users select an image, inspect it themselves and approve upload. PNG/JPEG up to 350 KB are supported. Diagnostics are unchecked by default and must be explicitly selected. No raw crash dumps or arbitrary files are uploaded. Known token patterns, emails, URLs and local paths are redacted from text; redaction cannot recognize every possible secret, so the review remains essential.
+
+## One-time maintainer setup
+
+1. Use a Cloudflare Free account and install Wrangler on the maintainer machine. Run `npx wrangler login` from this directory.
+2. Run `npx wrangler d1 create manaforge-feedback`. Put its database ID in `wrangler.toml`. Choose an unused account rate-limit namespace ID if 1001 is already used.
+3. Run `npx wrangler d1 execute manaforge-feedback --remote --file=schema.sql`.
+4. Set `GITHUB_REPOSITORY` in `wrangler.toml`. Precreate `bug`, `enhancement`, `user-feedback`, `friend-testing`, and `diagnostics` labels in that repository.
+5. Create a fine-grained GitHub token restricted to this repository with Issues: write only. Set it with `npx wrangler secret put GITHUB_TOKEN`. Never put it in the app, source, config files, command arguments or release bundle. Rotate before expiry.
+6. Generate a random friend invitation code and set it with `npx wrangler secret put INVITE_CODE`. Share privately with testers. This code permits feedback only; it is not a GitHub credential. Rotate it if abused. IP rate limiting is approximate and per Cloudflare location, not a global abuse guarantee.
+7. Run `npx wrangler deploy`. Configure tester launch environments with `MANAFORGE_FEEDBACK_URL=https://<worker>.<account>.workers.dev/feedback` and `MANAFORGE_FEEDBACK_INVITE=<invitation>`. The app intentionally has no live default endpoint. For staging, deploy a separate Worker/D1 database with a separate invitation and repository, then select its URL in the launch environment. Redirects and non-HTTPS endpoints are rejected. Do not commit invitation values.
+
+This deployment has not been provisioned by the implementation. Until configured, friends can compose and save reports but cannot submit. Configure these variables through a launcher or OS environment before distributing to friends.
+
+## Retrieving reports and retention
+
+GitHub issue references map to `reports.id`. Use the Cloudflare D1 dashboard (account-authenticated) to retrieve payloads by UUID. Payload JSON includes base64 screenshot bytes; decode the screenshot locally into a PNG/JPEG for inspection. D1 does not serve public attachment URLs. Do not enable request-body logging. Worker observability is disabled in the supplied config; Cloudflare still processes network metadata. Restrict Cloudflare account access. Tell testers that Cloudflare stores private reports and GitHub stores reference metadata before inviting them.
+
+Delete private payloads after follow-up, e.g. replace `payload` with `'{}'` after 30 days while retaining the ID/reference tombstone for deduplication. Run this SQL manually from the authenticated D1 dashboard:
+
+```sql
+UPDATE reports SET payload='{}' WHERE state='submitted' AND created_at < datetime('now','-30 days');
+```
+
+Never delete deduplication tombstones while clients may retry. Users can delete local drafts; remote deletion requires asking the maintainer with their reference. No contact is required.
+
+A reserved row without a reference means GitHub creation failed or was uncertain. Automatic retries deliberately do not create another issue. Inspect GitHub for `Private feedback reference: <UUID>`; if found, update the row reference and state to submitted. If absent and no request remains in flight, create the safe reference issue manually, then update the row. The user's next explicit retry returns its reference. This conservative behavior avoids duplicate issues after a timeout or failed D1 confirmation.
+
+## Free tier and limitations
+
+Cloudflare documents 100,000 Worker requests/day on Free, ample for a small friend group; D1 usage is also bounded by its free quotas. Stay on Free, monitor usage and retention, and expect submissions to fail safely at quota instead of adding a paid plan. No R2 account, paid attachment service, GitHub login or large backend is needed. GitHub issues intentionally omit report prose; the maintainer must consult D1. Invitation codes can be copied and are only a small-group spam barrier. There is no unattended crash reporting. Error prompts cover shared print failures and data/diagnostics operations; ordinary validation messages and every legacy editor exception are not globally intercepted.
+
+Sources: [Workers limits](https://developers.cloudflare.com/workers/platform/limits/), [D1 pricing](https://developers.cloudflare.com/d1/platform/pricing/), [Worker rate limiting](https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/), [GitHub create issue permissions](https://docs.github.com/en/rest/issues/issues#create-an-issue).
+
+## CI
+
+Python integration tests cover local persistence, consent defaults, URL restrictions and transport redaction. The relay workflow uses Node's built-in test runner for validation, authorization, rate limiting and duplicate responses. No tests, builds, lint or local validation were run for this change, as requested. Production deployment and real GitHub/Cloudflare smoke testing remain maintainer setup work.

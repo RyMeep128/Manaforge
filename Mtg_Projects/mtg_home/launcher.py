@@ -176,6 +176,8 @@ class ModuleController(C.QObject):
     @C.pyqtSlot(str,str,object)
     def data_status(self,job_id,state,value):
         if state=='failed':
+            from mtg_ui.feedback import report_problem
+            report_problem(self.home, 'data update', str(value))
             self.home.statusBar().showMessage('Data update could not finish. Existing data is available. Open Settings → Data Management to retry.',15000)
         elif state=='completed':
             self.home.statusBar().showMessage('Data operation completed.',5000)

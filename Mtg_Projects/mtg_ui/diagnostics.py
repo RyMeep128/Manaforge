@@ -62,6 +62,9 @@ class DiagnosticsDialog(W.QDialog):
         self.copy.clicked.connect(lambda: W.QApplication.clipboard().setText(self.report()))
         self.export = W.QPushButton('Export Diagnostic Report')
         self.export.clicked.connect(self.export_report)
+        feedback = W.QPushButton('Send Feedback')
+        feedback.clicked.connect(self.send_feedback)
+        bottom.addWidget(feedback)
         close = W.QPushButton('Close')
         close.clicked.connect(self.reject)
         for button in (self.cancel, self.copy, self.export, close):
@@ -72,6 +75,10 @@ class DiagnosticsDialog(W.QDialog):
         self.jobs.idle.connect(self.on_idle)
         self.cancel.setEnabled(False)
         C.QTimer.singleShot(0, lambda: self.check(False))
+
+    def send_feedback(self):
+        from .feedback import FeedbackDialog
+        FeedbackDialog(self, diagnostics=self.report()).exec()
 
     def state(self):
         return self.engine.state if self.engine else InstallationState()
@@ -157,6 +164,9 @@ class DiagnosticsDialog(W.QDialog):
         elif state in ('failed', 'cancelled'):
             detail = str(value) if state == 'failed' else 'Cancelled. Completed work and resumable downloads were kept.'
             self.results.append(Check('Last operation', 'Error' if state == 'failed' else 'Warning', detail + ' You can retry.'))
+            if state == 'failed':
+                from .feedback import report_problem
+                report_problem(self, 'diagnostics or repair', detail)
             self.summary.setText(detail)
             self.output.setPlainText(self.report())
 

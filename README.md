@@ -266,3 +266,8 @@ The UI uses the existing sequential JobQueue. Extensible checks live in
 live in `mtg_core.repair`. Downloads, installations and atomic activation remain in
 the existing infrastructure. Tests cover offline behavior, broken catalogs,
 report redaction, cancellation, backups, retries and avoiding redundant downloads.
+
+## Friend feedback
+
+Help → Send Feedback supports anonymous reports, optional diagnostics/screenshots and local drafts. Maintainer deployment and privacy details: [Feedback relay setup](feedback-relay/README.md).
+

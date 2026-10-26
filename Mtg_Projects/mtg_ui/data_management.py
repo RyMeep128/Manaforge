@@ -335,6 +335,8 @@ class DataManagementDialog(W.QDialog):
                     self.close_button.setText("Finish and launch Manaforge")
             self.refresh_versions()
         elif state == "failed":
+            from .feedback import report_problem
+            report_problem(self, "data installation or repair", str(value))
             self.status.setText(
                 "Could not complete the operation. "
                 + str(value)
