@@ -476,6 +476,10 @@ class EditorWindow(W.QMainWindow):
         self.reflow_toolbars()
 
     def reflow_toolbars(self):
+        compact = self.height() < 650
+        for group in self.control_groups:
+            group.title_label.setVisible(not compact)
+            group.layout().setSpacing(0 if compact else 2)
         available = max(300, self.width()-28)
         info = (self.decks_button.sizeHint().width() + self.name.minimumWidth() +
                 self.format.sizeHint().width() + self.count.sizeHint().width() +
@@ -524,6 +528,9 @@ class EditorWindow(W.QMainWindow):
         layout.setContentsMargins(0, 0, 8, 2)
         layout.setSpacing(2)
         label = W.QLabel(title)
+        frame.title_label = label
+        frame.setAccessibleName(title)
+        frame.setToolTip(title)
         label.setStyleSheet('font-size:9pt;color:#b5bdc9;')
         layout.addWidget(label)
         row = W.QHBoxLayout()
