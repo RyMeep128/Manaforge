@@ -157,7 +157,14 @@ def test_first_run_automatically_checks_local_installation(app, tmp_path):
     dialog = DataManagementDialog(engine=Engine(tmp_path), setup=True)
     app.processEvents()
     drain(app, dialog.jobs)
-    assert "Initial installation health" in dialog.status.text()
-    assert "Not Checked" in dialog.status.text()  # No implicit network requests.
+    assert "Initial installation health" in dialog.health_details.text()
+    assert "Not Checked" in dialog.health_details.text()
+    assert dialog.plan is not None  # Automatically proceeds to size lookup.
+    assert dialog.start.isEnabled()
+    assert "choose Install" in dialog.status.text()
+    assert dialog.progress.isHidden()
+    assert dialog.progress.maximum() == 100
+    assert not dialog.health_toggle.isChecked()
+    assert not dialog.engine.configured  # Size lookup never starts installation.
     assert not dialog.engine.state.get("setup_complete", False)
     dialog.reject()

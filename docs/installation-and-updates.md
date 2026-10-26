@@ -13,8 +13,11 @@ The same workflow can publish an application **prerelease** when its explicit
 `publish_windows_prerelease` input is selected. Dataset releases are separate and
 are not application installers. Building an artifact does not publish a release.
 
-On first launch, setup asks for a data location and artwork mode. **Check download
-sizes** retrieves current official Scryfall metadata and the published recommendation
+On first launch, setup asks for a data location and artwork mode, checks the local
+installation, and automatically looks up download sizes. Completed checks stop the
+loading indicator and show the next action; detailed local diagnostics are collapsed
+under **Show installation details**. **Check download sizes** repeats the lookup
+after changing options. It retrieves current official Scryfall metadata and the published recommendation
 manifest; it does not save a new artwork mode or start installation. The estimate
 includes expansion, catalog/index staging and selected artwork. Select **Install**
 to download, verify and initialize the library. Finish launches the Home page.

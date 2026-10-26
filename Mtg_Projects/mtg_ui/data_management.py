@@ -31,6 +31,7 @@ class DataManagementDialog(W.QDialog):
         self._closing = False
         self._ready = False
         self._owns_job = False
+        self._check_after_health = False
         self.setWindowTitle("Welcome to Manaforge" if setup else "Data Management")
         self.resize(700, 590)
         layout = W.QVBoxLayout(self)
@@ -76,7 +77,9 @@ class DataManagementDialog(W.QDialog):
             form.addRow(note)
         layout.addWidget(self.options)
         self.estimate = W.QLabel(
-            "Check download sizes to see current datasets and required free space."
+            "We will check download sizes automatically. Library installation starts when you choose Install."
+            if setup
+            else "Check for updates to see current datasets and required free space."
         )
         self.estimate.setWordWrap(True)
         layout.addWidget(self.estimate)
@@ -88,14 +91,31 @@ class DataManagementDialog(W.QDialog):
         layout.addWidget(self.operation_label)
         self.progress = W.QProgressBar()
         self.progress.setRange(0, 100)
+        self.progress.hide()
         layout.addWidget(self.progress)
         self.overall = W.QProgressBar()
         self.overall.setFormat("Overall: %p%")
+        self.overall.hide()
         layout.addWidget(self.overall)
         self.status = W.QLabel("")
         self.status.setTextFormat(C.Qt.TextFormat.PlainText)
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
+        self.health_details = W.QLabel()
+        self.health_details.setTextFormat(C.Qt.TextFormat.PlainText)
+        self.health_details.setWordWrap(True)
+        self.health_details.hide()
+        self.health_toggle = W.QPushButton("Show installation details")
+        self.health_toggle.setCheckable(True)
+        self.health_toggle.hide()
+        self.health_toggle.toggled.connect(self.health_details.setVisible)
+        self.health_toggle.toggled.connect(
+            lambda checked: self.health_toggle.setText(
+                "Hide installation details" if checked else "Show installation details"
+            )
+        )
+        layout.addWidget(self.health_toggle)
+        layout.addWidget(self.health_details)
         diagnostics = W.QPushButton("Diagnostics & Repair")
         diagnostics.clicked.connect(self.open_diagnostics)
         layout.addWidget(diagnostics)
@@ -109,6 +129,8 @@ class DataManagementDialog(W.QDialog):
         self.start = W.QPushButton("Install" if setup else "Apply updates")
         self.start.clicked.connect(self.start_install)
         self.start.setEnabled(False)
+        if setup:
+            self.start.setDefault(True)
         controls.addWidget(self.start)
         self.pause = W.QPushButton("Pause")
         self.pause.clicked.connect(self.pause_job)
@@ -212,6 +234,18 @@ class DataManagementDialog(W.QDialog):
     def invalidate_plan(self, *args):
         self.plan = None
         self.start.setEnabled(False)
+        if not self.jobs.busy:
+            self.operation_label.setText("Check sizes for your selected options")
+            self.status.setText(
+                "Choose Check download sizes, then Install."
+                if self.setup
+                else "Choose Check for Updates, then Apply updates."
+            )
+            self.estimate.setText(
+                "Check download sizes again for the selected storage and artwork options."
+            )
+            self.progress.hide()
+            self.overall.hide()
 
     def check_updates(self):
         mode = self.mode.currentData()
@@ -248,13 +282,27 @@ class DataManagementDialog(W.QDialog):
             )
             return
         self.operation = operation
+        self._check_after_health = False
         self._owns_job = True
         self.options.setEnabled(False)
         self.check.setEnabled(False)
         self.start.setEnabled(False)
         self.pause.setEnabled(True)
         self.progress.setRange(0, 0)
-        self.status.setText("Working…")
+        self.progress.show()
+        self.overall.setVisible(operation == "install")
+        self.operation_label.setText(
+            {
+                "health": "Checking this computer…",
+                "plan": "Checking download sizes…",
+                "install": "Installing your card library…",
+            }.get(operation, "Working…")
+        )
+        self.status.setText(
+            "Looking up download sizes. Installation has not started."
+            if operation == "plan"
+            else "Please wait while this step completes."
+        )
         self.job_id = self.jobs.submit(work)
 
     def pause_job(self):
@@ -301,16 +349,26 @@ class DataManagementDialog(W.QDialog):
         if job_id != self.job_id:
             return
         if state == "completed":
+            self.progress.setRange(0, 100)
+            self.progress.setValue(100)
             if self.operation == "health":
                 from mtg_core.health import overall
 
-                self.status.setText(
+                self.health_details.setText(
                     "Initial installation health: "
                     + overall(value)
                     + "\n"
                     + "\n".join(f"{r.name}: {r.status}" for r in value)
                     + "\nOpen Diagnostics & Repair for actions and a report."
                 )
+                self.health_toggle.show()
+                self.operation_label.setText("Local check complete")
+                self.status.setText(
+                    "Your card library is not installed yet. Checking download sizes next."
+                    if not self.engine.has_catalog()
+                    else "Local check complete. Checking available downloads next."
+                )
+                self._check_after_health = self.setup
             elif self.operation == "plan":
                 self.plan = value
                 root = Path(self.location.text()).expanduser().resolve()
@@ -326,19 +384,27 @@ class DataManagementDialog(W.QDialog):
                     )
                 )
                 self.status.setText(
-                    "Ready to install."
+                    "Review the sizes above, then choose Install to download and set up your library."
                     if self.setup
                     else "Check complete. Apply available updates, or save the selected mode by applying updates."
                 )
+                self.operation_label.setText(
+                    "Ready to install" if self.setup else "Update check complete"
+                )
             elif self.operation == "usage":
+                self.operation_label.setText("Artwork storage check complete")
                 self.status.setText(
                     f"{value['images']:,} cached artwork assets · {human_bytes(value['bytes'])} (canonical files; optional copies may use additional space)"
                 )
             elif self.operation == "clear":
+                self.operation_label.setText("Optional artwork cleanup complete")
                 self.status.setText(
                     f"{value} optional copies cleared. Canonical artwork, decks and preferences were kept."
                 )
             else:
+                self.operation_label.setText(
+                    "Library ready" if self.setup else "Operation complete"
+                )
                 self.status.setText(
                     "Your library is ready."
                     if self.setup
@@ -352,27 +418,44 @@ class DataManagementDialog(W.QDialog):
         elif state == "failed":
             from .feedback import report_problem
 
-            report_problem(self, "data installation or repair", str(value))
+            self.operation_label.setText("This step could not finish")
+            self.progress.hide()
+            self.overall.hide()
             self.status.setText(
                 "Could not complete the operation. "
                 + str(value)
                 + " Existing working data was preserved. You can retry."
             )
+            report_problem(self, "data installation or repair", str(value))
         elif state == "cancelled":
+            self.operation_label.setText(
+                "Paused" if self.operation == "install" else "Check cancelled"
+            )
             self.status.setText(
                 "Paused. Completed downloads and installed data were kept. Select Resume to continue."
+                if self.operation == "install"
+                else "Check cancelled. Choose Check download sizes to try again."
+                if self.setup
+                else "Check cancelled. Choose Check for Updates to try again."
             )
             if self.operation == "install":
                 self.start.setText("Resume")
 
     @C.pyqtSlot()
     def on_idle(self):
+        self.progress.setRange(0, 100)
+        self.progress.hide()
+        if not self._ready:
+            self.overall.hide()
         self.pause.setEnabled(False)
         self.options.setEnabled(True)
         self.check.setEnabled(True)
         self.start.setEnabled(self.plan is not None and not self._ready)
         if self._closing:
             super().reject()
+        elif self._check_after_health:
+            self._check_after_health = False
+            self.check_updates()
 
     def clear_cache(self):
         if (
