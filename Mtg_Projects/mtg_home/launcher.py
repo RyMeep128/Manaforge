@@ -47,6 +47,14 @@ class ModuleController(C.QObject):
         if key == 'home':
             self.show_home()
             return
+        if key == 'help':
+            if key not in self.windows:
+                from mtg_ui.keyboard import help_workspace
+                page = help_workspace()
+                self.home.add_workspace(key, page)
+                self.windows[key] = page
+            self.home.show_workspace(key)
+            return
         module = next((item for item in MODULES if item.key == key), None)
         if module is None or not module.available:
             return

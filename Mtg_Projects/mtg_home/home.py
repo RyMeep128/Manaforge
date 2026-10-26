@@ -158,7 +158,7 @@ class HomeWindow(W.QMainWindow):
         group = G.QActionGroup(self)
         group.setExclusive(True)
         for key, title, enabled in [('home', 'Home', True)] + [
-                (module.key, module.title, module.available) for module in MODULES]:
+                (module.key, module.title, module.available) for module in MODULES] + [('help', 'Help', True)]:
             action = navigation.addAction(title)
             action.setCheckable(True)
             action.setEnabled(enabled)
@@ -167,8 +167,6 @@ class HomeWindow(W.QMainWindow):
             action.triggered.connect(lambda checked=False, target=key: self.moduleRequested.emit(target))
         self.navigation['home'].setChecked(True)
         self.navigation['home'].setShortcut('Ctrl+Shift+H')
-        from mtg_ui.keyboard import add_shortcuts_help
-        add_shortcuts_help(self)
         self._columns = None
         self.reflow()
 
@@ -191,6 +189,8 @@ class HomeWindow(W.QMainWindow):
 
     def add_workspace(self, key, widget):
         widget.setProperty('manaforgeEmbedded', True)
+        if isinstance(widget, W.QMainWindow):
+            widget.menuBar().hide()
         scroll = W.QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(W.QFrame.Shape.NoFrame)

@@ -30,6 +30,30 @@ Esc — Cancel native dialogs and menus; ordinary deck and Home views stay open
 Text fields retain their native editing and selection shortcuts.'''
 
 
+def help_workspace(parent=None):
+    from .feedback import FeedbackDialog, pending_reports
+
+    page = W.QWidget(parent)
+    page.setWindowTitle('Help')
+    layout = W.QVBoxLayout(page)
+    title = W.QLabel('Help')
+    title.setProperty('role', 'title')
+    layout.addWidget(title)
+    actions = W.QHBoxLayout()
+    send = W.QPushButton('Send Feedback')
+    send.clicked.connect(lambda: FeedbackDialog(page).exec())
+    actions.addWidget(send)
+    pending = W.QPushButton('Pending Feedback')
+    pending.clicked.connect(lambda: pending_reports(page))
+    actions.addWidget(pending)
+    actions.addStretch()
+    layout.addLayout(actions)
+    shortcuts = W.QTextBrowser()
+    shortcuts.setPlainText(SHORTCUTS)
+    layout.addWidget(shortcuts, 1)
+    return page
+
+
 def add_shortcuts_help(window):
     from .feedback import FeedbackDialog, pending_reports
     menu = window.menuBar().addMenu('Help')
