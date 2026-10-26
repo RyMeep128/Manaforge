@@ -258,7 +258,8 @@ class CardCanvas(W.QAbstractScrollArea):
             primary, tags = corner_colors(entry, category_colors)
             draw_quantity_corner(p, rect, entry.quantity, primary, tags)
             if self.face_count(entry) > 1:
-                self.draw_flip(p, self.flip_rect(rect))
+                self.draw_flip(p, self.flip_rect(rect),
+                               backside=bool(self.faces.get(entry.entry_id, 0) % self.face_count(entry)))
             if entry.entry_id == self.hovered or entry.entry_id in self.selected:
                 control = self.control_rect(rect)
                 draw_quantity_controls(p, control, self.quantity_buttons(rect), can_decrease=entry.quantity > 0)
@@ -326,15 +327,16 @@ class CardCanvas(W.QAbstractScrollArea):
         return C.QRect(control.left(), control.bottom()+5, control.width(), control.width())
 
     @staticmethod
-    def draw_flip(painter, rect):
+    def draw_flip(painter, rect, *, backside=False):
         painter.save()
         painter.setRenderHint(G.QPainter.RenderHint.Antialiasing)
         painter.translate(rect.x(), rect.y())
         painter.scale(rect.width()/32, rect.height()/32)
         painter.setPen(G.QPen(G.QColor('#453f36'), 1.2))
-        painter.setBrush(G.QColor(237, 229, 210, 235))
+        painter.setBrush(G.QColor('#514b40') if backside else G.QColor(237, 229, 210, 235))
         painter.drawEllipse(C.QRectF(1, 1, 30, 30))
-        painter.setPen(G.QPen(G.QColor('#39362f'), 2.5,
+        arrow_color = G.QColor('#ede5d2' if backside else '#39362f')
+        painter.setPen(G.QPen(arrow_color, 2.5,
                              C.Qt.PenStyle.SolidLine, C.Qt.PenCapStyle.RoundCap))
         painter.setBrush(C.Qt.BrushStyle.NoBrush)
         upper = G.QPainterPath(C.QPointF(7, 16))
@@ -344,7 +346,7 @@ class CardCanvas(W.QAbstractScrollArea):
         painter.drawPath(upper)
         painter.drawPath(lower)
         painter.setPen(C.Qt.PenStyle.NoPen)
-        painter.setBrush(G.QColor('#39362f'))
+        painter.setBrush(arrow_color)
         painter.drawPolygon(G.QPolygonF([C.QPointF(24, 7), C.QPointF(24, 15), C.QPointF(17, 13)]))
         painter.drawPolygon(G.QPolygonF([C.QPointF(8, 25), C.QPointF(8, 17), C.QPointF(15, 19)]))
         painter.restore()
