@@ -72,7 +72,8 @@ an existing Archidekt, EDHREC, or Moxfield source is enabled; existing disable-a
 preferences stay disabled. Missing databases report unavailable. App startup,
 settings changes, and recommendation refresh never trigger collection.
 
-The [precon dataset](https://github.com/taw/magic-preconstructed-decks-data) uses
+For editable originals and the full product catalog, see [Create from Precon](preconstructed-decks.md).
+The recommendation-only [precon dataset](https://github.com/taw/magic-preconstructed-decks-data) uses
 `decks_v2.json`: only `format=commander` entries and their `cards` plus `commander`
 sections are included. Oversized display commanders, sideboards, planar decks,
 and scheme decks are excluded. MTGJSON identifiers are not Oracle IDs.

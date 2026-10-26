@@ -28,6 +28,7 @@ SECTIONS = {'deck': DeckSection.MAINBOARD, DeckSection.MAINBOARD: DeckSection.MA
             DeckSection.SIDEBOARD: DeckSection.SIDEBOARD, DeckSection.COMMANDER: DeckSection.COMMANDER, 'commanders': DeckSection.COMMANDER,
             'companion': DeckSection.SIDEBOARD, 'companions': DeckSection.SIDEBOARD, 'maybeboard': DeckSection.CONSIDERING,
             DeckSection.CONSIDERING: DeckSection.CONSIDERING, DeckSection.EXCLUDED: DeckSection.EXCLUDED}
+SECTIONS.update({zone: zone for zone in ('planar', 'scheme', 'display_commander')})
 PREFIXES = {'SB': DeckSection.SIDEBOARD, 'MB': DeckSection.MAINBOARD, 'CMDR': DeckSection.COMMANDER, 'COMMANDER': DeckSection.COMMANDER}
 LINE = re.compile(r'^(?:(?P<count>\d+)(?:x)?\s+)?(?P<name>.+?)'
                   r'(?:\s+\((?P<set_code>[A-Za-z0-9]+)\)(?:\s+(?P<collector_number>[A-Za-z0-9-]+))?)?$')
@@ -144,6 +145,8 @@ def export_decklist(document, *, include_printings=True, include_sections=True):
     """Common quantity/name text; exact printing coordinates and sections are optional."""
     labels = {DeckSection.MAINBOARD: 'Deck', DeckSection.COMMANDER: 'Commander', DeckSection.SIDEBOARD: 'Sideboard',
               DeckSection.CONSIDERING: 'Maybeboard', DeckSection.EXCLUDED: 'Excluded'}
+    labels.update({section: section for section in dict.fromkeys(e.section for e in document.deck.entries)
+                   if section not in labels})
     lines = []
     for section, label in labels.items():
         entries = [e for e in document.deck.entries if e.section == section and e.quantity > 0]
@@ -240,6 +243,7 @@ def apply_decklist(document, result):
                          and e.section == prepared.section and not e.art_override
                          and e.image_asset_id == prepared.image_asset_id
                          and e.backside_asset_id == prepared.backside_asset_id
+                         and e.extras.get('precon_printing') == prepared.extras.get('precon_printing')
                          and not e.do_not_print), None)
         if existing:
             existing.quantity += prepared.quantity

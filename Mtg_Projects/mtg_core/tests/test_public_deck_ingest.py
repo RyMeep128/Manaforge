@@ -23,8 +23,9 @@ def test_collected_samples_feed_recommendations_and_resume(tmp_path, monkeypatch
     responses, inputs = {}, []
     if source == "preconstructed":
         responses[PRECONS] = json.dumps([
-            dict(format="standard"),
-            dict(format="commander", set_code="fixture", name="Precon", release_date="2020-01-01",
+            dict(format="standard", set_code="fixture", name="Unlisted product", set_name="Fixture set",
+                 release_date="2020-01-01", cards=[]),
+            dict(format="commander", set_code="fixture", set_name="Fixture set", name="Precon", release_date="2020-01-01",
                  cards=[dict(name="Forest", count=99)], commander=[dict(name="Leader", count=1)],
                  displayCommander=[dict(name="Oversized Leader", count=1)]),
         ])

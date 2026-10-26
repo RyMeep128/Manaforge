@@ -292,6 +292,15 @@ class ImageOperations:
                 updated_at=now,
             )
 
+    def find_image_asset_by_url(self, source_url: str) -> str | None:
+        """Reuse an imported image without downloading the same URL again."""
+        with self.connect() as connection:
+            row = connection.execute(
+                'SELECT asset_id FROM image_assets WHERE source_url = ? ORDER BY updated_at DESC LIMIT 1',
+                (source_url,),
+            ).fetchone()
+        return row[0] if row else None
+
     def get_image_asset(self, asset_id: str) -> ImageAssetRecord | None:
         with self.connect() as connection:
             row = connection.execute(

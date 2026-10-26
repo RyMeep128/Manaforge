@@ -390,7 +390,7 @@ class EditorWindow(W.QMainWindow):
         from .project_browser import ProjectDashboard
         self.editor_body = body
         self.dashboard = ProjectDashboard(self.root, data_root() / 'projects', self.thumbnails, self)
-        self.dashboard.newRequested.connect(self.new)
+        self.dashboard.newRequested.connect(self.choose_new_deck)
         self.dashboard.openRequested.connect(self.open_path)
         self.dashboard.resumeRequested.connect(self.resume_deck)
         self.project_stack = W.QStackedWidget()
@@ -402,7 +402,7 @@ class EditorWindow(W.QMainWindow):
         self.zoom.valueChanged.connect(self.preferences_changed)
         self.filter.textChanged.connect(self.filter_changed)
         self.shortcuts = []
-        for sequence, callback in [('Ctrl+S', self.save), ('Ctrl+N', self.new), ('Ctrl+O', self.open),
+        for sequence, callback in [('Ctrl+S', self.save), ('Ctrl+N', self.choose_new_deck), ('Ctrl+O', self.open),
                                    ('Ctrl+Z', self.undo), ('Ctrl+Y', self.redo), ('Ctrl+Shift+Z', self.redo),
                                    ('Ctrl+F', self.focus_filter), ('Ctrl+K', self.open_search)]:
             shortcut = QtGui.QShortcut(QtGui.QKeySequence(sequence),
@@ -1615,6 +1615,31 @@ class EditorWindow(W.QMainWindow):
                 self.changed()
             self.run_task(resolve, apply)
 
+    def choose_new_deck(self):
+        choice, ok = W.QInputDialog.getItem(self, 'New deck', 'Start with:',
+            ['Create Blank Deck', 'Import Deck', 'Create from Precon'], 0, False)
+        if not ok:
+            return
+        if choice == 'Create from Precon':
+            from .precon_browser import PreconBrowser
+            from mtg_core.precons import apply_precon
+            if self.task is not None:
+                return
+            dialog = PreconBrowser(self.service, self.thumbnails, self)
+            if dialog.exec() != W.QDialog.DialogCode.Accepted or not dialog.result:
+                return
+            previous = self.document.deck.deck_id
+            self.new()
+            if self.document.deck.deck_id != previous:
+                self.edit(lambda d: apply_precon(d, dialog.record, dialog.result,
+                    dialog.deck_name.text(), dialog.cover_asset_id))
+                self.sync_fields()
+            return
+        previous = self.document.deck.deck_id
+        self.new()
+        if choice == 'Import Deck' and self.document.deck.deck_id != previous:
+            self.import_decklist()
+
     def new(self):
         if self.task is not None or (self._has_active_deck and self.session.dirty and not self.save()):
             return
@@ -1660,7 +1685,7 @@ class EditorWindow(W.QMainWindow):
     def refresh_recent(self):
         self.recent.clear()
         self.recent.addAction('Decks and print projects…', self.project_browser)
-        self.recent.addAction('New deck', self.new)
+        self.recent.addAction('New deck', self.choose_new_deck)
         self.recent.addAction('Open deck / proxy project…', self.open)
         self.recent.addSeparator()
         paths = sorted(self.root.glob('*.manaforge.json'), key=lambda p: p.stat().st_mtime, reverse=True)[:15]

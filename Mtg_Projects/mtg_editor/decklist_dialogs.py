@@ -133,11 +133,14 @@ class ImportDecklist(W.QDialog):
         for widget in (self.source, self.file_button, self.remote, self.resolve_button, self.url, self.input_mode, self.artwork):
             widget.setEnabled(False)
         self.progress.setRange(0, 0)
-        self.worker = ImportWorker(source, self.service, self.remote.isChecked(), self, public_url=public_url,
-                                   import_artwork=self.artwork.isChecked())
+        self.worker = self.make_worker(source, public_url)
         self.worker.progress.connect(self.update_progress)
         self.worker.finished.connect(self.resolved)
         self.worker.start()
+
+    def make_worker(self, source, public_url):
+        return ImportWorker(source, self.service, self.remote.isChecked(), self, public_url=public_url,
+                            import_artwork=self.artwork.isChecked())
 
     def update_progress(self, done, total):
         self.progress.setRange(0, total)

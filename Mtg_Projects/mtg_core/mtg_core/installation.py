@@ -352,6 +352,27 @@ class InstallationEngine:
                 self.state.set("cached_artwork_refresh_pending", False)
             cancelled(cancel)
             if not repair_cards:
+                from .precons import refresh_catalog
+
+                try:
+                    report(
+                        dict(
+                            operation="Refreshing preconstructed deck catalog",
+                            phase="precons",
+                            current=0,
+                            total=1,
+                            step=6,
+                            steps=6,
+                        )
+                    )
+                    refresh_catalog(self.fetch)
+                except (OSError, ValueError, KeyError, TypeError) as exc:
+                    from .diagnostics import get_logger
+
+                    get_logger(__name__).warning(
+                        "Precon refresh failed; retaining existing catalog: %s", exc
+                    )
+                cancelled(cancel)
                 self.state.set("last_successful_dataset_update", time.time())
                 self.state.set("update_pending", False)
             if setup:

@@ -146,6 +146,8 @@ class Collector:
             payload = json.loads(self.fetch(PRECONS))
             if not isinstance(payload, list):
                 raise ValueError("Expected the decks_v2 JSON array")
+            from .precons import write_catalog
+            write_catalog(payload, self.root.parent / 'precons.json')
             for deck in payload:
                 self.downloader.wait(0)
                 if deck.get("format") != "commander":

@@ -38,7 +38,9 @@ def project_catalog(deck_root, project_root):
             rows.append({'path': str(path.resolve()), 'kind': kind, 'name': name,
                          'modified': path.stat().st_mtime, 'format': deck.format,
                          'card_count': sum(entry.quantity for entry in entries),
-                         'cover': (cover.card_id, cover.image_asset_id) if cover else (None, None)})
+                         'cover': ((None, deck.extras['cover_image_asset_id'])
+                                   if deck.extras.get('cover_image_asset_id') else
+                                   (cover.card_id, cover.image_asset_id) if cover else (None, None))})
         except (OSError, ValueError, TypeError, AttributeError) as exc:
             get_logger(__name__).exception('Project read failed path=%s kind=%s', path, kind)
             errors.append(f'{path.name}: {exc}')
