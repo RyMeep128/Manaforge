@@ -24,9 +24,11 @@ class _Job(C.QThread):
         self.cancel_event = threading.Event()
         self._last_progress = 0.0
         self._last_phase = None
+        self.operation = "Background operation"
 
     def report(self, value):
         if isinstance(value, dict):
+            self.operation = value.get("operation", self.operation)
             phase = (value.get("operation"), value.get("phase"))
             current, total = value.get("current"), value.get("total")
         else:
@@ -45,14 +47,18 @@ class _Job(C.QThread):
             self._last_progress, self._last_phase = now, phase
 
     def run(self):
+        from mtg_core.repair import record_operation
         try:
             if self.cancel_event.is_set():
                 raise DownloadCancelled()
             result = self.work(self.cancel_event, self.report)
+            record_operation(self.operation, "completed")
             self.outcome.emit(self.job_id, "completed", result)
         except DownloadCancelled:
+            record_operation(self.operation, "cancelled")
             self.outcome.emit(self.job_id, "cancelled", None)
         except Exception as exc:
+            record_operation(self.operation, "failed", str(exc))
             get_logger(__name__).error(
                 "Background job failed id=%s type=%s", self.job_id, type(exc).__name__
             )

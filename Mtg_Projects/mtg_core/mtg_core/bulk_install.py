@@ -66,7 +66,7 @@ def _merge_table(db, table, key):
     )
 
 
-def import_cards(path, database, version, *, cancel, report):
+def import_cards(path, database, version, *, cancel, report, preserve_favorites=False):
     root = Path(path).parent
     check_space(root / "stage", max(Path(path).stat().st_size * 15, 64 * 1024**2))
     with TemporaryDirectory(prefix="card-import-", dir=root) as temporary:
@@ -125,9 +125,10 @@ def import_cards(path, database, version, *, cancel, report):
                         _merge_table(db, table, key)
                     # Preserve preferences except a favorite whose actual Oracle
                     # identity has changed upstream; it no longer names that card.
-                    db.execute(
-                        "DELETE FROM artwork_favorites WHERE EXISTS (SELECT 1 FROM prints p WHERE p.card_id=artwork_favorites.card_id AND p.oracle_id!=artwork_favorites.oracle_id)"
-                    )
+                    if not preserve_favorites:
+                        db.execute(
+                            "DELETE FROM artwork_favorites WHERE EXISTS (SELECT 1 FROM prints p WHERE p.card_id=artwork_favorites.card_id AND p.oracle_id!=artwork_favorites.oracle_id)"
+                        )
                     _canonical(db)
                     database.rebuild_search_index(db)
                     db.execute(

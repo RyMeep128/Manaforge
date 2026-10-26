@@ -136,7 +136,10 @@ class ModuleController(C.QObject):
 
     def settings(self, key):
         try:
-            if key == 'printing':
+            if key == 'diagnostics':
+                from mtg_ui.diagnostics import DiagnosticsDialog
+                DiagnosticsDialog(self.home, engine=self._installation_engine, jobs=self.jobs).exec()
+            elif key == 'printing':
                 from mtg_ui.printing_preferences import edit_printing_preferences
                 edit_printing_preferences(self.home, self.service)
             elif key == 'artwork':
@@ -191,7 +194,12 @@ def main():
     app.setStyleSheet(application_stylesheet())
     disable_hover_tooltips()
     root = data_root()
-    root.mkdir(parents=True, exist_ok=True)
+    try:
+        root.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        from mtg_ui.diagnostics import DiagnosticsDialog
+        DiagnosticsDialog().exec()
+        return 1
     address = 'manaforge-home-' + sha256(str(root.resolve()).encode()).hexdigest()[:20]
     lock = C.QLockFile(str(root / 'manaforge-home.lock'))
     lock.setStaleLockTime(0)

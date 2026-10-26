@@ -33,6 +33,9 @@ def cache_image(
     old = service.get_image_path(card_id, variant)
     if old and record and record.source != "scryfall":
         return old  # A user-selected/custom image is not replaceable remote data.
+    if old and record and record.source == "scryfall" and record.checksum:
+        if file_sha256(old) != record.checksum:
+            old = None  # A corrupt file must not satisfy the unchanged-URL shortcut.
     if old and not refresh:
         return old
     payload = (

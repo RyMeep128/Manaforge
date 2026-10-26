@@ -96,6 +96,9 @@ class DataManagementDialog(W.QDialog):
         self.status.setTextFormat(C.Qt.TextFormat.PlainText)
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
+        diagnostics = W.QPushButton("Diagnostics & Repair")
+        diagnostics.clicked.connect(self.open_diagnostics)
+        layout.addWidget(diagnostics)
         layout.addStretch(1)
         controls = W.QHBoxLayout()
         self.check = W.QPushButton(
@@ -147,6 +150,8 @@ class DataManagementDialog(W.QDialog):
         self.jobs.status.connect(self.on_status)
         self.jobs.idle.connect(self.on_idle)
         self.refresh_versions()
+        if setup:
+            C.QTimer.singleShot(0, self.first_run_checks)
         if self.jobs.busy:
             self.job_id = self.jobs.current_id
             self.operation = "install"
@@ -156,6 +161,17 @@ class DataManagementDialog(W.QDialog):
             self.status.setText(
                 "A library update is running in the background. You can pause it here."
             )
+
+    def open_diagnostics(self):
+        from .diagnostics import DiagnosticsDialog
+        DiagnosticsDialog(self, engine=self.engine, jobs=self.jobs).exec()
+
+    def first_run_checks(self):
+        if not self.jobs.busy:
+            from mtg_core.health import run_checks
+            from .diagnostics import app_version
+            self.start_job("health", lambda cancel, report: run_checks(
+                self.engine.state, version=app_version(), cancel=cancel, report=report))
 
     def refresh_versions(self):
         bulk = self.engine.state.get("bulk_versions", {})
@@ -276,7 +292,11 @@ class DataManagementDialog(W.QDialog):
         if job_id != self.job_id:
             return
         if state == "completed":
-            if self.operation == "plan":
+            if self.operation == "health":
+                from mtg_core.health import overall
+                self.status.setText("Initial installation health: " + overall(value) + "\n" + "\n".join(
+                    f"{r.name}: {r.status}" for r in value) + "\nOpen Diagnostics & Repair for actions and a report.")
+            elif self.operation == "plan":
                 self.plan = value
                 root = Path(self.location.text()).expanduser().resolve()
                 while not root.exists() and root != root.parent:
@@ -375,8 +395,13 @@ class DataManagementDialog(W.QDialog):
 
 
 def run_initial_setup(parent=None, *, engine=None):
-    engine = engine or InstallationEngine()
-    if engine.state.get("setup_complete", False):
-        return True
-    dialog = DataManagementDialog(parent, engine=engine, setup=True)
-    return dialog.exec() == W.QDialog.DialogCode.Accepted
+    try:
+        engine = engine or InstallationEngine()
+        if engine.state.get("setup_complete", False):
+            return True
+        dialog = DataManagementDialog(parent, engine=engine, setup=True)
+        return dialog.exec() == W.QDialog.DialogCode.Accepted
+    except Exception:
+        from .diagnostics import DiagnosticsDialog
+        DiagnosticsDialog(parent).exec()
+        return False

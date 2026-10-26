@@ -1140,6 +1140,12 @@ class SettingsDialog(QDialog):
 
         layout = QVBoxLayout()
         layout.addWidget(scroll_area)
+        diagnostics_button = QPushButton("Diagnostics & Repair")
+        def open_diagnostics():
+            from mtg_ui.diagnostics import DiagnosticsDialog
+            DiagnosticsDialog(self).exec()
+        diagnostics_button.clicked.connect(open_diagnostics)
+        layout.addWidget(diagnostics_button)
         layout.addWidget(button_box)
         self.setLayout(layout)
 

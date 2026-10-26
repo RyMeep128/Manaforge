@@ -122,3 +122,29 @@ def test_large_cached_scans_throttle_gui_progress_but_keep_completion(app):
     drain(app, jobs)
     assert seen[-1]["current"] == 10000
     assert len(seen) < 10000
+
+
+def test_diagnostics_opens_without_loading_card_or_recommendation_service(app, tmp_path):
+    from mtg_ui.diagnostics import DiagnosticsDialog
+    engine = Engine(tmp_path)
+    # A broken catalog must be inspected read-only, not passed to CardService.
+    catalog = tmp_path / 'broken.sqlite3'
+    catalog.write_bytes(b'broken')
+    engine.state.set('catalog_path', str(catalog))
+    dialog = DiagnosticsDialog(engine=engine)
+    app.processEvents()
+    drain(app, dialog.jobs)
+    assert any(r.status == 'Error' for r in dialog.results)
+    assert 'Manaforge diagnostic report' in dialog.report()
+    assert catalog.read_bytes() == b'broken'
+    dialog.reject()
+
+
+def test_first_run_automatically_checks_local_installation(app, tmp_path):
+    dialog = DataManagementDialog(engine=Engine(tmp_path), setup=True)
+    app.processEvents()
+    drain(app, dialog.jobs)
+    assert 'Initial installation health' in dialog.status.text()
+    assert 'Not Checked' in dialog.status.text()  # No implicit network requests.
+    assert not dialog.engine.state.get('setup_complete', False)
+    dialog.reject()

@@ -219,7 +219,7 @@ class InstallationEngine:
         except sqlite3.DatabaseError:
             return None
 
-    def run(self, *, cancel, report, plan=None, setup=False, artwork_only=False):
+    def run(self, *, cancel, report, plan=None, setup=False, artwork_only=False, repair_cards=False):
         if not self._lock.acquire(blocking=False):
             raise RuntimeError("A data update is already running")
         try:
@@ -232,7 +232,8 @@ class InstallationEngine:
                     report=report,
                     downloader=self.downloader,
                 )
-            self.state.set("update_pending", True)
+            if not repair_cards:
+                self.state.set("update_pending", True)
             plan = plan or self.plan(cancel=cancel, report=report)
             mode = self.state.get("artwork_mode", "on_demand")
             root = self.state.storage_root("cards")
@@ -253,7 +254,7 @@ class InstallationEngine:
             for index, (kind, metadata) in enumerate(plan.bulk.items()):
                 cancelled(cancel)
                 version = metadata["updated_at"]
-                if self._version(kind) == version:
+                if not (repair_cards and kind == "default_cards") and self._version(kind) == version:
                     continue
                 name = (
                     kind + "-" + version.replace(":", "-").replace("/", "-") + ".bulk"
@@ -302,6 +303,7 @@ class InstallationEngine:
                             version,
                             cancel=cancel,
                             report=report,
+                            preserve_favorites=repair_cards,
                         )
                         self.service._printings_refreshed.clear()
                         self.state.set("cached_artwork_refresh_pending", True)
@@ -337,7 +339,7 @@ class InstallationEngine:
                         )
                     ),
                 )
-            if mode == "full_offline":
+            if mode == "full_offline" and not repair_cards:
                 fill_artwork(
                     self.service,
                     self.state,
@@ -345,12 +347,13 @@ class InstallationEngine:
                     report=lambda p: report(dict(p, step=5, steps=6)),
                     downloader=self.downloader,
                 )
-            elif changed or self.state.get("cached_artwork_refresh_pending", False):
+            elif not repair_cards and (changed or self.state.get("cached_artwork_refresh_pending", False)):
                 self.refresh_cached(cancel=cancel, report=report)
                 self.state.set("cached_artwork_refresh_pending", False)
             cancelled(cancel)
-            self.state.set("last_successful_dataset_update", time.time())
-            self.state.set("update_pending", False)
+            if not repair_cards:
+                self.state.set("last_successful_dataset_update", time.time())
+                self.state.set("update_pending", False)
             if setup:
                 self.state.set("setup_complete", True)
             report(

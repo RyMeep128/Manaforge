@@ -142,3 +142,25 @@ def test_extraction_size_limit_and_cancel_preserve_state(tmp_path):
             cancel=cancelled,
         )
     assert installer.state.installed(manifest.dataset_id) is None
+
+
+def test_corrupt_sqlite_generation_can_be_repaired_without_removing_previous(tmp_path):
+    import sqlite3
+    installer, manifest = setup_installer(tmp_path)
+    calls = []
+
+    def validate(path):
+        calls.append(path)
+        if path.read_bytes() != b'new data':
+            raise sqlite3.DatabaseError('Damaged SQLite bundle')
+
+    old = installer.install(manifest, supported_schemas={'recommendations': {1}}, validate=validate)
+    old.write_bytes(b'corrupt')
+    restored = installer.install(manifest, supported_schemas={'recommendations': {1}}, validate=validate)
+    assert restored != old
+    assert restored.read_bytes() == b'new data'
+    assert old.read_bytes() == b'corrupt'
+    assert installer.state.installed(manifest.dataset_id)['previous'] == str(old)
+    count = len(calls)
+    assert installer.install(manifest, supported_schemas={'recommendations': {1}}, validate=validate) == restored
+    assert len(calls) == count + 1

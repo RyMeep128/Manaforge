@@ -205,7 +205,7 @@ class DatasetInstaller:
             ):
                 try:
                     validate(Path(current["path"]))
-                except (ValueError, OSError):
+                except (ValueError, OSError, sqlite3.DatabaseError):
                     pass  # Repair damaged installed data through a new generation.
                 else:
                     return Path(current["path"])

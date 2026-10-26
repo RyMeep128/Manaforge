@@ -211,3 +211,58 @@ To refresh the screenshots and GIF:
 
 Repository description and discovery topics are maintained in [repository-metadata.json](docs/repository-metadata.json). GitHub's About fields are separate from tracked files.
 To apply those values to `origin`, run `tools/update_repository_metadata.py` with the same Python environment; it uses your configured GitHub credential and preserves existing topics.
+
+### Diagnostics and repair
+
+Open **Settings → Diagnostics & Repair** on the homepage (also available in
+Print Studio Settings and the installation wizard). First-run setup automatically
+checks local installation health before downloading. Healthy, Warning, Error and
+Not Checked identify working components, recoverable issues and checks not run.
+Missing initial datasets are expected until installation completes.
+
+Local checks never contact online services, regardless of artwork mode. Use
+**Check online services** to explicitly check Scryfall and the recommendation
+release source. Cached data remains usable without internet. Full offline artwork
+mode describes what is stored; it does not force background network diagnostics.
+
+Choose a repair and review its explanation before proceeding. Resume installation
+reuses download checkpoints. Recommendation repair verifies all managed bundles,
+keeps valid generations and atomically activates repaired generations. Card repair
+uses the existing staged transactional import, retains user data, and skips a
+healthy current catalog. Physically corrupt catalogs and unsupported newer schemas
+are reported for manual recovery rather than overwritten: catalogs can contain
+favorites and preferences. Reinstalling application files should retain the data
+folder. Never delete that folder as a troubleshooting step.
+
+Artwork verification checks recorded Scryfall artwork and its canonical assets.
+Artwork repair restores canonical files from intact local copies where possible
+and downloads missing remote images. Custom artwork is preserved. To collect images
+that have never been cached, use Data Management → Download missing artwork.
+Rebuild optional caches clears only reproducible copies with verified originals;
+canonical artwork and decks are retained. Restoring configuration makes a timestamped
+backup of config.ini and applies defaults after restart; installation paths,
+favorites and artwork profiles remain unchanged. Pause/cancel preserves completed
+work, and failed actions can be retried. An in-flight metadata request or bundle
+verification may finish before cancellation takes effect.
+
+**Copy report** and **Export Diagnostic Report** produce readable text with build,
+OS, data versions, subsystem health, capacity, recorded storage usage, recent
+operations, repair outcomes and bounded diagnostic log excerpts. Reports redact
+common credentials, remote URLs, email addresses and personal paths. Review reports
+before sharing; arbitrary text in third-party errors cannot be guaranteed secret-free.
+No report is uploaded automatically.
+
+Integrity checks cover readable runtime files, database schemas/SQLite health,
+recommendation bundle checksums and explicit artwork checksums. They do not verify
+release signatures or detect every missing card in a locally modified catalog.
+Storage figures describe managed card/bulk files and recorded canonical artwork;
+optional copies and retained recommendation generations can consume additional space.
+Unreadable/corrupt installation state is preserved and can still be reported; it is
+not silently reset because that could lose storage pointers. Portable recovery of
+such state and automatic recovery of physically corrupt catalogs are not supported.
+
+The UI uses the existing sequential JobQueue. Extensible checks live in
+`mtg_core.health`; reusable repair routing and a bounded, redacted operation history
+live in `mtg_core.repair`. Downloads, installations and atomic activation remain in
+the existing infrastructure. Tests cover offline behavior, broken catalogs,
+report redaction, cancellation, backups, retries and avoiding redundant downloads.
