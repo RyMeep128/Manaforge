@@ -224,6 +224,23 @@ def test_reopening_install_registry_does_not_invalidate_recommendation_cache(tmp
     assert reopened.path.read_bytes() == before
 
 
+def test_existing_cohort_selectors_can_read_the_installed_dataset(
+    tmp_path, monkeypatch
+):
+    from mtg_core.edhrec_cohorts import cohort_options
+
+    installed = tmp_path / "installed-cohorts.sqlite3"
+    with closing(sqlite3.connect(installed)) as db, db:
+        db.execute("CREATE TABLE cohorts(kind TEXT,value TEXT,label TEXT)")
+        db.execute("INSERT INTO cohorts VALUES (?,?,?)", ("theme", "tokens", "Tokens"))
+    monkeypatch.setattr(
+        "mtg_core.recommendation_distribution.released_file", lambda *args: installed
+    )
+    assert cohort_options(tmp_path / "recommendations" / "edhrec-cohorts.sqlite3") == [
+        ("theme", "tokens", "Tokens")
+    ]
+
+
 def test_staging_uses_draft_prerelease_and_manifest_asset_allowlist(tmp_path):
     root, output = tmp_path / "private", tmp_path / "output"
     collected(root)
