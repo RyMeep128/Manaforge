@@ -4,6 +4,13 @@
 
 Manaforge is a Python / PyQt6 desktop workspace for building Magic decks, consulting rules, and preparing proxies for print.
 
+Standalone Windows bundles need no Python or Git: extract **Manaforge-Windows.zip**
+and run **Manaforge/Manaforge.exe**. The first-run wizard sets up card data,
+recommendations, and on-demand or full-offline artwork. See
+[installation and updates](docs/installation-and-updates.md) for download/build locations,
+setup, pause/resume, Data Management and monthly updates. Source launchers below
+remain supported for development.
+
 Launch **Launch Manaforge.cmd** at the repository root, or run `python run_manaforge.py`
 in the configured environment. The homepage opens Deck Editor, Rules & Rulings,
 and Print Studio; Play is visibly unavailable until implemented. The Windows
@@ -140,6 +147,11 @@ The script installs PyInstaller, rebuilds the product `build` and `dist` directo
 This bundle packages **Print Proxy Prep** and its shared dependencies. Core Admin and the early Deck Editor currently run from source.
 
 ## Shared architecture
+
+See [infrastructure readiness](docs/infrastructure-readiness.md) for the storage,
+download, job, manifest and recovery interfaces prepared for installation and data updates.
+See [recommendation distribution](docs/recommendation-distribution.md) for central
+dataset builds, safe GitHub prerelease publication and application consumption.
 
 The shared database retains full Scryfall payloads, including rules text and all card faces. **Add Card → Local database only** and **Core Admin → Prints → Scryfall syntax** support local queries such as `t:creature o:"draw a card" mv<=3`. See the [local card data and search guide](docs/local-card-search.md) for supported filters, index upgrades, and data-freshness limits.
 

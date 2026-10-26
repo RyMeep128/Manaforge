@@ -17,6 +17,12 @@ class ModuleController(C.QObject):
         super().__init__(home)
         self.home, self._service = home, service
         self.windows = {}
+        from mtg_ui.jobs import JobQueue
+        self.jobs = JobQueue(self)
+        self._installation_engine = None
+        self._automatic_update = None
+        self.jobs.progress.connect(self.data_progress)
+        self.jobs.status.connect(self.data_status)
         self.factories = factories or {}
         home.shutdown_guard = self.shutdown
         home.moduleRequested.connect(self.open_module)
@@ -82,6 +88,11 @@ class ModuleController(C.QObject):
         printer.open_managed_project(project['id'])
 
     def shutdown(self):
+        if self.jobs.busy:
+            self.jobs.cancel_all()
+            self.home.statusBar().showMessage('Cancelling background downloads before closing...')
+            C.QTimer.singleShot(250, self.home.close)
+            return False
         editor = self.windows.get('editor')
         if editor is not None and hasattr(editor, 'session'):
             busy = (editor.worker is not None or editor.task is not None or editor.thumbnails.worker is not None
@@ -131,9 +142,46 @@ class ModuleController(C.QObject):
             elif key == 'artwork':
                 from mtg_ui.artwork_preferences import edit_artwork_preferences
                 edit_artwork_preferences(self.home, self.service)
+            elif key == 'data':
+                from mtg_ui.data_management import DataManagementDialog
+                DataManagementDialog(self.home,engine=self.installation_engine,jobs=self.jobs).exec()
         except Exception as exc:
             get_logger(__name__).exception('Homepage settings failed kind=%s', key)
             W.QMessageBox.warning(self.home, 'Could not open settings', str(exc))
+
+    @property
+    def installation_engine(self):
+        if self._installation_engine is None:
+            from mtg_core.installation import InstallationEngine
+            self._installation_engine = InstallationEngine(service=self._service)
+        return self._installation_engine
+
+    def check_data_updates(self):
+        from mtg_print.config import CFG
+        if self.jobs.busy or not CFG.OnlineMode:
+            return
+        engine=self.installation_engine
+        if engine.needs_update():
+            self._automatic_update=self.jobs.submit(lambda cancel,report:engine.run(cancel=cancel,report=report))
+            self.home.statusBar().showMessage('Checking library updates in the background…')
+
+    @C.pyqtSlot(str,object)
+    def data_progress(self,job_id,value):
+        if isinstance(value,dict):
+            self.home.statusBar().showMessage(value.get('operation','Updating data…'))
+
+    @C.pyqtSlot(str,str,object)
+    def data_status(self,job_id,state,value):
+        if state=='failed':
+            self.home.statusBar().showMessage('Data update could not finish. Existing data is available. Open Settings → Data Management to retry.',15000)
+        elif state=='completed':
+            self.home.statusBar().showMessage('Data operation completed.',5000)
+            if self._service is not None and hasattr(self._service,'_printings_refreshed'):
+                self._service._printings_refreshed.clear()
+            editor=self.windows.get('editor')
+            if editor is not None and hasattr(editor,'recommendation_panel'):
+                editor.thumbnails.cache.clear()
+                editor.recommendation_panel.request_refresh()
 
 
 def main():
@@ -157,6 +205,11 @@ def main():
         W.QMessageBox.warning(None, 'Manaforge startup failed', server.errorString())
         return 1
     os.environ['MANAFORGE_HOME_SOCKET'] = address
+    from mtg_ui.data_management import run_initial_setup
+    if not run_initial_setup():
+        server.close()
+        lock.unlock()
+        return 0
     from .home import HomeWindow
     home = HomeWindow()
     controller = ModuleController(home)
@@ -168,6 +221,10 @@ def main():
             socket.deleteLater()
     server.newConnection.connect(activate)
     home.show()
+    update_timer=C.QTimer(controller)
+    update_timer.timeout.connect(controller.check_data_updates)
+    update_timer.start(6*60*60*1000)
+    C.QTimer.singleShot(1000,controller.check_data_updates)
     result = app.exec()
     server.close()
     lock.unlock()

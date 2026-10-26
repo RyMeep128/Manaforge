@@ -6,6 +6,7 @@ import os
 import re
 import sqlite3
 import time
+import uuid
 from pathlib import Path
 from mtg_core.models import ImageAssetRecord, ImageRecord
 from mtg_core.paths import core_data_root
@@ -94,6 +95,8 @@ class ImageOperations:
         return Path(self.db_path).expanduser().resolve().parent
 
     def _image_asset_storage_root(self) -> Path:
+        if getattr(self, 'image_storage_root', None) is not None:
+            return Path(self.image_storage_root)
         return self._image_asset_base_dir() / "images" / "assets"
 
     @staticmethod
@@ -129,18 +132,19 @@ class ImageOperations:
     @staticmethod
     def _write_verified_image_asset_file(path: Path, payload: bytes, checksum: str) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
-        temp_path = path.with_name(f"{path.name}.tmp")
-        with open(temp_path, "wb") as handle:
-            handle.write(payload)
-        with open(temp_path, "rb") as handle:
-            written_checksum = hashlib.sha256(handle.read()).hexdigest()
-        if written_checksum != checksum:
-            try:
-                temp_path.unlink()
-            except OSError:
-                pass
-            raise OSError("Stored image asset checksum verification failed.")
-        os.replace(temp_path, path)
+        temp_path = path.with_name(f"{path.name}.{uuid.uuid4().hex}.tmp")
+        try:
+            with open(temp_path, "wb") as handle:
+                handle.write(payload)
+                handle.flush()
+                os.fsync(handle.fileno())
+            with open(temp_path, "rb") as handle:
+                written_checksum = hashlib.sha256(handle.read()).hexdigest()
+            if written_checksum != checksum:
+                raise OSError("Stored image asset checksum verification failed.")
+            os.replace(temp_path, path)
+        finally:
+            temp_path.unlink(missing_ok=True)
 
     @staticmethod
     def _read_verified_image_asset_file(path: Path, checksum: str) -> bytes | None:

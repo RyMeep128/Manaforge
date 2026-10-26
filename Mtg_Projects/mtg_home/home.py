@@ -137,6 +137,7 @@ class HomeWindow(W.QMainWindow):
         menu = W.QMenu(settings)
         menu.addAction('Global printing defaults', lambda: self.settingsRequested.emit('printing'))
         menu.addAction('Artwork preferences', lambda: self.settingsRequested.emit('artwork'))
+        menu.addAction('Data Management', lambda: self.settingsRequested.emit('data'))
         settings.setMenu(menu)
         footer.addWidget(settings)
         layout.addLayout(footer)

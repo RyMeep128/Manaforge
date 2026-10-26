@@ -64,7 +64,11 @@ def connect(path):
 def cohort_options(path):
     """Read published choices without creating a missing database."""
     if not Path(path).exists():
-        return []
+        from .recommendation_distribution import released_file
+        released = released_file(Path(path).parent, 'edhrec', 'edhrec-cohorts.sqlite3')
+        if released is None:
+            return []
+        path = released
     with closing(sqlite3.connect(Path(path).resolve().as_uri() + "?mode=ro", uri=True)) as db:
         return db.execute("SELECT kind,value,min(label) FROM cohorts GROUP BY kind,value ORDER BY kind,min(label)").fetchall()
 

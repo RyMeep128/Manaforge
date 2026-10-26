@@ -84,6 +84,28 @@ def fetch_bytes(url: str) -> bytes:
         ) from error
 
 
+def stage_bulk_download(kind, destination, *, cancel=None, progress=None,
+                        fetch_metadata=None, downloader=None):
+    """Stage an official bulk export on disk without importing it into a catalog.
+
+    Scryfall metadata is not a trusted SHA-256 manifest. HTTP length is checked
+    by the shared downloader; a consumer must validate content before importing.
+    Existing small JSON/image lookups retain their bytes-based API.
+    """
+    from mtg_core.downloads import get_download_manager
+    metadata = (fetch_metadata or fetch_json)(
+        'https://api.scryfall.com/bulk-data/' + urllib.parse.quote(kind, safe=''))
+    url = (metadata.get('jsonl_download_uri') or metadata.get('download_uri')) if isinstance(metadata, dict) else None
+    parsed = urllib.parse.urlsplit(url or '')
+    if (not isinstance(metadata, dict) or metadata.get('type') != kind
+            or parsed.scheme != 'https' or not (parsed.hostname or '').endswith('.scryfall.io')
+            or parsed.username or parsed.password):
+        raise ValueError('Scryfall did not provide a valid official bulk export')
+    path = (downloader or get_download_manager()).download(
+        url, destination, cancel=cancel, progress=progress)
+    return path, metadata
+
+
 def build_named_url(exact_name: str) -> str:
     return "https://api.scryfall.com/cards/named?" + urllib.parse.urlencode(
         {"exact": exact_name}

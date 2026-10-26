@@ -10,6 +10,19 @@ for directory in (products, products / 'mtg_core'):
 
 
 def main():
+    if '--verify-bundle' in sys.argv:
+        # CI-only packaged startup check; no provider requests or setup downloads.
+        import ijson
+        from mtg_core.discovery_starter import starter_data
+        from mtg_home.home import HomeWindow
+        from PyQt6 import QtWidgets as W
+        app = W.QApplication.instance() or W.QApplication(sys.argv)
+        if not starter_data().get('cards') or not callable(ijson.items):
+            raise RuntimeError('Required packaged data or streaming parser is missing')
+        window = HomeWindow()
+        app.processEvents()
+        window.close()
+        return 0
     if '--print-studio' in sys.argv:
         # The legacy printer deliberately owns its own QApplication and event loop.
         proxy = products / 'mtg_proxy'
@@ -30,7 +43,8 @@ if __name__ == '__main__':
         from PyQt6 import QtWidgets as W
         from mtg_core.diagnostics import get_logger
         get_logger(__name__).exception('Manaforge startup failed')
-        app = W.QApplication.instance() or W.QApplication(sys.argv)
-        W.QMessageBox.critical(None, 'Manaforge could not start', str(exc))
+        if '--verify-bundle' not in sys.argv:
+            app = W.QApplication.instance() or W.QApplication(sys.argv)
+            W.QMessageBox.critical(None, 'Manaforge could not start', str(exc))
         result = 1
     raise SystemExit(result)

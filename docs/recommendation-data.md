@@ -121,6 +121,12 @@ reuse the normal card-detail behavior, which can fetch uncached images.
 
 ## Source policy (reviewed 2026-09-29)
 
+Update 2026-10-26: the user confirmed processed-data redistribution permission for
+EDHREC, Archidekt and Moxfield. See [recommendation distribution](recommendation-distribution.md)
+for the aggregate-only format, central build commands, prerelease feed and CI publication.
+The historical collection limits below remain in force; raw decks and response caches
+are never published.
+
 | Source | Role | Current access status |
 | --- | --- | --- |
 | Archidekt public Commander decks | Public recommendation evidence | User-authorized one-time personal/noncommercial collection; conservative caching collector available |
