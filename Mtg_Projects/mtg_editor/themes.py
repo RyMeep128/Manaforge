@@ -2,7 +2,7 @@
 from copy import deepcopy
 from .card_drop import CardSearchEdit
 from PyQt6 import QtCore as C, QtWidgets as W
-from mtg_core.discovery_themes import theme_catalog
+from mtg_core.discovery_themes import theme_catalog, oracle_tag_theme
 
 
 class ThemesDialog(W.QDialog):
@@ -24,7 +24,7 @@ class ThemesDialog(W.QDialog):
         self.search.setClearButtonEnabled(True)
         layout.addWidget(self.search)
         self.group = W.QComboBox()
-        self.group.addItems(['All groups', *sorted({t.get('group', 'Themes') for t in catalog})])
+        self.group.addItems(['All groups', *sorted({'Commander Oracle Tags', *{t.get('group', 'Themes') for t in catalog}})])
         layout.addWidget(self.group)
         self.list = W.QListWidget()
         layout.addWidget(self.list, 1)
@@ -46,6 +46,24 @@ class ThemesDialog(W.QDialog):
             item.setToolTip(option.get('group', 'Themes') + ' · Manual when checked')
             self.list.addItem(item)
         self.initial_selections = self.selections()
+        tag_note = W.QLabel('Choose commander tags from the Commander Oracle Tags group, or enter any Oracle tag below.'
+                           if any(t.get('oracle_tag') for t in catalog) else
+                           'No commander Oracle tags are available locally. You can still enter an Oracle tag below.')
+        tag_note.setWordWrap(True)
+        layout.addWidget(tag_note)
+        tag_row = W.QHBoxLayout()
+        self.oracle_tag = CardSearchEdit()
+        self.oracle_tag.setPlaceholderText('Oracle tag or otag:tag')
+        self.oracle_tag.setAccessibleName('Custom theme Oracle tag')
+        tag_row.addWidget(self.oracle_tag)
+        add_theme = W.QPushButton('Add Theme')
+        add_theme.setAutoDefault(False)
+        add_theme.clicked.connect(self.add_oracle_theme)
+        tag_row.addWidget(add_theme)
+        layout.addLayout(tag_row)
+        self.tag_status = W.QLabel()
+        self.tag_status.setWordWrap(True)
+        layout.addWidget(self.tag_status)
         clear = W.QPushButton('Remove all manual themes')
         clear.clicked.connect(self.clear)
         layout.addWidget(clear)
@@ -55,6 +73,40 @@ class ThemesDialog(W.QDialog):
         layout.addWidget(buttons)
         self.search.textChanged.connect(self.filter)
         self.group.currentTextChanged.connect(self.filter)
+
+    def keyPressEvent(self, event):
+        if (self.oracle_tag.hasFocus()
+                and event.key() in (C.Qt.Key.Key_Return, C.Qt.Key.Key_Enter)):
+            self.add_oracle_theme()
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+    def add_oracle_theme(self):
+        try:
+            option = oracle_tag_theme(self.oracle_tag.text())
+        except ValueError as exc:
+            self.tag_status.setText(str(exc))
+            self.oracle_tag.setFocus()
+            return
+        key = option['slug']
+        item = next((self.list.item(i) for i in range(self.list.count())
+                     if self.list.item(i).data(C.Qt.ItemDataRole.UserRole) == key), None)
+        if item is None:
+            self.catalog[key] = option
+            item = W.QListWidgetItem(option['name'])
+            item.setData(C.Qt.ItemDataRole.UserRole, key)
+            item.setFlags(item.flags() | C.Qt.ItemFlag.ItemIsUserCheckable)
+            item.setToolTip(option['query'])
+            self.list.addItem(item)
+        item.setCheckState(C.Qt.CheckState.Checked)
+        self.search.clear()
+        self.group.setCurrentText('Commander Oracle Tags')
+        self.filter()
+        self.list.setCurrentItem(item)
+        self.list.scrollToItem(item)
+        self.oracle_tag.clear()
+        self.tag_status.setText('Oracle tag theme selected. Save to apply it to this deck.')
 
     def filter(self, *_):
         needle = self.search.text().casefold().strip()
@@ -84,6 +136,23 @@ def edit_themes(editor):
         from mtg_core.guidance import guidance, GuidanceSettings
         reader = getattr(getattr(editor.service, 'database', None), 'discovery_metadata', None)
         catalog = theme_catalog(cached, reader() if callable(reader) else {})
+        from .commander_selection import commanders
+        from mtg_core.diagnostics import get_logger
+        tags = set()
+        for entry in commanders(document):
+            if entry.quantity <= 0:
+                continue
+            tags.update((entry.extras.get('facts') or {}).get('oracle_tags') or [])
+            try:
+                oracle_id = entry.oracle_id
+                if not oracle_id and entry.card_id:
+                    oracle_id = (editor.service.get_card(card_id=entry.card_id) or {}).get('oracle_id')
+                reader = getattr(editor.service, 'get_oracle_tags', None)
+                if callable(reader) and oracle_id:
+                    tags.update(reader(oracle_id) or [])
+            except Exception:
+                get_logger(__name__).exception('Could not load commander Oracle tags')
+        catalog.extend(oracle_tag_theme(tag) for tag in sorted(tags))
         proposals = editor.service.analyze_entries(document.deck.entries)
         inferred = guidance(document, proposals, GuidanceSettings.from_document(document))
         return catalog, [row['id'][6:] for row in inferred['suggestions'] if row['id'].startswith('theme:')]

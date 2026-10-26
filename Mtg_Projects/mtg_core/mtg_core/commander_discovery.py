@@ -38,6 +38,9 @@ def search_commanders(service, filters, store, *, metadata=None, should_cancel=N
         snapshot = dict(themes=[], members=[], status=f"EDHREC theme data unavailable: {exc}. Local search remains available.")
         rankings = {}
     catalog = theme_catalog(snapshot['themes'], metadata)
+    from .discovery_themes import oracle_tag_theme
+    catalog.extend(oracle_tag_theme(t['oracle_tag']) for t in filters.get('custom_themes', [])
+                   if t.get('origin') == 'custom' and t.get('oracle_tag'))
     option = next((item for item in catalog if item['slug'] == theme), None)
     cached_theme = bool(theme and option and option['origin'] == 'edhrec')
     snapshot.update(themes=catalog, cards=metadata.get('cards', 0), ranked=bool(rankings))

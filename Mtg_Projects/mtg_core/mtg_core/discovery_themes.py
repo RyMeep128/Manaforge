@@ -60,12 +60,27 @@ def theme_catalog(cached, metadata):
     return sorted(local.values(), key=lambda row: row['name'].casefold())
 
 
+def oracle_tag_theme(value):
+    """Build a deck-local theme without conflating tags with cached cohorts."""
+    from .card_pool import oracle_tag_query
+    tag = value.strip()
+    if tag.casefold().startswith('otag:'):
+        tag = tag[5:].strip()
+    if not tag:
+        raise ValueError('Enter an Oracle tag.')
+    return dict(slug='custom-otag:' + tag.casefold(), name=tag, oracle_tag=tag,
+                group='Commander Oracle Tags', query=oracle_tag_query(tag.casefold()),
+                roles=[], origin='custom')
+
+
 def theme_matches(row, theme):
     if not theme:
         return True
     if 'selected_themes' in theme:
         return any(theme_matches(row, option) for option in theme['selected_themes'])
     facts = row['entry'].extras.get('facts') or {}
+    if theme.get('origin') == 'custom' and 'oracle_tag' in theme:
+        return theme['oracle_tag'].casefold() in {str(t).casefold() for t in facts.get('oracle_tags') or []}
     if theme.get('companion'):
         # Companion selection is an idea filter, not an assertion of deck legality.
         from copy import copy
@@ -81,7 +96,7 @@ def theme_matches(row, theme):
     if key and cohort.get('kind') == 'theme' and cohort.get('value') == key:
         return True
     roles = {r['name'].casefold() for r in row.get('roles', [])}
-    tags = {slug(tag) for tag in facts.get('oracle_tags', [])}
+    tags = {slug(tag) for tag in facts.get('oracle_tags') or []}
     keywords = {slug(word) for word in facts.get('keywords') or []}
     if key in tags | keywords | {slug(role) for role in roles} or roles & {r.casefold() for r in theme.get('roles', [])}:
         return True

@@ -239,7 +239,7 @@ class CommanderDiscovery(CardDropPanel):
         self.theme_search.setClearButtonEnabled(True)
         self.theme_search.textChanged.connect(self.populate_themes)
         self.theme_group = W.QComboBox()
-        self.theme_group.addItems(["Mechanics", "Strategies", "Archetypes", "Typal", "Companions"])
+        self.theme_group.addItems(["Mechanics", "Strategies", "Archetypes", "Typal", "Companions", "Commander Oracle Tags"])
         self.theme_group.currentTextChanged.connect(self.populate_themes)
         self.theme_list = W.QListWidget()
         self.theme_list.setMaximumHeight(145)
@@ -317,7 +317,8 @@ class CommanderDiscovery(CardDropPanel):
         from mtg_core.card_pool import pool_context
         format_name, deck_identity, include_illegal = pool_context(self.editor.document)
         selected = commanders(self.editor.document)
-        return dict(theme=self.theme_slug, browse=self.browse_mode.currentData(), identity=self.identity.currentData(), name=self.name.text(), type=self.type.text(),
+        return dict(custom_themes=[t for t in self.editor.document.editor_preferences.get('manual_themes', [])
+                                  if t.get('origin') == 'custom'], theme=self.theme_slug, browse=self.browse_mode.currentData(), identity=self.identity.currentData(), name=self.name.text(), type=self.type.text(),
                     text=self.text.text(), capability=self.capability.currentData(),
                     legal_only=not include_illegal, deck_format=format_name, deck_identity=deck_identity, limit=self.limit,
                     partner_card_id=selected[0].card_id if self.partner.isChecked() and len(selected) == 1 else None)
@@ -522,7 +523,10 @@ class CommanderDiscovery(CardDropPanel):
             self.legal.setChecked(not pool[2])
         deck_id = self.editor.document.deck.deck_id
         saved = self.editor.document.editor_preferences.get('discovery', {})
-        preferences_changed = (self.preference_deck != deck_id or self.theme_slug != saved.get('theme', '')
+        custom_themes = json.dumps(self.filters()['custom_themes'], sort_keys=True)
+        custom_changed = getattr(self, '_custom_themes', None) != custom_themes
+        self._custom_themes = custom_themes
+        preferences_changed = (custom_changed or self.preference_deck != deck_id or self.theme_slug != saved.get('theme', '')
                 or self.identity.currentData() != saved.get('identity'))
         if preferences_changed:
             self.preference_deck = deck_id

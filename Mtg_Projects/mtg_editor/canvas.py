@@ -1,5 +1,6 @@
 """Image-first deck canvas. Only visible cards request and paint artwork."""
 import json
+import math
 from PyQt6 import QtCore as C, QtGui as G, QtWidgets as W
 from mtg_ui.cards import rounded_card, drag_ghost
 from mtg_ui.theme import COLORS
@@ -29,6 +30,7 @@ class CardCanvas(W.QAbstractScrollArea):
         self.card_width = 180
         self.fit_height = False
         self.faces = {}
+        self.flip_animations = {}
         self.expanded_stacks = set()
         self.discovery_drop = False
         self.minimum_search_card_width = None
@@ -83,6 +85,7 @@ class CardCanvas(W.QAbstractScrollArea):
         self.relayout()
 
     def relayout(self):
+        self.prune_flips()
         self.items, self.headers = [], []
         width = max(1 if self.minimum_search_card_width is not None else 150, self.viewport().width())
         cw = min(self.card_width, width - 32)
@@ -195,6 +198,7 @@ class CardCanvas(W.QAbstractScrollArea):
         return next((h for h in self.headers if h[3].contains(point)), None)
 
     def paintEvent(self, event):
+        self.prune_flips()
         p = G.QPainter(self.viewport())
         p.fillRect(self.viewport().rect(), G.QColor(COLORS['canvas']))
         offset = self.verticalScrollBar().value()
@@ -205,6 +209,11 @@ class CardCanvas(W.QAbstractScrollArea):
         visible_keys = [self.image_key(e) for e in nearby]
         if self.mode == 'Stacks' and not self.search_mode:
             visible_keys.extend(self.image_key(e, high_resolution=True) for e in nearby if e.entry_id == self.hovered)
+        for entry in nearby:
+            state = self.flip_animations.get(entry.entry_id)
+            if state:
+                options, asset = self.face_image_options(entry, state['target'])
+                visible_keys.append(Thumbnails.key(entry.card_id, asset, **options))
         self.thumbnails.set_visible(id(self), visible_keys)
         for entry in nearby:
             self.card_image(entry)
@@ -238,7 +247,12 @@ class CardCanvas(W.QAbstractScrollArea):
             if self.mode == 'Stacks' and not self.search_mode and entry.entry_id == self.hovered:
                 pixmap = self.card_image(entry, high_resolution=True)
             in_deck = self.search_mode and entry.entry_id in self.in_deck_ids
-            rounded_card(p, rect, pixmap, entry.entry_id in self.selected or in_deck, entry.entry_id == self.hovered)
+            state = self.flip_animations.get(entry.entry_id)
+            if state:
+                self.paint_flip(p, rect, pixmap, entry.entry_id in self.selected or in_deck,
+                                entry.entry_id == self.hovered, state['progress'])
+            else:
+                rounded_card(p, rect, pixmap, entry.entry_id in self.selected or in_deck, entry.entry_id == self.hovered)
             primary, tags = corner_colors(entry, category_colors)
             draw_quantity_corner(p, rect, entry.quantity, primary, tags)
             if self.face_count(entry) > 1:
@@ -284,6 +298,10 @@ class CardCanvas(W.QAbstractScrollArea):
 
     def image_options(self, entry, high_resolution=False):
         face = self.faces.get(entry.entry_id, 0) % max(1, self.face_count(entry))
+        return self.face_image_options(entry, face, high_resolution)
+
+    @staticmethod
+    def face_image_options(entry, face, high_resolution=False):
         asset = entry.backside_asset_id if face else entry.image_asset_id
         options = {}
         if face:
@@ -342,15 +360,84 @@ class CardCanvas(W.QAbstractScrollArea):
 
     def flip_entry(self, entry):
         count = self.face_count(entry)
-        if count > 1:
-            self.faces[entry.entry_id] = (self.faces.get(entry.entry_id, 0)+1) % count
-            self.preview.hide()
-            self.viewport().update()
+        key = entry.entry_id
+        if count <= 1 or key in self.flip_animations:
+            return
+        target = (self.faces.get(key, 0)+1) % count
+        options, asset = self.face_image_options(entry, target)
+        self.thumbnails.get(entry.card_id, asset, **options)
+        animation = C.QVariantAnimation(self)
+        animation.setDuration(420)
+        animation.setStartValue(0.0)
+        animation.setEndValue(1.0)
+        animation.setEasingCurve(C.QEasingCurve.Type.InOutSine)
+        self.flip_animations[key] = dict(animation=animation, progress=0.0, target=target,
+                                         document=self.document, deck_id=self.document.deck.deck_id, entry=entry)
+        animation.valueChanged.connect(lambda value: self.animate_flip_frame(key, value))
+        animation.finished.connect(lambda: self.finish_flip(key))
+        self.hover_timer.stop()
+        self.preview.hide()
+        animation.start()
+
+    def animate_flip_frame(self, key, progress):
+        self.prune_flips()
+        state = self.flip_animations.get(key)
+        if state is None:
+            return
+        state['progress'] = float(progress)
+        if progress >= 0.5:
+            self.faces[key] = state['target']
+        self.viewport().update()
+
+    def finish_flip(self, key):
+        state = self.flip_animations.pop(key, None)
+        if state:
+            self.faces[key] = state['target']
+            state['animation'].stop()
+            state['animation'].deleteLater()
+        self.viewport().update()
+
+    def prune_flips(self):
+        if not self.flip_animations:
+            return
+        entries = {e.entry_id: e for e in self.document.deck.entries}
+        for key, state in list(self.flip_animations.items()):
+            if (state['document'] is not self.document or state['deck_id'] != self.document.deck.deck_id
+                    or entries.get(key) is not state['entry']):
+                self.flip_animations.pop(key)
+                state['animation'].stop()
+                state['animation'].deleteLater()
+                self.faces.pop(key, None)
+
+    @staticmethod
+    def paint_flip(painter, rect, pixmap, selected, hovered, progress):
+        # Turn toward edge-on, exchange faces, then turn the new face forward.
+        angle = 180 * progress if progress < 0.5 else -180 * (1-progress)
+        if abs(abs(angle)-90) < 0.2:
+            angle = 89.8 if angle > 0 else -89.8
+        painter.save()
+        transform = G.QTransform()
+        transform.translate(rect.center().x(), rect.center().y())
+        transform.rotate(angle, C.Qt.Axis.YAxis)
+        painter.setWorldTransform(transform, True)
+        local = C.QRect(-(rect.width()//2), -(rect.height()//2), rect.width(), rect.height())
+        rounded_card(painter, local, pixmap, selected, hovered)
+        path = G.QPainterPath()
+        path.addRoundedRect(C.QRectF(local), 9, 9)
+        painter.setClipPath(path)
+        shading = G.QLinearGradient(C.QPointF(local.topLeft()), C.QPointF(local.topRight()))
+        strength = int(105 * math.sin(math.pi * progress))
+        shading.setColorAt(0, G.QColor(0, 0, 0, strength))
+        shading.setColorAt(1, G.QColor(255, 255, 255, strength//3))
+        painter.fillRect(local, shading)
+        painter.restore()
 
     def control_rect(self, rect):
         return quantity_control_rect(rect)
 
     def hideEvent(self, event):
+        for key in list(self.flip_animations):
+            self.finish_flip(key)
         self.context_resume_timer.stop()
         self.context_target = None
         self.hover_timer.stop()

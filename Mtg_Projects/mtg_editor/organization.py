@@ -30,7 +30,7 @@ def card_facts(payload):
     return {key: payload.get(key, face.get(key)) for key in
             ('released_at', 'type_line', 'mana_cost', 'cmc', 'colors', 'oracle_text', 'keywords', 'layout', 'card_faces',
              'color_identity', 'power', 'toughness', 'rarity', 'artist', 'legalities',
-             'finishes', 'frame_effects', 'promo', 'textless', 'full_art', 'border_color')}
+             'finishes', 'frame_effects', 'promo', 'textless', 'full_art', 'border_color', 'oracle_tags')}
 
 
 def update_candidate_quantities(document, canvas):
