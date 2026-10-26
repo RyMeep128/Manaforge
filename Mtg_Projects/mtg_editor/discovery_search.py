@@ -2,13 +2,13 @@
 import json
 
 from PyQt6 import QtWidgets as W
-from mtg_core.decks import DeckDocument, DeckEntry
-from mtg_core.categorization import classify
+from mtg_core.decks import DeckDocument
+from mtg_core.card_metadata import search_entry
 
 from .canvas import CardCanvas
 from .card_drop import CardDropPanel, CardSearchEdit
 from .search import SearchController
-from .organization import card_facts, in_deck_entries, update_candidate_quantities
+from .organization import in_deck_entries, update_candidate_quantities
 from .recommendation_panel import CARD_TYPES
 
 
@@ -119,12 +119,7 @@ class CardSearchPanel(CardDropPanel):
             return
         self.result_error = error
         previous = {entry.card_id: entry for entry in self.rows}
-        self.rows = [previous.get(r.card_id) or DeckEntry(r.card_id, r.name, card_id=r.card_id, oracle_id=r.oracle_id,
-                              set_code=r.set_code, collector_number=r.collector_number,
-                              pre_cropped=True, extras={'facts': card_facts(getattr(r, 'payload', {}) or {}),
-                                  'category_suggestion': (getattr(r, 'payload', {}) or {}).get(
-                                      '_category_evidence', classify(getattr(r, 'payload', {}) or {}))})
-                     for r in results]
+        self.rows = [previous.get(r.card_id) or search_entry(r) for r in results]
         self.update_quantities()
         self.status.setText(error or (f'Showing {len(self.canvas.document.deck.entries)} results. ' +
             ('Load More for additional results.' if self.controller.has_more else 'All available results loaded.')))

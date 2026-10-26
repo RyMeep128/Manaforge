@@ -67,3 +67,18 @@ def test_cancellation_has_no_partial_result():
     result = resolve_decklist('1 Sol Ring\n1 Missing', service(),
                              progress=lambda *args: calls.append(args), cancelled=lambda: bool(calls))
     assert result is None and calls == [(1, 2)]
+
+
+def test_import_preserves_facts_needed_for_immediate_commander_search():
+    from mtg_core.card_pool import pool_context, deck_query
+    adapter = service()
+    payload = adapter.get_card(exact_name='Sol Ring')
+    payload.update(color_identity=['U'], legalities={'commander': 'legal'}, mana_cost='{1}')
+    document = DeckDocument()
+    document.deck.format = 'Commander'
+    apply_decklist(document, resolve_decklist('Commander\n1 Sol Ring', adapter))
+    facts = document.deck.entries[0].extras['facts']
+    assert facts['mana_cost'] == '{1}'
+    assert facts['legalities'] == {'commander': 'legal'}
+    assert pool_context(document) == ('commander', 'U', False)
+    assert 'id<=U' in deck_query('t:instant', document)

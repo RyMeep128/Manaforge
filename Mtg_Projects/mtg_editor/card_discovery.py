@@ -8,7 +8,8 @@ from mtg_core.card_discovery import similar_cards, popular_commanders
 from mtg_core.recommendation_sources import default_sources
 from .commander_discovery import DiscoveryController
 from .canvas import CardCanvas
-from .organization import card_facts, update_candidate_quantities
+from mtg_core.card_metadata import card_facts
+from .organization import update_candidate_quantities
 
 
 class CardDiscoveryService:

@@ -3,7 +3,7 @@ from copy import deepcopy
 from mtg_core.deck_mutations import apply_quantity
 from pathlib import Path
 from PyQt6 import QtCore as C, QtGui as G, QtWidgets as W
-from .organization import card_facts
+from mtg_core.card_metadata import card_facts
 from .card_views import orient_face_image
 from mtg_core.diagnostics import get_logger
 

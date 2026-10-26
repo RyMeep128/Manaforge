@@ -124,3 +124,23 @@ def test_shared_quantity_geometry_matches_canvas_and_preview(width, height):
     assert buttons[0][1].united(buttons[1][1]) == control
     assert not buttons[0][1].intersects(buttons[1][1])
     assert CardCanvas.quantity_buttons(None, rect) == buttons
+
+
+def test_discovery_count_and_minus_agree_for_legacy_whitespace(tmp_path):
+    app = W.QApplication.instance() or W.QApplication([])
+    editor = EditorWindow(service=object(), root=tmp_path)
+    editor.document.deck.entries = [DeckEntry('legacy', '  Sol   Ring ', quantity=2)]
+    candidate = DeckEntry('result', 'Sol Ring', card_id='printing', oracle_id='oracle')
+    editor.search_document.deck.entries = [candidate]
+    editor.changed()
+    assert candidate.quantity == 2
+    editor.change_candidate_quantity(candidate, -1)
+    assert candidate.quantity == 1
+    editor.change_candidate_quantity(candidate, -1)
+    assert not editor.document.deck.entries
+    assert candidate.quantity == 0
+    editor.undo()
+    assert candidate.quantity == 1
+    editor.saved = editor.document.to_dict()
+    editor.close()
+    app.processEvents()

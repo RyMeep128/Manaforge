@@ -1,6 +1,8 @@
 """Deck organization commands and deterministic visual groups."""
 
 from mtg_core.sections import DeckSection
+from mtg_core.card_identity import normalized_card_name, matching_entries
+from mtg_core.card_metadata import card_facts
 from .filtering import compile_filter, matches
 SECTIONS = {DeckSection.MAINBOARD: 'Mainboard', DeckSection.COMMANDER: 'Commander', DeckSection.SIDEBOARD: 'Sideboard',
             DeckSection.CONSIDERING: 'Considering', DeckSection.EXCLUDED: 'Excluded'}
@@ -8,49 +10,18 @@ GROUPS = ['Type', 'Mana Value', 'Color', 'Category', 'Section']
 SORTS = ['Name', 'Mana Value', 'Color', 'Quantity', 'Import Order']
 
 
-def normalized_card_name(name):
-    return ' '.join(name.split()).casefold()
-
-
 def in_deck_entries(document, candidates):
     """Recognize alternate printings and legacy entries without changing selection."""
-    entries = [entry for entry in document.deck.entries if entry.quantity > 0]
-    oracles = {entry.oracle_id for entry in entries if entry.oracle_id}
-    prints = {entry.card_id for entry in entries if entry.card_id}
-    legacy_names = {normalized_card_name(entry.name) for entry in entries if not entry.oracle_id}
-    names = {normalized_card_name(entry.name) for entry in entries}
-    return {entry.entry_id for entry in candidates
-            if (entry.oracle_id and entry.oracle_id in oracles)
-            or (entry.card_id and entry.card_id in prints)
-            or normalized_card_name(entry.name) in (legacy_names if entry.oracle_id else names)}
-
-
-def card_facts(payload):
-    face = (payload.get('card_faces') or [{}])[0]
-    return {key: payload.get(key, face.get(key)) for key in
-            ('released_at', 'type_line', 'mana_cost', 'cmc', 'colors', 'oracle_text', 'keywords', 'layout', 'card_faces',
-             'color_identity', 'power', 'toughness', 'rarity', 'artist', 'legalities',
-             'finishes', 'frame_effects', 'promo', 'textless', 'full_art', 'border_color', 'oracle_tags')}
+    return {candidate.entry_id for candidate in candidates
+            if matching_entries(document.deck.entries, candidate)}
 
 
 def update_candidate_quantities(document, canvas):
     """Presentation quantities come only from the active mainboard/commanders."""
     entries = [entry for entry in document.deck.entries
                if entry.section in (DeckSection.MAINBOARD, DeckSection.COMMANDER)]
-    oracles, prints, names, legacy = {}, {}, {}, {}
-    for entry in entries:
-        for mapping, key in ((oracles, entry.oracle_id), (prints, entry.card_id),
-                             (names, normalized_card_name(entry.name))):
-            if key:
-                mapping[key] = mapping.get(key, 0) + entry.quantity
-        if not entry.oracle_id:
-            key = normalized_card_name(entry.name)
-            legacy[key] = legacy.get(key, 0) + entry.quantity
     for candidate in canvas.document.deck.entries:
-        name = normalized_card_name(candidate.name)
-        candidate.quantity = (oracles.get(candidate.oracle_id, 0) + legacy.get(name, 0)
-                              if candidate.oracle_id else names.get(name, 0))
-        candidate.quantity = max(candidate.quantity, prints.get(candidate.card_id, 0))
+        candidate.quantity = sum(entry.quantity for entry in matching_entries(entries, candidate))
     canvas.in_deck_ids = in_deck_entries(document, canvas.document.deck.entries)
     canvas.viewport().update()
 

@@ -11,7 +11,8 @@ from mtg_core.paths import core_data_root
 from .canvas import CardCanvas
 from .card_drop import CardDropPanel, CardSearchEdit
 from .commander_selection import commanders, select_commander
-from .organization import card_facts, update_candidate_quantities
+from mtg_core.card_metadata import card_facts
+from .organization import update_candidate_quantities
 from .search import SearchCache, SearchController, SearchWorker
 
 

@@ -6,9 +6,9 @@ import uuid
 from .card_drop import CardSearchEdit
 from PyQt6 import QtWidgets as W
 from mtg_core.decks import DeckEntry
-from mtg_core.categorization import apply_categories
+from mtg_core.deck_mutations import add_card
 from mtg_core.sections import DeckSection
-from .organization import card_facts
+from mtg_core.card_metadata import card_facts
 from mtg_core.recommendation_scoring import context, score, settings
 from mtg_core.public_deck_datasets import SOURCE_LABELS, STATISTICAL_SOURCES
 
@@ -414,16 +414,10 @@ class RecommendationsDialog(W.QDialog):
         row = self.selected()
         if row is None:
             return
-        entry = row["entry"]
-
-        def apply(document):
-            entry.sort_order = (
-                max((e.sort_order for e in document.deck.entries), default=-1) + 1
-            )
-            document.deck.entries.append(entry)
-            apply_categories(document, {entry.entry_id: row["roles"]})
-
-        self.editor.edit(apply)
+        from copy import deepcopy
+        entry = deepcopy(row["entry"])
+        entry.extras['category_suggestion'] = deepcopy(row['roles'])
+        self.editor.edit(lambda document: add_card(document, entry))
         self.all_rows = [
             item for item in self.all_rows if item["oracle_id"] != row["oracle_id"]
         ]

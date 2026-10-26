@@ -136,3 +136,52 @@ def test_local_database_cache_dates(tmp_path):
     assert set(records) == {'test'}
     assert records['test']['payload']['legalities']['commander'] == 'legal'
     assert records['test']['cached_at'] > 0
+
+
+@pytest.mark.parametrize('placement', ['top', 'face'])
+@pytest.mark.parametrize('choice,expected', [(None, None), ('X', None), ('R', 'GR')])
+def test_pool_and_checker_share_pregame_color_choices(placement, choice, expected):
+    from mtg_core.card_pool import pool_context
+    doc, records = deck()
+    doc.deck.format = 'Commander'
+    leader = records['leader']['payload']
+    phrase = 'Choose a color before the game begins.'
+    if placement == 'top':
+        leader['oracle_text'] = phrase
+    else:
+        leader['card_faces'] = [{'oracle_text': ''}, {'oracle_text': phrase}]
+    doc.deck.entries[0].extras['facts'] = deepcopy(leader)
+    if choice is not None:
+        doc.deck.extras['commander_colors'] = {'leader': choice}
+    assert pool_context(doc)[1] == expected
+    assert ('commander_identity' in codes(doc, records)) == (expected is None)
+    if expected is not None:
+        doc.deck.entries[1].quantity = 98
+        doc.deck.entries.append(DeckEntry('probe', 'Red spell', card_id='probe'))
+        records['probe'] = {'payload': card('Red spell', 'Instant', colors=('R',)), 'cached_at': NOW}
+        assert 'identity' not in codes(doc, records)
+
+
+def test_pool_and_checker_share_legacy_commander_selection_and_unknown_identity():
+    from mtg_core.card_pool import pool_context
+    doc, records = deck()
+    doc.deck.format = 'Commander'
+    leader = doc.deck.entries[0]
+    leader.section = 'mainboard'
+    leader.extras['facts'] = deepcopy(records['leader']['payload'])
+    assert pool_context(doc)[1] == 'G'
+    assert 'commanders' not in codes(doc, records)
+    leader.extras['facts']['color_identity'] = None
+    records['leader']['payload']['color_identity'] = None
+    assert pool_context(doc)[1] is None
+    assert 'commander_identity' in codes(doc, records)
+
+
+def test_pool_keeps_known_colorless_identity():
+    from mtg_core.card_pool import pool_context
+    doc, records = deck()
+    doc.deck.format = 'Commander'
+    records['leader']['payload']['color_identity'] = []
+    doc.deck.entries[0].extras['facts'] = deepcopy(records['leader']['payload'])
+    assert pool_context(doc)[1] == ''
+    assert 'commander_identity' not in codes(doc, records)

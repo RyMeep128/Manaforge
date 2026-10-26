@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from mtg_core.card_metadata import card_facts, search_entry
 from mtg_core.deck_mutations import add_card, change_candidate_quantity, change_quantities, remove_entries
 from mtg_core.sections import DeckSection
 from mtg_core.artwork import HighResOverride
@@ -15,7 +16,7 @@ from mtg_core import get_default_card_service
 from mtg_editor.card_views import Thumbnails
 from mtg_editor.canvas import CardCanvas
 from mtg_editor.card_drop import CardDropPanel, CardSearchEdit
-from mtg_editor.organization import SECTIONS, GROUPS, SORTS, card_facts, assign, move_entries
+from mtg_editor.organization import SECTIONS, GROUPS, SORTS, assign, move_entries
 from mtg_ui.theme import application_stylesheet
 from copy import deepcopy
 from mtg_core.categorization import classify, apply_categories
@@ -967,11 +968,7 @@ class EditorWindow(W.QMainWindow):
         self._quick_add_ready_query = self.query.text().strip() if not error else None
         self.syntax_error = error
         previous = {entry.card_id: entry for entry in self.syntax_all_entries}
-        self.search_document.deck.entries = [previous.get(r.card_id) or DeckEntry(entry_id=r.card_id, name=r.name,
-            card_id=r.card_id, oracle_id=r.oracle_id, set_code=r.set_code,
-            collector_number=r.collector_number, pre_cropped=True, extras={'facts': card_facts(getattr(r, 'payload', {}) or {}),
-                'category_suggestion': (getattr(r, 'payload', {}) or {}).get('_category_evidence',
-                    classify(getattr(r, 'payload', {}) or {}))}) for r in results]
+        self.search_document.deck.entries = [previous.get(r.card_id) or search_entry(r) for r in results]
         self.results.refresh()
         self.syntax_all_entries = list(self.search_document.deck.entries)
         self.filter_syntax_results()

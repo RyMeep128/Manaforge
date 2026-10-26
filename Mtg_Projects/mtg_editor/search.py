@@ -4,10 +4,10 @@ from copy import deepcopy
 from mtg_core.diagnostics import get_logger
 from threading import Event
 from time import monotonic
-import re
 
 from PyQt6 import QtCore
 from mtg_core.search.cancellation import SearchCancelled, check_cancelled
+from mtg_core.search.syntax import is_scryfall_syntax_query
 
 
 class SearchDraft(QtCore.QObject):
@@ -20,15 +20,7 @@ class SearchDraft(QtCore.QObject):
         self.syntax = False
 
     def set_text(self, text):
-        from mtg_core.search.syntax import Parser, LocalQueryError
-        try:
-            tokens = Parser(text).tokens
-        except LocalQueryError:
-            # Incomplete syntax must remain editable without becoming a name.
-            tokens = [text.strip()]
-        syntax = any(token.upper() in {'AND', 'OR', 'NOT', '(', ')', '-'}
-                     or token.startswith(('"', '!'))
-                     or re.match(r'^-?[a-zA-Z_]+(?::|[<>=!])', token) for token in tokens)
+        syntax = bool(is_scryfall_syntax_query(text))
         if (text, syntax) != (self.text, self.syntax):
             self.text, self.syntax = text, syntax
             self.changed.emit(text, syntax)

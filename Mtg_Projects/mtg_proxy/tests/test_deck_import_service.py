@@ -1108,3 +1108,22 @@ def test_import_single_card_promotes_online_cache_row_and_saves_image(monkeypatc
     assert row["cache_scope"] is None
     assert row["cache_expires_at"] is None
     assert (runtime_dir / "project_images" / "scryfall_dom_60_opt.png").exists()
+
+
+def test_boolean_syntax_search_keeps_local_pagination(tmp_path, monkeypatch):
+    def no_network(*args):
+        raise AssertionError('Local search must not contact the network')
+    service = CardService(db_path=str(tmp_path / 'boolean.sqlite3'),
+                          fetch_json_fn=no_network, fetch_bytes_fn=no_network)
+    for index in range(3):
+        service.database.upsert_card_payload(dict(id=f'dragon-{index}', oracle_id=f'oracle-{index}',
+            name=f'Dragon {index}', type_line='Creature — Dragon', oracle_text='',
+            colors=['R'], color_identity=['R'], cmc=3, set='test', collector_number=str(index)))
+    monkeypatch.setattr(deck_import_service, '_build_card_service', lambda *args: service)
+    page = deck_import_service.search_scryfall_card_page('Dragon AND Dragon', page_size=1, local_only=True)
+    assert page.total_count == 3
+    assert len(page.candidates) == 1
+    assert page.has_more is True
+    next_page = deck_import_service.search_scryfall_card_page(
+        'Dragon AND Dragon', page_start=1, page_size=1, local_only=True)
+    assert next_page.candidates[0].card_id != page.candidates[0].card_id

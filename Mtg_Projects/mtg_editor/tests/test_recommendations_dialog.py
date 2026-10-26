@@ -78,8 +78,18 @@ def test_preferences_dismissal_and_add_follow_editor_history():
     assert len(dialog.rows) == 1
     dialog.add()
     assert len(editor.document.deck.entries) == 1
+    assert editor.document.deck.entries[0] is not row['entry']
+    assert editor.document.deck.entries[0].entry_id != row['entry'].entry_id
     assert editor.history.undo()
     assert not editor.document.deck.entries
+    existing = DeckEntry('existing', 'Example', oracle_id='candidate', quantity=2)
+    editor.document.deck.entries = [existing]
+    dialog.all_rows = [row]
+    dialog.refresh()
+    dialog.add()
+    assert len(editor.document.deck.entries) == 1
+    assert existing.quantity == 3
+    assert row['entry'].quantity == 1
     dialog.deleteLater()
     editor.deleteLater()
     app.processEvents()

@@ -118,12 +118,45 @@ def copy_limit(payload, default=1):
     return default
 
 
+def commander_entries(document):
+    """Resolve active commander entries, including legacy ID-only selections."""
+    return [entry for entry in document.deck.entries
+            if entry.section in (DeckSection.MAINBOARD, DeckSection.COMMANDER)
+            and (entry.section == DeckSection.COMMANDER
+                 or entry.entry_id in document.deck.commander_entry_ids)]
+
+
+def commander_color_identity(document, commanders, payloads=None):
+    """Return the effective colors, or None when identity/choices are unknown.
+
+    Payloads are keyed by entry ID when a checker has fresher catalog records;
+    discovery uses the same calculation with each entry's stored facts.
+    """
+    if not commanders:
+        return None
+    identity = set()
+    for entry in commanders:
+        payload = payloads[entry.entry_id] if payloads is not None else entry.extras.get('facts') or {}
+        colors = payload.get('color_identity')
+        if colors is None or entry.quantity <= 0:
+            return None
+        identity.update(colors)
+        text = '\n'.join(str(face.get('oracle_text') or '')
+                         for face in [payload, *(payload.get('card_faces') or [])])
+        if 'choose a color before the game begins' in text.casefold():
+            choice = document.deck.extras.get('commander_colors', {}).get(entry.entry_id)
+            if not isinstance(choice, str) or len(choice) != 1 or choice not in 'WUBRG':
+                return None
+            identity.add(choice)
+    return identity
+
+
 def check_commander(document, records, *, now=None):
     now = time.time() if now is None else now
     entries = [e for e in document.deck.entries if e.section in (DeckSection.MAINBOARD, DeckSection.COMMANDER)]
     companion_id = document.deck.extras.get('companion_entry_id')
     companion = next((e for e in document.deck.entries if e.entry_id == companion_id), None)
-    commanders = [e for e in entries if e.section == DeckSection.COMMANDER]
+    commanders = commander_entries(document)
     report = Report(sum(e.quantity for e in entries))
     def issue(severity, code, message, selected=()):
         report.issues.append(Issue(severity, code, message, tuple(e.entry_id for e in selected)))
@@ -145,20 +178,8 @@ def check_commander(document, records, *, now=None):
         if status is not True:
             issue('Unknown' if status is None else 'Error', 'pairing',
                   'Commander pairing could not be established.' if status is None else 'These commanders do not have compatible partner/background abilities.', commanders)
-    identity = set()
-    identity_known = bool(commanders)
-    for entry in commanders:
-        colors = payloads[entry.entry_id].get('color_identity')
-        if colors is None:
-            identity_known = False
-        else:
-            identity.update(colors)
-        if 'choose a color before the game begins' in oracle(payloads[entry.entry_id]).casefold():
-            choice = document.deck.extras.get('commander_colors', {}).get(entry.entry_id)
-            if isinstance(choice, str) and len(choice) == 1 and choice in 'WUBRG':
-                identity.add(choice)
-            else:
-                identity_known = False
+    identity = commander_color_identity(document, commanders, payloads)
+    identity_known = identity is not None
     if not identity_known:
         issue('Unknown', 'commander_identity', 'Commander color identity is missing or needs a pregame color choice.', commanders)
     groups, stale, undated, dates = {}, [], [], []

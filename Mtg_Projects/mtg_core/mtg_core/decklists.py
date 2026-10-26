@@ -7,6 +7,7 @@ import re
 import uuid
 from dataclasses import dataclass, replace
 from .decks import DeckEntry
+from .card_metadata import card_facts
 from .categorization import analyze_entries, apply_categories
 from .services import RemoteLookupUnavailable
 
@@ -184,8 +185,7 @@ def resolve_entries(parsed, service, *, allow_remote=False, progress=None, cance
                 quantity=source.count, section=source.section, card_id=payload['id'],
                 oracle_id=payload.get('oracle_id'), set_code=payload.get('set'),
                 collector_number=payload.get('collector_number'),
-                pre_cropped=True, extras={'facts': {key: payload.get(key) for key in
-                    ('type_line', 'cmc', 'colors', 'oracle_text', 'keywords', 'layout', 'card_faces')}})
+                pre_cropped=True, extras={'facts': card_facts(payload)})
             if import_artwork:
                 for url, field in ((source.image_url, 'image_asset_id'), (source.backside_image_url, 'backside_asset_id')):
                     if cancelled():

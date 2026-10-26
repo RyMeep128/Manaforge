@@ -19,6 +19,17 @@ authoritative implementation so fixes propagate across the application.
   the editor's `edit` transaction so history, refresh, and persistence remain
   the container's responsibility. Card details re-exports `apply_quantity` for
   existing consumers; new consumers should import from core.
+- `mtg_core.card_metadata.card_facts`: the authoritative facts snapshot for
+  imports, discovery, and inspection. `search_entry` converts catalog search
+  results and preserves supplied category evidence without reclassifying it.
+- `mtg_core.card_identity`: normalized names and matching for discovery counts,
+  membership, and removal. Exact-print addition remains a separate merge policy.
+- `mtg_core.search.syntax.is_scryfall_syntax_query`: shared syntax detection for
+  editor inputs and print-project search, including boolean and incomplete input.
+- `mtg_core.commander.commander_entries` and `commander_color_identity`: shared
+  commander selection and effective identity, including pregame color choices.
+  Missing metadata returns unknown; an empty color set means known colorless.
+  Legality checks supply catalog payloads; discovery uses stored entry facts.
 - Search, Quick Add, recommendation panels, Discover Deck Ideas, and commander
   discovery connect to the editor commands rather than modifying deck entries.
 - `mtg_core.decklists.apply_decklist` retains import-specific quantity merging,
@@ -42,9 +53,11 @@ retain their project-model callbacks. Commander selection splits owned copies,
 and basic-land management tracks generated copies: these are distinct operations
 and retain their domain rules. Import merging also remains a separate policy.
 
+The older recommendation dialog also delegates to the core Add Card command,
+copying its candidate and category evidence rather than inserting UI-owned state.
+
 Further candidates for focused follow-up include background metadata-loading
-workers in card details and discovery, repeated discovery result preparation,
-and legacy print/proxy compatibility adapters. Evaluate cancellation, model, and
+workers in card details and discovery, and legacy print/proxy compatibility adapters. Evaluate cancellation, model, and
 artwork differences before merging them. This is an incremental consolidation,
 not a claim that every duplicated behavior has been eliminated.
 

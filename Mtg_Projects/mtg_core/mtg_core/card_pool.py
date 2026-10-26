@@ -3,6 +3,7 @@ import json
 import re
 
 from .search.syntax import Parser
+from .commander import commander_entries, commander_color_identity
 
 
 def oracle_tag_query(value):
@@ -16,22 +17,9 @@ def pool_context(document):
         format_name = ''
     identity = None
     if format_name == 'commander':
-        commanders = [e for e in document.deck.entries if e.quantity > 0 and
-                      (e.section == 'commander' or e.entry_id in document.deck.commander_entry_ids)]
-        facts = [e.extras.get('facts') or {} for e in commanders]
-        if facts and all(f.get('color_identity') is not None for f in facts):
-            colors = set().union(*(set(f['color_identity']) for f in facts))
-            known = True
-            for entry, fact in zip(commanders, facts):
-                text = ' '.join(f.get('oracle_text') or '' for f in fact.get('card_faces') or [fact])
-                if 'choose a color before the game begins' in text.casefold():
-                    choice = document.deck.extras.get('commander_colors', {}).get(entry.entry_id)
-                    if isinstance(choice, str) and len(choice) == 1 and choice in 'WUBRG':
-                        colors.add(choice)
-                    else:
-                        known = False
-            if known:
-                identity = ''.join(c for c in 'WUBRG' if c in colors)
+        colors = commander_color_identity(document, commander_entries(document))
+        if colors is not None:
+            identity = ''.join(c for c in 'WUBRG' if c in colors)
     return format_name, identity, bool(document.editor_preferences.get('include_illegal_cards', False))
 
 

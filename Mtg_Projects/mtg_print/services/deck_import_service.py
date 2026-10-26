@@ -13,18 +13,10 @@ from .. import card_layouts
 from ..config import CFG
 from mtg_core import CardService, RemoteLookupUnavailable
 from mtg_core.sync import is_no_card_match_error
+from mtg_core.search.syntax import is_scryfall_syntax_query
 
 from ..models import ProjectState, as_project_state
 from . import high_res_service, project_service
-
-
-def is_scryfall_syntax_query(query: str) -> bool:
-    """Return whether input contains Scryfall operators rather than plain name text."""
-    text = (query or "").strip()
-    return any(
-        marker in text
-        for marker in (":", "<=", ">=", "!=", "<", ">", " OR ", " or ", "-is:", "(", ")")
-    )
 
 
 @dataclass

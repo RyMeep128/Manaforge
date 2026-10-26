@@ -75,3 +75,30 @@ def test_discovery_defaults_exclude_alternate_printings_in_other_sections(tmp_pa
     assert editor.search_document.deck.entries[0].card_id == 'alternate'
     editor.close()
     app.processEvents()
+
+
+def test_both_search_views_keep_the_same_facts_and_category_evidence(tmp_path):
+    app = W.QApplication.instance() or W.QApplication([])
+    editor = EditorWindow(service=object(), root=tmp_path)
+    panel = editor.add_cards_workspace.card_search
+    panel.membership.setCurrentIndex(0)
+    editor.syntax_membership.setCurrentIndex(0)
+    payload = {'mana_cost': '{U}', 'color_identity': ['U'], 'legalities': {'commander': 'legal'},
+               '_category_evidence': [{'name': 'Draw', 'reason': 'Evidence'}]}
+    result = SimpleNamespace(card_id='print', name='Example', oracle_id='oracle',
+                             set_code='set', collector_number='1', payload=payload)
+    panel.completed(panel.query(), [result], '')
+    editor.show_results(editor.effective_search_query(), [result], '')
+    plain = panel.rows[0]
+    syntax = editor.syntax_all_entries[0]
+    assert plain.extras == syntax.extras
+    assert plain is not syntax
+    plain.extras['facts']['color_identity'].append('R')
+    assert syntax.extras['facts']['color_identity'] == ['U']
+    assert payload['color_identity'] == ['U']
+    # Later pages retain the existing candidate instead of discarding UI state.
+    panel.completed(panel.query(), [result], '')
+    assert panel.rows[0] is plain
+    editor.saved = editor.document.to_dict()
+    editor.close()
+    app.processEvents()

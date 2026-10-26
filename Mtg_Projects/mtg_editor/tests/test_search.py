@@ -128,3 +128,13 @@ def test_replacing_query_discards_an_inflight_later_page():
     assert [row.card_id for row in controller.rows] == ['replacement']
     assert not controller.has_more
     controller.shutdown()
+
+
+def test_search_draft_uses_the_core_syntax_detector():
+    from mtg_core.search.syntax import is_scryfall_syntax_query
+    from mtg_editor.search import SearchDraft
+    app = W.QApplication.instance() or W.QApplication([])
+    draft = SearchDraft()
+    for query in ('Sol Ring', 'Dragon AND Dragon', '!"Sol Ring"', 'name:"unfinished'):
+        draft.set_text(query)
+        assert draft.syntax is is_scryfall_syntax_query(query)

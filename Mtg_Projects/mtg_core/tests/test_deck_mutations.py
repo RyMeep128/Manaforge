@@ -82,3 +82,23 @@ def test_removal_preserves_unrelated_companion():
     document.deck.extras['companion_entry_id'] = 'b'
     remove_entries(document, {'a'})
     assert document.deck.extras['companion_entry_id'] == 'b'
+
+
+def test_legacy_name_whitespace_uses_the_same_count_and_removal_match():
+    from mtg_core.card_identity import matching_entries
+    legacy = DeckEntry('legacy', '  Sol   Ring\t', quantity=2)
+    different = DeckEntry('other', 'Sol Ring', quantity=4, oracle_id='different')
+    candidate = DeckEntry('result', 'sol ring', oracle_id='oracle')
+    document = document_with(legacy, different)
+    assert matching_entries(document.deck.entries, candidate) == [legacy]
+    change_candidate_quantity(document, candidate, -1)
+    assert legacy.quantity == 1
+    change_candidate_quantity(document, candidate, -1)
+    assert document.deck.entries == [different]
+
+
+def test_name_only_addition_merges_normalized_names():
+    document = document_with(DeckEntry('legacy', ' Sol   Ring ', quantity=2))
+    add_card(document, DeckEntry('result', 'sol ring'))
+    assert len(document.deck.entries) == 1
+    assert document.deck.entries[0].quantity == 3

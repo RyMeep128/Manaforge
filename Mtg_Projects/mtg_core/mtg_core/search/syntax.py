@@ -10,6 +10,22 @@ class LocalQueryError(ValueError):
     pass
 
 
+def is_scryfall_syntax_query(query):
+    """Recognize explicit syntax with the same lexer used for local search.
+
+    Incomplete expressions remain syntax while a user edits them; parsing and
+    user-facing errors remain the caller's responsibility.
+    """
+    text = query or ''
+    try:
+        tokens = Parser(text).tokens
+    except LocalQueryError:
+        tokens = [text.strip()]
+    return any(token.upper() in {'AND', 'OR', 'NOT', '(', ')', '-'}
+               or token.startswith(('"', '!'))
+               or re.match(r'^-?[a-zA-Z_]+(?::|[<>=!])', token) for token in tokens)
+
+
 def text_expression(field):
     return (f"coalesce(json_extract(s.search_json, '$.{field}'), '') || ' ' || "
             f"coalesce((SELECT group_concat(json_extract(face.value, '$.{field}'), ' ') "

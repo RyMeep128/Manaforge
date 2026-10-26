@@ -4,6 +4,7 @@ import uuid
 
 from .categorization import apply_categories
 from .sections import DeckSection
+from .card_identity import normalized_card_name, matching_entries
 
 
 def remove_entries(document, entry_ids):
@@ -36,7 +37,7 @@ def change_quantities(document, entry_ids, delta):
 def add_card(document, candidate):
     """Add one mainboard copy using discovery's printing and artwork policy."""
     existing = next((e for e in document.deck.entries if ((candidate.card_id and e.card_id == candidate.card_id)
-        or (not candidate.card_id and not e.card_id and e.name.casefold() == candidate.name.casefold()))
+        or (not candidate.card_id and not e.card_id and normalized_card_name(e.name) == normalized_card_name(candidate.name)))
         and e.section == DeckSection.MAINBOARD and not e.art_override), None)
     if existing:
         apply_quantity(document, existing.entry_id, existing.quantity + 1)
@@ -56,12 +57,9 @@ def change_candidate_quantity(document, candidate, delta=1):
         return
     if delta >= 0:
         return
-    matches = [entry for entry in document.deck.entries
-               if entry.quantity > 0 and entry.section in (DeckSection.MAINBOARD, DeckSection.COMMANDER)
-               and ((candidate.card_id and entry.card_id == candidate.card_id)
-                    or (candidate.oracle_id and entry.oracle_id == candidate.oracle_id)
-                    or (entry.name.casefold() == candidate.name.casefold()
-                        and (not candidate.oracle_id or not entry.oracle_id)))]
+    matches = matching_entries(
+        (entry for entry in document.deck.entries
+         if entry.section in (DeckSection.MAINBOARD, DeckSection.COMMANDER)), candidate)
     if matches:
         target = min(matches, key=lambda entry: (entry.section == DeckSection.COMMANDER,
                                                  entry.card_id != candidate.card_id, entry.sort_order))
