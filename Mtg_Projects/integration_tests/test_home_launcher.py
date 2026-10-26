@@ -15,6 +15,20 @@ def app():
     return W.QApplication.instance() or W.QApplication([])
 
 
+def test_artwork_audit_failures_do_not_open_automatic_update_prompt(app, monkeypatch):
+    home = HomeWindow()
+    controller = ModuleController(home, service=object())
+    prompts = []
+    monkeypatch.setattr('mtg_ui.feedback.report_problem', lambda *args: prompts.append(args))
+    controller._automatic_update = 'automatic-update'
+    controller.data_status('artwork-audit', 'failed', OverflowError('volume ID'))
+    assert not prompts
+    controller.data_status('automatic-update', 'failed', OSError('offline'))
+    assert len(prompts) == 1
+    home.shutdown_guard = None
+    home.close()
+
+
 def test_home_registry_disabled_play_keyboard_and_responsive_layout(app):
     home = HomeWindow()
     activated = []

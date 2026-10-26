@@ -302,3 +302,62 @@ def test_serializes_canonical_publication_with_cleanup(library):
         assert canonical.read_bytes() == b"artwork"
     worker.join(5)
     assert finished.is_set()
+
+
+def test_unsigned_windows_identifiers_are_preserved_exactly(library, monkeypatch):
+    from types import SimpleNamespace
+
+    _, canonical, legacy, manager = library
+    original = Path.stat
+    device = 11121873872395515817  # Actual unsigned volume ID from the E: library.
+
+    def large_identifiers(path, *args, **kwargs):
+        info = original(path, *args, **kwargs)
+        if path not in (canonical, legacy):
+            return info
+        return SimpleNamespace(
+            st_dev=device,
+            st_ino=2**100 + info.st_ino,
+            st_mode=info.st_mode,
+            st_size=info.st_size,
+            st_mtime_ns=info.st_mtime_ns,
+            st_nlink=info.st_nlink,
+        )
+
+    monkeypatch.setattr(Path, "stat", large_identifiers)
+    result = audit(manager)
+    assert result["duplicates"] == 1
+    assert result["unique_bytes"] == 2 * len(b"artwork")
+    with closing(manager.connect()) as db:
+        rows = db.execute("SELECT device,inode,typeof(device) FROM files").fetchall()
+        assert all(row[0] == str(device) and row[2] == "text" for row in rows)
+        assert all(int(row[1]) >= 2**100 for row in rows)
+
+
+def test_existing_journal_migrates_without_losing_verified_progress(library):
+    _, _, _, manager = library
+    audit(manager)
+    with closing(manager.connect()) as db, db:
+        before = [
+            tuple(r)
+            for r in db.execute(
+                "SELECT path,checksum,signature FROM files ORDER BY path"
+            )
+        ]
+        db.execute("ALTER TABLE files RENAME TO files_new")
+        db.execute("""CREATE TABLE files (
+            path TEXT PRIMARY KEY, signature TEXT, device INTEGER, inode TEXT,
+            bytes INTEGER, links INTEGER, checksum TEXT, seen TEXT, role TEXT)""")
+        db.execute("INSERT INTO files SELECT * FROM files_new")
+        db.execute("DROP TABLE files_new")
+    with closing(manager.connect()) as db:
+        columns = {r["name"]: r["type"] for r in db.execute("PRAGMA table_info(files)")}
+        assert columns["device"] == "TEXT"
+        after = [
+            tuple(r)
+            for r in db.execute(
+                "SELECT path,checksum,signature FROM files ORDER BY path"
+            )
+        ]
+        assert before == after
+    assert audit(manager)["duplicates"] == 1

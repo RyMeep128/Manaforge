@@ -178,11 +178,15 @@ class ModuleController(C.QObject):
 
     @C.pyqtSlot(str,object)
     def data_progress(self,job_id,value):
+        if job_id != self._automatic_update:
+            return
         if isinstance(value,dict):
             self.home.statusBar().showMessage(value.get('operation','Updating data…'))
 
     @C.pyqtSlot(str,str,object)
     def data_status(self,job_id,state,value):
+        if job_id != self._automatic_update:
+            return
         if state=='failed':
             from mtg_ui.feedback import report_problem
             report_problem(self.home, 'data update', str(value))

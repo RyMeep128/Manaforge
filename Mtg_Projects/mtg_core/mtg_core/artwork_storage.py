@@ -88,7 +88,7 @@ class ArtworkStorage:
         db.executescript("""
             CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
             CREATE TABLE IF NOT EXISTS files (
-                path TEXT PRIMARY KEY, signature TEXT, device INTEGER, inode TEXT,
+                path TEXT PRIMARY KEY, signature TEXT, device TEXT, inode TEXT,
                 bytes INTEGER, links INTEGER, checksum TEXT, seen TEXT,
                 role TEXT DEFAULT 'unknown');
             CREATE TABLE IF NOT EXISTS pairs (
@@ -104,6 +104,22 @@ class ArtworkStorage:
         if old and old[0] != binding:
             db.close()
             raise ValueError("Audit belongs to a different catalog or artwork folder")
+        columns = {
+            row["name"]: row["type"] for row in db.execute("PRAGMA table_info(files)")
+        }
+        if columns["device"].upper() != "TEXT":
+            # Windows volume IDs are unsigned 64-bit values. INTEGER affinity can
+            # also coerce decimal strings to lossy REALs, so change the column type.
+            with db:
+                db.execute("""CREATE TABLE files_device_text (
+                    path TEXT PRIMARY KEY, signature TEXT, device TEXT, inode TEXT,
+                    bytes INTEGER, links INTEGER, checksum TEXT, seen TEXT,
+                    role TEXT DEFAULT 'unknown')""")
+                db.execute("""INSERT INTO files_device_text
+                    SELECT path,signature,CAST(device AS TEXT),inode,bytes,links,
+                           checksum,seen,role FROM files""")
+                db.execute("DROP TABLE files")
+                db.execute("ALTER TABLE files_device_text RENAME TO files")
         db.execute("INSERT OR IGNORE INTO meta VALUES ('binding', ?)", (binding,))
         db.commit()
         return db
@@ -156,7 +172,7 @@ class ArtworkStorage:
                             (
                                 str(path),
                                 stamp,
-                                info.st_dev,
+                                str(info.st_dev),
                                 str(info.st_ino),
                                 info.st_size,
                                 info.st_nlink,
@@ -493,7 +509,7 @@ class ArtworkStorage:
         for row in db.execute("SELECT * FROM files"):
             files += 1
             logical += row["bytes"]
-            key = (row["device"], row["inode"])
+            key = (str(row["device"]), str(row["inode"]))
             if key not in identities:
                 unique += row["bytes"]
                 identities.add(key)
