@@ -200,34 +200,39 @@ class ProjectDashboard(W.QWidget):
         selected = self.list.currentItem()
         selected_path = selected.data(C.Qt.ItemDataRole.UserRole)['path'] if selected else None
         query = self.filter.text().strip().casefold()
-        rows = [row for row in self.rows if query in ' '.join(
-            str(row.get(key, '')) for key in ('name', 'kind', 'format')).casefold()]
+        rows = list(self.rows)
         rows.sort(key=(lambda row: (row['name'].casefold(), row['path'])) if self.sort.currentIndex()
                   else (lambda row: (-row['modified'], row['name'].casefold(), row['path'])))
         self.list.clear()
+        visible = []
         for row in rows:
             item = W.QListWidgetItem(row['name'])
             item.setData(C.Qt.ItemDataRole.UserRole, row)
             item.setToolTip(f"{row['name']}\n{row['path']}")
             self.list.addItem(item)
-            if row['path'] == selected_path:
-                self.list.setCurrentItem(item)
-        if self.list.currentItem() is None and rows:
-            self.list.setCurrentRow(0)
-        self.empty.setVisible(not rows)
+            matches = query in ' '.join(str(row.get(key, '')) for key in ('name', 'kind', 'format')).casefold()
+            item.setHidden(not matches)
+            if matches:
+                visible.append(item)
+                if row['path'] == selected_path:
+                    self.list.setCurrentItem(item)
+        if self.list.currentItem() is None and visible:
+            self.list.setCurrentItem(visible[0])
+        self.empty.setVisible(not visible)
         self.empty.setText('No matching projects. Try another search.' if self.rows else
                            'No projects yet. Start a new deck or open a project file.')
-        self.status.setText(f'{len(rows)} of {len(self.rows)} projects' +
+        self.status.setText(f'{len(visible)} of {len(self.rows)} projects' +
                             (f' · {len(self.errors)} unavailable files (details below)' if self.errors else ''))
         self.selection_changed()
         C.QTimer.singleShot(0, self.update_visible)
 
     def selection_changed(self):
-        self.open_button.setEnabled(self.list.currentItem() is not None)
+        item = self.list.currentItem()
+        self.open_button.setEnabled(item is not None and not item.isHidden())
 
     def open_selected(self, *_):
         item = self.list.currentItem()
-        if item is not None and not self.stopping:
+        if item is not None and not item.isHidden() and not self.stopping:
             self.openRequested.emit(Path(item.data(C.Qt.ItemDataRole.UserRole)['path']))
 
     def browse(self):
