@@ -161,6 +161,7 @@ def configure_sources(editor, root):
                 for source, checkbox in dataset_controls.items()
             },
         )
+
         def saved(_):
             panel = getattr(editor, "recommendation_panel", None)
             if panel is not None:

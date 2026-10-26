@@ -48,3 +48,5 @@ No local tests, linting, formatting, or runtime validation were run; existing te
 - CI now names tests and dumps stacks after a two-minute stall. Editor tests run first; every original suite remains included. Temporary failure-count limits used during diagnosis have been removed.
 
 CI confirmed the previously documented empty-deck redirect expectation is obsolete: `test_empty_deck_search_defaults_to_ideas_even_after_another_tab` still requires the intentionally removed redirect. Preserve the current behavior unless that requirement is explicitly changed.
+
+Additional complete-suite findings repaired: preserve row-based modal ProjectBrowser access over the tile list, restore the workspace card-size range to 180-360, and save source settings when no embedded recommendation panel exists. GitHub CI passed the repaired hover, saving, category-only deck, toolbar, keyword, and EDHREC-cohort scenarios. The obsolete redirect expectation remains subject to the explicit instruction to leave existing tests unchanged.
