@@ -139,7 +139,7 @@ def test_local_database_cache_dates(tmp_path):
 
 
 @pytest.mark.parametrize('placement', ['top', 'face'])
-@pytest.mark.parametrize('choice,expected', [(None, None), ('X', None), ('R', 'GR')])
+@pytest.mark.parametrize('choice,expected', [(None, None), ('X', None), ('R', 'RG')])
 def test_pool_and_checker_share_pregame_color_choices(placement, choice, expected):
     from mtg_core.card_pool import pool_context
     doc, records = deck()

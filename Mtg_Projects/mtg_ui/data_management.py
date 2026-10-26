@@ -164,14 +164,23 @@ class DataManagementDialog(W.QDialog):
 
     def open_diagnostics(self):
         from .diagnostics import DiagnosticsDialog
+
         DiagnosticsDialog(self, engine=self.engine, jobs=self.jobs).exec()
 
     def first_run_checks(self):
         if not self.jobs.busy:
             from mtg_core.health import run_checks
             from .diagnostics import app_version
-            self.start_job("health", lambda cancel, report: run_checks(
-                self.engine.state, version=app_version(), cancel=cancel, report=report))
+
+            self.start_job(
+                "health",
+                lambda cancel, report: run_checks(
+                    self.engine.state,
+                    version=app_version(),
+                    cancel=cancel,
+                    report=report,
+                ),
+            )
 
     def refresh_versions(self):
         bulk = self.engine.state.get("bulk_versions", {})
@@ -294,8 +303,14 @@ class DataManagementDialog(W.QDialog):
         if state == "completed":
             if self.operation == "health":
                 from mtg_core.health import overall
-                self.status.setText("Initial installation health: " + overall(value) + "\n" + "\n".join(
-                    f"{r.name}: {r.status}" for r in value) + "\nOpen Diagnostics & Repair for actions and a report.")
+
+                self.status.setText(
+                    "Initial installation health: "
+                    + overall(value)
+                    + "\n"
+                    + "\n".join(f"{r.name}: {r.status}" for r in value)
+                    + "\nOpen Diagnostics & Repair for actions and a report."
+                )
             elif self.operation == "plan":
                 self.plan = value
                 root = Path(self.location.text()).expanduser().resolve()
@@ -336,6 +351,7 @@ class DataManagementDialog(W.QDialog):
             self.refresh_versions()
         elif state == "failed":
             from .feedback import report_problem
+
             report_problem(self, "data installation or repair", str(value))
             self.status.setText(
                 "Could not complete the operation. "
@@ -405,5 +421,6 @@ def run_initial_setup(parent=None, *, engine=None):
         return dialog.exec() == W.QDialog.DialogCode.Accepted
     except Exception:
         from .diagnostics import DiagnosticsDialog
+
         DiagnosticsDialog(parent).exec()
         return False

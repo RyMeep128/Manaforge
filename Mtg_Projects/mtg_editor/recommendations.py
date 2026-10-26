@@ -415,8 +415,9 @@ class RecommendationsDialog(W.QDialog):
         if row is None:
             return
         from copy import deepcopy
+
         entry = deepcopy(row["entry"])
-        entry.extras['category_suggestion'] = deepcopy(row['roles'])
+        entry.extras["category_suggestion"] = deepcopy(row["roles"])
         self.editor.edit(lambda document: add_card(document, entry))
         self.all_rows = [
             item for item in self.all_rows if item["oracle_id"] != row["oracle_id"]

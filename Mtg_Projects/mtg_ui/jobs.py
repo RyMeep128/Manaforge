@@ -49,6 +49,7 @@ class _Job(LoadingThread):
 
     def run(self):
         from mtg_core.repair import record_operation
+
         try:
             if self.cancel_event.is_set():
                 raise DownloadCancelled()
