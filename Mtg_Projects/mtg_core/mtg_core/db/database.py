@@ -14,6 +14,12 @@ from .sync_state import SyncStateOperations
 
 
 def default_db_path() -> str:
+    from mtg_core.datasets import InstallationState
+    state_path = core_data_root() / 'installation.sqlite3'
+    if state_path.exists():
+        configured = InstallationState(state_path).get('catalog_path')
+        if configured:
+            return configured
     return str(core_data_root() / "card_data.sqlite3")
 
 

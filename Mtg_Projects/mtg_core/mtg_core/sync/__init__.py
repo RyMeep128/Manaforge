@@ -95,7 +95,7 @@ def stage_bulk_download(kind, destination, *, cancel=None, progress=None,
     from mtg_core.downloads import get_download_manager
     metadata = (fetch_metadata or fetch_json)(
         'https://api.scryfall.com/bulk-data/' + urllib.parse.quote(kind, safe=''))
-    url = metadata.get('download_uri') if isinstance(metadata, dict) else None
+    url = (metadata.get('jsonl_download_uri') or metadata.get('download_uri')) if isinstance(metadata, dict) else None
     parsed = urllib.parse.urlsplit(url or '')
     if (not isinstance(metadata, dict) or metadata.get('type') != kind
             or parsed.scheme != 'https' or not (parsed.hostname or '').endswith('.scryfall.io')

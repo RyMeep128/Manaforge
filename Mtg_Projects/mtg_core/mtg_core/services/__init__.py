@@ -42,7 +42,8 @@ class CardService(SearchOperations, ArtworkOperations, ImageOperations, CatalogS
         self.database = CardDatabase(db_path)
         # Explicit/test catalogs preserve their existing path ownership. The
         # default application service honors future wizard storage preferences.
-        if db_path is None:
+        from mtg_core.db.database import default_db_path
+        if db_path is None or Path(db_path).resolve() == Path(default_db_path()).resolve():
             from mtg_core.datasets import InstallationState
             state = InstallationState()
             configured_artwork = state.get('artwork_root')
@@ -55,6 +56,7 @@ class CardService(SearchOperations, ArtworkOperations, ImageOperations, CatalogS
         self.image_root = image_root or str(core_data_root() / "images")
         self.fetch_json_fn = fetch_json_fn or fetch_json
         self.fetch_bytes_fn = fetch_bytes_fn or fetch_bytes
+        self.streaming_artwork = fetch_bytes_fn is None
         self.fetch_bulk_fn = fetch_bulk_fn
         self._printings_refreshed = {}
 

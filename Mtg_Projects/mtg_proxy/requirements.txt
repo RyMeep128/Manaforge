@@ -3,3 +3,4 @@ reportlab
 opencv-python
 Pillow
 certifi
+ijson>=3.3,<4

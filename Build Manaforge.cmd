@@ -16,6 +16,7 @@ if errorlevel 1 exit /b 1
     --paths "%MANAFORGE_PRODUCTS%" --paths "%MANAFORGE_PRODUCTS%\mtg_core" --paths "%MANAFORGE_PROXY%" ^
     --collect-submodules mtg_home --collect-submodules mtg_editor --collect-submodules mtg_ui ^
     --collect-submodules mtg_core --collect-submodules mtg_print --hidden-import mtg_proxy.main ^
+    --collect-data mtg_core --collect-all ijson ^
     --add-data "%MANAFORGE_PROXY%\vibrance.CUBE;." --add-data "%MANAFORGE_PROXY%\assets;assets" ^
     "%MANAFORGE_ROOT%run_manaforge.py"
 if errorlevel 1 exit /b 1

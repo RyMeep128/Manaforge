@@ -4,6 +4,13 @@
 
 Manaforge is a Python / PyQt6 desktop workspace for building Magic decks, consulting rules, and preparing proxies for print.
 
+Standalone Windows bundles need no Python or Git: extract **Manaforge-Windows.zip**
+and run **Manaforge/Manaforge.exe**. The first-run wizard sets up card data,
+recommendations, and on-demand or full-offline artwork. See
+[installation and updates](docs/installation-and-updates.md) for download/build locations,
+setup, pause/resume, Data Management and monthly updates. Source launchers below
+remain supported for development.
+
 Launch **Launch Manaforge.cmd** at the repository root, or run `python run_manaforge.py`
 in the configured environment. The homepage opens Deck Editor, Rules & Rulings,
 and Print Studio; Play is visibly unavailable until implemented. The Windows

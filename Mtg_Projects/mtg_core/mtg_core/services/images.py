@@ -6,6 +6,7 @@ import re
 from functools import wraps
 import threading
 import uuid
+from pathlib import Path
 from mtg_core.images import checksum_bytes, ensure_parent_dir
 from mtg_core.models import ImageAssetRecord
 
@@ -51,10 +52,17 @@ class ImageOperations:
     """Operation group sharing the facade dependencies; not instantiated alone."""
 
     @_serialized_image
+    def cache_artwork(self, card_id, face_index=0, **kwargs):
+        from mtg_core.artwork_downloads import cache_image
+        return cache_image(self,card_id,face_index,**kwargs)
+
+    @_serialized_image
     def ensure_face_image(self, card_id: str, face_index: int = 0, *, allow_remote=True):
         """Cache alternate-face artwork without changing the printing's front."""
         if not face_index:
             return self.ensure_image(card_id, allow_remote=allow_remote)
+        if getattr(self,'streaming_artwork',False) and allow_remote:
+            return self.cache_artwork(card_id,face_index,cancel=threading.Event())
         variant = f'face-{face_index}'
         path = self.get_image_path(card_id, variant)
         if path and os.path.isfile(path):
@@ -81,6 +89,10 @@ class ImageOperations:
         record = self.database.get_image_record(card_id, variant)
         if record is None:
             return None
+        if record.path and Path(record.path).is_file():
+            from mtg_core.downloads import file_sha256
+            if not record.checksum or file_sha256(record.path)==record.checksum:
+                return record.path
         if record.asset_id:
             return self.materialize_image_asset(
                 record.asset_id,
@@ -92,6 +104,11 @@ class ImageOperations:
 
     @_serialized_image
     def ensure_image(self, card_id: str, variant: str = "default", allow_remote: bool = True) -> str | None:
+        existing=self.get_image_path(card_id,variant)
+        if existing:
+            return existing
+        if variant=='default' and getattr(self,'streaming_artwork',False) and allow_remote:
+            return self.cache_artwork(card_id,cancel=threading.Event())
         record = self.database.get_image_record(card_id, variant)
         if record is not None:
             if record.asset_id:

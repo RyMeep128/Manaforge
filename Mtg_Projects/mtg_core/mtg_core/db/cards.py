@@ -5,6 +5,7 @@ import hashlib
 import json
 import sqlite3
 import time
+from contextlib import nullcontext
 from mtg_core.models import CardRecord, PrintRecord
 from mtg_core.search import choose_canonical_print_key, normalized_search_text
 from mtg_core.search.cancellation import search_connection
@@ -124,6 +125,8 @@ class CardOperations:
         source: str = "remote_fill",
         cache_scope: str | None = None,
         cache_expires_at: float | None = None,
+        _connection=None,
+        _refresh_state=True,
     ) -> PrintRecord:
         payload = dict(card_payload)
         name = str(payload.get("name") or "")
@@ -149,7 +152,7 @@ class CardOperations:
         image_url, thumbnail_url, preview_url = extract_image_urls(payload)
         now = time.time()
 
-        with self.connect() as connection:
+        with (nullcontext(_connection) if _connection is not None else self.connect()) as connection:
             previous = connection.execute("SELECT oracle_id FROM prints WHERE card_id = ?", (card_id,)).fetchone()
             connection.execute(
                 """
@@ -209,8 +212,9 @@ class CardOperations:
                     cache_expires_at,
                 ),
             )
-            self.refresh_print_state(connection, card_id,
-                previous["oracle_id"] if previous is not None else None)
+            if _refresh_state:
+                self.refresh_print_state(connection, card_id,
+                    previous["oracle_id"] if previous is not None else None)
             connection.execute(
                 """
                 INSERT INTO sync_state (source, version, last_sync_at, payload_json)

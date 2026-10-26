@@ -54,6 +54,16 @@ class JobQueue(C.QObject):
     def busy(self):
         return self._active is not None or bool(self._pending)
 
+    @property
+    def current_id(self):
+        return (
+            self._active.job_id
+            if self._active
+            else self._pending[0][0]
+            if self._pending
+            else None
+        )
+
     def submit(self, work):
         if self._closing:
             raise RuntimeError("Background queue is shutting down")
