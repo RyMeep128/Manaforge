@@ -60,8 +60,18 @@ class ProgressCard(W.QFrame):
         self.animation = C.QVariantAnimation(self)
         self.animation.setDuration(240)
         self.animation.setEasingCurve(C.QEasingCurve.Type.OutCubic)
-        self.animation.valueChanged.connect(lambda value: self.bar.setValue(int(value)))
+        self.animation.valueChanged.connect(self._set_bar_value)
         self.set_state("pending")
+
+    @C.pyqtSlot("QVariant")
+    def _set_bar_value(self, value):
+        # A QObject receiver disconnects before its child widgets are destroyed.
+        # A lambda has no receiver lifetime and can access an already deleted bar.
+        self.bar.setValue(int(value))
+
+    def hideEvent(self, event):
+        self.animation.stop()
+        super().hideEvent(event)
 
     def set_state(self, state):
         self.state = state

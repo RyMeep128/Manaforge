@@ -134,6 +134,21 @@ def test_large_cached_scans_throttle_gui_progress_but_keep_completion(app):
     assert len(seen) < 10000
 
 
+def test_progress_animation_can_outlive_dialog_reference_without_access_violation(app):
+    from PyQt6 import sip
+    from mtg_ui.install_progress import ProgressCard
+
+    parent = W.QWidget()
+    card = ProgressCard("Installing", parent)
+    card.update_progress(key="download", title="Downloading", current=1, total=2)
+    animation = card.animation
+    animation.setCurrentTime(100)
+    assert 0 < card.bar.value() <= 500
+    sip.delete(parent)
+    assert sip.isdeleted(animation)
+    app.processEvents()  # Pending animation events must not call deleted widgets.
+
+
 def test_diagnostics_opens_without_loading_card_or_recommendation_service(
     app, tmp_path
 ):
