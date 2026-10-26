@@ -840,7 +840,7 @@ class EditorWindow(W.QMainWindow):
             self.changed()
 
     def changed(self):
-        if not self._has_active_deck and self.document.deck.entries:
+        if not self._has_active_deck and (self.document.deck.entries or self.document.deck.categories):
             self._has_active_deck = True
             self.project_stack.setCurrentWidget(self.editor_body)
         self.basic_lands.changed()

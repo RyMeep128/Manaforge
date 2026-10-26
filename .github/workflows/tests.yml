@@ -40,7 +40,7 @@ jobs:
         working-directory: Mtg_Projects
         env:
           PRINT_PROXY_PREP_DATA_DIR: ${{ runner.temp }}/mtg-suite-test-data
-        run: python -m pytest -vv --maxfail=3 --tb=short --durations=10 -o faulthandler_timeout=120
+        run: python -m pytest -vv --maxfail=1 --tb=short --durations=10 -o faulthandler_timeout=120
       - name: Lint scoped Core modules
         if: ${{ !cancelled() }}
         run: python -m ruff check .
