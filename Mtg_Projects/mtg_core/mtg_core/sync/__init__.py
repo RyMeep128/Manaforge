@@ -43,7 +43,7 @@ def is_no_card_match_error(details: str | None) -> bool:
     )
 
 
-def fetch_json(url: str) -> dict:
+def fetch_json(url: str) -> dict | list:
     request = urllib.request.Request(
         url,
         headers={
@@ -56,7 +56,7 @@ def fetch_json(url: str) -> dict:
     except urllib.error.HTTPError as error:
         payload = _decode_error_payload(error)
         if payload is not None:
-            if payload.get("object") == "error":
+            if isinstance(payload, dict) and payload.get("object") == "error":
                 raise ValueError(payload.get("details", "Scryfall error")) from error
             return payload
         raise ValueError(f"Remote lookup failed with HTTP {error.code}") from error
@@ -64,7 +64,7 @@ def fetch_json(url: str) -> dict:
         raise RemoteLookupUnavailable(
             f"Remote card lookup failed: {error.reason}"
         ) from error
-    if payload.get("object") == "error":
+    if isinstance(payload, dict) and payload.get("object") == "error":
         raise ValueError(payload.get("details", "Scryfall error"))
     return payload
 
