@@ -90,7 +90,10 @@ jobs:
         run: |
           $bundleExe = Join-Path $env:GITHUB_WORKSPACE 'Mtg_Projects/dist/Manaforge/Manaforge.exe'
           $process = Start-Process -FilePath $bundleExe -ArgumentList '--verify-bundle' -WindowStyle Hidden -PassThru -Wait
-          if ($process.ExitCode -ne 0) { throw 'Packaged Manaforge startup check failed' }
+          if ($process.ExitCode -ne 0) {
+            Get-ChildItem -LiteralPath $env:PRINT_PROXY_PREP_DATA_DIR -Recurse -Filter '*.log' -ErrorAction SilentlyContinue | ForEach-Object { Get-Content -LiteralPath $_.FullName -Tail 100 }
+            throw 'Packaged Manaforge startup check failed'
+          }
       - name: Archive application files only
         run: Compress-Archive -LiteralPath Mtg_Projects/dist/Manaforge -DestinationPath Manaforge-Windows.zip
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
