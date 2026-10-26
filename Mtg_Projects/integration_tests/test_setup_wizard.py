@@ -72,7 +72,14 @@ def test_first_run_requires_success_and_saves_only_when_installing(app, tmp_path
     assert dialog.result() == W.QDialog.DialogCode.Accepted
 
 
-def test_failed_setup_can_retry_without_claiming_completion(app, tmp_path):
+def test_failed_setup_can_retry_without_claiming_completion(app, tmp_path, monkeypatch):
+    reports = []
+    # The error prompt requires a person; capture its request without opening a
+    # modal dialog inside the job queue's completion callback.
+    monkeypatch.setattr(
+        "mtg_ui.feedback.report_problem",
+        lambda parent, operation, detail: reports.append((parent, operation, detail)),
+    )
     engine = Engine(tmp_path)
 
     def fail(**kwargs):
@@ -88,6 +95,9 @@ def test_failed_setup_can_retry_without_claiming_completion(app, tmp_path):
     assert not engine.state.get("setup_complete", False)
     assert "Connection unavailable" in dialog.status.text()
     assert dialog.start.isEnabled()
+    assert len(reports) == 1
+    assert reports[0][0] is dialog
+    assert "Connection unavailable" in reports[0][2]
     dialog.reject()
 
 
