@@ -7,8 +7,7 @@ from .search.syntax import Parser
 
 def oracle_tag_query(value):
     value = str(value).strip()
-    return 'otag:' + (json.dumps(value, ensure_ascii=False)
-                      if any(c.isspace() or c in '\\"' for c in value) else value)
+    return 'otag:' + json.dumps(value, ensure_ascii=False)
 
 
 def pool_context(document):
