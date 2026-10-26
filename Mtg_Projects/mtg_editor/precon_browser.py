@@ -1,7 +1,60 @@
 """Precon selection reusing the cancellable deck import review dialog."""
-from PyQt6 import QtCore as C, QtWidgets as W
+from PyQt6 import QtCore as C, QtGui as G, QtWidgets as W
 from mtg_core.precons import load_catalog, decklist_entries, prepare_precon, cover_asset
 from .decklist_dialogs import ImportDecklist, ImportWorker
+
+
+class PreconTileDelegate(W.QStyledItemDelegate):
+    def __init__(self, browser):
+        super().__init__(browser)
+        self.browser = browser
+
+    def sizeHint(self, option, index):
+        return C.QSize(230, 366)
+
+    def paint(self, painter, option, index):
+        record = index.data(C.Qt.ItemDataRole.UserRole)
+        rect = option.rect.adjusted(4, 4, -4, -4)
+        selected = bool(option.state & W.QStyle.StateFlag.State_Selected)
+        painter.save()
+        painter.setRenderHint(G.QPainter.RenderHint.Antialiasing)
+        palette = option.palette
+        painter.setBrush(palette.highlight() if selected else palette.alternateBase())
+        painter.setPen(palette.highlight().color() if selected else palette.mid().color())
+        painter.drawRoundedRect(rect, 8, 8)
+        painter.setPen(palette.highlightedText().color() if selected else palette.text().color())
+        text_rect = C.QRect(rect.left()+10, rect.top()+8, rect.width()-20, 40)
+        font = G.QFont(option.font)
+        font.setBold(True)
+        painter.setFont(font)
+        painter.drawText(text_rect, C.Qt.AlignmentFlag.AlignCenter | C.Qt.TextFlag.TextWordWrap,
+                         record['name'])
+        font.setBold(False)
+        painter.setFont(font)
+        metrics = G.QFontMetrics(font)
+        colors = record['colors'] or ('Colorless' if record['colors_complete'] else 'Unknown colors')
+        details = [f"{record['format']} \u00b7 {colors}", record['set_name'],
+                   f"{record['product_type']} \u00b7 {record['release_date'][:4]}"]
+        for line, text in enumerate(details):
+            area = C.QRect(rect.left()+10, rect.top()+50+line*19, rect.width()-20, 19)
+            painter.drawText(area, C.Qt.AlignmentFlag.AlignCenter,
+                             metrics.elidedText(text, C.Qt.TextElideMode.ElideRight, area.width()))
+        image_rect = C.QRect(rect.center().x()-84, rect.top()+111, 168, 235)
+        key = self.browser.thumbnail_key(record)
+        pixmap = self.browser.thumbnails.get(*key) if any(key) else None
+        if pixmap is not None and not pixmap.isNull():
+            scaled = pixmap.scaled(image_rect.size(), C.Qt.AspectRatioMode.KeepAspectRatio,
+                                   C.Qt.TransformationMode.SmoothTransformation)
+            painter.drawPixmap(image_rect.center().x()-scaled.width()//2,
+                               image_rect.center().y()-scaled.height()//2, scaled)
+        else:
+            painter.drawText(image_rect, C.Qt.AlignmentFlag.AlignCenter | C.Qt.TextFlag.TextWordWrap,
+                             'Card artwork unavailable')
+        if option.state & W.QStyle.StateFlag.State_HasFocus:
+            painter.setBrush(C.Qt.BrushStyle.NoBrush)
+            painter.setPen(G.QPen(palette.text().color(), 1, C.Qt.PenStyle.DotLine))
+            painter.drawRoundedRect(rect.adjusted(3, 3, -3, -3), 6, 6)
+        painter.restore()
 
 
 class CatalogWorker(C.QThread):
@@ -91,15 +144,19 @@ class PreconBrowser(ImportDecklist):
             filters.addWidget(widget)
             widget.currentIndexChanged.connect(self.filter_records)
         form.addLayout(filters)
-        split = W.QHBoxLayout()
         self.decks = W.QListWidget()
         self.decks.setAccessibleName('Official preconstructed deck catalog')
-        split.addWidget(self.decks, 1)
-        self.cover = W.QLabel('Loading local catalog…')
-        self.cover.setAlignment(C.Qt.AlignmentFlag.AlignCenter)
-        self.cover.setMinimumSize(160, 200)
-        split.addWidget(self.cover)
-        form.addLayout(split)
+        self.decks.setViewMode(W.QListView.ViewMode.IconMode)
+        self.decks.setResizeMode(W.QListView.ResizeMode.Adjust)
+        self.decks.setMovement(W.QListView.Movement.Static)
+        self.decks.setWrapping(True)
+        self.decks.setUniformItemSizes(True)
+        self.decks.setGridSize(C.QSize(230, 366))
+        self.decks.setMinimumHeight(390)
+        self.decks.setItemDelegate(PreconTileDelegate(self))
+        self.decks.viewport().installEventFilter(self)
+        self.decks.verticalScrollBar().valueChanged.connect(self.update_cover)
+        form.addWidget(self.decks, 1)
         self.deck_name = W.QLineEdit()
         self.deck_name.setAccessibleName('New deck name')
         form.addWidget(self.deck_name)
@@ -142,12 +199,15 @@ class PreconBrowser(ImportDecklist):
                     (bool(record['colors']) if color == 'C' else color not in record['colors'])))):
                 continue
             colors = record['colors'] or ('Colorless' if record['colors_complete'] else 'Unknown colors')
-            item = W.QListWidgetItem(f"{record['name']} · {record['format']} · {colors}\n"
-                f"{record['set_name']} · {record['release_date'][:4]}\n{commanders}")
+            label = (f"{record['name']} \u00b7 {record['format']} \u00b7 {colors}\n"
+                     f"{record['set_name']} \u00b7 {record['product_type']} \u00b7 {record['release_date'][:4]}")
+            item = W.QListWidgetItem(label)
+            item.setToolTip(label)
             item.setData(C.Qt.ItemDataRole.UserRole, record)
             self.decks.addItem(item)
         if self.decks.count():
             self.decks.setCurrentRow(0)
+        C.QTimer.singleShot(0, self.update_cover)
 
     def select_record(self, index):
         self.invalidate()
@@ -159,18 +219,28 @@ class PreconBrowser(ImportDecklist):
             f'{r.collector_number or ""} [{r.section}]' for r in decklist_entries(self.record)) if self.record else '')
         self.update_cover()
 
+    @staticmethod
+    def thumbnail_key(record):
+        featured = record.get('featured') or {}
+        return (featured.get('id'), None)
+
+    def eventFilter(self, watched, event):
+        if watched is self.decks.viewport() and event.type() in (
+                C.QEvent.Type.Resize, C.QEvent.Type.Show):
+            C.QTimer.singleShot(0, self.update_cover)
+        return super().eventFilter(watched, event)
+
     def update_cover(self):
-        featured = self.record.get('featured') if self.record else None
-        card_id = featured.get('id') if featured else None
-        asset = self.record.get('cover_asset_id') if self.record else None
-        key = (None, asset) if asset else (card_id, None)
-        self.thumbnails.set_visible(id(self), [key] if any(key) else [])
-        pixmap = self.thumbnails.get(*key) if any(key) else None
-        if pixmap is not None and not pixmap.isNull():
-            self.cover.setPixmap(pixmap.scaled(175, 245, C.Qt.AspectRatioMode.KeepAspectRatio,
-                                             C.Qt.TransformationMode.SmoothTransformation))
-        else:
-            self.cover.setText('Featured card artwork\nunavailable locally' if self.record else 'No matching precons')
+        visible = self.decks.viewport().rect()
+        keys = []
+        for row in range(self.decks.count()):
+            item = self.decks.item(row)
+            if self.decks.visualItemRect(item).intersects(visible):
+                key = self.thumbnail_key(item.data(C.Qt.ItemDataRole.UserRole))
+                if any(key):
+                    keys.append(key)
+        self.thumbnails.set_visible(id(self), keys)
+        self.decks.viewport().update()
 
     def make_worker(self, source, public_url):
         self.decks.setEnabled(False)

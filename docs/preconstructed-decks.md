@@ -3,7 +3,9 @@
 Choose **New deck → Create from Precon** in the project browser, recent-deck
 menu, or Ctrl+N. Blank decks and normal imports remain available in that chooser.
 Search by product/deck name, commander, set code/name, or year; combine this with
-format, release-year, and color filters. Commander products appear first.
+format, release-year, and color filters. Commander products appear first. The catalog uses a wrapping grid of commander/featured-card
+tiles, with deck name, format, colors, source product, and release year above each
+card. Commander names remain searchable without repeating them in tile labels.
 Color identity uses locally installed card data; products with incomplete color
 coverage do not appear under a specific color filter. They remain searchable.
 
@@ -51,7 +53,7 @@ data work. Cached product images reuse the shared image-asset store by source UR
 new images use its content-addressed storage. No separate image cache is created.
 On-demand mode retrieves supplied product art during review. Full-offline mode
 uses existing product art and otherwise falls back to normal card covers. Browser
-previews use cached product art or the shared card thumbnail service.
+tiles show commander/featured cards through the shared card thumbnail service.
 
 `deck.precon_origin` preserves a versioned source identity, metadata, immutable
 original list, source printings, and release date. Editing the new deck does not
