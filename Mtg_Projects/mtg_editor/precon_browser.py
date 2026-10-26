@@ -2,6 +2,7 @@
 from PyQt6 import QtCore as C, QtGui as G, QtWidgets as W
 from mtg_core.precons import load_catalog, decklist_entries, prepare_precon, cover_asset
 from .decklist_dialogs import ImportDecklist, ImportWorker
+from mtg_ui.theme import COLORS
 
 
 class PreconTileDelegate(W.QStyledItemDelegate):
@@ -10,36 +11,55 @@ class PreconTileDelegate(W.QStyledItemDelegate):
         self.browser = browser
 
     def sizeHint(self, option, index):
-        return C.QSize(230, 366)
+        return C.QSize(252, 424)
 
     def paint(self, painter, option, index):
         record = index.data(C.Qt.ItemDataRole.UserRole)
-        rect = option.rect.adjusted(4, 4, -4, -4)
+        rect = option.rect.adjusted(7, 7, -7, -7)
         selected = bool(option.state & W.QStyle.StateFlag.State_Selected)
+        hovered = bool(option.state & W.QStyle.StateFlag.State_MouseOver)
         painter.save()
         painter.setRenderHint(G.QPainter.RenderHint.Antialiasing)
-        palette = option.palette
-        painter.setBrush(palette.highlight() if selected else palette.alternateBase())
-        painter.setPen(palette.highlight().color() if selected else palette.mid().color())
-        painter.drawRoundedRect(rect, 8, 8)
-        painter.setPen(palette.highlightedText().color() if selected else palette.text().color())
-        text_rect = C.QRect(rect.left()+10, rect.top()+8, rect.width()-20, 40)
+        painter.setBrush(G.QColor(COLORS['surface_selected' if selected else
+                                         'surface_hover' if hovered else 'surface']))
+        painter.setPen(G.QPen(G.QColor(COLORS['accent' if selected else 'border']), 2 if selected else 1))
+        painter.drawRoundedRect(rect, 10, 10)
+        painter.setPen(G.QColor(COLORS['text']))
+        text_rect = C.QRect(rect.left()+16, rect.top()+14, rect.width()-32, 44)
         font = G.QFont(option.font)
         font.setBold(True)
         painter.setFont(font)
-        painter.drawText(text_rect, C.Qt.AlignmentFlag.AlignCenter | C.Qt.TextFlag.TextWordWrap,
-                         record['name'])
+        painter.drawText(text_rect, C.Qt.AlignmentFlag.AlignLeft | C.Qt.AlignmentFlag.AlignVCenter
+                         | C.Qt.TextFlag.TextWordWrap, record['name'])
         font.setBold(False)
         painter.setFont(font)
         metrics = G.QFontMetrics(font)
-        colors = record['colors'] or ('Colorless' if record['colors_complete'] else 'Unknown colors')
-        details = [f"{record['format']} \u00b7 {colors}", record['set_name'],
-                   f"{record['product_type']} \u00b7 {record['release_date'][:4]}"]
-        for line, text in enumerate(details):
-            area = C.QRect(rect.left()+10, rect.top()+50+line*19, rect.width()-20, 19)
-            painter.drawText(area, C.Qt.AlignmentFlag.AlignCenter,
-                             metrics.elidedText(text, C.Qt.TextElideMode.ElideRight, area.width()))
-        image_rect = C.QRect(rect.center().x()-84, rect.top()+111, 168, 235)
+        painter.setPen(G.QColor(COLORS['text_secondary']))
+        area = C.QRect(rect.left()+16, rect.top()+62, rect.width()-32, 20)
+        painter.drawText(area, C.Qt.AlignmentFlag.AlignLeft | C.Qt.AlignmentFlag.AlignVCenter,
+                         metrics.elidedText(record['format'], C.Qt.TextElideMode.ElideRight, 112))
+        colors = record['colors'] or ('C' if record['colors_complete'] else '?')
+        swatches = {'W': '#eee4c4', 'U': '#80bddd', 'B': '#b5a6bc',
+                    'R': '#e99b87', 'G': '#91c4a2', 'C': '#b7bdc5', '?': '#b7bdc5'}
+        start = rect.right()-16-len(colors)*18
+        for i, color in enumerate(colors):
+            badge = C.QRect(start+i*18, rect.top()+65, 15, 15)
+            painter.setPen(C.Qt.PenStyle.NoPen)
+            painter.setBrush(G.QColor(swatches[color]))
+            painter.drawEllipse(badge)
+            painter.setPen(G.QColor('#101318'))
+            badge_font = G.QFont(font)
+            badge_font.setPixelSize(10)
+            badge_font.setBold(True)
+            painter.setFont(badge_font)
+            painter.drawText(badge, C.Qt.AlignmentFlag.AlignCenter, color)
+        painter.setFont(font)
+        painter.setPen(G.QColor(COLORS['text_secondary']))
+        source = f"{record['set_name']} \u00b7 {record['release_date'][:4]}"
+        area = C.QRect(rect.left()+16, rect.top()+86, rect.width()-32, 20)
+        painter.drawText(area, C.Qt.AlignmentFlag.AlignLeft | C.Qt.AlignmentFlag.AlignVCenter,
+                         metrics.elidedText(source, C.Qt.TextElideMode.ElideRight, area.width()))
+        image_rect = C.QRect(rect.center().x()-97, rect.top()+120, 194, 272)
         key = self.browser.thumbnail_key(record)
         pixmap = self.browser.thumbnails.get(*key) if any(key) else None
         if pixmap is not None and not pixmap.isNull():
@@ -52,7 +72,7 @@ class PreconTileDelegate(W.QStyledItemDelegate):
                              'Card artwork unavailable')
         if option.state & W.QStyle.StateFlag.State_HasFocus:
             painter.setBrush(C.Qt.BrushStyle.NoBrush)
-            painter.setPen(G.QPen(palette.text().color(), 1, C.Qt.PenStyle.DotLine))
+            painter.setPen(G.QPen(G.QColor(COLORS['accent_hover']), 1, C.Qt.PenStyle.DotLine))
             painter.drawRoundedRect(rect.adjusted(3, 3, -3, -3), 6, 6)
         painter.restore()
 
@@ -123,12 +143,23 @@ class PreconBrowser(ImportDecklist):
         self.file_button.hide()
         self.artwork.hide()
         self.source.setReadOnly(True)
-        self.source.setMaximumHeight(150)
+        self.source.hide()
+        self.preview.hide()
+        self.messages.hide()
+        self.progress.hide()
+        self.buttons.hide()
+        cancel = W.QPushButton('Cancel')
+        cancel.clicked.connect(self.reject)
+        self.layout().itemAt(self.layout().indexOf(self.source)+1).layout().addWidget(cancel)
+        self.layout().setContentsMargins(20, 16, 20, 16)
+        self.layout().setSpacing(12)
         self.layout().itemAt(0).widget().setText(
-            'Choose an original preconstructed deck, then review all cards before creating an independent deck. '
-            'Printings follow the source: some variants, especially basic lands, are inferred.')
+            'Choose a preconstructed deck')
+        self.layout().itemAt(0).widget().setProperty('role', 'title')
         controls = W.QWidget()
         form = W.QVBoxLayout(controls)
+        form.setContentsMargins(0, 0, 0, 0)
+        form.setSpacing(12)
         self.search = W.QLineEdit()
         self.search.setPlaceholderText('Search name, commander, set, product, or release year')
         self.search.setAccessibleName('Search preconstructed decks')
@@ -151,19 +182,30 @@ class PreconBrowser(ImportDecklist):
         self.decks.setMovement(W.QListView.Movement.Static)
         self.decks.setWrapping(True)
         self.decks.setUniformItemSizes(True)
-        self.decks.setGridSize(C.QSize(230, 366))
-        self.decks.setMinimumHeight(390)
+        self.decks.setGridSize(C.QSize(252, 424))
+        self.decks.setMinimumHeight(438)
+        self.decks.setMouseTracking(True)
+        self.decks.setVerticalScrollMode(W.QAbstractItemView.ScrollMode.ScrollPerPixel)
+        self.decks.setHorizontalScrollBarPolicy(C.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.decks.setItemDelegate(PreconTileDelegate(self))
         self.decks.viewport().installEventFilter(self)
         self.decks.verticalScrollBar().valueChanged.connect(self.update_cover)
+        self.catalog_status = W.QLabel('Loading preconstructed decks...')
+        self.catalog_status.setProperty('role', 'muted')
+        form.addWidget(self.catalog_status)
         form.addWidget(self.decks, 1)
         self.deck_name = W.QLineEdit()
         self.deck_name.setAccessibleName('New deck name')
-        form.addWidget(self.deck_name)
+        name_row = W.QHBoxLayout()
+        name_row.addWidget(W.QLabel('Deck name'))
+        name_row.addWidget(self.deck_name, 1)
+        form.addLayout(name_row)
         self.layout().insertWidget(1, controls, 2)
         self.search.textChanged.connect(self.filter_records)
         self.decks.currentRowChanged.connect(self.select_record)
         self.resolve_button.setEnabled(False)
+        self.resolve_button.setText('Create deck')
+        self.resolve_button.setProperty('role', 'primary')
         self.apply_button.setText('Create deck from reviewed precon')
         self.thumbnails.updated.connect(self.update_cover)
         self.catalog_worker = CatalogWorker(service, self)
@@ -181,11 +223,15 @@ class PreconBrowser(ImportDecklist):
         for year in sorted({r['release_date'][:4] for r in self.records}, reverse=True):
             self.year_filter.addItem(year, year)
         self.filter_records()
+        if worker.error:
+            self.catalog_status.setText('Could not load decks: ' + worker.error)
 
     def filter_records(self):
         if self.worker is not None:
             return
         query = self.search.text().casefold().split()
+        previous = self.record
+        self.decks.blockSignals(True)
         self.decks.clear()
         for record in self.records:
             commanders = ', '.join(e['name'] for e in record['entries'] if e['section'] == 'commander')
@@ -205,8 +251,14 @@ class PreconBrowser(ImportDecklist):
             item.setToolTip(label)
             item.setData(C.Qt.ItemDataRole.UserRole, record)
             self.decks.addItem(item)
-        if self.decks.count():
-            self.decks.setCurrentRow(0)
+        selected = next((i for i in range(self.decks.count())
+                         if self.decks.item(i).data(C.Qt.ItemDataRole.UserRole) == previous), 0)
+        self.decks.setCurrentRow(selected if self.decks.count() else -1)
+        self.decks.blockSignals(False)
+        self.select_record(self.decks.currentRow())
+        count = self.decks.count()
+        self.catalog_status.setText(f'{count:,} decks - Select a card to create your deck'
+                                    if count else 'No decks match. Try another search or clear the filters.')
         C.QTimer.singleShot(0, self.update_cover)
 
     def select_record(self, index):
@@ -242,8 +294,15 @@ class PreconBrowser(ImportDecklist):
         self.thumbnails.set_visible(id(self), keys)
         self.decks.viewport().update()
 
+    def invalidate(self):
+        super().invalidate()
+        self.messages.hide()
+        self.progress.hide()
+
     def make_worker(self, source, public_url):
+        self.progress.show()
         self.decks.setEnabled(False)
+        self.deck_name.setEnabled(False)
         for widget in (self.search, self.format_filter, self.year_filter, self.color_filter):
             widget.setEnabled(False)
         return PreconWorker(self.record, self.service, self.remote.isChecked(), self)
@@ -252,8 +311,13 @@ class PreconBrowser(ImportDecklist):
         self.cover_asset_id = self.worker.cover_asset_id
         super().resolved()
         self.decks.setEnabled(True)
+        self.deck_name.setEnabled(True)
         for widget in (self.search, self.format_filter, self.year_filter, self.color_filter):
             widget.setEnabled(True)
+        if self.result and self.apply_button.isEnabled():
+            self.accept()
+        elif self.messages.toPlainText():
+            self.messages.show()
 
     def accept(self):
         if self.worker is not None or self.catalog_worker is not None or not self.result:

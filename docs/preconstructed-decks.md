@@ -9,13 +9,15 @@ card. Commander names remain searchable without repeating them in tile labels.
 Color identity uses locally installed card data; products with incomplete color
 coverage do not appear under a specific color filter. They remain searchable.
 
-Selecting a product previews its entire original list, quantities, zones, and
-source printing coordinates. Rename it if desired, then choose **Review import**.
-The normal cancellable import review resolves exact printings and categorizes
-cards. Enable **Fetch missing cards online** if the local card catalog lacks them.
-Creation is disabled if any printing fails to resolve; partial originals are not
-silently created. Cancel leaves the current deck intact. The new independent deck
-supports the normal editor, recommendations, undo, saving, and export.
+Select a tile, optionally rename the deck, and choose **Create deck**. The grid
+fills the chooser; raw deck lists and import review tables are hidden. Tiles use
+the app's dark surfaces, subtle selection outlines, and color identity badges.
+Full source details remain available in tooltips. Enable **Fetch missing cards
+online** if the local catalog lacks cards. Creation resolves source printings in
+the background with progress and cancellation, and displays errors when needed.
+Creation is blocked if a printing fails to resolve. Cancel leaves the current
+deck intact. The new independent deck supports normal editing, recommendations,
+undo, saving, and export.
 
 Mainboard, sideboard, both partner commanders, planar, scheme, and oversized
 display-commander sections retain their identities. Display commanders are
