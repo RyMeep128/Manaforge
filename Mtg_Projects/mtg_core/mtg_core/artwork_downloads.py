@@ -149,12 +149,30 @@ def fill_artwork(service, state, *, cancel, report, downloader=None):
                 if not image_url(payload, face):
                     continue
                 try:
+
+                    def transfer(p):
+                        report(
+                            dict(
+                                operation="Artwork: " + payload.get("name", card_id),
+                                phase=p.phase,
+                                current=p.downloaded,
+                                total=p.total,
+                                speed=p.bytes_per_second,
+                                remaining=p.remaining_seconds,
+                                unit="bytes",
+                                task_id=f"{card_id}:{face}",
+                                files_completed=done + scanned,
+                                files_total=total,
+                            )
+                        )
+
                     service.cache_artwork(
                         card_id,
                         face,
                         cancel=cancel,
                         refresh=True,
                         downloader=downloader,
+                        progress=transfer,
                     )
                     downloaded += 1
                 except (OSError, ValueError):
@@ -173,6 +191,7 @@ def fill_artwork(service, state, *, cancel, report, downloader=None):
                     current=done + scanned,
                     total=total,
                     phase="artwork",
+                    unit="cards checked",
                     failed=failed,
                 )
             )

@@ -14,7 +14,8 @@ import zlib
 from .artwork_downloads import fill_artwork, artwork_usage, clear_optional_artwork
 from .bulk_install import cancelled, import_cards, import_rulings
 from .datasets import InstallationState, parse_manifest
-from .downloads import check_space, get_download_manager
+from .downloads import check_space, get_download_manager, DownloadCancelled
+from .install_progress import InstallProgress
 from .paths import core_data_root
 from .recommendation_distribution import (
     DEFAULT_MANIFEST_URL,
@@ -231,19 +232,31 @@ class InstallationEngine:
     ):
         if not self._lock.acquire(blocking=False):
             raise RuntimeError("A data update is already running")
+        progress = None
         try:
+            progress = InstallProgress(
+                self.state,
+                report,
+                offline=self.state.get("artwork_mode", "on_demand") == "full_offline",
+                artwork_only=artwork_only,
+            )
+            report = progress
+            progress.begin("artwork" if artwork_only else "checks")
             self.state.set("last_update_attempt", time.time())
             if artwork_only:
-                return fill_artwork(
+                result = fill_artwork(
                     self.service,
                     self.state,
                     cancel=cancel,
                     report=report,
                     downloader=self.downloader,
                 )
+                progress.complete()
+                return result
             if not repair_cards:
                 self.state.set("update_pending", True)
             plan = plan or self.plan(cancel=cancel, report=report)
+            progress.configure_plan(plan)
             mode = self.state.get("artwork_mode", "on_demand")
             root = self.state.storage_root("cards")
             root.mkdir(parents=True, exist_ok=True)
@@ -259,8 +272,10 @@ class InstallationEngine:
                     root / "installation",
                     max(0, plan.required_bytes - min(used, plan.artwork_bytes)),
                 )
+            progress.complete()
+            progress.begin("cards")
             changed = False
-            for index, (kind, metadata) in enumerate(plan.bulk.items()):
+            for kind, metadata in plan.bulk.items():
                 cancelled(cancel)
                 version = metadata["updated_at"]
                 if (
@@ -286,16 +301,15 @@ class InstallationEngine:
                         path,
                         cancel=cancel,
                         size=expected,
-                        progress=lambda p, k=kind, i=index: report(
+                        progress=lambda p, k=kind: report(
                             dict(
                                 operation="Downloading " + k.replace("_", " "),
                                 phase=p.phase,
                                 current=p.downloaded,
                                 total=p.total,
+                                unit="bytes",
                                 speed=p.bytes_per_second,
                                 remaining=p.remaining_seconds,
-                                step=i,
-                                steps=6,
                             )
                         ),
                     )
@@ -330,13 +344,15 @@ class InstallationEngine:
                 versions = self.state.get("bulk_versions", {})
                 versions[kind] = version
                 self.state.set("bulk_versions", versions)
+            progress.complete()
+            progress.begin("recommendations")
             entries, _ = self.distribution.available(plan.recommendations)
-            for index, entry in enumerate(entries):
+            for entry in entries:
                 cancelled(cancel)
                 self.distribution.install(
                     entry,
                     cancel=cancel,
-                    progress=lambda p, e=entry, i=index: report(
+                    progress=lambda p, e=entry: report(
                         dict(
                             operation="Installing "
                             + e.dataset_id.replace("recommendations-", "").title()
@@ -344,19 +360,20 @@ class InstallationEngine:
                             phase=p.phase,
                             current=p.downloaded,
                             total=p.total,
+                            unit="bytes",
                             speed=p.bytes_per_second,
                             remaining=p.remaining_seconds,
-                            step=2 + i,
-                            steps=6,
                         )
                     ),
                 )
+            progress.complete()
+            progress.begin("artwork")
             if mode == "full_offline" and not repair_cards:
                 fill_artwork(
                     self.service,
                     self.state,
                     cancel=cancel,
-                    report=lambda p: report(dict(p, step=5, steps=6)),
+                    report=report,
                     downloader=self.downloader,
                 )
             elif not repair_cards and (
@@ -364,7 +381,11 @@ class InstallationEngine:
             ):
                 self.refresh_cached(cancel=cancel, report=report)
                 self.state.set("cached_artwork_refresh_pending", False)
+            progress.complete()
+            progress.begin("finalize")
             cancelled(cancel)
+            if "default_cards" in plan.bulk and not self.has_catalog():
+                raise ValueError("Card data verification failed; setup is incomplete.")
             if not repair_cards:
                 from .precons import refresh_catalog
 
@@ -375,8 +396,6 @@ class InstallationEngine:
                             phase="precons",
                             current=0,
                             total=1,
-                            step=6,
-                            steps=6,
                         )
                     )
                     refresh_catalog(self.fetch)
@@ -391,17 +410,24 @@ class InstallationEngine:
                 self.state.set("update_pending", False)
             if setup:
                 self.state.set("setup_complete", True)
+            progress.complete()
             report(
                 dict(
                     operation="Ready",
                     phase="completed",
                     current=1,
                     total=1,
-                    step=6,
-                    steps=6,
                 )
             )
             return self.state.get("bulk_versions", {})
+        except DownloadCancelled:
+            if progress is not None:
+                progress.stop("paused")
+            raise
+        except Exception:
+            if progress is not None:
+                progress.stop("failed")
+            raise
         finally:
             self._lock.release()
 

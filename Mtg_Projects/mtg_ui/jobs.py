@@ -30,7 +30,12 @@ class _Job(LoadingThread):
     def report(self, value):
         if isinstance(value, dict):
             self.operation = value.get("operation", self.operation)
-            phase = (value.get("operation"), value.get("phase"))
+            phase = (
+                value.get("operation"),
+                value.get("phase"),
+                value.get("stage"),
+                value.get("task_state"),
+            )
             current, total = value.get("current"), value.get("total")
         else:
             phase = getattr(value, "phase", None)
@@ -77,6 +82,7 @@ class JobQueue(C.QObject):
         self._pending = deque()
         self._active = None
         self._closing = False
+        self.latest_progress = None
 
     @property
     def busy(self):
@@ -127,6 +133,7 @@ class JobQueue(C.QObject):
         if self._active or not self._pending or self._closing:
             return
         job_id, work = self._pending.popleft()
+        self.latest_progress = None
         self._active = _Job(job_id, work, self)
         self._active.progress.connect(
             self._progress, C.Qt.ConnectionType.QueuedConnection
@@ -142,6 +149,7 @@ class JobQueue(C.QObject):
 
     @C.pyqtSlot(str, object)
     def _progress(self, job_id, value):
+        self.latest_progress = value
         self.progress.emit(job_id, value)
 
     @C.pyqtSlot(str, str, object)

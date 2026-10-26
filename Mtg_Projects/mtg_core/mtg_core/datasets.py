@@ -286,7 +286,13 @@ class DatasetInstaller:
         written = 0
         seen = set()
         with zipfile.ZipFile(archive) as package:
-            for entry in package.infolist():
+            entries = package.infolist()
+            expanded_total = sum(
+                entry.file_size for entry in entries if not entry.is_dir()
+            )
+            if expanded_total > limit:
+                raise ValueError("Dataset exceeds expanded size limit")
+            for entry in entries:
                 name = entry.filename
                 if "\\" in entry.orig_filename or "\x00" in entry.orig_filename:
                     raise ValueError("Unsafe original dataset archive path")
@@ -332,6 +338,10 @@ class DatasetInstaller:
                         check_space(target, len(chunk))
                         output.write(chunk)
                         if progress:
-                            progress(DownloadProgress(written, limit, 0, "extracting"))
+                            progress(
+                                DownloadProgress(
+                                    written, expanded_total, 0, "extracting"
+                                )
+                            )
                     output.flush()
                     os.fsync(output.fileno())

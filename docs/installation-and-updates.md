@@ -16,7 +16,7 @@ are not application installers. Building an artifact does not publish a release.
 On first launch, setup asks for a data location and artwork mode, checks the local
 installation, and automatically looks up download sizes. Completed checks stop the
 loading indicator and show the next action; detailed local diagnostics are collapsed
-under **Show installation details**. **Check download sizes** repeats the lookup
+under **Show diagnostic details**. **Check download sizes** repeats the lookup
 after changing options. It retrieves current official Scryfall metadata and the published recommendation
 manifest; it does not save a new artwork mode or start installation. The estimate
 includes expansion, catalog/index staging and selected artwork. Select **Install**
@@ -27,6 +27,30 @@ without requiring a network connection. Existing catalogs/favorites stay in plac
 setup never copies a replacement catalog over user preferences. User decks and
 printing settings retain their existing locations. All subsequent setup attempts
 reuse completed datasets/downloads where their version still matches.
+
+## Installation progress
+
+Setup and Data Management share the same progress cards. Overall progress counts
+completed stages rather than claiming a percentage of an unknown total duration.
+The stages cover requirements, cards/rulings, recommendations, artwork preparation,
+and final verification. On-demand mode prepares artwork storage; it does not
+schedule a full-artwork download. Completed stages stay visible.
+
+The current operation shows measured bytes or record counts, with percentages only
+when a total is available. Unknown totals and verification without measured counters
+use an indeterminate indicator. Receiving all bytes does not mark verification or
+installation complete. Download speed and estimated remaining time appear only when
+available. Artwork transfers report the current card/face and the scan's card count;
+these are per-file byte measurements, not a fabricated total for the entire library.
+
+Pause cooperates with active transfers and processing checkpoints. Resume rechecks
+the dataset plan, reuses installed versions and verified files, and resumes partial
+HTTP downloads when the server supports safe range requests. Otherwise the transfer
+restarts, with an explicit notice. Interrupted stage snapshots are persisted locally
+and restored when reopening setup/settings. Changed dataset plans reset stage
+completion; imports interrupted before activation may need to repeat processing.
+Failures identify the operation, keep working data, and offer Retry. Technical error
+details remain collapsed; Diagnostics & Repair is available separately.
 
 ## Artwork modes
 

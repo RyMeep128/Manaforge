@@ -93,11 +93,11 @@ def test_failed_setup_can_retry_without_claiming_completion(app, tmp_path, monke
     dialog.start_install()
     drain(app, dialog.jobs)
     assert not engine.state.get("setup_complete", False)
-    assert "Connection unavailable" in dialog.status.text()
+    assert "Connection unavailable" in dialog.error_details.toPlainText()
     assert dialog.start.isEnabled()
-    assert len(reports) == 1
-    assert reports[0][0] is dialog
-    assert "Connection unavailable" in reports[0][2]
+    assert not reports  # Diagnostics stay collapsed instead of interrupting progress.
+    assert dialog.start.text() == "Retry"
+    assert dialog.install_progress.task.state == "failed"
     dialog.reject()
 
 
@@ -157,14 +157,51 @@ def test_first_run_automatically_checks_local_installation(app, tmp_path):
     dialog = DataManagementDialog(engine=Engine(tmp_path), setup=True)
     app.processEvents()
     drain(app, dialog.jobs)
-    assert "Initial installation health" in dialog.health_details.text()
-    assert "Not Checked" in dialog.health_details.text()
+    assert "Initial installation health" in dialog.error_details.toPlainText()
+    assert "Not Checked" in dialog.error_details.toPlainText()
     assert dialog.plan is not None  # Automatically proceeds to size lookup.
     assert dialog.start.isEnabled()
     assert "choose Install" in dialog.status.text()
-    assert dialog.progress.isHidden()
-    assert dialog.progress.maximum() == 100
-    assert not dialog.health_toggle.isChecked()
+    assert dialog.install_progress.task.state == "completed"
+    assert dialog.install_progress.overall.isHidden()
+    assert not dialog.details_toggle.isChecked()
     assert not dialog.engine.configured  # Size lookup never starts installation.
     assert not dialog.engine.state.get("setup_complete", False)
     dialog.reject()
+
+
+def test_progress_does_not_claim_completion_for_full_transfer_or_verification(app):
+    from mtg_ui.install_progress import InstallationProgress
+
+    progress = InstallationProgress()
+    progress.consume(
+        dict(operation="Cards", phase="downloading", current=100, total=100)
+    )
+    assert progress.task.measure.text() == "99%"
+    assert progress.task.target < 1000
+    progress.consume(dict(operation="Cards", phase="verifying", current=100, total=100))
+    assert progress.task.bar.maximum() == 0
+    assert progress.task.measure.text() == "In progress"
+    progress.finish("paused")
+    assert progress.task.measure.text() == "Paused"
+    assert progress.task.bar.maximum() != 0
+
+
+def test_unknown_transfer_size_has_no_percentage_or_eta(app):
+    from mtg_ui.install_progress import InstallationProgress
+
+    progress = InstallationProgress()
+    progress.consume(
+        dict(
+            operation="Artwork",
+            phase="downloading",
+            current=1024,
+            total=None,
+            speed=512,
+            remaining=None,
+        )
+    )
+    assert progress.task.bar.maximum() == 0
+    assert "total size unavailable" in progress.task.detail.text()
+    assert "Estimated remaining" not in progress.task.detail.text()
+    assert "/s" in progress.task.detail.text()
