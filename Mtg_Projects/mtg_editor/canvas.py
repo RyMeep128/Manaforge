@@ -223,6 +223,13 @@ class CardCanvas(W.QAbstractScrollArea):
             if not rect.intersects(visible):
                 continue
             p.fillRect(rect, G.QColor(COLORS['surface']))
+            header_color = G.QColor(COLORS['accent'] if key == 'Commander' else
+                                   category_colors.get(key) if self.grouping == 'Category' and key in category_colors else
+                                   marker_color('group:' + self.grouping + ':' + key))
+            tint = G.QColor(header_color)
+            tint.setAlpha(90)
+            p.fillRect(rect, tint)
+            p.fillRect(C.QRect(rect.left(), rect.top(), 4, rect.height()), header_color)
             p.setPen(G.QColor(COLORS['accent'] if key == 'Commander' else COLORS['text']))
             center = rect.topLeft() + C.QPoint(12, 19)
             offsets = [(0, -4), (5, 0), (0, 4)] if key in self.collapsed else [(-4, -2), (4, -2), (0, 3)]
@@ -235,8 +242,6 @@ class CardCanvas(W.QAbstractScrollArea):
             p.drawText(text_rect, C.Qt.AlignmentFlag.AlignVCenter,
                        p.fontMetrics().elidedText(title, C.Qt.TextElideMode.ElideRight, max(0, text_rect.width())))
             p.drawText(count_rect, C.Qt.AlignmentFlag.AlignVCenter | C.Qt.AlignmentFlag.AlignRight, str(count))
-            if self.grouping == 'Category' and key in category_colors:
-                p.fillRect(C.QRect(rect.right()-7, rect.top()+10, 4, 18), G.QColor(category_colors[key]))
         for entry, rect, key in self.items:
             if not rect.adjusted(0, 0, 0, 32).intersects(visible):
                 continue
