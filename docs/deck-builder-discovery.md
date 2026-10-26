@@ -53,23 +53,35 @@ structured keywords or grants involving at least two relevant keywords. The
 same keyword reader supports similarity discovery. Single-keyword cards do not
 qualify solely for that keyword; manual category overrides remain authoritative.
 
-**More → Auto Add Basic Lands** proposes additional basics from quantity-weighted
-mana costs in the mainboard and command zone. It shares the mana-symbol reader
-with Deck Insights: hybrid symbols count once toward each color, phyrexian and
-monocolor hybrid symbols contribute their colored component, and generic,
-variable and snow symbols contribute no color. Double-faced cards use their
-front-face cost. Explicit colorless requirements are reported separately.
+Basic lands are automatic, with no menu action or slot-count setting. Once a
+nonempty deck has usable mana-cost or commander-color data, they fill the
+unoccupied slots toward 100 cards for Commander (including decks with a
+commander in Custom format), or 60 for other decks. These are automatic filling
+targets, not restrictions on manually building a larger constructed deck.
+Empty decks stay empty. Decks without sufficient local facts wait for metadata.
 
-Choose the additional slots, then edit the per-land counts before applying.
-Largest-remainder allocation makes the counts sum exactly to the requested
-slots, with ties resolved in WUBRG order. The plan respects known Commander
-colors even when browsing illegal cards. With no colored pips, it splits known
-commander colors evenly or proposes Wastes. Missing mana costs are reported.
-Commander plans cannot exceed 100 total mainboard and commander cards; formats
-with minimum sizes but no maximum do not acquire an artificial 60-card cap.
+Adding cards replaces automatic basic copies and recalculates the color ratio
+from mainboard and commander mana pips. Explicitly added basics and nonbasic
+lands stay in place and consume slots; existing basic colors are reserved when
+allocating the remaining basics. Only copies owned by automation are reduced
+or recolored. Artwork, manual roles, and explicitly added copies are preserved.
 
-The tool adds to existing mainboard basics without replacing artwork, deleting
-cards, or subtracting existing mana sources. Resolving a missing basic must
-succeed for the entire plan before any cards are inserted. Applying the plan is
-one undoable edit. This is a starting point, not mana-base optimization.
+Removing or reducing any land, including moving one out of the main deck,
+automatically stops filling and rebalancing for that deck. This state persists
+when saving and reopening. Undoing the removal restores automation along with
+the previous cards. Each card edit and its automatic basic adjustment share one
+undo step; metadata/image loading never creates an extra undo step.
 
+Allocation shares the mana-symbol reader with Deck Insights. Hybrid symbols
+count once toward each color, phyrexian and monocolor hybrid symbols contribute
+their colored component, and generic, variable and snow symbols contribute no
+color. Double-faced cards use their front-face cost. Largest remainders resolve
+whole-land counts deterministically in WUBRG order. Known Commander identity
+still limits the plan when browsing illegal cards. Without colored pips, known
+commander colors are split evenly; otherwise existing basic colors are reused
+or Wastes fills a colorless plan.
+
+Catalog data and artwork resolve in the background. If a basic is unavailable,
+it remains a name-only deck entry and a status message explains the missing
+catalog data. Saved decks retain these entries for later resolution. This is a
+pip-based starting point, not full mana-base optimization.

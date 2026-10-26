@@ -66,6 +66,8 @@ class EditorWindow(W.QMainWindow):
         self.task_runner.settled.connect(self.task_settled)
         self.search_controller = SearchController(self.service, self)
         self.thumbnails = Thumbnails(self.service, self)
+        from .basic_lands import AutomaticBasicLands
+        self.basic_lands = AutomaticBasicLands(self)
         self.setStyleSheet(application_stylesheet())
         self.setWindowIcon(QtGui.QIcon(str(Path(__file__).resolve().parents[1] / 'mtg_proxy' / 'proxy.png')))
         self.resize(1280, 820)
@@ -133,7 +135,6 @@ class EditorWindow(W.QMainWindow):
         from .recommendation_cache import manage_cache
         menu.addAction('Recommendation cache…', lambda: manage_cache(self))
         menu.addAction('Text view', self.show_table)
-        menu.addAction('Auto Add Basic Lands...', self.auto_add_basic_lands)
         menu.addAction('Deck themes...', self.edit_themes)
         menu.addAction('Deck insights…', self.deck_insights)
         menu.addAction('Opening-hand playtest…', self.playtest)
@@ -553,10 +554,6 @@ class EditorWindow(W.QMainWindow):
             self.card_discovery_dialog = CardDiscoveryDialog(self)
         self.card_discovery_dialog.open_card(entry)
 
-    def auto_add_basic_lands(self):
-        from .basic_lands import add_basic_lands
-        add_basic_lands(self)
-
     def edit_themes(self):
         from .themes import edit_themes
         edit_themes(self)
@@ -785,14 +782,19 @@ class EditorWindow(W.QMainWindow):
 
     def edit(self, action):
         from .tag_model import retain_tag_definitions
+        from mtg_core.basic_lands import land_quantities, stop_on_land_removal, reconcile_basic_lands
         def command(document):
+            previous_lands = land_quantities(document)
             retain_tag_definitions(document)
             action(document)
+            stop_on_land_removal(document, previous_lands)
+            reconcile_basic_lands(document, self.basic_lands.templates)
             retain_tag_definitions(document)
         if self.session.edit(command):
             self.changed()
 
     def changed(self):
+        self.basic_lands.changed()
         deck_id = self.document.deck.deck_id
         from mtg_core.card_pool import pool_context
         pool_key = (deck_id, pool_context(self.document))
@@ -950,7 +952,9 @@ class EditorWindow(W.QMainWindow):
     def add_card(self, result):
         """Shared Add Card command for search and recommendation discovery."""
         def action(document):
-            existing = next((e for e in document.deck.entries if e.card_id == result.card_id and e.section == DeckSection.MAINBOARD and not e.art_override), None)
+            existing = next((e for e in document.deck.entries if ((result.card_id and e.card_id == result.card_id)
+                or (not result.card_id and not e.card_id and e.name.casefold() == result.name.casefold()))
+                and e.section == DeckSection.MAINBOARD and not e.art_override), None)
             if existing:
                 existing.quantity += 1
             else:
@@ -1537,6 +1541,7 @@ class EditorWindow(W.QMainWindow):
         self.grid.selected.clear()
         self.grid.verticalScrollBar().setValue(0)
         self.sync_fields()
+        self.edit(lambda document: None)
         self.changed()
         # Legacy entries have no grouping facts; hydrate local metadata off the UI thread.
         legacy_folder = document.print_settings.get('proxy_project', {}).get('image_dir')
@@ -1646,6 +1651,7 @@ class EditorWindow(W.QMainWindow):
 
     def closeEvent(self, event):
         self.closing = True
+        self.basic_lands.stop()
         discovery = getattr(self, 'card_discovery_dialog', None)
         if discovery is not None:
             discovery.controller.shutdown()
@@ -1660,7 +1666,7 @@ class EditorWindow(W.QMainWindow):
         if (self.worker is not None or self.task is not None or self.thumbnails.worker is not None
                 or self.recommendation_panel.worker is not None or self.add_cards_workspace.discovery.controller.worker is not None
                 or self.add_cards_workspace.card_search.controller.worker is not None or self.text_view.worker is not None
-                or self.dashboard.worker is not None
+                or self.dashboard.worker is not None or self.basic_lands.worker is not None
                 or (discovery is not None and discovery.controller.worker is not None)):
             self.thumbnails.stopping = True
             self.thumbnails.pending.clear()
@@ -1671,6 +1677,7 @@ class EditorWindow(W.QMainWindow):
         if self.session.dirty and not self.save():
             self.thumbnails.stopping = False
             self.closing = False
+            self.basic_lands.changed()
             self.dashboard.stopping = False
             self.dashboard.update_visible()
             self.text_view.stopping = False
