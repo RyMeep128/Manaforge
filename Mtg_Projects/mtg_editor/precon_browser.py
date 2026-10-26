@@ -1,4 +1,5 @@
 """Precon selection reusing the cancellable deck import review dialog."""
+from mtg_ui.loading import LoadingThread
 from PyQt6 import QtCore as C, QtGui as G, QtWidgets as W
 from mtg_core.precons import load_catalog, decklist_entries, prepare_precon, cover_asset
 from .decklist_dialogs import ImportDecklist, ImportWorker
@@ -77,7 +78,7 @@ class PreconTileDelegate(W.QStyledItemDelegate):
         painter.restore()
 
 
-class CatalogWorker(C.QThread):
+class CatalogWorker(LoadingThread):
     def __init__(self, service, parent):
         super().__init__(parent)
         self.service, self.records, self.error = service, [], ''

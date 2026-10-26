@@ -1,4 +1,5 @@
 """Shared offline rules browser; all file/network/database work runs off the UI."""
+from mtg_ui.loading import LoadingRunnable
 from html import escape
 import re
 from PyQt6 import QtCore as C, QtWidgets as W
@@ -9,7 +10,7 @@ class _Signals(C.QObject):
     ready = C.pyqtSignal(int, object, str)
 
 
-class _Task(C.QRunnable):
+class _Task(LoadingRunnable):
     def __init__(self, token, work, callback):
         super().__init__()
         self.token, self.work = token, work

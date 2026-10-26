@@ -1,10 +1,11 @@
 """Background task execution and lifecycle for the editor."""
+from mtg_ui.loading import LoadingThread
 from PyQt6 import QtCore
 from mtg_core.diagnostics import get_logger
 from mtg_core.search.cancellation import SearchCancelled
 
 
-class Task(QtCore.QThread):
+class Task(LoadingThread):
     completed = QtCore.pyqtSignal(object, str)
 
     def __init__(self, work, parent=None, *, operation=None, context=None):

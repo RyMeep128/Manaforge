@@ -1,3 +1,4 @@
+from mtg_ui.loading import LoadingThread
 import os
 import re
 import sys
@@ -99,7 +100,7 @@ _showing_exception_dialog = False
 RECOVERABLE_EDITOR_LOAD_ERRORS = (OSError, ValueError, TypeError, json.JSONDecodeError)
 
 
-class UpdateCheckWorker(QtCore.QThread):
+class UpdateCheckWorker(LoadingThread):
     checked = QtCore.pyqtSignal(object, str, bool)
 
     def __init__(self, manual):

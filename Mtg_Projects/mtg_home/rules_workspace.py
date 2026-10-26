@@ -1,4 +1,5 @@
 """Homepage rules workspace reusing the shared browser and card reference."""
+from mtg_ui.loading import LoadingRunnable
 from PyQt6 import QtCore as C, QtWidgets as W
 from mtg_ui.rules_reference import RulesBrowser
 from mtg_core.diagnostics import get_logger
@@ -8,7 +9,7 @@ class _Signals(C.QObject):
     ready = C.pyqtSignal(object, str)
 
 
-class _FindCard(C.QRunnable):
+class _FindCard(LoadingRunnable):
     def __init__(self, service, name, callback):
         super().__init__()
         self.service, self.name = service, name

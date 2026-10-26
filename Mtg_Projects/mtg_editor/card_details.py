@@ -1,4 +1,5 @@
 ﻿"""Card inspection and printing selection, with background catalog/image reads."""
+from mtg_ui.loading import LoadingRunnable
 from copy import deepcopy
 from mtg_core.deck_mutations import apply_quantity
 from pathlib import Path
@@ -12,7 +13,7 @@ class Result(C.QObject):
     ready = C.pyqtSignal(int, object, str)
 
 
-class Load(C.QRunnable):
+class Load(LoadingRunnable):
     def __init__(self, token, work, callback, *, context=None):
         super().__init__()
         self.token, self.work = token, work

@@ -1,3 +1,4 @@
+from mtg_ui.loading import LoadingThread, LoadingRunnable
 import logging
 import sys
 
@@ -18,9 +19,10 @@ def popup(window, middle_text, debug_thread):
             text_widget = QLabel(text)
             text_widget.setStyleSheet("color: #f5f5f5; background: transparent;")
             layout = QVBoxLayout()
-            layout.setContentsMargins(16, 12, 16, 12)
+            layout.setContentsMargins(16, 52, 16, 12)
             layout.addWidget(text_widget)
             self.setLayout(layout)
+            self.setMinimumWidth(180)
             self.setWindowFlags(
                 QtCore.Qt.WindowType.FramelessWindowHint
                 | QtCore.Qt.WindowType.WindowStaysOnTopHint
@@ -65,7 +67,7 @@ def popup(window, middle_text, debug_thread):
                 self.move(offset)
 
         def show_during_work(self, work):
-            class WorkThread(QtCore.QThread):
+            class WorkThread(LoadingThread):
                 _refresh = QtCore.pyqtSignal(str)
 
                 def __init__(self):
@@ -140,7 +142,7 @@ def make_popup_print_fn(progress_popup):
     return popup_print_fn
 
 
-class HighResThumbnailLoader(QtCore.QThread):
+class HighResThumbnailLoader(LoadingThread):
     thumbnail_loaded = QtCore.pyqtSignal(int, str, bytes)
 
     def __init__(self, page_token, items):
@@ -166,7 +168,7 @@ class HighResThumbnailLoader(QtCore.QThread):
             self.thumbnail_loaded.emit(self._page_token, identifier, data)
 
 
-class CardSearchThumbnailLoader(QtCore.QThread):
+class CardSearchThumbnailLoader(LoadingThread):
     thumbnail_loaded = QtCore.pyqtSignal(int, str, bytes)
 
     def __init__(self, page_token, items):
@@ -207,7 +209,7 @@ class _ArtworkPreferenceSignals(QtCore.QObject):
     ready = QtCore.pyqtSignal(int, object, str)
 
 
-class ArtworkPreferencesCheck(QtCore.QRunnable):
+class ArtworkPreferencesCheck(LoadingRunnable):
     """Local-only read owned by the thread pool, independent of a dialog's life."""
     def __init__(self, service, oracle_id, revision, callback, *, project_rules=None):
         super().__init__()

@@ -1,4 +1,5 @@
 """Visual deck/project browser shared by the editor and Print Studio."""
+from mtg_ui.loading import LoadingThread
 from datetime import datetime
 from pathlib import Path
 from .card_drop import CardSearchEdit
@@ -7,7 +8,7 @@ from mtg_core.project_catalog import project_catalog
 from mtg_core.diagnostics import get_logger
 
 
-class CatalogWorker(C.QThread):
+class CatalogWorker(LoadingThread):
     def __init__(self, deck_root, project_root, parent):
         super().__init__(parent)
         self.roots = deck_root, project_root

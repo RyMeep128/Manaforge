@@ -1,4 +1,5 @@
 """Shared offline rulings viewer with explicit background updates."""
+from mtg_ui.loading import LoadingRunnable
 from html import escape
 from urllib.parse import quote
 from PyQt6 import QtCore as C, QtWidgets as W
@@ -19,7 +20,7 @@ class _Signals(C.QObject):
     ready = C.pyqtSignal(object, str)
 
 
-class _Load(C.QRunnable):
+class _Load(LoadingRunnable):
     def __init__(self, service, card_id, oracle_id, refresh, callback):
         super().__init__()
         self.service, self.card_id, self.oracle_id = service, card_id, oracle_id

@@ -1,4 +1,5 @@
 """Preview imports before applying; resolve on a cancellable worker thread."""
+from mtg_ui.loading import LoadingThread
 from PyQt6 import QtCore as C, QtWidgets as W
 from threading import Event
 from mtg_core.decklists import resolve_decklist, resolve_entries, read_decklist_file, export_decklist
@@ -7,7 +8,7 @@ from mtg_core.diagnostics import get_logger
 from urllib.parse import urlsplit
 
 
-class ImportWorker(C.QThread):
+class ImportWorker(LoadingThread):
     progress = C.pyqtSignal(int, int)
 
     def __init__(self, text, service, remote, parent=None, *, public_url='', import_artwork=True):

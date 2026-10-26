@@ -1,4 +1,5 @@
 """Virtual card painting with a bounded cache and one background image reader."""
+from mtg_ui.loading import LoadingThread
 from collections import OrderedDict
 import time
 from email.utils import parsedate_to_datetime
@@ -14,7 +15,7 @@ def orient_face_image(image, payload, face_index):
     return image.transformed(QtGui.QTransform().rotate(180)) if face_index and payload.get('layout') == 'flip' else image
 
 
-class ImageReader(QtCore.QThread):
+class ImageReader(LoadingThread):
     loaded = QtCore.pyqtSignal(object, QtGui.QImage)
     failed = QtCore.pyqtSignal(object, str, float)
 

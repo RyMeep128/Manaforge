@@ -4,6 +4,7 @@ Create/use on the GUI thread, connect signals to QObject slots, and keep the
 owner alive until shutdown() returns True. Workers never manipulate widgets.
 """
 
+from mtg_ui.loading import LoadingThread
 from collections import deque
 import threading
 import time
@@ -14,7 +15,7 @@ from mtg_core.diagnostics import get_logger
 from mtg_core.downloads import DownloadCancelled
 
 
-class _Job(C.QThread):
+class _Job(LoadingThread):
     progress = C.pyqtSignal(str, object)
     outcome = C.pyqtSignal(str, str, object)
 

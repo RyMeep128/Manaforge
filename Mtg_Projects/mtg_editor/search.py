@@ -1,4 +1,5 @@
 """Bounded recent results and cancellable local editor searches."""
+from mtg_ui.loading import LoadingThread
 from collections import OrderedDict
 from copy import deepcopy
 from mtg_core.diagnostics import get_logger
@@ -54,7 +55,7 @@ class SearchCache:
                 del self.entries[key]
 
 
-class SearchWorker(QtCore.QThread):
+class SearchWorker(LoadingThread):
     completed = QtCore.pyqtSignal(str, object, str)
 
     def __init__(self, query, service, parent=None, *, cache=None, refresh=False, offset=0, page_size=50):
