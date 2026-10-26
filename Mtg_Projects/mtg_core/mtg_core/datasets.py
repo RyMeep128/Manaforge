@@ -283,6 +283,8 @@ class DatasetInstaller:
         with zipfile.ZipFile(archive) as package:
             for entry in package.infolist():
                 name = entry.filename
+                if "\\" in entry.orig_filename or "\x00" in entry.orig_filename:
+                    raise ValueError("Unsafe original dataset archive path")
                 parts = PurePosixPath(name).parts
                 # Windows paths, device names, ADS, links and case collisions
                 # must be rejected even when validation runs on another OS.

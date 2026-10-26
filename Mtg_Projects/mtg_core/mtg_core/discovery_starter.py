@@ -22,6 +22,10 @@ def snapshot_path(root, filename):
     collected = root / filename
     if collected.exists():
         return collected
+    from .recommendation_distribution import released_file
+    released = released_file(root, 'edhrec', filename)
+    if released:
+        return released
     target = root / 'starter' / filename
     with _LOCK:
         if target.exists():

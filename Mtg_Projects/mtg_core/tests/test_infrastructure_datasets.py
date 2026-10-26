@@ -101,7 +101,11 @@ def test_successful_update_retains_previous_generation(tmp_path):
 def test_unsafe_archive_cannot_escape_staging_or_activate(tmp_path, filename):
     stream = io.BytesIO()
     with zipfile.ZipFile(stream, "w") as archive:
-        archive.writestr(filename, b"bad")
+        entry = zipfile.ZipInfo("fixture")
+        # ZipInfo's constructor normalizes Windows separators; preserve the
+        # actual unsafe wire name so the reader/extractor boundary is tested.
+        entry.filename = entry.orig_filename = filename
+        archive.writestr(entry, b"bad")
     installer, manifest = setup_installer(
         tmp_path, stream.getvalue(), format="zip", expanded_size=100
     )

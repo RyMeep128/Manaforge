@@ -58,6 +58,10 @@ def source_signature(root):
 
     root = Path(root)
     paths = [root / "source-settings.json", root / "archidekt.aggregate.json.gz"]
+    from .paths import core_data_root
+
+    if root.resolve() == (core_data_root() / "recommendations").resolve():
+        paths.append(core_data_root() / "installation.sqlite3")
     for name in (
         "local",
         "archidekt",
@@ -77,10 +81,12 @@ def source_signature(root):
     return tuple(signature)
 
 
-def default_sources(local_store, *, document=None):
+def default_sources(local_store, *, document=None, distribution_state=None):
     from .recommendations import RecommendationStore
     from .recommendation_cache import AggregateSource, source_settings
     from .edhrec import EdhrecSource
+    from .recommendation_distribution import released_file
+    from .released_recommendations import ReleasedRecommendationSource
 
     root = local_store.path.parent
     config = source_settings(root)
@@ -119,9 +125,18 @@ def default_sources(local_store, *, document=None):
                     if not theme:
                         note = "Automatic: no saved theme; using general. "
                 source = EdhrecSource(
-                    snapshot_path(root, "edhrec.sqlite3"),
+                    released_file(
+                        root, "edhrec", "edhrec.sqlite3", state=distribution_state
+                    )
+                    or snapshot_path(root, "edhrec.sqlite3"),
                     cohort=cohort,
-                    cohort_database=root / "edhrec-cohorts.sqlite3",
+                    cohort_database=released_file(
+                        root,
+                        "edhrec",
+                        "edhrec-cohorts.sqlite3",
+                        state=distribution_state,
+                    )
+                    or root / "edhrec-cohorts.sqlite3",
                     selection_note=note,
                     allow_general_fallback=automatic,
                 )
@@ -135,6 +150,12 @@ def default_sources(local_store, *, document=None):
                     "public",
                     RecommendationStore(root / f"{source_id}.sqlite3"),
                 )
+            elif source_id in ("archidekt", "moxfield") and (
+                released := released_file(
+                    root, source_id, "aggregates.sqlite3", state=distribution_state
+                )
+            ):
+                source = ReleasedRecommendationSource(released, source_id)
             else:
                 source = UnavailableSource(
                     source_id,

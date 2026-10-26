@@ -9,6 +9,10 @@ on:
         description: Build the existing Manaforge Windows bundle as a CI artifact
         type: boolean
         default: false
+      recommendation_release_tag:
+        description: Optional staged recommendation-data prerelease tag to validate and publish
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -80,3 +84,34 @@ jobs:
           name: Manaforge-Windows
           path: Manaforge-Windows.zip
           retention-days: 7
+
+  recommendation-data:
+    name: Validate and publish processed recommendation datasets
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.recommendation_release_tag != '' }}
+    needs: tests
+    runs-on: windows-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    concurrency:
+      group: recommendation-data-publication
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ github.token }}
+      DATA_RELEASE_TAG: ${{ inputs.recommendation_release_tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.12'
+      - name: Install data-tool dependency
+        run: python -m pip install certifi
+      - name: Download only the staged processed assets
+        run: |
+          if ($env:DATA_RELEASE_TAG -notmatch '^recommendations-[0-9][A-Za-z0-9.-]*-(alpha|beta)\.1$') { throw 'Invalid data prerelease tag' }
+          gh release download $env:DATA_RELEASE_TAG --repo $env:GITHUB_REPOSITORY --dir data-release --pattern '*.zip' --pattern manifest.json
+          if ($LASTEXITCODE -ne 0) { throw 'Could not retrieve staged release assets' }
+      - name: Validate assets and publish prerelease plus latest manifest
+        run: python tools/recommendation_data.py promote --directory data-release --repository $env:GITHUB_REPOSITORY --commit $env:GITHUB_SHA
