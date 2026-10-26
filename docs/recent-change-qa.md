@@ -36,3 +36,15 @@ Validation is deferred to CI/CD and manual review; no local tests, linting, form
 - Review narrow windows, empty groups, multiple columns, and double-faced card animation in both stack views.
 
 No local tests, linting, formatting, or runtime validation were run; existing tests are unchanged.
+
+## CI regression repairs
+
+- Always quote and escape generated Oracle-tag search values.
+- Treat possessed Keyword Soup keywords as secondary evidence so specific roles such as Lifegain retain priority. Actual keyword grants retain Oracle-effect explanations.
+- Explicit EDHREC audiences require an exact cached cohort. Only automatic audience selection can fall back to general, with a labeled status. Custom Oracle-tag themes do not become EDHREC cohort identifiers.
+- Activate populated, category-only, and intentionally edited decks so canvas visibility, saving, and preference persistence follow the active document. Keep blank startup on the dashboard.
+- Compact toolbar captions, padding, and gaps in short windows preserve usable canvas height while retaining all controls.
+- Apply formatting changes reported by GitHub CI directly. Existing test files remain unchanged; no local tests, linting, or formatter commands were run.
+- CI now names tests and dumps stacks after a two-minute stall. Editor tests run first; every original suite remains included. Temporary failure-count limits used during diagnosis have been removed.
+
+CI confirmed the previously documented empty-deck redirect expectation is obsolete: `test_empty_deck_search_defaults_to_ideas_even_after_another_tab` still requires the intentionally removed redirect. Preserve the current behavior unless that requirement is explicitly changed.
