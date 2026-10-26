@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from .card_drop import CardSearchEdit
 from PyQt6 import QtCore as C, QtGui as G, QtWidgets as W
-from mtg_core.project_catalog import project_catalog
+from mtg_core.project_catalog import project_catalog, managed_deck_path, rename_deck
 from mtg_core.diagnostics import get_logger
 
 
@@ -91,6 +91,8 @@ class ProjectDashboard(W.QWidget):
     openRequested = C.pyqtSignal(object)
     newRequested = C.pyqtSignal()
     resumeRequested = C.pyqtSignal()
+    deckRenamed = C.pyqtSignal(object, str)
+    deckDeleted = C.pyqtSignal(object)
     settled = C.pyqtSignal()
 
     def __init__(self, deck_root, project_root, thumbnails, parent=None):
@@ -149,6 +151,8 @@ class ProjectDashboard(W.QWidget):
         self.list.setGridSize(C.QSize(228, 290))
         self.list.setMouseTracking(True)
         self.list.setItemDelegate(ProjectTileDelegate(self))
+        self.list.setContextMenuPolicy(C.Qt.ContextMenuPolicy.CustomContextMenu)
+        self.list.customContextMenuRequested.connect(self.deck_context_menu)
         self.list.itemActivated.connect(self.open_selected)
         self.list.itemSelectionChanged.connect(self.selection_changed)
         self.list.verticalScrollBar().valueChanged.connect(self.update_visible)
@@ -235,6 +239,53 @@ class ProjectDashboard(W.QWidget):
         item = self.list.currentItem()
         if item is not None and not item.isHidden() and not self.stopping:
             self.openRequested.emit(Path(item.data(C.Qt.ItemDataRole.UserRole)['path']))
+
+    def deck_context_menu(self, position):
+        item = self.list.itemAt(position)
+        if item is None or self.worker is not None or self.stopping:
+            return
+        row = item.data(C.Qt.ItemDataRole.UserRole)
+        if row['kind'] != 'Deck':
+            return
+        self.list.setCurrentItem(item)
+        menu = W.QMenu(self)
+        rename = menu.addAction('Rename...')
+        delete = menu.addAction('Delete...')
+        action = menu.exec(self.list.viewport().mapToGlobal(position))
+        if action == rename:
+            self.rename_selected_deck(row)
+        elif action == delete:
+            self.delete_selected_deck(row)
+
+    def rename_selected_deck(self, row):
+        name, accepted = W.QInputDialog.getText(self, 'Rename deck', 'Deck name:', text=row['name'])
+        if not accepted or name.strip() == row['name']:
+            return
+        try:
+            name = rename_deck(row['path'], self.roots[0], name)
+        except (OSError, ValueError, TypeError) as exc:
+            W.QMessageBox.warning(self, 'Could not rename deck', str(exc))
+            return
+        self.deckRenamed.emit(Path(row['path']), name)
+        self.refresh()
+
+    def delete_selected_deck(self, row):
+        answer = W.QMessageBox.question(self, 'Delete deck',
+            f'Move "{row["name"]}" to the Recycle Bin?',
+            W.QMessageBox.StandardButton.Yes | W.QMessageBox.StandardButton.No,
+            W.QMessageBox.StandardButton.No)
+        if answer != W.QMessageBox.StandardButton.Yes:
+            return
+        try:
+            path = managed_deck_path(row['path'], self.roots[0])
+            result = C.QFile.moveToTrash(str(path))
+            if not (result[0] if isinstance(result, tuple) else result):
+                raise OSError('The deck could not be moved to the Recycle Bin.')
+        except (OSError, ValueError) as exc:
+            W.QMessageBox.warning(self, 'Could not delete deck', str(exc))
+            return
+        self.deckDeleted.emit(path)
+        self.refresh()
 
     def browse(self):
         path, _ = W.QFileDialog.getOpenFileName(self, 'Open deck or project', str(self.roots[0]), 'JSON projects (*.json)')

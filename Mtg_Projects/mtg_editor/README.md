@@ -210,7 +210,10 @@ the source is retained. Existing local artwork is imported into shared image sto
 **Decks > Decks and print projects** opens the shared library browser. The same
 browser is available from Proxy's project dashboard. It loads native decks and managed
 print projects in the background, supports name/type filtering, and offers New deck
-and Open file. Double-click a row to open it in the editor. Unavailable files are
+and Open file. Double-click a tile to open it in the editor. Right-click a saved
+deck tile for **Rename** or **Delete**. Rename updates the saved deck name; Delete
+asks for confirmation and moves the file to the Recycle Bin. Print projects do
+not offer these deck actions. Unavailable files are
 reported without removing their library entries. Print projects remain intact when
 opened as separate editor decks.
 

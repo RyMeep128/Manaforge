@@ -393,6 +393,8 @@ class EditorWindow(W.QMainWindow):
         self.dashboard.newRequested.connect(self.choose_new_deck)
         self.dashboard.openRequested.connect(self.open_path)
         self.dashboard.resumeRequested.connect(self.resume_deck)
+        self.dashboard.deckRenamed.connect(self.library_deck_renamed)
+        self.dashboard.deckDeleted.connect(self.library_deck_deleted)
         self.project_stack = W.QStackedWidget()
         self.project_stack.addWidget(self.dashboard)
         self.project_stack.addWidget(body)
@@ -1707,6 +1709,28 @@ class EditorWindow(W.QMainWindow):
         self.results.preview.hide()
         self.dashboard.refresh()
         self.dashboard.filter.setFocus()
+
+    def library_deck_renamed(self, path, name):
+        if self.path is not None and self.path.resolve() == path.resolve():
+            def rename(document):
+                document.deck.name = name
+                document.deck.extras['manual_name'] = True
+            self.session.edit(rename)
+            self.session.saved = self.document.to_dict()
+            self.sync_fields()
+            self.changed()
+
+    def library_deck_deleted(self, path):
+        if self.path is not None and self.path.resolve() == path.resolve():
+            self.autosave.stop()
+            self.session.new()
+            self.model.document = self.grid.document = self.document
+            self.grid.selected.clear()
+            self._has_active_deck = False
+            self.dashboard.resume_button.hide()
+            self.sync_fields()
+            self.changed()
+            self.autosave.stop()
 
     def resume_deck(self):
         if self._has_active_deck and self.task is None:

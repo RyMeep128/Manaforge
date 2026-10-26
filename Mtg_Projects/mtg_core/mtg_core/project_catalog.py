@@ -2,7 +2,7 @@
 import json
 from pathlib import Path
 from mtg_core.diagnostics import get_logger
-from mtg_core.decks import DeckDocument
+from mtg_core.decks import DeckDocument, DeckStore
 
 
 def project_catalog(deck_root, project_root):
@@ -45,3 +45,24 @@ def project_catalog(deck_root, project_root):
             get_logger(__name__).exception('Project read failed path=%s kind=%s', path, kind)
             errors.append(f'{path.name}: {exc}')
     return sorted(rows, key=lambda row: -row['modified']), errors
+
+
+def managed_deck_path(path, deck_root):
+    """Restrict library mutations to native deck files inside the deck folder."""
+    path = Path(path).resolve(strict=True)
+    if path.parent != Path(deck_root).resolve() or not path.name.endswith('.manaforge.json') or not path.is_file():
+        raise ValueError('Only saved decks in the deck folder can be changed here.')
+    return path
+
+
+def rename_deck(path, deck_root, name):
+    name = name.strip()
+    if not name:
+        raise ValueError('Enter a deck name.')
+    path = managed_deck_path(path, deck_root)
+    store = DeckStore()
+    document = store.load(path)
+    document.deck.name = name
+    document.deck.extras['manual_name'] = True
+    store.save(path, document)
+    return name
