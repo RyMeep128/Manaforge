@@ -16,7 +16,7 @@ completed run makes no requests unless new IDs or listing sources are added.
 The collector uses the supplied `https://api2.moxfield.com` endpoints:
 
 - `/v2/decks/search` for public search;
-- `/v2/users/{username}/decks` for a user's public decks;
+- `/v2/decks/search` with `authorUserNames` for a user's public decks;
 - `/v3/decks/all/{deckId}` for complete decks.
 
 Listings use `pageNumber`, `pageSize=64`, and the Commander format filter.

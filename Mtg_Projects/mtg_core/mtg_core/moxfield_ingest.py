@@ -79,7 +79,7 @@ class Collector:
         self.state.update(updates, status=status, updated=time.time())
         atomic_json(self.path, self.state)
 
-    def fetch(self, path, params=None):
+    def fetch(self, path, params=None, *, refresh=False):
         url = BASE + path
         if params:
             url += "?" + urllib.parse.urlencode(params)
@@ -87,7 +87,7 @@ class Collector:
             hashlib.sha256(url.encode()).hexdigest() + ".json.gz"
         )
         self.downloader.wait(0)
-        if cache.exists():
+        if cache.exists() and not refresh:
             with gzip.open(cache, "rb") as stream:
                 raw = stream.read(MAX_BYTES + 1)
         else:
@@ -164,22 +164,46 @@ class Collector:
                 if progress["page"] > self.max_pages:
                     self.save("bounded")
                     return self.state
-                payload = self.fetch(path, dict(
+                params = dict(
                     pageNumber=progress["page"], pageSize=64, fmt="commander",
                     sortType="updated", sortDirection="Descending",
-                ))
-                if not isinstance(payload, dict) or not isinstance(payload.get("data"), list):
-                    raise ValueError("Unexpected Moxfield listing schema")
-                ids = list(dict.fromkeys(deck_id(item["publicId"]) for item in payload["data"]))
-                signature = hashlib.sha256(json.dumps(ids).encode()).hexdigest()
+                )
+                request_path = path
+                if path.startswith("/v2/users/") and path.endswith("/decks"):
+                    # Keep existing checkpoint keys, but use the verified public
+                    # search filter; the old user-decks endpoint returns 404.
+                    params["authorUserNames"] = urllib.parse.unquote(path[len("/v2/users/"):-len("/decks")])
+                    request_path = "/v2/decks/search"
                 signatures = progress.setdefault("signatures", [])
+                # Updated-order listings move while we collect. Revalidate cached
+                # repeats over the network before advancing this bounded listing.
+                for attempt in range(3):
+                    payload = self.fetch(request_path, params, refresh=True) if attempt else self.fetch(request_path, params)
+                    if not isinstance(payload, dict) or not isinstance(payload.get("data"), list):
+                        raise ValueError("Unexpected Moxfield listing schema")
+                    ids = list(dict.fromkeys(deck_id(item["publicId"]) for item in payload["data"]))
+                    signature = hashlib.sha256(json.dumps(ids).encode()).hexdigest()
+                    if not ids or signature not in signatures:
+                        break
+                total_pages = payload.get("totalPages")
+                if type(total_pages) is int and total_pages >= 0:
+                    progress["total_pages"] = total_pages
                 if ids and signature in signatures:
-                    raise ValueError("Repeated listing page; stopped to avoid pagination loops")
+                    progress.setdefault("skipped_pages", []).append(progress["page"])
+                    progress["consecutive_repeats"] = progress.get("consecutive_repeats", 0) + 1
+                    self.save(last_warning=f"Skipped repeated listing page {progress['page']} after two fresh retries")
+                    if progress["consecutive_repeats"] >= 3:
+                        raise ValueError("Three consecutive repeated listing pages; stopped to avoid pagination loops")
+                    progress["page"] += 1
+                    progress["done"] = type(total_pages) is int and progress["page"] > total_pages
+                    self.save(last_error=None)
+                    continue
+                progress["consecutive_repeats"] = 0
                 signatures.append(signature)
                 self.state["queue"] = [value for value in ids if value not in seen]
-                progress["done"] = not ids
+                progress["done"] = not ids or (type(total_pages) is int and progress["page"] >= total_pages)
                 progress["page"] += 1
-                self.save()
+                self.save(last_error=None)
         except (InterruptedError, KeyboardInterrupt) as exc:
             self.save("paused", last_error=str(exc))
         except Exception as exc:

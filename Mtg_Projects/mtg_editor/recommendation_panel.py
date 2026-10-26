@@ -9,7 +9,7 @@ from mtg_core.recommendation_scoring import settings
 from mtg_ui.theme import COLORS
 
 from .canvas import CardCanvas
-from .card_drop import CardDropPanel
+from .card_drop import CardDropPanel, CardSearchEdit
 from .commander_selection import commanders
 from .organization import in_deck_entries, update_candidate_quantities
 from .recommendation_categories import CATEGORIES, card_types, matches
@@ -176,7 +176,7 @@ class RecommendationPanel(CardDropPanel):
         self.controls_grid = W.QGridLayout()
         self.controls_grid.setContentsMargins(0, 0, 0, 0)
         self.controls_grid.setSpacing(4)
-        self.text_filter = W.QLineEdit()
+        self.text_filter = CardSearchEdit()
         self.text_filter.setPlaceholderText("Search recommendations")
         self.text_filter.setClearButtonEnabled(True)
         self.text_filter.setMinimumHeight(32)

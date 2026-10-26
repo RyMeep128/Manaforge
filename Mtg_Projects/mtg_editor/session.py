@@ -8,6 +8,8 @@ import uuid
 
 from mtg_core.decks import DeckDocument, DeckHistory, DeckStore
 
+UNDOABLE_PREFERENCES = frozenset({'manual_themes', 'discovery', 'include_illegal_cards',
+                                 'edhrec_cohort', 'recommendations', 'guidance'})
 
 def update_default_name(document):
     """Follow the commander/first-added card until the user supplies a name."""
@@ -66,7 +68,12 @@ class DeckSession:
         preferences = deepcopy(self.document.editor_preferences)
         link = self.document.extras.get('proxy_project_id')
         changed = action()
-        self.document.editor_preferences = preferences
+        # Keep presentation state, but restore the history snapshot's deck intent.
+        semantic = {key: value for key, value in self.document.editor_preferences.items()
+                    if key in UNDOABLE_PREFERENCES}
+        self.document.editor_preferences = {key: value for key, value in preferences.items()
+                                            if key not in UNDOABLE_PREFERENCES}
+        self.document.editor_preferences.update(semantic)
         if link:
             self.document.extras['proxy_project_id'] = link
         return changed

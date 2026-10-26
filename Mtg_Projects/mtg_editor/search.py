@@ -4,9 +4,34 @@ from copy import deepcopy
 from mtg_core.diagnostics import get_logger
 from threading import Event
 from time import monotonic
+import re
 
 from PyQt6 import QtCore
 from mtg_core.search.cancellation import SearchCancelled, check_cancelled
+
+
+class SearchDraft(QtCore.QObject):
+    """One transient query shared by the editor's three search inputs."""
+    changed = QtCore.pyqtSignal(str, bool)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.text = ''
+        self.syntax = False
+
+    def set_text(self, text):
+        from mtg_core.search.syntax import Parser, LocalQueryError
+        try:
+            tokens = Parser(text).tokens
+        except LocalQueryError:
+            # Incomplete syntax must remain editable without becoming a name.
+            tokens = [text.strip()]
+        syntax = any(token.upper() in {'AND', 'OR', 'NOT', '(', ')', '-'}
+                     or token.startswith(('"', '!'))
+                     or re.match(r'^-?[a-zA-Z_]+(?::|[<>=!])', token) for token in tokens)
+        if (text, syntax) != (self.text, self.syntax):
+            self.text, self.syntax = text, syntax
+            self.changed.emit(text, syntax)
 
 
 class SearchCache:

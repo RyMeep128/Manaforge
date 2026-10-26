@@ -1,5 +1,6 @@
 """Searchable deck-local manual themes, sharing the discovery theme catalog."""
 from copy import deepcopy
+from .card_drop import CardSearchEdit
 from PyQt6 import QtCore as C, QtWidgets as W
 from mtg_core.discovery_themes import theme_catalog
 
@@ -18,7 +19,7 @@ class ThemesDialog(W.QDialog):
         automatic = W.QLabel('Automatically inferred: ' + (', '.join(inferred) or 'No repeated theme detected yet.'))
         automatic.setWordWrap(True)
         layout.addWidget(automatic)
-        self.search = W.QLineEdit()
+        self.search = CardSearchEdit()
         self.search.setPlaceholderText('Search themes by name')
         self.search.setClearButtonEnabled(True)
         layout.addWidget(self.search)
@@ -27,7 +28,14 @@ class ThemesDialog(W.QDialog):
         layout.addWidget(self.group)
         self.list = W.QListWidget()
         layout.addWidget(self.list, 1)
-        saved = document.editor_preferences.get('manual_themes', [])
+        saved = list(document.editor_preferences.get('manual_themes', []))
+        discovery = document.editor_preferences.get('discovery', {})
+        legacy = discovery.get('theme_option') or next(
+            (t for t in catalog if t['slug'] == discovery.get('theme')), None)
+        if not legacy and discovery.get('theme'):
+            legacy = dict(slug=discovery['theme'], name=discovery['theme'], group='Themes')
+        if legacy and not legacy.get('companion') and not any(t['slug'] == legacy['slug'] for t in saved):
+            saved.append(legacy)
         self.catalog = {t['slug']: t for t in [*catalog, *saved] if not t.get('companion')}
         checked = {t['slug'] for t in saved}
         for key, option in sorted(self.catalog.items(), key=lambda pair: pair[1]['name'].casefold()):
@@ -37,6 +45,7 @@ class ThemesDialog(W.QDialog):
             item.setCheckState(C.Qt.CheckState.Checked if key in checked else C.Qt.CheckState.Unchecked)
             item.setToolTip(option.get('group', 'Themes') + ' · Manual when checked')
             self.list.addItem(item)
+        self.initial_selections = self.selections()
         clear = W.QPushButton('Remove all manual themes')
         clear.clicked.connect(self.clear)
         layout.addWidget(clear)
@@ -85,6 +94,8 @@ def edit_themes(editor):
         dialog = ThemesDialog(editor.document, catalog, inferred, editor)
         if dialog.exec() == W.QDialog.DialogCode.Accepted and snapshot == editor.document.deck.deck_id:
             themes = dialog.selections()
+            if themes == dialog.initial_selections:
+                return
             def apply(document):
                 document.editor_preferences['manual_themes'] = themes
                 discovery = document.editor_preferences.setdefault('discovery', {})

@@ -1,5 +1,6 @@
 """Shared lightweight picker and deck-local organization management."""
 from copy import deepcopy
+from .card_drop import CardSearchEdit
 from PyQt6 import QtCore as C, QtWidgets as W
 
 from .tag_model import (choices, preferences, hold_delay, apply_choice,
@@ -17,7 +18,7 @@ class TagPicker(W.QDialog):
         self.mode.addItems(['Primary Role', 'Additional Tag'])
         self.mode.setCurrentIndex(int(tags))
         layout.addWidget(self.mode)
-        self.search = W.QLineEdit()
+        self.search = CardSearchEdit()
         self.search.setPlaceholderText('Search existing choices or enter a new name')
         layout.addWidget(self.search)
         self.listing = W.QListWidget()

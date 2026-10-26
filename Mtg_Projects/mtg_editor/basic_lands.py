@@ -3,7 +3,7 @@ from copy import deepcopy
 from time import monotonic
 
 from PyQt6 import QtCore as C
-from mtg_core.basic_lands import AUTOMATION, MANAGED_COPIES
+from mtg_core.basic_lands import AUTOMATION, MANAGED_COPIES, BASICS, reconcile_basic_lands
 from mtg_core.diagnostics import get_logger
 from .organization import card_facts
 from .tasks import Task
@@ -36,9 +36,8 @@ class AutomaticBasicLands(C.QObject):
         return changed
 
     def missing(self):
-        return sorted({e.name for e in self.editor.document.deck.entries
-            if e.extras.get(MANAGED_COPIES) and not e.card_id and e.name not in self.templates
-            and self.retry_after.get(e.name, 0) <= monotonic()})
+        return sorted(name for name in BASICS.values() if name not in self.templates
+                      and self.retry_after.get(name, 0) <= monotonic())
 
     def changed(self):
         if self.editor.closing:
@@ -49,6 +48,7 @@ class AutomaticBasicLands(C.QObject):
                 'Automatic basic lands stopped because a land was removed. Undo restores automation.', 8000)
         self.observed_state = state
         self.hydrate()
+        reconcile_basic_lands(self.editor.document, self.templates)
         if self.worker is None and self.missing():
             self.timer.start()
 
@@ -86,10 +86,11 @@ class AutomaticBasicLands(C.QObject):
             return
         payloads, missing = result if not error else ({}, self.missing())
         self.templates.update(payloads)
-        if self.hydrate():
+        self.hydrate()
+        if payloads:
             self.editor.changed()
         if missing or error:
-            self.editor.statusBar().showMessage('Automatic basics were added by name; catalog data is unavailable for '
+            self.editor.statusBar().showMessage('Automatic basics are waiting for legal catalog data for '
                                                + (', '.join(missing) if missing else 'some lands') + '.', 8000)
 
     def finished(self):

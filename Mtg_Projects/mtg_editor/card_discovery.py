@@ -32,6 +32,7 @@ class CardDiscoveryDialog(W.QDialog):
         super().__init__(editor)
         self.editor = editor
         self.seed = None
+        self.request_context = None
         self.setWindowTitle('Discover cards')
         self.resize(880, 700)
         self.controller = DiscoveryController(CardDiscoveryService(editor.service, editor.recommendation_store()), self)
@@ -84,6 +85,15 @@ class CardDiscoveryDialog(W.QDialog):
         self.controller.resultsReady.connect(self.completed)
         self.controller.statusChanged.connect(self.status.setText)
         self.controller.busyChanged.connect(cancel.setEnabled)
+        self.controller.busyChanged.connect(self.set_busy_cursor)
+
+    def set_busy_cursor(self, busy):
+        if busy:
+            self.setCursor(C.Qt.CursorShape.BusyCursor)
+            self.canvas.viewport().setCursor(C.Qt.CursorShape.BusyCursor)
+        else:
+            self.unsetCursor()
+            self.canvas.viewport().unsetCursor()
 
     def open_card(self, entry):
         self.seed = deepcopy(entry)
@@ -100,25 +110,32 @@ class CardDiscoveryDialog(W.QDialog):
     def query(self):
         return json.dumps(dict(seed=self.seed.to_dict(), document=self.editor.document.to_dict(), mode=self.tabs.currentIndex()), sort_keys=True)
 
+    def context(self):
+        from mtg_core.card_pool import pool_context
+        return (json.dumps(self.seed.to_dict(), sort_keys=True), self.tabs.currentIndex(),
+                self.editor.document.deck.deck_id, pool_context(self.editor.document),
+                self.editor.document.editor_preferences.get('edhrec_cohort'))
+
     def search(self, *_):
         if self.seed is None or self.editor.closing or not self.isVisible():
             return
         self.canvas.document.deck.entries = []
         self.canvas.refresh()
         self.selection_changed()
+        self.request_context = self.context()
         self.controller.search(self.query())
 
     def deck_changed(self):
         with C.QSignalBlocker(self.illegal):
             self.illegal.setChecked(self.editor.document.editor_preferences.get('include_illegal_cards', False))
         if self.seed is not None and self.isVisible():
-            if self.controller.query != self.query():
+            if self.request_context != self.context():
                 self.search()
             else:
                 update_candidate_quantities(self.editor.document, self.canvas)
 
     def completed(self, query, snapshot, error):
-        if not self.isVisible() or query != self.query():
+        if not self.isVisible() or query != self.controller.query or self.request_context != self.context():
             return
         entries = []
         for index, row in enumerate(snapshot.get('results', [])):

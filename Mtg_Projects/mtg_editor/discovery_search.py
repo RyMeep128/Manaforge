@@ -6,7 +6,7 @@ from mtg_core.decks import DeckDocument, DeckEntry
 from mtg_core.categorization import classify
 
 from .canvas import CardCanvas
-from .card_drop import CardDropPanel
+from .card_drop import CardDropPanel, CardSearchEdit
 from .search import SearchController
 from .organization import card_facts, in_deck_entries, update_candidate_quantities
 from .recommendation_panel import CARD_TYPES
@@ -22,8 +22,8 @@ class CardSearchPanel(CardDropPanel):
         layout = W.QVBoxLayout(self)
         layout.setContentsMargins(0, 8, 0, 0)
         search = W.QHBoxLayout()
-        self.name = W.QLineEdit()
-        self.name.setPlaceholderText('Search cards by name')
+        self.name = CardSearchEdit()
+        self.name.setPlaceholderText('Search cards by name or Scryfall syntax')
         self.name.setAccessibleName('Card name')
         self.name.setMinimumHeight(38)
         self.name.setClearButtonEnabled(True)
@@ -93,7 +93,9 @@ class CardSearchPanel(CardDropPanel):
     def query(self):
         parts = []
         if self.name.text().strip():
-            parts.append('name:' + json.dumps(self.name.text().strip(), ensure_ascii=False))
+            value = self.name.text().strip()
+            parts.append('(' + value + ')' if self.editor.search_draft.syntax else
+                         'name:' + json.dumps(value, ensure_ascii=False))
         if self.color.currentData():
             parts.append('c:' + self.color.currentData())
         if self.kind.currentIndex():
@@ -104,6 +106,9 @@ class CardSearchPanel(CardDropPanel):
         return deck_query(' '.join(parts), self.editor.document)
 
     def query_changed(self, *_):
+        if self.name.text() != self.editor.search_draft.text:
+            self.editor.search_draft.set_text(self.name.text())
+            return
         self.controller.change_query(self.query())
 
     def search(self):

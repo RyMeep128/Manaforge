@@ -13,6 +13,7 @@ from mtg_core.paths import data_root
 from mtg_core import get_default_card_service
 from mtg_editor.card_views import Thumbnails
 from mtg_editor.canvas import CardCanvas
+from mtg_editor.card_drop import CardDropPanel, CardSearchEdit
 from mtg_editor.organization import SECTIONS, GROUPS, SORTS, card_facts, assign, move_entries
 from mtg_ui.theme import application_stylesheet
 from copy import deepcopy
@@ -64,6 +65,9 @@ class EditorWindow(W.QMainWindow):
         self.task_runner.busyChanged.connect(self.task_busy_changed)
         self.task_runner.failed.connect(self.task_failed)
         self.task_runner.settled.connect(self.task_settled)
+        from .search import SearchDraft
+        self.search_draft = SearchDraft(self)
+        self._quick_add_armed = False
         self.search_controller = SearchController(self.service, self)
         self.thumbnails = Thumbnails(self.service, self)
         from .basic_lands import AutomaticBasicLands
@@ -179,7 +183,7 @@ class EditorWindow(W.QMainWindow):
         add_group, add_row = self.toolbar_group('Add Cards')
         self.workspace_button = self.button(add_row, 'Card Search', self.open_add_cards, True)
         self.button(add_row, 'Themes', self.edit_themes)
-        self.quick_add = W.QLineEdit()
+        self.quick_add = CardSearchEdit()
         self.quick_add.setPlaceholderText('Quick Add')
         self.quick_add.setAccessibleName('Quick Add: Enter searches, then Enter adds a result')
         self.quick_add.setFixedWidth(120)
@@ -200,7 +204,7 @@ class EditorWindow(W.QMainWindow):
         self.sort.addItems(SORTS)
         sort_row.addWidget(self.sort)
         filter_group, filter_row = self.toolbar_group('Local Filter')
-        self.filter = W.QLineEdit()
+        self.filter = CardSearchEdit()
         self.filter.setClearButtonEnabled(True)
         self.filter.setPlaceholderText('Filter this deck')
         self.filter.setMinimumWidth(140)
@@ -264,7 +268,6 @@ class EditorWindow(W.QMainWindow):
             widget.setMinimumHeight(34)
         layout.addWidget(controls)
         self.splitter = W.QSplitter()
-        from .card_drop import CardDropPanel
         self.search_panel = CardDropPanel(self)
         self.search_panel.setMinimumWidth(270)
         search_layout = W.QVBoxLayout(self.search_panel)
@@ -281,9 +284,9 @@ class EditorWindow(W.QMainWindow):
         search_layout = W.QVBoxLayout(self.syntax_search_page)
         search_layout.setContentsMargins(0, 8, 0, 0)
         self.add_card_tabs.addTab(self.syntax_search_page, 'Syntax Search')
-        self.query = W.QLineEdit()
+        self.query = CardSearchEdit()
         self.query.setPlaceholderText('Local search: o:flying c=g')
-        self.query.textChanged.connect(self.search_changed)
+        self.query.textChanged.connect(self.search_draft.set_text)
         self.query.setMinimumHeight(38)
         self.query.returnPressed.connect(self.search)
         self.query.setClearButtonEnabled(True)
@@ -403,6 +406,8 @@ class EditorWindow(W.QMainWindow):
             self.shortcuts.append(shortcut)
         from mtg_ui.keyboard import add_shortcuts_help
         add_shortcuts_help(self)
+        self.search_draft.changed.connect(self.sync_search_draft)
+        self.quick_add.textChanged.connect(self.search_draft.set_text)
         self.search_close.setToolTip('Close Quick Add (Esc)')
         self.sync_fields()
         self.changed()
@@ -523,19 +528,39 @@ class EditorWindow(W.QMainWindow):
         layout.addLayout(row)
         return frame, row
 
+    def sync_search_draft(self, text, syntax):
+        panel = self.add_cards_workspace.card_search
+        for field in (self.quick_add, self.query, panel.name):
+            with QtCore.QSignalBlocker(field):
+                field.setText(text)
+        self._quick_add_armed = False
+        self._quick_add_ready_query = None
+        if self.syntax_search_page.isVisible():
+            self.search_changed()
+        else:
+            self.cancel_search()
+            self.clear_search_results()
+        if panel.isVisible():
+            panel.query_changed()
+        else:
+            panel.controller.cancel()
+            panel.clear()
+
     def quick_add_enter(self):
         query = self.quick_add.text().strip()
         if not query:
             self.open_search()
             return
-        if (getattr(self, '_quick_add_ready_query', None) == query and self.query.text().strip() == query
+        if (self._quick_add_armed and getattr(self, '_quick_add_ready_query', None) == query
+                and self.query.text().strip() == query
                 and self.search_document.deck.entries):
             entry = next((entry for entry in self.search_document.deck.entries if entry.entry_id in self.results.selected),
                          self.search_document.deck.entries[0])
             self.add_result(entry.entry_id)
             self.quick_add.setFocus()
             return
-        self.query.setText(query)
+        self._quick_add_armed = True
+        self.search_draft.set_text(self.quick_add.text())
         self.open_search()
         self.quick_add.setFocus()
         self.statusBar().showMessage('Enter again after results load to add the selected or first match.', 4000)
@@ -586,7 +611,13 @@ class EditorWindow(W.QMainWindow):
         self.add_card_tab_changed(0)
 
     def open_add_cards(self):
+        self._quick_add_armed = False
         self.add_cards_workspace.open()
+        if self.search_draft.text.strip():
+            target = self.syntax_search_page if self.search_draft.syntax else self.add_cards_workspace.card_search
+            self.add_card_tabs.setCurrentWidget(target)
+            field = self.query if self.search_draft.syntax else self.add_cards_workspace.card_search.name
+            field.setFocus()
 
     def add_card_tab_changed(self, index):
         if self.add_card_tabs.widget(index) is self.syntax_search_page:
@@ -1394,6 +1425,14 @@ class EditorWindow(W.QMainWindow):
         self.run_task(lambda: apply_art(selection), apply)
 
     def print_deck(self):
+        from mtg_core.diagnostics import get_logger
+        try:
+            self._print_deck()
+        except Exception as exc:
+            get_logger(__name__).exception('Could not start deck printing')
+            self.task_failed(f'Could not print deck: {exc}')
+
+    def _print_deck(self):
         from .proxy_adapter import (prepare_print, launch_print, print_token_suggestions,
                                     include_print_tokens, exclude_basic_lands, subtract_owned_copies)
         dialog = W.QDialog(self)
@@ -1417,7 +1456,10 @@ class EditorWindow(W.QMainWindow):
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
         layout.addWidget(buttons)
-        if dialog.exec() != W.QDialog.DialogCode.Accepted or not self.save():
+        if dialog.exec() != W.QDialog.DialogCode.Accepted:
+            return
+        if not self.save():
+            W.QMessageBox.warning(self, 'Could not print deck', self.statusBar().currentMessage())
             return
         snapshot = DeckDocument.from_dict(self.document.to_dict())
         sections = {key for key, check in checks.items() if check.isChecked()}

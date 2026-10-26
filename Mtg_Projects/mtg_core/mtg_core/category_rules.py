@@ -69,12 +69,17 @@ def keyword_profile(payload):
         possessed.update(str(k).casefold() for k in face.get('keywords') or [])
         text = clean_text(face.get('oracle_text'))
         for sentence in re.split(r'[.!?\n]', text):
-            if not re.search(r'\b(?:gain|gains|have|has|with)\b', sentence):
-                continue
-            for keyword in SOUP_KEYWORDS:
-                if re.search(r'\b' + re.escape(keyword) + r'\b', sentence) and not re.search(
-                        r"\b(?:lose|loses|without|can't have|can't gain)\b", sentence):
-                    granted.add(keyword)
+            # Only inspect text after an actual grant, or a token creation's
+            # 'with' clause. A target 'with flying' is a restriction.
+            sentence = re.sub(r"\b(?:can't|cannot|don't|doesn't)\s+(?:have|gain)\b[^;:]*", '', sentence)
+            clauses = re.findall(r'\b(?:gains?|have|has)\s+([^;:]+)', sentence)
+            if re.search(r'\bcreate\b.*\btoken', sentence):
+                clauses += re.findall(r'\bwith\s+([^;:]+)', sentence)
+            keyword_pattern = '(?:' + '|'.join(re.escape(k) for k in sorted(SOUP_KEYWORDS, key=len, reverse=True)) + ')'
+            for clause in clauses:
+                match = re.match(keyword_pattern + r'\b(?:\s*(?:,\s*(?:and\s+)?|and\s+)' + keyword_pattern + r'\b)*', clause)
+                if match:
+                    granted.update(re.findall(keyword_pattern, match.group()))
     possessed.update(str(k).casefold() for k in payload.get('keywords') or [])
     return possessed & SOUP_KEYWORDS, granted
 

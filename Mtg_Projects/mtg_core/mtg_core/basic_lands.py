@@ -4,7 +4,7 @@ from copy import deepcopy
 import re
 import uuid
 
-from .card_pool import pool_context
+from .card_pool import pool_context, in_card_pool
 
 BASICS = {'W': 'Plains', 'U': 'Island', 'B': 'Swamp', 'R': 'Mountain', 'G': 'Forest', 'C': 'Wastes'}
 MANAGED_COPIES = 'automatic_basic_land_copies'
@@ -83,6 +83,13 @@ def reconcile_basic_lands(document, templates=None):
     """
     if document.deck.extras.get(AUTOMATION, True) is False:
         return
+    def wait():
+        # Drop derived copies that no longer have a confirmed legal plan.
+        for entry in document.deck.entries:
+            entry.quantity -= managed_copies(entry)
+            entry.extras.pop(MANAGED_COPIES, None)
+        document.deck.entries = [e for e in document.deck.entries if e.quantity > 0]
+
     from .deck_insights import deck_insights
     from .decks import DeckEntry
     from .categorization import apply_categories, classify
@@ -98,15 +105,28 @@ def reconcile_basic_lands(document, templates=None):
     target = 100 if commander else 60
     slots = max(0, target - sum(e.quantity for e in active)) if active else 0
     _, identity, _ = pool_context(analysis)
+    if slots and commander and identity is None:
+        return wait()
     if slots and identity is None and not any((e.extras.get('facts') or {}).get('mana_cost') is not None
                                              or e.name in BASICS.values() for e in active):
-        return  # Wait for the editor's existing legacy-card hydration.
+        return wait()  # Wait for legacy-card hydration.
     existing = {}
     for entry in active:
         name = entry.name.removeprefix('Snow-Covered ')
         if name in BASICS.values() and is_land(entry):
             existing[name] = existing.get(name, 0) + entry.quantity
-    counts = allocate_basics(deck_insights(analysis)['pips'], slots, identity, existing)
+    pips = deck_insights(analysis)['pips']
+    if slots and identity is None and not any(pips.get(c) for c in 'WUBRG') and not existing:
+        return wait()
+    # Automation always respects legality, even when browsing illegal cards.
+    analysis.editor_preferences['include_illegal_cards'] = False
+    allowed = {c for c, name in BASICS.items() if (templates or {}).get(name)
+               and in_card_pool(templates[name], analysis)}
+    wanted = allocate_basics(pips, slots, identity, existing)
+    if slots and any(count and next(c for c, n in BASICS.items() if n == name) not in allowed
+                     for name, count in wanted.items()):
+        return wait()  # Keep automation enabled while catalog data loads.
+    counts = wanted
     previous, managed_ids = {}, set()
     for entry in document.deck.entries:
         copies = managed_copies(entry)

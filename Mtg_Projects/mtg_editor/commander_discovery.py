@@ -9,7 +9,7 @@ from mtg_core.edhrec_discovery import DiscoveryStore
 from mtg_core.paths import core_data_root
 
 from .canvas import CardCanvas
-from .card_drop import CardDropPanel
+from .card_drop import CardDropPanel, CardSearchEdit
 from .commander_selection import commanders, select_commander
 from .organization import card_facts, update_candidate_quantities
 from .search import SearchCache, SearchController, SearchWorker
@@ -139,11 +139,11 @@ class CommanderDiscovery(CardDropPanel):
         self.import_themes_button.clicked.connect(self.import_themes)
         layout.addWidget(self.import_themes_button, 0, C.Qt.AlignmentFlag.AlignLeft)
         fields = W.QHBoxLayout()
-        self.name = W.QLineEdit()
+        self.name = CardSearchEdit()
         self.name.setPlaceholderText("Commander name")
-        self.type = W.QLineEdit()
+        self.type = CardSearchEdit()
         self.type.setPlaceholderText("Type / creature type")
-        self.text = W.QLineEdit()
+        self.text = CardSearchEdit()
         self.text.setPlaceholderText("Oracle text contains…")
         for field in (self.name, self.type, self.text):
             field.setClearButtonEnabled(True)
@@ -234,7 +234,7 @@ class CommanderDiscovery(CardDropPanel):
         self.controller.busyChanged.connect(self.cancel.setEnabled)
         self.selection_changed()
         self.preference_deck = None
-        self.theme_search = W.QLineEdit()
+        self.theme_search = CardSearchEdit()
         self.theme_search.setPlaceholderText("Search cached themes, typal strategies, or companions")
         self.theme_search.setClearButtonEnabled(True)
         self.theme_search.textChanged.connect(self.populate_themes)

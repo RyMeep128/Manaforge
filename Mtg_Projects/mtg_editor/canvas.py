@@ -219,12 +219,16 @@ class CardCanvas(W.QAbstractScrollArea):
             offsets = [(0, -4), (5, 0), (0, 4)] if key in self.collapsed else [(-4, -2), (4, -2), (0, 3)]
             p.setBrush(p.pen().color())
             p.drawPolygon(G.QPolygon([center+C.QPoint(*point) for point in offsets]))
-            text_rect = rect.adjusted(25, 0, -78 if self.mode == 'Stacks' else -5, 0)
+            text_rect = rect.adjusted(25, 0, -34 if self.mode == 'Stacks' else -5, 0)
+            count_width = p.fontMetrics().horizontalAdvance(str(count)) + 12
+            count_rect = C.QRect(text_rect.right()-count_width, text_rect.top(), count_width, text_rect.height())
+            text_rect.setRight(count_rect.left()-4)
             p.drawText(text_rect, C.Qt.AlignmentFlag.AlignVCenter,
-                       p.fontMetrics().elidedText(f'{title}   {count}', C.Qt.TextElideMode.ElideRight, text_rect.width()))
+                       p.fontMetrics().elidedText(title, C.Qt.TextElideMode.ElideRight, max(0, text_rect.width())))
+            p.drawText(count_rect, C.Qt.AlignmentFlag.AlignVCenter | C.Qt.AlignmentFlag.AlignRight, str(count))
             if self.mode == 'Stacks':
                 p.drawText(self.expand_rect(rect), C.Qt.AlignmentFlag.AlignCenter,
-                           'Collapse' if key in self.expanded_stacks else 'Expand')
+                           '-' if key in self.expanded_stacks else '+')
             if self.grouping == 'Category' and key in category_colors:
                 p.fillRect(C.QRect(rect.right()-7, rect.top()+10, 4, 18), G.QColor(category_colors[key]))
         for entry, rect, key in self.items:
@@ -238,9 +242,7 @@ class CardCanvas(W.QAbstractScrollArea):
             primary, tags = corner_colors(entry, category_colors)
             draw_quantity_corner(p, rect, entry.quantity, primary, tags)
             if self.face_count(entry) > 1:
-                p.fillRect(self.flip_rect(rect), G.QColor(COLORS['surface']))
-                p.setPen(G.QColor(COLORS['text']))
-                p.drawText(self.flip_rect(rect), C.Qt.AlignmentFlag.AlignCenter, '\u21bb')
+                self.draw_flip(p, self.flip_rect(rect))
             if entry.entry_id == self.hovered or entry.entry_id in self.selected:
                 control = self.control_rect(rect)
                 draw_quantity_controls(p, control, self.quantity_buttons(rect), can_decrease=entry.quantity > 0)
@@ -300,11 +302,36 @@ class CardCanvas(W.QAbstractScrollArea):
 
     @staticmethod
     def flip_rect(rect):
-        return C.QRect(rect.right()-34, rect.top()+5, 30, 30)
+        control = quantity_control_rect(rect)
+        return C.QRect(control.left(), control.bottom()+5, control.width(), control.width())
+
+    @staticmethod
+    def draw_flip(painter, rect):
+        painter.save()
+        painter.setRenderHint(G.QPainter.RenderHint.Antialiasing)
+        painter.translate(rect.x(), rect.y())
+        painter.scale(rect.width()/32, rect.height()/32)
+        painter.setPen(G.QPen(G.QColor('#453f36'), 1.2))
+        painter.setBrush(G.QColor(237, 229, 210, 235))
+        painter.drawEllipse(C.QRectF(1, 1, 30, 30))
+        painter.setPen(G.QPen(G.QColor('#39362f'), 2.5,
+                             C.Qt.PenStyle.SolidLine, C.Qt.PenCapStyle.RoundCap))
+        painter.setBrush(C.Qt.BrushStyle.NoBrush)
+        upper = G.QPainterPath(C.QPointF(7, 16))
+        upper.cubicTo(7, 9, 17, 7, 23, 11)
+        lower = G.QPainterPath(C.QPointF(25, 16))
+        lower.cubicTo(25, 23, 15, 25, 9, 21)
+        painter.drawPath(upper)
+        painter.drawPath(lower)
+        painter.setPen(C.Qt.PenStyle.NoPen)
+        painter.setBrush(G.QColor('#39362f'))
+        painter.drawPolygon(G.QPolygonF([C.QPointF(24, 7), C.QPointF(24, 15), C.QPointF(17, 13)]))
+        painter.drawPolygon(G.QPolygonF([C.QPointF(8, 25), C.QPointF(8, 17), C.QPointF(15, 19)]))
+        painter.restore()
 
     @staticmethod
     def expand_rect(rect):
-        return C.QRect(rect.right()-76, rect.top(), 72, rect.height())
+        return C.QRect(rect.right()-32, rect.top(), 28, rect.height())
 
     def toggle_stack(self, entry):
         key = next((k for e, _, k in self.items if e.entry_id == entry.entry_id), None)

@@ -1,6 +1,7 @@
 """Visual deck/project browser shared by the editor and Print Studio."""
 from datetime import datetime
 from pathlib import Path
+from .card_drop import CardSearchEdit
 from PyQt6 import QtCore as C, QtGui as G, QtWidgets as W
 from mtg_core.project_catalog import project_catalog
 from mtg_core.diagnostics import get_logger
@@ -111,7 +112,7 @@ class ProjectDashboard(W.QWidget):
         actions.addStretch()
         layout.addLayout(actions)
         filters = W.QHBoxLayout()
-        self.filter = W.QLineEdit()
+        self.filter = CardSearchEdit()
         self.filter.setPlaceholderText('Search by name, type, or format')
         self.filter.setAccessibleName('Search projects')
         self.find_shortcut = G.QShortcut(G.QKeySequence('Ctrl+F'), self)

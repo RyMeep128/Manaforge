@@ -3,6 +3,7 @@
 from datetime import datetime
 import uuid
 
+from .card_drop import CardSearchEdit
 from PyQt6 import QtWidgets as W
 from mtg_core.decks import DeckEntry
 from mtg_core.categorization import apply_categories
@@ -305,7 +306,7 @@ class RecommendationsDialog(W.QDialog):
         self.use_local.setChecked(self.preferences["local_enabled"])
         controls.addRow(self.use_local)
         layout.addWidget(panel)
-        self.filter = W.QLineEdit()
+        self.filter = CardSearchEdit()
         self.filter.setPlaceholderText(
             "Filter loaded candidates by name, role, or theme"
         )
