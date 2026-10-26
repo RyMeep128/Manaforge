@@ -839,6 +839,19 @@ class EditorWindow(W.QMainWindow):
 
     def changed(self):
         self.basic_lands.changed()
+        from mtg_core.basic_lands import AUTOMATION
+        lands_active = self.document.deck.extras.get(AUTOMATION, False) is True
+        self.add_lands_button.setText('Add Lands - Active' if lands_active else 'Add Lands')
+        self.add_lands_button.setAccessibleName(self.add_lands_button.text())
+        self.add_lands_button.setToolTip(
+            'Automatic land filling is active, including while waiting for legal colors or catalog data. Removing a land stops it.'
+            if lands_active else 'Fill remaining deck slots with legal basic lands. Removing a land stops automatic filling.')
+        self.add_lands_button.setStyleSheet(
+            'QPushButton { background-color: #237443; border-color: #39945b; color: white; }'
+            'QPushButton:hover { background-color: #2b8750; }'
+            'QPushButton:pressed { background-color: #1b5c35; }'
+            'QPushButton:disabled { background-color: #294b36; color: #b3c8ba; }'
+            if lands_active else '')
         deck_id = self.document.deck.deck_id
         from mtg_core.card_pool import pool_context
         pool_key = (deck_id, pool_context(self.document))
