@@ -42,18 +42,22 @@ class AutomaticBasicLands(C.QObject):
     def changed(self):
         if self.editor.closing:
             return
-        state = (self.editor.document.deck.deck_id, self.editor.document.deck.extras.get(AUTOMATION, True) is not False)
+        state = (self.editor.document.deck.deck_id, self.editor.document.deck.extras.get(AUTOMATION, False) is True)
         if self.observed_state is not None and self.observed_state[0] == state[0] and self.observed_state != state:
             self.editor.statusBar().showMessage('Automatic basic lands restored.' if state[1] else
                 'Automatic basic lands stopped because a land was removed. Undo restores automation.', 8000)
         self.observed_state = state
+        if not state[1]:
+            self.timer.stop()
+            return
         self.hydrate()
         reconcile_basic_lands(self.editor.document, self.templates)
         if self.worker is None and self.missing():
             self.timer.start()
 
     def resolve(self):
-        if self.editor.closing or self.worker is not None:
+        if (self.editor.closing or self.worker is not None
+                or self.editor.document.deck.extras.get(AUTOMATION, False) is not True):
             return
         names = self.missing()
         service = self.editor.service

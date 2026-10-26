@@ -252,16 +252,19 @@ class EditorWindow(W.QMainWindow):
         zoom_action.setDefaultWidget(zoom_widget)
         organization_menu.addAction(zoom_action)
         self.organization_overflow.setMenu(organization_menu)
+        self.add_lands_button = W.QPushButton('Add Lands')
+        self.add_lands_button.setToolTip('Fill remaining deck slots with legal basic lands. Removing a land stops automatic filling.')
+        self.add_lands_button.clicked.connect(self.add_lands)
         self.selection_label = W.QLabel('')
         self.control_groups = [add_group, view_group, group_group, sort_group, filter_group]
         self.control_overflow = self.control_groups
-        for widget in [*self.control_groups, self.organization_overflow, self.selection_label]:
+        for widget in [*self.control_groups, self.organization_overflow, self.add_lands_button, self.selection_label]:
             self.control_bar.addWidget(widget)
         self.control_bar.addStretch(1)
         self.control_extra_rows = []
         self.name.setMinimumHeight(34)
         for widget in (self.format, self.view_mode, self.group, self.sort, self.filter, self.quick_add,
-                       self.filter_help, self.workspace_button, self.import_button, self.organization_overflow,
+                       self.filter_help, self.workspace_button, self.import_button, self.organization_overflow, self.add_lands_button,
                        *self.header_actions):
             # The theme's 32px content minimum also needs room for its borders.
             # Let Qt honor the styled size hint instead of clipping it at 32px.
@@ -488,7 +491,7 @@ class EditorWindow(W.QMainWindow):
 
         rows = [[]]
         used = 0
-        widgets = [*self.control_groups, self.organization_overflow, self.selection_label]
+        widgets = [*self.control_groups, self.organization_overflow, self.add_lands_button, self.selection_label]
         for widget in widgets:
             width = widget.sizeHint().width() + 10
             if rows[-1] and used + width > available:
@@ -578,6 +581,16 @@ class EditorWindow(W.QMainWindow):
         if not hasattr(self, 'card_discovery_dialog'):
             self.card_discovery_dialog = CardDiscoveryDialog(self)
         self.card_discovery_dialog.open_card(entry)
+
+    def add_lands(self):
+        from mtg_core.basic_lands import AUTOMATION
+        if self.closing or self.task is not None:
+            return
+        self.basic_lands.retry_after.clear()
+        self.edit(lambda document: document.deck.extras.update({AUTOMATION: True}))
+        # Also retry when automation was already enabled and waiting for data.
+        self.changed()
+        self.statusBar().showMessage('Automatic basic lands enabled; waiting for legal colors or catalog data if needed.', 6000)
 
     def edit_themes(self):
         from .themes import edit_themes

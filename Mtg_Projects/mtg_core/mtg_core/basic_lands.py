@@ -81,7 +81,7 @@ def reconcile_basic_lands(document, templates=None):
     Artwork/catalog resolution is independent of this deterministic quantity
     operation. Name-only entries are valid deck entries while metadata loads.
     """
-    if document.deck.extras.get(AUTOMATION, True) is False:
+    if document.deck.extras.get(AUTOMATION, False) is not True:
         return
     def wait():
         # Drop derived copies that no longer have a confirmed legal plan.
