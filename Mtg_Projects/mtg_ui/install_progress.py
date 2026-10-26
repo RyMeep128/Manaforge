@@ -269,6 +269,7 @@ class InstallationProgress(W.QWidget):
         )
 
     def finish(self, state):
+        self.overall.setVisible(bool(self.last.get("stages")))
         if state == "completed":
             self.overall.update_progress(
                 key=self.overall.key,
