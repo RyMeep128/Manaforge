@@ -41,7 +41,7 @@ class AddCardsWorkspace(W.QWidget):
         navigation.addStretch()
         navigation.addWidget(W.QLabel("Card size"))
         self.zoom = W.QSlider(C.Qt.Orientation.Horizontal)
-        self.zoom.setRange(100, 360)
+        self.zoom.setRange(180, 360)
         self.zoom.setValue(270)
         self.zoom.setMaximumWidth(180)
         self.zoom.valueChanged.connect(self.resize_cards)

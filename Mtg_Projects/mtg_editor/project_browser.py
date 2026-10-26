@@ -21,6 +21,19 @@ class CatalogWorker(C.QThread):
             self.result = [], [str(exc)]
 
 
+class ProjectList(W.QListWidget):
+    """Keep row-based access for existing modal-browser integrations."""
+    def rowCount(self):
+        return self.count()
+
+    def isRowHidden(self, row):
+        item = self.item(row)
+        return item.isHidden() if item is not None else False
+
+    def selectRow(self, row):
+        self.setCurrentRow(row)
+
+
 class ProjectTileDelegate(W.QStyledItemDelegate):
     def __init__(self, browser):
         super().__init__(browser)
@@ -124,7 +137,7 @@ class ProjectDashboard(W.QWidget):
         filters.addWidget(self.filter, 1)
         filters.addWidget(self.sort)
         layout.addLayout(filters)
-        self.list = W.QListWidget()
+        self.list = ProjectList()
         self.list.setAccessibleName('Decks and print projects')
         self.list.setViewMode(W.QListView.ViewMode.IconMode)
         self.list.setResizeMode(W.QListView.ResizeMode.Adjust)
@@ -261,6 +274,8 @@ class ProjectBrowser(W.QDialog):
         layout = W.QVBoxLayout(self)
         self.browser = ProjectDashboard(deck_root, project_root, self.thumbnails, self)
         layout.addWidget(self.browser)
+        self.filter = self.browser.filter
+        self.table = self.browser.list
         close = W.QPushButton('Close')
         close.setAutoDefault(False)
         close.clicked.connect(self.reject)
@@ -272,6 +287,13 @@ class ProjectBrowser(W.QDialog):
         self.finish_timer.setInterval(100)
         self.finish_timer.timeout.connect(self.finish_close)
         self._result = W.QDialog.DialogCode.Rejected
+
+    @property
+    def worker(self):
+        return self.browser.worker
+
+    def open_selected(self):
+        self.browser.open_selected()
 
     def select_path(self, path):
         self.path = path

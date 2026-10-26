@@ -161,10 +161,12 @@ def configure_sources(editor, root):
                 for source, checkbox in dataset_controls.items()
             },
         )
-        editor.run_task(
-            lambda: save_source_settings(root, updated),
-            lambda _: editor.recommendation_panel.request_refresh(),
-        )
+        def saved(_):
+            panel = getattr(editor, "recommendation_panel", None)
+            if panel is not None:
+                panel.request_refresh()
+
+        editor.run_task(lambda: save_source_settings(root, updated), saved)
 
     def load():
         from mtg_core.edhrec_cohorts import cohort_options
