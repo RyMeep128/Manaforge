@@ -40,6 +40,15 @@ class CardService(SearchOperations, ArtworkOperations, ImageOperations, CatalogS
         fetch_bulk_fn: Callable[[], list[dict]] | None = None,
     ):
         self.database = CardDatabase(db_path)
+        # Explicit/test catalogs preserve their existing path ownership. The
+        # default application service honors future wizard storage preferences.
+        if db_path is None:
+            from mtg_core.datasets import InstallationState
+            state = InstallationState()
+            configured_artwork = state.get('artwork_root')
+            if configured_artwork:
+                self.database.image_storage_root = Path(configured_artwork) / 'assets'
+                image_root = image_root or configured_artwork
         self.rulings_path = rulings_path or str(
             Path(self.database.db_path).with_suffix('.rulings.sqlite3'))
         self.rules_path = rules_path or str(Path(self.database.db_path).with_suffix('.rules.sqlite3'))

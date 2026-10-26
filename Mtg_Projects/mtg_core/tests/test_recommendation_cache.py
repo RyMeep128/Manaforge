@@ -2,6 +2,7 @@ from copy import deepcopy
 import gzip
 import hashlib
 import json
+import io
 import uuid
 
 import pytest
@@ -16,6 +17,7 @@ from mtg_core.recommendation_cache import (
     validate,
 )
 from mtg_core.recommendation_sources import default_sources
+from mtg_core.downloads import DownloadManager
 
 
 def make_cache(tmp_path):
@@ -61,19 +63,19 @@ def test_download_verifies_checksum_before_replacing_cache(tmp_path, monkeypatch
     path, digest, *_ = make_cache(tmp_path)
     raw = path.read_bytes()
 
-    class Response:
+    class Response(io.BytesIO):
         url = "https://fixture.example/cache.gz"
+        status = 200
+        headers = {"Content-Length": str(len(raw))}
 
-        def __enter__(self):
-            return self
+        def geturl(self):
+            return self.url
 
-        def __exit__(self, *args):
-            pass
-
-        def read(self, limit):
-            return raw[:limit]
-
-    monkeypatch.setattr("urllib.request.urlopen", lambda *a, **k: Response())
+    manager = DownloadManager(opener=lambda *a, **k: Response(raw))
+    monkeypatch.setattr("mtg_core.downloads.wait_for_request", lambda *a, **k: None)
+    monkeypatch.setattr(
+        "mtg_core.recommendation_cache.get_download_manager", lambda: manager
+    )
     destination = tmp_path / "downloaded.gz"
     destination.write_bytes(b"existing")
     with pytest.raises(ValueError, match="checksum"):

@@ -23,6 +23,46 @@ _cooldown_until = 0.0
 _logger = None
 REQUEST_INTERVAL = 0.25  # At most four request starts per second per process.
 MAX_RETRIES = 3
+_provider_next = {}
+
+
+def wait_for_request(url, *, cancel=None, interval=None):
+    """Reserve a provider request slot, sharing Scryfall pacing with old callers."""
+    global _next_request
+    host = (urllib.parse.urlsplit(url).hostname or "").lower()
+    scryfall = host == "scryfall.com" or host.endswith((".scryfall.com", ".scryfall.io"))
+    key = "scryfall" if scryfall else host
+    spacing = max(REQUEST_INTERVAL, interval or 0) if scryfall else (0.25 if interval is None else interval)
+    while True:
+        if cancel is not None and cancel.is_set():
+            from mtg_core.downloads import DownloadCancelled
+            raise DownloadCancelled("Download cancelled; partial data was preserved.")
+        with _lock:
+            now = time.monotonic()
+            due = max(_next_request, _cooldown_until) if scryfall else _provider_next.get(key, 0)
+            delay = due - now
+            if delay <= 0:
+                if scryfall:
+                    _next_request = now + spacing
+                else:
+                    _provider_next[key] = now + spacing
+                return
+        if cancel is None:
+            time.sleep(min(delay, 0.1))
+        else:
+            cancel.wait(min(delay, 0.1))
+
+
+def defer_provider(url, seconds):
+    """Apply Retry-After to every download using this provider."""
+    global _cooldown_until
+    host = (urllib.parse.urlsplit(url).hostname or "").lower()
+    with _lock:
+        until = time.monotonic() + max(0, seconds)
+        if host == "scryfall.com" or host.endswith((".scryfall.com", ".scryfall.io")):
+            _cooldown_until = max(_cooldown_until, until)
+        else:
+            _provider_next[host] = max(_provider_next.get(host, 0), until)
 
 
 def get_download_logger():
@@ -55,27 +95,23 @@ def _retry_seconds(headers):
 
 
 def read_response(request, *, opener, context):
-    global _next_request, _cooldown_until
+    global _cooldown_until
     host = (urllib.parse.urlsplit(request.full_url).hostname or "").lower()
     paced = host == "scryfall.com" or host.endswith(".scryfall.com") or host.endswith(".scryfall.io")
     logger = get_download_logger()
     for attempt in range(MAX_RETRIES + 1):
         if paced:
-            with _lock:
-                delay = max(_next_request, _cooldown_until) - time.monotonic()
-                if delay > 0:
-                    time.sleep(delay)
-                _next_request = time.monotonic() + REQUEST_INTERVAL
+            wait_for_request(request.full_url)
         started = time.monotonic()
         try:
             with opener(request, timeout=30, context=context) as response:
                 payload = response.read()
                 logger.info("request status=%s bytes=%s elapsed=%.3f url=%s",
                             getattr(response, "status", 200), len(payload),
-                            time.monotonic() - started, request.full_url)
+                            time.monotonic() - started, host)
                 return payload
         except urllib.error.HTTPError as error:
-            logger.warning("request status=%s attempt=%s url=%s", error.code, attempt + 1, request.full_url)
+            logger.warning("request status=%s attempt=%s provider=%s", error.code, attempt + 1, host)
             if error.code != 429 or not paced:
                 raise
             seconds = _retry_seconds(error.headers)
@@ -83,12 +119,12 @@ def read_response(request, *, opener, context):
             with _lock:
                 _cooldown_until = max(_cooldown_until, time.monotonic() + seconds)
             logger.warning("rate_limit cooldown_seconds=%.1f retry=%s/%s url=%s",
-                           seconds, attempt + 1, MAX_RETRIES, request.full_url)
+                           seconds, attempt + 1, MAX_RETRIES, host)
             if attempt == MAX_RETRIES:
                 raise RateLimitExceeded(
                     f"Scryfall rate limit persisted after {MAX_RETRIES} retries; "
                     f"download stopped at its checkpoint. Wait at least {seconds:.0f} seconds before Resume."
                 ) from error
         except Exception:
-            logger.exception("request failed url=%s", request.full_url)
+            logger.error("request failed provider=%s", host)
             raise

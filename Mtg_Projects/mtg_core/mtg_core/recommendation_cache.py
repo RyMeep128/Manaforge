@@ -6,14 +6,15 @@ from dataclasses import dataclass
 import gzip
 import hashlib
 import json
+import os
 import sqlite3
 from pathlib import Path
 import time
 import urllib.parse
-import urllib.request
 import uuid
 
 from .public_deck_datasets import DATASET_LABELS
+from .downloads import get_download_manager
 
 
 MAX_BYTES = 40 * 1024**2
@@ -182,24 +183,13 @@ def download_cache(url, digest, destination):
         )
     if len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest.lower()):
         raise ValueError("Provide the expected SHA-256 checksum")
-    request = urllib.request.Request(
-        url, headers={"User-Agent": "Manaforge personal aggregate cache"}
-    )
-    with urllib.request.urlopen(request, timeout=60) as response:
-        if urllib.parse.urlsplit(response.url).scheme != "https":
-            raise ValueError("Aggregate download redirected away from HTTPS")
-        raw = response.read(MAX_BYTES + 1)
-    if len(raw) > MAX_BYTES or hashlib.sha256(raw).hexdigest() != digest.lower():
-        raise ValueError("Aggregate cache size/checksum validation failed")
     destination = Path(destination)
     destination.parent.mkdir(parents=True, exist_ok=True)
     temporary = destination.with_suffix(destination.suffix + ".download")
-    try:
-        temporary.write_bytes(raw)
-        data = read_cache(temporary)
-        write_cache(destination, data)
-    finally:
-        temporary.unlink(missing_ok=True)
+    get_download_manager().download(
+        url, temporary, sha256=digest, max_bytes=MAX_BYTES, validate=read_cache
+    )
+    os.replace(temporary, destination)
 
 
 @dataclass

@@ -3,8 +3,25 @@ from __future__ import annotations
 
 import os
 import re
+from functools import wraps
+import threading
+import uuid
 from mtg_core.images import checksum_bytes, ensure_parent_dir
 from mtg_core.models import ImageAssetRecord
+
+
+_image_locks = [threading.RLock() for _ in range(64)]
+
+
+def _serialized_image(method):
+    @wraps(method)
+    def invoke(self, card_id, *args, **kwargs):
+        # Bounded striped locks shared across service instances for this catalog.
+        # Reentrant because alternate-face resolution can fall back to the front.
+        key = (os.path.abspath(self.database.db_path), card_id)
+        with _image_locks[hash(key) % len(_image_locks)]:
+            return method(self, card_id, *args, **kwargs)
+    return invoke
 
 
 def _materialized_asset_filename(asset: ImageAssetRecord, preferred_name: str | None) -> str:
@@ -33,6 +50,7 @@ def _extension_from_url(url: str | None) -> str | None:
 class ImageOperations:
     """Operation group sharing the facade dependencies; not instantiated alone."""
 
+    @_serialized_image
     def ensure_face_image(self, card_id: str, face_index: int = 0, *, allow_remote=True):
         """Cache alternate-face artwork without changing the printing's front."""
         if not face_index:
@@ -70,16 +88,19 @@ class ImageOperations:
             )
         if record.path and os.path.exists(record.path):
             return record.path
-        return record.path
+        return None
 
+    @_serialized_image
     def ensure_image(self, card_id: str, variant: str = "default", allow_remote: bool = True) -> str | None:
         record = self.database.get_image_record(card_id, variant)
         if record is not None:
             if record.asset_id:
-                return self.materialize_image_asset(
+                path = self.materialize_image_asset(
                     record.asset_id,
                     preferred_name=f"{card_id}_{variant}",
                 )
+                if path:
+                    return path
             if record.path and os.path.exists(record.path):
                 return record.path
         if not allow_remote or self.fetch_bytes_fn is None:
@@ -146,7 +167,7 @@ class ImageOperations:
         output_root: str | None = None,
     ) -> str | None:
         asset = self.database.get_image_asset(asset_id)
-        if asset is None:
+        if asset is None or not asset.payload or checksum_bytes(asset.payload) != asset.checksum:
             return None
         filename = _materialized_asset_filename(asset, preferred_name)
         root = output_root or os.path.join(self.image_root, "mtg_core_cache")
@@ -160,8 +181,16 @@ class ImageOperations:
             except OSError:
                 should_write = True
         if should_write:
-            with open(path, "wb") as handle:
-                handle.write(asset.payload)
+            temporary = path + '.' + uuid.uuid4().hex + '.tmp'
+            try:
+                with open(temporary, "wb") as handle:
+                    handle.write(asset.payload)
+                    handle.flush()
+                    os.fsync(handle.fileno())
+                os.replace(temporary, path)
+            finally:
+                if os.path.exists(temporary):
+                    os.unlink(temporary)
         return path
 
     def set_print_image_asset(

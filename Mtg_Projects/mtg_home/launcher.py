@@ -17,6 +17,8 @@ class ModuleController(C.QObject):
         super().__init__(home)
         self.home, self._service = home, service
         self.windows = {}
+        from mtg_ui.jobs import JobQueue
+        self.jobs = JobQueue(self)
         self.factories = factories or {}
         home.shutdown_guard = self.shutdown
         home.moduleRequested.connect(self.open_module)
@@ -82,6 +84,11 @@ class ModuleController(C.QObject):
         printer.open_managed_project(project['id'])
 
     def shutdown(self):
+        if self.jobs.busy:
+            self.jobs.cancel_all()
+            self.home.statusBar().showMessage('Cancelling background downloads before closing...')
+            C.QTimer.singleShot(250, self.home.close)
+            return False
         editor = self.windows.get('editor')
         if editor is not None and hasattr(editor, 'session'):
             busy = (editor.worker is not None or editor.task is not None or editor.thumbnails.worker is not None
