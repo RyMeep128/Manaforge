@@ -3,9 +3,9 @@
 Choose **New deck → Create from Precon** in the project browser, recent-deck
 menu, or Ctrl+N. Blank decks and normal imports remain available in that chooser.
 Search by product/deck name, commander, set code/name, or year; combine this with
-format and release-year filters. Toggle the W/U/B/R/G color circles to require
-every selected color (W + U includes decks containing both, including decks with
-additional colors); **Clear** or no selections shows all colors, including colorless. Commander products appear first. The catalog uses a wrapping grid of commander/featured-card
+format and release-year filters. Toggle the W/U/B/R/G color circles to match
+exactly those colors (W + U matches only white-blue decks). The C circle selects
+colorless decks and is exclusive with the five colored circles; **Clear** or no selections shows all colors, including colorless. Commander products appear first. The catalog uses a wrapping grid of commander/featured-card
 tiles, with deck name, format, colors, source product, and release year above each
 card. Commander names remain searchable without repeating them in tile labels.
 The grid appears after reading catalog metadata, without waiting for card lookups.

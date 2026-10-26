@@ -181,12 +181,13 @@ class PreconBrowser(ImportDecklist):
         filters.addWidget(W.QLabel('Colors'))
         self.color_buttons = {}
         for name, color, background in [('White', 'W', '#eee4c4'), ('Blue', 'U', '#80bddd'),
-                ('Black', 'B', '#b5a6bc'), ('Red', 'R', '#e99b87'), ('Green', 'G', '#91c4a2')]:
+                ('Black', 'B', '#b5a6bc'), ('Red', 'R', '#e99b87'), ('Green', 'G', '#91c4a2'),
+                ('Colorless', 'C', '#b7bdc5')]:
             button = W.QPushButton(color)
             button.setCheckable(True)
             button.setFixedSize(30, 30)
-            button.setAccessibleName(f'Include {name.lower()} in deck color identity')
-            button.setToolTip(f'{name}: decks must contain every selected color. None selected shows all colors.')
+            button.setAccessibleName(f'Filter by {name.lower()} color identity')
+            button.setToolTip(f'{name}: match exactly the selected colors. Colorless is exclusive; no selection shows all decks.')
             button.setStyleSheet(f"""
                 QPushButton {{ background: {background}; color: #101318; border-radius: 15px;
                     border: 3px solid {COLORS['canvas']}; padding: 0; font-weight: bold; }}
@@ -195,7 +196,7 @@ class PreconBrowser(ImportDecklist):
                 QPushButton:focus {{ border-style: dotted; }}
                 QPushButton:disabled {{ color: #6b7280; background: {COLORS['border']}; }}
             """)
-            button.toggled.connect(self.filter_records)
+            button.toggled.connect(lambda checked, color=color: self.color_toggled(color, checked))
             self.color_buttons[color] = button
             filters.addWidget(button)
         self.clear_colors_button = clear_colors = W.QPushButton('Clear')
@@ -263,6 +264,15 @@ class PreconBrowser(ImportDecklist):
         if worker.error:
             self.catalog_status.setText('Could not load decks: ' + worker.error)
 
+    def color_toggled(self, color, checked):
+        if checked:
+            for other, button in self.color_buttons.items():
+                if other != color and (color == 'C' or other == 'C'):
+                    button.blockSignals(True)
+                    button.setChecked(False)
+                    button.blockSignals(False)
+        self.filter_records()
+
     def clear_colors(self):
         for button in self.color_buttons.values():
             button.blockSignals(True)
@@ -312,7 +322,7 @@ class PreconBrowser(ImportDecklist):
                 or self.format_filter.currentData() not in ('', record['format'])
                 or self.year_filter.currentData() not in ('', record['release_date'][:4])
                 or (selected_colors and (not record['colors_complete'] or
-                    not selected_colors.issubset(record['colors'])))):
+                    set(record['colors']) != (selected_colors - {'C'})))):
                 continue
             colors = record['colors'] or ('Colorless' if record['colors_complete'] else 'Unknown colors')
             label = (f"{record['name']} \u00b7 {record['format']} \u00b7 {colors}\n"

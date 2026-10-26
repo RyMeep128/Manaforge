@@ -23,7 +23,7 @@ def test_browser_filters_rename_and_original_preview(monkeypatch):
     monkeypatch.setattr(precon_browser, 'load_catalog', lambda: records)
     class Service:
         def get_card(self, **kwargs):
-            return dict(id='card', color_identity=['U'], name=kwargs['exact_name'])
+            return dict(id='card', color_identity=['W', 'U'], name=kwargs['exact_name'])
     dialog = precon_browser.PreconBrowser(Service(), Thumbnails())
     deadline = time.monotonic() + 3
     while (dialog.catalog_worker is not None or dialog.metadata_worker is not None) and time.monotonic() < deadline:
@@ -41,11 +41,25 @@ def test_browser_filters_rename_and_original_preview(monkeypatch):
     assert dialog.decks.count() == 0 and not dialog.apply_button.isEnabled()
     dialog.clear_colors()
     dialog.color_buttons['U'].setChecked(True)
+    assert dialog.decks.count() == 0  # WU is not an exact match for U.
+    dialog.color_buttons['W'].setChecked(True)
     assert dialog.decks.count() == 1
     dialog.color_buttons['R'].setChecked(True)
     assert dialog.decks.count() == 0  # Selected colors are combined, not treated as alternatives.
     dialog.clear_colors()
     assert dialog.decks.count() == 1
+    dialog.color_buttons['C'].setChecked(True)
+    assert dialog.decks.count() == 0
+    assert not any(dialog.color_buttons[c].isChecked() for c in 'WUBRG')
+    dialog.color_buttons['U'].setChecked(True)
+    assert not dialog.color_buttons['C'].isChecked()
+    dialog.clear_colors()
+    dialog.records[0].update(colors='', colors_complete=True)
+    dialog.color_buttons['C'].setChecked(True)
+    assert dialog.decks.count() == 1
+    dialog.records[0]['colors_complete'] = False
+    dialog.filter_records()
+    assert dialog.decks.count() == 0  # Unknown colors must not match colorless.
     dialog.search.setText('Not a product')
     assert dialog.record is None and not dialog.resolve_button.isEnabled()
     dialog.reject()
