@@ -55,6 +55,14 @@ def quantity_control_rect(rect):
     return C.QRect(rect.right()-width-4, rect.top()+max(38, round(rect.height()*.16)), width, row*2)
 
 
+def quantity_buttons(rect):
+    """Shared vertical +/- geometry for painted card quantity controls."""
+    control = quantity_control_rect(rect)
+    half = control.height() // 2
+    return [(1, C.QRect(control.x(), control.y(), control.width(), half)),
+            (-1, C.QRect(control.x(), control.y()+half, control.width(), control.height()-half))]
+
+
 def draw_quantity_controls(painter, control, buttons, *, can_decrease=True):
     painter.save()
     painter.setRenderHint(G.QPainter.RenderHint.Antialiasing)

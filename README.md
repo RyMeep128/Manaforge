@@ -271,3 +271,5 @@ report redaction, cancellation, backups, retries and avoiding redundant download
 
 Help → Send Feedback supports anonymous reports, optional diagnostics/screenshots and local drafts. Maintainer deployment and privacy details: [Feedback relay setup](feedback-relay/README.md).
 
+
+Contributor guidance: [Shared components and domain operations](docs/shared-components.md).

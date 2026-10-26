@@ -438,10 +438,8 @@ class CardCanvas(W.QAbstractScrollArea):
         super().hideEvent(event)
 
     def quantity_buttons(self, rect):
-        control = self.control_rect(rect)
-        half = control.height() // 2
-        return [(1, C.QRect(control.x(), control.y(), control.width(), half)),
-                (-1, C.QRect(control.x(), control.y()+half, control.width(), control.height()-half))]
+        from mtg_ui.card_chrome import quantity_buttons
+        return quantity_buttons(rect)
 
     def activate_quantity(self, item, position):
         if item is None:

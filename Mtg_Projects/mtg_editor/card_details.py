@@ -1,5 +1,6 @@
 ﻿"""Card inspection and printing selection, with background catalog/image reads."""
 from copy import deepcopy
+from mtg_core.deck_mutations import apply_quantity
 from pathlib import Path
 from PyQt6 import QtCore as C, QtGui as G, QtWidgets as W
 from .organization import card_facts
@@ -49,16 +50,6 @@ def apply_printing(document, entry_id, payload):
     entry.backside_asset_id = None
     entry.backside_pre_cropped = None
     entry.extras['facts'] = card_facts(payload)
-
-
-def apply_quantity(document, entry_id, quantity):
-    entry = next((e for e in document.deck.entries if e.entry_id == entry_id), None)
-    if entry is None:
-        return
-    entry.quantity = max(0, int(quantity))
-    if entry.quantity == 0:
-        document.deck.entries = [e for e in document.deck.entries if e.entry_id != entry_id]
-        document.deck.commander_entry_ids = [key for key in document.deck.commander_entry_ids if key != entry_id]
 
 
 class CardDetails(W.QDialog):

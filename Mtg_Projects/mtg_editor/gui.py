@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from mtg_core.deck_mutations import add_card, change_candidate_quantity, change_quantities, remove_entries
 from mtg_core.sections import DeckSection
 from mtg_core.artwork import HighResOverride
 
@@ -1003,63 +1004,21 @@ class EditorWindow(W.QMainWindow):
         self.change_candidate_quantity(result, delta)
 
     def change_candidate_quantity(self, result, delta=1):
-        if delta > 0:
-            self.add_card(result)
-            return
-        if delta >= 0:
-            return
-        matches = [entry for entry in self.document.deck.entries
-                   if entry.quantity > 0 and entry.section in (DeckSection.MAINBOARD, DeckSection.COMMANDER)
-                   and ((result.card_id and entry.card_id == result.card_id)
-                        or (result.oracle_id and entry.oracle_id == result.oracle_id)
-                        or (entry.name.casefold() == result.name.casefold()
-                            and (not result.oracle_id or not entry.oracle_id)))]
-        if not matches:
-            return
-        # Prefer mainboard copies and the visible printing before alternatives.
-        target = min(matches, key=lambda entry: (entry.section == DeckSection.COMMANDER,
-                                                 entry.card_id != result.card_id, entry.sort_order))
-        from .card_details import apply_quantity
-        self.edit(lambda d: apply_quantity(d, target.entry_id, target.quantity-1))
+        self.edit(lambda d: change_candidate_quantity(d, result, delta))
 
     def add_card(self, result):
-        """Shared Add Card command for search and recommendation discovery."""
-        def action(document):
-            existing = next((e for e in document.deck.entries if ((result.card_id and e.card_id == result.card_id)
-                or (not result.card_id and not e.card_id and e.name.casefold() == result.name.casefold()))
-                and e.section == DeckSection.MAINBOARD and not e.art_override), None)
-            if existing:
-                existing.quantity += 1
-            else:
-                entry = deepcopy(result)
-                entry.quantity = 1
-                entry.entry_id = str(uuid.uuid4())
-                entry.sort_order = max((e.sort_order for e in document.deck.entries), default=-1)+1
-                document.deck.entries.append(entry)
-                apply_categories(document, {entry.entry_id: entry.extras.pop('category_suggestion', [])})
-        self.edit(action)
+        self.edit(lambda d: add_card(d, result))
 
     def change_quantity(self, entry_id, delta):
         if not entry_id and delta == 0:
             self.remove_selected()
             return
         ids = set(self.grid.selected) if entry_id in self.grid.selected else {entry_id}
-        def action(document):
-            for entry in document.deck.entries:
-                if entry.entry_id in ids:
-                    entry.quantity = max(0, entry.quantity+delta)
-            removed = {entry.entry_id for entry in document.deck.entries
-                       if entry.entry_id in ids and entry.quantity == 0}
-            document.deck.entries = [entry for entry in document.deck.entries if entry.entry_id not in removed]
-            document.deck.commander_entry_ids = [key for key in document.deck.commander_entry_ids if key not in removed]
-        self.edit(action)
+        self.edit(lambda d: change_quantities(d, ids, delta))
 
     def remove_selected(self):
         ids = set(self.grid.selected)
-        def action(document):
-            document.deck.entries = [e for e in document.deck.entries if e.entry_id not in ids]
-            document.deck.commander_entry_ids = [i for i in document.deck.commander_entry_ids if i not in ids]
-        self.edit(action)
+        self.edit(lambda d: remove_entries(d, ids))
 
     def move_cards(self, ids, target, before):
         self.edit(lambda d: move_entries(d, ids, self.grid.grouping, target, before))

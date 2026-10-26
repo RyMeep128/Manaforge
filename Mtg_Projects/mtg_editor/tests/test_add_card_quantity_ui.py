@@ -112,3 +112,15 @@ def test_print_preview_shares_control_geometry_and_zero_guard():
     QtTest.QTest.mouseClick(preview, C.Qt.MouseButton.LeftButton, pos=minus)
     assert signals == [1, -1]
     preview.close()
+
+
+@pytest.mark.parametrize('width,height', [(100, 140), (180, 252), (300, 420)])
+def test_shared_quantity_geometry_matches_canvas_and_preview(width, height):
+    from mtg_ui.card_chrome import quantity_buttons
+    rect = C.QRect(23, 41, width, height)
+    buttons = quantity_buttons(rect)
+    control = quantity_control_rect(rect)
+    assert buttons[0][0] == 1 and buttons[1][0] == -1
+    assert buttons[0][1].united(buttons[1][1]) == control
+    assert not buttons[0][1].intersects(buttons[1][1])
+    assert CardCanvas.quantity_buttons(None, rect) == buttons
