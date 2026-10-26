@@ -835,9 +835,14 @@ class EditorWindow(W.QMainWindow):
             reconcile_basic_lands(document, self.basic_lands.templates)
             retain_tag_definitions(document)
         if self.session.edit(command):
+            self._has_active_deck = True
+            self.project_stack.setCurrentWidget(self.editor_body)
             self.changed()
 
     def changed(self):
+        if not self._has_active_deck and self.document.deck.entries:
+            self._has_active_deck = True
+            self.project_stack.setCurrentWidget(self.editor_body)
         self.basic_lands.changed()
         from mtg_core.basic_lands import AUTOMATION
         lands_active = self.document.deck.extras.get(AUTOMATION, False) is True

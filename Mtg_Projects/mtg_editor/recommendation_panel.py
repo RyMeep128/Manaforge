@@ -43,6 +43,7 @@ def context_key(document):
 def source_key(document, signature=()):
     """Changes requiring new sources/printings rather than just cached-candidate ranking."""
     from mtg_core.card_pool import pool_context
+
     return (
         document.deck.deck_id,
         pool_context(document),

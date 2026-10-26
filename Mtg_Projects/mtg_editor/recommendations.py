@@ -60,6 +60,7 @@ def load_recommendations(
         ],
     )
     from mtg_core.card_pool import deck_query, in_card_pool, pool_context
+
     allowed = None
     if query.strip():
         matches = service.search_cards(
