@@ -103,4 +103,4 @@ def test_native_launcher_forwards_arguments_and_uses_fallback(native, failure):
     output = root / 'arguments.json'
     args = [str(output), '', 'with spaces', 'quoted"value', 'C:\\trailing slash\\', 'slash\\"quote', '日本語']
     subprocess.run([str(native), *args], check=True, timeout=30)
-    assert json.loads(output.read_text()) == args
+    assert json.loads(output.read_text(encoding='utf-8-sig')) == args
