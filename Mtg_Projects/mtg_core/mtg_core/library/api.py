@@ -5,7 +5,7 @@ from urllib.parse import parse_qs
 
 from . import API_VERSION, LibraryError
 from .payload import MAX_BODY, text
-from .store import digest
+from .store import REMEMBERED_SESSION_SECONDS, SESSION_SECONDS, digest
 
 
 class LibraryAPI:
@@ -64,7 +64,7 @@ class LibraryAPI:
         method = env.get('REQUEST_METHOD', '')
         if method == 'GET' and path == '/api/v1/info':
             return {**self.store.info(), 'registration': 'invitation', 'max_request_bytes': MAX_BODY,
-                    'capabilities': ['publication_operations']}
+                    'capabilities': ['publication_operations', 'persistent_sessions']}
         if not path.startswith('/api/v1/'):
             raise LibraryError(426, 'Unsupported API version. This server supports /api/v1/.')
         if len(path) > 256 or '..' in path or '\\' in path:
@@ -74,10 +74,12 @@ class LibraryAPI:
             self.store.throttle('auth-ip:' + env.get('REMOTE_ADDR', 'unknown'), limit=30)
             body = self.body(env)
             if path.endswith('/login'):
-                token = self.store.login(body.get('username'), body.get('password'))
+                remember = body.get('remember', False)
+                token = self.store.login(body.get('username'), body.get('password'), remember=remember)
                 with self.store.db() as db:
                     user_id = self.store.actor(db, token)['id']
-                return {'token': token, 'user_id': user_id, 'expires_in': 86400}
+                return {'token': token, 'user_id': user_id,
+                        'expires_in': REMEMBERED_SESSION_SECONDS if remember else SESSION_SECONDS}
             user_id = self.store.register(body.get('invitation'), body.get('username'), body.get('password'))
             return {'user_id': user_id}
         auth = env.get('HTTP_AUTHORIZATION', '')
@@ -86,6 +88,8 @@ class LibraryAPI:
         with self.store.db() as db:
             self.store.actor(db, token)
         self.store.throttle('request:' + digest(token), limit=300, seconds=300)
+        if method == 'GET' and path == '/api/v1/session':
+            return self.store.session(token)
         if method == 'POST' and path == '/api/v1/logout':
             self.store.logout(token)
             return {}

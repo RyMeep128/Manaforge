@@ -8,6 +8,7 @@ from mtg_core.library import LibraryError
 from mtg_core.library.client import LibraryClient, LibraryConnections, copy_publication
 from mtg_core.library.publishing import PublicationJournal
 from mtg_core.library.following import FollowedDecks
+from mtg_core.library.sessions import SavedSessions
 from mtg_core.paths import data_root
 from mtg_editor.card_views import Thumbnails
 from mtg_editor.card_drop import CardSearchEdit
@@ -34,6 +35,8 @@ class LibraryWorkspace(W.QMainWindow):
         super().__init__(parent)
         self.setWindowTitle('Browse Online')
         self.connections = LibraryConnections(root or data_root())
+        self.saved_sessions = SavedSessions(self.connections.path.parent)
+        self._saved_restore_attempted = False
         self.publications = PublicationJournal(self.connections)
         self.followed = FollowedDecks(self.connections)
         self.deck_root = Path(deck_root or data_root() / 'decks')
@@ -71,7 +74,7 @@ class LibraryWorkspace(W.QMainWindow):
         self.add_button.clicked.connect(lambda: self.sign_in(new=True))
         self.login_button = W.QPushButton('Sign in')
         self.login_button.setProperty('buttonRole', 'primary')
-        self.login_button.clicked.connect(lambda: self.sign_in(new=False))
+        self.login_button.clicked.connect(self.reconnect)
         header.addWidget(self.add_button)
         header.addWidget(self.login_button)
         self.library_button = W.QToolButton()
@@ -216,6 +219,7 @@ class LibraryWorkspace(W.QMainWindow):
         shortcut.activated.connect(self.filters['query'].setFocus)
         self.setCentralWidget(body)
         self.reload_connections()
+        C.QTimer.singleShot(0, self.restore_saved_sessions)
 
     def connection(self):
         return self.selector.currentData()
@@ -262,8 +266,9 @@ class LibraryWorkspace(W.QMainWindow):
         self.add_button.setVisible(not connection and follows)
         self.add_button.setEnabled(not busy)
         self.login_button.setVisible(bool(connection) and not connected)
+        self.login_button.setText('Reconnect' if connection and self.saved_sessions.has(connection['id']) else 'Sign in')
         self.login_button.setEnabled(not busy)
-        self.disconnect_button.setEnabled(connected and not busy)
+        self.disconnect_button.setEnabled(bool(connected or (connection and self.saved_sessions.has(connection['id']))) and not busy)
         self.remove_button.setEnabled(bool(connection) and not busy)
         self.search_button.setVisible(bool(connection) and not follows)
         self.search_button.setEnabled(connected and not busy)
@@ -348,7 +353,7 @@ class LibraryWorkspace(W.QMainWindow):
         if action == 'Join library':
             self.sign_in(new=True)
         elif action == 'Sign in':
-            self.sign_in(new=False)
+            self.reconnect()
         elif action == 'Browse shared decks':
             self.view_mode.setCurrentIndex(0)
         elif action == 'Open Deck Editor':
@@ -361,11 +366,63 @@ class LibraryWorkspace(W.QMainWindow):
             self.search()
 
     def queue_idle(self):
+        if not self._saved_restore_attempted:
+            self.restore_saved_sessions()
+            if self._job:
+                return
         self.update_controls()
         key, self._load_after_signin = self._load_after_signin, None
         connection = self.connection()
         if key and connection and key == connection['id'] and self.view_mode.currentIndex() == 0:
             self.search()
+
+    def reconnect(self):
+        connection = self.connection()
+        if connection and self.saved_sessions.has(connection['id']):
+            self.restore_saved_sessions(records=[connection])
+        else:
+            self.sign_in(new=False)
+
+    def restore_saved_sessions(self, *, records=None):
+        if self._job or self.jobs.busy or self._signin_dialog is not None:
+            return
+        if records is None:
+            if self._saved_restore_attempted:
+                return
+            self._saved_restore_attempted = True
+            records = self.connections.list()
+        records = [row for row in records if self.saved_sessions.has(row['id'])
+                   and not getattr(self.clients.get(row['id']), 'token', None)]
+        if not records:
+            return
+        def work(cancel, report):
+            result = []
+            for record in records:
+                if cancel.is_set():
+                    raise DownloadCancelled()
+                report({'operation': 'Restoring library sign-in'})
+                try:
+                    saved = self.saved_sessions.load(record)
+                    if saved is None:
+                        result.append((record, None, 'Saved sign-in expired. Sign in again.'))
+                        continue
+                    client = self.client_factory(record['url'], allow_lan=bool(record['allow_lan']), server_id=record['server_id'])
+                    client.resume(saved)
+                    result.append((record, client, ''))
+                except LibraryError as error:
+                    if error.status in (401, 409):
+                        self.saved_sessions.forget(record['id'])
+                    result.append((record, None, str(error)))
+            return result
+        def complete(results):
+            for record, client, message in results:
+                self.states[record['id']] = message
+                if client is not None:
+                    self.clients[record['id']] = client
+            connection = self.connection()
+            if connection and getattr(self.clients.get(connection['id']), 'token', None) and not self.publishing.isVisible():
+                self._load_after_signin = connection['id']
+        self.submit('Restoring saved sign-in', work, complete, with_context=True)
 
     def toggle_filters(self, checked):
         self.filters_container.setVisible(checked and self.view_mode.currentIndex() == 0)
@@ -448,6 +505,12 @@ class LibraryWorkspace(W.QMainWindow):
         elif key:
             self.states[key] = ('Request failed: ' + str(value) + ' Existing results are an earlier snapshot.'
                                 if state == 'failed' else 'Operation cancelled. Existing results are unchanged.')
+            client = self.clients.get(key)
+            if state == 'failed' and client is not None and not client.token:
+                try:
+                    self.saved_sessions.forget(key)
+                except LibraryError:
+                    pass
         else:
             self.message = str(value) if state == 'failed' else 'Operation cancelled.'
         if state == 'failed' and not on_error:
@@ -470,6 +533,16 @@ class LibraryWorkspace(W.QMainWindow):
             return
         parent = self.publishing if self.publishing.isVisible() else self
         dialog = SignInDialog(parent, connection)
+        dialog.remember_supported = self.saved_sessions.available
+        dialog.remember.setEnabled(self.saved_sessions.available)
+        if connection and self.saved_sessions.has(connection['id']):
+            dialog.remember.setChecked(True)
+            try:
+                saved = self.saved_sessions.load(connection)
+                if saved:
+                    dialog.username.setText(saved.get('username', ''))
+            except LibraryError:
+                pass
         self._signin_dialog = dialog
         def submit():
             if self._job or self.jobs.busy:
@@ -477,12 +550,16 @@ class LibraryWorkspace(W.QMainWindow):
             url, username, password = dialog.url.text().strip(), dialog.username.text().strip(), dialog.password.text()
             invitation = dialog.invitation.text().strip() if dialog.mode.currentIndex() == 1 else ''
             allow_lan = dialog.lan.isChecked()
+            remember = dialog.remember.isChecked() and self.saved_sessions.available
             old_client = self.clients.get(connection['id']) if connection else None
             dialog.set_busy(True)
             def work():
                 client = self.client_factory(url, allow_lan=allow_lan,
                                              server_id=connection['server_id'] if connection else None)
-                info = client.login(username, password, invitation=invitation)
+                options = {'invitation': invitation}
+                if remember:
+                    options['remember'] = True
+                info = client.login(username, password, **options)
                 try:
                     record = connection or self.connections.add(client, info)
                 except Exception:
@@ -491,17 +568,31 @@ class LibraryWorkspace(W.QMainWindow):
                     except Exception:
                         pass
                     raise
+                warning = ''
+                try:
+                    if remember:
+                        self.saved_sessions.save(record, client, username)
+                    else:
+                        self.saved_sessions.forget(record['id'])
+                except LibraryError:
+                    warning = 'Signed in for this session, but Windows could not save the sign-in. Check local storage permissions.'
+                    try:
+                        self.saved_sessions.forget(record['id'])
+                    except LibraryError:
+                        pass
                 if old_client:
                     try:
                         old_client.disconnect()
                     except Exception:
                         pass
-                return client, record
+                return client, record, warning
             def complete(value):
-                client, record = value
+                client, record, warning = value
                 self.clients[record['id']] = client
                 self.message = ''
-                self.states[record['id']] = ''
+                self.states[record['id']] = warning
+                if warning:
+                    self.statusBar().showMessage(warning, 15000)
                 self.reload_connections(record['id'])
                 if callable(getattr(client, 'browse', None)) and not self.publishing.isVisible():
                     self._load_after_signin = record['id']
@@ -515,22 +606,40 @@ class LibraryWorkspace(W.QMainWindow):
             if self._signin_dialog is dialog:
                 self._signin_dialog = None
             dialog.deleteLater()
+            if not self._saved_restore_attempted:
+                C.QTimer.singleShot(0, self.restore_saved_sessions)
         dialog.finished.connect(finished)
         dialog.open()
         (dialog.username if connection else dialog.url).setFocus()
         return dialog
 
+    def forget_saved_sign_in(self, connection, client):
+        saved = None
+        if client is None and self.saved_sessions.has(connection['id']):
+            try:
+                saved = self.saved_sessions.load(connection)
+            except LibraryError:
+                pass
+        self.saved_sessions.forget(connection['id'])
+        try:
+            if client is None and saved:
+                client = self.client_factory(connection['url'], allow_lan=bool(connection['allow_lan']), server_id=connection['server_id'])
+                client.resume(saved)
+            if client:
+                client.disconnect()
+            return True
+        except Exception:
+            return False
+
     def disconnect(self):
         connection = self.connection()
         client = self.clients.get(connection['id']) if connection else None
-        if not client:
+        if not connection:
             return
         def work():
-            try:
-                client.disconnect()
-                return 'Session ended on the server.'
-            except Exception:
-                return 'Local session cleared. Server unavailable; its session will expire automatically.'
+            if self.forget_saved_sign_in(connection, client):
+                return 'Signed out. Saved sign-in removed.'
+            return 'Saved sign-in removed. Server unavailable; its session will expire automatically.'
         def complete(message):
             self.states[connection['id']] = message
         self.submit('Disconnecting', work, complete)
@@ -541,11 +650,7 @@ class LibraryWorkspace(W.QMainWindow):
             return
         client = self.clients.get(connection['id'])
         def work():
-            if client:
-                try:
-                    client.disconnect()
-                except Exception:
-                    pass
+            self.forget_saved_sign_in(connection, client)
             self.connections.remove(connection['id'])
         def complete(_):
             for mapping in (self.clients, self.views, self.states):

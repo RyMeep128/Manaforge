@@ -4,6 +4,7 @@ import json
 from types import SimpleNamespace
 from urllib.error import HTTPError, URLError
 import uuid
+import time
 
 import pytest
 
@@ -123,6 +124,42 @@ def test_forbidden_errors_identify_the_failing_operation(path, authenticated, ex
     assert 'private' not in str(caught.value)
     if path != 'register':
         assert 'invitation' not in str(caught.value)
+
+
+def test_remembered_login_and_resume_pin_identity_before_sending_saved_token():
+    account = str(uuid.uuid4())
+    info = {'server_id': SERVER_ID, 'name': 'Friends', 'capabilities': ['persistent_sessions']}
+    opener = Opener(info, {'token': 'a' * 43, 'user_id': account, 'expires_in': 30 * 86400})
+    client = LibraryClient('https://library.invalid', server_id=SERVER_ID, opener=opener)
+    client.login('friend', 'long enough password', remember=True)
+    assert json.loads(opener.requests[-1].data)['remember'] is True
+    assert client.expires_at - time.time() > 29 * 86400
+    saved = {'url': client.url, 'server_id': SERVER_ID, 'account_id': account,
+             'token': client.token, 'expires_at': client.expires_at}
+    resumed_opener = Opener(info, {'user_id': account, 'username': 'friend', 'expires_at': time.time() + 86400})
+    resumed = LibraryClient(client.url, server_id=SERVER_ID, opener=resumed_opener)
+    resumed.resume(saved)
+    assert resumed.token == 'a' * 43 and resumed.account_id == account
+    assert not resumed_opener.requests[0].has_header('Authorization')
+    assert resumed_opener.requests[1].get_header('Authorization') == 'Bearer ' + saved['token']
+    replaced_opener = Opener({**info, 'server_id': str(uuid.uuid4())})
+    replaced = LibraryClient(client.url, server_id=SERVER_ID, opener=replaced_opener)
+    with pytest.raises(LibraryError):
+        replaced.resume(saved)
+    assert len(replaced_opener.requests) == 1 and replaced.token is None
+    assert not replaced_opener.requests[0].has_header('Authorization')
+
+
+def test_revoked_saved_session_is_rejected_and_cleared_in_memory():
+    saved = {'url': 'https://library.invalid', 'server_id': SERVER_ID, 'account_id': str(uuid.uuid4()),
+             'token': 'a' * 43, 'expires_at': time.time() + 86400}
+    opener = Opener({'server_id': SERVER_ID, 'name': 'Friends', 'capabilities': ['persistent_sessions']},
+                    HTTPError(saved['url'], 401, 'private', {}, io.BytesIO()))
+    client = LibraryClient(saved['url'], server_id=SERVER_ID, opener=opener)
+    with pytest.raises(LibraryError) as caught:
+        client.resume(saved)
+    assert caught.value.status == 401
+    assert client.token is None and client.account_id is None
 
 
 def test_untrusted_responses_errors_and_disconnect_failure():

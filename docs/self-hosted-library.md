@@ -37,10 +37,26 @@ creation. Hosted proxy rules must allow the library API client while keeping
 normal library authentication enabled.
 
 Saved connections contain the URL, library name, UUID and LAN HTTP preference.
-Passwords are never saved. Each library's bearer session lives in memory and is
-not shared with other connections. Restarting Manaforge requires signing in again;
-secure OS-backed persistent credential storage remains future work. Selecting a
-saved library or opening Browse Online never automatically contacts it. Use
+Passwords are never saved. **Stay signed in on this computer** optionally saves a
+library's session token using Windows Data Protection for the current Windows
+account. Tokens are stored in separate encrypted files under the application's
+`library-sessions` directory, bound to connection ID, server UUID, origin and account.
+They are not stored in plaintext or in the connections database. There is no
+plaintext fallback; this option is disabled on unsupported operating systems.
+Remembered sessions last up to 30 days on updated servers; ordinary sessions last
+24 hours. Older API-v1 servers retain their existing session lifetime.
+
+Opening Browse Online restores only connections whose sessions you explicitly
+chose to save, using the background queue. The client verifies the pinned server
+identity before sending a stored token and verifies the active server session.
+Expired/revoked tokens require signing in again. Offline errors retain the encrypted
+session and offer **Reconnect** without requesting a password. Sign out or remove
+a connection to clear its saved token and revoke the session when reachable.
+Restoring a session does not extend its original expiry. Each independent library
+keeps its own token; no server or account is configured by default.
+
+Without saved sign-in, selecting a saved library or opening Browse Online never
+automatically contacts it. Use
 **Sign in**; a successful sign-in loads the shared decks automatically. The compact
 library selector switches saved libraries. Its **Library** menu contains joining
 another library, signing out, removing a connection and optional follow checks.
@@ -145,12 +161,7 @@ The optional Waitress dependency is separate from desktop requirements.
 
 Reuse points for follow-up work:
 
-1. Credential management: add secure optional credential storage using the
-   operating system credential store rather than saving bearer tokens in the
-   connections database. Browse Online and editor publishing already reuse the
-   separate client, connection metadata, `mtg_ui.jobs.JobQueue`, Home registry,
-   existing thumbnail/deck components and per-library publication journal.
-2. Hosting UI: add a disabled-by-default **Host a Manaforge Deck Library** section
+1. Hosting UI: add a disabled-by-default **Host a Manaforge Deck Library** section
    to `mtg_ui.data_management.DataManagementDialog` (current first-run setup), and
    shared Settings controls. Configure storage, administrator, LAN/tunnel,
    background startup, health checks and repair without overwriting databases.
@@ -188,8 +199,8 @@ Automatic checks default **off**. Optionally enable **Check followed decks every
 5 minutes** in the **Library** menu for an individual library. Checks only run while signed in. The app checks due libraries
 using its shared background queue, with roughly 30-second scheduling granularity,
 and shows notifications in Manaforge's status bar. It never applies updates.
-These checks only run while that library has an explicitly established in-memory
-session; saved preferences do not reconnect or authenticate on startup. Other
+These checks only run while that library has an explicitly established or securely
+restored session; follow preferences alone do not reconnect or authenticate on startup. Other
 libraries keep their own preference and schedule. In a deck preview, **More → Stop following (keep offline
 copy)** disables future checks for that deck and retains the accepted read-only
 cache. Following it again stages newer content without replacing the old cache.
@@ -265,7 +276,8 @@ access only to that directory and the read-only application installation.
 All responses are JSON with `api_version: 1`. Errors include an understandable
 `error` string and an HTTP status. Use `Authorization: Bearer <session-token>`
 on every endpoint except info, login and invitation redemption. Sessions expire
-after 24 hours. Protected endpoints validate active account/session membership
+after 24 hours, or 30 days when `remember: true` is explicitly requested at login.
+Protected endpoints validate active account/session membership
 on each request. No cookies, cross-origin access, or public self-registration.
 
 Requests containing bodies need `Content-Type: application/json` and a valid
@@ -280,7 +292,8 @@ SHA-256 digests. Never put credentials in URLs or logs.
 | Method/path under `/api/v1` | Body or result |
 | --- | --- |
 | `GET /info` | Library name, stable `server_id`, API version, request limit |
-| `POST /login` | `{ "username": "...", "password": "..." }`; returns `token`, `user_id`, `expires_in` |
+| `POST /login` | `{ "username": "...", "password": "...", "remember": false }`; returns `token`, `user_id`, `expires_in`; remember is optional and must be boolean |
+| `GET /session` | Authenticated session validation: `user_id`, `username`, `expires_at`; never returns the token |
 | `POST /logout` | Revoke current session immediately |
 | `POST /invitations` | Administrator only; returns a single-use invitation valid for 24 hours |
 | `POST /register` | `{ "invitation": "...", "username": "...", "password": "..." }`; creates a normal account; then log in |
@@ -293,7 +306,7 @@ SHA-256 digests. Never put credentials in URLs or logs.
 | `PUT /decks/{id}` | Same body plus `expected_revision`; owner/admin only; append revision |
 | `DELETE /decks/{id}` | `{ "expected_revision": 2 }`; owner/admin only; unpublish, retaining history |
 
-`GET /info` advertises `capabilities: ["publication_operations"]`. Include a fresh
+`GET /info` advertises `capabilities: ["publication_operations", "persistent_sessions"]`. Include a fresh
 canonical UUID `operation_id` on POST/PUT/DELETE publication changes, persist the
 exact request before sending, and reuse that operation ID and content when retrying.
 Receipts are scoped to the authenticated user. Reusing an operation ID for different
@@ -372,6 +385,11 @@ recovery after a response is lost following a server commit, without real networ
 separate library links, same-account retry protection and explicit conflict review.
 Server tests cover idempotent create/update/unpublish, revocation and the additive
 schema upgrade.
+`mtg_core/tests/test_library_sessions.py` covers native Windows encryption,
+connection/origin binding, expiry, corruption and refusing plaintext fallbacks.
+Client/server tests cover remembered login, identity checks before token reuse,
+session validation and revocation. UI tests cover optional saving, offline
+reconnection without a password, automatic restore and clearing on sign-out/removal.
 `mtg_core/tests/test_library_following.py` covers native offline documents, staged
 updates, private print metadata, failed transactions, revision rollback, local-edit
 guards, history bounds, source namespaces, stopped follows and cancellation.

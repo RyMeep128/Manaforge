@@ -113,6 +113,10 @@ class SignInDialog(W.QDialog):
         self.lan.hide()
         self.advanced_button.toggled.connect(self.lan.setVisible)
         layout.addWidget(self.lan)
+        self.remember_supported = True
+        self.remember = W.QCheckBox('Stay signed in on this computer')
+        self.remember.setToolTip('Save this session securely for your Windows account. Your password is never saved.')
+        layout.addWidget(self.remember)
         self.error = plain_label('', 'warning')
         self.error.hide()
         layout.addWidget(self.error)
@@ -167,6 +171,7 @@ class SignInDialog(W.QDialog):
                        self.submit_button, self.cancel_button, self.advanced_button):
             widget.setEnabled(not busy)
         self.lan.setEnabled(not busy and not self.url.isReadOnly())
+        self.remember.setEnabled(not busy and self.remember_supported)
         self.progress.setVisible(busy)
         if busy:
             self.error.hide()

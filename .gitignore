@@ -224,3 +224,6 @@ Mtg_Projects/mtg_proxy/projects/tmp_images/
 # Versioned documentation captures, not runtime card-image caches.
 !/docs/images/*.png
 !/docs/images/*.gif
+
+# Per-user encrypted library sessions are private configuration.
+**/library-sessions/

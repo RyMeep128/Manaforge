@@ -1,10 +1,11 @@
 """Explicit library transport, saved connection metadata and independent copies.
 
-No requests at import/startup. Passwords are never persisted; tokens live only
-in a Client instance, so each library has an isolated in-memory session.
+No requests at import. Passwords are never persisted. Each connection has an
+isolated session; optional saved sessions are handled by library.sessions.
 """
 import ipaddress
 import json
+import math
 from pathlib import Path
 import socket
 import sqlite3
@@ -69,6 +70,7 @@ class LibraryClient:
         self.server_id = identifier(server_id) if server_id else None
         self.token = None
         self.account_id = None
+        self.expires_at = None
         self.opener = opener or build_opener(
             ProxyHandler({}), _NoRedirects(),
             HTTPSHandler(context=ssl.create_default_context(cafile=certifi.where())))
@@ -102,6 +104,7 @@ class LibraryClient:
             if status == 401:
                 self.token = None
                 self.account_id = None
+                self.expires_at = None
             messages = {401: 'Session expired or credentials were rejected. Sign in again.',
                         403: 'This account does not have permission to perform that action.',
                         404: 'The requested deck or endpoint is unavailable.',
@@ -135,6 +138,7 @@ class LibraryClient:
         if self.server_id and self.server_id != server_id:
             self.token = None
             self.account_id = None
+            self.expires_at = None
             raise LibraryError(409, 'This address now identifies a different library. Remove the old connection and add it explicitly.')
         self.server_id = server_id
         capabilities = result.get('capabilities', [])
@@ -142,18 +146,49 @@ class LibraryClient:
             raise LibraryError(502, 'The library returned invalid capabilities.')
         return {'server_id': server_id, 'name': text(result.get('name')), 'capabilities': capabilities}
 
-    def login(self, username, password, *, invitation=''):
+    def login(self, username, password, *, invitation='', remember=False):
         info = self.check()  # Pin identity before sending credentials on each reconnect.
         if invitation:
             self.request('POST', 'register', {'invitation': invitation, 'username': username,
                                              'password': password}, authenticated=False)
-        result = self.request('POST', 'login', {'username': username, 'password': password}, authenticated=False)
+        result = self.request('POST', 'login', {'username': username, 'password': password, 'remember': remember}, authenticated=False)
         token = result.get('token')
         if (not isinstance(token, str) or not 20 <= len(token) <= 200 or not token.isascii()
                 or any(not (c.isalnum() or c in '-_') for c in token)):
             raise LibraryError(502, 'The library returned an invalid session.')
         self.token = token
         self.account_id = identifier(result['user_id']) if result.get('user_id') else None
+        expires = result.get('expires_in', 86400)
+        if type(expires) is not int or not 1 <= expires <= 30 * 86400:
+            self.token = None
+            raise LibraryError(502, 'The library returned an invalid session expiry.')
+        self.expires_at = time.time() + expires
+        return info
+
+    def resume(self, saved):
+        info = self.check()  # Never send a stored token before checking the pinned origin.
+        if saved['server_id'] != self.server_id or saved['url'] != self.url:
+            raise LibraryError(409, 'Saved sign-in belongs to a different library address.')
+        token, expires = saved.get('token'), saved.get('expires_at')
+        if (not isinstance(token, str) or not 20 <= len(token) <= 200 or not token.isascii()
+                or any(not (c.isalnum() or c in '-_') for c in token)
+                or type(expires) not in (int, float) or not math.isfinite(expires) or expires <= time.time()):
+            raise LibraryError(401, 'Saved sign-in expired or is invalid. Sign in again.')
+        self.token, self.account_id = saved['token'], identifier(saved['account_id'])
+        self.expires_at = saved['expires_at']
+        try:
+            if 'persistent_sessions' in info['capabilities']:
+                result = self.request('GET', 'session')
+                expires = result.get('expires_at')
+                if (identifier(result.get('user_id')) != self.account_id or type(expires) not in (int, float)
+                        or not math.isfinite(expires) or expires <= time.time()):
+                    raise LibraryError(401, 'Saved sign-in is no longer valid. Sign in again.')
+                self.expires_at = min(self.expires_at, expires)
+            else:
+                self.browse()  # Older v1 servers validate their existing 24-hour token.
+        except Exception:
+            self.token, self.account_id, self.expires_at = None, None, None
+            raise
         return info
 
     def disconnect(self):
@@ -163,6 +198,7 @@ class LibraryClient:
         finally:
             self.token = None
             self.account_id = None
+            self.expires_at = None
 
     @staticmethod
     def publication(value):

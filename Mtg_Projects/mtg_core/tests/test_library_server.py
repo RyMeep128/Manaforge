@@ -3,6 +3,7 @@ from copy import deepcopy
 import io
 import json
 import uuid
+import time
 
 import pytest
 
@@ -268,3 +269,32 @@ def test_existing_library_additive_upgrade_preserves_identity_and_decks(library,
     assert reopened.info() == original
     assert reopened.browse(friend)[0]['deck_id'] == published['deck_id']
     assert reopened.publish(friend, deck, [], operation_id=str(uuid.uuid4()))['revision'] == 1
+
+
+def test_remembered_sessions_have_bounded_lifetime_and_still_revoke(library):
+    store, admin, _, user_id = library
+    normal = store.login('friend', PASSWORD)
+    persistent = store.login('friend', PASSWORD, remember=True)
+    assert 86300 < store.session(normal)['expires_at'] - time.time() <= 86400
+    assert 30 * 86400 - 100 < store.session(persistent)['expires_at'] - time.time() <= 30 * 86400
+    app = LibraryAPI(store)
+    info = request(app, '/api/v1/info')['body']
+    assert 'persistent_sessions' in info['capabilities']
+    result = request(app, '/api/v1/session', token=persistent)
+    assert result['body']['user_id'] == user_id
+    assert result['body']['username'] == 'friend'
+    assert 'token' not in result['body'] and 'password' not in result['body']
+    store.revoke(admin, user_id)
+    assert request(app, '/api/v1/session', token=persistent)['status'] == 401
+    with pytest.raises(LibraryError):
+        store.login('admin', PASSWORD, remember='true')
+
+
+def test_remember_flag_is_optional_and_validated_by_login_api(library):
+    store, _, _, _ = library
+    app = LibraryAPI(store)
+    for remember, seconds in [(False, 86400), (True, 30 * 86400)]:
+        response = request(app, '/api/v1/login', 'POST', {'username': 'friend', 'password': PASSWORD, 'remember': remember})
+        assert response['status'] == 200
+        assert response['body']['expires_in'] == seconds
+    assert request(app, '/api/v1/login', 'POST', {'username': 'friend', 'password': PASSWORD, 'remember': 1})['status'] == 400

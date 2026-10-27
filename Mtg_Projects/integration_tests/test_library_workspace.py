@@ -3,6 +3,7 @@ import threading
 import time
 from types import SimpleNamespace
 import uuid
+import os
 
 from PyQt6 import QtCore as C, QtGui as G, QtWidgets as W
 import pytest
@@ -494,5 +495,87 @@ def test_library_visual_review_artifacts(app, tmp_path):
     app.processEvents()
     capture('library-create-account', dialog)
     dialog.reject()
+    assert workspace.prepare_to_close()
+    workspace.close()
+
+
+@pytest.mark.skipif(os.name != 'nt', reason='Native Windows DPAPI')
+def test_saved_sign_in_restores_without_password_and_sign_out_removes_it(app, tmp_path):
+    from mtg_core.library.client import LibraryConnections
+    from mtg_core.library.sessions import SavedSessions
+    source = SimpleNamespace(url='https://friends.invalid', server_id=str(uuid.uuid4()),
+                             token='fixture-secret-session-token-1234567890', account_id=str(uuid.uuid4()),
+                             expires_at=time.time() + 86400)
+    connection = LibraryConnections(tmp_path).add(source, {'server_id': source.server_id, 'name': 'Friends'})
+    sessions = SavedSessions(tmp_path)
+    sessions.save(connection, source, 'friend')
+    calls = []
+    class Client:
+        offline = False
+        def __init__(self, url, **options):
+            self.url, self.server_id, self.token = url, options['server_id'], None
+        def resume(self, saved):
+            calls.append('resume')
+            if self.offline:
+                raise LibraryError(503, 'Library is offline')
+            self.token, self.account_id = saved['token'], saved['account_id']
+        def browse(self, filters, offset=0):
+            return []
+        def disconnect(self):
+            calls.append('logout')
+            self.token = None
+    Client.offline = True
+    workspace = LibraryWorkspace(object(), root=tmp_path, client_factory=Client)
+    workspace.restore_saved_sessions()
+    settle(app, workspace)
+    assert sessions.has(connection['id'])
+    assert workspace.login_button.text() == 'Reconnect'
+    Client.offline = False
+    workspace.reconnect()
+    settle(app, workspace)
+    assert workspace.clients[connection['id']].token == source.token
+    assert workspace._signin_dialog is None
+    assert sessions.has(connection['id'])
+    workspace.disconnect()
+    settle(app, workspace)
+    assert not sessions.has(connection['id'])
+    assert calls == ['resume', 'resume', 'logout']
+    assert workspace.prepare_to_close()
+    workspace.close()
+
+
+@pytest.mark.skipif(os.name != 'nt', reason='Native Windows DPAPI')
+def test_remember_checkbox_saves_session_and_removing_connection_forgets_it(app, tmp_path):
+    calls = []
+    class Client:
+        def __init__(self, url, **options):
+            self.url, self.server_id, self.token = url, str(uuid.uuid4()), None
+        def login(self, username, password, *, invitation='', remember=False):
+            calls.append(remember)
+            self.token = 'fixture-persistent-session-1234567890'
+            self.account_id, self.expires_at = str(uuid.uuid4()), time.time() + 30 * 86400
+            return {'server_id': self.server_id, 'name': 'Friends'}
+        def browse(self, filters, offset=0):
+            return []
+        def disconnect(self):
+            self.token = None
+    workspace = LibraryWorkspace(object(), root=tmp_path, client_factory=Client)
+    dialog = workspace.sign_in(new=True)
+    dialog.url.setText('https://friends.invalid')
+    dialog.username.setText('friend')
+    dialog.password.setText('a sufficiently long password')
+    dialog.remember.setChecked(True)
+    dialog.submit_button.click()
+    settle(app, workspace)
+    connection = workspace.connection()
+    assert calls == [True]
+    saved = workspace.saved_sessions.load(connection)
+    assert saved['username'] == 'friend'
+    assert 'password' not in saved
+    assert b'a sufficiently long password' not in workspace.connections.path.read_bytes()
+    assert workspace.saved_sessions.has(connection['id'])
+    workspace.remove()
+    settle(app, workspace)
+    assert not workspace.saved_sessions.has(connection['id'])
     assert workspace.prepare_to_close()
     workspace.close()

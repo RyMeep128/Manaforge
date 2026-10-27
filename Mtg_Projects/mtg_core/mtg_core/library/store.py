@@ -15,6 +15,7 @@ from .payload import colors, shared_deck, text
 
 PASSWORD_ROUNDS = 600000
 SESSION_SECONDS = 60 * 60 * 24
+REMEMBERED_SESSION_SECONDS = 60 * 60 * 24 * 30
 OPERATIONS_SQL = '''CREATE TABLE IF NOT EXISTS publication_operations (
     user_id TEXT REFERENCES users(id), operation_id TEXT, signature TEXT NOT NULL,
     result TEXT NOT NULL, PRIMARY KEY(user_id, operation_id))'''
@@ -118,7 +119,9 @@ class LibraryStore:
             db.execute('INSERT INTO throttle VALUES (?, 1, ?) ON CONFLICT(key) DO UPDATE SET attempts=attempts+1',
                        (key, now + seconds))
 
-    def login(self, username, password):
+    def login(self, username, password, *, remember=False):
+        if type(remember) is not bool:
+            raise LibraryError(400, 'Remember sign-in must be true or false.')
         username = credentials(username, password)
         self.throttle('login:' + digest(username))
         with self.db() as db:
@@ -130,8 +133,16 @@ class LibraryStore:
             token = secrets.token_urlsafe(32)
             db.execute('DELETE FROM sessions WHERE expires < ?', (time.time(),))
             db.execute('INSERT INTO sessions VALUES (?, ?, ?)',
-                       (digest(token), row['id'], time.time() + SESSION_SECONDS))
+                       (digest(token), row['id'], time.time() + (REMEMBERED_SESSION_SECONDS if remember else SESSION_SECONDS)))
             return token
+
+    def session(self, token):
+        with self.db() as db:
+            actor = self.actor(db, token)
+            row = db.execute('SELECT expires FROM sessions WHERE token=?', (digest(token),)).fetchone()
+            if row is None:
+                raise LibraryError(401, 'Session expired or revoked. Sign in again.')
+            return {'user_id': actor['id'], 'username': actor['username'], 'expires_at': row['expires']}
 
     @staticmethod
     def actor(db, token, *, admin=False):
