@@ -30,6 +30,11 @@ a different UUID stops before sending credentials. Remove that connection and
 explicitly add the new library if the change was intentional. Certificate
 validation stays enabled for HTTPS. The client ignores environment HTTP proxies
 and uses a bounded response size and network timeouts.
+Requests identify the desktop client as `Manaforge-Library/1`, including the
+initial public library-info request. A rejected connection before sign-in is
+reported as an address/access restriction; invitation errors apply only to account
+creation. Hosted proxy rules must allow the library API client while keeping
+normal library authentication enabled.
 
 Saved connections contain the URL, library name, UUID and LAN HTTP preference.
 Passwords are never saved. Each library's bearer session lives in memory and is

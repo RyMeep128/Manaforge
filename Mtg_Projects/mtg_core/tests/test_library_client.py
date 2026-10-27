@@ -10,7 +10,7 @@ import pytest
 from mtg_core.decks import Deck, DeckDocument, DeckEntry, DeckStore
 from mtg_core.library import LibraryError
 from mtg_core.library.client import (
-    LibraryClient, LibraryConnections, MAX_RESPONSE, _NoRedirects, copy_publication, server_url,
+    LibraryClient, LibraryConnections, MAX_RESPONSE, USER_AGENT, _NoRedirects, copy_publication, server_url,
 )
 
 
@@ -90,6 +90,39 @@ def test_credentials_and_bearer_tokens_are_isolated_between_libraries():
         other.browse()
     client.disconnect()
     assert client.token is None
+
+
+def test_client_identifies_itself_for_public_info_sign_in_and_authenticated_requests():
+    opener = Opener({'server_id': SERVER_ID, 'name': 'Friends'}, {'token': 'a' * 43}, {'decks': []}, {})
+    client = LibraryClient('https://library.invalid', opener=opener)
+    client.login('friend', 'long enough password')
+    client.browse()
+    client.disconnect()
+    assert len(opener.requests) == 4
+    for request in opener.requests:
+        headers = {key.lower(): value for key, value in request.header_items()}
+        assert headers['user-agent'] == USER_AGENT == 'Manaforge-Library/1'
+        assert 'Python-urllib' not in headers['user-agent']
+
+
+@pytest.mark.parametrize('path, authenticated, expected', [
+    ('info', False, 'before sign-in'),
+    ('login', False, 'access restrictions'),
+    ('register', False, 'invitation'),
+    ('decks', True, 'permission'),
+])
+def test_forbidden_errors_identify_the_failing_operation(path, authenticated, expected):
+    opener = Opener(HTTPError('https://library.invalid/api/v1/' + path, 403,
+                              'private upstream detail', {}, io.BytesIO(b'private response')))
+    client = LibraryClient('https://library.invalid', opener=opener)
+    client.token = 'a' * 43
+    with pytest.raises(LibraryError) as caught:
+        client.request('GET' if path in ('info', 'decks') else 'POST', path, authenticated=authenticated)
+    assert caught.value.status == 403
+    assert expected in str(caught.value)
+    assert 'private' not in str(caught.value)
+    if path != 'register':
+        assert 'invitation' not in str(caught.value)
 
 
 def test_untrusted_responses_errors_and_disconnect_failure():

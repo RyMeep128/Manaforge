@@ -22,6 +22,7 @@ from . import API_VERSION, LibraryError
 from .payload import MAX_BODY, colors, shared_deck, text
 
 MAX_RESPONSE = 8 * 1024 * 1024
+USER_AGENT = f'Manaforge-Library/{API_VERSION}'
 
 
 def server_url(value, *, allow_lan=False):
@@ -78,7 +79,8 @@ class LibraryClient:
         data = json.dumps(body, allow_nan=False).encode('utf-8') if body is not None else None
         if data is not None and len(data) > MAX_BODY:
             raise LibraryError(413, 'Deck exceeds the 1 MiB upload limit.')
-        headers = {'Accept': 'application/json', 'Content-Type': 'application/json'}
+        headers = {'Accept': 'application/json', 'Content-Type': 'application/json',
+                   'User-Agent': USER_AGENT}
         if authenticated:
             headers['Authorization'] = 'Bearer ' + self.token
         request = Request(self.url + '/api/v1/' + path, data=data, headers=headers, method=method)
@@ -101,12 +103,21 @@ class LibraryClient:
                 self.token = None
                 self.account_id = None
             messages = {401: 'Session expired or credentials were rejected. Sign in again.',
-                        403: 'This account is not authorized, or the invitation is invalid.',
+                        403: 'This account does not have permission to perform that action.',
                         404: 'The requested deck or endpoint is unavailable.',
                         409: 'The library changed or the username is unavailable. Refresh and retry.',
                         413: 'The server rejected the request size.',
                         426: 'Client and library API versions are incompatible.',
                         429: 'Library request limit reached. Try again in five minutes.'}
+            if status == 403:
+                if path == 'info':
+                    messages[403] = 'This library address rejected the connection before sign-in. Ask the host to check its access restrictions.'
+                elif path == 'login':
+                    messages[403] = 'The server rejected the sign-in request. Ask the library host to check its access restrictions.'
+                elif path == 'register':
+                    messages[403] = 'The invitation is invalid, expired, or already used. Ask the administrator for a new invitation.'
+            elif status == 401 and path == 'login':
+                messages[401] = 'The username or password was rejected, or the account is disabled.'
             if status == 409 and path.startswith('decks') and method in ('POST', 'PUT', 'DELETE'):
                 messages[409] = 'Publication conflict. Review the latest publication before publishing or unpublishing again.'
             raise LibraryError(status, messages.get(status, 'The library could not complete the request. Check server status.')) from None
