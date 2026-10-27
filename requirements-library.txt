@@ -1,0 +1,2 @@
+# Optional standalone hosting only; normal desktop installs do not need this.
+waitress>=3.0.2,<4
