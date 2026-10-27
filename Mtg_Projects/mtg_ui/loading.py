@@ -52,7 +52,9 @@ class _Activity(C.QObject):
 
     def refresh(self):
         window = W.QApplication.activeModalWidget() or W.QApplication.activeWindow()
-        if window is None:
+        # Background activity does not belong to a completed result/confirmation
+        # message. A queued timer refresh must also never show idle activity.
+        if not self.count or window is None or isinstance(window, W.QMessageBox):
             if self.indicator is not None:
                 self.indicator.hide()
             return
