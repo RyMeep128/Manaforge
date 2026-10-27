@@ -1,6 +1,6 @@
 # Manaforge delivery checklist
 
-This checklist coordinates work across MTG Core, Print Proxy Prep, and the Deck Editor. It is ordered by dependency and product value. Detailed requirements remain in the [printer plan](printing-roadmap.md), [Deck Editor epic](../Mtg_Projects/mtg_editor/docs/deck-editor-epic.md), [architecture cleanup epic](architecture-cleanup-epic.md), [long-term product epic](long-term-product-epic.md), and [Manaforge Play epic](manaforge-play-epic.md). This checklist is the delivery sequence; the epics retain detailed scope and acceptance criteria. Product-epic phase numbers are mapped into the sequence below rather than replacing existing completed milestones.
+This checklist coordinates work across MTG Core, Print Proxy Prep, and the Deck Editor. It is ordered by dependency and product value. Detailed requirements remain in the [printer plan](printing-roadmap.md), [Deck Editor epic](../Mtg_Projects/mtg_editor/docs/deck-editor-epic.md), [architecture cleanup epic](architecture-cleanup-epic.md), [long-term product epic](long-term-product-epic.md), and [Manaforge Play epic](manaforge-play-epic.md). This checklist is the delivery sequence; the epics retain detailed scope and acceptance criteria. The product epic links to this sequence rather than maintaining separate phase numbers; existing completed milestones remain recorded below.
 
 Status: **[x] complete**, **[ ] planned**, **[~] partially complete**.
 
@@ -8,9 +8,25 @@ Status: **[x] complete**, **[ ] planned**, **[~] partially complete**.
 
 **Build -> Test -> Learn -> Print -> Play:** a local-first, open-source Magic workstation for personal use and private games with friends. One serializable deck model, with separate Oracle identity and exact printing identity, feeds building, analysis, recommendations, printing, and future play modes without re-entry or export. Match card instances and print jobs reference that model through adapters rather than putting game or rendering state into card records.
 
-Current priority remains completing and stabilizing the editor and print workflow, with incremental boundary cleanup. The later phases record direction, not authorization to implement a rules engine, AI, or networking now. Recommendations are deterministic and data-driven; a future gameplay AI is a separate system and does not require an LLM.
+Current priority is the Deck Editor friend-testing milestone below, with necessary incremental boundary cleanup. The later phases record direction, not authorization to implement a rules engine, AI, or networking now. Recommendations are deterministic and data-driven; a future gameplay AI is a separate system and does not require an LLM.
 
 Keep decks, downloaded data, artwork, preferences, and future rules/recommendation datasets user-owned and usable offline where practical. Avoid required accounts, subscriptions, cloud-only storage, public matchmaking, global rankings, social feeds, marketplaces, and unnecessary central infrastructure.
+
+## Immediate milestone - Deck Editor ready for friend testing
+
+Prepare Manaforge for personal use and a small group of friends, rather than a public production release. Before substantial gameplay development, a friend unfamiliar with development should be able to install and use the Deck Editor independently and find it intuitive and pleasant.
+
+These are acceptance priorities, not claims that every workflow is complete:
+
+- [ ] Introduce the major application features through first-run onboarding and a short, skippable guided tour that appears automatically on first use and can be reopened later.
+- [ ] Make installation easy with user-selectable artwork modes; provide reliable application updates with minimal intervention. Preserve offline use after setup; see [installation and updates](installation-and-updates.md) for current behavior.
+- [ ] Make built-in bug reporting, optional diagnostics, and feature suggestions easy to find and use; see [feedback setup and privacy](../feedback-relay/README.md).
+- [ ] Smooth deck creation, editing, commander/theme discovery, recommendations, preconstructed-deck exploration, opening-hand sampling, and print handoff, minimizing visits to external websites during normal deck building.
+- [ ] Resolve remaining recommendation quality, usability, and relevant CI/manual acceptance gaps before calling this milestone ready.
+
+**Exit gate:** A friend can independently install, discover features, build and organize a deck, sample and mulligan hands, use recommendations/precons, print proxies, update, and submit feedback. Cached card information, rules/rulings, and ordinary local deck building require no account, subscription, or cloud service. Private multiplayer may need networking later; avoid unnecessary central infrastructure.
+
+Architecture cleanup continues where needed for correctness, compatibility, or clear integration boundaries. Nonessential refactoring must not delay initial friend testing.
 
 ## Architecture cleanup - staged workstream alongside Phases 3-4
 
@@ -209,7 +225,7 @@ and ambiguous rules are not presented as verified. Phase 3 starts with filters a
 - [x] Support seven-card redraw mulligans, an optional free first mulligan, choosing cards to bottom before keeping, and additional draws without replacement. Handle small decks and empty libraries explicitly.
 - [x] Exclude commanders, sideboards, maybeboards, excluded sections, and do-not-print entries as configured. Default to mainboard, retaining do-not-print/owned cards; recognize commander IDs as well as the commander section.
 - [x] Persist plain-text playtest notes with the deck, with Undo/Redo and backward-compatible loading. Save inclusion/mulligan settings as editor preferences; Cancel discards dialog changes.
-- [x] Keep this a sampling tool rather than a rules engine; the Qt-independent sampler can be reused in Phase 7 local playtest. Hands and library state are temporary, not saved matches.
+- [x] Keep this a sampling tool rather than a rules engine; preserve the Qt-independent opening-hand and mulligan tools in the Deck Editor independently of future engine integration. Hands and library state are temporary, not saved matches.
 
 **Exit gate:** Users can evaluate composition and sample hands without leaving Manaforge.
 
@@ -298,29 +314,21 @@ Print-layout preview and future match surfaces still need reference entry points
 
 **Exit gate:** Cached rules and rulings work offline, including direct rule-number navigation. This reference library is independent of rules enforcement.
 
-## Phase 7 - Local playtest and reusable game state
-
-- [ ] Open an existing deck directly into manual goldfish play, reusing Phase 3 hand sampling.
-- [ ] Model players, unique card instances, zones, and turn state outside widgets with serializable state and explicit actions/events.
-- [ ] Support library, hand, battlefield, graveyard, exile, and command zone; shuffle, mulligan, draw, mill, move, tap/untap, restart, and repeated opening hands.
-- [ ] Track life, commander damage, poison, counters, and tokens.
-
-**Exit gate:** Manual play needs no deck recreation; transitions are testable without Qt and expose an adapter boundary for the future engine.
-
-## Phase 8 - Versioned game protocol and rules-engine feasibility
+## Phase 7 - Versioned game protocol and rules-engine feasibility
 
 - [ ] Evaluate XMage as the preferred initial authoritative engine, with Forge as an investigation alternative; verify feasibility and license compatibility before incorporating code. Keep engine-specific classes out of application models and UI.
 - [ ] Compare embedding, subprocess, and API integration while preserving Manaforge's UI; document supported cards/formats and limitations.
+- [ ] Establish serializable game state, unique card-instance identifiers, and explicit actions/events through engine integration, separate from Qt widgets and the persistent deck model. Do not build a temporary manual-play system or duplicate engine rules.
 - [ ] Define versioned Manaforge snapshots, player views, game objects, legal actions, choices, events, seats, combat assignments, and commands behind an engine adapter; run gameplay/UI against a fake engine without XMage installed.
 - [ ] Map persistent Oracle/printing IDs to engine definitions without persisting XMage class identities in decks.
 - [ ] Pin the Manaforge/protocol/XMage revision/adapter compatibility tuple; prohibit silent upstream engine replacement. Build compatibility and rules-scenario tests for deliberate upgrades.
-- [ ] Prove: load deck -> start game -> draw hand -> list legal actions -> play land -> cast simple spell -> resolve.
+- [ ] After feasibility and a clean adapter are established, build a small rules-enforced proof of concept before developing the gameplay interface around supported engine capabilities. Prove: load deck -> start game -> draw hand -> list legal actions -> play land -> cast simple spell -> resolve.
 
 **Exit gate:** Documented engine/licensing decision, fake-engine proof, and reproducible integration; upgrade between two supported XMage revisions without changing the Manaforge-facing protocol or gameplay UI before expanding gameplay scope.
 
-## Phase 9 - Rules-enforced local play
+## Phase 8 - Rules-enforced local play
 
-- [ ] Keep a deterministic, authoritative engine behind presentation/client and game API layers. UI requests actions and renders events; rules stay outside UI.
+- [ ] Keep a deterministic, authoritative engine behind presentation/client and game API layers. The engine owns rules enforcement, legal actions, triggers, priority, and game-state transitions; Manaforge owns presentation, navigation, interactions, and user experience. See the [Play architecture](manaforge-play-epic.md#1-stable-game-protocol).
 - [ ] Support legal actions/targets, costs/mana payment, stack/priority, phases/steps, triggers, replacement effects, combat/damage, state-based actions, tokens/counters, and zone movement.
 - [ ] Preserve hidden information and clearly identify supported-rule/card limitations.
 - [ ] Render current game objects by unique ID, including copies, merged components, face-down objects, transforms, control changes, attachments, and continuous effects; Inspect explains current characteristics and provenance.
@@ -328,18 +336,20 @@ Print-layout preview and future match surfaces still need reference entry points
 - [ ] Target ordinary laptops (4-core CPU/8 GB RAM minimum; 6-core/16 GB recommended, integrated graphics) using thumbnails, lazy loading, bounded caches, asynchronous engine/network work, and event/diff updates. Validate these as performance targets, not measured guarantees.
 - [ ] Provide legal-action/target highlights, readable stack, priority stops/automatic passing, attack/block selection, clear prompts, card zoom, and responsive battlefield interaction.
 
+**Long-term usability acceptance:** Meet the [Elemental/token/copy/trigger scenario](manaforge-play-epic.md#6-calm-presentation-of-complex-magic), preserving rules correctness and individual choices under heavy load.
+
 **Exit gate:** Supported games automate bookkeeping with deterministic tests, serializable state, and action/event logs suitable for replay and networking.
 
-## Phase 10 - Mixed human/AI seats and local deck testing
+## Phase 9 - Mixed human/AI seats and local deck testing
 
-- [ ] Separate match seat, player, deck, pilot, and controller; support LocalHuman, RemoteHuman, and EngineAI through the same legal-action protocol. Remote connections follow in Phase 11.
-- [ ] Expose usable XMage AI first and an **Add Computer** seat action; support mixed human/AI tables as multiplayer capacity arrives in Phase 12.
+- [ ] Separate match seat, player, deck, pilot, and controller; support LocalHuman, RemoteHuman, and EngineAI through the same legal-action protocol. Remote connections follow in Phase 10.
+- [ ] Expose usable XMage AI first and an **Add Computer** seat action; support mixed human/AI tables as multiplayer capacity arrives in Phase 11.
 - [ ] Improve adapted AI with heuristics, state evaluation/search, and deck-aware strategy only as needed; keep all decisions within engine-provided legal actions.
 - [ ] Cover sensible spell/target choices, interaction, and combat decisions to expose deck weaknesses.
 
 **Exit gate:** Repeatable matches provide useful testing; competitive strength and LLM integration are not prerequisites.
 
-## Phase 11 - Private 1v1 multiplayer
+## Phase 10 - Private 1v1 multiplayer
 
 - [ ] Support host, invite/code, and join; prefer peer-to-peer where practical and evaluate lightweight rendezvous only if needed.
 - [ ] Keep the host authoritative, validate client commands, and transmit only visibility-filtered state/events; never send hidden opponent data merely to conceal it in the UI. Support reconnect.
@@ -348,7 +358,7 @@ Print-layout preview and future match surfaces still need reference entry points
 
 **Exit gate:** Friends can complete and reconnect to private games using existing decks without state divergence or hidden-information leaks.
 
-## Phase 12 - Adaptive 2-5-player Commander
+## Phase 11 - Adaptive 2-5-player Commander
 
 - [ ] Support 2, 3, 4, and 5 seats with any supported mixture of humans and AI, multiplayer priority/combat, and Commander state; avoid a protocol-level five-seat maximum.
 - [ ] Provide Overview, Compare, Focus, and Inspect contexts with stable player positions and readable adaptive boards.
@@ -357,7 +367,7 @@ Print-layout preview and future match surfaces still need reference entry points
 
 **Exit gate:** Supported 2-5-seat Commander games remain readable and retain authoritative rules, mixed controllers, correct private views, and reconnect behavior.
 
-## Phase 13 - Playgroups and history
+## Phase 12 - Playgroups and history
 
 - [ ] Keep portable, local/user-owned playgroups with members, decks, sharing permissions, games, ranking configuration, and statistics.
 - [ ] Separate deck ownership from match piloting; support private, playgroup-visible, and borrowable decks, including AI pilots without ownership transfer.
@@ -369,9 +379,9 @@ Print-layout preview and future match surfaces still need reference entry points
 
 **Exit gate:** A playgroup can select owned, borrowed, shared, or preconstructed decks, complete a game, and inspect locally retained results by deck and pilot with historical brackets preserved. External synchronization is optional.
 
-## Phase 14 - Complete-loop polish
+## Phase 13 - Complete-loop polish
 
-- [ ] Once Build -> Test -> Learn -> Print -> Play -> Track -> Improve works, invest in richer animations, transitions, effects, sound, onboarding, and accessibility improvements.
+- [ ] Once Build -> Test -> Learn -> Print -> Play -> Track -> Improve works, invest in richer animations, transitions, effects, sound, and further onboarding/accessibility improvements beyond the earlier usability milestones.
 - [ ] Keep essential usability/accessibility and responsiveness part of every earlier phase.
 
 ## Optional ecosystem expansion - not a prerequisite for play
@@ -407,13 +417,10 @@ Print-layout preview and future match surfaces still need reference entry points
 
 ## Recommended next execution order
 
-1. Phase 3 is complete: preserve opening-hand sampling, cancellable search/cache, role overrides, filters, insights, and print-readiness behavior during the next refactors.
-2. Architecture A1-A5 are complete: shared persistence invariants, transactional admin operations, diagnostics, editor service boundaries, and database modularization. A6-A8 service, editor, and shared-print boundaries passed GitHub Actions verification; continue with A9 typed persistent state alongside the Phase 4 integration work below.
-3. Complete Phase 4 print handoff and shared preferences alongside A6-A8 service/session and shared-print extractions.
-4. Finish typed persistent state, migrations, and focused quality tooling (A9-A11); introduce migration support sooner if schema changes require it.
-5. Add explainable guidance and offline recommendation datasets/UI (Phase 5) after the editor is stable.
-6. Add the versioned rules reference (Phase 6), then reusable manual local playtest (Phase 7).
-7. Prove engine and licensing feasibility (Phase 8) before rules-enforced local play (Phase 9).
-8. Add mixed human/AI seats (Phase 10), private host-authoritative 1v1 (Phase 11), then adaptive 2-5-player Commander (Phase 12).
-9. Add local playgroups, borrowing, precons, brackets, and history (Phase 13), with optional external sync.
-10. Invest in complete-loop polish (Phase 14); schedule optional ecosystem work only when needed.
+1. Finish the immediate Deck Editor friend-testing milestone, preserving completed printer/editor features and opening-hand sampling. Close remaining acceptance gaps in recommendations, installation, updates, onboarding, feedback, and rules reference (Phases 3-6); consult the recorded completion/CI status above rather than restarting completed work.
+2. Continue necessary architecture work against current code and CI results; defer nonessential cleanup that would delay friend testing.
+3. Make engine feasibility and licensing the first major gameplay milestone (Phase 7): investigate XMage first and Forge as an alternative, establish the adapter, then prove a small rules-enforced game.
+4. Develop the gameplay interface around the chosen engine's capabilities (Phase 8), including the complex-board acceptance scenario in the Play epic.
+5. Add mixed human/AI seats (Phase 9), private host-authoritative 1v1 (Phase 10), then adaptive 2-5-player Commander (Phase 11).
+6. Add local playgroups, borrowing, precons, brackets, and history (Phase 12), with optional external sync.
+7. Invest in complete-loop polish (Phase 13); essential onboarding, usability, accessibility, and responsiveness belong in earlier milestones.

@@ -613,3 +613,7 @@ Future implementation must preserve existing project behavior:
 - Import errors are visible and recoverable.
 - Users can understand deck composition and print readiness without leaving the editor.
 - Later platform features remain clearly separated from the local desktop editor scope.
+
+## Current delivery priority
+
+The [roadmap friend-testing milestone](../../../docs/roadmap.md#immediate-milestone---deck-editor-ready-for-friend-testing) defines current usability, first-run tour, installation/artwork modes, update, feedback, recommendation, and preconstructed-deck priorities. Prepare for independent use by friends before substantial gameplay work; defer nonessential refactoring. Preserve Playtest Lite opening-hand sampling and mulligans as editor tools. Future gameplay begins with existing-engine feasibility and integration, without a standalone manual-play phase; see the [Play epic](../../../docs/manaforge-play-epic.md).

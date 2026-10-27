@@ -1,6 +1,6 @@
 # Manaforge — Long-Term Product Epic
 
-The [Manaforge Play epic](manaforge-play-epic.md) defines the detailed gameplay and playgroup scope: versioned engine adapters, adaptive 2-5-player tables, mixed human/AI seats, borrowing, local history, custom brackets, optional synchronization, and preservation. The [roadmap](roadmap.md) owns delivery order; the development phases below are product-level milestones.
+The [Manaforge Play epic](manaforge-play-epic.md) defines the detailed gameplay and playgroup scope: versioned engine adapters, adaptive 2-5-player tables, mixed human/AI seats, borrowing, local history, custom brackets, optional synchronization, and preservation. The [roadmap](roadmap.md) owns delivery order; the development strategy below links to that authoritative sequence.
 
 ## Product Vision
 
@@ -21,7 +21,8 @@ The user should be able to:
 5. Test decks locally and eventually against AI.
 6. Print those exact cards as proxies.
 7. Play the same deck digitally with friends.
-8. Look up card rulings and the Comprehensive Rules without leaving Manaforge.
+8. Discover commanders/themes and explore preconstructed decks.
+9. Look up card rulings and the Comprehensive Rules without leaving Manaforge.
 
 Manaforge is not intended to become a commercial live-service platform.
 
@@ -55,6 +56,8 @@ The user should own:
 * their play history if implemented
 * their local recommendation data
 * their local rules reference
+
+Ordinary deck building and local functionality must not require accounts, subscriptions, or cloud services. Private multiplayer may require networking, with unnecessary central infrastructure avoided.
 
 External services may be used to obtain or update data, but Manaforge should cache/store useful information locally and continue working wherever reasonably possible.
 
@@ -288,38 +291,11 @@ Rules/rulings data should be versioned separately from decks and artwork.
 
 ---
 
-# 6. Playtest / Goldfish Mode
+# 6. Deck Editor Opening-Hand Sampling
 
-Before networking, Manaforge should gain a local playtest mode.
+Preserve the existing Deck Editor opening-hand sampling, mulligan, draw, reset, and repeated-hand tools. These temporary samples are deck-analysis aids, not saved matches or a standalone manual gameplay phase.
 
-This should allow a deck to be opened directly from the editor.
-
-Initial functionality:
-
-* shuffle
-* draw opening hand
-* mulligan
-* library
-* hand
-* battlefield
-* graveyard
-* exile
-* command zone
-* life
-* commander damage
-* poison
-* counters
-* tokens
-* tap/untap
-* draw
-* mill
-* move cards between zones
-* restart game
-* generate repeated opening hands
-
-A basic manual playtest mode can exist before full rules automation.
-
-Eventually, this mode should use the same game engine as AI and multiplayer.
+Future local gameplay should open the same deck through the chosen rules engine. Serializable game state, unique card-instance IDs, and separation from the UI belong to that integration, as defined in the [Play epic](manaforge-play-epic.md#1-stable-game-protocol). Avoid temporary manual systems that duplicate rules or require later replacement; the purpose of Play is to automate complicated Magic bookkeeping.
 
 ---
 
@@ -327,7 +303,7 @@ Eventually, this mode should use the same game engine as AI and multiplayer.
 
 The long-term goal is **Arena-like automation**, not merely a digital tabletop.
 
-Manaforge should eventually understand enough Magic rules to automate ordinary gameplay.
+The chosen existing rules engine should enforce Magic rules and automate gameplay through Manaforge's adapter; Manaforge provides presentation, navigation, interactions, and user experience.
 
 Desired behavior:
 
@@ -687,7 +663,7 @@ The ideal Manaforge workflow is:
 >
 > I examine my curve, card roles, and composition.
 >
-> I immediately goldfish the deck.
+> I sample opening hands and mulligans in the Deck Editor, and eventually test the deck through rules-enforced local play.
 >
 > I play several games against AI.
 >
@@ -713,123 +689,13 @@ That is the long-term product.
 
 Do **not** attempt this entire epic at once.
 
-Recommended order:
+The [roadmap](roadmap.md#recommended-next-execution-order) is the authoritative delivery sequence, including phase numbers and dependencies. Preserve completed milestones and their recorded acceptance status.
 
-## Phase 1 — Finish Build
+First finish the [Deck Editor friend-testing milestone](roadmap.md#immediate-milestone---deck-editor-ready-for-friend-testing): usability, onboarding, recommendations, installation, updating, and feedback. Essential onboarding and accessibility must precede friend testing; later polish adds richer effects and presentation. Necessary boundary cleanup continues, but nonessential refactoring should not delay testing with friends.
 
-Complete and stabilize:
+After that milestone, investigate XMage and Forge feasibility, licensing, and compatibility; establish a clean adapter; prove a small rules-enforced game; and develop the gameplay interface around the chosen engine. Expand toward AI opponents, private multiplayer, full Commander, and local playgroups/history. There is no standalone manual gameplay phase.
 
-* deck editor
-* categorization
-* tagging
-* deck analytics
-* printing selection
-* recommendations
-* persistence
-* cohesive UI
-
-## Phase 2 — Rules Reference
-
-Add:
-
-* card rulings
-* Comprehensive Rules
-* local search/indexing
-* card → rules navigation
-
-This is relatively low-risk and immediately useful.
-
-## Phase 3 — Local Playtest
-
-Build the reusable game-state model:
-
-* players
-* card instances
-* zones
-* turn state
-* basic battlefield UI
-
-Initially allow manual actions.
-
-This phase should intentionally establish architecture usable by the future rules engine.
-
-## Phase 4 — Rules Engine Prototype
-
-Investigate Forge/XMage.
-
-Create the smallest possible integration proof:
-
-```text
-Load Deck
-→ Start Game
-→ Draw Hand
-→ Determine Legal Actions
-→ Play Land
-→ Cast Simple Spell
-→ Resolve
-```
-
-Do not build sophisticated UI until engine feasibility is proven.
-
-## Phase 5 — Arena-Like Local Play
-
-Integrate:
-
-* targets
-* stack
-* phases
-* combat
-* automatic rules
-* priority
-* triggers
-* visual feedback
-
-## Phase 6 — Mixed Human/AI Seats
-
-Allow:
-
-```text
-Deck A: Human
-Deck B: AI
-```
-
-This is the first seat configuration, not a separate human-versus-AI mode. Allow mixed controllers and **Add Computer** as multiplayer support arrives. Focus first on useful testing rather than AI strength.
-
-## Phase 7 — Private 1v1
-
-Move the authoritative game state into a networking-compatible architecture.
-
-Implement:
-
-* hosting
-* joining
-* synchronization
-* hidden state
-* reconnect
-
-## Phase 8 — Commander Multiplayer
-
-Extend networking and battlefield UX to support:
-
-* 2-5 players with adaptive Overview, Compare, Focus, and Inspect contexts
-* commander damage
-* shared combat state
-* multiplayer priority
-* larger battlefield layouts
-
-## Phase 9 — Playgroups & History
-
-Add local playgroups, ownership/piloting, sharing and borrowing, preconstructed deck libraries, configurable local brackets, and automatic digital match history/statistics. Preserve historical rank/bracket snapshots. External Playgroup.gg synchronization is optional and capability-dependent; local data remains canonical.
-
-Preserve known-good engine/adapter installations and cached data so previously supported play survives external service loss. See the [Play epic](manaforge-play-epic.md) for detailed scope.
-
-## Phase 10 — Polish
-
-Only after the complete loop works:
-
-**Build → Test → Print → Play**
-
-invest heavily in animations, transitions, visual effects, sound, onboarding, accessibility, and additional quality-of-life improvements.
+The [Play epic](manaforge-play-epic.md) owns detailed engine boundaries, reuse expectations, and the [complex Elemental/token/copy/trigger acceptance scenario](manaforge-play-epic.md#6-calm-presentation-of-complex-magic). Product sections above describe long-term scope, not implemented features.
 
 ---
 

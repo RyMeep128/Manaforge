@@ -38,6 +38,10 @@ Engine Adapter
 XMage
 ```
 
+The engine owns rules enforcement, legal actions, triggers, priority, and game-state transitions. Manaforge owns presentation, navigation, interactions, and user experience. Presentation automation submits engine-legal actions and preserves required choices; it does not implement competing rules.
+
+Establish serializable game state, unique card-instance identifiers, and actions/events through engine integration rather than a temporary manual-play implementation. Keep the canonical deck model engine-independent and reuse existing decks without recreation.
+
 Manaforge UI code must never depend directly on XMage classes such as its internal card, ability, permanent, or game-state objects.
 
 Define versioned Manaforge concepts including:
@@ -77,7 +81,7 @@ Manaforge gameplay and UI can run against a fake/test engine without XMage insta
 
 # 2. XMage Adapter & Upgrade Resilience
 
-XMage is the preferred initial authoritative rules engine.
+XMage is the preferred initial authoritative rules engine; Forge remains an alternative to investigate. Feasibility, licensing, supported cards/formats, and embedding/subprocess/API compatibility must be evaluated before selecting and incorporating an engine. Establish the adapter and a small rules-enforced proof of concept before building the gameplay interface around engine capabilities. This follows the roadmap's Deck Editor friend-testing milestone; no standalone manual gameplay phase is planned.
 
 Manaforge must **not fork XMage into the application** or make its application model depend upon a particular XMage release.
 
@@ -122,7 +126,7 @@ Upgrade between two supported XMage revisions without changing the Manaforge-fac
 
 # 3. Rules-Enforced Local Play
 
-XMage owns authoritative Magic rules.
+The chosen engine owns authoritative Magic rules (initial candidate: XMage).
 
 Manaforge owns the experience.
 
@@ -246,6 +250,19 @@ Support batch selection and count-based actions for interchangeable objects.
 ---
 
 # 6. Calm Presentation of Complex Magic
+
+### Long-term acceptance scenario: Elementals, tokens, copies, and triggers
+
+A Commander deck built around Elementals, token creation, copying effects, and many triggered abilities must be easier to play against in Manaforge than to manage physically. This is planned acceptance work, not an implemented capability.
+
+- Enforce rules and resolve triggers correctly through the engine, including ordering, priority, and individual choices.
+- Visually group equivalent tokens and game objects while preserving unique instance identities. Expand any group and inspect individual instances.
+- Clearly represent copied creatures, spells, and abilities, including their current characteristics and provenance.
+- Present repetitive triggers intelligently and handle large stacks and complex boards efficiently; explain what happened and why through readable events and inspection.
+- Minimize unnecessary clicks and repetitive confirmations, and automate bookkeeping wherever rules and player choices permit.
+- Keep gameplay responsive with large numbers of tokens and triggers; evaluate representative complex-board scenarios as engine support expands.
+
+Visual grouping must never compromise rules correctness. Objects or triggers with meaningful differences remain distinguishable; grouping must preserve access to individual choices, targets, ordering, and resolution whenever necessary. Presentation groups do not merge authoritative engine objects or triggers.
 
 The rules engine tracks exact state.
 
