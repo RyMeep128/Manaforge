@@ -9,7 +9,13 @@ export function validate(p) {
   if (!p.metadata || !/^\d+\.\d+\.\d+-(alpha|beta)\.\d+$/.test(p.metadata.version)) return false;
   if (Object.keys(p.metadata).some(k => !['version','os','architecture','python'].includes(k))) return false;
   if (Object.values(p.metadata).some(v => typeof v !== 'string' || v.length > 100)) return false;
-  if (p.screenshot && (!/^[A-Za-z0-9+/]+={0,2}$/.test(p.screenshot) || !(p.screenshot.startsWith('iVBORw0KGgo') || p.screenshot.startsWith('/9j/')))) return false;
+  if (p.screenshot) {
+    if (!/^[A-Za-z0-9+/]+={0,2}$/.test(p.screenshot)) return false;
+    try {
+      const bytes = atob(p.screenshot);
+      if (bytes.length > 350000 || !(bytes.startsWith('\x89PNG\r\n\x1a\n') || bytes.startsWith('\xff\xd8\xff'))) return false;
+    } catch { return false; }
+  }
   return true;
 }
 export default {

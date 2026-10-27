@@ -66,7 +66,7 @@ class _Job(LoadingThread):
             self.outcome.emit(self.job_id, "cancelled", None)
         except Exception as exc:
             record_operation(self.operation, "failed", str(exc))
-            get_logger(__name__).error(
+            get_logger(__name__).exception(
                 "Background job failed id=%s type=%s", self.job_id, type(exc).__name__
             )
             self.outcome.emit(self.job_id, "failed", str(exc))

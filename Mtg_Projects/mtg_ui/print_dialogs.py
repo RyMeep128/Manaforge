@@ -59,7 +59,8 @@ class FileDialogType:
 
 def _default_crash_log_path():
     timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-    crash_dir = os.path.join(cwd, "crash_logs")
+    from mtg_core.paths import data_root
+    crash_dir = os.path.join(data_root(), "crash_logs")
     os.makedirs(crash_dir, exist_ok=True)
     return os.path.join(crash_dir, f"print-proxy-prep-crash-{timestamp}.log")
 
@@ -142,12 +143,21 @@ def show_exception_dialog(exc_type, exc_value, exc_traceback, context=None, pare
         dialog.setInformativeText(summary)
         dialog.setDetailedText(report)
 
+        # Keep a bounded, sanitized error trail even when the user closes the dialog.
+        from mtg_core.repair import record_operation
+        record_operation(context or 'Unexpected application error', 'failed', report)
+        from mtg_core.diagnostics import get_logger
+        get_logger(__name__).error('Unexpected application error', exc_info=(exc_type, exc_value, exc_traceback))
+        report_button = dialog.addButton('Report This Problem', QMessageBox.ButtonRole.ActionRole)
         save_button = dialog.addButton("Save Crash Log", QMessageBox.ButtonRole.ActionRole)
         close_button = dialog.addButton(QMessageBox.StandardButton.Close)
         dialog.setDefaultButton(close_button)
         dialog.exec()
 
-        if dialog.clickedButton() == save_button:
+        if dialog.clickedButton() == report_button:
+            from mtg_ui.feedback import FeedbackDialog
+            FeedbackDialog(parent, operation=context or 'Unexpected application error', detail=report).exec()
+        elif dialog.clickedButton() == save_button:
             default_path = _default_crash_log_path()
             selected_path = file_dialog(
                 parent,
