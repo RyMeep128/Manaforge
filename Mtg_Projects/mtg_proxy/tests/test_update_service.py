@@ -12,7 +12,7 @@ def release_payload(tag_name="v0.1.1", assets=None, html_url="https://github.tes
         if assets is not None
         else [
             {
-                "name": "PrintProxyPrep-0.1.1-win.zip",
+                "name": f"PrintProxyPrep-{tag_name.removeprefix('v')}-win.zip",
                 "browser_download_url": "https://github.test/download.zip",
             }
         ],
@@ -97,6 +97,7 @@ def test_prerelease_version_order(newer, older):
 
 
 def test_alpha_update_fetches_release_list_and_skips_drafts(monkeypatch):
+    monkeypatch.setattr(update_service.sys, 'platform', 'win32')
     urls = []
     def fetch(url):
         urls.append(url)
@@ -107,7 +108,7 @@ def test_alpha_update_fetches_release_list_and_skips_drafts(monkeypatch):
     result = update_service.check_for_update('0.1.2-alpha.1')
     assert result.latest_version == '0.2.0-alpha.1'
     assert result.update_available
-    assert urls == [update_service.PRERELEASES_URL]
+    assert urls == [update_service.PRERELEASES_URL + '&page=1']
 
 
 def test_beta_channel_does_not_offer_alpha():
@@ -116,6 +117,70 @@ def test_beta_channel_does_not_offer_alpha():
     assert result.latest_version == '0.2.0-beta.2'
 
 
-def test_empty_prerelease_channel_reports_no_update():
-    assert not update_service.check_for_update('0.1.2-alpha.1', lambda: []).update_available
+def test_empty_prerelease_channel_reports_failure():
+    with pytest.raises(update_service.UpdateCheckError, match='No downloadable'):
+        update_service.check_for_update('0.1.2-alpha.1', lambda: [])
 
+
+
+def test_selects_downloadable_release_below_unfinished_release():
+    result = update_service.check_for_update('0.3.29-alpha.1', lambda: [
+        release_payload('v0.3.31-alpha.1', assets=[]),
+        release_payload('v0.3.30-alpha.1', assets=[{
+            'name': 'Manaforge-Windows.zip',
+            'browser_download_url': 'https://github.test/manaforge.zip',
+        }]),
+    ])
+    assert result.latest_version == '0.3.30-alpha.1'
+    assert result.asset_url == 'https://github.test/manaforge.zip'
+
+
+def test_stable_channel_ignores_prerelease_and_data_releases():
+    result = update_service.check_for_update('0.3.29', lambda: [
+        release_payload('v0.4.0-alpha.1'),
+        release_payload('recommendations-2026-alpha.1'),
+        release_payload('v0.3.30'),
+    ])
+    assert result.latest_version == '0.3.30'
+
+
+@pytest.mark.parametrize('newer,older', [
+    ('1.0.0-alpha.10', '1.0.0-alpha.2'),
+    ('1.0.0-beta', '1.0.0-alpha.99'),
+    ('1.0.0-rc.1', '1.0.0-beta.9'),
+    ('1.0.0-alpha.1.a', '1.0.0-alpha.1'),
+])
+def test_semver_identifiers(newer, older):
+    assert update_service.is_newer_version(newer, older)
+
+
+def test_semver_build_metadata_does_not_change_precedence():
+    assert not update_service.is_newer_version('1.0.0+new', '1.0.0+old')
+
+
+def test_non_windows_does_not_offer_windows_bundle(monkeypatch):
+    monkeypatch.setattr(update_service.sys, 'platform', 'darwin')
+    with pytest.raises(update_service.UpdateCheckError, match='Windows only'):
+        update_service.check_for_update('0.3.29-alpha.1')
+
+
+def test_rejects_asset_from_different_version():
+    with pytest.raises(update_service.UpdateCheckError, match='No downloadable'):
+        update_service.check_for_update('0.1.0', lambda: [release_payload('v0.1.2', assets=[{
+            'name': 'PrintProxyPrep-0.1.1-win.zip',
+            'browser_download_url': 'https://github.test/wrong.zip',
+        }])])
+
+
+def test_paginates_past_dataset_releases(monkeypatch):
+    monkeypatch.setattr(update_service.sys, 'platform', 'win32')
+    urls = []
+    def fetch(url):
+        urls.append(url)
+        return ([release_payload('recommendations-2026-alpha.1')] * 100
+                if len(urls) == 1 else [release_payload('v0.3.30-alpha.1')])
+    monkeypatch.setattr(update_service, 'fetch_latest_release_json', fetch)
+    result = update_service.check_for_update('0.3.29-alpha.1')
+    assert result.update_available
+    assert len(urls) == 2
+    assert urls[1].endswith('&page=2')

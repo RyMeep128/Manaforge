@@ -261,8 +261,11 @@ def main():
             socket.deleteLater()
     server.newConnection.connect(activate)
     home.show()
+    from mtg_ui.application_updates import application_updates
+    C.QTimer.singleShot(1000, lambda: application_updates().check(manual=False))
     update_timer=C.QTimer(controller)
     update_timer.timeout.connect(controller.check_data_updates)
+    update_timer.timeout.connect(lambda: application_updates().check(manual=False))
     update_timer.start(6*60*60*1000)
     C.QTimer.singleShot(1000,controller.check_data_updates)
     result = app.exec()

@@ -142,6 +142,8 @@ class HomeWindow(W.QMainWindow):
         settings.setMenu(menu)
         footer.addWidget(settings)
         layout.addLayout(footer)
+        from mtg_ui.application_updates import ApplicationUpdatePanel
+        layout.addWidget(ApplicationUpdatePanel(self))
         outer.addWidget(content)
         scroll.setWidget(wrapper)
         self.takeCentralWidget()

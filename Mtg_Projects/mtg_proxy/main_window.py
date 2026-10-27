@@ -92,32 +92,12 @@ from editor_widgets import (
     OptionsWidget,
     ProjectDashboardPage,
 )
-from services import deck_import_service, high_res_service, pdf_service, project_service, update_service
+from services import deck_import_service, high_res_service, pdf_service, project_service
 
 logger = logging.getLogger(__name__)
 
 _showing_exception_dialog = False
 RECOVERABLE_EDITOR_LOAD_ERRORS = (OSError, ValueError, TypeError, json.JSONDecodeError)
-
-
-class UpdateCheckWorker(LoadingThread):
-    checked = QtCore.pyqtSignal(object, str, bool)
-
-    def __init__(self, manual):
-        super().__init__()
-        self._manual = bool(manual)
-
-    def run(self):
-        try:
-            result = update_service.check_for_update(APP_VERSION)
-        except update_service.UpdateCheckError as exc:
-            logger.info("update check failed error=%s", exc)
-            self.checked.emit(None, str(exc), self._manual)
-        except Exception as exc:
-            logger.exception("unexpected update check failure")
-            self.checked.emit(None, f"Could not check for updates: {exc}", self._manual)
-        else:
-            self.checked.emit(result, "", self._manual)
 
 
 def install_exception_handlers():
@@ -303,7 +283,6 @@ class AppShellWindow(QMainWindow):
         self._active_session = None
         self._project_file_lock = None
         self._editor_page = None
-        self._update_check_worker = None
         self._saved_project_snapshot = None
         self._observed_project_snapshot = None
         self._observed_project_state = None
@@ -326,6 +305,8 @@ class AppShellWindow(QMainWindow):
         stack.addWidget(self._dashboard_page)
         self.setCentralWidget(stack)
         self._dashboard_page.refresh_projects()
+        from mtg_ui.application_updates import ApplicationUpdatePanel
+        self.statusBar().addPermanentWidget(ApplicationUpdatePanel(self))
         self.statusBar().setSizeGripEnabled(False)
         self.statusBar().showMessage("Ready")
         self._shortcuts = [
@@ -437,63 +418,12 @@ class AppShellWindow(QMainWindow):
             self.check_for_updates(manual=False)
 
     def check_for_updates(self, manual=True):
-        if self._update_check_worker is not None:
-            if manual:
-                QMessageBox.information(
-                    self,
-                    "Update Check Running",
-                    "The app is already checking for updates.",
-                )
-            return
-
-        worker = UpdateCheckWorker(manual)
-        self._update_check_worker = worker
-        worker.checked.connect(self._handle_update_check_finished)
-        worker.finished.connect(lambda: self._clear_update_check_worker(worker))
-        worker.start()
-
-    def _clear_update_check_worker(self, worker):
-        if self._update_check_worker is worker:
-            self._update_check_worker = None
-
-    @QtCore.pyqtSlot(object, str, bool)
-    def _handle_update_check_finished(self, result, error_message, manual):
-        if error_message:
-            if manual:
-                QMessageBox.warning(
-                    self,
-                    "Update Check Failed",
-                    f"Could not check for updates.\n\n{error_message}",
-                )
-            return
-
-        if result is None:
-            if manual:
-                QMessageBox.warning(
-                    self,
-                    "Update Check Failed",
-                    "Could not check for updates.",
-                )
-            return
-
-        if not result.update_available:
-            if manual:
-                QMessageBox.information(
-                    self,
-                    "No Updates Found",
-                    f"You're up to date.\n\nCurrent version: {result.current_version}",
-                )
-            return
-
-        message = (
-            "A newer version of Print Proxy Prep is available.\n\n"
-            f"Current version: {result.current_version}\n"
-            f"Latest version: {result.latest_version}\n\n"
-            f"Release page:\n{result.release_url}"
-        )
-        if result.asset_url:
-            message += f"\n\nWindows zip:\n{result.asset_url}"
-        QMessageBox.information(self, "Update Available", message)
+        from mtg_ui.application_updates import application_updates
+        updates = application_updates()
+        if manual:
+            updates.activate()
+        else:
+            updates.check(manual=False)
 
     def _build_editor_page(self, state, img_dict):
         card_grid = CardGrid(state, img_dict)

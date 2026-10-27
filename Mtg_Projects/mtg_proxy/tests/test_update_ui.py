@@ -58,77 +58,42 @@ def test_startup_update_check_respects_setting(monkeypatch):
     assert window.calls == [False]
 
 
-def test_manual_update_failure_warns(monkeypatch):
-    warnings = []
-    monkeypatch.setattr(
-        main_window.QMessageBox,
-        "warning",
-        lambda _parent, title, message: warnings.append((title, message)),
-    )
-
-    main_window.AppShellWindow._handle_update_check_finished(
-        object(), None, "network down", True
-    )
-
-    assert warnings == [("Update Check Failed", "Could not check for updates.\n\nnetwork down")]
-
-
-def test_startup_update_failure_stays_quiet(monkeypatch):
-    warnings = []
-    monkeypatch.setattr(
-        main_window.QMessageBox,
-        "warning",
-        lambda _parent, title, message: warnings.append((title, message)),
-    )
-
-    main_window.AppShellWindow._handle_update_check_finished(
-        object(), None, "network down", False
-    )
-
-    assert warnings == []
+def test_panels_share_state_and_show_check_error(monkeypatch):
+    from PyQt6 import QtWidgets
+    from mtg_ui import application_updates as ui
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    controller = ui.ApplicationUpdates(app)
+    monkeypatch.setattr(ui, 'application_updates', lambda: controller)
+    first, second = ui.ApplicationUpdatePanel(), ui.ApplicationUpdatePanel()
+    assert first.button.text() == 'Check for Updates'
+    assert '#28734f' in first.button.styleSheet()
+    controller.result = UpdateCheckResult('0.3.29-alpha.1', '0.3.30-alpha.1', True,
+                                         'https://github.test/release',
+                                         'Manaforge-Windows.zip', 'https://github.test/app.zip')
+    controller.changed.emit()
+    assert first.button.text() == second.button.text() == 'Update Available'
+    assert '#B45309' in first.button.styleSheet()
+    controller.error = 'network down'
+    controller.result = None
+    controller.changed.emit()
+    assert 'network down' in first.status.text()
+    assert 'Up to date' not in first.status.text()
+    assert first.button.isEnabled()
+    first.deleteLater()
+    second.deleteLater()
+    controller.deleteLater()
+    app.processEvents()
 
 
-def test_manual_no_update_shows_up_to_date(monkeypatch):
-    infos = []
-    monkeypatch.setattr(
-        main_window.QMessageBox,
-        "information",
-        lambda _parent, title, message: infos.append((title, message)),
-    )
-
-    result = UpdateCheckResult(
-        current_version="0.1.0",
-        latest_version="0.1.0",
-        update_available=False,
-        release_url="https://github.test/release",
-    )
-    main_window.AppShellWindow._handle_update_check_finished(object(), result, "", True)
-
-    assert infos == [("No Updates Found", "You're up to date.\n\nCurrent version: 0.1.0")]
-
-
-def test_update_found_dialog_includes_versions_and_release_url(monkeypatch):
-    infos = []
-    monkeypatch.setattr(
-        main_window.QMessageBox,
-        "information",
-        lambda _parent, title, message: infos.append((title, message)),
-    )
-
-    result = UpdateCheckResult(
-        current_version="0.1.0",
-        latest_version="0.1.1",
-        update_available=True,
-        release_url="https://github.test/release",
-        asset_name="PrintProxyPrep-0.1.1-win.zip",
-        asset_url="https://github.test/download.zip",
-    )
-    main_window.AppShellWindow._handle_update_check_finished(object(), result, "", True)
-
-    title, message = infos[0]
-    assert title == "Update Available"
-    assert "Current version: 0.1.0" in message
-    assert "Latest version: 0.1.1" in message
-    assert "https://github.test/release" in message
-    assert "https://github.test/download.zip" in message
-
+def test_manual_and_automatic_checks_do_not_duplicate_worker(monkeypatch):
+    from PyQt6 import QtWidgets
+    from mtg_ui import application_updates as ui
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    controller = ui.ApplicationUpdates(app)
+    controller.worker = object()
+    controller.check(manual=False)
+    controller.check(manual=True)
+    assert controller.manual
+    controller.worker = None
+    controller.deleteLater()
+    app.processEvents()

@@ -125,6 +125,43 @@ its worker to settle. Closing a dialog that is merely observing an automatic upd
 leaves it running. The main application cancels and defers shutdown until its shared
 job queue is idle. Partial file downloads and installed generations remain available.
 
+## Application updates
+
+Home and Print Studio show the running bundle's embedded `APP_VERSION` as the
+installed version. This metadata is packaged from `mtg_proxy/constants.py`; it is
+never inferred from the newest release, Git checkout, or a saved settings value.
+Launching an older extracted copy correctly continues to report that older version.
+
+**Check for Updates** is muted green, shows an indeterminate indicator while checking,
+and becomes burnt orange **Update Available** when a newer downloadable release is
+found. All application update entry points share one check and result. Failures stay
+visible and allow retry; an empty channel is a check failure, never ?up to date?.
+Automatic checks respect online/startup settings, are limited to once per six hours,
+and notify once per offered version. Manual successful checks have a 30-second cache;
+failed checks can be retried immediately. Data updates below are independent.
+
+The checker reads published GitHub Releases from `RyMeep128/Manaforge`, paginating
+past dataset releases. It ignores drafts, malformed versions and releases without an
+uploaded Windows application ZIP. Both `Manaforge-Windows.zip` and legacy
+`PrintProxyPrep-<version>-win.zip` are supported. Semantic precedence includes numeric
+prerelease identifiers and ignores build metadata. Alpha installations accept alpha,
+beta, RC and stable; beta accepts beta, RC and stable; stable accepts stable only.
+Only Windows packages currently exist; other operating systems report that limitation.
+
+Application installation uses the existing portable ZIP distribution, with an explicit
+**Download update** action. The browser owns transfer progress and retry. Finish the
+download, extract the entire archive into a **new folder**, close Manaforge, then run
+the new executable. Keep the previous folder until the new copy works. Interrupted
+or failed downloads/extraction leave the running installation untouched; reopen the
+previous copy for recovery. There is no automatic in-place replacement, installation
+progress, restart, or rollback executor. The new process reads its own embedded version
+and its next successful release check returns the button to green if current.
+
+Source inspection and CI regression coverage address selection/state logic. Tests and
+builds were deliberately not run locally. CI must validate regressions and packaging;
+an installed-app exercise must still verify download, extraction, old-copy recovery,
+launching the new copy, version reporting and button state after restart.
+
 ## Automatic updates
 
 After completed setup, Manaforge checks approximately every **30 days**. Startup
