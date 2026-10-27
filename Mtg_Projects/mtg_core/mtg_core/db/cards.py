@@ -365,7 +365,10 @@ class CardOperations:
             ).fetchone()
         return self.row_to_print_record(row)
 
-    def replace_oracle_tags(self, tag_records) -> int:
+    def replace_oracle_tags(self, tag_records, *, cancel=None, require_nonempty=False) -> int:
+        from mtg_core.artwork_storage_lock import cancelled
+
+        cancelled(cancel)
         tag_records = list(tag_records)
         records_by_id = {
             str(record.get('id')): record for record in tag_records if record.get('id')
@@ -380,11 +383,13 @@ class CardOperations:
 
         direct_oracle_ids = {}
         for record in tag_records:
+            cancelled(cancel)
             oracle_ids = record_oracle_ids(record)
             direct_oracle_ids[str(record.get('id') or '')] = oracle_ids
 
         descendant_cache = {}
         def oracle_ids_with_descendants(record_id, visiting=None):
+            cancelled(cancel)
             if record_id in descendant_cache:
                 return descendant_cache[record_id]
             visiting = set() if visiting is None else visiting
@@ -401,6 +406,7 @@ class CardOperations:
 
         rows = []
         for record in tag_records:
+            cancelled(cancel)
             tag_names = {
                 str(value or '').strip().casefold()
                 for value in [record.get('label'), record.get('slug'), *(record.get('aliases') or [])]
@@ -414,10 +420,18 @@ class CardOperations:
                 oracle_id = str(oracle_id or '').strip()
                 if oracle_id:
                     rows.extend((oracle_id, tag) for tag in tag_names)
+        if require_nonempty and not rows:
+            raise ValueError('Oracle Tags export contains no usable card taggings')
+        def checked_rows():
+            for row in rows:
+                cancelled(cancel)
+                yield row
         with self.connect() as connection:
+            cancelled(cancel)
             connection.execute('DELETE FROM oracle_tags')
             connection.executemany(
-                'INSERT OR IGNORE INTO oracle_tags (oracle_id, tag) VALUES (?, ?)', rows)
+                'INSERT OR IGNORE INTO oracle_tags (oracle_id, tag) VALUES (?, ?)', checked_rows())
+            cancelled(cancel)
         return len(rows)
 
     def oracle_tag_count(self) -> int:

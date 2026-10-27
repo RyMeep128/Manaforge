@@ -180,8 +180,12 @@ class RulesOperations:
             raise ValueError('The rules file exceeds 15 MB.')
         return RulesStore(self.rules_path).install(source.read_text(encoding='utf-8-sig'), str(source))
 
-    def refresh_rules(self):
-        page = self.fetch_bytes_fn(RULES_PAGE)
+    def refresh_rules(self, *, fetch_bytes=None, cancel=None):
+        from .artwork_storage_lock import cancelled
+        fetch = fetch_bytes or self.fetch_bytes_fn
+        cancelled(cancel)
+        page = fetch(RULES_PAGE)
+        cancelled(cancel)
         if len(page) > 15 * 1024 * 1024:
             raise ValueError('The rules download page exceeds 15 MB.')
         parser = _Links()
@@ -195,7 +199,8 @@ class RulesOperations:
                        and urlsplit(url).path.casefold().endswith('.txt')), None)
         if source is None:
             raise ValueError('No official English TXT link was found. Import a downloaded rules TXT file instead.')
-        content = self.fetch_bytes_fn(source)
+        content = fetch(source)
+        cancelled(cancel)
         if len(content) > 15 * 1024 * 1024:
             raise ValueError('The rules download exceeds 15 MB.')
         return RulesStore(self.rules_path).install(content.decode('utf-8-sig'), source)

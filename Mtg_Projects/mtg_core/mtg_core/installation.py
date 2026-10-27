@@ -4,6 +4,7 @@ from contextlib import closing
 from dataclasses import dataclass
 import json
 import gzip
+import hashlib
 from pathlib import Path
 import sqlite3
 import threading
@@ -12,7 +13,7 @@ import urllib.parse
 import zlib
 
 from .artwork_downloads import fill_artwork, artwork_usage, clear_optional_artwork
-from .bulk_install import cancelled, import_cards, import_rulings
+from .bulk_install import cancelled, import_cards, import_rulings, records
 from .datasets import InstallationState, parse_manifest
 from .downloads import check_space, get_download_manager, DownloadCancelled
 from .install_progress import InstallProgress
@@ -127,7 +128,7 @@ class InstallationEngine:
     def plan(self, *, cancel, report, mode=None):
         cancelled(cancel)
         bulk = {}
-        for kind in ("default_cards", "rulings"):
+        for kind in ("default_cards", "rulings", "oracle_tags"):
             report(
                 dict(
                     operation="Checking " + kind.replace("_", " "),
@@ -136,9 +137,12 @@ class InstallationEngine:
                     total=None,
                 )
             )
-            metadata = self.fetch("https://api.scryfall.com/bulk-data/" + kind)
-            if metadata.get("type") != kind or not isinstance(
-                metadata.get("updated_at"), str
+            slug = "oracle-tags" if kind == "oracle_tags" else kind
+            metadata = self.fetch("https://api.scryfall.com/bulk-data/" + slug)
+            if (
+                not isinstance(metadata, dict)
+                or metadata.get("type") != kind
+                or not isinstance(metadata.get("updated_at"), str)
             ):
                 raise ValueError("Invalid Scryfall bulk metadata")
             bulk_url(metadata)
@@ -177,9 +181,15 @@ class InstallationEngine:
         ):
             raise ValueError("No compatible recommendation datasets are available")
         downloads = sum(
-            int(m.get("compressed_size") or m.get("size") or 150 * 1024**2)
-            for m in bulk.values()
+            int(
+                m.get("compressed_size")
+                or m.get("size")
+                or (16 if k == "oracle_tags" else 150) * 1024**2
+            )
+            for k, m in bulk.items()
         )
+        # The official rules page and TXT document each have a 15 MiB cap.
+        downloads += 30 * 1024**2
         downloads += sum(e.size for e in entries)
         # Allow room for retained generations, expanded archives, the staged
         # catalog and transactional index work. These are estimates, not promises.
@@ -205,6 +215,13 @@ class InstallationEngine:
         )
 
     def _version(self, kind):
+        if kind == "oracle_tags":
+            row = self.service.database.get_sync_state("scryfall_oracle_tags")
+            return (
+                row["version"]
+                if row and self.service.database.oracle_tag_count()
+                else None
+            )
         if kind == "default_cards":
             row = self.service.database.get_sync_state("installed-default_cards")
             return row["version"] if row else None
@@ -239,6 +256,7 @@ class InstallationEngine:
                 report,
                 offline=self.state.get("artwork_mode", "on_demand") == "full_offline",
                 artwork_only=artwork_only,
+                reference=not repair_cards,
             )
             report = progress
             progress.begin("artwork" if artwork_only else "checks")
@@ -277,6 +295,9 @@ class InstallationEngine:
             changed = False
             for kind, metadata in plan.bulk.items():
                 cancelled(cancel)
+                if kind == "oracle_tags":
+                    progress.complete()
+                    progress.begin("reference")
                 version = metadata["updated_at"]
                 if (
                     not (repair_cards and kind == "default_cards")
@@ -334,16 +355,27 @@ class InstallationEngine:
                         self.service._printings_refreshed.clear()
                         self.state.set("cached_artwork_refresh_pending", True)
                         changed = True
-                    else:
+                    elif kind == "rulings":
                         import_rulings(
                             path, self.service, version, cancel=cancel, report=report
                         )
+                    elif kind == "oracle_tags":
+                        self.service.install_oracle_tags(
+                            records(path), metadata, cancel=cancel
+                        )
+                    else:
+                        raise ValueError("Unsupported installation dataset: " + kind)
                 except (ValueError, EOFError, gzip.BadGzipFile, zlib.error):
                     path.unlink(missing_ok=True)
                     raise
                 versions = self.state.get("bulk_versions", {})
                 versions[kind] = version
                 self.state.set("bulk_versions", versions)
+            if not repair_cards:
+                if progress.active != "reference":
+                    progress.complete()
+                    progress.begin("reference")
+                self.refresh_reference_rules(root, cancel=cancel, report=report)
             progress.complete()
             progress.begin("recommendations")
             entries, _ = self.distribution.available(plan.recommendations)
@@ -430,6 +462,51 @@ class InstallationEngine:
             raise
         finally:
             self._lock.release()
+
+    def refresh_reference_rules(self, root, *, cancel, report):
+        from .rules_reference import RULES_PAGE, parse_rules
+
+        def fetch(url):
+            cancelled(cancel)
+            page = url == RULES_PAGE
+            key = (
+                str(time.time_ns())
+                if page
+                else hashlib.sha256(url.encode()).hexdigest()
+            )
+            destination = root / ("rules-" + key + (".html" if page else ".txt"))
+            try:
+                self.downloader.download(
+                    url,
+                    destination,
+                    cancel=cancel,
+                    max_bytes=15 * 1024**2,
+                    validate=None
+                    if page
+                    else lambda path: parse_rules(path.read_text(encoding="utf-8-sig")),
+                    progress=lambda p: report(
+                        dict(
+                            operation="Downloading comprehensive rules"
+                            if not page
+                            else "Finding official comprehensive rules",
+                            phase=p.phase,
+                            current=p.downloaded,
+                            total=p.total,
+                            unit="bytes",
+                            speed=p.bytes_per_second,
+                            remaining=p.remaining_seconds,
+                        )
+                    ),
+                )
+                cancelled(cancel)
+                return destination.read_bytes()
+            finally:
+                if page:
+                    destination.unlink(missing_ok=True)
+
+        result = self.service.refresh_rules(fetch_bytes=fetch, cancel=cancel)
+        self.state.set("rules_version", result["metadata"]["effective_date"])
+        return result
 
     def refresh_cached(self, *, cancel, report):
         last = ""

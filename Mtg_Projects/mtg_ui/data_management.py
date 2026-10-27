@@ -241,6 +241,10 @@ class DataManagementDialog(W.QDialog):
 
     def refresh_versions(self):
         bulk = self.engine.state.get("bulk_versions", {})
+        if self.engine.state.get("rules_version"):
+            bulk = dict(
+                bulk, comprehensive_rules=self.engine.state.get("rules_version")
+            )
         installed = []
         for source in ("edhrec", "archidekt", "moxfield"):
             item = self.engine.state.installed("recommendations-" + source)

@@ -26,7 +26,7 @@ def test_stage_completion_is_explicit_and_pause_is_persisted():
     assert saved["task_state"] == "paused"
     assert saved["stages"][0]["state"] == "completed"
     assert saved["stages"][1]["state"] == "paused"
-    assert "on demand" in saved["stages"][3]["title"]
+    assert "on demand" in next(s for s in saved['stages'] if s['id'] == 'artwork')['title']
 
 
 def test_resume_preserves_stages_only_for_same_dataset_plan():
@@ -53,5 +53,6 @@ def test_offline_artwork_is_an_explicit_stage_and_failures_are_persisted():
     progress = InstallProgress(state, events.append, offline=True)
     progress.begin("artwork")
     progress.stop("failed")
-    assert state.get("installation_progress")["stages"][3]["state"] == "failed"
-    assert "offline" in events[-1]["stages"][3]["title"]
+    stage = next(s for s in state.get('installation_progress')['stages'] if s['id'] == 'artwork')
+    assert stage['state'] == 'failed'
+    assert "offline" in stage['title']

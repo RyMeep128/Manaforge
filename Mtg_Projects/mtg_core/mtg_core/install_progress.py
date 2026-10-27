@@ -6,7 +6,7 @@ import json
 
 
 class InstallProgress:
-    def __init__(self, state, report, *, offline=False, artwork_only=False):
+    def __init__(self, state, report, *, offline=False, artwork_only=False, reference=True):
         self.state, self.report = state, report
         self.stages = (
             [("artwork", "Download and verify artwork")]
@@ -14,6 +14,7 @@ class InstallProgress:
             else [
                 ("checks", "Check storage and requirements"),
                 ("cards", "Prepare card data and rulings"),
+                ("reference", "Prepare Oracle Tags and comprehensive rules"),
                 ("recommendations", "Prepare recommendation data"),
                 (
                     "artwork",
@@ -24,6 +25,8 @@ class InstallProgress:
                 ("finalize", "Verify datasets and finalize setup"),
             ]
         )
+        if not reference:
+            self.stages = [stage for stage in self.stages if stage[0] != 'reference']
         self.statuses = {key: "pending" for key, _ in self.stages}
         self.previous = state.get("installation_progress", {})
         previous_stages = self.previous.get("stages", [])

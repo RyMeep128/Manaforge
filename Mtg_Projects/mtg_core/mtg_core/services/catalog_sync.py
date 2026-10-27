@@ -43,7 +43,20 @@ class CatalogSyncOperations:
             records = json.loads(text)
         else:
             records = [json.loads(line) for line in text.splitlines() if line.strip()]
-        tagging_count = self.database.replace_oracle_tags(records)
+        return self.install_oracle_tags(records, metadata)
+
+    def install_oracle_tags(self, records, metadata, *, cancel=None) -> dict:
+        from mtg_core.artwork_storage_lock import cancelled
+
+        validated = []
+        for record in records:
+            cancelled(cancel)
+            if not isinstance(record, dict):
+                raise ValueError('Invalid Oracle Tags record')
+            validated.append(record)
+        records = validated
+        tagging_count = self.database.replace_oracle_tags(
+            records, cancel=cancel, require_nonempty=True)
         tag_count = sum(1 for record in records if record.get('label'))
         updated_at = metadata.get('updated_at')
         now = time.time()
@@ -52,7 +65,7 @@ class CatalogSyncOperations:
             version=str(updated_at or ''),
             last_sync_at=now,
             payload={'updated_at': updated_at, 'tags': tag_count,
-                     'taggings': tagging_count, 'download_url': download_url},
+                     'taggings': tagging_count, 'download_url': metadata.get('jsonl_download_uri') or metadata.get('download_uri')},
         )
         return {'tags': tag_count, 'taggings': tagging_count,
                 'updated_at': updated_at, 'last_sync_at': now}

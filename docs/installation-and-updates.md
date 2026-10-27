@@ -32,7 +32,8 @@ reuse completed datasets/downloads where their version still matches.
 
 Setup and Data Management share the same progress cards. Overall progress counts
 completed stages rather than claiming a percentage of an unknown total duration.
-The stages cover requirements, cards/rulings, recommendations, artwork preparation,
+The stages cover requirements, cards/rulings, Oracle Tags and comprehensive rules,
+recommendations, artwork preparation,
 and final verification. On-demand mode prepares artwork storage; it does not
 schedule a full-artwork download. Completed stages stay visible.
 
@@ -87,7 +88,7 @@ New fills point directly at canonical files instead of making a second full copy
 
 Home → **Settings → Data Management** provides:
 
-- Installed card/rulings and recommendation versions.
+- Installed card/rulings, Oracle Tags, comprehensive rules, and recommendation versions.
 - **Check for Updates**, estimated sizes and **Apply updates**.
 - Artwork mode and future data/artwork storage selection.
 - **Download missing artwork**, including resumable fills and changed-image retries.
@@ -131,7 +132,15 @@ and a lightweight six-hour timer decide whether a check is due; no provider is p
 continuously. Explicit offline mode disables automatic network work. Failed/interrupted
 updates retry no more often than daily, and manual checks remain available.
 
-Checks compare Scryfall Default Cards and Rulings timestamps and the GitHub manifest
+Setup installs Scryfall Oracle Tags for offline tag search and the official English
+Comprehensive Rules from Wizards for offline rules browsing. Later data updates also
+refresh these references. Tag imports replace their index transactionally; rules use
+the existing validated snapshot importer. Failed or cancelled reference work retains
+previous usable data and leaves setup/update pending for retry. Completed card and
+rulings imports are reused on retry. Artwork-only fills and targeted card repairs do
+not download reference datasets.
+
+Checks compare Scryfall Default Cards, Rulings, and Oracle Tags timestamps and the GitHub manifest
 independently. They do not depend on set-release dates or application releases.
 New recommendation archives use the existing compatibility/schema and integrity
 checks. Card and rulings downloads use current compressed JSONL exports, with legacy

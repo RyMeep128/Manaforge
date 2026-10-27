@@ -17,6 +17,23 @@ from mtg_core.installation import InstallationEngine, InstallPlan, MONTH
 from mtg_core.services import CardService
 
 
+RULES_DOCUMENT = """Magic: The Gathering Comprehensive Rules
+These rules are effective as of October 1, 2026.
+1. Game Concepts
+100. General
+100.1. Fixture rules for setup integration.
+7. Additional Rules
+702. Keyword Abilities
+702.1. Fixture abilities.
+9. Casual Variants
+903. Commander
+903.1. Fixture commander rules.
+Glossary
+Credits
+Synthetic fixture.
+"""
+
+
 def card(identity=1, *, version=1):
     return dict(
         object="card",
@@ -279,6 +296,10 @@ def test_setup_downloads_and_installs_same_base_datasets_without_artwork(
         comment="Ruling",
     )
     rulings = export(tmp_path / "rulings.gz", [ruling])
+    tags = export(
+        tmp_path / "tags.gz",
+        [dict(id="tag", label="ramp", oracle_ids=[card()["oracle_id"]])],
+    )
 
     class Downloads:
         def __init__(self):
@@ -288,7 +309,13 @@ def test_setup_downloads_and_installs_same_base_datasets_without_artwork(
             self.calls.append(url)
             destination = Path(destination)
             destination.parent.mkdir(parents=True, exist_ok=True)
-            if url.endswith("manifest.json"):
+            if url == "https://magic.wizards.com/en/rules":
+                destination.write_text(
+                    '<a href="https://media.wizards.com/2026/MagicCompRules.txt">TXT</a>'
+                )
+            elif url.endswith("MagicCompRules.txt"):
+                destination.write_text(RULES_DOCUMENT)
+            elif url.endswith("manifest.json"):
                 destination.write_text(json.dumps(manifest))
             else:
                 selected = (
@@ -296,6 +323,8 @@ def test_setup_downloads_and_installs_same_base_datasets_without_artwork(
                     if url.endswith("cards.gz")
                     else rulings
                     if url.endswith("rulings.gz")
+                    else tags
+                    if url.endswith("tags.gz")
                     else packaged / Path(url).name
                 )
                 shutil.copyfile(selected, destination)
@@ -307,11 +336,18 @@ def test_setup_downloads_and_installs_same_base_datasets_without_artwork(
 
     def metadata(url):
         kind = url.rsplit("/", 1)[-1]
+        kind = "oracle_tags" if kind == "oracle-tags" else kind
         return dict(
             type=kind,
             updated_at="2026-10-26",
             jsonl_download_uri="https://data.scryfall.io/"
-            + ("cards.gz" if kind == "default_cards" else "rulings.gz"),
+            + (
+                "cards.gz"
+                if kind == "default_cards"
+                else "tags.gz"
+                if kind == "oracle_tags"
+                else "rulings.gz"
+            ),
         )
 
     state = InstallationState(tmp_path / "state.sqlite3")
@@ -322,6 +358,63 @@ def test_setup_downloads_and_installs_same_base_datasets_without_artwork(
     assert state.get("setup_complete") is True
     assert len(engine.service.database.search_syntax("o:draw")) == 2
     assert engine.service.get_rulings(card()["oracle_id"])["rulings"]
+    assert "ramp" in engine.service.get_oracle_tags(card()["oracle_id"])
+    assert engine.service.rules_index()["metadata"]["effective_date"] == "2026-10-01"
+    assert any(
+        row["number"] == "903.1" for row in engine.service.search_rules("commander")
+    )
     assert state.installed("recommendations-archidekt")
     assert not any(".png" in url for url in downloads.calls)
     assert not state.get("update_pending")
+
+
+def test_missing_or_invalid_oracle_export_keeps_working_tags(tmp_path):
+    svc = service(tmp_path)
+    seed = dict(label="existing", oracle_ids=[card()["oracle_id"]])
+    svc.database.replace_oracle_tags([seed])
+    metadata = dict(
+        updated_at="new", jsonl_download_uri="https://data.scryfall.io/tags.gz"
+    )
+    for invalid in ([], [dict(label="tag with no cards")], [[]]):
+        with pytest.raises(ValueError):
+            svc.install_oracle_tags(invalid, metadata, cancel=threading.Event())
+        assert svc.get_oracle_tags(card()["oracle_id"]) == ["existing"]
+        assert svc.database.get_sync_state("scryfall_oracle_tags") is None
+
+
+def test_cancelled_oracle_import_keeps_previous_tags_and_checkpoint(tmp_path):
+    svc = service(tmp_path)
+    svc.database.replace_oracle_tags(
+        [dict(label="existing", oracle_ids=[card()["oracle_id"]])]
+    )
+    cancel = threading.Event()
+
+    def incoming():
+        yield dict(label="new", oracle_ids=[card()["oracle_id"]])
+        cancel.set()
+        yield dict(label="later", oracle_ids=[card()["oracle_id"]])
+
+    with pytest.raises(DownloadCancelled):
+        svc.install_oracle_tags(incoming(), dict(updated_at="new"), cancel=cancel)
+    assert svc.get_oracle_tags(card()["oracle_id"]) == ["existing"]
+
+
+def test_rules_download_failure_preserves_existing_offline_rules(tmp_path):
+    svc = service(tmp_path)
+    from mtg_core.rules_reference import RulesStore
+
+    RulesStore(svc.rules_path).install(RULES_DOCUMENT, "fixture")
+    original = svc.rules_index()["metadata"]["checksum"]
+
+    class BrokenDownloads:
+        def download(self, url, destination, **kwargs):
+            raise OSError("Connection unavailable")
+
+    state = InstallationState(tmp_path / "state.sqlite3")
+    engine = InstallationEngine(state, service=svc, downloader=BrokenDownloads())
+    with pytest.raises(OSError):
+        engine.refresh_reference_rules(
+            tmp_path, cancel=threading.Event(), report=lambda value: None
+        )
+    assert svc.rules_index()["metadata"]["checksum"] == original
+    assert not state.get("setup_complete", False)
