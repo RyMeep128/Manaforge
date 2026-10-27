@@ -77,8 +77,9 @@ current application session; save a local copy or follow the deck for offline us
 
 ## Publish, update and unpublish
 
-In the unified Manaforge application, open a deck in Deck Editor and choose
-**More → Publish to Library…**. Manaforge saves the deck locally, freezes a shared
+In the unified Manaforge application, open a deck in Deck Editor and click
+**Upload to Library** beside **Import** (also available under **More → Publish to Library…**).
+Manaforge saves the deck locally, freezes a shared
 snapshot and opens a separate **Publish deck** dialog. Select a destination library
 inside the dialog and sign in or join a library there if needed. Review the deck
 name and color choices, then choose **Publish deck**. Color identity is suggested

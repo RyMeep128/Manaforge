@@ -195,6 +195,10 @@ class EditorWindow(W.QMainWindow):
         self.quick_add.returnPressed.connect(self.quick_add_enter)
         add_row.addWidget(self.quick_add)
         self.import_button = self.button(add_row, 'Import', self.import_decklist)
+        self.upload_button = self.button(add_row, 'Upload to Library', self.publish_action.trigger)
+        self.upload_button.setAccessibleDescription('Choose a library and review this deck before uploading.')
+        self.upload_button.setEnabled(self.publish_action.isEnabled())
+        self.publish_action.changed.connect(lambda: self.upload_button.setEnabled(self.publish_action.isEnabled()))
 
         view_group, view_row = self.toolbar_group('View As')
         self.view_mode = W.QComboBox()
@@ -269,7 +273,7 @@ class EditorWindow(W.QMainWindow):
         self.control_extra_rows = []
         self.name.setMinimumHeight(34)
         for widget in (self.format, self.view_mode, self.group, self.sort, self.filter, self.quick_add,
-                       self.filter_help, self.workspace_button, self.import_button, self.organization_overflow, self.add_lands_button,
+                       self.filter_help, self.workspace_button, self.import_button, self.upload_button, self.organization_overflow, self.add_lands_button,
                        *self.header_actions):
             # The theme's 32px content minimum also needs room for its borders.
             # Let Qt honor the styled size hint instead of clipping it at 32px.
