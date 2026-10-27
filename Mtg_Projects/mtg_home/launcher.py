@@ -262,6 +262,11 @@ def main():
             socket.deleteLater()
     server.newConnection.connect(activate)
     home.show()
+    from mtg_print.application_launcher import configure_window
+    try:
+        configure_window(home)
+    except OSError:
+        get_logger(__name__).exception('Could not configure taskbar relaunch properties')
     from mtg_ui.application_updates import application_updates
     # The window exists, setup has succeeded, and the event loop is processing.
     # Build the required service on the verification worker before permitting cleanup.

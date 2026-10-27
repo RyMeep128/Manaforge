@@ -4,7 +4,9 @@
 
 Run **Manaforge-Setup.exe** for a per-user Windows installation without administrator
 access. Use the Manaforge Start Menu shortcut or
-`%LOCALAPPDATA%/Programs/Manaforge/Manaforge.cmd`. Application binaries live under
+`%LOCALAPPDATA%/Programs/Manaforge/Manaforge.exe`. The optional desktop shortcut
+and Start Menu shortcut target this permanent, windowless launcher. The legacy
+`Manaforge.cmd` now forwards to it as well. Application binaries live under
 `versions/<APP_VERSION>`; data remains in its existing configured locations.
 The optional **Manaforge-Windows.zip** remains a portable distribution: extract
 the entire archive and keep `_internal` beside `Manaforge.exe`.
@@ -173,6 +175,35 @@ initializes its required card service, runs the existing local health checks, an
 confirms prior data locations remain accessible before allowing cleanup. Failed
 initialization or checks retain the record and old installation. Successful updates
 write `last-success.json` and clear the pending record after cleanup.
+
+The permanent launcher reads `active-install.json` beside itself (with an atomic
+backup record). This is the single authority for the active and previous verified
+installation; it never selects a directory merely because it has a newer name.
+Fresh/manual installs run the packaged startup diagnostic and verify every payload
+hash before activation. In-app updates activate only after the existing startup and
+data checks succeed. One previous verified installation remains as a fallback;
+later successful updates clean displaced fallbacks using the same conservative
+inventory rules. Interrupted or failed activation leaves the previous target usable.
+
+Normal launch forwards arguments without a command prompt, checks payload presence
+and sizes, hashes the application executable, and rehashes dependencies whose file
+timestamps changed since activation. Missing, modified or immediately failing
+executables fall back to the previous verified installation. If neither record
+provides a usable copy, a repair message asks the user to rerun the installer.
+Failures occurring after the launcher's brief process-start check still use the
+application's existing diagnostics; they cannot always trigger automatic fallback.
+The launcher requires Windows' .NET Framework 4.x, present on supported CI runners.
+
+Shortcuts and windows share the `Manaforge.Desktop` application identity, and new
+window-created taskbar pins carry a permanent relaunch command and icon location.
+The installer refreshes its Start Menu shortcut and safely migrates an existing
+standard desktop shortcut targeting a managed version or the legacy CMD launcher.
+Customized desktop shortcuts with arguments are preserved unless the desktop task
+is explicitly selected. Windows does not provide reliable automatic migration of
+existing taskbar pins or arbitrary user-created links to old version directories:
+unpin those once and pin the new Start Menu shortcut. User-created links targeting
+the permanent executable remain valid across updates. Launcher maintenance touches
+only application files and activation metadata, never decks or configured data.
 
 Cleanup only handles installer-owned version directories under
 `%LOCALAPPDATA%/Programs/Manaforge/versions`. It rejects junctions, symlinks and

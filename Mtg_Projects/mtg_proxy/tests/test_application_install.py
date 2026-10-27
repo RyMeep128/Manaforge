@@ -135,7 +135,9 @@ def test_successful_startup_finalizes_and_clears_record(roots, monkeypatch):
     monkeypatch.setattr(health, 'run_checks', lambda *a, **k: [SimpleNamespace(status='Healthy')])
     message = install.finish_startup(NEW, cancel=threading.Event(), report=lambda p: None, initialize=lambda: None)
     assert 'successfully' in message
-    assert not old.exists()
+    assert old.exists()  # The permanent launcher retains one verified fallback.
+    from mtg_print.application_launcher import read_state
+    assert [entry['version'] for entry in read_state()['installations']] == [NEW, OLD]
     assert install.read_record() is None
     assert json.loads((install.state_path().parent / 'last-success.json').read_text())['status'] == 'successful'
 

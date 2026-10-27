@@ -10,8 +10,10 @@ for directory in (products, products / 'mtg_core'):
 
 
 def main():
-    if '--verify-bundle' in sys.argv:
-        # CI-only packaged startup check; no provider requests or setup downloads.
+    from mtg_print.application_launcher import configure_windows_identity
+    configure_windows_identity()
+    if '--verify-bundle' in sys.argv or '--activate-install' in sys.argv:
+        # Packaged startup check; no provider requests or setup downloads.
         import ijson
         from mtg_core.discovery_starter import starter_data
         from mtg_home.home import HomeWindow
@@ -22,6 +24,15 @@ def main():
         window = HomeWindow()
         app.processEvents()
         window.close()
+        if '--activate-install' in sys.argv:
+            from mtg_print.application_launcher import activate
+            from mtg_proxy.constants import APP_VERSION
+            if not getattr(sys, 'frozen', False):
+                raise ValueError('Activation requires an installed bundle')
+            from mtg_print.application_install import version_path
+            if Path(sys.executable).resolve().parent != version_path(APP_VERSION).resolve():
+                raise ValueError('Activation requires the managed installation path')
+            activate(APP_VERSION)
         return 0
     if '--print-studio' in sys.argv:
         # The legacy printer deliberately owns its own QApplication and event loop.
@@ -43,7 +54,7 @@ if __name__ == '__main__':
         from PyQt6 import QtWidgets as W
         from mtg_core.diagnostics import get_logger
         get_logger(__name__).exception('Manaforge startup failed')
-        if '--verify-bundle' not in sys.argv:
+        if '--verify-bundle' not in sys.argv and '--activate-install' not in sys.argv:
             app = W.QApplication.instance() or W.QApplication(sys.argv)
             W.QMessageBox.critical(None, 'Manaforge could not start', str(exc))
         result = 1

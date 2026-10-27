@@ -240,7 +240,26 @@ def finish_startup(version, *, cancel, report, initialize):
     protected = [state.path, *(state.storage_root(c) for c in ('cards', 'recommendations', 'artwork'))]
     if state.get('catalog_path'):
         protected.append(state.get('catalog_path'))
-    save_record(record, 'verified')
+    from .application_launcher import activate, read_state, retained_paths
+    # Migrate a pre-launcher installation only after verifying its owned payload.
+    if not read_state()['installations'] and record['old_version'] != version:
+        try:
+            if Path(record['old_install_path']).resolve() == version_path(record['old_version']).resolve():
+                activate(record['old_version'])
+        except (OSError, ValueError, KeyError, TypeError):
+            pass  # Portable or modified old copies remain under existing cleanup rules.
+    # Persist displaced fallback versions before promotion so interrupted cleanup retries.
+    obsolete = record.get('obsolete_installations', [])
+    obsolete += [item for item in read_state()['installations']
+                 if item['version'] not in {version, record['old_version']} and item not in obsolete]
+    save_record(record, 'verified', obsolete_installations=obsolete)
+    activate(version)
+    protected.extend(retained_paths())
+    for item in obsolete:
+        displaced = dict(record, old_version=item['version'], old_install_path=str(version_path(item['version'])))
+        if not cleanup_old(displaced, protected):
+            save_record(record, 'cleanup_pending')
+            return 'Update installed. Previous fallback cleanup will retry next startup.'
     if not cleanup_old(record, protected):
         save_record(record, 'cleanup_pending')
         return 'Update installed. Locked application files will be cleaned on next startup.'

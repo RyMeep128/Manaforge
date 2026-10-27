@@ -107,6 +107,16 @@ jobs:
           }
       - name: Archive application files only
         run: Compress-Archive -LiteralPath Mtg_Projects/dist/Manaforge -DestinationPath Manaforge-Windows.zip
+      - name: Build permanent GUI launcher
+        run: |
+          New-Item -ItemType Directory -Force launcher-output | Out-Null
+          Add-Type -AssemblyName System.Drawing
+          $icon = [Drawing.Icon]::ExtractAssociatedIcon((Join-Path $env:GITHUB_WORKSPACE 'Mtg_Projects/dist/Manaforge/Manaforge.exe'))
+          $stream = [IO.File]::Create((Join-Path $env:GITHUB_WORKSPACE 'launcher-output/Manaforge.ico'))
+          try { $icon.Save($stream) } finally { $stream.Dispose(); $icon.Dispose() }
+          $compiler = Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
+          & $compiler /nologo /target:winexe /platform:anycpu /reference:System.Web.Extensions.dll /reference:System.Windows.Forms.dll /reference:System.Core.dll /win32icon:launcher-output/Manaforge.ico /out:launcher-output/Manaforge.exe installer/Launcher.cs
+          if ($LASTEXITCODE -ne 0) { throw 'Permanent launcher compilation failed' }
       - name: Inventory payload and compile per-user installer
         run: |
           python tools/application_inventory.py
@@ -127,11 +137,19 @@ jobs:
         run: |
           $versionLine = Get-Content Mtg_Projects/mtg_proxy/constants.py | Where-Object { $_ -match '^APP_VERSION = ' }
           $version = $versionLine.Split('"')[1]
-          $target = Join-Path $env:RUNNER_TEMP 'manaforge-installer-check'
-          $process = Start-Process -FilePath (Join-Path $env:GITHUB_WORKSPACE 'Manaforge-Setup.exe') -ArgumentList @('/VERYSILENT', '/NORESTART', "/DIR=`"$target`"", '/NOLAUNCH=1') -WindowStyle Hidden -PassThru -Wait
+          $target = Join-Path $env:LOCALAPPDATA "Programs/Manaforge/versions/$version"
+          $process = Start-Process -FilePath (Join-Path $env:GITHUB_WORKSPACE 'Manaforge-Setup.exe') -ArgumentList @('/VERYSILENT', '/NORESTART', "/DIR=`"$target`"", '/NOLAUNCH=1', '/TASKS=desktopicon') -WindowStyle Hidden -PassThru -Wait
           if ($process.ExitCode -ne 0) { throw 'Installer smoke test failed' }
           $receipt = Get-Content -LiteralPath (Join-Path $target 'manaforge-install.json') | ConvertFrom-Json
           if ($receipt.version -ne $version -or !(Test-Path -LiteralPath (Join-Path $target 'Manaforge.exe'))) { throw 'Installer receipt or executable missing' }
+          $permanent = Join-Path $env:LOCALAPPDATA 'Programs/Manaforge'
+          $active = Get-Content -LiteralPath (Join-Path $permanent 'active-install.json') | ConvertFrom-Json
+          if ($active.installations[0].version -ne $version) { throw 'Permanent launcher activation failed' }
+          $shell = New-Object -ComObject WScript.Shell
+          $shortcut = $shell.CreateShortcut((Join-Path ([Environment]::GetFolderPath('Programs')) 'Manaforge.lnk'))
+          if ($shortcut.TargetPath -ne (Join-Path $permanent 'Manaforge.exe')) { throw 'Start Menu shortcut is not permanent' }
+          $desktop = $shell.CreateShortcut((Join-Path ([Environment]::GetFolderPath('Desktop')) 'Manaforge.lnk'))
+          if ($desktop.TargetPath -ne (Join-Path $permanent 'Manaforge.exe')) { throw 'Desktop shortcut is not permanent' }
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: Manaforge-Windows

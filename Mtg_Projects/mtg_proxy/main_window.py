@@ -275,8 +275,13 @@ class AppShellWindow(QMainWindow):
         if sys.platform == "win32" and not embedded:
             import ctypes
 
-            myappid = "proxy.printer"
+            myappid = "Manaforge.Desktop"
             ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+            from mtg_print.application_launcher import configure_window
+            try:
+                configure_window(self)
+            except OSError:
+                pass
 
         self._application = application
         self._current_project_path = os.path.join(cwd, "print.json")
