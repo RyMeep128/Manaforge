@@ -13,6 +13,7 @@ class PublishingPanel(W.QDialog):
         self.workspace = workspace
         self.snapshot = None
         self.reviewed = None
+        self._destination_id = None
         self.setWindowTitle('Publish deck')
         self.setWindowModality(C.Qt.WindowModality.WindowModal)
         self.setMinimumWidth(480)
@@ -76,6 +77,8 @@ class PublishingPanel(W.QDialog):
             self.workspace.connection_status.setText('Cannot prepare publication: ' + str(error))
             return False
         self.snapshot = snapshot
+        records = self.workspace.connections.list()
+        self._destination_id = records[0]['id'] if len(records) == 1 else None
         self.colors.setText(color_identity)
         self.reviewed = None
         self.error.hide()
@@ -83,23 +86,24 @@ class PublishingPanel(W.QDialog):
         self.open()
         return True
 
+    def use_connection(self, connection_id):
+        self._destination_id = connection_id
+        self.refresh()
+
     def choose_library(self):
         selected = self.destination.currentData()
-        if selected:
-            for index in range(self.workspace.selector.count()):
-                if self.workspace.selector.itemData(index)['id'] == selected:
-                    self.workspace.selector.setCurrentIndex(index)
-                    break
-        elif self.destination.currentIndex() >= 0:
+        if selected == '__join__':
             self.workspace.sign_in(new=True)
-            self.refresh()
+        else:
+            self._destination_id = selected
+        self.refresh()
 
     def connect_library(self):
-        connection = self.workspace.connection()
-        self.workspace.sign_in(new=not bool(connection))
+        connection = self.workspace.connection(self._destination_id) if self._destination_id else None
+        self.workspace.sign_in(new=connection is None, connection=connection)
 
     def context(self):
-        connection = self.workspace.connection()
+        connection = self.workspace.connection(self._destination_id) if self._destination_id else None
         if not connection or not self.snapshot:
             return None, None, None
         client = self.workspace.clients.get(connection['id'])
@@ -120,16 +124,18 @@ class PublishingPanel(W.QDialog):
         self.title.setText(self.snapshot['name'])
         self.destination.blockSignals(True)
         self.destination.clear()
+        if self._destination_id is None and rows:
+            self.destination.addItem('Choose a library', None)
         for row in rows:
             self.destination.addItem(row['name'], row['id'])
             if connection and row['id'] == connection['id']:
                 self.destination.setCurrentIndex(self.destination.count()-1)
-        self.destination.addItem('Join another library…', None)
+        self.destination.addItem('Join another library...', '__join__')
         self.destination.blockSignals(False)
         self.destination.setVisible(bool(rows))
         self.destination.setEnabled(not busy)
         signed_in = bool(client and client.token)
-        self.connect_button.setVisible(not signed_in)
+        self.connect_button.setVisible(not signed_in and (bool(connection) or not rows))
         self.connect_button.setText('Sign in' if connection else 'Join library')
         self.connect_button.setEnabled(not busy)
         self.connect_button.setDefault(not signed_in)
@@ -137,7 +143,7 @@ class PublishingPanel(W.QDialog):
         self.color_label.setVisible(signed_in)
         pending = link['pending'] if link else None
         if not connection:
-            caption = 'Join a library to share this deck with friends.'
+            caption = 'Choose the destination library.' if rows else 'Join a library to share this deck with friends.'
         elif not signed_in:
             caption = 'Sign in to ' + connection['name'] + ' to publish this deck.'
         elif pending:
@@ -193,7 +199,7 @@ class PublishingPanel(W.QDialog):
             self.workspace.preview_dialog.hide()
             self.accept()
             if callable(getattr(client, 'browse', None)):
-                self.workspace._load_after_signin = connection['id']
+                self.workspace._load_after_signin = True
         self.workspace.submit('Unpublishing deck' if unpublish else 'Publishing deck snapshot', work, complete)
 
     def review(self):

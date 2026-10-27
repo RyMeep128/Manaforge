@@ -246,6 +246,9 @@ class DeckPreviewDialog(W.QDialog):
         count = sum(entry['quantity'] for entry in deck['entries'])
         colors = ', '.join(COLOR_NAMES[color] for color in row['color_identity']) or 'Colorless'
         self.metadata.setText(f"{row['owner']} · {deck['format']} · {count} cards · {colors}")
+        source_name = row.get('library', {}).get('name') or row.get('follow', {}).get('server_name')
+        if source_name:
+            self.metadata.setText(source_name + ' · ' + self.metadata.text())
         self.hint.setText(hint)
         self.hint.setVisible(bool(hint))
         self.description.setText(deck['description'])

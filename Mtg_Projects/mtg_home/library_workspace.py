@@ -1,5 +1,6 @@
 """Opt-in library browsing with the shared job queue and local deck persistence."""
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import sqlite3
 
 from PyQt6 import QtCore as C, QtGui as G, QtWidgets as W
@@ -42,6 +43,7 @@ class LibraryWorkspace(W.QMainWindow):
         self.deck_root = Path(deck_root or data_root() / 'decks')
         self.client_factory = client_factory
         self.clients, self.views, self.states = {}, {}, {}
+        self.connection_errors = {}
         self.message = ''
         self._job = None
         self._completion = None
@@ -51,6 +53,7 @@ class LibraryWorkspace(W.QMainWindow):
         self._load_after_signin = None
         self.jobs = jobs or JobQueue(self)
         self.jobs.status.connect(self.job_status)
+        self.jobs.progress.connect(self.library_progress)
         self.jobs.idle.connect(self.queue_idle)
         self.thumbnails = Thumbnails(_LocalArtwork(service), self)
         self.thumbnails.updated.connect(self.refresh_icons)
@@ -62,13 +65,7 @@ class LibraryWorkspace(W.QMainWindow):
         title = plain_label('Browse Online', 'title')
         header.addWidget(title)
         header.addStretch()
-        self.selector = W.QComboBox()
-        self.selector.setAccessibleName('Saved library connections')
-        self.selector.setPlaceholderText('Choose a library')
-        self.selector.setMinimumWidth(180)
-        self.selector.setMaximumWidth(320)
-        self.selector.currentIndexChanged.connect(self.switch_library)
-        header.addWidget(self.selector)
+        header.addWidget(plain_label('All libraries', 'muted'))
         self.add_button = W.QPushButton('Join library')
         self.add_button.setProperty('buttonRole', 'primary')
         self.add_button.clicked.connect(lambda: self.sign_in(new=True))
@@ -78,14 +75,12 @@ class LibraryWorkspace(W.QMainWindow):
         header.addWidget(self.add_button)
         header.addWidget(self.login_button)
         self.library_button = W.QToolButton()
-        self.library_button.setText('Library')
+        self.library_button.setText('Libraries')
         self.library_button.setAccessibleName('Manage libraries')
         self.library_button.setPopupMode(W.QToolButton.ToolButtonPopupMode.InstantPopup)
         self.library_menu = W.QMenu(self.library_button)
-        self.library_menu.addAction('Join another library…', lambda: self.sign_in(new=True))
-        self.disconnect_button = self.library_menu.addAction('Sign out', self.disconnect)
-        self.remove_button = self.library_menu.addAction('Remove connection…', self.confirm_remove)
         self.library_button.setMenu(self.library_menu)
+        self.login_menu = W.QMenu(self.login_button)
         header.addWidget(self.library_button)
         layout.addLayout(header)
         self.connection_status = plain_label('', 'muted')
@@ -201,8 +196,6 @@ class LibraryWorkspace(W.QMainWindow):
         self.preview_dialog.footer.addWidget(self.following.review_button)
         self.preview_dialog.footer.addWidget(self.following.accept_button)
         self.preview_dialog.more_menu.addAction(self.following.stop_button)
-        self.library_menu.addSeparator()
-        self.library_menu.addAction(self.following.automatic)
         self.preview_dialog.footer.addWidget(self.publishing.accept_button)
         layout.insertWidget(4, self.following)
         self.progress = W.QProgressBar()
@@ -221,81 +214,128 @@ class LibraryWorkspace(W.QMainWindow):
         self.reload_connections()
         C.QTimer.singleShot(0, self.restore_saved_sessions)
 
-    def connection(self):
-        return self.selector.currentData()
+    def connection(self, connection_id=None):
+        records = self.connections.list()
+        if connection_id:
+            return next((row for row in records if row['id'] == connection_id), None)
+        return records[0] if len(records) == 1 else None
+
+    def connected_libraries(self):
+        return [row for row in self.connections.list() if getattr(self.clients.get(row['id']), 'token', None)]
+
+    def selected_connection(self):
+        item = self.results.currentItem()
+        row = item.data(C.Qt.ItemDataRole.UserRole) if item else {}
+        if row.get('library'):
+            return self.connection(row['library']['id'])
+        follow = row.get('follow')
+        if follow:
+            return next((record for record in self.connections.list() if record['server_id'] == follow['server_id']), None)
+        return self.connection()
+
+    @staticmethod
+    def row_key(row):
+        source = row.get('follow') or row.get('library') or {}
+        return source.get('server_id'), row['deck_id']
 
     def reload_connections(self, selected=None):
-        selected = selected or (self.connection() or {}).get('id')
-        self.selector.blockSignals(True)
-        self.selector.clear()
-        for row in self.connections.list():
-            self.selector.addItem(row['name'], row)
-            self.selector.setItemData(self.selector.count()-1, row['url'], C.Qt.ItemDataRole.ToolTipRole)
-        for index in range(self.selector.count()):
-            if self.selector.itemData(index)['id'] == selected:
-                self.selector.setCurrentIndex(index)
-        self.selector.blockSignals(False)
         self.switch_library()
 
+    def rebuild_library_menu(self):
+        self.library_menu.clear()
+        self.library_menu.addAction('Join another library...', lambda: self.sign_in(new=True))
+        for record in self.connections.list():
+            client = self.clients.get(record['id'])
+            signed_in = bool(client and client.token)
+            state = 'Unavailable' if record['id'] in self.connection_errors else ('Connected' if signed_in else 'Sign in needed')
+            menu = self.library_menu.addMenu(record['name'] + ' - ' + state)
+            menu.setToolTipsVisible(True)
+            if record['id'] in self.connection_errors:
+                message = self.connection_errors[record['id']]
+                action = menu.addAction(message.splitlines()[0][:120])
+                action.setEnabled(False)
+                action.setToolTip(message)
+                menu.addSeparator()
+            if signed_in:
+                menu.addAction('Sign in as another user...', lambda checked=False, row=record: self.sign_in(new=False, connection=row))
+                menu.addAction('Sign out', lambda checked=False, row=record: self.disconnect(connection=row))
+            else:
+                label = 'Reconnect' if self.saved_sessions.has(record['id']) else 'Sign in...'
+                menu.addAction(label, lambda checked=False, row=record: self.reconnect(connection=row))
+            menu.addAction('Remove connection...', lambda checked=False, row=record: self.confirm_remove(connection=row))
+        if self.connections.list():
+            self.library_menu.addSeparator()
+            self.library_menu.addAction(self.following.automatic)
+
     def switch_library(self):
-        self.results.clear()
-        self.details.clear()
         if self.view_mode.currentIndex() == 1:
             self.refresh_follows()
-            return
-        connection = self.connection()
-        view = self.views.get(connection['id']) if connection else None
-        for key, field in self.filters.items():
-            field.blockSignals(True)
-            field.setText(view['filters'].get(key, '') if view else '')
-            field.blockSignals(False)
-        if view:
-            self.render(view['rows'])
-        self.update_controls()
+        else:
+            self.render_shared()
+
+    def search_filters(self):
+        return {key: field.text().strip() for key, field in self.filters.items() if field.text().strip()}
+
+    def render_shared(self):
+        filters = self.search_filters()
+        combined = {}
+        records = self.connections.list()
+        # Prefer the authenticated connection if the same library has two saved origins.
+        records.sort(key=lambda row: bool(getattr(self.clients.get(row['id']), 'token', None)))
+        for record in records:
+            view = self.views.get(record['id'])
+            if not view or view.get('filters', {}) != filters:
+                continue
+            for value in view['rows']:
+                row = dict(value)
+                row['library'] = record
+                row['cached'] = record['id'] in self.connection_errors or not getattr(self.clients.get(record['id']), 'token', None)
+                combined[(record['server_id'], row['deck_id'])] = row
+        self.render(list(combined.values()))
 
     def update_controls(self):
         busy = bool(self._job) or self.jobs.busy
-        connection = self.connection()
-        client = self.clients.get(connection['id']) if connection else None
-        connected = bool(client and client.token)
+        records, connected = self.connections.list(), self.connected_libraries()
+        disconnected = [row for row in records if not getattr(self.clients.get(row['id']), 'token', None)]
         follows = self.view_mode.currentIndex() == 1
-        self.selector.setVisible(bool(self.selector.count()))
-        self.selector.setEnabled(not busy)
-        self.library_button.setVisible(bool(connection))
+        self.library_button.setVisible(bool(records))
         self.library_button.setEnabled(not busy)
-        self.add_button.setVisible(not connection and follows)
+        self.rebuild_library_menu()
+        self.add_button.setVisible(not records and follows)
         self.add_button.setEnabled(not busy)
-        self.login_button.setVisible(bool(connection) and not connected)
-        self.login_button.setText('Reconnect' if connection and self.saved_sessions.has(connection['id']) else 'Sign in')
+        self.login_button.setVisible(bool(disconnected))
+        label = 'Reconnect' if disconnected and all(self.saved_sessions.has(row['id']) for row in disconnected) else 'Sign in'
+        self.login_button.setText(label + (f' ({len(disconnected)})' if len(disconnected) > 1 else ''))
         self.login_button.setEnabled(not busy)
-        self.disconnect_button.setEnabled(bool(connected or (connection and self.saved_sessions.has(connection['id']))) and not busy)
-        self.remove_button.setEnabled(bool(connection) and not busy)
-        self.search_button.setVisible(bool(connection) and not follows)
-        self.search_button.setEnabled(connected and not busy)
-        self.filters['query'].setVisible(bool(connection) or follows)
-        self.filters['query'].setEnabled(not busy and (follows or connected))
-        self.filter_button.setVisible(bool(connection) and not follows)
-        self.filter_button.setEnabled(connected and not busy)
-        self.filters_container.setVisible(not follows and self.filter_button.isChecked() and bool(connection))
+        self.search_button.setVisible(bool(records) and not follows)
+        self.search_button.setEnabled(bool(connected) and not busy)
+        self.filters['query'].setVisible(bool(records) or follows)
+        self.filter_button.setVisible(bool(records) and not follows)
+        self.filter_button.setEnabled(bool(connected) and not busy)
+        self.filters_container.setVisible(not follows and self.filter_button.isChecked() and bool(records))
         active_filters = sum(bool(field.text()) for key, field in self.filters.items() if key != 'query')
         self.filter_button.setText(f'Filters ({active_filters})' if active_filters else 'Filters')
-        self.sort.setVisible(bool(connection) or follows)
+        self.sort.setVisible(bool(records) or follows)
         self.sort.setEnabled(not busy and bool(self.results.count()))
         self.following.setVisible(follows)
         self.following.refresh()
-        view = self.views.get(connection['id'], {}) if connection else {}
-        self.more_button.setVisible(not follows and bool(view.get('more')))
-        self.more_button.setEnabled(connected and not busy)
+        filters = self.search_filters()
+        more = any(self.views.get(row['id'], {}).get('more') and self.views[row['id']].get('filters', {}) == filters for row in connected)
+        self.more_button.setVisible(not follows and more)
+        self.more_button.setEnabled(not busy and more)
         for field in self.filters.values():
-            field.setEnabled(not busy and (follows or connected))
+            field.setEnabled(not busy and (follows or bool(connected)))
         self.publishing.refresh()
         self.update_preview_actions()
         self.progress.setVisible(bool(self._job))
         if not self._job:
-            state = self.states.get(connection['id'], '') if connection else self.message
-            base = ('Connected' if connected else 'Sign in to load decks') if connection else ''
-            self.connection_status.setText(state or base)
-            self.connection_status.setVisible(bool(state or base))
+            summary = (f'{len(records)} ' + ('library' if len(records) == 1 else 'libraries')
+                       + f' - {len(connected)} signed in') if records else ''
+            errors = sum(row['id'] in self.connection_errors for row in records)
+            if errors:
+                summary += f' - {errors} unavailable'
+            self.connection_status.setText(self.message or summary)
+            self.connection_status.setVisible(bool(self.message or summary))
         self.update_empty_state()
 
     def update_preview_actions(self):
@@ -303,7 +343,7 @@ class LibraryWorkspace(W.QMainWindow):
         row = self.preview_dialog.row or {}
         normal = self.preview_dialog.scope == 'browse'
         follow = row.get('follow')
-        connection = self.connection()
+        connection = self.selected_connection()
         client = self.clients.get(connection['id']) if connection else None
         selected = self.results.currentItem() is not None
         self.copy_button.setVisible(normal)
@@ -322,21 +362,20 @@ class LibraryWorkspace(W.QMainWindow):
         self.gallery_stack.setCurrentIndex(0 if visible else 1)
         if visible:
             return
-        connection = self.connection()
-        client = self.clients.get(connection['id']) if connection else None
+        records, connected = self.connections.list(), self.connected_libraries()
         follows = self.view_mode.currentIndex() == 1
-        view = self.views.get(connection['id']) if connection else None
+        loaded = any(row['id'] in self.views for row in records)
         if self._job:
             title, text, action = 'Loading…', 'Your decks will appear here.', None
         elif follows:
             title, text, action = ('No matching decks', 'Try a different search.', 'Clear search') if self.results.count() else (
                 'No followed decks yet', 'Follow a shared deck to keep a read-only copy available offline.', 'Browse shared decks')
-        elif not connection:
+        elif not records:
             title, text, action = 'Join a deck library', 'Connect to your own library or one shared by a friend.', 'Join library'
-        elif not client or not client.token:
-            title, text, action = 'Sign in to your library', 'Your local decks are always available in the Deck Editor.', 'Sign in'
-        elif view is None:
-            title, text, action = 'Browse shared decks', 'See what your friends have shared in this library.', 'Load decks'
+        elif not connected:
+            title, text, action = 'Sign in to your libraries', 'Your local decks are always available in the Deck Editor.', 'Sign in'
+        elif not loaded:
+            title, text, action = 'Browse shared decks', 'See what your friends have shared across your libraries.', 'Load decks'
         elif any(field.text() for field in self.filters.values()):
             title, text, action = 'No decks found', 'Try another search or reset the filters.', 'Reset search'
         else:
@@ -372,16 +411,23 @@ class LibraryWorkspace(W.QMainWindow):
                 return
         self.update_controls()
         key, self._load_after_signin = self._load_after_signin, None
-        connection = self.connection()
-        if key and connection and key == connection['id'] and self.view_mode.currentIndex() == 0:
+        if key and self.view_mode.currentIndex() == 0:
             self.search()
 
-    def reconnect(self):
-        connection = self.connection()
+    def reconnect(self, *, connection=None):
+        if connection is None:
+            records = [row for row in self.connections.list() if not getattr(self.clients.get(row['id']), 'token', None)]
+            if len(records) > 1:
+                self.login_menu.clear()
+                for record in records:
+                    self.login_menu.addAction(record['name'], lambda checked=False, row=record: self.reconnect(connection=row))
+                self.login_menu.popup(self.login_button.mapToGlobal(C.QPoint(0, self.login_button.height())))
+                return
+            connection = records[0] if records else self.connection()
         if connection and self.saved_sessions.has(connection['id']):
             self.restore_saved_sessions(records=[connection])
         else:
-            self.sign_in(new=False)
+            self.sign_in(new=False, connection=connection)
 
     def restore_saved_sessions(self, *, records=None):
         if self._job or self.jobs.busy or self._signin_dialog is not None:
@@ -419,9 +465,12 @@ class LibraryWorkspace(W.QMainWindow):
                 self.states[record['id']] = message
                 if client is not None:
                     self.clients[record['id']] = client
-            connection = self.connection()
-            if connection and getattr(self.clients.get(connection['id']), 'token', None) and not self.publishing.isVisible():
-                self._load_after_signin = connection['id']
+                    self.connection_errors.pop(record['id'], None)
+                elif message:
+                    self.connection_errors[record['id']] = message
+            if self.connected_libraries() and not self.publishing.isVisible():
+                self._load_after_signin = True
+            self.switch_library()
         self.submit('Restoring saved sign-in', work, complete, with_context=True)
 
     def toggle_filters(self, checked):
@@ -460,10 +509,10 @@ class LibraryWorkspace(W.QMainWindow):
         rows = [self.results.item(index).data(C.Qt.ItemDataRole.UserRole) for index in range(self.results.count())]
         self.render(rows)
 
-    def confirm_remove(self):
+    def confirm_remove(self, *, connection=None):
         if W.QMessageBox.question(self, 'Remove library connection',
                 'Remove this saved connection? Your local decks and followed copies will stay on this computer.') == W.QMessageBox.StandardButton.Yes:
-            self.remove()
+            self.remove(connection=connection)
 
     def submit(self, operation, work, complete, *, with_context=False, on_error=None):
         if self._job or self.jobs.busy:
@@ -522,13 +571,13 @@ class LibraryWorkspace(W.QMainWindow):
         # JobQueue still owns the worker until idle; only then re-enable actions.
         self.update_controls()
 
-    def sign_in(self, *, new):
+    def sign_in(self, *, new, connection=None):
         if self._job or self.jobs.busy:
             return
         if self._signin_dialog is not None and self._signin_dialog.isVisible():
             self._signin_dialog.raise_()
             return
-        connection = None if new else self.connection()
+        connection = None if new else (connection or self.connection())
         if not new and not connection:
             return
         parent = self.publishing if self.publishing.isVisible() else self
@@ -592,11 +641,14 @@ class LibraryWorkspace(W.QMainWindow):
                 self.clients[record['id']] = client
                 self.message = ''
                 self.states[record['id']] = warning
+                self.connection_errors.pop(record['id'], None)
                 if warning:
                     self.statusBar().showMessage(warning, 15000)
-                self.reload_connections(record['id'])
+                if self.publishing.isVisible():
+                    self.publishing.use_connection(record['id'])
+                self.reload_connections()
                 if callable(getattr(client, 'browse', None)) and not self.publishing.isVisible():
-                    self._load_after_signin = record['id']
+                    self._load_after_signin = True
                 dialog.password.clear()
                 dialog.invitation.clear()
                 dialog.set_busy(False)
@@ -632,8 +684,8 @@ class LibraryWorkspace(W.QMainWindow):
         except Exception:
             return False
 
-    def disconnect(self):
-        connection = self.connection()
+    def disconnect(self, *, connection=None):
+        connection = connection or self.connection()
         client = self.clients.get(connection['id']) if connection else None
         if not connection:
             return
@@ -643,10 +695,13 @@ class LibraryWorkspace(W.QMainWindow):
             return 'Saved sign-in removed. Server unavailable; its session will expire automatically.'
         def complete(message):
             self.states[connection['id']] = message
+            self.connection_errors.pop(connection['id'], None)
+            self.message = message
+            self.switch_library()
         self.submit('Disconnecting', work, complete)
 
-    def remove(self):
-        connection = self.connection()
+    def remove(self, *, connection=None):
+        connection = connection or self.connection()
         if not connection:
             return
         client = self.clients.get(connection['id'])
@@ -654,38 +709,85 @@ class LibraryWorkspace(W.QMainWindow):
             self.forget_saved_sign_in(connection, client)
             self.connections.remove(connection['id'])
         def complete(_):
-            for mapping in (self.clients, self.views, self.states):
+            for mapping in (self.clients, self.views, self.states, self.connection_errors):
                 mapping.pop(connection['id'], None)
             self.reload_connections()
         self.submit('Removing library connection', work, complete)
 
     def search(self, *, more=False):
-        if self.view_mode.currentIndex() == 1:
+        if self.view_mode.currentIndex() == 1 or self._job or self.jobs.busy:
             return
-        connection = self.connection()
-        client = self.clients.get(connection['id']) if connection else None
-        if not client or not client.token:
+        records = self.connected_libraries()
+        filters = self.search_filters()
+        if more:
+            records = [row for row in records if self.views.get(row['id'], {}).get('more')
+                       and self.views[row['id']].get('filters', {}) == filters]
+        if not records:
             return
         self.search_timer.stop()
-        previous = self.views.get(connection['id'], {})
-        filters = {key: field.text().strip() for key, field in self.filters.items() if field.text().strip()}
-        # Loading another page always continues the previous query, regardless of draft edits.
-        if more:
-            filters = previous.get('filters', {})
-        offset = previous.get('offset', 0) + 50 if more else 0
-        def complete(rows):
-            combined = {row['deck_id']: row for row in (previous.get('rows', []) if more else [])}
-            combined.update({row['deck_id']: row for row in rows})
-            self.views[connection['id']] = {'rows': list(combined.values()), 'filters': filters,
-                                            'offset': offset, 'more': len(rows) == 50}
-            self.states[connection['id']] = ''
-            self.switch_library()
-        self.submit('Searching library', lambda: client.browse(filters, offset=offset), complete)
+        previous = {row['id']: self.views.get(row['id'], {}) for row in records}
+        def fetch(record, cancel):
+            if cancel.is_set():
+                raise DownloadCancelled()
+            offset = previous[record['id']].get('offset', 0) + 50 if more else 0
+            try:
+                rows = self.clients[record['id']].browse(filters, offset=offset)
+                return record, rows, offset, None
+            except (LibraryError, OSError) as error:
+                return record, None, offset, str(error)
+        def work(cancel, report):
+            outcomes = []
+            with ThreadPoolExecutor(max_workers=min(4, len(records))) as pool:
+                pending = [pool.submit(fetch, record, cancel) for record in records]
+                for future in as_completed(pending):
+                    if cancel.is_set():
+                        for queued in pending:
+                            queued.cancel()
+                        raise DownloadCancelled()
+                    outcome = future.result()
+                    outcomes.append(outcome)
+                    report({'operation': 'Loaded ' + outcome[0]['name'], 'phase': outcome[0]['id'],
+                            'library_outcome': outcome, 'library_filters': filters, 'library_more': more})
+            return outcomes
+        def complete(outcomes):
+            self.message = ''
+            for outcome in outcomes:
+                self.apply_library_outcome(outcome, filters, more)
+            self.render_shared()
+        self.submit('Loading all libraries', work, complete, with_context=True)
+
+    def apply_library_outcome(self, outcome, filters, more):
+        record, rows, offset, error = outcome
+        key = record['id']
+        if error is not None:
+            self.connection_errors[key] = error
+            self.states[key] = error
+            client = self.clients.get(key)
+            if client is not None and not client.token:
+                try:
+                    self.saved_sessions.forget(key)
+                except LibraryError:
+                    pass
+            return
+        previous = self.views.get(key, {})
+        combined = {row['deck_id']: row for row in (previous.get('rows', []) if more else [])}
+        combined.update({row['deck_id']: row for row in rows})
+        self.views[key] = {'rows': list(combined.values()), 'filters': filters,
+                           'offset': offset, 'more': len(rows) == 50}
+        self.states[key] = ''
+        self.connection_errors.pop(key, None)
+
+    @C.pyqtSlot(str, object)
+    def library_progress(self, job_id, value):
+        if job_id != self._job or not isinstance(value, dict) or 'library_outcome' not in value:
+            return
+        self.apply_library_outcome(value['library_outcome'], value['library_filters'], value['library_more'])
+        self.render_shared()
 
     def render(self, rows):
         selected = self.results.currentItem()
         selected = selected.data(C.Qt.ItemDataRole.UserRole) if selected else None
-        key = (selected.get('follow', {}).get('server_id'), selected['deck_id']) if selected else None
+        key = self.row_key(selected) if selected else None
         rows = list(rows)
         if self.sort.currentIndex() == 1:
             rows.sort(key=lambda row: row['deck']['name'].casefold())
@@ -704,8 +806,12 @@ class LibraryWorkspace(W.QMainWindow):
             if follow:
                 footer = f"Update available · revision {follow['pending_revision']}" if follow['pending_revision'] else (
                     'Offline copy · following stopped' if not follow['active'] else f"Following · revision {row['revision']}")
+            source_name = row.get('library', {}).get('name') or row.get('follow', {}).get('server_name')
+            if row.get('cached'):
+                footer = 'Cached preview - library unavailable or signed out'
             row.update(name=deck['name'], cover=(cover.get('card_id'), None) if cover else (None, None),
-                       summary_lines=[f"{row['owner']} · {deck['format']}", f'{count} cards · {colors}', footer])
+                       summary_lines=[f"{row['owner']} - {source_name or deck['format']}",
+                                      f"{deck['format']} - {count} cards - {colors}", footer])
             label = deck['name'] + '\n' + '\n'.join(row['summary_lines'])
             if follow:
                 label += '\nFollowed · ' + follow['server_name']
@@ -713,7 +819,7 @@ class LibraryWorkspace(W.QMainWindow):
             item.setData(C.Qt.ItemDataRole.UserRole, row)
             item.setToolTip(label)
             self.results.addItem(item)
-            if (row.get('follow', {}).get('server_id'), row['deck_id']) == key:
+            if self.row_key(row) == key:
                 self.results.setCurrentItem(item)
         if self.view_mode.currentIndex() == 1:
             self.filter_followed_rows()
@@ -745,7 +851,8 @@ class LibraryWorkspace(W.QMainWindow):
             return
         row = current.data(C.Qt.ItemDataRole.UserRole)
         follow = row.get('follow')
-        hint = ('Read-only · Available offline. ' + follow['message']) if follow else ''
+        hint = ('Read-only - Available offline. ' + follow['message']) if follow else (
+            'Cached preview. Refresh or sign in to its library for the latest version.' if row.get('cached') else '')
         self.preview_dialog.set_publication(row, hint=hint)
         self.update_controls()
 
@@ -779,11 +886,11 @@ class LibraryWorkspace(W.QMainWindow):
         return '\n'.join(lines)
 
     def copy_selected(self):
-        connection, item = self.connection(), self.results.currentItem()
+        connection, item = self.selected_connection(), self.results.currentItem()
         if item is None:
             return
         publication = item.data(C.Qt.ItemDataRole.UserRole)
-        source = publication.get('follow') or connection
+        source = publication.get('follow') or publication.get('library') or connection
         if not source:
             return
         def complete(path):
@@ -798,7 +905,7 @@ class LibraryWorkspace(W.QMainWindow):
                     deck_root=self.deck_root), complete)
 
     def follow_selected(self):
-        connection, item = self.connection(), self.results.currentItem()
+        connection, item = self.selected_connection(), self.results.currentItem()
         client = self.clients.get(connection['id']) if connection else None
         if not item or not client or not client.token or self.view_mode.currentIndex() != 0:
             return

@@ -38,7 +38,7 @@ def test_opening_browse_online_never_connects(app, tmp_path):
     def forbidden(*args, **kwargs):
         pytest.fail('Opening Browse Online must not connect to a server')
     workspace = LibraryWorkspace(object(), root=tmp_path, client_factory=forbidden)
-    assert workspace.selector.count() == 0
+    assert len(workspace.connections.list()) == 0
     assert workspace.add_button.isEnabled()
     assert not workspace.search_button.isEnabled()
     assert workspace.empty_title.text() == 'Join a deck library'
@@ -87,36 +87,58 @@ def test_browse_is_background_copy_is_editable_and_connection_removal_keeps_copi
     assert document.deck.deck_id != value['deck_id']
     workspace.remove()
     settle(app, workspace)
-    assert workspace.selector.count() == 0
+    assert len(workspace.connections.list()) == 0
     assert copies[0].exists()
     assert workspace.prepare_to_close()
     workspace.close()
 
 
-def test_connection_switches_and_failed_search_preserve_separate_snapshots(app, tmp_path):
-    workspace = LibraryWorkspace(object(), root=tmp_path)
+def test_all_libraries_share_gallery_and_offline_failure_keeps_own_snapshot(app, tmp_path):
+    workspace = LibraryWorkspace(object(), root=tmp_path, deck_root=tmp_path / 'decks')
     first = workspace.connections.add(SimpleNamespace(url='https://first.invalid'),
                                       {'server_id': str(uuid.uuid4()), 'name': 'First'})
     second = workspace.connections.add(SimpleNamespace(url='https://second.invalid'),
                                        {'server_id': str(uuid.uuid4()), 'name': 'Second'})
     first_row, second_row = record(), record()
+    # Identical remote IDs must remain distinct across independent servers.
+    second_row['deck_id'] = first_row['deck_id']
     second_row['deck']['name'] = 'Second deck'
-    workspace.views[first['id']] = {'rows': [first_row], 'filters': {'owner': 'first'}, 'more': False}
-    workspace.views[second['id']] = {'rows': [second_row], 'filters': {'owner': 'second'}, 'more': False}
+    workspace.views[first['id']] = {'rows': [first_row], 'filters': {}, 'more': False}
     class Offline:
         token = 'session'
         def browse(self, *args, **kwargs):
             raise OSError('Library is offline')
+    class Online:
+        token = 'session'
+        def browse(self, *args, **kwargs):
+            return [second_row]
     workspace.clients[first['id']] = Offline()
-    workspace.reload_connections(first['id'])
+    workspace.clients[second['id']] = Online()
+    workspace.reload_connections()
     workspace.search()
     settle(app, workspace)
+    assert workspace.results.count() == 2
+    assert '1 unavailable' in workspace.connection_status.text()
+    rows = [workspace.results.item(i).data(C.Qt.ItemDataRole.UserRole) for i in range(2)]
+    assert len({workspace.row_key(row) for row in rows}) == 2
+    assert {row['library']['name'] for row in rows} == {'First', 'Second'}
+    assert next(row for row in rows if row['library']['id'] == first['id'])['cached']
+    copies = []
+    workspace.copyCreated.connect(copies.append)
+    for index, row in enumerate(rows):
+        workspace.results.setCurrentRow(index)
+        assert workspace.selected_connection()['id'] == row['library']['id']
+        workspace.copy_selected()
+        settle(app, workspace)
+        source = DeckStore().load(copies[-1]).deck.extras['library_source']
+        assert source['server_id'] == row['library']['server_id']
+        assert source['server_url'] == row['library']['url']
+    workspace.remove(connection=first)
+    settle(app, workspace)
+    assert [row['id'] for row in workspace.connections.list()] == [second['id']]
     assert workspace.results.count() == 1
-    assert 'offline' in workspace.connection_status.text()
-    workspace.selector.setCurrentIndex(1)
-    assert 'Second deck' in workspace.results.item(0).text()
-    assert workspace.filters['owner'].text() == 'second'
-    assert not workspace.search_button.isEnabled()
+    assert all(path.exists() for path in copies)
+    assert workspace.search_button.isEnabled()
     assert workspace.prepare_to_close()
     workspace.close()
 
@@ -149,7 +171,7 @@ def test_add_and_reconnect_are_explicit_and_do_not_persist_credentials(app, tmp_
     assert not calls
     complete_form(workspace.sign_in(new=True), creating=True)
     settle(app, workspace)
-    assert workspace.selector.count() == 1
+    assert len(workspace.connections.list()) == 1
     connection = workspace.connection()
     assert workspace.clients[connection['id']].token == 'memory-session'
     assert calls[0]['server_id'] is None
@@ -301,7 +323,7 @@ def test_follow_offline_restart_review_and_accept_are_separate(app, tmp_path):
     assert workspace.prepare_to_close()
     workspace.close()
     restarted = LibraryWorkspace(object(), root=tmp_path, deck_root=tmp_path / 'decks')
-    assert restarted.selector.count() == 0 and not restarted.clients
+    assert len(restarted.connections.list()) == 0 and not restarted.clients
     restarted.view_mode.setCurrentIndex(1)
     restarted.results.setCurrentRow(0)
     assert 'New owner revision' in restarted.details.toPlainText()
@@ -323,16 +345,17 @@ def test_gallery_reuses_project_tiles_and_only_opens_actions_with_a_deck(app, tm
     connection = workspace.connections.add(client, {'server_id': str(uuid.uuid4()), 'name': 'Friends'})
     workspace.clients[connection['id']] = client
     workspace.reload_connections(connection['id'])
-    workspace.render([record()])
+    workspace.views[connection['id']] = {'rows': [record()], 'filters': {}, 'more': False}
+    workspace.render_shared()
     assert workspace.results.viewMode() == W.QListView.ViewMode.IconMode
     assert isinstance(workspace.results.itemDelegate(), ProjectTileDelegate)
-    assert workspace.selector.currentText() == 'Friends'
+    assert not hasattr(workspace, 'selector')
     assert workspace.filters_container.isHidden()
     assert not workspace.preview_dialog.isVisible()
     assert workspace.preview_dialog.isAncestorOf(workspace.copy_button)
     assert workspace.preview_dialog.isAncestorOf(workspace.follow_button)
     row = workspace.results.item(0).data(C.Qt.ItemDataRole.UserRole)
-    assert row['summary_lines'][0] == 'friend · Custom'
+    assert row['summary_lines'][0] == 'friend - Friends'
     assert row['color_identity'] == ['U']
     workspace.results.setCurrentRow(0)
     workspace.open_preview()
@@ -384,7 +407,7 @@ def test_failed_sign_in_stays_in_form_and_can_retry_without_losing_address(app, 
     dialog.submit_button.click()
     settle(app, workspace)
     assert workspace._signin_dialog is None
-    assert workspace.selector.count() == 1
+    assert len(workspace.connections.list()) == 1
     assert workspace.empty_title.text() == 'No decks shared yet'
     assert calls[-1][2] == ''
     assert workspace.prepare_to_close()
@@ -580,4 +603,97 @@ def test_remember_checkbox_saves_session_and_removing_connection_forgets_it(app,
     settle(app, workspace)
     assert not workspace.saved_sessions.has(connection['id'])
     assert workspace.prepare_to_close()
+    workspace.close()
+
+
+def test_combined_gallery_loads_healthy_library_before_slow_source(app, tmp_path):
+    workspace = LibraryWorkspace(object(), root=tmp_path)
+    release = threading.Event()
+    class Client:
+        token = 'session'
+        def __init__(self, name, slow=False):
+            self.url, self.slow = 'https://' + name + '.invalid', slow
+        def browse(self, filters, offset=0):
+            if self.slow:
+                release.wait(5)
+                raise OSError('Offline')
+            return [record()]
+    for name, slow in [('slow', True), ('healthy', False)]:
+        client = Client(name, slow)
+        connection = workspace.connections.add(client, {'server_id': str(uuid.uuid4()), 'name': name})
+        workspace.clients[connection['id']] = client
+    workspace.reload_connections()
+    workspace.search()
+    try:
+        deadline = time.monotonic() + 3
+        while workspace.results.count() == 0 and time.monotonic() < deadline:
+            app.processEvents()
+            time.sleep(0.005)
+        assert workspace.jobs.busy
+        assert workspace.results.count() == 1
+        row = workspace.results.item(0).data(C.Qt.ItemDataRole.UserRole)
+        assert row['library']['name'] == 'healthy'
+    finally:
+        release.set()
+        settle(app, workspace)
+        workspace.close()
+
+
+def test_combined_pagination_only_fetches_sources_with_more_pages(app, tmp_path):
+    workspace = LibraryWorkspace(object(), root=tmp_path)
+    calls = []
+    class Client:
+        token = 'session'
+        def __init__(self, name, count):
+            self.url, self.name, self.count = 'https://' + name + '.invalid', name, count
+        def browse(self, filters, offset=0):
+            calls.append((self.name, offset))
+            return [record() for _ in range(self.count if offset == 0 else 1)]
+    for name, count in [('large', 50), ('small', 1)]:
+        client = Client(name, count)
+        connection = workspace.connections.add(client, {'server_id': str(uuid.uuid4()), 'name': name})
+        workspace.clients[connection['id']] = client
+    workspace.reload_connections()
+    workspace.search()
+    settle(app, workspace)
+    assert workspace.results.count() == 51
+    workspace.search(more=True)
+    settle(app, workspace)
+    assert workspace.results.count() == 52
+    assert sorted(calls) == [('large', 0), ('large', 50), ('small', 0)]
+    assert workspace.more_button.isHidden()
+    workspace.close()
+
+
+def test_publishing_requires_one_destination_without_filtering_gallery(app, tmp_path):
+    workspace = LibraryWorkspace(object(), root=tmp_path)
+    clients = []
+    class Client:
+        token = 'session'
+        def __init__(self, name):
+            self.url = 'https://' + name + '.invalid'
+            self.server_id, self.account_id = str(uuid.uuid4()), str(uuid.uuid4())
+            self.operations = []
+        def publish_operation(self, operation):
+            self.operations.append(operation)
+            return {'deck_id': str(uuid.uuid4()), 'revision': 1}
+    for name in ['first', 'second']:
+        client = Client(name)
+        connection = workspace.connections.add(client, {'server_id': client.server_id, 'name': name})
+        workspace.clients[connection['id']] = client
+        workspace.views[connection['id']] = {'rows': [record()], 'filters': {}, 'more': False}
+        clients.append((client, connection))
+    workspace.reload_connections()
+    panel = workspace.publishing
+    assert panel.prepare(record()['deck'], 'U')
+    assert panel.context() == (None, None, None)
+    panel.publish()
+    assert not any(client.operations for client, _ in clients)
+    panel.destination.setCurrentIndex(panel.destination.findData(clients[1][1]['id']))
+    assert workspace.results.count() == 2
+    panel.publish()
+    settle(app, workspace)
+    assert not clients[0][0].operations
+    assert len(clients[1][0].operations) == 1
+    assert workspace.results.count() == 2
     workspace.close()

@@ -29,7 +29,7 @@ class FollowingPanel(W.QWidget):
         self.stop_button.triggered.connect(self.stop)
         actions.addWidget(self.check_button)
         layout.addLayout(actions)
-        self.automatic = G.QAction('Check followed decks every 5 minutes', self)
+        self.automatic = G.QAction('Check all libraries every 5 minutes', self)
         self.automatic.setCheckable(True)
         self.automatic.toggled.connect(self.set_automatic)
         self.timer = C.QTimer(self)
@@ -43,13 +43,12 @@ class FollowingPanel(W.QWidget):
 
     def refresh(self):
         busy = bool(self.workspace._job) or self.workspace.jobs.busy
-        connection, selected = self.workspace.connection(), self.selected()
-        client = self.workspace.clients.get(connection['id']) if connection else None
-        self.check_button.setEnabled(bool(client and client.token) and not busy)
-        self.automatic.setEnabled(bool(connection) and not busy)
+        records, selected = self.workspace.connections.list(), self.selected()
+        self.check_button.setEnabled(bool(self.workspace.connected_libraries()) and not busy)
+        self.automatic.setEnabled(bool(records) and not busy)
         self.automatic.blockSignals(True)
         try:
-            self.automatic.setChecked(self.workspace.followed.auto_check(connection['server_id']) if connection else False)
+            self.automatic.setChecked(bool(records) and all(self.workspace.followed.auto_check(row['server_id']) for row in records))
         except (sqlite3.Error, OSError):
             self.automatic.setChecked(False)
             self.automatic.setEnabled(False)
@@ -62,15 +61,12 @@ class FollowingPanel(W.QWidget):
         self.stop_button.setEnabled(bool(selected and selected['active']) and not busy)
 
     def set_automatic(self, enabled):
-        connection = self.workspace.connection()
-        if connection:
-            try:
-                self.workspace.followed.auto_check(connection['server_id'], enabled)
-            except Exception:
-                self.status.setText('Could not save automatic check preference. Check local storage and retry.')
-                self.automatic.blockSignals(True)
-                self.automatic.setChecked(not enabled)
-                self.automatic.blockSignals(False)
+        try:
+            for record in self.workspace.connections.list():
+                self.workspace.followed.auto_check(record['server_id'], enabled)
+        except Exception:
+            self.status.setText('Could not save automatic check preference. Check local storage and retry.')
+            self.refresh()
 
     def tick(self):
         if (self.workspace._job or self.workspace.jobs.busy or self.workspace.preview_dialog.isVisible()
@@ -88,24 +84,28 @@ class FollowingPanel(W.QWidget):
             self.status.setText('Automatic checks paused because local storage is unavailable.')
 
     def check(self, *, connection=None):
-        connection = connection or self.workspace.connection()
-        client = self.workspace.clients.get(connection['id']) if connection else None
-        if not client or not client.token:
+        records = [connection] if connection else self.workspace.connected_libraries()
+        records = [row for row in records if getattr(self.workspace.clients.get(row['id']), 'token', None)]
+        if not records:
             return
-        self.checked_at[connection['server_id']] = time.monotonic()
-        def complete(records):
-            count = sum(bool(row['pending']) for row in records)
-            errors = sum(row['state'] in ('offline', 'unavailable', 'source_changed') for row in records)
-            message = f"{count} update(s) available" + (f" · {errors} unavailable source(s)" if errors else ".")
+        for record in records:
+            self.checked_at[record['server_id']] = time.monotonic()
+        def work(cancel, report):
+            return [(record, self.workspace.followed.check(self.workspace.clients[record['id']], cancel=cancel, report=report))
+                    for record in records if not cancel.is_set()]
+        def complete(results):
+            count, errors = 0, 0
+            for record, follows in results:
+                updates = sum(bool(row['pending']) for row in follows)
+                count += updates
+                errors += sum(row['state'] in ('offline', 'unavailable', 'source_changed') for row in follows)
+                if updates:
+                    self.workspace.followUpdates.emit(record['name'], updates)
+            message = f'{count} update(s) available' + (f' - {errors} unavailable source(s)' if errors else '.')
             self.status.setText(message)
             self.workspace.message = message
-            self.workspace.states[connection['id']] = message
             self.workspace.refresh_follows()
-            if count:
-                self.workspace.followUpdates.emit(connection['name'], count)
-        self.workspace.submit('Checking followed decks',
-            lambda cancel, report: self.workspace.followed.check(client, cancel=cancel, report=report),
-            complete, with_context=True)
+        self.workspace.submit('Checking all followed decks', work, complete, with_context=True)
 
     def review(self):
         selected = self.selected()

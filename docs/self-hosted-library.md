@@ -58,11 +58,12 @@ a connection to clear its saved token and revoke the session when reachable.
 Restoring a session does not extend its original expiry. Each independent library
 keeps its own token; no server or account is configured by default.
 
-Without saved sign-in, selecting a saved library or opening Browse Online never
-automatically contacts it. Use
-**Sign in**; a successful sign-in loads the shared decks automatically. The compact
-library selector switches saved libraries. Its **Library** menu contains joining
-another library, signing out, removing a connection and optional follow checks.
+Without saved sign-in, opening Browse Online never automatically contacts a saved
+library. Use **Sign in**; a successful sign-in loads shared decks automatically.
+All connected libraries appear together in one gallery, with the source library
+on each deck. The **Libraries** menu manages sign-in, sign-out and removal for
+each connection, joining another library and optional follow checks. Publishing
+still requires choosing one destination library; browsing never changes it.
 An invalid/expired session asks you to sign in again. **Sign out** revokes the server
 session when reachable and clears it locally even when offline. **Remove connection** forgets just that connection and its
 in-memory search results, leaving other libraries and all saved local decks intact.
@@ -72,8 +73,10 @@ deck name, owner, format, card count, color identity and tags/update state. **Sh
 decks** and **Following** are tabs. Search by name/description in the main search
 field; **Filters** reveals commander, owner, tag/theme and named color toggles.
 The colorless choice is exclusive. **Apply filters** submits advanced criteria;
-**Reset filters** clears them. Local sorting applies to loaded decks. Search results
-arrive in pages of 50; **Load more** appears when another page is available.
+**Reset filters** clears them. Local sorting applies to loaded decks. Search applies to every signed-in library. Results arrive independently in pages
+of 50 per library; **Load more** fetches only libraries with another page. An
+unavailable library keeps its earlier matching results marked as cached, while
+other libraries continue loading. Source errors are available in **Libraries**.
 Click a deck (or press Enter on the selected card) for a focused read-only preview
 with a structured decklist, printing choices, categories and a Details tab.
 Copying/following/updating actions live in that preview rather than above an empty
@@ -189,8 +192,7 @@ to check for updates again. **Copy to My Decks** works from the accepted offline
 cache even when its connection has been removed; the new editable copy receives
 its own UUID and source attribution and never synchronizes automatically.
 
-**Check for updates** checks active subscriptions for the library
-selected in the connection selector. New revisions are downloaded to a staged
+**Check for updates** checks active subscriptions across all signed-in libraries. New revisions are downloaded to a staged
 slot and trigger an update count/notification. The accepted cache is unchanged.
 Open a followed deck and choose **Review update** to preview the downloaded revision. Then
 **Accept update** atomically replaces the accepted cache with exactly
