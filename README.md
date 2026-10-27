@@ -8,9 +8,10 @@ An opt-in [self-hosted deck library server](docs/self-hosted-library.md) is avai
 as a standalone source command. **Browse Online** on the home page connects to your
 own or a friend’s libraries, searches shared decks, and copies decks into your local
 collection. In the unified editor, **More → Publish to Library…** prepares an explicit
-snapshot for publishing, updating or unpublishing in a chosen library. Following
-and hosting setup UI are still planned. Normal installations require no library
-account and start no library service.
+snapshot for publishing, updating or unpublishing in a chosen library. **Follow Deck**
+keeps a read-only offline cache and offers newer revisions for explicit review and
+acceptance. Optional hosting setup UI is still planned. Normal installations
+require no library account and start no library service.
 
 Standalone Windows bundles need no Python or Git: extract **Manaforge-Windows.zip**
 and run **Manaforge/Manaforge.exe**. The first-run wizard sets up card data,

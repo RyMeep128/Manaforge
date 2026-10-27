@@ -83,6 +83,8 @@ class ModuleController(C.QObject):
                 elif module.action == 'library':
                     from .library_workspace import LibraryWorkspace
                     window = LibraryWorkspace(self.service, jobs=self.jobs)
+                    window.followUpdates.connect(lambda name, count: self.home.statusBar().showMessage(
+                        f'{name}: {count} followed deck update(s) available. Open Browse Online to review.', 15000))
                 else:
                     return
                 self.home.add_workspace(key, window)

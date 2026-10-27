@@ -253,5 +253,20 @@ def test_client_and_server_contract_end_to_end_without_network(tmp_path, monkeyp
     assert updated['deck_id'] == recovered['deck_id'] and updated['revision'] == 2
     journal.send(client, client.server_id, local.deck_id, unpublish=True)
     assert client.browse({'owner': 'friend'}) == []
+    from mtg_core.library.following import FollowedDecks
+    followed = FollowedDecks(LibraryConnections(tmp_path / 'client'))
+    followed.add(downloaded, server_id=client.server_id, address=client.url, name='Friends')
+    owner_update = publication()['deck']
+    owner_update['name'] = 'Owner published an update'
+    store.publish(admin, owner_update, ['U'], deck_id=published['deck_id'], expected_revision=1)
+    followed.check(client)
+    assert followed.get(client.server_id, published['deck_id'])['revision'] == 1
+    reviewed = followed.review(client.server_id, published['deck_id'])
+    accepted = followed.accept(client.server_id, published['deck_id'], reviewed['fingerprint'])
+    assert accepted['revision'] == 2 and accepted['document'].deck.name == 'Owner published an update'
+    store.unpublish(admin, published['deck_id'], 2)
+    followed.check(client)
+    assert followed.get(client.server_id, published['deck_id'])['document'].deck.name == 'Owner published an update'
+    assert followed.get(client.server_id, published['deck_id'])['state'] == 'unavailable'
     client.disconnect()
     assert DeckStore().load(copied).deck.name == 'Shared deck'

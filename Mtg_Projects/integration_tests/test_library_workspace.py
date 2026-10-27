@@ -240,3 +240,69 @@ def test_editor_forwards_a_saved_snapshot_only_for_explicit_publish():
     editor._has_active_deck = False
     EditorWindow.publish_to_library(editor)
     assert len(snapshots) == 1
+
+
+def test_follow_offline_restart_review_and_accept_are_separate(app, tmp_path):
+    from copy import deepcopy
+    workspace = LibraryWorkspace(object(), root=tmp_path, deck_root=tmp_path / 'decks')
+    value = record()
+    class Client:
+        url, token = 'https://friend.invalid', 'session'
+        server_id = str(uuid.uuid4())
+        calls = 0
+        def check(self):
+            return {'server_id': self.server_id, 'name': 'Friends'}
+        def download(self, deck_id):
+            self.calls += 1
+            return deepcopy(value)
+    client = Client()
+    connection = workspace.connections.add(client, {'server_id': client.server_id, 'name': 'Friends'})
+    workspace.clients[connection['id']] = client
+    workspace.reload_connections(connection['id'])
+    workspace.views[connection['id']] = {'rows': [value], 'filters': {}, 'more': False}
+    workspace.switch_library()
+    workspace.results.setCurrentRow(0)
+    workspace.follow_selected()
+    settle(app, workspace)
+    assert workspace.view_mode.currentIndex() == 1
+    assert workspace.results.count() == 1
+    assert 'Followed' in workspace.results.item(0).text()
+    workspace.results.setCurrentRow(0)
+    assert 'READ-ONLY OFFLINE CACHE' in workspace.details.toPlainText()
+    assert workspace.details.isReadOnly()
+    assert client.calls == 1
+    workspace.following.tick()  # Automatic checks require separate explicit opt-in.
+    assert not workspace.jobs.busy and client.calls == 1
+    value['revision'] = 2
+    value['deck']['name'] = 'New owner revision'
+    notices = []
+    workspace.followUpdates.connect(lambda name, count: notices.append((name, count)))
+    workspace.following.check()
+    settle(app, workspace)
+    assert notices == [('Friends', 1)]
+    assert workspace.followed.get(client.server_id, value['deck_id'])['revision'] == 1
+    workspace.following.review()
+    settle(app, workspace)
+    assert 'New owner revision' in workspace.details.toPlainText()
+    assert workspace.followed.get(client.server_id, value['deck_id'])['revision'] == 1
+    workspace.following.accept()
+    settle(app, workspace)
+    assert workspace.followed.get(client.server_id, value['deck_id'])['revision'] == 2
+    # Removing the connection retains the cache and allows offline copying after restart.
+    workspace.connections.remove(connection['id'])
+    assert workspace.prepare_to_close()
+    workspace.close()
+    restarted = LibraryWorkspace(object(), root=tmp_path, deck_root=tmp_path / 'decks')
+    assert restarted.selector.count() == 0 and not restarted.clients
+    restarted.view_mode.setCurrentIndex(1)
+    restarted.results.setCurrentRow(0)
+    assert 'New owner revision' in restarted.details.toPlainText()
+    assert not restarted.following.check_button.isEnabled()
+    copies = []
+    restarted.copyCreated.connect(copies.append)
+    restarted.copy_selected()
+    settle(app, restarted)
+    assert len(copies) == 1
+    assert DeckStore().load(copies[0]).deck.name == 'New owner revision'
+    assert restarted.prepare_to_close()
+    restarted.close()

@@ -1,10 +1,13 @@
 """Opt-in library browsing with the shared job queue and local deck persistence."""
 from pathlib import Path
+import sqlite3
 
 from PyQt6 import QtCore as C, QtGui as G, QtWidgets as W
 from mtg_core.downloads import DownloadCancelled
+from mtg_core.library import LibraryError
 from mtg_core.library.client import LibraryClient, LibraryConnections, copy_publication
 from mtg_core.library.publishing import PublicationJournal
+from mtg_core.library.following import FollowedDecks
 from mtg_core.paths import data_root
 from mtg_editor.card_views import Thumbnails
 from mtg_ui.jobs import JobQueue
@@ -53,12 +56,14 @@ class SignInDialog(W.QDialog):
 
 class LibraryWorkspace(W.QMainWindow):
     copyCreated = C.pyqtSignal(object)
+    followUpdates = C.pyqtSignal(str, int)
 
     def __init__(self, service, parent=None, *, jobs=None, root=None, deck_root=None, client_factory=LibraryClient):
         super().__init__(parent)
         self.setWindowTitle('Browse Online')
         self.connections = LibraryConnections(root or data_root())
         self.publications = PublicationJournal(self.connections)
+        self.followed = FollowedDecks(self.connections)
         self.deck_root = Path(deck_root or data_root() / 'decks')
         self.client_factory = client_factory
         self.clients, self.views, self.states = {}, {}, {}
@@ -100,7 +105,13 @@ class LibraryWorkspace(W.QMainWindow):
         from .library_publishing import PublishingPanel
         self.publishing = PublishingPanel(self)
         layout.addWidget(self.publishing)
-        filters = W.QFormLayout()
+        self.view_mode = W.QComboBox()
+        self.view_mode.setAccessibleName('Library view')
+        self.view_mode.addItems(['Browse shared decks', 'Followed decks (offline)'])
+        self.view_mode.currentIndexChanged.connect(self.switch_library)
+        layout.addWidget(self.view_mode)
+        self.filters_container = W.QWidget()
+        filters = W.QFormLayout(self.filters_container)
         self.filters = {}
         for key, label in [('query', 'Name / description'), ('commander', 'Commander'),
                            ('owner', 'Owner'), ('tag', 'Tag / theme'), ('color', 'Color identity (WU, C, etc.)')]:
@@ -109,7 +120,7 @@ class LibraryWorkspace(W.QMainWindow):
             field.returnPressed.connect(self.search)
             filters.addRow(label, field)
             self.filters[key] = field
-        layout.addLayout(filters)
+        layout.addWidget(self.filters_container)
         actions = W.QHBoxLayout()
         self.search_button = W.QPushButton('Search / Refresh')
         self.search_button.clicked.connect(self.search)
@@ -117,7 +128,9 @@ class LibraryWorkspace(W.QMainWindow):
         self.more_button.clicked.connect(lambda: self.search(more=True))
         self.copy_button = W.QPushButton('Copy to My Decks')
         self.copy_button.clicked.connect(self.copy_selected)
-        for button in (self.search_button, self.more_button, self.copy_button):
+        self.follow_button = W.QPushButton('Follow Deck')
+        self.follow_button.clicked.connect(self.follow_selected)
+        for button in (self.search_button, self.more_button, self.follow_button, self.copy_button):
             actions.addWidget(button)
         layout.addLayout(actions)
         split = W.QSplitter()
@@ -131,6 +144,9 @@ class LibraryWorkspace(W.QMainWindow):
         self.details.setAccessibleName('Shared deck preview')
         split.addWidget(self.details)
         layout.addWidget(split, 1)
+        from .library_following import FollowingPanel
+        self.following = FollowingPanel(self)
+        layout.addWidget(self.following)
         self.progress = W.QProgressBar()
         self.progress.setRange(0, 0)
         self.progress.hide()
@@ -156,6 +172,9 @@ class LibraryWorkspace(W.QMainWindow):
     def switch_library(self):
         self.results.clear()
         self.details.clear()
+        if self.view_mode.currentIndex() == 1:
+            self.refresh_follows()
+            return
         connection = self.connection()
         view = self.views.get(connection['id']) if connection else None
         for key, field in self.filters.items():
@@ -169,12 +188,20 @@ class LibraryWorkspace(W.QMainWindow):
         connection = self.connection()
         client = self.clients.get(connection['id']) if connection else None
         connected = bool(client and client.token)
+        follows = self.view_mode.currentIndex() == 1
         self.selector.setEnabled(not busy)
         self.add_button.setEnabled(not busy)
         self.login_button.setEnabled(bool(connection) and not busy)
         self.remove_button.setEnabled(bool(connection) and not busy)
         self.disconnect_button.setEnabled(connected and not busy)
-        self.search_button.setEnabled(connected and not busy)
+        self.search_button.setEnabled(connected and not busy and not follows)
+        self.search_button.setVisible(not follows)
+        self.more_button.setVisible(not follows)
+        self.filters_container.setVisible(not follows)
+        self.follow_button.setVisible(not follows)
+        self.follow_button.setEnabled(connected and not busy and self.results.currentItem() is not None and not follows)
+        self.following.setVisible(follows)
+        self.following.refresh()
         view = self.views.get(connection['id'], {}) if connection else {}
         self.more_button.setEnabled(connected and view.get('more', False) and not busy)
         self.copy_button.setEnabled(self.results.currentItem() is not None and not busy)
@@ -189,7 +216,7 @@ class LibraryWorkspace(W.QMainWindow):
             base = 'Signed in.' if connected else 'Disconnected. Sign in to search online.'
             self.connection_status.setText(base + (' ' + state if state else ''))
 
-    def submit(self, operation, work, complete):
+    def submit(self, operation, work, complete, *, with_context=False):
         if self._job or self.jobs.busy:
             return
         connection = self.connection()
@@ -199,7 +226,7 @@ class LibraryWorkspace(W.QMainWindow):
             if cancel.is_set():
                 raise DownloadCancelled()
             report({'operation': operation})
-            return work()
+            return work(cancel, report) if with_context else work()
         self._job = self.jobs.submit(run)
         self.update_controls()
         self.connection_status.setText(operation + '…')
@@ -302,6 +329,8 @@ class LibraryWorkspace(W.QMainWindow):
         self.submit('Removing library connection', work, complete)
 
     def search(self, *, more=False):
+        if self.view_mode.currentIndex() == 1:
+            return
         connection = self.connection()
         client = self.clients.get(connection['id']) if connection else None
         if not client or not client.token:
@@ -328,9 +357,17 @@ class LibraryWorkspace(W.QMainWindow):
             commanders = [entry['name'] for entry in deck['entries'] if entry['entry_id'] in deck['commander_entry_ids']]
             label = (deck['name'] + '\n' + row['owner'] + ' · ' + (''.join(row['color_identity']) or 'C')
                      + '\n' + ', '.join(commanders) + '\n' + ', '.join(deck['tags']))
+            if row.get('follow'):
+                follow = row['follow']
+                label += f"\nFollowed · {follow['server_name']} · cached revision {row['revision']}"
+                if not follow['active']:
+                    label += ' · stopped'
+                if follow['pending_revision']:
+                    label += f" · update {follow['pending_revision']} available"
+                label += '\n' + follow['state']
             item = W.QListWidgetItem(label)
             item.setData(C.Qt.ItemDataRole.UserRole, row)
-            item.setSizeHint(C.QSize(280, 140))
+            item.setSizeHint(C.QSize(280, 180 if row.get('follow') else 140))
             self.results.addItem(item)
         self.refresh_icons()
         self.update_controls()
@@ -352,7 +389,11 @@ class LibraryWorkspace(W.QMainWindow):
             self.update_controls()
             return
         row = current.data(C.Qt.ItemDataRole.UserRole)
-        self.details.setPlainText(self.publication_text(row))
+        prefix = ''
+        if row.get('follow'):
+            follow = row['follow']
+            prefix = 'FOLLOWED DECK — READ-ONLY OFFLINE CACHE\n' + follow['server_name'] + '\n' + follow['message'] + '\n\n'
+        self.details.setPlainText(prefix + self.publication_text(row))
         self.update_controls()
 
     @staticmethod
@@ -377,15 +418,67 @@ class LibraryWorkspace(W.QMainWindow):
 
     def copy_selected(self):
         connection, item = self.connection(), self.results.currentItem()
-        if not connection or item is None:
+        if item is None:
             return
         publication = item.data(C.Qt.ItemDataRole.UserRole)
+        source = publication.get('follow') or connection
+        if not source:
+            return
         def complete(path):
-            self.states[connection['id']] = 'Independent copy saved in My Decks. Open it from Deck Editor → Projects.'
+            message = 'Independent copy saved in My Decks. Open it from Deck Editor → Projects.'
+            self.message = message
+            if connection:
+                self.states[connection['id']] = message
             self.copyCreated.emit(path)
         self.submit('Copying deck to My Decks', lambda: copy_publication(publication,
-                    server_id=connection['server_id'], server_address=connection['url'],
+                    server_id=source['server_id'], server_address=source.get('server_url') or source['url'],
                     deck_root=self.deck_root), complete)
+
+    def follow_selected(self):
+        connection, item = self.connection(), self.results.currentItem()
+        client = self.clients.get(connection['id']) if connection else None
+        if not item or not client or not client.token or self.view_mode.currentIndex() != 0:
+            return
+        deck_id = item.data(C.Qt.ItemDataRole.UserRole)['deck_id']
+        def work():
+            client.check()
+            return self.followed.add(client.download(deck_id), server_id=connection['server_id'],
+                                     address=connection['url'], name=connection['name'])
+        def complete(_):
+            self.states[connection['id']] = 'Deck followed. Accepted cache is available read-only offline.'
+            self.view_mode.setCurrentIndex(1)
+            self.refresh_follows()
+        self.submit('Following shared deck', work, complete)
+
+    def refresh_follows(self):
+        try:
+            records = self.followed.list()
+        except (sqlite3.Error, OSError, ValueError, TypeError, LibraryError):
+            self.following.status.setText('Followed deck cache could not be read. Check local storage or restore a backup; no cache was replaced.')
+            return
+        count = sum(bool(record['pending']) for record in records)
+        self.view_mode.setItemText(1, f'Followed decks (offline · {count} updates)')
+        if self.view_mode.currentIndex() != 1:
+            self.update_controls()
+            return
+        selected = self.results.currentItem()
+        selected = selected.data(C.Qt.ItemDataRole.UserRole).get('follow') if selected else None
+        rows = []
+        for record in records:
+            try:
+                publication = self.followed.publication(record)
+            except (ValueError, TypeError, LibraryError):
+                self.following.status.setText('A cached deck contains invalid data. Its stored copy was kept for repair; other follows remain available.')
+                continue
+            publication['follow'] = {key: record[key] for key in
+                ('server_id', 'deck_id', 'server_url', 'server_name', 'active', 'state', 'message')}
+            publication['follow']['pending_revision'] = record['pending']['revision'] if record['pending'] else None
+            rows.append(publication)
+        self.render(rows)
+        if selected:
+            for index, row in enumerate(rows):
+                if (row['follow']['server_id'], row['deck_id']) == (selected['server_id'], selected['deck_id']):
+                    self.results.setCurrentRow(index)
 
     def prepare_to_close(self):
         if self._job:
@@ -394,6 +487,7 @@ class LibraryWorkspace(W.QMainWindow):
         # Clear memory credentials at exit, without making a network request during shutdown.
         for client in self.clients.values():
             client.token = None
+        self.following.timer.stop()
         self.thumbnails.stopping = True
         self.thumbnails.pending.clear()
         self.thumbnails.next_timer.stop()

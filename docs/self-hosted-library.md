@@ -1,4 +1,4 @@
-# Self-hosted Deck Library — stages 1–3
+# Self-hosted Deck Library — stages 1–4
 
 Manaforge stays local-first. Installing or launching the desktop app does not
 start a server, connect to a library, create an online account, open router ports,
@@ -10,8 +10,8 @@ The server supplies a standalone JSON API, persistent SQLite storage,
 invitation-only accounts, and revisioned publications. The desktop now supplies
 Browse Online, multiple saved connections, account sign-in/invitation redemption,
 deck searching, previews, independent local copies and explicit publishing from
-the unified deck editor. Read-only follows, offline subscription caches, update notifications and
-installation/Settings hosting controls remain planned. Those features are not
+the unified deck editor, plus read-only offline follows with staged revision updates.
+Installation/Settings hosting controls remain planned. Those features are not
 exposed as partially working desktop actions.
 
 ## Browse Online
@@ -59,7 +59,7 @@ custom artwork paths, project settings and unknown remote extras are excluded.
 Removing the server connection cannot delete or modify these decks. If a search
 fails, the previously displayed results remain labeled as an earlier snapshot;
 you can still copy one while disconnected. Search snapshots are only kept for the
-current application session; save a local copy for offline use after restart.
+current application session; save a local copy or follow the deck for offline use after restart.
 
 ## Publish, update and unpublish
 
@@ -136,17 +136,75 @@ Reuse points for follow-up work:
    connections database. Browse Online and editor publishing already reuse the
    separate client, connection metadata, `mtg_ui.jobs.JobQueue`, Home registry,
    existing thumbnail/deck components and per-library publication journal.
-2. Offline following/copying: use `DeckDocument` and atomic `DeckStore` persistence,
-   store `(server_id, deck_id, revision)` separately from local deck identity, keep
-   follows read-only, stage updates before atomic replacement, and offer explicit
-   acceptance. Independent copies already use fresh local UUIDs and source attribution. Preserve
-   existing local print statuses; new followed entries may start Pending locally.
-3. Hosting UI: add a disabled-by-default **Host a Manaforge Deck Library** section
+2. Hosting UI: add a disabled-by-default **Host a Manaforge Deck Library** section
    to `mtg_ui.data_management.DataManagementDialog` (current first-run setup), and
    shared Settings controls. Configure storage, administrator, LAN/tunnel,
    background startup, health checks and repair without overwriting databases.
    Joining belongs exclusively in Browse Online. Skipping hosting must skip all
    server dependencies/configuration. Bundle/service lifecycle work remains here.
+
+## Followed decks and offline updates
+
+Select a shared search result and choose **Follow Deck**. Manaforge explicitly
+downloads the latest publication and caches a native `DeckDocument` in its local
+connections database. **Followed decks (offline)** shows cached decks from every
+library, with source-library labels, accepted revision, availability state and
+update badges. The preview is read-only; follows are kept outside the editable
+deck directory and cannot accidentally open as editor projects. They remain
+viewable after restart without signing in or connecting to any server.
+
+Each follow uses `(server_id, deck_id)` as its source key, plus a separate stable
+local UUID and accepted revision. Different libraries can use identical deck IDs
+without colliding. Removing a connection retains its offline follows, recovery
+history and independently editable deck copies. Re-add/sign in to that library
+to check for updates again. **Copy to My Decks** works from the accepted offline
+cache even when its connection has been removed; the new editable copy receives
+its own UUID and source attribution and never synchronizes automatically.
+
+**Check selected library for updates** checks active subscriptions for the library
+selected in the connection selector. New revisions are downloaded to a staged
+slot and trigger an update count/notification. The accepted cache is unchanged.
+**Review cached update** opens the downloaded revision in the preview. Then
+**Accept reviewed update** atomically replaces the accepted cache with exactly
+the reviewed revision. If a check staged a different update in the meantime,
+acceptance stops and asks for another review. Reviewing and accepting staged
+content require no network connection; it was already downloaded while authorized.
+
+Automatic checks default **off**. Optionally enable **Check this library every
+5 minutes while signed in** for an individual library. The app checks due libraries
+using its shared background queue, with roughly 30-second scheduling granularity,
+and shows notifications in Manaforge's status bar. It never applies updates.
+These checks only run while that library has an explicitly established in-memory
+session; saved preferences do not reconnect or authenticate on startup. Other
+libraries keep their own preference and schedule. **Stop following (keep offline
+copy)** disables future checks for that deck and retains the accepted read-only
+cache. Following it again stages newer content without replacing the old cache.
+
+An offline, deleted, unpublished or inaccessible source changes the availability
+message while retaining the accepted cache and any staged revision. Expired
+sessions require signing in again. The client verifies server identity, rejects
+revision rollback, and reports content changed without a new revision. It does
+not replace previously staged data with inconsistent or older content. An owner
+unpublishing a deck cannot retract copies clients already downloaded.
+
+Update acceptance preserves local document settings and existing per-card print
+fields/extra metadata, including future print-status fields. Existing cards are
+matched by stable entry ID and card identity; unambiguous regenerated IDs can also
+match by card/section. New cards use current local model defaults; this stage does
+not add Printed/Pending/No Tag values or couple to the planned print-status UI.
+Removed/changed-card state stays in the previous accepted recovery snapshot.
+Five prior accepted revisions are retained locally. A content fingerprint detects
+local decklist edits and refuses to overwrite them; make an independent copy
+before resolving such a change. Failed/interrupted checks and failed SQLite
+transactions leave the accepted document and its print data intact.
+
+Subscription, staged-update, history and preference tables share the private
+application connection database. They store native deck JSON, not another deck
+format, and contain no passwords or bearer tokens. Back up this database while
+Manaforge is closed to preserve offline subscriptions, publication links and
+recovery snapshots across repairs. There is no automatic cache deletion on
+upgrade, connection removal or repair. Recovery snapshots currently have no
+separate restore UI.
 
 ## Explicit operator setup
 
@@ -245,8 +303,8 @@ the same publication. Concurrent/stale changes return 409. Unpublished decks and
 decks belonging to disabled users return 404 to readers, including historical
 revisions. The owner or administrator can republish by PUT using the latest
 revision. The original owner stays the owner when an administrator updates it.
-Clients can compare the latest revision to a cached revision before offering an
-update; desktop following, update polling and offline subscription caches remain planned.
+Desktop following compares the latest revision to its accepted/staged cache;
+only explicit acceptance changes the accepted offline document.
 
 Shareable fields include names, descriptions, format, commanders, categories,
 tags, card names/quantities/sections, notes and printing/oracle identifiers.
@@ -300,9 +358,13 @@ recovery after a response is lost following a server commit, without real networ
 separate library links, same-account retry protection and explicit conflict review.
 Server tests cover idempotent create/update/unpublish, revocation and the additive
 schema upgrade.
+`mtg_core/tests/test_library_following.py` covers native offline documents, staged
+updates, private print metadata, failed transactions, revision rollback, local-edit
+guards, history bounds, source namespaces, stopped follows and cancellation.
 `integration_tests/test_library_workspace.py` covers opt-in startup, background
 browsing, plain-text previews, copying, separate connection snapshots and failure
-preservation, plus explicit publication/conflict review with fake clients. The
+preservation, plus explicit publication/conflict review, offline restart, follow
+review/accept and connection-free copying with fake clients. The
 homepage tests cover editor-to-library routing without automatic upload. The existing Windows Python 3.12/3.13 workflow
 collects these tests and installs the optional server dependency. No tests or
 builds were executed locally, per the requested execution policy. Live LAN/tunnel
