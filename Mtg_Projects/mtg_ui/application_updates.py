@@ -56,6 +56,7 @@ class ApplicationUpdates(C.QObject):
                     and 0 <= now - last < 6 * 60 * 60):
                 return
         elif now - self.last_attempt < 30 and self.result is not None and not self.error:
+            self.present_result(manual=True)
             return
         self.last_attempt = now
         self.settings.setValue('lastAttempt', now)
@@ -75,21 +76,26 @@ class ApplicationUpdates(C.QObject):
         worker, self.worker = self.worker, None
         worker.deleteLater()
         self.changed.emit()
+        self.present_result(manual=self.manual)
+
+    def present_result(self, *, manual):
         if self.error:
-            if self.manual:
+            if manual:
                 W.QMessageBox.warning(None, 'Update Check Failed', self.error + '\n\nPlease retry Check for Updates.')
             return
         if self.result and self.result.update_available:
             version = self.result.latest_version
-            if self.manual or self.settings.value('notifiedVersion', '') != version:
+            if manual or self.settings.value('notifiedVersion', '') != version:
                 self.settings.setValue('notifiedVersion', version)
                 self.show_download()
-        elif self.manual:
+        elif manual and self.result is not None:
             W.QMessageBox.information(None, 'No Updates Found',
                 f"You're up to date.\n\nCurrent version: {APP_VERSION}")
 
     def activate(self):
-        if self.result and self.result.update_available and not self.error:
+        if self.checking:
+            self.check(manual=True)
+        elif self.result and self.result.update_available and not self.error:
             self.show_download()
         else:
             self.check()
@@ -169,4 +175,38 @@ class ApplicationUpdatePanel(W.QWidget):
             status += ' \u00b7 Updates have not been checked'
         self.status.setText(status)
         self.button.setToolTip(status)
+        self.button.setAccessibleDescription(status)
+
+
+class ApplicationUpdateAction(G.QAction):
+    """Use the toolbar's own button geometry for the navigation update control."""
+
+    def __init__(self, toolbar):
+        super().__init__(toolbar)
+        self.updates = application_updates()
+        toolbar.addAction(self)
+        self.button = toolbar.widgetForAction(self)
+        self.triggered.connect(self.updates.activate)
+        self.updates.changed.connect(self.refresh)
+        self.refresh()
+
+    def refresh(self):
+        updates = self.updates
+        available = updates.result and updates.result.update_available and not updates.error
+        self.setText('Checking for Updates...' if updates.checking else
+                     'Update Available' if available else 'Check for Updates')
+        self.setEnabled(not updates.checking)
+        color, hover = ('#B45309', '#92400e') if available else ('#28734f', '#32875f')
+        # Override colors only: size, padding, borders and font come from the
+        # same toolbar/theme rules as Home and the other navigation actions.
+        self.button.setStyleSheet(
+            f'QToolButton {{background-color:{color};color:white;}}'
+            f'QToolButton:hover {{background-color:{hover};}}'
+            'QToolButton:disabled {background-color:#34483e;color:#d3dfd7;}')
+        status = f'Installed version: {APP_VERSION}'
+        if updates.error:
+            status += '\nUpdate check failed: ' + updates.error + ' Click to retry.'
+        elif updates.result:
+            status += f' | Latest downloadable version: {updates.result.latest_version}'
+        self.setStatusTip(status)
         self.button.setAccessibleDescription(status)

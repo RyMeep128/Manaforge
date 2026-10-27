@@ -97,3 +97,42 @@ def test_manual_and_automatic_checks_do_not_duplicate_worker(monkeypatch):
     controller.worker = None
     controller.deleteLater()
     app.processEvents()
+
+
+def test_cached_manual_check_still_shows_result(monkeypatch):
+    from PyQt6 import QtWidgets
+    from mtg_ui import application_updates as ui
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    controller = ui.ApplicationUpdates(app)
+    controller.result = UpdateCheckResult('0.3.37-alpha.1', '0.3.37-alpha.1', False, '')
+    controller.last_attempt = ui.time.time()
+    messages = []
+    monkeypatch.setattr(ui.W.QMessageBox, 'information',
+                        lambda parent, title, message: messages.append((title, message)))
+    controller.activate()
+    assert controller.worker is None
+    assert messages[0][0] == 'No Updates Found'
+    assert "You're up to date" in messages[0][1]
+    controller.deleteLater()
+    app.processEvents()
+
+
+def test_navigation_update_uses_native_toolbar_action(monkeypatch):
+    from PyQt6 import QtWidgets
+    from mtg_ui import application_updates as ui
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    controller = ui.ApplicationUpdates(app)
+    monkeypatch.setattr(ui, 'application_updates', lambda: controller)
+    calls = []
+    monkeypatch.setattr(controller, 'activate', lambda: calls.append(True))
+    toolbar = QtWidgets.QToolBar()
+    home = toolbar.addAction('Home')
+    action = ui.ApplicationUpdateAction(toolbar)
+    assert type(toolbar.widgetForAction(home)) is type(action.button)
+    assert 'padding' not in action.button.styleSheet()
+    assert 'min-height' not in action.button.styleSheet()
+    action.button.click()
+    assert calls == [True]
+    toolbar.deleteLater()
+    controller.deleteLater()
+    app.processEvents()
