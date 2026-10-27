@@ -178,3 +178,47 @@ def test_large_deck_uses_one_batch_and_reuses_effect_parsing():
     assert database.calls == 1
     assert all(evidence[0]['name'] == 'Ramp' for evidence in roles.values())
     assert _analyze_cached.cache_info().misses == 1
+
+
+@pytest.mark.parametrize('text,primary,roles', [
+    ('Enchant land. Whenever enchanted land is tapped for mana, its controller adds an additional {G}.',
+     'Ramp', {'Ramp'}),
+    ('Enchant land. Whenever enchanted land is tapped for mana, its controller adds an additional {G}{G}.',
+     'Ramp', {'Ramp'}),
+    ('Enchant land. Whenever enchanted land is tapped for mana, its controller adds an additional one mana of any color.',
+     'Ramp', {'Ramp'}),
+    ("Enchant creature. Enchanted creature gets +1/+1 for each card in its controller's hand. "
+     "At the beginning of the draw step of enchanted creature's controller, that player draws an additional card.",
+     'Draw', {'Draw'}),
+    ('Reveal the top six cards of your library. Put up to three enchantment cards from among them into your hand '
+     'and the rest into your graveyard.', 'Enchantment Matters', {'Enchantment Matters', 'Card Advantage'}),
+    ("Reveal cards from the top of your library until you reveal a nonland permanent card. Put that card onto the battlefield.",
+     'Card Advantage', {'Card Advantage'}),
+    ('If a creature an opponent controls would die, instead exile it and put a +1/+1 counter on this creature.',
+     'Graveyard', {'Graveyard'}),
+    ('Whenever this creature attacks or blocks, you may attach to it any number of Auras on the battlefield '
+     'and you may put onto the battlefield attached to it any number of Aura cards that could enchant it from your graveyard and/or hand.',
+     'Recursion', {'Recursion', 'Enchantment Matters'}),
+    ('Whenever this creature deals combat damage to a player, you may draw that many cards.',
+     'Draw', {'Draw'}),
+    ('At the beginning of combat on your turn, if you control your commander, prevent all combat damage '
+     'that would be dealt to creatures you control this turn. Other creatures you control gain vigilance until end of turn.',
+     'Protection', {'Protection'}),
+])
+def test_adaptive_enchantment_effect_wordings(text, primary, roles):
+    evidence = classify({'type_line': 'Enchantment', 'oracle_text': text})
+    assert evidence[0]['name'] == primary
+    assert roles <= {item['name'] for item in evidence}
+    if primary == 'Ramp':
+        assert {item['name'] for item in evidence} == {'Ramp'}
+
+
+@pytest.mark.parametrize('text,absent', [
+    ('Enchant creature. Enchanted creature gets +2/+2.', 'Enchantment Matters'),
+    ('Destroy target enchantment.', 'Enchantment Matters'),
+    ('If this creature would die, return it to your hand instead.', 'Graveyard'),
+    ('Reveal the top card of your library. Put it into your graveyard.', 'Card Advantage'),
+    ('Each opponent draws an additional card.', 'Draw'),
+])
+def test_adaptive_enchantment_rules_do_not_infer_unrelated_roles(text, absent):
+    assert absent not in {item['name'] for item in classify({'oracle_text': text})}

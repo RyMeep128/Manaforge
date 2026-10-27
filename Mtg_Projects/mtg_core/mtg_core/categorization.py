@@ -5,7 +5,7 @@ Scores are rule priorities, not probabilities. No AI or remote classification.
 from .decks import DeckCategory
 from .role_analysis import analyze_effects, deck_context
 
-RULE_VERSION = 6
+RULE_VERSION = 7
 # Earlier functional roles win primary-category ties; all matches are retained.
 ROLE_TAGS = (
     ('Board Wipes', ('board-wipe', 'boardwipe', 'sweeper', 'mass-removal')),
@@ -25,6 +25,7 @@ ROLE_TAGS = (
     ('Blink', ('blink', 'flicker')),
     ('Anthem', ('anthem',)),
     ('Counters', ('counters', '+1/+1-counters', 'proliferate')),
+    ('Enchantment Matters', ('enchantment-matters', 'enchantment-synergy', 'enchantress', 'aura-synergy')),
     ('Equipment', ('equipment', 'equipment-synergy')),
     ('Keyword Soup', ('keyword-soup',)),
     ('Spellslinger', ('spellslinger', 'magecraft')),

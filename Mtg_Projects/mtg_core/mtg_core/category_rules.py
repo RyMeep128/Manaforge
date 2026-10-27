@@ -31,7 +31,7 @@ RULES = (
     ('Removal', 'targeted toughness reduction', r'\btarget creature gets? -[\dx]+/-[\dx]+'),
     ('Removal', 'opponent sacrifices a permanent', rf'\b(?:target|each) opponent sacrifices (?:an?|\w+) (?:\w+ ){{0,3}}{PERMANENTS}\b'),
     ('Removal', 'returns opposing permanent to hand', rf"\breturn target (?:\w+ ){{0,3}}{PERMANENTS} to (?:its|their) owners?'s? hands?"),
-    ('Draw', 'draws cards', r'\b(?:draw (?:a|an|one|two|three|four|five|six|seven|eight|nine|ten|x|\d+) cards?|draw cards equal to)\b'),
+    ('Draw', 'draws cards', r'\b(?:draws? (?:an additional|a|an|one|two|three|four|five|six|seven|eight|nine|ten|x|\d+) cards?|draws? cards equal to|draw that many cards)\b'),
     ('Card Advantage', 'exiled cards may be played', rf'\bexile {GAP}(?:top|cards? from the top){GAP}\b(?:play|cast) (?:that card|those cards|them|it|one of)\b'),
     ('Card Advantage', 'plays cards from library', rf'\b(?:play|cast) {GAP}(?:from the top of your library|top card of your library)\b'),
     ('Card Advantage', 'selects library cards for hand', rf'\blook at the top {GAP}\bput {GAP}\binto your hand\b'),
@@ -113,7 +113,7 @@ def text_roles(payload):
                 add('Ramp', 'library lands provide mana or consistent land drops')
             else:
                 add('Tutors', 'searches your library for a card')
-        if re.search(r'\badd (?:\{[wubrgc0-9]+\}|[^.]{0,60}\bmana\b)', text):
+        if re.search(r'\badds? (?:an? additional )?(?:\{[wubrgc0-9]+\}|[^.]{0,60}\bmana\b)', text):
             add('Ramp', 'produces mana')
         if re.search(r'\b(?:play|put) (?:an? |one |two )?additional lands?\b', text):
             add('Ramp', 'additional land plays')
