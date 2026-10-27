@@ -21,11 +21,15 @@ RestartApplications=no
 UninstallFilesDir={localappdata}\Programs\Manaforge\uninstall
 WizardStyle=modern
 
+[Tasks]
+Name: "desktopicon"; Description: "Create a &desktop shortcut"; Flags: unchecked
+
 [Files]
 Source: "..\Mtg_Projects\dist\Manaforge\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{userprograms}\Manaforge"; Filename: "{app}\Manaforge.exe"; WorkingDir: "{app}"
+Name: "{userdesktop}\Manaforge"; Filename: "{app}\Manaforge.exe"; WorkingDir: "{app}"; Tasks: desktopicon
 
 [Code]
 function OpenProcess(Access: LongWord; Inherit: Boolean; PID: LongWord): THandle;
