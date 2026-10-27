@@ -123,13 +123,14 @@ def application_updates():
 
 
 class ApplicationUpdatePanel(W.QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, *, compact=False):
         super().__init__(parent)
         self.updates = application_updates()
         layout = W.QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         self.status = W.QLabel()
         self.status.setWordWrap(True)
+        self.status.setVisible(not compact)
         self.button = W.QPushButton()
         self.button.clicked.connect(self.updates.activate)
         self.progress = W.QProgressBar()
@@ -167,3 +168,5 @@ class ApplicationUpdatePanel(W.QWidget):
         else:
             status += ' \u00b7 Updates have not been checked'
         self.status.setText(status)
+        self.button.setToolTip(status)
+        self.button.setAccessibleDescription(status)

@@ -143,7 +143,6 @@ class HomeWindow(W.QMainWindow):
         footer.addWidget(settings)
         layout.addLayout(footer)
         from mtg_ui.application_updates import ApplicationUpdatePanel
-        layout.addWidget(ApplicationUpdatePanel(self))
         outer.addWidget(content)
         scroll.setWidget(wrapper)
         self.takeCentralWidget()
@@ -167,6 +166,11 @@ class HomeWindow(W.QMainWindow):
             group.addAction(action)
             self.navigation[key] = action
             action.triggered.connect(lambda checked=False, target=key: self.moduleRequested.emit(target))
+        spacer = W.QWidget()
+        spacer.setSizePolicy(W.QSizePolicy.Policy.Expanding, W.QSizePolicy.Policy.Preferred)
+        navigation.addWidget(spacer)
+        self.application_update_panel = ApplicationUpdatePanel(self, compact=True)
+        navigation.addWidget(self.application_update_panel)
         self.navigation['home'].setChecked(True)
         self.navigation['home'].setShortcut('Ctrl+Shift+H')
         self._columns = None

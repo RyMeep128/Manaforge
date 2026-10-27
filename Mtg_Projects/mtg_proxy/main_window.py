@@ -305,8 +305,9 @@ class AppShellWindow(QMainWindow):
         stack.addWidget(self._dashboard_page)
         self.setCentralWidget(stack)
         self._dashboard_page.refresh_projects()
-        from mtg_ui.application_updates import ApplicationUpdatePanel
-        self.statusBar().addPermanentWidget(ApplicationUpdatePanel(self))
+        if not embedded:
+            from mtg_ui.application_updates import ApplicationUpdatePanel
+            self.statusBar().addPermanentWidget(ApplicationUpdatePanel(self))
         self.statusBar().setSizeGripEnabled(False)
         self.statusBar().showMessage("Ready")
         self._shortcuts = [
