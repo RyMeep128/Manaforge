@@ -55,7 +55,16 @@ jobs:
         working-directory: Mtg_Projects
         env:
           PRINT_PROXY_PREP_DATA_DIR: ${{ runner.temp }}/mtg-suite-test-data
+          MANAFORGE_UI_SCREENSHOTS: ${{ runner.temp }}/manaforge-ui
         run: python -m pytest -vv --tb=short --durations=10 -o faulthandler_timeout=120 mtg_editor/tests integration_tests mtg_proxy/tests mtg_core/tests
+      - name: Upload library UI review screenshots
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: library-ui-python-${{ matrix.python }}
+          path: ${{ runner.temp }}/manaforge-ui
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Lint scoped Core modules
         if: ${{ !cancelled() }}
         run: python -m ruff check .

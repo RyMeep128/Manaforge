@@ -1,49 +1,74 @@
-"""Explicit publication controls over the existing Browse Online session/queue."""
+"""Focused publication dialog over Browse Online's existing sessions and journal."""
 import sqlite3
 
 from PyQt6 import QtCore as C, QtWidgets as W
 from mtg_core.library import LibraryError
 from mtg_core.library.payload import shared_deck
+from .library_widgets import ColorChoices, plain_label
 
 
-class PublishingPanel(W.QGroupBox):
+class PublishingPanel(W.QDialog):
     def __init__(self, workspace):
-        super().__init__('Publish a local deck snapshot', workspace)
+        super().__init__(workspace)
         self.workspace = workspace
         self.snapshot = None
         self.reviewed = None
+        self.setWindowTitle('Publish deck')
+        self.setWindowModality(C.Qt.WindowModality.WindowModal)
+        self.setMinimumWidth(480)
+        self.resize(560, 360)
         form = W.QVBoxLayout(self)
-        self.summary = W.QLabel()
-        self.summary.setTextFormat(C.Qt.TextFormat.PlainText)
-        self.summary.setWordWrap(True)
+        form.setContentsMargins(24, 20, 24, 20)
+        form.setSpacing(12)
+        self.title = plain_label('Publish deck', 'title')
+        form.addWidget(self.title)
+        self.summary = plain_label('', 'subtitle')
         form.addWidget(self.summary)
-        colors_row = W.QHBoxLayout()
-        colors_row.addWidget(W.QLabel('Color identity (WUBRG letters, or C)'))
-        self.colors = W.QLineEdit()
-        self.colors.setMaxLength(5)
-        colors_row.addWidget(self.colors)
-        form.addLayout(colors_row)
-        actions = W.QHBoxLayout()
-        self.publish_button = W.QPushButton('Publish snapshot')
+        destination_row = W.QHBoxLayout()
+        self.destination = W.QComboBox()
+        self.destination.setAccessibleName('Destination library')
+        self.destination.currentIndexChanged.connect(self.choose_library)
+        destination_row.addWidget(self.destination, 1)
+        self.connect_button = W.QPushButton('Join library')
+        self.connect_button.setProperty('buttonRole', 'primary')
+        self.connect_button.clicked.connect(self.connect_library)
+        destination_row.addWidget(self.connect_button)
+        form.addLayout(destination_row)
+        self.color_label = plain_label('Color identity', 'subtitle')
+        form.addWidget(self.color_label)
+        self.colors = ColorChoices(allow_any=False)
+        form.addWidget(self.colors)
+        self.error = plain_label('', 'warning')
+        self.error.hide()
+        form.addWidget(self.error)
+        form.addStretch()
+        form.addWidget(plain_label('Your local printing status stays private.', 'muted'))
+        footer = W.QHBoxLayout()
+        self.more_button = W.QToolButton()
+        self.more_button.setText('More')
+        self.more_button.setPopupMode(W.QToolButton.ToolButtonPopupMode.InstantPopup)
+        menu = W.QMenu(self.more_button)
+        self.review_button = menu.addAction('Review published deck', self.review)
+        self.unpublish_button = menu.addAction('Unpublish deck', lambda: self.publish(unpublish=True))
+        self.more_button.setMenu(menu)
+        footer.addWidget(self.more_button)
+        footer.addStretch()
+        self.close_button = W.QPushButton('Cancel')
+        self.close_button.clicked.connect(self.reject)
+        self.publish_button = W.QPushButton('Publish deck')
+        self.publish_button.setProperty('buttonRole', 'primary')
         self.publish_button.clicked.connect(self.publish)
-        self.unpublish_button = W.QPushButton('Unpublish')
-        self.unpublish_button.clicked.connect(lambda: self.publish(unpublish=True))
-        self.review_button = W.QPushButton('Review latest publication')
-        self.review_button.clicked.connect(self.review)
-        self.close_button = W.QPushButton('Close publication panel')
-        self.close_button.clicked.connect(self.hide)
-        for button in (self.publish_button, self.unpublish_button, self.review_button, self.close_button):
-            actions.addWidget(button)
-        form.addLayout(actions)
-        self.accept_button = W.QPushButton('Use reviewed revision as the next publish base')
+        footer.addWidget(self.close_button)
+        footer.addWidget(self.publish_button)
+        form.addLayout(footer)
+        self.accept_button = W.QPushButton('Use this revision')
+        self.accept_button.setProperty('buttonRole', 'primary')
         self.accept_button.clicked.connect(self.accept_review)
         self.accept_button.hide()
-        form.addWidget(self.accept_button)
-        self.hide()
 
     def prepare(self, deck, color_identity):
         if self.workspace._job or self.workspace.jobs.busy:
-            self.workspace.connection_status.setText('Wait for the current background operation, then choose Publish to Library again.')
+            self.workspace.connection_status.setText('Wait for the current operation, then publish again.')
             return False
         try:
             snapshot = shared_deck(deck)
@@ -53,9 +78,25 @@ class PublishingPanel(W.QGroupBox):
         self.snapshot = snapshot
         self.colors.setText(color_identity)
         self.reviewed = None
-        self.show()
+        self.error.hide()
         self.refresh()
+        self.open()
         return True
+
+    def choose_library(self):
+        selected = self.destination.currentData()
+        if selected:
+            for index in range(self.workspace.selector.count()):
+                if self.workspace.selector.itemData(index)['id'] == selected:
+                    self.workspace.selector.setCurrentIndex(index)
+                    break
+        elif self.destination.currentIndex() >= 0:
+            self.workspace.sign_in(new=True)
+            self.refresh()
+
+    def connect_library(self):
+        connection = self.workspace.connection()
+        self.workspace.sign_in(new=not bool(connection))
 
     def context(self):
         connection = self.workspace.connection()
@@ -71,44 +112,74 @@ class PublishingPanel(W.QGroupBox):
         busy = bool(self.workspace._job) or self.workspace.jobs.busy
         try:
             connection, client, link = self.context()
+            rows = self.workspace.connections.list()
         except (sqlite3.Error, OSError):
-            self.summary.setText('Publication tracking is unavailable. Check local storage and reopen Browse Online.')
-            for button in (self.publish_button, self.unpublish_button, self.review_button, self.accept_button):
-                button.setEnabled(False)
+            self.show_error('Publication tracking is unavailable. Check local storage and retry.')
+            self.publish_button.setEnabled(False)
             return
-        connected = bool(client and client.token) and not busy
+        self.title.setText(self.snapshot['name'])
+        self.destination.blockSignals(True)
+        self.destination.clear()
+        for row in rows:
+            self.destination.addItem(row['name'], row['id'])
+            if connection and row['id'] == connection['id']:
+                self.destination.setCurrentIndex(self.destination.count()-1)
+        self.destination.addItem('Join another library…', None)
+        self.destination.blockSignals(False)
+        self.destination.setVisible(bool(rows))
+        self.destination.setEnabled(not busy)
+        signed_in = bool(client and client.token)
+        self.connect_button.setVisible(not signed_in)
+        self.connect_button.setText('Sign in' if connection else 'Join library')
+        self.connect_button.setEnabled(not busy)
+        self.connect_button.setDefault(not signed_in)
+        self.colors.setVisible(signed_in)
+        self.color_label.setVisible(signed_in)
         pending = link['pending'] if link else None
-        caption = 'Snapshot: ' + self.snapshot['name'] + '. Choose a library above, then publish explicitly.'
-        if link and link['deck_id']:
-            caption += f"\nLast acknowledged publication: {link['deck_id']} · revision {link['revision']}"
-            caption += ' · published.' if link['published'] else ' · unpublished.'
-        if pending:
+        if not connection:
+            caption = 'Join a library to share this deck with friends.'
+        elif not signed_in:
+            caption = 'Sign in to ' + connection['name'] + ' to publish this deck.'
+        elif pending:
+            name = pending.get('deck', {}).get('name', self.snapshot['name'])
+            caption = 'An earlier upload is unfinished. Retry sends "' + name + '"; newer local edits stay on this computer.'
             if pending['kind'] == 'publish':
                 self.colors.setText(''.join(pending['color_identity']) or 'C')
-            name = pending.get('deck', {}).get('name', self.snapshot['name'])
-            caption += '\nA previous operation is pending. Retry sends its original snapshot (' + name + '), including its original color identity.'
-            caption += ' Local edits made afterward are not included. Review the latest publication to resolve a revision conflict.'
-        caption += '\nPublishing shares card notes, descriptions and tags. Personal print statuses and private artwork paths are excluded.'
+        elif link and link['deck_id']:
+            caption = f"Publish a new version to {connection['name']}. Last published revision: {link['revision']}."
+        else:
+            caption = 'Share this deck in ' + connection['name'] + '.'
         self.summary.setText(caption)
-        self.publish_button.setText('Retry pending publish' if pending and pending['kind'] == 'publish' else 'Publish snapshot')
-        self.unpublish_button.setText('Retry pending unpublish' if pending and pending['kind'] == 'unpublish' else 'Unpublish')
-        self.publish_button.setEnabled(connected and (not pending or pending['kind'] == 'publish'))
-        self.unpublish_button.setEnabled(connected and bool(link and link['deck_id'])
+        self.publish_button.setText('Retry upload' if pending and pending['kind'] == 'publish' else 'Publish deck')
+        self.publish_button.setVisible(signed_in)
+        self.publish_button.setDefault(signed_in)
+        self.publish_button.setEnabled(signed_in and not busy and (not pending or pending['kind'] == 'publish'))
+        self.unpublish_button.setEnabled(signed_in and not busy and bool(link and link['deck_id'])
                                          and (not pending or pending['kind'] == 'unpublish'))
-        self.review_button.setEnabled(connected and bool(link and link['deck_id']))
+        self.review_button.setEnabled(signed_in and not busy and bool(link and link['deck_id']))
+        self.more_button.setVisible(bool(link and link['deck_id']))
+        self.more_button.setEnabled(not busy)
         self.colors.setEnabled(not busy and not pending)
         self.close_button.setEnabled(not busy)
         reviewed_here = bool(self.reviewed and connection and self.reviewed['server_id'] == connection['server_id']
                              and self.reviewed['local_id'] == self.snapshot['deck_id'])
-        self.accept_button.setVisible(reviewed_here)
-        self.accept_button.setEnabled(connected and reviewed_here)
+        self.accept_button.setEnabled(signed_in and not busy and reviewed_here)
         if reviewed_here:
-            self.accept_button.setText(f"Use reviewed revision {self.reviewed['publication']['revision']} as the next publish base")
+            self.accept_button.setText(f"Use revision {self.reviewed['publication']['revision']}")
+
+    def show_error(self, message):
+        self.error.setText(message)
+        self.error.show()
+
+    def reject(self):
+        if not self.workspace._job:
+            super().reject()
 
     def publish(self, *, unpublish=False):
         connection, client, link = self.context()
         if not connection or not client or not client.token:
             return
+        self.error.hide()
         local_id, snapshot = self.snapshot['deck_id'], self.snapshot
         value = self.colors.text().strip().upper()
         color_identity = [] if value == 'C' else list(value)
@@ -118,7 +189,11 @@ class PublishingPanel(W.QGroupBox):
         def complete(result):
             self.reviewed = None
             action = 'Unpublished' if unpublish else 'Published'
-            self.workspace.states[connection['id']] = f"{action} revision {result['revision']}. Local editing remains independent. Search / Refresh to update results."
+            self.workspace.states[connection['id']] = f"{action} {self.snapshot['name']}."
+            self.workspace.preview_dialog.hide()
+            self.accept()
+            if callable(getattr(client, 'browse', None)):
+                self.workspace._load_after_signin = connection['id']
         self.workspace.submit('Unpublishing deck' if unpublish else 'Publishing deck snapshot', work, complete)
 
     def review(self):
@@ -128,12 +203,9 @@ class PublishingPanel(W.QGroupBox):
         local_id = self.snapshot['deck_id']
         def complete(publication):
             self.reviewed = {'server_id': connection['server_id'], 'local_id': local_id, 'publication': publication}
-            self.workspace.details.setPlainText(
-                'LATEST REMOTE PUBLICATION — REVIEW BEFORE CHANGING THE PUBLISH BASE\n'
-                'Accepting the reviewed revision keeps your local deck unchanged. Your next explicit publish '
-                'will replace this remote deck with the selected local snapshot.\n\n'
-                + self.workspace.publication_text(publication))
-            self.workspace.states[connection['id']] = 'Review the remote deck in the preview, then explicitly accept its revision if you intend to replace it.'
+            self.workspace.show_review(publication, scope='publication_review', parent=self,
+                hint='Review the published deck. Using this revision leaves your local deck unchanged; your next publish replaces the shared version.')
+            self.workspace.states[connection['id']] = 'Review the published deck before replacing it.'
         self.workspace.submit('Loading latest publication for review', lambda: client.download(link['deck_id']), complete)
 
     def accept_review(self):
@@ -146,5 +218,7 @@ class PublishingPanel(W.QGroupBox):
             self.workspace.publications.accept_reviewed_revision(connection['server_id'], reviewed['local_id'], reviewed['publication'])
         def complete(_):
             self.reviewed = None
-            self.workspace.states[connection['id']] = 'Reviewed revision accepted. Local deck unchanged. Choose Publish snapshot or Unpublish explicitly to continue.'
+            self.workspace.preview_dialog.hide()
+            self.workspace.states[connection['id']] = 'Published revision reviewed. Choose Publish deck to share your local version.'
+            self.error.hide()
         self.workspace.submit('Saving reviewed publication revision', work, complete)

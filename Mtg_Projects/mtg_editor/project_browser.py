@@ -77,9 +77,23 @@ class ProjectTileDelegate(W.QStyledItemDelegate):
         font.setBold(False)
         painter.setFont(font)
         painter.setPen(G.QColor('#aab6c7'))
-        details = f"{row['kind']} · {row.get('format') or 'Custom'}\n{row.get('card_count', 0)} cards\nUpdated {datetime.fromtimestamp(row['modified']):%Y-%m-%d %H:%M}"
-        painter.drawText(C.QRect(rect.left()+8, rect.top()+207, rect.width()-16, 62),
-                         C.Qt.AlignmentFlag.AlignCenter, details)
+        if 'color_identity' in row:
+            swatches = {'W': '#eee4c4', 'U': '#80bddd', 'B': '#b5a6bc',
+                        'R': '#e99b87', 'G': '#91c4a2', 'C': '#b7bdc5'}
+            colors = row['color_identity'] or ['C']
+            width = (rect.width()-24) / len(colors)
+            for index, color in enumerate(colors):
+                painter.fillRect(C.QRectF(rect.left()+12+index*width, rect.top()+169, width-2, 4), G.QColor(swatches[color]))
+        if 'summary_lines' in row:
+            metrics = G.QFontMetrics(font)
+            for index, line in enumerate(row['summary_lines'][:3]):
+                area = C.QRect(rect.left()+10, rect.top()+207+index*19, rect.width()-20, 19)
+                painter.drawText(area, C.Qt.AlignmentFlag.AlignCenter,
+                                 metrics.elidedText(line, C.Qt.TextElideMode.ElideRight, area.width()))
+        else:
+            details = f"{row['kind']} · {row.get('format') or 'Custom'}\n{row.get('card_count', 0)} cards\nUpdated {datetime.fromtimestamp(row['modified']):%Y-%m-%d %H:%M}"
+            painter.drawText(C.QRect(rect.left()+8, rect.top()+207, rect.width()-16, 62),
+                             C.Qt.AlignmentFlag.AlignCenter, details)
         if option.state & W.QStyle.StateFlag.State_HasFocus:
             painter.setPen(G.QPen(G.QColor('#8ab4f8'), 1, C.Qt.PenStyle.DotLine))
             painter.setBrush(C.Qt.BrushStyle.NoBrush)

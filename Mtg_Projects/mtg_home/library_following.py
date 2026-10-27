@@ -2,7 +2,7 @@
 import time
 import sqlite3
 
-from PyQt6 import QtCore as C, QtWidgets as W
+from PyQt6 import QtCore as C, QtGui as G, QtWidgets as W
 
 
 class FollowingPanel(W.QWidget):
@@ -11,26 +11,27 @@ class FollowingPanel(W.QWidget):
         self.workspace = workspace
         self.reviewed = None
         self.checked_at = {}
-        layout = W.QVBoxLayout(self)
-        self.status = W.QLabel('Followed decks are read-only offline caches. Copy one to My Decks to edit it.')
+        layout = W.QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        self.status = W.QLabel('Available offline. Open a deck to view it or review an update.')
         self.status.setTextFormat(C.Qt.TextFormat.PlainText)
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
         actions = W.QHBoxLayout()
-        self.check_button = W.QPushButton('Check selected library for updates')
+        self.check_button = W.QPushButton('Check for updates')
         self.check_button.clicked.connect(self.check)
-        self.review_button = W.QPushButton('Review cached update')
+        self.review_button = W.QPushButton('Review update')
         self.review_button.clicked.connect(self.review)
-        self.accept_button = W.QPushButton('Accept reviewed update')
+        self.accept_button = W.QPushButton('Accept update')
+        self.accept_button.setProperty('buttonRole', 'primary')
         self.accept_button.clicked.connect(self.accept)
-        self.stop_button = W.QPushButton('Stop following (keep offline copy)')
-        self.stop_button.clicked.connect(self.stop)
-        for button in (self.check_button, self.review_button, self.accept_button, self.stop_button):
-            actions.addWidget(button)
+        self.stop_button = G.QAction('Stop following (keep offline copy)', self)
+        self.stop_button.triggered.connect(self.stop)
+        actions.addWidget(self.check_button)
         layout.addLayout(actions)
-        self.automatic = W.QCheckBox('Check this library every 5 minutes while signed in')
+        self.automatic = G.QAction('Check followed decks every 5 minutes', self)
+        self.automatic.setCheckable(True)
         self.automatic.toggled.connect(self.set_automatic)
-        layout.addWidget(self.automatic)
         self.timer = C.QTimer(self)
         self.timer.setInterval(30000)
         self.timer.timeout.connect(self.tick)
@@ -72,7 +73,8 @@ class FollowingPanel(W.QWidget):
                 self.automatic.blockSignals(False)
 
     def tick(self):
-        if self.workspace._job or self.workspace.jobs.busy:
+        if (self.workspace._job or self.workspace.jobs.busy or self.workspace.preview_dialog.isVisible()
+                or self.workspace.publishing.isVisible() or self.workspace._signin_dialog is not None):
             return
         now = time.monotonic()
         try:
@@ -94,7 +96,7 @@ class FollowingPanel(W.QWidget):
         def complete(records):
             count = sum(bool(row['pending']) for row in records)
             errors = sum(row['state'] in ('offline', 'unavailable', 'source_changed') for row in records)
-            message = f"{connection['name']}: {count} update(s) available; {errors} source issue(s). Accepted caches unchanged."
+            message = f"{count} update(s) available" + (f" · {errors} unavailable source(s)" if errors else ".")
             self.status.setText(message)
             self.workspace.message = message
             self.workspace.states[connection['id']] = message
@@ -112,9 +114,9 @@ class FollowingPanel(W.QWidget):
         key = (selected['server_id'], selected['deck_id'])
         def complete(result):
             self.reviewed = {'key': key, 'fingerprint': result['fingerprint']}
-            self.workspace.details.setPlainText('STAGED FOLLOW UPDATE — ACCEPT EXPLICITLY TO REPLACE THE OFFLINE CACHE\n\n'
-                + self.workspace.publication_text(result['publication']))
-            self.status.setText('Review the new deck above. Accepting preserves existing local print metadata and keeps a recovery snapshot.')
+            self.workspace.show_review(result['publication'], scope='follow_review',
+                hint='Review this update before replacing the offline copy. Your local print status will be kept.')
+            self.status.setText('Review the update, then accept it when ready.')
         self.workspace.submit('Opening cached update for review', lambda: self.workspace.followed.review(*key), complete)
 
     def accept(self):
@@ -123,7 +125,7 @@ class FollowingPanel(W.QWidget):
             return
         def complete(_):
             self.reviewed = None
-            self.status.setText('Update accepted. Local print metadata preserved. The followed deck remains read-only.')
+            self.status.setText('Deck updated. Available offline.')
             self.workspace.refresh_follows()
         self.workspace.submit('Accepting reviewed follow update',
             lambda: self.workspace.followed.accept(*reviewed['key'], reviewed['fingerprint']), complete)
@@ -134,7 +136,7 @@ class FollowingPanel(W.QWidget):
             return
         def complete(_):
             self.reviewed = None
-            self.status.setText('Following stopped. The offline cache is still viewable and can be copied to My Decks.')
+            self.status.setText('Following stopped. Your offline copy is still available.')
             self.workspace.refresh_follows()
         self.workspace.submit('Stopping deck subscription',
             lambda: self.workspace.followed.stop(selected['server_id'], selected['deck_id']), complete)

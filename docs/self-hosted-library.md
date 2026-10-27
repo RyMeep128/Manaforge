@@ -16,10 +16,11 @@ exposed as partially working desktop actions.
 
 ## Browse Online
 
-Open **Browse Online** from the home page, then **Add library…**. Enter the HTTPS
-origin supplied by your friend or your own server, and your account credentials.
-For a new account, also enter the single-use invitation from its administrator.
-For a trusted LAN, explicitly enable LAN HTTP and use a private IP address; HTTP
+Open **Browse Online** from the home page, then **Join library**. Use **Sign in**
+for an existing account, or **Create account** with a single-use invitation from
+the library administrator. Enter the HTTPS address supplied by your host. Failed
+connections stay in this form with an inline error and retain the address/username.
+For a trusted LAN, expand **Advanced connection options**, explicitly enable LAN HTTP and use a private IP address; HTTP
 to hostnames or public IPs is rejected. Server URLs cannot include credentials,
 paths, query strings or fragments. Redirects are rejected, including redirects
 to another hostname; provide the final library origin directly.
@@ -35,16 +36,24 @@ Passwords are never saved. Each library's bearer session lives in memory and is
 not shared with other connections. Restarting Manaforge requires signing in again;
 secure OS-backed persistent credential storage remains future work. Selecting a
 saved library or opening Browse Online never automatically contacts it. Use
-**Sign in / Reconnect…**, then **Search / Refresh**. Errors and connection status
-appear beside the connection controls. An invalid/expired session asks you to
-sign in again. **Disconnect** revokes the server session when reachable and clears
-it locally even when offline. **Remove** forgets just that connection and its
+**Sign in**; a successful sign-in loads the shared decks automatically. The compact
+library selector switches saved libraries. Its **Library** menu contains joining
+another library, signing out, removing a connection and optional follow checks.
+An invalid/expired session asks you to sign in again. **Sign out** revokes the server
+session when reachable and clears it locally even when offline. **Remove connection** forgets just that connection and its
 in-memory search results, leaving other libraries and all saved local decks intact.
 
-Search by name/description, commander, owner, deck tag/theme and exact color
-identity. Search results arrive in pages of 50; **Load more** continues the last
-submitted search. Selecting a result previews its owner/revision, description,
-commander, categories, tags, quantities, card notes and selected printing IDs.
+The gallery reuses the Deck Editor's **Your decks** tiles: commander artwork,
+deck name, owner, format, card count, color identity and tags/update state. **Shared
+decks** and **Following** are tabs. Search by name/description in the main search
+field; **Filters** reveals commander, owner, tag/theme and named color toggles.
+The colorless choice is exclusive. **Apply filters** submits advanced criteria;
+**Reset filters** clears them. Local sorting applies to loaded decks. Search results
+arrive in pages of 50; **Load more** appears when another page is available.
+Click a deck (or press Enter on the selected card) for a focused read-only preview
+with a structured decklist, printing choices, categories and a Details tab.
+Copying/following/updating actions live in that preview rather than above an empty
+gallery. The page has separate join, sign-in, empty-library and no-match states.
 Commander artwork uses the existing thumbnail component against the local card
 image cache only; missing images show no artwork. This page makes no artwork
 provider requests. Search, sign-in, disconnect and disk copying use the existing
@@ -65,10 +74,10 @@ current application session; save a local copy or follow the deck for offline us
 
 In the unified Manaforge application, open a deck in Deck Editor and choose
 **More → Publish to Library…**. Manaforge saves the deck locally, freezes a shared
-snapshot and opens its publishing panel in Browse Online. Select a destination
-library above the panel and sign in if needed. Review the snapshot name and color
-identity, then choose **Publish snapshot**. Color identity is suggested from local
-card facts and can be corrected before publishing. Opening the panel never uploads
+snapshot and opens a separate **Publish deck** dialog. Select a destination library
+inside the dialog and sign in or join a library there if needed. Review the deck
+name and color choices, then choose **Publish deck**. Color identity is suggested
+from local card facts and can be corrected with named color toggles. Opening the dialog never uploads
 anything. The standalone editor launcher keeps this action disabled; use the
 unified application for online publishing.
 
@@ -79,8 +88,7 @@ and publish. Later local edits are never automatically uploaded. Choose Publish
 to Library again from the editor to prepare a fresh snapshot. A copied deck has
 a new local ID and publishes independently of its source.
 
-The panel displays the last acknowledged server deck ID, revision and published
-state. **Unpublish** hides that publication from readers but retains server history
+The dialog displays the last acknowledged revision. **More → Unpublish deck** hides that publication from readers but retains server history
 and your local deck. Publishing again uses the same server ID and a new revision.
 The server enforces owner/administrator permissions on every modification; signing
 in as another normal user cannot update someone else's publication. General
@@ -88,7 +96,7 @@ administrator deck management remains available through the API; the desktop pan
 manages publications linked to your local decks.
 
 A durable local journal records an operation before uploading. If an upload or
-its response is interrupted, **Retry pending publish/unpublish** retries that same
+its response is interrupted, **Retry upload** (or **More → Unpublish deck**) retries that same
 operation and original snapshot, including its original colors. Edits made after
 the pending snapshot are not part of the retry. Once recovered, prepare another
 snapshot to publish the newer edits. The journal contains only shared deck fields
@@ -99,10 +107,10 @@ Pending retries require the same user account that started them. This remains tr
 after an application/server restart or reconnect.
 
 If another client published a newer revision, the update stops with a conflict.
-Choose **Review latest publication** to load the remote deck into the preview.
+Choose **More → Review published deck** to load the remote deck into a read-only preview.
 Reading it does not change your local deck or publishing base. If you intend your
-next explicit publication to replace that remote content, choose **Use reviewed
-revision as the next publish base**, then separately publish or unpublish. This
+next explicit publication to replace that remote content, choose **Use revision N**,
+then separately publish or unpublish. This
 clears the conflicting pending operation and leaves the local deck and prepared
 snapshot unchanged. A further remote change still causes another conflict. An
 unavailable/unpublished source may not be reviewable; retry/reconnect diagnostics
@@ -147,7 +155,7 @@ Reuse points for follow-up work:
 
 Select a shared search result and choose **Follow Deck**. Manaforge explicitly
 downloads the latest publication and caches a native `DeckDocument` in its local
-connections database. **Followed decks (offline)** shows cached decks from every
+connections database. The **Following** tab shows cached decks from every
 library, with source-library labels, accepted revision, availability state and
 update badges. The preview is read-only; follows are kept outside the editable
 deck directory and cannot accidentally open as editor projects. They remain
@@ -161,22 +169,22 @@ to check for updates again. **Copy to My Decks** works from the accepted offline
 cache even when its connection has been removed; the new editable copy receives
 its own UUID and source attribution and never synchronizes automatically.
 
-**Check selected library for updates** checks active subscriptions for the library
+**Check for updates** checks active subscriptions for the library
 selected in the connection selector. New revisions are downloaded to a staged
 slot and trigger an update count/notification. The accepted cache is unchanged.
-**Review cached update** opens the downloaded revision in the preview. Then
-**Accept reviewed update** atomically replaces the accepted cache with exactly
+Open a followed deck and choose **Review update** to preview the downloaded revision. Then
+**Accept update** atomically replaces the accepted cache with exactly
 the reviewed revision. If a check staged a different update in the meantime,
 acceptance stops and asks for another review. Reviewing and accepting staged
 content require no network connection; it was already downloaded while authorized.
 
-Automatic checks default **off**. Optionally enable **Check this library every
-5 minutes while signed in** for an individual library. The app checks due libraries
+Automatic checks default **off**. Optionally enable **Check followed decks every
+5 minutes** in the **Library** menu for an individual library. Checks only run while signed in. The app checks due libraries
 using its shared background queue, with roughly 30-second scheduling granularity,
 and shows notifications in Manaforge's status bar. It never applies updates.
 These checks only run while that library has an explicitly established in-memory
 session; saved preferences do not reconnect or authenticate on startup. Other
-libraries keep their own preference and schedule. **Stop following (keep offline
+libraries keep their own preference and schedule. In a deck preview, **More → Stop following (keep offline
 copy)** disables future checks for that deck and retains the accepted read-only
 cache. Following it again stages newer content without replacing the old cache.
 
@@ -369,3 +377,9 @@ homepage tests cover editor-to-library routing without automatic upload. The exi
 collects these tests and installs the optional server dependency. No tests or
 builds were executed locally, per the requested execution policy. Live LAN/tunnel
 deployment and full story acceptance testing remain for subsequent stages.
+
+Gallery UX regressions cover inline sign-in retry, separate account creation,
+contextual actions, the shared project-tile renderer and named color choices.
+CI also uploads empty, populated, narrow-window, preview, publishing and account-form screenshots under the
+`library-ui-python-*` artifacts for visual review. No local GUI validation runs
+are needed to produce these CI artifacts.

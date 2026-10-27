@@ -4,7 +4,7 @@ import time
 from types import SimpleNamespace
 import uuid
 
-from PyQt6 import QtWidgets as W
+from PyQt6 import QtCore as C, QtGui as G, QtWidgets as W
 import pytest
 
 from mtg_core.decks import Deck, DeckEntry, DeckStore
@@ -40,7 +40,11 @@ def test_opening_browse_online_never_connects(app, tmp_path):
     assert workspace.selector.count() == 0
     assert workspace.add_button.isEnabled()
     assert not workspace.search_button.isEnabled()
-    assert 'No libraries configured' in workspace.connection_status.text()
+    assert workspace.empty_title.text() == 'Join a deck library'
+    assert workspace.empty_button.text() == 'Join library'
+    assert workspace.filters_container.isHidden()
+    assert not workspace.preview_dialog.isVisible()
+    assert not workspace.publishing.isVisible()
     assert workspace.prepare_to_close()
     workspace.close()
 
@@ -116,8 +120,7 @@ def test_connection_switches_and_failed_search_preserve_separate_snapshots(app, 
     workspace.close()
 
 
-def test_add_and_reconnect_are_explicit_and_do_not_persist_credentials(app, tmp_path, monkeypatch):
-    from mtg_home.library_workspace import SignInDialog
+def test_add_and_reconnect_are_explicit_and_do_not_persist_credentials(app, tmp_path):
     server_id = str(uuid.uuid4())
     calls = []
     class Client:
@@ -125,27 +128,30 @@ def test_add_and_reconnect_are_explicit_and_do_not_persist_credentials(app, tmp_
             self.url, self.token = url, None
             calls.append(options)
         def login(self, username, password, *, invitation=''):
-            assert (username, password, invitation) == ('friend', 'a sufficiently long password', 'invite')
+            assert (username, password) == ('friend', 'a sufficiently long password')
+            assert invitation == ('invite' if calls[-1]['server_id'] is None else '')
             self.token = 'memory-session'
             return {'server_id': server_id, 'name': 'Friends'}
         def disconnect(self):
             self.token = None
-    def accept(dialog):
+        def browse(self, filters, offset=0):
+            return []
+    def complete_form(dialog, *, creating=False):
+        dialog.mode.setCurrentIndex(1 if creating else 0)
         dialog.url.setText('https://friend.invalid')
         dialog.username.setText('friend')
         dialog.password.setText('a sufficiently long password')
-        dialog.invitation.setText('invite')
-        return W.QDialog.DialogCode.Accepted
-    monkeypatch.setattr(SignInDialog, 'exec', accept)
+        dialog.invitation.setText('invite' if creating else '')
+        dialog.submit_button.click()
     workspace = LibraryWorkspace(object(), root=tmp_path, client_factory=Client)
     assert not calls
-    workspace.sign_in(new=True)
+    complete_form(workspace.sign_in(new=True), creating=True)
     settle(app, workspace)
     assert workspace.selector.count() == 1
     connection = workspace.connection()
     assert workspace.clients[connection['id']].token == 'memory-session'
     assert calls[0]['server_id'] is None
-    workspace.sign_in(new=False)
+    complete_form(workspace.sign_in(new=False))
     settle(app, workspace)
     assert calls[1]['server_id'] == server_id
     assert b'a sufficiently long password' not in workspace.connections.path.read_bytes()
@@ -198,7 +204,7 @@ def test_publish_conflict_review_unpublish_and_republish_are_explicit(app, tmp_p
     panel.publish()
     settle(app, workspace)
     assert workspace.publications.get(client.server_id, local_id)['revision'] == 1
-    assert 'Retry pending publish' == panel.publish_button.text()
+    assert 'Retry upload' == panel.publish_button.text()
     panel.review()
     settle(app, workspace)
     assert 'A remote edit' in workspace.details.toPlainText()
@@ -268,7 +274,7 @@ def test_follow_offline_restart_review_and_accept_are_separate(app, tmp_path):
     assert workspace.results.count() == 1
     assert 'Followed' in workspace.results.item(0).text()
     workspace.results.setCurrentRow(0)
-    assert 'READ-ONLY OFFLINE CACHE' in workspace.details.toPlainText()
+    assert 'Read-only' in workspace.preview_dialog.hint.text()
     assert workspace.details.isReadOnly()
     assert client.calls == 1
     workspace.following.tick()  # Automatic checks require separate explicit opt-in.
@@ -306,3 +312,187 @@ def test_follow_offline_restart_review_and_accept_are_separate(app, tmp_path):
     assert DeckStore().load(copies[0]).deck.name == 'New owner revision'
     assert restarted.prepare_to_close()
     restarted.close()
+
+
+def test_gallery_reuses_project_tiles_and_only_opens_actions_with_a_deck(app, tmp_path):
+    from mtg_editor.project_browser import ProjectTileDelegate
+    workspace = LibraryWorkspace(object(), root=tmp_path)
+    client = SimpleNamespace(url='https://friend.invalid', token='session')
+    connection = workspace.connections.add(client, {'server_id': str(uuid.uuid4()), 'name': 'Friends'})
+    workspace.clients[connection['id']] = client
+    workspace.reload_connections(connection['id'])
+    workspace.render([record()])
+    assert workspace.results.viewMode() == W.QListView.ViewMode.IconMode
+    assert isinstance(workspace.results.itemDelegate(), ProjectTileDelegate)
+    assert workspace.selector.currentText() == 'Friends'
+    assert workspace.filters_container.isHidden()
+    assert not workspace.preview_dialog.isVisible()
+    assert workspace.preview_dialog.isAncestorOf(workspace.copy_button)
+    assert workspace.preview_dialog.isAncestorOf(workspace.follow_button)
+    row = workspace.results.item(0).data(C.Qt.ItemDataRole.UserRole)
+    assert row['summary_lines'][0] == 'friend · Custom'
+    assert row['color_identity'] == ['U']
+    workspace.results.setCurrentRow(0)
+    workspace.open_preview()
+    assert workspace.preview_dialog.isVisible()
+    assert workspace.preview_dialog.title.text() == '<b>Shared deck</b>'
+    assert workspace.preview_dialog.title.textFormat() == C.Qt.TextFormat.PlainText
+    assert workspace.preview_dialog.cards.topLevelItemCount() == 1
+    assert workspace.preview_dialog.cards.topLevelItem(0).child(0).text(1) == 'Commander'
+    workspace.preview_dialog.reject()
+    workspace.filter_button.setChecked(True)
+    assert not workspace.filters_container.isHidden()
+    workspace.filter_button.setChecked(False)
+    assert workspace.filters_container.isHidden()
+    assert workspace.prepare_to_close()
+    workspace.close()
+
+
+def test_failed_sign_in_stays_in_form_and_can_retry_without_losing_address(app, tmp_path):
+    calls = []
+    class Client:
+        def __init__(self, url, **options):
+            self.url, self.token = url, None
+        def login(self, username, password, *, invitation=''):
+            calls.append((username, password, invitation))
+            if len(calls) == 1:
+                raise LibraryError(401, 'The username or password was rejected.')
+            self.token = 'test-session'
+            return {'server_id': str(uuid.uuid4()), 'name': 'Friends'}
+        def browse(self, filters, offset=0):
+            return []
+    workspace = LibraryWorkspace(object(), root=tmp_path, client_factory=Client)
+    dialog = workspace.sign_in(new=True)
+    assert dialog.invitation.isHidden()
+    assert dialog.lan.isHidden()
+    dialog.url.setText('https://friend.invalid')
+    dialog.username.setText('friend')
+    dialog.password.setText('a sufficiently long password')
+    dialog.submit_button.click()
+    settle(app, workspace)
+    assert dialog.isVisible()
+    assert dialog.error.text() == 'The username or password was rejected.'
+    assert dialog.url.text() == 'https://friend.invalid'
+    assert dialog.username.text() == 'friend'
+    assert not dialog.password.text()
+    assert 'rejected' not in workspace.connection_status.text()
+    assert workspace.connections.list() == []
+    dialog.password.setText('a corrected long password')
+    dialog.submit_button.click()
+    settle(app, workspace)
+    assert workspace._signin_dialog is None
+    assert workspace.selector.count() == 1
+    assert workspace.empty_title.text() == 'No decks shared yet'
+    assert calls[-1][2] == ''
+    assert workspace.prepare_to_close()
+    workspace.close()
+
+
+def test_sign_in_and_account_creation_have_separate_validation(app, tmp_path):
+    workspace = LibraryWorkspace(object(), root=tmp_path)
+    dialog = workspace.sign_in(new=True)
+    dialog.mode.setCurrentIndex(1)
+    assert not dialog.invitation.isHidden()
+    dialog.url.setText('https://friend.invalid')
+    dialog.username.setText('friend')
+    dialog.password.setText('short')
+    dialog.invitation.setText('invitation')
+    dialog.submit_button.click()
+    assert 'at least 12' in dialog.error.text()
+    assert not workspace.jobs.busy
+    dialog.mode.setCurrentIndex(0)
+    assert dialog.invitation.isHidden()
+    dialog.reject()
+    assert workspace._signin_dialog is None
+    assert workspace.prepare_to_close()
+    workspace.close()
+
+
+def test_color_controls_are_exclusive_with_colorless(app):
+    from mtg_home.library_widgets import ColorChoices
+    colors = ColorChoices()
+    colors.buttons['U'].click()
+    colors.buttons['G'].click()
+    assert colors.text() == 'UG'
+    colors.buttons['C'].click()
+    assert colors.text() == 'C'
+    colors.buttons['W'].click()
+    assert colors.text() == 'W'
+    colors.clear()
+    assert colors.text() == ''
+
+
+def test_publishing_is_a_dialog_with_connection_first_when_no_library_exists(app, tmp_path):
+    workspace = LibraryWorkspace(object(), root=tmp_path)
+    panel = workspace.publishing
+    assert isinstance(panel, W.QDialog)
+    assert panel.prepare(record()['deck'], 'U')
+    assert panel.isVisible()
+    assert panel.publish_button.isHidden()
+    assert panel.colors.isHidden()
+    assert panel.connect_button.text() == 'Join library'
+    panel.connect_button.click()
+    assert workspace._signin_dialog.parentWidget() is panel
+    workspace._signin_dialog.reject()
+    panel.reject()
+    assert not workspace.jobs.busy
+    assert workspace.prepare_to_close()
+    workspace.close()
+
+
+def test_library_visual_review_artifacts(app, tmp_path):
+    """CI screenshots make the real Qt layout reviewable without a local run."""
+    import os
+    from pathlib import Path
+    from mtg_ui.theme import application_stylesheet
+    workspace = LibraryWorkspace(object(), root=tmp_path)
+    workspace.setStyleSheet(application_stylesheet())
+    workspace.resize(1180, 760)
+    workspace.show()
+    app.processEvents()
+    output = os.environ.get('MANAFORGE_UI_SCREENSHOTS')
+    def capture(name, widget=None):
+        if output:
+            path = Path(output)
+            path.mkdir(parents=True, exist_ok=True)
+            assert (widget or workspace).grab().save(str(path / (name + '.png')))
+    capture('library-empty')
+    client = SimpleNamespace(url='https://friend.invalid', token='session')
+    connection = workspace.connections.add(client, {'server_id': str(uuid.uuid4()), 'name': 'Friends library'})
+    workspace.clients[connection['id']] = client
+    workspace.reload_connections(connection['id'])
+    rows = []
+    for index, name in enumerate(['Artifacts', 'Elves', 'Tokens', 'Spells', 'Dragons', 'Lands', 'Counters', 'Control']):
+        value = record()
+        value['deck']['name'] = name
+        card_id = f'fixture-{index}'
+        value['deck']['entries'][0]['card_id'] = card_id
+        pixmap = G.QPixmap(110, 154)
+        pixmap.fill(G.QColor(['#3e6268', '#546348', '#746353', '#4a5675'][index % 4]))
+        workspace.thumbnails.cache[(card_id, None)] = pixmap
+        rows.append(value)
+    workspace.render(rows)
+    app.processEvents()
+    assert workspace.gallery_stack.currentWidget() is workspace.results
+    capture('library-gallery')
+    workspace.resize(640, 740)
+    app.processEvents()
+    capture('library-gallery-narrow')
+    workspace.results.setCurrentRow(0)
+    workspace.open_preview()
+    app.processEvents()
+    capture('library-deck-preview', workspace.preview_dialog)
+    workspace.preview_dialog.reject()
+    workspace.publishing.prepare(rows[0]['deck'], 'U')
+    app.processEvents()
+    capture('library-publish', workspace.publishing)
+    workspace.publishing.reject()
+    dialog = workspace.sign_in(new=True)
+    app.processEvents()
+    capture('library-sign-in', dialog)
+    dialog.mode.setCurrentIndex(1)
+    app.processEvents()
+    capture('library-create-account', dialog)
+    dialog.reject()
+    assert workspace.prepare_to_close()
+    workspace.close()
