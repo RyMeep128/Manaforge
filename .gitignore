@@ -195,6 +195,7 @@ mpc-autofill/
 /__pycache__/
 /build/
 /dist/
+/installer-output/
 /venv/
 /crop_skip_debug/
 /dubpes/

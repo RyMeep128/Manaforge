@@ -25,6 +25,8 @@ class UpdateCheckResult:
     release_url: str
     asset_name: str | None = None
     asset_url: str | None = None
+    checksum_url: str | None = None
+    asset_size: int | None = None
 
 
 def _normalize_version(version: str | None) -> str:
@@ -88,6 +90,15 @@ def _find_windows_zip_asset(release: dict) -> tuple[str, str] | None:
     return None
 
 
+def _find_windows_asset(release):
+    for asset in release.get('assets') or []:
+        if (isinstance(asset, dict) and asset.get('name') == 'Manaforge-Setup.exe'
+                and str(asset.get('browser_download_url', '')).startswith('https://')
+                and asset.get('state', 'uploaded') == 'uploaded' and asset.get('size') != 0):
+            return asset['name'], asset['browser_download_url']
+    return _find_windows_zip_asset(release)
+
+
 def parse_latest_release(release: dict, current_version: str) -> UpdateCheckResult:
     if not isinstance(release, dict):
         raise UpdateCheckError("GitHub release response was not a JSON object.")
@@ -97,7 +108,7 @@ def parse_latest_release(release: dict, current_version: str) -> UpdateCheckResu
     latest_version = _release_version(release)
     release_url = str(release.get("html_url") or "")
     update_available = is_newer_version(latest_version, current_version)
-    asset = _find_windows_zip_asset(release) if update_available else None
+    asset = _find_windows_asset(release) if update_available else None
     if update_available and asset is None:
         raise UpdateCheckError("A newer release exists, but it does not include a Windows release zip.")
 
@@ -109,6 +120,11 @@ def parse_latest_release(release: dict, current_version: str) -> UpdateCheckResu
         release_url=release_url,
         asset_name=asset_name,
         asset_url=asset_url,
+        checksum_url=next((a.get('browser_download_url') for a in release.get('assets', [])
+                           if isinstance(a, dict) and a.get('name') == 'SHA256SUMS.txt'
+                           and a.get('state', 'uploaded') == 'uploaded'), None),
+        asset_size=next((a.get('size') for a in release.get('assets', [])
+                         if isinstance(a, dict) and a.get('name') == asset_name), None),
     )
 
 
@@ -170,7 +186,7 @@ def check_for_update(current_version: str, fetch_json_fn=None, cancelled_fn=None
             continue
         if _channel(version) not in allowed or (not channel and release.get('prerelease')):
             continue
-        if _find_windows_zip_asset(release) is not None:
+        if _find_windows_asset(release) is not None:
             candidates.append(release)
     if not candidates:
         raise UpdateCheckError('No downloadable Windows application release was found for this channel.')

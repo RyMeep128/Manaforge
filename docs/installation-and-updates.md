@@ -2,10 +2,13 @@
 
 ## Friends installing Manaforge
 
-Download a tested **Manaforge-Windows.zip**, extract the entire archive to a normal
-writable folder, and open `Manaforge/Manaforge.exe`. Keep the accompanying `_internal`
-directory beside the executable. The standalone bundle includes Python and its
-dependencies; installing Python, Git, or development tools is unnecessary.
+Run **Manaforge-Setup.exe** for a per-user Windows installation without administrator
+access. Use the Manaforge Start Menu shortcut or
+`%LOCALAPPDATA%/Programs/Manaforge/Manaforge.cmd`. Application binaries live under
+`versions/<APP_VERSION>`; data remains in its existing configured locations.
+The optional **Manaforge-Windows.zip** remains a portable distribution: extract
+the entire archive and keep `_internal` beside `Manaforge.exe`.
+Both distributions include Python and dependencies.
 
 Windows bundles are available as artifacts of manually requested
 [Tests workflow builds](https://github.com/RyMeep128/Manaforge/actions/workflows/tests.yml).
@@ -142,25 +145,51 @@ failed checks can be retried immediately. Data updates below are independent.
 
 The checker reads published GitHub Releases from `RyMeep128/Manaforge`, paginating
 past dataset releases. It ignores drafts, malformed versions and releases without an
-uploaded Windows application ZIP. Both `Manaforge-Windows.zip` and legacy
+uploaded Windows application installer or ZIP. Installers are preferred. Both `Manaforge-Windows.zip` and legacy
 `PrintProxyPrep-<version>-win.zip` are supported. Semantic precedence includes numeric
 prerelease identifiers and ignores build metadata. Alpha installations accept alpha,
 beta, RC and stable; beta accepts beta, RC and stable; stable accepts stable only.
 Only Windows packages currently exist; other operating systems report that limitation.
 
-Application installation uses the existing portable ZIP distribution, with an explicit
-**Download update** action. The browser owns transfer progress and retry. Finish the
-download, extract the entire archive into a **new folder**, close Manaforge, then run
-the new executable. Keep the previous folder until the new copy works. Interrupted
-or failed downloads/extraction leave the running installation untouched; reopen the
-previous copy for recovery. There is no automatic in-place replacement, installation
-progress, restart, or rollback executor. The new process reads its own embedded version
-and its next successful release check returns the button to green if current.
+Select **Download & Install** to download inside Manaforge. Shared background workers
+show measured percentage, bytes and speed in the update panel and Home status bar.
+Click the downloading button to cancel; retry resumes partial transfers when safe.
+The release's `SHA256SUMS.txt` must contain a unique installer SHA-256 checksum.
+Incomplete or mismatched downloads are never executed. Legacy ZIP-only releases are
+still recognized but cannot be installed by this workflow; they show an explanation.
+Source checkouts cannot launch application installers.
 
-Source inspection and CI regression coverage address selection/state logic. Tests and
-builds were deliberately not run locally. CI must validate regressions and packaging;
-an installed-app exercise must still verify download, extraction, old-copy recovery,
-launching the new copy, version reporting and button state after restart.
+After verification, normal window close guards save work or postpone installation.
+The installer writes a completion receipt and waits for the old process to exit
+before launching the new executable. A persistent record in
+`PrintProxyPrep/application-updates/pending.json` (under the existing data root,
+including `PRINT_PROXY_PREP_DATA_DIR` overrides) tracks download, readiness,
+pending installation, verification and cleanup. It is created on confirmation only.
+Installer cancellation/failure retains the old executable. Reopen that executable
+to retry; no automatic rollback overwrites application or data files.
+
+The new application verifies its embedded version, installation path and receipt,
+initializes its required card service, runs the existing local health checks, and
+confirms prior data locations remain accessible before allowing cleanup. Failed
+initialization or checks retain the record and old installation. Successful updates
+write `last-success.json` and clear the pending record after cleanup.
+
+Cleanup only handles installer-owned version directories under
+`%LOCALAPPDATA%/Programs/Manaforge/versions`. It rejects junctions, symlinks and
+invalid inventories. Only files whose hashes still match the installer inventory
+are removed; unknown and modified files survive. Configured data locations within
+an old installation protect the entire folder. Portable installations are always
+preserved for explicit manual review, including folders containing decks or artwork.
+No recursive directory deletion occurs. Locked files retain `cleanup_pending` and
+retry after health verification on a later startup without blocking the UI.
+
+The Windows build workflow compiles the Inno Setup installer, smoke tests its
+receipt/payload, and uploads the installer, ZIP and checksums. Publication still
+requires the explicit prerelease input; building never creates a release or tag.
+CI tests cover updater ownership, interrupted cleanup, verification and startup
+failure contracts. Local tests, builds and application launches were deliberately
+not run. CI and a Windows installed-app exercise must validate end-to-end updating,
+installer cancellation, restart, version reporting and data preservation.
 
 ## Automatic updates
 

@@ -263,6 +263,13 @@ def main():
     server.newConnection.connect(activate)
     home.show()
     from mtg_ui.application_updates import application_updates
+    # The window exists, setup has succeeded, and the event loop is processing.
+    # Build the required service on the verification worker before permitting cleanup.
+    def verify_application_update():
+        from mtg_print.application_install import state_path
+        if state_path().exists() and getattr(sys, 'frozen', False):
+            application_updates().verify_startup(lambda: controller.service)
+    C.QTimer.singleShot(0, verify_application_update)
     C.QTimer.singleShot(1000, lambda: application_updates().check(manual=False))
     update_timer=C.QTimer(controller)
     update_timer.timeout.connect(controller.check_data_updates)

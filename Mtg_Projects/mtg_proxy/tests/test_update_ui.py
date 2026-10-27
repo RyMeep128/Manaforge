@@ -136,3 +136,29 @@ def test_navigation_update_uses_native_toolbar_action(monkeypatch):
     toolbar.deleteLater()
     controller.deleteLater()
     app.processEvents()
+
+
+def test_download_progress_and_cancel_are_shared(monkeypatch):
+    from types import SimpleNamespace
+    import threading
+    from PyQt6 import QtWidgets
+    from mtg_core.downloads import DownloadProgress
+    from mtg_ui import application_updates as ui
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    controller = ui.ApplicationUpdates(app)
+    monkeypatch.setattr(ui, 'application_updates', lambda: controller)
+    first, second = ui.ApplicationUpdatePanel(), ui.ApplicationUpdatePanel()
+    cancel = threading.Event()
+    controller.install_worker = SimpleNamespace(cancel=cancel)
+    controller.phase = 'Downloading'
+    controller.transfer_progress(DownloadProgress(1024**2, 2 * 1024**2, 1024**2))
+    assert first.progress.value() == second.progress.value() == 50
+    assert '50%' in first.button.text()
+    assert 'MiB/s' in first.status.text()
+    first.button.click()
+    assert cancel.is_set()
+    controller.install_worker = None
+    first.deleteLater()
+    second.deleteLater()
+    controller.deleteLater()
+    app.processEvents()
