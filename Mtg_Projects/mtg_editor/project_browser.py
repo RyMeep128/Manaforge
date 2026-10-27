@@ -108,7 +108,8 @@ class ProjectDashboard(W.QWidget):
         title = W.QLabel('Your decks')
         title.setProperty('role', 'title')
         layout.addWidget(title)
-        subtitle = W.QLabel('Pick up where you left off or start a new deck. Print projects open as separate editable decks.')
+        self.subtitle = W.QLabel('Pick up where you left off or start a new deck.')
+        subtitle = self.subtitle
         subtitle.setWordWrap(True)
         layout.addWidget(subtitle)
         actions = W.QHBoxLayout()
@@ -125,6 +126,12 @@ class ProjectDashboard(W.QWidget):
         for button in (new_button, open_button, self.resume_button, self.refresh_button):
             button.setAutoDefault(False)
             actions.addWidget(button)
+        self.tabs = W.QTabBar()
+        self.tabs.addTab('Decks')
+        self.tabs.addTab('Print projects')
+        self.tabs.setAccessibleName('Project library tabs')
+        self.tabs.setExpanding(False)
+        actions.addWidget(self.tabs)
         actions.addStretch()
         layout.addLayout(actions)
         filters = W.QHBoxLayout()
@@ -141,7 +148,7 @@ class ProjectDashboard(W.QWidget):
         filters.addWidget(self.sort)
         layout.addLayout(filters)
         self.list = ProjectList()
-        self.list.setAccessibleName('Decks and print projects')
+        self.list.setAccessibleName('Decks')
         self.list.setViewMode(W.QListView.ViewMode.IconMode)
         self.list.setResizeMode(W.QListView.ResizeMode.Adjust)
         self.list.setMovement(W.QListView.Movement.Static)
@@ -178,6 +185,7 @@ class ProjectDashboard(W.QWidget):
         self.filter.textChanged.connect(self.filter_rows)
         self.filter.returnPressed.connect(self.open_selected)
         self.sort.currentIndexChanged.connect(self.filter_rows)
+        self.tabs.currentChanged.connect(self.filter_rows)
         self.thumbnails.updated.connect(self.list.viewport().update)
         self.refresh()
 
@@ -205,7 +213,14 @@ class ProjectDashboard(W.QWidget):
         selected = self.list.currentItem()
         selected_path = selected.data(C.Qt.ItemDataRole.UserRole)['path'] if selected else None
         query = self.filter.text().strip().casefold()
-        rows = list(self.rows)
+        print_projects = self.tabs.currentIndex() == 1
+        kind = 'Print project' if print_projects else 'Deck'
+        label = 'print projects' if print_projects else 'decks'
+        self.subtitle.setText('Open a print project as a separate editable deck.' if print_projects else
+                              'Pick up where you left off or start a new deck.')
+        self.list.setAccessibleName('Print projects' if print_projects else 'Decks')
+        self.open_button.setText('Open selected as deck' if print_projects else 'Open selected')
+        rows = [row for row in self.rows if row['kind'] == kind]
         rows.sort(key=(lambda row: (row['name'].casefold(), row['path'])) if self.sort.currentIndex()
                   else (lambda row: (-row['modified'], row['name'].casefold(), row['path'])))
         self.list.clear()
@@ -224,9 +239,10 @@ class ProjectDashboard(W.QWidget):
         if self.list.currentItem() is None and visible:
             self.list.setCurrentItem(visible[0])
         self.empty.setVisible(not visible)
-        self.empty.setText('No matching projects. Try another search.' if self.rows else
-                           'No projects yet. Start a new deck or open a project file.')
-        self.status.setText(f'{len(visible)} of {len(self.rows)} projects' +
+        self.empty.setText(f'No matching {label}. Try another search.' if rows else
+                           'No print projects yet. Open a project file to edit it as a deck.' if print_projects else
+                           'No decks yet. Start a new deck or open a deck file.')
+        self.status.setText(f'{len(visible)} of {len(rows)} {label}' +
                             (f' · {len(self.errors)} unavailable files (details below)' if self.errors else ''))
         self.selection_changed()
         C.QTimer.singleShot(0, self.update_visible)
@@ -288,7 +304,10 @@ class ProjectDashboard(W.QWidget):
         self.refresh()
 
     def browse(self):
-        path, _ = W.QFileDialog.getOpenFileName(self, 'Open deck or project', str(self.roots[0]), 'JSON projects (*.json)')
+        print_projects = self.tabs.currentIndex() == 1
+        path, _ = W.QFileDialog.getOpenFileName(
+            self, 'Open print project as deck' if print_projects else 'Open deck',
+            str(self.roots[1 if print_projects else 0]), 'JSON projects (*.json)')
         if path:
             self.openRequested.emit(Path(path))
 
