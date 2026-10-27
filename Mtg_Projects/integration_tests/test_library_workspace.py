@@ -138,6 +138,7 @@ def test_add_and_reconnect_are_explicit_and_do_not_persist_credentials(app, tmp_
         def browse(self, filters, offset=0):
             return []
     def complete_form(dialog, *, creating=False):
+        dialog.remember.setChecked(False)  # This case exercises sign-in without local persistence.
         dialog.mode.setCurrentIndex(1 if creating else 0)
         dialog.url.setText('https://friend.invalid')
         dialog.username.setText('friend')
@@ -365,6 +366,7 @@ def test_failed_sign_in_stays_in_form_and_can_retry_without_losing_address(app, 
     workspace = LibraryWorkspace(object(), root=tmp_path, client_factory=Client)
     dialog = workspace.sign_in(new=True)
     assert dialog.invitation.isHidden()
+    dialog.remember.setChecked(False)  # The retry fixture provides no persistent account metadata.
     assert dialog.lan.isHidden()
     dialog.url.setText('https://friend.invalid')
     dialog.username.setText('friend')
@@ -553,7 +555,7 @@ def test_remember_checkbox_saves_session_and_removing_connection_forgets_it(app,
         def login(self, username, password, *, invitation='', remember=False):
             calls.append(remember)
             self.token = 'fixture-persistent-session-1234567890'
-            self.account_id, self.expires_at = str(uuid.uuid4()), time.time() + 30 * 86400
+            self.account_id, self.expires_at = str(uuid.uuid4()), time.time() + 730 * 86400
             return {'server_id': self.server_id, 'name': 'Friends'}
         def browse(self, filters, offset=0):
             return []
@@ -564,7 +566,7 @@ def test_remember_checkbox_saves_session_and_removing_connection_forgets_it(app,
     dialog.url.setText('https://friends.invalid')
     dialog.username.setText('friend')
     dialog.password.setText('a sufficiently long password')
-    dialog.remember.setChecked(True)
+    assert dialog.remember.isChecked()
     dialog.submit_button.click()
     settle(app, workspace)
     connection = workspace.connection()

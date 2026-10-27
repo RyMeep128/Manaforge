@@ -64,7 +64,8 @@ class LibraryAPI:
         method = env.get('REQUEST_METHOD', '')
         if method == 'GET' and path == '/api/v1/info':
             return {**self.store.info(), 'registration': 'invitation', 'max_request_bytes': MAX_BODY,
-                    'capabilities': ['publication_operations', 'persistent_sessions']}
+                    'capabilities': ['publication_operations', 'persistent_sessions'],
+                    'max_remember_seconds': REMEMBERED_SESSION_SECONDS}
         if not path.startswith('/api/v1/'):
             raise LibraryError(426, 'Unsupported API version. This server supports /api/v1/.')
         if len(path) > 256 or '..' in path or '\\' in path:
@@ -75,11 +76,13 @@ class LibraryAPI:
             body = self.body(env)
             if path.endswith('/login'):
                 remember = body.get('remember', False)
-                token = self.store.login(body.get('username'), body.get('password'), remember=remember)
+                # Keep the old 30-day response for clients that bounded their accepted lifetime.
+                seconds = body.get('session_lifetime', 30 * 86400) if remember is True else None
+                token = self.store.login(body.get('username'), body.get('password'), remember=remember, session_seconds=seconds)
                 with self.store.db() as db:
                     user_id = self.store.actor(db, token)['id']
                 return {'token': token, 'user_id': user_id,
-                        'expires_in': REMEMBERED_SESSION_SECONDS if remember else SESSION_SECONDS}
+                        'expires_in': seconds if remember else SESSION_SECONDS}
             user_id = self.store.register(body.get('invitation'), body.get('username'), body.get('password'))
             return {'user_id': user_id}
         auth = env.get('HTTP_AUTHORIZATION', '')

@@ -128,12 +128,14 @@ def test_forbidden_errors_identify_the_failing_operation(path, authenticated, ex
 
 def test_remembered_login_and_resume_pin_identity_before_sending_saved_token():
     account = str(uuid.uuid4())
-    info = {'server_id': SERVER_ID, 'name': 'Friends', 'capabilities': ['persistent_sessions']}
-    opener = Opener(info, {'token': 'a' * 43, 'user_id': account, 'expires_in': 30 * 86400})
+    info = {'server_id': SERVER_ID, 'name': 'Friends', 'capabilities': ['persistent_sessions'],
+            'max_remember_seconds': 730 * 86400}
+    opener = Opener(info, {'token': 'a' * 43, 'user_id': account, 'expires_in': 730 * 86400})
     client = LibraryClient('https://library.invalid', server_id=SERVER_ID, opener=opener)
     client.login('friend', 'long enough password', remember=True)
     assert json.loads(opener.requests[-1].data)['remember'] is True
-    assert client.expires_at - time.time() > 29 * 86400
+    assert json.loads(opener.requests[-1].data)['session_lifetime'] == 730 * 86400
+    assert client.expires_at - time.time() > 729 * 86400
     saved = {'url': client.url, 'server_id': SERVER_ID, 'account_id': account,
              'token': client.token, 'expires_at': client.expires_at}
     resumed_opener = Opener(info, {'user_id': account, 'username': 'friend', 'expires_at': time.time() + 86400})

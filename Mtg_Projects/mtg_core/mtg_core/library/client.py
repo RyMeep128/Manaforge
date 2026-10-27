@@ -144,14 +144,21 @@ class LibraryClient:
         capabilities = result.get('capabilities', [])
         if not isinstance(capabilities, list) or len(capabilities) > 100 or any(not isinstance(item, str) for item in capabilities):
             raise LibraryError(502, 'The library returned invalid capabilities.')
-        return {'server_id': server_id, 'name': text(result.get('name')), 'capabilities': capabilities}
+        lifetime = result.get('max_remember_seconds', 30 * 86400)
+        if type(lifetime) is not int or not 1 <= lifetime <= 730 * 86400:
+            raise LibraryError(502, 'The library returned an invalid remembered session lifetime.')
+        return {'server_id': server_id, 'name': text(result.get('name')), 'capabilities': capabilities,
+                'max_remember_seconds': lifetime}
 
     def login(self, username, password, *, invitation='', remember=False):
         info = self.check()  # Pin identity before sending credentials on each reconnect.
         if invitation:
             self.request('POST', 'register', {'invitation': invitation, 'username': username,
                                              'password': password}, authenticated=False)
-        result = self.request('POST', 'login', {'username': username, 'password': password, 'remember': remember}, authenticated=False)
+        body = {'username': username, 'password': password, 'remember': remember}
+        if remember:
+            body['session_lifetime'] = info['max_remember_seconds']
+        result = self.request('POST', 'login', body, authenticated=False)
         token = result.get('token')
         if (not isinstance(token, str) or not 20 <= len(token) <= 200 or not token.isascii()
                 or any(not (c.isalnum() or c in '-_') for c in token)):
@@ -159,7 +166,7 @@ class LibraryClient:
         self.token = token
         self.account_id = identifier(result['user_id']) if result.get('user_id') else None
         expires = result.get('expires_in', 86400)
-        if type(expires) is not int or not 1 <= expires <= 30 * 86400:
+        if type(expires) is not int or not 1 <= expires <= 730 * 86400:
             self.token = None
             raise LibraryError(502, 'The library returned an invalid session expiry.')
         self.expires_at = time.time() + expires

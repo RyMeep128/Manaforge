@@ -15,7 +15,7 @@ from .payload import colors, shared_deck, text
 
 PASSWORD_ROUNDS = 600000
 SESSION_SECONDS = 60 * 60 * 24
-REMEMBERED_SESSION_SECONDS = 60 * 60 * 24 * 30
+REMEMBERED_SESSION_SECONDS = 60 * 60 * 24 * 730
 OPERATIONS_SQL = '''CREATE TABLE IF NOT EXISTS publication_operations (
     user_id TEXT REFERENCES users(id), operation_id TEXT, signature TEXT NOT NULL,
     result TEXT NOT NULL, PRIMARY KEY(user_id, operation_id))'''
@@ -119,9 +119,13 @@ class LibraryStore:
             db.execute('INSERT INTO throttle VALUES (?, 1, ?) ON CONFLICT(key) DO UPDATE SET attempts=attempts+1',
                        (key, now + seconds))
 
-    def login(self, username, password, *, remember=False):
+    def login(self, username, password, *, remember=False, session_seconds=None):
         if type(remember) is not bool:
             raise LibraryError(400, 'Remember sign-in must be true or false.')
+        if session_seconds is None:
+            session_seconds = REMEMBERED_SESSION_SECONDS
+        if type(session_seconds) is not int or not 1 <= session_seconds <= REMEMBERED_SESSION_SECONDS:
+            raise LibraryError(400, 'Invalid remembered session lifetime.')
         username = credentials(username, password)
         self.throttle('login:' + digest(username))
         with self.db() as db:
@@ -133,7 +137,7 @@ class LibraryStore:
             token = secrets.token_urlsafe(32)
             db.execute('DELETE FROM sessions WHERE expires < ?', (time.time(),))
             db.execute('INSERT INTO sessions VALUES (?, ?, ?)',
-                       (digest(token), row['id'], time.time() + (REMEMBERED_SESSION_SECONDS if remember else SESSION_SECONDS)))
+                       (digest(token), row['id'], time.time() + (session_seconds if remember else SESSION_SECONDS)))
             return token
 
     def session(self, token):

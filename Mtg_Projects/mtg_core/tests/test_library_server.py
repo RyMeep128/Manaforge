@@ -276,10 +276,11 @@ def test_remembered_sessions_have_bounded_lifetime_and_still_revoke(library):
     normal = store.login('friend', PASSWORD)
     persistent = store.login('friend', PASSWORD, remember=True)
     assert 86300 < store.session(normal)['expires_at'] - time.time() <= 86400
-    assert 30 * 86400 - 100 < store.session(persistent)['expires_at'] - time.time() <= 30 * 86400
+    assert 730 * 86400 - 100 < store.session(persistent)['expires_at'] - time.time() <= 730 * 86400
     app = LibraryAPI(store)
     info = request(app, '/api/v1/info')['body']
     assert 'persistent_sessions' in info['capabilities']
+    assert info['max_remember_seconds'] == 730 * 86400
     result = request(app, '/api/v1/session', token=persistent)
     assert result['body']['user_id'] == user_id
     assert result['body']['username'] == 'friend'
@@ -298,3 +299,8 @@ def test_remember_flag_is_optional_and_validated_by_login_api(library):
         assert response['status'] == 200
         assert response['body']['expires_in'] == seconds
     assert request(app, '/api/v1/login', 'POST', {'username': 'friend', 'password': PASSWORD, 'remember': 1})['status'] == 400
+    response = request(app, '/api/v1/login', 'POST', {'username': 'friend', 'password': PASSWORD,
+                       'remember': True, 'session_lifetime': 730 * 86400})
+    assert response['status'] == 200 and response['body']['expires_in'] == 730 * 86400
+    assert request(app, '/api/v1/login', 'POST', {'username': 'friend', 'password': PASSWORD,
+                   'remember': True, 'session_lifetime': 731 * 86400})['status'] == 400

@@ -535,6 +535,7 @@ class LibraryWorkspace(W.QMainWindow):
         dialog = SignInDialog(parent, connection)
         dialog.remember_supported = self.saved_sessions.available
         dialog.remember.setEnabled(self.saved_sessions.available)
+        dialog.remember.setChecked(self.saved_sessions.available)
         if connection and self.saved_sessions.has(connection['id']):
             dialog.remember.setChecked(True)
             try:

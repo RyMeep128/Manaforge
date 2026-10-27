@@ -43,8 +43,11 @@ account. Tokens are stored in separate encrypted files under the application's
 `library-sessions` directory, bound to connection ID, server UUID, origin and account.
 They are not stored in plaintext or in the connections database. There is no
 plaintext fallback; this option is disabled on unsupported operating systems.
-Remembered sessions last up to 30 days on updated servers; ordinary sessions last
-24 hours. Older API-v1 servers retain their existing session lifetime.
+Remembered sessions default on supported Windows systems and last up to two years
+(730 days) on updated servers. Uncheck the option for a normal 24-hour session.
+Older API-v1 servers retain their existing session lifetime; older clients retain
+the 30-day response they support. Existing saved sessions retain their original expiry;
+sign in again to get the new lifetime.
 
 Opening Browse Online restores only connections whose sessions you explicitly
 chose to save, using the background queue. The client verifies the pinned server
@@ -276,7 +279,9 @@ access only to that directory and the read-only application installation.
 All responses are JSON with `api_version: 1`. Errors include an understandable
 `error` string and an HTTP status. Use `Authorization: Bearer <session-token>`
 on every endpoint except info, login and invitation redemption. Sessions expire
-after 24 hours, or 30 days when `remember: true` is explicitly requested at login.
+after 24 hours, or up to 730 days for a remembered login. Updated clients request
+the advertised `max_remember_seconds` using `session_lifetime`. Remembered API
+requests that omit the lifetime retain a 30-day response for compatibility.
 Protected endpoints validate active account/session membership
 on each request. No cookies, cross-origin access, or public self-registration.
 
