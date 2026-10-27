@@ -39,7 +39,7 @@ def draw_quantity_corner(painter, rect, quantity, primary, tags=()):
     painter.drawPolygon(triangle)
     if tags:
         path = G.QPainterPath()
-        path.addPolygon(G.QPolygonF(triangle))
+        path.addPolygon(G.QPolygonF([C.QPointF(point) for point in triangle]))
         painter.setClipPath(path, C.Qt.ClipOperation.IntersectClip)
         width = max(5, side // len(tags))
         for index, color in enumerate(tags):
