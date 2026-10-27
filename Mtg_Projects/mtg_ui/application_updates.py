@@ -158,12 +158,12 @@ class ApplicationUpdatePanel(W.QWidget):
         self.progress.setVisible(updates.checking)
         status = f'Installed version: {APP_VERSION}'
         if updates.checking:
-            status += ' · Checking published releases…'
+            status += ' \u00b7 Checking published releases\u2026'
         elif updates.error:
             status += '\nUpdate check failed: ' + updates.error + ' Retry below.'
         elif updates.result:
-            status += f' · Latest downloadable version: {updates.result.latest_version}'
-            status += ' · Update available' if available else ' · Up to date'
+            status += f' \u00b7 Latest downloadable version: {updates.result.latest_version}'
+            status += ' \u00b7 Update available' if available else ' \u00b7 Up to date'
         else:
-            status += ' · Updates have not been checked'
+            status += ' \u00b7 Updates have not been checked'
         self.status.setText(status)
