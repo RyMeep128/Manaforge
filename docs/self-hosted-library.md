@@ -1,4 +1,4 @@
-# Self-hosted Deck Library — stages 1–2
+# Self-hosted Deck Library — stages 1–3
 
 Manaforge stays local-first. Installing or launching the desktop app does not
 start a server, connect to a library, create an online account, open router ports,
@@ -9,8 +9,8 @@ database, server UUID, and published deck IDs.
 The server supplies a standalone JSON API, persistent SQLite storage,
 invitation-only accounts, and revisioned publications. The desktop now supplies
 Browse Online, multiple saved connections, account sign-in/invitation redemption,
-deck searching, previews and independent local copies. Publish to Library,
-read-only follows, offline subscription caches, update notifications and
+deck searching, previews, independent local copies and explicit publishing from
+the unified deck editor. Read-only follows, offline subscription caches, update notifications and
 installation/Settings hosting controls remain planned. Those features are not
 exposed as partially working desktop actions.
 
@@ -61,6 +61,66 @@ fails, the previously displayed results remain labeled as an earlier snapshot;
 you can still copy one while disconnected. Search snapshots are only kept for the
 current application session; save a local copy for offline use after restart.
 
+## Publish, update and unpublish
+
+In the unified Manaforge application, open a deck in Deck Editor and choose
+**More → Publish to Library…**. Manaforge saves the deck locally, freezes a shared
+snapshot and opens its publishing panel in Browse Online. Select a destination
+library above the panel and sign in if needed. Review the snapshot name and color
+identity, then choose **Publish snapshot**. Color identity is suggested from local
+card facts and can be corrected before publishing. Opening the panel never uploads
+anything. The standalone editor launcher keeps this action disabled; use the
+unified application for online publishing.
+
+The first publish creates a new server publication. Subsequent explicit publishes
+from the same local deck to the same library update that publication with a new
+revision. A separate library receives its own publication only when you select it
+and publish. Later local edits are never automatically uploaded. Choose Publish
+to Library again from the editor to prepare a fresh snapshot. A copied deck has
+a new local ID and publishes independently of its source.
+
+The panel displays the last acknowledged server deck ID, revision and published
+state. **Unpublish** hides that publication from readers but retains server history
+and your local deck. Publishing again uses the same server ID and a new revision.
+The server enforces owner/administrator permissions on every modification; signing
+in as another normal user cannot update someone else's publication. General
+administrator deck management remains available through the API; the desktop panel
+manages publications linked to your local decks.
+
+A durable local journal records an operation before uploading. If an upload or
+its response is interrupted, **Retry pending publish/unpublish** retries that same
+operation and original snapshot, including its original colors. Edits made after
+the pending snapshot are not part of the retry. Once recovered, prepare another
+snapshot to publish the newer edits. The journal contains only shared deck fields
+and account/server identifiers, never passwords, bearer tokens or print status.
+The server atomically stores an operation receipt with the publication; repeated
+requests return the original result without creating duplicate decks/revisions.
+Pending retries require the same user account that started them. This remains true
+after an application/server restart or reconnect.
+
+If another client published a newer revision, the update stops with a conflict.
+Choose **Review latest publication** to load the remote deck into the preview.
+Reading it does not change your local deck or publishing base. If you intend your
+next explicit publication to replace that remote content, choose **Use reviewed
+revision as the next publish base**, then separately publish or unpublish. This
+clears the conflicting pending operation and leaves the local deck and prepared
+snapshot unchanged. A further remote change still causes another conflict. An
+unavailable/unpublished source may not be reviewable; retry/reconnect diagnostics
+leave the local deck and journal intact.
+
+Publication links are keyed by `(server_id, local_deck_id)` and survive removing
+and re-adding a connection, preventing accidental duplicate publication after a
+reconnect. Removing a connection does not unpublish its decks. Application updates
+leave the journal in the application data directory alongside saved connections.
+Published deck notes, descriptions and tags are intentionally shared; private
+project extras, ownership counts and personal print statuses are excluded.
+
+The desktop requires the server's `publication_operations` capability and a
+verified account ID from login. Upgrade an older library server and sign in again
+before publishing; browsing older API-v1 servers remains supported. Publication
+receipts report the originally completed operation, so review the latest deck if
+another client may have changed it since then.
+
 ## Architecture and remaining stages
 
 `mtg_core.library.payload` projects the existing `mtg_core.decks.Deck` model into
@@ -71,13 +131,11 @@ The optional Waitress dependency is separate from desktop requirements.
 
 Reuse points for follow-up work:
 
-1. Desktop publication: add explicit Publish to Library in the existing editor,
-   retain a per-library publication/revision mapping, and expose owner/admin
-   update/unpublish actions. Browse Online already uses the separate client,
-   saved connection metadata, `mtg_ui.jobs.JobQueue`, Home registry and existing
-   thumbnail/deck persistence components. Add secure optional credential storage
-   using the operating system credential store rather than saving bearer tokens
-   in the connections database.
+1. Credential management: add secure optional credential storage using the
+   operating system credential store rather than saving bearer tokens in the
+   connections database. Browse Online and editor publishing already reuse the
+   separate client, connection metadata, `mtg_ui.jobs.JobQueue`, Home registry,
+   existing thumbnail/deck components and per-library publication journal.
 2. Offline following/copying: use `DeckDocument` and atomic `DeckStore` persistence,
    store `(server_id, deck_id, revision)` separately from local deck identity, keep
    follows read-only, stage updates before atomic replacement, and offer explicit
@@ -150,7 +208,7 @@ SHA-256 digests. Never put credentials in URLs or logs.
 | Method/path under `/api/v1` | Body or result |
 | --- | --- |
 | `GET /info` | Library name, stable `server_id`, API version, request limit |
-| `POST /login` | `{ "username": "...", "password": "..." }`; returns `token`, `expires_in` |
+| `POST /login` | `{ "username": "...", "password": "..." }`; returns `token`, `user_id`, `expires_in` |
 | `POST /logout` | Revoke current session immediately |
 | `POST /invitations` | Administrator only; returns a single-use invitation valid for 24 hours |
 | `POST /register` | `{ "invitation": "...", "username": "...", "password": "..." }`; creates a normal account; then log in |
@@ -159,9 +217,17 @@ SHA-256 digests. Never put credentials in URLs or logs.
 | `GET /decks` | Authenticated browsing; returns `decks`, up to 50 records |
 | `GET /decks/{id}` | Latest `publication` with deck, owner, colors and revision |
 | `GET /decks/{id}/revisions/{n}` | Immutable historical revision of an accessible publication |
-| `POST /decks` | `{ "deck": <Deck.to_dict()>, "color_identity": ["U"] }`; returns server `deck_id`, `revision: 1` |
+| `POST /decks` | `{ "deck": <Deck.to_dict()>, "color_identity": ["U"], "operation_id": "<UUID>" }`; returns server `deck_id`, `revision: 1` |
 | `PUT /decks/{id}` | Same body plus `expected_revision`; owner/admin only; append revision |
 | `DELETE /decks/{id}` | `{ "expected_revision": 2 }`; owner/admin only; unpublish, retaining history |
+
+`GET /info` advertises `capabilities: ["publication_operations"]`. Include a fresh
+canonical UUID `operation_id` on POST/PUT/DELETE publication changes, persist the
+exact request before sending, and reuse that operation ID and content when retrying.
+Receipts are scoped to the authenticated user. Reusing an operation ID for different
+content returns 409. Update/unpublish still require `expected_revision` and
+ownership. PUT/DELETE return `deck_id` and `revision` too. Older API clients may
+omit operation IDs, but do not then have a safe automatic retry guarantee.
 
 Browse filters are `query` (name/description substring), `commander` (name
 substring), `owner` (exact username), `tag` (exact deck tag/theme), `color` (exact
@@ -199,8 +265,10 @@ schemas prevent startup rather than modifying stored data.
 
 Stop the server with Ctrl+C before copying the **entire data directory** for a
 consistent backup. Keep backups private. Upgrades replace application code and
-leave that directory intact. This stage provides no uninstall/delete-data command
-or automatic migration. Never delete it as part of repair/reinstallation.
+leave that directory intact. Startup adds an operation-receipt table to existing
+schema-v1 databases without replacing data, identity or history. There is no
+uninstall/delete-data command or destructive migration. Never delete it as part of
+repair/reinstallation. Back up before upgrading.
 
 If binding fails, check the chosen IP, firewall and port. If storage is unavailable,
 check service-account permissions and free space. For an unreadable/incompatible
@@ -226,9 +294,16 @@ permission checks, revisions/conflicts, filtering, request validation, private-d
 projection, invitations, revocation, expiry, persistence and independent servers.
 `mtg_core/tests/test_library_client.py` covers transport constraints, identity
 pinning, session separation, untrusted responses and local copy isolation.
+It also bridges the client to the actual WSGI API to exercise publication and
+recovery after a response is lost following a server commit, without real networking.
+`mtg_core/tests/test_library_publishing.py` covers durable pending snapshots,
+separate library links, same-account retry protection and explicit conflict review.
+Server tests cover idempotent create/update/unpublish, revocation and the additive
+schema upgrade.
 `integration_tests/test_library_workspace.py` covers opt-in startup, background
 browsing, plain-text previews, copying, separate connection snapshots and failure
-preservation with fake clients. The existing Windows Python 3.12/3.13 workflow
+preservation, plus explicit publication/conflict review with fake clients. The
+homepage tests cover editor-to-library routing without automatic upload. The existing Windows Python 3.12/3.13 workflow
 collects these tests and installs the optional server dependency. No tests or
 builds were executed locally, per the requested execution policy. Live LAN/tunnel
 deployment and full story acceptance testing remain for subsequent stages.

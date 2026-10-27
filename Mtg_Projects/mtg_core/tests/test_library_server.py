@@ -2,6 +2,7 @@
 from copy import deepcopy
 import io
 import json
+import uuid
 
 import pytest
 
@@ -212,3 +213,58 @@ def test_server_identity_is_independent_per_library(tmp_path, library):
     assert other.info()['server_id'] != store.info()['server_id']
     with pytest.raises(LibraryError):
         other.browse(friend)
+
+
+def test_publication_operations_are_idempotent_and_scoped_to_user(library, deck):
+    store, admin, friend, _ = library
+    create_id = str(uuid.uuid4())
+    first = store.publish(friend, deck, ['U'], operation_id=create_id)
+    assert store.publish(friend, deck, ['U'], operation_id=create_id) == first
+    assert len(store.browse(friend)) == 1
+    legacy = deepcopy(deck)
+    legacy.pop('deck_id')
+    legacy_id = str(uuid.uuid4())
+    legacy_result = store.publish(friend, legacy, [], operation_id=legacy_id)
+    assert store.publish(friend, legacy, [], operation_id=legacy_id) == legacy_result
+    changed = deepcopy(deck)
+    changed['name'] = 'Changed'
+    with pytest.raises(LibraryError, match='different publication'):
+        store.publish(friend, changed, ['U'], operation_id=create_id)
+    # Another account cannot replay the first account's response using its operation ID.
+    other = store.publish(admin, deck, ['U'], operation_id=create_id)
+    assert other['deck_id'] != first['deck_id']
+    update_id = str(uuid.uuid4())
+    updated = store.publish(friend, changed, ['U'], deck_id=first['deck_id'], expected_revision=1,
+                            operation_id=update_id)
+    assert updated['revision'] == 2
+    assert store.publish(friend, changed, ['U'], deck_id=first['deck_id'], expected_revision=1,
+                         operation_id=update_id) == updated
+    unpublish_id = str(uuid.uuid4())
+    removed = store.unpublish(friend, first['deck_id'], 2, operation_id=unpublish_id)
+    assert store.unpublish(friend, first['deck_id'], 2, operation_id=unpublish_id) == removed
+    with store.db() as db:
+        assert db.execute('SELECT COUNT(*) FROM revisions WHERE deck_id=?', (first['deck_id'],)).fetchone()[0] == 2
+
+
+def test_operation_replay_still_requires_active_session(library, deck):
+    store, admin, friend, user_id = library
+    operation_id = str(uuid.uuid4())
+    store.publish(friend, deck, [], operation_id=operation_id)
+    store.revoke(admin, user_id)
+    with pytest.raises(LibraryError) as error:
+        store.publish(friend, deck, [], operation_id=operation_id)
+    assert error.value.status == 401
+
+
+def test_existing_library_additive_upgrade_preserves_identity_and_decks(library, deck):
+    store, _, friend, _ = library
+    original = store.info()
+    published = store.publish(friend, deck, [])
+    with store.db() as db:
+        db.execute('DROP TABLE publication_operations')
+    reopened = LibraryStore(store.directory)
+    reopened.check_schema()
+    reopened.check_schema()  # Repeat startup is harmless.
+    assert reopened.info() == original
+    assert reopened.browse(friend)[0]['deck_id'] == published['deck_id']
+    assert reopened.publish(friend, deck, [], operation_id=str(uuid.uuid4()))['revision'] == 1

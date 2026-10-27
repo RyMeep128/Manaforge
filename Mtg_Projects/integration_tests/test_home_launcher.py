@@ -78,6 +78,23 @@ def test_controller_reuses_workspaces_inside_the_same_window(app):
     home.close()
 
 
+def test_editor_publication_routes_to_existing_browse_workspace_without_uploading(app):
+    from types import SimpleNamespace
+    home = HomeWindow()
+    calls = []
+    def factory():
+        window = W.QMainWindow()
+        window.publishing = SimpleNamespace(prepare=lambda deck, color: calls.append((deck, color)))
+        return window
+    controller = ModuleController(home, service=object(), factories={'library': factory})
+    controller.publish_deck({'name': 'Snapshot'}, 'U')
+    controller.publish_deck({'name': 'Second snapshot'}, 'R')
+    assert len(controller.windows) == 1
+    assert calls == [({'name': 'Snapshot'}, 'U'), ({'name': 'Second snapshot'}, 'R')]
+    assert home.current_workspace == 'library'
+    home.close()
+
+
 def test_print_command_reuses_environment_and_ignores_working_directory(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
     command, directory = print_studio_command('deck.json')

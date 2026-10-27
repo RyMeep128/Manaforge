@@ -72,6 +72,8 @@ class ModuleController(C.QObject):
                     from mtg_editor.gui import EditorWindow
                     window = EditorWindow(service=self.service)
                     window.print_project_handler = self.open_print_project
+                    window.publish_deck_handler = self.publish_deck
+                    window.publish_action.setEnabled(True)
                 elif module.action == 'printer':
                     from .printing import create_print_workspace
                     window = create_print_workspace(self.home)
@@ -97,6 +99,12 @@ class ModuleController(C.QObject):
         if printer is None:
             raise OSError('Print Studio could not be opened.')
         printer.open_managed_project(project['id'])
+
+    def publish_deck(self, snapshot, color_identity):
+        self.open_module('library')
+        library = self.windows.get('library')
+        if library is not None:
+            library.publishing.prepare(snapshot, color_identity)
 
     def shutdown(self):
         if self.jobs.busy:

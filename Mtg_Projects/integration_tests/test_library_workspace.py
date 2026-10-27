@@ -8,6 +8,7 @@ from PyQt6 import QtWidgets as W
 import pytest
 
 from mtg_core.decks import Deck, DeckEntry, DeckStore
+from mtg_core.library import LibraryError
 from mtg_home.library_workspace import LibraryWorkspace
 
 
@@ -151,3 +152,91 @@ def test_add_and_reconnect_are_explicit_and_do_not_persist_credentials(app, tmp_
     assert b'memory-session' not in workspace.connections.path.read_bytes()
     assert workspace.prepare_to_close()
     workspace.close()
+
+
+def test_publish_conflict_review_unpublish_and_republish_are_explicit(app, tmp_path):
+    from copy import deepcopy
+    workspace = LibraryWorkspace(object(), root=tmp_path)
+    main_thread = threading.get_ident()
+    class Client:
+        url, token = 'https://friend.invalid', 'session'
+        server_id, remote_id = str(uuid.uuid4()), str(uuid.uuid4())
+        account_id = str(uuid.uuid4())
+        revision = 0
+        operations = []
+        def publish_operation(self, operation):
+            assert threading.get_ident() != main_thread
+            self.operations.append(deepcopy(operation))
+            if operation['expected_revision'] != self.revision:
+                raise LibraryError(409, 'Revision changed. Review first.')
+            if operation['kind'] == 'publish':
+                self.revision += 1
+            return {'deck_id': self.remote_id, 'revision': self.revision}
+        def download(self, deck_id):
+            result = record()
+            result.update(deck_id=self.remote_id, revision=self.revision)
+            result['deck']['name'] = 'A remote edit'
+            return result
+    client = Client()
+    connection = workspace.connections.add(client, {'server_id': client.server_id, 'name': 'Friend library'})
+    workspace.clients[connection['id']] = client
+    workspace.reload_connections(connection['id'])
+    snapshot = record()['deck']
+    snapshot['entries'][0].update(print_status='Printed', owned=6, do_not_print=True)
+    panel = workspace.publishing
+    assert panel.prepare(snapshot, 'U')
+    assert not client.operations  # Preparing a snapshot never uploads it.
+    snapshot['name'] = 'Later local edit'
+    panel.publish()
+    settle(app, workspace)
+    assert client.operations[0]['deck']['name'] == '<b>Shared deck</b>'
+    assert 'owned' not in client.operations[0]['deck']['entries'][0]
+    assert 'print_status' not in client.operations[0]['deck']['entries'][0]
+    local_id = snapshot['deck_id']
+    assert workspace.publications.get(client.server_id, local_id)['revision'] == 1
+    client.revision = 2  # A newer owner publication from another client.
+    panel.publish()
+    settle(app, workspace)
+    assert workspace.publications.get(client.server_id, local_id)['revision'] == 1
+    assert 'Retry pending publish' == panel.publish_button.text()
+    panel.review()
+    settle(app, workspace)
+    assert 'A remote edit' in workspace.details.toPlainText()
+    assert workspace.publications.get(client.server_id, local_id)['revision'] == 1
+    panel.accept_review()
+    settle(app, workspace)
+    assert workspace.publications.get(client.server_id, local_id)['revision'] == 2
+    assert snapshot['name'] == 'Later local edit'
+    panel.publish()
+    settle(app, workspace)
+    assert client.revision == 3
+    assert client.operations[-1]['deck_id'] == client.remote_id
+    panel.publish(unpublish=True)
+    settle(app, workspace)
+    assert workspace.publications.get(client.server_id, local_id)['published'] == 0
+    panel.publish()
+    settle(app, workspace)
+    assert client.revision == 4
+    assert client.operations[-1]['deck_id'] == client.remote_id
+    assert workspace.prepare_to_close()
+    workspace.close()
+
+
+def test_editor_forwards_a_saved_snapshot_only_for_explicit_publish():
+    from mtg_core.decks import DeckDocument
+    from mtg_editor.gui import EditorWindow
+    snapshots, saves = [], []
+    document = DeckDocument(deck=Deck(name='Local deck', entries=[DeckEntry('one', 'Card')]))
+    editor = SimpleNamespace(task=None, _has_active_deck=True, document=document,
+                             save=lambda: saves.append(True) or True,
+                             publish_deck_handler=lambda deck, color: snapshots.append((deck, color)))
+    EditorWindow.publish_to_library(editor)
+    assert saves == [True] and snapshots[0][0]['name'] == 'Local deck'
+    document.deck.name = 'Changed later'
+    assert snapshots[0][0]['name'] == 'Local deck'
+    editor.save = lambda: False
+    EditorWindow.publish_to_library(editor)
+    assert len(snapshots) == 1
+    editor._has_active_deck = False
+    EditorWindow.publish_to_library(editor)
+    assert len(snapshots) == 1

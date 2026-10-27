@@ -7,8 +7,10 @@ Manaforge is a Python / PyQt6 desktop workspace for building Magic decks, consul
 An opt-in [self-hosted deck library server](docs/self-hosted-library.md) is available
 as a standalone source command. **Browse Online** on the home page connects to your
 own or a friend’s libraries, searches shared decks, and copies decks into your local
-collection. Following, publishing from the editor, and hosting setup UI are still
-planned. Normal installations require no library account and start no library service.
+collection. In the unified editor, **More → Publish to Library…** prepares an explicit
+snapshot for publishing, updating or unpublishing in a chosen library. Following
+and hosting setup UI are still planned. Normal installations require no library
+account and start no library service.
 
 Standalone Windows bundles need no Python or Git: extract **Manaforge-Windows.zip**
 and run **Manaforge/Manaforge.exe**. The first-run wizard sets up card data,

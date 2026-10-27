@@ -146,6 +146,8 @@ class EditorWindow(W.QMainWindow):
         menu.addAction('Opening-hand playtest…', self.playtest)
         menu.addAction('Print readiness…', self.print_readiness)
         menu.addAction('Export decklist…', self.export_decklist)
+        self.publish_action = menu.addAction('Publish to Library…', self.publish_to_library)
+        self.publish_action.setEnabled(False)  # Enabled by the unified app's library handler.
         menu.addAction('Commander / format deck checks…', self.commander_checks)
         menu.addAction('Manage Tags…', self.manage_categories)
         menu.addAction('Comprehensive Rules…', self.rules_reference)
@@ -1548,6 +1550,14 @@ class EditorWindow(W.QMainWindow):
         QtCore.QTimer.singleShot(0, lambda: self.view_scrollbar(mode).setValue(position)
                                 if self._active_view == mode else None)
         del blockers
+
+    def publish_to_library(self):
+        handler = getattr(self, 'publish_deck_handler', None)
+        if handler is None or self.task is not None or not self._has_active_deck:
+            return
+        if self.save():
+            from mtg_core.library.publishing import suggested_colors
+            handler(deepcopy(self.document.deck.to_dict()), suggested_colors(self.document.deck))
 
     def save(self):
         if not self._has_active_deck:

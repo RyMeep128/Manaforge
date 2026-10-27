@@ -117,6 +117,17 @@ def test_redirects_never_forward_authentication():
     assert handler.redirect_request(None, None, 302, '', {}, 'https://other.invalid') is None
 
 
+def test_publication_requires_server_retry_capability_before_upload():
+    opener = Opener({'server_id': SERVER_ID, 'name': 'Older server'})
+    client = LibraryClient('https://library.invalid', server_id=SERVER_ID, opener=opener)
+    client.token = 'a' * 43
+    with pytest.raises(LibraryError, match='Upgrade'):
+        client.publish_operation({'kind': 'publish', 'operation_id': str(uuid.uuid4()),
+                                  'expected_revision': 0, 'deck': publication()['deck'], 'color_identity': []})
+    assert len(opener.requests) == 1
+    assert opener.requests[0].get_method() == 'GET'
+
+
 def test_saved_connections_contain_no_secrets_and_removal_preserves_other_libraries(tmp_path):
     connections = LibraryConnections(tmp_path)
     client = SimpleNamespace(url='https://first.invalid', token='secret token', password='secret password')
@@ -218,5 +229,29 @@ def test_client_and_server_contract_end_to_end_without_network(tmp_path, monkeyp
     downloaded = client.download(published['deck_id'])
     copied = copy_publication(downloaded, server_id=client.server_id, server_address=client.url,
                               deck_root=tmp_path / 'decks')
+    from mtg_core.library.publishing import PublicationJournal
+    journal = PublicationJournal(LibraryConnections(tmp_path / 'client'))
+    local = DeckStore().load(copied).deck
+    # Simulate a dropped response after the server commits a create.
+    class InterruptedOpener(WSGIOpener):
+        interrupt = True
+        def open(self, request, timeout):
+            response = super().open(request, timeout)
+            if self.interrupt and request.method == 'POST' and urlsplit(request.full_url).path.endswith('/decks'):
+                self.interrupt = False
+                response.close()
+                raise URLError('Response interrupted after upload')
+            return response
+    client.opener = InterruptedOpener()
+    with pytest.raises(LibraryError):
+        journal.send(client, client.server_id, local.deck_id, deck=local.to_dict(), color_identity=['U'])
+    recovered = journal.send(client, client.server_id, local.deck_id, deck=local.to_dict(), color_identity=['U'])
+    assert len(client.browse({'owner': 'friend'})) == 1
+    assert recovered['revision'] == 1
+    local.name = 'Explicitly updated'
+    updated = journal.send(client, client.server_id, local.deck_id, deck=local.to_dict(), color_identity=['U'])
+    assert updated['deck_id'] == recovered['deck_id'] and updated['revision'] == 2
+    journal.send(client, client.server_id, local.deck_id, unpublish=True)
+    assert client.browse({'owner': 'friend'}) == []
     client.disconnect()
     assert DeckStore().load(copied).deck.name == 'Shared deck'

@@ -63,7 +63,8 @@ class LibraryAPI:
         path = env.get('PATH_INFO', '')
         method = env.get('REQUEST_METHOD', '')
         if method == 'GET' and path == '/api/v1/info':
-            return {**self.store.info(), 'registration': 'invitation', 'max_request_bytes': MAX_BODY}
+            return {**self.store.info(), 'registration': 'invitation', 'max_request_bytes': MAX_BODY,
+                    'capabilities': ['publication_operations']}
         if not path.startswith('/api/v1/'):
             raise LibraryError(426, 'Unsupported API version. This server supports /api/v1/.')
         if len(path) > 256 or '..' in path or '\\' in path:
@@ -73,8 +74,10 @@ class LibraryAPI:
             self.store.throttle('auth-ip:' + env.get('REMOTE_ADDR', 'unknown'), limit=30)
             body = self.body(env)
             if path.endswith('/login'):
-                return {'token': self.store.login(body.get('username'), body.get('password')),
-                        'expires_in': 86400}
+                token = self.store.login(body.get('username'), body.get('password'))
+                with self.store.db() as db:
+                    user_id = self.store.actor(db, token)['id']
+                return {'token': token, 'user_id': user_id, 'expires_in': 86400}
             user_id = self.store.register(body.get('invitation'), body.get('username'), body.get('password'))
             return {'user_id': user_id}
         auth = env.get('HTTP_AUTHORIZATION', '')
@@ -118,7 +121,8 @@ class LibraryAPI:
             return {'decks': self.store.browse(token, **filters)}
         if path == prefix and method == 'POST':
             body = self.body(env)
-            return self.store.publish(token, body.get('deck'), body.get('color_identity', []))
+            return self.store.publish(token, body.get('deck'), body.get('color_identity', []),
+                                      operation_id=body.get('operation_id'))
         if path.startswith(prefix + '/'):
             parts = path[len(prefix) + 1:].split('/')
             deck_id = parts[0]
@@ -133,10 +137,11 @@ class LibraryAPI:
             if len(parts) == 1 and method == 'PUT':
                 body = self.body(env)
                 return self.store.publish(token, body.get('deck'), body.get('color_identity', []),
-                                          deck_id=deck_id, expected_revision=body.get('expected_revision'))
+                                          deck_id=deck_id, expected_revision=body.get('expected_revision'),
+                                          operation_id=body.get('operation_id'))
             if len(parts) == 1 and method == 'DELETE':
                 body = self.body(env)
-                self.store.unpublish(token, deck_id, body.get('expected_revision'))
-                return {}
+                return self.store.unpublish(token, deck_id, body.get('expected_revision'),
+                                            operation_id=body.get('operation_id'))
         raise LibraryError(404, 'Endpoint not found.')
 

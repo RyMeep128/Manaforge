@@ -67,6 +67,7 @@ class LibraryClient:
         self.url = server_url(url, allow_lan=allow_lan)
         self.server_id = identifier(server_id) if server_id else None
         self.token = None
+        self.account_id = None
         self.opener = opener or build_opener(
             ProxyHandler({}), _NoRedirects(),
             HTTPSHandler(context=ssl.create_default_context(cafile=certifi.where())))
@@ -98,6 +99,7 @@ class LibraryClient:
             error.close()
             if status == 401:
                 self.token = None
+                self.account_id = None
             messages = {401: 'Session expired or credentials were rejected. Sign in again.',
                         403: 'This account is not authorized, or the invitation is invalid.',
                         404: 'The requested deck or endpoint is unavailable.',
@@ -105,6 +107,8 @@ class LibraryClient:
                         413: 'The server rejected the request size.',
                         426: 'Client and library API versions are incompatible.',
                         429: 'Library request limit reached. Try again in five minutes.'}
+            if status == 409 and path.startswith('decks') and method in ('POST', 'PUT', 'DELETE'):
+                messages[409] = 'Publication conflict. Review the latest publication before publishing or unpublishing again.'
             raise LibraryError(status, messages.get(status, 'The library could not complete the request. Check server status.')) from None
         except (URLError, OSError, socket.timeout):
             raise LibraryError(503, 'Cannot reach the library. Check its URL, HTTPS certificate and connection, then retry.') from None
@@ -119,9 +123,13 @@ class LibraryClient:
         server_id = identifier(result.get('server_id'))
         if self.server_id and self.server_id != server_id:
             self.token = None
+            self.account_id = None
             raise LibraryError(409, 'This address now identifies a different library. Remove the old connection and add it explicitly.')
         self.server_id = server_id
-        return {'server_id': server_id, 'name': text(result.get('name'))}
+        capabilities = result.get('capabilities', [])
+        if not isinstance(capabilities, list) or len(capabilities) > 100 or any(not isinstance(item, str) for item in capabilities):
+            raise LibraryError(502, 'The library returned invalid capabilities.')
+        return {'server_id': server_id, 'name': text(result.get('name')), 'capabilities': capabilities}
 
     def login(self, username, password, *, invitation=''):
         info = self.check()  # Pin identity before sending credentials on each reconnect.
@@ -134,6 +142,7 @@ class LibraryClient:
                 or any(not (c.isalnum() or c in '-_') for c in token)):
             raise LibraryError(502, 'The library returned an invalid session.')
         self.token = token
+        self.account_id = identifier(result['user_id']) if result.get('user_id') else None
         return info
 
     def disconnect(self):
@@ -142,6 +151,7 @@ class LibraryClient:
                 self.request('POST', 'logout')
         finally:
             self.token = None
+            self.account_id = None
 
     @staticmethod
     def publication(value):
@@ -169,6 +179,35 @@ class LibraryClient:
         if publication['deck_id'] != deck_id:
             raise LibraryError(502, 'The library returned the wrong deck.')
         return publication
+
+    def publish_operation(self, operation):
+        """Send one durable journal operation; retrying the same operation is safe."""
+        info = self.check()
+        if 'publication_operations' not in info['capabilities']:
+            raise LibraryError(426, 'Upgrade this library server before publishing from Manaforge. Safe publication retries are required.')
+        kind = operation['kind']
+        if kind not in ('publish', 'unpublish'):
+            raise LibraryError(400, 'Invalid publication operation.')
+        deck_id = operation.get('deck_id')
+        expected = operation['expected_revision']
+        if type(expected) is not int or expected < 0:
+            raise LibraryError(400, 'Invalid publication revision.')
+        body = {'operation_id': identifier(operation['operation_id']), 'expected_revision': expected}
+        if deck_id:
+            path = 'decks/' + identifier(deck_id)
+            method = 'DELETE' if kind == 'unpublish' else 'PUT'
+        else:
+            if kind == 'unpublish' or expected != 0:
+                raise LibraryError(400, 'Invalid publication target.')
+            path, method = 'decks', 'POST'
+        if kind == 'publish':
+            body.update(deck=shared_deck(operation['deck']), color_identity=list(colors(operation['color_identity'])))
+        result = self.request(method, path, body)
+        remote_id, revision = identifier(result.get('deck_id')), result.get('revision')
+        wanted_revision = expected + 1 if kind == 'publish' else expected
+        if type(revision) is not int or revision != wanted_revision or (deck_id and remote_id != deck_id):
+            raise LibraryError(502, 'Publication response did not match the request. Retry the pending operation to recover its result.')
+        return {'deck_id': remote_id, 'revision': revision}
 
 
 class LibraryConnections:

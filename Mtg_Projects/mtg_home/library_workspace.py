@@ -4,6 +4,7 @@ from pathlib import Path
 from PyQt6 import QtCore as C, QtGui as G, QtWidgets as W
 from mtg_core.downloads import DownloadCancelled
 from mtg_core.library.client import LibraryClient, LibraryConnections, copy_publication
+from mtg_core.library.publishing import PublicationJournal
 from mtg_core.paths import data_root
 from mtg_editor.card_views import Thumbnails
 from mtg_ui.jobs import JobQueue
@@ -57,6 +58,7 @@ class LibraryWorkspace(W.QMainWindow):
         super().__init__(parent)
         self.setWindowTitle('Browse Online')
         self.connections = LibraryConnections(root or data_root())
+        self.publications = PublicationJournal(self.connections)
         self.deck_root = Path(deck_root or data_root() / 'decks')
         self.client_factory = client_factory
         self.clients, self.views, self.states = {}, {}, {}
@@ -95,6 +97,9 @@ class LibraryWorkspace(W.QMainWindow):
         self.connection_status.setTextFormat(C.Qt.TextFormat.PlainText)
         self.connection_status.setWordWrap(True)
         layout.addWidget(self.connection_status)
+        from .library_publishing import PublishingPanel
+        self.publishing = PublishingPanel(self)
+        layout.addWidget(self.publishing)
         filters = W.QFormLayout()
         self.filters = {}
         for key, label in [('query', 'Name / description'), ('commander', 'Commander'),
@@ -175,6 +180,7 @@ class LibraryWorkspace(W.QMainWindow):
         self.copy_button.setEnabled(self.results.currentItem() is not None and not busy)
         for field in self.filters.values():
             field.setEnabled(not busy)
+        self.publishing.refresh()
         self.progress.setVisible(bool(self._job))
         if not connection:
             self.connection_status.setText('No libraries configured. Add your own server or a friend’s library. ' + self.message)
@@ -346,6 +352,11 @@ class LibraryWorkspace(W.QMainWindow):
             self.update_controls()
             return
         row = current.data(C.Qt.ItemDataRole.UserRole)
+        self.details.setPlainText(self.publication_text(row))
+        self.update_controls()
+
+    @staticmethod
+    def publication_text(row):
         deck = row['deck']
         categories = {item['category_id']: item['name'] for item in deck['categories']}
         lines = [deck['name'], f"Owner: {row['owner']} · Revision: {row['revision']}",
@@ -362,8 +373,7 @@ class LibraryWorkspace(W.QMainWindow):
                 lines.append('  Printing ID: ' + entry['card_id'])
             if entry['notes']:
                 lines.append('  ' + entry['notes'])
-        self.details.setPlainText('\n'.join(lines))
-        self.update_controls()
+        return '\n'.join(lines)
 
     def copy_selected(self):
         connection, item = self.connection(), self.results.currentItem()

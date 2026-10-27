@@ -15,6 +15,9 @@ from .payload import colors, shared_deck, text
 
 PASSWORD_ROUNDS = 600000
 SESSION_SECONDS = 60 * 60 * 24
+OPERATIONS_SQL = '''CREATE TABLE IF NOT EXISTS publication_operations (
+    user_id TEXT REFERENCES users(id), operation_id TEXT, signature TEXT NOT NULL,
+    result TEXT NOT NULL, PRIMARY KEY(user_id, operation_id))'''
 
 
 def digest(value):
@@ -76,6 +79,7 @@ class LibraryStore:
             db.executemany('INSERT INTO meta VALUES (?, ?)',
                            [('schema', '1'), ('name', name), ('server_id', str(uuid.uuid4()))])
             self._user(db, username, password, admin=True)
+            db.execute(OPERATIONS_SQL)
 
     def check_schema(self):
         if not self.path.is_file():
@@ -85,6 +89,8 @@ class LibraryStore:
                 version = db.execute("SELECT value FROM meta WHERE key='schema'").fetchone()
                 if version is None or version[0] != '1':
                     raise LibraryError(503, 'Unsupported library database version. Upgrade the server.')
+                # Additive schema-v1 capability: preserve existing libraries and all history.
+                db.execute(OPERATIONS_SQL)
         except sqlite3.Error:
             raise LibraryError(503, 'Library database is unreadable. Check permissions or restore a backup.') from None
 
@@ -181,7 +187,30 @@ class LibraryStore:
             self.actor(db, token, admin=True)
             return [dict(row) for row in db.execute('SELECT id, username, admin, active FROM users ORDER BY username')]
 
-    def publish(self, token, value, color_identity, *, deck_id=None, expected_revision=0):
+    @staticmethod
+    def _operation(db, actor, operation_id, payload):
+        if operation_id is None:
+            return None, None
+        try:
+            if not isinstance(operation_id, str) or str(uuid.UUID(operation_id)) != operation_id:
+                raise ValueError()
+        except (ValueError, AttributeError):
+            raise LibraryError(400, 'Invalid publication operation identifier.') from None
+        signature = digest(json.dumps(payload, sort_keys=True, allow_nan=False))
+        row = db.execute('SELECT signature, result FROM publication_operations WHERE user_id=? AND operation_id=?',
+                         (actor['id'], operation_id)).fetchone()
+        if row and row['signature'] != signature:
+            raise LibraryError(409, 'Operation identifier already used for a different publication change.')
+        return signature, json.loads(row['result']) if row else None
+
+    @staticmethod
+    def _record_operation(db, actor, operation_id, signature, result):
+        if operation_id is not None:
+            db.execute('INSERT INTO publication_operations VALUES (?, ?, ?, ?)',
+                       (actor['id'], operation_id, signature, json.dumps(result)))
+        return result
+
+    def publish(self, token, value, color_identity, *, deck_id=None, expected_revision=0, operation_id=None):
         payload = shared_deck(value)
         color_identity = colors(color_identity)
         if type(expected_revision) is not int or expected_revision < 0:
@@ -189,6 +218,15 @@ class LibraryStore:
         with self.db() as db:
             db.execute('BEGIN IMMEDIATE')
             actor = self.actor(db, token)
+            signature_deck = dict(payload)
+            # A client's local deck ID has no meaning in a server publication.
+            # Omit it so legacy payloads without a deck_id also retry deterministically.
+            signature_deck.pop('deck_id', None)
+            signature, replay = self._operation(db, actor, operation_id,
+                {'action': 'publish', 'deck_id': deck_id, 'revision': expected_revision,
+                 'deck': signature_deck, 'colors': color_identity})
+            if replay is not None:
+                return replay
             if deck_id is None:
                 if expected_revision != 0:
                     raise LibraryError(409, 'A new publication must start at revision zero.')
@@ -207,12 +245,19 @@ class LibraryStore:
             db.execute('INSERT INTO revisions VALUES (?, ?, ?, ?, ?)',
                        (deck_id, revision, json.dumps(payload, allow_nan=False), color_identity, time.time()))
             db.execute('UPDATE decks SET revision=?, published=1 WHERE id=?', (revision, deck_id))
-            return {'deck_id': deck_id, 'revision': revision}
+            return self._record_operation(db, actor, operation_id, signature,
+                                          {'deck_id': deck_id, 'revision': revision})
 
-    def unpublish(self, token, deck_id, expected_revision):
+    def unpublish(self, token, deck_id, expected_revision, *, operation_id=None):
+        if type(expected_revision) is not int or expected_revision < 1:
+            raise LibraryError(400, 'Expected revision must be a positive integer.')
         with self.db() as db:
             db.execute('BEGIN IMMEDIATE')
             actor = self.actor(db, token)
+            signature, replay = self._operation(db, actor, operation_id,
+                {'action': 'unpublish', 'deck_id': deck_id, 'revision': expected_revision})
+            if replay is not None:
+                return replay
             row = db.execute('SELECT * FROM decks WHERE id=?', (deck_id,)).fetchone()
             if not row:
                 raise LibraryError(404, 'Deck not found.')
@@ -221,6 +266,8 @@ class LibraryStore:
             if type(expected_revision) is not int or row['revision'] != expected_revision:
                 raise LibraryError(409, 'Revision changed. Refresh before unpublishing.')
             db.execute('UPDATE decks SET published=0 WHERE id=?', (deck_id,))
+            return self._record_operation(db, actor, operation_id, signature,
+                                          {'deck_id': deck_id, 'revision': expected_revision})
 
     def browse(self, token, *, deck_id=None, revision=None, query='', commander='', owner='', tag='', color='', offset=0):
         with self.db() as db:
