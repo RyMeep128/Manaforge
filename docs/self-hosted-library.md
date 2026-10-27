@@ -1,4 +1,4 @@
-# Self-hosted Deck Library — stage 1
+# Self-hosted Deck Library — stages 1–2
 
 Manaforge stays local-first. Installing or launching the desktop app does not
 start a server, connect to a library, create an online account, open router ports,
@@ -6,12 +6,60 @@ or install Cloudflare. There are no default library connections or developer
 server addresses. Anyone can operate an independent library with its own users,
 database, server UUID, and published deck IDs.
 
-This first stage supplies a standalone JSON API, persistent SQLite storage,
-invitation-only accounts, and revisioned publications. It is useful to operators
-and API clients. It does **not** yet supply Browse Online, desktop connections,
-Publish to Library, read-only follows, offline subscription caches, update
-notifications, independent-copy UI, or installation/Settings hosting controls.
-Those features are not exposed as partially working desktop actions.
+The server supplies a standalone JSON API, persistent SQLite storage,
+invitation-only accounts, and revisioned publications. The desktop now supplies
+Browse Online, multiple saved connections, account sign-in/invitation redemption,
+deck searching, previews and independent local copies. Publish to Library,
+read-only follows, offline subscription caches, update notifications and
+installation/Settings hosting controls remain planned. Those features are not
+exposed as partially working desktop actions.
+
+## Browse Online
+
+Open **Browse Online** from the home page, then **Add library…**. Enter the HTTPS
+origin supplied by your friend or your own server, and your account credentials.
+For a new account, also enter the single-use invitation from its administrator.
+For a trusted LAN, explicitly enable LAN HTTP and use a private IP address; HTTP
+to hostnames or public IPs is rejected. Server URLs cannot include credentials,
+paths, query strings or fragments. Redirects are rejected, including redirects
+to another hostname; provide the final library origin directly.
+
+The first sign-in pins the server UUID. Reconnecting to an address that now serves
+a different UUID stops before sending credentials. Remove that connection and
+explicitly add the new library if the change was intentional. Certificate
+validation stays enabled for HTTPS. The client ignores environment HTTP proxies
+and uses a bounded response size and network timeouts.
+
+Saved connections contain the URL, library name, UUID and LAN HTTP preference.
+Passwords are never saved. Each library's bearer session lives in memory and is
+not shared with other connections. Restarting Manaforge requires signing in again;
+secure OS-backed persistent credential storage remains future work. Selecting a
+saved library or opening Browse Online never automatically contacts it. Use
+**Sign in / Reconnect…**, then **Search / Refresh**. Errors and connection status
+appear beside the connection controls. An invalid/expired session asks you to
+sign in again. **Disconnect** revokes the server session when reachable and clears
+it locally even when offline. **Remove** forgets just that connection and its
+in-memory search results, leaving other libraries and all saved local decks intact.
+
+Search by name/description, commander, owner, deck tag/theme and exact color
+identity. Search results arrive in pages of 50; **Load more** continues the last
+submitted search. Selecting a result previews its owner/revision, description,
+commander, categories, tags, quantities, card notes and selected printing IDs.
+Commander artwork uses the existing thumbnail component against the local card
+image cache only; missing images show no artwork. This page makes no artwork
+provider requests. Search, sign-in, disconnect and disk copying use the existing
+background job queue and show a progress indicator.
+
+**Copy to My Decks** saves the selected preview as a native Manaforge deck with a
+new local UUID and source attribution. Open it through **Deck Editor → Projects**.
+The copy is independently editable and available after restart while offline.
+It includes the previewed revision; copying again deliberately makes another
+independent deck. It receives no future updates. Local print/ownership state,
+custom artwork paths, project settings and unknown remote extras are excluded.
+Removing the server connection cannot delete or modify these decks. If a search
+fails, the previously displayed results remain labeled as an earlier snapshot;
+you can still copy one while disconnected. Search snapshots are only kept for the
+current application session; save a local copy for offline use after restart.
 
 ## Architecture and remaining stages
 
@@ -23,15 +71,17 @@ The optional Waitress dependency is separate from desktop requirements.
 
 Reuse points for follow-up work:
 
-1. Desktop client: separate transport and credential storage, multiple connections
-   keyed by server UUID, shared `mtg_ui.jobs.JobQueue` for nonblocking work,
-   `mtg_home.modules.MODULES`/Home and the existing editor for browsing and explicit
-   publication. Reuse the card catalog and artwork cache for previews. Require
-   HTTPS for remote connections; HTTP may be explicitly allowed on private LANs.
+1. Desktop publication: add explicit Publish to Library in the existing editor,
+   retain a per-library publication/revision mapping, and expose owner/admin
+   update/unpublish actions. Browse Online already uses the separate client,
+   saved connection metadata, `mtg_ui.jobs.JobQueue`, Home registry and existing
+   thumbnail/deck persistence components. Add secure optional credential storage
+   using the operating system credential store rather than saving bearer tokens
+   in the connections database.
 2. Offline following/copying: use `DeckDocument` and atomic `DeckStore` persistence,
    store `(server_id, deck_id, revision)` separately from local deck identity, keep
    follows read-only, stage updates before atomic replacement, and offer explicit
-   acceptance. Copies need fresh local UUIDs and source attribution. Preserve
+   acceptance. Independent copies already use fresh local UUIDs and source attribution. Preserve
    existing local print statuses; new followed entries may start Pending locally.
 3. Hosting UI: add a disabled-by-default **Host a Manaforge Deck Library** section
    to `mtg_ui.data_management.DataManagementDialog` (current first-run setup), and
@@ -130,7 +180,7 @@ decks belonging to disabled users return 404 to readers, including historical
 revisions. The owner or administrator can republish by PUT using the latest
 revision. The original owner stays the owner when an administrator updates it.
 Clients can compare the latest revision to a cached revision before offering an
-update; automatic desktop polling and offline caches belong to stage 2.
+update; desktop following, update polling and offline subscription caches remain planned.
 
 Shareable fields include names, descriptions, format, commanders, categories,
 tags, card names/quantities/sections, notes and printing/oracle identifiers.
@@ -174,7 +224,11 @@ for your friend group. This stage is not a centralized public service.
 `mtg_core/tests/test_library_server.py` adds in-process WSGI and storage tests for
 permission checks, revisions/conflicts, filtering, request validation, private-data
 projection, invitations, revocation, expiry, persistence and independent servers.
-The existing Windows Python 3.12/3.13 workflow collects these tests and installs
-the optional server dependency. No tests or builds were executed locally for this
-implementation, per the requested execution policy. Live LAN/tunnel deployment,
-desktop integration and full acceptance testing remain for subsequent stages.
+`mtg_core/tests/test_library_client.py` covers transport constraints, identity
+pinning, session separation, untrusted responses and local copy isolation.
+`integration_tests/test_library_workspace.py` covers opt-in startup, background
+browsing, plain-text previews, copying, separate connection snapshots and failure
+preservation with fake clients. The existing Windows Python 3.12/3.13 workflow
+collects these tests and installs the optional server dependency. No tests or
+builds were executed locally, per the requested execution policy. Live LAN/tunnel
+deployment and full story acceptance testing remain for subsequent stages.

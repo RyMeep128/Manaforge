@@ -78,6 +78,9 @@ class ModuleController(C.QObject):
                 elif module.action == 'rules':
                     from .rules_workspace import RulesWorkspace
                     window = RulesWorkspace(self.service, self.show_home)
+                elif module.action == 'library':
+                    from .library_workspace import LibraryWorkspace
+                    window = LibraryWorkspace(self.service, jobs=self.jobs)
                 else:
                     return
                 self.home.add_workspace(key, window)
@@ -140,6 +143,11 @@ class ModuleController(C.QObject):
             app = W.QApplication.instance()
             if getattr(app, '_manaforge_print_context', None) is context:
                 del app._manaforge_print_context
+        library = self.windows.get('library')
+        if library is not None and hasattr(library, 'prepare_to_close') and not library.prepare_to_close():
+            self.home.statusBar().showMessage('Finishing local library artwork before closing…')
+            C.QTimer.singleShot(250, self.home.close)
+            return False
         return True
 
     def settings(self, key):

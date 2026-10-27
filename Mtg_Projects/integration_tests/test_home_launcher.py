@@ -33,7 +33,8 @@ def test_home_registry_disabled_play_keyboard_and_responsive_layout(app):
     home = HomeWindow()
     activated = []
     home.moduleRequested.connect(activated.append)
-    assert len(MODULES) == 4
+    assert len(MODULES) == 5
+    assert home.tiles['library'].isEnabled()
     assert not home.tiles['play'].isEnabled()
     home.tiles['play'].click()
     assert not activated
