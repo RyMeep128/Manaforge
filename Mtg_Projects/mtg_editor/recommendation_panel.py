@@ -948,6 +948,8 @@ class RecommendationPanel(CardDropPanel):
                 if self.theme_option.get("companion")
                 else " Theme matching uses EDHREC cohort membership and local mechanics/tags."
             )
+        if self.rows and all(row.get('fallback') for row in self.rows):
+            label += ' · Popular Cards'
         self.status.setText(label + (" " + self.coverage if self.coverage else ""))
         self.canvas.empty_message = (
             "No matching cards in this category. Clear a filter, change the theme, or use Local Card Search."

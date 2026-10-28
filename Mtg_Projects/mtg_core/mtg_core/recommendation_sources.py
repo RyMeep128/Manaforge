@@ -1,6 +1,7 @@
 """Pluggable aggregate sources; public recommendations lead, local data supplements."""
 
 from dataclasses import dataclass
+import sqlite3
 from typing import Protocol
 from .public_deck_datasets import DATASET_LABELS, SOURCE_LABELS
 
@@ -58,6 +59,19 @@ def source_signature(root):
 
     root = Path(root)
     paths = [root / "source-settings.json", root / "archidekt.aggregate.json.gz"]
+    from .library.recommendations import cache_path
+    paths.append(cache_path())
+    if cache_path().exists():
+        from contextlib import closing
+        import sqlite3
+        import time
+        try:
+            with closing(sqlite3.connect(cache_path())) as db:
+                access_state = tuple(db.execute('SELECT server, expires>? FROM access ORDER BY server', (time.time(),)))
+        except sqlite3.Error:
+            access_state = ()
+    else:
+        access_state = ()
     from .paths import core_data_root
 
     if root.resolve() == (core_data_root() / "recommendations").resolve():
@@ -78,7 +92,7 @@ def source_signature(root):
             signature.append((str(path), stat.st_mtime_ns, stat.st_size))
         except OSError:
             signature.append((str(path), None, None))
-    return tuple(signature)
+    return (*signature, ('library-access', access_state))
 
 
 def default_sources(local_store, *, document=None, distribution_state=None):
@@ -167,8 +181,14 @@ def default_sources(local_store, *, document=None, distribution_state=None):
                 source_id, "public", f"Source error: {type(exc).__name__}: {exc}"
             )
         sources.append(source)
+    from .library.recommendations import LibraryRecommendations, cache_path
+    try:
+        libraries = [LibraryRecommendations(document=document)] if cache_path().exists() else []
+    except (OSError, sqlite3.Error):
+        libraries = [UnavailableSource('library', 'library', 'Shared recommendation cache unavailable')]
     return [
         *sources,
+        *libraries,
         UnavailableSource(
             "blueprintmtg", "public", "Unavailable; optional future source"
         ),
@@ -236,6 +256,19 @@ def recommend(
         if source.role in {"public", "primary", "secondary"} and data["results"]
     }
     rows = fuse_public_recommendations(public)
+    shared = next((data for source, data in snapshots if source.role == 'library'), {})
+    by_identity = {row['oracle_id']: row for row in rows}
+    for item in shared.get('results', []):
+        oid = item['oracle_id']
+        row = by_identity.get(oid)
+        if row is None:
+            row = dict(oracle_id=oid, public_score=0.0, public_rrf=0.0,
+                       source_evidence={}, sources_present=[])
+            rows.append(row)
+            by_identity[oid] = row
+        row['library_score'] = 0.2 * max(0, min(1, item['score']))
+        row['source_evidence']['library'] = dict(item)
+        row['sources_present'].append('library')
     local = next((data for source, data in snapshots if source.role == "local"), {})
     local_count = local.get("relevant_decks", 0)
     eligible = local_count >= 15 and bool(rows)
@@ -257,6 +290,8 @@ def recommend(
             else row["public_score"],
         )
         row["score"] = row["statistical_score"]
+        row['statistical_score'] += row.get('library_score', 0)
+        row['score'] = row['statistical_score']
         # Compatibility fields for older consumers; fusion never reads these.
         row["primary_score"] = row["public_score"]
         if len(row["source_evidence"]) == 1:
@@ -331,5 +366,6 @@ def recommend(
         if rows
         else "No public recommendation data available for this deck.",
         formula="Public ranking uses reciprocal-rank fusion (k=60), normalized across active sources; "
-        "eligible enabled local decks contribute 20% of the statistical signal (80% public); otherwise 100% public.",
+        "eligible enabled local decks contribute 20% of the statistical signal (80% public); otherwise 100% public. "
+        "Permitted shared-library evidence adds at most 0.2, discounted for small cohorts.",
     )

@@ -5,6 +5,7 @@ from copy import deepcopy
 import json
 from pathlib import Path
 import sqlite3
+import time
 from tempfile import TemporaryDirectory
 
 from mtg_core.decks import DeckEntry
@@ -107,7 +108,10 @@ class RecommendationPages:
                                 for e in document.deck.entries if e.quantity > 0))
         key = (deck_key, pool_context(document), limit, kind, text, role, membership, tuple(sorted(dismissed)), category,
                identity, mana_value, json.dumps(theme, sort_keys=True))
-        if key in self.cache:
+        # Shared evidence must be checked even for a previously viewed page:
+        # disconnects, permission changes and expiry can invalidate it at any time.
+        if key in self.cache and not any(row.get('source_evidence', {}).get('library')
+                                         for row in self.cache[key][0]):
             self.cache.move_to_end(key)
             return deepcopy(self.cache[key])
         clauses, parameters = ['instr(text, ?) > 0'], [text.casefold().strip()]
@@ -129,10 +133,19 @@ class RecommendationPages:
                 db.set_progress_handler(lambda: int(should_cancel()), 1000)
             try:
                 cursor = db.execute('SELECT payload FROM cards WHERE ' + ' AND '.join(clauses) +
-                                    ' ORDER BY score DESC, oracle', parameters)
+                                    " ORDER BY coalesce(json_extract(payload, '$.fallback'), 0), score DESC, oracle", parameters)
                 for (payload,) in cursor:
                     check_cancelled(should_cancel)
                     row = json.loads(payload)
+                    shared = row.get('source_evidence', {}).get('library')
+                    if shared:
+                        try:
+                            permitted = (shared.get('cache_deadline', 0) > time.time()
+                                         and Path(shared['cache_file']).stat().st_mtime_ns == shared['cache_mtime'])
+                        except (OSError, KeyError):
+                            permitted = False
+                        if not permitted:
+                            continue
                     if row['oracle_id'] in dismissed:
                         continue
                     row['entry'] = DeckEntry.from_dict(row['entry'])
@@ -143,6 +156,8 @@ class RecommendationPages:
                     present = bool(in_deck_entries(document, [row['entry']]))
                     if membership and present != (membership == 2):
                         continue
+                    if rows and row.get('fallback') and not rows[0].get('fallback'):
+                        break
                     rows.append(row)
                     if len(rows) > limit:
                         break

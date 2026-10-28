@@ -68,7 +68,8 @@ class SearchOperations:
                     offset=max(0, int(filters.get('offset', 0))),
                     set_filter=set_filter, online_mode=online_mode,
                     should_cancel=filters.get('should_cancel'),
-                    oracle_ids=filters.get('oracle_ids'))
+                    oracle_ids=filters.get('oracle_ids'),
+                    **({'popularity': True} if filters.get('popularity') else {}))
             except LocalQueryError:
                 if not filters.get('allow_remote', True):
                     raise

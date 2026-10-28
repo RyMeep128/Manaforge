@@ -6,6 +6,24 @@ from mtg_core.search import card_rules_text
 from mtg_core.search.syntax import LocalQueryError, compile_query
 
 
+def test_popularity_search_ranks_before_pagination_and_deduplicates_printings(tmp_path):
+    service = CardService(db_path=str(tmp_path / 'popular.sqlite3'),
+                          fetch_json_fn=lambda *args: pytest.fail('Must stay offline'))
+    for card_id, oracle, name, rank in [('a', 'a', 'Alphabetical first', 500),
+                                       ('z', 'z', 'Last alphabetically', 1),
+                                       ('z-copy', 'z', 'Last alphabetically', 1),
+                                       ('unknown', 'unknown', 'No rank', None),
+                                       ('zero', 'zero', 'Invalid zero rank', 0)]:
+        service.database.upsert_card_payload(dict(
+            id=card_id, oracle_id=oracle, name=name, set='abc', collector_number=card_id,
+            lang='en', type_line='Instant', color_identity=[], legalities={'commander': 'legal'},
+            edhrec_rank=rank))
+    options = dict(scryfall_syntax=True, allow_remote=False, popularity=True, limit=1)
+    assert service.search_cards('t:instant legal:commander', options)[0].oracle_id == 'z'
+    assert service.search_cards('t:instant legal:commander', dict(options, offset=1))[0].oracle_id == 'a'
+    assert service.search_cards('t:instant', dict(options, popularity=False))[0].oracle_id == 'a'
+
+
 def test_editor_search_pages_beyond_one_hundred_without_duplicates(tmp_path):
     service = CardService(db_path=str(tmp_path / 'paged.sqlite3'),
                           fetch_json_fn=lambda *args: pytest.fail('Must stay offline'))

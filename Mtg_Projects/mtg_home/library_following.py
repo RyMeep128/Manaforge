@@ -1,6 +1,7 @@
 """Offline subscription controls; checking never applies a staged revision."""
 import time
 import sqlite3
+from mtg_core.library import LibraryError
 
 from PyQt6 import QtCore as C, QtGui as G, QtWidgets as W
 
@@ -91,6 +92,13 @@ class FollowingPanel(W.QWidget):
         for record in records:
             self.checked_at[record['server_id']] = time.monotonic()
         def work(cancel, report):
+            for record in records:
+                if cancel.is_set():
+                    break
+                try:
+                    self.workspace.recommendations.sync(self.workspace.clients[record['id']], should_cancel=cancel.is_set)
+                except (sqlite3.Error, OSError, LibraryError):
+                    pass
             return [(record, self.workspace.followed.check(self.workspace.clients[record['id']], cancel=cancel, report=report))
                     for record in records if not cancel.is_set()]
         def complete(results):

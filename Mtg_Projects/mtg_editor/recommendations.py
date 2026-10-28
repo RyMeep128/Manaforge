@@ -72,6 +72,7 @@ def load_recommendations(
 
     deck_context = recommendation_context(service, document)
     rows = []
+    seen = set()
 
     def enrich(batch):
         check_cancelled(should_cancel)
@@ -120,6 +121,7 @@ def load_recommendations(
             continue
         if allowed is None and not in_card_pool(payload, document):
             continue
+        seen.add(row['oracle_id'])
         entry = DeckEntry(
             str(uuid.uuid4()),
             payload["name"],
@@ -133,6 +135,15 @@ def load_recommendations(
         rows.append(
             dict(row, entry=entry, commander_names=[e.name for e in commanders])
         )
+        if sink and len(rows) == 50:
+            enrich(rows)
+            rows = []
+    # Cache type candidates alongside source rows. Pages activate them only when
+    # the current category/filters have no usable source results.
+    from .recommendation_fallbacks import fallback_rows
+    for row in fallback_rows(service, document, seen=seen, query=query,
+                             include_present=include_present, should_cancel=should_cancel):
+        rows.append(row)
         if sink and len(rows) == 50:
             enrich(rows)
             rows = []
@@ -172,18 +183,24 @@ def rank_recommendations(rows, deck_context, preferences, query=""):
         eligible = row.get("local_eligible", row.get("local_enabled", False))
         enabled = eligible and preferences["local_enabled"]
         statistical = (0.8 * public + 0.2 * row["local_score"]) if enabled else public
+        statistical += row.get('library_score', 0)
         raw = dict(row, statistical_score=statistical, local_enabled=enabled)
         ranked.append(score(raw, deck_context, preferences["weights"]))
     return sorted(ranked, key=lambda row: (-row["score"], row["oracle_id"]))
 
 
 def statistical_reason(row):
+    if row.get('fallback'):
+        return 'Popular Cards — popular Commander staples from the local card catalog.'
     evidence = row.get("source_evidence")
     if evidence is None:  # Older snapshots remain inspectable.
         key = row.get("statistics_source", "archidekt")
         evidence = {key: row}
-    lines = ["Public recommendation evidence"]
+    lines = ["Recommendation evidence"]
     for source_id, item in sorted(evidence.items()):
+        if source_id == 'library':
+            lines.append(f"Used in {item['shared_decks']} similar shared decks (small-cohort confidence applied)")
+            continue
         lines.append(SOURCE_LABELS.get(source_id, source_id))
         if "rank" in item:
             lines.append(f"Rank: #{item['rank']}")
@@ -228,7 +245,7 @@ def statistical_reason(row):
     if "public_score" in row:
         lines.extend(
             [
-                f"Supported by {len(evidence)} public recommendation source(s)",
+                f"Supported by {len(set(evidence) - {'library'})} public recommendation source(s)",
                 f"Combined public ranking signal: {row['public_score']:.3f}",
                 f"Local Manaforge: {row.get('local_relevant', 0)} relevant decks; supplement {'active' if row.get('local_enabled') else 'inactive'}",
                 "Public contribution: 80%; local contribution: 20%"
@@ -236,6 +253,8 @@ def statistical_reason(row):
                 else "Public contribution: 100%",
             ]
         )
+    if row.get('library_score'):
+        lines.append(f"Shared library supplement: {row['library_score']:.3f} (maximum 0.2)")
     return "\n".join(lines)
 
 
@@ -363,6 +382,11 @@ class RecommendationsDialog(W.QDialog):
         self.rows = rank_recommendations(
             self.all_rows, self.deck_context, self.preferences, self.filter.text()
         )
+        from .recommendation_categories import categories, CATEGORIES
+        supported = set(CATEGORIES) - {'Top Cards', 'New Cards', 'High Lift'}
+        covered = set().union(*(categories(row) for row in self.rows if not row.get('fallback')))
+        self.rows = [row for row in self.rows if not row.get('fallback')
+                     or (categories(row) & supported) - covered]
         self.list.clear()
         self.list.addItems(
             [f"{row['entry'].name} — {row['score']:.3f}" for row in self.rows]

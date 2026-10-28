@@ -1,5 +1,38 @@
 # Phase 5 guidance and recommendation data
 
+## Popular cards and connected libraries
+
+Card-type categories fall back to **Popular Cards** when no usable source cards
+remain after the active filters, deck membership and dismissals. Candidates come
+from the local catalog's positive EDHREC popularity ranks, use the shared legality
+and commander color-identity restrictions, and include eligible colorless cards.
+Artifacts and utility lands keep the existing role/category classification.
+Categories without a type equivalent keep their existing tagging logic. Cards
+without a known popularity rank are omitted rather than presented as popular.
+Existing source recommendations always take precedence within a category.
+
+Browse Online refreshes a separate `library-recommendations.sqlite3` cache during
+background library searches and update checks. It indexes authorized shared lists
+without importing them into owned decks, following them, or uploading anything.
+Only changed revisions rewrite membership records; a successful complete listing
+removes missing publications. Failed or cancelled listings do not imply deletion.
+Publishing/unpublishing triggers the existing library refresh workflow.
+
+Shared evidence favors exact commander sets (including partners), then matching
+deck tags, then deck-card overlap within compatible color identities. Identical
+commander/card lists count once across libraries. Scores shrink toward zero for
+small cohorts and contribute at most 0.2 additional statistical signal, alongside
+the existing public/local pipeline. The Why popover reports the number of similar
+shared decks; general catalog fallbacks are labelled separately.
+
+Signing out or removing a library purges its samples. Access rejections and server
+identity changes also purge them. Temporary network failures retain cached evidence
+only until the previously authorized session expires. Cached recommendation pages
+recheck expiry and cache changes before displaying shared evidence. Permission
+changes become known on the next successful library check; no network request is
+made merely to browse recommendations. Public recommendations and local popular
+cards remain available independently of library access.
+
 ## Available workflow
 
 **Quick Add** keeps the lightweight **Syntax Search** and **Recommendations**

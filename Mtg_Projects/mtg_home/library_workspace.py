@@ -40,6 +40,8 @@ class LibraryWorkspace(W.QMainWindow):
         self._saved_restore_attempted = False
         self.publications = PublicationJournal(self.connections)
         self.followed = FollowedDecks(self.connections)
+        from mtg_core.library.recommendations import LibraryRecommendations
+        self.recommendations = LibraryRecommendations(self.connections.path.parent / 'library-recommendations.sqlite3')
         self.deck_root = Path(deck_root or data_root() / 'decks')
         self.client_factory = client_factory
         self.clients, self.views, self.states = {}, {}, {}
@@ -456,6 +458,8 @@ class LibraryWorkspace(W.QMainWindow):
                     client.resume(saved)
                     result.append((record, client, ''))
                 except LibraryError as error:
+                    if error.status in (401, 403, 404, 409):
+                        self.recommendations.revoke(record['server_id'])
                     if error.status in (401, 409):
                         self.saved_sessions.forget(record['id'])
                     result.append((record, None, str(error)))
@@ -690,6 +694,7 @@ class LibraryWorkspace(W.QMainWindow):
         if not connection:
             return
         def work():
+            self.recommendations.revoke(connection['server_id'])
             if self.forget_saved_sign_in(connection, client):
                 return 'Signed out. Saved sign-in removed.'
             return 'Saved sign-in removed. Server unavailable; its session will expire automatically.'
@@ -706,6 +711,7 @@ class LibraryWorkspace(W.QMainWindow):
             return
         client = self.clients.get(connection['id'])
         def work():
+            self.recommendations.revoke(connection['server_id'])
             self.forget_saved_sign_in(connection, client)
             self.connections.remove(connection['id'])
         def complete(_):
@@ -731,9 +737,16 @@ class LibraryWorkspace(W.QMainWindow):
                 raise DownloadCancelled()
             offset = previous[record['id']].get('offset', 0) + 50 if more else 0
             try:
+                if not more:
+                    try:
+                        self.recommendations.sync(self.clients[record['id']], should_cancel=cancel.is_set)
+                    except (sqlite3.Error, OSError):
+                        pass  # Recommendation storage must not prevent library browsing.
                 rows = self.clients[record['id']].browse(filters, offset=offset)
                 return record, rows, offset, None
             except (LibraryError, OSError) as error:
+                if isinstance(error, LibraryError) and error.status in (401, 403, 404, 409):
+                    self.recommendations.revoke(record['server_id'])
                 return record, None, offset, str(error)
         def work(cancel, report):
             outcomes = []
