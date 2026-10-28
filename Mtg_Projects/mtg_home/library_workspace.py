@@ -547,10 +547,11 @@ class LibraryWorkspace(W.QMainWindow):
         if self._job or self.jobs.busy:
             return
         try:
-            pending = self.publications.queued_masters()
+            pending = [dict(row, deletion=True, snapshot={}) for row in self.publications.queued_deletions()]
+            pending.extend(self.publications.queued_masters())
             connections = self.connections.list()
         except (OSError, sqlite3.Error):
-            self.masterSyncStatus.emit('Saved locally. Library sync storage is unavailable; queued updates will retry.')
+            self.masterSyncStatus.emit('Library sync storage is unavailable; queued uploads and removals will retry.')
             return
         for queued in pending:
             key = queued['server_id'], queued['local_id']
@@ -558,33 +559,39 @@ class LibraryWorkspace(W.QMainWindow):
                 continue
             connection = next((row for row in connections if row['server_id'] == queued['server_id']), None)
             client = self.clients.get(connection['id']) if connection else None
-            if not client or not client.token or getattr(client, 'account_id', None) != queued['account_id']:
+            if not client or not client.token or not getattr(client, 'account_id', None):
+                continue
+            if queued['account_id'] and client.account_id != queued['account_id']:
                 continue
             snapshot = queued['snapshot']
             def work(client=client, queued=queued, snapshot=snapshot):
                 try:
+                    if queued.get('deletion'):
+                        return dict(result=self.publications.send_deletion(client, queued['server_id'], queued['local_id']))
                     return dict(result=self.publications.send(client, queued['server_id'], queued['local_id'], **snapshot))
                 except LibraryError as error:
                     return dict(error=str(error), status=error.status)
             def complete(value, queued=queued, connection=connection, snapshot=snapshot):
                 if 'error' in value:
-                    if 400 <= value['status'] < 500:
-                        self.publications.pause_master(queued['server_id'], queued['local_id'])
-                        message = 'Library sync paused. Review and publish this deck to resume: ' + value['error']
+                    if 400 <= value['status'] < 500 and not (queued.get('deletion') and value['status'] == 401):
+                        pause = self.publications.pause_deletion if queued.get('deletion') else self.publications.pause_master
+                        pause(queued['server_id'], queued['local_id'])
+                        message = 'Library removal paused: ' + value['error'] if queued.get('deletion') else 'Library sync paused. Review and publish this deck to resume: ' + value['error']
                     else:
                         self.master_retry[(queued['server_id'], queued['local_id'])] = monotonic() + 60
-                        message = 'Saved locally. Library update queued for retry: ' + value['error']
+                        message = ('Library removal queued for retry: ' if queued.get('deletion') else 'Saved locally. Library update queued for retry: ') + value['error']
                 else:
                     self.master_retry.pop((queued['server_id'], queued['local_id']), None)
                     self._load_after_signin = True
-                    message = snapshot['deck']['name'] + ' updated in ' + connection['name'] + '.'
+                    message = ('Linked upload removed from ' + connection['name'] + '.' if queued.get('deletion') else
+                               snapshot['deck']['name'] + ' updated in ' + connection['name'] + '.')
                 self.states[connection['id']] = message
                 self.connection_status.setText(message)
                 self.masterSyncStatus.emit(message)
             def failed(message, queued=queued):
                 self.master_retry[(queued['server_id'], queued['local_id'])] = monotonic() + 60
-                self.masterSyncStatus.emit('Saved locally. Library update queued for retry: ' + message)
-            self.submit('Updating library from local master', work, complete, on_error=failed)
+                self.masterSyncStatus.emit(('Library removal queued for retry: ' if queued.get('deletion') else 'Saved locally. Library update queued for retry: ') + message)
+            self.submit('Removing deleted deck from library' if queued.get('deletion') else 'Updating library from local master', work, complete, on_error=failed)
             return
 
     def submit(self, operation, work, complete, *, with_context=False, on_error=None):

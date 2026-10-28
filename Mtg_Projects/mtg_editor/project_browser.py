@@ -107,12 +107,14 @@ class ProjectDashboard(W.QWidget):
     resumeRequested = C.pyqtSignal()
     deckRenamed = C.pyqtSignal(object, str)
     deckDeleted = C.pyqtSignal(object)
+    libraryDeletionQueued = C.pyqtSignal()
     settled = C.pyqtSignal()
 
     def __init__(self, deck_root, project_root, thumbnails, parent=None):
         super().__init__(parent)
         self.roots = deck_root, project_root
         self.thumbnails = thumbnails
+        self.libraryDeletionQueued.connect(self.notify_library_deletion)
         self.worker = None
         self.rows, self.errors = [], []
         self.stopping = False
@@ -302,22 +304,51 @@ class ProjectDashboard(W.QWidget):
         self.deckRenamed.emit(Path(row['path']), name)
         self.refresh()
 
+    def notify_library_deletion(self):
+        parent = self.parentWidget()
+        while parent is not None:
+            handler = getattr(parent, 'library_delete_handler', None)
+            if callable(handler):
+                handler()
+                return
+            parent = parent.parentWidget()
+
     def delete_selected_deck(self, row):
         answer = W.QMessageBox.question(self, 'Delete deck',
-            f'Move "{row["name"]}" to the Recycle Bin?',
+            f'Move "{row["name"]}" to the Recycle Bin and remove its linked library uploads?\nOffline library removals will be queued until you reconnect.',
             W.QMessageBox.StandardButton.Yes | W.QMessageBox.StandardButton.No,
             W.QMessageBox.StandardButton.No)
         if answer != W.QMessageBox.StandardButton.Yes:
             return
+        from sqlite3 import Error as StorageError
+        from mtg_core.decks import DeckStore
+        from mtg_core.library.client import LibraryConnections
+        from mtg_core.library.publishing import PublicationJournal
+        from mtg_core.paths import data_root
+        token, journal = None, None
         try:
             path = managed_deck_path(row['path'], self.roots[0])
+            local_id = DeckStore().load(path).deck.deck_id
+            journal = PublicationJournal(LibraryConnections(data_root()))
+            token = journal.stage_deletion(local_id, path)
             result = C.QFile.moveToTrash(str(path))
             if not (result[0] if isinstance(result, tuple) else result):
                 raise OSError('The deck could not be moved to the Recycle Bin.')
-        except (OSError, ValueError) as exc:
+        except (OSError, ValueError, StorageError) as exc:
+            if token:
+                journal.cancel_deletion(token)
             W.QMessageBox.warning(self, 'Could not delete deck', str(exc))
             return
+        if token:
+            try:
+                journal.finish_deletion(token)
+            except (OSError, StorageError):
+                # The staged intent and missing file are sufficient for crash recovery.
+                W.QMessageBox.warning(self, 'Library removal queued',
+                    'The local deck was deleted. Library removal remains queued for recovery when storage is available.')
         self.deckDeleted.emit(path)
+        if token:
+            self.libraryDeletionQueued.emit()
         self.refresh()
 
     def browse(self):

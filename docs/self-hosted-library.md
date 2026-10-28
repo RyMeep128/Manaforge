@@ -449,3 +449,13 @@ resume. Unpublishing or removing the connection stops automatic updates.
 Links created before automatic synchronization was introduced require one explicit
 upload to establish the account-bound master link. Local copies of other people's
 decks remain independent unless you explicitly upload them yourself.
+
+
+Deleting a local deck through Manaforge also removes its tracked library uploads.
+The confirmation describes both effects. A durable removal intent is staged before
+the local file enters the Recycle Bin; failed local deletion cancels that intent.
+Offline removals persist across restarts and take priority over automatic uploads.
+Interrupted publication operations replay safely before the linked deck is unpublished,
+and removal targets the latest linked revision. Stale saves cannot republish a deleted
+master. Independent copies and print projects do not remove someone else's upload.
+Deleting or moving a file outside Manaforge does not trigger remote removal.

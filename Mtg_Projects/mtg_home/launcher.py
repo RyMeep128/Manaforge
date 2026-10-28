@@ -74,11 +74,13 @@ class ModuleController(C.QObject):
                     window.print_project_handler = self.open_print_project
                     window.publish_deck_handler = self.publish_deck
                     window.library_sync_handler = self.queue_library_sync
+                    window.library_delete_handler = self.wake_library_sync
                     window.deck_libraries_provider = self.deck_libraries
                     window.publish_action.setEnabled(True)
                 elif module.action == 'printer':
                     from .printing import create_print_workspace
                     window = create_print_workspace(self.home)
+                    window.library_delete_handler = self.wake_library_sync
                 elif module.action == 'rules':
                     from .rules_workspace import RulesWorkspace
                     window = RulesWorkspace(self.service, self.show_home)
@@ -120,6 +122,10 @@ class ModuleController(C.QObject):
         if not journal.queue_master(snapshot['deck_id'], deck=snapshot, color_identity=color_identity,
                                     community=snapshot.get('_manual_category_evidence')):
             return
+        self.wake_library_sync()
+        self.home.statusBar().showMessage('Saved locally. Library update queued.', 8000)
+
+    def wake_library_sync(self):
         previous = self.home.current_workspace
         if 'library' not in self.windows:
             self.open_module('library')
@@ -128,7 +134,6 @@ class ModuleController(C.QObject):
         library = self.windows.get('library')
         if library is not None:
             library.master_timer.start(2000)
-        self.home.statusBar().showMessage('Saved locally. Library update queued.', 8000)
 
     def publish_deck(self, snapshot, color_identity, *, upload=False):
         self.open_module('library')
