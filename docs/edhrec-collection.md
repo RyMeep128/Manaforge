@@ -75,7 +75,7 @@ contributing independently.
 
 The expansion shares the original `edhrec-run/collector.lock`, `responses/`, and
 `STOP` file. Run only one EDHREC downloader at a time. It reuses the same serial
-six-second pacing, 8 MiB response limit, Retry-After behavior, and backoff.
+six-second default pacing, 8 MiB response limit, Retry-After behavior, and backoff.
 `edhrec-run/cohort-state.json` reports imported/skipped/pending counts and current
 work. Create `edhrec-run/STOP` to pause; remove that file and rerun to resume.
 The queue survives crashes without duplicate counts. Completed/skipped pages are
@@ -121,12 +121,20 @@ mismatched pages are skipped with their reason retained in the SQLite crawl tabl
 Other failures stop with a saved error and leave pending work resumable.
 
 This script shares the existing exclusive collector lock, STOP file, compressed
-response cache, serial six-second pacing, response-size limit, and retry/backoff
+response cache, serial six-second default pacing, response-size limit, and retry/backoff
 logic. **Do not run both collectors together.** To switch, create `edhrec-run/STOP`,
 wait for the active collector to exit, remove STOP, then run the command above.
 To resume, rerun the same command; raise `--max-pages` when its total successful-page
 bound has been reached. The default is 250,000 processed pages and `--max-gb 20`
 limits the shared compressed response storage. No automatic scheduling is installed.
+
+Both cohort scripts accept `--delay SECONDS`, with a default of 6 and a minimum of 1.
+For example, append `--delay 3` for a three-second interval, or `--delay 2` / `--delay 1`.
+The interval is measured between network request starts; cached reads do not wait.
+Retry-After and error backoff can extend it. The configured delay is included in
+the progress JSON. Changing the interval requires pausing and restarting the collector.
+This is an operator-selected interval, not a published EDHREC request quota.
+The general commander and other provider collectors retain their existing pacing.
 
 Collection is preparation for combined audience selection. The recommendation UI
 and distributable recommendation packs do not consume this new snapshot yet.

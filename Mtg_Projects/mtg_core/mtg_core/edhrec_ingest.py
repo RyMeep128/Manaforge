@@ -6,6 +6,7 @@ import gzip
 import hashlib
 import http.client
 import json
+import math
 from pathlib import Path
 import re
 import sqlite3
@@ -230,13 +231,16 @@ def reprocess_cached(root, catalog):
 
 
 class Downloader:
+    minimum_delay = 6
     validate_page = staticmethod(page_path)
 
     def __init__(self, root, delay=6, *, source="EDHREC", max_bytes=MAX_BYTES):
         self.root = Path(root)
         self.source = source
         self.max_bytes = max_bytes
-        self.delay = max(6, delay)
+        if not math.isfinite(delay) or delay < 0:
+            raise ValueError("Request delay must be finite and nonnegative")
+        self.delay = max(self.minimum_delay, delay)
         self.last = 0.0
         (self.root / "responses").mkdir(parents=True, exist_ok=True)
 

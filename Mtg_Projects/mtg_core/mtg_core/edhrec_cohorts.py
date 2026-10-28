@@ -5,6 +5,7 @@ from contextlib import closing
 import gzip
 import hashlib
 import json
+import math
 from pathlib import Path
 import re
 import sqlite3
@@ -28,6 +29,7 @@ def cohort_path(page):
 
 
 class CohortDownloader(Downloader):
+    minimum_delay = 1
     validate_page = staticmethod(cohort_path)
 
 
@@ -106,14 +108,16 @@ def cohort_options(path):
         return db.execute("SELECT kind,value,min(label) FROM cohorts GROUP BY kind,value ORDER BY kind,min(label)").fetchall()
 
 
-def collect(root, catalog, *, max_pages=250000, max_gb=20, combinations=False):
+def collect(root, catalog, *, max_pages=250000, max_gb=20, combinations=False, delay=6):
+    if not math.isfinite(delay) or delay < 1:
+        raise ValueError("Request delay must be finite and at least one second")
     root = Path(root)
     state_path = root / ("combination-state.json" if combinations else "cohort-state.json")
-    downloader = CombinationDownloader(root) if combinations else CohortDownloader(root)
+    downloader = CombinationDownloader(root, delay) if combinations else CohortDownloader(root, delay)
     checkpoint = json.loads((root / "state.json").read_text(encoding="utf-8"))
     names, _ = catalog_index(catalog)
     target = root.parent / ("edhrec-combinations.sqlite3" if combinations else "edhrec-cohorts.sqlite3")
-    state = dict(status="indexing", imported=0, skipped=0, pending=0, current=None)
+    state = dict(status="indexing", imported=0, skipped=0, pending=0, current=None, delay=delay)
     cache_bytes = sum(path.stat().st_size for path in (root / "responses").glob("*.json.gz"))
 
     with closing(connect(target)) as db:
@@ -231,12 +235,16 @@ def main(*, combinations=False):
     parser.add_argument("--catalog", type=Path, default=core_data_root() / "card_data.sqlite3")
     parser.add_argument("--max-pages", type=int, default=250000)
     parser.add_argument("--max-gb", type=float, default=20)
+    parser.add_argument("--delay", type=float, default=6,
+                        help="Seconds between network request starts (minimum 1; default 6)")
     args = parser.parse_args()
     if args.max_pages <= 0 or not 0 < args.max_gb < float("inf"):
         parser.error("Collection bounds must be positive and finite")
+    if not math.isfinite(args.delay) or args.delay < 1:
+        parser.error("--delay must be finite and at least one second")
     with collector_lock(args.root):
         print(json.dumps(collect(args.root, args.catalog, max_pages=args.max_pages, max_gb=args.max_gb,
-                                 combinations=combinations), indent=2))
+                                 combinations=combinations, delay=args.delay), indent=2))
 
 
 if __name__ == "__main__":

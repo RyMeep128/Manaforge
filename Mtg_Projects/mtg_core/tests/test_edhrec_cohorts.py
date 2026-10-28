@@ -81,6 +81,36 @@ def test_invalid_cohort_setting_fails_explicitly(tmp_path):
         EdhrecSource(tmp_path / "edhrec.sqlite3", cohort="theme:../../secret")
 
 
+@pytest.mark.parametrize("delay", [1, 2, 3, 6])
+def test_configurable_pacing_applies_only_to_network_requests(tmp_path, monkeypatch, delay):
+    from unittest.mock import MagicMock
+    from mtg_core.edhrec_ingest import Downloader
+
+    response = MagicMock()
+    response.__enter__.return_value.read.return_value = b'{"ok":true}'
+    opener = MagicMock()
+    opener.open.return_value = response
+    monkeypatch.setattr("urllib.request.build_opener", lambda *args: opener)
+    monkeypatch.setattr("mtg_core.edhrec_ingest.time.monotonic", lambda: 100)
+    downloader = CohortDownloader(tmp_path, delay=delay)
+    waits = []
+    monkeypatch.setattr(downloader, "wait", waits.append)
+    downloader.fetch("commanders/a/tokens.json")
+    downloader.fetch("commanders/b/tokens.json")
+    downloader.fetch("commanders/a/tokens.json")
+    assert waits == [0, delay]
+    assert opener.open.call_count == 2
+    assert Downloader(tmp_path).delay == 6
+    assert Downloader(tmp_path, delay=1).delay == 6
+
+
+@pytest.mark.parametrize("delay", [0, -1, float("nan"), float("inf")])
+def test_invalid_pacing_is_rejected_before_collection(tmp_path, delay):
+    with pytest.raises(ValueError, match="delay"):
+        collect(tmp_path / "not-created", tmp_path / "catalog", delay=delay)
+    assert not (tmp_path / "not-created").exists()
+
+
 def test_combination_traversal_uses_conditional_counts_and_canonical_order():
     children = list(combination_children(page(), "bracket", "upgraded", "Bracket 3"))
     assert [(key, route) for key, route, _ in children] == [
