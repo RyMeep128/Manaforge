@@ -255,7 +255,10 @@ def test_modes_preserve_categories_and_filter_role_overlap_in_ranked_order(edito
     panel.browse_modes.setCurrentIndex(1)
     assert panel.selected_category == "Top Cards"
     panel.change_category("Role: Draw")
-    assert [entry.entry_id for entry in panel.canvas.document.deck.entries] == ["e2", "e3"]
+    assert [entry.entry_id for entry in panel.canvas.document.deck.entries] == [
+        "e2",
+        "e3",
+    ]
     panel.browse_modes.setCurrentIndex(0)
     assert panel.selected_category == "Creatures"
     assert panel.shown_limit == 100
@@ -272,8 +275,13 @@ def test_modes_preserve_categories_and_filter_role_overlap_in_ranked_order(edito
 def test_legacy_filters_and_missing_audience_are_preserved(editor):
     panel = editor.recommendation_panel
     editor.document.editor_preferences.update(
-        recommendation_browse=dict(category="Utility Lands", kind="Land", role="Ramp",
-                                   positions={"Utility Lands": [20, 100]}, sidebar=False),
+        recommendation_browse=dict(
+            category="Utility Lands",
+            kind="Land",
+            role="Ramp",
+            positions={"Utility Lands": [20, 100]},
+            sidebar=False,
+        ),
         edhrec_cohort="theme:missing-theme",
     )
     panel.restore_view()
@@ -284,7 +292,9 @@ def test_legacy_filters_and_missing_audience_are_preserved(editor):
     assert panel.role_filter.currentText() == "Ramp"
     assert panel.audience.currentData() == "theme:missing-theme"
     panel.save_view()
-    assert editor.document.editor_preferences["recommendation_browse"]["sidebar"] is False
+    assert (
+        editor.document.editor_preferences["recommendation_browse"]["sidebar"] is False
+    )
     assert editor.document.editor_preferences["edhrec_cohort"] == "theme:missing-theme"
 
 
@@ -299,15 +309,23 @@ def test_inline_audience_applies_immediately_and_undo_restores_selection(editor)
     panel.suspend()
 
 
-def test_audience_loading_handles_missing_cache_and_rejects_stale_results(editor, monkeypatch):
+def test_audience_loading_handles_missing_cache_and_rejects_stale_results(
+    editor, monkeypatch
+):
     from mtg_editor.tasks import Task
     from mtg_core import edhrec_cohorts
     import sqlite3
 
     panel = editor.recommendation_panel
     monkeypatch.setattr(Task, "start", lambda self: None)
-    monkeypatch.setattr(edhrec_cohorts, "cohort_options", lambda path: [
-        ("theme", "tokens", "Tokens"), ("bracket", "core", "Bracket 2: Core")])
+    monkeypatch.setattr(
+        edhrec_cohorts,
+        "cohort_options",
+        lambda path: [
+            ("theme", "tokens", "Tokens"),
+            ("bracket", "core", "Bracket 2: Core"),
+        ],
+    )
     panel.load_audiences(("first",))
     worker = panel.audience_worker
     options = worker.work()
