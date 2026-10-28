@@ -12,7 +12,7 @@ GITHUB_REPOSITORY = "RyMeep128/branch_print-proxy-prep-QtPort"
 [[d1_databases]]
 binding = "REPORTS"
 database_name = "manaforge-feedback"
-database_id = "REPLACE_WITH_DATABASE_ID"
+database_id = "b0b96201-d0ef-405e-8c61-396ee2e75bdb"
 
 [[ratelimits]]
 name = "RATE_LIMITER"
