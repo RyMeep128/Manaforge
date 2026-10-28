@@ -137,15 +137,19 @@ def submit(report, endpoint=None, invite=None):
         raise ValueError('Feedback is not configured. Your report is saved; ask the maintainer for setup help.')
     if report.get('status') == 'submitted':
         return dict(id=report['id'], reference=report['reference'])
+    invitation = invite or os.environ.get('MANAFORGE_FEEDBACK_INVITE', '')
+    if not invitation:
+        raise ValueError('The feedback invitation is not configured. Ask the maintainer to set it up, then restart Manaforge.')
     payload = validate_report(report)
     data = json.dumps(payload).encode('utf-8')
     request = Request(endpoint, data=data, headers={'Content-Type': 'application/json',
-        'X-Feedback-Invite': invite or os.environ.get('MANAFORGE_FEEDBACK_INVITE', '')}, method='POST')
+        'X-Feedback-Invite': invitation}, method='POST')
     try:
         with build_opener(NoRedirect()).open(request, timeout=25) as response:
             result = json.loads(response.read(8192))
     except HTTPError as exc:
-        messages = {403: 'The feedback invitation is unavailable. Ask the maintainer for help.',
+        messages = {404: 'The feedback server address is incorrect. Check that it ends in /feedback.',
+                    403: 'The feedback invitation is unavailable. Ask the maintainer for help.',
                     409: 'Your report is stored on the server and needs maintainer confirmation. Keep this report.',
                     429: 'Too many reports were sent recently. Please try again in a minute.',
                     503: 'The feedback service could not confirm submission. Please try again later.'}

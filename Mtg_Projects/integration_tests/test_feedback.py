@@ -41,7 +41,7 @@ def test_transport_redacts_and_preserves_stable_id(monkeypatch):
             requests.append(json.loads(request.data))
             return Response()
     monkeypatch.setattr(service, 'build_opener', lambda *args: Opener())
-    assert service.submit(report, 'https://example.com/feedback')['reference'] == '42'
+    assert service.submit(report, 'https://example.com/feedback', invite='test-invitation')['reference'] == '42'
     assert requests[0]['id'] == report['id']
     assert 'verysecret' not in requests[0]['description']
     assert 'person@example.com' not in requests[0]['description']
@@ -91,7 +91,7 @@ def test_submitted_report_does_not_make_network_request(monkeypatch):
     report = complete_report()
     report.update(status='submitted', reference='42')
     monkeypatch.setattr(service, 'build_opener', lambda *args: pytest.fail('Already sent'))
-    assert service.submit(report, 'https://example.com/feedback')['reference'] == '42'
+    assert service.submit(report, 'https://example.com/feedback', invite='test-invitation')['reference'] == '42'
 
 
 @pytest.mark.parametrize('field,limit', [('description', 12000), ('steps', 8000), ('diagnostics', 50000)])
@@ -168,6 +168,13 @@ def test_dialog_failure_saves_report_without_showing_network_exception(tmp_path)
     assert loaded['id'] == report_id
     assert loaded['diagnostics'] == 'sanitized attachment'
     assert 'Traceback' not in dialog.notice.text()
+    assert loaded['last_error'] == dialog.failure_notice.text()
+    dialog.save()
+    assert dialog.failure_notice.text() == loaded['last_error']
+    reopened = FeedbackDialog(report=loaded)
+    assert reopened.failure_notice.text() == loaded['last_error']
+    reopened._diag_started = True
+    reopened.deleteLater()
     dialog._diag_started = True  # Keep collection scheduling out of synchronous UI contract tests.
     dialog.deleteLater()
     app.processEvents()
@@ -187,3 +194,10 @@ def test_total_encoded_payload_limit_includes_unicode_expansion():
     report['diagnostics'] = '\U0001f600' * 50000
     with pytest.raises(ValueError, match='too large'):
         service.validate_report(report)
+
+
+def test_missing_invitation_explains_setup_without_network(monkeypatch):
+    monkeypatch.delenv('MANAFORGE_FEEDBACK_INVITE', raising=False)
+    monkeypatch.setattr(service, 'build_opener', lambda *args: pytest.fail('Must not send without invitation'))
+    with pytest.raises(ValueError, match='invitation is not configured'):
+        service.submit(complete_report(), 'https://example.com/feedback')

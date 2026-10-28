@@ -39,6 +39,14 @@ class FeedbackDialog(W.QDialog):
         font.setBold(True)
         intro.setFont(font)
         layout.addWidget(intro)
+        self.failure_notice = W.QLabel()
+        self.failure_notice.setTextFormat(C.Qt.TextFormat.PlainText)
+        self.failure_notice.setWordWrap(True)
+        self.failure_notice.setProperty('role', 'warning')
+        self.failure_notice.setTextInteractionFlags(C.Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.failure_notice.setText(self.report.get('last_error', '') or ('The previous attempt failed. Retry to see the current reason.' if self.report.get('status') == 'failed' else ''))
+        self.failure_notice.setVisible(bool(self.failure_notice.text()))
+        layout.addWidget(self.failure_notice)
         self.editor = W.QWidget()
         body = W.QVBoxLayout(self.editor)
         body.setContentsMargins(0, 0, 0, 0)
@@ -310,6 +318,9 @@ class FeedbackDialog(W.QDialog):
             state = 'failed'
         if state == 'completed':
             self.report.update(status='submitted', reference=str(result['reference']))
+            self.report.pop('last_error', None)
+            self.failure_notice.clear()
+            self.failure_notice.hide()
             try:
                 self.store.save(self.report)
             except OSError:
@@ -319,6 +330,9 @@ class FeedbackDialog(W.QDialog):
             self._closing = True
         elif state in ('failed', 'cancelled'):
             self.report['status'] = 'failed'
+            self.report['last_error'] = friendly_error or 'The feedback service could not confirm submission. Check your connection and try again.'
+            self.failure_notice.setText(self.report['last_error'])
+            self.failure_notice.show()
             saved = self.save()
             suffix = ' Your report has been saved, and you can try again later.' if saved else ' Your report is still open; save it before closing.'
             self.notice.setText("Couldn't send feedback." + suffix + (" " + friendly_error if friendly_error else ""))
@@ -370,6 +384,10 @@ def pending_reports(parent):
     layout = W.QVBoxLayout(dialog)
     items = W.QListWidget()
     layout.addWidget(items)
+    failure_detail = W.QLabel()
+    failure_detail.setWordWrap(True)
+    failure_detail.setTextFormat(C.Qt.TextFormat.PlainText)
+    layout.addWidget(failure_detail)
     store = Store()
     def refresh():
         items.clear()
@@ -379,6 +397,10 @@ def pending_reports(parent):
             items.addItem(item)
     def selected():
         return items.currentItem().data(C.Qt.ItemDataRole.UserRole) if items.currentItem() else None
+    def show_failure():
+        report = selected() or {}
+        failure_detail.setText(report.get('last_error', '') or ('The previous attempt failed. Review / retry to see the current reason.' if report.get('status') == 'failed' else ''))
+    items.currentItemChanged.connect(lambda current, previous: show_failure())
     def edit():
         if selected() and selected().get('status') == 'submitted':
             W.QMessageBox.information(dialog, 'Already sent', 'This feedback has already been sent. Reference: ' + str(selected().get('reference', '')))
