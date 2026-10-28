@@ -46,6 +46,10 @@ def help_workspace(parent=None):
     pending = W.QPushButton('Pending Feedback')
     pending.clicked.connect(lambda: pending_reports(page))
     actions.addWidget(pending)
+    from .whats_new import whats_new
+    highlights = W.QPushButton('What’s New')
+    highlights.clicked.connect(lambda: whats_new().show(page))
+    actions.addWidget(highlights)
     actions.addStretch()
     layout.addLayout(actions)
     shortcuts = W.QTextBrowser()
@@ -57,6 +61,8 @@ def help_workspace(parent=None):
 def add_shortcuts_help(window):
     from .feedback import FeedbackDialog, pending_reports
     menu = window.menuBar().addMenu('Help')
+    from .whats_new import whats_new
+    menu.addAction('What’s New', lambda: whats_new().show(window))
     menu.addAction('Send Feedback', lambda: FeedbackDialog(window).exec())
     menu.addAction('Pending Feedback', lambda: pending_reports(window))
     menu.addAction('Keyboard Shortcuts', lambda: W.QMessageBox.information(

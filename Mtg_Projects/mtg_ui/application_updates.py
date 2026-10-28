@@ -159,6 +159,13 @@ class ApplicationUpdates(C.QObject):
             self.start_install_worker(InstallWorker(result, parent=self))
 
     def verify_startup(self, initialize):
+        # Capture the previous installed version before successful cleanup removes
+        # the updater receipt. This also covers upgrades from before What's New.
+        try:
+            record = application_install.read_record() or {}
+            self.previous_startup_version = record.get('old_version')
+        except (OSError, ValueError):
+            self.previous_startup_version = None
         self.start_install_worker(InstallWorker(initialize=initialize, parent=self))
 
     def start_install_worker(self, worker):
@@ -195,6 +202,10 @@ class ApplicationUpdates(C.QObject):
         self.error = self.install_error
         if startup:
             self.detail = self.install_value or self.error
+            if not self.error:
+                from .whats_new import whats_new
+                whats_new().startup(W.QApplication.activeWindow(),
+                    previous=getattr(self, 'previous_startup_version', None))
         elif self.error:
             self.detail = self.error + ' Click to retry.'
         elif self.install_value:
