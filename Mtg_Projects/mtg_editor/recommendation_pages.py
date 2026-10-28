@@ -101,13 +101,13 @@ class RecommendationPages:
 
     def page(self, document, *, limit=50, kind='All Card Types', text='', role='All roles',
              membership=1, dismissed=(), category='Top Cards', identity=None, mana_value=-1,
-             theme=None, should_cancel=None):
+             theme=None, should_cancel=None, collection='Top Cards'):
         check_cancelled(should_cancel)
         # Quantity/printing changes that do not change membership can reuse pages.
         deck_key = tuple(sorted((e.oracle_id or '', e.card_id or '', ' '.join(e.name.casefold().split()))
                                 for e in document.deck.entries if e.quantity > 0))
         key = (deck_key, pool_context(document), limit, kind, text, role, membership, tuple(sorted(dismissed)), category,
-               identity, mana_value, json.dumps(theme, sort_keys=True))
+               identity, mana_value, json.dumps(theme, sort_keys=True), collection)
         # Shared evidence must be checked even for a previously viewed page:
         # disconnects, permission changes and expiry can invalidate it at any time.
         if key in self.cache and not any(row.get('source_evidence', {}).get('library')
@@ -116,7 +116,7 @@ class RecommendationPages:
             return deepcopy(self.cache[key])
         clauses, parameters = ['instr(text, ?) > 0'], [text.casefold().strip()]
         for column, value, all_value in [('types', kind, 'All Card Types'), ('roles', role, 'All roles'),
-                                         ('categories', category, None)]:
+                                         ('categories', category, None), ('categories', collection, 'Top Cards')]:
             if value != all_value:
                 clauses.append(f'EXISTS (SELECT 1 FROM json_each(cards.{column}) WHERE value=?)')
                 parameters.append(value)

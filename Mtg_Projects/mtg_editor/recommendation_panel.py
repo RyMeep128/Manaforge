@@ -1,6 +1,7 @@
 """Persistent, image-first recommendation browsing over the existing ranking engine."""
 
 from copy import deepcopy
+import sqlite3
 from threading import Event
 
 from PyQt6 import QtCore as C, QtGui as G, QtWidgets as W
@@ -12,12 +13,13 @@ from .canvas import CardCanvas
 from .card_drop import CardDropPanel, CardSearchEdit
 from .commander_selection import commanders
 from .organization import in_deck_entries, update_candidate_quantities
-from .recommendation_categories import CATEGORIES, card_types, matches
+from .recommendation_categories import CATEGORIES, TYPE_CATEGORIES_ORDER, card_types, matches
 from .recommendations import load_recommendations
 from .tasks import Task
 
 CARD_TYPES = (
     "Artifact",
+    "Battle",
     "Creature",
     "Enchantment",
     "Instant",
@@ -147,6 +149,12 @@ class RecommendationPanel(CardDropPanel):
         self.key = self.loaded_key = self.loaded_source_key = None
         self.rows, self.category_scroll = [], {}
         self.selected_category = "Top Cards"
+        self.browse_mode = "types"
+        self.mode_categories = {"types": "Top Cards", "roles": "Top Cards"}
+        self.available_roles = []
+        self.audience_generation = 0
+        self.audience_signature = None
+        self.audience_worker = None
         self.restore_category_position = None
         self.pages = None
         self.shown_limit = 50
@@ -183,13 +191,20 @@ class RecommendationPanel(CardDropPanel):
         self.text_filter.setMinimumHeight(32)
         self.text_filter.setMinimumWidth(0)
         self.text_filter.textChanged.connect(self.filter_rows)
-        self.sidebar_toggle = W.QToolButton()
-        self.sidebar_toggle.setText("\u2630")
-        self.sidebar_toggle.setToolTip("Toggle category sidebar")
-        self.sidebar_toggle.setCheckable(True)
-        self.sidebar_toggle.setChecked(True)
-        self.sidebar_toggle.setAccessibleName("Show category sidebar")
-        self.sidebar_toggle.toggled.connect(self.toggle_categories)
+        self.audience = W.QComboBox()
+        self.audience.setAccessibleName("Recommendation audience")
+        self.audience.setMinimumWidth(0)
+        self.audience.setSizeAdjustPolicy(W.QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self.audience.addItem("Audience: Automatic", "auto")
+        self.audience.addItem("Audience: General", "general")
+        self.audience.addItem("Audience: Follow global setting", "inherit")
+        self.audience.currentIndexChanged.connect(self.change_audience)
+        self.browse_modes = W.QTabBar()
+        self.browse_modes.addTab("Card Types")
+        self.browse_modes.addTab("Card Roles")
+        self.browse_modes.setExpanding(False)
+        self.browse_modes.setAccessibleName("Recommendation browsing mode")
+        self.browse_modes.currentChanged.connect(self.change_mode)
         self.filters_button = W.QToolButton()
         self.filters_button.setText("Filters")
         self.filters_button.setCheckable(True)
@@ -200,17 +215,11 @@ class RecommendationPanel(CardDropPanel):
         )
         menu = W.QMenu(self.advanced_button)
         menu.addAction("Change Commander / Theme", self.open_discovery)
-        menu.addAction("EDHREC audience…", self.choose_audience)
         menu.addAction("Local Card Search", self.open_search)
         menu.addAction("Refresh cached recommendations", self.request_refresh)
         self.advanced_button.setMenu(menu)
-        self.cohort_status = W.QLabel(
-            "EDHREC audience follows recommendation source settings."
-        )
-        self.cohort_status.setWordWrap(True)
-        self.cohort_status.setProperty("role", "muted")
-        body.addWidget(self.cohort_status)
         body.addLayout(self.controls_grid)
+        body.addWidget(self.browse_modes)
         self.filter_box = W.QWidget()
         self.filter_layout = W.QGridLayout(self.filter_box)
         self.filter_layout.setContentsMargins(0, 0, 0, 0)
@@ -225,6 +234,13 @@ class RecommendationPanel(CardDropPanel):
         self.role_filter = W.QComboBox()
         self.role_filter.addItem("All roles")
         self.role_filter.currentTextChanged.connect(self.filter_rows)
+        self.special_category = W.QComboBox()
+        self.special_category.setAccessibleName("Specialist recommendation category")
+        self.special_category.addItem("All collections", "Top Cards")
+        for label in CATEGORIES:
+            if label not in TYPE_CATEGORIES_ORDER:
+                self.special_category.addItem(label, label)
+        self.special_category.currentIndexChanged.connect(self.filter_rows)
         from .discovery_options import color_combo
 
         self.identity = color_combo()
@@ -243,6 +259,7 @@ class RecommendationPanel(CardDropPanel):
             self.type_filter,
             self.membership,
             self.role_filter,
+            self.special_category,
             self.identity,
             self.mana_value,
         ]
@@ -251,11 +268,16 @@ class RecommendationPanel(CardDropPanel):
         self.filter_box.hide()
         body.addWidget(self.filter_box)
         self.type_tabs = W.QTabBar()
-        self.type_tabs.hide()
+        self.type_tabs.setExpanding(False)
+        self.type_tabs.setUsesScrollButtons(True)
+        self.type_tabs.setAccessibleName("Recommendation categories")
+        self.type_tabs.currentChanged.connect(self.tab_category_changed)
+        body.addWidget(self.type_tabs)
         self.category_combo = W.QComboBox()
-        self.category_combo.addItems(CATEGORIES)
         self.category_combo.setAccessibleName("Recommendation category")
-        self.category_combo.currentTextChanged.connect(self.change_category)
+        self.category_combo.currentIndexChanged.connect(
+            lambda index: self.change_category(self.category_combo.itemData(index))
+        )
         self.category_combo.setMinimumWidth(0)
         self.category_combo.setMaximumWidth(175)
         self.category_combo.setSizeAdjustPolicy(
@@ -264,13 +286,6 @@ class RecommendationPanel(CardDropPanel):
         self.category_combo.setMinimumContentsLength(10)
         self.status = CompactLabel("Recommendations use local cached data.")
         results = W.QHBoxLayout()
-        self.categories = W.QListWidget()
-        self.categories.addItems(CATEGORIES)
-        self.categories.setFixedWidth(152)
-        self.categories.setAccessibleName("Recommendation categories")
-        self.categories.setCurrentRow(0)
-        self.categories.currentTextChanged.connect(self.change_category)
-        results.addWidget(self.categories)
         self.canvas = RecommendationCanvas(editor.thumbnails, self)
         self.canvas.quantityRequested.connect(self.add)
         self.canvas.detailsRequested.connect(self.inspect)
@@ -292,6 +307,7 @@ class RecommendationPanel(CardDropPanel):
         footer.addWidget(top)
         body.addLayout(footer)
         layout.addWidget(self.content, 1)
+        self.populate_navigation()
         self.reflow_controls()
         self.update_navigation()
 
@@ -305,15 +321,15 @@ class RecommendationPanel(CardDropPanel):
     def reflow_controls(self):
         widgets = [
             self.text_filter,
-            self.sidebar_toggle,
+            self.audience,
             self.category_combo,
             self.filters_button,
             self.advanced_button,
         ]
         for widget in widgets:
             self.controls_grid.removeWidget(widget)
-        self.controls_grid.setColumnStretch(0, 0)
-        self.controls_grid.setColumnStretch(1, 0)
+        for column in range(5):
+            self.controls_grid.setColumnStretch(column, 0)
         if self.width() < 600:
             self.controls_grid.addWidget(self.text_filter, 0, 0, 1, 4)
             for column, widget in enumerate(widgets[1:]):
@@ -325,13 +341,47 @@ class RecommendationPanel(CardDropPanel):
             self.controls_grid.setColumnStretch(0, 1)
 
     def update_navigation(self):
-        self.categories.setVisible(
-            self.width() >= 850 and self.sidebar_toggle.isChecked()
-        )
-        self.category_combo.show()
+        wide = self.width() >= max(850, self.type_tabs.sizeHint().width() + 24)
+        self.type_tabs.setVisible(wide)
+        self.category_combo.setVisible(not wide)
 
-    def toggle_categories(self, *_):
+    def populate_navigation(self):
+        choices = ([(label, label) for label in TYPE_CATEGORIES_ORDER]
+                   if self.browse_mode == "types" else
+                   [("Top Cards", "Top Cards"), *[(role, "Role: " + role) for role in self.available_roles]])
+        if self.selected_category not in [key for _, key in choices]:
+            choices.append((self.selected_category.removeprefix("Role: "), self.selected_category))
+        with C.QSignalBlocker(self.type_tabs), C.QSignalBlocker(self.category_combo):
+            while self.type_tabs.count():
+                self.type_tabs.removeTab(0)
+            self.category_combo.clear()
+            for label, key in choices:
+                index = self.type_tabs.addTab(label)
+                self.type_tabs.setTabData(index, key)
+                self.category_combo.addItem(label, key)
+            selected = self.category_combo.findData(self.selected_category)
+            self.type_tabs.setCurrentIndex(selected)
+            self.category_combo.setCurrentIndex(selected)
         self.update_navigation()
+
+    def tab_category_changed(self, index):
+        self.change_category(self.type_tabs.tabData(index))
+
+    def position_key(self, category=None):
+        return self.browse_mode + ":" + (category or self.selected_category)
+
+    def change_mode(self, index):
+        mode = "roles" if index == 1 else "types"
+        if mode == self.browse_mode:
+            return
+        self.category_scroll[self.position_key()] = (
+            self.canvas.verticalScrollBar().value(), self.shown_limit)
+        self.mode_categories[self.browse_mode] = self.selected_category
+        self.browse_mode = mode
+        self.selected_category = self.mode_categories.get(mode, "Top Cards")
+        self.restore_category_position, self.shown_limit = self.category_scroll.get(self.position_key(), (0, 50))
+        self.populate_navigation()
+        self.filter_rows(reset=False)
         self.save_view()
 
     def resizeEvent(self, event):
@@ -355,17 +405,14 @@ class RecommendationPanel(CardDropPanel):
     def change_category(self, category):
         if not category or category == self.selected_category:
             return
-        self.category_scroll[self.selected_category] = (
+        self.category_scroll[self.position_key()] = (
             self.canvas.verticalScrollBar().value(),
             self.shown_limit,
         )
         self.selected_category = category
-        with C.QSignalBlocker(self.categories), C.QSignalBlocker(self.category_combo):
-            found = self.categories.findItems(category, C.Qt.MatchFlag.MatchExactly)
-            if found:
-                self.categories.setCurrentItem(found[0])
-            self.category_combo.setCurrentText(category)
-        position, self.shown_limit = self.category_scroll.get(category, (0, 50))
+        self.mode_categories[self.browse_mode] = category
+        self.populate_navigation()
+        position, self.shown_limit = self.category_scroll.get(self.position_key(), (0, 50))
         self.restore_category_position = position
         self.filter_rows(reset=False)
         self.save_view()
@@ -373,60 +420,65 @@ class RecommendationPanel(CardDropPanel):
     def active(self):
         return self.isVisible() and not self.editor.closing
 
-    def choose_audience(self):
+    def change_audience(self, index):
+        value = self.audience.itemData(index)
+        if value is None:
+            return
+        if value != self.editor.document.editor_preferences.get("edhrec_cohort", "inherit"):
+            self.editor.edit(lambda document: document.editor_preferences.update(edhrec_cohort=value))
+
+    def sync_audience(self):
+        selected = self.editor.document.editor_preferences.get("edhrec_cohort", "inherit")
+        with C.QSignalBlocker(self.audience):
+            if self.audience.findData(selected) < 0:
+                self.audience.addItem("Audience: " + selected + " (unavailable)", selected)
+            self.audience.setCurrentIndex(self.audience.findData(selected))
+
+    def load_audiences(self, signature):
         from mtg_core.edhrec_cohorts import cohort_options
         from mtg_core.paths import core_data_root
 
-        def show(options):
-            choices = [
-                ("Follow global setting", "inherit"),
-                ("Automatic: match deck theme", "auto"),
-                ("General commander recommendations", "general"),
-            ]
-            choices.extend(
-                (f"{kind.title()}: {label}", f"{kind}:{value}")
-                for kind, value, label in options
-                if kind in ("bracket", "budget")
-            )
-            dialog = W.QDialog(self)
-            dialog.setWindowTitle("EDHREC audience for this deck")
-            layout = W.QFormLayout(dialog)
-            combo = W.QComboBox()
-            combo.setAccessibleName("EDHREC audience")
-            for label, value in choices:
-                combo.addItem(label, value)
-            selected = self.editor.document.editor_preferences.get(
-                "edhrec_cohort", "inherit"
-            )
-            if combo.findData(selected) < 0:
-                combo.addItem(f"{selected} (not cached yet)", selected)
-            combo.setCurrentIndex(combo.findData(selected))
-            layout.addRow("Audience", combo)
-            note = W.QLabel(
-                "Automatic uses the saved deck theme. Missing cohorts use general recommendations. Source enable/disable settings still apply."
-            )
-            note.setWordWrap(True)
-            layout.addRow(note)
-            buttons = W.QDialogButtonBox(
-                W.QDialogButtonBox.StandardButton.Save
-                | W.QDialogButtonBox.StandardButton.Cancel
-            )
-            buttons.accepted.connect(dialog.accept)
-            buttons.rejected.connect(dialog.reject)
-            layout.addRow(buttons)
-            if dialog.exec() == W.QDialog.DialogCode.Accepted:
-                self.editor.edit(
-                    lambda document: document.editor_preferences.update(
-                        edhrec_cohort=combo.currentData()
-                    )
-                )
+        if self.audience_worker is not None or signature == self.audience_signature:
+            self.sync_audience()
+            return
+        self.audience_signature = signature
+        self.audience_generation += 1
+        generation = self.audience_generation
 
-        self.editor.run_task(
-            lambda: cohort_options(
-                core_data_root() / "recommendations" / "edhrec-cohorts.sqlite3"
-            ),
-            show,
-        )
+        def show(options):
+            if generation != self.audience_generation or self.editor.closing:
+                return
+            choices = [
+                ("Audience: Automatic", "auto"),
+                ("Audience: General", "general"),
+                ("Audience: Follow global setting", "inherit"),
+            ]
+            with C.QSignalBlocker(self.audience):
+                self.audience.clear()
+                for label, value in choices:
+                    self.audience.addItem(label, value)
+                for kind in ("theme", "bracket", "budget"):
+                    group = [(value, label) for option_kind, value, label in options if option_kind == kind]
+                    if group:
+                        self.audience.insertSeparator(self.audience.count())
+                    for value, label in group:
+                        self.audience.addItem(f"{kind.title()}: {label}", f"{kind}:{value}")
+            self.sync_audience()
+
+        def read():
+            try:
+                return cohort_options(core_data_root() / "recommendations" / "edhrec-cohorts.sqlite3")
+            except (OSError, ValueError, sqlite3.DatabaseError):
+                return []
+
+        self.audience_worker = Task(read, self, operation="recommendation audiences")
+        self.audience_worker.completed.connect(lambda result, error: show(result or []))
+        self.audience_worker.finished.connect(self.audiences_finished)
+        self.audience_worker.start()
+
+    def audiences_finished(self):
+        self.audience_worker.deleteLater()
+        self.audience_worker = None
 
     def set_expanded(self, expanded):
         self.expanded = expanded
@@ -439,11 +491,12 @@ class RecommendationPanel(CardDropPanel):
         ):
             return
         positions = dict(self.category_scroll)
-        positions[self.selected_category] = (
+        positions[self.position_key()] = (
             self.canvas.verticalScrollBar().value(),
             self.shown_limit,
         )
-        value = dict(
+        value = dict(self.editor.document.editor_preferences.get("recommendation_browse", {}))
+        value.update(
             text=self.text_filter.text(),
             kind=self.type_filter.currentText(),
             role=self.role_filter.currentText(),
@@ -451,8 +504,10 @@ class RecommendationPanel(CardDropPanel):
             identity=self.identity.currentData(),
             mana_value=self.mana_value.value(),
             category=self.selected_category,
+            mode=self.browse_mode,
+            mode_categories=dict(self.mode_categories, **{self.browse_mode: self.selected_category}),
+            collection=self.special_category.currentData(),
             card_width=self.canvas.card_width,
-            sidebar=self.sidebar_toggle.isChecked(),
             positions={key: list(item) for key, item in positions.items()},
         )
         self.view_snapshot = deepcopy(value)
@@ -499,32 +554,36 @@ class RecommendationPanel(CardDropPanel):
                 max(0, self.identity.findData(value.get("identity")))
             )
             self.mana_value.setValue(value.get("mana_value", -1))
+        collection = value.get("collection", "Top Cards")
+        legacy_category = value.get("category", "Top Cards")
+        if "mode" not in value and legacy_category not in TYPE_CATEGORIES_ORDER:
+            collection = legacy_category
+            legacy_category = "Top Cards"
+        with C.QSignalBlocker(self.special_category):
+            if self.special_category.findData(collection) < 0:
+                self.special_category.addItem(collection, collection)
+            self.special_category.setCurrentIndex(self.special_category.findData(collection))
+        self.browse_mode = "roles" if value.get("mode") == "roles" else "types"
+        self.mode_categories = dict(value.get("mode_categories") or {})
+        with C.QSignalBlocker(self.browse_modes):
+            self.browse_modes.setCurrentIndex(int(self.browse_mode == "roles"))
         self.canvas.card_width = max(100, min(360, int(value.get("card_width", 270))))
         workspace = getattr(self.editor, "add_cards_workspace", None)
         if workspace is not None and workspace.expanded:
             with C.QSignalBlocker(workspace.zoom):
                 workspace.zoom.setValue(self.canvas.card_width)
             workspace.resize_cards()
-        with C.QSignalBlocker(self.sidebar_toggle):
-            self.sidebar_toggle.setChecked(value.get("sidebar", True))
-        self.update_navigation()
-        self.selected_category = value.get("category", "Top Cards")
+        self.selected_category = legacy_category
         self.category_scroll = {
-            key: tuple(item)
+            (key if key.startswith(("types:", "roles:")) else "types:" + key): tuple(item)
             for key, item in value.get("positions", {}).items()
             if isinstance(item, (list, tuple)) and len(item) == 2
         }
         self.restore_category_position, self.shown_limit = self.category_scroll.get(
-            self.selected_category, (0, 50)
+            self.position_key(), self.category_scroll.get("types:" + collection, (0, 50))
         )
         self.shown_limit = max(50, int(self.shown_limit))
-        with C.QSignalBlocker(self.categories), C.QSignalBlocker(self.category_combo):
-            found = self.categories.findItems(
-                self.selected_category, C.Qt.MatchFlag.MatchExactly
-            )
-            if found:
-                self.categories.setCurrentItem(found[0])
-            self.category_combo.setCurrentText(self.selected_category)
+        self.populate_navigation()
         return True
 
     def deck_changed(self):
@@ -588,6 +647,9 @@ class RecommendationPanel(CardDropPanel):
             if self.active()
             else (self.key[1][-1] if self.key is not None else ())
         )
+        self.sync_audience()
+        if self.active():
+            self.load_audiences(signature)
         current_source = source_key(self.editor.document, signature)
         key = (context_key(self.editor.document), current_source)
         changed = key != self.key
@@ -605,7 +667,7 @@ class RecommendationPanel(CardDropPanel):
                 previous_source is not None and previous_source != current_source
             ):
                 self.pages, self.rows = None, []
-                self.cohort_status.setText("EDHREC: updating audience…")
+                self.audience.setToolTip("Updating audience…")
                 if not restored:
                     self.category_scroll.clear()
                     self.shown_limit = 50
@@ -618,6 +680,7 @@ class RecommendationPanel(CardDropPanel):
             self.timer.start()
 
     def request_refresh(self):
+        self.audience_signature = None
         self.loaded_source_key = None
         self.loaded_key = None
         self.cancelled.set()
@@ -737,37 +800,30 @@ class RecommendationPanel(CardDropPanel):
         self.pages = snapshot["pages"]
         self.coverage = snapshot.get("coverage", "")
         self.edhrec_status = snapshot.get("edhrec_status", "")
-        self.cohort_status.setText("EDHREC: " + self.edhrec_status)
+        self.audience.setToolTip(self.edhrec_status)
         self.status.setToolTip("")
         current = self.role_filter.currentText()
         roles = snapshot["roles"]
+        self.available_roles = roles
         with C.QSignalBlocker(self.role_filter):
             self.role_filter.clear()
             self.role_filter.addItems(["All roles", *roles])
-            self.role_filter.setCurrentText(
-                current if current in roles else "All roles"
-            )
+            if self.role_filter.findText(current) < 0:
+                self.role_filter.addItem(current)
+            self.role_filter.setCurrentText(current)
         available = snapshot.get("categories", {})
-        labels = [
-            *CATEGORIES,
-            *sorted(label for label in available if label.startswith("EDHREC: ")),
-        ]
-        with C.QSignalBlocker(self.categories), C.QSignalBlocker(self.category_combo):
-            self.categories.clear()
-            self.category_combo.clear()
-            self.categories.addItems(labels)
-            self.category_combo.addItems(labels)
-            if self.selected_category not in labels:
-                self.selected_category = "Top Cards"
-            self.categories.setCurrentRow(labels.index(self.selected_category))
-            self.category_combo.setCurrentText(self.selected_category)
-            for index, label in enumerate(labels):
-                count = available.get(label, 0)
-                self.categories.item(index).setToolTip(
-                    f"{count} cached candidates before deck and browsing filters"
-                    if count
-                    else "No eligible cards in this snapshot"
-                )
+        with C.QSignalBlocker(self.special_category):
+            selected = self.special_category.currentData()
+            self.special_category.clear()
+            self.special_category.addItem("All collections", "Top Cards")
+            labels = [label for label in CATEGORIES if label not in TYPE_CATEGORIES_ORDER]
+            labels.extend(sorted(label for label in available if label.startswith("EDHREC: ")))
+            for label in labels:
+                self.special_category.addItem(label, label)
+            if self.special_category.findData(selected) < 0:
+                self.special_category.addItem(selected, selected)
+            self.special_category.setCurrentIndex(self.special_category.findData(selected))
+        self.populate_navigation()
         self.filter_rows(reset=False)
 
     def finished(self):
@@ -841,6 +897,7 @@ class RecommendationPanel(CardDropPanel):
             membership=self.membership.currentIndex(),
             dismissed=settings(document)["dismissed"],
             category=self.selected_category,
+            collection=self.special_category.currentData(),
             identity=self.identity.currentData(),
             mana_value=self.mana_value.value(),
             theme=deepcopy(self.theme_option),
@@ -911,6 +968,7 @@ class RecommendationPanel(CardDropPanel):
                     self.mana_value.value(),
                     self.theme_option,
                 )
+                and matches(row, self.special_category.currentData())
                 and (kind == "All Card Types" or kind in card_types(entry))
                 and (
                     not text
@@ -939,17 +997,20 @@ class RecommendationPanel(CardDropPanel):
         self.canvas.document.deck.entries = entries[: self.shown_limit]
         self.more.setVisible(more)
         count = len(self.canvas.document.deck.entries)
-        label = f"{self.selected_category}: {count} cards. "
-        label += "Scroll or Load More." if more else "All matching results loaded."
-        if self.theme_option:
-            label += (
-                " Companion card restrictions applied; use deck checks for complete requirements."
-                if self.theme_option.get("companion")
-                else " Theme matching uses EDHREC cohort membership and local mechanics/tags."
-            )
+        label = f"{self.selected_category.removeprefix('Role: ')} · {count} cards"
+        if more:
+            label += " · More available"
         if self.rows and all(row.get("fallback") for row in self.rows):
             label += " · Popular Cards"
-        self.status.setText(label + (" " + self.coverage if self.coverage else ""))
+        audience_status = self.edhrec_status.casefold()
+        if "disabled" in audience_status:
+            label += " · EDHREC disabled"
+        elif "unavailable" in audience_status and "using" in audience_status:
+            label += " · General audience fallback"
+        elif any(value in audience_status for value in ("unavailable", "no exact cached", "no cached edhrec")):
+            label += " · Audience unavailable"
+        self.status.setText(label)
+        self.status.setToolTip("\n".join(filter(None, (self.edhrec_status, self.coverage))))
         self.canvas.empty_message = (
             "No matching cards in this category. Clear a filter, change the theme, or use Local Card Search."
             if self.pages is not None

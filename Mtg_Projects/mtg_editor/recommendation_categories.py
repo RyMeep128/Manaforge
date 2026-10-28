@@ -11,16 +11,18 @@ from mtg_core.public_deck_datasets import STATISTICAL_SOURCES
 CATEGORIES = ("Top Cards", "New Cards", "High Lift", "Creatures", "Instants",
               "Sorceries", "Utility Artifacts", "Enchantments", "Planeswalkers",
               "Utility Lands", "Mana Artifacts", "Lands")
+TYPE_CATEGORIES_ORDER = ("Top Cards", "Creatures", "Instants", "Sorceries", "Artifacts",
+                         "Enchantments", "Planeswalkers", "Lands", "Battles")
 TYPE_CATEGORIES = {"Creature": "Creatures", "Instant": "Instants", "Sorcery": "Sorceries",
-                   "Enchantment": "Enchantments", "Planeswalker": "Planeswalkers", "Land": "Lands"}
+                   "Enchantment": "Enchantments", "Planeswalker": "Planeswalkers", "Land": "Lands",
+                   "Artifact": "Artifacts", "Battle": "Battles"}
 
 
 def card_types(entry):
     facts = entry.extras.get('facts') or {}
     lines = [facts.get('type_line') or ''] + [f.get('type_line') or '' for f in facts.get('card_faces') or []]
     return {word for line in lines for half in line.split('//')
-            for word in half.split('\u2014')[0].split()} & set(TYPE_CATEGORIES) | (
-                {'Artifact'} if any('Artifact' in line.split('\u2014')[0].split() for line in lines) else set())
+            for word in half.split('\u2014')[0].split()} & set(TYPE_CATEGORIES)
 
 
 def categories(row):
@@ -32,6 +34,7 @@ def categories(row):
     roles = {r['name'].casefold() for r in row.get('roles', [])}
     roles.update(role.casefold() for role in effects)
     result = {'Top Cards'} | {label for kind, label in TYPE_CATEGORIES.items() if kind in types}
+    result.update('Role: ' + role['name'] for role in row.get('roles', []) if role.get('name'))
     if 'Artifact' in types:
         mana = 'ramp' in roles
         if mana:

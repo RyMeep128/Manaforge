@@ -35,6 +35,27 @@ def test_high_lift_requires_same_source_baseline():
     assert 'High Lift' not in categories(row)
 
 
+def test_type_role_and_collection_filters_intersect_before_pagination():
+    pages = RecommendationPages()
+    rows = [candidate(i, 'Artifact Creature' if i % 2 else 'Battle', cmc=2) for i in range(140)]
+    for row in rows:
+        row['roles'] = [{'name': 'Ramp'}, {'name': 'Draw'}]
+        row['source_evidence'] = {'edhrec': {'categories': ['Theme Cards']}}
+    pages.append(rows)
+    document = DeckDocument()
+    artifacts, more = pages.page(document, category='Artifacts')
+    assert len(artifacts) == 50 and more
+    assert artifacts[0]['oracle_id'] == 'o1'
+    assert {'Artifacts', 'Creatures', 'Role: Ramp', 'Role: Draw'} <= categories(artifacts[0])
+    battles, more = pages.page(document, category='Battles', limit=100)
+    assert len(battles) == 70 and not more
+    assert battles[0]['oracle_id'] == 'o0'
+    role, more = pages.page(document, category='Role: Draw', kind='Artifact', collection='EDHREC: Theme Cards')
+    assert [row['oracle_id'] for row in role] == [row['oracle_id'] for row in artifacts]
+    assert more
+    assert not pages.page(document, category='Role: Draw', collection='High Lift')[0]
+
+
 def test_category_filters_before_pagination_and_excludes_alternate_printings():
     pages = RecommendationPages()
     rows = [candidate(i, 'Creature' if i % 2 else 'Instant', color_identity=['W'], cmc=2)

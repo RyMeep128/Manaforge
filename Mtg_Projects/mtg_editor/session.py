@@ -56,7 +56,7 @@ class DeckSession:
         update_default_name(document)
 
     def new(self):
-        self.replace_document(DeckDocument())
+        self.replace_document(DeckDocument(editor_preferences={'edhrec_cohort': 'auto'}))
 
     def edit(self, action) -> bool:
         def command(document):

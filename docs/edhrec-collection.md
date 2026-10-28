@@ -62,10 +62,11 @@ Invalid or missing pages are recorded in `crawl.error` and skipped; access denia
 and other terminal failures stop with a visible reason. Missing parent responses
 stop indexing rather than silently losing coverage.
 
-Use **More > Recommendation cache > Configure recommendation sources > EDHREC
-cohort** to choose a collected theme, bracket, or budget filter. Save and refresh
-recommendations to apply it. Choices appear as cohorts finish collecting. General
-commander recommendations remain the default. An unavailable exact filtered
+Use the inline **Audience** dropdown above recommendations to choose Automatic,
+General, or a collected theme, bracket, or budget audience. Changes apply immediately.
+Choices become available on refresh or returning to recommendations as cohorts finish
+collecting. New decks start on Automatic; existing deck and global source selections
+are preserved. An unavailable exact filtered
 commander/pair reports unavailable; it never silently substitutes a general page
 or a different cohort. Only one EDHREC cohort contributes to a ranking at a time;
 overlapping cohort sample counts are never summed. Evidence identifies the exact
@@ -226,10 +227,9 @@ redistribution, publishing, emailing, or recurring refresh is configured.
 
 ## Automatic cohorts
 
-The source dialog offers **Automatic: match deck theme** alongside General and
-specific collected cohorts. In the recommendation panel, **More > EDHREC audience**
-adds a per-deck override for Automatic, General, or a cached bracket/budget; Follow
-global setting is the default. Automatic selects the saved discovery theme for
+The source dialog retains global source settings. The inline **Audience** dropdown
+provides per-deck Automatic, General, theme, bracket, and budget choices, plus Follow
+global setting. Automatic selects the saved discovery theme for
 the exact commander or pair. A missing filtered cohort falls back to that same
 commander/pair's general page, with an explanation in the panel. Only one EDHREC
 cohort contributes to each run; other enabled sources still contribute normally.
@@ -237,3 +237,18 @@ cohort contributes to each run; other enabled sources still contribute normally.
 Returning to recommendations checks source settings and database/WAL publication
 metadata. Deck context changes and explicit Refresh also update the list. There
 is no polling while browsing and no collector restart or download on refresh.
+
+## Browsing recommendations
+
+Switch between **Card Types** and **Card Roles**, then select a category. Each mode
+starts with Top Cards and remembers its category, loaded page size, and scroll position
+per deck. Type categories include Artifacts and Battles; multi-type and multi-face
+cards can appear in multiple categories. Roles use the shared card classifications.
+All categories retain recommendation rank order.
+
+Wide panels show category tabs; compact panels use a category dropdown. Search stays
+visible. **Filters** retains membership, type, role, color identity, mana value,
+legality, and specialist collections such as New Cards, High Lift, Utility Lands,
+and EDHREC source categories. These filters intersect with the current mode category.
+Existing saved browsing filters are restored. The footer shows compact availability
+status; audience and source details remain in tooltips and card inspection.

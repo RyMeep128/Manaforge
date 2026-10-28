@@ -214,7 +214,7 @@ def test_category_browsing_does_not_consume_card_undo_and_repeat_add_is_ignored(
     assert editor.document.deck.entries[0].quantity == 1
 
 
-def test_compact_recommendations_prioritize_grid_and_allow_collapsing_categories(
+def test_compact_recommendations_prioritize_grid_and_use_responsive_categories(
     editor, monkeypatch
 ):
     panel = editor.recommendation_panel
@@ -228,21 +228,109 @@ def test_compact_recommendations_prioritize_grid_and_allow_collapsing_categories
     assert panel.canvas.card_width == 270
     assert panel.canvas.height() >= panel.height() * 0.75
     assert not hasattr(panel, "commander_art")
-    assert not panel.categories.isHidden()
-    old_width = panel.canvas.width()
-    panel.sidebar_toggle.setChecked(False)
-    W.QApplication.processEvents()
-    assert panel.categories.isHidden()
-    assert panel.canvas.width() > old_width
-    assert not panel.category_combo.isHidden()
+    assert not panel.type_tabs.isHidden()
+    assert panel.category_combo.isHidden()
+    assert not hasattr(panel, "categories")
+    assert not hasattr(panel, "cohort_status")
     assert panel.selected_category == "Top Cards"
     panel.resize(500, 700)
-    panel.sidebar_toggle.setChecked(True)
     W.QApplication.processEvents()
-    assert panel.categories.isHidden()
+    assert panel.type_tabs.isHidden()
     assert not panel.category_combo.isHidden()
+    assert panel.canvas.width() <= panel.width()
+    assert panel.audience.width() <= panel.width()
     panel.hide()
     panel.setParent(editor)
+
+
+def test_modes_preserve_categories_and_filter_role_overlap_in_ranked_order(editor):
+    panel = editor.recommendation_panel
+    panel.deck_changed()
+    panel.rows = [recommendation(2), recommendation(1), recommendation(3, "Instant")]
+    panel.rows[0]["roles"].append(dict(name="Draw"))
+    panel.rows[2]["roles"] = [dict(name="Draw")]
+    panel.available_roles = ["Draw", "Ramp"]
+    panel.change_category("Creatures")
+    panel.shown_limit = 100
+    panel.browse_modes.setCurrentIndex(1)
+    assert panel.selected_category == "Top Cards"
+    panel.change_category("Role: Draw")
+    assert [entry.entry_id for entry in panel.canvas.document.deck.entries] == ["e2", "e3"]
+    panel.browse_modes.setCurrentIndex(0)
+    assert panel.selected_category == "Creatures"
+    assert panel.shown_limit == 100
+    panel.browse_modes.setCurrentIndex(1)
+    assert panel.selected_category == "Role: Draw"
+    saved = deepcopy(editor.document.editor_preferences["recommendation_browse"])
+    panel.view_snapshot = None
+    assert panel.restore_view()
+    assert panel.browse_mode == "roles"
+    assert panel.selected_category == "Role: Draw"
+    assert editor.document.editor_preferences["recommendation_browse"] == saved
+
+
+def test_legacy_filters_and_missing_audience_are_preserved(editor):
+    panel = editor.recommendation_panel
+    editor.document.editor_preferences.update(
+        recommendation_browse=dict(category="Utility Lands", kind="Land", role="Ramp",
+                                   positions={"Utility Lands": [20, 100]}, sidebar=False),
+        edhrec_cohort="theme:missing-theme",
+    )
+    panel.restore_view()
+    panel.sync_audience()
+    assert panel.selected_category == "Top Cards"
+    assert panel.special_category.currentData() == "Utility Lands"
+    assert panel.type_filter.currentText() == "Land"
+    assert panel.role_filter.currentText() == "Ramp"
+    assert panel.audience.currentData() == "theme:missing-theme"
+    panel.save_view()
+    assert editor.document.editor_preferences["recommendation_browse"]["sidebar"] is False
+    assert editor.document.editor_preferences["edhrec_cohort"] == "theme:missing-theme"
+
+
+def test_inline_audience_applies_immediately_and_undo_restores_selection(editor):
+    panel = editor.recommendation_panel
+    panel.deck_changed()
+    assert panel.audience.currentData() == "auto"
+    panel.audience.setCurrentIndex(panel.audience.findData("general"))
+    assert editor.document.editor_preferences["edhrec_cohort"] == "general"
+    editor.undo()
+    assert panel.audience.currentData() == "auto"
+    panel.suspend()
+
+
+def test_audience_loading_handles_missing_cache_and_rejects_stale_results(editor, monkeypatch):
+    from mtg_editor.tasks import Task
+    from mtg_core import edhrec_cohorts
+    import sqlite3
+
+    panel = editor.recommendation_panel
+    monkeypatch.setattr(Task, "start", lambda self: None)
+    monkeypatch.setattr(edhrec_cohorts, "cohort_options", lambda path: [
+        ("theme", "tokens", "Tokens"), ("bracket", "core", "Bracket 2: Core")])
+    panel.load_audiences(("first",))
+    worker = panel.audience_worker
+    options = worker.work()
+    worker.completed.emit(options, "")
+    assert panel.audience.findData("theme:tokens") >= 0
+    assert panel.audience.findData("bracket:core") >= 0
+    panel.audiences_finished()
+
+    def locked(path):
+        raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr(edhrec_cohorts, "cohort_options", locked)
+    panel.load_audiences(("second",))
+    worker = panel.audience_worker
+    assert worker.work() == []
+    panel.audience_generation += 1
+    worker.completed.emit([], "")
+    assert panel.audience.findData("theme:tokens") >= 0
+    panel.audience_generation -= 1
+    worker.completed.emit([], "")
+    assert panel.audience.findData("theme:tokens") < 0
+    assert panel.audience.findData("auto") >= 0
+    panel.audiences_finished()
 
 
 def test_workspace_card_size_survives_return_to_quick_panel(editor, monkeypatch):
