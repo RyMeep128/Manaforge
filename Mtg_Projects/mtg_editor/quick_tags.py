@@ -245,6 +245,11 @@ class QuickTagMenu(W.QWidget):
         remove = choice.name.casefold() in self.shared_tags
         return ('− ' if remove else '+ ') + choice.name
 
+    def display_label(self, index, width):
+        """Fit the painted text while retaining the complete label for tooltips."""
+        return self.fontMetrics().elidedText(
+            self.label(index), C.Qt.TextElideMode.ElideRight, max(1, int(width)))
+
     def paintEvent(self, event):
         p = G.QPainter(self)
         p.setRenderHint(G.QPainter.RenderHint.Antialiasing)
@@ -269,7 +274,7 @@ class QuickTagMenu(W.QWidget):
                 p.rotate(rotation)
                 rect = C.QRectF(-label_width/2, -p.fontMetrics().height()/2, label_width, p.fontMetrics().height())
                 p.setPen(G.QColor('white'))
-                label = p.fontMetrics().elidedText(self.label(index), C.Qt.TextElideMode.ElideRight, int(label_width))
+                label = self.display_label(index, label_width)
                 p.drawText(rect, C.Qt.AlignmentFlag.AlignCenter, label)
                 p.restore()
         p.setPen(G.QPen(G.QColor(accent), 2))

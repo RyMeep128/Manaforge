@@ -230,16 +230,26 @@ def test_measured_radial_layout_corners_and_dynamic_choices(app, monkeypatch, co
     compact = menu.width()
     doc.deck.categories = populated(20).deck.categories
     doc.deck.entries = populated(20).deck.entries
+    menu.update_mode()
+    dense = menu.width()
     for category in doc.deck.categories:
         category.name = 'Graveyard Recursion ' + category.category_id
     menu.update_mode()
     assert menu.width() > compact
+    assert menu.width() == dense  # Long labels must not enlarge every wedge.
     assert menu.page_size == 20
     assert bounds.contains(menu.geometry())
     metrics = menu.fontMetrics()
     for start, count, lo, hi in menu.rings:
         for i in range(start, start + count):
-            assert hi - lo - 16 >= metrics.horizontalAdvance(menu.label(i))
+            width = hi - lo - 16
+            full_label = menu.label(i)
+            displayed = menu.display_label(i, width)
+            assert width >= metrics.horizontalAdvance(displayed)
+            if metrics.horizontalAdvance(full_label) > width:
+                assert displayed != full_label and displayed.endswith('…')
+            assert menu.label(i) == full_label
+    assert menu.display_label(0, 50) != menu.label(0)
     menu.deleteLater()
 
 

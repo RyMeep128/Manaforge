@@ -84,7 +84,7 @@ def context(document, proposals, records=None):
     return dict(
         gaps=gaps,
         themes=themes,
-        explicit_themes=list(document.editor_preferences.get('manual_themes', [])),
+        explicit_themes=list(document.editor_preferences.get("manual_themes", [])),
         archetypes=archetypes,
         average=composition["average_mana_value"],
         known=composition["known_mana_value"],
@@ -103,8 +103,12 @@ def score(row, deck_context, weights):
     }
     themes = [name for name in deck_context["themes"] if name.casefold() in role_names]
     from .discovery_themes import theme_matches
-    explicit = [theme['name'] for theme in deck_context.get('explicit_themes', [])
-                if theme_matches(row, theme)]
+
+    explicit = [
+        theme["name"]
+        for theme in deck_context.get("explicit_themes", [])
+        if theme_matches(row, theme)
+    ]
     archetypes = [
         kind
         for kind in deck_context["archetypes"]
