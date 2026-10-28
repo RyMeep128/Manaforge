@@ -89,6 +89,48 @@ pages take at least seven days; leave the computer running. No recurring refresh
 is installed. Local tests, linting, and formatting were not run for this change;
 offline regression coverage is supplied for CI.
 
+## Combined theme, bracket, and budget collection
+
+`tools/collect_edhrec_combinations.py` builds a separate snapshot of exact
+two- and three-filter audiences:
+
+```powershell
+& '.\Mtg_Projects\mtg_proxy\venv\Scripts\python.exe' tools/collect_edhrec_combinations.py --max-pages 10000
+```
+
+It starts from the existing general snapshot and its cached responses, visits
+theme/bracket pages, and follows their advertised nonempty filters in the canonical
+bracket/theme/budget order. It collects theme + budget, bracket + theme, bracket +
+budget, and bracket + theme + budget. It does not generate a Cartesian product,
+combine statistics from separate samples, or request arbitrary advanced filters.
+Combined children are prioritized so collection can produce combined data before
+processing every single-filter page. Already cached pages need no network request.
+
+The normalized data goes into `recommendations/edhrec-combinations.sqlite3` using
+the existing versioned cohort schema. Only combined audiences are published there.
+Each has `kind=combined`, a canonical dimension-qualified key such as
+`bracket:core|theme:tokens|budget:budget`, an explicit `cohort.filters` mapping,
+the exact EDHREC source path, sample counts, card statistics, and timestamps.
+Single-filter pages are traversal checkpoints, not combined recommendation evidence.
+Existing general and single-filter databases and their checkpoints are preserved.
+
+Progress is in `edhrec-run/combination-state.json`: `imported` counts all successfully
+processed traversal pages, while `combined_imported` counts stored combined audiences.
+The pending count can grow as pages advertise more children. Empty, missing, or
+mismatched pages are skipped with their reason retained in the SQLite crawl table.
+Other failures stop with a saved error and leave pending work resumable.
+
+This script shares the existing exclusive collector lock, STOP file, compressed
+response cache, serial six-second pacing, response-size limit, and retry/backoff
+logic. **Do not run both collectors together.** To switch, create `edhrec-run/STOP`,
+wait for the active collector to exit, remove STOP, then run the command above.
+To resume, rerun the same command; raise `--max-pages` when its total successful-page
+bound has been reached. The default is 250,000 processed pages and `--max-gb 20`
+limits the shared compressed response storage. No automatic scheduling is installed.
+
+Collection is preparation for combined audience selection. The recommendation UI
+and distributable recommendation packs do not consume this new snapshot yet.
+
 ## Offline commander/theme discovery
 
 Build the discovery snapshot explicitly from responses already collected:

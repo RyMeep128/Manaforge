@@ -31,6 +31,39 @@ class CohortDownloader(Downloader):
     validate_page = staticmethod(cohort_path)
 
 
+def combination_path(page):
+    if not isinstance(page, str) or not re.fullmatch(
+        r"commanders/[a-z0-9-]+(?:/[a-z0-9-]+){0,3}\.json", page
+    ):
+        raise ValueError(f"Unexpected EDHREC combination path: {page!r}")
+    return page
+
+
+class CombinationDownloader(CohortDownloader):
+    validate_page = staticmethod(combination_path)
+
+
+def combination_filters(kind, value):
+    """Explicit dimension keys avoid confusing a theme slug with a bracket slug."""
+    if kind != "combined":
+        return {kind: value}
+    return dict(part.split(":", 1) for part in value.split("|"))
+
+
+def combination_children(payload, kind, value, label):
+    """Traverse advertised nonempty filters once, in bracket/theme/budget order."""
+    dimensions = ("bracket", "theme", "budget")
+    selected = combination_filters(kind, value)
+    last = max(dimensions.index(key) for key in selected)
+    for child_kind, child_value, child_label in variants(payload):
+        if dimensions.index(child_kind) <= last:
+            continue
+        filters = dict(selected, **{child_kind: child_value})
+        key = "|".join(f"{dimension}:{filters[dimension]}" for dimension in dimensions if dimension in filters)
+        route = "/".join(filters[dimension] for dimension in dimensions if dimension in filters)
+        yield key, route, f"{label} / {child_label}"
+
+
 def variants(payload):
     """Only nonempty source-advertised filters; no speculative combinations."""
     tags = payload.get("tag_counts", payload.get("panels", {}).get("taglinks", []))
@@ -73,13 +106,13 @@ def cohort_options(path):
         return db.execute("SELECT kind,value,min(label) FROM cohorts GROUP BY kind,value ORDER BY kind,min(label)").fetchall()
 
 
-def collect(root, catalog, *, max_pages=250000, max_gb=20):
+def collect(root, catalog, *, max_pages=250000, max_gb=20, combinations=False):
     root = Path(root)
-    state_path = root / "cohort-state.json"
-    downloader = CohortDownloader(root)
+    state_path = root / ("combination-state.json" if combinations else "cohort-state.json")
+    downloader = CombinationDownloader(root) if combinations else CohortDownloader(root)
     checkpoint = json.loads((root / "state.json").read_text(encoding="utf-8"))
     names, _ = catalog_index(catalog)
-    target = root.parent / "edhrec-cohorts.sqlite3"
+    target = root.parent / ("edhrec-combinations.sqlite3" if combinations else "edhrec-cohorts.sqlite3")
     state = dict(status="indexing", imported=0, skipped=0, pending=0, current=None)
     cache_bytes = sum(path.stat().st_size for path in (root / "responses").glob("*.json.gz"))
 
@@ -89,6 +122,8 @@ def collect(root, catalog, *, max_pages=250000, max_gb=20):
             state["imported"] = db.execute("SELECT count(*) FROM crawl WHERE status='complete'").fetchone()[0]
             state["skipped"] = db.execute("SELECT count(*) FROM crawl WHERE status='skipped'").fetchone()[0]
             state["pending"] = db.execute("SELECT count(*) FROM crawl WHERE status='pending'").fetchone()[0]
+            if combinations:
+                state["combined_imported"] = db.execute("SELECT count(*) FROM cohorts WHERE kind='combined'").fetchone()[0]
             write_json(state_path, state)
 
         try:
@@ -107,6 +142,9 @@ def collect(root, catalog, *, max_pages=250000, max_gb=20):
                 payload = json.loads(raw)
                 with db:
                     for kind, value, label in variants(payload):
+                        if combinations and kind == "budget":
+                            # Budget is terminal in canonical traversal; no children to discover.
+                            continue
                         path = cohort_path(f"commanders/{slug}/{value}.json")
                         db.execute("INSERT OR IGNORE INTO crawl(path,slug,kind,value,label) VALUES (?,?,?,?,?)", (path, slug, kind, value, label))
                     db.execute("INSERT INTO seeds VALUES (?)", (slug,))
@@ -118,7 +156,9 @@ def collect(root, catalog, *, max_pages=250000, max_gb=20):
                 if state["imported"] >= max_pages or cache_bytes >= max_gb * 1024**3:
                     save("bounded")
                     break
-                item = db.execute("SELECT path,slug,kind,value,label FROM crawl WHERE status='pending' ORDER BY rowid LIMIT 1").fetchone()
+                order = "CASE WHEN kind='combined' THEN 0 ELSE 1 END,rowid" if combinations else "rowid"
+                item = db.execute("SELECT path,slug,kind,value,label FROM crawl WHERE status='pending' ORDER BY "
+                                  + order + " LIMIT 1").fetchone()
                 if item is None:
                     save("complete", current=None)
                     break
@@ -129,9 +169,12 @@ def collect(root, catalog, *, max_pages=250000, max_gb=20):
                 try:
                     payload = downloader.fetch(page)
                     source_path = page.removesuffix(".json")
+                    crumbs = payload["container"]["breadcrumb"]
+                    if combinations:
+                        crumbs = crumbs[-1:]
                     if not any(
                         isinstance(crumb, dict) and "/" + source_path in crumb
-                        for crumb in payload["container"]["breadcrumb"]
+                        for crumb in crumbs
                     ):
                         raise ValueError("Response does not identify the requested filtered cohort")
                     data = normalize(payload, lambda name: names.get(name.casefold()), slug)
@@ -142,6 +185,12 @@ def collect(root, catalog, *, max_pages=250000, max_gb=20):
                     if not base or parent is None or json.loads(parent[0])["slug"] != slug:
                         raise ValueError("Cohort does not match its cached commander identity")
                     data.update(cohort=dict(kind=kind, value=value, label=label), source_path=source_path)
+                    if combinations:
+                        data["cohort"]["filters"] = combination_filters(kind, value)
+                    children = [
+                        (combination_path(f"commanders/{slug}/{route}.json"), key, child_label)
+                        for key, route, child_label in combination_children(payload, kind, value, label)
+                    ] if combinations else []
                     for row in data["results"]:
                         row["edhrec_cohort"] = data["cohort"]
                 except urllib.error.HTTPError as exc:
@@ -154,12 +203,18 @@ def collect(root, catalog, *, max_pages=250000, max_gb=20):
                         db.execute("UPDATE crawl SET status='skipped',error=? WHERE path=?", (str(exc), page))
                 else:
                     with db:
-                        db.execute("INSERT OR REPLACE INTO cohorts VALUES (?,?,?,?,?,?)", (data["commander"], kind, value, label, json.dumps(data), time.time()))
+                        if not combinations or kind == "combined":
+                            db.execute("INSERT OR REPLACE INTO cohorts VALUES (?,?,?,?,?,?)", (data["commander"], kind, value, label, json.dumps(data), time.time()))
+                        for child_path, key, child_label in children:
+                            db.execute("INSERT OR IGNORE INTO crawl(path,slug,kind,value,label) VALUES (?,?,?,?,?)",
+                                       (child_path, slug, "combined", key, child_label))
                         db.execute("UPDATE crawl SET status='complete',error=NULL WHERE path=?", (page,))
                 if cached.exists():
                     cache_bytes += cached.stat().st_size - previous_bytes
                 save("running")
-                print(f"EDHREC cohorts: {state['imported']} imported, {state['skipped']} skipped, {state['pending']} pending", flush=True)
+                collector_label = "combinations" if combinations else "cohorts"
+                print(f"EDHREC {collector_label}: {state['imported']} processed, {state['skipped']} skipped, {state['pending']} pending"
+                      + (f", {state['combined_imported']} combined audiences stored" if combinations else ""), flush=True)
         except (InterruptedError, KeyboardInterrupt) as exc:
             save("paused", last_error=str(exc))
         except Exception as exc:
@@ -168,8 +223,10 @@ def collect(root, catalog, *, max_pages=250000, max_gb=20):
     return state
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+def main(*, combinations=False):
+    parser = argparse.ArgumentParser(description=(
+        "Collect exact combined EDHREC audiences into a separate resumable snapshot."
+        if combinations else __doc__))
     parser.add_argument("--root", type=Path, default=core_data_root() / "recommendations" / "edhrec-run")
     parser.add_argument("--catalog", type=Path, default=core_data_root() / "card_data.sqlite3")
     parser.add_argument("--max-pages", type=int, default=250000)
@@ -178,7 +235,8 @@ def main():
     if args.max_pages <= 0 or not 0 < args.max_gb < float("inf"):
         parser.error("Collection bounds must be positive and finite")
     with collector_lock(args.root):
-        print(json.dumps(collect(args.root, args.catalog, max_pages=args.max_pages, max_gb=args.max_gb), indent=2))
+        print(json.dumps(collect(args.root, args.catalog, max_pages=args.max_pages, max_gb=args.max_gb,
+                                 combinations=combinations), indent=2))
 
 
 if __name__ == "__main__":
