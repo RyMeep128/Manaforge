@@ -1,0 +1,5807 @@
+{
+  "analyzed_copies": 18846,
+  "card_copies": 18846,
+  "card_rows": 16399,
+  "catalog_sha256": "2466574d4c8870d115de5fedf1db69e1a85b9242c94a6ab336692aff423cc618",
+  "deck_results": [
+    {
+      "commanders": [
+        "Ashling, the Limitless"
+      ],
+      "context": {
+        "Draw": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "Sacrifice / Aristocrats": 8,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Sacrifice / Aristocrats",
+            "Tokens"
+          ],
+          "themes": [
+            "Counters",
+            "Graveyard",
+            "Sacrifice / Aristocrats",
+            "Tokens"
+          ],
+          "tribes": [
+            "elemental"
+          ]
+        }
+      },
+      "id": "0114544e86964fd884d3fcb45162ec88150868eb065bc8084b4187b42d9e9d4b",
+      "name": "Dance of the Elements",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Jirina Kudro"
+      ],
+      "context": {
+        "Anthem": 8,
+        "Draw": 3,
+        "Lifegain": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "Sacrifice / Aristocrats": 3,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Tokens"
+          ],
+          "themes": [
+            "Lifegain",
+            "Sacrifice / Aristocrats",
+            "Tokens",
+            "Voltron"
+          ],
+          "tribes": [
+            "human",
+            "soldier"
+          ]
+        }
+      },
+      "id": "020d8ed70e52ac5f8af8f6338733bd1788d2b8838781b07d8f03612ad0efe303",
+      "name": "Ruthless Regiment",
+      "unresolved": [
+        "Shared Animosity"
+      ]
+    },
+    {
+      "commanders": [
+        "Atraxa, Praetors' Voice"
+      ],
+      "context": {
+        "Counters": 8,
+        "Draw": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Counters",
+            "Keyword Soup"
+          ],
+          "themes": [
+            "Counters",
+            "Tokens"
+          ],
+          "tribes": [
+            "human"
+          ]
+        }
+      },
+      "id": "0605d46484a22b7c27c5173c52874e68635e66a499ac43f2282482b35beeeddc",
+      "name": "Breed Lethality",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Invisible Woman"
+      ],
+      "context": {
+        "Counters": 3,
+        "Draw": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "Spellslinger": 3,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Spellslinger",
+            "Tokens"
+          ],
+          "themes": [
+            "Counters",
+            "Graveyard",
+            "Spellslinger",
+            "Tokens"
+          ],
+          "tribes": [
+            "hero",
+            "human"
+          ]
+        }
+      },
+      "id": "08a400a385c7cec068bf6194628f291b93499207eced2f4023c617defa6707a9",
+      "name": "The Fantastic Four",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Terra, Herald of Hope"
+      ],
+      "context": {
+        "Counters": 3,
+        "Draw": 3,
+        "Graveyard": 8,
+        "Ramp": 3,
+        "Recursion": 8,
+        "Removal": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Graveyard",
+            "Reanimator"
+          ],
+          "themes": [
+            "Counters",
+            "Graveyard",
+            "Reanimator"
+          ],
+          "tribes": [
+            "human"
+          ]
+        }
+      },
+      "id": "090d14adea36a8e9109ec74b7b554b96e9f70df29cfbeea513e20629c68126dd",
+      "name": "Revival Trance Collector's Edition (FINAL FANTASY VI)",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Disa the Restless"
+      ],
+      "context": {
+        "Draw": 3,
+        "Graveyard": 3,
+        "Ramp": 3,
+        "Recursion": 3,
+        "Removal": 3,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Graveyard",
+            "Reanimator",
+            "Tokens"
+          ],
+          "themes": [
+            "Graveyard",
+            "Reanimator",
+            "Tokens"
+          ],
+          "tribes": [
+            "lhurgoyf"
+          ]
+        }
+      },
+      "id": "0944fe1cf3ede829380651637c987b66a94b9749c9e656fe1fa584a796071cd3",
+      "name": "Graveyard Overdrive",
+      "unresolved": [
+        "Sawhorn Nemesis"
+      ]
+    },
+    {
+      "commanders": [
+        "Freyalise, Llanowar's Fury"
+      ],
+      "context": {
+        "Anthem": 3,
+        "Counters": 3,
+        "Draw": 8,
+        "Ramp": 8,
+        "Removal": 8,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Tokens"
+          ],
+          "themes": [
+            "Counters",
+            "Graveyard",
+            "Tokens"
+          ],
+          "tribes": [
+            "beast",
+            "druid",
+            "elf",
+            "warrior"
+          ]
+        }
+      },
+      "id": "0a374e2358bac929ea7e32041585706102b142927c6e2cb2bc5fe35eeb5b219c",
+      "name": "Guided by Nature",
+      "unresolved": [
+        "Creeperhulk"
+      ]
+    },
+    {
+      "commanders": [
+        "Auntie Ool, Cursewretch"
+      ],
+      "context": {
+        "Draw": 8,
+        "Ramp": 3,
+        "Removal": 3,
+        "Sacrifice / Aristocrats": 3,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [
+            "Sacrifice / Aristocrats",
+            "Tokens"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "0b07d8772ff126ebfb4eb039ebc39fc165229c12b7cf2c40dbf1f3997b92b722",
+      "name": "Blight Curse",
+      "unresolved": [
+        "Tree of Perdition",
+        "Everlasting Torment",
+        "Lasting Tarfire",
+        "Kulrath Knight"
+      ]
+    },
+    {
+      "commanders": [
+        "Kitt Kanto, Mayhem Diva"
+      ],
+      "context": {
+        "Anthem": 3,
+        "Counters": 3,
+        "Draw": 3,
+        "Goad": 8,
+        "Ramp": 3,
+        "Removal": 3,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Goad",
+            "Tokens"
+          ],
+          "themes": [
+            "Counters",
+            "Goad",
+            "Tokens"
+          ],
+          "tribes": [
+            "human"
+          ]
+        }
+      },
+      "id": "0c101dc5a10cbfda35f5c749f10379e4b238ee196df92d3df20ce2aa964c7a6d",
+      "name": "Cabaretti Cacophony",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Edgar Markov"
+      ],
+      "context": {
+        "Counters": 8,
+        "Draw": 3,
+        "Lifegain": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "Sacrifice / Aristocrats": 3,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Counters",
+            "Tokens"
+          ],
+          "themes": [
+            "Counters",
+            "Lifegain",
+            "Sacrifice / Aristocrats",
+            "Tokens"
+          ],
+          "tribes": [
+            "shaman",
+            "vampire"
+          ]
+        }
+      },
+      "id": "0dc3f100f5032181236210b4d7f577b86af7b754016b0795fd4054605e91486f",
+      "name": "Vampiric Bloodlust",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Teval, the Balanced Scale"
+      ],
+      "context": {
+        "Draw": 3,
+        "Graveyard": 8,
+        "Ramp": 3,
+        "Recursion": 8,
+        "Removal": 3,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Graveyard",
+            "Reanimator",
+            "Tokens"
+          ],
+          "themes": [
+            "Counters",
+            "Graveyard",
+            "Reanimator",
+            "Tokens"
+          ],
+          "tribes": [
+            "druid",
+            "zombie"
+          ]
+        }
+      },
+      "id": "0ef7503a6825a32ee00d719e0a907c5a8b2aeda796da44c4379cc096901d6dd1",
+      "name": "Sultai Arisen",
+      "unresolved": [
+        "Lord of Extinction"
+      ]
+    },
+    {
+      "commanders": [
+        "Wilhelt, the Rotcleaver"
+      ],
+      "context": {
+        "Anthem": 3,
+        "Draw": 8,
+        "Graveyard": 3,
+        "Ramp": 3,
+        "Recursion": 3,
+        "Removal": 3,
+        "Sacrifice / Aristocrats": 8,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Sacrifice / Aristocrats",
+            "Tokens"
+          ],
+          "themes": [
+            "Graveyard",
+            "Mill",
+            "Sacrifice / Aristocrats",
+            "Tokens"
+          ],
+          "tribes": [
+            "wizard",
+            "zombie"
+          ]
+        }
+      },
+      "id": "0f06f6513e32a18ed4d9c3dc9ec4f4a4a68a19e66f5e29c96cad845830a22c48",
+      "name": "Undead Unleashed",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "T'Challa, the Black Panther"
+      ],
+      "context": {
+        "Counters": 8,
+        "Draw": 3,
+        "Ramp": 3,
+        "Recursion": 3,
+        "Removal": 3,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Counters",
+            "Tokens"
+          ],
+          "themes": [
+            "Counters",
+            "Graveyard",
+            "Keyword Soup",
+            "Tokens",
+            "Voltron"
+          ],
+          "tribes": [
+            "hero",
+            "human"
+          ]
+        }
+      },
+      "id": "0f0bc12af962382c89073f83ef1bb85c1ebe3a6b01d89c9b0e6bff07146f97e1",
+      "name": "Wakanda Forever Collector's Edition",
+      "unresolved": [
+        "Panther Robot"
+      ]
+    },
+    {
+      "commanders": [
+        "Dogmeat, Ever Loyal"
+      ],
+      "context": {
+        "Draw": 3,
+        "Enchantment Matters": 3,
+        "Equipment": 3,
+        "Graveyard": 8,
+        "Ramp": 3,
+        "Recursion": 8,
+        "Removal": 3,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Graveyard",
+            "Tokens"
+          ],
+          "themes": [
+            "Counters",
+            "Enchantment Matters",
+            "Graveyard",
+            "Reanimator",
+            "Tokens",
+            "Voltron"
+          ],
+          "tribes": [
+            "human"
+          ]
+        }
+      },
+      "id": "0f8e7eb57badc01d62cad3174228e30c018f77a2cb3c5dda8d1dc55009e679ab",
+      "name": "Scrappy Survivors",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Aesi, Tyrant of Gyre Strait"
+      ],
+      "context": {
+        "Draw": 8,
+        "Ramp": 8,
+        "Removal": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Landfall"
+          ],
+          "themes": [
+            "Counters",
+            "Landfall",
+            "Tokens"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "10259aa58d1e89726f7d6bcc921c517b7201c23f7ec6e4cd0869a5b34fc0fcb6",
+      "name": "Reap the Tides",
+      "unresolved": [
+        "Molimo, Maro-Sorcerer",
+        "Stormtide Leviathan"
+      ]
+    },
+    {
+      "commanders": [
+        "Satya, Aetherflux Genius"
+      ],
+      "context": {
+        "Draw": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Tokens"
+          ],
+          "themes": [
+            "Tokens"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "13815ee1779206462cf2da27e57183f21ce04a2db7269488adfa48f9c7e7d523",
+      "name": "Creative Energy Collector's Edition",
+      "unresolved": [
+        "Razorfield Ripper",
+        "Aethertide Whale",
+        "Decoction Module"
+      ]
+    },
+    {
+      "commanders": [
+        "Galea, Kindler of Hope"
+      ],
+      "context": {
+        "Card Advantage": 8,
+        "Draw": 3,
+        "Enchantment Matters": 3,
+        "Equipment": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [
+            "Enchantment Matters",
+            "Keyword Soup",
+            "Voltron"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "15c2b9d343f25554dd13d4a4cd840f73040a0fdc973253ea0d67d6d001203db8",
+      "name": "Aura of Courage",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Zhulodok, Void Gorger"
+      ],
+      "context": {
+        "Counters": 3,
+        "Draw": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [
+            "Counters",
+            "Graveyard",
+            "Tokens"
+          ],
+          "tribes": [
+            "eldrazi"
+          ]
+        }
+      },
+      "id": "16cacdbf69bb973b25c4ed8699e5623aedf1493c9243d14be767293aeb47f4d7",
+      "name": "Eldrazi Unbound",
+      "unresolved": [
+        "Skittering Cicada",
+        "Crashing Drawbridge",
+        "Suspicious Bookcase"
+      ]
+    },
+    {
+      "commanders": [
+        "Aminatou, the Fateshifter"
+      ],
+      "context": {
+        "Draw": 8,
+        "Lifegain": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [
+            "Graveyard",
+            "Lifegain"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "17fbdae93c9f7cec729b18bc0f246b2f4868f96a89fbb27dc5691f34ada9f3c3",
+      "name": "Subjective Reality",
+      "unresolved": [
+        "Djinn of Wishes",
+        "Magus of the Balance",
+        "Sower of Discord",
+        "Loyal Subordinate"
+      ]
+    },
+    {
+      "commanders": [
+        "Ob Nixilis of the Black Oath"
+      ],
+      "context": {
+        "Draw": 8,
+        "Lifegain": 8,
+        "Ramp": 3,
+        "Removal": 3,
+        "Sacrifice / Aristocrats": 8,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Lifegain",
+            "Sacrifice / Aristocrats",
+            "Tokens"
+          ],
+          "themes": [
+            "Graveyard",
+            "Lifegain",
+            "Reanimator",
+            "Sacrifice / Aristocrats",
+            "Tokens"
+          ],
+          "tribes": [
+            "demon",
+            "zombie"
+          ]
+        }
+      },
+      "id": "181a1fd8173aedb14a83a47f262232b275b6a29de69a676dcc65d7bf0622a7ab",
+      "name": "Sworn To Darkness",
+      "unresolved": [
+        "Nantuko Shade",
+        "Evernight Shade",
+        "Sudden Spoiling"
+      ]
+    },
+    {
+      "commanders": [
+        "Go-Shintai of Life's Origin"
+      ],
+      "context": {
+        "Counters": 3,
+        "Draw": 3,
+        "Enchantment Matters": 8,
+        "Lifegain": 3,
+        "Ramp": 3,
+        "Recursion": 8,
+        "Tokens": 8,
+        "Win Conditions": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Enchantment Matters",
+            "Graveyard",
+            "Reanimator",
+            "Tokens"
+          ],
+          "themes": [
+            "Counters",
+            "Enchantment Matters",
+            "Graveyard",
+            "Lifegain",
+            "Reanimator",
+            "Tokens",
+            "Voltron"
+          ],
+          "tribes": [
+            "human"
+          ]
+        }
+      },
+      "id": "197071b08e7bcfdb945b4a3d4e0de4a59fc93de0edc413577e6ffaaa822bbb47",
+      "name": "20 Ways to Win",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Satya, Aetherflux Genius"
+      ],
+      "context": {
+        "Draw": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Tokens"
+          ],
+          "themes": [
+            "Tokens"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "19f1674fb5ba94c4fbea671dd9b0c62a00aa9a040cd9b651ac05b5f60076c7a1",
+      "name": "Creative Energy",
+      "unresolved": [
+        "Razorfield Ripper",
+        "Aethertide Whale",
+        "Decoction Module"
+      ]
+    },
+    {
+      "commanders": [
+        "Kalemne, Disciple of Iroas"
+      ],
+      "context": {
+        "Board Wipes": 3,
+        "Draw": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [],
+          "tribes": [
+            "giant"
+          ]
+        }
+      },
+      "id": "1c3dc6b7fcb792792f37a08acc74bc7d38fe67f2d2db10264e1a41615686e008",
+      "name": "Wade into Battle",
+      "unresolved": [
+        "Hunted Dragon"
+      ]
+    },
+    {
+      "commanders": [
+        "Cloud, Ex-SOLDIER"
+      ],
+      "context": {
+        "Draw": 8,
+        "Equipment": 8,
+        "Ramp": 8,
+        "Recursion": 3,
+        "Removal": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Voltron"
+          ],
+          "themes": [
+            "Counters",
+            "Graveyard",
+            "Voltron"
+          ],
+          "tribes": [
+            "human",
+            "soldier"
+          ]
+        }
+      },
+      "id": "1e589b033d7e3d5ef1f33d2911afb44ba8a2c872a8749562602e643fdc55bcbf",
+      "name": "Limit Break (FINAL FANTASY VII)",
+      "unresolved": [
+        "Armory Automaton"
+      ]
+    },
+    {
+      "commanders": [
+        "Zaffai, Thunder Conductor"
+      ],
+      "context": {
+        "Copy": 3,
+        "Draw": 3,
+        "Graveyard": 3,
+        "Ramp": 3,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Spellslinger",
+            "Tokens"
+          ],
+          "themes": [
+            "Graveyard",
+            "Spellslinger",
+            "Tokens"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "1eb9fbc5e8b614f62e661e3bba94e20461884209dcca08839a75ab7cd40e32ee",
+      "name": "Prismari Performance",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Ghave, Guru of Spores"
+      ],
+      "context": {
+        "Counters": 8,
+        "Ramp": 3,
+        "Removal": 3,
+        "Sacrifice / Aristocrats": 8,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Counters",
+            "Sacrifice / Aristocrats",
+            "Tokens"
+          ],
+          "themes": [
+            "Counters",
+            "Sacrifice / Aristocrats",
+            "Tokens",
+            "Voltron"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "1fd698c088a2118deb937bd14434d5aba78dbfe0c2e139b7ca5c64e25615e2a9",
+      "name": "Counterpunch",
+      "unresolved": [
+        "Deadly Recluse",
+        "Alliance of Arms"
+      ]
+    },
+    {
+      "commanders": [
+        "Henzie \"Toolbox\" Torre"
+      ],
+      "context": {
+        "Draw": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [
+            "Counters",
+            "Graveyard",
+            "Tokens"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "22569b950fe3d9aa7c5c354165e8ac9a113bdfa94aff254e5bbdd435aefddf32",
+      "name": "Riveteers Rampage",
+      "unresolved": [
+        "Wave of Rats",
+        "Dodgy Jalopy",
+        "Next of Kin"
+      ]
+    },
+    {
+      "commanders": [
+        "Bello, Bard of the Brambles"
+      ],
+      "context": {
+        "Draw": 8,
+        "Enchantment Matters": 8,
+        "Ramp": 3,
+        "Removal": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Enchantment Matters",
+            "Keyword Soup"
+          ],
+          "themes": [
+            "Counters",
+            "Enchantment Matters",
+            "Tokens"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "23b174ef49f9517ffcf1d6d17d75da11533a2b6ff654e9b07bf68763a43d7b50",
+      "name": "Animated Army",
+      "unresolved": [
+        "Pyreswipe Hawk",
+        "Evercoat Ursine",
+        "Ghalta, Primal Hunger",
+        "Teapot Slinger"
+      ]
+    },
+    {
+      "commanders": [
+        "Galadriel, Elven-Queen"
+      ],
+      "context": {
+        "Counters": 8,
+        "Draw": 8,
+        "Ramp": 3,
+        "Removal": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Counters"
+          ],
+          "themes": [
+            "Counters",
+            "Tokens"
+          ],
+          "tribes": [
+            "elf"
+          ]
+        }
+      },
+      "id": "23e6afcc05086733ba8da5813a5443d454115d6ae51a31a4c65d58e375a0a49b",
+      "name": "Elven Council",
+      "unresolved": [
+        "Trap the Trespassers"
+      ]
+    },
+    {
+      "commanders": [
+        "Inquisitor Greyfax"
+      ],
+      "context": {
+        "Anthem": 8,
+        "Draw": 8,
+        "Lifegain": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [
+            "Graveyard",
+            "Lifegain",
+            "Sacrifice / Aristocrats",
+            "Tokens"
+          ],
+          "tribes": [
+            "astartes",
+            "human",
+            "soldier",
+            "warrior"
+          ]
+        }
+      },
+      "id": "24f40480c5531b4eec65fb6c003bc6bc87c1ce358cef4f04221eb2356e60ee5a",
+      "name": "Forces of the Imperium Collector's Edition",
+      "unresolved": [
+        "Knight Paladin"
+      ]
+    },
+    {
+      "commanders": [
+        "Eshki, Temur's Roar"
+      ],
+      "context": {
+        "Card Advantage": 3,
+        "Counters": 8,
+        "Draw": 8,
+        "Ramp": 3,
+        "Removal": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Counters"
+          ],
+          "themes": [
+            "Counters",
+            "Tokens"
+          ],
+          "tribes": [
+            "dragon"
+          ]
+        }
+      },
+      "id": "258b5e8e07648826bb7b60cf6b4a05a2911d04c999c213f2c67b93709e05e797",
+      "name": "Temur Roar",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Obuun, Mul Daya Ancestor"
+      ],
+      "context": {
+        "Counters": 8,
+        "Draw": 3,
+        "Ramp": 3,
+        "Recursion": 3,
+        "Removal": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Counters",
+            "Landfall"
+          ],
+          "themes": [
+            "Counters",
+            "Graveyard",
+            "Landfall",
+            "Tokens"
+          ],
+          "tribes": [
+            "elemental",
+            "human"
+          ]
+        }
+      },
+      "id": "25d3ac9248d7e00c633b169259954a2e8b1d7b398670e16885c5140a83c4a6dd",
+      "name": "Land's Wrath",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "The Ur-Dragon"
+      ],
+      "context": {
+        "Draw": 8,
+        "Ramp": 8,
+        "Removal": 3,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [
+            "Graveyard"
+          ],
+          "tribes": [
+            "dragon"
+          ]
+        }
+      },
+      "id": "2697dce8384bbc292485d64aefb53f9a08e550e417094feb171428e05b88db40",
+      "name": "Draconic Domination",
+      "unresolved": [
+        "Fist of Suns",
+        "Curse of Bounty"
+      ]
+    },
+    {
+      "commanders": [
+        "Temmet, Naktamun's Will"
+      ],
+      "context": {
+        "Anthem": 8,
+        "Draw": 8,
+        "Graveyard": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [
+            "Graveyard",
+            "Sacrifice / Aristocrats",
+            "Tokens"
+          ],
+          "tribes": [
+            "wizard",
+            "zombie"
+          ]
+        }
+      },
+      "id": "26f271a15848fac09724f44ca48cc130549d098a9b7ef5b619a2b47e52998e25",
+      "name": "Eternal Might",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Jeleva, Nephalia's Scourge"
+      ],
+      "context": {
+        "Draw": 3,
+        "Ramp": 8,
+        "Removal": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Spellslinger"
+          ],
+          "themes": [
+            "Graveyard",
+            "Spellslinger"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "27140538c90b89979299589d94152cb87b57091f33a52bbfc6ac911a54613577",
+      "name": "Mind Seize",
+      "unresolved": [
+        "Hooded Horror",
+        "Terra Ravager",
+        "Viseling",
+        "Sudden Spoiling",
+        "Price of Knowledge"
+      ]
+    },
+    {
+      "commanders": [
+        "Gonti, Canny Acquisitor"
+      ],
+      "context": {
+        "Draw": 3,
+        "Ramp": 8,
+        "Removal": 3,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [],
+          "tribes": [
+            "rogue"
+          ]
+        }
+      },
+      "id": "2765ab1088c20cba04acbb56e090520cf09ac9f87ca19cd2da5b822158bf065a",
+      "name": "Grand Larceny",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Daretti, Scrap Savant"
+      ],
+      "context": {
+        "Draw": 8,
+        "Ramp": 3,
+        "Recursion": 8,
+        "Removal": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Graveyard",
+            "Reanimator"
+          ],
+          "themes": [
+            "Graveyard",
+            "Reanimator",
+            "Tokens"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "278b2335a087ce9837b59741529d4410274328ccadd9a5d6c61dd2e168a393d8",
+      "name": "Built From Scratch",
+      "unresolved": [
+        "Liquimetal Coating",
+        "Bitter Feud"
+      ]
+    },
+    {
+      "commanders": [
+        "Marath, Will of the Wild"
+      ],
+      "context": {
+        "Board Wipes": 3,
+        "Counters": 8,
+        "Draw": 3,
+        "Ramp": 3,
+        "Removal": 8,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Counters",
+            "Tokens"
+          ],
+          "themes": [
+            "Counters",
+            "Landfall",
+            "Tokens"
+          ],
+          "tribes": [
+            "beast"
+          ]
+        }
+      },
+      "id": "28b523f9d17f787fdb6b6c5601869e29037686066f8f819f4a67fdd6df709710",
+      "name": "Nature of the Beast",
+      "unresolved": [
+        "Archangel",
+        "Witch Hunt"
+      ]
+    },
+    {
+      "commanders": [
+        "Nelly Borca, Impulsive Accuser"
+      ],
+      "context": {
+        "Draw": 8,
+        "Goad": 8,
+        "Ramp": 3,
+        "Removal": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Goad"
+          ],
+          "themes": [
+            "Goad",
+            "Tokens",
+            "Voltron"
+          ],
+          "tribes": [
+            "human"
+          ]
+        }
+      },
+      "id": "29234735725db494b344345ad99ed1e399d0186d225c066f42bb2812103a69d1",
+      "name": "Blame Game",
+      "unresolved": [
+        "Fiendish Duo",
+        "Deflecting Palm"
+      ]
+    },
+    {
+      "commanders": [
+        "Y'shtola, Night's Blessed"
+      ],
+      "context": {
+        "Draw": 8,
+        "Lifegain": 8,
+        "Ramp": 3,
+        "Removal": 3,
+        "Spellslinger": 8,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Lifegain",
+            "Spellslinger"
+          ],
+          "themes": [
+            "Counters",
+            "Graveyard",
+            "Lifegain",
+            "Spellslinger",
+            "Tokens",
+            "Voltron"
+          ],
+          "tribes": [
+            "wizard"
+          ]
+        }
+      },
+      "id": "29c1266f6ee136dee9d026f2159982535ca862fd57675ae818cc8eef80481ab8",
+      "name": "Scions & Spellcraft (FINAL FANTASY XIV)",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Ghired, Conclave Exile"
+      ],
+      "context": {
+        "Draw": 3,
+        "Lifegain": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Tokens"
+          ],
+          "themes": [
+            "Lifegain",
+            "Tokens"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "2c2a0e6a4c36449dbf38a15a0ab0de1b75d9713405dd27e495c84a432d880ad2",
+      "name": "Primal Genesis",
+      "unresolved": [
+        "Tahngarth, First Mate"
+      ]
+    },
+    {
+      "commanders": [
+        "Esika, God of the Tree"
+      ],
+      "context": {
+        "Anthem": 8,
+        "Card Advantage": 8,
+        "Draw": 3,
+        "Ramp": 8,
+        "Recursion": 3,
+        "Removal": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [
+            "Counters",
+            "Graveyard",
+            "Keyword Soup",
+            "Tokens"
+          ],
+          "tribes": [
+            "god",
+            "human"
+          ]
+        }
+      },
+      "id": "2d58af2ab73794548f893bb12e42773ece74cab0ce72ee9814e017d7b1193b64",
+      "name": "From Cute to Brute",
+      "unresolved": [
+        "Ludevic, Necrogenius"
+      ]
+    },
+    {
+      "commanders": [
+        "Derevi, Empyrial Tactician"
+      ],
+      "context": {
+        "Draw": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [
+            "Counters",
+            "Tokens",
+            "Voltron"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "2e9418172dea8b44f32a278fb471ae1ab29744b8b0985495780a84b57436d555",
+      "name": "Evasive Maneuvers",
+      "unresolved": [
+        "Thunderstaff"
+      ]
+    },
+    {
+      "commanders": [
+        "Saskia the Unyielding"
+      ],
+      "context": {
+        "Anthem": 3,
+        "Draw": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [
+            "Counters",
+            "Tokens",
+            "Voltron"
+          ],
+          "tribes": [
+            "human"
+          ]
+        }
+      },
+      "id": "3126cbcc3b19eed6dcf6741997789efe25ffe03600e2b0cc8e05553ebdbc039f",
+      "name": "Open Hostility",
+      "unresolved": [
+        "Wight of Precinct Six",
+        "Wilderness Elemental",
+        "Charging Cinderhorn",
+        "Everlasting Torment"
+      ]
+    },
+    {
+      "commanders": [
+        "Inspirit, Flagship Vessel"
+      ],
+      "context": {
+        "Counters": 8,
+        "Draw": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Artifacts",
+            "Counters",
+            "Keyword Soup"
+          ],
+          "themes": [
+            "Artifacts",
+            "Counters"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "3328d0549f7534090a400bcc8e0b41e616968f531ac45e1c17100fbae8f96a9d",
+      "name": "Counter Intelligence",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Sliver Gravemother"
+      ],
+      "context": {
+        "Anthem": 3,
+        "Draw": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Graveyard"
+          ],
+          "themes": [],
+          "tribes": [
+            "sliver"
+          ]
+        }
+      },
+      "id": "334d03fb0812e5090024860fd3d163216705bdcd1cee3f5b1478889938d70981",
+      "name": "Sliver Swarm",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Perrie, the Pulverizer"
+      ],
+      "context": {
+        "Counters": 3,
+        "Draw": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [
+            "Counters"
+          ],
+          "tribes": [
+            "human"
+          ]
+        }
+      },
+      "id": "33847ab245d7e6cea334fb369be9256f8f3e361beb45f3fa5abbfaef1799ea4e",
+      "name": "Bedecked Brokers",
+      "unresolved": [
+        "Aven Courier",
+        "Aven Mimeomancer",
+        "Denry Klin, Editor in Chief"
+      ]
+    },
+    {
+      "commanders": [
+        "Zinnia, Valley's Voice"
+      ],
+      "context": {
+        "Anthem": 3,
+        "Board Wipes": 3,
+        "Draw": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [
+            "Tokens"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "34b75858cf33da8470132f4e2bee64701c101de1296011195aacf9af1a028c12",
+      "name": "Family Matters",
+      "unresolved": [
+        "Devilish Valet",
+        "Junk Winder",
+        "Tetsuko Umezawa, Fugitive"
+      ]
+    },
+    {
+      "commanders": [
+        "Szarekh, the Silent King"
+      ],
+      "context": {
+        "Draw": 3,
+        "Graveyard": 8,
+        "Ramp": 3,
+        "Recursion": 3,
+        "Removal": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [
+            "Artifacts",
+            "Graveyard",
+            "Reanimator",
+            "Tokens"
+          ],
+          "tribes": [
+            "necron"
+          ]
+        }
+      },
+      "id": "370695b2ca36ac7aa497d981e42088beeb6d07d4eb1adeca7faab6e5bad1fb7b",
+      "name": "Necron Dynasties Collector's Edition",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Zndrsplt, Eye of Wisdom",
+        "Okaun, Eye of Chaos"
+      ],
+      "context": {
+        "Draw": 8,
+        "Equipment": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "Tutors": 3,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [
+            "Keyword Soup",
+            "Voltron"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "3707c880bfcf181a713122ab9e2efa98d37cf4a9e6f79a4e7a3d437ffecd8d3e",
+      "name": "Heads I Win, Tails You Lose",
+      "unresolved": [
+        "Krark's Thumb",
+        "Impulsive Maneuvers",
+        "Risky Move"
+      ]
+    },
+    {
+      "commanders": [
+        "Freyalise, Llanowar's Fury"
+      ],
+      "context": {
+        "Anthem": 3,
+        "Counters": 3,
+        "Draw": 8,
+        "Ramp": 8,
+        "Removal": 8,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Tokens"
+          ],
+          "themes": [
+            "Counters",
+            "Graveyard",
+            "Tokens"
+          ],
+          "tribes": [
+            "beast",
+            "druid",
+            "elf",
+            "warrior"
+          ]
+        }
+      },
+      "id": "3870926bb6f8c360c133c95d23f9aa409a620a8efd83a22c3fe37b3018879cf8",
+      "name": "Guided By Nature",
+      "unresolved": [
+        "Creeperhulk"
+      ]
+    },
+    {
+      "commanders": [
+        "Leinore, Autumn Sovereign"
+      ],
+      "context": {
+        "Counters": 8,
+        "Draw": 8,
+        "Ramp": 3,
+        "Removal": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Counters"
+          ],
+          "themes": [
+            "Counters",
+            "Graveyard",
+            "Tokens"
+          ],
+          "tribes": [
+            "human"
+          ]
+        }
+      },
+      "id": "3a83b5c00e72551b6de975c5f45d04e99f6e31b8543d7ba55f5308d951167200",
+      "name": "Coven Counters",
+      "unresolved": [
+        "Curse of Conformity"
+      ]
+    },
+    {
+      "commanders": [
+        "Ghalta, Primal Hunger"
+      ],
+      "context": {
+        "Counters": 3,
+        "Draw": 3,
+        "Lifegain": 3,
+        "Ramp": 3,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [
+            "Counters",
+            "Keyword Soup",
+            "Lifegain"
+          ],
+          "tribes": [
+            "dinosaur"
+          ]
+        }
+      },
+      "id": "3ae1bda417413a6bb393787b74305e526004f62a8108ae9686ff5e313165f618",
+      "name": "Tramplesaurus Rex",
+      "unresolved": [
+        "Steel Leaf Champion",
+        "Surrak, the Hunt Caller",
+        "Yeva, Nature's Herald",
+        "Challenger Troll"
+      ]
+    },
+    {
+      "commanders": [
+        "Dihada, Binder of Wills"
+      ],
+      "context": {
+        "Anthem": 3,
+        "Card Advantage": 8,
+        "Counters": 3,
+        "Draw": 3,
+        "Interaction": 8,
+        "Ramp": 8,
+        "Removal": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Graveyard",
+            "Keyword Soup"
+          ],
+          "themes": [
+            "Counters",
+            "Graveyard",
+            "Keyword Soup",
+            "Reanimator",
+            "Tokens"
+          ],
+          "tribes": [
+            "human",
+            "knight"
+          ]
+        }
+      },
+      "id": "3b00862d3285e81941e2fabad036909c858b7b1414d95ca0e444ab8d96249154",
+      "name": "Legends' Legacy",
+      "unresolved": [
+        "Traxos, Scourge of Kroog",
+        "Sword of the Chosen"
+      ]
+    },
+    {
+      "commanders": [
+        "Olivia, Opulent Outlaw"
+      ],
+      "context": {
+        "Counters": 8,
+        "Draw": 3,
+        "Ramp": 8,
+        "Removal": 3,
+        "Sacrifice / Aristocrats": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Counters"
+          ],
+          "themes": [
+            "Counters",
+            "Graveyard",
+            "Keyword Soup",
+            "Sacrifice / Aristocrats",
+            "Tokens"
+          ],
+          "tribes": [
+            "assassin",
+            "human",
+            "rogue"
+          ]
+        }
+      },
+      "id": "3b3ddc1c70fc7b15bf0556ded93b9fa57aa4f7ceac5886ac5db8c150506ba69c",
+      "name": "Most Wanted",
+      "unresolved": [
+        "Marshland Bloodcaster",
+        "Dire Fleet Ravager",
+        "Mass Mutiny"
+      ]
+    },
+    {
+      "commanders": [
+        "Yennett, Cryptic Sovereign"
+      ],
+      "context": {
+        "Draw": 8,
+        "Ramp": 8,
+        "Removal": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Keyword Soup"
+          ],
+          "themes": [],
+          "tribes": []
+        }
+      },
+      "id": "3c0b0b088f756a807d59c90a49df10c2b666d52851c61b1bc79db440f26b5ea6",
+      "name": "Odds and Ends",
+      "unresolved": [
+        "Void Winnower",
+        "Reconnaissance",
+        "Aeon Engine",
+        "Fatespinner",
+        "Inniaz, the Gale Force",
+        "Soothsaying"
+      ]
+    },
+    {
+      "commanders": [
+        "Lathril, Blade of the Elves"
+      ],
+      "context": {
+        "Anthem": 3,
+        "Draw": 3,
+        "Lifegain": 8,
+        "Ramp": 3,
+        "Recursion": 3,
+        "Removal": 3,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Lifegain",
+            "Tokens"
+          ],
+          "themes": [
+            "Graveyard",
+            "Lifegain",
+            "Sacrifice / Aristocrats",
+            "Tokens"
+          ],
+          "tribes": [
+            "elf",
+            "warrior"
+          ]
+        }
+      },
+      "id": "3d1187024367ecb11c56fa7f03a89292940030d97b74546433d8a5d7069f01d8",
+      "name": "Elven Empire",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Tidus, Yuna's Guardian"
+      ],
+      "context": {
+        "Counters": 8,
+        "Draw": 8,
+        "Ramp": 3,
+        "Removal": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Counters"
+          ],
+          "themes": [
+            "Counters"
+          ],
+          "tribes": [
+            "human"
+          ]
+        }
+      },
+      "id": "3d7733ba0eb11f4bfdc52a7bf9ae4225bfc7951dd6d2d48bac17e0372b4a787e",
+      "name": "Counter Blitz Collector's Edition (FINAL FANTASY X)",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Anowon, the Ruin Thief"
+      ],
+      "context": {
+        "Anthem": 8,
+        "Draw": 8,
+        "Graveyard": 8,
+        "Ramp": 3,
+        "Removal": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Mill"
+          ],
+          "themes": [
+            "Graveyard",
+            "Mill",
+            "Reanimator",
+            "Sacrifice / Aristocrats",
+            "Tokens",
+            "Voltron"
+          ],
+          "tribes": [
+            "human",
+            "rogue"
+          ]
+        }
+      },
+      "id": "3fc080f70a62284833ba7ee665098ebc7727ca301243b790412b0df1876196b2",
+      "name": "Sneak Attack",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "T'Challa, the Black Panther"
+      ],
+      "context": {
+        "Counters": 8,
+        "Draw": 3,
+        "Ramp": 3,
+        "Recursion": 3,
+        "Removal": 3,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Counters",
+            "Tokens"
+          ],
+          "themes": [
+            "Counters",
+            "Graveyard",
+            "Keyword Soup",
+            "Tokens",
+            "Voltron"
+          ],
+          "tribes": [
+            "hero",
+            "human"
+          ]
+        }
+      },
+      "id": "411bca379769a15730ac478f22d26d9f64cd9ab79e276076bab5d38d750eb764",
+      "name": "Wakanda Forever",
+      "unresolved": [
+        "Panther Robot"
+      ]
+    },
+    {
+      "commanders": [
+        "Rootha, Mastering the Moment"
+      ],
+      "context": {
+        "Copy": 3,
+        "Draw": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "Spellslinger": 3,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Keyword Soup",
+            "Spellslinger",
+            "Tokens"
+          ],
+          "themes": [
+            "Graveyard",
+            "Keyword Soup",
+            "Spellslinger",
+            "Tokens"
+          ],
+          "tribes": [
+            "wizard"
+          ]
+        }
+      },
+      "id": "45b21a98cb89c8d9b6944caedf5a3d7eb509d871133fbe285767d0854d84189a",
+      "name": "Prismari Artistry",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Hearthhull, the Worldseed"
+      ],
+      "context": {
+        "Counters": 3,
+        "Draw": 8,
+        "Lifegain": 3,
+        "Ramp": 8,
+        "Recursion": 3,
+        "Removal": 3,
+        "Sacrifice / Aristocrats": 8,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Sacrifice / Aristocrats"
+          ],
+          "themes": [
+            "Counters",
+            "Graveyard",
+            "Lifegain",
+            "Reanimator",
+            "Sacrifice / Aristocrats",
+            "Tokens"
+          ],
+          "tribes": [
+            "insect"
+          ]
+        }
+      },
+      "id": "4981a72c7de8a12436229a68ebdbf4500d3a6aa0bd8864651ec87da5b58b7c4a",
+      "name": "World Shaper",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Meren of Clan Nel Toth"
+      ],
+      "context": {
+        "Counters": 3,
+        "Draw": 3,
+        "Ramp": 3,
+        "Recursion": 3,
+        "Removal": 3,
+        "Sacrifice / Aristocrats": 8,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Graveyard",
+            "Sacrifice / Aristocrats"
+          ],
+          "themes": [
+            "Counters",
+            "Graveyard",
+            "Sacrifice / Aristocrats",
+            "Tokens"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "49f21004727dfbec4f3cd21787a7b796980f91d3c33190e79dca83f798235eff",
+      "name": "Plunder the Graves",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Gisela, the Broken Blade"
+      ],
+      "context": {
+        "Draw": 3,
+        "Lifegain": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Keyword Soup"
+          ],
+          "themes": [
+            "Graveyard",
+            "Keyword Soup",
+            "Lifegain",
+            "Tokens",
+            "Voltron"
+          ],
+          "tribes": [
+            "angel"
+          ]
+        }
+      },
+      "id": "4ac078474de9609c91d0fa45e372b1a4ccb542887aa56310ad043714b4d7da16",
+      "name": "Angels: They're Just Like Us but Cooler and with Wings",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Heroes in a Half Shell"
+      ],
+      "context": {
+        "Counters": 8,
+        "Draw": 8,
+        "Ramp": 3,
+        "Removal": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Counters",
+            "Keyword Soup"
+          ],
+          "themes": [
+            "Counters",
+            "Keyword Soup",
+            "Tokens"
+          ],
+          "tribes": [
+            "mutant",
+            "ninja",
+            "turtle"
+          ]
+        }
+      },
+      "id": "4ac0ff03b502c7fee6f474c459438c32e35931e9c049dc67dc39cd1e4517b110",
+      "name": "Turtle Power!",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Terra, Herald of Hope"
+      ],
+      "context": {
+        "Counters": 3,
+        "Draw": 3,
+        "Graveyard": 8,
+        "Ramp": 3,
+        "Recursion": 8,
+        "Removal": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Graveyard",
+            "Reanimator"
+          ],
+          "themes": [
+            "Counters",
+            "Graveyard",
+            "Reanimator"
+          ],
+          "tribes": [
+            "human"
+          ]
+        }
+      },
+      "id": "4b7e16699eea676d3636552539e4143ada65e6408c390d759d5449cc50a5cd2a",
+      "name": "Revival Trance (FINAL FANTASY VI)",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Zurgo Stormrender"
+      ],
+      "context": {
+        "Draw": 8,
+        "Ramp": 3,
+        "Removal": 3,
+        "Sacrifice / Aristocrats": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [
+            "Counters",
+            "Sacrifice / Aristocrats",
+            "Tokens"
+          ],
+          "tribes": [
+            "goblin",
+            "human",
+            "warrior"
+          ]
+        }
+      },
+      "id": "4b9a7712a9b5bfee3a663f86016388445cbdc86e8d4ee0db27dd56babc031b45",
+      "name": "Mardu Surge",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Anhelo, the Painter"
+      ],
+      "context": {
+        "Draw": 3,
+        "Ramp": 3,
+        "Recursion": 3,
+        "Removal": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Spellslinger"
+          ],
+          "themes": [
+            "Graveyard",
+            "Spellslinger",
+            "Tokens"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "4bc10f17f756e17f1499b4abf914c32f14607d20668e4bd4c7a4301c38e06669",
+      "name": "Maestros Massacre",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Shiko and Narset, Unified"
+      ],
+      "context": {
+        "Copy": 8,
+        "Draw": 8,
+        "Ramp": 3,
+        "Removal": 3,
+        "Spellslinger": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [
+            "Spellslinger",
+            "Tokens"
+          ],
+          "tribes": [
+            "human"
+          ]
+        }
+      },
+      "id": "4d940ea77e4db716e6012dee0dd94a798a38b79439b226a1533513b5c4ef66f8",
+      "name": "Jeskai Striker",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Sauron, Lord of the Rings"
+      ],
+      "context": {
+        "Draw": 3,
+        "Graveyard": 8,
+        "Ramp": 3,
+        "Recursion": 8,
+        "Removal": 3,
+        "Sacrifice / Aristocrats": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Graveyard",
+            "Reanimator",
+            "Sacrifice / Aristocrats"
+          ],
+          "themes": [
+            "Graveyard",
+            "Reanimator",
+            "Sacrifice / Aristocrats",
+            "Spellslinger"
+          ],
+          "tribes": [
+            "goblin"
+          ]
+        }
+      },
+      "id": "4d9bfc45247ec8a34db379b5342ed73a2e36b9d7cce22967c94a60710a2012dc",
+      "name": "The Hosts of Mordor",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Captain America, Team Leader"
+      ],
+      "context": {
+        "Counters": 8,
+        "Draw": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Counters",
+            "Keyword Soup"
+          ],
+          "themes": [
+            "Counters",
+            "Keyword Soup"
+          ],
+          "tribes": [
+            "hero",
+            "human"
+          ]
+        }
+      },
+      "id": "4eaf4197f6525aebb9faa2b484c0a0ba78d9b071c64177dc8e6c2ca386fc422a",
+      "name": "Avengers Assemble Collector's Edition",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Yidris, Maelstrom Wielder"
+      ],
+      "context": {
+        "Draw": 3,
+        "Lifegain": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [
+            "Graveyard",
+            "Lifegain"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "4ee201053810f116d9e33dd41f1bdea0c8a2a16f9982ef72085501a88602d820",
+      "name": "Entropic Uprising",
+      "unresolved": [
+        "Guiltfeeder",
+        "Cruel Entertainment"
+      ]
+    },
+    {
+      "commanders": [
+        "Emmara, Soul of the Accord"
+      ],
+      "context": {
+        "Anthem": 3,
+        "Counters": 3,
+        "Draw": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Tokens"
+          ],
+          "themes": [
+            "Counters",
+            "Lifegain",
+            "Tokens"
+          ],
+          "tribes": [
+            "elf"
+          ]
+        }
+      },
+      "id": "501d82cf7ac7e14ebc13030ee21660ea46cc5b581c39e112e1f772704c29ec86",
+      "name": "Token Triumph",
+      "unresolved": [
+        "Curse of Bounty"
+      ]
+    },
+    {
+      "commanders": [
+        "Cloud, Ex-SOLDIER"
+      ],
+      "context": {
+        "Draw": 8,
+        "Equipment": 8,
+        "Ramp": 8,
+        "Recursion": 3,
+        "Removal": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Voltron"
+          ],
+          "themes": [
+            "Counters",
+            "Graveyard",
+            "Voltron"
+          ],
+          "tribes": [
+            "human",
+            "soldier"
+          ]
+        }
+      },
+      "id": "50bb1bacbd8be824bd66c362adbdbac59209bb8614d14826bc1609bd854c4699",
+      "name": "Limit Break Collector's Edition (FINAL FANTASY VII)",
+      "unresolved": [
+        "Armory Automaton"
+      ]
+    },
+    {
+      "commanders": [
+        "Prossh, Skyraider of Kher"
+      ],
+      "context": {
+        "Counters": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "Sacrifice / Aristocrats": 8,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Sacrifice / Aristocrats",
+            "Tokens"
+          ],
+          "themes": [
+            "Counters",
+            "Graveyard",
+            "Sacrifice / Aristocrats",
+            "Tokens"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "50f4480e6c9d7e046677f828ca3d4588f403346730113c66c38da298f09477b3",
+      "name": "Power Hungry",
+      "unresolved": [
+        "Brooding Saurian",
+        "Hooded Horror",
+        "Terra Ravager",
+        "Wight of Precinct Six",
+        "Mass Mutiny",
+        "Widespread Panic"
+      ]
+    },
+    {
+      "commanders": [
+        "Ulalek, Fused Atrocity"
+      ],
+      "context": {
+        "Anthem": 3,
+        "Draw": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [
+            "Tokens"
+          ],
+          "tribes": [
+            "eldrazi"
+          ]
+        }
+      },
+      "id": "5141ecc6a0325d29c8e3948429ff74d9558e919e86e5cbd52eca5b612bb38a74",
+      "name": "Eldrazi Incursion Collector's Edition",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Kardur, Doomscourge"
+      ],
+      "context": {
+        "Draw": 3,
+        "Goad": 8,
+        "Lifegain": 8,
+        "Ramp": 3,
+        "Removal": 3,
+        "Sacrifice / Aristocrats": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Goad",
+            "Lifegain",
+            "Sacrifice / Aristocrats"
+          ],
+          "themes": [
+            "Goad",
+            "Lifegain",
+            "Sacrifice / Aristocrats"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "5157d094903bf7396cc03a0a8544ef2a3c1a1e628814e4e7c22bda0c1eb6bdf9",
+      "name": "Chaos Incarnate",
+      "unresolved": [
+        "Scythe Specter",
+        "Dictate of the Twin Gods",
+        "Breath of Malfegor"
+      ]
+    },
+    {
+      "commanders": [
+        "Vrondiss, Rage of Ancients"
+      ],
+      "context": {
+        "Draw": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Tokens"
+          ],
+          "themes": [
+            "Tokens"
+          ],
+          "tribes": [
+            "dragon"
+          ]
+        }
+      },
+      "id": "52673e173b4b3e5180fb7d560b03e2348dd9cfe88735cd376597fe719263aeb4",
+      "name": "Draconic Rage",
+      "unresolved": [
+        "Gratuitous Violence",
+        "Berserker's Frenzy",
+        "Maddening Hex",
+        "Indomitable Might",
+        "Wulfgar of Icewind Dale"
+      ]
+    },
+    {
+      "commanders": [
+        "Pantlaza, Sun-Favored"
+      ],
+      "context": {
+        "Draw": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [],
+          "tribes": [
+            "dinosaur"
+          ]
+        }
+      },
+      "id": "52c1af50cdfb9848a2d911c876b1a03aebafa82725f23f2f58bd5b3ee84b06ef",
+      "name": "Veloci-Ramp-Tor",
+      "unresolved": [
+        "Rhythm of the Wild"
+      ]
+    },
+    {
+      "commanders": [
+        "The Wise Mothman"
+      ],
+      "context": {
+        "Counters": 8,
+        "Draw": 3,
+        "Ramp": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Counters"
+          ],
+          "themes": [
+            "Counters",
+            "Graveyard"
+          ],
+          "tribes": [
+            "mutant",
+            "zombie"
+          ]
+        }
+      },
+      "id": "564f6369bab11a71c93fffbb85a1c553abf4070655c10b856d9814c372a4e4f5",
+      "name": "Mutant Menace",
+      "unresolved": [
+        "Winding Constrictor"
+      ]
+    },
+    {
+      "commanders": [
+        "Daxos the Returned"
+      ],
+      "context": {
+        "Draw": 3,
+        "Enchantment Matters": 8,
+        "Lifegain": 3,
+        "Ramp": 3,
+        "Recursion": 3,
+        "Removal": 3,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Enchantment Matters",
+            "Tokens"
+          ],
+          "themes": [
+            "Enchantment Matters",
+            "Graveyard",
+            "Lifegain",
+            "Tokens",
+            "Voltron"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "56c43dd51e9662f2118c053a0969e06c5b20707486288683a9e1fa7e0589ef59",
+      "name": "Call the Spirits",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Sai, Master Thopterist"
+      ],
+      "context": {
+        "Draw": 8,
+        "Ramp": 3,
+        "Removal": 3,
+        "Sacrifice / Aristocrats": 8,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Tokens"
+          ],
+          "themes": [
+            "Artifacts",
+            "Tokens"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "56d1566a9caa4199a158e074868821997206a31279fbaebb70fa29c70445712a",
+      "name": "Keen Engineering",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Mizzix of the Izmagnus"
+      ],
+      "context": {
+        "Draw": 3,
+        "Ramp": 8,
+        "Removal": 3,
+        "Spellslinger": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Spellslinger"
+          ],
+          "themes": [
+            "Graveyard",
+            "Spellslinger",
+            "Tokens"
+          ],
+          "tribes": [
+            "wizard"
+          ]
+        }
+      },
+      "id": "5727a7c3db543a3d2381c232486319df743f0419a353274f733c41dca54f4312",
+      "name": "Seize Control",
+      "unresolved": [
+        "Aethersnatch",
+        "Seal of the Guildpact"
+      ]
+    },
+    {
+      "commanders": [
+        "Anikthea, Hand of Erebos"
+      ],
+      "context": {
+        "Anthem": 8,
+        "Draw": 3,
+        "Enchantment Matters": 3,
+        "Graveyard": 8,
+        "Lifegain": 3,
+        "Ramp": 3,
+        "Recursion": 3,
+        "Removal": 3,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Enchantment Matters",
+            "Graveyard",
+            "Tokens"
+          ],
+          "themes": [
+            "Enchantment Matters",
+            "Graveyard",
+            "Lifegain",
+            "Reanimator",
+            "Tokens"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "5b711450c16fb1fdd2e3023ab0acd12151f975ecacb09a7cec9f31340934b2c2",
+      "name": "Enduring Enchantments",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Nahiri, the Lithomancer"
+      ],
+      "context": {
+        "Draw": 3,
+        "Equipment": 8,
+        "Ramp": 3,
+        "Removal": 3,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Reanimator",
+            "Tokens",
+            "Voltron"
+          ],
+          "themes": [
+            "Graveyard",
+            "Keyword Soup",
+            "Reanimator",
+            "Tokens",
+            "Voltron"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "5ed8f5b94e852acca06ef5948c5852eb9026e6dbb714c859104c742552f59dc4",
+      "name": "Forged In Stone",
+      "unresolved": [
+        "Whitemane Lion",
+        "Skyhunter Skirmisher"
+      ]
+    },
+    {
+      "commanders": [
+        "Otrimi, the Ever-Playful"
+      ],
+      "context": {
+        "Counters": 3,
+        "Draw": 3,
+        "Lifegain": 3,
+        "Ramp": 3,
+        "Recursion": 8,
+        "Removal": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Graveyard"
+          ],
+          "themes": [
+            "Counters",
+            "Graveyard",
+            "Lifegain"
+          ],
+          "tribes": [
+            "beast"
+          ]
+        }
+      },
+      "id": "60d113e7a8eff4d3494ecaf50f32e2d0bbb9e5cf903c64921df163a0098d8671",
+      "name": "Enhanced Evolution",
+      "unresolved": [
+        "Tidal Barracuda",
+        "Vorapede",
+        "Wydwen, the Biting Gale",
+        "Silent Arbiter",
+        "Archipelagore",
+        "Cavern Whisperer"
+      ]
+    },
+    {
+      "commanders": [
+        "Ghoulcaller Gisa"
+      ],
+      "context": {
+        "Anthem": 3,
+        "Draw": 3,
+        "Lifegain": 3,
+        "Ramp": 3,
+        "Recursion": 3,
+        "Removal": 3,
+        "Sacrifice / Aristocrats": 8,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Sacrifice / Aristocrats",
+            "Tokens"
+          ],
+          "themes": [
+            "Counters",
+            "Graveyard",
+            "Lifegain",
+            "Sacrifice / Aristocrats",
+            "Tokens"
+          ],
+          "tribes": [
+            "zombie"
+          ]
+        }
+      },
+      "id": "61e79a315027e7b78fcaf6737e091eb9411b97f202f2f0fbee5e58036325864b",
+      "name": "Wretched Ranks",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Morophon, the Boundless"
+      ],
+      "context": {
+        "Anthem": 8,
+        "Counters": 3,
+        "Draw": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [
+            "Counters",
+            "Tokens"
+          ],
+          "tribes": [
+            "shapeshifter"
+          ]
+        }
+      },
+      "id": "63c05b79c17e2db58f07dc2ea7c56d578bce8d6d430b5d546e29ef0dae4f20a3",
+      "name": "Everyone's Invited!",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Captain America, Team Leader"
+      ],
+      "context": {
+        "Counters": 8,
+        "Draw": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Counters",
+            "Keyword Soup"
+          ],
+          "themes": [
+            "Counters",
+            "Keyword Soup"
+          ],
+          "tribes": [
+            "hero",
+            "human"
+          ]
+        }
+      },
+      "id": "640cc27d50dcf40e2f5a666182a0ec62a6aff03563b5dca285eb26271fd24c40",
+      "name": "Avengers Assemble",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Lathliss, Dragon Queen"
+      ],
+      "context": {
+        "Anthem": 8,
+        "Card Advantage": 3,
+        "Draw": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Tokens"
+          ],
+          "themes": [
+            "Tokens"
+          ],
+          "tribes": [
+            "dragon"
+          ]
+        }
+      },
+      "id": "657467a097e35c00e165689f672d7a5bd8ff67e29cd5aafa3578175ac82e7393",
+      "name": "Reign of Dragons",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Isperia, Supreme Judge"
+      ],
+      "context": {
+        "Anthem": 3,
+        "Draw": 8,
+        "Lifegain": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [
+            "Lifegain",
+            "Tokens"
+          ],
+          "tribes": [
+            "bird"
+          ]
+        }
+      },
+      "id": "6698fb70e9764f8685c2cc999b0f9bcb9aef353b7f0fe0c6968c2d7f36ff4316",
+      "name": "First Flight",
+      "unresolved": [
+        "Jubilant Skybonder"
+      ]
+    },
+    {
+      "commanders": [
+        "Doctor Doom, King of Latveria"
+      ],
+      "context": {
+        "Counters": 3,
+        "Draw": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [
+            "Counters",
+            "Graveyard",
+            "Tokens"
+          ],
+          "tribes": [
+            "human",
+            "villain"
+          ]
+        }
+      },
+      "id": "6b286485b1800a7bfcc7bf99876fb7b0d8fb80e9e314934c485c34c83a527735",
+      "name": "Doom Prevails",
+      "unresolved": [
+        "Extract Power"
+      ]
+    },
+    {
+      "commanders": [
+        "Stella Lee, Wild Card"
+      ],
+      "context": {
+        "Card Advantage": 8,
+        "Copy": 8,
+        "Draw": 3,
+        "Ramp": 3,
+        "Spellslinger": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Spellslinger"
+          ],
+          "themes": [
+            "Graveyard",
+            "Spellslinger",
+            "Tokens"
+          ],
+          "tribes": [
+            "wizard"
+          ]
+        }
+      },
+      "id": "6c5ef7dcc8feeeeaae81e28c1bd9c43de75a3346ae4daf2c2ba47e463dd6f448",
+      "name": "Quick Draw",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Tegwyll, Duke of Splendor"
+      ],
+      "context": {
+        "Anthem": 8,
+        "Draw": 8,
+        "Ramp": 3,
+        "Removal": 3,
+        "Sacrifice / Aristocrats": 8,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Sacrifice / Aristocrats"
+          ],
+          "themes": [
+            "Graveyard",
+            "Tokens"
+          ],
+          "tribes": [
+            "faerie",
+            "rogue"
+          ]
+        }
+      },
+      "id": "6d3f8d08b96c1a4dda0ee3b5e6430d020abc769e898e744af5559067935f6bf1",
+      "name": "Fae Dominion",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Yuma, Proud Protector"
+      ],
+      "context": {
+        "Draw": 8,
+        "Graveyard": 3,
+        "Ramp": 3,
+        "Recursion": 3,
+        "Removal": 3,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Graveyard",
+            "Tokens"
+          ],
+          "themes": [
+            "Graveyard",
+            "Reanimator",
+            "Sacrifice / Aristocrats",
+            "Tokens"
+          ],
+          "tribes": [
+            "elemental",
+            "plant"
+          ]
+        }
+      },
+      "id": "6e27ec145e04420453d0b8a8084b77aff256c1da4a07db6cef3940524b174593",
+      "name": "Desert Bloom",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Faldorn, Dread Wolf Herald"
+      ],
+      "context": {
+        "Card Advantage": 8,
+        "Counters": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Tokens"
+          ],
+          "themes": [
+            "Counters",
+            "Tokens"
+          ],
+          "tribes": [
+            "human"
+          ]
+        }
+      },
+      "id": "6ff9cb9f1a689b2a807432eb0c85078b09a910f80205f275dfb7224341c4357c",
+      "name": "Exit from Exile",
+      "unresolved": [
+        "Passionate Archaeologist"
+      ]
+    },
+    {
+      "commanders": [
+        "Daretti, Scrap Savant"
+      ],
+      "context": {
+        "Draw": 8,
+        "Ramp": 3,
+        "Recursion": 8,
+        "Removal": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Graveyard",
+            "Reanimator"
+          ],
+          "themes": [
+            "Graveyard",
+            "Reanimator",
+            "Tokens"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "701490cb69a5ef5547cb673b924899f5ceb102c089625071163c0ee416564fab",
+      "name": "Built From Scratch",
+      "unresolved": [
+        "Liquimetal Coating",
+        "Bitter Feud"
+      ]
+    },
+    {
+      "commanders": [
+        "Invisible Woman"
+      ],
+      "context": {
+        "Counters": 3,
+        "Draw": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "Spellslinger": 3,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Spellslinger",
+            "Tokens"
+          ],
+          "themes": [
+            "Counters",
+            "Graveyard",
+            "Spellslinger",
+            "Tokens"
+          ],
+          "tribes": [
+            "hero",
+            "human"
+          ]
+        }
+      },
+      "id": "721c5cbb714a0eb44c442a5cd4d308958b7055a05400f3557c3df389695a5ad6",
+      "name": "The Fantastic Four Collector's Edition",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Jared Carthalion"
+      ],
+      "context": {
+        "Counters": 8,
+        "Draw": 8,
+        "Ramp": 8,
+        "Recursion": 8,
+        "Removal": 3,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Counters",
+            "Graveyard",
+            "Tokens"
+          ],
+          "themes": [
+            "Counters",
+            "Graveyard",
+            "Tokens"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "727770cecd63c5ccfabff7a06965f4b513a17aa11ab1c4eff247ee67b0c3d141",
+      "name": "Painbow",
+      "unresolved": [
+        "Archelos, Lagoon Mystic",
+        "Fusion Elemental",
+        "Transguild Courier",
+        "Tiller Engine"
+      ]
+    },
+    {
+      "commanders": [
+        "Kaust, Eyes of the Glade"
+      ],
+      "context": {
+        "Draw": 8,
+        "Ramp": 3,
+        "Removal": 3,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [],
+          "tribes": []
+        }
+      },
+      "id": "72a8dc1a33afab176310ad720d0e7894f415cab45cad39b128479b8baf7567e9",
+      "name": "Deadly Disguise",
+      "unresolved": [
+        "Panoptic Projektor",
+        "Krosan Cloudscraper",
+        "Krosan Colossus",
+        "Whisperwood Elemental",
+        "Sidar Kondo of Jamuraa",
+        "Scroll of Fate"
+      ]
+    },
+    {
+      "commanders": [
+        "\u00c9owyn, Shieldmaiden"
+      ],
+      "context": {
+        "Anthem": 3,
+        "Counters": 3,
+        "Draw": 8,
+        "Ramp": 3,
+        "Removal": 3,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Keyword Soup",
+            "Tokens"
+          ],
+          "themes": [
+            "Counters",
+            "Keyword Soup",
+            "Tokens"
+          ],
+          "tribes": [
+            "human",
+            "soldier"
+          ]
+        }
+      },
+      "id": "77f64ebc25fedbace733c0448ec0456c0e2d8c0644eae9abb10be91016172460",
+      "name": "Riders of Rohan",
+      "unresolved": [
+        "Shared Animosity"
+      ]
+    },
+    {
+      "commanders": [
+        "Y'shtola, Night's Blessed"
+      ],
+      "context": {
+        "Draw": 8,
+        "Lifegain": 8,
+        "Ramp": 3,
+        "Removal": 3,
+        "Spellslinger": 8,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Lifegain",
+            "Spellslinger"
+          ],
+          "themes": [
+            "Counters",
+            "Graveyard",
+            "Lifegain",
+            "Spellslinger",
+            "Tokens",
+            "Voltron"
+          ],
+          "tribes": [
+            "wizard"
+          ]
+        }
+      },
+      "id": "781e58595f531a38013f4376e6c632cc71517511446c648a8c62984df6592a87",
+      "name": "Scions & Spellcraft Collector's Edition (FINAL FANTASY XIV)",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Derevi, Empyrial Tactician"
+      ],
+      "context": {
+        "Draw": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [
+            "Counters",
+            "Tokens",
+            "Voltron"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "7847b80f17e70700d20310ed38f55491ced1e17cc07fc10573ca5f2df4e05b89",
+      "name": "Evasive Maneuvers",
+      "unresolved": [
+        "Thunderstaff"
+      ]
+    },
+    {
+      "commanders": [
+        "Inalla, Archmage Ritualist"
+      ],
+      "context": {
+        "Draw": 3,
+        "Ramp": 3,
+        "Recursion": 3,
+        "Removal": 3,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Tokens"
+          ],
+          "themes": [
+            "Graveyard",
+            "Reanimator",
+            "Tokens"
+          ],
+          "tribes": [
+            "human",
+            "wizard"
+          ]
+        }
+      },
+      "id": "78cdc8d252e36b1d51bc046a6d07e758d6223c8bf7d29400ac70ce785ce20b0d",
+      "name": "Arcane Wizardry",
+      "unresolved": [
+        "Polymorphist's Jest"
+      ]
+    },
+    {
+      "commanders": [
+        "Mishra, Eminent One"
+      ],
+      "context": {
+        "Copy": 3,
+        "Draw": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "Sacrifice / Aristocrats": 3,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Tokens"
+          ],
+          "themes": [
+            "Artifacts",
+            "Graveyard",
+            "Reanimator",
+            "Sacrifice / Aristocrats",
+            "Tokens"
+          ],
+          "tribes": [
+            "artificer",
+            "human"
+          ]
+        }
+      },
+      "id": "7a28fe764c802e74f2873caede343259ccbd9a1c5febc475443152a1d8ed6bc1",
+      "name": "Mishra's Burnished Banner",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Commodore Guff"
+      ],
+      "context": {
+        "Counters": 3,
+        "Draw": 8,
+        "Protection": 3,
+        "Ramp": 8,
+        "Removal": 3,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Tokens"
+          ],
+          "themes": [
+            "Counters",
+            "Tokens"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "7cc75b6feecd25f2e6f809f189a8a3210dffb42a122adab567264cb55342c0af",
+      "name": "Planeswalker Party",
+      "unresolved": [
+        "The Chain Veil",
+        "Silent Arbiter"
+      ]
+    },
+    {
+      "commanders": [
+        "Ezuri, Claw of Progress"
+      ],
+      "context": {
+        "Counters": 8,
+        "Draw": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Counters"
+          ],
+          "themes": [
+            "Counters",
+            "Tokens"
+          ],
+          "tribes": [
+            "snake"
+          ]
+        }
+      },
+      "id": "81b1216274ff1f09761db05053a90bf52959bdb29ca341740319915532459dfa",
+      "name": "Swell the Host",
+      "unresolved": [
+        "Noble Quarry"
+      ]
+    },
+    {
+      "commanders": [
+        "Disa the Restless"
+      ],
+      "context": {
+        "Draw": 3,
+        "Graveyard": 3,
+        "Ramp": 3,
+        "Recursion": 3,
+        "Removal": 3,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Graveyard",
+            "Reanimator",
+            "Tokens"
+          ],
+          "themes": [
+            "Graveyard",
+            "Reanimator",
+            "Tokens"
+          ],
+          "tribes": [
+            "lhurgoyf"
+          ]
+        }
+      },
+      "id": "83321ffa93b5d126c1d25b0158fdc7acb564f5fd21a14266be10f449564d9266",
+      "name": "Graveyard Overdrive Collector's Edition",
+      "unresolved": [
+        "Sawhorn Nemesis"
+      ]
+    },
+    {
+      "commanders": [
+        "Kamiz, Obscura Oculus"
+      ],
+      "context": {
+        "Draw": 3,
+        "Ramp": 3,
+        "Recursion": 3,
+        "Removal": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [
+            "Graveyard",
+            "Reanimator",
+            "Tokens"
+          ],
+          "tribes": [
+            "rogue"
+          ]
+        }
+      },
+      "id": "8811cee31333a5daec4454309f26366a22ea7151b0da4825cd6d731c78b40481",
+      "name": "Obscura Operation",
+      "unresolved": [
+        "Inkfathom Witch"
+      ]
+    },
+    {
+      "commanders": [
+        "Ulalek, Fused Atrocity"
+      ],
+      "context": {
+        "Anthem": 3,
+        "Draw": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [
+            "Tokens"
+          ],
+          "tribes": [
+            "eldrazi"
+          ]
+        }
+      },
+      "id": "891ba5d8d4c3f2063d992189260f7d9525acc19149a3c95a5b2a009f1cac4d4e",
+      "name": "Eldrazi Incursion",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Ranar the Ever-Watchful"
+      ],
+      "context": {
+        "Draw": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Tokens"
+          ],
+          "themes": [
+            "Blink",
+            "Lifegain",
+            "Tokens"
+          ],
+          "tribes": [
+            "angel",
+            "human",
+            "spirit"
+          ]
+        }
+      },
+      "id": "90de0e08fa8459bf1c9f90ca42420d3dadbf680236640631fac0332e457f663b",
+      "name": "Phantom Premonition",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Kadena, Slinking Sorcerer"
+      ],
+      "context": {
+        "Draw": 8,
+        "Ramp": 3,
+        "Removal": 3,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [],
+          "tribes": []
+        }
+      },
+      "id": "9266b2a8503844c6bd36a529527ca6087e441d7141bb0a5491718fe52cc088fd",
+      "name": "Faceless Menace",
+      "unresolved": [
+        "Scroll of Fate"
+      ]
+    },
+    {
+      "commanders": [
+        "Ms. Bumbleflower"
+      ],
+      "context": {
+        "Counters": 8,
+        "Draw": 8,
+        "Ramp": 3,
+        "Removal": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Counters"
+          ],
+          "themes": [
+            "Counters",
+            "Tokens"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "934729ed5b3cb9cacecb95b45b5dac21e0c3d1bf20aa445e1eaac2d41c4fd7c8",
+      "name": "Peace Offering",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Inquisitor Greyfax"
+      ],
+      "context": {
+        "Anthem": 8,
+        "Draw": 8,
+        "Lifegain": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [
+            "Graveyard",
+            "Lifegain",
+            "Sacrifice / Aristocrats",
+            "Tokens"
+          ],
+          "tribes": [
+            "astartes",
+            "human",
+            "soldier",
+            "warrior"
+          ]
+        }
+      },
+      "id": "94819dba4be72870ce74cc8b8c3b17b0b182ba34df73294985c0d174f3fa24ea",
+      "name": "Forces of the Imperium",
+      "unresolved": [
+        "Knight Paladin"
+      ]
+    },
+    {
+      "commanders": [
+        "Osgir, the Reconstructor"
+      ],
+      "context": {
+        "Copy": 8,
+        "Draw": 3,
+        "Graveyard": 8,
+        "Ramp": 3,
+        "Removal": 3,
+        "Sacrifice / Aristocrats": 8,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Graveyard",
+            "Sacrifice / Aristocrats",
+            "Tokens"
+          ],
+          "themes": [
+            "Artifacts",
+            "Graveyard",
+            "Reanimator",
+            "Sacrifice / Aristocrats",
+            "Tokens"
+          ],
+          "tribes": [
+            "artificer"
+          ]
+        }
+      },
+      "id": "96d5c02d8502ed041b1d1e886422aeec19c09fdd16b7a5a97eb6d3352a8359fc",
+      "name": "Lorehold Legacies",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Szarekh, the Silent King"
+      ],
+      "context": {
+        "Draw": 3,
+        "Graveyard": 8,
+        "Ramp": 3,
+        "Recursion": 3,
+        "Removal": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [
+            "Artifacts",
+            "Graveyard",
+            "Reanimator",
+            "Tokens"
+          ],
+          "tribes": [
+            "necron"
+          ]
+        }
+      },
+      "id": "99238b534721a744ae77620675e640c6e7f2fb66688bee9913a44e2f39a59509",
+      "name": "Necron Dynasties",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Ixhel, Scion of Atraxa"
+      ],
+      "context": {
+        "Counters": 3,
+        "Draw": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [
+            "Counters",
+            "Tokens"
+          ],
+          "tribes": [
+            "phyrexian"
+          ]
+        }
+      },
+      "id": "9975b06c82c777afec5bb7fe3a5b226fa57278c489b66b5b2346fcdc09441dc5",
+      "name": "Corrupting Influence",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Wyleth, Soul of Steel"
+      ],
+      "context": {
+        "Draw": 8,
+        "Enchantment Matters": 8,
+        "Equipment": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [
+            "Keyword Soup",
+            "Voltron"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "9e9f8ba545099d5baa879c2080b232604085a0cde8bef49cf58db54def4e4a52",
+      "name": "Arm for Battle",
+      "unresolved": [
+        "Deflecting Palm",
+        "Master Warcraft"
+      ]
+    },
+    {
+      "commanders": [
+        "Lord Windgrace"
+      ],
+      "context": {
+        "Counters": 3,
+        "Draw": 8,
+        "Ramp": 3,
+        "Recursion": 8,
+        "Removal": 8,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Graveyard",
+            "Reanimator",
+            "Tokens"
+          ],
+          "themes": [
+            "Counters",
+            "Graveyard",
+            "Landfall",
+            "Reanimator",
+            "Tokens"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "a235a57781b120377a18fd3ebc4eb5cce5e8999d6b94217b6ac761acc8cffc9f",
+      "name": "Nature's Vengeance",
+      "unresolved": [
+        "Rubblehulk",
+        "Zendikar Incarnate",
+        "Crash of Rhino Beetles",
+        "Loyal Subordinate"
+      ]
+    },
+    {
+      "commanders": [
+        "Kaalia of the Vast"
+      ],
+      "context": {
+        "Board Wipes": 3,
+        "Lifegain": 3,
+        "Ramp": 8,
+        "Removal": 3,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [],
+          "tribes": [
+            "angel",
+            "demon",
+            "dragon"
+          ]
+        }
+      },
+      "id": "a2f4becb6ae8a80236e77d9f6f282497254464edac332880c5f3c7e134e45889",
+      "name": "Heavenly Inferno",
+      "unresolved": [
+        "Master Warcraft",
+        "Stranglehold"
+      ]
+    },
+    {
+      "commanders": [
+        "Kalamax, the Stormsire"
+      ],
+      "context": {
+        "Copy": 8,
+        "Counters": 8,
+        "Draw": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "Spellslinger": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Counters"
+          ],
+          "themes": [
+            "Counters",
+            "Graveyard",
+            "Spellslinger",
+            "Tokens"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "a3c7a26faf59fdd5c11313f393895d6d6edc1ed66bb9bc830b7807cc66032525",
+      "name": "Arcane Maelstrom",
+      "unresolved": [
+        "Wilderness Reclamation"
+      ]
+    },
+    {
+      "commanders": [
+        "Zimone, Infinite Analyst"
+      ],
+      "context": {
+        "Counters": 8,
+        "Draw": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Counters"
+          ],
+          "themes": [
+            "Counters",
+            "Spellslinger",
+            "Tokens"
+          ],
+          "tribes": [
+            "wizard"
+          ]
+        }
+      },
+      "id": "a47cdd1797d1e55fca73025d3878a99dfee4cedd276c13fc040e21bcfad55f0a",
+      "name": "Quandrix Unlimited",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Prosper, Tome-Bound"
+      ],
+      "context": {
+        "Card Advantage": 8,
+        "Ramp": 8,
+        "Removal": 3,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [
+            "Sacrifice / Aristocrats",
+            "Tokens"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "a594e4a0df902fb58ca84c83a358974956f020ca47a84cd6c9344ea3a155efe7",
+      "name": "Planar Portal",
+      "unresolved": [
+        "Marionette Master"
+      ]
+    },
+    {
+      "commanders": [
+        "The Swarmlord"
+      ],
+      "context": {
+        "Counters": 8,
+        "Draw": 8,
+        "Ramp": 3,
+        "Removal": 3,
+        "Sacrifice / Aristocrats": 8,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Counters",
+            "Sacrifice / Aristocrats"
+          ],
+          "themes": [
+            "Counters",
+            "Sacrifice / Aristocrats",
+            "Tokens"
+          ],
+          "tribes": [
+            "tyranid"
+          ]
+        }
+      },
+      "id": "a6169c619136a7eb4d312524e8aa5b1074e27c40751fc5698c4a8cfc8740d620",
+      "name": "Tyranid Swarm",
+      "unresolved": [
+        "Shadow in the Warp"
+      ]
+    },
+    {
+      "commanders": [
+        "Hakbal of the Surging Soul"
+      ],
+      "context": {
+        "Counters": 3,
+        "Draw": 8,
+        "Ramp": 8,
+        "Removal": 3,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [
+            "Counters"
+          ],
+          "tribes": [
+            "merfolk",
+            "wizard"
+          ]
+        }
+      },
+      "id": "a6cf9b5d74a89e7974614e6f4a157bc46bfcf8fc0a552a3241ed15a64baa379b",
+      "name": "Explorers of the Deep",
+      "unresolved": [
+        "Xolatoyac, the Smiling Flood"
+      ]
+    },
+    {
+      "commanders": [
+        "The Mimeoplasm"
+      ],
+      "context": {
+        "Copy": 8,
+        "Draw": 3,
+        "Graveyard": 3,
+        "Ramp": 3,
+        "Recursion": 3,
+        "Removal": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Counters"
+          ],
+          "themes": [
+            "Counters",
+            "Graveyard",
+            "Mill"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "a7debeedbb69503fc61473bb084b00fd6cf480fd71b3b6593d4e008a8cfc52a7",
+      "name": "Devour for Power",
+      "unresolved": [
+        "Lhurgoyf",
+        "Scythe Specter",
+        "Unnerve"
+      ]
+    },
+    {
+      "commanders": [
+        "Breya, Etherium Shaper"
+      ],
+      "context": {
+        "Draw": 3,
+        "Lifegain": 8,
+        "Ramp": 3,
+        "Recursion": 3,
+        "Removal": 8,
+        "Sacrifice / Aristocrats": 8,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Lifegain",
+            "Tokens"
+          ],
+          "themes": [
+            "Artifacts",
+            "Graveyard",
+            "Lifegain",
+            "Reanimator",
+            "Tokens",
+            "Voltron"
+          ],
+          "tribes": [
+            "human"
+          ]
+        }
+      },
+      "id": "a9647d570a3bc54d21bd17cc0371b6bb10a85c374a45589745f12f469cdb1c3e",
+      "name": "Invent Superiority",
+      "unresolved": [
+        "Akiri, Line-Slinger"
+      ]
+    },
+    {
+      "commanders": [
+        "Urza, Chief Artificer"
+      ],
+      "context": {
+        "Anthem": 8,
+        "Draw": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Tokens"
+          ],
+          "themes": [
+            "Artifacts",
+            "Graveyard",
+            "Tokens"
+          ],
+          "tribes": [
+            "artificer",
+            "construct"
+          ]
+        }
+      },
+      "id": "a9fda5e0e86c6a18445437b96677821765eaeef0c5f259da6c0c7bc64d0a0171",
+      "name": "Urza's Iron Alliance",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Jace, Multiverse Architect"
+      ],
+      "context": {
+        "Board Wipes": 3,
+        "Card Advantage": 8,
+        "Draw": 8,
+        "Lifegain": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [
+            "Lifegain",
+            "Tokens"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "aa7bba570854115739614b869d8a655d875ed68a8d6bd299a5f5d8e0a66a738d",
+      "name": "Multiverse Reforged",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Felothar the Steadfast"
+      ],
+      "context": {
+        "Counters": 3,
+        "Draw": 8,
+        "Lifegain": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "Sacrifice / Aristocrats": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Sacrifice / Aristocrats"
+          ],
+          "themes": [
+            "Counters",
+            "Lifegain",
+            "Sacrifice / Aristocrats"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "aae8fae4161cbeec16f3fe77268780ed1eb8a5718e744151a7f4fbf4cf04e815",
+      "name": "Abzan Armor",
+      "unresolved": [
+        "Jaws of Defeat",
+        "Tree of Redemption",
+        "Baldin, Century Herdmaster",
+        "Indomitable Ancients",
+        "Wakestone Gargoyle",
+        "Sidar Kondo of Jamuraa",
+        "Blight Pile",
+        "Crashing Drawbridge",
+        "Walking Bulwark"
+      ]
+    },
+    {
+      "commanders": [
+        "Mirko, Obsessive Theorist"
+      ],
+      "context": {
+        "Counters": 8,
+        "Draw": 3,
+        "Ramp": 3,
+        "Recursion": 8,
+        "Removal": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Counters",
+            "Graveyard",
+            "Reanimator"
+          ],
+          "themes": [
+            "Counters",
+            "Graveyard",
+            "Reanimator"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "ab722e738834ee4b97a42cb204b61f6f94bbabe2e464879f55e93055980c6f7c",
+      "name": "Revenant Recon",
+      "unresolved": [
+        "Final-Word Phantom"
+      ]
+    },
+    {
+      "commanders": [
+        "Rubinia Soulsinger"
+      ],
+      "context": {
+        "Draw": 3,
+        "Enchantment Matters": 3,
+        "Interaction": 8,
+        "Ramp": 3,
+        "Removal": 3,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [
+            "Enchantment Matters"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "abcfdfc8655a5419248c38239fb2535c8b5d2f7b4c715fb69ca2e34dad777216",
+      "name": "Enchantress Rubinia",
+      "unresolved": [
+        "Jungle Lion"
+      ]
+    },
+    {
+      "commanders": [
+        "Estrid, the Masked"
+      ],
+      "context": {
+        "Draw": 3,
+        "Enchantment Matters": 8,
+        "Graveyard": 8,
+        "Ramp": 3,
+        "Recursion": 8,
+        "Removal": 3,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Enchantment Matters",
+            "Graveyard",
+            "Reanimator",
+            "Tokens"
+          ],
+          "themes": [
+            "Enchantment Matters",
+            "Graveyard",
+            "Lifegain",
+            "Reanimator",
+            "Tokens",
+            "Voltron"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "abf1fdb22a09a9e11252e5ad36f783f3dee261f8a45dcb542c904942f8f07fc7",
+      "name": "Adaptive Enchantment",
+      "unresolved": [
+        "Hydra Omnivore"
+      ]
+    },
+    {
+      "commanders": [
+        "Willowdusk, Essence Seer"
+      ],
+      "context": {
+        "Counters": 8,
+        "Draw": 3,
+        "Lifegain": 3,
+        "Ramp": 3,
+        "Recursion": 3,
+        "Removal": 3,
+        "Sacrifice / Aristocrats": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Counters"
+          ],
+          "themes": [
+            "Counters",
+            "Graveyard",
+            "Lifegain",
+            "Sacrifice / Aristocrats",
+            "Tokens"
+          ],
+          "tribes": [
+            "vampire"
+          ]
+        }
+      },
+      "id": "ae088c89e20908aa98381c0727a5643e755e7c6c14a74232c913399f7df95b04",
+      "name": "Witherbloom Witchcraft",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Strefan, Maurer Progenitor"
+      ],
+      "context": {
+        "Counters": 3,
+        "Draw": 3,
+        "Lifegain": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "Sacrifice / Aristocrats": 3,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [
+            "Counters",
+            "Lifegain",
+            "Sacrifice / Aristocrats",
+            "Tokens"
+          ],
+          "tribes": [
+            "vampire"
+          ]
+        }
+      },
+      "id": "ae0f0316c7f6be11d635ea7d128193bc5e7b91606323664aaf8592042b3d12b1",
+      "name": "Vampiric Bloodline",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Zada, Hedron Grinder"
+      ],
+      "context": {
+        "Anthem": 3,
+        "Copy": 8,
+        "Draw": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "Spellslinger": 8,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Spellslinger"
+          ],
+          "themes": [
+            "Sacrifice / Aristocrats",
+            "Spellslinger",
+            "Tokens"
+          ],
+          "tribes": [
+            "goblin",
+            "warrior"
+          ]
+        }
+      },
+      "id": "ae2794c27f15c20c5405863acb1fc557c691846bec78b9a740b52a1e4aaa91e3",
+      "name": "Goblin Storm",
+      "unresolved": [
+        "Impact Tremors",
+        "Wild Ride"
+      ]
+    },
+    {
+      "commanders": [
+        "Zedruu the Greathearted"
+      ],
+      "context": {
+        "Draw": 8,
+        "Lifegain": 8,
+        "Ramp": 3,
+        "Removal": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Lifegain"
+          ],
+          "themes": [
+            "Voltron"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "b0dd57773946f63ab74ef975aa2f73e08c1085d7110767fc87758692f48a5d57",
+      "name": "Political Puppets",
+      "unresolved": [
+        "Goblin Cadets",
+        "Plumeveil",
+        "Ruhan of the Fomori",
+        "Arbiter of Knollridge",
+        "Death by Dragons",
+        "Insurrection",
+        "Ruhan of the Fomori"
+      ]
+    },
+    {
+      "commanders": [
+        "Kalemne, Disciple of Iroas"
+      ],
+      "context": {
+        "Board Wipes": 3,
+        "Draw": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [],
+          "tribes": [
+            "giant"
+          ]
+        }
+      },
+      "id": "b1531a9b0ffec09e50c93cd4f85773ac2fe6c45d2eebf4e5d6972b44374cec82",
+      "name": "Wade into Battle",
+      "unresolved": [
+        "Hunted Dragon"
+      ]
+    },
+    {
+      "commanders": [
+        "Oloro, Ageless Ascetic"
+      ],
+      "context": {
+        "Draw": 8,
+        "Lifegain": 8,
+        "Ramp": 3,
+        "Removal": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Lifegain"
+          ],
+          "themes": [
+            "Graveyard",
+            "Lifegain",
+            "Tokens"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "b1b14cdaec3afbe0716eb2ba88aa8e054cf6bace236034cb2804543846fed4ee",
+      "name": "Eternal Bargain",
+      "unresolved": [
+        "Hooded Horror",
+        "Serene Master",
+        "Tidehollow Strix",
+        "Tower Gargoyle",
+        "Order of Succession",
+        "Crawlspace"
+      ]
+    },
+    {
+      "commanders": [
+        "Neyali, Suns' Vanguard"
+      ],
+      "context": {
+        "Anthem": 8,
+        "Card Advantage": 8,
+        "Draw": 3,
+        "Equipment": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Tokens"
+          ],
+          "themes": [
+            "Keyword Soup",
+            "Tokens",
+            "Voltron"
+          ],
+          "tribes": [
+            "human",
+            "soldier"
+          ]
+        }
+      },
+      "id": "b281d828626282622ed996ef16b58223b8ef5e7c56e00b239990047bed298d4e",
+      "name": "Rebellion Rising",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Kaalia of the Vast"
+      ],
+      "context": {
+        "Board Wipes": 3,
+        "Lifegain": 3,
+        "Ramp": 8,
+        "Removal": 3,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [],
+          "tribes": [
+            "angel",
+            "demon",
+            "dragon"
+          ]
+        }
+      },
+      "id": "b2b274033e8d553254de55b53b2925eb4947bb85fa8308285e07719a6ebe4c25",
+      "name": "Heavenly Inferno",
+      "unresolved": [
+        "Master Warcraft",
+        "Stranglehold"
+      ]
+    },
+    {
+      "commanders": [
+        "Abaddon the Despoiler"
+      ],
+      "context": {
+        "Draw": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [
+            "Spellslinger",
+            "Tokens"
+          ],
+          "tribes": [
+            "astartes",
+            "demon"
+          ]
+        }
+      },
+      "id": "b53952281045f7d4ce3e6a06914b73050e571a0051d053ffa12e5959135a6f98",
+      "name": "The Ruinous Powers Collector's Edition",
+      "unresolved": [
+        "Knight Rampager"
+      ]
+    },
+    {
+      "commanders": [
+        "Firkraag, Cunning Instigator"
+      ],
+      "context": {
+        "Counters": 8,
+        "Draw": 8,
+        "Goad": 8,
+        "Ramp": 3,
+        "Removal": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Counters",
+            "Goad"
+          ],
+          "themes": [
+            "Counters",
+            "Goad",
+            "Tokens"
+          ],
+          "tribes": [
+            "dragon"
+          ]
+        }
+      },
+      "id": "b7901402882569b7f4c0f4a3e5c79fceb85e4bb947973ec2bc41c07e619147a3",
+      "name": "Draconic Dissent",
+      "unresolved": [
+        "Domineering Will"
+      ]
+    },
+    {
+      "commanders": [
+        "Hazel of the Rootbloom"
+      ],
+      "context": {
+        "Anthem": 3,
+        "Copy": 8,
+        "Counters": 3,
+        "Draw": 3,
+        "Lifegain": 3,
+        "Ramp": 8,
+        "Removal": 3,
+        "Sacrifice / Aristocrats": 3,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Tokens"
+          ],
+          "themes": [
+            "Counters",
+            "Lifegain",
+            "Sacrifice / Aristocrats",
+            "Tokens"
+          ],
+          "tribes": [
+            "squirrel"
+          ]
+        }
+      },
+      "id": "b7f9be0b82fbf3d353b24bc5c1589003a7c8deb79fd25f82f1dc2c21db016689",
+      "name": "Squirreled Away",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Clavile\u00f1o, First of the Blessed"
+      ],
+      "context": {
+        "Counters": 3,
+        "Draw": 8,
+        "Lifegain": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "Sacrifice / Aristocrats": 3,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Tokens"
+          ],
+          "themes": [
+            "Counters",
+            "Graveyard",
+            "Keyword Soup",
+            "Lifegain",
+            "Reanimator",
+            "Sacrifice / Aristocrats",
+            "Tokens"
+          ],
+          "tribes": [
+            "vampire"
+          ]
+        }
+      },
+      "id": "b8e13a1ba98060d910279ba22d4aa536c542df5f96c4ba25a0118d5c014bb8a7",
+      "name": "Blood Rites",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "The Mimeoplasm"
+      ],
+      "context": {
+        "Copy": 8,
+        "Draw": 3,
+        "Graveyard": 3,
+        "Ramp": 3,
+        "Recursion": 3,
+        "Removal": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Counters"
+          ],
+          "themes": [
+            "Counters",
+            "Graveyard",
+            "Mill"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "bece3229d80e66469b99122fbb7dabf3ffe42b55fddd2bc88dbaa272f1b4c06c",
+      "name": "Devour for Power",
+      "unresolved": [
+        "Lhurgoyf",
+        "Scythe Specter",
+        "Unnerve"
+      ]
+    },
+    {
+      "commanders": [
+        "Millicent, Restless Revenant"
+      ],
+      "context": {
+        "Draw": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "Sacrifice / Aristocrats": 8,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Sacrifice / Aristocrats",
+            "Tokens"
+          ],
+          "themes": [
+            "Graveyard",
+            "Sacrifice / Aristocrats",
+            "Tokens"
+          ],
+          "tribes": [
+            "spirit"
+          ]
+        }
+      },
+      "id": "bf1149ed4f64f9a6b05f45a55738093e7955be3d90232b632f93cc97bbf75575",
+      "name": "Spirit Squadron",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Meren of Clan Nel Toth"
+      ],
+      "context": {
+        "Counters": 3,
+        "Draw": 3,
+        "Ramp": 3,
+        "Recursion": 3,
+        "Removal": 3,
+        "Sacrifice / Aristocrats": 8,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Graveyard",
+            "Sacrifice / Aristocrats"
+          ],
+          "themes": [
+            "Counters",
+            "Graveyard",
+            "Sacrifice / Aristocrats",
+            "Tokens"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "c00244da7bc4079df195770e42a0f89d97f0b17b9ce363491f1f356688139384",
+      "name": "Plunder the Graves",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Admiral Brass, Unsinkable"
+      ],
+      "context": {
+        "Draw": 3,
+        "Graveyard": 8,
+        "Ramp": 3,
+        "Recursion": 8,
+        "Removal": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Graveyard",
+            "Reanimator"
+          ],
+          "themes": [
+            "Graveyard",
+            "Reanimator"
+          ],
+          "tribes": [
+            "human",
+            "pirate"
+          ]
+        }
+      },
+      "id": "c364c82a67788ef62608e7d7790b9985b31d30ae1a725523c6a39c4c80cc9382",
+      "name": "Ahoy Mateys",
+      "unresolved": [
+        "Shared Animosity"
+      ]
+    },
+    {
+      "commanders": [
+        "Captain N'ghathrod"
+      ],
+      "context": {
+        "Anthem": 8,
+        "Draw": 3,
+        "Graveyard": 8,
+        "Ramp": 3,
+        "Removal": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Mill"
+          ],
+          "themes": [
+            "Graveyard",
+            "Mill",
+            "Tokens"
+          ],
+          "tribes": [
+            "horror"
+          ]
+        }
+      },
+      "id": "c39be6b1d11c2376c4688aabfcb05c2ff2b201e14d943149ecbf5b82dc6faf08",
+      "name": "Mind Flayarrrs",
+      "unresolved": [
+        "Leyline of Anticipation"
+      ]
+    },
+    {
+      "commanders": [
+        "Caesar, Legion's Emperor"
+      ],
+      "context": {
+        "Counters": 3,
+        "Draw": 8,
+        "Ramp": 3,
+        "Removal": 3,
+        "Sacrifice / Aristocrats": 3,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Tokens"
+          ],
+          "themes": [
+            "Counters",
+            "Sacrifice / Aristocrats",
+            "Tokens"
+          ],
+          "tribes": [
+            "human",
+            "soldier"
+          ]
+        }
+      },
+      "id": "c455c385a8ab354b66929aed840d2f0436584bbde02320dc36f1d5b5325b4a3c",
+      "name": "Hail, Caesar",
+      "unresolved": [
+        "Fervent Charge"
+      ]
+    },
+    {
+      "commanders": [
+        "Ellivere of the Wild Court"
+      ],
+      "context": {
+        "Draw": 8,
+        "Enchantment Matters": 8,
+        "Ramp": 3,
+        "Recursion": 3,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Tokens",
+            "Voltron"
+          ],
+          "themes": [
+            "Enchantment Matters",
+            "Graveyard",
+            "Keyword Soup",
+            "Reanimator",
+            "Tokens",
+            "Voltron"
+          ],
+          "tribes": [
+            "human"
+          ]
+        }
+      },
+      "id": "c6bc291acbe550439f74a473e922979938f6a8e32ec08d8080ac6b67dd22c9c0",
+      "name": "Virtue and Valor",
+      "unresolved": [
+        "Timber Paladin"
+      ]
+    },
+    {
+      "commanders": [
+        "Xira Arien"
+      ],
+      "context": {
+        "Draw": 8,
+        "Ramp": 3,
+        "Recursion": 3,
+        "Removal": 3,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [
+            "Graveyard"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "c89a19162b2c3e6ccc73aee1160e02feeb3f0afe5d9a01c63937a43a909ce5e8",
+      "name": "Deathdancer Xira",
+      "unresolved": [
+        "Rootbreaker Wurm",
+        "Wild Mongrel"
+      ]
+    },
+    {
+      "commanders": [
+        "Atarka, World Render"
+      ],
+      "context": {
+        "Board Wipes": 3,
+        "Draw": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [],
+          "tribes": [
+            "dragon"
+          ]
+        }
+      },
+      "id": "c97dfcd9d590bf2023942211e1b51941cc5796d3b8101bb2417bcbd88cebbd95",
+      "name": "Draconic Destruction",
+      "unresolved": [
+        "Unleash Fury"
+      ]
+    },
+    {
+      "commanders": [
+        "Dr. Madison Li"
+      ],
+      "context": {
+        "Draw": 8,
+        "Ramp": 3,
+        "Recursion": 8,
+        "Removal": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Graveyard",
+            "Keyword Soup",
+            "Reanimator"
+          ],
+          "themes": [
+            "Artifacts",
+            "Graveyard",
+            "Keyword Soup",
+            "Reanimator",
+            "Tokens"
+          ],
+          "tribes": [
+            "human",
+            "robot"
+          ]
+        }
+      },
+      "id": "cc34cbe6fefb189f4aaa7088e80b2227f12c090f4651b498f53616037bf4d011",
+      "name": "Science!",
+      "unresolved": [
+        "Vault 112: Sadistic Simulation"
+      ]
+    },
+    {
+      "commanders": [
+        "Breena, the Demagogue"
+      ],
+      "context": {
+        "Counters": 8,
+        "Draw": 8,
+        "Ramp": 3,
+        "Removal": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Counters"
+          ],
+          "themes": [
+            "Counters",
+            "Tokens"
+          ],
+          "tribes": [
+            "human"
+          ]
+        }
+      },
+      "id": "cc8763a87285a98df2c981806b014062fca951ae8dd19b8305aae3b98ffae044",
+      "name": "Silverquill Statement",
+      "unresolved": [
+        "Combat Calligrapher",
+        "Bold Plagiarist",
+        "Hunted Lammasu"
+      ]
+    },
+    {
+      "commanders": [
+        "Atraxa, Praetors' Voice"
+      ],
+      "context": {
+        "Counters": 8,
+        "Draw": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Counters",
+            "Keyword Soup"
+          ],
+          "themes": [
+            "Counters",
+            "Tokens"
+          ],
+          "tribes": [
+            "human"
+          ]
+        }
+      },
+      "id": "ce07563cce9f392a238855e47601b75c4ceeaf203249734320ffc21504642891",
+      "name": "Breed Lethality",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Saheeli, Radiant Creator"
+      ],
+      "context": {
+        "Draw": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Tokens"
+          ],
+          "themes": [
+            "Tokens"
+          ],
+          "tribes": [
+            "artificer",
+            "human"
+          ]
+        }
+      },
+      "id": "ce9fe3de5b7bcc56d9d0edeff5709932ebd2b4614ac4d9243086bb51b73cf858",
+      "name": "Living Energy",
+      "unresolved": [
+        "Nissa, Worldsoul Speaker",
+        "Aethertide Whale",
+        "Aetherwind Basker",
+        "Panharmonicon",
+        "Peema Aether-Seer",
+        "Decoction Module"
+      ]
+    },
+    {
+      "commanders": [
+        "Sevinne, the Chronoclasm"
+      ],
+      "context": {
+        "Copy": 8,
+        "Draw": 3,
+        "Protection": 8,
+        "Ramp": 3,
+        "Recursion": 8,
+        "Removal": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Graveyard",
+            "Spellslinger"
+          ],
+          "themes": [
+            "Graveyard",
+            "Spellslinger"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "d07c128ffd88e24dce1903d00dcd66a3e83afea6e0ecd00542f314ad5a7921b1",
+      "name": "Mystic Intellect",
+      "unresolved": [
+        "Runic Repetition",
+        "Mandate of Peace"
+      ]
+    },
+    {
+      "commanders": [
+        "Omo, Queen of Vesuva"
+      ],
+      "context": {
+        "Copy": 3,
+        "Draw": 3,
+        "Graveyard": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [
+            "Graveyard",
+            "Landfall",
+            "Lifegain",
+            "Tokens"
+          ],
+          "tribes": [
+            "hydra"
+          ]
+        }
+      },
+      "id": "d41bf191a8f29f3bc81bdb31766e6dd847dddc7d402cdac733696901f3994b05",
+      "name": "Tricky Terrain",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Doctor Doom, King of Latveria"
+      ],
+      "context": {
+        "Counters": 3,
+        "Draw": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [
+            "Counters",
+            "Graveyard",
+            "Tokens"
+          ],
+          "tribes": [
+            "human",
+            "villain"
+          ]
+        }
+      },
+      "id": "d47439935a49a64777c80176df69c7980bbe32a1defbbbe13b1b3fe6f87eb3b0",
+      "name": "Doom Prevails Collector's Edition",
+      "unresolved": [
+        "Extract Power"
+      ]
+    },
+    {
+      "commanders": [
+        "Gisa and Geralf"
+      ],
+      "context": {
+        "Anthem": 3,
+        "Draw": 3,
+        "Graveyard": 8,
+        "Lifegain": 3,
+        "Ramp": 3,
+        "Recursion": 8,
+        "Removal": 3,
+        "Sacrifice / Aristocrats": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Graveyard"
+          ],
+          "themes": [
+            "Graveyard",
+            "Lifegain",
+            "Sacrifice / Aristocrats",
+            "Tokens"
+          ],
+          "tribes": [
+            "zombie"
+          ]
+        }
+      },
+      "id": "d4e339accb537839d96db4a55b599b6a39f2fd1840b23dfefc718c628038ae6e",
+      "name": "Grave Danger",
+      "unresolved": [
+        "Vela the Night-Clad"
+      ]
+    },
+    {
+      "commanders": [
+        "Anje Falkenrath"
+      ],
+      "context": {
+        "Draw": 8,
+        "Ramp": 3,
+        "Recursion": 3,
+        "Removal": 3,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [
+            "Graveyard",
+            "Lifegain",
+            "Reanimator",
+            "Tokens"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "d7492f3a8eeb0f0382792d11887f612a0d1f2024dec76fa4bc768ba53eb021cc",
+      "name": "Merciless Rage",
+      "unresolved": [
+        "Aeon Engine"
+      ]
+    },
+    {
+      "commanders": [
+        "Omo, Queen of Vesuva"
+      ],
+      "context": {
+        "Copy": 3,
+        "Draw": 3,
+        "Graveyard": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [
+            "Graveyard",
+            "Landfall",
+            "Lifegain",
+            "Tokens"
+          ],
+          "tribes": [
+            "hydra"
+          ]
+        }
+      },
+      "id": "d9502e0d3a368afcf5528e6ff073fe331fc3ae18c210e004cd477aa7148bfe54",
+      "name": "Tricky Terrain Collector's Edition",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Kathril, Aspect Warper"
+      ],
+      "context": {
+        "Counters": 8,
+        "Draw": 3,
+        "Graveyard": 3,
+        "Ramp": 3,
+        "Recursion": 3,
+        "Removal": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Counters",
+            "Graveyard"
+          ],
+          "themes": [
+            "Counters",
+            "Graveyard",
+            "Keyword Soup",
+            "Reanimator"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "d9829eac7a51c37be6fe4eadc29d90b583676b533a906fd5bd184f7e44a8a146",
+      "name": "Symbiotic Swarm",
+      "unresolved": [
+        "Avenging Huntbonder",
+        "Netherborn Altar"
+      ]
+    },
+    {
+      "commanders": [
+        "The Swarmlord"
+      ],
+      "context": {
+        "Counters": 8,
+        "Draw": 8,
+        "Ramp": 3,
+        "Removal": 3,
+        "Sacrifice / Aristocrats": 8,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Counters",
+            "Sacrifice / Aristocrats"
+          ],
+          "themes": [
+            "Counters",
+            "Sacrifice / Aristocrats",
+            "Tokens"
+          ],
+          "tribes": [
+            "tyranid"
+          ]
+        }
+      },
+      "id": "da2407818389fdb01499bbb447dff2f21e73dd5479787067d42a6c1a880ed022",
+      "name": "Tyranid Swarm Collector's Edition",
+      "unresolved": [
+        "Shadow in the Warp"
+      ]
+    },
+    {
+      "commanders": [
+        "Trostani, Selesnya's Voice"
+      ],
+      "context": {
+        "Counters": 3,
+        "Draw": 3,
+        "Lifegain": 8,
+        "Ramp": 3,
+        "Removal": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Lifegain",
+            "Tokens"
+          ],
+          "themes": [
+            "Counters",
+            "Lifegain",
+            "Tokens"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "db70073dba81734bb9eb8569badfb6940a1c36eae7c8ac1fbcbbbb4fe67d5cb6",
+      "name": "Hatsune Miku",
+      "unresolved": [
+        "Dazzling Theater // Prop Room"
+      ]
+    },
+    {
+      "commanders": [
+        "Teferi, Temporal Archmage"
+      ],
+      "context": {
+        "Draw": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [],
+          "tribes": []
+        }
+      },
+      "id": "dd06a175b356d4aa2d774c9b4c0fc2c5759ef8371b8740e12dbf1d964ceee0ff",
+      "name": "Peer Through Time",
+      "unresolved": [
+        "Dulcet Sirens",
+        "Brine Elemental",
+        "Frost Titan",
+        "Lorthos, the Tidemaker",
+        "Deep-Sea Kraken",
+        "Turn to Frog",
+        "Domineering Will",
+        "Crown of Doom"
+      ]
+    },
+    {
+      "commanders": [
+        "Killian, Decisive Mentor"
+      ],
+      "context": {
+        "Draw": 8,
+        "Enchantment Matters": 8,
+        "Goad": 8,
+        "Ramp": 3,
+        "Removal": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Enchantment Matters",
+            "Goad"
+          ],
+          "themes": [
+            "Counters",
+            "Enchantment Matters",
+            "Goad",
+            "Graveyard",
+            "Reanimator",
+            "Tokens",
+            "Voltron"
+          ],
+          "tribes": [
+            "human"
+          ]
+        }
+      },
+      "id": "dd0ddbbdff7b4bf8ff7fc4829b5b659b1e34187e3103860aef892123d0bb421f",
+      "name": "Silverquill Influence",
+      "unresolved": [
+        "Combat Calligrapher"
+      ]
+    },
+    {
+      "commanders": [
+        "Saheeli, the Gifted"
+      ],
+      "context": {
+        "Draw": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Artifacts",
+            "Tokens"
+          ],
+          "themes": [
+            "Artifacts",
+            "Tokens"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "dde781350536ac2a6cbc2bc7b66a51cc96946f8fc555ed0bb416714bc9e493bd",
+      "name": "Exquisite Invention",
+      "unresolved": [
+        "Varchild, Betrayer of Kjeldor"
+      ]
+    },
+    {
+      "commanders": [
+        "Chishiro, the Shattered Blade"
+      ],
+      "context": {
+        "Counters": 8,
+        "Draw": 3,
+        "Enchantment Matters": 8,
+        "Equipment": 8,
+        "Ramp": 3,
+        "Removal": 3,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Counters",
+            "Tokens",
+            "Voltron"
+          ],
+          "themes": [
+            "Counters",
+            "Tokens",
+            "Voltron"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "de62029f216ebc6af691a683d408c592c6d9758547965fb7ea800afa932616e9",
+      "name": "Upgrades Unleashed",
+      "unresolved": [
+        "Rhythm of the Wild"
+      ]
+    },
+    {
+      "commanders": [
+        "Dina, Essence Brewer"
+      ],
+      "context": {
+        "Counters": 8,
+        "Draw": 8,
+        "Lifegain": 8,
+        "Ramp": 3,
+        "Recursion": 3,
+        "Removal": 3,
+        "Sacrifice / Aristocrats": 8,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Counters",
+            "Lifegain",
+            "Sacrifice / Aristocrats"
+          ],
+          "themes": [
+            "Counters",
+            "Graveyard",
+            "Lifegain",
+            "Sacrifice / Aristocrats",
+            "Tokens"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "e159179e4d4c4c9ba0abc71dd4369aeb70b17a80033d54211ae6b0ba1305ab7e",
+      "name": "Witherbloom Pestilence",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Gavi, Nest Warden"
+      ],
+      "context": {
+        "Draw": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Tokens"
+          ],
+          "themes": [
+            "Counters",
+            "Graveyard",
+            "Tokens"
+          ],
+          "tribes": [
+            "human"
+          ]
+        }
+      },
+      "id": "e2277c400beee3598d6c7a5d27076405ff3b9e2a807916cc4f2839c196dfd589",
+      "name": "Timeless Wisdom",
+      "unresolved": [
+        "Fluctuator"
+      ]
+    },
+    {
+      "commanders": [
+        "Kynaios and Tiro of Meletis"
+      ],
+      "context": {
+        "Counters": 3,
+        "Draw": 8,
+        "Ramp": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [
+            "Counters",
+            "Tokens"
+          ],
+          "tribes": [
+            "human"
+          ]
+        }
+      },
+      "id": "e2fabe2694eb6018f0f18d5e9b943b05a5242087eacb8d14bbd82351f8204be3",
+      "name": "Stalwart Unity",
+      "unresolved": [
+        "Hushwing Gryff",
+        "Akroan Horse",
+        "Rubblehulk",
+        "Blazing Archon",
+        "Reverse the Sands"
+      ]
+    },
+    {
+      "commanders": [
+        "Quintorius, History Chaser"
+      ],
+      "context": {
+        "Anthem": 3,
+        "Draw": 8,
+        "Graveyard": 8,
+        "Ramp": 3,
+        "Recursion": 3,
+        "Removal": 3,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Keyword Soup",
+            "Tokens"
+          ],
+          "themes": [
+            "Counters",
+            "Graveyard",
+            "Keyword Soup",
+            "Reanimator",
+            "Tokens"
+          ],
+          "tribes": [
+            "spirit"
+          ]
+        }
+      },
+      "id": "e9b64d2425c6693b3c5c3e498a21305d2ceb4b8957ca16de7e0f9ee1342c76e6",
+      "name": "Lorehold Spirit",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Nalia de'Arnise"
+      ],
+      "context": {
+        "Card Advantage": 8,
+        "Counters": 8,
+        "Draw": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "Sacrifice / Aristocrats": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Counters"
+          ],
+          "themes": [
+            "Counters",
+            "Graveyard",
+            "Reanimator",
+            "Sacrifice / Aristocrats",
+            "Tokens"
+          ],
+          "tribes": [
+            "cleric",
+            "human",
+            "rogue",
+            "warrior",
+            "wizard"
+          ]
+        }
+      },
+      "id": "eb3b9bd3a13890e40420a21de7701d1b3e92e25fad1fd88fd063a2ae192779a3",
+      "name": "Party Time",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Frodo, Adventurous Hobbit",
+        "Sam, Loyal Attendant"
+      ],
+      "context": {
+        "Draw": 8,
+        "Lifegain": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [
+            "Counters",
+            "Lifegain",
+            "Sacrifice / Aristocrats",
+            "Tokens"
+          ],
+          "tribes": [
+            "halfling",
+            "treefolk"
+          ]
+        }
+      },
+      "id": "ee3a26230b400447177f5a512c9376d476ccb25d6f0918795e194c838378b591",
+      "name": "Food and Fellowship",
+      "unresolved": [
+        "Motivated Pony",
+        "Landroval, Horizon Witness"
+      ]
+    },
+    {
+      "commanders": [
+        "Arahbo, Roar of the World"
+      ],
+      "context": {
+        "Draw": 3,
+        "Equipment": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [
+            "Keyword Soup",
+            "Voltron"
+          ],
+          "tribes": [
+            "cat"
+          ]
+        }
+      },
+      "id": "f01ba8b790cee984fc4732d7dd51348606941a791c41b55cd4e11a10cc05a2e8",
+      "name": "Feline Ferocity",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Rin and Seri, Inseparable"
+      ],
+      "context": {
+        "Anthem": 3,
+        "Counters": 3,
+        "Draw": 3,
+        "Lifegain": 8,
+        "Ramp": 3,
+        "Removal": 8,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Lifegain",
+            "Tokens"
+          ],
+          "themes": [
+            "Counters",
+            "Tokens"
+          ],
+          "tribes": [
+            "cat",
+            "dog"
+          ]
+        }
+      },
+      "id": "f05c526d31f99e9279814b3f4738c696d24328ce90a8bb999f608bd8148d1091",
+      "name": "Raining Cats and Dogs",
+      "unresolved": [
+        "Impact Tremors"
+      ]
+    },
+    {
+      "commanders": [
+        "Adrix and Nev, Twincasters"
+      ],
+      "context": {
+        "Counters": 3,
+        "Draw": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Tokens"
+          ],
+          "themes": [
+            "Counters",
+            "Tokens"
+          ],
+          "tribes": [
+            "wizard"
+          ]
+        }
+      },
+      "id": "f1669186e72e1467e40f22a477c81027edec8f55d0f8d14e44b6f52305ea17fd",
+      "name": "Quantum Quandrix",
+      "unresolved": [
+        "Crafty Cutpurse"
+      ]
+    },
+    {
+      "commanders": [
+        "Abaddon the Despoiler"
+      ],
+      "context": {
+        "Draw": 3,
+        "Ramp": 3,
+        "Removal": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [],
+          "themes": [
+            "Spellslinger",
+            "Tokens"
+          ],
+          "tribes": [
+            "astartes",
+            "demon"
+          ]
+        }
+      },
+      "id": "f203b6d1e5c132565b316e3fb9b3654bc949a3cc294200c93509d08ad90891ec",
+      "name": "The Ruinous Powers",
+      "unresolved": [
+        "Knight Rampager"
+      ]
+    },
+    {
+      "commanders": [
+        "Riku of Two Reflections"
+      ],
+      "context": {
+        "Copy": 8,
+        "Ramp": 3,
+        "Removal": 3,
+        "Spellslinger": 8,
+        "Tokens": 8,
+        "_strategy": {
+          "commander_themes": [
+            "Spellslinger",
+            "Tokens"
+          ],
+          "themes": [
+            "Spellslinger",
+            "Tokens"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "f23392b02629858de08ec3771aea566d071e7c43b5da7ad10fbd83899d8033e8",
+      "name": "Mirror Mastery",
+      "unresolved": [
+        "Baloth Woodcrasher",
+        "Hydra Omnivore",
+        "Avatar of Fury",
+        "Death by Dragons",
+        "Colossal Might"
+      ]
+    },
+    {
+      "commanders": [
+        "Kotori, Pilot Prodigy"
+      ],
+      "context": {
+        "Draw": 3,
+        "Lifegain": 8,
+        "Ramp": 3,
+        "Removal": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Keyword Soup"
+          ],
+          "themes": [
+            "Artifacts",
+            "Graveyard",
+            "Keyword Soup",
+            "Tokens"
+          ],
+          "tribes": [
+            "artificer",
+            "human"
+          ]
+        }
+      },
+      "id": "f252dcfe88a8ccb784a986cd91da17e53e8e99056b0fa4b1b8f794cb66d5a719",
+      "name": "Buckle Up",
+      "unresolved": [
+        "Drumbellower"
+      ]
+    },
+    {
+      "commanders": [
+        "Giada, Font of Hope"
+      ],
+      "context": {
+        "Anthem": 3,
+        "Counters": 8,
+        "Draw": 3,
+        "Lifegain": 3,
+        "Ramp": 8,
+        "Removal": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Counters"
+          ],
+          "themes": [
+            "Counters",
+            "Lifegain"
+          ],
+          "tribes": [
+            "angel"
+          ]
+        }
+      },
+      "id": "f792036f170383f44a3c6e8fa6569c759fc68cc67c99a718877fe97d10139022",
+      "name": "Calling All Angels",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Tidus, Yuna's Guardian"
+      ],
+      "context": {
+        "Counters": 8,
+        "Draw": 8,
+        "Ramp": 3,
+        "Removal": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Counters"
+          ],
+          "themes": [
+            "Counters"
+          ],
+          "tribes": [
+            "human"
+          ]
+        }
+      },
+      "id": "f9c86bd5058346da453000efbbcbb79944407484cdcbb7cf0578e1266d77a286",
+      "name": "Counter Blitz (FINAL FANTASY X)",
+      "unresolved": []
+    },
+    {
+      "commanders": [
+        "Sefris of the Hidden Ways"
+      ],
+      "context": {
+        "Draw": 3,
+        "Ramp": 3,
+        "Recursion": 8,
+        "Removal": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Graveyard",
+            "Reanimator"
+          ],
+          "themes": [
+            "Graveyard",
+            "Lifegain",
+            "Reanimator"
+          ],
+          "tribes": []
+        }
+      },
+      "id": "fd65d73cec67da99a7b848e7db01659f391904db1207585705400e54315c16f4",
+      "name": "Dungeons of Death",
+      "unresolved": [
+        "Midnight Pathlighter",
+        "Hama Pashar, Ruin Seeker"
+      ]
+    },
+    {
+      "commanders": [
+        "Morska, Undersea Sleuth"
+      ],
+      "context": {
+        "Counters": 8,
+        "Draw": 8,
+        "Ramp": 3,
+        "Tokens": 3,
+        "_strategy": {
+          "commander_themes": [
+            "Counters"
+          ],
+          "themes": [
+            "Artifacts",
+            "Counters",
+            "Lifegain",
+            "Sacrifice / Aristocrats",
+            "Tokens"
+          ],
+          "tribes": [
+            "detective"
+          ]
+        }
+      },
+      "id": "fe9e106db6e21a9b817f3c19b8cb4b74376d3e3c32506dd587089404f3817ccd",
+      "name": "Deep Clue Sea",
+      "unresolved": [
+        "Junk Winder",
+        "Wilderness Reclamation"
+      ]
+    }
+  ],
+  "decks": 187,
+  "fallback_copies": 251,
+  "fallback_unique": 200,
+  "missing": {},
+  "missing_copies": 0,
+  "rule_version": 12,
+  "unique_cards": 6080,
+  "unresolved": {
+    "Aeon Engine": 2,
+    "Aethersnatch": 1,
+    "Aethertide Whale": 3,
+    "Aetherwind Basker": 1,
+    "Akiri, Line-Slinger": 1,
+    "Akroan Horse": 1,
+    "Alliance of Arms": 1,
+    "Arbiter of Knollridge": 1,
+    "Archangel": 1,
+    "Archelos, Lagoon Mystic": 1,
+    "Archipelagore": 1,
+    "Armory Automaton": 2,
+    "Avatar of Fury": 1,
+    "Aven Courier": 1,
+    "Aven Mimeomancer": 1,
+    "Avenging Huntbonder": 1,
+    "Baldin, Century Herdmaster": 1,
+    "Baloth Woodcrasher": 1,
+    "Berserker's Frenzy": 1,
+    "Bitter Feud": 2,
+    "Blazing Archon": 1,
+    "Blight Pile": 1,
+    "Bold Plagiarist": 1,
+    "Breath of Malfegor": 1,
+    "Brine Elemental": 1,
+    "Brooding Saurian": 1,
+    "Cavern Whisperer": 1,
+    "Challenger Troll": 1,
+    "Charging Cinderhorn": 1,
+    "Colossal Might": 1,
+    "Combat Calligrapher": 2,
+    "Crafty Cutpurse": 1,
+    "Crash of Rhino Beetles": 1,
+    "Crashing Drawbridge": 2,
+    "Crawlspace": 1,
+    "Creeperhulk": 2,
+    "Crown of Doom": 1,
+    "Cruel Entertainment": 1,
+    "Curse of Bounty": 2,
+    "Curse of Conformity": 1,
+    "Dazzling Theater // Prop Room": 1,
+    "Deadly Recluse": 1,
+    "Death by Dragons": 2,
+    "Decoction Module": 3,
+    "Deep-Sea Kraken": 1,
+    "Deflecting Palm": 2,
+    "Denry Klin, Editor in Chief": 1,
+    "Devilish Valet": 1,
+    "Dictate of the Twin Gods": 1,
+    "Dire Fleet Ravager": 1,
+    "Djinn of Wishes": 1,
+    "Dodgy Jalopy": 1,
+    "Domineering Will": 2,
+    "Drumbellower": 1,
+    "Dulcet Sirens": 1,
+    "Evercoat Ursine": 1,
+    "Everlasting Torment": 2,
+    "Evernight Shade": 1,
+    "Extract Power": 2,
+    "Fatespinner": 1,
+    "Fervent Charge": 1,
+    "Fiendish Duo": 1,
+    "Final-Word Phantom": 1,
+    "Fist of Suns": 1,
+    "Fluctuator": 1,
+    "Frost Titan": 1,
+    "Fusion Elemental": 1,
+    "Ghalta, Primal Hunger": 1,
+    "Goblin Cadets": 1,
+    "Gratuitous Violence": 1,
+    "Guiltfeeder": 1,
+    "Hama Pashar, Ruin Seeker": 1,
+    "Hooded Horror": 3,
+    "Hunted Dragon": 2,
+    "Hunted Lammasu": 1,
+    "Hushwing Gryff": 1,
+    "Hydra Omnivore": 2,
+    "Impact Tremors": 2,
+    "Impulsive Maneuvers": 1,
+    "Indomitable Ancients": 1,
+    "Indomitable Might": 1,
+    "Inkfathom Witch": 1,
+    "Inniaz, the Gale Force": 1,
+    "Insurrection": 1,
+    "Jaws of Defeat": 1,
+    "Jubilant Skybonder": 1,
+    "Jungle Lion": 1,
+    "Junk Winder": 2,
+    "Knight Paladin": 2,
+    "Knight Rampager": 2,
+    "Krark's Thumb": 1,
+    "Krosan Cloudscraper": 1,
+    "Krosan Colossus": 1,
+    "Kulrath Knight": 1,
+    "Landroval, Horizon Witness": 1,
+    "Lasting Tarfire": 1,
+    "Leyline of Anticipation": 1,
+    "Lhurgoyf": 2,
+    "Liquimetal Coating": 2,
+    "Lord of Extinction": 1,
+    "Lorthos, the Tidemaker": 1,
+    "Loyal Subordinate": 2,
+    "Ludevic, Necrogenius": 1,
+    "Maddening Hex": 1,
+    "Magus of the Balance": 1,
+    "Mandate of Peace": 1,
+    "Marionette Master": 1,
+    "Marshland Bloodcaster": 1,
+    "Mass Mutiny": 2,
+    "Master Warcraft": 3,
+    "Midnight Pathlighter": 1,
+    "Molimo, Maro-Sorcerer": 1,
+    "Motivated Pony": 1,
+    "Nantuko Shade": 1,
+    "Netherborn Altar": 1,
+    "Next of Kin": 1,
+    "Nissa, Worldsoul Speaker": 1,
+    "Noble Quarry": 1,
+    "Order of Succession": 1,
+    "Panharmonicon": 1,
+    "Panoptic Projektor": 1,
+    "Panther Robot": 2,
+    "Passionate Archaeologist": 1,
+    "Peema Aether-Seer": 1,
+    "Plumeveil": 1,
+    "Polymorphist's Jest": 1,
+    "Price of Knowledge": 1,
+    "Pyreswipe Hawk": 1,
+    "Razorfield Ripper": 2,
+    "Reconnaissance": 1,
+    "Reverse the Sands": 1,
+    "Rhythm of the Wild": 2,
+    "Risky Move": 1,
+    "Rootbreaker Wurm": 1,
+    "Rubblehulk": 2,
+    "Ruhan of the Fomori": 2,
+    "Runic Repetition": 1,
+    "Sawhorn Nemesis": 2,
+    "Scroll of Fate": 2,
+    "Scythe Specter": 3,
+    "Seal of the Guildpact": 1,
+    "Serene Master": 1,
+    "Shadow in the Warp": 2,
+    "Shared Animosity": 3,
+    "Sidar Kondo of Jamuraa": 2,
+    "Silent Arbiter": 2,
+    "Skittering Cicada": 1,
+    "Skyhunter Skirmisher": 1,
+    "Soothsaying": 1,
+    "Sower of Discord": 1,
+    "Steel Leaf Champion": 1,
+    "Stormtide Leviathan": 1,
+    "Stranglehold": 2,
+    "Sudden Spoiling": 2,
+    "Surrak, the Hunt Caller": 1,
+    "Suspicious Bookcase": 1,
+    "Sword of the Chosen": 1,
+    "Tahngarth, First Mate": 1,
+    "Teapot Slinger": 1,
+    "Terra Ravager": 2,
+    "Tetsuko Umezawa, Fugitive": 1,
+    "The Chain Veil": 1,
+    "Thunderstaff": 2,
+    "Tidal Barracuda": 1,
+    "Tidehollow Strix": 1,
+    "Tiller Engine": 1,
+    "Timber Paladin": 1,
+    "Tower Gargoyle": 1,
+    "Transguild Courier": 1,
+    "Trap the Trespassers": 1,
+    "Traxos, Scourge of Kroog": 1,
+    "Tree of Perdition": 1,
+    "Tree of Redemption": 1,
+    "Turn to Frog": 1,
+    "Unleash Fury": 1,
+    "Unnerve": 2,
+    "Varchild, Betrayer of Kjeldor": 1,
+    "Vault 112: Sadistic Simulation": 1,
+    "Vela the Night-Clad": 1,
+    "Viseling": 1,
+    "Void Winnower": 1,
+    "Vorapede": 1,
+    "Wakestone Gargoyle": 1,
+    "Walking Bulwark": 1,
+    "Wave of Rats": 1,
+    "Whisperwood Elemental": 1,
+    "Whitemane Lion": 1,
+    "Widespread Panic": 1,
+    "Wight of Precinct Six": 2,
+    "Wild Mongrel": 1,
+    "Wild Ride": 1,
+    "Wilderness Elemental": 1,
+    "Wilderness Reclamation": 2,
+    "Winding Constrictor": 1,
+    "Witch Hunt": 1,
+    "Wulfgar of Icewind Dale": 1,
+    "Wydwen, the Biting Gale": 1,
+    "Xolatoyac, the Smiling Flood": 1,
+    "Yeva, Nature's Herald": 1,
+    "Zendikar Incarnate": 1
+  }
+}

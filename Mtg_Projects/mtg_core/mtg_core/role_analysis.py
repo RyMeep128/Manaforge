@@ -6,14 +6,20 @@ bounded to an ability/sentence; this is not a Magic rules interpreter.
 from functools import lru_cache
 import json
 import re
+import gzip
+import hashlib
+from pathlib import Path
 
 from .category_rules import clean_text, text_roles
+from .strategy_analysis import strategy_context
+
+RULE_VERSION = 14
 
 
 BASE_SCORES = {
     'Board Wipes': 180, 'Counterspells': 175, 'Interaction': 170,
     'Ramp': 160, 'Removal': 150, 'Tutors': 145, 'Recursion': 145,
-    'Protection': 120, 'Win Conditions': 130, 'Draw': 142,
+    'Protection': 120, 'Win Conditions': 140, 'Draw': 142,
     'Card Advantage': 138, 'Tokens': 143, 'Lifegain': 135,
     'Graveyard': 135, 'Sacrifice / Aristocrats': 125, 'Utility': 50,
 }
@@ -21,6 +27,66 @@ BASE_SCORES = {
 # Effects missing from the original conservative role hints. Different kinds of
 # evidence within a role use max(), not occurrence counts.
 EFFECTS = (
+    ('Card Advantage', 155, 'moves revealed library cards or piles into hand',
+     r"\breveals? [^.]{0,140}\btop\b[^.]{0,160}\blibrary\b(?:[^.]{0,240}\. ){0,3}[^.]{0,240}\bputs? (?:it|that card|the revealed card|one pile|a pile|[^.]{0,60}cards?) into (?:your|their) hand\b"),
+    ('Card Advantage', 155, 'casts revealed cards without spending a card from hand',
+     r"\breveal [^.]{0,140}\b(?:top|hand)\b[^.]{0,160}\. [^.]{0,160}\byou may (?:cast|play) (?:it|that card)\b"),
+    ('Card Advantage', 155, 'casts exiled library cards',
+     r"\bexile [^.]{0,140}\btop\b[^.]{0,100}\blibrary\b[^.]{0,180}\. [^.]{0,180}\. [^.]{0,180}\byou may cast\b"),
+    ('Card Advantage', 155, 'casts cards from an inspected opposing hand',
+     r"\blook at (?:that|target) player's hand\b[^.]{0,80}\. [^.]{0,160}\byou may cast\b"),
+    ('Card Advantage', 155, 'casts cards from a revealed opposing hand',
+     r"\breveals? (?:their|his or her) hand\b[^.]{0,80}\. [^.]{0,160}\byou may cast\b"),
+    ('Card Advantage', 155, 'turns a library card into a permanent',
+     r'\bmanifest (?:the top card|dread)\b'),
+    ('Utility', 110, 'inspects the top of your library',
+     r'\blook at the top card of your library any time\b'),
+    ('Protection', 145, 'grants protection to another permanent',
+     r'\b(?:enchanted|equipped|target) (?:creature|permanent) (?:has|gains?) (?:protection from|hexproof|shroud|indestructible|ward)\b'),
+    ('Graveyard Hate', 165, 'prevents targeting cards in graveyards',
+     r"\bcards in graveyards (?:can't|cannot) be (?:the )?targets? of spells or abilities"),
+    ('Graveyard Hate', 165, 'exiles graveyard cards or whole graveyards',
+     r"\bexile (?:all cards (?:from|in) all graveyards|all graveyards|(?:target player's|each opponent's|all opponents') graveyards?|[^.!?]{0,100}\bcards? (?:from|in) (?:a|any|target player's|an opponent's) graveyard)\b"),
+    ('Graveyard Hate', 165, 'replaces graveyard entry with exile',
+     r'\bif [^.]{0,100}\b(?:would die|would be put into (?:a|any|an? [a-z]+) graveyard)\b[^.]{0,100}\bexile\b[^.]{0,40}\binstead\b'),
+    ('Graveyard Hate', 165, 'restricts playing cards or recovering creatures from graveyards',
+     r"\b(?:players (?:can't|cannot) cast spells (?:from|in) graveyards|creature cards in graveyards (?:can't|cannot) enter the battlefield)\b"),
+    ('Draw', 160, 'provides additional cards during draw steps',
+     r"\bat the beginning of [^.]{0,100}\bdraw step[^.]{0,120}\bdraws? (?:an additional|an extra|a|one|two|three|x|\d+) cards?\b"),
+    ('Ramp', 160, 'untaps your lands for additional mana',
+     r'\buntap all (?:lands|artifacts and lands) you control\b'),
+    ('Evasion', 150, 'grants flying or other blocking evasion',
+     r'\b(?:creatures you control|enchanted creature|equipped creature|target creature) (?:have|has|gains?) (?:flying|menace|shadow|horsemanship|fear|intimidate|skulk)\b'),
+    ('Evasion', 150, 'makes your creatures unblockable',
+     r"\b(?:creatures you control|enchanted creature|equipped creature|target creature) (?:can't|cannot) be blocked\b"),
+    ('Anthem', 135, 'pumps a team after granting combat abilities', r'\b(?:each creature you control|creatures you control)[^.]{0,90}\bgets? \+[x0-9]+/\+[x0-9]+'),
+    ('Anthem', 130, 'sets team base power and toughness', r'\bcreatures you control have base power and toughness [x0-9]+/[x0-9]+'),
+    ('Interaction', 145, 'takes control of selected or opposing permanents', r'\bgain control of (?:it|(?:target|that|all|each) [^.]{0,70}(?:creatures?|permanents?|artifacts?))\b'),
+
+    ('Anthem', 135, 'boosts a creature team or creature-type team', r'\b(?:each creature you control gets|creatures (?:you control|target player controls) get) \+[x0-9]+/\+[x0-9]+|\beach (?:other )?[a-z]+ (?:you control )?gets \+[^.]{0,100}creature type'),
+    ('Anthem', 130, 'grants a combat keyword to creatures', r'\b(?:creatures|target creature) [^.]{0,90}\b(?:gains?|have) double strike\b'),
+    ('Protection', 120, 'prevents damage to a permanent or player', r'\bprevent (?:all|the next) [^.]{0,100}damage that would be dealt to'),
+    ('Protection', 155, 'prevents damage to you or your permanents',
+     r'\bprevent (?:all|the next) [^.]{0,100}\bdamage that would be dealt to (?:you|(?:creatures|permanents) you control)\b'),
+    ('Interaction', 135, 'exchanges control of permanents', r'\bexchange control of\b'),
+    ('Interaction', 110, 'taps opposing creatures', r'\btap (?:target|all) [^.]{0,60}creatures?\b'),
+    ('Ramp', 150, 'puts creatures into play without casting them', r'\bput [^.]{0,120}creature card from your hand onto the battlefield'),
+    ('Ramp', 150, 'casts cards without paying mana', r'\byou may cast [^.]{0,130}without paying (?:its|their|the) mana cost'),
+    ('Ramp', 150, 'reduces chosen creature-type spell costs', r'\b(?:spells of the chosen type|[a-z]+ spells) [^.]{0,60}cost (?:\{[0-9]+\} )?less to cast'),
+    ('Counters', 125, 'uses structured counter mechanics', r'\b(?:bolster|support|adapt|renown|evolve|graft|modular|outlast|reinforce|mentor) [0-9x]+\b'),
+    ('Goad', 130, 'forces opposing combat', r'\b(?:creatures|creature) [^.]{0,60}attacks? each combat if able'),
+
+    ('Goad', 155, 'goads creatures or rewards goaded combat', r'\bgoad(?:ed)?\b'),
+    ('Anthem', 130, 'grants combat keywords to a team', r'\b(?:creatures|[a-z]+s) you control have (?:haste|trample|double strike|menace|flying)\b'),
+    ('Anthem', 130, 'scales team power', r'\bcreatures you control get \+[x0-9]+/\+[x0-9]+'),
+    ('Counters', 150, 'doubles existing counters', r'\bdouble the number of [^.]{0,80}counters?\b'),
+    ('Interaction', 145, 'gains control of opposing permanents', r'\bgain control of (?:target|all|each|that) [^.]{0,60}(?:creature|permanent|artifact)\b'),
+    ('Copy', 140, 'copies a spell, ability, or permanent', r'\b(?:copy target|copy that|copy it|copy each|copies of|becomes? a copy of|as a copy of)\b'),
+    ('Extra Combat', 150, 'adds combat phases or turns', r'\b(?:additional combat phase|extra turn after this one)\b'),
+    ('Equipment', 130, 'equipment supports an equipped creature', r'\bequipped creature (?:gets|has|haste|gains)\b'),
+    ('Tokens', 145, 'replaces creature tokens with different tokens', r'\bif [^.]{0,100}tokens would be created[^.]{0,140}instead'),
+    ('Ramp', 150, 'untaps your mana sources repeatedly', r"\buntap all (?:lands|artifacts and lands|permanents) you control during each other player's untap step"),
+
     ('Enchantment Matters', 140, 'rewards enchantments or Auras',
      r'\b(?:whenever|when) [^.]{0,90}(?:cast [^.]{0,40}(?:enchantment|aura)|(?:enchantment|aura)[^.]{0,60}enters)|\b(?:for each|number of) (?:aura|enchantment)s?\b|\b(?:aura|enchantment)s? you control\b'),
     ('Enchantment Matters', 140, 'rewards enchanted creatures',
@@ -108,14 +174,37 @@ COMPILED_EFFECTS = tuple((role, score, label, re.compile(pattern))
 
 def analyze_effects(payload):
     """Return fresh evidence dictionaries backed by a bounded immutable cache."""
+    serialized = effect_cache_key(payload)
+    cached = generated_effects().get(hashlib.sha256(serialized.encode()).hexdigest())
+    evidence = cached if cached is not None else _analyze_cached(serialized)
+    return {role: {'score': score, 'reasons': list(reasons)}
+            for role, score, reasons in evidence}
+
+
+@lru_cache(maxsize=1)
+def generated_effects():
+    try:
+        with gzip.open(Path(__file__).with_name('data') / 'categorization' / 'classifications.json.gz', 'rt', encoding='utf-8') as stream:
+            data = json.load(stream)
+        return data['cards'] if data.get('rule_version') == RULE_VERSION else {}
+    except (OSError, ValueError, KeyError):
+        return {}
+
+
+def effect_cache_key(payload):
     fields = ('oracle_text', 'type_line', 'keywords', 'card_faces')
     relevant = {k: payload.get(k) for k in fields}
     if relevant['card_faces']:
         relevant['card_faces'] = [{k: face.get(k) for k in fields if k != 'card_faces'}
                                   for face in relevant['card_faces']]
     key = json.dumps(relevant, sort_keys=True, ensure_ascii=True)
-    return {role: {'score': score, 'reasons': list(reasons)}
-            for role, score, reasons in _analyze_cached(key)}
+    return key
+
+
+def effect_cache_record(payload):
+    key = effect_cache_key(payload)
+    return hashlib.sha256(key.encode()).hexdigest(), _analyze_cached(key)
+
 
 
 @lru_cache(maxsize=4096)
@@ -144,8 +233,18 @@ def _analyze_cached(key):
     for face in payload.get('card_faces') or [payload]:
         text = clean_text(face.get('oracle_text'))
         for role, score, label, pattern in COMPILED_EFFECTS:
-            if pattern.search(text):
+            match = pattern.search(text)
+            if match:
+                # An opponent-only draw benefit is not our draw access. Apply
+                # recipient scope to effect evidence as well as basic text hints.
+                recipient = text[max(0, match.start() - 50):match.end()]
+                if role in ('Draw', 'Card Advantage') and re.search(r'\bopponents?\b', recipient) and not re.search(
+                        r'\byou (?:may )?(?:draw|cast|play)\b|\binto your hand\b|\beach player\b', recipient):
+                    continue
                 add(role, score, 'Oracle effect: ' + label)
+        if re.search(r'\bcascade\b', text) or 'cascade' in {
+                str(k).casefold() for k in payload.get('keywords') or []}:
+            add('Card Advantage', 155, 'Oracle effect: cascade casts an additional library card')
         # Alternate casting costs can turn targeted removal into a sweep.
         keywords = {str(k).casefold() for k in payload.get('keywords') or []}
         if ('overload' in keywords or re.search(r'\boverload\b', text)) and 'Removal' in result:
@@ -172,6 +271,7 @@ def _analyze_cached(key):
 
 def deck_context(payloads, commander_payloads=()):
     """Bounded tie-break support from commanders and repeated deck mechanics."""
+    payloads, commander_payloads = list(payloads), list(commander_payloads)
     support = {}
     for payload in payloads:
         for role, evidence in analyze_effects(payload).items():
@@ -182,4 +282,5 @@ def deck_context(payloads, commander_payloads=()):
         for role, evidence in analyze_effects(payload).items():
             if evidence['score'] >= 120:
                 bonuses[role] = 8
+    bonuses['_strategy'] = strategy_context(payloads, commander_payloads)
     return bonuses

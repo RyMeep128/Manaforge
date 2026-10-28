@@ -42,3 +42,24 @@ def test_membership_uses_all_sections_and_respects_reliable_oracle_identity():
     document.deck.entries.append(DeckEntry('legacy', '  Legacy   Card '))
     candidates.append(DeckEntry('legacy-match', 'legacy card', oracle_id='new-oracle'))
     assert 'legacy-match' in in_deck_entries(document, candidates)
+
+
+def test_cached_shared_page_survives_session_renewal_and_rejects_revocation(tmp_path):
+    import time
+    from contextlib import closing
+    from mtg_core.library.recommendations import LibraryRecommendations, cache_token
+    cache = LibraryRecommendations(tmp_path / 'library.sqlite3')
+    with closing(cache.connect()) as db, db:
+        db.execute('INSERT INTO access VALUES (?, ?, ?)', ('server', 'account', time.time() + 100))
+    evidence = dict(cache_file=str(cache.path), cache_token=cache_token(cache.path))
+    pages = RecommendationPages()
+    pages.append([dict(oracle_id='shared', score=1, roles=[], source_evidence={'library': evidence},
+                       entry=DeckEntry('candidate', 'Shared', oracle_id='shared',
+                                       extras={'facts': {'type_line': 'Creature'}}))])
+    document = DeckDocument()
+    assert pages.page(document)[0]
+    with closing(cache.connect()) as db, db:
+        db.execute('UPDATE access SET expires=?', (time.time() + 300,))
+    assert pages.page(document)[0]
+    cache.revoke('server')
+    assert pages.page(document)[0] == []

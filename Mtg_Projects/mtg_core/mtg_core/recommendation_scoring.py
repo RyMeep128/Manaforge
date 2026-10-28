@@ -84,6 +84,7 @@ def context(document, proposals, records=None):
     return dict(
         gaps=gaps,
         themes=themes,
+        explicit_themes=list(document.editor_preferences.get("manual_themes", [])),
         archetypes=archetypes,
         average=composition["average_mana_value"],
         known=composition["known_mana_value"],
@@ -101,6 +102,13 @@ def score(row, deck_context, weights):
         or (key != "lands" and role_names & GROUPS[key])
     }
     themes = [name for name in deck_context["themes"] if name.casefold() in role_names]
+    from .discovery_themes import theme_matches
+
+    explicit = [
+        theme["name"]
+        for theme in deck_context.get("explicit_themes", [])
+        if theme_matches(row, theme)
+    ]
     archetypes = [
         kind
         for kind in deck_context["archetypes"]
@@ -127,7 +135,7 @@ def score(row, deck_context, weights):
             - association.get("baseline", row.get("baseline", 0)),
         ),
         roles=max(gaps.values(), default=0),
-        themes=float(bool(themes)),
+        themes=2.0 if explicit else float(bool(themes)),
         archetype=float(bool(archetypes)),
         curve=float(bool(curve)),
     )
@@ -140,6 +148,8 @@ def score(row, deck_context, weights):
         )
     if themes:
         reasons.append("Theme matches: " + ", ".join(themes))
+    if explicit:
+        reasons.append("Selected themes: " + ", ".join(explicit))
     if archetypes:
         reasons.append("Type-based archetype matches: " + ", ".join(archetypes))
     if curve:

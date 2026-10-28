@@ -3685,7 +3685,7 @@ class ProjectDashboardPage(QWidget):
             if dialog.path:
                 window.open_path(dialog.path)
             elif dialog.new_deck:
-                window.new()
+                window.choose_new_deck()
             window.show()
 
     def refresh_projects(self):

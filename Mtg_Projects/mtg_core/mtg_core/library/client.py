@@ -304,15 +304,17 @@ class LibraryConnections:
             db.execute('DELETE FROM connections WHERE id=?', (connection_id,))
 
 
-def copy_publication(publication, *, server_id, server_address, deck_root, store=None):
+def copy_publication(publication, *, server_id, server_address, deck_root, store=None, library_name=None):
     """Save an independent deck atomically. No server-controlled filenames/settings."""
     publication = LibraryClient.publication(publication)
     document = DeckDocument(deck=Deck.from_dict(publication['deck']))
     document.deck.deck_id = str(uuid.uuid4())
+    if library_name:
+        document.deck.name += ' [' + str(library_name).strip() + ']'
     document.deck.extras['manual_name'] = True
     document.deck.extras['library_source'] = {
         'server_id': identifier(server_id), 'server_url': server_address,
         'deck_id': publication['deck_id'], 'revision': publication['revision'],
-        'owner': publication['owner'], 'kind': 'independent_copy'}
+        'owner': publication['owner'], 'kind': 'independent_copy', 'library_name': library_name}
     destination = Path(deck_root) / f'{document.deck.deck_id}.manaforge.json'
     return (store or DeckStore()).save(destination, document)

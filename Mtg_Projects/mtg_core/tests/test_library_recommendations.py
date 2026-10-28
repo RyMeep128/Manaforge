@@ -110,3 +110,44 @@ def test_cancelled_listing_does_not_delete_cached_samples(tmp_path):
     with pytest.raises(SearchCancelled):
         cache.sync(client, should_cancel=lambda: True)
     assert cache.snapshot(['cmd'])['results']
+
+
+def test_content_signature_survives_renewal_but_tracks_permissions_and_revisions(tmp_path):
+    from mtg_core.library.recommendations import cache_signature, shared_permitted
+    cache, client = LibraryRecommendations(tmp_path / 'shared.sqlite3'), Client()
+    cache.sync(client)
+    original = cache_signature(cache.path)
+    evidence = cache.snapshot(['cmd'])['results'][0]
+    client.expires_at += 300
+    cache.sync(client)
+    assert cache_signature(cache.path) == original
+    assert shared_permitted(evidence)
+    client.rows = [publication(revision=2)]
+    cache.sync(client)
+    assert cache_signature(cache.path) != original
+    assert not shared_permitted(evidence)
+    evidence = cache.snapshot(['cmd'])['results'][0]
+    client.account_id = 'other-account'
+    cache.sync(client)
+    assert not shared_permitted(evidence)
+    evidence = cache.snapshot(['cmd'])['results'][0]
+    client.expires_at = time.time() - 1
+    cache.sync(client)
+    assert not shared_permitted(evidence)
+
+
+def test_source_signature_ignores_unrelated_installation_writes(tmp_path, monkeypatch):
+    from mtg_core import paths, recommendation_distribution
+    from mtg_core.recommendation_sources import source_signature
+    root = tmp_path / 'recommendations'
+    monkeypatch.setattr(paths, 'core_data_root', lambda: tmp_path)
+    monkeypatch.setattr('mtg_core.library.recommendations.cache_path', lambda: tmp_path / 'shared.sqlite3')
+    monkeypatch.setattr(recommendation_distribution, 'installed_bundle', lambda source: None)
+    before = source_signature(root)
+    (tmp_path / 'installation.sqlite3').write_bytes(b'unrelated update check')
+    assert source_signature(root) == before
+    bundle = tmp_path / 'generation-2'
+    bundle.mkdir()
+    (bundle / 'bundle.json').write_text('{}')
+    monkeypatch.setattr(recommendation_distribution, 'installed_bundle', lambda source: bundle if source == 'edhrec' else None)
+    assert source_signature(root) != before

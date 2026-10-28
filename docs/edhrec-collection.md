@@ -62,10 +62,11 @@ Invalid or missing pages are recorded in `crawl.error` and skipped; access denia
 and other terminal failures stop with a visible reason. Missing parent responses
 stop indexing rather than silently losing coverage.
 
-Use **More > Recommendation cache > Configure recommendation sources > EDHREC
-cohort** to choose a collected theme, bracket, or budget filter. Save and refresh
-recommendations to apply it. Choices appear as cohorts finish collecting. General
-commander recommendations remain the default. An unavailable exact filtered
+Use the inline **Audience** dropdown above recommendations to choose Automatic,
+General, or a collected theme, bracket, or budget audience. Changes apply immediately.
+Choices become available on refresh or returning to recommendations as cohorts finish
+collecting. New decks start on Automatic; existing deck and global source selections
+are preserved. An unavailable exact filtered
 commander/pair reports unavailable; it never silently substitutes a general page
 or a different cohort. Only one EDHREC cohort contributes to a ranking at a time;
 overlapping cohort sample counts are never summed. Evidence identifies the exact
@@ -74,7 +75,7 @@ contributing independently.
 
 The expansion shares the original `edhrec-run/collector.lock`, `responses/`, and
 `STOP` file. Run only one EDHREC downloader at a time. It reuses the same serial
-six-second pacing, 8 MiB response limit, Retry-After behavior, and backoff.
+six-second default pacing, 8 MiB response limit, Retry-After behavior, and backoff.
 `edhrec-run/cohort-state.json` reports imported/skipped/pending counts and current
 work. Create `edhrec-run/STOP` to pause; remove that file and rerun to resume.
 The queue survives crashes without duplicate counts. Completed/skipped pages are
@@ -87,6 +88,56 @@ explicitly to continue a bounded run. At six seconds per request, 100,000 uncach
 pages take at least seven days; leave the computer running. No recurring refresh
 is installed. Local tests, linting, and formatting were not run for this change;
 offline regression coverage is supplied for CI.
+
+## Combined theme, bracket, and budget collection
+
+`tools/collect_edhrec_combinations.py` builds a separate snapshot of exact
+two- and three-filter audiences:
+
+```powershell
+& '.\Mtg_Projects\mtg_proxy\venv\Scripts\python.exe' tools/collect_edhrec_combinations.py --max-pages 10000
+```
+
+It starts from the existing general snapshot and its cached responses, visits
+theme/bracket pages, and follows their advertised nonempty filters in the canonical
+bracket/theme/budget order. It collects theme + budget, bracket + theme, bracket +
+budget, and bracket + theme + budget. It does not generate a Cartesian product,
+combine statistics from separate samples, or request arbitrary advanced filters.
+Combined children are prioritized so collection can produce combined data before
+processing every single-filter page. Already cached pages need no network request.
+
+The normalized data goes into `recommendations/edhrec-combinations.sqlite3` using
+the existing versioned cohort schema. Only combined audiences are published there.
+Each has `kind=combined`, a canonical dimension-qualified key such as
+`bracket:core|theme:tokens|budget:budget`, an explicit `cohort.filters` mapping,
+the exact EDHREC source path, sample counts, card statistics, and timestamps.
+Single-filter pages are traversal checkpoints, not combined recommendation evidence.
+Existing general and single-filter databases and their checkpoints are preserved.
+
+Progress is in `edhrec-run/combination-state.json`: `imported` counts all successfully
+processed traversal pages, while `combined_imported` counts stored combined audiences.
+The pending count can grow as pages advertise more children. Empty, missing, or
+mismatched pages are skipped with their reason retained in the SQLite crawl table.
+Other failures stop with a saved error and leave pending work resumable.
+
+This script shares the existing exclusive collector lock, STOP file, compressed
+response cache, serial six-second default pacing, response-size limit, and retry/backoff
+logic. **Do not run both collectors together.** To switch, create `edhrec-run/STOP`,
+wait for the active collector to exit, remove STOP, then run the command above.
+To resume, rerun the same command; raise `--max-pages` when its total successful-page
+bound has been reached. The default is 250,000 processed pages and `--max-gb 20`
+limits the shared compressed response storage. No automatic scheduling is installed.
+
+Both cohort scripts accept `--delay SECONDS`, with a default of 6 and a minimum of 1.
+For example, append `--delay 3` for a three-second interval, or `--delay 2` / `--delay 1`.
+The interval is measured between network request starts; cached reads do not wait.
+Retry-After and error backoff can extend it. The configured delay is included in
+the progress JSON. Changing the interval requires pausing and restarting the collector.
+This is an operator-selected interval, not a published EDHREC request quota.
+The general commander and other provider collectors retain their existing pacing.
+
+Collection is preparation for combined audience selection. The recommendation UI
+and distributable recommendation packs do not consume this new snapshot yet.
 
 ## Offline commander/theme discovery
 
@@ -226,10 +277,9 @@ redistribution, publishing, emailing, or recurring refresh is configured.
 
 ## Automatic cohorts
 
-The source dialog offers **Automatic: match deck theme** alongside General and
-specific collected cohorts. In the recommendation panel, **More > EDHREC audience**
-adds a per-deck override for Automatic, General, or a cached bracket/budget; Follow
-global setting is the default. Automatic selects the saved discovery theme for
+The source dialog retains global source settings. The inline **Audience** dropdown
+provides per-deck Automatic, General, theme, bracket, and budget choices, plus Follow
+global setting. Automatic selects the saved discovery theme for
 the exact commander or pair. A missing filtered cohort falls back to that same
 commander/pair's general page, with an explanation in the panel. Only one EDHREC
 cohort contributes to each run; other enabled sources still contribute normally.
@@ -237,3 +287,18 @@ cohort contributes to each run; other enabled sources still contribute normally.
 Returning to recommendations checks source settings and database/WAL publication
 metadata. Deck context changes and explicit Refresh also update the list. There
 is no polling while browsing and no collector restart or download on refresh.
+
+## Browsing recommendations
+
+Switch between **Card Types** and **Card Roles**, then select a category. Each mode
+starts with Top Cards and remembers its category, loaded page size, and scroll position
+per deck. Type categories include Artifacts and Battles; multi-type and multi-face
+cards can appear in multiple categories. Roles use the shared card classifications.
+All categories retain recommendation rank order.
+
+Wide panels show category tabs; compact panels use a category dropdown. Search stays
+visible. **Filters** retains membership, type, role, color identity, mana value,
+legality, and specialist collections such as New Cards, High Lift, Utility Lands,
+and EDHREC source categories. These filters intersect with the current mode category.
+Existing saved browsing filters are restored. The footer shows compact availability
+status; audience and source details remain in tooltips and card inspection.

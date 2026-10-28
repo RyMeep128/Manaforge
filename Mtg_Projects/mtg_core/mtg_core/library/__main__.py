@@ -22,6 +22,8 @@ def main():
     serve.add_argument('--host', default='127.0.0.1')
     serve.add_argument('--port', default=8771, type=int)
     serve.add_argument('--lan', action='store_true', help='Explicitly permit a private LAN bind address')
+    serve.add_argument('--disable-community-categories', action='store_true',
+                       help='Disable manual category evidence contributions and downloads')
     args = parser.parse_args()
     store = LibraryStore(args.data_dir)
     # User configuration and secrets must not be placed in a source checkout.
@@ -46,6 +48,9 @@ def main():
         except ImportError:
             parser.error('Install the optional requirements-library.txt before hosting.')
         app = LibraryAPI(store)
+        with store.db() as db:
+            db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',
+                       ('community_categories', 'disabled' if args.disable_community_categories else 'enabled'))
         print(f'Starting library on {address}:{args.port}. Stop with Ctrl+C.')
         # Ignore proxy headers. TLS terminates at the operator's tunnel/reverse proxy.
         # Waitress bounds concurrency, buffers and slow/incomplete requests.

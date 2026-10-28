@@ -32,7 +32,7 @@ def test_secondary_override_roundtrip_history_and_reanalysis():
     apply_categories(loaded, proposals)
     assert loaded.to_dict() == edited
     apply_categories(loaded, proposals, reconsider_manual=True)
-    assert loaded.deck.entries[0].category_ids == ['auto:ramp', 'auto:draw']
+    assert loaded.deck.entries[0].category_ids == ['auto:ramp']
 
 
 def test_bulk_changes_preserve_unmentioned_categories_and_unselected_entries():

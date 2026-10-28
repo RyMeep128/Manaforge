@@ -17,6 +17,17 @@ from mtg_core.library.store import LibraryStore, digest
 PASSWORD = 'a sufficiently long test password'
 
 
+def test_administrator_can_disable_category_evidence(library):
+    store, admin, friend, _ = library
+    app = LibraryAPI(store)
+    assert 'manual_category_evidence_v1' in request(app, '/api/v1/info')['body']['capabilities']
+    with store.db() as db:
+        db.execute("INSERT OR REPLACE INTO meta VALUES ('community_categories', 'disabled')")
+    assert 'manual_category_evidence_v1' not in request(app, '/api/v1/info')['body']['capabilities']
+    assert request(app, '/api/v1/category-evidence', token=friend)['status'] == 403
+    assert request(app, '/api/v1/decks/example/category-evidence', 'PUT', token=admin)['status'] == 403
+
+
 @pytest.fixture
 def library(tmp_path, monkeypatch):
     # Exercise the real hashing implementation without paying production KDF cost in every fixture.

@@ -5,7 +5,6 @@ from copy import deepcopy
 import json
 from pathlib import Path
 import sqlite3
-import time
 from tempfile import TemporaryDirectory
 
 from mtg_core.decks import DeckEntry
@@ -30,6 +29,9 @@ class RecommendationPages:
     def append(self, rows):
         self.cache.clear()
         with closing(sqlite3.connect(self.path)) as db:
+            # Rebuildable scratch pages: avoid a durable disk flush per small batch.
+            db.execute('PRAGMA synchronous=OFF')
+            db.execute('PRAGMA journal_mode=MEMORY')
             for row in rows:
                 entry = row['entry']
                 facts = entry.extras.get('facts') or {}
@@ -83,7 +85,7 @@ class RecommendationPages:
                     row['association'] = association
                 row['entry'] = DeckEntry.from_dict(row['entry'])
                 batch.append(row)
-                if len(batch) == 50:
+                if len(batch) == 200:
                     result.append(rank_recommendations(batch, context, preferences))
                     batch = []
         if batch:
@@ -101,13 +103,13 @@ class RecommendationPages:
 
     def page(self, document, *, limit=50, kind='All Card Types', text='', role='All roles',
              membership=1, dismissed=(), category='Top Cards', identity=None, mana_value=-1,
-             theme=None, should_cancel=None):
+             theme=None, should_cancel=None, collection='Top Cards'):
         check_cancelled(should_cancel)
         # Quantity/printing changes that do not change membership can reuse pages.
         deck_key = tuple(sorted((e.oracle_id or '', e.card_id or '', ' '.join(e.name.casefold().split()))
                                 for e in document.deck.entries if e.quantity > 0))
         key = (deck_key, pool_context(document), limit, kind, text, role, membership, tuple(sorted(dismissed)), category,
-               identity, mana_value, json.dumps(theme, sort_keys=True))
+               identity, mana_value, json.dumps(theme, sort_keys=True), collection)
         # Shared evidence must be checked even for a previously viewed page:
         # disconnects, permission changes and expiry can invalidate it at any time.
         if key in self.cache and not any(row.get('source_evidence', {}).get('library')
@@ -116,7 +118,7 @@ class RecommendationPages:
             return deepcopy(self.cache[key])
         clauses, parameters = ['instr(text, ?) > 0'], [text.casefold().strip()]
         for column, value, all_value in [('types', kind, 'All Card Types'), ('roles', role, 'All roles'),
-                                         ('categories', category, None)]:
+                                         ('categories', category, None), ('categories', collection, 'Top Cards')]:
             if value != all_value:
                 clauses.append(f'EXISTS (SELECT 1 FROM json_each(cards.{column}) WHERE value=?)')
                 parameters.append(value)
@@ -128,6 +130,7 @@ class RecommendationPages:
                            "(SELECT 1 FROM json_each(cards.identity) WHERE instr(?, value)=0)")
             parameters.append(identity)
         rows, dismissed = [], set(dismissed)
+        permissions = {}
         with closing(sqlite3.connect(self.path, timeout=0.1)) as db:
             if should_cancel:
                 db.set_progress_handler(lambda: int(should_cancel()), 1000)
@@ -139,11 +142,11 @@ class RecommendationPages:
                     row = json.loads(payload)
                     shared = row.get('source_evidence', {}).get('library')
                     if shared:
-                        try:
-                            permitted = (shared.get('cache_deadline', 0) > time.time()
-                                         and Path(shared['cache_file']).stat().st_mtime_ns == shared['cache_mtime'])
-                        except (OSError, KeyError):
-                            permitted = False
+                        from mtg_core.library.recommendations import shared_permitted
+                        token_key = (shared.get('cache_file'), shared.get('cache_token'), shared.get('cache_mtime'))
+                        if token_key not in permissions:
+                            permissions[token_key] = shared_permitted(shared)
+                        permitted = permissions[token_key]
                         if not permitted:
                             continue
                     if row['oracle_id'] in dismissed:

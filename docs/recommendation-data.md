@@ -327,3 +327,27 @@ replaces counts. BlueprintMTG remains optional and disabled until verified.
 
 For pacing, run bounds, cache paths, and stop/resume controls, see the
 [one-time collection runbook](archidekt-collection.md).
+
+
+Recommendation browsing keeps scrollable type and role tabs in the same navigation
+row at sidebar and full-workspace widths. Presentation metadata (deck name, library
+destination, and browse preferences) does not invalidate ranked candidates. Pending
+page requests reuse a completed candidate set instead of rebuilding it. Rebuildable
+temporary SQLite pages use memory journals without durable per-batch flushes, and
+candidate enrichment uses larger batches. Deck context reads card records in one batch instead of opening one lookup per card. Source caches and saved decks retain their
+existing durability. Runtime latency remains for CI and interactive verification;
+no local performance tests were run.
+
+
+Audience selection is under Filters. Card Roles has an independent role-name
+search and pages of up to ten roles, with Top Cards pinned and dedicated previous /
+next buttons. Narrow layouts use fewer roles and two navigation rows. Searching or
+paging roles preserves the active category and does not rebuild candidates.
+
+Recommendation source signatures track active installed bundles instead of the
+whole installation database. Library signatures use account/authorization validity
+and sample revisions/content instead of file modification times. Routine session
+renewal does not invalidate results; changed accounts, expiry, removal and changed
+publications still do. Candidate and page workers are separate. Hidden panels retain
+valid candidate work, and source refreshes keep valid cards until replacement pages
+are ready. CI owns regression and screenshot validation; no local tests were run.

@@ -132,6 +132,7 @@ class EditorWindow(W.QMainWindow):
         more.setText('More')
         more.setPopupMode(W.QToolButton.ToolButtonPopupMode.InstantPopup)
         menu = W.QMenu(more)
+        menu.addAction('Deck settings…', self.deck_settings)
         menu.addAction('Artwork preferences?', self.artwork_preferences)
         menu.addAction('Deck artwork preferences...', self.project_artwork_preferences)
         menu.addAction('Global printing defaults...', self.printing_preferences)
@@ -187,7 +188,7 @@ class EditorWindow(W.QMainWindow):
 
         add_group, add_row = self.toolbar_group('Add Cards')
         self.workspace_button = self.button(add_row, 'Card Search', self.open_add_cards, True)
-        self.button(add_row, 'Themes', self.edit_themes)
+        self.button(add_row, 'Deck settings', self.deck_settings)
         self.quick_add = CardSearchEdit()
         self.quick_add.setPlaceholderText('Quick Add')
         self.quick_add.setAccessibleName('Quick Add: Enter searches, then Enter adds a result')
@@ -846,8 +847,16 @@ class EditorWindow(W.QMainWindow):
         self._refreshing_table = False
 
     def edit(self, action):
+        from .commander_selection import commanders
+        before_commanders = tuple(e.entry_id for e in commanders(self.document))
+        established = self._has_active_deck
         from .tag_model import retain_tag_definitions
         from mtg_core.basic_lands import land_quantities, stop_on_land_removal, reconcile_basic_lands
+        def composition(document):
+            return (tuple(document.deck.commander_entry_ids), deepcopy(document.editor_preferences.get('manual_themes', [])), tuple(
+                (e.entry_id, e.card_id, e.quantity > 0, e.section, e.extras.get('facts'))
+                for e in document.deck.entries))
+        before_composition = deepcopy(composition(self.document))
         def command(document):
             previous_lands = land_quantities(document)
             retain_tag_definitions(document)
@@ -855,10 +864,18 @@ class EditorWindow(W.QMainWindow):
             stop_on_land_removal(document, previous_lands)
             reconcile_basic_lands(document, self.basic_lands.templates)
             retain_tag_definitions(document)
+            from mtg_core.categorization import refresh_automatic_categories
+            if before_composition != composition(document):
+                refresh_automatic_categories(document)
         if self.session.edit(command):
             self._has_active_deck = True
             self.project_stack.setCurrentWidget(self.editor_body)
             self.changed()
+            after_commanders = tuple(e.entry_id for e in commanders(self.document))
+            if established and before_commanders != after_commanders and not getattr(self, '_setting_up_deck', False):
+                from .deck_setup import prompt_commander_themes
+                document = self.document
+                QtCore.QTimer.singleShot(0, lambda: prompt_commander_themes(self, document, after_commanders))
 
     def changed(self):
         if not self._has_active_deck and (self.document.deck.entries or self.document.deck.categories):
@@ -1555,15 +1572,21 @@ class EditorWindow(W.QMainWindow):
                                 if self._active_view == mode else None)
         del blockers
 
-    def publish_to_library(self):
+    def publish_to_library(self, *, upload=False):
         handler = getattr(self, 'publish_deck_handler', None)
         if handler is None or self.task is not None or not self._has_active_deck:
             return
-        if self.save():
+        if self.save(sync_library=False):
             from mtg_core.library.publishing import suggested_colors
-            handler(deepcopy(self.document.deck.to_dict()), suggested_colors(self.document.deck))
+            snapshot = deepcopy(self.document.deck.to_dict())
+            from mtg_core.library.category_evidence import manual_snapshot
+            snapshot['_manual_category_evidence'] = manual_snapshot(self.document)
+            if upload:
+                handler(snapshot, suggested_colors(self.document.deck), upload=True)
+            else:
+                handler(snapshot, suggested_colors(self.document.deck))
 
-    def save(self):
+    def save(self, *, sync_library=True):
         if not self._has_active_deck:
             return True
         self.view_scrolls[self._active_view] = self.view_scrollbar(self._active_view).value()
@@ -1572,6 +1595,8 @@ class EditorWindow(W.QMainWindow):
             self.edit_metadata()
         self.autosave.stop()
         if not self.session.dirty and self.path:
+            if sync_library:
+                self.queue_library_master()
             return True
         try:
             destination = self.session.save()
@@ -1581,7 +1606,23 @@ class EditorWindow(W.QMainWindow):
             return False
         self.changed()
         self.statusBar().showMessage(f'Saved: {destination}')
+        if sync_library:
+            self.queue_library_master()
         return True
+
+    def queue_library_master(self):
+        handler = getattr(self, 'library_sync_handler', None)
+        if callable(handler):
+            import sqlite3
+            from mtg_core.library import LibraryError
+            from mtg_core.library.publishing import suggested_colors
+            from mtg_core.library.category_evidence import manual_snapshot
+            snapshot = deepcopy(self.document.deck.to_dict())
+            snapshot['_manual_category_evidence'] = manual_snapshot(self.document)
+            try:
+                handler(snapshot, suggested_colors(self.document.deck))
+            except (OSError, ValueError, sqlite3.Error, LibraryError):
+                self.statusBar().showMessage('Saved locally. Library sync could not be queued; save again to retry.')
 
     def replace_document(self, document, path=None):
         self.session.replace_document(document, path)
@@ -1602,7 +1643,7 @@ class EditorWindow(W.QMainWindow):
         missing = [(e.entry_id, e.card_id, e.extras.get('proxy_front_name'), e.image_asset_id)
                    for e in document.deck.entries if (e.card_id and 'legalities' not in e.extras.get('facts', {})) or (legacy_folder and not e.image_asset_id)]
         uncategorized = [deepcopy(e) for e in document.deck.entries
-                         if not e.category_ids and not e.extras.get('auto_categories')]
+                         if not e.category_ids or (e.extras.get('auto_categories') and not e.extras['auto_categories'].get('manual'))]
         analysis_context = deepcopy(document.deck.entries)
         commander_ids = tuple(document.deck.commander_entry_ids)
         can_analyze = callable(getattr(self.service, 'analyze_entries', None))
@@ -1632,31 +1673,65 @@ class EditorWindow(W.QMainWindow):
             self.run_task(resolve, apply)
 
     def choose_new_deck(self):
-        choice, ok = W.QInputDialog.getItem(self, 'New deck', 'Start with:',
-            ['Create Blank Deck', 'Import Deck', 'Create from Precon'], 0, False)
-        if not ok:
+        self.create_deck()
+
+    def deck_settings(self):
+        if self.task is not None or not self._has_active_deck:
             return
-        if choice == 'Create from Precon':
-            from .precon_browser import PreconBrowser
-            from mtg_core.precons import apply_precon
-            if self.task is not None:
-                return
-            dialog = PreconBrowser(self.service, self.thumbnails, self)
-            if dialog.exec() != W.QDialog.DialogCode.Accepted or not dialog.result:
-                return
-            previous = self.document.deck.deck_id
-            self.new()
-            if self.document.deck.deck_id != previous:
-                self.edit(lambda d: apply_precon(d, dialog.record, dialog.result,
-                    dialog.deck_name.text(), dialog.cover_asset_id))
+        from .deck_setup import DeckSetupDialog
+        document = self.document
+        snapshot = document.to_dict()
+        dialog = DeckSetupDialog(self, document)
+        if dialog.exec() == W.QDialog.DialogCode.Accepted and self.document is document and document.to_dict() == snapshot:
+            self._setting_up_deck = True
+            try:
+                self.edit(dialog.apply_to)
                 self.sync_fields()
+            finally:
+                self._setting_up_deck = False
+
+    def create_deck(self, *, seed=None):
+        if self.task is not None:
             return
-        previous = self.document.deck.deck_id
-        self.new()
-        if choice == 'Import Deck' and self.document.deck.deck_id != previous:
-            self.import_decklist()
+        from .deck_setup import DeckSetupDialog
+        draft = DeckDocument()
+        settings = QtCore.QSettings('Manaforge', 'DeckEditor')
+        draft.deck.format = str(settings.value('new_deck_format', 'Commander'))
+        dialog = DeckSetupDialog(self, draft, creating=True, seed=seed)
+        if dialog.exec() != W.QDialog.DialogCode.Accepted:
+            return
+        # Do not replace the active document until all optional setup is accepted.
+        if self._has_active_deck and self.session.dirty and not self.save():
+            return
+        choice = dialog.start.currentIndex()
+        if choice == 2:
+            draft = deepcopy(dialog.draft)
+        dialog.apply_to(draft)
+        self.session.new()
+        self.session.edit(lambda d: (setattr(d, 'deck', deepcopy(draft.deck)),
+                                     setattr(d, 'editor_preferences', deepcopy(draft.editor_preferences))))
+        self._document_replaced()
+        settings.setValue('new_deck_format', draft.deck.format)
+        if choice == 1:
+            self._setting_up_deck = True
+            try:
+                self.import_decklist()
+            finally:
+                self._setting_up_deck = False
+
+        if self.document.deck.extras.get('library_association'):
+            document = self.document
+            def upload_created():
+                if self.closing or self.document is not document:
+                    return
+                if self.task is not None:
+                    QtCore.QTimer.singleShot(100, upload_created)
+                    return
+                self.publish_to_library(upload=True)
+            QtCore.QTimer.singleShot(0, upload_created)
 
     def new(self):
+        """Reset the document for internal callers; UI creation uses create_deck."""
         if self.task is not None or (self._has_active_deck and self.session.dirty and not self.save()):
             return
         self.session.new()
@@ -1765,7 +1840,9 @@ class EditorWindow(W.QMainWindow):
         self.add_cards_workspace.card_search.controller.shutdown()
         self.recommendation_panel.suspend()
         if (self.worker is not None or self.task is not None or self.thumbnails.worker is not None
-                or self.recommendation_panel.worker is not None or self.add_cards_workspace.discovery.controller.worker is not None
+                or self.recommendation_panel.worker is not None or self.recommendation_panel.page_worker is not None
+                or self.recommendation_panel.audience_worker is not None
+                or self.add_cards_workspace.discovery.controller.worker is not None
                 or self.add_cards_workspace.card_search.controller.worker is not None or self.text_view.worker is not None
                 or self.dashboard.worker is not None or self.basic_lands.worker is not None
                 or (discovery is not None and discovery.controller.worker is not None)):

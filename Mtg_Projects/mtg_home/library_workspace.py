@@ -2,6 +2,7 @@
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import sqlite3
+from time import monotonic
 
 from PyQt6 import QtCore as C, QtGui as G, QtWidgets as W
 from mtg_core.downloads import DownloadCancelled
@@ -29,6 +30,7 @@ class _LocalArtwork:
 
 class LibraryWorkspace(W.QMainWindow):
     copyCreated = C.pyqtSignal(object)
+    masterSyncStatus = C.pyqtSignal(str)
     followUpdates = C.pyqtSignal(str, int)
     editorRequested = C.pyqtSignal()
 
@@ -39,9 +41,16 @@ class LibraryWorkspace(W.QMainWindow):
         self.saved_sessions = SavedSessions(self.connections.path.parent)
         self._saved_restore_attempted = False
         self.publications = PublicationJournal(self.connections)
+        self.master_retry = {}
+        self.master_timer = C.QTimer(self)
+        self.master_timer.setInterval(30000)
+        self.master_timer.timeout.connect(self.sync_local_master)
+        self.master_timer.start()
         self.followed = FollowedDecks(self.connections)
         from mtg_core.library.recommendations import LibraryRecommendations
         self.recommendations = LibraryRecommendations(self.connections.path.parent / 'library-recommendations.sqlite3')
+        from mtg_core.library.category_evidence import CategoryEvidence
+        self.category_evidence = CategoryEvidence(self.connections.path.parent / 'library-category-evidence.sqlite3')
         self.deck_root = Path(deck_root or data_root() / 'decks')
         self.client_factory = client_factory
         self.clients, self.views, self.states = {}, {}, {}
@@ -186,7 +195,7 @@ class LibraryWorkspace(W.QMainWindow):
         layout.addLayout(bottom)
         self.preview_dialog = DeckPreviewDialog(self)
         self.details = self.preview_dialog.notes
-        self.copy_button = W.QPushButton('Copy to My Decks')
+        self.copy_button = W.QPushButton('Make editable copy')
         self.copy_button.setProperty('buttonRole', 'primary')
         self.copy_button.clicked.connect(self.copy_selected)
         self.follow_button = W.QPushButton('Follow deck')
@@ -252,6 +261,11 @@ class LibraryWorkspace(W.QMainWindow):
             state = 'Unavailable' if record['id'] in self.connection_errors else ('Connected' if signed_in else 'Sign in needed')
             menu = self.library_menu.addMenu(record['name'] + ' - ' + state)
             menu.setToolTipsVisible(True)
+            contribution = menu.addAction('Share manual categories when publishing decks')
+            contribution.setCheckable(True)
+            contribution.setChecked(self.category_evidence.consent(record['server_id']))
+            contribution.setToolTip('Opt in for this library. Shares deliberate category choices only for decks you publish. Private local decks stay private.')
+            contribution.toggled.connect(lambda checked, row=record: self.category_evidence.consent(row['server_id'], checked))
             if record['id'] in self.connection_errors:
                 message = self.connection_errors[record['id']]
                 action = menu.addAction(message.splitlines()[0][:120])
@@ -259,6 +273,7 @@ class LibraryWorkspace(W.QMainWindow):
                 action.setToolTip(message)
                 menu.addSeparator()
             if signed_in:
+                menu.addAction('Refresh community categories', lambda checked=False, row=record: self.refresh_category_evidence(row))
                 menu.addAction('Sign in as another user...', lambda checked=False, row=record: self.sign_in(new=False, connection=row))
                 menu.addAction('Sign out', lambda checked=False, row=record: self.disconnect(connection=row))
             else:
@@ -456,10 +471,15 @@ class LibraryWorkspace(W.QMainWindow):
                         continue
                     client = self.client_factory(record['url'], allow_lan=bool(record['allow_lan']), server_id=record['server_id'])
                     client.resume(saved)
+                    try:
+                        self.category_evidence.sync(client, should_cancel=cancel.is_set)
+                    except (LibraryError, sqlite3.Error, OSError):
+                        pass
                     result.append((record, client, ''))
                 except LibraryError as error:
                     if error.status in (401, 403, 404, 409):
                         self.recommendations.revoke(record['server_id'])
+                        self.category_evidence.revoke(record['server_id'])
                     if error.status in (401, 409):
                         self.saved_sessions.forget(record['id'])
                     result.append((record, None, str(error)))
@@ -517,6 +537,62 @@ class LibraryWorkspace(W.QMainWindow):
         if W.QMessageBox.question(self, 'Remove library connection',
                 'Remove this saved connection? Your local decks and followed copies will stay on this computer.') == W.QMessageBox.StandardButton.Yes:
             self.remove(connection=connection)
+
+    def closeEvent(self, event):
+        self.master_timer.stop()
+        super().closeEvent(event)
+
+    def sync_local_master(self):
+        self.master_timer.setInterval(30000)
+        if self._job or self.jobs.busy:
+            return
+        try:
+            pending = [dict(row, deletion=True, snapshot={}) for row in self.publications.queued_deletions()]
+            pending.extend(self.publications.queued_masters())
+            connections = self.connections.list()
+        except (OSError, sqlite3.Error):
+            self.masterSyncStatus.emit('Library sync storage is unavailable; queued uploads and removals will retry.')
+            return
+        for queued in pending:
+            key = queued['server_id'], queued['local_id']
+            if self.master_retry.get(key, 0) > monotonic():
+                continue
+            connection = next((row for row in connections if row['server_id'] == queued['server_id']), None)
+            client = self.clients.get(connection['id']) if connection else None
+            if not client or not client.token or not getattr(client, 'account_id', None):
+                continue
+            if queued['account_id'] and client.account_id != queued['account_id']:
+                continue
+            snapshot = queued['snapshot']
+            def work(client=client, queued=queued, snapshot=snapshot):
+                try:
+                    if queued.get('deletion'):
+                        return dict(result=self.publications.send_deletion(client, queued['server_id'], queued['local_id']))
+                    return dict(result=self.publications.send(client, queued['server_id'], queued['local_id'], **snapshot))
+                except LibraryError as error:
+                    return dict(error=str(error), status=error.status)
+            def complete(value, queued=queued, connection=connection, snapshot=snapshot):
+                if 'error' in value:
+                    if 400 <= value['status'] < 500 and not (queued.get('deletion') and value['status'] == 401):
+                        pause = self.publications.pause_deletion if queued.get('deletion') else self.publications.pause_master
+                        pause(queued['server_id'], queued['local_id'])
+                        message = 'Library removal paused: ' + value['error'] if queued.get('deletion') else 'Library sync paused. Review and publish this deck to resume: ' + value['error']
+                    else:
+                        self.master_retry[(queued['server_id'], queued['local_id'])] = monotonic() + 60
+                        message = ('Library removal queued for retry: ' if queued.get('deletion') else 'Saved locally. Library update queued for retry: ') + value['error']
+                else:
+                    self.master_retry.pop((queued['server_id'], queued['local_id']), None)
+                    self._load_after_signin = True
+                    message = ('Linked upload removed from ' + connection['name'] + '.' if queued.get('deletion') else
+                               snapshot['deck']['name'] + ' updated in ' + connection['name'] + '.')
+                self.states[connection['id']] = message
+                self.connection_status.setText(message)
+                self.masterSyncStatus.emit(message)
+            def failed(message, queued=queued):
+                self.master_retry[(queued['server_id'], queued['local_id'])] = monotonic() + 60
+                self.masterSyncStatus.emit(('Library removal queued for retry: ' if queued.get('deletion') else 'Saved locally. Library update queued for retry: ') + message)
+            self.submit('Removing deleted deck from library' if queued.get('deletion') else 'Updating library from local master', work, complete, on_error=failed)
+            return
 
     def submit(self, operation, work, complete, *, with_context=False, on_error=None):
         if self._job or self.jobs.busy:
@@ -623,6 +699,12 @@ class LibraryWorkspace(W.QMainWindow):
                         pass
                     raise
                 warning = ''
+                if old_client and getattr(old_client, 'account_id', None) != getattr(client, 'account_id', None):
+                    self.category_evidence.revoke(record['server_id'])
+                try:
+                    self.category_evidence.sync(client)
+                except (LibraryError, sqlite3.Error, OSError):
+                    pass
                 try:
                     if remember:
                         self.saved_sessions.save(record, client, username)
@@ -695,6 +777,7 @@ class LibraryWorkspace(W.QMainWindow):
             return
         def work():
             self.recommendations.revoke(connection['server_id'])
+            self.category_evidence.revoke(connection['server_id'])
             if self.forget_saved_sign_in(connection, client):
                 return 'Signed out. Saved sign-in removed.'
             return 'Saved sign-in removed. Server unavailable; its session will expire automatically.'
@@ -712,13 +795,22 @@ class LibraryWorkspace(W.QMainWindow):
         client = self.clients.get(connection['id'])
         def work():
             self.recommendations.revoke(connection['server_id'])
+            self.category_evidence.revoke(connection['server_id'])
             self.forget_saved_sign_in(connection, client)
+            self.publications.unlink_server(connection['server_id'])
             self.connections.remove(connection['id'])
         def complete(_):
             for mapping in (self.clients, self.views, self.states, self.connection_errors):
                 mapping.pop(connection['id'], None)
             self.reload_connections()
         self.submit('Removing library connection', work, complete)
+
+    def refresh_category_evidence(self, connection):
+        client = self.clients.get(connection['id'])
+        if client and client.token and not self._job and not self.jobs.busy:
+            self.submit('Refreshing community categories',
+                        lambda: self.category_evidence.sync(client, force=True),
+                        lambda _: None)
 
     def search(self, *, more=False):
         if self.view_mode.currentIndex() == 1 or self._job or self.jobs.busy:
@@ -739,6 +831,10 @@ class LibraryWorkspace(W.QMainWindow):
             try:
                 if not more:
                     try:
+                        self.category_evidence.sync(self.clients[record['id']], should_cancel=cancel.is_set)
+                    except (LibraryError, sqlite3.Error, OSError):
+                        pass  # Evidence refresh is independent of browsing and editing.
+                    try:
                         self.recommendations.sync(self.clients[record['id']], should_cancel=cancel.is_set)
                     except (sqlite3.Error, OSError):
                         pass  # Recommendation storage must not prevent library browsing.
@@ -747,6 +843,7 @@ class LibraryWorkspace(W.QMainWindow):
             except (LibraryError, OSError) as error:
                 if isinstance(error, LibraryError) and error.status in (401, 403, 404, 409):
                     self.recommendations.revoke(record['server_id'])
+                    self.category_evidence.revoke(record['server_id'])
                 return record, None, offset, str(error)
         def work(cancel, report):
             outcomes = []
@@ -864,9 +961,9 @@ class LibraryWorkspace(W.QMainWindow):
             return
         row = current.data(C.Qt.ItemDataRole.UserRole)
         follow = row.get('follow')
-        hint = ('Read-only - Available offline. ' + follow['message']) if follow else (
+        hint = ('Read-only - Make an editable copy to change this deck. Available offline. ' + follow['message']) if follow else (
             'Cached preview. Refresh or sign in to its library for the latest version.' if row.get('cached') else '')
-        self.preview_dialog.set_publication(row, hint=hint)
+        self.preview_dialog.set_publication(row, hint=hint or 'Read-only - Make an editable copy to change this deck. Follow to keep it available offline.')
         self.update_controls()
 
     def open_preview(self, *_):
@@ -907,7 +1004,7 @@ class LibraryWorkspace(W.QMainWindow):
         if not source:
             return
         def complete(path):
-            message = 'Independent copy saved in My Decks. Open it from Deck Editor → Projects.'
+            message = 'Independent copy saved in My Decks. Opening your editable deck.'
             self.message = message
             if connection:
                 self.states[connection['id']] = message
@@ -915,7 +1012,8 @@ class LibraryWorkspace(W.QMainWindow):
             self.copyCreated.emit(path)
         self.submit('Copying deck to My Decks', lambda: copy_publication(publication,
                     server_id=source['server_id'], server_address=source.get('server_url') or source['url'],
-                    deck_root=self.deck_root), complete)
+                    deck_root=self.deck_root, library_name=source.get('name') or source.get('server_name')
+                    or (connection or {}).get('name') or 'Library'), complete)
 
     def follow_selected(self):
         connection, item = self.selected_connection(), self.results.currentItem()
@@ -971,6 +1069,7 @@ class LibraryWorkspace(W.QMainWindow):
         # Clear memory credentials at exit, without making a network request during shutdown.
         for client in self.clients.values():
             client.token = None
+        self.master_timer.stop()
         self.following.timer.stop()
         self.search_timer.stop()
         if self._signin_dialog is not None:

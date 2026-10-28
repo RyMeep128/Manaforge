@@ -203,3 +203,41 @@ def test_embedded_rules_close_returns_home_without_discarding_workspace(app, mon
     workspace.setProperty('manaforgeQuitting', True)
     workspace.reject()
     assert workspace._closed
+
+
+def test_created_deck_upload_uses_selected_library_and_existing_publisher(app):
+    from types import SimpleNamespace
+    home = HomeWindow()
+    calls = []
+    def factory():
+        window = W.QMainWindow()
+        def prepare(deck, color):
+            calls.append(('prepare', deck['name'], color))
+            return True
+        window.publishing = SimpleNamespace(
+            prepare=prepare,
+            use_connection=lambda key: calls.append(('destination', key)),
+            publish_button=SimpleNamespace(isEnabled=lambda: True),
+            publish=lambda: calls.append(('upload',)))
+        return window
+    controller = ModuleController(home, service=object(), factories={'library': factory})
+    controller.publish_deck({'name': 'New deck', 'library_association': {'id': 'friends'}}, 'U', upload=True)
+    assert calls == [('prepare', 'New deck', 'U'), ('destination', 'friends'), ('upload',)]
+    home.close()
+
+
+def test_copy_routes_immediately_to_editor_and_preserves_saved_file_on_cancel(app, tmp_path):
+    home = HomeWindow()
+    calls = []
+    path = tmp_path / 'copy.manaforge.json'
+    path.write_text('{}')
+    def factory():
+        window = W.QMainWindow()
+        window.open_path = lambda selected: calls.append(selected)  # Models an editor declining to replace its dirty deck.
+        return window
+    controller = ModuleController(home, service=object(), factories={'editor': factory})
+    controller.open_copied_deck(path)
+    assert home.current_workspace == 'editor'
+    assert calls == [path]
+    assert path.exists()
+    home.close()

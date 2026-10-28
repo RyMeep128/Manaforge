@@ -414,3 +414,48 @@ contextual actions, the shared project-tile renderer and named color choices.
 CI also uploads empty, populated, narrow-window, preview, publishing and account-form screenshots under the
 `library-ui-python-*` artifacts for visual review. No local GUI validation runs
 are needed to produce these CI artifacts.
+
+## Community category evidence
+
+Updated servers advertise `manual_category_evidence_v1`. Signed-in members can
+download compact evidence from currently published decks. Only a publication's
+owner can contribute its manual choices; contributions require the desktop's
+per-library opt-in and accompany explicit deck publication. No central service,
+behavioral analytics or private local-deck upload is required.
+
+Add `--disable-community-categories` to the existing `serve` command to disable
+contributions and downloads. The flag does not affect deck publication or browsing.
+The additive schema creates `category_evidence` alongside existing library data;
+normal database backups include it. Old clients and servers remain compatible.
+Evidence from outdated revisions, unpublished decks and inactive owners is excluded.
+See [categorization policy](card-categorization.md) for cache retention, consent,
+deduplication, conservative weighting and evaluation limitations.
+
+
+### Local master uploads
+
+Uploading creates an account-bound link from the local deck ID to the library deck
+ID and revision. Subsequent successful local saves, including autosaves, queue a
+one-way update to that same publication. The local deck remains the master; this
+process never downloads edits into it. Private printing state is still omitted.
+
+Saves coalesce into the latest durable public snapshot. Interrupted requests replay
+their existing operation ID before sending newer edits. Background updates require
+a signed-in connection for the original account. Offline updates remain queued
+across restarts and retry when the connection is available. Revision conflicts and
+other rejected requests pause automatic updates; review and explicitly publish to
+resume. Unpublishing or removing the connection stops automatic updates.
+
+Links created before automatic synchronization was introduced require one explicit
+upload to establish the account-bound master link. Local copies of other people's
+decks remain independent unless you explicitly upload them yourself.
+
+
+Deleting a local deck through Manaforge also removes its tracked library uploads.
+The confirmation describes both effects. A durable removal intent is staged before
+the local file enters the Recycle Bin; failed local deletion cancels that intent.
+Offline removals persist across restarts and take priority over automatic uploads.
+Interrupted publication operations replay safely before the linked deck is unpublished,
+and removal targets the latest linked revision. Stale saves cannot republish a deleted
+master. Independent copies and print projects do not remove someone else's upload.
+Deleting or moving a file outside Manaforge does not trigger remote removal.

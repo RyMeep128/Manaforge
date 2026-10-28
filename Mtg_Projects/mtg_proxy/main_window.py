@@ -420,6 +420,8 @@ class AppShellWindow(QMainWindow):
         self._update_window_title()
 
     def check_for_updates_on_startup(self):
+        from mtg_ui.whats_new import whats_new
+        whats_new().startup(self)
         if CFG.UpdateCheckOnStartup:
             self.check_for_updates(manual=False)
 

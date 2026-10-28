@@ -276,3 +276,27 @@ release. It does not embed downloaded datasets or artwork in the application ZIP
 The [infrastructure](infrastructure-readiness.md) and
 [recommendation distribution](recommendation-distribution.md) documents describe the
 shared transport, generation manifests, source permissions and data publication.
+# What’s New after updates
+
+Manaforge shows one combined set of update highlights after the first successful
+launch of a newer version. Fresh installations establish a quiet baseline. Close,
+Escape, and Start Building acknowledge the highlights; Help → What’s New reopens
+them without changing automatic acknowledgment. Settings survive updates when
+Windows user settings are retained. The installed `APP_VERSION` is authoritative.
+
+Player-facing notes live in `Mtg_Projects/mtg_ui/release_notes.py`. Add a versioned
+entry for each release with a short summary and optional `features`, `improvements`,
+and `fixes` lists. Put the most meaningful items first, describe what players can
+do, and retain previous entries so skipped updates can be combined. Duplicate
+bullets are removed across groups and versions. Entries newer than the installed
+application and malformed entries are ignored. No notes means no automatic popup.
+
+The catalog ships as Python code in existing bundles, so it works offline without
+extra packaging assets or a server. GitHub Releases currently contain installer
+instructions rather than structured player highlights; they remain the updater’s
+download source. No release-body or commit-message parsing is involved.
+
+Existing installations predating this feature establish a baseline on first launch;
+an in-app update receipt can supply the previous version after successful startup
+verification. Installer flags are not required. An interrupted highlights dialog
+is retried until dismissed; manual viewing never consumes a pending notification.

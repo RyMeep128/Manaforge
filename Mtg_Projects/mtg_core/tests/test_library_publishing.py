@@ -34,6 +34,35 @@ class Client:
                 'revision': operation['expected_revision'] + (operation['kind'] == 'publish')}
 
 
+def test_manual_evidence_requires_consent_and_retries_as_one_batch(tmp_path, snapshot):
+    from mtg_core.library.category_evidence import CategoryEvidence, CAPABILITY
+    journal, client = PublicationJournal(LibraryConnections(tmp_path)), Client()
+    cache = CategoryEvidence(tmp_path / 'library-category-evidence.sqlite3')
+    calls = []
+    client.check = lambda: {'capabilities': [CAPABILITY]}
+    def upload(method, path, body):
+        calls.append((method, path, deepcopy(body)))
+        if len(calls) == 1:
+            raise LibraryError(503, 'Interrupted after publishing')
+        return {}
+    client.request = upload
+    evidence = {'assignments': [{'oracle': str(uuid.UUID(int=1)), 'category': 'Draw'}], 'themes': ['Tokens']}
+    local_id = snapshot['deck_id']
+    journal.send(client, client.server_id, local_id, deck=snapshot, color_identity=[], community=evidence)
+    assert calls == []
+    cache.consent(client.server_id, True)
+    with pytest.raises(LibraryError):
+        journal.send(client, client.server_id, local_id, deck=snapshot, color_identity=[], community=evidence)
+    pending = journal.get(client.server_id, local_id)['pending']
+    assert len(pending['community']['assignments']) == 1
+    journal.send(client, client.server_id, local_id, deck=snapshot, color_identity=[], community={'assignments': []})
+    assert calls[0] == calls[1]
+    assert journal.get(client.server_id, local_id)['pending'] is None
+    cache.consent(client.server_id, False)
+    journal.send(client, client.server_id, local_id, deck=snapshot, color_identity=[], community=evidence)
+    assert len(calls) == 2
+
+
 def test_pending_snapshot_survives_restart_and_ignores_later_edits(tmp_path, snapshot):
     client = Client()
     journal = PublicationJournal(LibraryConnections(tmp_path))
@@ -125,3 +154,167 @@ def test_pending_operations_cannot_be_changed_into_other_actions(tmp_path, snaps
 def test_suggested_colors_use_existing_local_card_facts(snapshot):
     assert suggested_colors(Deck.from_dict(snapshot)) == 'U'
     assert suggested_colors(Deck()) == 'C'
+
+
+def test_local_master_coalesces_saves_and_updates_same_publication(tmp_path, snapshot):
+    journal, client = PublicationJournal(LibraryConnections(tmp_path)), Client()
+    local_id = snapshot['deck_id']
+    original = journal.send(client, client.server_id, local_id, deck=snapshot, color_identity=['U'])
+    assert journal.queue_master(local_id, deck=snapshot, color_identity=['U']) == 0
+    snapshot['name'] = 'First edit'
+    assert journal.queue_master(local_id, deck=snapshot, color_identity=['U']) == 1
+    snapshot['name'] = 'Latest edit'
+    journal.queue_master(local_id, deck=snapshot, color_identity=['U'])
+    restarted = PublicationJournal(LibraryConnections(tmp_path))
+    queued = restarted.queued_masters()
+    assert len(queued) == 1
+    assert queued[0]['snapshot']['deck']['name'] == 'Latest edit'
+    assert 'owned' not in queued[0]['snapshot']['deck']['entries'][0]
+    updated = restarted.send(client, client.server_id, local_id, **queued[0]['snapshot'])
+    assert updated['deck_id'] == original['deck_id']
+    assert updated['revision'] == original['revision'] + 1
+    assert restarted.queued_masters() == []
+
+
+def test_initial_offline_upload_keeps_latest_master_behind_safe_retry(tmp_path, snapshot):
+    journal, client = PublicationJournal(LibraryConnections(tmp_path)), Client()
+    local_id = snapshot['deck_id']
+    client.fail_after_upload = True
+    with pytest.raises(LibraryError):
+        journal.send(client, client.server_id, local_id, deck=snapshot, color_identity=['U'])
+    first = deepcopy(client.operations[0])
+    snapshot['name'] = 'Newer local edit'
+    journal.queue_master(local_id, deck=snapshot, color_identity=['U'])
+    queued = journal.queued_masters()[0]
+    journal.send(client, client.server_id, local_id, **queued['snapshot'])
+    assert client.operations[1] == first
+    queued = journal.queued_masters()[0]
+    journal.send(client, client.server_id, local_id, **queued['snapshot'])
+    assert client.operations[2]['deck']['name'] == 'Newer local edit'
+    assert client.operations[2]['deck_id'] == client.remote_id
+    assert not journal.queued_masters()
+
+
+def test_pause_and_unpublish_stop_automatic_master_updates(tmp_path, snapshot):
+    journal, client = PublicationJournal(LibraryConnections(tmp_path)), Client()
+    local_id = snapshot['deck_id']
+    journal.send(client, client.server_id, local_id, deck=snapshot, color_identity=['U'])
+    journal.pause_master(client.server_id, local_id)
+    snapshot['name'] = 'Local only while paused'
+    journal.queue_master(local_id, deck=snapshot, color_identity=['U'])
+    assert not journal.queued_masters()
+    journal.send(client, client.server_id, local_id, deck=snapshot, color_identity=['U'])
+    assert not journal.queued_masters()
+    journal.send(client, client.server_id, local_id, unpublish=True)
+    snapshot['name'] = 'Unpublished edits'
+    assert journal.queue_master(local_id, deck=snapshot, color_identity=['U']) == 0
+
+
+def test_local_deletion_unpublishes_all_linked_libraries_and_blocks_stale_saves(tmp_path, snapshot):
+    journal = PublicationJournal(LibraryConnections(tmp_path))
+    clients = [Client(), Client()]
+    local_id = snapshot['deck_id']
+    for client in clients:
+        journal.send(client, client.server_id, local_id, deck=snapshot, color_identity=['U'])
+    local = tmp_path / 'master.manaforge.json'
+    local.write_text('local deck')
+    token = journal.stage_deletion(local_id, local)
+    assert journal.queued_deletions() == []
+    snapshot['name'] = 'Stale autosave'
+    assert journal.queue_master(local_id, deck=snapshot, color_identity=['U']) == 0
+    local.unlink()
+    journal.finish_deletion(token)
+    restarted = PublicationJournal(LibraryConnections(tmp_path))
+    assert len(restarted.queued_deletions()) == 2
+    for client in clients:
+        restarted.send_deletion(client, client.server_id, local_id)
+        assert client.operations[-1]['kind'] == 'unpublish'
+        assert client.operations[-1]['deck_id'] == client.remote_id
+        assert restarted.get(client.server_id, local_id)['published'] == 0
+    assert restarted.queued_deletions() == []
+    assert restarted.queue_master(local_id, deck=snapshot, color_identity=['U']) == 0
+
+
+def test_failed_local_delete_cancels_remote_intent(tmp_path, snapshot):
+    journal, client = PublicationJournal(LibraryConnections(tmp_path)), Client()
+    local_id = snapshot['deck_id']
+    journal.send(client, client.server_id, local_id, deck=snapshot, color_identity=['U'])
+    local = tmp_path / 'master.manaforge.json'
+    local.write_text('retained')
+    token = journal.stage_deletion(local_id, local)
+    journal.cancel_deletion(token)
+    assert journal.queued_deletions() == []
+    snapshot['name'] = 'Still editable'
+    assert journal.queue_master(local_id, deck=snapshot, color_identity=['U']) == 1
+    assert len(client.operations) == 1
+
+
+def test_delete_recovers_after_lost_upload_response_and_interrupted_local_move(tmp_path, snapshot):
+    journal, client = PublicationJournal(LibraryConnections(tmp_path)), Client()
+    local_id = snapshot['deck_id']
+    client.fail_after_upload = True
+    with pytest.raises(LibraryError):
+        journal.send(client, client.server_id, local_id, deck=snapshot, color_identity=['U'])
+    local = tmp_path / 'master.manaforge.json'
+    local.write_text('local')
+    journal.stage_deletion(local_id, local)
+    local.unlink()  # Crash before finish_deletion.
+    restarted = PublicationJournal(LibraryConnections(tmp_path))
+    assert len(restarted.queued_deletions()) == 1
+    restarted.send_deletion(client, client.server_id, local_id)
+    assert client.operations[0] == client.operations[1]
+    assert client.operations[2]['kind'] == 'unpublish'
+    assert not restarted.queued_deletions()
+    assert not restarted.queued_masters()
+
+
+def test_deletion_conflict_removes_latest_linked_revision(tmp_path, snapshot):
+    journal, client = PublicationJournal(LibraryConnections(tmp_path)), Client()
+    local_id = snapshot['deck_id']
+    journal.send(client, client.server_id, local_id, deck=snapshot, color_identity=['U'])
+    journal.finish_deletion(journal.stage_deletion(local_id, tmp_path / 'deleted.json'))
+    original = client.publish_operation
+    def publish(operation):
+        if operation['kind'] == 'unpublish' and operation['expected_revision'] < 5:
+            raise LibraryError(409, 'Remote revision changed')
+        return original(operation)
+    client.publish_operation = publish
+    client.download = lambda deck_id: dict(deck_id=deck_id, revision=5, deck=snapshot, owner='owner', color_identity=['U'])
+    journal.send_deletion(client, client.server_id, local_id)
+    assert client.operations[-1]['kind'] == 'unpublish'
+    assert client.operations[-1]['expected_revision'] == 5
+    assert not journal.queued_deletions()
+
+
+def test_delete_does_not_target_an_independent_copy(tmp_path, snapshot):
+    journal = PublicationJournal(LibraryConnections(tmp_path))
+    assert journal.stage_deletion(str(uuid.uuid4()), tmp_path / 'copy.json') is None
+    assert not journal.queued_deletions()
+
+
+def test_offline_removal_replays_same_operation_after_restart(tmp_path, snapshot):
+    journal, client = PublicationJournal(LibraryConnections(tmp_path)), Client()
+    local_id = snapshot['deck_id']
+    journal.send(client, client.server_id, local_id, deck=snapshot, color_identity=['U'])
+    journal.finish_deletion(journal.stage_deletion(local_id, tmp_path / 'deleted.json'))
+    client.fail_after_upload = True
+    with pytest.raises(LibraryError):
+        journal.send_deletion(client, client.server_id, local_id)
+    removal = deepcopy(client.operations[-1])
+    restarted = PublicationJournal(LibraryConnections(tmp_path))
+    assert restarted.queued_deletions()
+    restarted.send_deletion(client, client.server_id, local_id)
+    assert client.operations[-1] == removal
+    assert not restarted.queued_deletions()
+
+
+def test_deleted_master_requires_original_account(tmp_path, snapshot):
+    journal, client = PublicationJournal(LibraryConnections(tmp_path)), Client()
+    local_id = snapshot['deck_id']
+    journal.send(client, client.server_id, local_id, deck=snapshot, color_identity=['U'])
+    journal.finish_deletion(journal.stage_deletion(local_id, tmp_path / 'deleted.json'))
+    client.account_id = str(uuid.uuid4())
+    with pytest.raises(LibraryError):
+        journal.send_deletion(client, client.server_id, local_id)
+    assert len(client.operations) == 1
+    assert journal.queued_deletions()

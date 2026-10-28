@@ -45,6 +45,9 @@ class _FakeWindow:
 
 
 def test_startup_update_check_respects_setting(monkeypatch):
+    from types import SimpleNamespace
+    from mtg_ui import whats_new
+    monkeypatch.setattr(whats_new, 'whats_new', lambda: SimpleNamespace(startup=lambda parent: None))
     window = _FakeWindow()
     monkeypatch.setattr(main_window.CFG, "UpdateCheckOnStartup", True)
 

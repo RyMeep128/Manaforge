@@ -174,14 +174,8 @@ class CardDiscoveryDialog(W.QDialog):
         entry = deepcopy(self.selected())
         if entry is None:
             return
-        previous = self.editor.document.deck.deck_id
-        self.editor.new()
-        if previous == self.editor.document.deck.deck_id:
-            return
-        from .commander_selection import select_commander
-        self.editor.edit(lambda d: setattr(d.deck, 'format', 'Commander'))
         self.reject()
-        select_commander(self.editor, entry)
+        self.editor.create_deck(seed=entry)
 
     def reject(self):
         self.controller.shutdown()

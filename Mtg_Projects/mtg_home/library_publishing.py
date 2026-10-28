@@ -12,6 +12,7 @@ class PublishingPanel(W.QDialog):
         super().__init__(workspace)
         self.workspace = workspace
         self.snapshot = None
+        self.community = None
         self.reviewed = None
         self._destination_id = None
         self.setWindowTitle('Publish deck')
@@ -43,7 +44,7 @@ class PublishingPanel(W.QDialog):
         self.error.hide()
         form.addWidget(self.error)
         form.addStretch()
-        form.addWidget(plain_label('Your local printing status stays private.', 'muted'))
+        form.addWidget(plain_label('Your local deck is the master. Future saves update this library deck automatically. Local printing status stays private.', 'muted'))
         footer = W.QHBoxLayout()
         self.more_button = W.QToolButton()
         self.more_button.setText('More')
@@ -77,6 +78,7 @@ class PublishingPanel(W.QDialog):
             self.workspace.connection_status.setText('Cannot prepare publication: ' + str(error))
             return False
         self.snapshot = snapshot
+        self.community = deck.get('_manual_category_evidence')
         records = self.workspace.connections.list()
         self._destination_id = records[0]['id'] if len(records) == 1 else None
         self.colors.setText(color_identity)
@@ -152,7 +154,7 @@ class PublishingPanel(W.QDialog):
             if pending['kind'] == 'publish':
                 self.colors.setText(''.join(pending['color_identity']) or 'C')
         elif link and link['deck_id']:
-            caption = f"Publish a new version to {connection['name']}. Last published revision: {link['revision']}."
+            caption = f"Local master linked to {connection['name']}. Last uploaded revision: {link['revision']}."
         else:
             caption = 'Share this deck in ' + connection['name'] + '.'
         self.summary.setText(caption)
@@ -190,8 +192,10 @@ class PublishingPanel(W.QDialog):
         value = self.colors.text().strip().upper()
         color_identity = [] if value == 'C' else list(value)
         def work():
+            community = self.community if self.workspace.category_evidence.consent(connection['server_id']) else None
             return self.workspace.publications.send(client, connection['server_id'], local_id,
-                                                    deck=snapshot, color_identity=color_identity, unpublish=unpublish)
+                                                    deck=snapshot, color_identity=color_identity, unpublish=unpublish,
+                                                    community=community)
         def complete(result):
             self.reviewed = None
             action = 'Unpublished' if unpublish else 'Published'

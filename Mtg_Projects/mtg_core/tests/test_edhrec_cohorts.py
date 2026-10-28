@@ -3,11 +3,14 @@
 import gzip
 import hashlib
 import json
+import sqlite3
+import urllib.error
 
 import pytest
 
 from mtg_core.edhrec import EdhrecSource, normalize, save_page
 from mtg_core.edhrec_cohorts import CohortDownloader, cohort_options, cohort_path, collect, variants
+from mtg_core.edhrec_cohorts import combination_children, combination_path
 
 
 def page(sample=100):
@@ -76,3 +79,114 @@ def test_expansion_resume_and_exact_reads_preserve_general_snapshot(tmp_path, mo
 def test_invalid_cohort_setting_fails_explicitly(tmp_path):
     with pytest.raises(ValueError, match="cohort selection"):
         EdhrecSource(tmp_path / "edhrec.sqlite3", cohort="theme:../../secret")
+
+
+@pytest.mark.parametrize("delay", [1, 2, 3, 6])
+def test_configurable_pacing_applies_only_to_network_requests(tmp_path, monkeypatch, delay):
+    from unittest.mock import MagicMock
+    from mtg_core.edhrec_ingest import Downloader
+
+    response = MagicMock()
+    response.__enter__.return_value.read.return_value = b'{"ok":true}'
+    opener = MagicMock()
+    opener.open.return_value = response
+    monkeypatch.setattr("urllib.request.build_opener", lambda *args: opener)
+    monkeypatch.setattr("mtg_core.edhrec_ingest.time.monotonic", lambda: 100)
+    downloader = CohortDownloader(tmp_path, delay=delay)
+    waits = []
+    monkeypatch.setattr(downloader, "wait", waits.append)
+    downloader.fetch("commanders/a/tokens.json")
+    downloader.fetch("commanders/b/tokens.json")
+    downloader.fetch("commanders/a/tokens.json")
+    assert waits == [0, delay]
+    assert opener.open.call_count == 2
+    assert Downloader(tmp_path).delay == 6
+    assert Downloader(tmp_path, delay=1).delay == 6
+
+
+@pytest.mark.parametrize("delay", [0, -1, float("nan"), float("inf")])
+def test_invalid_pacing_is_rejected_before_collection(tmp_path, delay):
+    with pytest.raises(ValueError, match="delay"):
+        collect(tmp_path / "not-created", tmp_path / "catalog", delay=delay)
+    assert not (tmp_path / "not-created").exists()
+
+
+def test_combination_traversal_uses_conditional_counts_and_canonical_order():
+    children = list(combination_children(page(), "bracket", "upgraded", "Bracket 3"))
+    assert [(key, route) for key, route, _ in children] == [
+        ("bracket:upgraded|theme:infect", "upgraded/infect"),
+        ("bracket:upgraded|budget:budget", "upgraded/budget"),
+    ]
+    assert list(combination_children(page(), "combined", "theme:infect|budget:budget", "Infect / Budget")) == []
+    empty = dict(page(), tag_counts=[], budget_counts={"budget": 0})
+    assert list(combination_children(empty, "bracket", "upgraded", "Bracket 3")) == []
+    assert combination_path("commanders/commander/upgraded/infect/budget.json")
+    for path in ("../data.json", "commanders/c/../../data.json", "commanders/c/a/b/c/d.json"):
+        with pytest.raises(ValueError):
+            combination_path(path)
+
+
+def combination_snapshot(tmp_path, monkeypatch):
+    root = tmp_path / "edhrec-run"
+    (root / "responses").mkdir(parents=True)
+    names = {"commander": "commander-oracle", "card": "card-oracle"}
+    monkeypatch.setattr("mtg_core.edhrec_cohorts.catalog_index", lambda _: (names, {}))
+    original = page()
+    cached = root / "responses" / (hashlib.sha256(b"commanders/commander.json").hexdigest() + ".json.gz")
+    cached.write_bytes(gzip.compress(json.dumps(original).encode()))
+    (root / "state.json").write_text(json.dumps(dict(completed=["commander"])), encoding="utf-8")
+    save_page(tmp_path / "edhrec.sqlite3", normalize(original, lambda name: names.get(name.casefold()), "commander"), 1)
+    return root
+
+
+def test_combination_collection_resumes_prioritizes_children_and_isolates_existing_data(tmp_path, monkeypatch):
+    root = combination_snapshot(tmp_path, monkeypatch)
+    calls = []
+
+    def fetch(self, path):
+        calls.append(path)
+        result = page(5)
+        result["container"]["breadcrumb"] = [{"/" + path.removesuffix(".json"): "Filtered"}]
+        return result
+
+    monkeypatch.setattr(CohortDownloader, "fetch", fetch)
+    (root / "cohort-state.json").write_text('{"status":"running"}', encoding="utf-8")
+    first = collect(root, tmp_path / "catalog", combinations=True, max_pages=2)
+    assert first["status"] == "bounded" and first["combined_imported"] == 1
+    assert calls[:2] == ["commanders/commander/infect.json", "commanders/commander/infect/budget.json"]
+    second = collect(root, tmp_path / "catalog", combinations=True)
+    assert second["status"] == "complete" and second["combined_imported"] == 4
+    assert second["imported"] == len(calls) == len(set(calls)) == 6
+    with sqlite3.connect(tmp_path / "edhrec-combinations.sqlite3") as db:
+        rows = db.execute("SELECT kind,value,payload FROM cohorts").fetchall()
+    assert len(rows) == 4 and all(kind == "combined" for kind, _, _ in rows)
+    triple = next(json.loads(payload) for _, key, payload in rows if key == "bracket:upgraded|theme:infect|budget:budget")
+    assert triple["cohort"]["filters"] == dict(bracket="upgraded", theme="infect", budget="budget")
+    assert triple["sample"] == 5
+    assert triple["source_path"].endswith("/upgraded/infect/budget")
+    assert (root / "cohort-state.json").read_text(encoding="utf-8") == '{"status":"running"}'
+    assert not (tmp_path / "edhrec-cohorts.sqlite3").exists()
+    assert EdhrecSource(tmp_path / "edhrec.sqlite3").snapshot(["commander-oracle"])["decks"] == 100
+    (root / "STOP").touch()
+    assert collect(root, tmp_path / "catalog", combinations=True)["status"] == "paused"
+
+
+@pytest.mark.parametrize("failure", ["missing", "redirected", "wrong-commander", "empty"])
+def test_combination_collection_rejects_unavailable_or_mismatched_pages(tmp_path, monkeypatch, failure):
+    root = combination_snapshot(tmp_path, monkeypatch)
+
+    def fetch(self, path):
+        if failure == "missing":
+            raise urllib.error.HTTPError(path, 404, "Missing", {}, None)
+        result = page(0 if failure == "empty" else 5)
+        result["container"]["breadcrumb"] = [{"/" + path.removesuffix(".json"): "Filtered"}]
+        if failure == "redirected":
+            result["container"]["breadcrumb"] = [{"/commanders/commander": "General"}]
+        if failure == "wrong-commander":
+            result["container"]["json_dict"]["card"]["name"] = "Card"
+        return result
+
+    monkeypatch.setattr(CohortDownloader, "fetch", fetch)
+    state = collect(root, tmp_path / "catalog", combinations=True)
+    assert state["status"] == "complete"
+    assert state["combined_imported"] == 0 and state["skipped"] == 2

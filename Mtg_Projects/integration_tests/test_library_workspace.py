@@ -697,3 +697,51 @@ def test_publishing_requires_one_destination_without_filtering_gallery(app, tmp_
     assert len(clients[1][0].operations) == 1
     assert workspace.results.count() == 2
     workspace.close()
+
+
+@pytest.mark.parametrize('source_kind', ['library', 'follow'])
+def test_editable_copy_uses_clicked_source_name_and_emits_saved_path(app, tmp_path, monkeypatch, source_kind):
+    from mtg_core.decks import DeckStore
+    workspace = LibraryWorkspace(object(), root=tmp_path / 'settings', deck_root=tmp_path / 'decks')
+    value = record()
+    source = dict(id='clicked', server_id=str(uuid.uuid4()), name='Clicked library', server_name='Clicked library',
+                  url='https://clicked.invalid', server_url='https://clicked.invalid',
+                  message='', pending_revision=None, active=True)
+    value[source_kind] = source
+    item = W.QListWidgetItem('Shared deck')
+    item.setData(C.Qt.ItemDataRole.UserRole, value)
+    workspace.results.addItem(item)
+    workspace.results.setCurrentItem(item)
+    monkeypatch.setattr(workspace, 'submit', lambda label, work, complete: complete(work()))
+    copied = []
+    workspace.copyCreated.connect(copied.append)
+    workspace.copy_selected()
+    assert len(copied) == 1
+    assert DeckStore().load(copied[0]).deck.name == value['deck']['name'] + ' [Clicked library]'
+    workspace.close()
+    app.processEvents()
+
+
+def test_local_master_sync_requires_matching_account_and_pauses_on_conflict(app, tmp_path, monkeypatch):
+    workspace = LibraryWorkspace(object(), root=tmp_path)
+    client = SimpleNamespace(url='https://friend.invalid', token='session', account_id='other')
+    server = str(uuid.uuid4())
+    connection = workspace.connections.add(client, {'server_id': server, 'name': 'Friends'})
+    workspace.clients[connection['id']] = client
+    queued = dict(server_id=server, local_id='local', account_id='owner',
+                  snapshot={'deck': {'name': 'Local master'}, 'color_identity': ['U']})
+    monkeypatch.setattr(workspace.publications, 'queued_masters', lambda: [queued])
+    calls = []
+    monkeypatch.setattr(workspace, 'submit', lambda label, work, complete, **kwargs: (calls.append(label), complete(work())))
+    workspace.sync_local_master()
+    assert calls == []
+    client.account_id = 'owner'
+    monkeypatch.setattr(workspace.publications, 'send', lambda *args, **kwargs: (_ for _ in ()).throw(LibraryError(409, 'Revision changed')))
+    paused = []
+    monkeypatch.setattr(workspace.publications, 'pause_master', lambda *args: paused.append(args))
+    workspace.sync_local_master()
+    assert len(calls) == 1
+    assert paused == [(server, 'local')]
+    assert 'paused' in workspace.connection_status.text()
+    workspace.close()
+    app.processEvents()

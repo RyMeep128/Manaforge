@@ -198,7 +198,7 @@ class DeckPreviewDialog(W.QDialog):
         self.workspace = workspace
         self.scope = 'browse'
         self.row = None
-        self.setWindowTitle('Deck preview')
+        self.setWindowTitle('Shared deck - read only')
         self.setWindowModality(C.Qt.WindowModality.WindowModal)
         self.resize(860, 680)
         layout = W.QVBoxLayout(self)
@@ -212,6 +212,14 @@ class DeckPreviewDialog(W.QDialog):
         self.description = plain_label()
         layout.addWidget(self.description)
         self.tabs = W.QTabWidget()
+        from mtg_core.decks import DeckDocument
+        from mtg_editor.canvas import CardCanvas
+        self.artwork = CardCanvas(DeckDocument(), workspace.thumbnails, self)
+        self.artwork.read_only = True
+        self.artwork.setAcceptDrops(False)
+        self.artwork.grouping = 'Section'
+        self.artwork.setAccessibleName('Shared deck cards, read only')
+        self.tabs.addTab(self.artwork, 'Cards')
         self.cards = W.QTreeWidget()
         self.cards.setHeaderLabels(['Qty', 'Card', 'Printing', 'Categories'])
         self.cards.setEditTriggers(W.QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -242,6 +250,9 @@ class DeckPreviewDialog(W.QDialog):
     def set_publication(self, row, *, scope='browse', hint=''):
         self.scope, self.row = scope, row
         deck = row['deck']
+        from mtg_core.decks import DeckDocument, Deck
+        self.artwork.document = DeckDocument(deck=Deck.from_dict(deck))
+        self.artwork.refresh()
         self.title.setText(deck['name'])
         count = sum(entry['quantity'] for entry in deck['entries'])
         colors = ', '.join(COLOR_NAMES[color] for color in row['color_identity']) or 'Colorless'
@@ -281,4 +292,6 @@ class DeckPreviewDialog(W.QDialog):
 
     def reject(self):
         if not self.workspace._job:
+            self.artwork.preview.hide()
+            self.workspace.thumbnails.set_visible(id(self.artwork), [])
             super().reject()

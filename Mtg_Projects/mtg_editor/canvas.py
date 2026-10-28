@@ -26,6 +26,7 @@ class CardCanvas(W.QAbstractScrollArea):
         super().__init__(parent)
         self.document, self.thumbnails = document, thumbnails
         self.search_mode = search
+        self.read_only = False
         self.mode, self.grouping, self.sort, self.query = 'Grid', 'Type', 'Name', ''
         self.card_width = 180
         self.fit_height = False
@@ -260,7 +261,7 @@ class CardCanvas(W.QAbstractScrollArea):
             if self.face_count(entry) > 1:
                 self.draw_flip(p, self.flip_rect(rect),
                                backside=bool(self.faces.get(entry.entry_id, 0) % self.face_count(entry)))
-            if entry.entry_id == self.hovered or entry.entry_id in self.selected:
+            if not self.read_only and (entry.entry_id == self.hovered or entry.entry_id in self.selected):
                 control = self.control_rect(rect)
                 draw_quantity_controls(p, control, self.quantity_buttons(rect), can_decrease=entry.quantity > 0)
             if self.mode not in ('Stacks', 'Expanded Stacks') or not any(r.y() > rect.y() and r.x() == rect.x() and k == key for _, r, k in self.items):
@@ -444,7 +445,7 @@ class CardCanvas(W.QAbstractScrollArea):
         return quantity_buttons(rect)
 
     def activate_quantity(self, item, position):
-        if item is None:
+        if item is None or self.read_only:
             return False
         entry, rect, _ = item
         point = position + C.QPoint(0, self.verticalScrollBar().value())
@@ -523,7 +524,7 @@ class CardCanvas(W.QAbstractScrollArea):
             else:
                 self.hover_timer.start()
                 self.viewport().update()
-        if (event.buttons() & C.Qt.MouseButton.LeftButton and self.press_position is not None
+        if (not self.read_only and event.buttons() & C.Qt.MouseButton.LeftButton and self.press_position is not None
                 and (event.position().toPoint()-self.press_position).manhattanLength() >= W.QApplication.startDragDistance()):
             self.press_position = None
             self.detail_entry = None
@@ -554,6 +555,8 @@ class CardCanvas(W.QAbstractScrollArea):
             self.detailsRequested.emit(self.detail_entry)
 
     def mouseDoubleClickEvent(self, event):
+        if self.read_only:
+            return
         self.detail_timer.stop()
         self.detail_entry = None
         self.press_position = None
@@ -615,6 +618,10 @@ class CardCanvas(W.QAbstractScrollArea):
             self.viewport().update()
 
     def keyPressEvent(self, event):
+        if self.read_only and event.key() in (C.Qt.Key.Key_T, C.Qt.Key.Key_D,
+                                              C.Qt.Key.Key_Delete, C.Qt.Key.Key_Backspace):
+            event.accept()
+            return
         self.detail_timer.stop()
         if event.key() == C.Qt.Key.Key_Escape and self.preview.isVisible():
             self.hover_timer.stop()

@@ -1,4 +1,5 @@
-PyQt6
+# Keep the QtPdf-capable version used by the verified Windows CI environment.
+PyQt6==6.11.0
 reportlab
 opencv-python
 Pillow

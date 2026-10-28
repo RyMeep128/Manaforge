@@ -63,6 +63,8 @@ def test_entire_lyra_reference_assignments_and_local_batching():
     apply_categories(doc, proposals)
     names = {c.category_id: c.name for c in doc.deck.categories}
     expected = {name: category for _, name, category in REFERENCE}
+    # Graveyard interaction now has a distinct function instead of generic removal.
+    expected['Angel of Finality'] = 'Graveyard Hate'
     for entry in doc.deck.entries:
         assert names[entry.category_ids[0]] == expected[entry.name], (entry.name, proposals[entry.entry_id])
     plains = next(e for e in doc.deck.entries if e.name == 'Plains')
@@ -93,7 +95,7 @@ def test_multirole_evidence_is_ranked_without_card_name_rules(name, primary, sec
 
 @pytest.mark.parametrize('name,primary', [
     ('Sol Ring', 'Ramp'), ('Cultivate', 'Ramp'), ('Beast Whisperer', 'Draw'),
-    ('Eternal Witness', 'Recursion'), ('Rest in Peace', 'Graveyard'),
+    ('Eternal Witness', 'Recursion'), ('Rest in Peace', 'Graveyard Hate'),
     ('Avenger of Zendikar', 'Tokens'), ('Viscera Seer', 'Sacrifice / Aristocrats'),
     ('Blood Artist', 'Sacrifice / Aristocrats'), ('Hardened Scales', 'Counters'),
     ("Sigarda's Aid", 'Equipment'), ('Young Pyromancer', 'Tokens'),
@@ -114,8 +116,8 @@ def test_commander_synergy_breaks_close_choices_but_not_obvious_functions():
                DeckEntry('commander', 'Commander', card_id='commander', section='commander')]
     assert classify(payoff)[0]['name'] == 'Tokens'
     roles = analyze_entries(database, entries)
-    assert roles['payoff'][0]['name'] == 'Spellslinger'
-    assert 'Deck context:' in roles['payoff'][0]['reason']
+    assert roles['payoff'][0]['name'] == 'Tokens'
+    assert 'Spellslinger' in {item['name'] for item in roles['payoff']}
     assert classify(LYRA['Pristine Talisman'], context={'Lifegain': 8})[0]['name'] == 'Ramp'
     assert classify(LYRA['Blind Obedience'], context={'Lifegain': 8})[0]['name'] == 'Stax'
     assert classify(STRATEGIES['Kenrith, the Returned King'], context={'Draw': 8})[0]['name'] == 'Draw'
@@ -130,12 +132,13 @@ def test_available_categories_aliases_renames_manual_control_and_deletion():
     apply_categories(doc, proposals)
     assert doc.deck.entries[0].category_ids[0] == 'custom-life'
     assert doc.deck.entries[1].category_ids == ['custom-counters']
-    # Only Counters is available: the strongest supported existing role wins.
+    # Existing categories are reused, but do not replace the card's main job.
     doc = DeckDocument()
     doc.deck.categories = [DeckCategory('mine', 'Counters')]
     doc.deck.entries = [DeckEntry('auto', 'Automatic')]
     apply_categories(doc, {'auto': classify(LYRA['Heliod, Sun-Crowned'])})
-    assert doc.deck.entries[0].category_ids[0] == 'mine'
+    assert doc.deck.entries[0].category_ids[0] == 'auto:lifegain'
+    assert 'mine' in doc.deck.entries[0].category_ids
     before = deepcopy(doc.to_dict())
     apply_categories(doc, {'auto': classify(LYRA['Heliod, Sun-Crowned'])})
     assert doc.to_dict() == before
@@ -153,13 +156,15 @@ def test_available_categories_aliases_renames_manual_control_and_deletion():
     assert len(doc.deck.categories) == 1
 
 
-def test_context_subset_metadata_fallback_missing_data_and_analysis_cache():
+def test_context_subset_metadata_fallback_missing_data_and_analysis_cache(monkeypatch):
+    monkeypatch.setattr('mtg_core.role_analysis.generated_effects', lambda: {})
     database = LocalCards({})
     commander = DeckEntry('commander', 'Commander', section='commander', extras={'facts': {
         'oracle_text': 'Whenever you cast an instant or sorcery spell, scry 1.'}})
     payoff = DeckEntry('payoff', 'Payoff', extras={'facts': STRATEGIES['Young Pyromancer']})
     roles = analyze_entries(database, [payoff], context_entries=[commander, payoff])
-    assert roles['payoff'][0]['name'] == 'Spellslinger'
+    assert roles['payoff'][0]['name'] == 'Tokens'
+    assert 'Spellslinger' in {item['name'] for item in roles['payoff']}
     assert classify({}) == []
     assert analyze_entries(database, [DeckEntry('missing', 'Missing')]) == {'missing': []}
     _analyze_cached.cache_clear()
@@ -170,7 +175,8 @@ def test_context_subset_metadata_fallback_missing_data_and_analysis_cache():
     assert _analyze_cached.cache_info().hits == 1
 
 
-def test_large_deck_uses_one_batch_and_reuses_effect_parsing():
+def test_large_deck_uses_one_batch_and_reuses_effect_parsing(monkeypatch):
+    monkeypatch.setattr('mtg_core.role_analysis.generated_effects', lambda: {})
     database = LocalCards(STRATEGIES)
     entries = [DeckEntry(str(i), 'Rock', card_id=STRATEGIES['Sol Ring']['id']) for i in range(500)]
     _analyze_cached.cache_clear()
@@ -191,7 +197,7 @@ def test_large_deck_uses_one_batch_and_reuses_effect_parsing():
      "At the beginning of the draw step of enchanted creature's controller, that player draws an additional card.",
      'Draw', {'Draw'}),
     ('Reveal the top six cards of your library. Put up to three enchantment cards from among them into your hand '
-     'and the rest into your graveyard.', 'Enchantment Matters', {'Enchantment Matters', 'Card Advantage'}),
+     'and the rest into your graveyard.', 'Card Advantage', {'Enchantment Matters', 'Card Advantage'}),
     ("Reveal cards from the top of your library until you reveal a nonland permanent card. Put that card onto the battlefield.",
      'Card Advantage', {'Card Advantage'}),
     ('If a creature an opponent controls would die, instead exile it and put a +1/+1 counter on this creature.',
