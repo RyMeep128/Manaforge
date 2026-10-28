@@ -50,7 +50,8 @@ begin
     Shell := CreateOleObject('WScript.Shell');
     Link := Shell.CreateShortcut(ExpandConstant('{userdesktop}\Manaforge.lnk'));
     if (Link.Arguments <> '') then exit;
-    Target := Lowercase(Link.TargetPath);
+    Target := Link.TargetPath;
+    Target := Lowercase(Target);
     Root := Lowercase(ExpandConstant('{localappdata}\Programs\Manaforge\'));
     if Target = Root + 'manaforge.cmd' then begin Result := True; exit; end;
     Root := Root + 'versions\';

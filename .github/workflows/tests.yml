@@ -5,6 +5,10 @@ on:
   pull_request:
   workflow_dispatch:
     inputs:
+      skip_tests:
+        description: Skip tests and smoke checks for this explicitly requested manual build
+        type: boolean
+        default: false
       build_windows:
         description: Build the existing Manaforge Windows bundle as a CI artifact
         type: boolean
@@ -27,6 +31,7 @@ concurrency:
 
 jobs:
   tests:
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.skip_tests) }}
     name: Windows / Python ${{ matrix.python }}
     runs-on: windows-latest
     timeout-minutes: 20
@@ -74,7 +79,7 @@ jobs:
 
   windows-bundle:
     name: Optional Windows application bundle
-    if: ${{ github.event_name == 'workflow_dispatch' && (inputs.build_windows || inputs.publish_windows_prerelease) }}
+    if: ${{ always() && !cancelled() && github.event_name == 'workflow_dispatch' && (inputs.build_windows || inputs.publish_windows_prerelease) && (needs.tests.result == 'success' || (inputs.skip_tests && needs.tests.result == 'skipped')) }}
     needs: tests
     runs-on: windows-latest
     timeout-minutes: 30
@@ -95,6 +100,7 @@ jobs:
         shell: cmd
         run: call "Build Manaforge.cmd"
       - name: Verify packaged startup and bundled resources without network access
+        if: ${{ !inputs.skip_tests }}
         env:
           QT_QPA_PLATFORM: offscreen
           PRINT_PROXY_PREP_DATA_DIR: ${{ runner.temp }}/manaforge-packaged-check
@@ -137,6 +143,7 @@ jobs:
           }
           [IO.File]::WriteAllLines((Join-Path $env:GITHUB_WORKSPACE 'SHA256SUMS.txt'), $lines, [Text.UTF8Encoding]::new($false))
       - name: Smoke test installer without launching the application
+        if: ${{ !inputs.skip_tests }}
         run: |
           $versionLine = Get-Content Mtg_Projects/mtg_proxy/constants.py | Where-Object { $_ -match '^APP_VERSION = ' }
           $version = $versionLine.Split('"')[1]
