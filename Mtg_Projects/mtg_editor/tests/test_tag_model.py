@@ -127,7 +127,7 @@ def test_extra_tag_does_not_lock_auto_primary_and_unused_creation_stays_hidden()
     assert 'Future role' in {c.name for c in choices(doc, active=False)}
 
 
-@pytest.mark.parametrize('count', [1, 4, 6, 8, 15])
+@pytest.mark.parametrize('count', [1, 4, 6, 8, 15, 20, 80])
 def test_radial_dynamic_geometry_and_center_cancellation(app, count):
     doc = populated(count)
     menu = QuickTagMenu(doc, {'0'})
@@ -137,11 +137,12 @@ def test_radial_dynamic_geometry_and_center_cancellation(app, count):
     assert not menu.findChildren(W.QPushButton)
     assert len(menu.options) == count
     center, outer, inner = menu.geometry_values()
-    for i in range(len(menu.options)):
-        angle = -math.pi / 2 + i * 2 * math.pi / len(menu.options)
-        radius = (inner + outer) / 2
-        point = center + C.QPointF(math.cos(angle)*radius, math.sin(angle)*radius)
-        assert menu.sector(point) == i
+    for start, count, lo, hi in menu.rings:
+        for i in range(count):
+            angle = -math.pi / 2 + i * 2 * math.pi / count
+            radius = (lo + hi) / 2
+            point = center + C.QPointF(math.cos(angle)*radius, math.sin(angle)*radius)
+            assert menu.sector(point) == start + i
     assert menu.sector(center) is None
     screen = menu.screen().availableGeometry()
     assert screen.contains(menu.geometry())
@@ -213,3 +214,58 @@ def test_toolbar_bulk_assignment_is_one_undo_command(app, tmp_path, monkeypatch)
     assert all(not e.category_ids for e in window.document.deck.entries)
     window.saved = window.document.to_dict()
     window.close()
+
+
+@pytest.mark.parametrize('corner', [(0, 0), (1, 0), (0, 1), (1, 1)])
+def test_measured_radial_layout_corners_and_dynamic_choices(app, monkeypatch, corner):
+    from types import SimpleNamespace
+    bounds = C.QRect(-1000, 100, 900, 800)
+    screen = SimpleNamespace(availableGeometry=lambda: bounds)
+    monkeypatch.setattr(W.QApplication, 'screenAt', lambda point: screen)
+    doc = populated(4)
+    menu = QuickTagMenu(doc, {'0'})
+    menu.press_origin = C.QPoint(bounds.right() if corner[0] else bounds.left(),
+                                bounds.bottom() if corner[1] else bounds.top())
+    menu.layout_menu()
+    compact = menu.width()
+    doc.deck.categories = populated(20).deck.categories
+    doc.deck.entries = populated(20).deck.entries
+    for category in doc.deck.categories:
+        category.name = 'Graveyard Recursion ' + category.category_id
+    menu.update_mode()
+    assert menu.width() > compact
+    assert menu.page_size == 20
+    assert bounds.contains(menu.geometry())
+    metrics = menu.fontMetrics()
+    for start, count, lo, hi in menu.rings:
+        for i in range(start, start + count):
+            assert hi - lo - 16 >= metrics.horizontalAdvance(menu.label(i))
+    menu.deleteLater()
+
+
+def test_radial_small_window_paging_and_keyboard_access(app, monkeypatch):
+    from types import SimpleNamespace
+    bounds = C.QRect(0, 0, 300, 300)
+    monkeypatch.setattr(W.QApplication, 'screenAt',
+                        lambda point: SimpleNamespace(availableGeometry=lambda: bounds))
+    menu = QuickTagMenu(populated(40), {'0'})
+    menu.press_origin = C.QPoint(1, 1)
+    menu.layout_menu()
+    assert menu.page_size < len(menu.options)
+    visited = set()
+    for page in range(math.ceil(len(menu.options) / menu.page_size)):
+        assert bounds.contains(menu.geometry())
+        center, _, _ = menu.geometry_values()
+        for start, count, lo, hi in menu.rings:
+            for i in range(count):
+                angle = -math.pi / 2 + i * 2 * math.pi / count
+                point = center + C.QPointF(math.cos(angle), math.sin(angle)) * ((lo + hi) / 2)
+                assert menu.sector(point) == start + i
+                visited.add(start + i)
+        menu.change_page(1)
+    assert visited == set(range(40))
+    for index in range(40):
+        QtTest.QTest.keyClick(menu, C.Qt.Key.Key_Right)
+        assert menu.active == index
+        assert menu.page == index // menu.page_size
+    menu.deleteLater()
