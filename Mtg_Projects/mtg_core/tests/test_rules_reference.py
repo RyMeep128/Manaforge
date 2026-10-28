@@ -65,6 +65,9 @@ def test_local_search_numbers_text_and_snapshot_versions(tmp_path):
     assert store.search('" OR * --') == []
     assert len(store.search('', limit=2)) == 2
     assert store.search('100')[0]['number'] == '100'
+    partial = store.search('70')
+    assert partial and all(row['number'].startswith('70') for row in partial)
+    assert [row['number'] for row in store.search('rule 70')] == [row['number'] for row in partial]
     newer = DOCUMENT.replace('September 25', 'October 23')
     second = store.install(newer, 'new fixture')
     assert second['metadata']['effective_date'] == '2026-10-23'

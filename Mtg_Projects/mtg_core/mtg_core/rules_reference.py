@@ -138,12 +138,12 @@ class RulesStore:
             if metadata is None:
                 return []
             version = metadata['checksum']
-            number = re.fullmatch(r'(?:rule\s+)?([1-9](?:\d{2}(?:\.\d+[a-z]?)?)?)\.?', query, re.I)
+            number = re.fullmatch(r'(?:rule\s+)?([1-9](?:\d{1,2}(?:\.\d+[a-z]?)?)?)\.?', query, re.I)
             if number:
                 key = number[1].lower()
                 return [dict(row) for row in db.execute('''SELECT * FROM rules WHERE version=?
                     AND (number=? OR number LIKE ? OR number GLOB ?) ORDER BY ordinal LIMIT ? OFFSET ?''',
-                    (version, key, key + ('%' if len(key) == 1 else '.%'), key + '[a-z]', limit, offset))]
+                    (version, key, key + ('%' if len(key) <= 2 else '.%'), key + '[a-z]', limit, offset))]
             terms = re.findall(r'\w+', query, re.UNICODE)[:30]
             if terms:
                 match = ' AND '.join('"' + word + '"*' for word in terms)

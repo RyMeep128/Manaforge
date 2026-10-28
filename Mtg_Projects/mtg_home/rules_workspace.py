@@ -29,19 +29,37 @@ class RulesWorkspace(RulesBrowser):
         super().__init__(service)
         self._home = home
         self.setWindowTitle('Rules & Rulings — Manaforge')
-        row = W.QHBoxLayout()
+        self.card_panel = W.QWidget()
+        row = W.QHBoxLayout(self.card_panel)
+        row.setContentsMargins(0, 0, 0, 0)
         back = W.QPushButton('Home')
         back.clicked.connect(home)
-        row.addWidget(back)
+        self.footer_actions.insertWidget(0, back)
+        back.setAutoDefault(False)
+        row.addWidget(W.QLabel('Card rulings'))
         self.card_name = W.QLineEdit()
         self.card_name.setPlaceholderText('Exact card name for Oracle text and rulings')
         self.card_name.setClearButtonEnabled(True)
         self.card_name.returnPressed.connect(self.find_card)
         row.addWidget(self.card_name, 1)
         self.card_button = W.QPushButton('Find card')
+        self.card_button.setAutoDefault(False)
         self.card_button.clicked.connect(self.find_card)
         row.addWidget(self.card_button)
-        self.layout().insertLayout(0, row)
+        self.card_toggle = W.QPushButton('Card rulings')
+        self.card_toggle.setAutoDefault(False)
+        self.card_toggle.setCheckable(True)
+        self.card_toggle.toggled.connect(self.card_panel.setVisible)
+        self.search_tools.addWidget(self.card_toggle)
+        self.layout().insertWidget(2, self.card_panel)
+        self.card_panel.hide()
+
+    def keyPressEvent(self, event):
+        if event.key() == C.Qt.Key.Key_Escape and self.card_toggle.isChecked():
+            self.card_toggle.setChecked(False)
+            event.accept()
+        else:
+            super().keyPressEvent(event)
 
     def reject(self):
         if self.property('manaforgeEmbedded') and not self.property('manaforgeQuitting'):
