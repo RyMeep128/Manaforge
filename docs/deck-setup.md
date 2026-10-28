@@ -59,3 +59,10 @@ Make editable copy opens the saved local deck immediately through the editor's
 normal unsaved-change handling. Copies use `Deck Name [Library Name]`; the name
 comes from the selected publication or followed deck's source, not another active
 connection. Cancelling an editor switch leaves the saved copy in My Decks.
+
+
+The finishing page explicitly shows the embedded theme and destination widgets after
+removing them from their tabs. The precon summary has a bounded height so both
+controls remain visible. Starting-point and precon-finishing pages use the local
+theme catalog immediately; they do not run commander discovery to populate themes.
+Commander searches run only on the commander page and cancel when leaving it.

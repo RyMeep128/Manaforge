@@ -189,6 +189,7 @@ class DeckSetupDialog(W.QDialog):
             finishing_layout.setContentsMargins(0, 0, 0, 0)
             finishing_layout.setSpacing(12)
             self.precon_summary = W.QGroupBox('Selected precon')
+            self.precon_summary.setFixedHeight(180)
             precon_layout = W.QHBoxLayout(self.precon_summary)
             self.precon_art = DiscoveryCanvas(DeckDocument(), editor.thumbnails, self)
             self.precon_art.read_only = True
@@ -204,10 +205,13 @@ class DeckSetupDialog(W.QDialog):
             finishing_layout.addWidget(self.precon_summary)
             self.tabs.removeTab(self.tabs.indexOf(self.themes))
             finishing_layout.addWidget(self.themes, 1)
+            self.themes.show()
             self.tabs.removeTab(self.tabs.indexOf(library_page))
             library_layout.setContentsMargins(0, 0, 0, 0)
             library_layout.insertWidget(0, W.QLabel('Save to'))
             finishing_layout.addWidget(library_page)
+            library_page.show()
+            self.library_page = library_page
             self.setup_pages.addWidget(finishing)
             outer.insertWidget(2, self.setup_pages, 1)
         self.format.currentTextChanged.connect(self.format_changed)
@@ -222,7 +226,7 @@ class DeckSetupDialog(W.QDialog):
             self.selected = [deepcopy(seed)]
             self.format.setCurrentText('Commander')
         self.format_changed()
-        self.update_summary()
+        self.refresh_themes()
         self.update_stage()
         self.name.setFocus()
 
@@ -244,6 +248,8 @@ class DeckSetupDialog(W.QDialog):
                             'Choose your commander',
                             'Themes and library')[self.stage])
         self.setup_pages.setCurrentIndex(self.stage)
+        if self.stage != 1:
+            self.controller.cancel()
         path = 'Starting point  >  ' + ('Precon  >  ' if self.start.currentIndex() == 2 else
                                        'Commander  >  ' if commander else '') + 'Themes and library'
         three_steps = commander and self.start.currentIndex() != 2
@@ -337,8 +343,7 @@ class DeckSetupDialog(W.QDialog):
         self.canvas.refresh()
         self.choose.setEnabled(False)
         if ((self.creating and self.stage == 1) or
-                (not self.creating and self.tabs.currentIndex() == 0 and self.tabs.isTabVisible(0)) or
-                not self.catalog_loaded):
+                (not self.creating and self.tabs.currentIndex() == 0 and self.tabs.isTabVisible(0))):
             self.controller.change_query(self.query())
 
     def completed(self, query, snapshot, error):

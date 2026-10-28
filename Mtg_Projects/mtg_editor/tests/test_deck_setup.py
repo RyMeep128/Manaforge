@@ -107,6 +107,14 @@ def test_precon_keeps_commander_and_skips_commander_search(tmp_path, monkeypatch
     assert result.deck.commander_entry_ids == ['cmd']
     assert len(result.deck.entries) == 1
     assert 'Original commander' in dialog.precon_text.text()
+    dialog.show()
+    app.processEvents()
+    assert dialog.themes.isVisibleTo(dialog)
+    assert dialog.themes.list.isVisibleTo(dialog)
+    assert dialog.library.isVisibleTo(dialog)
+    assert dialog.precon_summary.height() == 180
+    assert dialog.themes.list.height() >= 80
+    assert dialog.library.geometry().height() > 0
     import os
     from pathlib import Path
     from PyQt6 import QtGui as G
@@ -150,6 +158,28 @@ def test_setup_visual_review_artifacts(tmp_path, monkeypatch):
             assert dialog.grab().save(str(destination / f'deck-setup-step-{stage + 1}.png'))
         if stage == 0:
             assert dialog.height() < 500
+    dialog.reject()
+    editor.close()
+    app.processEvents()
+
+
+def test_starting_and_precon_finish_do_not_start_commander_discovery(tmp_path, monkeypatch):
+    app = W.QApplication.instance() or W.QApplication([])
+    searches = []
+    monkeypatch.setattr(DiscoveryController, 'change_query', lambda *args: searches.append(args))
+    editor = EditorWindow(service=object(), root=tmp_path)
+    dialog = DeckSetupDialog(editor, DeckDocument(), creating=True)
+    assert not searches
+    assert dialog.themes.list.count() > 0
+    dialog.start.setCurrentIndex(2)
+    dialog.stage = 2
+    dialog.update_stage()
+    dialog.format_changed()
+    assert not searches
+    assert not dialog.controller.timer.isActive()
+    dialog.stage = 1
+    dialog.update_stage()
+    assert searches
     dialog.reject()
     editor.close()
     app.processEvents()
