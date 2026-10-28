@@ -132,6 +132,7 @@ class EditorWindow(W.QMainWindow):
         more.setText('More')
         more.setPopupMode(W.QToolButton.ToolButtonPopupMode.InstantPopup)
         menu = W.QMenu(more)
+        menu.addAction('Deck settings…', self.deck_settings)
         menu.addAction('Artwork preferences?', self.artwork_preferences)
         menu.addAction('Deck artwork preferences...', self.project_artwork_preferences)
         menu.addAction('Global printing defaults...', self.printing_preferences)
@@ -187,7 +188,7 @@ class EditorWindow(W.QMainWindow):
 
         add_group, add_row = self.toolbar_group('Add Cards')
         self.workspace_button = self.button(add_row, 'Card Search', self.open_add_cards, True)
-        self.button(add_row, 'Themes', self.edit_themes)
+        self.button(add_row, 'Deck settings', self.deck_settings)
         self.quick_add = CardSearchEdit()
         self.quick_add.setPlaceholderText('Quick Add')
         self.quick_add.setAccessibleName('Quick Add: Enter searches, then Enter adds a result')
@@ -846,6 +847,9 @@ class EditorWindow(W.QMainWindow):
         self._refreshing_table = False
 
     def edit(self, action):
+        from .commander_selection import commanders
+        before_commanders = tuple(e.entry_id for e in commanders(self.document))
+        established = self._has_active_deck
         from .tag_model import retain_tag_definitions
         from mtg_core.basic_lands import land_quantities, stop_on_land_removal, reconcile_basic_lands
         def composition(document):
@@ -867,6 +871,11 @@ class EditorWindow(W.QMainWindow):
             self._has_active_deck = True
             self.project_stack.setCurrentWidget(self.editor_body)
             self.changed()
+            after_commanders = tuple(e.entry_id for e in commanders(self.document))
+            if established and before_commanders != after_commanders and not getattr(self, '_setting_up_deck', False):
+                from .deck_setup import prompt_commander_themes
+                document = self.document
+                QtCore.QTimer.singleShot(0, lambda: prompt_commander_themes(self, document, after_commanders))
 
     def changed(self):
         if not self._has_active_deck and (self.document.deck.entries or self.document.deck.categories):
@@ -1640,11 +1649,39 @@ class EditorWindow(W.QMainWindow):
             self.run_task(resolve, apply)
 
     def choose_new_deck(self):
-        choice, ok = W.QInputDialog.getItem(self, 'New deck', 'Start with:',
-            ['Create Blank Deck', 'Import Deck', 'Create from Precon'], 0, False)
-        if not ok:
+        self.create_deck()
+
+    def deck_settings(self):
+        if self.task is not None or not self._has_active_deck:
             return
-        if choice == 'Create from Precon':
+        from .deck_setup import DeckSetupDialog
+        document = self.document
+        snapshot = document.to_dict()
+        dialog = DeckSetupDialog(self, document)
+        if dialog.exec() == W.QDialog.DialogCode.Accepted and self.document is document and document.to_dict() == snapshot:
+            self._setting_up_deck = True
+            try:
+                self.edit(dialog.apply_to)
+                self.sync_fields()
+            finally:
+                self._setting_up_deck = False
+
+    def create_deck(self, *, seed=None):
+        if self.task is not None:
+            return
+        from .deck_setup import DeckSetupDialog
+        draft = DeckDocument()
+        settings = QtCore.QSettings('Manaforge', 'DeckEditor')
+        draft.deck.format = str(settings.value('new_deck_format', 'Commander'))
+        dialog = DeckSetupDialog(self, draft, creating=True, seed=seed)
+        if dialog.exec() != W.QDialog.DialogCode.Accepted:
+            return
+        # Do not replace the active document until all optional setup is accepted.
+        if self._has_active_deck and self.session.dirty and not self.save():
+            return
+        dialog.apply_to(draft)
+        choice = dialog.start.currentIndex()
+        if choice == 2:
             from .precon_browser import PreconBrowser
             from mtg_core.precons import apply_precon
             if self.task is not None:
@@ -1652,19 +1689,21 @@ class EditorWindow(W.QMainWindow):
             dialog = PreconBrowser(self.service, self.thumbnails, self)
             if dialog.exec() != W.QDialog.DialogCode.Accepted or not dialog.result:
                 return
-            previous = self.document.deck.deck_id
-            self.new()
-            if self.document.deck.deck_id != previous:
-                self.edit(lambda d: apply_precon(d, dialog.record, dialog.result,
-                    dialog.deck_name.text(), dialog.cover_asset_id))
-                self.sync_fields()
-            return
-        previous = self.document.deck.deck_id
-        self.new()
-        if choice == 'Import Deck' and self.document.deck.deck_id != previous:
-            self.import_decklist()
+            apply_precon(draft, dialog.record, dialog.result, dialog.deck_name.text(), dialog.cover_asset_id)
+        self.session.new()
+        self.session.edit(lambda d: (setattr(d, 'deck', deepcopy(draft.deck)),
+                                     setattr(d, 'editor_preferences', deepcopy(draft.editor_preferences))))
+        self._document_replaced()
+        settings.setValue('new_deck_format', draft.deck.format)
+        if choice == 1:
+            self._setting_up_deck = True
+            try:
+                self.import_decklist()
+            finally:
+                self._setting_up_deck = False
 
     def new(self):
+        """Reset the document for internal callers; UI creation uses create_deck."""
         if self.task is not None or (self._has_active_deck and self.session.dirty and not self.save()):
             return
         self.session.new()

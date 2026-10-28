@@ -557,10 +557,9 @@ class RecommendationPanel(CardDropPanel):
         self.last_discovery_identity = discovery_identity
         manual = self.editor.document.editor_preferences.get("manual_themes", [])
         if manual:
-            theme = {
-                "name": "Manual: " + ", ".join(t["name"] for t in manual),
-                "selected_themes": manual,
-            }
+            # Deck intent is a ranking signal. Only an explicit browse filter
+            # should exclude otherwise useful recommendations.
+            theme = None
         theme_changed = theme != self.theme_option
         self.theme_option = deepcopy(theme)
         identities = [

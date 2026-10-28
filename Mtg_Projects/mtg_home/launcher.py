@@ -73,6 +73,7 @@ class ModuleController(C.QObject):
                     window = EditorWindow(service=self.service)
                     window.print_project_handler = self.open_print_project
                     window.publish_deck_handler = self.publish_deck
+                    window.deck_libraries_provider = self.deck_libraries
                     window.publish_action.setEnabled(True)
                 elif module.action == 'printer':
                     from .printing import create_print_workspace
@@ -108,6 +109,26 @@ class ModuleController(C.QObject):
         library = self.windows.get('library')
         if library is not None:
             library.publishing.prepare(snapshot, color_identity)
+            association = snapshot.get('library_association') or {}
+            if association.get('id'):
+                library.publishing.use_connection(association['id'])
+
+    def deck_libraries(self):
+        """Offer signed-in destinations without network access or publication."""
+        import sqlite3
+        from mtg_core.library.client import LibraryConnections
+        from mtg_core.library.sessions import SavedSessions
+        from mtg_core.paths import data_root
+        workspace = self.windows.get('library')
+        try:
+            connections = workspace.connections if workspace else LibraryConnections(data_root())
+            sessions = workspace.saved_sessions if workspace else SavedSessions(data_root())
+            rows = connections.list()
+            return [{key: row[key] for key in ('id', 'name', 'server_id')} for row in rows
+                    if (workspace and getattr(workspace.clients.get(row['id']), 'token', None))
+                    or sessions.has(row['id'])]
+        except (OSError, sqlite3.Error):
+            return []
 
     def shutdown(self):
         if self.jobs.busy:

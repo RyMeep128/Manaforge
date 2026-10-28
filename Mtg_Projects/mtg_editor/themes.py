@@ -2,11 +2,11 @@
 from copy import deepcopy
 from .card_drop import CardSearchEdit
 from PyQt6 import QtCore as C, QtWidgets as W
-from mtg_core.discovery_themes import theme_catalog, oracle_tag_theme
+from mtg_core.discovery_themes import theme_catalog, oracle_tag_theme, theme_matches
 
 
 class ThemesDialog(W.QDialog):
-    def __init__(self, document, catalog, inferred, parent):
+    def __init__(self, document, catalog, inferred, parent, *, compact=False):
         super().__init__(parent)
         self.setWindowTitle('Deck themes')
         self.resize(520, 540)
@@ -18,6 +18,7 @@ class ThemesDialog(W.QDialog):
         layout.addWidget(note)
         automatic = W.QLabel('Automatically inferred: ' + (', '.join(inferred) or 'No repeated theme detected yet.'))
         automatic.setWordWrap(True)
+        self.current_themes = automatic
         layout.addWidget(automatic)
         self.search = CardSearchEdit()
         self.search.setPlaceholderText('Search themes by name')
@@ -38,8 +39,12 @@ class ThemesDialog(W.QDialog):
             saved.append(legacy)
         self.catalog = {t['slug']: t for t in [*catalog, *saved] if not t.get('companion')}
         checked = {t['slug'] for t in saved}
-        for key, option in sorted(self.catalog.items(), key=lambda pair: pair[1]['name'].casefold()):
-            item = W.QListWidgetItem(option['name'])
+        from .commander_selection import commanders
+        from mtg_core.categorization import classify
+        rows = [{'entry': entry, 'roles': classify(entry.extras.get('facts') or {})} for entry in commanders(document)]
+        suggested = {key for key, option in self.catalog.items() if any(theme_matches(row, option) for row in rows)}
+        for key, option in sorted(self.catalog.items(), key=lambda pair: (pair[0] not in suggested, pair[1]['name'].casefold())):
+            item = W.QListWidgetItem(option['name'] + (' · Suggested' if key in suggested else ''))
             item.setData(C.Qt.ItemDataRole.UserRole, key)
             item.setFlags(item.flags() | C.Qt.ItemFlag.ItemIsUserCheckable)
             item.setCheckState(C.Qt.CheckState.Checked if key in checked else C.Qt.CheckState.Unchecked)
@@ -71,10 +76,19 @@ class ThemesDialog(W.QDialog):
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
+        self.buttons = buttons
+        if compact:
+            automatic.setText('Current themes: ' + (', '.join(t['name'] for t in saved) or 'None'))
+            for widget in (note, self.group, tag_note, self.oracle_tag,
+                           add_theme, self.tag_status, clear):
+                widget.hide()
         self.search.textChanged.connect(self.filter)
         self.group.currentTextChanged.connect(self.filter)
 
     def keyPressEvent(self, event):
+        if not self.isWindow() and event.key() in (C.Qt.Key.Key_Return, C.Qt.Key.Key_Enter, C.Qt.Key.Key_Escape):
+            event.ignore()
+            return
         if (self.oracle_tag.hasFocus()
                 and event.key() in (C.Qt.Key.Key_Return, C.Qt.Key.Key_Enter)):
             self.add_oracle_theme()
@@ -126,10 +140,11 @@ class ThemesDialog(W.QDialog):
                 for i in range(self.list.count()) if self.list.item(i).checkState() == C.Qt.CheckState.Checked]
 
 
-def edit_themes(editor):
+def edit_themes(editor, *, commander_changed=False):
     if editor.task is not None or editor.closing:
         return
     snapshot = editor.document.deck.deck_id
+    snapshot_data = editor.document.to_dict()
     cached = [t for t in editor.add_cards_workspace.discovery.theme_options.values() if t.get('origin') == 'edhrec']
     document = deepcopy(editor.document)
     def load():
@@ -157,11 +172,15 @@ def edit_themes(editor):
         inferred = guidance(document, proposals, GuidanceSettings.from_document(document))
         return catalog, [row['id'][6:] for row in inferred['suggestions'] if row['id'].startswith('theme:')]
     def loaded(result):
-        if snapshot != editor.document.deck.deck_id:
+        if snapshot != editor.document.deck.deck_id or snapshot_data != editor.document.to_dict():
             return
         catalog, inferred = result
-        dialog = ThemesDialog(editor.document, catalog, inferred, editor)
-        if dialog.exec() == W.QDialog.DialogCode.Accepted and snapshot == editor.document.deck.deck_id:
+        dialog = ThemesDialog(editor.document, catalog, inferred, editor, compact=commander_changed)
+        if commander_changed:
+            dialog.setWindowTitle('Update themes for your new commander?')
+            dialog.buttons.button(W.QDialogButtonBox.StandardButton.Cancel).setText('Keep existing themes')
+        if (dialog.exec() == W.QDialog.DialogCode.Accepted and snapshot == editor.document.deck.deck_id
+                and snapshot_data == editor.document.to_dict()):
             themes = dialog.selections()
             if themes == dialog.initial_selections:
                 return
