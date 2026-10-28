@@ -62,7 +62,7 @@ jobs:
           PRINT_PROXY_PREP_DATA_DIR: ${{ runner.temp }}/mtg-suite-test-data
           MANAFORGE_UI_SCREENSHOTS: ${{ runner.temp }}/manaforge-ui
           MANAFORGE_CATEGORY_EVALUATION: ${{ runner.temp }}/categorization-evaluation.json
-        run: python -m pytest -vv --tb=short --durations=10 -o faulthandler_timeout=120 mtg_editor/tests integration_tests mtg_proxy/tests mtg_core/tests
+        run: python -m pytest -vv --tb=short --durations=10 -o faulthandler_timeout=120 mtg_editor/tests integration_tests mtg_proxy/tests mtg_core/tests mtg_play/tests
       - name: Upload library UI review screenshots
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

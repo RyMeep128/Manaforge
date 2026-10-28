@@ -33,6 +33,15 @@ EVENTS = {
     "connected",
     "status",
     "shutdown",
+    "table_created",
+    "joined",
+    "started",
+    "game_started",
+    "game_state",
+    "decision",
+    "response_sent",
+    "game_over",
+    "concede_sent",
 }
 
 
@@ -44,7 +53,7 @@ def decode_event(line: str) -> dict:
     try:
         event = json.loads(line)
     except (ValueError, TypeError) as error:
-        raise ProofError(f"Malformed bridge JSON: {line[:200]!r}") from error
+        raise ProofError("Malformed bridge JSON") from error
     if (
         not isinstance(event, dict)
         or type(event.get("protocol")) is not int
@@ -52,7 +61,7 @@ def decode_event(line: str) -> dict:
         or not isinstance(event.get("event"), str)
         or event.get("event") not in EVENTS
     ):
-        raise ProofError(f"Invalid bridge protocol event: {event!r}")
+        raise ProofError("Invalid bridge protocol event")
     if event["event"] == "callback" and (
         not isinstance(event.get("method"), str)
         or type(event.get("message_id")) is not int
@@ -75,10 +84,23 @@ class BridgeEvents:
     def _read(self):
         try:
             for line in self.process.stdout:
-                self.transcript.write(line)
-                self.transcript.flush()
                 try:
-                    self.events.put(decode_event(line))
+                    event = decode_event(line)
+                    # Diagnostics retain routing metadata, never private views or prompts.
+                    diagnostic = {
+                        key: event[key]
+                        for key in (
+                            "protocol",
+                            "event",
+                            "request_id",
+                            "method",
+                            "message_id",
+                        )
+                        if key in event
+                    }
+                    self.transcript.write(json.dumps(diagnostic) + "\n")
+                    self.transcript.flush()
+                    self.events.put(event)
                 except ProofError as error:
                     self.events.put(error)
         except (OSError, ValueError) as error:
@@ -239,7 +261,7 @@ def wait_for_server(process: subprocess.Popen, log: Path, deadline: float):
     raise ProofError(f"XMage server startup timed out; inspect {log}")
 
 
-def run_proof(bundle: Path, jdk: Path, port: int = 0) -> dict:
+def run_proof(bundle: Path, jdk: Path, port: int = 0, scenario=None) -> dict:
     java, javac, manifest = validate_installation(bundle, jdk)
     workspace = (
         HERE / ".runtime" / (time.strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:8])
@@ -252,6 +274,7 @@ def run_proof(bundle: Path, jdk: Path, port: int = 0) -> dict:
     }
     server_process = bridge_process = events = None
     logs = []
+    peers = []
     reservations = []
     failure = None
     try:
@@ -350,6 +373,31 @@ def run_proof(bundle: Path, jdk: Path, port: int = 0) -> dict:
         if not events.callbacks:
             events.wait("callback", deadline)
         result.update({"status": status, "callbacks": list(events.callbacks)})
+        if scenario is not None:
+
+            def launch_peer():
+                peer_dir = workspace / ("peer-" + str(len(peers)))
+                peer_dir.mkdir()
+                peer_log = (peer_dir / "bridge.log").open("w", encoding="utf-8")
+                peer_transcript = (peer_dir / "events.jsonl").open(
+                    "w", encoding="utf-8"
+                )
+                logs.extend((peer_log, peer_transcript))
+                peer = subprocess.Popen(
+                    [*base, "-Xmx256m", "-cp", classpath, "ManaforgeBridge"],
+                    cwd=peer_dir,
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=peer_log,
+                    text=True,
+                    encoding="utf-8",
+                    creationflags=flags,
+                )
+                peer_events = BridgeEvents(peer, peer_transcript)
+                peers.append((peer, peer_events))
+                return peer, peer_events
+
+            result["gameplay"] = scenario(bridge_process, events, launch_peer, port)
         send(bridge_process, "shutdown", "shutdown-1")
         shutdown = events.wait(
             "shutdown", time.monotonic() + STOP_TIMEOUT, "shutdown-1"
@@ -357,18 +405,25 @@ def run_proof(bundle: Path, jdk: Path, port: int = 0) -> dict:
         if shutdown.get("connected") is not False:
             raise ProofError("Bridge did not confirm disconnection")
         result["disconnected"] = True
-    except (
-        ProofError,
-        OSError,
-        subprocess.SubprocessError,
-        KeyboardInterrupt,
-    ) as error:
+    except (Exception, KeyboardInterrupt) as error:
         failure = str(error) or type(error).__name__
     finally:
         for reservation in reservations:
             reservation.close()
         # Continue cleanup even if one process cannot be reaped.
         cleanup_errors = []
+        for index, (peer, peer_events) in enumerate(peers):
+            try:
+                if peer.poll() is None:
+                    send(peer, "shutdown", "peer-shutdown")
+                    peer_events.wait(
+                        "shutdown", time.monotonic() + STOP_TIMEOUT, "peer-shutdown"
+                    )
+                result["peer_" + str(index)] = stop_process(peer)
+            except (ProofError, OSError, subprocess.SubprocessError) as error:
+                cleanup_errors.append(f"peer {index}: {error}")
+                result["peer_" + str(index)] = stop_process(peer)
+            peer_events.thread.join(timeout=2)
         for name, process, line in (
             ("bridge", bridge_process, None),
             ("server", server_process, "shutdown"),
@@ -384,7 +439,11 @@ def run_proof(bundle: Path, jdk: Path, port: int = 0) -> dict:
         if cleanup_errors:
             failure = f"{failure or ''} Cleanup failed: {cleanup_errors}"
         if failure is None:
-            for name in ("bridge", "server"):
+            for name in (
+                "bridge",
+                "server",
+                *("peer_" + str(i) for i in range(len(peers))),
+            ):
                 state = result[name]
                 if state.get("forced") or state.get("exit_code") != 0:
                     failure = f"{name} did not shut down normally: {state}"

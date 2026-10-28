@@ -202,3 +202,25 @@ def test_generated_config_preserves_original(tmp_path):
         "secondaryBindPort": "1235",
     }
     assert (original / "config/config.xml").read_bytes() == config
+
+
+def test_gameplay_transcript_redacts_private_payload(children):
+    secret = "PRIVATE_HAND_IDENTITY"
+    child = children(
+        "import json;print(json.dumps({'protocol':1,'event':'game_state',"
+        "'hand':[{'name':'" + secret + "'}]}));input()"
+    )
+    transcript = io.StringIO()
+    events = proof.BridgeEvents(child, transcript)
+    state = events.wait("game_state", time.monotonic() + 5)
+    assert state["hand"][0]["name"] == secret
+    assert secret not in transcript.getvalue()
+    assert json.loads(transcript.getvalue()) == {"protocol": 1, "event": "game_state"}
+    proof.stop_process(child)
+    events.thread.join(timeout=2)
+
+
+def test_invalid_protocol_error_does_not_echo_private_payload():
+    with pytest.raises(proof.ProofError) as failure:
+        proof.decode_event('{"protocol":2,"event":"PRIVATE_HAND_IDENTITY"}')
+    assert "PRIVATE_HAND_IDENTITY" not in str(failure.value)

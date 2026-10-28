@@ -120,3 +120,120 @@ the next feasibility milestones.
 XMage's bundled license is MIT. No XMage source is copied here; distribution still
 requires preserving applicable engine/dependency notices and a separate packaging
 review. Forge remains untouched and is not a dependency of this experiment.
+
+
+## Gameplay feasibility (adapter epic, Milestone A)
+
+Run the same pinned, isolated engine with two independent human sessions:
+
+```powershell
+python Mtg_Projects/mtg_play/gameplay_proof.py
+```
+
+The CLI accepts the same `--xmage-root` and `--jdk-path` overrides. It reuses
+`run_proof` for artifact verification, compilation, loopback listeners, process
+ownership, deadlines, diagnostics, and shutdown. No download or installation
+changes occur. The original connection-only CLI remains available.
+
+The scenario creates a **Two Player Duel** table using the engine's
+**Constructed - Freeform Unlimited** validator. Each fixture deck contains 30
+M10/248 Forests and 30 SOM/174 Memnites. These deliberately simple, engine-supported
+fixture decks are not yet Manaforge `DeckDocument` conversion. XMage shuffles and
+deals them normally; the harness never fixes opening hands or implements rules.
+
+Acceptance requires both sessions to join the same game, receive seven distinct
+opening objects and mulligan prompts, keep their hands, submit engine-provided
+playable objects, observe a Forest on the battlefield, observe Memnite on the
+stack and then on the battlefield, reject a replayed decision, and receive
+`GAME_OVER` for both seats after an explicit concession. A submission acknowledgement
+alone never establishes a land play, cast, resolution, or game completion.
+The scenario deadline is 90 seconds after starting the match. Unexpected prompts
+fail explicitly. Choosing an offered starting player and ability, keeping hands,
+passing priority, and conceding are scripted **harness** decisions, not adapter
+automation or opponent strategy.
+
+### Confirmed binary API mappings
+
+Inspected using JDK `javap` against the SHA-256-pinned server JARs; upstream
+[`CallbackClientImpl`](https://github.com/magefree/mage/blob/xmage_1.4.62V1/Mage.Client/src/main/java/mage/client/remote/CallbackClientImpl.java)
+and [`Deck`](https://github.com/magefree/mage/blob/xmage_1.4.62V1/Mage/src/main/java/mage/cards/decks/Deck.java)
+provide source context. The pinned binaries remain the compatibility authority.
+
+| Operation | Actual engine interface |
+|---|---|
+| Create table | `SessionImpl.createTable(roomId, MatchOptions)` |
+| Join seat with deck | `SessionImpl.joinTable(..., PlayerType.HUMAN, ..., DeckCardLists, ...)` |
+| Start match | `SessionImpl.startMatch(roomId, tableId)` |
+| Enter game | `START_GAME` contains `TableClientMessage`; then `joinGame(gameId)` |
+| Authoritative player view | `GAME_INIT` carries `GameView`; gameplay messages carry `GameClientMessage.getGameView()` |
+| Mulligan | `GAME_ASK`, answered with `sendPlayerBoolean` |
+| Priority/object selection | `GAME_SELECT`, answered with `sendPlayerUUID` or `sendPlayerBoolean(false)` |
+| Starting player | `GAME_TARGET` with permitted player UUIDs |
+| Cast/ability selection | `GAME_CHOOSE_ABILITY` carries `AbilityPickerView`; answer with `sendPlayerUUID` |
+| Concession | `sendPlayerAction(PlayerAction.CONCEDE, gameId, null)` |
+
+Important observed pitfalls: `DeckCardInfo` constructor order is **name, number,
+set, quantity**. Its name does not establish Oracle identity: `Deck.load` resolves
+set and number. An unknown deck-validator label can create a table whose later
+join fails with a server-side null-pointer error; use the exact configured label.
+Neither finding justifies inventing a permanent deck-resolution contract yet.
+
+### Experimental wire extension and privacy
+
+This is still experimental bridge protocol **1**, not a stable public game API.
+New operations: `create_game`, `join_table`, `start_game`, `respond`, `concede`.
+`respond` requires the current `game_id`, `decision_id`, response `kind`, and
+`value`. Responses are consumed before the remote call, preventing replay and
+avoiding overwriting a newer callback's pending decision. Invalid response kinds
+leave the decision available. Duplicate/older decision callbacks are ignored;
+complete view updates advance by callback message ID. Failed submissions require
+explicit recovery; they are never silently retried.
+
+Gameplay events include `game_started`, `game_state`, `decision`, `response_sent`,
+and `game_over`. Per-session state includes only that player's engine-provided
+hand, public battlefield/stack information and player counts. Face-down or
+engine-hidden cards omit names and characteristics. No arbitrary Java payload
+is serialized. Protocol transcripts retain only event/routing metadata, omitting
+hands, prompts, targets, rules, and other gameplay data. JVM logs remain local
+engine diagnostics and must not be distributed as visibility-safe public events.
+
+### Capability status and remaining epic work
+
+**Milestone A only:** two-player fixture-deck gameplay has been demonstrated with
+the pinned engine. A game ending by concession is verified; representative combat
+and a game ending through damage are not yet acceptance scenarios.
+
+This is **not** the completed gameplay adapter. Stories 2?12 remain: a stable
+Manaforge-owned API, Core deck/Oracle and selected-printing resolution, object
+identity across zone changes, comprehensive state/dynamic characteristics,
+validated legal-action and decision contracts, exhaustive visibility scenarios,
+Commander and actual 2/3/4/5-seat verification, interruption/recovery semantics,
+and integration acceptance exclusively through the public adapter. Engine IDs and
+callback names here are private experimental transport details; future consumers
+must not depend on them. No Commander or multiplayer capability is claimed from
+plugin presence alone.
+
+`view_rules` is engine view text; it is **not** a guarantee of complete current
+abilities or authoritative dynamic Oracle text. Unsupported fields are omitted in
+this experiment, not filled with printed data. Amount/mana/general-choice interfaces have binary API evidence but no live
+scenario coverage or response implementation yet.
+Unsupported decision families emit `UNSUPPORTED_DECISION` and fail the harness.
+The current protocol is unsuitable as a production visibility or authorization
+boundary until those later stories pass.
+
+Ordinary adapter tests run in the existing Windows test job. Engine bundles are
+not downloaded by CI and there is no new CI service or workflow: real-engine
+acceptance uses this explicit local harness and its retained `result.json`.
+No test-suite result should be inferred from the live harness result.
+
+
+Verified October 28, 2026: final gameplay scenario
+`.runtime/20261028-183731-050afcd6/result.json` reported both player starts, both
+opening hands and mulligan prompts, independent opening-object identities, nine
+submitted decisions, a land on the battlefield, a spell on the stack and then
+resolved, stale-response rejection, and game-over callbacks for both seats.
+All three owned JVMs exited 0 without forced cleanup. The original connection
+harness also passed in `.runtime/20261028-183837-e3826419/result.json`, with both
+JVMs exiting 0 normally. Ruff checks passed. The two new privacy regression tests
+were added to CI but were not executed locally; CI has not run for this unpushed
+branch. These results establish Milestone A, not completion of the epic.
