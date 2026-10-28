@@ -10,7 +10,7 @@ test('bounds and allowlists', () => {
   assert.equal(validate({...report(), screenshot:'not an image'}), false);
 });
 test('unauthorized requests never reach storage', async () => {
-  const response = await worker.fetch(new Request('https://example.com/feedback',{method:'POST'}), {INVITE_CODE:'invitation', GITHUB_TOKEN:'server-only', RATE_LIMITER:{limit:async()=>({success:true})}});
+  const response = await worker.fetch(new Request('https://example.com/feedback',{method:'POST'}), {REQUIRE_INVITE:'true', INVITE_CODE:'invitation', GITHUB_TOKEN:'server-only', RATE_LIMITER:{limit:async()=>({success:true})}});
   assert.equal(response.status,403);
 });
 test('retries return existing reference without GitHub call', async () => {
@@ -49,7 +49,7 @@ test('approved attachments are stored privately and only references reach GitHub
   };
   try {
     const response = await worker.fetch(new Request('https://example.com/feedback', {
-      method:'POST', headers:{'Content-Type':'application/json','X-Feedback-Invite':'invitation'},
+      method:'POST', headers:{'Content-Type':'application/json'},
       body:JSON.stringify(submitted)}), env);
     assert.equal(response.status,201);
     assert.deepEqual(await response.json(), {id:submitted.id, reference:'42'});

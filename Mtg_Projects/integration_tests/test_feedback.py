@@ -196,8 +196,22 @@ def test_total_encoded_payload_limit_includes_unicode_expansion():
         service.validate_report(report)
 
 
-def test_missing_invitation_explains_setup_without_network(monkeypatch):
+def test_default_endpoint_works_without_environment_or_invitation(monkeypatch):
+    monkeypatch.delenv('MANAFORGE_FEEDBACK_URL', raising=False)
     monkeypatch.delenv('MANAFORGE_FEEDBACK_INVITE', raising=False)
-    monkeypatch.setattr(service, 'build_opener', lambda *args: pytest.fail('Must not send without invitation'))
-    with pytest.raises(ValueError, match='invitation is not configured'):
-        service.submit(complete_report(), 'https://example.com/feedback')
+    report = complete_report()
+    requests = []
+    class Response:
+        def __enter__(self): return self
+        def __exit__(self, *args): pass
+        def read(self, size):
+            return json.dumps(dict(id=report['id'], reference='42')).encode()
+    class Opener:
+        def open(self, request, timeout):
+            requests.append(request)
+            return Response()
+    monkeypatch.setattr(service, 'build_opener', lambda *args: Opener())
+    assert service.submit(report)['reference'] == '42'
+    assert requests[0].get_header('User-agent') == 'Manaforge/' + report['metadata']['version']
+    assert requests[0].full_url == service.DEFAULT_FEEDBACK_URL
+    assert requests[0].get_header('X-feedback-invite') == ''

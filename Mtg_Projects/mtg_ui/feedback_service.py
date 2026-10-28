@@ -16,6 +16,7 @@ from mtg_core.paths import core_data_root
 from mtg_core.repair import redact
 
 CATEGORIES = ('Report a Bug', 'Suggest a Feature', 'General Feedback')
+DEFAULT_FEEDBACK_URL = 'https://manaforge-feedback.rshafer128.workers.dev/feedback'
 MAX_SCREENSHOT = 350_000
 LIMITS = dict(title=120, description=12000, steps=8000, behavior=8000,
               contact=250, operation=500, diagnostics=50000, screenshot=466668)
@@ -131,25 +132,24 @@ class NoRedirect(HTTPRedirectHandler):
 
 
 def submit(report, endpoint=None, invite=None):
-    endpoint = endpoint or os.environ.get('MANAFORGE_FEEDBACK_URL', '')
+    endpoint = endpoint if endpoint is not None else os.environ.get('MANAFORGE_FEEDBACK_URL', DEFAULT_FEEDBACK_URL)
     parsed = urlsplit(endpoint)
     if parsed.scheme != 'https' or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
         raise ValueError('Feedback is not configured. Your report is saved; ask the maintainer for setup help.')
     if report.get('status') == 'submitted':
         return dict(id=report['id'], reference=report['reference'])
     invitation = invite or os.environ.get('MANAFORGE_FEEDBACK_INVITE', '')
-    if not invitation:
-        raise ValueError('The feedback invitation is not configured. Ask the maintainer to set it up, then restart Manaforge.')
     payload = validate_report(report)
     data = json.dumps(payload).encode('utf-8')
     request = Request(endpoint, data=data, headers={'Content-Type': 'application/json',
+        'User-Agent': 'Manaforge/' + payload['metadata']['version'],
         'X-Feedback-Invite': invitation}, method='POST')
     try:
         with build_opener(NoRedirect()).open(request, timeout=25) as response:
             result = json.loads(response.read(8192))
     except HTTPError as exc:
         messages = {404: 'The feedback server address is incorrect. Check that it ends in /feedback.',
-                    403: 'The feedback invitation is unavailable. Ask the maintainer for help.',
+                    403: 'The feedback service refused this request. Ask the maintainer to check server access settings.',
                     409: 'Your report is stored on the server and needs maintainer confirmation. Keep this report.',
                     429: 'Too many reports were sent recently. Please try again in a minute.',
                     503: 'The feedback service could not confirm submission. Please try again later.'}

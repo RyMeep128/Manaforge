@@ -21,9 +21,9 @@ export function validate(p) {
 export default {
   async fetch(request, env) {
     if (new URL(request.url).pathname !== '/feedback' || request.method !== 'POST') return reply(404, {error:'Not found'});
-    if (!env.INVITE_CODE || !env.GITHUB_TOKEN) return reply(503, {error:'Not configured'});
+    if (!env.GITHUB_TOKEN || (env.REQUIRE_INVITE === 'true' && !env.INVITE_CODE)) return reply(503, {error:'Not configured'});
     if (!(await env.RATE_LIMITER.limit({key: request.headers.get('CF-Connecting-IP') || 'unknown'})).success) return reply(429, {error:'Try again later'});
-    if (request.headers.get('X-Feedback-Invite') !== env.INVITE_CODE) return reply(403, {error:'Invitation required'});
+    if (env.REQUIRE_INVITE === 'true' && request.headers.get('X-Feedback-Invite') !== env.INVITE_CODE) return reply(403, {error:'Invitation required'});
     if (!request.headers.get('Content-Type')?.startsWith('application/json')) return reply(415, {error:'JSON required'});
     let p;
     try {

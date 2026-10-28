@@ -7,7 +7,8 @@ workers_dev = true
 enabled = false
 
 [vars]
-GITHUB_REPOSITORY = "RyMeep128/branch_print-proxy-prep-QtPort"
+REQUIRE_INVITE = "false"
+GITHUB_REPOSITORY = "RyMeep128/Manaforge"
 
 [[d1_databases]]
 binding = "REPORTS"
