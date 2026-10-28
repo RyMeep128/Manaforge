@@ -450,3 +450,139 @@ def test_read_only_canvas_does_not_emit_edit_actions():
     canvas.close()
     canvas.preview.close()
     app.processEvents()
+
+
+def test_role_search_pages_without_reloading_and_preserves_selection(
+    editor, monkeypatch
+):
+    panel = editor.recommendation_panel
+    monkeypatch.setattr(panel, "active", lambda: False)
+    panel.resize(1900, 760)
+    panel.available_roles = [f"Role {index:02}" for index in range(25)]
+    panel.browse_modes.setCurrentIndex(1)
+    assert panel.type_tabs.count() == 11  # Top Cards plus ten roles.
+    assert not panel.previous_roles.isEnabled() and panel.next_roles.isEnabled()
+    panel.change_category("Role: Role 02")
+    selected = panel.selected_category
+    key, generation = panel.key, panel.generation
+    panel.move_roles(1)
+    assert panel.type_tabs.tabText(0) == "Top Cards"
+    assert panel.type_tabs.tabText(1) == "Role 10"
+    assert panel.previous_roles.isEnabled()
+    panel.move_roles(1)
+    assert panel.type_tabs.count() == 6 and not panel.next_roles.isEnabled()
+    panel.role_search.setText("Role 02")
+    assert panel.type_tabs.count() == 2
+    assert panel.selected_category == selected
+    panel.role_search.setText("no matching roles")
+    assert panel.type_tabs.count() == 1
+    assert "No roles match" in panel.role_hint.text()
+    assert panel.selected_category == selected
+    assert (panel.key, panel.generation) == (key, generation)
+    assert panel.worker is None and panel.page_worker is None
+    panel.role_search.clear()
+    panel.resize(500, 700)
+    assert panel.role_page_size() < 10
+    assert panel.previous_roles.width() >= 36
+    assert panel.filter_layout.indexOf(panel.audience) >= 0
+    assert panel.controls_grid.indexOf(panel.audience) == -1
+
+
+def test_hide_preserves_candidates_and_completed_work(editor, monkeypatch):
+    panel = editor.recommendation_panel
+    monkeypatch.setattr(panel, "active", lambda: False)
+    panel.rows = [recommendation(1)]
+    panel.loaded_key = panel.key = (context_key(editor.document), ("source",))
+    generation = panel.generation
+    panel.cancelled.clear()
+    panel.hideEvent(G.QHideEvent())
+    assert not panel.cancelled.is_set()
+    assert panel.generation == generation
+    assert panel.rows and panel.loaded_key == panel.key
+
+
+def test_background_source_refresh_keeps_valid_cards_visible(editor, monkeypatch):
+    from mtg_editor.recommendation_panel import source_key
+    from mtg_core import recommendation_sources
+
+    panel = editor.recommendation_panel
+    monkeypatch.setattr(panel, "active", lambda: True)
+    monkeypatch.setattr(panel, "load_audiences", lambda *_: None)
+    panel.deck_changed()
+    panel.timer.stop()
+    panel.rows = [recommendation(1)]
+    panel.membership.setCurrentIndex(0)
+    original_signature = (("dataset", 1, 1), ("library-access", ()))
+    panel.key = (
+        context_key(editor.document),
+        source_key(editor.document, original_signature),
+    )
+    panel.loaded_key, panel.loaded_source_key = panel.key, panel.key[1]
+    monkeypatch.setattr(
+        recommendation_sources,
+        "source_signature",
+        lambda root: (("dataset", 2, 2), ("library-access", ())),
+    )
+    panel.deck_changed()
+    panel.timer.stop()
+    assert panel.rows
+    assert panel.canvas.document.deck.entries
+    assert panel.status.full_text == "Updating recommendations..."
+    assert panel.pending
+
+
+def test_deck_tags_invalidate_ranking_context(editor):
+    before = context_key(editor.document)
+    editor.document.deck.tags.append("artifacts")
+    assert context_key(editor.document) != before
+
+
+def test_recommendation_visual_review_artifacts(editor, monkeypatch):
+    import os
+    from pathlib import Path
+    from mtg_ui.theme import application_stylesheet
+
+    panel = editor.recommendation_panel
+    monkeypatch.setattr(panel, "active", lambda: False)
+    monkeypatch.setattr(panel, "deck_changed", lambda: None)
+    panel.setParent(None)
+    panel.setStyleSheet(application_stylesheet())
+    panel.available_roles = [
+        "Anthem",
+        "Artifacts",
+        "Blink",
+        "Board Wipes",
+        "Card Advantage",
+        "Copy",
+        "Counters",
+        "Counterspells",
+        "Draw",
+        "Evasion",
+        "Protection",
+        "Ramp",
+    ]
+    panel.rows = [recommendation(i) for i in range(16)]
+    for row in panel.rows:
+        pixmap = G.QPixmap(150, 210)
+        pixmap.fill(G.QColor("#365c68"))
+        editor.thumbnails.cache[(row["entry"].card_id, None)] = pixmap
+    panel.membership.setCurrentIndex(0)
+    panel.browse_modes.setCurrentIndex(1)
+    output = os.environ.get("MANAFORGE_UI_SCREENSHOTS")
+    for width, label in ((1900, "wide"), (500, "compact")):
+        panel.resize(width, 780)
+        panel.show()
+        panel.filter_rows()
+        W.QApplication.processEvents()
+        if output:
+            target = Path(output)
+            target.mkdir(parents=True, exist_ok=True)
+            assert panel.grab().save(str(target / f"recommendations-{label}.png"))
+    panel.filters_button.setChecked(True)
+    W.QApplication.processEvents()
+    if output:
+        assert panel.grab().save(
+            str(Path(output) / "recommendations-audience-filter.png")
+        )
+    panel.hide()
+    panel.setParent(editor)

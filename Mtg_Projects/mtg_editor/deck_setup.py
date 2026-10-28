@@ -12,6 +12,15 @@ from .commander_discovery import DiscoveryController, DiscoverySearch, Discovery
 from .themes import ThemesDialog
 
 
+class SetupPages(W.QStackedWidget):
+    """Only the current step determines the dialog's minimum size."""
+    def sizeHint(self):
+        return self.currentWidget().sizeHint() if self.currentWidget() else C.QSize(640, 320)
+
+    def minimumSizeHint(self):
+        return C.QSize(0, 0)
+
+
 class DeckSetupDialog(W.QDialog):
     def __init__(self, editor, document, *, creating=False, seed=None):
         super().__init__(editor)
@@ -29,11 +38,16 @@ class DeckSetupDialog(W.QDialog):
         available = self.screen().availableGeometry()
         self.resize(min(700, available.width()), min(650, available.height()))
         outer = W.QVBoxLayout(self)
-        outer.setSpacing(12)
+        outer.setContentsMargins(24, 20, 24, 20)
+        outer.setSpacing(16)
         title = self.title = W.QLabel('Make room for your next idea' if creating else 'Deck settings')
         title.setProperty('role', 'title')
+        title.setSizePolicy(W.QSizePolicy.Policy.Preferred, W.QSizePolicy.Policy.Maximum)
         outer.addWidget(title)
-        form = W.QFormLayout()
+        self.form_widget = W.QWidget()
+        form = W.QFormLayout(self.form_widget)
+        form.setContentsMargins(0, 0, 0, 0)
+        form.setSpacing(12)
         self.name = W.QLineEdit('' if creating else document.deck.name)
         self.name.setPlaceholderText('Deck name · optional')
         form.addRow('&Name', self.name)
@@ -43,9 +57,8 @@ class DeckSetupDialog(W.QDialog):
         form.addRow('&Format', self.format)
         self.start = W.QComboBox()
         self.start.addItems(['Blank deck', 'Import decklist', 'From a precon'])
-        if creating:
-            form.addRow('Start with', self.start)
-        outer.addLayout(form)
+        self.start.hide()
+        outer.addWidget(self.form_widget)
         self.tabs = W.QTabWidget()
         outer.addWidget(self.tabs, 1)
         self.commander_page = W.QWidget()
@@ -138,6 +151,65 @@ class DeckSetupDialog(W.QDialog):
         buttons.accepted.connect(self.next_step)
         buttons.rejected.connect(self.reject)
         outer.addWidget(buttons)
+        if creating:
+            self.progress = W.QLabel()
+            self.progress.setProperty('role', 'muted')
+            outer.insertWidget(1, self.progress)
+            self.setup_pages = SetupPages()
+            self.setup_pages.setSizePolicy(W.QSizePolicy.Policy.Expanding, W.QSizePolicy.Policy.Ignored)
+            outer.removeWidget(self.form_widget)
+            outer.removeWidget(self.tabs)
+            self.tabs.hide()
+            starting = W.QWidget()
+            starting_layout = W.QVBoxLayout(starting)
+            starting_layout.setContentsMargins(0, 0, 0, 0)
+            starting_layout.setSpacing(16)
+            tiles = W.QHBoxLayout()
+            self.start_buttons = W.QButtonGroup(self)
+            self.start_buttons.setExclusive(True)
+            for index, text in enumerate(('Blank deck\nBuild your own', 'Import decklist\nUse an existing list', 'From a precon\nStart with a full deck')):
+                tile = W.QPushButton(text)
+                tile.setCheckable(True)
+                tile.setAutoDefault(False)
+                tile.setMinimumHeight(76)
+                tile.setStyleSheet('QPushButton { padding: 12px; border: 1px solid #65748a; border-radius: 8px; } '
+                                  'QPushButton:checked { border: 2px solid #38b785; background: #18372f; }')
+                self.start_buttons.addButton(tile, index)
+                tiles.addWidget(tile, 1)
+            self.start_buttons.button(0).setChecked(True)
+            self.start_buttons.idClicked.connect(self.start.setCurrentIndex)
+            starting_layout.addLayout(tiles)
+            starting_layout.addWidget(self.form_widget)
+            starting_layout.addStretch()
+            self.setup_pages.addWidget(starting)
+            self.tabs.removeTab(self.tabs.indexOf(self.commander_page))
+            self.setup_pages.addWidget(self.commander_page)
+            finishing = W.QWidget()
+            finishing_layout = W.QVBoxLayout(finishing)
+            finishing_layout.setContentsMargins(0, 0, 0, 0)
+            finishing_layout.setSpacing(12)
+            self.precon_summary = W.QGroupBox('Selected precon')
+            precon_layout = W.QHBoxLayout(self.precon_summary)
+            self.precon_art = DiscoveryCanvas(DeckDocument(), editor.thumbnails, self)
+            self.precon_art.read_only = True
+            self.precon_art.setFixedSize(105, 148)
+            self.precon_art.card_width = 80
+            self.precon_art.minimum_search_card_width = 1
+            self.precon_art.fit_height = True
+            self.precon_art.setAcceptDrops(False)
+            self.precon_text = W.QLabel()
+            self.precon_text.setWordWrap(True)
+            precon_layout.addWidget(self.precon_art)
+            precon_layout.addWidget(self.precon_text, 1)
+            finishing_layout.addWidget(self.precon_summary)
+            self.tabs.removeTab(self.tabs.indexOf(self.themes))
+            finishing_layout.addWidget(self.themes, 1)
+            self.tabs.removeTab(self.tabs.indexOf(library_page))
+            library_layout.setContentsMargins(0, 0, 0, 0)
+            library_layout.insertWidget(0, W.QLabel('Save to'))
+            finishing_layout.addWidget(library_page)
+            self.setup_pages.addWidget(finishing)
+            outer.insertWidget(2, self.setup_pages, 1)
         self.format.currentTextChanged.connect(self.format_changed)
         self.start.currentIndexChanged.connect(self.start_changed)
         self.library.currentIndexChanged.connect(lambda *_: self.update_stage())
@@ -168,13 +240,26 @@ class DeckSetupDialog(W.QDialog):
             self.back.hide()
             return
         commander = self.format.currentText() in ('Commander', 'Custom')
-        self.title.setText(('1. Choose your starting point',
-                            '2. Choose your commander',
-                            '3. Choose themes and a library')[self.stage])
-        self.tabs.setVisible(self.stage > 0)
-        self.tabs.setTabVisible(0, self.stage == 1 and commander)
-        self.tabs.setTabVisible(1, self.stage == 2)
-        self.tabs.setTabVisible(2, self.stage == 2)
+        self.title.setText(('Choose your starting point',
+                            'Choose your commander',
+                            'Themes and library')[self.stage])
+        self.setup_pages.setCurrentIndex(self.stage)
+        path = 'Starting point  >  ' + ('Precon  >  ' if self.start.currentIndex() == 2 else
+                                       'Commander  >  ' if commander else '') + 'Themes and library'
+        three_steps = commander and self.start.currentIndex() != 2
+        step = 1 if self.stage == 0 else (3 if self.stage == 2 and three_steps else 2)
+        self.progress.setText(f'Step {step} of {3 if three_steps else 2} | ' + path)
+        self.summary.setVisible(self.stage > 0)
+        self.precon_summary.setVisible(self.precon_loaded)
+        if self.precon_loaded:
+            origin = self.draft.deck.extras.get('precon_origin', {})
+            self.precon_text.setText(origin.get('name', self.draft.deck.name) + '\n' +
+                                     ' + '.join(entry.name for entry in self.selected))
+            self.precon_art.document.deck.entries = deepcopy(self.selected[:1])
+            self.precon_art.refresh()
+        available = self.screen().availableGeometry()
+        width, height = ((720, 370), (820, 650), (760, 720 if self.precon_loaded else 590))[self.stage]
+        self.resize(min(width, available.width()), min(height, available.height()))
         self.back.setVisible(self.stage > 0)
         self.start.setEnabled(self.stage == 0)
         self.format.setEnabled(self.stage == 0 and self.start.currentIndex() != 2)
@@ -182,28 +267,27 @@ class DeckSetupDialog(W.QDialog):
             self.submit.setText('Next: choose precon' if self.start.currentIndex() == 2 else
                                 'Next: commander' if commander else 'Next: themes and library')
         elif self.stage == 1:
-            self.tabs.setCurrentIndex(0)
             self.submit.setText('Next: themes and library')
             self.search_commanders()
         else:
-            self.tabs.setCurrentIndex(1)
             self.submit.setText('Create Deck and Upload' if self.library.currentData() else 'Create Deck')
 
     def previous_step(self):
-        self.stage = 0 if self.stage == 1 else (1 if self.format.currentText() in ('Commander', 'Custom') else 0)
+        self.stage = 0 if self.stage == 1 or self.start.currentIndex() == 2 else (1 if self.format.currentText() in ('Commander', 'Custom') else 0)
         self.update_stage()
 
     def next_step(self):
         if not self.creating or self.stage == 2:
             self.accept()
             return
-        if self.stage == 0 and self.start.currentIndex() == 2 and not self.precon_loaded:
+        if self.stage == 0 and self.start.currentIndex() == 2:
             from .precon_browser import PreconBrowser
             from mtg_core.precons import apply_precon
             browser = PreconBrowser(self.editor.service, self.editor.thumbnails, self)
             browser.resolve_button.setText('Next: use selected precon')
             if browser.exec() != W.QDialog.DialogCode.Accepted or not browser.result:
                 return
+            self.draft.deck.entries = []
             apply_precon(self.draft, browser.record, browser.result,
                          self.name.text() or browser.deck_name.text(), browser.cover_asset_id)
             self.selected = deepcopy(commanders(self.draft))
@@ -213,10 +297,12 @@ class DeckSetupDialog(W.QDialog):
             self.precon_loaded = True
             self.update_summary()
             self.refresh_themes()
-        self.stage = (1 if self.format.currentText() in ('Commander', 'Custom') else 2) if self.stage == 0 else 2
+        self.stage = (1 if self.format.currentText() in ('Commander', 'Custom') and self.start.currentIndex() != 2 else 2) if self.stage == 0 else 2
         self.update_stage()
 
     def start_changed(self, *_):
+        if self.creating:
+            self.start_buttons.button(self.start.currentIndex()).setChecked(True)
         if self.precon_loaded:
             self.selected = []
             self.original_ids = []
@@ -230,7 +316,8 @@ class DeckSetupDialog(W.QDialog):
     def format_changed(self, *_):
         precon = self.creating and self.start.currentIndex() == 2
         enabled = self.format.currentText() in ('Commander', 'Custom')
-        self.tabs.setTabVisible(0, enabled)
+        if not self.creating:
+            self.tabs.setTabVisible(0, enabled)
         self.format.setEnabled(not precon)
         self.draft.deck.format = self.format.currentText()
         self.update_summary()
@@ -249,7 +336,9 @@ class DeckSetupDialog(W.QDialog):
         self.canvas.document.deck.entries = []
         self.canvas.refresh()
         self.choose.setEnabled(False)
-        if (self.tabs.currentIndex() == 0 and self.tabs.isTabVisible(0)) or not self.catalog_loaded:
+        if ((self.creating and self.stage == 1) or
+                (not self.creating and self.tabs.currentIndex() == 0 and self.tabs.isTabVisible(0)) or
+                not self.catalog_loaded):
             self.controller.change_query(self.query())
 
     def completed(self, query, snapshot, error):
@@ -369,6 +458,9 @@ class DeckSetupDialog(W.QDialog):
     def done(self, result):
         self.controller.shutdown()
         self.canvas.preview.hide()
+        if self.creating:
+            self.precon_art.preview.hide()
+            self.editor.thumbnails.set_visible(id(self.precon_art), [])
         # Keep the dialog alive until the cancellable worker has exited.
         if self.controller.worker is not None:
             C.QTimer.singleShot(30, lambda: self.done(result))

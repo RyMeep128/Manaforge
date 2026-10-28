@@ -59,30 +59,29 @@ def source_signature(root):
 
     root = Path(root)
     paths = [root / "source-settings.json", root / "archidekt.aggregate.json.gz"]
-    from .library.recommendations import cache_path
+    from .library.recommendations import cache_signature
+    import sqlite3
 
-    paths.append(cache_path())
-    if cache_path().exists():
-        from contextlib import closing
-        import sqlite3
-        import time
-
-        try:
-            with closing(sqlite3.connect(cache_path())) as db:
-                access_state = tuple(
-                    db.execute(
-                        "SELECT server, expires>? FROM access ORDER BY server",
-                        (time.time(),),
-                    )
-                )
-        except sqlite3.Error:
-            access_state = ()
-    else:
+    try:
+        access_state = cache_signature()
+    except (OSError, sqlite3.Error):
         access_state = ()
     from .paths import core_data_root
 
     if root.resolve() == (core_data_root() / "recommendations").resolve():
-        paths.append(core_data_root() / "installation.sqlite3")
+        from .recommendation_distribution import installed_bundle
+
+        for source in ("archidekt", "edhrec", "moxfield", *DATASET_LABELS):
+            try:
+                bundle = installed_bundle(source)
+            except (OSError, ValueError, sqlite3.Error):
+                bundle = None
+            if bundle:
+                paths.append(bundle / "bundle.json")
+    paths.extend(
+        root / "starter" / name
+        for name in ("edhrec.sqlite3", "edhrec-discovery.sqlite3")
+    )
     for name in (
         "local",
         "archidekt",

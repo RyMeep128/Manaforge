@@ -5,7 +5,6 @@ from copy import deepcopy
 import json
 from pathlib import Path
 import sqlite3
-import time
 from tempfile import TemporaryDirectory
 
 from mtg_core.decks import DeckEntry
@@ -131,6 +130,7 @@ class RecommendationPages:
                            "(SELECT 1 FROM json_each(cards.identity) WHERE instr(?, value)=0)")
             parameters.append(identity)
         rows, dismissed = [], set(dismissed)
+        permissions = {}
         with closing(sqlite3.connect(self.path, timeout=0.1)) as db:
             if should_cancel:
                 db.set_progress_handler(lambda: int(should_cancel()), 1000)
@@ -142,11 +142,11 @@ class RecommendationPages:
                     row = json.loads(payload)
                     shared = row.get('source_evidence', {}).get('library')
                     if shared:
-                        try:
-                            permitted = (shared.get('cache_deadline', 0) > time.time()
-                                         and Path(shared['cache_file']).stat().st_mtime_ns == shared['cache_mtime'])
-                        except (OSError, KeyError):
-                            permitted = False
+                        from mtg_core.library.recommendations import shared_permitted
+                        token_key = (shared.get('cache_file'), shared.get('cache_token'), shared.get('cache_mtime'))
+                        if token_key not in permissions:
+                            permissions[token_key] = shared_permitted(shared)
+                        permitted = permissions[token_key]
                         if not permitted:
                             continue
                     if row['oracle_id'] in dismissed:

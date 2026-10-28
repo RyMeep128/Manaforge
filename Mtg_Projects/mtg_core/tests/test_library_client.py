@@ -342,3 +342,13 @@ def test_client_and_server_contract_end_to_end_without_network(tmp_path, monkeyp
     assert followed.get(client.server_id, published['deck_id'])['state'] == 'unavailable'
     client.disconnect()
     assert DeckStore().load(copied).deck.name == 'Shared deck'
+
+
+def test_editable_copy_names_its_library_and_preserves_source_separately(tmp_path):
+    value = publication()
+    path = copy_publication(value, server_id=SERVER_ID, server_address='https://library.invalid',
+                            deck_root=tmp_path, library_name='Friends')
+    copied = DeckStore().load(path)
+    assert copied.deck.name == 'Shared deck [Friends]'
+    assert copied.deck.extras['library_source']['library_name'] == 'Friends'
+    assert value['deck']['name'] == 'Shared deck'

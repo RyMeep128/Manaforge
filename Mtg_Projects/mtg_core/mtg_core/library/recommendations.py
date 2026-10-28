@@ -15,6 +15,34 @@ def cache_path():
     return data_root() / 'library-recommendations.sqlite3'
 
 
+def cache_signature(path=None, *, connection=None):
+    """Content and authorization identity; routine session renewal is not a change."""
+    path = Path(path or cache_path())
+    if connection is None:
+        if not path.exists():
+            return ()
+        with closing(sqlite3.connect(f'{path.resolve().as_uri()}?mode=ro', uri=True, timeout=0.1)) as db:
+            db.execute('BEGIN')
+            return cache_signature(path, connection=db)
+    access = tuple(connection.execute('SELECT server, account, expires>? FROM access ORDER BY server', (time.time(),)))
+    samples = tuple(connection.execute('SELECT server, deck, revision, digest, commanders, colors, tags FROM samples ORDER BY server, deck'))
+    return access, sha256(repr(samples).encode()).hexdigest()
+
+
+def cache_token(path=None, *, connection=None):
+    return sha256(repr(cache_signature(path, connection=connection)).encode()).hexdigest()
+
+
+def shared_permitted(evidence):
+    try:
+        if evidence.get('cache_token'):
+            return cache_token(evidence['cache_file']) == evidence['cache_token']
+        return (evidence.get('cache_deadline', 0) > time.time()
+                and Path(evidence['cache_file']).stat().st_mtime_ns == evidence['cache_mtime'])
+    except (OSError, KeyError, sqlite3.Error):
+        return False
+
+
 class LibraryRecommendations:
     source_id = 'library'
     role = 'library'
@@ -132,6 +160,7 @@ class LibraryRecommendations:
         cache_mtime = self.path.stat().st_mtime_ns
         with closing(self.connect()) as db:
             db.execute('BEGIN')
+            token = cache_token(self.path, connection=db)
             deadline = db.execute('SELECT min(expires) FROM access WHERE expires>?', (time.time(),)).fetchone()[0]
             relevant, total = db.execute(cohort_sql + 'SELECT (SELECT count(*) FROM cohort), '
                                          '(SELECT count(*) FROM copies WHERE copy=1)', parameters).fetchone()
@@ -146,6 +175,7 @@ class LibraryRecommendations:
             item['cache_deadline'] = deadline or 0
             item['cache_file'] = str(self.path)
             item['cache_mtime'] = cache_mtime
+            item['cache_token'] = token
             results.append(item)
         return dict(results=results, decks=total, relevant_decks=relevant, sources=[],
                     status='Permitted cached shared decks')

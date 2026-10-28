@@ -85,6 +85,7 @@ class ModuleController(C.QObject):
                     from .library_workspace import LibraryWorkspace
                     window = LibraryWorkspace(self.service, jobs=self.jobs)
                     window.editorRequested.connect(lambda: self.open_module('editor'))
+                    window.copyCreated.connect(self.open_copied_deck)
                     window.followUpdates.connect(lambda name, count: self.home.statusBar().showMessage(
                         f'{name}: {count} followed deck update(s) available. Open Browse Online to review.', 15000))
                 else:
@@ -103,6 +104,12 @@ class ModuleController(C.QObject):
         if printer is None:
             raise OSError('Print Studio could not be opened.')
         printer.open_managed_project(project['id'])
+
+    def open_copied_deck(self, path):
+        self.open_module('editor')
+        editor = self.windows.get('editor')
+        if editor is not None:
+            editor.open_path(Path(path))
 
     def publish_deck(self, snapshot, color_identity, *, upload=False):
         self.open_module('library')

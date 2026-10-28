@@ -697,3 +697,26 @@ def test_publishing_requires_one_destination_without_filtering_gallery(app, tmp_
     assert len(clients[1][0].operations) == 1
     assert workspace.results.count() == 2
     workspace.close()
+
+
+@pytest.mark.parametrize('source_kind', ['library', 'follow'])
+def test_editable_copy_uses_clicked_source_name_and_emits_saved_path(app, tmp_path, monkeypatch, source_kind):
+    from mtg_core.decks import DeckStore
+    workspace = LibraryWorkspace(object(), root=tmp_path / 'settings', deck_root=tmp_path / 'decks')
+    value = record()
+    source = dict(id='clicked', server_id=str(uuid.uuid4()), name='Clicked library', server_name='Clicked library',
+                  url='https://clicked.invalid', server_url='https://clicked.invalid',
+                  message='', pending_revision=None, active=True)
+    value[source_kind] = source
+    item = W.QListWidgetItem('Shared deck')
+    item.setData(C.Qt.ItemDataRole.UserRole, value)
+    workspace.results.addItem(item)
+    workspace.results.setCurrentItem(item)
+    monkeypatch.setattr(workspace, 'submit', lambda label, work, complete: complete(work()))
+    copied = []
+    workspace.copyCreated.connect(copied.append)
+    workspace.copy_selected()
+    assert len(copied) == 1
+    assert DeckStore().load(copied[0]).deck.name == value['deck']['name'] + ' [Clicked library]'
+    workspace.close()
+    app.processEvents()

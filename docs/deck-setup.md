@@ -47,3 +47,15 @@ manual category choices from published decks are contributed.
 
 Browse Online opens shared decks as read-only card galleries. Make editable copy
 creates an independent local deck; Follow deck keeps a revision-tracked offline copy.
+
+
+Creation uses compact stacked pages with starting-point tiles and a stable footer.
+Only blank/import Commander or Custom paths show commander search. A precon goes
+straight from selection to themes and library, preserving its commander(s) and
+showing a summary with commander artwork. Back returns to the starting point;
+Next opens precon selection again. Commander changes remain available after creation.
+
+Make editable copy opens the saved local deck immediately through the editor's
+normal unsaved-change handling. Copies use `Deck Name [Library Name]`; the name
+comes from the selected publication or followed deck's source, not another active
+connection. Cancelling an editor switch leaves the saved copy in My Decks.

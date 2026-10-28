@@ -1822,7 +1822,8 @@ class EditorWindow(W.QMainWindow):
         self.add_cards_workspace.card_search.controller.shutdown()
         self.recommendation_panel.suspend()
         if (self.worker is not None or self.task is not None or self.thumbnails.worker is not None
-                or self.recommendation_panel.worker is not None or self.recommendation_panel.audience_worker is not None
+                or self.recommendation_panel.worker is not None or self.recommendation_panel.page_worker is not None
+                or self.recommendation_panel.audience_worker is not None
                 or self.add_cards_workspace.discovery.controller.worker is not None
                 or self.add_cards_workspace.card_search.controller.worker is not None or self.text_view.worker is not None
                 or self.dashboard.worker is not None or self.basic_lands.worker is not None

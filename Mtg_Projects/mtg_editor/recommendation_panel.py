@@ -41,6 +41,7 @@ def context_key(document):
         dict(
             deck_id=document.deck.deck_id,
             format=document.deck.format,
+            tags=list(document.deck.tags),
             commander_entry_ids=list(document.deck.commander_entry_ids),
             categories=[category.to_dict() for category in document.deck.categories],
             entries=[
@@ -75,6 +76,7 @@ def source_key(document, signature=()):
     return (
         document.deck.deck_id,
         pool_context(document),
+        tuple(document.deck.tags),
         tuple((e.entry_id, e.oracle_id, e.card_id) for e in commanders(document)),
         deepcopy(document.artwork_preferences),
         deepcopy(document.editor_preferences.get("discovery", {}).get("theme_option")),
@@ -171,6 +173,8 @@ class RecommendationPanel(CardDropPanel):
         super().__init__(editor)
         self.editor = editor
         self.worker = None
+        self.page_worker = None
+        self.role_page = 0
         self.generation = self.page_generation = 0
         self.key = self.loaded_key = self.loaded_source_key = None
         self.rows, self.category_scroll = [], {}
@@ -282,7 +286,9 @@ class RecommendationPanel(CardDropPanel):
         self.mana_value.valueChanged.connect(self.filter_rows)
         self.include_illegal = W.QCheckBox("Include illegal cards")
         self.include_illegal.toggled.connect(editor.set_include_illegal)
+        self.audience.setMinimumWidth(160)
         self.filter_widgets = [
+            self.audience,
             self.include_illegal,
             self.type_filter,
             self.membership,
@@ -297,15 +303,37 @@ class RecommendationPanel(CardDropPanel):
         body.addWidget(self.filter_box)
         self.type_tabs = W.QTabBar()
         self.type_tabs.setExpanding(False)
+        self.type_tabs.setElideMode(C.Qt.TextElideMode.ElideRight)
         self.type_tabs.setMinimumWidth(0)
         self.type_tabs.setUsesScrollButtons(True)
         self.type_tabs.setAccessibleName("Recommendation categories")
         self.type_tabs.currentChanged.connect(self.tab_category_changed)
-        navigation = W.QHBoxLayout()
+        self.role_search = CardSearchEdit()
+        self.role_search.setPlaceholderText("Search roles")
+        self.role_search.setAccessibleName("Search card roles")
+        self.role_search.setClearButtonEnabled(True)
+        self.role_search.setMinimumWidth(80)
+        self.role_search.setMaximumWidth(220)
+        self.role_search.textChanged.connect(self.search_roles)
+        self.previous_roles = W.QPushButton("<")
+        self.next_roles = W.QPushButton(">")
+        for button, label in (
+            (self.previous_roles, "Previous roles"),
+            (self.next_roles, "Next roles"),
+        ):
+            button.setAccessibleName(label)
+            button.setToolTip(label)
+            button.setFixedSize(36, 34)
+        self.previous_roles.clicked.connect(lambda: self.move_roles(-1))
+        self.next_roles.clicked.connect(lambda: self.move_roles(1))
+        self.role_hint = W.QLabel()
+        self.role_hint.setWordWrap(True)
+        self.navigation = W.QGridLayout()
+        self.navigation.setContentsMargins(0, 0, 0, 0)
+        self.navigation.setSpacing(4)
         body.removeWidget(self.browse_modes)
-        navigation.addWidget(self.browse_modes)
-        navigation.addWidget(self.type_tabs, 1)
-        body.addLayout(navigation)
+        body.addLayout(self.navigation)
+        body.addWidget(self.role_hint)
         self.category_combo = W.QComboBox()
         self.category_combo.setAccessibleName("Recommendation category")
         self.category_combo.currentIndexChanged.connect(
@@ -348,14 +376,12 @@ class RecommendationPanel(CardDropPanel):
         columns = 3 if self.width() >= 900 else 2 if self.width() >= 500 else 1
         for index, widget in enumerate(self.filter_widgets):
             self.filter_layout.removeWidget(widget)
-            widget.setMinimumWidth(0)
+            widget.setMinimumWidth(160 if widget is self.audience else 0)
             self.filter_layout.addWidget(widget, index // columns, index % columns)
 
     def reflow_controls(self):
         widgets = [
             self.text_filter,
-            self.audience,
-            self.category_combo,
             self.filters_button,
             self.advanced_button,
         ]
@@ -376,20 +402,73 @@ class RecommendationPanel(CardDropPanel):
     def update_navigation(self):
         self.type_tabs.setVisible(True)
         self.category_combo.setVisible(False)
+        roles = self.browse_mode == "roles"
+        self.role_search.setVisible(roles)
+        self.previous_roles.setVisible(roles)
+        self.next_roles.setVisible(roles)
+        widgets = (
+            self.browse_modes,
+            self.role_search,
+            self.type_tabs,
+            self.previous_roles,
+            self.next_roles,
+        )
+        for widget in widgets:
+            self.navigation.removeWidget(widget)
+        for column in range(5):
+            self.navigation.setColumnStretch(column, 0)
+        if self.width() < 900:
+            self.navigation.addWidget(self.browse_modes, 0, 0)
+            self.navigation.addWidget(self.role_search, 0, 1, 1, 3)
+            self.navigation.addWidget(self.type_tabs, 1, 0, 1, 2)
+            self.navigation.addWidget(self.previous_roles, 1, 2)
+            self.navigation.addWidget(self.next_roles, 1, 3)
+            self.navigation.setColumnStretch(1, 1)
+        else:
+            for column, widget in enumerate(widgets):
+                self.navigation.addWidget(widget, 0, column)
+            self.navigation.setColumnStretch(2, 1)
+
+    def role_page_size(self):
+        available = self.width() - (590 if self.width() >= 900 else 190)
+        return max(1, min(10, available // 120))
+
+    def search_roles(self):
+        self.role_page = 0
+        self.populate_navigation()
+
+    def move_roles(self, direction):
+        self.role_page = max(0, self.role_page + direction)
+        self.populate_navigation()
 
     def populate_navigation(self):
-        choices = (
-            [(label, label) for label in TYPE_CATEGORIES_ORDER]
-            if self.browse_mode == "types"
-            else [
+        roles_mode = self.browse_mode == "roles"
+        if roles_mode:
+            term = self.role_search.text().strip().casefold()
+            roles = [role for role in self.available_roles if term in role.casefold()]
+            size = self.role_page_size()
+            self.role_page = min(self.role_page, max(0, (len(roles) - 1) // size))
+            start = self.role_page * size
+            choices = [
                 ("Top Cards", "Top Cards"),
-                *[(role, "Role: " + role) for role in self.available_roles],
+                *[(role, "Role: " + role) for role in roles[start : start + size]],
             ]
-        )
-        if self.selected_category not in [key for _, key in choices]:
-            choices.append(
-                (self.selected_category.removeprefix("Role: "), self.selected_category)
+            self.previous_roles.setEnabled(start > 0)
+            self.next_roles.setEnabled(start + size < len(roles))
+            active = self.selected_category.removeprefix("Role: ")
+            hidden_selection = (
+                self.selected_category != "Top Cards"
+                and active not in roles[start : start + size]
             )
+            self.role_hint.setText(
+                ("No roles match. " if not roles else "")
+                + ("Selected: " + active if hidden_selection else "")
+            )
+            self.role_hint.setVisible(not roles or hidden_selection)
+        else:
+            choices = [(label, label) for label in TYPE_CATEGORIES_ORDER]
+            self.role_hint.hide()
+        self.type_tabs.setUsesScrollButtons(not roles_mode)
         with C.QSignalBlocker(self.type_tabs), C.QSignalBlocker(self.category_combo):
             while self.type_tabs.count():
                 self.type_tabs.removeTab(0)
@@ -431,7 +510,7 @@ class RecommendationPanel(CardDropPanel):
         super().resizeEvent(event)
         self.reflow_filters()
         self.reflow_controls()
-        self.update_navigation()
+        self.populate_navigation()
 
     def open_discovery(self):
         self.editor.add_cards_workspace.open()
@@ -733,9 +812,29 @@ class RecommendationPanel(CardDropPanel):
             self.cancelled.set()
             self.page_cancelled.set()
             self.load_error = ""
-            if switched or (
-                previous_source is not None and previous_source != current_source
-            ):
+
+            def access(signature):
+                if (
+                    signature
+                    and signature[-1][0] == "library-access"
+                    and signature[-1][1]
+                ):
+                    return signature[-1][1][0]
+                return ()
+
+            unsafe = previous_source is not None and (
+                previous_source[:-1] != current_source[:-1]
+                or access(previous_source[-1]) != access(current_source[-1])
+            )
+            from mtg_core.diagnostics import get_logger
+
+            get_logger(__name__).debug(
+                "Recommendation invalidation: deck_switch=%s unsafe=%s sources_changed=%s",
+                switched,
+                unsafe,
+                previous_source != current_source,
+            )
+            if switched or unsafe:
                 self.pages, self.rows = None, []
                 self.audience.setToolTip("Updating audience…")
                 if not restored:
@@ -776,6 +875,7 @@ class RecommendationPanel(CardDropPanel):
         document = deepcopy(self.editor.document)
         service = self.editor.service
         reuse = self.pages if self.loaded_source_key == key[1] else None
+        self.page_cancelled.set()
         self.cancelled = Event()
         cancelled = self.cancelled
         coverage = self.coverage
@@ -830,7 +930,11 @@ class RecommendationPanel(CardDropPanel):
                     if active
                     else "No cached recommendations for this deck. Local Card Search remains available."
                 )
+            from mtg_core.recommendation_sources import source_signature
+            from mtg_core.paths import core_data_root
+
             return dict(
+                signature=source_signature(core_data_root() / "recommendations"),
                 pages=pages,
                 roles=pages.roles(),
                 categories=pages.available_categories(),
@@ -839,8 +943,8 @@ class RecommendationPanel(CardDropPanel):
             )
 
         self.status.setText(
-            "Updating ranked candidates..."
-            if reuse
+            "Updating recommendations..."
+            if self.rows
             else "Loading cached recommendations..."
         )
         self.more.setEnabled(False)
@@ -854,7 +958,6 @@ class RecommendationPanel(CardDropPanel):
     def completed(self, generation, key, snapshot, error):
         if (
             generation != self.generation
-            or not self.active()
             or key != self.key
             or key[0] != context_key(self.editor.document)
         ):
@@ -868,6 +971,25 @@ class RecommendationPanel(CardDropPanel):
             self.status.setText(self.load_error)
             self.status.setToolTip(error)
             return
+        if "signature" in snapshot:
+            # Initial starter materialization is already represented by these results.
+            # Other concurrent dataset changes must still invalidate on the next check.
+            local_created = any(
+                str(item[0]).endswith("local.sqlite3") and item[1] is None
+                for item in key[1][-1]
+            )
+
+            def without_starter(signature):
+                return tuple(
+                    item
+                    for item in signature
+                    if "starter" not in str(item[0]).replace("\\", "/").split("/")
+                    and not (local_created and str(item[0]).endswith("local.sqlite3"))
+                )
+
+            if without_starter(key[1][-1]) == without_starter(snapshot["signature"]):
+                key = (key[0], source_key(self.editor.document, snapshot["signature"]))
+                self.key = key
         self.loaded_key = key
         self.loaded_source_key = key[1]
         self.pages = snapshot["pages"]
@@ -942,7 +1064,11 @@ class RecommendationPanel(CardDropPanel):
         self.page_generation += 1
         self.render_rows()
         if self.pending or (self.worker is not None and self.loaded_key != self.key):
-            self.status.setText("Loading cached recommendations…")
+            self.status.setText(
+                "Updating recommendations..."
+                if self.rows
+                else "Loading cached recommendations..."
+            )
             if self.pages is None:
                 self.canvas.empty_message = "Loading cached recommendations…"
         elif self.load_error:
@@ -958,6 +1084,7 @@ class RecommendationPanel(CardDropPanel):
         if (
             not self.active()
             or self.worker is not None
+            or self.page_worker is not None
             or self.pages is None
             or self.pending
             or self.loaded_key != self.key
@@ -983,7 +1110,7 @@ class RecommendationPanel(CardDropPanel):
             should_cancel=cancelled.is_set,
         )
         self.more.setEnabled(False)
-        self.worker = Task(
+        self.page_worker = Task(
             lambda: pages.page(document, **options),
             self,
             operation="recommendation page",
@@ -1018,9 +1145,16 @@ class RecommendationPanel(CardDropPanel):
             self.render_rows(more)
             self.canvas.verticalScrollBar().setValue(position)
 
-        self.worker.completed.connect(completed)
-        self.worker.finished.connect(self.finished)
-        self.worker.start()
+        self.page_worker.completed.connect(completed)
+        self.page_worker.finished.connect(self.page_finished)
+        self.page_worker.start()
+
+    def page_finished(self):
+        self.page_worker.deleteLater()
+        self.page_worker = None
+        self.more.setEnabled(self.worker is None)
+        if self.pending_page and self.active():
+            self.request_page()
 
     def render_rows(self, more=None):
         from mtg_core.card_pool import in_card_pool
@@ -1034,7 +1168,21 @@ class RecommendationPanel(CardDropPanel):
         membership = self.membership.currentIndex()
         dismissed = settings(self.editor.document)["dismissed"]
         entries = []
+        permissions = {}
+        from mtg_core.library.recommendations import shared_permitted
+
         for row in self.rows:
+            shared = row.get("source_evidence", {}).get("library")
+            if shared:
+                token = (
+                    shared.get("cache_file"),
+                    shared.get("cache_token"),
+                    shared.get("cache_mtime"),
+                )
+                if token not in permissions:
+                    permissions[token] = shared_permitted(shared)
+                if not permissions[token]:
+                    continue
             entry = row["entry"]
             entry.extras["category_suggestion"] = row["roles"]
             if (
@@ -1169,5 +1317,9 @@ class RecommendationPanel(CardDropPanel):
     def hideEvent(self, event):
         if not self.editor.closing:
             self.save_view()
-        self.suspend()
+        self.page_cancelled.set()
+        self.page_generation += 1
+        self.timer.stop()
+        self.canvas.preview.hide()
+        self.editor.thumbnails.set_visible(id(self.canvas), [])
         super().hideEvent(event)

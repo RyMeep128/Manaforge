@@ -940,7 +940,7 @@ class LibraryWorkspace(W.QMainWindow):
         if not source:
             return
         def complete(path):
-            message = 'Independent copy saved in My Decks. Open it from Deck Editor → Projects.'
+            message = 'Independent copy saved in My Decks. Opening your editable deck.'
             self.message = message
             if connection:
                 self.states[connection['id']] = message
@@ -948,7 +948,8 @@ class LibraryWorkspace(W.QMainWindow):
             self.copyCreated.emit(path)
         self.submit('Copying deck to My Decks', lambda: copy_publication(publication,
                     server_id=source['server_id'], server_address=source.get('server_url') or source['url'],
-                    deck_root=self.deck_root), complete)
+                    deck_root=self.deck_root, library_name=source.get('name') or source.get('server_name')
+                    or (connection or {}).get('name') or 'Library'), complete)
 
     def follow_selected(self):
         connection, item = self.selected_connection(), self.results.currentItem()
