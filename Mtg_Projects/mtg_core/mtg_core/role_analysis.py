@@ -13,13 +13,13 @@ from pathlib import Path
 from .category_rules import clean_text, text_roles
 from .strategy_analysis import strategy_context
 
-RULE_VERSION = 11
+RULE_VERSION = 13
 
 
 BASE_SCORES = {
     'Board Wipes': 180, 'Counterspells': 175, 'Interaction': 170,
     'Ramp': 160, 'Removal': 150, 'Tutors': 145, 'Recursion': 145,
-    'Protection': 120, 'Win Conditions': 130, 'Draw': 142,
+    'Protection': 120, 'Win Conditions': 140, 'Draw': 142,
     'Card Advantage': 138, 'Tokens': 143, 'Lifegain': 135,
     'Graveyard': 135, 'Sacrifice / Aristocrats': 125, 'Utility': 50,
 }
@@ -27,6 +27,24 @@ BASE_SCORES = {
 # Effects missing from the original conservative role hints. Different kinds of
 # evidence within a role use max(), not occurrence counts.
 EFFECTS = (
+    ('Protection', 145, 'grants protection to another permanent',
+     r'\b(?:enchanted|equipped|target) (?:creature|permanent) (?:has|gains?) (?:protection from|hexproof|shroud|indestructible|ward)\b'),
+    ('Graveyard Hate', 165, 'prevents targeting cards in graveyards',
+     r"\bcards in graveyards (?:can't|cannot) be (?:the )?targets? of spells or abilities"),
+    ('Graveyard Hate', 165, 'exiles graveyard cards or whole graveyards',
+     r"\bexile (?:all cards (?:from|in) all graveyards|all graveyards|(?:target player's|each opponent's|all opponents') graveyards?|[^.!?]{0,100}\bcards? (?:from|in) (?:a|any|target player's|an opponent's) graveyard)\b"),
+    ('Graveyard Hate', 165, 'replaces graveyard entry with exile',
+     r'\bif [^.]{0,100}\b(?:would die|would be put into (?:a|any|an? [a-z]+) graveyard)\b[^.]{0,100}\bexile\b[^.]{0,40}\binstead\b'),
+    ('Graveyard Hate', 165, 'restricts playing cards or recovering creatures from graveyards',
+     r"\b(?:players (?:can't|cannot) cast spells (?:from|in) graveyards|creature cards in graveyards (?:can't|cannot) enter the battlefield)\b"),
+    ('Draw', 160, 'provides additional cards during draw steps',
+     r"\bat the beginning of [^.]{0,100}\bdraw step[^.]{0,120}\bdraws? (?:an additional|an extra|a|one|two|three|x|\d+) cards?\b"),
+    ('Ramp', 160, 'untaps your lands for additional mana',
+     r'\buntap all (?:lands|artifacts and lands) you control\b'),
+    ('Evasion', 150, 'grants flying or other blocking evasion',
+     r'\b(?:creatures you control|enchanted creature|equipped creature|target creature) (?:have|has|gains?) (?:flying|menace|shadow|horsemanship|fear|intimidate|skulk)\b'),
+    ('Evasion', 150, 'makes your creatures unblockable',
+     r"\b(?:creatures you control|enchanted creature|equipped creature|target creature) (?:can't|cannot) be blocked\b"),
     ('Anthem', 135, 'pumps a team after granting combat abilities', r'\b(?:each creature you control|creatures you control)[^.]{0,90}\bgets? \+[x0-9]+/\+[x0-9]+'),
     ('Anthem', 130, 'sets team base power and toughness', r'\bcreatures you control have base power and toughness [x0-9]+/[x0-9]+'),
     ('Interaction', 145, 'takes control of selected or opposing permanents', r'\bgain control of (?:it|(?:target|that|all|each) [^.]{0,70}(?:creatures?|permanents?|artifacts?))\b'),
@@ -34,6 +52,8 @@ EFFECTS = (
     ('Anthem', 135, 'boosts a creature team or creature-type team', r'\b(?:each creature you control gets|creatures (?:you control|target player controls) get) \+[x0-9]+/\+[x0-9]+|\beach (?:other )?[a-z]+ (?:you control )?gets \+[^.]{0,100}creature type'),
     ('Anthem', 130, 'grants a combat keyword to creatures', r'\b(?:creatures|target creature) [^.]{0,90}\b(?:gains?|have) double strike\b'),
     ('Protection', 120, 'prevents damage to a permanent or player', r'\bprevent (?:all|the next) [^.]{0,100}damage that would be dealt to'),
+    ('Protection', 155, 'prevents damage to you or your permanents',
+     r'\bprevent (?:all|the next) [^.]{0,100}\bdamage that would be dealt to (?:you|(?:creatures|permanents) you control)\b'),
     ('Interaction', 135, 'exchanges control of permanents', r'\bexchange control of\b'),
     ('Interaction', 110, 'taps opposing creatures', r'\btap (?:target|all) [^.]{0,60}creatures?\b'),
     ('Ramp', 150, 'puts creatures into play without casting them', r'\bput [^.]{0,120}creature card from your hand onto the battlefield'),
@@ -199,7 +219,13 @@ def _analyze_cached(key):
     for face in payload.get('card_faces') or [payload]:
         text = clean_text(face.get('oracle_text'))
         for role, score, label, pattern in COMPILED_EFFECTS:
-            if pattern.search(text):
+            match = pattern.search(text)
+            if match:
+                # An opponent-only draw benefit is not our draw access. Apply
+                # recipient scope to effect evidence as well as basic text hints.
+                if role == 'Draw' and re.search(r'\bopponents?\b', match.group()) and not re.search(
+                        r'\byou (?:may )?draw\b', match.group()):
+                    continue
                 add(role, score, 'Oracle effect: ' + label)
         # Alternate casting costs can turn targeted removal into a sweep.
         keywords = {str(k).casefold() for k in payload.get('keywords') or []}

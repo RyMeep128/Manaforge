@@ -12,6 +12,7 @@ class PublishingPanel(W.QDialog):
         super().__init__(workspace)
         self.workspace = workspace
         self.snapshot = None
+        self.community = None
         self.reviewed = None
         self._destination_id = None
         self.setWindowTitle('Publish deck')
@@ -77,6 +78,7 @@ class PublishingPanel(W.QDialog):
             self.workspace.connection_status.setText('Cannot prepare publication: ' + str(error))
             return False
         self.snapshot = snapshot
+        self.community = deck.get('_manual_category_evidence')
         records = self.workspace.connections.list()
         self._destination_id = records[0]['id'] if len(records) == 1 else None
         self.colors.setText(color_identity)
@@ -190,8 +192,10 @@ class PublishingPanel(W.QDialog):
         value = self.colors.text().strip().upper()
         color_identity = [] if value == 'C' else list(value)
         def work():
+            community = self.community if self.workspace.category_evidence.consent(connection['server_id']) else None
             return self.workspace.publications.send(client, connection['server_id'], local_id,
-                                                    deck=snapshot, color_identity=color_identity, unpublish=unpublish)
+                                                    deck=snapshot, color_identity=color_identity, unpublish=unpublish,
+                                                    community=community)
         def complete(result):
             self.reviewed = None
             action = 'Unpublished' if unpublish else 'Published'

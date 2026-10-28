@@ -1,6 +1,6 @@
 from copy import deepcopy
 import pytest
-from mtg_core.categorization import classify, apply_categories, analyze_entries
+from mtg_core.categorization import classify, apply_categories, analyze_entries, select_categories
 from mtg_core.decks import DeckDocument, DeckEntry, DeckCategory, DeckHistory
 from mtg_core.db import CardDatabase
 
@@ -34,6 +34,15 @@ def test_unscored_role_suggestions_remain_supported():
     doc.deck.categories = [DeckCategory('custom', 'Ramp')]
     apply_categories(doc, {'a': evidence})
     assert doc.deck.entries[0].category_ids == ['custom']
+
+
+@pytest.mark.parametrize('score,primary', [(80, 'Lifegain'), (55, 'Tribal'), (40, 'Tribal'), (10, 'Tribal')])
+def test_custom_category_preference_retains_keywords_but_not_incidental_evidence(score, primary):
+    evidence = [{'name': 'Tribal', 'score': 115}, {'name': 'Lifegain', 'score': score}]
+    original = deepcopy(evidence)
+    result = select_categories(evidence, [DeckCategory('custom', 'Life Gain')])
+    assert result[0]['name'] == primary
+    assert evidence == original
 
 
 def test_manual_protection_idempotence_history_and_serialization():
@@ -125,7 +134,7 @@ def test_500_entries_use_batched_local_reads(tmp_path):
     ('Create two 1/1 white Soldier creature tokens.', 'Tokens'),
     ('You gain 5 life.', 'Lifegain'),
     ('Mill three cards.', 'Graveyard'),
-    ('Exile target creature card from a graveyard.', 'Graveyard'),
+    ('Exile target creature card from a graveyard.', 'Graveyard Hate'),
     ('Sacrifice another creature: Add {C}.', 'Ramp'),
     ('Whenever another creature dies, each opponent loses 1 life and you gain 1 life.', 'Sacrifice / Aristocrats'),
     ('If you have forty or more life, you win the game.', 'Win Conditions'),

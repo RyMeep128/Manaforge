@@ -99,7 +99,7 @@ def assign(document, ids, field, value):
         if entry.entry_id not in ids:
             continue
         if field == 'category':
-            entry.extras['auto_categories'] = {'manual': True}
+            entry.extras['auto_categories'] = {'manual': True, 'origin': 'manual', 'manual_ids': [value] if value else []}
             entry.category_ids = ([value] + [c for c in entry.category_ids if c != value]) if value else []
         else:
             setattr(entry, field, value.copy() if isinstance(value, list) else value)
@@ -110,7 +110,9 @@ def remove_category(document, category_id):
     document.deck.categories = [c for c in document.deck.categories if c.category_id != category_id]
     for entry in document.deck.entries:
         if category_id in entry.category_ids:
-            entry.extras['auto_categories'] = {'manual': True}
+            previous_manual = entry.extras.get('auto_categories', {}).get('manual_ids', [])
+            entry.extras['auto_categories'] = {'manual': True, 'origin': 'manual',
+                'manual_ids': [cid for cid in previous_manual if cid != category_id]}
         entry.category_ids = [c for c in entry.category_ids if c != category_id]
 
 

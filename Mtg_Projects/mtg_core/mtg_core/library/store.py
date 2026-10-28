@@ -12,6 +12,7 @@ import uuid
 
 from . import LibraryError
 from .payload import colors, shared_deck, text
+from .category_evidence import SERVER_SQL
 
 PASSWORD_ROUNDS = 600000
 SESSION_SECONDS = 60 * 60 * 24
@@ -81,6 +82,7 @@ class LibraryStore:
                            [('schema', '1'), ('name', name), ('server_id', str(uuid.uuid4()))])
             self._user(db, username, password, admin=True)
             db.execute(OPERATIONS_SQL)
+            db.execute(SERVER_SQL)
 
     def check_schema(self):
         if not self.path.is_file():
@@ -92,6 +94,7 @@ class LibraryStore:
                     raise LibraryError(503, 'Unsupported library database version. Upgrade the server.')
                 # Additive schema-v1 capability: preserve existing libraries and all history.
                 db.execute(OPERATIONS_SQL)
+                db.execute(SERVER_SQL)
         except sqlite3.Error:
             raise LibraryError(503, 'Library database is unreadable. Check permissions or restore a backup.') from None
 

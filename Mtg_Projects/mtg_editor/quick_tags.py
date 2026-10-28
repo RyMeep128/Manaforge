@@ -156,7 +156,9 @@ class QuickTagMenu(W.QWidget):
                 bounds = intersection
         metrics = self.fontMetrics()
         height = metrics.height() + 12
-        width = max((metrics.horizontalAdvance(self.label(i)) for i in range(len(self.options))), default=70) + 20
+        # Keep equal-sized menus for equal choice counts. Long names are elided
+        # when painted instead of enlarging every wedge in the menu.
+        base_thickness = max(88, metrics.height() * 5) + 12
         limit = max(1, (min(bounds.width(), bounds.height()) - 16) / 2 - 8)
 
         def candidate(count, ring_count):
@@ -166,7 +168,8 @@ class QuickTagMenu(W.QWidget):
             rings = []
             offset = 0
             for n in counts:
-                thickness = width + 12
+                # Give crowded menus visibly more room, even with short names.
+                thickness = base_thickness + max(0, n - 6) * 7
                 # A rotated label rectangle must fit inside its wedge.
                 needed = height / (2 * math.tan(math.pi / n)) if n > 2 else 0
                 inner = max(inner, needed + 8)
@@ -180,7 +183,7 @@ class QuickTagMenu(W.QWidget):
         radius, rings = min(candidates, key=lambda item: item[0])
         self.page_size = max(1, count)
         if radius > limit:
-            # Paging is a last resort for small windows or unusually long names.
+            # Paging is a last resort when the choices exceed available space.
             self.page_size = 1
             for capacity in range(1, count + 1):
                 if candidate(capacity, 1)[0] <= limit:

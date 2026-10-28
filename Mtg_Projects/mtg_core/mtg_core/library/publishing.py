@@ -30,7 +30,7 @@ class PublicationJournal:
             result['pending'] = json.loads(result['pending']) if result['pending'] else None
             return result
 
-    def begin(self, server_id, local_id, account_id, *, deck=None, color_identity=None, unpublish=False):
+    def begin(self, server_id, local_id, account_id, *, deck=None, color_identity=None, unpublish=False, community=None):
         server_id, local_id, account_id = identifier(server_id), text(local_id), identifier(account_id)
         kind = 'unpublish' if unpublish else 'publish'
         with self.connections.db() as db:
@@ -52,6 +52,9 @@ class PublicationJournal:
                          'expected_revision': row['revision'] if row else 0}
             if not unpublish:
                 operation.update(deck=shared_deck(deck), color_identity=list(colors(color_identity)))
+                if community is not None:
+                    from .category_evidence import clean_snapshot
+                    operation['community'] = clean_snapshot(community)
             if row is None:
                 db.execute('INSERT INTO publication_links VALUES (?, ?, NULL, 0, 0, ?)',
                            (server_id, local_id, json.dumps(operation)))
@@ -67,6 +70,14 @@ class PublicationJournal:
             raise LibraryError(426, 'Reconnect to an updated library server before publishing. Account identity is required for safe retries.')
         operation = self.begin(server_id, local_id, client.account_id, **snapshot)
         result = client.publish_operation(operation)
+        from .category_evidence import CategoryEvidence, CAPABILITY
+        cache = CategoryEvidence(self.connections.path.parent / 'library-category-evidence.sqlite3')
+        if (operation['kind'] == 'publish' and operation.get('community') is not None
+                and cache.consent(server_id) and CAPABILITY in client.check()['capabilities']):
+            # Retain pending state on failure. Publication replay and replacement
+            # evidence batches are idempotent, including after a lost response.
+            client.request('PUT', 'decks/' + result['deck_id'] + '/category-evidence',
+                           {'revision': result['revision'], 'evidence': operation['community']})
         with self.connections.db() as db:
             db.execute('BEGIN IMMEDIATE')
             row = db.execute('SELECT pending FROM publication_links WHERE server_id=? AND local_id=?',

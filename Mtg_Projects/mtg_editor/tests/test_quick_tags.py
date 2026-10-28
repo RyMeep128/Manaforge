@@ -31,7 +31,7 @@ def test_batch_roles_tags_undo_and_persistence():
     apply_categories(restored, proposals)
     assert all(e.category_ids[0] == primary and e.tags == ['Draw'] for e in restored.deck.entries)
     apply_categories(restored, proposals, reconsider_manual=True)
-    assert all(e.category_ids[0] == 'auto:ramp' and not is_manual(e) for e in restored.deck.entries)
+    assert all(e.category_ids[0] == primary and is_manual(e) for e in restored.deck.entries)
 
 
 def test_tags_do_not_lock_automatic_primary():
@@ -120,7 +120,7 @@ def test_open_import_categorizes_without_overwriting_manual(tmp_path):
     app.processEvents()
 
 
-def test_review_explicitly_reconsiders_manual():
+def test_review_preserves_manual_even_when_legacy_flag_is_set():
     from mtg_editor.category_review import CategoryReview
     app = W.QApplication.instance() or W.QApplication([])
     doc = DeckDocument()
@@ -128,7 +128,7 @@ def test_review_explicitly_reconsiders_manual():
     dialog = CategoryReview(doc, {'a': classify({}, ['ramp'])})
     assert dialog.selected_proposals() == {}
     dialog.reconsider.setChecked(True)
-    assert list(dialog.selected_proposals()) == ['a']
+    assert dialog.selected_proposals() == {}
     dialog.reconsider.setChecked(False)
     assert dialog.selected_proposals() == {}
     dialog.close()

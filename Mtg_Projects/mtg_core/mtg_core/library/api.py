@@ -6,6 +6,7 @@ from urllib.parse import parse_qs
 from . import API_VERSION, LibraryError
 from .payload import MAX_BODY, text
 from .store import REMEMBERED_SESSION_SECONDS, SESSION_SECONDS, digest
+from . import category_evidence
 
 
 class LibraryAPI:
@@ -64,7 +65,8 @@ class LibraryAPI:
         method = env.get('REQUEST_METHOD', '')
         if method == 'GET' and path == '/api/v1/info':
             return {**self.store.info(), 'registration': 'invitation', 'max_request_bytes': MAX_BODY,
-                    'capabilities': ['publication_operations', 'persistent_sessions'],
+                    'capabilities': ['publication_operations', 'persistent_sessions'] +
+                        ([category_evidence.CAPABILITY] if category_evidence.enabled(self.store) else []),
                     'max_remember_seconds': REMEMBERED_SESSION_SECONDS}
         if not path.startswith('/api/v1/'):
             raise LibraryError(426, 'Unsupported API version. This server supports /api/v1/.')
@@ -91,6 +93,23 @@ class LibraryAPI:
         with self.store.db() as db:
             self.store.actor(db, token)
         self.store.throttle('request:' + digest(token), limit=300, seconds=300)
+        if path == '/api/v1/category-evidence' or path.endswith('/category-evidence'):
+            if not category_evidence.enabled(self.store):
+                raise LibraryError(403, 'Community categorization is disabled by this library.')
+            if path == '/api/v1/category-evidence' and method == 'GET':
+                try:
+                    params = parse_qs(env.get('QUERY_STRING', ''), max_num_fields=2, strict_parsing=True)
+                    if params.keys() - {'offset', 'version'} or any(len(v) != 1 for v in params.values()):
+                        raise ValueError()
+                    offset = int(params.get('offset', ['0'])[0])
+                    version = text(params.get('version', [''])[0], 64, empty=True)
+                except ValueError:
+                    raise LibraryError(400, 'Invalid category evidence cursor.') from None
+                return category_evidence.feed(self.store, token, offset=offset, version=version)
+            if path.startswith('/api/v1/decks/') and path.endswith('/category-evidence') and method == 'PUT':
+                body = self.body(env)
+                deck_id = path.removeprefix('/api/v1/decks/').removesuffix('/category-evidence')
+                return category_evidence.contribute(self.store, token, deck_id, body.get('revision'), body.get('evidence'))
         if method == 'GET' and path == '/api/v1/session':
             return self.store.session(token)
         if method == 'POST' and path == '/api/v1/logout':

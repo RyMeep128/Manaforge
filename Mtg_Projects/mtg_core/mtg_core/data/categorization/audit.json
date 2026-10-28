@@ -5600,7 +5600,7 @@
   "fallback_unique": 200,
   "missing": {},
   "missing_copies": 0,
-  "rule_version": 11,
+  "rule_version": 12,
   "unique_cards": 6080,
   "unresolved": {
     "Aeon Engine": 2,

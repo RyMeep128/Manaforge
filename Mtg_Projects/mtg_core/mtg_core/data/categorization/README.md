@@ -7,7 +7,7 @@ Full offline audit executed during implementation, then rerun after reusable rul
 - Inventory: bundled `precons.json.gz`, installed `precons.json` when present, and every cached raw preconstructed collector response. Deduplicated by the existing catalog ID, retaining all Commander products, including sideboards and special zones. The available cached catalog and bundle contain the same 187 Commander deck identities.
 - Catalog SHA-256: `2466574d4c8870d115de5fedf1db69e1a85b9242c94a6ab336692aff423cc618`.
 - Original engine: rule version 7 from main commit `0ed37c47c929de7dc4495435f2c06a7b319ed051`.
-- Updated engine: rule version 11.
+- Updated engine: rule version 12. CI corrections retain explicit keyword-role category preferences and rank team finishers above generic Anthem effects. The cache and audit were regenerated with the same catalog and complete Oracle coverage.
 - Decks processed in each comparable pass: 187.
 - Card rows: 16,399; card copies analyzed: 18,846 / 18,846; distinct catalog card names resolved: 6,080.
 - Generic type-only fallback copies: 1,028 before, 251 after (reduction 777, 75.6%). Distinct fallback names: 625 before, 200 after.

@@ -42,6 +42,8 @@ class LibraryWorkspace(W.QMainWindow):
         self.followed = FollowedDecks(self.connections)
         from mtg_core.library.recommendations import LibraryRecommendations
         self.recommendations = LibraryRecommendations(self.connections.path.parent / 'library-recommendations.sqlite3')
+        from mtg_core.library.category_evidence import CategoryEvidence
+        self.category_evidence = CategoryEvidence(self.connections.path.parent / 'library-category-evidence.sqlite3')
         self.deck_root = Path(deck_root or data_root() / 'decks')
         self.client_factory = client_factory
         self.clients, self.views, self.states = {}, {}, {}
@@ -252,6 +254,11 @@ class LibraryWorkspace(W.QMainWindow):
             state = 'Unavailable' if record['id'] in self.connection_errors else ('Connected' if signed_in else 'Sign in needed')
             menu = self.library_menu.addMenu(record['name'] + ' - ' + state)
             menu.setToolTipsVisible(True)
+            contribution = menu.addAction('Share manual categories when publishing decks')
+            contribution.setCheckable(True)
+            contribution.setChecked(self.category_evidence.consent(record['server_id']))
+            contribution.setToolTip('Opt in for this library. Shares deliberate category choices only for decks you publish. Private local decks stay private.')
+            contribution.toggled.connect(lambda checked, row=record: self.category_evidence.consent(row['server_id'], checked))
             if record['id'] in self.connection_errors:
                 message = self.connection_errors[record['id']]
                 action = menu.addAction(message.splitlines()[0][:120])
@@ -259,6 +266,7 @@ class LibraryWorkspace(W.QMainWindow):
                 action.setToolTip(message)
                 menu.addSeparator()
             if signed_in:
+                menu.addAction('Refresh community categories', lambda checked=False, row=record: self.refresh_category_evidence(row))
                 menu.addAction('Sign in as another user...', lambda checked=False, row=record: self.sign_in(new=False, connection=row))
                 menu.addAction('Sign out', lambda checked=False, row=record: self.disconnect(connection=row))
             else:
@@ -456,10 +464,15 @@ class LibraryWorkspace(W.QMainWindow):
                         continue
                     client = self.client_factory(record['url'], allow_lan=bool(record['allow_lan']), server_id=record['server_id'])
                     client.resume(saved)
+                    try:
+                        self.category_evidence.sync(client, should_cancel=cancel.is_set)
+                    except (LibraryError, sqlite3.Error, OSError):
+                        pass
                     result.append((record, client, ''))
                 except LibraryError as error:
                     if error.status in (401, 403, 404, 409):
                         self.recommendations.revoke(record['server_id'])
+                        self.category_evidence.revoke(record['server_id'])
                     if error.status in (401, 409):
                         self.saved_sessions.forget(record['id'])
                     result.append((record, None, str(error)))
@@ -623,6 +636,12 @@ class LibraryWorkspace(W.QMainWindow):
                         pass
                     raise
                 warning = ''
+                if old_client and getattr(old_client, 'account_id', None) != getattr(client, 'account_id', None):
+                    self.category_evidence.revoke(record['server_id'])
+                try:
+                    self.category_evidence.sync(client)
+                except (LibraryError, sqlite3.Error, OSError):
+                    pass
                 try:
                     if remember:
                         self.saved_sessions.save(record, client, username)
@@ -695,6 +714,7 @@ class LibraryWorkspace(W.QMainWindow):
             return
         def work():
             self.recommendations.revoke(connection['server_id'])
+            self.category_evidence.revoke(connection['server_id'])
             if self.forget_saved_sign_in(connection, client):
                 return 'Signed out. Saved sign-in removed.'
             return 'Saved sign-in removed. Server unavailable; its session will expire automatically.'
@@ -712,6 +732,7 @@ class LibraryWorkspace(W.QMainWindow):
         client = self.clients.get(connection['id'])
         def work():
             self.recommendations.revoke(connection['server_id'])
+            self.category_evidence.revoke(connection['server_id'])
             self.forget_saved_sign_in(connection, client)
             self.connections.remove(connection['id'])
         def complete(_):
@@ -719,6 +740,13 @@ class LibraryWorkspace(W.QMainWindow):
                 mapping.pop(connection['id'], None)
             self.reload_connections()
         self.submit('Removing library connection', work, complete)
+
+    def refresh_category_evidence(self, connection):
+        client = self.clients.get(connection['id'])
+        if client and client.token and not self._job and not self.jobs.busy:
+            self.submit('Refreshing community categories',
+                        lambda: self.category_evidence.sync(client, force=True),
+                        lambda _: None)
 
     def search(self, *, more=False):
         if self.view_mode.currentIndex() == 1 or self._job or self.jobs.busy:
@@ -739,6 +767,10 @@ class LibraryWorkspace(W.QMainWindow):
             try:
                 if not more:
                     try:
+                        self.category_evidence.sync(self.clients[record['id']], should_cancel=cancel.is_set)
+                    except (LibraryError, sqlite3.Error, OSError):
+                        pass  # Evidence refresh is independent of browsing and editing.
+                    try:
                         self.recommendations.sync(self.clients[record['id']], should_cancel=cancel.is_set)
                     except (sqlite3.Error, OSError):
                         pass  # Recommendation storage must not prevent library browsing.
@@ -747,6 +779,7 @@ class LibraryWorkspace(W.QMainWindow):
             except (LibraryError, OSError) as error:
                 if isinstance(error, LibraryError) and error.status in (401, 403, 404, 409):
                     self.recommendations.revoke(record['server_id'])
+                    self.category_evidence.revoke(record['server_id'])
                 return record, None, offset, str(error)
         def work(cancel, report):
             outcomes = []

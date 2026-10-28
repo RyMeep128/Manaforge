@@ -414,3 +414,19 @@ contextual actions, the shared project-tile renderer and named color choices.
 CI also uploads empty, populated, narrow-window, preview, publishing and account-form screenshots under the
 `library-ui-python-*` artifacts for visual review. No local GUI validation runs
 are needed to produce these CI artifacts.
+
+## Community category evidence
+
+Updated servers advertise `manual_category_evidence_v1`. Signed-in members can
+download compact evidence from currently published decks. Only a publication's
+owner can contribute its manual choices; contributions require the desktop's
+per-library opt-in and accompany explicit deck publication. No central service,
+behavioral analytics or private local-deck upload is required.
+
+Add `--disable-community-categories` to the existing `serve` command to disable
+contributions and downloads. The flag does not affect deck publication or browsing.
+The additive schema creates `category_evidence` alongside existing library data;
+normal database backups include it. Old clients and servers remain compatible.
+Evidence from outdated revisions, unpublished decks and inactive owners is excluded.
+See [categorization policy](card-categorization.md) for cache retention, consent,
+deduplication, conservative weighting and evaluation limitations.

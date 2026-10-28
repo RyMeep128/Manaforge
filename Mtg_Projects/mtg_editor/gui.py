@@ -853,7 +853,7 @@ class EditorWindow(W.QMainWindow):
         from .tag_model import retain_tag_definitions
         from mtg_core.basic_lands import land_quantities, stop_on_land_removal, reconcile_basic_lands
         def composition(document):
-            return (tuple(document.deck.commander_entry_ids), tuple(
+            return (tuple(document.deck.commander_entry_ids), deepcopy(document.editor_preferences.get('manual_themes', [])), tuple(
                 (e.entry_id, e.card_id, e.quantity > 0, e.section, e.extras.get('facts'))
                 for e in document.deck.entries))
         before_composition = deepcopy(composition(self.document))
@@ -1578,7 +1578,10 @@ class EditorWindow(W.QMainWindow):
             return
         if self.save():
             from mtg_core.library.publishing import suggested_colors
-            handler(deepcopy(self.document.deck.to_dict()), suggested_colors(self.document.deck))
+            snapshot = deepcopy(self.document.deck.to_dict())
+            from mtg_core.library.category_evidence import manual_snapshot
+            snapshot['_manual_category_evidence'] = manual_snapshot(self.document)
+            handler(snapshot, suggested_colors(self.document.deck))
 
     def save(self):
         if not self._has_active_deck:

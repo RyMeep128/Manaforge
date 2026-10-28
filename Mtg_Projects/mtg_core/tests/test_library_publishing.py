@@ -34,6 +34,35 @@ class Client:
                 'revision': operation['expected_revision'] + (operation['kind'] == 'publish')}
 
 
+def test_manual_evidence_requires_consent_and_retries_as_one_batch(tmp_path, snapshot):
+    from mtg_core.library.category_evidence import CategoryEvidence, CAPABILITY
+    journal, client = PublicationJournal(LibraryConnections(tmp_path)), Client()
+    cache = CategoryEvidence(tmp_path / 'library-category-evidence.sqlite3')
+    calls = []
+    client.check = lambda: {'capabilities': [CAPABILITY]}
+    def upload(method, path, body):
+        calls.append((method, path, deepcopy(body)))
+        if len(calls) == 1:
+            raise LibraryError(503, 'Interrupted after publishing')
+        return {}
+    client.request = upload
+    evidence = {'assignments': [{'oracle': str(uuid.UUID(int=1)), 'category': 'Draw'}], 'themes': ['Tokens']}
+    local_id = snapshot['deck_id']
+    journal.send(client, client.server_id, local_id, deck=snapshot, color_identity=[], community=evidence)
+    assert calls == []
+    cache.consent(client.server_id, True)
+    with pytest.raises(LibraryError):
+        journal.send(client, client.server_id, local_id, deck=snapshot, color_identity=[], community=evidence)
+    pending = journal.get(client.server_id, local_id)['pending']
+    assert len(pending['community']['assignments']) == 1
+    journal.send(client, client.server_id, local_id, deck=snapshot, color_identity=[], community={'assignments': []})
+    assert calls[0] == calls[1]
+    assert journal.get(client.server_id, local_id)['pending'] is None
+    cache.consent(client.server_id, False)
+    journal.send(client, client.server_id, local_id, deck=snapshot, color_identity=[], community=evidence)
+    assert len(calls) == 2
+
+
 def test_pending_snapshot_survives_restart_and_ignores_later_edits(tmp_path, snapshot):
     client = Client()
     journal = PublicationJournal(LibraryConnections(tmp_path))
