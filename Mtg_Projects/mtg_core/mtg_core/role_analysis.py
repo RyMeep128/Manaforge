@@ -6,8 +6,14 @@ bounded to an ability/sentence; this is not a Magic rules interpreter.
 from functools import lru_cache
 import json
 import re
+import gzip
+import hashlib
+from pathlib import Path
 
 from .category_rules import clean_text, text_roles
+from .strategy_analysis import strategy_context
+
+RULE_VERSION = 11
 
 
 BASE_SCORES = {
@@ -21,6 +27,32 @@ BASE_SCORES = {
 # Effects missing from the original conservative role hints. Different kinds of
 # evidence within a role use max(), not occurrence counts.
 EFFECTS = (
+    ('Anthem', 135, 'pumps a team after granting combat abilities', r'\b(?:each creature you control|creatures you control)[^.]{0,90}\bgets? \+[x0-9]+/\+[x0-9]+'),
+    ('Anthem', 130, 'sets team base power and toughness', r'\bcreatures you control have base power and toughness [x0-9]+/[x0-9]+'),
+    ('Interaction', 145, 'takes control of selected or opposing permanents', r'\bgain control of (?:it|(?:target|that|all|each) [^.]{0,70}(?:creatures?|permanents?|artifacts?))\b'),
+
+    ('Anthem', 135, 'boosts a creature team or creature-type team', r'\b(?:each creature you control gets|creatures (?:you control|target player controls) get) \+[x0-9]+/\+[x0-9]+|\beach (?:other )?[a-z]+ (?:you control )?gets \+[^.]{0,100}creature type'),
+    ('Anthem', 130, 'grants a combat keyword to creatures', r'\b(?:creatures|target creature) [^.]{0,90}\b(?:gains?|have) double strike\b'),
+    ('Protection', 120, 'prevents damage to a permanent or player', r'\bprevent (?:all|the next) [^.]{0,100}damage that would be dealt to'),
+    ('Interaction', 135, 'exchanges control of permanents', r'\bexchange control of\b'),
+    ('Interaction', 110, 'taps opposing creatures', r'\btap (?:target|all) [^.]{0,60}creatures?\b'),
+    ('Ramp', 150, 'puts creatures into play without casting them', r'\bput [^.]{0,120}creature card from your hand onto the battlefield'),
+    ('Ramp', 150, 'casts cards without paying mana', r'\byou may cast [^.]{0,130}without paying (?:its|their|the) mana cost'),
+    ('Ramp', 150, 'reduces chosen creature-type spell costs', r'\b(?:spells of the chosen type|[a-z]+ spells) [^.]{0,60}cost (?:\{[0-9]+\} )?less to cast'),
+    ('Counters', 125, 'uses structured counter mechanics', r'\b(?:bolster|support|adapt|renown|evolve|graft|modular|outlast|reinforce|mentor) [0-9x]+\b'),
+    ('Goad', 130, 'forces opposing combat', r'\b(?:creatures|creature) [^.]{0,60}attacks? each combat if able'),
+
+    ('Goad', 155, 'goads creatures or rewards goaded combat', r'\bgoad(?:ed)?\b'),
+    ('Anthem', 130, 'grants combat keywords to a team', r'\b(?:creatures|[a-z]+s) you control have (?:haste|trample|double strike|menace|flying)\b'),
+    ('Anthem', 130, 'scales team power', r'\bcreatures you control get \+[x0-9]+/\+[x0-9]+'),
+    ('Counters', 150, 'doubles existing counters', r'\bdouble the number of [^.]{0,80}counters?\b'),
+    ('Interaction', 145, 'gains control of opposing permanents', r'\bgain control of (?:target|all|each|that) [^.]{0,60}(?:creature|permanent|artifact)\b'),
+    ('Copy', 140, 'copies a spell, ability, or permanent', r'\b(?:copy target|copy that|copy it|copy each|copies of|becomes? a copy of|as a copy of)\b'),
+    ('Extra Combat', 150, 'adds combat phases or turns', r'\b(?:additional combat phase|extra turn after this one)\b'),
+    ('Equipment', 130, 'equipment supports an equipped creature', r'\bequipped creature (?:gets|has|haste|gains)\b'),
+    ('Tokens', 145, 'replaces creature tokens with different tokens', r'\bif [^.]{0,100}tokens would be created[^.]{0,140}instead'),
+    ('Ramp', 150, 'untaps your mana sources repeatedly', r"\buntap all (?:lands|artifacts and lands|permanents) you control during each other player's untap step"),
+
     ('Enchantment Matters', 140, 'rewards enchantments or Auras',
      r'\b(?:whenever|when) [^.]{0,90}(?:cast [^.]{0,40}(?:enchantment|aura)|(?:enchantment|aura)[^.]{0,60}enters)|\b(?:for each|number of) (?:aura|enchantment)s?\b|\b(?:aura|enchantment)s? you control\b'),
     ('Enchantment Matters', 140, 'rewards enchanted creatures',
@@ -108,14 +140,37 @@ COMPILED_EFFECTS = tuple((role, score, label, re.compile(pattern))
 
 def analyze_effects(payload):
     """Return fresh evidence dictionaries backed by a bounded immutable cache."""
+    serialized = effect_cache_key(payload)
+    cached = generated_effects().get(hashlib.sha256(serialized.encode()).hexdigest())
+    evidence = cached if cached is not None else _analyze_cached(serialized)
+    return {role: {'score': score, 'reasons': list(reasons)}
+            for role, score, reasons in evidence}
+
+
+@lru_cache(maxsize=1)
+def generated_effects():
+    try:
+        with gzip.open(Path(__file__).with_name('data') / 'categorization' / 'classifications.json.gz', 'rt', encoding='utf-8') as stream:
+            data = json.load(stream)
+        return data['cards'] if data.get('rule_version') == RULE_VERSION else {}
+    except (OSError, ValueError, KeyError):
+        return {}
+
+
+def effect_cache_key(payload):
     fields = ('oracle_text', 'type_line', 'keywords', 'card_faces')
     relevant = {k: payload.get(k) for k in fields}
     if relevant['card_faces']:
         relevant['card_faces'] = [{k: face.get(k) for k in fields if k != 'card_faces'}
                                   for face in relevant['card_faces']]
     key = json.dumps(relevant, sort_keys=True, ensure_ascii=True)
-    return {role: {'score': score, 'reasons': list(reasons)}
-            for role, score, reasons in _analyze_cached(key)}
+    return key
+
+
+def effect_cache_record(payload):
+    key = effect_cache_key(payload)
+    return hashlib.sha256(key.encode()).hexdigest(), _analyze_cached(key)
+
 
 
 @lru_cache(maxsize=4096)
@@ -172,6 +227,7 @@ def _analyze_cached(key):
 
 def deck_context(payloads, commander_payloads=()):
     """Bounded tie-break support from commanders and repeated deck mechanics."""
+    payloads, commander_payloads = list(payloads), list(commander_payloads)
     support = {}
     for payload in payloads:
         for role, evidence in analyze_effects(payload).items():
@@ -182,4 +238,5 @@ def deck_context(payloads, commander_payloads=()):
         for role, evidence in analyze_effects(payload).items():
             if evidence['score'] >= 120:
                 bonuses[role] = 8
+    bonuses['_strategy'] = strategy_context(payloads, commander_payloads)
     return bonuses

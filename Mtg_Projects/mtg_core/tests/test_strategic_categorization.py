@@ -153,7 +153,8 @@ def test_available_categories_aliases_renames_manual_control_and_deletion():
     assert len(doc.deck.categories) == 1
 
 
-def test_context_subset_metadata_fallback_missing_data_and_analysis_cache():
+def test_context_subset_metadata_fallback_missing_data_and_analysis_cache(monkeypatch):
+    monkeypatch.setattr('mtg_core.role_analysis.generated_effects', lambda: {})
     database = LocalCards({})
     commander = DeckEntry('commander', 'Commander', section='commander', extras={'facts': {
         'oracle_text': 'Whenever you cast an instant or sorcery spell, scry 1.'}})
@@ -170,7 +171,8 @@ def test_context_subset_metadata_fallback_missing_data_and_analysis_cache():
     assert _analyze_cached.cache_info().hits == 1
 
 
-def test_large_deck_uses_one_batch_and_reuses_effect_parsing():
+def test_large_deck_uses_one_batch_and_reuses_effect_parsing(monkeypatch):
+    monkeypatch.setattr('mtg_core.role_analysis.generated_effects', lambda: {})
     database = LocalCards(STRATEGIES)
     entries = [DeckEntry(str(i), 'Rock', card_id=STRATEGIES['Sol Ring']['id']) for i in range(500)]
     _analyze_cached.cache_clear()

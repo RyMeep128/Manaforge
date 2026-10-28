@@ -3,11 +3,14 @@
 Scores are rule priorities, not probabilities. No AI or remote classification.
 """
 from .decks import DeckCategory
-from .role_analysis import analyze_effects, deck_context
+from .role_analysis import RULE_VERSION, analyze_effects, deck_context
+from .strategy_analysis import memberships
 
-RULE_VERSION = 7
 # Earlier functional roles win primary-category ties; all matches are retained.
 ROLE_TAGS = (
+    ('Goad', ('goad',)),
+    ('Copy', ('copy',)),
+    ('Extra Combat', ('extra-combat',)),
     ('Board Wipes', ('board-wipe', 'boardwipe', 'sweeper', 'mass-removal')),
     ('Counterspells', ('counterspell', 'counter', 'counter-ability')),
     ('Interaction', ('redirect', 'redirection', 'spell-redirection', 'change-target')),
@@ -36,7 +39,9 @@ ROLE_TAGS = (
 TYPES = ('Land', 'Creature', 'Planeswalker', 'Battle', 'Artifact', 'Enchantment', 'Instant', 'Sorcery')
 CATEGORY_ALIASES = {'land': 'lands', 'board wipe': 'board wipes', 'boardwipes': 'board wipes',
                     'card draw': 'draw', 'life gain': 'lifegain', 'counterspell': 'counterspells',
-                    'anthem effects': 'anthem', '+1/+1 counters': 'counters'}
+                    'anthem effects': 'anthem', '+1/+1 counters': 'counters',
+                    'token generation': 'tokens', 'blink / etb': 'blink', 'enchantress': 'enchantment matters',
+                    'sacrifice': 'sacrifice / aristocrats', 'aristocrats': 'sacrifice / aristocrats'}
 
 
 def category_key(name):
@@ -91,6 +96,14 @@ def classify(payload, tags=(), context=None):
                 reasons.append(f'Deck context: commander or repeated {name.lower()} synergy (+{bonus})')
             matches.append({'name': name, 'score': score + bonus,
                             'reason': '; '.join(dict.fromkeys(reasons))})
+    strategy = (context or {}).get('_strategy', {})
+    existing = {m['name']: m for m in matches}
+    for role in sorted(memberships(payload, strategy)):
+        if role in existing:
+            continue
+        # Keep efficient functional engines ahead of supporting theme membership.
+        matches.append({'name': role, 'score': 148 if role in strategy.get('commander_themes', []) else 115,
+                        'reason': 'Supported deck strategy: ' + role})
     matches.sort(key=lambda match: -match['score'])
     if not matches:
         kind = next((kind for kind in TYPES if kind in front_types), None)
@@ -147,6 +160,12 @@ def apply_categories(document, proposals, reconsider_manual=False):
             managed.append(category.category_id)
         entry.category_ids = managed + [c for c in entry.category_ids if c not in previous and c not in managed]
         entry.extras['auto_categories'] = {'version': RULE_VERSION, 'managed_ids': managed, 'evidence': evidence}
+    used = {cid for entry in document.deck.entries for cid in entry.category_ids}
+    foundational = {'auto:ramp', 'auto:draw', 'auto:removal', 'auto:protection'}
+    document.deck.categories[:] = [c for c in document.deck.categories if c.category_id in used or c.category_id in foundational
+        or not c.category_id.startswith('auto:')
+        or category_key(c.name) != category_key(c.category_id[5:].replace('-', ' '))]
+
 
 
 def override_categories(document, entry_ids, choices):
@@ -195,3 +214,27 @@ def analyze_entries(database, entries, *, context_entries=None, commander_entry_
                                  if entry.section == 'commander' or entry.entry_id in commanders else
                                  classify(payload, data['tags'].get(oracle_id, []), context))
     return result
+
+
+def refresh_automatic_categories(document):
+    """Reevaluate deck-dependent evidence from cached facts inside an edit transaction.
+
+    Per-card Oracle analysis is memoized; only composition changes trigger this.
+    Entries lacking local facts keep their current assignments until hydration.
+    """
+    entries = document.deck.entries
+    active = [e for e in entries if e.quantity > 0 and e.section in ('mainboard', 'commander')]
+    commanders = set(document.deck.commander_entry_ids)
+    context = deck_context([e.extras.get('facts', {}) for e in active],
+        [e.extras.get('facts', {}) for e in active if e.section == 'commander' or e.entry_id in commanders])
+    def local_tags(entry):
+        tags = set(entry.extras['facts'].get('oracle_tags') or ())
+        # Older saved facts omit Oracle tags; retain their local tag evidence.
+        for match in entry.extras.get('auto_categories', {}).get('evidence', []):
+            reason = match.get('reason', '')
+            if 'Local Oracle Tags: ' in reason:
+                tags.update(reason.split('Local Oracle Tags: ', 1)[1].split(';', 1)[0].split(', '))
+        return tags
+    proposals = {e.entry_id: classify(e.extras['facts'], local_tags(e), context)
+                 for e in entries if e.extras.get('facts') and not is_manual(e)}
+    apply_categories(document, proposals)

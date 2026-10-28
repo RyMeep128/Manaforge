@@ -848,6 +848,11 @@ class EditorWindow(W.QMainWindow):
     def edit(self, action):
         from .tag_model import retain_tag_definitions
         from mtg_core.basic_lands import land_quantities, stop_on_land_removal, reconcile_basic_lands
+        def composition(document):
+            return (tuple(document.deck.commander_entry_ids), tuple(
+                (e.entry_id, e.card_id, e.quantity > 0, e.section, e.extras.get('facts'))
+                for e in document.deck.entries))
+        before_composition = deepcopy(composition(self.document))
         def command(document):
             previous_lands = land_quantities(document)
             retain_tag_definitions(document)
@@ -855,6 +860,9 @@ class EditorWindow(W.QMainWindow):
             stop_on_land_removal(document, previous_lands)
             reconcile_basic_lands(document, self.basic_lands.templates)
             retain_tag_definitions(document)
+            from mtg_core.categorization import refresh_automatic_categories
+            if before_composition != composition(document):
+                refresh_automatic_categories(document)
         if self.session.edit(command):
             self._has_active_deck = True
             self.project_stack.setCurrentWidget(self.editor_body)
@@ -1602,7 +1610,7 @@ class EditorWindow(W.QMainWindow):
         missing = [(e.entry_id, e.card_id, e.extras.get('proxy_front_name'), e.image_asset_id)
                    for e in document.deck.entries if (e.card_id and 'legalities' not in e.extras.get('facts', {})) or (legacy_folder and not e.image_asset_id)]
         uncategorized = [deepcopy(e) for e in document.deck.entries
-                         if not e.category_ids and not e.extras.get('auto_categories')]
+                         if not e.category_ids or (e.extras.get('auto_categories') and not e.extras['auto_categories'].get('manual'))]
         analysis_context = deepcopy(document.deck.entries)
         commander_ids = tuple(document.deck.commander_entry_ids)
         can_analyze = callable(getattr(self.service, 'analyze_entries', None))
