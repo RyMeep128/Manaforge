@@ -115,7 +115,10 @@ jobs:
           $stream = [IO.File]::Create((Join-Path $env:GITHUB_WORKSPACE 'launcher-output/Manaforge.ico'))
           try { $icon.Save($stream) } finally { $stream.Dispose(); $icon.Dispose() }
           $compiler = Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
-          & $compiler /nologo /target:winexe /platform:anycpu /reference:System.Web.Extensions.dll /reference:System.Windows.Forms.dll /reference:System.Core.dll /win32icon:launcher-output/Manaforge.ico /out:launcher-output/Manaforge.exe installer/Launcher.cs
+          $launcherSource = Join-Path $env:GITHUB_WORKSPACE 'installer/Launcher.cs'
+          $launcherIcon = Join-Path $env:GITHUB_WORKSPACE 'launcher-output/Manaforge.ico'
+          $launcherExe = Join-Path $env:GITHUB_WORKSPACE 'launcher-output/Manaforge.exe'
+          & $compiler /nologo /target:winexe /platform:anycpu /reference:System.Web.Extensions.dll /reference:System.Windows.Forms.dll /reference:System.Core.dll "/win32icon:$launcherIcon" "/out:$launcherExe" $launcherSource
           if ($LASTEXITCODE -ne 0) { throw 'Permanent launcher compilation failed' }
       - name: Inventory payload and compile per-user installer
         run: |
