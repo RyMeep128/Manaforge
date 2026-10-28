@@ -20,6 +20,8 @@ class DeckSetupDialog(W.QDialog):
         self.selected = deepcopy(commanders(document))
         self.original_ids = [e.entry_id for e in self.selected]
         self.creating = creating
+        self.stage = 0
+        self.precon_loaded = False
         self.rows = {}
         self.catalog = theme_catalog([], {})
         self.catalog_loaded = False
@@ -28,7 +30,7 @@ class DeckSetupDialog(W.QDialog):
         self.resize(min(700, available.width()), min(650, available.height()))
         outer = W.QVBoxLayout(self)
         outer.setSpacing(12)
-        title = W.QLabel('Make room for your next idea' if creating else 'Deck settings')
+        title = self.title = W.QLabel('Make room for your next idea' if creating else 'Deck settings')
         title.setProperty('role', 'title')
         outer.addWidget(title)
         form = W.QFormLayout()
@@ -115,7 +117,7 @@ class DeckSetupDialog(W.QDialog):
                 index = self.library.count() - 1
             self.library.setCurrentIndex(index)
         library_layout.addWidget(self.library)
-        note = W.QLabel('Association only. Use Upload to Library to review and share your deck.'
+        note = W.QLabel('Choose a library to upload your deck when you create it.'
                        if libraries else 'No signed-in libraries available. You can connect one in Browse Online later.')
         note.setWordWrap(True)
         library_layout.addWidget(note)
@@ -128,12 +130,17 @@ class DeckSetupDialog(W.QDialog):
         self.submit = buttons.button(W.QDialogButtonBox.StandardButton.Ok)
         self.submit.setText('Create Deck' if creating else 'Save changes')
         self.submit.setProperty('buttonRole', 'primary')
-        self.submit.setDefault(True)
-        buttons.accepted.connect(self.accept)
+        self.submit.setAutoDefault(False)
+        self.submit.setDefault(False)
+        self.back = buttons.addButton('Back', W.QDialogButtonBox.ButtonRole.ActionRole)
+        self.back.setAutoDefault(False)
+        self.back.clicked.connect(self.previous_step)
+        buttons.accepted.connect(self.next_step)
         buttons.rejected.connect(self.reject)
         outer.addWidget(buttons)
         self.format.currentTextChanged.connect(self.format_changed)
-        self.start.currentIndexChanged.connect(self.format_changed)
+        self.start.currentIndexChanged.connect(self.start_changed)
+        self.library.currentIndexChanged.connect(lambda *_: self.update_stage())
         self.search.textChanged.connect(self.search_commanders)
         self.mode.currentIndexChanged.connect(self.search_commanders)
         self.controller.resultsReady.connect(self.completed)
@@ -144,16 +151,92 @@ class DeckSetupDialog(W.QDialog):
             self.format.setCurrentText('Commander')
         self.format_changed()
         self.update_summary()
+        self.update_stage()
         self.name.setFocus()
+
+    def keyPressEvent(self, event):
+        if event.key() in (C.Qt.Key.Key_Return, C.Qt.Key.Key_Enter):
+            if self.search.hasFocus():
+                self.search_commanders()
+            # Search fields must never submit the deck setup dialog.
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+    def update_stage(self):
+        if not self.creating:
+            self.back.hide()
+            return
+        commander = self.format.currentText() in ('Commander', 'Custom')
+        self.title.setText(('1. Choose your starting point',
+                            '2. Choose your commander',
+                            '3. Choose themes and a library')[self.stage])
+        self.tabs.setVisible(self.stage > 0)
+        self.tabs.setTabVisible(0, self.stage == 1 and commander)
+        self.tabs.setTabVisible(1, self.stage == 2)
+        self.tabs.setTabVisible(2, self.stage == 2)
+        self.back.setVisible(self.stage > 0)
+        self.start.setEnabled(self.stage == 0)
+        self.format.setEnabled(self.stage == 0 and self.start.currentIndex() != 2)
+        if self.stage == 0:
+            self.submit.setText('Next: choose precon' if self.start.currentIndex() == 2 else
+                                'Next: commander' if commander else 'Next: themes and library')
+        elif self.stage == 1:
+            self.tabs.setCurrentIndex(0)
+            self.submit.setText('Next: themes and library')
+            self.search_commanders()
+        else:
+            self.tabs.setCurrentIndex(1)
+            self.submit.setText('Create Deck and Upload' if self.library.currentData() else 'Create Deck')
+
+    def previous_step(self):
+        self.stage = 0 if self.stage == 1 else (1 if self.format.currentText() in ('Commander', 'Custom') else 0)
+        self.update_stage()
+
+    def next_step(self):
+        if not self.creating or self.stage == 2:
+            self.accept()
+            return
+        if self.stage == 0 and self.start.currentIndex() == 2 and not self.precon_loaded:
+            from .precon_browser import PreconBrowser
+            from mtg_core.precons import apply_precon
+            browser = PreconBrowser(self.editor.service, self.editor.thumbnails, self)
+            browser.resolve_button.setText('Next: use selected precon')
+            if browser.exec() != W.QDialog.DialogCode.Accepted or not browser.result:
+                return
+            apply_precon(self.draft, browser.record, browser.result,
+                         self.name.text() or browser.deck_name.text(), browser.cover_asset_id)
+            self.selected = deepcopy(commanders(self.draft))
+            self.original_ids = [entry.entry_id for entry in self.selected]
+            self.name.setText(self.draft.deck.name)
+            self.format.setCurrentText(self.draft.deck.format)
+            self.precon_loaded = True
+            self.update_summary()
+            self.refresh_themes()
+        self.stage = (1 if self.format.currentText() in ('Commander', 'Custom') else 2) if self.stage == 0 else 2
+        self.update_stage()
+
+    def start_changed(self, *_):
+        if self.precon_loaded:
+            self.selected = []
+            self.original_ids = []
+        self.precon_loaded = False
+        self.draft.deck.entries = []
+        self.draft.deck.extras.pop('precon_origin', None)
+        self.draft.deck.extras.pop('cover_image_asset_id', None)
+        self.update_stage()
+        self.format_changed()
 
     def format_changed(self, *_):
         precon = self.creating and self.start.currentIndex() == 2
-        enabled = self.format.currentText() in ('Commander', 'Custom') and not precon
+        enabled = self.format.currentText() in ('Commander', 'Custom')
         self.tabs.setTabVisible(0, enabled)
         self.format.setEnabled(not precon)
         self.draft.deck.format = self.format.currentText()
         self.update_summary()
         self.search_commanders()
+        if self.creating:
+            self.update_stage()
 
     def query(self):
         partner = (self.selected[0].card_id if self.mode.currentIndex() == 1 and self.selected else None)
@@ -268,8 +351,6 @@ class DeckSetupDialog(W.QDialog):
             document.deck.extras['manual_name'] = True
         document.deck.format = self.format.currentText()
         chosen = self.selected if document.deck.format in ('Commander', 'Custom') else []
-        if self.creating and self.start.currentIndex() == 2:
-            chosen = []  # The precon import owns its original commander configuration.
         if [e.entry_id for e in chosen] != self.original_ids:
             set_commanders(document, [])
             for index, entry in enumerate(chosen):

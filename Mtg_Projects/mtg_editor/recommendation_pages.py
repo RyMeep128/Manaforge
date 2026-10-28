@@ -30,6 +30,9 @@ class RecommendationPages:
     def append(self, rows):
         self.cache.clear()
         with closing(sqlite3.connect(self.path)) as db:
+            # Rebuildable scratch pages: avoid a durable disk flush per small batch.
+            db.execute('PRAGMA synchronous=OFF')
+            db.execute('PRAGMA journal_mode=MEMORY')
             for row in rows:
                 entry = row['entry']
                 facts = entry.extras.get('facts') or {}
@@ -83,7 +86,7 @@ class RecommendationPages:
                     row['association'] = association
                 row['entry'] = DeckEntry.from_dict(row['entry'])
                 batch.append(row)
-                if len(batch) == 50:
+                if len(batch) == 200:
                     result.append(rank_recommendations(batch, context, preferences))
                     batch = []
         if batch:

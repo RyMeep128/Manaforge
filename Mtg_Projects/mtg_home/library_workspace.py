@@ -188,7 +188,7 @@ class LibraryWorkspace(W.QMainWindow):
         layout.addLayout(bottom)
         self.preview_dialog = DeckPreviewDialog(self)
         self.details = self.preview_dialog.notes
-        self.copy_button = W.QPushButton('Copy to My Decks')
+        self.copy_button = W.QPushButton('Make editable copy')
         self.copy_button.setProperty('buttonRole', 'primary')
         self.copy_button.clicked.connect(self.copy_selected)
         self.follow_button = W.QPushButton('Follow deck')
@@ -897,9 +897,9 @@ class LibraryWorkspace(W.QMainWindow):
             return
         row = current.data(C.Qt.ItemDataRole.UserRole)
         follow = row.get('follow')
-        hint = ('Read-only - Available offline. ' + follow['message']) if follow else (
+        hint = ('Read-only - Make an editable copy to change this deck. Available offline. ' + follow['message']) if follow else (
             'Cached preview. Refresh or sign in to its library for the latest version.' if row.get('cached') else '')
-        self.preview_dialog.set_publication(row, hint=hint)
+        self.preview_dialog.set_publication(row, hint=hint or 'Read-only - Make an editable copy to change this deck. Follow to keep it available offline.')
         self.update_controls()
 
     def open_preview(self, *_):

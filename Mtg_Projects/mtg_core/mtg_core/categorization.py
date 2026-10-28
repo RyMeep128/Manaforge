@@ -103,11 +103,16 @@ def classify(payload, tags=(), context=None):
                 and all(reason.startswith('Keywords:') for reason in effect['reasons'])
                 and not set(found).difference({'recursion'}))
             score = 40 if keyword_recursion else max(100 if found else 0, effect.get('score', 0))
+            # Evasion tags describe self keywords as well as actual evasion grants.
+            # Without a detected grant, keep them secondary to functional evidence.
+            incidental_evasion = name == 'Evasion' and not effect
+            if incidental_evasion:
+                score = 80
             bonus = min(8, max(0, (context or {}).get(name, 0))) if score >= 100 else 0
             if bonus:
                 reasons.append(f'Deck context: commander or repeated {name.lower()} synergy (+{bonus})')
             matches.append({'name': name, 'score': score + bonus,
-                            'layer': evidence_layer(name, effect.get('score', score), has_effect=bool(effect)),
+                            'layer': 'incidental' if incidental_evasion else evidence_layer(name, effect.get('score', score), has_effect=bool(effect)),
                             'reason': '; '.join(dict.fromkeys(reasons))})
     strategy = (context or {}).get('_strategy', {})
     existing = {m['name']: m for m in matches}

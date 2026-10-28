@@ -29,6 +29,8 @@ def update_candidate_quantities(document, canvas):
 def group_key(entry, grouping):
     if entry.section == DeckSection.COMMANDER:
         return 'Commander'
+    if entry.section not in SECTIONS:
+        return entry.section.replace('_', ' ').title()
     facts = entry.extras.get('facts', {})
     if grouping == 'Category':
         return entry.category_ids[0] if entry.category_ids else 'Uncategorized'

@@ -13,7 +13,7 @@ from pathlib import Path
 from .category_rules import clean_text, text_roles
 from .strategy_analysis import strategy_context
 
-RULE_VERSION = 13
+RULE_VERSION = 14
 
 
 BASE_SCORES = {
@@ -27,6 +27,20 @@ BASE_SCORES = {
 # Effects missing from the original conservative role hints. Different kinds of
 # evidence within a role use max(), not occurrence counts.
 EFFECTS = (
+    ('Card Advantage', 155, 'moves revealed library cards or piles into hand',
+     r"\breveals? [^.]{0,140}\btop\b[^.]{0,160}\blibrary\b(?:[^.]{0,240}\. ){0,3}[^.]{0,240}\bputs? (?:it|that card|the revealed card|one pile|a pile|[^.]{0,60}cards?) into (?:your|their) hand\b"),
+    ('Card Advantage', 155, 'casts revealed cards without spending a card from hand',
+     r"\breveal [^.]{0,140}\b(?:top|hand)\b[^.]{0,160}\. [^.]{0,160}\byou may (?:cast|play) (?:it|that card)\b"),
+    ('Card Advantage', 155, 'casts exiled library cards',
+     r"\bexile [^.]{0,140}\btop\b[^.]{0,100}\blibrary\b[^.]{0,180}\. [^.]{0,180}\. [^.]{0,180}\byou may cast\b"),
+    ('Card Advantage', 155, 'casts cards from an inspected opposing hand',
+     r"\blook at (?:that|target) player's hand\b[^.]{0,80}\. [^.]{0,160}\byou may cast\b"),
+    ('Card Advantage', 155, 'casts cards from a revealed opposing hand',
+     r"\breveals? (?:their|his or her) hand\b[^.]{0,80}\. [^.]{0,160}\byou may cast\b"),
+    ('Card Advantage', 155, 'turns a library card into a permanent',
+     r'\bmanifest (?:the top card|dread)\b'),
+    ('Utility', 110, 'inspects the top of your library',
+     r'\blook at the top card of your library any time\b'),
     ('Protection', 145, 'grants protection to another permanent',
      r'\b(?:enchanted|equipped|target) (?:creature|permanent) (?:has|gains?) (?:protection from|hexproof|shroud|indestructible|ward)\b'),
     ('Graveyard Hate', 165, 'prevents targeting cards in graveyards',
@@ -223,10 +237,14 @@ def _analyze_cached(key):
             if match:
                 # An opponent-only draw benefit is not our draw access. Apply
                 # recipient scope to effect evidence as well as basic text hints.
-                if role == 'Draw' and re.search(r'\bopponents?\b', match.group()) and not re.search(
-                        r'\byou (?:may )?draw\b', match.group()):
+                recipient = text[max(0, match.start() - 50):match.end()]
+                if role in ('Draw', 'Card Advantage') and re.search(r'\bopponents?\b', recipient) and not re.search(
+                        r'\byou (?:may )?(?:draw|cast|play)\b|\binto your hand\b|\beach player\b', recipient):
                     continue
                 add(role, score, 'Oracle effect: ' + label)
+        if re.search(r'\bcascade\b', text) or 'cascade' in {
+                str(k).casefold() for k in payload.get('keywords') or []}:
+            add('Card Advantage', 155, 'Oracle effect: cascade casts an additional library card')
         # Alternate casting costs can turn targeted removal into a sweep.
         keywords = {str(k).casefold() for k in payload.get('keywords') or []}
         if ('overload' in keywords or re.search(r'\boverload\b', text)) and 'Removal' in result:

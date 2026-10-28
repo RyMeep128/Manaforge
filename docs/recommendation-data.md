@@ -327,3 +327,13 @@ replaces counts. BlueprintMTG remains optional and disabled until verified.
 
 For pacing, run bounds, cache paths, and stop/resume controls, see the
 [one-time collection runbook](archidekt-collection.md).
+
+
+Recommendation browsing keeps scrollable type and role tabs in the same navigation
+row at sidebar and full-workspace widths. Presentation metadata (deck name, library
+destination, and browse preferences) does not invalidate ranked candidates. Pending
+page requests reuse a completed candidate set instead of rebuilding it. Rebuildable
+temporary SQLite pages use memory journals without durable per-batch flushes, and
+candidate enrichment uses larger batches. Deck context reads card records in one batch instead of opening one lookup per card. Source caches and saved decks retain their
+existing durability. Runtime latency remains for CI and interactive verification;
+no local performance tests were run.

@@ -1572,7 +1572,7 @@ class EditorWindow(W.QMainWindow):
                                 if self._active_view == mode else None)
         del blockers
 
-    def publish_to_library(self):
+    def publish_to_library(self, *, upload=False):
         handler = getattr(self, 'publish_deck_handler', None)
         if handler is None or self.task is not None or not self._has_active_deck:
             return
@@ -1581,7 +1581,10 @@ class EditorWindow(W.QMainWindow):
             snapshot = deepcopy(self.document.deck.to_dict())
             from mtg_core.library.category_evidence import manual_snapshot
             snapshot['_manual_category_evidence'] = manual_snapshot(self.document)
-            handler(snapshot, suggested_colors(self.document.deck))
+            if upload:
+                handler(snapshot, suggested_colors(self.document.deck), upload=True)
+            else:
+                handler(snapshot, suggested_colors(self.document.deck))
 
     def save(self):
         if not self._has_active_deck:
@@ -1682,17 +1685,10 @@ class EditorWindow(W.QMainWindow):
         # Do not replace the active document until all optional setup is accepted.
         if self._has_active_deck and self.session.dirty and not self.save():
             return
-        dialog.apply_to(draft)
         choice = dialog.start.currentIndex()
         if choice == 2:
-            from .precon_browser import PreconBrowser
-            from mtg_core.precons import apply_precon
-            if self.task is not None:
-                return
-            dialog = PreconBrowser(self.service, self.thumbnails, self)
-            if dialog.exec() != W.QDialog.DialogCode.Accepted or not dialog.result:
-                return
-            apply_precon(draft, dialog.record, dialog.result, dialog.deck_name.text(), dialog.cover_asset_id)
+            draft = deepcopy(dialog.draft)
+        dialog.apply_to(draft)
         self.session.new()
         self.session.edit(lambda d: (setattr(d, 'deck', deepcopy(draft.deck)),
                                      setattr(d, 'editor_preferences', deepcopy(draft.editor_preferences))))
@@ -1704,6 +1700,17 @@ class EditorWindow(W.QMainWindow):
                 self.import_decklist()
             finally:
                 self._setting_up_deck = False
+
+        if self.document.deck.extras.get('library_association'):
+            document = self.document
+            def upload_created():
+                if self.closing or self.document is not document:
+                    return
+                if self.task is not None:
+                    QtCore.QTimer.singleShot(100, upload_created)
+                    return
+                self.publish_to_library(upload=True)
+            QtCore.QTimer.singleShot(0, upload_created)
 
     def new(self):
         """Reset the document for internal callers; UI creation uses create_deck."""

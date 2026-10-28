@@ -232,6 +232,7 @@ class PreconBrowser(ImportDecklist):
         self.layout().insertWidget(1, controls, 2)
         self.search.textChanged.connect(self.filter_records)
         self.decks.currentRowChanged.connect(self.select_record)
+        self.decks.itemDoubleClicked.connect(lambda *_: self.resolve())
         self.resolve_button.setEnabled(False)
         self.resolve_button.setText('Create deck')
         self.resolve_button.setProperty('role', 'primary')

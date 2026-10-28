@@ -77,3 +77,14 @@ def test_color_sort_wubrg_multicolor_colorless_unknown():
     entries = grouped_entries(document.deck, 'Section', sort='Color')
     mainboard = next(cards for key, _, cards in entries if key == 'Mainboard')
     assert [e.entry_id for e in mainboard] == ['7', '6', '5', '4', '3', '2', '1', '0']
+
+
+def test_display_commander_is_separate_from_playable_cards():
+    document = deck()
+    document.deck.entries.append(DeckEntry('display', 'Commander', section='display_commander',
+        do_not_print=True, extras={'facts': {'type_line': 'Creature'}}))
+    for grouping in ('Type', 'Category', 'Section'):
+        groups = grouped_entries(document.deck, grouping)
+        group = next(group for group in groups if any(e.entry_id == 'display' for e in group[2]))
+        assert group[0] == 'Display Commander'
+        assert [e.entry_id for e in group[2]] == ['display']

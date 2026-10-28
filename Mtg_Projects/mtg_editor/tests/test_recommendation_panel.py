@@ -235,8 +235,8 @@ def test_compact_recommendations_prioritize_grid_and_use_responsive_categories(
     assert panel.selected_category == "Top Cards"
     panel.resize(500, 700)
     W.QApplication.processEvents()
-    assert panel.type_tabs.isHidden()
-    assert not panel.category_combo.isHidden()
+    assert not panel.type_tabs.isHidden()
+    assert panel.category_combo.isHidden()
     assert panel.canvas.width() <= panel.width()
     assert panel.audience.width() <= panel.width()
     panel.hide()
@@ -367,3 +367,86 @@ def test_workspace_card_size_survives_return_to_quick_panel(editor, monkeypatch)
     assert (
         editor.document.editor_preferences["recommendation_browse"]["card_width"] == 320
     )
+
+
+def test_view_metadata_does_not_invalidate_ranked_candidates(editor):
+    before = context_key(editor.document)
+    editor.document.deck.name = "Renamed deck"
+    editor.document.deck.extras["library_association"] = {"id": "friends"}
+    editor.document.editor_preferences["recommendation_browse"] = {"mode": "roles"}
+    assert context_key(editor.document) == before
+
+
+def test_completed_candidates_are_not_reloaded_for_a_pending_page(editor, monkeypatch):
+    panel = editor.recommendation_panel
+    monkeypatch.setattr(panel, "active", lambda: True)
+    panel.key = panel.loaded_key = ("same",)
+    panel.pending = panel.pending_page = True
+    requested = []
+    monkeypatch.setattr(panel, "request_page", lambda: requested.append(True))
+    panel.refresh()
+    assert not panel.pending
+    assert requested == [True]
+
+
+def test_recommendation_context_batches_card_reads():
+    from mtg_core.decks import DeckDocument
+    from mtg_editor.recommendations import recommendation_context
+
+    calls = []
+
+    class Database:
+        def categorization_data(self, card_ids, oracle_ids):
+            calls.append(list(card_ids))
+            return {
+                "cards": {key: {"type_line": "Creature", "cmc": 3} for key in card_ids}
+            }
+
+    class Service:
+        database = Database()
+
+        def analyze_entries(self, entries):
+            return {}
+
+        def get_card(self, **kwargs):
+            raise AssertionError("Context must not read one card at a time")
+
+    document = DeckDocument()
+    document.deck.entries = [
+        DeckEntry(str(i), "Card", card_id="printing") for i in range(100)
+    ]
+    recommendation_context(Service(), document)
+    assert calls == [["printing"]]
+
+
+def test_read_only_canvas_does_not_emit_edit_actions():
+    from mtg_core.decks import DeckDocument
+
+    app = W.QApplication.instance() or W.QApplication([])
+
+    class Thumbnails(C.QObject):
+        updated = C.pyqtSignal()
+
+        def set_visible(self, *args):
+            pass
+
+        def get(self, *args):
+            return None
+
+    from mtg_editor.canvas import CardCanvas
+
+    document = DeckDocument()
+    document.deck.entries = [DeckEntry("card", "Shared card")]
+    canvas = CardCanvas(document, Thumbnails())
+    canvas.read_only = True
+    canvas.selected = {"card"}
+    actions = []
+    canvas.quantityRequested.connect(lambda *args: actions.append(args))
+    canvas.quickTagRequested.connect(lambda *args: actions.append(args))
+    for key in (C.Qt.Key.Key_Delete, C.Qt.Key.Key_Backspace, C.Qt.Key.Key_T):
+        QtTest.QTest.keyClick(canvas, key)
+    assert actions == []
+    assert document.deck.entries[0].quantity == 1
+    canvas.close()
+    canvas.preview.close()
+    app.processEvents()

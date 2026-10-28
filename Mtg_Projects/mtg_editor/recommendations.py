@@ -135,7 +135,7 @@ def load_recommendations(
         rows.append(
             dict(row, entry=entry, commander_names=[e.name for e in commanders])
         )
-        if sink and len(rows) == 50:
+        if sink and len(rows) == 200:
             enrich(rows)
             rows = []
     # Cache type candidates alongside source rows. Pages activate them only when
@@ -151,7 +151,7 @@ def load_recommendations(
         should_cancel=should_cancel,
     ):
         rows.append(row)
-        if sink and len(rows) == 50:
+        if sink and len(rows) == 200:
             enrich(rows)
             rows = []
     if rows:
@@ -169,11 +169,16 @@ def load_recommendations(
 
 def recommendation_context(service, document):
     proposals = service.analyze_entries(document.deck.entries)
-    records = {
-        entry.card_id: service.get_card(card_id=entry.card_id) or {}
-        for entry in document.deck.entries
-        if entry.card_id
-    }
+    card_ids = list(
+        dict.fromkeys(e.card_id for e in document.deck.entries if e.card_id)
+    )
+    reader = getattr(getattr(service, "database", None), "categorization_data", None)
+    if callable(reader):
+        records = reader(card_ids, [])["cards"]
+    else:
+        records = {
+            card_id: service.get_card(card_id=card_id) or {} for card_id in card_ids
+        }
     return context(document, proposals, records)
 
 

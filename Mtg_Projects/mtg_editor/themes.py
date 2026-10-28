@@ -28,6 +28,11 @@ class ThemesDialog(W.QDialog):
         self.group.addItems(['All groups', *sorted({'Commander Oracle Tags', *{t.get('group', 'Themes') for t in catalog}})])
         layout.addWidget(self.group)
         self.list = W.QListWidget()
+        self.list.setStyleSheet("QListWidget::indicator { width: 18px; height: 18px; "
+                                "border: 2px solid #a8b6cc; border-radius: 3px; } "
+                                "QListWidget::indicator:checked { background: #729bea; "
+                                "border-color: #dbe7ff; } "
+                                "QListWidget::item { padding: 5px; }")
         layout.addWidget(self.list, 1)
         saved = list(document.editor_preferences.get('manual_themes', []))
         discovery = document.editor_preferences.get('discovery', {})

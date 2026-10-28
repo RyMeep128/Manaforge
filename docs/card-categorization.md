@@ -115,3 +115,11 @@ regressions verify useful refinement. These samples are not representative full
 player decks and do not establish the aspirational 90–98% target. A consented,
 independently reviewed full-deck holdout corpus is still needed before reporting
 production accuracy. Precon development data is excluded from this evaluation.
+
+
+Rule version 14 treats tag-only evasion as incidental. Functional grants of evasion
+remain functional evidence. Card access now recognizes bounded multi-sentence
+reveals and pile selection, casting from inspected hands or revealed/exiled library
+cards, cascade, and manifest. Looking at the library without gaining a card remains
+Utility. These rules use effect wording and recipient scope, never card names;
+old generated snapshots fall back to the current memoized rules.

@@ -104,14 +104,17 @@ class ModuleController(C.QObject):
             raise OSError('Print Studio could not be opened.')
         printer.open_managed_project(project['id'])
 
-    def publish_deck(self, snapshot, color_identity):
+    def publish_deck(self, snapshot, color_identity, *, upload=False):
         self.open_module('library')
         library = self.windows.get('library')
         if library is not None:
-            library.publishing.prepare(snapshot, color_identity)
+            if not library.publishing.prepare(snapshot, color_identity):
+                return
             association = snapshot.get('library_association') or {}
             if association.get('id'):
                 library.publishing.use_connection(association['id'])
+            if upload and library.publishing.publish_button.isEnabled():
+                library.publishing.publish()
 
     def deck_libraries(self):
         """Offer signed-in destinations without network access or publication."""

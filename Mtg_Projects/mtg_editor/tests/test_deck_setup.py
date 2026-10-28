@@ -50,3 +50,30 @@ def test_settings_preserve_cards_manual_categories_and_unavailable_library(tmp_p
     dialog.reject()
     editor.close()
     app.processEvents()
+
+
+def test_enter_search_never_creates_deck_and_steps_hide_later_choices(tmp_path, monkeypatch):
+    from PyQt6 import QtTest
+    app = W.QApplication.instance() or W.QApplication([])
+    monkeypatch.setattr(DiscoveryController, 'change_query', lambda *args: None)
+    editor = EditorWindow(service=object(), root=tmp_path)
+    dialog = DeckSetupDialog(editor, DeckDocument(), creating=True)
+    accepted = []
+    dialog.accepted.connect(lambda: accepted.append(True))
+    assert dialog.tabs.isHidden()
+    dialog.next_step()
+    assert dialog.stage == 1
+    assert dialog.tabs.isTabVisible(0)
+    assert not dialog.tabs.isTabVisible(1)
+    assert not dialog.tabs.isTabVisible(2)
+    dialog.show()
+    dialog.search.setFocus()
+    QtTest.QTest.keyClick(dialog.search, C.Qt.Key.Key_Return)
+    assert not accepted and dialog.stage == 1
+    dialog.next_step()
+    assert dialog.stage == 2
+    assert not dialog.tabs.isTabVisible(0)
+    assert dialog.tabs.isTabVisible(1) and dialog.tabs.isTabVisible(2)
+    dialog.reject()
+    editor.close()
+    app.processEvents()

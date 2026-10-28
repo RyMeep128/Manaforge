@@ -147,3 +147,28 @@ def test_damage_prevention_is_primary_over_a_counter_reward(beneficiary, kind):
 ])
 def test_effect_patterns_do_not_treat_opposing_effects_as_our_job(text, absent):
     assert absent not in {item['name'] for item in classify({'oracle_text': text})}
+
+
+@pytest.mark.parametrize('text,keywords,primary', [
+    ('Flying. When this creature enters, reveal the top five cards of your library. An opponent separates those cards into two piles. Put one pile into your hand and the other into your graveyard.', ['Flying'], 'Card Advantage'),
+    ('Flying. Shroud. You may look at the top card of your library any time.', ['Flying', 'Shroud'], 'Utility'),
+    ('When this enchantment enters, it becomes an Aura with enchant creature. Manifest the top card of your library, then attach this enchantment to it. Enchanted creature has flying and lifelink.', [], 'Card Advantage'),
+    ('Flying. When this creature dies, put it into your library third from the top. Cascade.', ['Flying', 'Cascade'], 'Card Advantage'),
+    ('Flying. At the beginning of your upkeep, each player reveals the top card of their library, loses life equal to that card\'s mana value, then puts it into their hand.', ['Flying'], 'Card Advantage'),
+    ('Flying. Remove a wish counter: Reveal the top card of your library. You may play that card without paying its mana cost.', ['Flying'], 'Card Advantage'),
+    ('Flying. Whenever this creature attacks, each player names a card. Then each player reveals the top card of their library. If the card a player revealed has the name they chose, they put that card into their hand. If it doesn\'t, they put it on the bottom of their library.', ['Flying'], 'Card Advantage'),
+    ('When this enchantment enters, manifest the top card of your library. Enchanted creature has flying and hexproof.', [], 'Card Advantage'),
+    ('Flying, vigilance, menace. Whenever this creature attacks, reveal the top card of your library. If that card\'s mana value is odd, you may cast it without paying its mana cost. Otherwise, draw a card.', ['Flying', 'Vigilance', 'Menace'], 'Card Advantage'),
+    ('Ninjutsu. Whenever this creature deals combat damage to a player, look at that player\'s hand. You may cast a spell from among those cards without paying its mana cost.', [], 'Card Advantage'),
+    ('Exile the top eight cards of your library. You may put a land card from among them onto the battlefield. Until end of turn, for each nonland card type, you may cast a spell of that type from among the exiled cards without paying its mana cost.', [], 'Card Advantage'),
+])
+def test_card_access_beats_incidental_evasion(text, keywords, primary):
+    payload = dict(type_line='Creature', oracle_text=text, keywords=keywords)
+    evidence = classify(payload, ['evasion'], THEMES)
+    assert evidence[0]['name'] == primary
+
+
+def test_opponent_only_card_access_does_not_become_our_advantage():
+    evidence = classify(dict(type_line='Creature', oracle_text=
+        'Target opponent reveals the top card of their library and puts it into their hand.'))
+    assert not any(item['name'] == 'Card Advantage' for item in evidence)

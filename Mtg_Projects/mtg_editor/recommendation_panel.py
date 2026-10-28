@@ -35,13 +35,34 @@ CARD_TYPES = (
 
 
 def context_key(document):
-    data = document.to_dict()
+    from mtg_core.categorization import is_manual
+
     return (
-        data["deck"],
+        dict(
+            deck_id=document.deck.deck_id,
+            format=document.deck.format,
+            commander_entry_ids=list(document.deck.commander_entry_ids),
+            categories=[category.to_dict() for category in document.deck.categories],
+            entries=[
+                dict(
+                    entry_id=e.entry_id,
+                    card_id=e.card_id,
+                    oracle_id=e.oracle_id,
+                    name=e.name,
+                    quantity=e.quantity,
+                    section=e.section,
+                    facts=deepcopy(e.extras.get("facts")),
+                    category_ids=list(e.category_ids),
+                    tags=list(e.tags),
+                    manual=is_manual(e),
+                )
+                for e in document.deck.entries
+            ],
+        ),
         deepcopy(document.editor_preferences.get("guidance")),
         deepcopy(document.editor_preferences.get("manual_themes")),
         deepcopy(document.editor_preferences.get("recommendations")),
-        deepcopy(data.get("artwork_preferences")),
+        deepcopy(document.artwork_preferences),
         deepcopy(document.editor_preferences.get("discovery", {})),
         document.editor_preferences.get("edhrec_cohort", "inherit"),
     )
@@ -276,10 +297,15 @@ class RecommendationPanel(CardDropPanel):
         body.addWidget(self.filter_box)
         self.type_tabs = W.QTabBar()
         self.type_tabs.setExpanding(False)
+        self.type_tabs.setMinimumWidth(0)
         self.type_tabs.setUsesScrollButtons(True)
         self.type_tabs.setAccessibleName("Recommendation categories")
         self.type_tabs.currentChanged.connect(self.tab_category_changed)
-        body.addWidget(self.type_tabs)
+        navigation = W.QHBoxLayout()
+        body.removeWidget(self.browse_modes)
+        navigation.addWidget(self.browse_modes)
+        navigation.addWidget(self.type_tabs, 1)
+        body.addLayout(navigation)
         self.category_combo = W.QComboBox()
         self.category_combo.setAccessibleName("Recommendation category")
         self.category_combo.currentIndexChanged.connect(
@@ -348,9 +374,8 @@ class RecommendationPanel(CardDropPanel):
             self.controls_grid.setColumnStretch(0, 1)
 
     def update_navigation(self):
-        wide = self.width() >= max(850, self.type_tabs.sizeHint().width() + 24)
-        self.type_tabs.setVisible(wide)
-        self.category_combo.setVisible(not wide)
+        self.type_tabs.setVisible(True)
+        self.category_combo.setVisible(False)
 
     def populate_navigation(self):
         choices = (
@@ -740,7 +765,10 @@ class RecommendationPanel(CardDropPanel):
         if self.worker is not None:
             self.pending = True
             return
-        if self.loaded_key == self.key and not self.pending:
+        if self.loaded_key == self.key:
+            self.pending = False
+            if self.pending_page:
+                self.request_page()
             return
         self.timer.stop()
         self.pending = False
