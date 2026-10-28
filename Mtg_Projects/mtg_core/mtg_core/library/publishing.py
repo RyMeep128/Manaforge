@@ -4,6 +4,7 @@ Journal only the allowlisted public snapshot. Never retain local document extras
 printing state, credentials, or the user's subsequent edits in a pending request.
 """
 import json
+from hashlib import sha256
 import uuid
 
 from . import LibraryError
@@ -19,6 +20,50 @@ class PublicationJournal:
                 server_id TEXT, local_id TEXT, deck_id TEXT, revision INTEGER NOT NULL,
                 published INTEGER NOT NULL, pending TEXT,
                 PRIMARY KEY(server_id, local_id))''')
+
+            db.execute('''CREATE TABLE IF NOT EXISTS local_masters (
+                server_id TEXT, local_id TEXT, account_id TEXT NOT NULL, digest TEXT NOT NULL,
+                queued TEXT, paused INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(server_id, local_id))''')
+
+    @staticmethod
+    def master_snapshot(deck, color_identity, community=None):
+        snapshot = dict(deck=shared_deck(deck), color_identity=list(colors(color_identity)))
+        if community is not None:
+            from .category_evidence import clean_snapshot
+            snapshot['community'] = clean_snapshot(community)
+        return snapshot
+
+    @staticmethod
+    def master_digest(snapshot):
+        return sha256(json.dumps(snapshot, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+
+    def queue_master(self, local_id, *, deck, color_identity, community=None):
+        snapshot = self.master_snapshot(deck, color_identity, community)
+        digest = self.master_digest(snapshot)
+        with self.connections.db() as db:
+            rows = db.execute('SELECT server_id, digest, queued FROM local_masters WHERE local_id=?',
+                              (text(local_id),)).fetchall()
+            queued = 0
+            for row in rows:
+                if row['digest'] == digest and not row['queued']:
+                    continue
+                db.execute('UPDATE local_masters SET queued=? WHERE server_id=? AND local_id=?',
+                           (json.dumps(snapshot), row['server_id'], local_id))
+                queued += 1
+            return queued
+
+    def queued_masters(self):
+        with self.connections.db() as db:
+            rows = db.execute('SELECT * FROM local_masters WHERE queued IS NOT NULL AND paused=0 ORDER BY server_id, local_id').fetchall()
+            return [dict(row, snapshot=json.loads(row['queued'])) for row in rows]
+
+    def pause_master(self, server_id, local_id):
+        with self.connections.db() as db:
+            db.execute('UPDATE local_masters SET paused=1 WHERE server_id=? AND local_id=?', (server_id, local_id))
+
+    def unlink_server(self, server_id):
+        with self.connections.db() as db:
+            db.execute('DELETE FROM local_masters WHERE server_id=?', (server_id,))
 
     def get(self, server_id, local_id):
         with self.connections.db() as db:
@@ -61,6 +106,10 @@ class PublicationJournal:
             else:
                 db.execute('UPDATE publication_links SET pending=? WHERE server_id=? AND local_id=?',
                            (json.dumps(operation), server_id, local_id))
+            if not unpublish:
+                desired = self.master_snapshot(operation['deck'], operation['color_identity'], operation.get('community'))
+                db.execute('INSERT OR IGNORE INTO local_masters VALUES (?, ?, ?, ?, ?, 0)',
+                           (server_id, local_id, account_id, '', json.dumps(desired)))
             return operation
 
     def send(self, client, server_id, local_id, **snapshot):
@@ -87,6 +136,18 @@ class PublicationJournal:
             db.execute('''UPDATE publication_links SET deck_id=?, revision=?, published=?, pending=NULL
                           WHERE server_id=? AND local_id=?''',
                        (result['deck_id'], result['revision'], int(operation['kind'] == 'publish'), server_id, local_id))
+            if operation['kind'] == 'publish':
+                sent = self.master_snapshot(operation['deck'], operation['color_identity'], operation.get('community'))
+                digest = self.master_digest(sent)
+                previous = db.execute('SELECT queued FROM local_masters WHERE server_id=? AND local_id=?',
+                                      (server_id, local_id)).fetchone()
+                queued = previous['queued'] if previous else None
+                if queued and self.master_digest(json.loads(queued)) == digest:
+                    queued = None
+                db.execute('INSERT OR REPLACE INTO local_masters VALUES (?, ?, ?, ?, ?, 0)',
+                           (server_id, local_id, client.account_id, digest, queued))
+            else:
+                db.execute('DELETE FROM local_masters WHERE server_id=? AND local_id=?', (server_id, local_id))
         return result
 
     def accept_reviewed_revision(self, server_id, local_id, publication):

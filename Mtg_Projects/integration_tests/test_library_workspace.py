@@ -720,3 +720,28 @@ def test_editable_copy_uses_clicked_source_name_and_emits_saved_path(app, tmp_pa
     assert DeckStore().load(copied[0]).deck.name == value['deck']['name'] + ' [Clicked library]'
     workspace.close()
     app.processEvents()
+
+
+def test_local_master_sync_requires_matching_account_and_pauses_on_conflict(app, tmp_path, monkeypatch):
+    workspace = LibraryWorkspace(object(), root=tmp_path)
+    client = SimpleNamespace(url='https://friend.invalid', token='session', account_id='other')
+    server = str(uuid.uuid4())
+    connection = workspace.connections.add(client, {'server_id': server, 'name': 'Friends'})
+    workspace.clients[connection['id']] = client
+    queued = dict(server_id=server, local_id='local', account_id='owner',
+                  snapshot={'deck': {'name': 'Local master'}, 'color_identity': ['U']})
+    monkeypatch.setattr(workspace.publications, 'queued_masters', lambda: [queued])
+    calls = []
+    monkeypatch.setattr(workspace, 'submit', lambda label, work, complete, **kwargs: (calls.append(label), complete(work())))
+    workspace.sync_local_master()
+    assert calls == []
+    client.account_id = 'owner'
+    monkeypatch.setattr(workspace.publications, 'send', lambda *args, **kwargs: (_ for _ in ()).throw(LibraryError(409, 'Revision changed')))
+    paused = []
+    monkeypatch.setattr(workspace.publications, 'pause_master', lambda *args: paused.append(args))
+    workspace.sync_local_master()
+    assert len(calls) == 1
+    assert paused == [(server, 'local')]
+    assert 'paused' in workspace.connection_status.text()
+    workspace.close()
+    app.processEvents()

@@ -1576,7 +1576,7 @@ class EditorWindow(W.QMainWindow):
         handler = getattr(self, 'publish_deck_handler', None)
         if handler is None or self.task is not None or not self._has_active_deck:
             return
-        if self.save():
+        if self.save(sync_library=False):
             from mtg_core.library.publishing import suggested_colors
             snapshot = deepcopy(self.document.deck.to_dict())
             from mtg_core.library.category_evidence import manual_snapshot
@@ -1586,7 +1586,7 @@ class EditorWindow(W.QMainWindow):
             else:
                 handler(snapshot, suggested_colors(self.document.deck))
 
-    def save(self):
+    def save(self, *, sync_library=True):
         if not self._has_active_deck:
             return True
         self.view_scrolls[self._active_view] = self.view_scrollbar(self._active_view).value()
@@ -1595,6 +1595,8 @@ class EditorWindow(W.QMainWindow):
             self.edit_metadata()
         self.autosave.stop()
         if not self.session.dirty and self.path:
+            if sync_library:
+                self.queue_library_master()
             return True
         try:
             destination = self.session.save()
@@ -1604,7 +1606,23 @@ class EditorWindow(W.QMainWindow):
             return False
         self.changed()
         self.statusBar().showMessage(f'Saved: {destination}')
+        if sync_library:
+            self.queue_library_master()
         return True
+
+    def queue_library_master(self):
+        handler = getattr(self, 'library_sync_handler', None)
+        if callable(handler):
+            import sqlite3
+            from mtg_core.library import LibraryError
+            from mtg_core.library.publishing import suggested_colors
+            from mtg_core.library.category_evidence import manual_snapshot
+            snapshot = deepcopy(self.document.deck.to_dict())
+            snapshot['_manual_category_evidence'] = manual_snapshot(self.document)
+            try:
+                handler(snapshot, suggested_colors(self.document.deck))
+            except (OSError, ValueError, sqlite3.Error, LibraryError):
+                self.statusBar().showMessage('Saved locally. Library sync could not be queued; save again to retry.')
 
     def replace_document(self, document, path=None):
         self.session.replace_document(document, path)

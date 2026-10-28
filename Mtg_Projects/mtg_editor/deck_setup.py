@@ -130,7 +130,7 @@ class DeckSetupDialog(W.QDialog):
                 index = self.library.count() - 1
             self.library.setCurrentIndex(index)
         library_layout.addWidget(self.library)
-        note = W.QLabel('Choose a library to upload your deck when you create it.'
+        note = W.QLabel('Upload on creation. This local deck remains the master; future saves update the library automatically.'
                        if libraries else 'No signed-in libraries available. You can connect one in Browse Online later.')
         note.setWordWrap(True)
         library_layout.addWidget(note)
@@ -208,7 +208,7 @@ class DeckSetupDialog(W.QDialog):
             self.themes.show()
             self.tabs.removeTab(self.tabs.indexOf(library_page))
             library_layout.setContentsMargins(0, 0, 0, 0)
-            library_layout.insertWidget(0, W.QLabel('Save to'))
+            library_layout.insertWidget(0, W.QLabel('Library destination'))
             finishing_layout.addWidget(library_page)
             library_page.show()
             self.library_page = library_page

@@ -430,3 +430,22 @@ normal database backups include it. Old clients and servers remain compatible.
 Evidence from outdated revisions, unpublished decks and inactive owners is excluded.
 See [categorization policy](card-categorization.md) for cache retention, consent,
 deduplication, conservative weighting and evaluation limitations.
+
+
+### Local master uploads
+
+Uploading creates an account-bound link from the local deck ID to the library deck
+ID and revision. Subsequent successful local saves, including autosaves, queue a
+one-way update to that same publication. The local deck remains the master; this
+process never downloads edits into it. Private printing state is still omitted.
+
+Saves coalesce into the latest durable public snapshot. Interrupted requests replay
+their existing operation ID before sending newer edits. Background updates require
+a signed-in connection for the original account. Offline updates remain queued
+across restarts and retry when the connection is available. Revision conflicts and
+other rejected requests pause automatic updates; review and explicitly publish to
+resume. Unpublishing or removing the connection stops automatic updates.
+
+Links created before automatic synchronization was introduced require one explicit
+upload to establish the account-bound master link. Local copies of other people's
+decks remain independent unless you explicitly upload them yourself.

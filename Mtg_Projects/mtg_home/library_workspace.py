@@ -2,6 +2,7 @@
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import sqlite3
+from time import monotonic
 
 from PyQt6 import QtCore as C, QtGui as G, QtWidgets as W
 from mtg_core.downloads import DownloadCancelled
@@ -29,6 +30,7 @@ class _LocalArtwork:
 
 class LibraryWorkspace(W.QMainWindow):
     copyCreated = C.pyqtSignal(object)
+    masterSyncStatus = C.pyqtSignal(str)
     followUpdates = C.pyqtSignal(str, int)
     editorRequested = C.pyqtSignal()
 
@@ -39,6 +41,11 @@ class LibraryWorkspace(W.QMainWindow):
         self.saved_sessions = SavedSessions(self.connections.path.parent)
         self._saved_restore_attempted = False
         self.publications = PublicationJournal(self.connections)
+        self.master_retry = {}
+        self.master_timer = C.QTimer(self)
+        self.master_timer.setInterval(30000)
+        self.master_timer.timeout.connect(self.sync_local_master)
+        self.master_timer.start()
         self.followed = FollowedDecks(self.connections)
         from mtg_core.library.recommendations import LibraryRecommendations
         self.recommendations = LibraryRecommendations(self.connections.path.parent / 'library-recommendations.sqlite3')
@@ -531,6 +538,55 @@ class LibraryWorkspace(W.QMainWindow):
                 'Remove this saved connection? Your local decks and followed copies will stay on this computer.') == W.QMessageBox.StandardButton.Yes:
             self.remove(connection=connection)
 
+    def closeEvent(self, event):
+        self.master_timer.stop()
+        super().closeEvent(event)
+
+    def sync_local_master(self):
+        self.master_timer.setInterval(30000)
+        if self._job or self.jobs.busy:
+            return
+        try:
+            pending = self.publications.queued_masters()
+            connections = self.connections.list()
+        except (OSError, sqlite3.Error):
+            self.masterSyncStatus.emit('Saved locally. Library sync storage is unavailable; queued updates will retry.')
+            return
+        for queued in pending:
+            key = queued['server_id'], queued['local_id']
+            if self.master_retry.get(key, 0) > monotonic():
+                continue
+            connection = next((row for row in connections if row['server_id'] == queued['server_id']), None)
+            client = self.clients.get(connection['id']) if connection else None
+            if not client or not client.token or getattr(client, 'account_id', None) != queued['account_id']:
+                continue
+            snapshot = queued['snapshot']
+            def work(client=client, queued=queued, snapshot=snapshot):
+                try:
+                    return dict(result=self.publications.send(client, queued['server_id'], queued['local_id'], **snapshot))
+                except LibraryError as error:
+                    return dict(error=str(error), status=error.status)
+            def complete(value, queued=queued, connection=connection, snapshot=snapshot):
+                if 'error' in value:
+                    if 400 <= value['status'] < 500:
+                        self.publications.pause_master(queued['server_id'], queued['local_id'])
+                        message = 'Library sync paused. Review and publish this deck to resume: ' + value['error']
+                    else:
+                        self.master_retry[(queued['server_id'], queued['local_id'])] = monotonic() + 60
+                        message = 'Saved locally. Library update queued for retry: ' + value['error']
+                else:
+                    self.master_retry.pop((queued['server_id'], queued['local_id']), None)
+                    self._load_after_signin = True
+                    message = snapshot['deck']['name'] + ' updated in ' + connection['name'] + '.'
+                self.states[connection['id']] = message
+                self.connection_status.setText(message)
+                self.masterSyncStatus.emit(message)
+            def failed(message, queued=queued):
+                self.master_retry[(queued['server_id'], queued['local_id'])] = monotonic() + 60
+                self.masterSyncStatus.emit('Saved locally. Library update queued for retry: ' + message)
+            self.submit('Updating library from local master', work, complete, on_error=failed)
+            return
+
     def submit(self, operation, work, complete, *, with_context=False, on_error=None):
         if self._job or self.jobs.busy:
             return
@@ -734,6 +790,7 @@ class LibraryWorkspace(W.QMainWindow):
             self.recommendations.revoke(connection['server_id'])
             self.category_evidence.revoke(connection['server_id'])
             self.forget_saved_sign_in(connection, client)
+            self.publications.unlink_server(connection['server_id'])
             self.connections.remove(connection['id'])
         def complete(_):
             for mapping in (self.clients, self.views, self.states, self.connection_errors):
@@ -1005,6 +1062,7 @@ class LibraryWorkspace(W.QMainWindow):
         # Clear memory credentials at exit, without making a network request during shutdown.
         for client in self.clients.values():
             client.token = None
+        self.master_timer.stop()
         self.following.timer.stop()
         self.search_timer.stop()
         if self._signin_dialog is not None:

@@ -183,3 +183,22 @@ def test_starting_and_precon_finish_do_not_start_commander_discovery(tmp_path, m
     dialog.reject()
     editor.close()
     app.processEvents()
+
+
+def test_successful_saves_and_autosaves_queue_master_updates(tmp_path):
+    app = W.QApplication.instance() or W.QApplication([])
+    editor = EditorWindow(service=object(), root=tmp_path)
+    calls = []
+    editor.library_sync_handler = lambda deck, color: calls.append((deck['name'], color))
+    editor.replace_document(DeckDocument())
+    assert editor.save()
+    assert len(calls) == 1
+    editor.name.setText('Autosaved edit')
+    editor.autosave.timeout.emit()
+    assert calls[-1][0] == 'Autosaved edit'
+    count = len(calls)
+    assert editor.save(sync_library=False)
+    assert len(calls) == count
+    editor.library_sync_handler = None
+    editor.close()
+    app.processEvents()

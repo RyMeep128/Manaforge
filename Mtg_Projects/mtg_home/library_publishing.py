@@ -44,7 +44,7 @@ class PublishingPanel(W.QDialog):
         self.error.hide()
         form.addWidget(self.error)
         form.addStretch()
-        form.addWidget(plain_label('Your local printing status stays private.', 'muted'))
+        form.addWidget(plain_label('Your local deck is the master. Future saves update this library deck automatically. Local printing status stays private.', 'muted'))
         footer = W.QHBoxLayout()
         self.more_button = W.QToolButton()
         self.more_button.setText('More')
@@ -154,7 +154,7 @@ class PublishingPanel(W.QDialog):
             if pending['kind'] == 'publish':
                 self.colors.setText(''.join(pending['color_identity']) or 'C')
         elif link and link['deck_id']:
-            caption = f"Publish a new version to {connection['name']}. Last published revision: {link['revision']}."
+            caption = f"Local master linked to {connection['name']}. Last uploaded revision: {link['revision']}."
         else:
             caption = 'Share this deck in ' + connection['name'] + '.'
         self.summary.setText(caption)

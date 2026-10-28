@@ -154,3 +154,57 @@ def test_pending_operations_cannot_be_changed_into_other_actions(tmp_path, snaps
 def test_suggested_colors_use_existing_local_card_facts(snapshot):
     assert suggested_colors(Deck.from_dict(snapshot)) == 'U'
     assert suggested_colors(Deck()) == 'C'
+
+
+def test_local_master_coalesces_saves_and_updates_same_publication(tmp_path, snapshot):
+    journal, client = PublicationJournal(LibraryConnections(tmp_path)), Client()
+    local_id = snapshot['deck_id']
+    original = journal.send(client, client.server_id, local_id, deck=snapshot, color_identity=['U'])
+    assert journal.queue_master(local_id, deck=snapshot, color_identity=['U']) == 0
+    snapshot['name'] = 'First edit'
+    assert journal.queue_master(local_id, deck=snapshot, color_identity=['U']) == 1
+    snapshot['name'] = 'Latest edit'
+    journal.queue_master(local_id, deck=snapshot, color_identity=['U'])
+    restarted = PublicationJournal(LibraryConnections(tmp_path))
+    queued = restarted.queued_masters()
+    assert len(queued) == 1
+    assert queued[0]['snapshot']['deck']['name'] == 'Latest edit'
+    assert 'owned' not in queued[0]['snapshot']['deck']['entries'][0]
+    updated = restarted.send(client, client.server_id, local_id, **queued[0]['snapshot'])
+    assert updated['deck_id'] == original['deck_id']
+    assert updated['revision'] == original['revision'] + 1
+    assert restarted.queued_masters() == []
+
+
+def test_initial_offline_upload_keeps_latest_master_behind_safe_retry(tmp_path, snapshot):
+    journal, client = PublicationJournal(LibraryConnections(tmp_path)), Client()
+    local_id = snapshot['deck_id']
+    client.fail_after_upload = True
+    with pytest.raises(LibraryError):
+        journal.send(client, client.server_id, local_id, deck=snapshot, color_identity=['U'])
+    first = deepcopy(client.operations[0])
+    snapshot['name'] = 'Newer local edit'
+    journal.queue_master(local_id, deck=snapshot, color_identity=['U'])
+    queued = journal.queued_masters()[0]
+    journal.send(client, client.server_id, local_id, **queued['snapshot'])
+    assert client.operations[1] == first
+    queued = journal.queued_masters()[0]
+    journal.send(client, client.server_id, local_id, **queued['snapshot'])
+    assert client.operations[2]['deck']['name'] == 'Newer local edit'
+    assert client.operations[2]['deck_id'] == client.remote_id
+    assert not journal.queued_masters()
+
+
+def test_pause_and_unpublish_stop_automatic_master_updates(tmp_path, snapshot):
+    journal, client = PublicationJournal(LibraryConnections(tmp_path)), Client()
+    local_id = snapshot['deck_id']
+    journal.send(client, client.server_id, local_id, deck=snapshot, color_identity=['U'])
+    journal.pause_master(client.server_id, local_id)
+    snapshot['name'] = 'Local only while paused'
+    journal.queue_master(local_id, deck=snapshot, color_identity=['U'])
+    assert not journal.queued_masters()
+    journal.send(client, client.server_id, local_id, deck=snapshot, color_identity=['U'])
+    assert not journal.queued_masters()
+    journal.send(client, client.server_id, local_id, unpublish=True)
+    snapshot['name'] = 'Unpublished edits'
+    assert journal.queue_master(local_id, deck=snapshot, color_identity=['U']) == 0

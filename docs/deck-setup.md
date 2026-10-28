@@ -66,3 +66,10 @@ removing them from their tabs. The precon summary has a bounded height so both
 controls remain visible. Starting-point and precon-finishing pages use the local
 theme catalog immediately; they do not run commander discovery to populate themes.
 Commander searches run only on the commander page and cancel when leaving it.
+
+
+Library destination means upload plus a one-way local-master link. Successful saves
+and autosaves update the same uploaded deck automatically, with durable offline
+queuing. Library changes never replace the local master. The publishing dialog
+shows this behavior before uploading; existing older publications need one explicit
+upload to establish their account-bound master link.

@@ -73,6 +73,7 @@ class ModuleController(C.QObject):
                     window = EditorWindow(service=self.service)
                     window.print_project_handler = self.open_print_project
                     window.publish_deck_handler = self.publish_deck
+                    window.library_sync_handler = self.queue_library_sync
                     window.deck_libraries_provider = self.deck_libraries
                     window.publish_action.setEnabled(True)
                 elif module.action == 'printer':
@@ -86,6 +87,7 @@ class ModuleController(C.QObject):
                     window = LibraryWorkspace(self.service, jobs=self.jobs)
                     window.editorRequested.connect(lambda: self.open_module('editor'))
                     window.copyCreated.connect(self.open_copied_deck)
+                    window.masterSyncStatus.connect(lambda message: self.home.statusBar().showMessage(message, 15000))
                     window.followUpdates.connect(lambda name, count: self.home.statusBar().showMessage(
                         f'{name}: {count} followed deck update(s) available. Open Browse Online to review.', 15000))
                 else:
@@ -110,6 +112,23 @@ class ModuleController(C.QObject):
         editor = self.windows.get('editor')
         if editor is not None:
             editor.open_path(Path(path))
+
+    def queue_library_sync(self, snapshot, color_identity):
+        from mtg_core.library.client import LibraryConnections
+        from mtg_core.library.publishing import PublicationJournal
+        journal = PublicationJournal(LibraryConnections(data_root()))
+        if not journal.queue_master(snapshot['deck_id'], deck=snapshot, color_identity=color_identity,
+                                    community=snapshot.get('_manual_category_evidence')):
+            return
+        previous = self.home.current_workspace
+        if 'library' not in self.windows:
+            self.open_module('library')
+            if previous in self.home.navigation:
+                self.home.show_workspace(previous)
+        library = self.windows.get('library')
+        if library is not None:
+            library.master_timer.start(2000)
+        self.home.statusBar().showMessage('Saved locally. Library update queued.', 8000)
 
     def publish_deck(self, snapshot, color_identity, *, upload=False):
         self.open_module('library')
