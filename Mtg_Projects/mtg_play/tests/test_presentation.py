@@ -369,7 +369,7 @@ def test_home_preview_is_lazy_persistent_and_disabled_for_installed_builds(
     from mtg_home.modules import MODULES, module_available
     import sys
 
-    monkeypatch.setenv("MANAFORGE_ENABLE_LOCAL_PLAY", "1")
+    monkeypatch.delenv("MANAFORGE_ENABLE_LOCAL_PLAY", raising=False)
     monkeypatch.setattr(sys, "frozen", False, raising=False)
     play = next(module for module in MODULES if module.key == "play")
     assert module_available(play)
@@ -395,6 +395,7 @@ def test_home_preview_is_lazy_persistent_and_disabled_for_installed_builds(
     controller.open_module("play")
     assert len(created) == 1
     assert not created[0].isWindow()
+    monkeypatch.setenv("MANAFORGE_ENABLE_LOCAL_PLAY", "1")
     monkeypatch.setattr(sys, "frozen", True, raising=False)
     assert not module_available(play)
     assert home.close()

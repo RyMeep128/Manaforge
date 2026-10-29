@@ -29,7 +29,8 @@ def test_artwork_audit_failures_do_not_open_automatic_update_prompt(app, monkeyp
     home.close()
 
 
-def test_home_registry_disabled_play_keyboard_and_responsive_layout(app):
+def test_home_registry_disabled_play_keyboard_and_responsive_layout(app, monkeypatch):
+    monkeypatch.setenv('MANAFORGE_ENABLE_LOCAL_PLAY', '0')
     home = HomeWindow()
     activated = []
     home.moduleRequested.connect(activated.append)
@@ -51,7 +52,8 @@ def test_home_registry_disabled_play_keyboard_and_responsive_layout(app):
     home.close()
 
 
-def test_controller_reuses_workspaces_inside_the_same_window(app):
+def test_controller_reuses_workspaces_inside_the_same_window(app, monkeypatch):
+    monkeypatch.setenv('MANAFORGE_ENABLE_LOCAL_PLAY', '0')
     home = HomeWindow()
     created = []
     def factory():

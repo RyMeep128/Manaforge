@@ -22,8 +22,9 @@ Implemented, awaiting CI verification:
   waits for owned engine cleanup and respects the game-close confirmation.
 - Scripted session tests are collected by the existing Windows/Python CI suite.
 
-Source-only preview: set `MANAFORGE_ENABLE_LOCAL_PLAY=1` before starting Manaforge.
-This enables the existing homepage tile and navigation entry. Frozen/installed
+Source-only preview: Play is enabled by default when running this branch from
+source, including its homepage tile and navigation entry. Set
+`MANAFORGE_ENABLE_LOCAL_PLAY=0` to hide it during development. Frozen/installed
 builds keep Play disabled even when the environment variable is present. Opening
 Play loads saved deck metadata; only **Start Game** starts the optional runtime.
 No runtime is downloaded, upgraded or bundled by this change.
