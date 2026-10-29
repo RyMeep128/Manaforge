@@ -8,7 +8,7 @@ from mtg_core.diagnostics import get_logger
 from mtg_core.paths import data_root
 from mtg_ui.theme import application_stylesheet
 from mtg_ui.tooltips import disable_hover_tooltips
-from .modules import MODULES
+from .modules import MODULES, module_available
 from .navigation import request_home
 
 
@@ -56,7 +56,7 @@ class ModuleController(C.QObject):
             self.home.show_workspace(key)
             return
         module = next((item for item in MODULES if item.key == key), None)
-        if module is None or not module.available:
+        if module is None or not module_available(module):
             return
         try:
             window = self.windows.get(key)
@@ -92,6 +92,9 @@ class ModuleController(C.QObject):
                     window.masterSyncStatus.connect(lambda message: self.home.statusBar().showMessage(message, 15000))
                     window.followUpdates.connect(lambda name, count: self.home.statusBar().showMessage(
                         f'{name}: {count} followed deck update(s) available. Open Browse Online to review.', 15000))
+                elif module.action == 'play':
+                    from mtg_play.workspace import PlayWorkspace
+                    window = PlayWorkspace(self.service, self.show_home)
                 else:
                     return
                 self.home.add_workspace(key, window)
@@ -165,6 +168,12 @@ class ModuleController(C.QObject):
             return []
 
     def shutdown(self):
+        play = self.windows.get('play')
+        if play is not None and not play.prepare_to_close():
+            self.home.show_workspace('play')
+            if play.session.closing or (not play.session.active and (play.session.busy or play.catalog_jobs.busy)):
+                C.QTimer.singleShot(250, self.home.close)
+            return False
         if self.jobs.busy:
             self.jobs.cancel_all()
             self.home.statusBar().showMessage('Cancelling background downloads before closing...')

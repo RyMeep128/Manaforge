@@ -2,21 +2,21 @@
 from PyQt6 import QtCore as C, QtGui as G, QtWidgets as W
 from mtg_ui.theme import COLORS
 from mtg_proxy.constants import APP_VERSION
-from .modules import MODULES
+from .modules import MODULES, module_available
 
 
 class ModuleTile(W.QAbstractButton):
     def __init__(self, module, parent=None):
         super().__init__(parent)
         self.module = module
-        self.setEnabled(module.available)
+        self.setEnabled(module_available(module))
         self.setMinimumSize(280, 195)
         self.setSizePolicy(W.QSizePolicy.Policy.Expanding, W.QSizePolicy.Policy.Fixed)
         self.setFixedHeight(205)
         self.setFocusPolicy(C.Qt.FocusPolicy.StrongFocus)
-        self.setCursor(C.Qt.CursorShape.PointingHandCursor if module.available else C.Qt.CursorShape.ArrowCursor)
+        self.setCursor(C.Qt.CursorShape.PointingHandCursor if module_available(module) else C.Qt.CursorShape.ArrowCursor)
         self.setAccessibleName(module.title)
-        self.setAccessibleDescription(module.description + (' Available.' if module.available else ' Coming soon.'))
+        self.setAccessibleDescription(module.description + (' Available.' if module_available(module) else ' Coming soon.'))
 
     def sizeHint(self):
         return C.QSize(440, 205)
@@ -159,7 +159,7 @@ class HomeWindow(W.QMainWindow):
         group = G.QActionGroup(self)
         group.setExclusive(True)
         for key, title, enabled in [('home', 'Home', True)] + [
-                (module.key, module.title, module.available) for module in MODULES] + [('help', 'Help', True)]:
+                (module.key, module.title, module_available(module)) for module in MODULES] + [('help', 'Help', True)]:
             action = navigation.addAction(title)
             action.setCheckable(True)
             action.setEnabled(enabled)
