@@ -10,6 +10,15 @@ from .adapter import AdapterError, LocalGameAdapter
 from .contracts import GameSetup, MatchSeat
 
 
+def checked_poll(session, player_id):
+    """Keep the adapter's public failure code rather than replacing it."""
+    events = session.poll(player_id)
+    for event in events:
+        if event.kind == "session_failed":
+            raise AdapterError(event.code or "ACCEPTANCE_SESSION_FAILED")
+    return events
+
+
 def fixture_deck() -> DeckDocument:
     return DeckDocument(
         deck=Deck(
@@ -56,7 +65,7 @@ def acceptance(adapter: LocalGameAdapter) -> dict:
     deadline = time.monotonic() + 90
     while time.monotonic() < deadline:
         for seat in setup.seats:
-            session.poll(seat.seat_id)
+            checked_poll(session, seat.seat_id)
             try:
                 snapshot = session.snapshot(seat.seat_id)
             except AdapterError as error:
@@ -186,7 +195,7 @@ def combat_acceptance(adapter: LocalGameAdapter) -> dict:
     deadline = time.monotonic() + 150
     while time.monotonic() < deadline:
         for seat in setup.seats:
-            session.poll(seat.seat_id)
+            checked_poll(session, seat.seat_id)
             try:
                 view = session.snapshot(seat.seat_id)
             except AdapterError as error:
@@ -444,7 +453,7 @@ def commander_acceptance(adapter: LocalGameAdapter, seats: int) -> dict:
     deadline = time.monotonic() + 120
     while time.monotonic() < deadline:
         for seat in setup.seats:
-            session.poll(seat.seat_id)
+            checked_poll(session, seat.seat_id)
             try:
                 view = session.snapshot(seat.seat_id)
             except AdapterError as error:
@@ -452,6 +461,7 @@ def commander_acceptance(adapter: LocalGameAdapter, seats: int) -> dict:
                     continue
                 raise
             if view.status == "failed":
+                checked_poll(session, seat.seat_id)
                 raise AdapterError("COMMANDER_SESSION_FAILED")
             if view.status == "active" and seat.seat_id not in report["started"]:
                 report["started"].append(seat.seat_id)

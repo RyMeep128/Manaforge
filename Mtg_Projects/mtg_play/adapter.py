@@ -264,15 +264,34 @@ class LocalGameAdapter:
             raise AdapterError("ENGINE_CONTROL_LOST") from error
         response = directory / "manaforge-responses" / (request + ".json")
         deadline = time.monotonic() + 30
+        payload = None
+        loaded = False
+        access_blocked = False
         while time.monotonic() < deadline:
-            if response.is_file():
-                payload = json.loads(response.read_text(encoding="utf-8"))
+            try:
+                if not loaded:
+                    payload = json.loads(response.read_text(encoding="utf-8"))
+                    loaded = True
                 response.unlink()  # Private deck-resolution payload is transient.
                 return payload
+            except PermissionError:
+                # Windows may briefly retain a sharing lock after Java's atomic
+                # move. Retry this response file, never resend the request. If
+                # deletion is locked, retain the parsed payload until cleanup.
+                access_blocked = True
+            except FileNotFoundError:
+                if loaded:
+                    return payload  # Already removed; no private payload remains.
+            except (OSError, ValueError) as error:
+                raise AdapterError("SERVER_RESPONSE_INVALID") from error
             if server.poll() is not None:
                 raise AdapterError("ENGINE_EXITED")
             time.sleep(0.01)
-        raise AdapterError("SERVER_CONTROL_TIMEOUT")
+        raise AdapterError(
+            "SERVER_RESPONSE_ACCESS_TIMEOUT"
+            if access_blocked
+            else "SERVER_CONTROL_TIMEOUT"
+        )
 
     def _resolve(self, queries):
         return self._server_request(cards=queries)
