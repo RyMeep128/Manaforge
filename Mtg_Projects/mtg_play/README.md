@@ -122,7 +122,10 @@ requires preserving applicable engine/dependency notices and a separate packagin
 review. Forge remains untouched and is not a dependency of this experiment.
 
 
-## Gameplay feasibility (adapter epic, Milestone A)
+## Gameplay feasibility (adapter epic, historical Milestone A)
+
+The current public adapter and capability status are documented in [ADAPTER.md](ADAPTER.md).
+The following describes the original feasibility milestone.
 
 Run the same pinned, isolated engine with two independent human sessions:
 
@@ -199,11 +202,11 @@ engine diagnostics and must not be distributed as visibility-safe public events.
 
 ### Capability status and remaining epic work
 
-**Milestone A only:** two-player fixture-deck gameplay has been demonstrated with
+**At Milestone A:** two-player fixture-deck gameplay was demonstrated with
 the pinned engine. A game ending by concession is verified; representative combat
 and a game ending through damage are not yet acceptance scenarios.
 
-This is **not** the completed gameplay adapter. Stories 2?12 remain: a stable
+At that milestone the remaining work in Stories 2?12 included: a stable
 Manaforge-owned API, Core deck/Oracle and selected-printing resolution, object
 identity across zone changes, comprehensive state/dynamic characteristics,
 validated legal-action and decision contracts, exhaustive visibility scenarios,

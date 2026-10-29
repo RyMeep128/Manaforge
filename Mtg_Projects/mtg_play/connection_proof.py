@@ -41,6 +41,7 @@ EVENTS = {
     "decision",
     "response_sent",
     "game_over",
+    "game_result",
     "concede_sent",
 }
 
@@ -261,7 +262,9 @@ def wait_for_server(process: subprocess.Popen, log: Path, deadline: float):
     raise ProofError(f"XMage server startup timed out; inspect {log}")
 
 
-def run_proof(bundle: Path, jdk: Path, port: int = 0, scenario=None) -> dict:
+def run_proof(
+    bundle: Path, jdk: Path, port: int = 0, scenario=None, runtime_consumer=None
+) -> dict:
     java, javac, manifest = validate_installation(bundle, jdk)
     workspace = (
         HERE / ".runtime" / (time.strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:8])
@@ -373,7 +376,7 @@ def run_proof(bundle: Path, jdk: Path, port: int = 0, scenario=None) -> dict:
         if not events.callbacks:
             events.wait("callback", deadline)
         result.update({"status": status, "callbacks": list(events.callbacks)})
-        if scenario is not None:
+        if scenario is not None or runtime_consumer is not None:
 
             def launch_peer():
                 peer_dir = workspace / ("peer-" + str(len(peers)))
@@ -397,7 +400,12 @@ def run_proof(bundle: Path, jdk: Path, port: int = 0, scenario=None) -> dict:
                 peers.append((peer, peer_events))
                 return peer, peer_events
 
-            result["gameplay"] = scenario(bridge_process, events, launch_peer, port)
+            if runtime_consumer is not None:
+                runtime_consumer(
+                    bridge_process, events, launch_peer, port, server_process, server
+                )
+            if scenario is not None:
+                result["gameplay"] = scenario(bridge_process, events, launch_peer, port)
         send(bridge_process, "shutdown", "shutdown-1")
         shutdown = events.wait(
             "shutdown", time.monotonic() + STOP_TIMEOUT, "shutdown-1"
