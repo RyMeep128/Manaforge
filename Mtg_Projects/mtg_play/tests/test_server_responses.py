@@ -164,7 +164,9 @@ def test_commander_keeps_all_hands_before_conceding_and_waits_for_game_over(
         kept.add(player)
         return SimpleNamespace(outcome="submitted")
 
-    session = SimpleNamespace(poll=poll, snapshot=snapshot, concede=concede, choose=choose)
+    session = SimpleNamespace(
+        poll=poll, snapshot=snapshot, concede=concede, choose=choose
+    )
     adapter = SimpleNamespace(create_game=lambda *args: session)
     monkeypatch.setattr("mtg_play.adapter_acceptance.time.sleep", lambda seconds: None)
     if reject:
