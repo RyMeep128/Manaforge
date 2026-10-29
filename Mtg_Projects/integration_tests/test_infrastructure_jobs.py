@@ -66,3 +66,18 @@ def test_shutdown_cancels_active_and_pending_jobs_without_destroying_thread():
     drain(app, lambda: not queue.busy)
     assert queue.shutdown()
     assert {e[0] for e in receiver.events if e[1] == "cancelled"} == {first, pending}
+
+
+def test_quiet_poll_jobs_do_not_write_routine_operation_history(monkeypatch):
+    app = W.QApplication.instance() or W.QApplication([])
+    recorded = []
+    monkeypatch.setattr(
+        "mtg_core.repair.record_operation", lambda *args: recorded.append(args)
+    )
+    queue = JobQueue()
+    queue.submit(lambda cancel, progress: "poll complete", quiet=True)
+    drain(app, lambda: not queue.busy)
+    assert not recorded
+    queue.submit(lambda cancel, progress: "normal complete")
+    drain(app, lambda: not queue.busy)
+    assert len(recorded) == 1 and recorded[0][1] == "completed"

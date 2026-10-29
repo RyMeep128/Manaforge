@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "engine": {
+    "url": "https://xmage.today/files/mage-full_1.4.62-dev_2026-10-03_20-47.zip",
+    "sha256": "d256251ae41155638233c2cb20a7fec82f3f2dea7a468976691664c55e357b16",
+    "prefix": "xmage/mage-server/",
+    "destination": ""
+  },
+  "runtime": {
+    "url": "https://xmage.today/java/jre-8u201-windows-x64.zip",
+    "sha256": "fe505395a3b65863feaf46aacaa19d823864ba7f9f2aa8eba9d0103f60d37ec3",
+    "prefix": "jre1.8.0_201/",
+    "destination": "java/"
+  }
+}

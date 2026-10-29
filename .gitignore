@@ -227,3 +227,7 @@ Mtg_Projects/mtg_proxy/projects/tmp_images/
 
 # Per-user encrypted library sessions are private configuration.
 **/library-sessions/
+
+# Local XMage feasibility downloads and generated runtime files.
+/Mtg_Projects/mtg_play/mage-full_*/
+/Mtg_Projects/mtg_play/.runtime/

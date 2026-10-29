@@ -258,13 +258,13 @@ def test_editor_forwards_a_saved_snapshot_only_for_explicit_publish():
     snapshots, saves = [], []
     document = DeckDocument(deck=Deck(name='Local deck', entries=[DeckEntry('one', 'Card')]))
     editor = SimpleNamespace(task=None, _has_active_deck=True, document=document,
-                             save=lambda: saves.append(True) or True,
+                             save=lambda *, sync_library=True: saves.append(sync_library) or True,
                              publish_deck_handler=lambda deck, color: snapshots.append((deck, color)))
     EditorWindow.publish_to_library(editor)
-    assert saves == [True] and snapshots[0][0]['name'] == 'Local deck'
+    assert saves == [False] and snapshots[0][0]['name'] == 'Local deck'
     document.deck.name = 'Changed later'
     assert snapshots[0][0]['name'] == 'Local deck'
-    editor.save = lambda: False
+    editor.save = lambda *, sync_library=True: False
     EditorWindow.publish_to_library(editor)
     assert len(snapshots) == 1
     editor._has_active_deck = False
@@ -333,7 +333,7 @@ def test_follow_offline_restart_review_and_accept_are_separate(app, tmp_path):
     restarted.copy_selected()
     settle(app, restarted)
     assert len(copies) == 1
-    assert DeckStore().load(copies[0]).deck.name == 'New owner revision'
+    assert DeckStore().load(copies[0]).deck.name == 'New owner revision [Friends]'
     assert restarted.prepare_to_close()
     restarted.close()
 

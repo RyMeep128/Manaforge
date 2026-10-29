@@ -1,5 +1,13 @@
 """Small module registry; no tool imports or startup side effects."""
 from dataclasses import dataclass
+import os
+import sys
+
+
+def module_available(module):
+    """Local development preview only; installed builds retain the release gate."""
+    return module.available or (module.key == 'play' and not getattr(sys, 'frozen', False)
+                                and os.environ.get('MANAFORGE_ENABLE_LOCAL_PLAY', '1') == '1')
 
 
 @dataclass(frozen=True)

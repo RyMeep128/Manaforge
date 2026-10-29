@@ -87,9 +87,9 @@ def _activity():
 
 class LoadingThread(C.QThread):
     """Balance activity even when a worker fails or is cancelled."""
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, show_activity=True, **kwargs):
         super().__init__(*args, **kwargs)
-        activity = _activity()
+        activity = _activity() if show_activity else None
         if activity is not None:
             self.started.connect(activity.begin, C.Qt.ConnectionType.QueuedConnection)
             self.finished.connect(activity.end, C.Qt.ConnectionType.QueuedConnection)
