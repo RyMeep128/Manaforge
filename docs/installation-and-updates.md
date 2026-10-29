@@ -300,3 +300,7 @@ Existing installations predating this feature establish a baseline on first laun
 an in-app update receipt can supply the previous version after successful startup
 verification. Installer flags are not required. An interrupted highlights dialog
 is retried until dismissed; manual viewing never consumes a pending notification.
+
+## Card Database workspace
+
+Post-install controls are available through **Settings > Card Database**. See the [workspace guide](card-database-workspace.md) for local browsing, artwork selection, maintenance, and current validation limits. The first-run wizard is unchanged.

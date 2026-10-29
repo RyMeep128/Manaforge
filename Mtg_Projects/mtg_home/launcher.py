@@ -168,6 +168,10 @@ class ModuleController(C.QObject):
             return []
 
     def shutdown(self):
+        database = getattr(self, '_card_database_workspace', None)
+        if database is not None and not database.prepare_to_close():
+            C.QTimer.singleShot(250, self.home.close)
+            return False
         play = self.windows.get('play')
         if play is not None and not play.prepare_to_close():
             self.home.show_workspace('play')
@@ -237,8 +241,13 @@ class ModuleController(C.QObject):
                 from mtg_ui.artwork_preferences import edit_artwork_preferences
                 edit_artwork_preferences(self.home, self.service)
             elif key == 'data':
-                from mtg_ui.data_management import DataManagementDialog
-                DataManagementDialog(self.home,engine=self.installation_engine,jobs=self.jobs).exec()
+                from mtg_ui.card_database import CardDatabaseWorkspace
+                if not getattr(self, "_card_database_workspace", None):
+                    self._card_database_workspace = CardDatabaseWorkspace(
+                        self.home, engine=self.installation_engine, jobs=self.jobs)
+                self._card_database_workspace.show()
+                self._card_database_workspace.raise_()
+                self._card_database_workspace.activateWindow()
         except Exception as exc:
             get_logger(__name__).exception('Homepage settings failed kind=%s', key)
             W.QMessageBox.warning(self.home, 'Could not open settings', str(exc))
@@ -273,7 +282,7 @@ class ModuleController(C.QObject):
         if state=='failed':
             from mtg_ui.feedback import report_problem
             report_problem(self.home, 'data update', str(value))
-            self.home.statusBar().showMessage('Data update could not finish. Existing data is available. Open Settings → Data Management to retry.',15000)
+            self.home.statusBar().showMessage('Data update could not finish. Existing data is available. Open Settings → Card Database to retry.',15000)
         elif state=='completed':
             self.home.statusBar().showMessage('Data operation completed.',5000)
             if self._service is not None and hasattr(self._service,'_printings_refreshed'):

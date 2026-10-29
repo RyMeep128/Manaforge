@@ -269,7 +269,8 @@ class SearchOperations:
 
     def search_syntax(self, query: str, limit: int = 200, *, offset: int = 0,
                       set_filter: str = '', online_mode: bool = False,
-                      should_cancel=None, oracle_ids=None, popularity=False) -> list[PrintRecord]:
+                      should_cancel=None, oracle_ids=None, popularity=False,
+                      unique=True) -> list[PrintRecord]:
         predicate, params = self._syntax_predicate(query, set_filter, online_mode)
         if oracle_ids is not None:
             identities = list(dict.fromkeys(oracle_ids))
@@ -292,7 +293,7 @@ class SearchOperations:
                 'FROM prints p JOIN print_search_data s ON s.card_id = p.card_id '
                 'LEFT JOIN canonical_prints cp ON cp.oracle_id = p.oracle_id '
                 f'WHERE {predicate}) '
-                ', page AS (SELECT card_id, name, released_at, popularity_rank FROM matches WHERE search_rank = 1 '
+                f", page AS (SELECT card_id, name, released_at, popularity_rank FROM matches WHERE {'search_rank = 1' if unique else '1'} "
                 f'ORDER BY {order} LIMIT ? OFFSET ?) '
                 'SELECT p.* FROM page JOIN prints p ON p.card_id = page.card_id '
                 f'ORDER BY {"page.popularity_rank, " if popularity else ""}page.name COLLATE NOCASE, page.released_at, page.card_id',
