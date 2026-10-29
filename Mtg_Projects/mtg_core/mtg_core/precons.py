@@ -4,6 +4,7 @@ from dataclasses import asdict
 import gzip
 import hashlib
 import json
+import re
 from pathlib import Path
 
 from .decklists import DecklistEntry, resolve_entries, apply_decklist
@@ -92,8 +93,18 @@ def cover_asset(record, service, *, offline=False):
 
 
 def decklist_entries(record):
-    return [DecklistEntry(**{k: row.get(k) for k in
-            ('count', 'name', 'set_code', 'collector_number', 'section')}) for row in record['entries']]
+    entries = []
+    for row in record['entries']:
+        values = {k: row.get(k) for k in
+                  ('count', 'name', 'set_code', 'collector_number', 'section')}
+        # The upstream MTGJSON catalog numbers split-card faces separately;
+        # Scryfall indexes the whole card without that face suffix. Keep the
+        # untouched source coordinates in the record and precon_printing extras.
+        number = values['collector_number']
+        if ' // ' in values['name'] and number and re.fullmatch(r'\d+[ab]', number):
+            values['collector_number'] = number[:-1]
+        entries.append(DecklistEntry(**values))
+    return entries
 
 
 def prepare_precon(record, service, **options):

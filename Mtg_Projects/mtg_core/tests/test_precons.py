@@ -33,6 +33,17 @@ def test_normalization_preserves_printings_quantities_and_every_zone():
     assert record['entries'][0]['foil'] is True
 
 
+def test_split_card_face_numbers_resolve_as_whole_card_printings():
+    record = dict(entries=[dict(count=1, name=name, set_code='ncc',
+                               collector_number=number, section='mainboard')
+                          for name, number in [('Dusk // Dawn', '198a'),
+                                               ('Commit // Memory', '216a'),
+                                               ('Ordinary variant', '42a'),
+                                               ('Other // Split', '42p')]])
+    assert [e.collector_number for e in decklist_entries(record)] == ['198', '216', '42a', '42p']
+    assert record['entries'][0]['collector_number'] == '198a'
+
+
 def test_independent_decks_and_origin_roundtrip(monkeypatch):
     from mtg_core import precons
     record = normalize_catalog(source())['decks'][0]
