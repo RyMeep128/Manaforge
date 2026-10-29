@@ -516,11 +516,18 @@ def commander_acceptance(adapter: LocalGameAdapter, seats: int) -> dict:
         if (
             len(report["command_zones"]) == seats
             and len(report["opening_hands"]) == seats
+            and conceded.issubset(report["finished"])
         ):
+            # XMage processes concessions asynchronously on the game thread.
+            # Wait for the previous seat's terminal callback before sending
+            # another, so its async-command reset cannot swallow the next one.
             for seat in setup.seats[1:]:
                 if seat.seat_id not in conceded:
-                    session.concede(seat.seat_id)
+                    result = session.concede(seat.seat_id)
+                    if result.outcome != "submitted":
+                        raise AdapterError(result.code or "COMMANDER_CONCESSION_FAILED")
                     conceded.add(seat.seat_id)
+                    break
         if len(report["finished"]) == seats and len(report["results"]) == seats:
             return report
         time.sleep(0.005)
