@@ -607,9 +607,15 @@ class XmageGameSession:
                 self._fail(player, "ENGINE_METADATA_TIMEOUT")
                 self._deferred_views.pop(player, None)
             return False
-        if metadata["status"] == "finished":
+        if metadata["status"] in ("finished", "view_only"):
             view["_metadata_unavailable"] = True
-            if self._status[player] not in ("finished", "failed"):
+            if metadata["status"] == "view_only":
+                players = {row["id"]: row for row in metadata["players"]}
+                for row in view["players"]:
+                    flags = players[row["id"]]
+                    row["eliminated"] = flags["lost"] or flags["left"]
+                    row["left"] = flags["left"]
+            elif self._status[player] not in ("finished", "failed"):
                 self._status[player] = "finishing"
                 self._pending.pop(player, None)
             return True

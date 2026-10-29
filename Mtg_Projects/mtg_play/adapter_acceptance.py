@@ -452,6 +452,7 @@ def commander_acceptance(adapter: LocalGameAdapter, seats: int) -> dict:
         ready_for_concessions=False,
     )
     conceded = set()
+    eliminated = set()
     deadline = time.monotonic() + 120
     while time.monotonic() < deadline:
         for seat in setup.seats:
@@ -485,8 +486,28 @@ def commander_acceptance(adapter: LocalGameAdapter, seats: int) -> dict:
                 report["finished"].append(seat.seat_id)
             if view.result is not None:
                 report["results"][seat.seat_id] = view.result
+            eliminated.update(
+                player.player_id
+                for player in view.players
+                if player.eliminated or player.left_game
+            )
             decision = view.decision
-            if decision is None or conceded or view.status != "active":
+            if decision is None or view.status != "active":
+                continue
+            if conceded:
+                # An off-priority concession may leave the game thread waiting
+                # on the surviving priority holder. Advance only that prompt;
+                # never answer a departed player's stale decision.
+                if seat.seat_id not in conceded and decision.family == "selection":
+                    result = session.perform(
+                        seat.seat_id,
+                        decision.decision_id,
+                        next(
+                            action for action in view.actions if action.kind == "pass"
+                        ).action_id,
+                    )
+                    if result.outcome != "submitted":
+                        raise AdapterError(result.code or "COMMANDER_COMMAND_FAILED")
                 continue
             if decision.family == "boolean" and "mulligan" in decision.prompt.lower():
                 result = session.choose(
@@ -528,16 +549,19 @@ def commander_acceptance(adapter: LocalGameAdapter, seats: int) -> dict:
             and len(report["opening_hands"]) == seats
             and len(report["kept_hands"]) == seats
             and report["ready_for_concessions"]
+            and conceded.issubset(eliminated)
         ):
-            # XMage queues conceding players. Submit every concession after all
-            # keep-hand responses, then poll without sending further decisions.
-            # GAME_OVER and final results are required below, not between seats.
+            # Transport acknowledgement does not confirm elimination. XMage's
+            # asynchronous concession signals can overwrite one another. Wait
+            # for authoritative player metadata before queuing the next seat;
+            # GAME_OVER is only guaranteed when the whole game finishes.
             for seat in setup.seats[1:]:
                 if seat.seat_id not in conceded:
                     result = session.concede(seat.seat_id)
                     if result.outcome != "submitted":
                         raise AdapterError(result.code or "COMMANDER_CONCESSION_FAILED")
                     conceded.add(seat.seat_id)
+                    break
         if len(report["finished"]) == seats and len(report["results"]) == seats:
             expected = {
                 seat.seat_id: "won" if index == 0 else "did_not_win"
