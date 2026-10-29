@@ -1,4 +1,5 @@
 """Boundary regressions for CI; live evidence remains in acceptance reports."""
+
 from copy import deepcopy
 from pathlib import Path
 import sys
@@ -22,11 +23,22 @@ def test_commander_fixtures_are_singleton_hundred_card_documents_and_not_mutated
         assert sum(e.quantity for e in entries) == 100
         assert document.deck.commander_entry_ids == ["commander"]
         assert len({e.name for e in entries}) == len(entries)
-        assert all(e.quantity == 1 for e in entries if e.name not in {"Forest", "Island", "Mountain", "Plains"})
+        assert all(
+            e.quantity == 1
+            for e in entries
+            if e.name not in {"Forest", "Island", "Mountain", "Plains"}
+        )
 
         def resolve(queries):
-            return [dict(key=q["key"], name=q["name"], set=q["set"] or "FIX",
-                         number=q["number"] or str(i)) for i, q in enumerate(queries)]
+            return [
+                dict(
+                    key=q["key"],
+                    name=q["name"],
+                    set=q["set"] or "FIX",
+                    number=q["number"] or str(i),
+                )
+                for i, q in enumerate(queries)
+            ]
 
         prepared = prepare_deck(document, resolve, commander=True)
         assert sum(e["quantity"] for e in prepared.cards) == 99
@@ -37,34 +49,53 @@ def test_commander_fixtures_are_singleton_hundred_card_documents_and_not_mutated
 
 def test_selected_printing_cannot_be_bound_to_engine_fallback():
     document = commander_decks()[0]
+
     def resolve(queries):
-        return [dict(key=q["key"], name=q["name"], set="WRONG", number=str(i))
-                for i, q in enumerate(queries)]
+        return [
+            dict(key=q["key"], name=q["name"], set="WRONG", number=str(i))
+            for i, q in enumerate(queries)
+        ]
+
     with pytest.raises(DeckTranslationError) as failure:
         prepare_deck(document, resolve, commander=True)
-    assert [(i.entry_id, i.code) for i in failure.value.issues] == [("forest", "PRINTING_NOT_RESOLVED")]
+    assert [(i.entry_id, i.code) for i in failure.value.issues] == [
+        ("forest", "PRINTING_NOT_RESOLVED")
+    ]
 
 
-@pytest.mark.parametrize("code,category", [
-    ("CARD_NOT_SUPPORTED", "card_missing_from_pinned_engine"),
-    ("PRINTING_NOT_RESOLVED", "identity_or_printing_resolution"),
-    ("UNSUPPORTED_SECTION", "unsupported_deck_configuration"),
-    ("UNSUPPORTED_DECISION", "unsupported_game_decision"),
-    ("PINNED_METADATA_INTERFACE_CHANGED", "adapter_translation_failure"),
-    ("SCENARIO_TIMEOUT", "unexpected_engine_or_harness_behavior"),
-])
+@pytest.mark.parametrize(
+    "code,category",
+    [
+        ("CARD_NOT_SUPPORTED", "card_missing_from_pinned_engine"),
+        ("PRINTING_NOT_RESOLVED", "identity_or_printing_resolution"),
+        ("UNSUPPORTED_SECTION", "unsupported_deck_configuration"),
+        ("UNSUPPORTED_DECISION", "unsupported_game_decision"),
+        ("PINNED_METADATA_INTERFACE_CHANGED", "adapter_translation_failure"),
+        ("SCENARIO_TIMEOUT", "unexpected_engine_or_harness_behavior"),
+    ],
+)
 def test_diagnostic_categories_preserve_distinctions(code, category):
     assert diagnostic_category(code) == category
 
 
-@pytest.mark.parametrize("change,code", [
-    ({"zone": "hand", "owner_id": "two"}, "OPPONENT_HAND_EXPOSED"),
-    ({"hidden": True, "characteristics": object()}, "HIDDEN_IDENTITY_EXPOSED"),
-    ({"copy_source_id": "retired"}, "COPY_SOURCE_NOT_VISIBLE"),
-])
+@pytest.mark.parametrize(
+    "change,code",
+    [
+        ({"zone": "hand", "owner_id": "two"}, "OPPONENT_HAND_EXPOSED"),
+        ({"hidden": True, "characteristics": object()}, "HIDDEN_IDENTITY_EXPOSED"),
+        ({"copy_source_id": "retired"}, "COPY_SOURCE_NOT_VISIBLE"),
+    ],
+)
 def test_live_inspector_rejects_visibility_and_identity_regressions(change, code):
-    values = dict(object_id="object", zone="battlefield", owner_id="one",
-                  hidden=False, characteristics=None, card_identity=None, copy_source_id=None)
+    values = dict(
+        object_id="object",
+        zone="battlefield",
+        owner_id="one",
+        hidden=False,
+        characteristics=None,
+        card_identity=None,
+        copy_source_id=None,
+    )
     values.update(change)
     view = NS(viewer_id="one", objects=(NS(**values),), decision=None)
     with pytest.raises(AdapterError, match=code):

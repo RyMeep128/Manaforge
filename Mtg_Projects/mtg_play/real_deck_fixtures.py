@@ -3,6 +3,7 @@
 Fixture version 1. Names resolve against the pinned engine, never a web service.
 Only explicit selected printings claim a printing; other entries are name-only.
 """
+
 from mtg_core.decks import Deck, DeckDocument, DeckEntry
 
 COMMON = """Sol Ring|Arcane Signet|Commander's Sphere|Mind Stone|Fellwar Stone|
@@ -36,10 +37,18 @@ Harmonize|Shamanic Revelation|Overrun""".replace("\n", "").split("|")
 def commander_decks():
     result = []
     for title, commander, spells, basics in (
-        ("Temur Elementals", "Animar, Soul of Elements", ELEMENTALS,
-         (("Forest", 13), ("Island", 12), ("Mountain", 12))),
-        ("Selesnya Tokens", "Rhys the Redeemed", TOKENS,
-         (("Forest", 19), ("Plains", 18))),
+        (
+            "Temur Elementals",
+            "Animar, Soul of Elements",
+            ELEMENTALS,
+            (("Forest", 13), ("Island", 12), ("Mountain", 12)),
+        ),
+        (
+            "Selesnya Tokens",
+            "Rhys the Redeemed",
+            TOKENS,
+            (("Forest", 19), ("Plains", 18)),
+        ),
     ):
         names = COMMON + spells
         entries = [DeckEntry(f"spell-{i}", name, 1) for i, name in enumerate(names)]
@@ -49,7 +58,11 @@ def commander_decks():
         document.deck.commander_entry_ids = ["commander"]
         # Explicit physical selection in each list exercises strict resolution.
         land = next(entry for entry in entries if entry.name == "Forest")
-        land.set_code, land.collector_number, land.card_id = "M10", "248", "fixture-forest-M10-248"
+        land.set_code, land.collector_number, land.card_id = (
+            "M10",
+            "248",
+            "fixture-forest-M10-248",
+        )
         if sum(e.quantity for e in entries) != 100 or len(set(names)) != 62:
             raise ValueError("Invalid versioned Commander fixture")
         result.append(document)

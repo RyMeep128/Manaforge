@@ -55,6 +55,7 @@ def _pairs(value):
 
 def _timed(metric):
     """Bounded numeric diagnostics only; never retain views or prompt contents."""
+
     def decorate(function):
         @wraps(function)
         def measured(self, *args, **kwargs):
@@ -66,19 +67,27 @@ def _timed(metric):
             finally:
                 if hasattr(self, "_timings"):
                     elapsed = (time.perf_counter() - started) * 1000
-                    row = self._timings.setdefault(metric, dict(count=0, total_ms=0., max_ms=0.))
+                    row = self._timings.setdefault(
+                        metric, dict(count=0, total_ms=0.0, max_ms=0.0)
+                    )
                     row["count"] += 1
                     row["total_ms"] += elapsed
                     row["max_ms"] = max(row["max_ms"], elapsed)
                     if metric == "snapshot_construction" and value is not None:
                         size = len(value.objects)
-                        band = "0-15" if size < 16 else "16-63" if size < 64 else "64-plus"
-                        bucket = self._timings.setdefault("snapshot_objects_" + band,
-                            dict(count=0, total_ms=0., max_ms=0.))
+                        band = (
+                            "0-15" if size < 16 else "16-63" if size < 64 else "64-plus"
+                        )
+                        bucket = self._timings.setdefault(
+                            "snapshot_objects_" + band,
+                            dict(count=0, total_ms=0.0, max_ms=0.0),
+                        )
                         bucket["count"] += 1
                         bucket["total_ms"] += elapsed
                         bucket["max_ms"] = max(bucket["max_ms"], elapsed)
+
         return measured
+
     return decorate
 
 

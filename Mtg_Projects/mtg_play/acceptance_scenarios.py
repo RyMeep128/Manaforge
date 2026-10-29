@@ -562,7 +562,11 @@ def drive(
                 # an inspector has seen the first permanent resolve.
                 action = (
                     None
-                    if conceded or (not allow_stack_actions and any(obj.zone == "stack" for obj in view.objects))
+                    if conceded
+                    or (
+                        not allow_stack_actions
+                        and any(obj.zone == "stack" for obj in view.objects)
+                    )
                     else select(view)
                 )
                 if action is None:

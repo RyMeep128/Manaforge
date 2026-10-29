@@ -17,6 +17,7 @@ class DeckIssue:
     @property
     def category(self):
         from .diagnostics import diagnostic_category
+
         return diagnostic_category(self.code)
 
 
@@ -108,8 +109,9 @@ def prepare_deck(
                 )
             )
             continue
-        if ((entry.set_code and row["set"].upper() != entry.set_code.upper()) or
-                (entry.collector_number and row["number"] != entry.collector_number)):
+        if (entry.set_code and row["set"].upper() != entry.set_code.upper()) or (
+            entry.collector_number and row["number"] != entry.collector_number
+        ):
             issues.append(DeckIssue(entry.entry_id, "PRINTING_NOT_RESOLVED"))
             continue
         identity = CardIdentity(entry.oracle_id, entry.card_id, entry.entry_id)

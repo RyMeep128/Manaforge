@@ -601,7 +601,10 @@ def main():
         result["success"] = True
     except DeckTranslationError as error:
         # Fixture entry IDs only; never export a source deck or raw JVM log.
-        result["issues"] = [dict(code=i.code, category=i.category, entry_id=i.entry_id) for i in error.issues]
+        result["issues"] = [
+            dict(code=i.code, category=i.category, entry_id=i.entry_id)
+            for i in error.issues
+        ]
     except AdapterError as error:
         code = error.code.split(":", 1)[0]
         result["error"] = dict(code=code, category=diagnostic_category(code))
