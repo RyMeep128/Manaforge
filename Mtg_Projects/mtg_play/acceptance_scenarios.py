@@ -614,7 +614,25 @@ def drive(
                     seat.seat_id, request.decision_id, option.option_id
                 )
             else:
-                raise AdapterError("SCENARIO_DECISION_UNSUPPORTED: " + request.family)
+                # Preserve only the bounded decision family in sanitized reports;
+                # do not include private prompt text.
+                family = (
+                    request.family
+                    if request.family
+                    in {
+                        "boolean",
+                        "mana",
+                        "options",
+                        "number",
+                        "amounts",
+                        "piles",
+                        "selection",
+                        "target",
+                        "ability",
+                    }
+                    else "unknown"
+                )
+                raise AdapterError("SCENARIO_DECISION_UNSUPPORTED_" + family.upper())
             if result.outcome != "submitted":
                 raise AdapterError(result.code or "SCENARIO_RESPONSE_FAILED")
         if len(finished) == len(setup.seats) and len(results) == len(setup.seats):

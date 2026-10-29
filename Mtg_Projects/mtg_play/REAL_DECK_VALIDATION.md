@@ -4,6 +4,16 @@ Status: implemented acceptance paths, awaiting CI evidence. No new live-engine
 results or numerical baseline are claimed in this change. The existing 24
 scenarios remain enabled with their integrity and privacy checks intact.
 
+CI run [40884348259](https://github.com/RyMeep128/Manaforge/actions/runs/40884348259)
+passed all 24 original engine scenarios and the Python suites on both versions.
+Its real-deck scenario failed at an unhandled boolean decision. The pinned
+Mind's Eye implementation uses `DoIfCostPaid` to ask `Pay {1} and draw a card?`;
+the fixture now explicitly declines that payment while retaining its mana policy.
+Other unfamiliar booleans still fail. The routine `optional-payment` scenario
+forces this trigger with a redundant deck, independently of shuffled Commander
+draws. Unsupported decision reports now retain a bounded family suffix without
+exporting prompt text. These new checks await the next CI run.
+
 ## Reproduce
 
 Use the existing Tests workflow. Routine pinned-engine acceptance now also runs

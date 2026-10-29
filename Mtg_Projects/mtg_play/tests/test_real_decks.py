@@ -13,7 +13,7 @@ from mtg_play.adapter import AdapterError
 from mtg_play.decks import prepare_deck, DeckTranslationError
 from mtg_play.diagnostics import diagnostic_category
 from mtg_play.real_deck_fixtures import commander_decks
-from mtg_play.real_deck_acceptance import validate_view
+from mtg_play.real_deck_acceptance import real_deck_decision, validate_view
 
 
 def test_commander_fixtures_are_singleton_hundred_card_documents_and_not_mutated():
@@ -106,3 +106,48 @@ def test_live_inspector_does_not_allow_duplicate_token_references():
     obj = NS(object_id="token")
     with pytest.raises(AdapterError, match="DUPLICATE_OBJECT_REFERENCES"):
         validate_view(NS(objects=(obj, obj)))
+
+
+def payment_view(
+    *, prompt="Pay {1} and draw a card?", controller="one", family="boolean"
+):
+    return NS(
+        viewer_id="one",
+        decision=NS(
+            family=family,
+            prompt=prompt,
+            decision_id="current",
+            options=(NS(label="Yes", option_id="yes"), NS(label="No", option_id="no")),
+        ),
+        objects=(
+            NS(
+                zone="battlefield",
+                controller_id=controller,
+                characteristics=NS(name="Mind's Eye"),
+            ),
+        ),
+    )
+
+
+def test_real_deck_policy_explicitly_declines_minds_eye_payment():
+    calls = []
+    result = NS(outcome="submitted")
+
+    def choose(*args):
+        calls.append(args)
+        return result
+
+    assert real_deck_decision(NS(choose=choose), payment_view()) is result
+    assert calls == [("one", "current", "no")]
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        dict(prompt="Pay 2 life?"),
+        dict(controller="two"),
+        dict(family="options"),
+    ],
+)
+def test_payment_policy_does_not_silently_answer_other_decisions(changes):
+    assert real_deck_decision(NS(), payment_view(**changes)) is None

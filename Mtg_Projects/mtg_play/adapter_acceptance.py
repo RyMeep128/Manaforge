@@ -557,6 +557,7 @@ def main():
             "piles",
             "companion",
             "real-decks",
+            "optional-payment",
             "complex-board",
         ),
         default="basic",
@@ -600,6 +601,7 @@ def main():
         "piles": acceptance_scenarios.piles,
         "companion": acceptance_scenarios.companion,
         "real-decks": real_deck_acceptance.real_decks,
+        "optional-payment": real_deck_acceptance.optional_payment,
         "complex-board": real_deck_acceptance.complex_board,
     }
     adapter = LocalGameAdapter(**options)

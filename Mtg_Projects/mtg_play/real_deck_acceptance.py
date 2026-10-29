@@ -23,6 +23,85 @@ def validate_view(view):
         raise AdapterError("OPPONENT_DECISION_EXPOSED")
 
 
+def real_deck_decision(game, view):
+    """Fixture policy: decline Mind's Eye's optional payment, without auto-paying.
+
+    The pinned engine's DoIfCostPaid emits this boolean prompt. Other boolean
+    decisions remain unhandled so new mechanics cannot be silently skipped.
+    """
+    request = view.decision
+    if (
+        request.family == "boolean"
+        and request.prompt.strip().lower() == "pay {1} and draw a card?"
+        and any(
+            obj.zone == "battlefield"
+            and obj.controller_id == view.viewer_id
+            and obj.characteristics
+            and obj.characteristics.name == "Mind's Eye"
+            for obj in view.objects
+        )
+    ):
+        option = next(option for option in request.options if option.label == "No")
+        return game.choose(view.viewer_id, request.decision_id, option.option_id)
+    return None
+
+
+def optional_payment(adapter):
+    """Force the Mind's Eye decision instead of depending on Commander draws."""
+    report = dict(optional_payments_declined=0, performance={})
+
+    def inspect(view):
+        validate_view(view)
+        return report["optional_payments_declined"] >= 2
+
+    def select(view):
+        if any(
+            obj.zone == "battlefield"
+            and obj.controller_id == view.viewer_id
+            and obj.characteristics
+            and obj.characteristics.name == "Mind's Eye"
+            for obj in view.objects
+        ):
+            # Keep mana available for the engine to offer the optional payment.
+            return next((a for a in view.actions if a.kind == "play_land"), None)
+        lands = sum(
+            obj.zone == "battlefield"
+            and obj.controller_id == view.viewer_id
+            and obj.characteristics
+            and obj.characteristics.name == "Island"
+            and obj.tapped is False
+            for obj in view.objects
+        )
+        return next(
+            (
+                a
+                for a in view.actions
+                if a.kind == "play_land"
+                or (lands >= 5 and a.kind == "cast_spell" and a.label == "Mind's Eye")
+            ),
+            None,
+        )
+
+    def respond(game, view):
+        result = real_deck_decision(game, view)
+        if result is not None and result.outcome == "submitted":
+            report["optional_payments_declined"] += 1
+        return result
+
+    fixture = deck(("Island", 30), ("Mind's Eye", 30))
+    report.update(
+        drive(
+            adapter,
+            (fixture, fixture),
+            inspect,
+            select,
+            decision_handler=respond,
+            performance=report["performance"],
+        )
+    )
+    return report
+
+
 def real_decks(adapter):
     documents = commander_decks()
     originals = [document.to_dict() for document in documents]
@@ -36,6 +115,7 @@ def real_decks(adapter):
         max_pending_options=0,
         selected_printing=False,
         artifacts_resolved={},
+        optional_payments_declined=0,
         performance={},
     )
     ready = set()
@@ -120,6 +200,12 @@ def real_decks(adapter):
                 return action
         return None
 
+    def respond(game, view):
+        result = real_deck_decision(game, view)
+        if result is not None:
+            report["optional_payments_declined"] += 1
+        return result
+
     report.update(
         drive(
             adapter,
@@ -131,6 +217,7 @@ def real_decks(adapter):
             ),
             timeout=240,
             performance=report["performance"],
+            decision_handler=respond,
         )
     )
     if [document.to_dict() for document in documents] != originals:
