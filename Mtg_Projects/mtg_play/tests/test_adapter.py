@@ -389,3 +389,149 @@ def test_unconfirmed_transport_response_fails_session_without_replaying(session)
         ).outcome
         == "rejected"
     )
+
+
+def test_engine_incarnation_retires_reference_without_intermediate_zone_snapshot(
+    session,
+):
+    first = state(1, zone="battlefield")
+    first["players"][0]["battlefield"][0]["incarnation"] = 3
+    inject(session, first)
+    before = session.snapshot("one").objects[0].object_id
+    returned = state(2, zone="battlefield")
+    returned["players"][0]["battlefield"][0]["incarnation"] = 5
+    inject(session, returned)
+    view = session.snapshot("one")
+    assert view.objects[0].object_id != before
+    assert "incarnation" not in json.dumps(view.to_dict())
+
+
+def test_metadata_retry_does_not_publish_an_incoherent_view(session):
+    update = state(1)
+    update["cycle"] = 7
+    session._owner._metadata = lambda view: {"status": "retry"}
+    inject(session, update)
+    with pytest.raises(AdapterError, match="SNAPSHOT_NOT_READY"):
+        session.snapshot("one")
+    session._owner._metadata = lambda view: dict(
+        status="ok",
+        cycle=7,
+        objects={"engine-card": {"incarnation": 2}},
+        commanders=[],
+        players=[
+            dict(id="engine-player-one", lost=False, left=False),
+            dict(id="engine-player-two", lost=False, left=False),
+        ],
+    )
+    view = session.snapshot("one")
+    assert view.players[0].eliminated is False
+    assert view.objects and view.commanders == ()
+
+
+def test_commander_designation_is_distinct_from_current_object_identity(session):
+    update = state(1)
+    update["hand"][0]["incarnation"] = 1
+    update["commanders"] = [
+        dict(
+            id="engine-card",
+            owner="engine-player-one",
+            name="Known commander",
+            set="SOM",
+            number="174",
+            plays=1,
+            tax="{2}",
+            damage={"engine-player-two": 2},
+        )
+    ]
+    inject(session, update)
+    original = session.snapshot("one")
+    update = deepcopy(update)
+    update["sequence"] = 2
+    update["hand"][0]["incarnation"] = 3
+    inject(session, update)
+    returned = session.snapshot("one")
+    assert original.commanders[0].commander_id == returned.commanders[0].commander_id
+    assert original.objects[0].object_id != returned.objects[0].object_id
+    assert returned.commanders[0].damage_dealt == (("two", 2),)
+    assert returned.commanders[0].additional_cast_cost == "{2}"
+    assert "engine-card" not in json.dumps(returned.to_dict())
+
+
+def test_private_observations_clear_without_exposing_persistent_object_links(session):
+    revealed = state(1)
+    revealed["observations"] = [
+        dict(source="looked_at", hidden=False, name="SECRET", set="ABC", number="1")
+    ]
+    inject(session, revealed)
+    view = session.snapshot("one")
+    assert view.observations[0].name == "SECRET"
+    assert not hasattr(view.observations[0], "object_id")
+    assert not session.poll("two")
+    inject(session, state(2))
+    assert session.snapshot("one").observations == ()
+    events = session.poll("one")
+    assert any(event.kind == "cards_observed" for event in events)
+    assert any(event.kind == "observations_cleared" for event in events)
+    # Obsolete reveal cannot restore a concealed current observation.
+    inject(session, revealed)
+    assert session.snapshot("one").observations == ()
+
+
+def test_hidden_observation_scrubs_even_malformed_engine_printing_fields(session):
+    update = state(1)
+    update["observations"] = [
+        dict(
+            source="revealed", hidden=True, name="SECRET", set="SECRET_SET", number="42"
+        )
+    ]
+    inject(session, update)
+    payload = json.dumps(session.snapshot("one").to_dict())
+    assert "SECRET" not in payload
+    assert session.snapshot("one").observations[0].name is None
+
+
+def test_selected_targets_can_finish_without_claiming_cancellation(session):
+    inject(session, state(1))
+    inject(
+        session,
+        dict(
+            event="decision",
+            decision_id=2,
+            kind="GAME_TARGET",
+            message="Choose targets",
+            targets=[],
+            selected_targets=["engine-card"],
+            can_finish=True,
+            cancellable=False,
+        ),
+    )
+    request = session.snapshot("one").decision
+    assert len(request.options) == 1 and request.options[0].selected
+    assert request.can_finish and not request.cancellable
+    assert session.cancel("one", request.decision_id).outcome == "rejected"
+    responses = []
+    session._request = lambda *args, **kwargs: (
+        responses.append(kwargs) or dict(accepted=True)
+    )
+    assert session.finish_selection("one", request.decision_id).outcome == "submitted"
+    assert responses[0]["value"] is False
+
+
+def test_copy_uses_physical_printing_instead_of_copied_display_printing(session):
+    identity = CardIdentity("clone-oracle", "clone-print", "clone-entry")
+    session._decks = (
+        PreparedDeck((), (), {("M10", "45"): identity}),
+        PreparedDeck((), (), {}),
+    )
+    update = state(1, zone="battlefield")
+    update["players"][0]["battlefield"][0].update(
+        owner="engine-player-one",
+        physical_set="M10",
+        physical_number="45",
+        is_copy=True,
+        name="Memnite",
+    )
+    inject(session, update)
+    obj = session.snapshot("one").objects[0]
+    assert obj.card_identity == identity
+    assert obj.characteristics.name == "Memnite"

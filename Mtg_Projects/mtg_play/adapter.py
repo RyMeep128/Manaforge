@@ -19,9 +19,11 @@ from .contracts import (
     GAME_PROTOCOL_VERSION,
     Capability,
     CardCharacteristics,
+    CardObservation,
     ChoiceOption,
     ChoiceRequest,
     CombatAssignment,
+    CommanderState,
     CommandResult,
     Compatibility,
     GameEvent,
@@ -153,7 +155,7 @@ class LocalGameAdapter:
             Capability(
                 "commander",
                 "verified",
-                "2, 3, 4, 5 seats: command zones, opening hands, concession and results",
+                "2–5 seats; partner designations; casting, damage and engine-calculated tax",
             ),
             Capability(
                 "continuous_power_toughness", "verified", "Giant Growth and expiration"
@@ -166,25 +168,61 @@ class LocalGameAdapter:
             ),
             Capability(
                 "complex_decisions",
-                "unverified",
-                "Numeric, multi-amount, modes, piles and cancellation need dedicated live scenarios",
+                "verified",
+                "Numbers, modes, search, sacrifice, distribution, trigger ordering and cancellation",
             ),
-            Capability("x_mana_payment", "unsupported"),
-            Capability("commander_damage_tax", "unsupported"),
-            Capability("revealed_information", "unsupported"),
-            Capability("unobserved_zone_change_identity", "unverified"),
+            Capability(
+                "x_mana_payment", "verified", "Walking Ballista number and mana prompts"
+            ),
+            Capability("legacy_x_mana_prompt", "unsupported"),
+            Capability("commander_damage_tax", "verified"),
+            Capability(
+                "revealed_information",
+                "verified",
+                "Private Gitaxian Probe peek and concealment",
+            ),
+            Capability(
+                "unobserved_zone_change_identity",
+                "verified",
+                "Cloudshift and engine incarnation metadata",
+            ),
+            Capability(
+                "copy_and_transform",
+                "verified",
+                "Clone and Delver; physical printing preserved",
+            ),
+            Capability(
+                "blocking",
+                "verified",
+                "Two Memnites, block assignment and combat deaths",
+            ),
+            Capability("pending_choice_shutdown", "verified"),
+            Capability(
+                "pile_choices", "verified", "Fact or Fiction split and both piles"
+            ),
+            Capability(
+                "backgrounds_and_companions",
+                "verified",
+                "Wilson/Raised by Giants; Kenrith/Jegantha pregame choice",
+            ),
+            Capability(
+                "string_choices", "verified", "Utopia Sprawl color and attachment"
+            ),
             Capability("complete_dynamic_rules_text", "unsupported"),
             Capability("reconnection", "unsupported"),
             Capability("remote_multiplayer", "unsupported"),
         )
 
-    def _resolve(self, queries):
+    def _server_request(self, **fields):
         if self._runtime is None or self._done.is_set():
             raise AdapterError("ENGINE_UNAVAILABLE")
         server, directory = self._runtime[4:]
         request = str(uuid.uuid4())
-        server.stdin.write(json.dumps({"request_id": request, "cards": queries}) + "\n")
-        server.stdin.flush()
+        try:
+            server.stdin.write(json.dumps({"request_id": request, **fields}) + "\n")
+            server.stdin.flush()
+        except (OSError, ValueError) as error:
+            raise AdapterError("ENGINE_CONTROL_LOST") from error
         response = directory / "manaforge-responses" / (request + ".json")
         deadline = time.monotonic() + 30
         while time.monotonic() < deadline:
@@ -195,7 +233,31 @@ class LocalGameAdapter:
             if server.poll() is not None:
                 raise AdapterError("ENGINE_EXITED")
             time.sleep(0.01)
-        raise AdapterError("CARD_RESOLUTION_TIMEOUT")
+        raise AdapterError("SERVER_CONTROL_TIMEOUT")
+
+    def _resolve(self, queries):
+        return self._server_request(cards=queries)
+
+    def _metadata(self, view):
+        cards = [
+            card for zone in ("hand", "stack", "exile") for card in view.get(zone, ())
+        ]
+        cards += [
+            card
+            for row in view["players"]
+            for zone in ("battlefield", "graveyard", "command")
+            for card in row.get(zone, ())
+        ]
+        return self._server_request(
+            command="metadata",
+            game=view["game_id"],
+            player=view["viewer"],
+            cycle=view["cycle"],
+            object_ids=[card["id"] for card in cards],
+            identified_ids=[
+                card["id"] for card in cards if not card.get("hidden", True)
+            ],
+        )
 
     def create_game(
         self, setup: GameSetup, decks: tuple[DeckDocument, ...], *, oracle_lookup=None
@@ -265,6 +327,11 @@ class XmageGameSession:
         self._results = {}
         self._outstanding = set()
         self._decision_sequences = {seat.seat_id: -1 for seat in setup.seats}
+        self._deferred_views = {}
+        self._metadata_wait_since = {}
+        self._commander_refs = {}
+        self._observation_signatures = {}
+        self._observation_sequences = {seat.seat_id: -1 for seat in setup.seats}
         self._closed = False
 
     def _start(self):
@@ -375,38 +442,17 @@ class XmageGameSession:
                     sequence = event.get("sequence", -1)
                     if sequence <= self._sequences[player]:
                         continue
-                    self._sequences[player] = sequence
-                    # Retire references on every authoritative zone/visibility transition,
-                    # including transitions the consumer did not poll between.
-                    visible = set()
-                    for zone in ("hand", "stack", "exile"):
-                        visible.update(
-                            (card["id"], zone, card.get("hidden", True))
-                            for card in event.get(zone, ())
-                        )
-                    for row in event["players"]:
-                        for zone in ("battlefield", "graveyard", "command"):
-                            visible.update(
-                                (card["id"], zone, card.get("hidden", True))
-                                for card in row.get(zone, ())
-                            )
-                    self._objects[player] = {
-                        key: value
-                        for key, value in self._objects.get(player, {}).items()
-                        if key in visible
-                    }
-                    self._views[player] = event
-                    # The local viewer is authoritative for its own seat identity.
-                    if event.get("viewer"):
-                        self._player_ids[event["viewer"]] = player
-                    for row in event["players"]:
-                        if row["id"] in self._player_ids:
-                            self._names[row["name"]] = self._player_ids[row["id"]]
-                        elif row["name"] in self._names:
-                            self._player_ids[row["id"]] = self._names[row["name"]]
-                    if self._status[player] == "starting":
-                        self._status[player] = "active"
-                    self._refresh(player)
+                    if event.get("game_id"):
+                        self._game_ids.setdefault(player, event["game_id"])
+                    try:
+                        self._record_observations(player, event)
+                    except AdapterError as error:
+                        self._fail(player, error.code)
+                        continue
+                    deferred = self._deferred_views.get(player)
+                    if deferred is None or sequence > deferred["sequence"]:
+                        self._deferred_views[player] = event
+                        self._metadata_wait_since.setdefault(player, time.monotonic())
                 elif kind == "decision":
                     if event["decision_id"] > self._decision_sequences[player]:
                         self._decision_sequences[player] = event["decision_id"]
@@ -427,6 +473,147 @@ class XmageGameSession:
                         if "UNSUPPORTED_DECISION" in event.get("message", "")
                         else "ENGINE_CONNECTION_FAILED",
                     )
+
+        for player, view in tuple(self._deferred_views.items()):
+            if self._enrich_view(player, view):
+                self._publish_view(player, view)
+                self._deferred_views.pop(player, None)
+                self._metadata_wait_since.pop(player, None)
+
+    def _record_observations(self, player, event):
+        if event.get("sequence", -1) <= self._observation_sequences[player]:
+            return
+        self._observation_sequences[player] = event.get("sequence", -1)
+        source = event.get("observations", ())
+        queries = [
+            dict(key=str(index), set=item["set"], number=item["number"])
+            for index, item in enumerate(source)
+            if not item.get("hidden", True)
+            and item.get("name") is None
+            and item.get("set")
+            and item.get("number")
+        ]
+        names = (
+            self._owner._server_request(command="printing_names", printings=queries)
+            if queries
+            else {}
+        )
+        observations = tuple(
+            CardObservation(
+                _id(),
+                item["source"],
+                item.get("hidden", True),
+                None
+                if item.get("hidden", True)
+                else item.get("name", names.get(str(index))),
+                None if item.get("hidden", True) else item.get("set"),
+                None if item.get("hidden", True) else item.get("number"),
+            )
+            for index, item in enumerate(source)
+        )
+        signature = tuple(
+            (item.source, item.hidden, item.name, item.set_code, item.collector_number)
+            for item in observations
+        )
+        previous = self._observation_signatures.get(player, ())
+        self._observation_signatures[player] = signature
+        event["_observations"] = observations
+        if signature != previous:
+            self._notifications[player].append(
+                GameEvent(
+                    "cards_observed" if observations else "observations_cleared",
+                    player,
+                    self._revision[player],
+                    observations=observations,
+                )
+            )
+
+    def _enrich_view(self, player, view):
+        if "cycle" not in view:  # Controlled transport fixtures, never the real bridge.
+            return True
+        try:
+            metadata = self._owner._metadata(view)
+        except AdapterError as error:
+            self._fail(player, error.code)
+            self._deferred_views.pop(player, None)
+            return False
+        if metadata["status"] == "retry":
+            if (
+                time.monotonic()
+                - self._metadata_wait_since.get(player, time.monotonic())
+                > 30
+            ):
+                self._fail(player, "ENGINE_METADATA_TIMEOUT")
+                self._deferred_views.pop(player, None)
+            return False
+        if metadata["status"] == "finished":
+            if self._status[player] not in ("finished", "failed"):
+                self._status[player] = "finishing"
+                self._pending.pop(player, None)
+            return True
+        if metadata["status"] != "ok" or metadata["cycle"] != view["cycle"]:
+            self._fail(
+                player,
+                "PINNED_METADATA_INTERFACE_CHANGED"
+                if metadata.get("code") == "PINNED_METADATA_INTERFACE_CHANGED"
+                else "INCOHERENT_ENGINE_METADATA",
+            )
+            self._deferred_views.pop(player, None)
+            return False
+        cards = [
+            card for zone in ("hand", "stack", "exile") for card in view.get(zone, ())
+        ]
+        cards += [
+            card
+            for row in view["players"]
+            for zone in ("battlefield", "graveyard", "command")
+            for card in row.get(zone, ())
+        ]
+        if any(card["id"] not in metadata["objects"] for card in cards):
+            self._fail(player, "INCOMPLETE_ENGINE_METADATA")
+            self._deferred_views.pop(player, None)
+            return False
+        for card in cards:
+            card.update(metadata["objects"][card["id"]])
+        players = {row["id"]: row for row in metadata["players"]}
+        for row in view["players"]:
+            row["eliminated"] = players[row["id"]]["lost"] or players[row["id"]]["left"]
+        view["commanders"] = metadata["commanders"]
+        return True
+
+    @staticmethod
+    def _object_key(card, zone):
+        return card["id"], zone, card.get("hidden", True), card.get("incarnation")
+
+    def _publish_view(self, player, event):
+        self._sequences[player] = event.get("sequence", -1)
+        # Retire references on every authoritative zone/visibility transition,
+        # including transitions the consumer did not poll between.
+        visible = set()
+        for zone in ("hand", "stack", "exile"):
+            visible.update(self._object_key(card, zone) for card in event.get(zone, ()))
+        for row in event["players"]:
+            for zone in ("battlefield", "graveyard", "command"):
+                visible.update(
+                    self._object_key(card, zone) for card in row.get(zone, ())
+                )
+        self._objects[player] = {
+            key: value
+            for key, value in self._objects.get(player, {}).items()
+            if key in visible
+        }
+        self._views[player] = event
+        # The local viewer is authoritative for its own seat identity.
+        if event.get("viewer"):
+            self._player_ids[event["viewer"]] = player
+        for row in event["players"]:
+            if row["id"] in self._player_ids:
+                self._names[row["name"]] = self._player_ids[row["id"]]
+            elif row["name"] in self._names:
+                self._player_ids[row["id"]] = self._names[row["name"]]
+        if self._status[player] == "starting":
+            self._status[player] = "active"
+        self._refresh(player)
 
     def _fail(self, player, code):
         if self._status[player] != "failed":
@@ -462,8 +649,35 @@ class XmageGameSession:
     def snapshot(self, player_id):
         self._check(player_id)
         self._pump()
+        if self._status[player_id] == "failed":
+            return GameSnapshot(
+                session_id=self.session_id,
+                viewer_id=player_id,
+                revision=self._revision[player_id],
+                status="failed",
+                turn=None,
+                phase=None,
+                step=None,
+                active_player_id=None,
+                priority_player_id=None,
+                players=(),
+                objects=(),
+                actions=(),
+                decision=None,
+                unsupported_fields=("state_unavailable",),
+            )
         view = self._views.get(player_id)
-        if view is None:
+        if view is None or player_id in self._deferred_views:
+            raise AdapterError("SNAPSHOT_NOT_READY")
+        pending = self._pending.get(player_id)
+        if (
+            pending is not None
+            and "cycle" in pending
+            and (
+                pending["cycle"] != view.get("cycle")
+                or pending["decision_id"] > view.get("sequence", -1)
+            )
+        ):
             raise AdapterError("SNAPSHOT_NOT_READY")
         player_names = {seat.seat_id: seat.name for seat in self._setup.seats}
         players = []
@@ -479,7 +693,7 @@ class XmageGameSession:
                     row["life"],
                     row["hand_count"],
                     row["library_count"],
-                    None,
+                    row.get("eliminated"),
                     row.get("left"),
                     _pairs(row.get("mana")),
                     _pairs(row.get("counters")),
@@ -505,11 +719,39 @@ class XmageGameSession:
                 for card in pending.get("second_pile", ())
                 if card["id"] not in known
             )
+        commanders = []
+        for commander in view.get("commanders", ()):
+            owner = self._player_ids.get(commander["owner"])
+            if owner is None:
+                raise AdapterError("SNAPSHOT_NOT_READY")
+            deck = self._decks[
+                next(
+                    index
+                    for index, seat in enumerate(self._setup.seats)
+                    if seat.seat_id == owner
+                )
+            ]
+            reference = self._commander_refs.setdefault(commander["id"], _id())
+            commanders.append(
+                CommanderState(
+                    reference,
+                    owner,
+                    commander.get("name"),
+                    deck.bindings.get((commander.get("set"), commander.get("number"))),
+                    commander.get("plays"),
+                    tuple(
+                        (self._player_ids[raw], amount)
+                        for raw, amount in commander["damage"].items()
+                        if raw in self._player_ids
+                    ),
+                    commander.get("tax"),
+                )
+            )
         old_objects = self._objects.get(player_id, {})
         references, wire, objects = {}, {}, []
         for zone, card, seat in zones:
             hidden = card.get("hidden", True)
-            key = (card["id"], zone, hidden)
+            key = self._object_key(card, zone)
             reference = old_objects.get(key, _id())
             references[key] = reference
             wire[reference] = card["id"]
@@ -523,7 +765,10 @@ class XmageGameSession:
                     else controller
                 )
             else:
-                owner = controller = seat
+                owner = self._player_ids.get(card.get("owner"), seat)
+                controller = self._player_ids.get(card.get("controller"), seat)
+            owner = self._player_ids.get(card.get("owner"), owner)
+            controller = self._player_ids.get(card.get("controller"), controller)
             identity = None
             if not hidden and not card.get("token") and owner in player_names:
                 deck = self._decks[
@@ -533,7 +778,12 @@ class XmageGameSession:
                         if match.seat_id == owner
                     )
                 ]
-                identity = deck.bindings.get((card.get("set"), card.get("number")))
+                identity = deck.bindings.get(
+                    (
+                        card.get("physical_set", card.get("set")),
+                        card.get("physical_number", card.get("number")),
+                    )
+                )
             characteristics = (
                 None
                 if hidden
@@ -552,6 +802,11 @@ class XmageGameSession:
                     _pairs(card.get("counters")),
                     card.get("copy"),
                     card.get("flipped"),
+                    current_abilities=None
+                    if "live_abilities" not in card
+                    else tuple(
+                        self._public_text(rule) for rule in card["live_abilities"]
+                    ),
                 )
             )
             objects.append(
@@ -568,14 +823,16 @@ class XmageGameSession:
                     card.get("can_attack"),
                     card.get("can_block"),
                     card.get("face_down"),
+                    commander_id=self._commander_refs.get(card["id"])
+                    if not hidden
+                    else None,
                 )
             )
         self._objects[player_id] = references
         self._wire_objects[player_id] = wire
         reverse = {raw: ref for ref, raw in wire.items()}
         cards_by_ref = {
-            references[(card["id"], zone, card.get("hidden", True))]: card
-            for zone, card, _ in zones
+            references[self._object_key(card, zone)]: card for zone, card, _ in zones
         }
         objects = [
             replace(
@@ -588,6 +845,9 @@ class XmageGameSession:
                 if "attachments" in cards_by_ref[obj.object_id]
                 else None,
                 attached_to=reverse.get(cards_by_ref[obj.object_id].get("attached_to")),
+                copy_source_id=reverse.get(
+                    cards_by_ref[obj.object_id].get("copy_source")
+                ),
             )
             for obj in objects
         ]
@@ -673,8 +933,13 @@ class XmageGameSession:
                         raw: "Select player"
                         if raw in self._player_ids
                         else "Select object"
-                        for raw in request.get("targets")
-                        or [card["id"] for card in request.get("cards", ())]
+                        for raw in (
+                            tuple(
+                                request.get("targets")
+                                or [card["id"] for card in request.get("cards", ())]
+                            )
+                            + tuple(request.get("selected_targets") or ())
+                        )
                     }
                 )
                 for raw, label in values.items():
@@ -691,6 +956,7 @@ class XmageGameSession:
                             self._public_text(label),
                             reverse.get(raw),
                             self._player_ids.get(raw),
+                            raw in (request.get("selected_targets") or ()),
                         )
                     )
             decision = ChoiceRequest(
@@ -711,6 +977,7 @@ class XmageGameSession:
                     )
                     for row in request.get("amounts", ())
                 ),
+                request.get("can_finish", False),
             )
         combat = tuple(
             CombatAssignment(
@@ -737,6 +1004,8 @@ class XmageGameSession:
             decision,
             combat,
             result=self._results.get(player_id),
+            commanders=tuple(commanders) if "commanders" in view else None,
+            observations=view.get("_observations", ()),
         )
 
     def poll(self, player_id, timeout=0):
@@ -756,6 +1025,8 @@ class XmageGameSession:
         self._check(player)
         self._pump()
         pending = self._pending.get(player)
+        if player in self._deferred_views:
+            return CommandResult(command, "rejected", "SNAPSHOT_NOT_READY")
         if self._status[player] != "active":
             return CommandResult(command, "rejected", "SESSION_NOT_ACTIVE")
         if (
@@ -857,6 +1128,18 @@ class XmageGameSession:
             "string",
             " ".join(str(value) for value in values),
         )
+        return self._submit(player_id, decision_id, option, self._choices)
+
+    def finish_selection(self, player_id, decision_id):
+        request = self.snapshot(player_id).decision
+        if (
+            request is None
+            or request.decision_id != decision_id
+            or not request.can_finish
+        ):
+            return CommandResult(_id(), "rejected", "SELECTION_NOT_FINISHABLE")
+        option = _id()
+        self._choices[player_id][option] = ("boolean", False)
         return self._submit(player_id, decision_id, option, self._choices)
 
     def cancel(self, player_id, decision_id):

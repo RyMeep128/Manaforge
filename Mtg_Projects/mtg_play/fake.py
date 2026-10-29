@@ -101,6 +101,19 @@ class ScriptedGameSession:
         )
         return CommandResult(uuid4().hex, "submitted")
 
+    def finish_selection(self, player_id, decision_id):
+        view = self.snapshot(player_id)
+        if (
+            view.decision is None
+            or view.decision.decision_id != decision_id
+            or not view.decision.can_finish
+        ):
+            return CommandResult(uuid4().hex, "rejected", "SELECTION_NOT_FINISHABLE")
+        self.publish(
+            replace(view, decision=None, actions=(), revision=view.revision + 1)
+        )
+        return CommandResult(uuid4().hex, "submitted")
+
     def cancel(self, player_id, decision_id):
         view = self.snapshot(player_id)
         if (

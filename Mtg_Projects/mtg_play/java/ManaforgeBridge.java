@@ -30,6 +30,7 @@ public final class ManaforgeBridge implements MageClient {
     private volatile int amountMin;
     private volatile int amountMax;
     private volatile boolean decisionCancellable;
+    private volatile boolean decisionFinishable;
     private int lastDecisionMessageId = -1;
     private int lastStateMessageId = -1;
 
@@ -79,6 +80,7 @@ public final class ManaforgeBridge implements MageClient {
             GameView view = payload instanceof GameView ? (GameView) payload : null;
             if (payload instanceof GameClientMessage) view = ((GameClientMessage) payload).getGameView();
             if (payload instanceof AbilityPickerView) view = ((AbilityPickerView) payload).getGameView();
+            if (view != null && gameId == null) gameId = callback.getObjectId();
             if (view != null && callback.getMessageId() > lastStateMessageId) {
                 lastStateMessageId = callback.getMessageId();
                 JsonObject snapshot = state(view);
@@ -96,6 +98,7 @@ public final class ManaforgeBridge implements MageClient {
                 decisionMethod = method;
                 JsonObject choice = new JsonObject();
                 choice.addProperty("decision_id", decisionId);
+                choice.addProperty("cycle", view == null ? -1 : view.getGameCycle());
                 choice.addProperty("kind", method);
                 choice.addProperty("message", prompt.getMessage());
                 choice.addProperty("min", prompt.getMin());
@@ -116,11 +119,14 @@ public final class ManaforgeBridge implements MageClient {
                 }
                 choice.add("amounts", amounts);
                 decisionCancellable = method.equals("GAME_PLAY_MANA")
-                    || (method.equals("GAME_TARGET") && !prompt.isFlag())
+
                     || (method.equals("GAME_CHOOSE_CHOICE") && !prompt.getChoice().isRequired())
                     || (method.equals("GAME_GET_MULTI_AMOUNT") && prompt.getOptions() != null && Boolean.TRUE.equals(prompt.getOptions().get("canCancel")));
+                decisionFinishable = method.equals("GAME_TARGET") && !prompt.isFlag();
                 choice.addProperty("cancellable", decisionCancellable);
+                choice.addProperty("can_finish", decisionFinishable);
                 if (prompt.getOptions() != null) {
+                    choice.add("selected_targets", JSON.toJsonTree(prompt.getOptions().get("chosenTargets")));
                     choice.add("attackers", JSON.toJsonTree(prompt.getOptions().get(mage.constants.Constants.Option.POSSIBLE_ATTACKERS)));
                     choice.add("blockers", JSON.toJsonTree(prompt.getOptions().get(mage.constants.Constants.Option.POSSIBLE_BLOCKERS)));
                 }
@@ -141,6 +147,7 @@ public final class ManaforgeBridge implements MageClient {
                 decisionMethod = method;
                 JsonObject choice = new JsonObject();
                 choice.addProperty("decision_id", decisionId);
+                choice.addProperty("cycle", view == null ? -1 : view.getGameCycle());
                 choice.addProperty("kind", method);
                 choice.addProperty("message", picker.getMessage());
                 choice.add("key_choices", JSON.toJsonTree(picker.getChoices()));
@@ -207,10 +214,29 @@ public final class ManaforgeBridge implements MageClient {
         return item;
     }
 
+    private static JsonObject observation(SimpleCardView card, String source) {
+        JsonObject observation = new JsonObject();
+        observation.addProperty("source", source);
+        boolean hidden = card instanceof CardView
+            ? ((CardView) card).hideInfo() || ((CardView) card).isFaceDown()
+            : card.getExpansionSetCode() == null || card.getExpansionSetCode().isEmpty()
+                || card.getCardNumber() == null || card.getCardNumber().equals("0");
+        observation.addProperty("hidden", hidden);
+        if (!hidden) {
+            observation.addProperty("set", card.getExpansionSetCode());
+            observation.addProperty("number", card.getCardNumber());
+            if (card instanceof CardView) observation.addProperty("name", ((CardView) card).getName());
+        }
+        // Deliberately omit engine object IDs: a past observation must not identify
+        // the corresponding object after concealment or a hidden-zone shuffle.
+        return observation;
+    }
+
     private JsonObject state(GameView view) {
         JsonObject data = new JsonObject();
         data.addProperty("game_id", gameId == null ? null : gameId.toString());
         data.addProperty("turn", view.getTurn());
+        data.addProperty("cycle", view.getGameCycle());
         data.addProperty("viewer", view.getMyPlayer() == null ? null : view.getMyPlayer().getPlayerId().toString());
         data.add("phase", JSON.toJsonTree(view.getPhase() == null ? null : view.getPhase().name()));
         data.add("step", JSON.toJsonTree(view.getStep() == null ? null : view.getStep().name()));
@@ -253,6 +279,16 @@ public final class ManaforgeBridge implements MageClient {
             players.add(row);
         }
         data.add("players", players);
+        JsonArray observations = new JsonArray();
+        for (RevealedView revealed : view.getRevealed())
+            for (CardView card : revealed.getCards().values()) observations.add(observation(card, "revealed"));
+        for (RevealedView companion : view.getCompanion())
+            for (CardView card : companion.getCards().values()) observations.add(observation(card, "companion"));
+        for (LookedAtView looked : view.getLookedAt())
+            for (SimpleCardView card : looked.getCards().values()) observations.add(observation(card, "looked_at"));
+        for (PlayerView player : view.getPlayers())
+            if (player.getTopCard() != null) observations.add(observation(player.getTopCard(), "library_top"));
+        data.add("observations", observations);
         JsonArray combat = new JsonArray();
         for (CombatGroupView group : view.getCombat()) {
             JsonObject entry = new JsonObject();
@@ -278,7 +314,11 @@ public final class ManaforgeBridge implements MageClient {
             JsonObject stats = JSON.toJsonTree(view.getCanPlayObjects().getStats(object)).getAsJsonObject();
             int play = stats.getAsJsonArray("basicPlayAbilities").size();
             int cast = stats.getAsJsonArray("basicCastAbilities").size();
-            actionKinds.addProperty(object.toString(), play > 0 && cast == 0 ? "play_land" : cast > 0 && play == 0 ? "cast_spell" : "activate");
+            int other = stats.getAsJsonArray("other").size();
+            int mana = stats.getAsJsonArray("basicManaAbilities").size();
+            actionKinds.addProperty(object.toString(), other > 0 ? "select_object" :
+                play > 0 && cast == 0 ? "play_land" : cast > 0 && play == 0 ? "cast_spell" :
+                mana > 0 && play == 0 && cast == 0 ? "activate" : "select_object");
         }
         data.add("action_kinds", actionKinds);
         data.add("playable", JSON.toJsonTree(view.getCanPlayObjects() == null
@@ -328,7 +368,10 @@ public final class ManaforgeBridge implements MageClient {
                 connection.setPassword("");
                 connection.setProxyType(Connection.ProxyType.NONE);
                 connection.setUserIdStr(UUID.randomUUID().toString());
-                connection.setUserData(UserData.getDefaultUserDataView());
+                UserData preferences = UserData.getDefaultUserDataView();
+                preferences.setAutoOrderTrigger(false);
+                preferences.setAutoTargetLevel(0);
+                connection.setUserData(preferences);
                 if (!session.connectStart(connection)) {
                     throw new IllegalStateException("XMage connection failed: " + session.getLastError());
                 }
@@ -393,7 +436,7 @@ public final class ManaforgeBridge implements MageClient {
                             || expected != decisionId || decisionId < 0)
                         throw new IllegalArgumentException("STALE_DECISION");
                     pendingMethod = decisionMethod;
-                    boolean valid = (kind.equals("boolean") && (pendingMethod.equals("GAME_ASK") || pendingMethod.equals("GAME_SELECT") || pendingMethod.equals("GAME_PLAY_MANA") || pendingMethod.equals("GAME_CHOOSE_PILE") || (decisionCancellable && (pendingMethod.equals("GAME_TARGET") || pendingMethod.equals("GAME_GET_MULTI_AMOUNT")))))
+                    boolean valid = (kind.equals("boolean") && (pendingMethod.equals("GAME_ASK") || pendingMethod.equals("GAME_SELECT") || pendingMethod.equals("GAME_PLAY_MANA") || pendingMethod.equals("GAME_CHOOSE_PILE") || ((decisionFinishable && pendingMethod.equals("GAME_TARGET")) || (decisionCancellable && pendingMethod.equals("GAME_GET_MULTI_AMOUNT")))))
                         || (kind.equals("object") && (pendingMethod.equals("GAME_SELECT") || pendingMethod.equals("GAME_TARGET") || pendingMethod.equals("GAME_CHOOSE_ABILITY") || pendingMethod.equals("GAME_PLAY_MANA")))
                         || (kind.equals("integer") && pendingMethod.equals("GAME_GET_AMOUNT"))
                         || (kind.equals("string") && (pendingMethod.equals("GAME_CHOOSE_CHOICE") || pendingMethod.equals("GAME_GET_MULTI_AMOUNT")));

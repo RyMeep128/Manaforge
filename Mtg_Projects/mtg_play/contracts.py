@@ -5,7 +5,7 @@ from dataclasses import asdict, dataclass
 from typing import Protocol, Literal
 
 GAME_PROTOCOL_VERSION = 1
-ADAPTER_VERSION = "0.1.0-alpha.1"
+ADAPTER_VERSION = "0.2.0-alpha.1"
 
 
 class Serializable:
@@ -72,11 +72,12 @@ class CardCharacteristics(Serializable):
     counters: tuple[tuple[str, int], ...] | None = None
     is_copy: bool | None = None
     flipped: bool | None = None
+    current_abilities: tuple[str, ...] | None = None
     unsupported_fields: tuple[str, ...] = (
         "current_rules_text",
         "ability_identities",
         "color_identity",
-        "copy_provenance",
+        "copy_provenance_history",
         "merged_components",
     )
 
@@ -97,6 +98,8 @@ class GameObject(Serializable):
     face_down: bool | None = None
     attachments: tuple[str, ...] | None = None
     attached_to: str | None = None
+    commander_id: str | None = None
+    copy_source_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -126,6 +129,7 @@ class ChoiceOption(Serializable):
     label: str
     object_id: str | None = None
     player_id: str | None = None
+    selected: bool = False
 
 
 @dataclass(frozen=True)
@@ -147,6 +151,7 @@ class ChoiceRequest(Serializable):
     maximum: int | None = None
     cancellable: bool = False
     amounts: tuple[AmountConstraint, ...] = ()
+    can_finish: bool = False
 
 
 @dataclass(frozen=True)
@@ -155,6 +160,27 @@ class CombatAssignment(Serializable):
     blockers: tuple[str, ...]
     defender_id: str | None
     blocked: bool
+
+
+@dataclass(frozen=True)
+class CommanderState(Serializable):
+    commander_id: str
+    owner_id: str
+    name: str | None
+    card_identity: CardIdentity | None
+    command_zone_plays: int | None
+    damage_dealt: tuple[tuple[str, int], ...]
+    additional_cast_cost: str | None = None
+
+
+@dataclass(frozen=True)
+class CardObservation(Serializable):
+    observation_id: str
+    source: str
+    hidden: bool
+    name: str | None = None
+    set_code: str | None = None
+    collector_number: str | None = None
 
 
 @dataclass(frozen=True)
@@ -175,12 +201,9 @@ class GameSnapshot(Serializable):
     combat: tuple[CombatAssignment, ...] = ()
     protocol_version: int = GAME_PROTOCOL_VERSION
     result: str | None = None
-    unsupported_fields: tuple[str, ...] = (
-        "commander_damage",
-        "commander_tax",
-        "revealed_zones",
-        "unobserved_zone_change_identity",
-    )
+    commanders: tuple[CommanderState, ...] | None = None
+    observations: tuple[CardObservation, ...] = ()
+    unsupported_fields: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -189,6 +212,7 @@ class GameEvent(Serializable):
     player_id: str
     revision: int
     code: str | None = None
+    observations: tuple[CardObservation, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -218,5 +242,6 @@ class GameSession(Protocol):
     def choose_amounts(
         self, player_id: str, decision_id: str, values: tuple[int, ...]
     ) -> CommandResult: ...
+    def finish_selection(self, player_id: str, decision_id: str) -> CommandResult: ...
     def cancel(self, player_id: str, decision_id: str) -> CommandResult: ...
     def concede(self, player_id: str) -> CommandResult: ...

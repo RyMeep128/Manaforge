@@ -1,4 +1,9 @@
-# XMage connection proof
+# XMage integration and connection proof
+
+For the current public gameplay API, acceptance scenarios, capabilities, and
+remaining verification gate, read [ADAPTER.md](ADAPTER.md). The connection and
+Milestone A sections below document the historical experiment; current gameplay
+consumers must use the public adapter.
 
 Standalone feasibility experiment for Python → Java bridge → local XMage server →
 real server callback → disconnection and normal JVM shutdown. This does not enable
@@ -224,9 +229,9 @@ Unsupported decision families emit `UNSUPPORTED_DECISION` and fail the harness.
 The current protocol is unsuitable as a production visibility or authorization
 boundary until those later stories pass.
 
-Ordinary adapter tests run in the existing Windows test job. Engine bundles are
-not downloaded by CI and there is no new CI service or workflow: real-engine
-acceptance uses this explicit local harness and its retained `result.json`.
+Ordinary adapter tests run in the existing Windows test job. The existing CI workflow now prepares explicitly SHA-256-pinned engine/runtime
+archives in an isolated directory and runs the public adapter acceptance suite.
+See ADAPTER.md for the current verification process.
 No test-suite result should be inferred from the live harness result.
 
 

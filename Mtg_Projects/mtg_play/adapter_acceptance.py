@@ -513,21 +513,75 @@ def commander_acceptance(adapter: LocalGameAdapter, seats: int) -> dict:
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--xmage-root", type=Path)
+    parser.add_argument("--jdk-path", type=Path)
     parser.add_argument(
-        "--scenario", choices=("basic", "combat", "commander"), default="basic"
+        "--scenario",
+        choices=(
+            "basic",
+            "combat",
+            "commander",
+            "identity",
+            "commander-play",
+            "visibility",
+            "number",
+            "modes",
+            "sacrifice",
+            "distribution",
+            "triggers",
+            "copy",
+            "transform",
+            "partners",
+            "interruption",
+            "blockers",
+            "cancellation",
+            "string-choice",
+            "background",
+            "piles",
+            "companion",
+        ),
+        default="basic",
     )
     parser.add_argument("--seats", type=int, default=2)
     args = parser.parse_args()
-    with LocalGameAdapter() as adapter:
+    from . import acceptance_scenarios
+
+    options = {}
+    if args.xmage_root is not None:
+        options["bundle"] = args.xmage_root
+    if args.jdk_path is not None:
+        options["jdk"] = args.jdk_path
+    scenarios = {
+        "basic": acceptance,
+        "combat": combat_acceptance,
+        "commander": lambda adapter: commander_acceptance(adapter, args.seats),
+        "identity": acceptance_scenarios.identity,
+        "commander-play": acceptance_scenarios.commander_play,
+        "visibility": acceptance_scenarios.visibility,
+        "number": lambda adapter: acceptance_scenarios.decisions(adapter, "number"),
+        "modes": lambda adapter: acceptance_scenarios.decisions(adapter, "modes"),
+        "sacrifice": lambda adapter: acceptance_scenarios.decisions(
+            adapter, "sacrifice"
+        ),
+        "distribution": acceptance_scenarios.distribution,
+        "triggers": acceptance_scenarios.triggers,
+        "copy": acceptance_scenarios.copy_identity,
+        "transform": acceptance_scenarios.transformation,
+        "partners": acceptance_scenarios.partners,
+        "background": lambda adapter: acceptance_scenarios.partners(
+            adapter, background=True
+        ),
+        "interruption": acceptance_scenarios.interruption,
+        "blockers": acceptance_scenarios.blockers,
+        "cancellation": acceptance_scenarios.cancellation,
+        "string-choice": acceptance_scenarios.string_choice,
+        "piles": acceptance_scenarios.piles,
+        "companion": acceptance_scenarios.companion,
+    }
+    with LocalGameAdapter(**options) as adapter:
         result = dict(
             compatibility=adapter.compatibility.to_dict(),
-            gameplay=(
-                commander_acceptance(adapter, args.seats)
-                if args.scenario == "commander"
-                else combat_acceptance(adapter)
-                if args.scenario == "combat"
-                else acceptance(adapter)
-            ),
+            gameplay=scenarios[args.scenario](adapter),
         )
     result["runtime"] = adapter.result.to_dict()
     payload = json.dumps(result, indent=2)
