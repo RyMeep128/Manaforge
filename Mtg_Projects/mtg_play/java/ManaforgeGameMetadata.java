@@ -62,6 +62,11 @@ public final class ManaforgeGameMetadata {
             Object response = field(human, type, "response");
             synchronized (response) {
                 if (!Boolean.TRUE.equals(field(human, type, "responseOpenedForAnswer"))) continue;
+                // Eliminated seats stop receiving fresh views while other seats
+                // continue playing. Their last cycle cannot become current again.
+                Player viewer = game.getPlayer(playerId);
+                if (game.hasEnded() || (viewer != null && (viewer.hasLost() || viewer.hasLeft())))
+                    return status("finished");
                 GameView permitted = controller.getGameView(playerId);
                 GameState state = game.getState();
                 if (permitted == null || permitted.getGameCycle() != cycle || state.getApplyEffectsCounter() != cycle)

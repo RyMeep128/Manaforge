@@ -8,6 +8,7 @@ of calling the engine session. Only the workspace controller talks to the engine
 from __future__ import annotations
 import argparse
 import json
+import logging
 import os
 from pathlib import Path
 import tempfile
@@ -328,6 +329,9 @@ def main():
                 result["runtime"] = runtime.result.to_dict()
                 if not runtime.result.success:
                     result["success"] = False
+            # This standalone pilot owns the process logging lifecycle. Windows
+            # cannot remove its temporary data directory while handlers are open.
+            logging.shutdown()
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     if not result["success"]:
