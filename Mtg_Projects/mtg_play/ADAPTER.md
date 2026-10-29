@@ -73,7 +73,11 @@ priority, permitted zones, stack, combat links, attachments, pending decisions,
 and object actions. Commander state includes engine watcher damage, command-zone
 play counts, and the engine-calculated additional casting cost. No tax or combat
 formula is implemented in Python. Terminal commander metadata can be unavailable
-(`None`) once the engine has removed the game controller.
+(`None`) once the engine has removed the game controller. Such terminal views
+list incarnation, physical-printing, commander and live-ability metadata as
+unavailable in `unsupported_fields`. They do not guess printing associations from
+a copied display face. Object reference continuity applies to active coherent
+frames; controller removal ends that guarantee.
 
 The Java client starts with its own scoped GameView. A narrow server metadata
 reader supplies fields omitted from that view: incarnation counters, physical

@@ -494,7 +494,7 @@ def drive(
                 if view.result is not None:
                     results[seat.seat_id] = view.result
                 continue
-            if inspect(view) and not conceded:
+            if view.status == "active" and inspect(view) and not conceded:
                 for other in setup.seats[1:]:
                     result = game.concede(other.seat_id)
                     if result.outcome != "submitted":
@@ -555,7 +555,14 @@ def drive(
                     seat.seat_id, request.decision_id, source.object_id
                 )
             elif request.family == "selection":
-                action = None if conceded else select(view)
+                # Fixture policy: resolve the current stack before starting another
+                # operation. Otherwise zero-cost duplicates can all be cast before
+                # an inspector has seen the first permanent resolve.
+                action = (
+                    None
+                    if conceded or any(obj.zone == "stack" for obj in view.objects)
+                    else select(view)
+                )
                 if action is None:
                     action = next(
                         action for action in view.actions if action.kind == "pass"

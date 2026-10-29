@@ -97,19 +97,22 @@ jobs:
         run: |
           $reports = Join-Path $env:RUNNER_TEMP 'manaforge-xmage-reports'
           New-Item -ItemType Directory -Path $reports -Force | Out-Null
+          $failures = @()
           foreach ($scenario in @('basic', 'combat', 'identity', 'commander-play', 'visibility', 'number', 'modes', 'sacrifice', 'distribution', 'triggers', 'copy', 'transform', 'partners', 'background', 'companion', 'blockers', 'cancellation', 'string-choice', 'piles', 'interruption')) {
             python -m mtg_play.adapter_acceptance --scenario $scenario --xmage-root "$env:RUNNER_TEMP/manaforge-xmage" --jdk-path "$env:JAVA_HOME" --output "$reports/$scenario.json"
-            if ($LASTEXITCODE -ne 0) { throw "XMage scenario failed: $scenario" }
+            if ($LASTEXITCODE -ne 0) { $failures += $scenario }
           }
           foreach ($seats in @(2, 3, 4, 5)) {
             python -m mtg_play.adapter_acceptance --scenario commander --seats $seats --xmage-root "$env:RUNNER_TEMP/manaforge-xmage" --jdk-path "$env:JAVA_HOME" --output "$reports/commander-$seats.json"
-            if ($LASTEXITCODE -ne 0) { throw "XMage Commander scenario failed: $seats seats" }
+            if ($LASTEXITCODE -ne 0) { $failures += "commander-$seats" }
           }
+          if ($failures.Count) { throw "XMage scenarios failed: $($failures -join ', ')" }
       - name: Upload sanitized XMage acceptance reports
         if: ${{ !cancelled() && matrix.python == '3.12' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: xmage-acceptance
+          include-hidden-files: true
           path: |
             ${{ runner.temp }}/manaforge-xmage-reports
             Mtg_Projects/mtg_play/.runtime/*/events.jsonl

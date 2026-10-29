@@ -180,6 +180,7 @@ def combat_acceptance(adapter: LocalGameAdapter) -> dict:
     )
     conceded = False
     creature_reference = None
+    creature_requested = False
     boosted_turn = None
     changed_turn = None
     deadline = time.monotonic() + 150
@@ -202,7 +203,9 @@ def combat_acceptance(adapter: LocalGameAdapter) -> dict:
                 and obj.characteristics
                 and obj.characteristics.name == "Memnite"
             ]
-            if creatures and seat.seat_id == "one":
+            if creatures and seat.seat_id == "one" and view.status == "active":
+                if len(creatures) != 1:
+                    raise AdapterError("COMBAT_FIXTURE_REQUIRES_ONE_CREATURE")
                 report["spell_resolved"] = True
                 if creature_reference is None:
                     creature_reference = creatures[0].object_id
@@ -336,7 +339,9 @@ def combat_acceptance(adapter: LocalGameAdapter) -> dict:
                 selected = next(
                     action for action in view.actions if action.kind == "pass"
                 )
-                if seat.seat_id == "one":
+                if seat.seat_id == "one" and not any(
+                    obj.zone == "stack" for obj in view.objects
+                ):
                     attacking = {
                         reference
                         for group in view.combat
@@ -349,7 +354,7 @@ def combat_acceptance(adapter: LocalGameAdapter) -> dict:
                         or (
                             action.kind == "cast_spell"
                             and action.label == "Memnite"
-                            and not creatures
+                            and not creature_requested
                         )
                         or (
                             action.kind == "cast_spell"
@@ -372,6 +377,8 @@ def combat_acceptance(adapter: LocalGameAdapter) -> dict:
                     ]
                     if preferred:
                         selected = preferred[0]
+                    if selected.kind == "cast_spell" and selected.label == "Memnite":
+                        creature_requested = True
                 result = session.perform(
                     seat.seat_id, decision.decision_id, selected.action_id
                 )

@@ -547,6 +547,7 @@ class XmageGameSession:
                 self._deferred_views.pop(player, None)
             return False
         if metadata["status"] == "finished":
+            view["_metadata_unavailable"] = True
             if self._status[player] not in ("finished", "failed"):
                 self._status[player] = "finishing"
                 self._pending.pop(player, None)
@@ -770,7 +771,12 @@ class XmageGameSession:
             owner = self._player_ids.get(card.get("owner"), owner)
             controller = self._player_ids.get(card.get("controller"), controller)
             identity = None
-            if not hidden and not card.get("token") and owner in player_names:
+            if (
+                not hidden
+                and not card.get("token")
+                and owner in player_names
+                and not view.get("_metadata_unavailable")
+            ):
                 deck = self._decks[
                     next(
                         index
@@ -1006,6 +1012,16 @@ class XmageGameSession:
             result=self._results.get(player_id),
             commanders=tuple(commanders) if "commanders" in view else None,
             observations=view.get("_observations", ()),
+            unsupported_fields=(
+                (
+                    "object_incarnations",
+                    "physical_printing",
+                    "commander_metadata",
+                    "live_abilities",
+                )
+                if view.get("_metadata_unavailable")
+                else ()
+            ),
         )
 
     def poll(self, player_id, timeout=0):

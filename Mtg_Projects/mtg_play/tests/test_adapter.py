@@ -535,3 +535,24 @@ def test_copy_uses_physical_printing_instead_of_copied_display_printing(session)
     obj = session.snapshot("one").objects[0]
     assert obj.card_identity == identity
     assert obj.characteristics.name == "Memnite"
+
+
+def test_terminal_view_does_not_guess_printing_after_metadata_controller_is_removed(
+    session,
+):
+    identity = CardIdentity("oracle", "selected-print", "entry")
+    session._decks = (
+        PreparedDeck((), (), {("SOM", "174"): identity}),
+        PreparedDeck((), (), {}),
+    )
+    inject(session, state(1))
+    assert session.snapshot("one").objects[0].card_identity == identity
+    terminal = state(2)
+    terminal["cycle"] = 8
+    session._owner._metadata = lambda view: dict(status="finished")
+    inject(session, terminal)
+    view = session.snapshot("one")
+    assert view.status == "finishing" and view.commanders is None
+    assert "object_incarnations" in view.unsupported_fields
+    assert "physical_printing" in view.unsupported_fields
+    assert view.objects[0].card_identity is None
