@@ -70,7 +70,7 @@ jobs:
         run: python -m pytest -vv --tb=short --durations=10 -o faulthandler_timeout=120 mtg_editor/tests integration_tests mtg_proxy/tests mtg_core/tests mtg_play/tests
       - name: Determine XMage acceptance scope
         id: xmage-scope
-        if: ${{ matrix.python == '3.12' }}
+        if: ${{ !cancelled() && matrix.python == '3.12' }}
         env:
           XMAGE_FORCE: ${{ github.event_name == 'workflow_dispatch' && inputs.verify_xmage }}
         run: |
@@ -78,18 +78,20 @@ jobs:
           $verify = $LASTEXITCODE -ne 0 -or [bool]($changed -match '^Mtg_Projects/(mtg_play|mtg_core)/|^\.github/workflows/tests\.yml$') -or $env:XMAGE_FORCE -eq 'true'
           "verify=$($verify.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
       - name: Set up the bridge compiler
-        if: ${{ matrix.python == '3.12' && steps.xmage-scope.outputs.verify == 'true' }}
+        id: xmage-compiler
+        if: ${{ !cancelled() && matrix.python == '3.12' && steps.xmage-scope.outputs.verify == 'true' }}
         uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
         with:
           distribution: temurin
           java-version: '23.0.2+7'
       - name: Prepare SHA-256-pinned XMage and runtime in a new CI directory
-        if: ${{ matrix.python == '3.12' && steps.xmage-scope.outputs.verify == 'true' }}
+        id: xmage-prepare
+        if: ${{ !cancelled() && steps.xmage-compiler.outcome == 'success' }}
         env:
           PYTHONPATH: ${{ github.workspace }}/Mtg_Projects
         run: python -m mtg_play.ci_prepare --destination "$env:RUNNER_TEMP/manaforge-xmage" --jdk-path "$env:JAVA_HOME"
       - name: Verify real XMage games through the public adapter
-        if: ${{ matrix.python == '3.12' && steps.xmage-scope.outputs.verify == 'true' }}
+        if: ${{ !cancelled() && steps.xmage-prepare.outcome == 'success' }}
         env:
           PYTHONPATH: ${{ github.workspace }}/Mtg_Projects;${{ github.workspace }}/Mtg_Projects/mtg_core
         run: |

@@ -2,8 +2,8 @@
 
 The alpha adapter implements engine-backed local games without Qt, rendering,
 AI, or remote multiplayer. Integration acceptance is implemented and has passed
-locally against the pinned engine. **Epic acceptance still requires the existing
-CI checks to pass.** This does not certify every card or engine mechanic.
+locally against the pinned engine. **Consult the Tests workflow for CI acceptance
+of a particular commit.** This does not certify every card or engine mechanic.
 
 ## Public API
 
@@ -158,7 +158,9 @@ Use `--output` for JSON reports; `--xmage-root` and `--jdk-path` override locati
 All fixture decisions use the public API. Fixture policies are harness scripts,
 not adapter policy or AI. The existing Tests workflow runs boundary tests on
 Python 3.12/3.13 and real-engine scenarios on 3.12 when adapter/Core/workflow paths
-change. Manual input `verify_xmage` forces acceptance regardless of changed paths.
+change. Engine acceptance still runs if unrelated ordinary tests fail; their job
+remains failed and those failures are never suppressed. Manual input `verify_xmage`
+forces acceptance regardless of changed paths.
 
 `ci_prepare` downloads only explicitly pinned archives in `ci-artifacts.json`,
 checks archive hashes, extracts into a new isolated directory, and verifies all
@@ -188,7 +190,7 @@ Normal adapter startup does not download or update an engine.
 
 Every listed completed scenario reported all owned JVMs exiting 0 without forced
 cleanup. Reports are retained locally under ignored `.runtime`; no ordinary local
-pytest result is claimed. CI has not run for the unpushed work. Arbitrary card mechanics remain uncertified;
+pytest result is claimed. CI reports are separate from this local evidence. Arbitrary card mechanics remain uncertified;
 capability claims describe the demonstrated fixtures rather than inferring
 universal support from engine presence.
 
