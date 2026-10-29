@@ -52,10 +52,18 @@ public final class ManaforgeGameMetadata {
         GameController controller = managers().gameManager().getGameController().get(gameId);
         if (controller == null) return status("finished");
         Game game = (Game) field(controller, GameController.class, "game");
+        Player viewer = game.getPlayer(playerId);
+        // Terminal flags are monotonic. A departed viewer has no fresh cycle,
+        // even when there is no remaining human response monitor to acquire.
+        if (game.hasEnded() || (viewer != null && (viewer.hasLost() || viewer.hasLeft())))
+            return status("finished");
         // HumanPlayer.waitForResponse holds no game work while its response monitor
         // is acquired with responseOpenedForAnswer=true. No game-state mutation or
         // feedback is performed here. Reject mismatched cycles instead of guessing.
         for (Player player : game.getPlayers().values()) {
+            // A departed HumanPlayer can retain an open response flag. Its
+            // monitor no longer pauses the game thread and cannot guard a read.
+            if (player.hasLost() || player.hasLeft()) continue;
             Object human = player.getRealPlayer();
             Class<?> type = human.getClass();
             if (!type.getName().equals("mage.player.human.HumanPlayer")) continue;
@@ -64,15 +72,28 @@ public final class ManaforgeGameMetadata {
                 if (!Boolean.TRUE.equals(field(human, type, "responseOpenedForAnswer"))) continue;
                 // Eliminated seats stop receiving fresh views while other seats
                 // continue playing. Their last cycle cannot become current again.
-                Player viewer = game.getPlayer(playerId);
                 if (game.hasEnded() || (viewer != null && (viewer.hasLost() || viewer.hasLeft())))
                     return status("finished");
                 GameView permitted = controller.getGameView(playerId);
                 GameState state = game.getState();
-                if (permitted == null || permitted.getGameCycle() != cycle || state.getApplyEffectsCounter() != cycle)
-                    return status("retry");
+                if (permitted == null || permitted.getGameCycle() != cycle) return status("retry");
                 if (permitted.getMyPlayer() == null || !permitted.getMyPlayer().getPlayerId().equals(playerId))
                     return status("unauthorized");
+                if (state.getApplyEffectsCounter() != cycle) {
+                    // Concessions can advance live state after the current prompt's
+                    // view was sent. Do not join card metadata from another cycle,
+                    // or block the very response needed to advance the game.
+                    JsonObject result = status("view_only");
+                    JsonArray players = new JsonArray();
+                    for (PlayerView view : permitted.getPlayers()) {
+                        Player current = game.getPlayer(view.getPlayerId());
+                        JsonObject row = new JsonObject(); row.addProperty("id", current.getId().toString());
+                        row.addProperty("lost", current.hasLost()); row.addProperty("left", current.hasLeft());
+                        players.add(row);
+                    }
+                    result.add("players", players);
+                    return result;
+                }
                 Set<UUID> visible = new HashSet<>();
                 cards(visible, permitted.getMyHand()); cards(visible, permitted.getStack());
                 for (PlayerView view : permitted.getPlayers()) {

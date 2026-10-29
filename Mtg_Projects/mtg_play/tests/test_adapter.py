@@ -428,6 +428,61 @@ def test_metadata_retry_does_not_publish_an_incoherent_view(session):
     assert view.objects and view.commanders == ()
 
 
+def test_view_only_metadata_keeps_prompt_usable_without_guessing_card_metadata(session):
+    identity = CardIdentity("oracle", "selected-print", "entry")
+    session._decks = (
+        PreparedDeck((), (), {("SOM", "174"): identity}),
+        PreparedDeck((), (), {}),
+    )
+    update = state(2)
+    update["cycle"] = 7
+    session._owner._metadata = lambda view: dict(
+        status="view_only",
+        players=[
+            dict(id="engine-player-one", lost=False, left=False),
+            dict(id="engine-player-two", lost=False, left=True),
+        ],
+    )
+    inject(session, update)
+    inject(
+        session,
+        dict(
+            event="decision",
+            decision_id=2,
+            cycle=7,
+            kind="GAME_ASK",
+            message="Mulligan?",
+        ),
+    )
+    view = session.snapshot("one")
+    assert view.status == "active" and view.decision is not None
+    assert view.players[1].eliminated and view.players[1].left_game
+    assert view.objects[0].card_identity is None and view.commanders is None
+    assert "physical_printing" in view.unsupported_fields
+    session._request = lambda *args, **kwargs: {"accepted": True}
+    assert (
+        session.choose(
+            "one", view.decision.decision_id, view.decision.options[0].option_id
+        ).outcome
+        == "submitted"
+    )
+    session._owner._metadata = lambda view: dict(
+        status="ok",
+        cycle=8,
+        objects={"engine-card": {"incarnation": 2}},
+        commanders=[],
+        players=[
+            dict(id="engine-player-one", lost=False, left=False),
+            dict(id="engine-player-two", lost=False, left=True),
+        ],
+    )
+    update = state(3)
+    update["cycle"] = 8
+    inject(session, update)
+    view = session.snapshot("one")
+    assert view.unsupported_fields == () and view.objects[0].card_identity == identity
+
+
 def test_commander_designation_is_distinct_from_current_object_identity(session):
     update = state(1)
     update["hand"][0]["incarnation"] = 1

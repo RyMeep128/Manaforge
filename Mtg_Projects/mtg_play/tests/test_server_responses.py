@@ -93,17 +93,20 @@ def test_acceptance_keeps_multiplayer_failure_cause():
 
 
 @pytest.mark.parametrize("reject", [False, True])
+@pytest.mark.parametrize("requires_pass", [False, True])
 @pytest.mark.parametrize("seats", [2, 3, 4, 5])
 def test_commander_keeps_all_hands_before_conceding_and_waits_for_game_over(
-    monkeypatch, reject, seats
+    monkeypatch, reject, seats, requires_pass
 ):
     players = {str(index) for index in range(seats)}
     finished = set()
+    eliminated = set()
     kept = set()
     pending = {}
     sent = []
     polls = 0
     priority_seen = False
+    passed = set()
     objects = [SimpleNamespace(zone="hand") for _ in range(7)] + [
         SimpleNamespace(
             zone="command",
@@ -116,10 +119,11 @@ def test_commander_keeps_all_hands_before_conceding_and_waits_for_game_over(
         nonlocal polls
         polls += 1
         assert polls < 100, "acceptance stalled waiting for a terminal callback"
-        if player in pending:
+        if player in pending and (not requires_pass or player in passed):
             pending[player] -= 1
             if not pending[player]:
                 del pending[player]
+                eliminated.add(player)
         # Individual concessions do not finish the multiplayer game. Only emit
         # final statuses/results once all opponents' commands were processed.
         if len(sent) == seats - 1 and not pending:
@@ -132,6 +136,8 @@ def test_commander_keeps_all_hands_before_conceding_and_waits_for_game_over(
         decision = None
         if sent:
             decision = SimpleNamespace(family="target", prompt="Discard a card")
+            if requires_pass and player == "0" and pending:
+                decision = SimpleNamespace(family="selection", decision_id="priority")
         elif kept == players and polls >= seats * 3:
             priority_seen = True
             decision = SimpleNamespace(family="selection")
@@ -145,6 +151,15 @@ def test_commander_keeps_all_hands_before_conceding_and_waits_for_game_over(
         return SimpleNamespace(
             status="finished" if terminal else "active",
             objects=objects,
+            players=[
+                SimpleNamespace(
+                    player_id=seat,
+                    eliminated=seat in eliminated,
+                    left_game=seat in eliminated,
+                )
+                for seat in players
+            ],
+            actions=[SimpleNamespace(kind="pass", action_id="pass")],
             decision=decision,
             result=("won" if player == "0" else "did_not_win") if terminal else None,
         )
@@ -152,6 +167,7 @@ def test_commander_keeps_all_hands_before_conceding_and_waits_for_game_over(
     def concede(player):
         assert kept == players, "conceded before every hand was kept"
         assert priority_seen, "conceded before the engine processed keep responses"
+        assert not pending, "overlapping concessions can lose an engine signal"
         sent.append(player)
         pending[player] = 3
         return SimpleNamespace(
@@ -164,8 +180,13 @@ def test_commander_keeps_all_hands_before_conceding_and_waits_for_game_over(
         kept.add(player)
         return SimpleNamespace(outcome="submitted")
 
+    def perform(player, decision, action):
+        assert player == "0" and decision == "priority" and action == "pass"
+        passed.update(pending)
+        return SimpleNamespace(outcome="submitted")
+
     session = SimpleNamespace(
-        poll=poll, snapshot=snapshot, concede=concede, choose=choose
+        poll=poll, snapshot=snapshot, concede=concede, choose=choose, perform=perform
     )
     adapter = SimpleNamespace(create_game=lambda *args: session)
     monkeypatch.setattr("mtg_play.adapter_acceptance.time.sleep", lambda seconds: None)
