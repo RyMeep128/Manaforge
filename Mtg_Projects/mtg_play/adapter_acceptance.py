@@ -448,6 +448,8 @@ def commander_acceptance(adapter: LocalGameAdapter, seats: int) -> dict:
         opening_hands=[],
         finished=[],
         results={},
+        kept_hands=[],
+        ready_for_concessions=False,
     )
     conceded = set()
     deadline = time.monotonic() + 120
@@ -484,7 +486,7 @@ def commander_acceptance(adapter: LocalGameAdapter, seats: int) -> dict:
             if view.result is not None:
                 report["results"][seat.seat_id] = view.result
             decision = view.decision
-            if decision is None or seat.seat_id in conceded:
+            if decision is None or conceded or view.status != "active":
                 continue
             if decision.family == "boolean" and "mulligan" in decision.prompt.lower():
                 result = session.choose(
@@ -502,6 +504,11 @@ def commander_acceptance(adapter: LocalGameAdapter, seats: int) -> dict:
                     seat.seat_id, decision.decision_id, decision.options[0].option_id
                 )
             elif decision.family == "selection":
+                if len(report["kept_hands"]) == seats:
+                    # A new priority prompt proves XMage processed the last
+                    # keep response. Leave it open while concessions are queued.
+                    report["ready_for_concessions"] = True
+                    continue
                 result = session.perform(
                     seat.seat_id,
                     decision.decision_id,
@@ -513,22 +520,31 @@ def commander_acceptance(adapter: LocalGameAdapter, seats: int) -> dict:
                 raise AdapterError("UNSUPPORTED_COMMANDER_PROMPT: " + decision.family)
             if result.outcome != "submitted":
                 raise AdapterError(result.code or "COMMANDER_COMMAND_FAILED")
+            if decision.family == "boolean" and "mulligan" in decision.prompt.lower():
+                if seat.seat_id not in report["kept_hands"]:
+                    report["kept_hands"].append(seat.seat_id)
         if (
             len(report["command_zones"]) == seats
             and len(report["opening_hands"]) == seats
-            and conceded.issubset(report["finished"])
+            and len(report["kept_hands"]) == seats
+            and report["ready_for_concessions"]
         ):
-            # XMage processes concessions asynchronously on the game thread.
-            # Wait for the previous seat's terminal callback before sending
-            # another, so its async-command reset cannot swallow the next one.
+            # XMage queues conceding players. Submit every concession after all
+            # keep-hand responses, then poll without sending further decisions.
+            # GAME_OVER and final results are required below, not between seats.
             for seat in setup.seats[1:]:
                 if seat.seat_id not in conceded:
                     result = session.concede(seat.seat_id)
                     if result.outcome != "submitted":
                         raise AdapterError(result.code or "COMMANDER_CONCESSION_FAILED")
                     conceded.add(seat.seat_id)
-                    break
         if len(report["finished"]) == seats and len(report["results"]) == seats:
+            expected = {
+                seat.seat_id: "won" if index == 0 else "did_not_win"
+                for index, seat in enumerate(setup.seats)
+            }
+            if report["results"] != expected:
+                raise AdapterError("COMMANDER_RESULT_MISMATCH")
             return report
         time.sleep(0.005)
     raise AdapterError("COMMANDER_ACCEPTANCE_TIMEOUT: " + json.dumps(report))

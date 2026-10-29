@@ -93,52 +93,86 @@ def test_acceptance_keeps_multiplayer_failure_cause():
 
 
 @pytest.mark.parametrize("reject", [False, True])
-def test_commander_concessions_wait_for_terminal_confirmation(monkeypatch, reject):
+@pytest.mark.parametrize("seats", [2, 3, 4, 5])
+def test_commander_keeps_all_hands_before_conceding_and_waits_for_game_over(
+    monkeypatch, reject, seats
+):
+    players = {str(index) for index in range(seats)}
     finished = set()
+    kept = set()
     pending = {}
     sent = []
+    polls = 0
+    priority_seen = False
     objects = [SimpleNamespace(zone="hand") for _ in range(7)] + [
         SimpleNamespace(
             zone="command",
             characteristics=SimpleNamespace(name="Isamaru, Hound of Konda"),
         )
-        for _ in range(3)
+        for _ in range(seats)
     ]
 
     def poll(player):
+        nonlocal polls
+        polls += 1
+        assert polls < 100, "acceptance stalled waiting for a terminal callback"
         if player in pending:
             pending[player] -= 1
             if not pending[player]:
                 del pending[player]
-                finished.add(player)
-                if len(finished) == 2:
-                    finished.add("0")
+        # Individual concessions do not finish the multiplayer game. Only emit
+        # final statuses/results once all opponents' commands were processed.
+        if len(sent) == seats - 1 and not pending:
+            finished.update(players)
         return ()
 
     def snapshot(player):
+        nonlocal priority_seen
         terminal = player in finished
+        decision = None
+        if sent:
+            decision = SimpleNamespace(family="target", prompt="Discard a card")
+        elif kept == players and polls >= seats * 3:
+            priority_seen = True
+            decision = SimpleNamespace(family="selection")
+        elif player not in kept and polls >= 4:
+            decision = SimpleNamespace(
+                family="boolean",
+                prompt="Mulligan?",
+                decision_id=player,
+                options=[SimpleNamespace(label="No", option_id="keep")],
+            )
         return SimpleNamespace(
             status="finished" if terminal else "active",
             objects=objects,
-            decision=None,
-            result="did_not_win" if terminal else None,
+            decision=decision,
+            result=("won" if player == "0" else "did_not_win") if terminal else None,
         )
 
     def concede(player):
-        assert not pending, "concession sent before previous elimination completed"
+        assert kept == players, "conceded before every hand was kept"
+        assert priority_seen, "conceded before the engine processed keep responses"
         sent.append(player)
         pending[player] = 3
         return SimpleNamespace(
             outcome="rejected" if reject else "submitted", code="SESSION_NOT_ACTIVE"
         )
 
-    session = SimpleNamespace(poll=poll, snapshot=snapshot, concede=concede)
+    def choose(player, decision, option):
+        assert not sent, "gameplay command sent during concession cleanup"
+        assert decision == player and option == "keep"
+        kept.add(player)
+        return SimpleNamespace(outcome="submitted")
+
+    session = SimpleNamespace(poll=poll, snapshot=snapshot, concede=concede, choose=choose)
     adapter = SimpleNamespace(create_game=lambda *args: session)
     monkeypatch.setattr("mtg_play.adapter_acceptance.time.sleep", lambda seconds: None)
     if reject:
         with pytest.raises(AdapterError, match="^SESSION_NOT_ACTIVE$"):
-            commander_acceptance(adapter, 3)
+            commander_acceptance(adapter, seats)
     else:
-        report = commander_acceptance(adapter, 3)
-        assert sent == ["1", "2"]
-        assert set(report["finished"]) == {"0", "1", "2"}
+        report = commander_acceptance(adapter, seats)
+        assert sent == [str(index) for index in range(1, seats)]
+        assert set(report["kept_hands"]) == players
+        assert set(report["finished"]) == players
+        assert report["results"]["0"] == "won"
