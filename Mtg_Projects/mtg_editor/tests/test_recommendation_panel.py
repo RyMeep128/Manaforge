@@ -238,6 +238,11 @@ def test_compact_recommendations_prioritize_grid_and_use_responsive_categories(
     assert not panel.type_tabs.isHidden()
     assert panel.category_combo.isHidden()
     assert panel.canvas.width() <= panel.width()
+    # Hidden filter controls need not have current layout geometry. Exercise the
+    # responsive filter grid while it is actually visible.
+    panel.filters_button.setChecked(True)
+    W.QApplication.processEvents()
+    assert not panel.filter_box.isHidden()
     assert panel.audience.width() <= panel.width()
     panel.hide()
     panel.setParent(editor)

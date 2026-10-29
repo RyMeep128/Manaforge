@@ -198,6 +198,11 @@ pytest result is claimed. CI reports are separate from this local evidence. Arbi
 capability claims describe the demonstrated fixtures rather than inferring
 universal support from engine presence.
 
+CI acceptance at commit `dc32e0e` passed all 24 real-engine scenarios, with normal
+cleanup, and all adapter boundary tests on Python 3.12 and 3.13. The full workflow
+at that commit remained red solely because of three pre-existing Editor/library
+test failures. See the [Tests run](https://github.com/RyMeep128/Manaforge/actions/runs/40803512696).
+
 For upgrades, obtain a separate candidate bundle, inspect real interfaces and the
 metadata reader's private anchors, run all scenarios, review privacy/identity,
 and deliberately update archive/artifact hashes and compatibility. Never edit the
