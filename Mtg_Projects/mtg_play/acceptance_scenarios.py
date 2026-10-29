@@ -467,6 +467,8 @@ def drive(
     timeout=120,
     event_handler=None,
     decision_handler=None,
+    performance=None,
+    allow_stack_actions=False,
 ):
     setup = setup or GameSetup((MatchSeat("one", "One"), MatchSeat("two", "Two")))
     game = adapter.create_game(setup, documents)
@@ -560,7 +562,7 @@ def drive(
                 # an inspector has seen the first permanent resolve.
                 action = (
                     None
-                    if conceded or any(obj.zone == "stack" for obj in view.objects)
+                    if conceded or (not allow_stack_actions and any(obj.zone == "stack" for obj in view.objects))
                     else select(view)
                 )
                 if action is None:
@@ -614,6 +616,8 @@ def drive(
         if len(finished) == len(setup.seats) and len(results) == len(setup.seats):
             if not conceded:
                 raise AdapterError("SCENARIO_ENDED_BEFORE_EVIDENCE")
+            if performance is not None:
+                performance.update(game.performance_report())
             return dict(results=results, engine_result=True)
         time.sleep(0.005)
     raise AdapterError("SCENARIO_TIMEOUT")

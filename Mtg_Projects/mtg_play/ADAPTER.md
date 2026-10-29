@@ -149,6 +149,11 @@ and compiler diagnostics, not JVM logs.
 
 ## Acceptance and reproducibility
 
+The additional [real-deck validation paths and baseline methodology](REAL_DECK_VALIDATION.md)
+separate Commander loading/extended play from the deliberate Elemental/token/copy
+stress fixture. Their implementation is awaiting CI evidence; they do not expand
+the verified capability claims below.
+
 From the repository root in PowerShell:
 
 ```powershell

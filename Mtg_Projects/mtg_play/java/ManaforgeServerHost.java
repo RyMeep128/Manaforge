@@ -59,6 +59,14 @@ public final class ManaforgeServerHost {
                         if (card == null || (!alias && !card.getName().equals(name))) {
                             result.addProperty("error", "CARD_NOT_SUPPORTED");
                         } else {
+                            String selectedSet = query.get("set").getAsString();
+                            String selectedNumber = query.get("number").getAsString();
+                            if ((!selectedSet.isEmpty() && !selectedSet.equalsIgnoreCase(card.getSetCode()))
+                                    || (!selectedNumber.isEmpty() && !selectedNumber.equals(card.getCardNumber()))) {
+                                result.addProperty("error", "PRINTING_NOT_RESOLVED");
+                                resolved.add(result);
+                                continue;
+                            }
                             result.addProperty("name", card.getName());
                             result.addProperty("set", card.getSetCode());
                             result.addProperty("number", card.getCardNumber());

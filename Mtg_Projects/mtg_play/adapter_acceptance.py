@@ -546,12 +546,17 @@ def main():
             "background",
             "piles",
             "companion",
+            "real-decks",
+            "complex-board",
         ),
         default="basic",
     )
     parser.add_argument("--seats", type=int, default=2)
     args = parser.parse_args()
     from . import acceptance_scenarios
+    from . import real_deck_acceptance
+    from .decks import DeckTranslationError
+    from .diagnostics import diagnostic_category
 
     options = {}
     if args.xmage_root is not None:
@@ -584,17 +589,31 @@ def main():
         "string-choice": acceptance_scenarios.string_choice,
         "piles": acceptance_scenarios.piles,
         "companion": acceptance_scenarios.companion,
+        "real-decks": real_deck_acceptance.real_decks,
+        "complex-board": real_deck_acceptance.complex_board,
     }
-    with LocalGameAdapter(**options) as adapter:
-        result = dict(
-            compatibility=adapter.compatibility.to_dict(),
-            gameplay=scenarios[args.scenario](adapter),
-        )
-    result["runtime"] = adapter.result.to_dict()
+    adapter = LocalGameAdapter(**options)
+    result = dict(scenario=args.scenario, success=False)
+    try:
+        with adapter:
+            result["compatibility"] = adapter.compatibility.to_dict()
+            result["gameplay"] = scenarios[args.scenario](adapter)
+        result["success"] = True
+    except DeckTranslationError as error:
+        # Fixture entry IDs only; never export a source deck or raw JVM log.
+        result["issues"] = [dict(code=i.code, category=i.category, entry_id=i.entry_id) for i in error.issues]
+    except AdapterError as error:
+        code = error.code.split(":", 1)[0]
+        result["error"] = dict(code=code, category=diagnostic_category(code))
+    finally:
+        if adapter.result is not None:
+            result["runtime"] = adapter.result.to_dict()
     payload = json.dumps(result, indent=2)
     if args.output:
         args.output.write_text(payload + "\n", encoding="utf-8")
     print(payload)
+    if not result["success"]:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

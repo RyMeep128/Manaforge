@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 from dataclasses import replace
+from functools import wraps
 import hashlib
 import html
 import json
@@ -50,6 +51,35 @@ def _text(value: str | None) -> str:
 
 def _pairs(value):
     return None if value is None else tuple(tuple(item) for item in value)
+
+
+def _timed(metric):
+    """Bounded numeric diagnostics only; never retain views or prompt contents."""
+    def decorate(function):
+        @wraps(function)
+        def measured(self, *args, **kwargs):
+            started = time.perf_counter()
+            value = None
+            try:
+                value = function(self, *args, **kwargs)
+                return value
+            finally:
+                if hasattr(self, "_timings"):
+                    elapsed = (time.perf_counter() - started) * 1000
+                    row = self._timings.setdefault(metric, dict(count=0, total_ms=0., max_ms=0.))
+                    row["count"] += 1
+                    row["total_ms"] += elapsed
+                    row["max_ms"] = max(row["max_ms"], elapsed)
+                    if metric == "snapshot_construction" and value is not None:
+                        size = len(value.objects)
+                        band = "0-15" if size < 16 else "16-63" if size < 64 else "64-plus"
+                        bucket = self._timings.setdefault("snapshot_objects_" + band,
+                            dict(count=0, total_ms=0., max_ms=0.))
+                        bucket["count"] += 1
+                        bucket["total_ms"] += elapsed
+                        bucket["max_ms"] = max(bucket["max_ms"], elapsed)
+        return measured
+    return decorate
 
 
 class AdapterError(RuntimeError):
@@ -315,6 +345,7 @@ class XmageGameSession:
     """One local game. Public values contain no engine identifiers or payloads."""
 
     def __init__(self, owner, setup, decks):
+        self._timings = {}
         self.session_id = _id()
         self._owner, self._setup, self._decks = owner, setup, decks
         self._clients, self._views, self._pending, self._replies = {}, {}, {}, {}
@@ -378,6 +409,7 @@ class XmageGameSession:
         if self._closed:
             raise AdapterError("SESSION_CLOSED")
 
+    @_timed("command_round_trip")
     def _request(self, player, operation, expected, **fields):
         request = _id()
         self._outstanding.add(request)
@@ -528,6 +560,7 @@ class XmageGameSession:
                 )
             )
 
+    @_timed("metadata_enrichment")
     def _enrich_view(self, player, view):
         if "cycle" not in view:  # Controlled transport fixtures, never the real bridge.
             return True
@@ -647,6 +680,15 @@ class XmageGameSession:
         self._actions[player] = {}
         self._choices[player] = {}
 
+    def performance_report(self):
+        """Aggregate timings in milliseconds, including retries and failed calls.
+
+        Snapshot timing includes pumping/enrichment and must not be added to the
+        metadata timing. Resource usage of owned JVMs is currently unavailable.
+        """
+        return {name: dict(values) for name, values in self._timings.items()}
+
+    @_timed("snapshot_construction")
     def snapshot(self, player_id):
         self._check(player_id)
         self._pump()
