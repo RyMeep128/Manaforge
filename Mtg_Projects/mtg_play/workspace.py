@@ -66,6 +66,7 @@ class PlayWorkspace(W.QWidget):
         self.format = W.QComboBox()
         self.format.addItem("Freeform", "freeform")
         self.format.addItem("Commander", "commander")
+        self.format.currentIndexChanged.connect(self._selection_changed)
         format_row.addRow("Format", self.format)
         setup_layout.addLayout(format_row)
         seats = W.QHBoxLayout()
@@ -245,12 +246,27 @@ class PlayWorkspace(W.QWidget):
                             or "Colorless"
                         )
                     )
+                if self.format.currentData() == "commander" and not item.commanders:
+                    label.setText(
+                        label.text()
+                        + "\nChoose a commander in Deck Editor before starting."
+                    )
+                elif self.format.currentData() == "freeform" and item.commanders:
+                    label.setText(
+                        label.text()
+                        + "\nThis deck has commanders selected. Choose Commander format."
+                    )
         self._deck_images()
         self.start_button.setEnabled(
             not self.session.active
             and not self.catalog_jobs.busy
             and all(selector.currentData() is not None for selector in self.selectors)
             and all(name.text().strip() for name in self.names)
+            and all(
+                bool(self._decks[selector.currentData()].commanders)
+                == (self.format.currentData() == "commander")
+                for selector in self.selectors
+            )
         )
 
     def start_game(self):

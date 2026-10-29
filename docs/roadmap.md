@@ -329,7 +329,7 @@ Print-layout preview and future match surfaces still need reference entry points
 ## Phase 8 - Rules-enforced local play
 
 The [local two-player delivery plan](play-local-game.md) tracks the staged first
-playable experience and its adapter/CI acceptance gates. Source-only foundation
+playable experience and its adapter/CI acceptance gates. Source-only preview
 work does not enable Play in installed releases.
 
 - [ ] Keep a deterministic, authoritative engine behind presentation/client and game API layers. The engine owns rules enforcement, legal actions, triggers, priority, and game-state transitions; Manaforge owns presentation, navigation, interactions, and user experience. See the [Play architecture](manaforge-play-epic.md#1-stable-game-protocol).

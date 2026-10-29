@@ -62,6 +62,7 @@ class GameCard(W.QAbstractButton):
         self.setAccessibleName(
             object_name(obj)
             + (" · Available action" if actionable else "")
+            + (" · Selected" if selected else "")
             + (" · Tapped" if obj.tapped else "")
             + (" · " + combat if combat else "")
         )
@@ -120,6 +121,10 @@ class GameCard(W.QAbstractButton):
             else None
         )
         badge = []
+        if self.selected:
+            badge.append("Selected")
+        elif self.actionable:
+            badge.append("Available")
         if c and "Land" in (c.type_line or ""):
             badge.append("Land")
         if c and c.power is not None and c.toughness is not None:
@@ -258,7 +263,8 @@ class GameTable(W.QWidget):
             ("graveyard", "Graveyards"),
             ("exile", "Exile"),
             ("command", "Command zones"),
-            ("choices", "Revealed choices"),
+            ("decision", "Revealed choices / Pile 1"),
+            ("decision_pile_2", "Pile 2"),
         ]:
             lane = CardLane(self.artwork)
             self.zone_lanes[zone] = lane
@@ -456,13 +462,7 @@ class GameTable(W.QWidget):
             combat,
         )
         for zone, lane in self.zone_lanes.items():
-            objects = tuple(
-                obj
-                for obj in visible
-                if obj.zone == zone
-                or zone == "choices"
-                and (obj.zone == "decision" or obj.zone.startswith("decision_"))
-            )
+            objects = tuple(obj for obj in visible if obj.zone == zone)
             lane.present(objects, actions, options, combat)
         self.zones.setTabText(0, f"Stack ({len(self.zone_lanes['stack'].cards)})")
         self.observations.setPlainText(

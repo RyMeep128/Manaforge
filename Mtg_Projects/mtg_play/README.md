@@ -5,6 +5,11 @@ remaining verification gate, read [ADAPTER.md](ADAPTER.md). The connection and
 Milestone A sections below document the historical experiment; current gameplay
 consumers must use the public adapter.
 
+The source-only local Play workspace and its staged UI acceptance gate are
+documented in [the local two-player delivery plan](../../docs/play-local-game.md).
+Installed Play remains disabled pending verification; the experiment below is
+historical and does not describe the new Qt workspace.
+
 Standalone feasibility experiment for Python → Java bridge → local XMage server →
 real server callback → disconnection and normal JVM shutdown. This does not enable
 Play in Manaforge or implement deck loading, game actions, or rendering.

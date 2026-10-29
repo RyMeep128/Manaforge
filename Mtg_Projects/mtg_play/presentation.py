@@ -19,6 +19,12 @@ class _SetupFailure(RuntimeError):
     """Safe, presentation-owned startup text containing no engine identifiers."""
 
 
+class _SessionFailure(RuntimeError):
+    def __init__(self, code):
+        self.code = code
+        super().__init__(code)
+
+
 class SessionController(C.QObject):
     snapshotChanged = C.pyqtSignal(object)
     statusChanged = C.pyqtSignal(str)
@@ -36,6 +42,7 @@ class SessionController(C.QObject):
         self._operations = {}
         self._epoch = 0
         self._viewer = None
+        self._session_id = None
         self._seats = set()
         self._revision = -1
         self._snapshot = None
@@ -115,6 +122,7 @@ class SessionController(C.QObject):
             raise ValueError("Choose two local seats and decks.")
         self._epoch += 1
         self._viewer = setup.seats[0].seat_id
+        self._session_id = None
         self._seats = {seat.seat_id for seat in setup.seats}
         self._revision = -1
         self._submitted.clear()
@@ -155,7 +163,7 @@ class SessionController(C.QObject):
                         + ". Their cards, selected printings, or configuration could not be loaded. No cards were replaced."
                     ) from error
                 raise
-            return "started", None
+            return "started", self._session.session_id
 
         self._queue("start", create)
         return True
@@ -192,7 +200,10 @@ class SessionController(C.QObject):
         viewer = self._viewer
 
         def read():
-            self._session.poll(viewer, timeout=0)
+            events = self._session.poll(viewer, timeout=0)
+            for event in events:
+                if event.kind == "session_failed":
+                    raise _SessionFailure(event.code or "ENGINE_UNAVAILABLE")
             return "snapshot", self._session.snapshot(viewer)
 
         self._queue("refresh", read)
@@ -281,6 +292,8 @@ class SessionController(C.QObject):
             if state == "completed"
             else ("error", "The local game could not finish its background request.")
         )
+        if outcome == "started" and self.active and not self.closing:
+            self._session_id = payload
         if epoch != self._epoch:
             if (
                 kind in ("command", "concede")
@@ -308,6 +321,15 @@ class SessionController(C.QObject):
             self.statusChanged.emit("Waiting for the opening game state…")
         elif outcome == "snapshot":
             if payload.viewer_id != self._viewer:
+                return
+            if payload.session_id != self._session_id:
+                self._blocked = True
+                self.timer.stop()
+                self._snapshot = None
+                self.viewCleared.emit()
+                self.statusChanged.emit(
+                    "The game state did not match this session. Close the game to recover."
+                )
                 return
             if payload.revision < self._revision:
                 return

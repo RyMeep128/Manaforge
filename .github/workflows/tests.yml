@@ -79,7 +79,7 @@ jobs:
           XMAGE_FORCE: ${{ github.event_name == 'workflow_dispatch' && (inputs.verify_xmage || inputs.stress_xmage) }}
         run: |
           $changed = @(git diff --name-only 'HEAD^' HEAD)
-          $verify = $LASTEXITCODE -ne 0 -or [bool]($changed -match '^Mtg_Projects/(mtg_play|mtg_core)/|^\.github/workflows/tests\.yml$') -or $env:XMAGE_FORCE -eq 'true'
+          $verify = $LASTEXITCODE -ne 0 -or [bool]($changed -match '^Mtg_Projects/(mtg_play|mtg_core)/|^Mtg_Projects/mtg_home/(home|launcher|modules)\.py$|^Mtg_Projects/mtg_ui/(jobs|loading)\.py$|^\.github/workflows/tests\.yml$') -or $env:XMAGE_FORCE -eq 'true'
           "verify=$($verify.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
       - name: Set up the bridge compiler
         id: xmage-compiler
@@ -111,6 +111,19 @@ jobs:
             if ($LASTEXITCODE -ne 0) { $failures += "commander-$seats" }
           }
           if ($failures.Count) { throw "XMage scenarios failed: $($failures -join ', ')" }
+      - name: Verify local Play through Manaforge controls
+        if: ${{ !cancelled() && steps.xmage-prepare.outcome == 'success' }}
+        env:
+          PYTHONPATH: ${{ github.workspace }}/Mtg_Projects;${{ github.workspace }}/Mtg_Projects/mtg_core
+        run: |
+          $reports = Join-Path $env:RUNNER_TEMP 'manaforge-xmage-reports'
+          New-Item -ItemType Directory -Path $reports -Force | Out-Null
+          $failures = @()
+          foreach ($scenario in @('basic', 'combat', 'blockers', 'commander-play')) {
+            python -m mtg_play.ui_acceptance --scenario $scenario --xmage-root "$env:RUNNER_TEMP/manaforge-xmage" --jdk-path "$env:JAVA_HOME" --output "$reports/ui-$scenario.json"
+            if ($LASTEXITCODE -ne 0) { $failures += $scenario }
+          }
+          if ($failures.Count) { throw "Play UI scenarios failed: $($failures -join ', ')" }
       - name: Deliberate XMage complex-board baseline
         if: ${{ !cancelled() && steps.xmage-prepare.outcome == 'success' && github.event_name == 'workflow_dispatch' && inputs.stress_xmage }}
         env:

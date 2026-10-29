@@ -261,10 +261,16 @@ def test_workspace_selects_existing_documents_without_starting_runtime_on_open(
     app, tmp_path
 ):
     documents = (DeckDocument(), DeckDocument())
+    for document in documents:
+        document.deck.entries = [
+            DeckEntry("commander", "Isamaru, Hound of Konda", section="commander")
+        ]
+        document.deck.commander_entry_ids = ["commander"]
     documents[0].deck.extras["preserve"] = ["selected printing"]
     owner = Owner(ScriptedGameSession((snapshot("one"),)))
     entries = tuple(
-        SavedDeck(tmp_path / str(i), doc, ()) for i, doc in enumerate(documents)
+        SavedDeck(tmp_path / str(i), doc, ("Isamaru, Hound of Konda",))
+        for i, doc in enumerate(documents)
     )
     workspace = PlayWorkspace(
         SimpleNamespace(database=object()),
@@ -392,3 +398,54 @@ def test_home_preview_is_lazy_persistent_and_disabled_for_installed_builds(
     monkeypatch.setattr(sys, "frozen", True, raising=False)
     assert not module_available(play)
     assert home.close()
+
+
+def test_uncertain_inflight_command_blocks_both_seats_after_handoff(app):
+    entered, release = threading.Event(), threading.Event()
+
+    class DelayedCommand(ScriptedGameSession):
+        def choose(self, *args):
+            entered.set()
+            release.wait(4)
+            return CommandResult("receipt", "uncertain")
+
+    controller = SessionController(
+        adapter_factory=lambda: Owner(DelayedCommand((snapshot(), snapshot("two"))))
+    )
+    views, messages = [], []
+    controller.snapshotChanged.connect(views.append)
+    controller.statusChanged.connect(messages.append)
+    controller.start(setup(), (DeckDocument(), DeckDocument()))
+    drain(app, lambda: bool(views) and not controller.busy)
+    controller.timer.stop()
+    assert controller.submit(views[-1], "choose", "keep")
+    drain(app, entered.is_set)
+    controller.reveal("two")
+    release.set()
+    drain(app, lambda: not controller.busy)
+    assert "unknown" in messages[-1]
+    assert not controller.timer.isActive()
+    assert controller._snapshot is None
+    close(app, controller)
+
+
+def test_cleanup_failure_preserves_owner_until_explicit_retry(app):
+    class SlowCleanup(Owner):
+        attempts = 0
+
+        def close(self):
+            self.attempts += 1
+            if self.attempts == 1:
+                raise RuntimeError("cleanup not confirmed")
+            super().close()
+
+    owner = SlowCleanup(ScriptedGameSession((snapshot(),)))
+    controller = SessionController(adapter_factory=lambda: owner)
+    controller.start(setup(), (DeckDocument(), DeckDocument()))
+    drain(app, lambda: not controller.busy)
+    controller.stop()
+    drain(app, lambda: not controller.busy)
+    assert controller.active and not controller.closing
+    assert not owner.closed
+    close(app, controller)
+    assert owner.closed and owner.attempts == 2

@@ -73,12 +73,44 @@ Unsupported entries are rejected by the adapter; no fallback deck is fabricated.
 | B | 4–6 | Implemented; CI and visual verification pending |
 | C | 7–8 | Implemented; real-engine UI verification pending |
 | D | 9–10 | Implemented; Commander/privacy/artwork verification pending |
-| E | 11–12 | Acceptance wiring in progress; passing evidence still required |
+| E | 11–12 | Scripted and pinned-engine UI acceptance wired; passing evidence still required |
 
 No milestone is accepted solely because its code exists. In particular, do not
 claim that a complete game has been demonstrated until CI and visual review
 provide that evidence. Presentation tests cover fallback artwork; real selected
 artwork and moderately crowded tables still require visual review.
+
+### Verification paths
+
+The existing Windows/Python test job collects the new Qt offscreen tests. These
+cover lazy navigation, saved document preservation, obsolete replies and controls,
+snapshot unavailability, decision families/constraints, uncertain outcomes, hidden
+hands and faces, artwork fallback, object replacement, combat presentation and
+cleanup. A prescribed ScriptedGameSession also drives the real homepage, setup,
+card/action controls, seat handoff, concession and result display end to end.
+
+The pinned-engine preparation step is reused by a new **Verify local Play through
+Manaforge controls** step. `mtg_play.ui_acceptance` runs the existing `basic`,
+`combat`, `blockers` and `commander-play` fixture policies through a UI pilot. The
+pilot selects saved fixture decks, answers prompts using actual buttons/spinners,
+hands off between seats through the neutral screen, and confirms the visible hand
+matches the authorized snapshot. The production controller remains the sole owner
+of engine communication. No test policy or automatic-answer code is imported by
+the product workspace.
+
+These scenarios retain their existing evidence gates; they end with explicit
+concession after those gates, rather than claiming a natural victory. They are
+not a duplicate rules test suite. Sanitized `ui-*.json` reports and bounded fixture
+screenshots (setup, table, handoff, stack, combat and result) join the existing
+XMage CI artifacts. Synthetic printing IDs intentionally exercise fallback art;
+these screenshots do not establish real artwork quality or all printing styles.
+
+The new pilot and scripted tests have not been executed during this task. Their
+CI results may identify integration fixes. Full complex-board UI interactions,
+real artwork appearance, crowding/focus usability, and every combined Freeform or
+Commander interaction remain acceptance work. Existing headless real-deck and
+complex-board evidence is still independently required. Installed Play must remain
+disabled until those gates and visual review are satisfied.
 
 ## Adapter evidence gate
 
