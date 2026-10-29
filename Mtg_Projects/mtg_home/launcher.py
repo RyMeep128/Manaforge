@@ -171,7 +171,7 @@ class ModuleController(C.QObject):
         play = self.windows.get('play')
         if play is not None and not play.prepare_to_close():
             self.home.show_workspace('play')
-            if play.session.closing or (not play.session.active and (play.session.busy or play.catalog_jobs.busy)):
+            if play.session.closing or (not play.session.active and play.busy):
                 C.QTimer.singleShot(250, self.home.close)
             return False
         if self.jobs.busy:

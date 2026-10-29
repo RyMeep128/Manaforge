@@ -262,7 +262,7 @@ def test_workspace_selects_existing_documents_without_starting_runtime_on_open(
 ):
     documents = (DeckDocument(), DeckDocument())
     documents[0].deck.extras["preserve"] = ["selected printing"]
-    owner = Owner(ScriptedGameSession((snapshot("local-1"),)))
+    owner = Owner(ScriptedGameSession((snapshot("one"),)))
     entries = tuple(
         SavedDeck(tmp_path / str(i), doc, ()) for i, doc in enumerate(documents)
     )

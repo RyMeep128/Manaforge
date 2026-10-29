@@ -19,9 +19,10 @@ class _Job(LoadingThread):
     progress = C.pyqtSignal(str, object)
     outcome = C.pyqtSignal(str, str, object)
 
-    def __init__(self, job_id, work, parent):
-        super().__init__(parent)
+    def __init__(self, job_id, work, parent, *, quiet=False):
+        super().__init__(parent, show_activity=not quiet)
         self.job_id, self.work = job_id, work
+        self.quiet = quiet
         self.cancel_event = threading.Event()
         self._last_progress = 0.0
         self._last_phase = None
@@ -59,13 +60,16 @@ class _Job(LoadingThread):
             if self.cancel_event.is_set():
                 raise DownloadCancelled()
             result = self.work(self.cancel_event, self.report)
-            record_operation(self.operation, "completed")
+            if not self.quiet:
+                record_operation(self.operation, "completed")
             self.outcome.emit(self.job_id, "completed", result)
         except DownloadCancelled:
-            record_operation(self.operation, "cancelled")
+            if not self.quiet:
+                record_operation(self.operation, "cancelled")
             self.outcome.emit(self.job_id, "cancelled", None)
         except Exception as exc:
-            record_operation(self.operation, "failed", str(exc))
+            if not self.quiet:
+                record_operation(self.operation, "failed", str(exc))
             get_logger(__name__).exception(
                 "Background job failed id=%s type=%s", self.job_id, type(exc).__name__
             )
@@ -98,11 +102,11 @@ class JobQueue(C.QObject):
             else None
         )
 
-    def submit(self, work):
+    def submit(self, work, *, quiet=False):
         if self._closing:
             raise RuntimeError("Background queue is shutting down")
         job_id = uuid.uuid4().hex
-        self._pending.append((job_id, work))
+        self._pending.append((job_id, work, quiet))
         self.status.emit(job_id, "queued", None)
         C.QTimer.singleShot(0, self._start_next)
         return job_id
@@ -123,7 +127,7 @@ class JobQueue(C.QObject):
 
     def cancel_all(self):
         """Cancel current work while allowing future jobs if window close is vetoed."""
-        for job_id, _ in tuple(self._pending):
+        for job_id, _, _ in tuple(self._pending):
             self.cancel(job_id)
         if self._active:
             self._active.cancel_event.set()
@@ -132,9 +136,9 @@ class JobQueue(C.QObject):
     def _start_next(self):
         if self._active or not self._pending or self._closing:
             return
-        job_id, work = self._pending.popleft()
+        job_id, work, quiet = self._pending.popleft()
         self.latest_progress = None
-        self._active = _Job(job_id, work, self)
+        self._active = _Job(job_id, work, self, quiet=quiet)
         self._active.progress.connect(
             self._progress, C.Qt.ConnectionType.QueuedConnection
         )

@@ -11,9 +11,11 @@ class SavedDeck:
     path: Path
     document: DeckDocument
     commanders: tuple[str, ...]
+    colors: tuple[str, ...] | None = None
+    cover: tuple[str | None, str | None] = (None, None)
 
 
-def saved_decks(root):
+def saved_decks(root, service=None):
     root = Path(root)
     rows, errors = project_catalog(root / "decks", root / "projects")
     decks = []
@@ -30,7 +32,28 @@ def saved_decks(root):
                 if entry.entry_id in document.deck.commander_entry_ids
                 or entry.section == "commander"
             )
-            decks.append(SavedDeck(Path(row["path"]), document, commanders))
+            colors = None
+            if service is not None and hasattr(service, "get_deck_legality_data"):
+                entries = [
+                    entry
+                    for entry in document.deck.entries
+                    if entry.section not in ("excluded", "considering")
+                ]
+                facts = service.get_deck_legality_data(entries)
+                if entries and all(
+                    entry.card_id in facts
+                    and "color_identity" in facts[entry.card_id]["payload"]
+                    for entry in entries
+                ):
+                    present = {
+                        color
+                        for entry in entries
+                        for color in facts[entry.card_id]["payload"]["color_identity"]
+                    }
+                    colors = tuple(color for color in "WUBRG" if color in present)
+            decks.append(
+                SavedDeck(Path(row["path"]), document, commanders, colors, row["cover"])
+            )
         except (OSError, ValueError, TypeError, AttributeError):
             errors.append(
                 "A saved deck could not be read. Open it in Deck Editor to review it."

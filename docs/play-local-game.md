@@ -28,27 +28,57 @@ builds keep Play disabled even when the environment variable is present. Opening
 Play loads saved deck metadata; only **Start Game** starts the optional runtime.
 No runtime is downloaded, upgraded or bundled by this change.
 
-The foundation shows public player/turn status after startup. It does **not** yet
-provide a playable battlefield or mulligan/decision controls. Do not treat this
-workspace as the epic's gameplay acceptance result.
+## Milestones B–D: interactive table
+
+Implemented, awaiting CI and visual verification:
+
+- Distinct object widgets in a two-player battlefield, grouped lands/permanents,
+  current-seat hand, stack, graveyards, exile, command zones and revealed choices.
+- Direct single-action card clicks, explicit action buttons when alternatives
+  exist, and right-click inspection without taking an action. Every command is
+  bound to the exact displayed snapshot and decision; stale controls cannot answer
+  a later prompt.
+- Boolean/mulligan, selection, target, ability/order, option, number, mana,
+  amount-allocation and pile prompts. Target selection/deselection, finishing and
+  cancellation use the engine's supplied choices and permissions. Unsupported
+  families show a recovery message. No player decisions are automatically answered.
+- Turn/phase/priority, stack objects, attacker/blocker controls and combat
+  assignments. Mana requests permit source selection through the adapter's public
+  payment contract; exhaustive legal-source enumeration is not available.
+- Original-printing images from the existing image reader, active-face loading,
+  bounded seat-scoped caches, tapped/counter/damage badges and live inspection.
+  Engine card notes are explicitly labelled as potentially incomplete.
+- Commander identities, command-zone cast information, additional costs and
+  commander damage when supplied by the engine.
+- Neutral, explicit seat handoff. Old hand widgets, decision handlers, inspection,
+  observations and image caches are cleared immediately. Obsolete in-flight image
+  replies cannot populate the next view. This is pass-and-play privacy, not authentication.
+- Concession, authoritative result display and asynchronous cleanup, including
+  waiting for artwork readers without blocking the UI.
+
+Normal polling uses quiet jobs so it does not flash the global loading indicator
+or write repeated operation-history entries. Other modules retain normal job behavior.
 
 Deck selection currently lists saved native documents from the existing deck
 catalog. Print projects must be saved as native decks through existing Editor
-workflows first. Artwork/color previews belong to the next presentation stages.
+workflows first. Setup shows saved cover artwork and locally available color
+metadata; missing metadata remains unknown instead of inventing deck information.
 Unsupported entries are rejected by the adapter; no fallback deck is fabricated.
 
-## Remaining stages
+## Acceptance status
 
-| Milestone | Stories | Required result |
+| Milestone | Stories | Status |
 | --- | --- | --- |
-| B | 4–6 | Battlefield, distinct card objects, legal actions and reusable player decisions |
-| C | 7–8 | Stack responses, priority and interactive combat |
-| D | 9–10 | Selected-printing artwork, live inspection, Commander information and neutral seat handoff |
-| E | 11–12 | Lifecycle polish, negative scenarios and complete real-engine UI acceptance |
+| A | 1–3 | Implemented; CI pending |
+| B | 4–6 | Implemented; CI and visual verification pending |
+| C | 7–8 | Implemented; real-engine UI verification pending |
+| D | 9–10 | Implemented; Commander/privacy/artwork verification pending |
+| E | 11–12 | Acceptance wiring in progress; passing evidence still required |
 
-The controller's conceal/reveal boundary is groundwork for handoff. A finished
-handoff screen, private artwork/overlay cleanup and two-player privacy acceptance
-remain required before claiming Story 10 complete.
+No milestone is accepted solely because its code exists. In particular, do not
+claim that a complete game has been demonstrated until CI and visual review
+provide that evidence. Presentation tests cover fallback artwork; real selected
+artwork and moderately crowded tables still require visual review.
 
 ## Adapter evidence gate
 

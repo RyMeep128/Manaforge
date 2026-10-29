@@ -15,10 +15,15 @@ def local_adapter():
     return LocalGameAdapter()
 
 
+class _SetupFailure(RuntimeError):
+    """Safe, presentation-owned startup text containing no engine identifiers."""
+
+
 class SessionController(C.QObject):
     snapshotChanged = C.pyqtSignal(object)
     statusChanged = C.pyqtSignal(str)
     viewCleared = C.pyqtSignal()
+    interactionPending = C.pyqtSignal()
     commandFinished = C.pyqtSignal(object)
     stopped = C.pyqtSignal()
 
@@ -36,6 +41,7 @@ class SessionController(C.QObject):
         self._snapshot = None
         self._submitted = {}
         self._blocked = False
+        self.concession_pending = False
         self.active = self.closing = False
         self.timer = C.QTimer(self)
         self.timer.setInterval(250)
@@ -71,12 +77,19 @@ class SessionController(C.QObject):
                 # Never surface bridge payloads, engine identifiers or deck entry IDs.
                 from mtg_core.diagnostics import get_logger
 
-                get_logger(__name__).exception("Play operation failed: %s", kind)
                 code = getattr(exc, "code", "")
                 if code == "SNAPSHOT_NOT_READY":
                     return "waiting", None
+                get_logger(__name__).exception("Play operation failed: %s", kind)
+                if code.startswith("UNSUPPORTED_DECISION"):
+                    return (
+                        "error",
+                        "This game requires a decision that this Play preview cannot display. Close the game to recover.",
+                    )
                 from .decks import DeckTranslationError
 
+                if isinstance(exc, _SetupFailure):
+                    return "error", str(exc)
                 if isinstance(exc, DeckTranslationError):
                     return (
                         "error",
@@ -92,8 +105,8 @@ class SessionController(C.QObject):
                     "The game connection could not finish this request. Its outcome may be unknown. Close the game before starting again.",
                 )
 
-        job = self.jobs.submit(run)
-        self._operations[job] = kind, epoch
+        job = self.jobs.submit(run, quiet=kind == "refresh")
+        self._operations[job] = kind, epoch, self._viewer
 
     def start(self, setup, decks, *, oracle_lookup=None):
         if self.active or self.busy or self.closing:
@@ -106,6 +119,7 @@ class SessionController(C.QObject):
         self._revision = -1
         self._submitted.clear()
         self._blocked = False
+        self.concession_pending = False
         self.active = True
         self.statusChanged.emit("Starting your local game…")
 
@@ -116,9 +130,30 @@ class SessionController(C.QObject):
                 self._session = self._owner.create_game(
                     setup, decks, oracle_lookup=oracle_lookup
                 )
-            except Exception:
+            except Exception as error:
                 # Preserve the owner on unconfirmed cleanup for an explicit retry.
                 self._close_owner()
+                from .decks import DeckTranslationError
+
+                if isinstance(error, DeckTranslationError):
+                    identifiers = {issue.entry_id for issue in error.issues}
+                    names = sorted(
+                        {
+                            entry.name
+                            for document in decks
+                            for entry in document.deck.entries
+                            if entry.entry_id in identifiers and entry.name
+                        }
+                    )
+                    detail = (
+                        ", ".join(names[:8])
+                        or "commander selection or deck configuration"
+                    )
+                    raise _SetupFailure(
+                        "Review these deck entries in Deck Editor: "
+                        + detail
+                        + ". Their cards, selected printings, or configuration could not be loaded. No cards were replaced."
+                    ) from error
                 raise
             return "started", None
 
@@ -180,6 +215,7 @@ class SessionController(C.QObject):
             or self._blocked
             or view is None
             or view is not self._snapshot
+            or view.result is not None
             or view.decision is None
             or self._viewer in self._submitted
         ):
@@ -188,7 +224,7 @@ class SessionController(C.QObject):
         viewer = self._viewer
         self._submitted[viewer] = decision
         self._snapshot = None
-        self.viewCleared.emit()
+        self.interactionPending.emit()
         self.statusChanged.emit("Submitting your decision…")
         self._queue(
             "command",
@@ -197,6 +233,25 @@ class SessionController(C.QObject):
                 getattr(self._session, method)(viewer, decision, *args),
             ),
         )
+        return True
+
+    def concede(self, view):
+        if (
+            self.busy
+            or self.concession_pending
+            or self.closing
+            or self._blocked
+            or view is None
+            or view is not self._snapshot
+            or view.result
+        ):
+            return False
+        viewer = view.viewer_id
+        self.concession_pending = True
+        self._snapshot = None
+        self.interactionPending.emit()
+        self.statusChanged.emit("Submitting concession…")
+        self._queue("concede", lambda: ("command", self._session.concede(viewer)))
         return True
 
     def stop(self):
@@ -220,14 +275,34 @@ class SessionController(C.QObject):
         operation = self._operations.pop(job, None)
         if operation is None:
             return
-        kind, epoch = operation
-        if epoch != self._epoch:
-            return
+        kind, epoch, viewer = operation
         outcome, payload = (
             value
             if state == "completed"
             else ("error", "The local game could not finish its background request.")
         )
+        if epoch != self._epoch:
+            if (
+                kind in ("command", "concede")
+                and outcome == "command"
+                and payload.outcome == "rejected"
+            ):
+                self._submitted.pop(viewer, None)
+                if kind == "concede":
+                    self.concession_pending = False
+            if kind in ("command", "concede") and (
+                outcome == "error"
+                or outcome == "command"
+                and payload.outcome == "uncertain"
+            ):
+                self._blocked = True
+                self.timer.stop()
+                self._snapshot = None
+                self.viewCleared.emit()
+                self.statusChanged.emit(
+                    "The previous decision outcome is unknown. Close this game before starting again."
+                )
+            return
         if outcome == "started":
             self.timer.start()
             self.statusChanged.emit("Waiting for the opening game state…")
@@ -263,6 +338,8 @@ class SessionController(C.QObject):
         elif outcome == "command":
             self.commandFinished.emit(payload)
             if payload.outcome == "rejected":
+                if kind == "concede":
+                    self.concession_pending = False
                 self._submitted.pop(self._viewer, None)
                 self.statusChanged.emit(
                     "That decision is no longer available. Refreshing the game…"

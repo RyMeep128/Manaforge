@@ -6,6 +6,8 @@ from mtg_ui.jobs import JobQueue
 from .contracts import GameSetup, MatchSeat
 from .presentation import SessionController, local_adapter
 from .setup import saved_decks
+from .table import GameTable
+from mtg_editor.card_views import Thumbnails
 
 
 class PlayWorkspace(W.QWidget):
@@ -21,9 +23,16 @@ class PlayWorkspace(W.QWidget):
         super().__init__(parent)
         self.setWindowTitle("Play")
         self.service = service
-        self._deck_provider = deck_provider or (lambda: saved_decks(data_root()))
+        self._deck_provider = deck_provider or (
+            lambda: saved_decks(data_root(), service)
+        )
         self._decks = ()
         self._approved_close = False
+        self._view = None
+        self._seats = ()
+        self._seat_id = self._handoff_to = None
+        self.deck_artwork = Thumbnails(service, self)
+        self.deck_artwork.updated.connect(self._deck_images)
         self.session = SessionController(self, adapter_factory=adapter_factory)
         self.catalog_jobs = JobQueue(self)
         self.catalog_jobs.status.connect(self._catalog_loaded)
@@ -33,6 +42,7 @@ class PlayWorkspace(W.QWidget):
         self.session.viewCleared.connect(self._clear_view)
         self.session.stopped.connect(self._stopped)
         self.session.jobs.idle.connect(self._selection_changed)
+        self.session.interactionPending.connect(self._pending)
         layout = W.QVBoxLayout(self)
         layout.setContentsMargins(24, 20, 24, 20)
         heading = W.QHBoxLayout()
@@ -59,7 +69,7 @@ class PlayWorkspace(W.QWidget):
         format_row.addRow("Format", self.format)
         setup_layout.addLayout(format_row)
         seats = W.QHBoxLayout()
-        self.names, self.selectors, self.details = [], [], []
+        self.names, self.selectors, self.details, self.covers = [], [], [], []
         for index in range(2):
             box = W.QGroupBox(f"Player {index + 1}")
             form = W.QFormLayout(box)
@@ -75,17 +85,21 @@ class PlayWorkspace(W.QWidget):
             form.addRow("Name", name)
             form.addRow("Deck", selector)
             form.addRow(details)
+            cover = W.QLabel()
+            cover.setMinimumHeight(140)
+            cover.setAlignment(C.Qt.AlignmentFlag.AlignCenter)
+            form.addRow(cover)
             self.names.append(name)
             self.selectors.append(selector)
             self.details.append(details)
+            self.covers.append(cover)
             selector.currentIndexChanged.connect(self._selection_changed)
             name.textChanged.connect(self._selection_changed)
             seats.addWidget(box)
         setup_layout.addLayout(seats)
         note = W.QLabel(
-            "Local Play preview • The game interface is being built in stages. "
-            "This foundation connects your decks to the local rules engine; "
-            "battlefield interactions arrive in the next milestone."
+            "Local Play preview • Two people share this computer. Use Hand off to player "
+            "to conceal your cards before passing control."
         )
         note.setWordWrap(True)
         note.setProperty("role", "muted")
@@ -109,15 +123,42 @@ class PlayWorkspace(W.QWidget):
         self.game_heading.setProperty("role", "title")
         self.game_heading.setTextFormat(C.Qt.TextFormat.PlainText)
         game_layout.addWidget(self.game_heading)
-        self.game_summary = W.QLabel()
-        self.game_summary.setWordWrap(True)
-        self.game_summary.setTextFormat(C.Qt.TextFormat.PlainText)
-        game_layout.addWidget(self.game_summary)
-        game_layout.addStretch()
+        self.table = GameTable(service)
+        self.table.command.connect(self._command)
+        game_layout.addWidget(self.table, 1)
+        game_actions = W.QHBoxLayout()
+        self.handoff_button = W.QPushButton("Hand off to player")
+        self.handoff_button.clicked.connect(self.handoff)
+        game_actions.addWidget(self.handoff_button)
+        game_actions.addStretch()
+        self.concede_button = W.QPushButton("Concede")
+        self.concede_button.setEnabled(False)
+        self.concede_button.clicked.connect(self.concede)
+        game_actions.addWidget(self.concede_button)
         self.close_button = W.QPushButton("Close game")
         self.close_button.clicked.connect(self.request_close_game)
-        game_layout.addWidget(self.close_button)
+        game_actions.addWidget(self.close_button)
+        game_layout.addLayout(game_actions)
         self.pages.addWidget(self.game_page)
+        self.handoff_page = W.QWidget()
+        handoff_layout = W.QVBoxLayout(self.handoff_page)
+        handoff_layout.addStretch()
+        self.handoff_label = W.QLabel("Pass the computer to the next player")
+        self.handoff_label.setProperty("role", "title")
+        self.handoff_label.setWordWrap(True)
+        self.handoff_label.setTextFormat(C.Qt.TextFormat.PlainText)
+        handoff_layout.addWidget(self.handoff_label)
+        privacy = W.QLabel(
+            "The previous hand and card inspection have been concealed. Reveal your view when you are ready."
+        )
+        privacy.setWordWrap(True)
+        handoff_layout.addWidget(privacy)
+        self.reveal_button = W.QPushButton("Reveal my view")
+        self.reveal_button.setProperty("buttonRole", "primary")
+        self.reveal_button.clicked.connect(self.reveal_seat)
+        handoff_layout.addWidget(self.reveal_button)
+        handoff_layout.addStretch()
+        self.pages.addWidget(self.handoff_page)
         self.status = W.QLabel("Loading your decks…")
         self.status.setWordWrap(True)
         self.status.setTextFormat(C.Qt.TextFormat.PlainText)
@@ -128,6 +169,7 @@ class PlayWorkspace(W.QWidget):
     def load_decks(self):
         if self.catalog_jobs.busy or self.session.active:
             return
+        self.deck_artwork.stopping = False
         self.reload.setEnabled(False)
         self.start_button.setEnabled(False)
         self.status.setText("Loading your saved decks…")
@@ -170,6 +212,9 @@ class PlayWorkspace(W.QWidget):
         self._selection_changed()
 
     def _selection_changed(self):
+        if self.session.active:
+            self.start_button.setEnabled(False)
+            return
         for selector, label in zip(self.selectors, self.details):
             index = selector.currentData()
             if index is None:
@@ -184,6 +229,23 @@ class PlayWorkspace(W.QWidget):
                         else ""
                     )
                 )
+                if item.colors is not None:
+                    color_names = {
+                        "W": "White",
+                        "U": "Blue",
+                        "B": "Black",
+                        "R": "Red",
+                        "G": "Green",
+                    }
+                    label.setText(
+                        label.text()
+                        + "\nColors: "
+                        + (
+                            ", ".join(color_names[color] for color in item.colors)
+                            or "Colorless"
+                        )
+                    )
+        self._deck_images()
         self.start_button.setEnabled(
             not self.session.active
             and not self.catalog_jobs.busy
@@ -198,7 +260,7 @@ class PlayWorkspace(W.QWidget):
 
         setup = GameSetup(
             tuple(
-                MatchSeat(f"local-{index + 1}", name.text().strip())
+                MatchSeat(("one", "two")[index], name.text().strip())
                 for index, name in enumerate(self.names)
             ),
             self.format.currentData(),
@@ -213,9 +275,37 @@ class PlayWorkspace(W.QWidget):
             return self.service.database.get_oracle_card(oracle_id)
 
         self._approved_close = False
+        self._seats = setup.seats
+        self._seat_id = setup.seats[0].seat_id
+        self.table.artwork.stopping = False
         if self.session.start(setup, decks, oracle_lookup=oracle_lookup):
             self.pages.setCurrentWidget(self.game_page)
             self.start_button.setEnabled(False)
+
+    @C.pyqtSlot()
+    def _deck_images(self):
+        if self.session.active:
+            return
+        keys = []
+        for selector, cover in zip(self.selectors, self.covers):
+            index = selector.currentData()
+            cover.clear()
+            if index is not None:
+                cover.setText("No artwork preview")
+                key = self._decks[index].cover
+                if any(key):
+                    keys.append(key)
+                    image = self.deck_artwork.get(*key)
+                    if image is not None and not image.isNull():
+                        cover.setPixmap(
+                            image.scaled(
+                                110,
+                                154,
+                                C.Qt.AspectRatioMode.KeepAspectRatio,
+                                C.Qt.TransformationMode.SmoothTransformation,
+                            )
+                        )
+        self.deck_artwork.set_visible("setup", keys)
 
     @C.pyqtSlot(str)
     def _status(self, message):
@@ -226,23 +316,72 @@ class PlayWorkspace(W.QWidget):
 
     @C.pyqtSlot()
     def _clear_view(self):
+        self._view = None
         self.game_heading.setText("Waiting for your table…")
-        self.game_summary.clear()
+        self.table.clear()
+        self.concede_button.setEnabled(False)
+
+    @C.pyqtSlot()
+    def _pending(self):
+        self._view = None
+        self.table.pending()
+        self.concede_button.setEnabled(False)
 
     @C.pyqtSlot(object)
     def _show_snapshot(self, view):
-        self.game_heading.setText(view.result or "Your local game is connected")
-        players = "\n".join(
-            f"{player.name} · {player.life} life · {player.hand_count} cards in hand"
-            for player in view.players
+        self._view = view
+        self.game_heading.setText(
+            view.result
+            or next(
+                (
+                    seat.name + "’s view"
+                    for seat in self._seats
+                    if seat.seat_id == view.viewer_id
+                ),
+                "Local game",
+            )
         )
-        flow = " · ".join(str(value) for value in (view.phase, view.step) if value)
-        self.game_summary.setText(
-            players
-            + ("\nTurn " + str(view.turn) if view.turn is not None else "")
-            + (" · " + flow if flow else "")
-            + "\nBattlefield controls are coming in the next milestone."
+        self.table.present(view)
+        self.concede_button.setEnabled(
+            not view.result and not self.session.concession_pending
         )
+
+    @C.pyqtSlot(object, str, object)
+    def _command(self, view, method, args):
+        self.session.submit(view, method, *args)
+
+    def handoff(self):
+        if not self.session.active or self.session.closing or not self._seats:
+            return
+        target = next(seat for seat in self._seats if seat.seat_id != self._seat_id)
+        self.session.conceal()
+        self._handoff_to = target.seat_id
+        self.handoff_label.setText("Pass the computer to " + target.name)
+        self.pages.setCurrentWidget(self.handoff_page)
+        self.status.setText("Private game view concealed")
+        self.reveal_button.setFocus()
+
+    def reveal_seat(self):
+        if self._handoff_to is None:
+            return
+        self._seat_id = self._handoff_to
+        self._handoff_to = None
+        self.pages.setCurrentWidget(self.game_page)
+        self.session.reveal(self._seat_id)
+
+    def concede(self):
+        view = self._view
+        if view is None:
+            return
+        answer = W.QMessageBox.question(
+            self,
+            "Concede game?",
+            "Concede for the player whose view is open?",
+            W.QMessageBox.StandardButton.Yes | W.QMessageBox.StandardButton.No,
+            W.QMessageBox.StandardButton.No,
+        )
+        if answer == W.QMessageBox.StandardButton.Yes:
+            self.session.concede(view)
 
     def request_close_game(self):
         if self.session.closing:
@@ -274,4 +413,21 @@ class PlayWorkspace(W.QWidget):
             if not self.session.closing and self._confirm_close():
                 self.session.stop()
             return False
-        return not self.session.busy and not self.catalog_jobs.busy
+        self.deck_artwork.stopping = True
+        self.deck_artwork.pending.clear()
+        self.deck_artwork.next_timer.stop()
+        return (
+            not self.session.busy
+            and not self.catalog_jobs.busy
+            and self.table.artwork.shutdown()
+            and self.deck_artwork.worker is None
+        )
+
+    @property
+    def busy(self):
+        return (
+            self.session.busy
+            or self.catalog_jobs.busy
+            or self.table.artwork.worker is not None
+            or self.deck_artwork.worker is not None
+        )
