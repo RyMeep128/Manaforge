@@ -468,3 +468,13 @@ partial-frame scenario pass locally, within 118 focused EditMode checks. Earlier
 protocol CI runs passed at the scheduled snapshot; new licensed Unity evidence,
 write budgets, product coordinator and G0/G1 acceptance remain pending. Bulk P2
 has not started; this is engine-independent transport work.
+
+
+### G1 bounded C# frame writes — October 30, 2026
+
+A [client write boundary](../Mtg_Projects/mtg_play/protocol/frame-write-deadlines.md)
+now validates before sending, bounds socket progress and closes without retrying
+uncertain chunks. The seven actual Java-dummy scenarios use it for normal client
+sends. Twelve new socket/ownership checks bring focused local EditMode validation
+to 130. Java write parity, product session coordination and licensed CI remain
+pending. G1 is not frozen and bulk P2 remains gated.

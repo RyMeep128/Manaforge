@@ -63,6 +63,7 @@ namespace Manaforge.Play.Tests
             ["server_nonce"]=ready["server_nonce"],["role"]=role,["proof"]=new string('0',64)
         });
         private static void Send(Stream stream,JObject message) { TextFrame.Write(stream,message.ToString(Formatting.None));stream.Flush(); }
+        private static void Send(LoopbackFrameReader owner,JObject message) => owner.Write(message.ToString(Formatting.None));
         private static JObject Read(LoopbackFrameReader input,long minimumRevision=0,ReceiveInbox inbox=null)
         {
             string text=input.Read();
@@ -73,10 +74,10 @@ namespace Manaforge.Play.Tests
         }
         private static JObject Command(string id,long revision,string decision,string action)=>Message("command",id,new JObject
         { ["session_id"]="fixture-session",["viewer_id"]="one",["revision"]=revision,["operation"]="perform",["decision_id"]=decision,["action_id"]=action });
-        private static void SendTracked(Stream stream,JObject command,CommandTracker tracker)
+        private static void SendTracked(LoopbackFrameReader owner,JObject command,CommandTracker tracker)
         {
             string text=command.ToString(Formatting.None);tracker.Begin(text);
-            try { TextFrame.Write(stream,text);stream.Flush(); }
+            try { owner.Write(text); }
             catch { tracker.Disconnect();throw; }
         }
         private static void Ack(LoopbackFrameReader input,string id,long revision,string outcome,string code,CommandTracker tracker=null)
@@ -116,7 +117,7 @@ namespace Manaforge.Play.Tests
                     var clientHello=Hello(boot,ready,"client");
                     var signingKey=wrongKey?new byte[32]:key;
                     clientHello["body"]["proof"]=ViewerAuthentication.ComputeProof(clientHello.ToString(),signingKey);
-                    Send(stream,clientHello);
+                    Send(peer.Reader,clientHello);
                     if(wrongKey)
                     {
                         Assert.That(peer.Reader.Read(),Is.Null,"Unauthenticated peer must receive no snapshot");
@@ -151,9 +152,9 @@ namespace Manaforge.Play.Tests
                     }
                     string decision=snapshot.decision.decision_id,action=snapshot.actions.Single().action_id;
                     using var tracker=new CommandTracker(snapshot.session_id,snapshot.viewer_id);
-                    SendTracked(stream,Command("stale",snapshot.revision-1,decision,action),tracker);Ack(peer.Reader,"stale",snapshot.revision-1,"rejected","STALE_REVISION",tracker);
+                    SendTracked(peer.Reader,Command("stale",snapshot.revision-1,decision,action),tracker);Ack(peer.Reader,"stale",snapshot.revision-1,"rejected","STALE_REVISION",tracker);
                     Assert.That(tracker.CanSubmit,Is.True,"A matched rejection releases the command slot");
-                    SendTracked(stream,Command("current",snapshot.revision,decision,action),tracker);Ack(peer.Reader,"current",snapshot.revision,"submitted",null,tracker);
+                    SendTracked(peer.Reader,Command("current",snapshot.revision,decision,action),tracker);Ack(peer.Reader,"current",snapshot.revision,"submitted",null,tracker);
                     if(sessionError)
                     {
                         Assert.That(tracker.AcceptSessionError(peer.Reader.Read()),Is.EqualTo("SESSION_FAILED"));
@@ -170,19 +171,19 @@ namespace Manaforge.Play.Tests
                     if(conflictingDuplicate)
                     {
                         // Same ID with different contents must not create another submission reservation.
-                        Send(stream,Command("current",snapshot.revision+1,decision,action));
+                        Send(peer.Reader,Command("current",snapshot.revision+1,decision,action));
                         Assert.That(peer.Reader.Read(),Is.Null,"Conflicting ID reuse closes the connection");
                         Assert.That(peer.Process.WaitForExit(5000),Is.True);Assert.That(peer.Process.ExitCode,Is.EqualTo(2));
                         tracker.Disconnect();Assert.That(tracker.Current.State,Is.EqualTo(CommandState.Uncertain));return;
                     }
                     // Deliberate raw retry probe, bypassing the normal client's ID-reuse prevention.
-                    Send(stream,Command("current",snapshot.revision,decision,action));Ack(peer.Reader,"current",snapshot.revision,"submitted",null,tracker);
+                    Send(peer.Reader,Command("current",snapshot.revision,decision,action));Ack(peer.Reader,"current",snapshot.revision,"submitted",null,tracker);
                     Assert.That(tracker.Current.State,Is.EqualTo(CommandState.Submitted),"A terminal fixture snapshot is not command confirmation");
                     Assert.That(Assert.Throws<WireEnvelope.EnvelopeException>(()=>tracker.Begin(Command("blocked",snapshot.revision,decision,action).ToString())).Code,Is.EqualTo("COMMAND_PENDING"));
                     // Deliberate raw protocol probe of the SERVER guard, bypassing normal client submission.
-                    Send(stream,Command("pending",snapshot.revision,decision,action));Ack(peer.Reader,"pending",snapshot.revision,"rejected","COMMAND_PENDING");
+                    Send(peer.Reader,Command("pending",snapshot.revision,decision,action));Ack(peer.Reader,"pending",snapshot.revision,"rejected","COMMAND_PENDING");
                     var shutdown=Message("shutdown","close",new JObject{["session_id"]=snapshot.session_id,["viewer_id"]=snapshot.viewer_id,["reason"]="client_close"});
-                    Send(stream,shutdown);var closed=WireMessages.Parse(peer.Reader.Read());
+                    Send(peer.Reader,shutdown);var closed=WireMessages.Parse(peer.Reader.Read());
                     Assert.That((string)closed["message_type"],Is.EqualTo("shutdown"));Assert.That(JToken.DeepEquals(closed["body"],shutdown["body"]),Is.True);
                     Assert.That(peer.Reader.Read(),Is.Null);Assert.That(peer.Process.WaitForExit(5000),Is.True);Assert.That(peer.Process.ExitCode,Is.Zero);
                     tracker.Disconnect();Assert.That(tracker.Current.State,Is.EqualTo(CommandState.Uncertain));

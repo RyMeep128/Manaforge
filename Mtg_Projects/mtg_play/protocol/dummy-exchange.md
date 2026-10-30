@@ -172,3 +172,13 @@ header bytes. Java times out, closes and exits with the expected fixed failure
 status; C# observes EOF. Sixteen Java real-loopback cases and all seven process
 scenarios pass locally, within 118 focused EditMode checks. This remains a protocol
 fixture, not a Java XMage gateway or production cleanup proof.
+
+
+### Bounded C# write follow-up
+
+Normal client TCP sends now use the existing owned socket's
+[bounded Write method](frame-write-deadlines.md), including hello, tracked commands
+and shutdown. Registration still precedes sending, with tracking disconnected on
+write failure. Deliberate malformed two-byte probes and private bootstrap pipes
+remain separate test paths. Seven scenarios and 130 focused EditMode checks pass
+locally; no Java outbound deadline or production session coordinator is implied.

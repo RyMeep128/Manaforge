@@ -174,3 +174,13 @@ Its owner lifeline closes through the reader rather than bypassing ownership.
 An authenticated partial-client-frame scenario verifies Java timeout and child
 exit; 16 Java socket cases and 118 focused EditMode checks pass locally. This
 still does not connect LaunchOwner, bound writes or prove product containment.
+
+
+### Client write deadline follow-up
+
+The C# socket owner now provides [bounded writes](../Mtg_Projects/mtg_play/protocol/frame-write-deadlines.md)
+and closes after partial/uncertain failure rather than retrying. The authenticated
+fixture uses it for normal outbound TCP frames; 130 focused EditMode checks pass.
+Product orchestration must still couple failure with command admission, inbox
+cancellation and process cleanup. This does not connect LaunchOwner or implement
+Java outbound deadlines.

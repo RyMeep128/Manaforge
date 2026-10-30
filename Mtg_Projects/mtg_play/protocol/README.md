@@ -367,3 +367,13 @@ socket closure. The dummy uses it for authentication and command reads. Sixteen
 Java socket checks and a seventh Java↔C# authenticated partial-client-frame scenario
 pass locally within 118 focused EditMode checks. No wire/schema change, engine
 port or G1 completion is claimed; writes and product coordination remain pending.
+
+
+## Bounded client frame writes
+
+The [C# write boundary](frame-write-deadlines.md) now validates a whole frame
+before sending, bounds socket progress and closes on partial/uncertain failure
+without retrying chunks. One reader and writer can operate together; concurrent
+writers fail closed. All seven actual dummy scenarios use it for normal client
+TCP sends. Twelve new checks bring focused local EditMode validation to 130.
+Java write budgets, product stop/admission coordination and G1 freeze remain open.

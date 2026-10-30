@@ -123,3 +123,12 @@ Scheduled third-commit CI snapshot: protocol runs for `96fd05f`
 (https://github.com/RyMeep128/Manaforge/actions/runs/41108455868) passed. These are
 hosted Java/model checks for earlier increments, not licensed Unity evidence or a
 CI result for the new Java reader. No running job was waited on.
+
+
+### C# write boundary follow-up
+
+The same C# socket owner now also supports [bounded frame writes](frame-write-deadlines.md),
+with a separate single-writer guard and failure closure. Normal dummy client
+sends use that path while a reader may run alongside it. Java write deadlines and
+product session coordination remain pending. Local focused EditMode count is 130;
+read-deadline behavior and all seven process scenarios remain covered.

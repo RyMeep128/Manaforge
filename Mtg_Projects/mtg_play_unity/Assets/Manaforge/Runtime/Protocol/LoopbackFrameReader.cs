@@ -8,12 +8,13 @@ using System.Threading;
 namespace Manaforge.Play.Protocol
 {
     // Transfers ownership of one connected loopback socket on successful construction.
-    // One reader only. Run on a worker; writes/connect/handshake budgets belong to the owner.
+    // One reader only. Run on a worker; one writer may run alongside it. Connect/handshake budgets belong to the session owner.
     public sealed class LoopbackFrameReader : IDisposable
     {
         private readonly Socket socket;
-        private int closed, reading;
+        private int closed, reading, writing;
         public bool IsClosed => Volatile.Read(ref closed) != 0;
+        public bool WriteInProgress => Volatile.Read(ref writing) != 0;
         public bool ReadInProgress => Volatile.Read(ref reading) != 0;
         public LoopbackFrameReader(Socket ownedSocket)
         {
@@ -24,6 +25,7 @@ namespace Manaforge.Play.Protocol
             // Defensive fallback after readiness; cancellation/deadline checks also poll every <=25 ms.
             ownedSocket.LingerState = new LingerOption(false, 0);
             ownedSocket.ReceiveTimeout = 25;
+            ownedSocket.SendTimeout = 25;
             socket = ownedSocket;
         }
         public string Read(int timeoutMilliseconds = 5000, CancellationToken cancellation = default)
@@ -48,6 +50,58 @@ namespace Manaforge.Play.Protocol
                 Dispose(); throw new TextFrame.FrameException(code);
             }
             finally { Volatile.Write(ref reading, 0); }
+        }
+        // Success means local socket acceptance only, never an engine acknowledgement.
+        public void Write(string text, int timeoutMilliseconds = 5000, CancellationToken cancellation = default)
+        {
+            if (timeoutMilliseconds < 1 || timeoutMilliseconds > 60000) throw new ArgumentOutOfRangeException(nameof(timeoutMilliseconds));
+            if (IsClosed) throw new TextFrame.FrameException("FRAME_CLOSED");
+            if (Interlocked.Exchange(ref writing, 1) != 0)
+            { Dispose(); throw new TextFrame.FrameException("FRAME_CONCURRENT_WRITE"); }
+            using var frame = new MemoryStream();
+            var timer = Stopwatch.StartNew();
+            try
+            {
+                // Validate/encode the whole bounded frame before any socket bytes are written.
+                TextFrame.Write(frame, text);
+                byte[] bytes = frame.GetBuffer(); int size = (int)frame.Length, offset = 0;
+                try
+                {
+                    while (offset < size)
+                    {
+                        CheckWrite(timer, timeoutMilliseconds, cancellation);
+                        int microseconds = Math.Max(1, (int)Math.Ceiling(Math.Min(25, timeoutMilliseconds - timer.Elapsed.TotalMilliseconds) * 1000));
+                        if (!socket.Poll(microseconds, SelectMode.SelectWrite)) continue;
+                        CheckWrite(timer, timeoutMilliseconds, cancellation);
+                        int sent = socket.Send(bytes, offset, Math.Min(16384, size - offset), SocketFlags.None);
+                        if (sent <= 0) throw new TextFrame.FrameException("FRAME_WRITE_IO");
+                        offset += sent;
+                    }
+                    CheckWrite(timer, timeoutMilliseconds, cancellation);
+                }
+                catch (TextFrame.FrameException) { Dispose(); throw; }
+                catch (OperationCanceledException) { Dispose(); throw new TextFrame.FrameException("FRAME_WRITE_CANCELLED"); }
+                catch (SocketException error)
+                {
+                    string code = cancellation.IsCancellationRequested ? "FRAME_WRITE_CANCELLED" : IsClosed ? "FRAME_CLOSED" :
+                        error.SocketErrorCode == SocketError.TimedOut || error.SocketErrorCode == SocketError.WouldBlock
+                            ? "FRAME_WRITE_TIMEOUT" : "FRAME_WRITE_IO";
+                    // A failed Send may already have transferred bytes. Never retry that chunk.
+                    Dispose(); throw new TextFrame.FrameException(code);
+                }
+                catch (ObjectDisposedException) { Dispose(); throw new TextFrame.FrameException("FRAME_CLOSED"); }
+            }
+            finally
+            {
+                if (frame.TryGetBuffer(out var buffer)) Array.Clear(buffer.Array, buffer.Offset, buffer.Count);
+                Volatile.Write(ref writing, 0);
+            }
+        }
+        private void CheckWrite(Stopwatch timer, int budget, CancellationToken cancellation)
+        {
+            cancellation.ThrowIfCancellationRequested();
+            if (IsClosed) throw new TextFrame.FrameException("FRAME_CLOSED");
+            if (timer.Elapsed.TotalMilliseconds >= budget) throw new TextFrame.FrameException("FRAME_WRITE_TIMEOUT");
         }
         public void Dispose()
         { if (Interlocked.Exchange(ref closed, 1) == 0) socket.Dispose(); }
