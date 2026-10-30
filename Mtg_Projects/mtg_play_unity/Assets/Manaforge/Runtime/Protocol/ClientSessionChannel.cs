@@ -32,7 +32,8 @@ namespace Manaforge.Play.Protocol
         private readonly string session,viewer;
         private readonly HashSet<string> actions=new HashSet<string>(StringComparer.Ordinal);
         private readonly HashSet<string> options=new HashSet<string>(StringComparer.Ordinal);
-        private bool canFinish,cancellable;
+        private bool canFinish,cancellable,mana;
+        private readonly HashSet<string> objectIds=new HashSet<string>(StringComparer.Ordinal);
         private NumericDecisionBounds numeric;
         private readonly TaskCompletionSource<ClientChannelStop> completion=new TaskCompletionSource<ClientChannelStop>(TaskCreationOptions.RunContinuationsAsynchronously);
         private ClientChannelState state;
@@ -51,14 +52,14 @@ namespace Manaforge.Play.Protocol
         public TrackedCommand Pending {get{lock(gate)return commands.Current;}}
         public int QueuedCount {get{lock(gate)return inbox.Count;}}
         public bool CanSubmit {get{lock(gate)return state==ClientChannelState.Active && !transport.IsClosed && !resultSeen
-            && !shutdownRequested && !string.IsNullOrEmpty(decision) && (actions.Count>0 || options.Count>0 || canFinish || cancellable || (numeric?.Available ?? false)) && commands.CanSubmit;}}
+            && !shutdownRequested && !string.IsNullOrEmpty(decision) && (actions.Count>0 || options.Count>0 || canFinish || cancellable || (mana && objectIds.Count>0) || (numeric?.Available ?? false)) && commands.CanSubmit;}}
         private static void Fail(string code)=>throw new WireEnvelope.EnvelopeException(code);
         private void Open()
         {
             if(state!=ClientChannelState.Active)Fail("SESSION_STOPPED");
             if(transport.IsClosed){Stop("SESSION_TRANSPORT_CLOSED");Fail("SESSION_STOPPED");}
         }
-        private void ClearDecision(){decision=null;actions.Clear();options.Clear();canFinish=false;cancellable=false;numeric=null;}
+        private void ClearDecision(){decision=null;actions.Clear();options.Clear();canFinish=false;cancellable=false;numeric=null;mana=false;objectIds.Clear();}
         // Called under gate. Blocking socket IO never runs under gate; closing releases siblings.
         private void Stop(string code,bool graceful=false)
         {
@@ -79,7 +80,7 @@ namespace Manaforge.Play.Protocol
                 var envelope=WireMessages.Parse(text);
                 if((string)envelope["message_type"]!="command")Fail("SESSION_COMMAND_UNSUPPORTED");
                 var body=envelope["body"];string operation=(string)body["operation"];
-                if(operation!="perform" && operation!="choose" && operation!="finish_selection" && operation!="cancel" && operation!="choose_number" && operation!="choose_amounts")Fail("SESSION_COMMAND_UNSUPPORTED");
+                if(operation!="perform" && operation!="choose" && operation!="finish_selection" && operation!="cancel" && operation!="choose_number" && operation!="choose_amounts" && operation!="select_mana_source")Fail("SESSION_COMMAND_UNSUPPORTED");
                 if(string.IsNullOrEmpty(decision))Fail("SESSION_NO_DECISION");
                 string rejection=operation=="perform"?WireMessages.CheckCurrent(text,session,viewer,revision,decision,actions)
                     :WireMessages.CheckBinding(text,session,viewer,revision,decision);
@@ -90,6 +91,10 @@ namespace Manaforge.Play.Protocol
                 if(operation=="choose_number" || operation=="choose_amounts") {
                     string numericRejection=numeric==null?"SESSION_NUMERIC_UNAVAILABLE":numeric.Reject(operation,body);
                     if(numericRejection!=null)Fail(numericRejection);
+                }
+                if(operation=="select_mana_source") {
+                    if(!mana)Fail("DECISION_FAMILY_MISMATCH");
+                    if(!objectIds.Contains((string)body["object_id"]))Fail("STALE_OR_INVALID_OBJECT");
                 }
                 receipt=commands.Begin(text); // reservation is atomic with admission, before first write
             }
@@ -120,10 +125,11 @@ namespace Manaforge.Play.Protocol
                                 var snapshot=body["snapshot"];revision=(long)snapshot["revision"];
                                 ClearDecision();var request=snapshot["decision"];
                                 if(request.Type!=JTokenType.Null) {
-                                    numeric=new NumericDecisionBounds(request);
+                                    numeric=new NumericDecisionBounds(request);mana=(string)request["family"]=="mana";
                                     decision=(string)request["decision_id"];canFinish=(bool)request["can_finish"];cancellable=(bool)request["cancellable"];
                                     foreach(var option in request["options"])options.Add((string)option["option_id"]);
                                 }
+                                if(mana)foreach(var obj in snapshot["objects"])objectIds.Add((string)obj["object_id"]);
                                 foreach(var action in snapshot["actions"])actions.Add((string)action["action_id"]);
                                 if((string)snapshot["status"]!="active")ClearDecision();
                                 if(type=="result"){resultSeen=true;ClearDecision();}

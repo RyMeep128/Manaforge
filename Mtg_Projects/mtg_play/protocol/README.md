@@ -420,3 +420,13 @@ missing/inverted/unsupported constraints without inventing defaults or truncatin
 Twenty owner checks and two authenticated fixture scenarios bring local EditMode
 validation to 186. Mana-source handling, actual engine parity, product lifecycle
 and licensed CI remain pending; no G1 completion is claimed.
+
+
+## Viewer-scoped mana source addressing
+
+The [mana boundary](mana-source-admission.md) now admits select_mana_source using
+a current mana decision and object ID from the viewer's latest snapshot. The
+client does not compute usable sources or infer legality from card state. This
+completes admission coverage for the seven specified wire families; fifteen new
+owner checks and one authenticated fixture case bring local EditMode validation
+to 202. Product boundary/CI acceptance and real Java/XMage parity remain open.

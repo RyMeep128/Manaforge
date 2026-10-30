@@ -125,10 +125,10 @@ namespace Manaforge.Play.Tests
             p.Send(Snapshot("s2",8));p.Channel.ReceiveNext(1000);Assert.That(p.Channel.CanSubmit,Is.True);
             p.Channel.Submit(Command(revision:8).ToString());Assert.That((long)WireMessages.Parse(TextFrame.Read(p.Peer.GetStream()))["body"]["revision"],Is.EqualTo(8));
         }
-        [Test] public void ManaSourcesRemainExplicitlyUnsupportedByThisCoordinatorSlice()
+        [Test] public void ControlReceiptsCannotBeSubmittedAsGameplayCommands()
         {
-            using var p=new Pair();p.Prime();var choice=Command();choice["body"]["operation"]="select_mana_source";((JObject)choice["body"]).Remove("action_id");choice["body"]["object_id"]="object";
-            Assert.That(Assert.Throws<WireEnvelope.EnvelopeException>(()=>p.Channel.Submit(choice.ToString())).Code,Is.EqualTo("SESSION_COMMAND_UNSUPPORTED"));Assert.That(p.Channel.CanSubmit,Is.True);
+            using var p=new Pair();p.Prime();
+            Assert.That(Assert.Throws<WireEnvelope.EnvelopeException>(()=>p.Channel.Submit(Ack().ToString())).Code,Is.EqualTo("SESSION_COMMAND_UNSUPPORTED"));Assert.That(p.Channel.CanSubmit,Is.True);
         }
         private static JObject ChoiceSnapshot(string id="s1",long revision=7,string option="offered",bool controls=true)
         {
@@ -261,6 +261,63 @@ namespace Manaforge.Play.Tests
         {
             using var p=new Pair();PresentNumeric(p,NumericSnapshot("number",0,10));
             Assert.That(Assert.Throws<WireEnvelope.EnvelopeException>(()=>p.Channel.Submit(Numeric("choose_amounts",1).ToString())).Code,Is.EqualTo("DECISION_FAMILY_MISMATCH"));Assert.That(p.Channel.Pending,Is.Null);
+        }
+        private static JObject ManaSnapshot(string id="s1",long revision=7)
+        {var snapshot=ChoiceSnapshot(id,revision,option:null,controls:false);snapshot["body"]["snapshot"]["decision"]["family"]="mana";return snapshot;}
+        private static string ManaObject(JObject snapshot)=>(string)snapshot["body"]["snapshot"]["objects"][0]["object_id"];
+        private static JObject ManaCommand(string objectId,long revision=7)
+        {var command=Choice("select_mana_source",revision:revision);command["body"]["object_id"]=objectId;return command;}
+        [Test] public void CurrentManaObjectUsesTheSameReceiptsAndUncertaintyPath()
+        {
+            using var p=new Pair();var snapshot=ManaSnapshot();p.Send(snapshot);p.Channel.ReceiveNext(1000);Assert.That(p.Channel.CanSubmit,Is.True);
+            p.Channel.Submit(ManaCommand(ManaObject(snapshot)).ToString());Assert.That((string)WireMessages.Parse(TextFrame.Read(p.Peer.GetStream()))["body"]["object_id"],Is.EqualTo(ManaObject(snapshot)));
+            p.Send(Ack());Assert.That(p.Channel.ReceiveNext(1000).Receipt.State,Is.EqualTo(CommandState.Submitted));p.Peer.Client.Shutdown(SocketShutdown.Send);p.Channel.ReceiveNext(1000);Stopped(p,"SESSION_EOF");
+        }
+        [TestCase("tapped")] [TestCase("face-down")] [TestCase("unknown-characteristics")] [TestCase("other-controller")]
+        [TestCase("hand")] [TestCase("unknown-zone")] [TestCase("hidden")]
+        public void ObjectAddressabilityDoesNotInventManaEligibility(string kind)
+        {
+            using var p=new Pair();var snapshot=ManaSnapshot();var obj=snapshot["body"]["snapshot"]["objects"][0];obj["hidden"]=false;obj["zone"]="battlefield";
+            if(kind=="tapped")obj["tapped"]=true;if(kind=="face-down")obj["face_down"]=true;
+            if(kind=="other-controller")obj["controller_id"]="two";if(kind=="hand")obj["zone"]="hand";
+            if(kind=="unknown-zone")obj["zone"]="future-zone";if(kind=="hidden")obj["hidden"]=true;
+            p.Send(snapshot);p.Channel.ReceiveNext(1000);p.Channel.Submit(ManaCommand(ManaObject(snapshot)).ToString());
+            Assert.That((string)WireMessages.Parse(TextFrame.Read(p.Peer.GetStream()))["body"]["object_id"],Is.EqualTo(ManaObject(snapshot)));
+        }
+        [TestCase("other-viewer-object")] [TestCase("old-incarnation")]
+        public void UnaddressableManaObjectIsRejectedBeforeWriting(string objectId)
+        {
+            using var p=new Pair();var snapshot=ManaSnapshot();p.Send(snapshot);p.Channel.ReceiveNext(1000);
+            Assert.That(Assert.Throws<WireEnvelope.EnvelopeException>(()=>p.Channel.Submit(ManaCommand(objectId).ToString())).Code,Is.EqualTo("STALE_OR_INVALID_OBJECT"));
+            Assert.That(p.Channel.Pending,Is.Null);Assert.That(p.Channel.CanSubmit,Is.True);p.Channel.Submit(ManaCommand(ManaObject(snapshot)).ToString());
+            Assert.That((string)WireMessages.Parse(TextFrame.Read(p.Peer.GetStream()))["body"]["object_id"],Is.EqualTo(ManaObject(snapshot)));
+        }
+        [Test] public void NewSnapshotReplacesManaObjectIncarnations()
+        {
+            using var p=new Pair();var first=ManaSnapshot();p.Send(first);p.Channel.ReceiveNext(1000);var next=ManaSnapshot("s2",8);next["body"]["snapshot"]["objects"][0]["object_id"]="new-incarnation";
+            p.Send(next);p.Channel.ReceiveNext(1000);Assert.That(Assert.Throws<WireEnvelope.EnvelopeException>(()=>p.Channel.Submit(ManaCommand(ManaObject(first),8).ToString())).Code,Is.EqualTo("STALE_OR_INVALID_OBJECT"));
+            p.Channel.Submit(ManaCommand("new-incarnation",8).ToString());Assert.That((string)WireMessages.Parse(TextFrame.Read(p.Peer.GetStream()))["body"]["object_id"],Is.EqualTo("new-incarnation"));
+        }
+        [Test] public void HigherRevisionEventRevokesManaAddressability()
+        {
+            using var p=new Pair();var snapshot=ManaSnapshot();p.Send(snapshot);p.Channel.ReceiveNext(1000);
+            var e=(JObject)Corpus()["cases"][0]["steps"][2]["envelope"].DeepClone();e["body"]["event"]["revision"]=8;p.Send(e);p.Channel.ReceiveNext(1000);
+            Assert.That(p.Channel.CanSubmit,Is.False);Assert.That(Assert.Throws<WireEnvelope.EnvelopeException>(()=>p.Channel.Submit(ManaCommand(ManaObject(snapshot)).ToString())).Code,Is.EqualTo("SESSION_NO_DECISION"));
+        }
+        [Test] public void ManaOperationRequiresAManaDecisionFamily()
+        {
+            using var p=new Pair();var snapshot=Snapshot();p.Send(snapshot);p.Channel.ReceiveNext(1000);
+            Assert.That(Assert.Throws<WireEnvelope.EnvelopeException>(()=>p.Channel.Submit(ManaCommand(ManaObject(snapshot)).ToString())).Code,Is.EqualTo("DECISION_FAMILY_MISMATCH"));Assert.That(p.Channel.Pending,Is.Null);
+        }
+        [Test] public void EmptyObjectSetDoesNotInventAManaSource()
+        {
+            using var p=new Pair();var snapshot=ManaSnapshot();snapshot["body"]["snapshot"]["objects"]=new JArray();p.Send(snapshot);p.Channel.ReceiveNext(1000);
+            Assert.That(p.Channel.CanSubmit,Is.False);Assert.That(Assert.Throws<WireEnvelope.EnvelopeException>(()=>p.Channel.Submit(ManaCommand("invented").ToString())).Code,Is.EqualTo("STALE_OR_INVALID_OBJECT"));
+        }
+        [Test] public void ManaObjectCannotBypassAStaleDecisionToken()
+        {
+            using var p=new Pair();var snapshot=ManaSnapshot();p.Send(snapshot);p.Channel.ReceiveNext(1000);var command=ManaCommand(ManaObject(snapshot));command["body"]["decision_id"]="stale";
+            Assert.That(Assert.Throws<WireEnvelope.EnvelopeException>(()=>p.Channel.Submit(command.ToString())).Code,Is.EqualTo("STALE_DECISION"));Assert.That(p.Channel.Pending,Is.Null);
         }
         [TestCase("finished")] [TestCase("unknown")] [TestCase("empty-decision")]
         public void SnapshotsWithoutActiveDecisionsDoNotEnableProvidedActionTokens(string status)

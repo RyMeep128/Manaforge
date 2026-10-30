@@ -47,8 +47,9 @@ has a feasible solution.
 A fresh snapshot replaces the numeric projection. Higher-revision events, results,
 non-active state and channel failure revoke it with other decision permissions.
 The same correlated ACK, uncertainty, cancellation and no-replay handling applies.
-Mana-source admission remains explicitly unsupported in the owner; its existing
-adapter boundary is separate and must not be inferred from numeric payment data.
+The later [mana-source path](mana-source-admission.md) uses current viewer object
+IDs and a mana decision; it does not infer source eligibility from numeric payment
+data.
 
 ## Actual evidence
 
@@ -69,7 +70,7 @@ Local validation: 186 focused Unity EditMode checks, including 48 owner checks a
 checks passed. Model-generation drift check passed. No full application suite ran.
 No new numeric UI or live session is exposed by this increment.
 
-Boundary work still includes mana-source admission, complete authentication/session
+Boundary work still includes complete authentication/session
 budgets, Java session ownership, immutable renderer projection, product launch/
 containment and licensed Unity CI. G0/G1 remain open. Java/XMage behavior parity
 belongs to Phase 2/G2 acceptance after those gates. CI review

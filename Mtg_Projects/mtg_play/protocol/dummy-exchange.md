@@ -224,3 +224,12 @@ the dummy matches only those fixed fixture values and emits its simulated
 submitted/confirmed receipts plus fixture-only result. All fifteen process
 scenarios pass within 186 local focused EditMode checks. There is no actual XMage
 numeric choice or natural-game proof in these modes.
+
+
+### Viewer-scoped mana object fixture
+
+A sixteenth authenticated case supplies a public synthetic object and mana-family
+request. The client owner submits the exact snapshot object ID; the dummy matches
+that fixed fixture input and emits simulated submitted/confirmed receipts, a
+fixture-only result and matched shutdown. It does not calculate mana eligibility
+or start XMage. All sixteen scenarios pass within 202 local focused EditMode checks.

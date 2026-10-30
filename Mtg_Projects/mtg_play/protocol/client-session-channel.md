@@ -30,7 +30,8 @@ may already have sent bytes; cancellation cannot undo them. No new submission is
 admitted after the coordinator observes termination, and a stopped socket cannot
 be reused for transmission.
 
-The coordinator now supports **perform, choose, finish_selection, cancel, choose_number and choose_amounts**.
+The coordinator now supports **perform, choose, finish_selection, cancel, choose_number, choose_amounts
+and select_mana_source**.
 It requires an active viewer snapshot, a nonempty engine-provided decision token
 and the current revision. Perform uses exact offered action IDs; choose uses exact
 offered option IDs. Finish/cancel require the explicit can_finish/cancellable flag.
@@ -48,9 +49,9 @@ viewer/token admission, not a second legality engine or strategic decision maker
 [Numeric admission](numeric-choices.md) uses only supplied number/amount ranges,
 exact vector length and overflow-safe mathematical totals. It does not select,
 clamp or infer values. Missing/unsupported constraints do not enable numeric
-submission. Select_mana_source remains validated by the shared protocol readers
-but this owner refuses it with SESSION_COMMAND_UNSUPPORTED until its separate
-source-identity boundary is implemented.
+submission. [Mana source admission](mana-source-admission.md) requires the current
+mana decision and an exact current viewer object ID; the engine still determines
+usability. No land/type/tap/controller inference or automatic source choice occurs.
 
 No operation is selected automatically. Submit(operation=cancel) is an engine
 decision command bound to its token/flag; the owner's Cancel() closes the local
@@ -98,11 +99,11 @@ transition is performed by this coordinator.
 
 ## Evidence and open gates
 
-Forty-eight focused loopback checks exercise token admission, duplicate delivery,
+Sixty-three focused loopback checks exercise token admission, duplicate delivery,
 correlated receipts, malformed/wrong-viewer input, overflow, cancellation during
 an active read, unexpected EOF, terminal error, unsolicited/matched shutdown,
 final packet draining, results versus ACKs, disposal, canceled writes, revision
-advance, unsupported mana submission and inactive/empty-decision state. New cases cover
+advance, control-message rejection and inactive/empty-decision state. New cases cover
 offered options, absent finish/cancel flags, controls without an option list,
 replacement permissions and revision-based choice revocation.
 
@@ -119,9 +120,9 @@ actual process scenarios in that slice, not real engine games or choice-parity e
 Two more authenticated numeric scenarios now bring the total to fifteen; see
 [numeric admission](numeric-choices.md).
 
-Local evidence: 186 focused Unity EditMode checks, all Java corpora including
+Local evidence: 202 focused Unity EditMode checks, all Java corpora including
 16 read and 14 write loopback checks, passed. No full application suite ran.
-Mana-source dispatch, authentication/session deadline coordination, Java
+Authentication/session deadline coordination, Java
 session ownership, immutable renderer projection, product lifecycle containment
 and licensed Unity CI remain pending. G0/G1 stay open; bulk P2 is not started.
 
@@ -138,3 +139,10 @@ Shared receive validation now rejects empty/duplicate option IDs in both Java an
 C# (eight positive/26 negative receive cases). Eight focused Python schema checks
 pass; identity/context constraints remain distinct from JSON shape. No fields or
 schema versions change and no real engine gateway dispatcher is enabled.
+
+
+The mana follow-up adds a sixteenth authenticated process scenario; all seven
+specified command families now have client admission coverage. The owner retains
+only current viewer-scoped object IDs, not a computed list of legal mana sources.
+Fifteen new checks cover that distinction and permission lifetime. See
+[mana admission](mana-source-admission.md) for current evidence and limits.

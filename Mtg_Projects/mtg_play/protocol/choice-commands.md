@@ -109,3 +109,14 @@ vector length and an overflow-safe mathematical total. Values remain signed
 Twenty new owner checks and two authenticated numeric fixture scenarios pass
 within 186 focused local EditMode checks. Mana-source admission and real-engine
 parity remain pending; this is not G1 completion.
+
+
+## Viewer object source admission follow-up
+
+The [mana-source path](mana-source-admission.md) now completes client admission
+coverage for the seven specified command families. It requires a current mana
+request and viewer-scoped object incarnation, while XMage retains every source/
+ability/payment legality decision. No type/tap/controller/printing inference or
+automatic choice is introduced. Fifteen owner checks and a sixteenth authenticated
+fixture scenario pass within 202 local EditMode checks. G1 acceptance and the
+actual Java/XMage parity port remain separate outstanding work.

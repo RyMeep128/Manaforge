@@ -51,13 +51,20 @@ public final class DummyGateway {
             require(session.equals(snapshot.get("session_id").getAsString()) && viewer.equals(snapshot.get("viewer_id").getAsString()));
             boolean numberMode=args.length==2 && args[1].equals("number");
             boolean amountsMode=args.length==2 && args[1].equals("amounts");
-            boolean choiceMode=args.length==2 && args[1].equals("choice") || numberMode || amountsMode;
+            boolean manaMode=args.length==2 && args[1].equals("mana");
+            boolean choiceMode=args.length==2 && args[1].equals("choice") || numberMode || amountsMode || manaMode;
             if(choiceMode) {
                 snapshot.add("actions",new JsonArray());JsonObject request=snapshot.getAsJsonObject("decision");
                 request.addProperty("family","selection");request.addProperty("is_priority",false);request.addProperty("can_finish",true);request.addProperty("cancellable",true);
                 JsonObject option=new JsonObject();option.addProperty("option_id","fixture-option");option.addProperty("label","Public fixture option");
                 option.add("object_id",JsonNull.INSTANCE);option.add("player_id",JsonNull.INSTANCE);option.addProperty("selected",false);
                 JsonArray options=new JsonArray();options.add(option);request.add("options",options);
+                if(manaMode) {
+                    request.addProperty("family","mana");request.add("options",new JsonArray());request.addProperty("can_finish",false);request.addProperty("cancellable",false);
+                    JsonObject source=snapshot.getAsJsonArray("objects").get(0).getAsJsonObject().deepCopy();
+                    source.addProperty("object_id","fixture-mana-object");source.addProperty("zone","battlefield");source.addProperty("hidden",false);source.addProperty("face_down",false);
+                    snapshot.getAsJsonArray("objects").add(source);
+                }
                 if(numberMode || amountsMode) {
                     request.addProperty("family",numberMode?"number":"amounts");request.add("options",new JsonArray());
                     request.addProperty("can_finish",false);request.addProperty("cancellable",false);
@@ -123,7 +130,8 @@ public final class DummyGateway {
                         if(rejection==null) {
                             String operation=request.get("operation").getAsString();
                             boolean allowed;
-                            if(numberMode)allowed=operation.equals("choose_number") && request.get("value").getAsLong()==-2;
+                            if(manaMode)allowed=operation.equals("select_mana_source") && request.get("object_id").getAsString().equals("fixture-mana-object");
+                            else if(numberMode)allowed=operation.equals("choose_number") && request.get("value").getAsLong()==-2;
                             else if(amountsMode)allowed=operation.equals("choose_amounts") && request.getAsJsonArray("values").size()==2
                                 && request.getAsJsonArray("values").get(0).getAsLong()==-2 && request.getAsJsonArray("values").get(1).getAsLong()==3;
                             else allowed=operation.equals("choose") && request.get("option_id").getAsString().equals("fixture-option")

@@ -522,3 +522,15 @@ checks and two authenticated fixture modes pass within 186 local EditMode checks
 Mana-source admission, full session/lifecycle boundary work and licensed CI remain
 open; G1 is not frozen and bulk P2 remains gated. Java/XMage choice behavior parity
 is Phase 2/G2 acceptance after G0/G1.
+
+
+### G1 viewer-scoped mana source admission — October 30, 2026
+
+The [client mana path](../Mtg_Projects/mtg_play/protocol/mana-source-admission.md)
+now binds source clicks to a current mana decision and viewer object incarnation.
+It does not infer source usability or calculate payment. All seven specified wire
+command families now have client admission coverage; fifteen new owner checks
+and a sixteenth authenticated fixture case pass within 202 local EditMode checks.
+Complete session budgets, Java owner, renderer projection, product lifecycle and
+licensed CI remain open, so G1 is not frozen. Real Java/XMage behavior parity is
+Phase 2/G2 after G0/G1; no bulk engine port has started.
