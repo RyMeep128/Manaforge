@@ -134,3 +134,10 @@ The [first command-body slice](../Mtg_Projects/mtg_play/protocol/command-boundar
 adds perform/ack/viewer-shutdown validation and opaque current-decision comparison.
 It does not execute actions, authenticate a viewer, wire the launch owner or prove
 shutdown. The dummy exchange and P1.4/G1 gates remain pending.
+
+
+The [viewer-authentication primitive](../Mtg_Projects/mtg_play/protocol/viewer-authentication.md)
+now specifies a separate per-seat key and role/nonce/session/pin-bound hello
+proof, with single-use Java/C# verifiers. Credential generation/delivery,
+challenge exchange, verified readiness and owner lifeline remain unimplemented.
+No process lifecycle transition uses proof success yet.

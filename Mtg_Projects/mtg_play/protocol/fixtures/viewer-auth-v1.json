@@ -1,0 +1,312 @@
+{
+  "provenance": "Synthetic public HMAC-SHA256 vectors generated with Python standard library; never live credentials.",
+  "viewer_key_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+  "positive": [
+    {
+      "name": "client",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "hello",
+        "message_id": "auth-client",
+        "body": {
+          "protocol_version": 1,
+          "engine_version": "fixture-engine",
+          "artifact_manifest_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "session_id": "fixture-session",
+          "viewer_id": "seat-one",
+          "server_nonce": "1111111111111111111111111111111111111111111111111111111111111111",
+          "client_nonce": "2222222222222222222222222222222222222222222222222222222222222222",
+          "role": "client",
+          "proof": "1dca682e5dc97da55050df44dc815510975b8f01d4b1f824d37da42c513c6f99"
+        }
+      }
+    },
+    {
+      "name": "gateway",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "hello",
+        "message_id": "auth-gateway",
+        "body": {
+          "protocol_version": 1,
+          "engine_version": "fixture-engine",
+          "artifact_manifest_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "session_id": "fixture-session",
+          "viewer_id": "seat-one",
+          "server_nonce": "1111111111111111111111111111111111111111111111111111111111111111",
+          "client_nonce": "2222222222222222222222222222222222222222222222222222222222222222",
+          "role": "gateway",
+          "proof": "9779f721fa994106dbb7916339da2d6864b4c3422e697efe4c53bb3c7fb13a29"
+        }
+      }
+    }
+  ],
+  "negative": [
+    {
+      "name": "session_id",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "hello",
+        "message_id": "auth-client",
+        "body": {
+          "protocol_version": 1,
+          "engine_version": "fixture-engine",
+          "artifact_manifest_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "session_id": "other",
+          "viewer_id": "seat-one",
+          "server_nonce": "1111111111111111111111111111111111111111111111111111111111111111",
+          "client_nonce": "2222222222222222222222222222222222222222222222222222222222222222",
+          "role": "client",
+          "proof": "1dca682e5dc97da55050df44dc815510975b8f01d4b1f824d37da42c513c6f99"
+        }
+      }
+    },
+    {
+      "name": "viewer_id",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "hello",
+        "message_id": "auth-client",
+        "body": {
+          "protocol_version": 1,
+          "engine_version": "fixture-engine",
+          "artifact_manifest_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "session_id": "fixture-session",
+          "viewer_id": "seat-two",
+          "server_nonce": "1111111111111111111111111111111111111111111111111111111111111111",
+          "client_nonce": "2222222222222222222222222222222222222222222222222222222222222222",
+          "role": "client",
+          "proof": "1dca682e5dc97da55050df44dc815510975b8f01d4b1f824d37da42c513c6f99"
+        }
+      }
+    },
+    {
+      "name": "server_nonce",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "hello",
+        "message_id": "auth-client",
+        "body": {
+          "protocol_version": 1,
+          "engine_version": "fixture-engine",
+          "artifact_manifest_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "session_id": "fixture-session",
+          "viewer_id": "seat-one",
+          "server_nonce": "3333333333333333333333333333333333333333333333333333333333333333",
+          "client_nonce": "2222222222222222222222222222222222222222222222222222222222222222",
+          "role": "client",
+          "proof": "1dca682e5dc97da55050df44dc815510975b8f01d4b1f824d37da42c513c6f99"
+        }
+      }
+    },
+    {
+      "name": "client_nonce",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "hello",
+        "message_id": "auth-client",
+        "body": {
+          "protocol_version": 1,
+          "engine_version": "fixture-engine",
+          "artifact_manifest_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "session_id": "fixture-session",
+          "viewer_id": "seat-one",
+          "server_nonce": "1111111111111111111111111111111111111111111111111111111111111111",
+          "client_nonce": "4444444444444444444444444444444444444444444444444444444444444444",
+          "role": "client",
+          "proof": "1dca682e5dc97da55050df44dc815510975b8f01d4b1f824d37da42c513c6f99"
+        }
+      }
+    },
+    {
+      "name": "engine_version",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "hello",
+        "message_id": "auth-client",
+        "body": {
+          "protocol_version": 1,
+          "engine_version": "other-engine",
+          "artifact_manifest_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "session_id": "fixture-session",
+          "viewer_id": "seat-one",
+          "server_nonce": "1111111111111111111111111111111111111111111111111111111111111111",
+          "client_nonce": "2222222222222222222222222222222222222222222222222222222222222222",
+          "role": "client",
+          "proof": "1dca682e5dc97da55050df44dc815510975b8f01d4b1f824d37da42c513c6f99"
+        }
+      }
+    },
+    {
+      "name": "artifact_manifest_sha256",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "hello",
+        "message_id": "auth-client",
+        "body": {
+          "protocol_version": 1,
+          "engine_version": "fixture-engine",
+          "artifact_manifest_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "session_id": "fixture-session",
+          "viewer_id": "seat-one",
+          "server_nonce": "1111111111111111111111111111111111111111111111111111111111111111",
+          "client_nonce": "2222222222222222222222222222222222222222222222222222222222222222",
+          "role": "client",
+          "proof": "1dca682e5dc97da55050df44dc815510975b8f01d4b1f824d37da42c513c6f99"
+        }
+      }
+    },
+    {
+      "name": "role",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "hello",
+        "message_id": "auth-client",
+        "body": {
+          "protocol_version": 1,
+          "engine_version": "fixture-engine",
+          "artifact_manifest_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "session_id": "fixture-session",
+          "viewer_id": "seat-one",
+          "server_nonce": "1111111111111111111111111111111111111111111111111111111111111111",
+          "client_nonce": "2222222222222222222222222222222222222222222222222222222222222222",
+          "role": "gateway",
+          "proof": "1dca682e5dc97da55050df44dc815510975b8f01d4b1f824d37da42c513c6f99"
+        }
+      }
+    },
+    {
+      "name": "protocol_version",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "hello",
+        "message_id": "auth-client",
+        "body": {
+          "protocol_version": 2,
+          "engine_version": "fixture-engine",
+          "artifact_manifest_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "session_id": "fixture-session",
+          "viewer_id": "seat-one",
+          "server_nonce": "1111111111111111111111111111111111111111111111111111111111111111",
+          "client_nonce": "2222222222222222222222222222222222222222222222222222222222222222",
+          "role": "client",
+          "proof": "1dca682e5dc97da55050df44dc815510975b8f01d4b1f824d37da42c513c6f99"
+        }
+      }
+    },
+    {
+      "name": "proof",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "hello",
+        "message_id": "auth-client",
+        "body": {
+          "protocol_version": 1,
+          "engine_version": "fixture-engine",
+          "artifact_manifest_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "session_id": "fixture-session",
+          "viewer_id": "seat-one",
+          "server_nonce": "1111111111111111111111111111111111111111111111111111111111111111",
+          "client_nonce": "2222222222222222222222222222222222222222222222222222222222222222",
+          "role": "client",
+          "proof": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+        }
+      }
+    },
+    {
+      "name": "owner_secret",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "hello",
+        "message_id": "auth-client",
+        "body": {
+          "protocol_version": 1,
+          "engine_version": "fixture-engine",
+          "artifact_manifest_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "session_id": "fixture-session",
+          "viewer_id": "seat-one",
+          "server_nonce": "1111111111111111111111111111111111111111111111111111111111111111",
+          "client_nonce": "2222222222222222222222222222222222222222222222222222222222222222",
+          "role": "client",
+          "proof": "1dca682e5dc97da55050df44dc815510975b8f01d4b1f824d37da42c513c6f99",
+          "owner_secret": "forbidden"
+        }
+      }
+    },
+    {
+      "name": "message-id",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "hello",
+        "message_id": "other-id",
+        "body": {
+          "protocol_version": 1,
+          "engine_version": "fixture-engine",
+          "artifact_manifest_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "session_id": "fixture-session",
+          "viewer_id": "seat-one",
+          "server_nonce": "1111111111111111111111111111111111111111111111111111111111111111",
+          "client_nonce": "2222222222222222222222222222222222222222222222222222222222222222",
+          "role": "client",
+          "proof": "1dca682e5dc97da55050df44dc815510975b8f01d4b1f824d37da42c513c6f99"
+        }
+      }
+    },
+    {
+      "name": "missing-proof",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "hello",
+        "message_id": "auth-client",
+        "body": {
+          "protocol_version": 1,
+          "engine_version": "fixture-engine",
+          "artifact_manifest_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "session_id": "fixture-session",
+          "viewer_id": "seat-one",
+          "server_nonce": "1111111111111111111111111111111111111111111111111111111111111111",
+          "client_nonce": "2222222222222222222222222222222222222222222222222222222222222222",
+          "role": "client"
+        }
+      }
+    },
+    {
+      "name": "valid-gateway-reflection",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "hello",
+        "message_id": "auth-gateway",
+        "body": {
+          "protocol_version": 1,
+          "engine_version": "fixture-engine",
+          "artifact_manifest_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "session_id": "fixture-session",
+          "viewer_id": "seat-one",
+          "server_nonce": "1111111111111111111111111111111111111111111111111111111111111111",
+          "client_nonce": "2222222222222222222222222222222222222222222222222222222222222222",
+          "role": "gateway",
+          "proof": "9779f721fa994106dbb7916339da2d6864b4c3422e697efe4c53bb3c7fb13a29"
+        }
+      }
+    },
+    {
+      "name": "valid-proof-wrong-seat",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "hello",
+        "message_id": "auth-client",
+        "body": {
+          "protocol_version": 1,
+          "engine_version": "fixture-engine",
+          "artifact_manifest_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "session_id": "fixture-session",
+          "viewer_id": "seat-two",
+          "server_nonce": "1111111111111111111111111111111111111111111111111111111111111111",
+          "client_nonce": "2222222222222222222222222222222222222222222222222222222222222222",
+          "role": "client",
+          "proof": "1064d0728f21480ab9de472bf62bc3e8cee9dca80c8ae450db6de22c28274de8"
+        }
+      }
+    }
+  ]
+}

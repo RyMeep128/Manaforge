@@ -245,3 +245,14 @@ uncertain remain distinct. Other bodies/families, real authentication, pending
 tracking and dummy exchange remain pending. Local checks: six positive/19
 negative body cases, six current-context cases, 33 Unity EditMode checks and two
 schema checks passed. See that guide for this increment's scheduled CI snapshot.
+
+
+## Viewer authentication primitive
+
+[Viewer authentication](viewer-authentication.md) defines the separate per-seat
+credential audience, hello schema and ordered HMAC transcript. Java/C# pass two
+independent known answers, 14 tamper cases and single-use/concurrent verification
+checks. Local focused evidence: 37 Unity EditMode and three schema checks passed.
+This does not deliver bootstrap credentials, open a listener or exchange actual
+peer messages. Private launch delivery, both-direction handshake and G1 remain
+pending. Never pass owner credentials or the all-decks manifest to Unity.

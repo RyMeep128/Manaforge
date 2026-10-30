@@ -59,6 +59,8 @@ def main():
             PROTOCOL / "java-test/EnvelopeFixtureConsumer.java",
             PROTOCOL / "java/manaforge/protocol/WireMessages.java",
             PROTOCOL / "java-test/MessageFixtureConsumer.java",
+            PROTOCOL / "java/manaforge/protocol/ViewerAuthentication.java",
+            PROTOCOL / "java-test/AuthFixtureConsumer.java",
         ]
         subprocess.run(
             [
@@ -119,6 +121,18 @@ def main():
                 str(workspace) + os.pathsep + str(jar),
                 "manaforge.protocol.MessageFixtureConsumer",
                 str(PROTOCOL / "fixtures/wire-messages-v1.json"),
+            ],
+            check=True,
+            timeout=60,
+        )
+
+        subprocess.run(
+            [
+                runtime,
+                "-cp",
+                str(workspace) + os.pathsep + str(jar),
+                "manaforge.protocol.AuthFixtureConsumer",
+                str(PROTOCOL / "fixtures/viewer-auth-v1.json"),
             ],
             check=True,
             timeout=60,

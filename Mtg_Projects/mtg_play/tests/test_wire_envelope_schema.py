@@ -41,3 +41,23 @@ def test_shared_envelopes_match_schema(stem):
         # A stale or unauthorized command may be structurally valid; current engine
         # context and authenticated seat binding are separate checks in both peers.
         validator.validate(case["envelope"])
+
+
+def test_viewer_auth_schema_separates_shape_from_authentication():
+    schema = json.loads(
+        (ROOT / "viewer-auth-v1.schema.json").read_text(encoding="utf-8")
+    )
+    Draft202012Validator.check_schema(schema)
+    validator = Draft202012Validator(schema)
+    corpus = json.loads(
+        (ROOT / "fixtures/viewer-auth-v1.json").read_text(encoding="utf-8")
+    )
+    for case in corpus["positive"]:
+        validator.validate(case["envelope"])
+    for case in corpus["negative"]:
+        if case["name"] in {"protocol_version", "owner_secret", "missing-proof"}:
+            assert not validator.is_valid(case["envelope"])
+        else:
+            # Wrong proofs, pins, nonce/context and role can be structurally valid.
+            # Runtime cryptographic verification must still reject them.
+            validator.validate(case["envelope"])
