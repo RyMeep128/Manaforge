@@ -332,7 +332,7 @@ public final class ManaforgeBridge implements MageClient {
         return data;
     }
 
-    private static DeckCardLists deck(JsonObject command) {
+    static DeckCardLists deck(JsonObject command) {
         DeckCardLists deck = new DeckCardLists();
         for (com.google.gson.JsonElement element : command.getAsJsonArray("cards")) {
             JsonObject card = element.getAsJsonObject();

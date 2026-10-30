@@ -663,6 +663,20 @@ def main():
     try:
         with adapter:
             result["compatibility"] = adapter.compatibility.to_dict()
+            if args.scenario == "ai-freeform":
+                document = ai_acceptance.fixture_deck()
+                original = document.to_dict()
+                if not adapter.validate_deck(document, "freeform"):
+                    raise AdapterError("FREEFORM_VALIDATION_ACCEPTANCE_FAILED")
+                if adapter.validate_deck(document, "commander"):
+                    raise AdapterError("COMMANDER_VALIDATION_ACCEPTANCE_FAILED")
+                if not adapter.validate_deck(
+                    ai_acceptance.commander_deck(), "commander"
+                ):
+                    raise AdapterError("COMMANDER_VALIDATION_ACCEPTANCE_FAILED")
+                if document.to_dict() != original:
+                    raise AdapterError("SOURCE_DECK_CHANGED")
+                result["engine_deck_validation"] = True
             result["gameplay"] = scenarios[args.scenario](adapter)
         if args.scenario.startswith("ai-"):
             runtime = adapter.result

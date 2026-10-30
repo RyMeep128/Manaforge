@@ -5,6 +5,9 @@ import java.nio.file.*;
 import com.google.gson.*;
 import mage.cards.repository.CardRepository;
 import mage.cards.repository.CardInfo;
+import mage.cards.decks.Deck;
+import mage.cards.decks.DeckValidator;
+import mage.cards.decks.DeckValidatorFactory;
 
 /** Gives the owned server a stdin shutdown channel, allowing normal JVM shutdown hooks. */
 public final class ManaforgeServerHost {
@@ -19,7 +22,9 @@ public final class ManaforgeServerHost {
                     JsonObject command = JsonParser.parseString(line).getAsJsonObject();
                     String id = java.util.UUID.fromString(command.get("request_id").getAsString()).toString();
                     JsonElement results;
-                    if (command.has("command") && command.get("command").getAsString().equals("metadata")) {
+                    if (command.has("command") && command.get("command").getAsString().equals("validate_deck")) {
+                        results = validateDeck(command);
+                    } else if (command.has("command") && command.get("command").getAsString().equals("metadata")) {
                         try {
                             results = ManaforgeGameMetadata.read(command);
                         } catch (java.util.ConcurrentModificationException retry) {
@@ -91,5 +96,31 @@ public final class ManaforgeServerHost {
         control.setDaemon(true);
         control.start();
         mage.server.Main.main(args);
+    }
+
+    private static JsonObject validateDeck(JsonObject command) {
+        JsonObject result = new JsonObject();
+        String format = command.get("format").getAsString();
+        String deckType;
+        if (format.equals("freeform")) deckType = "Constructed - Freeform Unlimited";
+        else if (format.equals("commander")) deckType = "Variant Magic - Commander";
+        else {
+            result.addProperty("code", "UNSUPPORTED_GAME_SETUP");
+            return result;
+        }
+        DeckValidator validator = DeckValidatorFactory.instance.createDeckValidator(deckType);
+        if (validator == null) {
+            result.addProperty("code", "ENGINE_VALIDATOR_UNAVAILABLE");
+            return result;
+        }
+        // Match the pinned server's join-table load/validation path. Never return
+        // validator messages: they can contain private deck names and card data.
+        try {
+            boolean eligible = validator.validate(Deck.load(ManaforgeBridge.deck(command), false, false));
+            result.addProperty("eligible", eligible);
+        } catch (mage.game.GameException unsupported) {
+            result.addProperty("code", "ENGINE_DECK_LOAD_FAILED");
+        }
+        return result;
     }
 }

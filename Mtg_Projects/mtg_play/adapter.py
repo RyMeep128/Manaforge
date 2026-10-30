@@ -318,6 +318,42 @@ class LocalGameAdapter:
     def _resolve(self, queries):
         return self._server_request(cards=queries)
 
+    def validate_deck(self, document: DeckDocument, format: str, *, oracle_lookup=None):
+        """Check one deck using the owned pinned engine; never cache eligibility.
+
+        Call on the runtime worker before creating a match. False is an explicit
+        format rejection; translation, transport and protocol failures raise.
+        """
+        if self._runtime is None or self._done.is_set():
+            raise AdapterError("ENGINE_UNAVAILABLE")
+        if self._session is not None:
+            raise AdapterError("SESSION_ALREADY_CREATED")
+        if format not in ("freeform", "commander"):
+            raise AdapterError("UNSUPPORTED_GAME_SETUP")
+        with self.lifecycle.stage("deck_resolution"):
+            prepared = prepare_deck(
+                document, self._resolve, oracle_lookup, commander=format == "commander"
+            )
+            result = self._server_request(
+                command="validate_deck",
+                format=format,
+                cards=prepared.cards,
+                sideboard=prepared.sideboard,
+            )
+        if not isinstance(result, dict) or type(result.get("eligible")) is not bool:
+            code = result.get("code") if isinstance(result, dict) else None
+            raise AdapterError(
+                code
+                if code
+                in (
+                    "ENGINE_VALIDATOR_UNAVAILABLE",
+                    "ENGINE_DECK_LOAD_FAILED",
+                    "UNSUPPORTED_GAME_SETUP",
+                )
+                else "INVALID_DECK_VALIDATION_RESPONSE"
+            )
+        return result["eligible"]
+
     def _metadata(self, view):
         cards = [
             card for zone in ("hand", "stack", "exile") for card in view.get(zone, ())

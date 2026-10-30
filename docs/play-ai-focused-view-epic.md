@@ -361,6 +361,18 @@ The selected AI deck must use the ordinary Core deck representation and match pr
 
 ---
 
+Story 6 incremental implementation (0.5.10-alpha.1): the worker-facing adapter
+now offers uncached pinned-engine deck validation before match creation. It uses
+ordinary Core translation and the same XMage deck loader and format validators
+as table joins. Explicit ineligibility remains distinct from translation,
+transport, engine-load, and malformed-response failures. Private validator
+messages are not returned. CI coverage adds source preservation and strict
+response checks; the existing AI Freeform engine scenario now requires the same
+deck to pass Freeform validation and fail Commander validation before gameplay.
+These checks have not been run locally. Randomize selection, cancellation,
+cleanup recovery, and UI integration are still pending; this is not completion
+of Story 6 or an eligibility cache.
+
 ## Story 7 — Local battlefield artwork generation
 
 **Priority:** P1  

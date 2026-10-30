@@ -711,3 +711,84 @@ def test_ai_identity_maps_from_public_name_without_an_ai_client(session):
     view = session.snapshot("one")
     assert {player.player_id for player in view.players} == {"one", "two"}
     assert all(obj.owner_id == "one" for obj in view.objects if obj.zone == "hand")
+
+
+@pytest.mark.parametrize("eligible", [True, False])
+def test_engine_deck_validation_preserves_document_and_uses_prepared_printings(
+    eligible,
+):
+    from threading import Event
+    from mtg_play.diagnostics import LifecycleDiagnostics
+
+    document = DeckDocument(deck=Deck(entries=[DeckEntry("forest", "Forest", 30)]))
+    before = deepcopy(document.to_dict())
+    owner = LocalGameAdapter.__new__(LocalGameAdapter)
+    owner._runtime = object()
+    owner._done = Event()
+    owner._session = None
+    owner.lifecycle = LifecycleDiagnostics()
+    calls = []
+
+    def request(**fields):
+        calls.append(fields)
+        if fields.get("command") == "validate_deck":
+            return {"eligible": eligible}
+        return resolve(fields["cards"])
+
+    owner._server_request = request
+    assert owner.validate_deck(document, "freeform") is eligible
+    assert calls[-1] == dict(
+        command="validate_deck",
+        format="freeform",
+        cards=({"name": "Forest", "set": "M10", "number": "248", "quantity": 30},),
+        sideboard=(),
+    )
+    assert document.to_dict() == before
+    assert owner._session is None
+
+
+@pytest.mark.parametrize(
+    "response",
+    [None, {}, {"eligible": 1}, {"eligible": "true"}, {"code": "private card name"}],
+)
+def test_engine_deck_validation_does_not_treat_unknown_response_as_rejection(
+    response, monkeypatch
+):
+    from threading import Event
+    from mtg_play.diagnostics import LifecycleDiagnostics
+
+    owner = LocalGameAdapter.__new__(LocalGameAdapter)
+    owner._runtime = object()
+    owner._done = Event()
+    owner._session = None
+    owner.lifecycle = LifecycleDiagnostics()
+    monkeypatch.setattr(
+        "mtg_play.adapter.prepare_deck", lambda *a, **k: PreparedDeck((), (), {})
+    )
+    owner._server_request = lambda **fields: response
+    with pytest.raises(AdapterError, match="INVALID_DECK_VALIDATION_RESPONSE"):
+        owner.validate_deck(object(), "commander")
+
+
+@pytest.mark.parametrize(
+    "runtime,done,session,format,code",
+    [
+        (None, False, None, "freeform", "ENGINE_UNAVAILABLE"),
+        (True, True, None, "freeform", "ENGINE_UNAVAILABLE"),
+        (True, False, True, "freeform", "SESSION_ALREADY_CREATED"),
+        (True, False, None, "standard", "UNSUPPORTED_GAME_SETUP"),
+    ],
+)
+def test_engine_deck_validation_rejects_unavailable_or_active_runtime(
+    runtime, done, session, format, code
+):
+    from threading import Event
+
+    owner = LocalGameAdapter.__new__(LocalGameAdapter)
+    owner._runtime = runtime
+    owner._done = Event()
+    if done:
+        owner._done.set()
+    owner._session = session
+    with pytest.raises(AdapterError, match=code):
+        owner.validate_deck(object(), format)
