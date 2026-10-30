@@ -42,10 +42,37 @@ and [TableController](https://github.com/magefree/mage/blob/xmage_1.4.62V1/Mage.
 The unchanged artifact integrity checks and CI compilation against the actual
 pinned bundle remain authoritative; source inspection is not runtime evidence.
 
-Story 1 is **not accepted**. Freeform CI evidence is pending. Two-player Commander
-AI acceptance, explicit AI blocking coverage, and wider deck behavior remain
-outstanding. The active UI still uses pass-and-play; no rebuilt gameplay UI or
-installed feature enablement depends on this unverified integration.
+### Story 1 follow-on: Commander and blocking evidence (local, unverified)
+
+Two additional scenarios are prepared for a subsequent CI run:
+
+- `ai-commander`: canonical 99 Plains plus Isamaru documents for both seats.
+  Require both command zones, preserved commander printing identities, AI casting
+  its commander from the command zone, combat, commander damage to the human,
+  a human land play, and an engine-offered human commander cast action. The human
+  leaves its commander uncast to permit AI attacks against an open battlefield.
+- `ai-blockers`: one human Memnite attacks into engine-controlled Ornithopters.
+  Require the actual human attacker and AI blocker references in the same blocked
+  combat assignment. Merely having an AI creature or unrelated combat is not proof.
+
+Both drivers control only the human, reject unknown human decisions, and concede
+only after their evidence gates. Reports explicitly distinguish these conceded
+outcomes from the Freeform normal-completion proof. Both must confirm the human's
+non-winning result, unchanged source documents, and normal owned-process cleanup
+without an AI peer client. Fixture driver tests cover evidence ordering, rejection
+of premature results and unrelated combat, and canonical Commander preservation.
+AI strategy is not overridden if it declines to block; missing evidence fails CI.
+
+The Freeform increment is being evaluated by
+[CI run 40977624067](https://github.com/RyMeep128/Manaforge/actions/runs/40977624067)
+at `ef38464050689315480d033dd87dee18f96171ce`. No subsequent push is permitted until
+that run finishes and its outcome has been reviewed. The local follow-on scenarios
+have not run and are not part of that run's evidence.
+
+Story 1 is **not accepted**. Freeform CI evidence is pending, and Commander/blocking
+scenarios are unverified local work. Wider deck behavior also remains outstanding.
+The active UI still uses pass-and-play; no rebuilt gameplay UI or installed
+feature enablement depends on this unverified integration.
 
 No local tests, builds, or engine acceptance are permitted for this rebuild.
 New tests execute in GitHub Actions; identify actual runs before claiming a pass.

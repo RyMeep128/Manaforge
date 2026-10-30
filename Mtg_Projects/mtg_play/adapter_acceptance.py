@@ -583,6 +583,8 @@ def main():
         "--scenario",
         choices=(
             "ai-freeform",
+            "ai-commander",
+            "ai-blockers",
             "basic",
             "combat",
             "commander",
@@ -625,6 +627,8 @@ def main():
         options["jdk"] = args.jdk_path
     scenarios = {
         "ai-freeform": ai_acceptance.freeform,
+        "ai-commander": ai_acceptance.commander,
+        "ai-blockers": ai_acceptance.blockers,
         "basic": acceptance,
         "combat": combat_acceptance,
         "commander": lambda adapter: commander_acceptance(adapter, args.seats),
@@ -660,7 +664,7 @@ def main():
         with adapter:
             result["compatibility"] = adapter.compatibility.to_dict()
             result["gameplay"] = scenarios[args.scenario](adapter)
-        if args.scenario == "ai-freeform":
+        if args.scenario.startswith("ai-"):
             runtime = adapter.result
             if (
                 runtime is None

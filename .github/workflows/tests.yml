@@ -102,7 +102,7 @@ jobs:
           $reports = Join-Path $env:RUNNER_TEMP 'manaforge-xmage-reports'
           New-Item -ItemType Directory -Path $reports -Force | Out-Null
           $failures = @()
-          foreach ($scenario in @('ai-freeform', 'optional-payment', 'real-decks', 'basic', 'combat', 'identity', 'commander-play', 'visibility', 'number', 'modes', 'sacrifice', 'distribution', 'triggers', 'copy', 'transform', 'partners', 'background', 'companion', 'blockers', 'cancellation', 'string-choice', 'piles', 'interruption')) {
+          foreach ($scenario in @('ai-freeform', 'ai-commander', 'ai-blockers', 'optional-payment', 'real-decks', 'basic', 'combat', 'identity', 'commander-play', 'visibility', 'number', 'modes', 'sacrifice', 'distribution', 'triggers', 'copy', 'transform', 'partners', 'background', 'companion', 'blockers', 'cancellation', 'string-choice', 'piles', 'interruption')) {
             python -m mtg_play.adapter_acceptance --scenario $scenario --xmage-root "$env:RUNNER_TEMP/manaforge-xmage" --jdk-path "$env:JAVA_HOME" --output "$reports/$scenario.json"
             if ($LASTEXITCODE -ne 0) { $failures += $scenario }
           }
