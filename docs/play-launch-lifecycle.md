@@ -128,3 +128,9 @@ duplicate-key/depth/Unicode checks and an explicit header-only type vocabulary.
 See the [protocol guide](../Mtg_Projects/mtg_play/protocol/README.md#strict-json-envelope-foundation--g1-remains-open).
 Bodies, peer authentication, live command safety and dummy exchange remain pending;
 this does not mark G1 complete or begin the XMage gateway port.
+
+
+The [first command-body slice](../Mtg_Projects/mtg_play/protocol/command-boundary.md)
+adds perform/ack/viewer-shutdown validation and opaque current-decision comparison.
+It does not execute actions, authenticate a viewer, wire the launch owner or prove
+shutdown. The dummy exchange and P1.4/G1 gates remain pending.

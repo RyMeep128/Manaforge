@@ -1,0 +1,261 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:manaforge:play:wire-messages:1",
+  "title": "First perform/ack/shutdown wire bodies",
+  "type": "object",
+  "required": [
+    "wire_version",
+    "message_type",
+    "message_id",
+    "body"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "wire_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "message_type": {
+      "enum": [
+        "command",
+        "ack",
+        "shutdown"
+      ]
+    },
+    "message_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,128}(?![\\s\\S])"
+    },
+    "body": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/value"
+      }
+    }
+  },
+  "$defs": {
+    "value": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "type": "integer",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/value"
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/value"
+          }
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "message_type": {
+            "const": "command"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "type": "object",
+            "required": [
+              "session_id",
+              "viewer_id",
+              "revision",
+              "operation",
+              "decision_id",
+              "action_id"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "session_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+              },
+              "viewer_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+              },
+              "revision": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9223372036854775807
+              },
+              "operation": {
+                "const": "perform"
+              },
+              "decision_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+              },
+              "action_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "message_type": {
+            "const": "ack"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "type": "object",
+            "required": [
+              "session_id",
+              "viewer_id",
+              "command_id",
+              "request_revision",
+              "outcome",
+              "code"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "session_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+              },
+              "viewer_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+              },
+              "command_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,128}(?![\\s\\S])"
+              },
+              "request_revision": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9223372036854775807
+              },
+              "outcome": {
+                "enum": [
+                  "submitted",
+                  "confirmed",
+                  "rejected",
+                  "uncertain"
+                ]
+              },
+              "code": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "oneOf": [
+              {
+                "properties": {
+                  "outcome": {
+                    "enum": [
+                      "submitted",
+                      "confirmed"
+                    ]
+                  },
+                  "code": {
+                    "type": "null"
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "outcome": {
+                    "const": "rejected"
+                  },
+                  "code": {
+                    "enum": [
+                      "SESSION_MISMATCH",
+                      "VIEWER_MISMATCH",
+                      "STALE_REVISION",
+                      "STALE_DECISION",
+                      "ACTION_UNAVAILABLE",
+                      "COMMAND_PENDING",
+                      "ENGINE_REJECTED"
+                    ]
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "outcome": {
+                    "const": "uncertain"
+                  },
+                  "code": {
+                    "const": "COMMAND_UNCERTAIN"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "message_type": {
+            "const": "shutdown"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "type": "object",
+            "required": [
+              "session_id",
+              "viewer_id",
+              "reason"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "session_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+              },
+              "viewer_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+              },
+              "reason": {
+                "enum": [
+                  "client_close",
+                  "cancel",
+                  "startup_failed"
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

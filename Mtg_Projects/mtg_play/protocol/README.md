@@ -233,3 +233,15 @@ ENVELOPE_VERSION; never reflect raw content in diagnostics. Multiple defects may
 fail at the first parser-specific check; no recovery/replay is implied. Framing,
 JSON and semantic validation are distinct layers. Run these readers on workers.
 No socket listener, real engine, launcher or gameplay dispatcher is introduced.
+
+
+## First command-body slice
+
+[Command boundary](command-boundary.md) documents the new perform/ack/shutdown
+schema and shared Java/C# readers. Commands bind session, viewer, revision,
+decision and action IDs; a current-context comparison rejects stale/mismatched
+values without duplicating game rules. Submitted, confirmed, rejected and
+uncertain remain distinct. Other bodies/families, real authentication, pending
+tracking and dummy exchange remain pending. Local checks: six positive/19
+negative body cases, six current-context cases, 33 Unity EditMode checks and two
+schema checks passed. See that guide for this increment's scheduled CI snapshot.
