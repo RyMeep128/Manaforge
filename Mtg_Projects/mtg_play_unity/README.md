@@ -106,8 +106,8 @@ assets (`get_image_path`, with the appropriate variant). `Cached` means a usable
 verified asset, not just an image URL or database row. `FaceKey` means equivalent
 card-face identity across printings, not merely a numeric face index. Do not infer
 compatibility from matching indices. Profile classification must explicitly
-exclude unsupported treatments. Neither catalog classification nor this bridge
-is implemented yet. Never feed the private all-decks launch manifest to Unity.
+exclude unsupported treatments. The host-side collector described below supplies conservative classification;
+Unity delivery and the live bridge remain pending. Never feed the private all-decks launch manifest to Unity.
 
 The existing Qt cache remains unchanged. Core's `ensure_face_image` can fall back
 to the front image for some layouts; a future bridge must verify the actual face
@@ -119,3 +119,29 @@ sequence. Retry policy selection when verified cache availability changes.
 Local validation: 16 EditMode tests passed (8 existing and 8 printing-policy
 checks). CI evidence and all rendering/benchmark gates remain pending. There is
 no new visual screenshot or packaged-player behavior in this increment.
+
+### Host-side local catalog collector
+
+`mtg_play.visual_catalog.collect_visual_candidates` supplies immutable internal
+host metadata using existing Core catalog/image APIs only. It requests no remote
+catalog refresh or downloads and does not change saved printings. Call it on an
+asset worker during fixture preparation or one-time launch asset preparation,
+not in the gameplay action loop. No app launch integration is installed yet.
+
+Its initial `standard_compatible` profile requires normal layout, 2015 frame,
+black/white border, explicitly false full-art/textless/promo flags, no frame
+effects and no multiple faces. Unknown/special metadata stays authentic-image
+only; broader frame support needs separate profile evidence. Equivalent faces
+match exact names within the same Oracle identity. Ambiguous selected faces fail
+explicitly. Exact image variants are decoded to reject corrupt files. Flip backs
+remain unavailable here until rotation metadata is supported.
+
+The collector returns selected-first candidates, then ordinal printing IDs,
+including missing-asset candidates. Its local paths are **host-internal** and must
+not be serialized to Unity. Cache flags are observations and can become stale.
+There is no second database, downloader or persistent resolution cache. The next
+bridge must pass approved asset handles and candidate metadata to Unity's policy,
+verify viewer ownership and clear assets on viewer handoff. No shared wire schema
+for that transfer exists yet; these Python records are not public protocol DTOs.
+Eighteen focused collector tests passed locally; Unity delivery, real artwork
+demo, screenshots, dynamic rendering and CI evidence remain pending.

@@ -232,8 +232,10 @@ The Unity [offline printing policy](../Mtg_Projects/mtg_play_unity/README.md#off
 now separates selected/rendered identities and selects deterministic cached
 same-card/same-face standard or authentic image fallbacks. Eight focused policy
 tests pass locally (16 total EditMode checks). This uses supplied catalog
-metadata only; no live catalog bridge, classification, downloader, texture cache
-or composable renderer has been implemented. Online resolution and CI remain
+metadata only. A host-side offline collector now reads the existing Core catalog
+and exact-face local images, verifies decodability and conservatively classifies
+ordinary 2015-frame printings. Eighteen collector tests pass locally. No Unity
+asset delivery, downloader, texture cache or composable renderer is implemented. Online resolution and CI remain
 pending. The acceptance checklist below remains open.
 
 ## Acceptance criteria
