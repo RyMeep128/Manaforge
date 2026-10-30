@@ -53,6 +53,8 @@ def main():
             PROTOCOL / "java/manaforge/protocol/PlayContracts.java",
             PROTOCOL / "java/manaforge/protocol/LaunchContracts.java",
             PROTOCOL / "java-test/FixtureConsumer.java",
+            PROTOCOL / "java/manaforge/protocol/TextFrame.java",
+            PROTOCOL / "java-test/FrameFixtureConsumer.java",
         ]
         subprocess.run(
             [
@@ -77,6 +79,18 @@ def main():
                 str(workspace) + os.pathsep + str(jar),
                 "manaforge.protocol.FixtureConsumer",
                 str(PROTOCOL),
+            ],
+            check=True,
+            timeout=60,
+        )
+
+        subprocess.run(
+            [
+                runtime,
+                "-cp",
+                str(workspace) + os.pathsep + str(jar),
+                "manaforge.protocol.FrameFixtureConsumer",
+                str(PROTOCOL / "fixtures/text-frames-v1.json"),
             ],
             check=True,
             timeout=60,

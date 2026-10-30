@@ -112,3 +112,12 @@ engine pin, saved deck or live gameplay path changes here. Complete real bootstr
 bounded diagnostics, platform containment/orphan checks and lifecycle acceptance
 before treating P1.4 or G1 as complete. CI is reviewed every third commit; a running
 check is deferred to the next scheduled review without waiting.
+
+
+### G1 stream-boundary progress
+
+The shared [text framing foundation](../Mtg_Projects/mtg_play/protocol/text-framing.md)
+now provides matching Java/C# length caps, strict UTF-8 and fragmented/truncated
+stream checks. No bootstrap pipes or loopback service use it yet. JSON envelopes,
+authentication, cancellation/deadlines, acknowledgements and the actual dummy
+exchange are still required; P1.4/G1 remain open.

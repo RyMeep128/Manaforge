@@ -178,3 +178,13 @@ receives a root all-seats session.
 Local evidence: Java round-tripped 14 positives/rejected 12 negatives; Unity's
 eight EditMode checks passed, including both fixture-consumer checks. CI review
 is every third commit; pending CI permits continued development but is unverified.
+
+
+## Bounded text framing foundation
+
+See [text framing v1](text-framing.md) for the shared Java/C# four-byte length
+prefix, 1 MiB byte cap, strict UTF-8, safe error codes and shared adversarial
+fixtures. Local Java checks and 28 Unity EditMode tests pass. These codecs do not
+parse JSON, authenticate a peer or dispatch gameplay; dummy process exchange,
+shutdown and G1 acceptance remain pending. The Java protocol CI helper includes
+the framing corpus without starting Unity or XMage.
