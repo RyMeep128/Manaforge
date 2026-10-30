@@ -10,9 +10,29 @@ from mtg_play.workspace import PlayWorkspace
 from mtg_play.tests.test_presentation import drain
 
 
-@pytest.fixture
-def app():
+@pytest.fixture(scope="session")
+def navigation_application():
     return W.QApplication.instance() or W.QApplication([])
+
+
+@pytest.fixture
+def app(navigation_application):
+    application = navigation_application
+    workspaces = application._navigation_workspaces = []
+    yield application
+    for workspace in workspaces:
+
+        def stopped():
+            ready = workspace.prepare_to_close()
+            return ready and not workspace.busy
+
+        drain(application, stopped)
+        workspace.loading_timer.stop()
+        workspace.close()
+        workspace.deleteLater()
+    application.sendPostedEvents(None, C.QEvent.Type.DeferredDelete)
+    application.processEvents()
+    del application._navigation_workspaces
 
 
 def workspace_fixture(app, tmp_path):
@@ -38,6 +58,7 @@ def workspace_fixture(app, tmp_path):
         adapter_factory=forbidden_runtime,
         deck_provider=lambda: (entries, ()),
     )
+    app._navigation_workspaces.append(workspace)
     drain(app, lambda: not workspace.catalog_jobs.busy)
     return workspace, calls
 

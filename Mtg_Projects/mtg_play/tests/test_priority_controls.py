@@ -2,7 +2,7 @@
 
 from dataclasses import replace
 import pytest
-from PyQt6 import QtCore as C, QtWidgets as W
+from PyQt6 import QtCore as C, QtGui as G, QtWidgets as W, sip
 from mtg_play.priority_ui import PriorityControls
 from mtg_play.tests.test_priority import priority_view
 
@@ -45,6 +45,27 @@ def test_registered_hold_cancels_scheduled_pass(controls):
     ui.hold_next()
     ui._automatic_pass()
     assert not session.calls and not ui.timer.isActive()
+
+
+def test_application_filter_is_harmless_after_parent_native_deletion(tmp_path):
+    app = W.QApplication.instance() or W.QApplication([])
+    parent = W.QWidget()
+    session = Session()
+    settings = C.QSettings(
+        str(tmp_path / "deleted-priority.ini"), C.QSettings.Format.IniFormat
+    )
+    ui = PriorityControls(session, "one", parent, settings=settings)
+    parent.deleteLater()
+    app.sendPostedEvents(None, C.QEvent.Type.DeferredDelete)
+    assert sip.isdeleted(ui)
+    assert ui.eventFilter(app, C.QEvent(C.QEvent.Type.User)) is False
+    key = G.QKeyEvent(
+        C.QEvent.Type.KeyPress,
+        C.Qt.Key.Key_Control,
+        C.Qt.KeyboardModifier.ControlModifier,
+    )
+    assert ui.eventFilter(app, key) is False
+    assert not session.calls
 
 
 def test_duplicate_timer_and_stale_view_never_submit_twice(controls):

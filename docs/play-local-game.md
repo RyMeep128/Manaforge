@@ -9,6 +9,25 @@ followed by a format-first lobby, local asset preparation, and an immersive
 two-player Focused View. The [long-term Play epic](manaforge-play-epic.md)
 retains the future 2-5-player and private networking roadmap.
 
+## October 30 CI fallback review
+
+The Unity migration's scheduled CI review found application-suite runs
+[41065792269](https://github.com/RyMeep128/Manaforge/actions/runs/41065792269) and
+[41067732760](https://github.com/RyMeep128/Manaforge/actions/runs/41067732760)
+exiting during Qt navigation on Python 3.12/3.13. The independent Java protocol
+fixture jobs passed; this does not establish real-engine acceptance.
+
+Targeted diagnosis reproduced a deleted `PriorityControls` native wrapper being
+called as an application event filter during teardown. The filter now ignores
+deleted wrappers and returns false for unhandled events without calling a deleted
+native base object. Navigation fixtures retain their QApplication/workspaces and
+wait for owned jobs through `prepare_to_close` before deleting widgets.
+
+Local validation: 37 focused priority/navigation/artwork tests passed, including
+a regression that dispatches events to a deleted filter and verifies no gameplay
+command is submitted. Existing assertions remain intact. CI verification of the
+fix is pending the next scheduled review; no full suite was run locally.
+
 ## Current offline preview workflow
 
 Open **Play Offline**, choose Freeform or Commander, then **Continue to Lobby**.

@@ -1,6 +1,6 @@
 """Cancelable UI scheduling around the pure priority policy and public session API."""
 
-from PyQt6 import QtCore as C, QtGui as G, QtWidgets as W
+from PyQt6 import QtCore as C, QtGui as G, QtWidgets as W, sip
 from .priority import PriorityController, STEPS, opportunity, turn_boundary
 
 
@@ -282,6 +282,10 @@ class PriorityControls(W.QWidget):
         )
 
     def eventFilter(self, obj, event):
+        # Application-wide filters can be reentered while their parent tree is
+        # being destroyed. Never call native QWidget methods on a deleted wrapper.
+        if sip.isdeleted(self):
+            return False
         if (
             event.type() == C.QEvent.Type.KeyPress
             and not event.isAutoRepeat()
@@ -304,7 +308,7 @@ class PriorityControls(W.QWidget):
                 if binding and value == binding:
                     self._key_action(name)
                     return True
-        return super().eventFilter(obj, event)
+        return False
 
     def configure_shortcuts(self):
         dialog = W.QDialog(self)
