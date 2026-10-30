@@ -436,3 +436,14 @@ events can share revisions. Ten shared sequences, mutation/concurrency checks an
 a duplicated snapshot in the actual dummy exchange pass locally, within 86
 focused EditMode and eight schema checks. Missing-event detection, recovery,
 licensed Unity CI and real-engine emission parity remain open. G1 is not frozen.
+
+
+### G1 bounded client receive inbox — October 30, 2026
+
+A [client worker inbox](../Mtg_Projects/mtg_play/protocol/receive-inbox.md) now bounds
+queued packet count/UTF-8 bytes and clears owned data/history on overflow,
+validation failure or cancellation. Dequeue transfers explicit packet ownership;
+normal input completion permits draining. Fifteen new checks plus the actual
+Java-dummy handoff bring local focused EditMode validation to 101. Socket read
+deadlines/cancellation, owner coordination, renderer projection and licensed CI
+remain pending; G1 is not frozen and bulk P2 remains gated.

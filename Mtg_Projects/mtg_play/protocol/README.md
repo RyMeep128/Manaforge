@@ -335,3 +335,14 @@ Ten shared sequences plus mutation/concurrency/disposal checks pass; the real
 Java-dummy exchange now drops a repeated snapshot. Local evidence is 86 focused
 EditMode and eight schema checks. Missing-event detection, rejoin/recovery and
 immutable renderer projections remain pending; no G1 completion is claimed.
+
+
+## Bounded client packet handoff
+
+The [C# receive inbox](receive-inbox.md) composes existing validation/history with
+packet-count and UTF-8 byte budgets, FIFO ownership transfer, completion,
+cancellation and failure cleanup. Duplicate packets take no slot; overflow or
+invalid viewer data clears the queue. The actual dummy worker now passes data
+through it. Fifteen new checks bring focused EditMode validation to 101 locally;
+Java preflight also passes. Socket read cancellation/deadlines, product pump
+coordination and immutable renderer projection remain pending. G1 remains open.

@@ -140,3 +140,13 @@ use [ReceiveHistory](receive-history.md) to drop the duplicate, then admit the
 same-revision event and later result. This exercises receive idempotency through
 the actual pipe/bootstrap/loopback path without adding a second game model.
 All five existing process scenarios continue to pass locally.
+
+
+### Bounded inbox follow-up
+
+The C# worker now routes data through [ReceiveInbox](receive-inbox.md), drops the
+repeated snapshot without using a queue slot, then takes/disposes each packet
+before validating/deserializing it. Five owned-process scenarios pass within 101
+focused local EditMode checks. This test immediately drains packets; overflow,
+consumer races and cancellation are covered separately by focused inbox checks,
+not claimed as real socket-pump or renderer behavior.

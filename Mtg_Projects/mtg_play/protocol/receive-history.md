@@ -92,3 +92,12 @@ Scheduled CI snapshot: protocol runs for `3ef4c38`
 Java fixtures/model generation, not licensed C# or real-engine gameplay. No new
 CI result is claimed for this increment. Review continues every third commit;
 Qt CI was not investigated.
+
+
+### Bounded handoff follow-up
+
+The client [receive inbox](receive-inbox.md) now owns this history and adds a
+bounded FIFO of validated encoded packets. It clears queued bytes/history on
+cancellation or failure and transfers packet disposal responsibility on dequeue.
+The dummy exchange exercises this path. This does not add event sequence numbers,
+recovery or socket read cancellation.
