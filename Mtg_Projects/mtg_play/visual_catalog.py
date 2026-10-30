@@ -45,16 +45,25 @@ def _standard(payload):
     )
 
 
-def collect_visual_candidates(service, printing_id, face_index=0, *, concealed=False):
+def collect_visual_candidates(
+    service, printing_id, face_index=0, *, concealed=False, max_cached_candidates=None
+):
     """Return immutable selected-first metadata, decoding only exact local assets.
 
     No downloads, preference writes, fallback-to-front calls, or persisted cache.
+    Optional preparation budgets inspect selected artwork first, then standard
+    candidates. Unexamined paths remain cached=False (unverified), not missing.
+    The default still verifies every candidate.
     Face names match conservatively within one Oracle identity; an unmatched or
     malformed face cannot be substituted. Re-run after cache changes. A caller
     must discard these results on viewer handoff; this is not authorization.
     """
     if concealed:
         return ()
+    if max_cached_candidates is not None and (
+        type(max_cached_candidates) is not int or not 1 <= max_cached_candidates <= 16
+    ):
+        raise ValueError("VISUAL_CANDIDATE_BUDGET")
     if not isinstance(printing_id, str) or not printing_id:
         raise ValueError("VISUAL_PRINTING_REQUIRED")
     if type(face_index) is not int or face_index < 0:
@@ -80,9 +89,14 @@ def collect_visual_candidates(service, printing_id, face_index=0, *, concealed=F
     result = []
     payloads = [selected] + sorted(
         service.get_prints(oracle, allow_remote=False),
-        key=lambda item: str(item.get("id", "")),
+        key=lambda item: (
+            (not _standard(item), str(item.get("id", "")))
+            if max_cached_candidates is not None
+            else str(item.get("id", ""))
+        ),
     )
     seen = set()
+    verified_cached = 0
     for payload in payloads:
         identity = payload.get("id")
         if not identity or identity in seen or payload.get("oracle_id") != oracle:
@@ -97,10 +111,14 @@ def collect_visual_candidates(service, printing_id, face_index=0, *, concealed=F
         # Flip cards share a rotated image. Leave that treatment unsupported here
         # rather than mark the unrotated front usable as the back.
         path = None
-        if not (payload.get("layout") == "flip" and index != 0):
+        if (
+            max_cached_candidates is None or verified_cached < max_cached_candidates
+        ) and not (payload.get("layout") == "flip" and index != 0):
             variant = "default" if index == 0 else f"face-{index}"
             path = service.get_image_path(identity, variant=variant)
         usable = bool(path and Path(path).is_file() and not QImage(str(path)).isNull())
+        if usable:
+            verified_cached += 1
         result.append(
             VisualAssetCandidate(
                 oracle,

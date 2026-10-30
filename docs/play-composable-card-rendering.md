@@ -253,6 +253,12 @@ Three PlayMode checks pass locally with a shared default runtime theme. These
 headless checks do not demonstrate rendered pixels, real art or readable fonts;
 all visual acceptance and CI requirements remain open.
 
+The [real-artwork fixture preparation](play-artwork-fixtures.md) now exports
+existing cached public-card art as bounded raw RGBA resources with exact printing
+and face metadata. Seven local demo cards have authentic art and standard
+alternatives. Unity texture ownership/loading and the actual packaged renderer
+remain pending; this is preparation evidence only and changes no acceptance box.
+
 ## Acceptance criteria
 
 - [ ] Standard cards assemble from reusable Unity components.

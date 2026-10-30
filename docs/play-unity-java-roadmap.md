@@ -381,3 +381,14 @@ shutdown. Wrong-key and owner-EOF checks pass locally. No Python action relay,
 XMage startup, packaged UI match or real result is involved. Forty focused
 EditMode checks and four schema checks pass; licensed CI and final public body
 validation remain pending. G0/G1 remain open and the bulk P2 port stays gated.
+
+
+### G0 real-artwork preparation — October 30, 2026
+
+An [offline fixture exporter](play-artwork-fixtures.md) now reuses the installed
+Core catalog/artwork cache to prepare authentic, bounded raw RGBA resources.
+The local seven-card bundle contains 21 assets (about 46 MiB), with selected
+identities preserved and standard alternatives available. Twenty-seven focused
+catalog/export checks pass. This removes image decoding from the planned Unity
+rendering path but does not yet connect a player renderer or establish GPU,
+startup, interaction or 20/70/200 performance evidence. G0 remains open.

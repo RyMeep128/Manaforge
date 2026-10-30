@@ -255,3 +255,15 @@ return the existing ACK without another fixture result; changed request contents
 under the same ID close the connection. Fifty-seven local EditMode checks pass,
 including four real Java-process scenarios. This remains protocol-only evidence;
 see the [submission ledger limits](../mtg_play/protocol/submission-ledger.md).
+
+
+## Real-artwork fixture input prepared
+
+The [offline artwork exporter](../../docs/play-artwork-fixtures.md) now prepares
+existing cached public-card images as hash-verified raw RGBA8 inputs, preserving
+selected printing/face identity and standard alternatives. The local seven-card
+bundle is ignored `Artifacts/CardFixture-20261030-bounded/manifest.json` (21
+assets, about 46 MiB). Card text is explicitly printed-reference mock data.
+Twenty-seven focused catalog/export checks pass locally. This input is not yet
+loaded by Unity; the packaged scene remains the earlier placeholder smoke.
+Worker loading/shared textures, renderer screenshots and benchmarks are next.

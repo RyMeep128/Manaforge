@@ -151,3 +151,34 @@ def test_ambiguous_selected_face_is_rejected_before_asset_access():
     with pytest.raises(ValueError, match="VISUAL_FACE_AMBIGUOUS"):
         collect_visual_candidates(service, "selected", 1)
     assert service.calls == [("card", "selected")]
+
+
+def test_opt_in_budget_preserves_selected_then_prefers_standard_without_decoding_every_print(
+    tmp_path,
+):
+    selected = card("selected")
+    selected["full_art"] = True
+    other_special = card("0-special")
+    other_special["full_art"] = True
+    path = image(tmp_path)
+    service = Service(
+        selected,
+        [other_special, card("a-standard")],
+        {
+            ("selected", "default"): path,
+            ("0-special", "default"): path,
+            ("a-standard", "default"): path,
+        },
+    )
+    result = collect_visual_candidates(service, "selected", max_cached_candidates=2)
+    assert [(item.printing_id, item.cached) for item in result] == [
+        ("selected", True),
+        ("a-standard", True),
+        ("0-special", False),
+    ]
+    assert ("0-special", "default") not in service.calls
+
+
+def test_invalid_preparation_budget_fails_before_catalog_access():
+    with pytest.raises(ValueError, match="VISUAL_CANDIDATE_BUDGET"):
+        collect_visual_candidates(None, "selected", max_cached_candidates=0)
