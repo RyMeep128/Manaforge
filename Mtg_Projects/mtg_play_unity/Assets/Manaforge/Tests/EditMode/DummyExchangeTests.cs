@@ -25,11 +25,11 @@ namespace Manaforge.Play.Tests
             public TcpClient Client;
             public LoopbackFrameReader Reader;
             private bool disposed;
-            public Peer(string directory,bool sessionError=false,bool partialFrame=false,bool clientPartialFrame=false,bool blockedClient=false,string choiceOperation=null)
+            public Peer(string directory,bool sessionError=false,bool partialFrame=false,bool clientPartialFrame=false,bool blockedClient=false,string choiceOperation=null,string authMode=null)
             {
                 Assert.That(File.Exists(Path.Combine(directory,"manaforge/protocol/DummyGateway.class")),Is.True,"Run the Java dummy fixture preparation first");
                 string jar=Path.Combine(directory,"gson.jar"),fixture=Path.Combine(directory,"dummy-session-v1.json");
-                var start=new ProcessStartInfo("java", "-cp \""+directory+Path.PathSeparator+jar+"\" manaforge.protocol.DummyGateway \""+fixture+"\""+(choiceOperation=="select_mana_source"?" mana":choiceOperation=="choose_number"?" number":choiceOperation=="choose_amounts"?" amounts":choiceOperation!=null?" choice":blockedClient?" blocked-client":clientPartialFrame?" client-partial-frame":partialFrame?" partial-frame":sessionError?" session-error":""))
+                var start=new ProcessStartInfo("java", "-cp \""+directory+Path.PathSeparator+jar+"\" manaforge.protocol.DummyGateway \""+fixture+"\""+(authMode=="timeout"?" delayed-proof":choiceOperation=="select_mana_source"?" mana":choiceOperation=="choose_number"?" number":choiceOperation=="choose_amounts"?" amounts":choiceOperation!=null?" choice":blockedClient?" blocked-client":clientPartialFrame?" client-partial-frame":partialFrame?" partial-frame":sessionError?" session-error":""))
                 { UseShellExecute=false,CreateNoWindow=true,WindowStyle=ProcessWindowStyle.Hidden,
                   RedirectStandardInput=true,RedirectStandardOutput=true,RedirectStandardError=true };
                 Process=new Process { StartInfo=start };
@@ -89,9 +89,9 @@ namespace Manaforge.Play.Tests
             Assert.That((string)body["outcome"],Is.EqualTo(outcome));Assert.That((string)body["code"],Is.EqualTo(code));
             tracker?.Accept(reply.ToString(Formatting.None));
         }
-        private static void Coordinated(Peer peer,bool sessionError)
+        private static void Coordinated(Peer peer,bool sessionError,ClientSessionChannel authenticated=null)
         {
-            using var channel=new ClientSessionChannel(peer.Reader,"fixture-session","one",true);
+            using var channel=authenticated??new ClientSessionChannel(peer.Reader,"fixture-session","one",true);
             Assert.That(channel.ReceiveNext(5000).Type,Is.EqualTo("snapshot"));
             Assert.That(channel.ReceiveNext(5000).Applied,Is.False);
             Assert.That(channel.ReceiveNext(5000).Type,Is.EqualTo("event"));
@@ -140,7 +140,7 @@ namespace Manaforge.Play.Tests
             Assert.That(channel.Pending,Is.Null);Assert.That(channel.Completion.Result.Graceful,Is.True);
             Assert.That(peer.Process.WaitForExit(5000),Is.True);Assert.That(peer.Process.ExitCode,Is.Zero);
         }
-        private static void Exchange(Peer peer,bool wrongKey,bool ownerEof,bool conflictingDuplicate,bool sessionError,bool partialFrame,bool clientPartialFrame,bool blockedClient,bool coordinated,string choiceOperation)
+        private static void Exchange(Peer peer,bool wrongKey,bool ownerEof,bool conflictingDuplicate,bool sessionError,bool partialFrame,bool clientPartialFrame,bool blockedClient,bool coordinated,string choiceOperation,string authMode)
         {
             byte[] key=RandomBytes();
             try
@@ -167,6 +167,15 @@ namespace Manaforge.Play.Tests
                 peer.Reader=new LoopbackFrameReader(peer.Client.Client);
                 using(var stream=peer.Client.GetStream())
                 {
+                    if(authMode!=null) {
+                        if(authMode=="timeout") {
+                            Assert.That(Assert.Throws<WireEnvelope.EnvelopeException>(()=>ClientHandshake.Open(peer.Reader,Hello(boot,ready,"client").ToString(),Hello(boot,ready,"gateway").ToString(),key,150,fixtureMode:true)).Code,Is.EqualTo("AUTH_TIMEOUT"));
+                            Assert.That(peer.Reader.IsClosed,Is.True);peer.Process.StandardInput.Close();
+                            Assert.That(peer.Process.WaitForExit(5000),Is.True);Assert.That(peer.Process.ExitCode,Is.Zero);return;
+                        }
+                        using var authenticated=ClientHandshake.Open(peer.Reader,Hello(boot,ready,"client").ToString(),Hello(boot,ready,"gateway").ToString(),key,5000,fixtureMode:true);
+                        Coordinated(peer,false,authenticated);return;
+                    }
                     var clientHello=Hello(boot,ready,"client");
                     var signingKey=wrongKey?new byte[32]:key;
                     clientHello["body"]["proof"]=ViewerAuthentication.ComputeProof(clientHello.ToString(),signingKey);
@@ -251,12 +260,12 @@ namespace Manaforge.Play.Tests
             }
             finally { Array.Clear(key,0,key.Length); }
         }
-        private static IEnumerator Run(bool wrongKey,bool ownerEof,bool conflictingDuplicate=false,bool sessionError=false,bool partialFrame=false,bool clientPartialFrame=false,bool blockedClient=false,bool coordinated=false,string choiceOperation=null)
+        private static IEnumerator Run(bool wrongKey,bool ownerEof,bool conflictingDuplicate=false,bool sessionError=false,bool partialFrame=false,bool clientPartialFrame=false,bool blockedClient=false,bool coordinated=false,string choiceOperation=null,string authMode=null)
         {
             string directory=Path.GetFullPath(Path.Combine(Application.dataPath,"../Artifacts/JavaDummy"));
-            using(var peer=new Peer(directory,sessionError,partialFrame,clientPartialFrame,blockedClient,choiceOperation))
+            using(var peer=new Peer(directory,sessionError,partialFrame,clientPartialFrame,blockedClient,choiceOperation,authMode))
             {
-                var task=Task.Run(()=>Exchange(peer,wrongKey,ownerEof,conflictingDuplicate,sessionError,partialFrame,clientPartialFrame,blockedClient,coordinated,choiceOperation));var timer=Stopwatch.StartNew();
+                var task=Task.Run(()=>Exchange(peer,wrongKey,ownerEof,conflictingDuplicate,sessionError,partialFrame,clientPartialFrame,blockedClient,coordinated,choiceOperation,authMode));var timer=Stopwatch.StartNew();
                 try
                 {
                     while(!task.IsCompleted && timer.Elapsed.TotalSeconds<25)yield return null;
@@ -273,6 +282,8 @@ namespace Manaforge.Play.Tests
         [UnityTest] public IEnumerator JavaPeerExchangesAuthenticatedFixtureAndRejectsStaleAndPendingActions()=>Run(false,false);
         [UnityTest] public IEnumerator WrongViewerKeyReceivesNoSessionData()=>Run(true,false);
         [UnityTest] public IEnumerator OwnerPipeEofStopsTheOwnedListener()=>Run(false,true);
+        [UnityTest] public IEnumerator BoundedHandshakeReturnsAnOwnedAuthenticatedSession()=>Run(false,false,authMode:"success");
+        [UnityTest] public IEnumerator BoundedHandshakeStopsDelayedProofAndOwnedPeer()=>Run(false,false,authMode:"timeout");
         [UnityTest] public IEnumerator CoordinatedManaSourcePreservesViewerObjectIdentity()=>Run(false,false,choiceOperation:"select_mana_source");
         [UnityTest] public IEnumerator CoordinatedNumberPreservesExplicitSignedFixtureValue()=>Run(false,false,choiceOperation:"choose_number");
         [UnityTest] public IEnumerator CoordinatedAmountsPreserveExplicitFixtureVector()=>Run(false,false,choiceOperation:"choose_amounts");

@@ -233,3 +233,13 @@ request. The client owner submits the exact snapshot object ID; the dummy matche
 that fixed fixture input and emits simulated submitted/confirmed receipts, a
 fixture-only result and matched shutdown. It does not calculate mana eligibility
 or start XMage. All sixteen scenarios pass within 202 local focused EditMode checks.
+
+
+### Bounded authentication-to-owner handoff
+
+Two further scenarios use [ClientHandshake.Open](client-handshake.md) rather than
+manual client proof exchange: coordinated success, and a delayed gateway proof
+that exceeds the total client budget. The latter closes its socket/private owner
+pipe and verifies child exit before admitting session data. All eighteen process
+scenarios pass within 220 focused local EditMode checks. No real engine or rendered
+UI behavior is demonstrated by these cases.

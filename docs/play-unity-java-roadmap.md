@@ -534,3 +534,13 @@ and a sixteenth authenticated fixture case pass within 202 local EditMode checks
 Complete session budgets, Java owner, renderer projection, product lifecycle and
 licensed CI remain open, so G1 is not frozen. Real Java/XMage behavior parity is
 Phase 2/G2 after G0/G1; no bulk engine port has started.
+
+
+### G1 bounded client authentication handoff — October 30, 2026
+
+The [client handshake](../Mtg_Projects/mtg_play/protocol/client-handshake.md) now
+checks trusted pins/viewer/nonces and proof under one total deadline before
+returning the session owner. Sixteen new checks and two process cases pass within
+220 local EditMode checks. This changes no rendered UI and needs no hands-on UI
+verification. Product bootstrap, Java total authentication budgets, artifact/
+process ownership and licensed CI remain open; G1 is not frozen.

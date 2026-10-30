@@ -12,7 +12,7 @@ namespace Manaforge.Play.Protocol
     public sealed class LoopbackFrameReader : IDisposable
     {
         private readonly Socket socket;
-        private int closed, reading, writing;
+        private int closed, reading, writing, handshakeAttempted;
         public bool IsClosed => Volatile.Read(ref closed) != 0;
         public bool WriteInProgress => Volatile.Read(ref writing) != 0;
         public bool ReadInProgress => Volatile.Read(ref reading) != 0;
@@ -28,6 +28,8 @@ namespace Manaforge.Play.Protocol
             ownedSocket.SendTimeout = 25;
             socket = ownedSocket;
         }
+        // A connection may attempt viewer authentication once. This marker is NOT authentication proof.
+        internal bool BeginViewerHandshake()=>!IsClosed && Interlocked.CompareExchange(ref handshakeAttempted,1,0)==0;
         public string Read(int timeoutMilliseconds = 5000, CancellationToken cancellation = default)
         {
             if (timeoutMilliseconds < 1 || timeoutMilliseconds > 60000) throw new ArgumentOutOfRangeException(nameof(timeoutMilliseconds));

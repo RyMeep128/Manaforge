@@ -92,6 +92,7 @@ public final class DummyGateway {
                     require(verifier.verify(frames.read(5000)));
                 }
                 gatewayHello.getAsJsonObject("body").addProperty("proof",ViewerAuthentication.computeProof(gatewayHello.toString(),key));
+                if(args.length==2 && args[1].equals("delayed-proof"))Thread.sleep(350);
                 send(frames,gatewayHello);
                 if(args.length==2 && args[1].equals("blocked-client")) {
                     char[] text=new char[TextFrame.MAX_BYTES];Arrays.fill(text,'x');

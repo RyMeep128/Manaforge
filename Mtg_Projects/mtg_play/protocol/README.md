@@ -430,3 +430,13 @@ client does not compute usable sources or infer legality from card state. This
 completes admission coverage for the seven specified wire families; fifteen new
 owner checks and one authenticated fixture case bring local EditMode validation
 to 202. Product boundary/CI acceptance and real Java/XMage parity remain open.
+
+
+## Bounded authentication handoff
+
+The [client handshake](client-handshake.md) now verifies trusted gateway context
+under one total deadline before returning the owned session channel. Failed or
+canceled attempts close the socket; the helper clears its cloned key. Sixteen
+checks and two actual process cases bring local EditMode evidence to 220.
+Private bootstrap, complete launch ownership and licensed CI remain open. No UI
+verification is needed for this protocol-only increment.

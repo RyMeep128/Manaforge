@@ -146,3 +146,13 @@ specified command families now have client admission coverage. The owner retains
 only current viewer-scoped object IDs, not a computed list of legal mana sources.
 Fifteen new checks cover that distinction and permission lifetime. See
 [mana admission](mana-source-admission.md) for current evidence and limits.
+
+
+## Bounded authenticated construction
+
+[ClientHandshake.Open](client-handshake.md) now provides the preferred worker-side
+entry point: one total proof-exchange budget, trusted-context verification and
+failure closure before returning this owner. The low-level constructor still
+requires prior authentication. Local validation is now 220 focused EditMode
+checks with eighteen process scenarios; product bootstrap/renderer integration
+and licensed CI remain pending.

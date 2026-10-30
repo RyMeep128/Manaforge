@@ -1,8 +1,9 @@
 # Viewer authentication v1 — G1 primitive, bootstrap delivery pending
 
 Status: shared hello schema, HMAC known-answer vectors and single-use verifiers
-implemented in Java/C#. No listener, private credential delivery, actual peer
-handshake, runtime launcher or engine startup. G1 is still open.
+implemented in Java/C#. The later dummy exchange and bounded client handoff now
+exercise actual peer authentication; product credential delivery, launcher and
+engine startup remain pending. G1 is still open.
 
 ## Separate credentials and audiences
 
@@ -102,3 +103,13 @@ Java↔Unity loopback exchange with timeouts/cancellation and clean shutdown. Ke
 credentials out of diagnostics; correlate acknowledgements and enforce viewer-safe
 snapshot/result bodies before dispatch. Windows process containment, owner
 lifeline/orphan handling and real pinned-engine integration remain pending.
+
+
+## Bounded client handoff follow-up
+
+[ClientHandshake.Open](client-handshake.md) now signs/verifies against trusted
+expectations within one total budget and returns a session owner only after
+success. It closes failed attempts, clears its key clone and prevents reattempts
+on the same socket. Sixteen new checks and two Java-process cases pass within
+220 focused local EditMode checks. Private product bootstrap, artifact verification
+and Java-side total handshake budgets remain pending. This needs no UI verification.
