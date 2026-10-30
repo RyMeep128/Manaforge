@@ -176,3 +176,22 @@ The `daac5b7` run was still in progress
 (https://github.com/RyMeep128/Manaforge/actions/runs/41104134788); deferred to the
 next scheduled check without waiting. No new licensed Unity CI evidence exists.
 Qt CI was not investigated.
+
+
+## Scripted interactions and measurement harness
+
+`FixtureInteractions` owns fixture-only pointer selection, 90-degree tap toggles
+and a 300 ms cyan target line to the next display object. Hover and selection use
+the same inspection callback. Disposal unregisters callbacks, stops the scheduled
+animation and clears rotation/selection. Replacing the grid disposes this state
+before reusing views. No action IDs, legal decisions, cards-in-game or wire command
+submission are involved; these mock gestures must not be reused as live legality.
+
+Add `-Benchmark` to `ArtworkSmoke` for the five-second packaged diagnostic; see
+[measurement method and evidence](play-renderer-benchmarks.md). The normal manual
+fixture retains the 60 fps cap. The benchmark disables vsync/frame cap temporarily,
+forces panel repaint, records bounded raw wall-clock intervals and optional Unity
+CPU/GPU counters, and restores rendering settings/resources. The player script
+rejects incomplete measurements and logged exceptions. Owner-side process sampling
+avoids Unity Mono's zero-valued process memory counters. GPU samples may be absent;
+absence is explicit and never means zero GPU cost.

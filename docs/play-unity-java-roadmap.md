@@ -405,3 +405,13 @@ a measured performance benchmark. G0 remains open for interaction/performance,
 integrated GPU, licensed CI, approved LTS and distribution review; G1 remains
 open and bulk P2 stays gated. Human-versus-AI and future five-seat support remain
 the playable direction, not claims made by this fixture.
+
+
+### G0 scripted measurement harness — October 30, 2026
+
+The [packaged renderer harness](play-renderer-benchmarks.md) now exercises fixture
+pointer selection, tap rotation and target-line animation at 20/70/200 objects.
+It records five-second offscreen loop/CPU intervals, startup and externally sampled
+process memory with raw artifacts. GPU counters were unavailable on this hidden
+Direct3D 12 path; these intervals are not presented FPS or input latency. G0 stays
+open for visible graphics/latency evidence and the other outstanding acceptance.

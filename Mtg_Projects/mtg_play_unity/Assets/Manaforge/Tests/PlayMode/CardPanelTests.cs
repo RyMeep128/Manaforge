@@ -74,6 +74,37 @@ namespace Manaforge.Play.Tests
         }
 
         [UnityTest]
+        public IEnumerator FixturePointerSelectionTapTargetAndCleanupUseOnlyDisplayObjects()
+        {
+            var second = new CardView();
+            document.rootVisualElement.Add(second);
+            second.Bind(Identity("second"), texture, new Rect(0, 0, 1, 1));
+            yield return null; yield return null;
+            int inspected = -1;
+            var interactions = new FixtureInteractions(document.rootVisualElement, new[] { view, second }, index => inspected = index);
+            try
+            {
+                using (var click = PointerDownEvent.GetPooled(new Event { type = EventType.MouseDown, button = 0, mousePosition = second.worldBound.center })) { click.target = second; second.SendEvent(click); }
+                Assert.That(interactions.SelectedIndex, Is.EqualTo(1));
+                Assert.That(inspected, Is.EqualTo(1));
+                interactions.ToggleSelectedTap();
+                Assert.That(interactions.IsTapped(1), Is.True);
+                interactions.TargetNext();
+                Assert.That(interactions.TargetIndex, Is.Zero);
+                yield return null; yield return null;
+                Assert.That(second.resolvedStyle.rotate.angle.value, Is.EqualTo(90));
+                interactions.ToggleSelectedTap();
+                Assert.That(interactions.IsTapped(1), Is.False);
+                interactions.Select(0);
+                Assert.That(interactions.TargetIndex, Is.EqualTo(-1));
+            }
+            finally { interactions.Dispose(); second.Dispose(); }
+            using (var click = PointerDownEvent.GetPooled(new Event { type = EventType.MouseDown, button = 0 })) { click.target = view; view.SendEvent(click); }
+            Assert.That(interactions.SelectedIndex, Is.EqualTo(-1), "Disposed callbacks cannot retain a selection");
+            Assert.Throws<ObjectDisposedException>(() => interactions.Select(0));
+        }
+
+        [UnityTest]
         public IEnumerator ViewerHandoffHasAnEmptyFrameBeforeRebindingAndDisposeDetaches()
         {
             view.tooltip = "Private first viewer tooltip";

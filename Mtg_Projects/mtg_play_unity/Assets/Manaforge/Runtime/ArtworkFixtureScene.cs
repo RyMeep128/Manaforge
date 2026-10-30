@@ -5,6 +5,7 @@ using System.IO;
 using System.Threading;
 using UnityEngine;
 using UnityEngine.UIElements;
+using UnityEngine.Profiling;
 
 namespace Manaforge.Play
 {
@@ -13,6 +14,11 @@ namespace Manaforge.Play
     {
         private readonly CancellationTokenSource cancellation = new CancellationTokenSource();
         private readonly List<CardView> views = new List<CardView>();
+        private FixtureInteractions interactions;
+        private double processToReadyMs;
+        private double fixtureStart;
+        private double workerLoadMs;
+        private double uploadMs;
         private FixtureTextures textures;
         private PanelSettings settings;
         private UIDocument document;
@@ -30,6 +36,7 @@ namespace Manaforge.Play
         }
         private IEnumerator Start()
         {
+            fixtureStart = Time.realtimeSinceStartupAsDouble;
             settings = ScriptableObject.CreateInstance<PanelSettings>();
             settings.themeStyleSheet = Resources.Load<ThemeStyleSheet>("CardTheme");
             settings.scaleMode = PanelScaleMode.ScaleWithScreenSize;
@@ -47,8 +54,10 @@ namespace Manaforge.Play
             var controls = new VisualElement(); controls.style.flexDirection = FlexDirection.Row; root.Add(controls);
             foreach (int count in new[] { 20, 70, 200 })
             { int captured = count; controls.Add(new Button(() => Populate(captured)) { text = count + " objects" }); }
+            controls.Add(new Button(() => interactions?.ToggleSelectedTap()) { text = "Mock tap / untap" });
+            controls.Add(new Button(() => interactions?.TargetNext()) { text = "Mock target next" });
             board = new VisualElement();
-            board.style.position = Position.Absolute; board.style.left = 24; board.style.top = 125;
+            board.style.position = Position.Absolute; board.style.left = 24; board.style.top = 145;
             board.style.width = 900; board.style.height = 560;
             root.Add(board);
             preview = new CardView(); preview.style.position = Position.Absolute;
@@ -59,20 +68,28 @@ namespace Manaforge.Play
             { message.text = "Fixture failed validation. No artwork displayed.";
                 if (Argument("-manaforgeArtworkOutput") != null) Application.Quit(1);
                 yield break; }
+            workerLoadMs = (Time.realtimeSinceStartupAsDouble - fixtureStart) * 1000;
+            double uploadStarted = Time.realtimeSinceStartupAsDouble;
             fixture = loading.Result;
             textures = new FixtureTextures();
             foreach (var card in fixture.Cards)
             { textures.Get(card.Artwork); yield return null; } // at most one upload per frame
+            uploadMs = (Time.realtimeSinceStartupAsDouble - uploadStarted) * 1000;
             int initial = 20;
             if (int.TryParse(Argument("-manaforgeFixtureCount"), out int countArg)
                 && (countArg == 20 || countArg == 70 || countArg == 200)) initial = countArg;
-            Populate(initial); Ready = true;
+            Populate(initial);
+            yield return null; yield return null; // allow panel layout/render work to run
+            using (var process = System.Diagnostics.Process.GetCurrentProcess())
+                processToReadyMs = (DateTime.UtcNow - process.StartTime.ToUniversalTime()).TotalMilliseconds;
+            Ready = true;
             string output = Argument("-manaforgeArtworkOutput");
             if (output != null) yield return Capture(output);
         }
         private void Populate(int count)
         {
             if (fixture == null || textures == null) return;
+            interactions?.Dispose();
             foreach (var view in views) view.Dispose(); views.Clear();
             preview.Conceal();
             int columns = count == 20 ? 5 : count == 70 ? 10 : 20;
@@ -86,15 +103,11 @@ namespace Manaforge.Play
                 view.UpdateValues(card.MockValues); view.SetPresentation(CardPresentationMode.Compact, width);
                 view.style.position = Position.Absolute;
                 view.style.left = (i % columns) * (width + 5); view.style.top = (i / columns) * (width * 0.78f + 5);
-                view.RegisterCallback<PointerEnterEvent>(_ => Show(card));
-                view.RegisterCallback<PointerDownEvent>(_ => {
-                    foreach (var other in views) other.style.borderTopWidth = 0;
-                    view.style.borderTopColor = Color.cyan; view.style.borderTopWidth = 3; Show(card);
-                });
                 board.Add(view); views.Add(view);
             }
+            interactions = new FixtureInteractions(board, views, index => Show(fixture.Cards[index % fixture.Cards.Count]));
             ObjectCount = count;
-            message.text = $"{count} display objects · {textures.Count} shared textures · PRINTED MOCK values · Hover to inspect / click to select · No live game";
+            message.text = $"{count} display objects · {textures.Count} shared textures · PRINTED MOCK values · Hover / select · Mock tap / target · No live game";
             Show(fixture.Cards[0]);
         }
         private void Show(ArtworkFixture.Card card)
@@ -107,22 +120,85 @@ namespace Manaforge.Play
             // UI Toolkit renders into its own target; camera-only capture omits the panel.
             var target = new RenderTexture(1280, 720, 0);
             target.Create(); settings.targetTexture = target;
-            for (int i = 0; i < 30; i++) yield return null;
-            var image = new Texture2D(1280, 720, TextureFormat.RGBA32, false);
+            int oldVsync = QualitySettings.vSyncCount, oldTarget = Application.targetFrameRate;
+            Texture2D image = null;
             var previous = RenderTexture.active;
             try
             {
+                bool benchmark = Argument("-manaforgeArtworkBenchmark") == "1";
+                if (benchmark) { QualitySettings.vSyncCount = 0; Application.targetFrameRate = -1; }
+                for (int i = 0; i < 60; i++) yield return null;
+                var samples = new List<double>();
+                var gpuSamples = new List<double>();
+                var cpuSamples = new List<double>();
+                var latestTiming = new FrameTiming[1];
+                ulong lastTiming = 0;
+                double duration = 0;
+
+                if (benchmark)
+                {
+                    double started = Time.realtimeSinceStartupAsDouble, previousFrame = started;
+                    while (samples.Count < 100000 && (duration < 5 || samples.Count < 240))
+                    {
+                        if (samples.Count % 60 == 0)
+                        {
+                            int selected = (samples.Count / 60) % views.Count;
+                            using (var click = PointerDownEvent.GetPooled(new Event { type = EventType.MouseDown, button = 0, mousePosition = views[selected].worldBound.center })) { click.target = views[selected]; views[selected].SendEvent(click); }
+                            interactions.ToggleSelectedTap(); interactions.TargetNext();
+
+                        }
+                        FrameTimingManager.CaptureFrameTimings();
+                        document.rootVisualElement.MarkDirtyRepaint();
+                        yield return new WaitForEndOfFrame();
+                        double now = Time.realtimeSinceStartupAsDouble;
+                        samples.Add((now - previousFrame) * 1000); previousFrame = now; duration = now - started;
+                        if (FrameTimingManager.GetLatestTimings(1, latestTiming) > 0 && latestTiming[0].frameStartTimestamp != lastTiming)
+                        {
+                            lastTiming = latestTiming[0].frameStartTimestamp;
+                            if (latestTiming[0].gpuFrameTime > 0) gpuSamples.Add(latestTiming[0].gpuFrameTime);
+                            if (latestTiming[0].cpuFrameTime > 0) cpuSamples.Add(latestTiming[0].cpuFrameTime);
+                        }
+                    }
+                    // Repeatable screenshot shows a visible mock tap/target after measurement.
+                    interactions.Select(0);
+                    if (!interactions.IsTapped(0)) interactions.ToggleSelectedTap();
+                    interactions.TargetNext();
+                    yield return new WaitForSecondsRealtime(0.35f);
+                }
+                QualitySettings.vSyncCount = oldVsync; Application.targetFrameRate = oldTarget;
+                long unityAllocated = Profiler.GetTotalAllocatedMemoryLong();
+                long unityReserved = Profiler.GetTotalReservedMemoryLong();
+                long managedBytes = GC.GetTotalMemory(false);
+                image = new Texture2D(1280, 720, TextureFormat.RGBA32, false);
                 RenderTexture.active = target; image.ReadPixels(new Rect(0, 0, 1280, 720), 0, 0); image.Apply();
                 Directory.CreateDirectory(output);
                 File.WriteAllBytes(Path.Combine(output, "artwork-" + ObjectCount + ".png"), image.EncodeToPNG());
                 File.WriteAllText(Path.Combine(output, "artwork-" + ObjectCount + ".json"),
                     JsonUtility.ToJson(new CaptureReport { fixtureOnly = true, objectCount = ObjectCount,
                         textureCount = textures.Count, textureBytes = textures.Bytes,
-                        graphicsDevice = SystemInfo.graphicsDeviceName, editorVersion = Application.unityVersion }, true));
+                        graphicsDevice = SystemInfo.graphicsDeviceName, editorVersion = Application.unityVersion,
+                        graphicsApi = SystemInfo.graphicsDeviceVersion, processor = SystemInfo.processorType,
+                        systemMemoryMiB = SystemInfo.systemMemorySize, developmentBuild = Debug.isDebugBuild,
+                        capturedUtc = DateTime.UtcNow.ToString("O"),
+                        reportVersion = 2, benchmark = benchmark, measurementComplete = benchmark && duration >= 5 && samples.Count >= 240,
+                        processToReadyMs = processToReadyMs, fixtureSetupAndLoadMs = workerLoadMs, uploadWithFrameYieldsMs = uploadMs,
+                        measurementSeconds = duration, intervalsMs = samples.ToArray(),
+                        frames = benchmark ? FixtureFrameStatistics.Summarize(samples) : null,
+                        gpuFrames = gpuSamples.Count > 0 ? FixtureFrameStatistics.Summarize(gpuSamples) : null,
+                        cpuFrames = cpuSamples.Count > 0 ? FixtureFrameStatistics.Summarize(cpuSamples) : null,
+                        gpuTimingAvailable = gpuSamples.Count > 0, gpuIntervalsMs = gpuSamples.ToArray(), cpuIntervalsMs = cpuSamples.ToArray(),
+                        unityAllocatedBytes = unityAllocated, unityReservedBytes = unityReserved, managedHeapBytes = managedBytes,
+                        selectionCount = interactions.SelectionCount, tapCount = interactions.TapCount, targetCount = interactions.TargetCount,
+                        qualityLevel = QualitySettings.GetQualityLevel(), width = 1280, height = 720,
+                        timingMethod = "uncapped wall-clock end-of-frame intervals; scripted fixture gestures; panel RenderTexture; loop intervals are not GPU or physical input timings; optional GPU/CPU counters use FrameTimingManager",
+                        memoryMethod = "Unity/managed counters before screenshot; external owner samples process; excludes total GPU memory"
+                    }, true));
             }
             finally
             {
-                RenderTexture.active = previous; settings.targetTexture = null;
+                QualitySettings.vSyncCount = oldVsync; Application.targetFrameRate = oldTarget;
+                RenderTexture.active = previous;
+                if (settings != null) settings.targetTexture = null;
                 target.Release(); Destroy(target); Destroy(image);
             }
             Application.Quit(0);
@@ -130,13 +206,27 @@ namespace Manaforge.Play
         private void OnDestroy()
         {
             cancellation.Cancel(); cancellation.Dispose();
+            interactions?.Dispose();
             foreach (var view in views) view.Dispose(); views.Clear(); preview?.Dispose();
             textures?.Dispose();
-            if (document != null) document.rootVisualElement.Clear();
+            if (document != null) document.rootVisualElement?.Clear();
             if (settings != null) Destroy(settings);
         }
         [Serializable] private sealed class CaptureReport
         {
+            public string graphicsApi, processor, capturedUtc;
+            public int systemMemoryMiB;
+            public bool developmentBuild;
+            public int reportVersion;
+            public bool benchmark, measurementComplete;
+            public double processToReadyMs, fixtureSetupAndLoadMs, uploadWithFrameYieldsMs, measurementSeconds;
+            public double[] intervalsMs;
+            public FixtureFrameStatistics.Result frames, gpuFrames, cpuFrames;
+            public bool gpuTimingAvailable;
+            public double[] gpuIntervalsMs, cpuIntervalsMs;
+            public long unityAllocatedBytes, unityReservedBytes, managedHeapBytes;
+            public int selectionCount, tapCount, targetCount, qualityLevel, width, height;
+            public string timingMethod, memoryMethod;
             public bool fixtureOnly;
             public int objectCount, textureCount;
             public long textureBytes;

@@ -6,6 +6,7 @@ param(
     [string]$FixtureDirectory,
     [ValidateSet(20, 70, 200)]
     [int]$FixtureCount = 20,
+    [switch]$Benchmark,
     [switch]$DownloadGson
 )
 $ErrorActionPreference = 'Stop'
@@ -22,19 +23,50 @@ function Invoke-OwnedProcess([string]$Executable, [string[]]$Arguments) {
         '"' + $_ + '"'
     }
     $process = Start-Process -FilePath $Executable -ArgumentList $quoted -PassThru -WindowStyle Hidden
-    if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
+    $elapsed = [Diagnostics.Stopwatch]::StartNew()
+    $peakWorking = [long]0
+    $peakPrivate = [long]0
+    while (-not $process.WaitForExit(50)) {
+        if ($Mode -eq 'ArtworkSmoke' -and $Benchmark) {
+            try {
+                $process.Refresh()
+                if (-not $process.HasExited) {
+                    $peakWorking = [Math]::Max($peakWorking, $process.WorkingSet64)
+                    $peakPrivate = [Math]::Max($peakPrivate, $process.PrivateMemorySize64)
+                }
+            } catch {
+                if (-not $process.HasExited) { throw }
+            }
+        }
+        if ($elapsed.Elapsed.TotalSeconds -ge $TimeoutSeconds) { break }
+    }
+    if (-not $process.HasExited) {
         $process.Kill($true)
         $process.WaitForExit()
         throw "Owned $Mode process exceeded timeout"
     }
     if ($process.ExitCode -ne 0) { throw "$Mode process failed with exit code $($process.ExitCode); inspect Artifacts" }
+    if ($Mode -eq 'ArtworkSmoke') {
+        $log = Join-Path $artifacts "artwork-$FixtureCount.log"
+        if (Select-String -LiteralPath $log -Pattern '^[A-Za-z][A-Za-z0-9.]*Exception:' -Quiet) { throw 'Artwork player logged an exception' }
+    }
+    if ($Mode -eq 'ArtworkSmoke' -and $Benchmark) {
+        [ordered]@{ reportVersion = 1; peakWorkingSetBytes = $peakWorking; peakPrivateBytes = $peakPrivate;
+            processElapsedMs = $elapsed.Elapsed.TotalMilliseconds;
+            method = 'owned Windows process sampled every 50 ms from launch through exit; includes screenshot readback' } |
+            ConvertTo-Json | Set-Content -Encoding utf8 (Join-Path $output "process-$FixtureCount.json")
+    }
 }
 
 if ($Mode -eq 'ArtworkSmoke') {
     if (-not $FixtureDirectory) { throw 'ArtworkSmoke requires an existing offline fixture directory' }
     $fixture = (Resolve-Path -LiteralPath $FixtureDirectory).Path
-    $output = Join-Path $artifacts 'ArtworkScene'
+    $output = Join-Path $artifacts $(if ($Benchmark) { 'ArtworkBenchmark' } else { 'ArtworkScene' })
     New-Item -ItemType Directory -Force $output | Out-Null
+    if ($Benchmark) {
+        $priorProcess = Join-Path $output "process-$FixtureCount.json"
+        if (Test-Path -LiteralPath $priorProcess) { Remove-Item -LiteralPath $priorProcess }
+    }
     foreach ($extension in @('json', 'png')) {
         $prior = Join-Path $output "artwork-$FixtureCount.$extension"
         if (Test-Path -LiteralPath $prior) { Remove-Item -LiteralPath $prior }
@@ -43,14 +75,24 @@ if ($Mode -eq 'ArtworkSmoke') {
         '-screen-fullscreen', '0', '-screen-width', '1280', '-screen-height', '720',
         '-logFile', (Join-Path $artifacts "artwork-$FixtureCount.log"),
         '-manaforgeArtworkFixture', $fixture, '-manaforgeArtworkOutput', $output,
-        '-manaforgeFixtureCount', "$FixtureCount"
+        '-manaforgeFixtureCount', "$FixtureCount", '-manaforgeArtworkBenchmark', $(if ($Benchmark) { '1' } else { '0' })
     )
     $report = Get-Content (Join-Path $output "artwork-$FixtureCount.json") -Raw | ConvertFrom-Json
     $image = Get-Item (Join-Path $output "artwork-$FixtureCount.png")
     if (-not $report.fixtureOnly -or $report.objectCount -ne $FixtureCount -or
         $report.textureCount -lt 1 -or $report.textureBytes -gt 67108864 -or
         $report.editorVersion -ne $version -or $image.Length -lt 1000) { throw 'Artwork smoke failed' }
-    Write-Output ($report | ConvertTo-Json)
+    if ($Benchmark -and (-not $report.measurementComplete -or $report.frames.sampleCount -lt 240 -or
+        $report.selectionCount -lt 2 -or $report.tapCount -lt 1 -or $report.targetCount -lt 1 -or
+        $report.processToReadyMs -le 0)) { throw 'Incomplete artwork benchmark' }
+    if ($Benchmark) {
+        $memory = Get-Content (Join-Path $output "process-$FixtureCount.json") -Raw | ConvertFrom-Json
+        if ($memory.peakWorkingSetBytes -le 0 -or $memory.peakPrivateBytes -le 0) { throw 'Missing process memory evidence' }
+        Write-Output ($memory | ConvertTo-Json)
+    }
+    # Raw samples stay in the artifact; keep console output bounded.
+    foreach ($name in @('intervalsMs', 'gpuIntervalsMs', 'cpuIntervalsMs')) { $report.PSObject.Properties.Remove($name) }
+    Write-Output ($report | ConvertTo-Json -Depth 5)
     exit 0
 }
 
@@ -96,7 +138,7 @@ Invoke-OwnedProcess $EditorPath $arguments
 if ($Mode -in @('EditMode', 'PlayMode')) {
     [xml]$report = Get-Content -LiteralPath $results
     # Counts include printing policy/card components and attached-panel handoff checks.
-    $minimum = if ($Mode -eq 'EditMode') { 67 } else { 3 }
+    $minimum = if ($Mode -eq 'EditMode') { 73 } else { 4 }
     if ($report.'test-run'.result -ne 'Passed' -or [int]$report.'test-run'.total -lt $minimum) {
         throw "Missing or failed $Mode acceptance"
     }

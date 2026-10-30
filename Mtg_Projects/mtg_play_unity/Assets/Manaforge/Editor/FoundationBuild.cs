@@ -24,6 +24,7 @@ namespace Manaforge.Play.Editor
             PlayerSettings.defaultScreenHeight = 720;
             PlayerSettings.fullScreenMode = FullScreenMode.Windowed;
             PlayerSettings.runInBackground = true;
+            PlayerSettings.enableFrameTimingStats = true;
             PlayerSettings.SetScriptingBackend(NamedBuildTarget.Standalone, ScriptingImplementation.Mono2x);
             PlayerSettings.SetApiCompatibilityLevel(NamedBuildTarget.Standalone, ApiCompatibilityLevel.NET_Standard);
             GraphicsSettings.defaultRenderPipeline = AssetDatabase.LoadAssetAtPath<RenderPipelineAsset>("Assets/Settings/PC_RPAsset.asset");
