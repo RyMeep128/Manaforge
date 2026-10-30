@@ -518,3 +518,54 @@ def test_ai_or_non_hand_bottom_choices_do_not_open_human_opening_overlay(app):
         ),
     )
     assert not opening_hand_request(view)
+
+
+@pytest.mark.parametrize(
+    "step,family,label",
+    [
+        ("DECLARE_ATTACKERS", "selection", "Finish attackers"),
+        ("DECLARE_BLOCKERS", "selection", "Finish blockers"),
+        ("PRECOMBAT_MAIN", "mana", "Finish payment"),
+        ("END", "selection", "Pass priority"),
+    ],
+)
+def test_pass_control_uses_actual_step_when_no_creature_actions_exist(
+    app, step, family, label
+):
+    panel = DecisionPanel()
+    view = replace(
+        snapshot(),
+        step=step,
+        decision=ChoiceRequest("current", "one", family, "Choose", ()),
+        actions=(LegalAction("pass-current", "pass", None, "Pass"),),
+    )
+    calls = []
+    panel.command.connect(lambda *args: calls.append(args))
+    panel.present(view)
+    control = button(panel, label)
+    assert control.property("buttonRole") == "primary" and not calls
+    control.click()
+    assert calls == [(view, "perform", ("pass-current",))]
+    panel.clear()
+
+
+@pytest.mark.parametrize(
+    "result,label",
+    [("won", "You won"), ("did_not_win", "Game complete - you did not win")],
+)
+def test_result_panel_only_reports_engine_outcome_and_requests_cleanup(
+    app, result, label
+):
+    table = GameTable(object(), artwork_factory=SilentArtwork)
+    view = replace(
+        snapshot(), status="finished", result=result, decision=None, actions=()
+    )
+    commands, returns = [], []
+    table.command.connect(lambda *args: commands.append(args))
+    table.returnRequested.connect(lambda: returns.append(True))
+    table.present(view)
+    assert not table.result_panel.isHidden() and table.result_label.text() == label
+    table.result_return.click()
+    assert returns == [True] and not commands
+    table.clear()
+    assert table.result_panel.isHidden() and not table.result_label.text()

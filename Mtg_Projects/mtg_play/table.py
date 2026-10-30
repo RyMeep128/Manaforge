@@ -417,6 +417,7 @@ class OpeningHandFan(W.QWidget):
 
 class GameTable(W.QWidget):
     command = C.pyqtSignal(object, str, object)
+    returnRequested = C.pyqtSignal()
 
     def __init__(self, service, parent=None, *, artwork_factory=PlayArtwork):
         super().__init__(parent)
@@ -462,6 +463,19 @@ class GameTable(W.QWidget):
         self.zone_button = W.QPushButton("Other zones")
         top.addWidget(self.zone_button)
         column.addLayout(top)
+        self.result_panel = W.QFrame()
+        result_layout = W.QHBoxLayout(self.result_panel)
+        self.result_label = W.QLabel()
+        self.result_label.setTextFormat(C.Qt.TextFormat.PlainText)
+        self.result_label.setProperty("role", "title")
+        self.result_label.setWordWrap(True)
+        result_layout.addWidget(self.result_label, 1)
+        self.result_return = W.QPushButton("Return to Lobby")
+        self.result_return.setProperty("buttonRole", "primary")
+        self.result_return.clicked.connect(self.returnRequested)
+        result_layout.addWidget(self.result_return)
+        self.result_panel.hide()
+        column.addWidget(self.result_panel)
         self.opponent_label = W.QLabel()
         self.player_label = W.QLabel()
         for label in (self.opponent_label, self.player_label):
@@ -582,6 +596,9 @@ class GameTable(W.QWidget):
             )
 
     def clear(self):
+        self.result_panel.hide()
+        self.result_label.clear()
+        self.result_return.setEnabled(False)
         self.opening_overlay.hide()
         self.opening_hand.clear()
         self._dock_decisions(False)
@@ -609,6 +626,7 @@ class GameTable(W.QWidget):
     def pending(self):
         self._interactions_pending = True
         self.opening_hand.setEnabled(False)
+        self.result_return.setEnabled(False)
         self._hide_hover()
         self.action_menu.hide()
         self.decisions.setEnabled(False)
@@ -623,6 +641,15 @@ class GameTable(W.QWidget):
         if self.view and self.view.viewer_id != view.viewer_id:
             self.clear()
         self.view = view
+        self.result_panel.setVisible(bool(view.result))
+        self.result_return.setEnabled(bool(view.result))
+        self.result_label.setText(
+            {"won": "You won", "did_not_win": "Game complete - you did not win"}.get(
+                view.result, "Game complete"
+            )
+            if view.result
+            else ""
+        )
         for lane in self.lanes:
             lane.setEnabled(True)
         self.object_actions.setEnabled(True)

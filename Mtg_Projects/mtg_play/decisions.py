@@ -38,6 +38,17 @@ def opening_hand_request(view):
     )
 
 
+def pass_label(view):
+    kinds = {action.kind for action in view.actions}
+    if view.step == "DECLARE_ATTACKERS" or "declare_attacker" in kinds:
+        return "Finish attackers"
+    if view.step == "DECLARE_BLOCKERS" or "declare_blocker" in kinds:
+        return "Finish blockers"
+    if view.decision is not None and view.decision.family == "mana":
+        return "Finish payment"
+    return "Pass priority"
+
+
 class DecisionPanel(W.QWidget):
     command = C.pyqtSignal(object, str, object)
 
@@ -126,17 +137,14 @@ class DecisionPanel(W.QWidget):
             if action.object_id is None:
                 label = action.label
                 if action.kind == "pass":
-                    kinds = {item.kind for item in view.actions}
-                    label = (
-                        "Finish attackers"
-                        if "declare_attacker" in kinds
-                        else "Finish blockers"
-                        if "declare_blocker" in kinds
-                        else "Finish payment"
-                        if request.family == "mana"
-                        else "Pass priority"
+                    label = pass_label(view)
+                button = self.button(label, "perform", (action.action_id,))
+                if action.kind == "pass":
+                    button.setMinimumHeight(44)
+                    button.setProperty("buttonRole", "primary")
+                    button.setAccessibleDescription(
+                        "Submit this engine-offered action once. The game determines what happens next."
                     )
-                self.button(label, "perform", (action.action_id,))
         if request.family == "target":
             selected = sum(option.selected for option in request.options)
             self.rows.addWidget(

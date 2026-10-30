@@ -1087,3 +1087,27 @@ XMage acceptance or application build ran. On the user's explicit request CI was
 checked: run 40995778446 at 5519e68 was in progress with neither Python job yet
 failed. This commit is pushed as requested and supersedes that running build;
 there was no completed new CI failure to diagnose at the time of the check.
+
+
+Story 12 incremental implementation (0.5.22-alpha.1): the primary pass control
+uses the engine's current declare-attackers/declare-blockers step even when no
+creature actions are offered. Mana completion and ordinary priority retain their
+own labels. Every action still submits the original current engine token once;
+no phase advancement, combat legality or payment rules are simulated in the UI.
+
+A contextual match-result panel now reports the engine's won/did_not_win outcome
+and offers Return to Lobby. did_not_win is deliberately not reinterpreted as a
+specific defeat/draw reason. Returning from an already completed game skips the
+active-session confirmation and goes through the existing owned cleanup queue.
+The loading screen shows closing progress and exposes Retry cleanup only after
+a failed cleanup has returned control; deck selection and new matches remain
+gated until the existing controller confirms cleanup. Earlier explicit closing
+of an active game still requires confirmation.
+
+Python 3.13 verification: all Play tests plus Editor readiness pass (282 tests),
+including no-creature combat completion, engine-token preservation, authoritative
+result presentation, no gameplay command from result controls, and cleanup-only
+return/retry behavior. Ruff lint, formatting and diff checks pass. No local XMage
+acceptance or application build ran. This increment is committed and pushed at
+the user's request. The epic is not complete: later recovery/diagnostics review,
+CI engine acceptance and manual UX verification remain outstanding.

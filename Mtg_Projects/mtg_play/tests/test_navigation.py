@@ -536,3 +536,48 @@ def test_match_loading_waits_for_authorized_opening_snapshot(app, tmp_path):
         workspace.session.active = False
         workspace.table.clear()
         workspace.close()
+
+
+def test_completed_game_return_skips_concession_confirmation_and_shows_cleanup(
+    app, tmp_path, monkeypatch
+):
+    from mtg_play.tests.test_presentation import snapshot
+    from dataclasses import replace
+
+    workspace, calls = workspace_fixture(app, tmp_path)
+    stops = []
+    workspace.session.stop = lambda: stops.append(True)
+    monkeypatch.setattr(
+        W.QMessageBox,
+        "question",
+        lambda *args: pytest.fail("A finished match must not ask to concede"),
+    )
+    try:
+        workspace.session.active = True
+        workspace._show_snapshot(
+            replace(
+                snapshot(workspace.lobby.local_seat_id),
+                result="did_not_win",
+                decision=None,
+            )
+        )
+        workspace.table.result_return.click()
+        assert stops == [True] and not calls
+        assert workspace.pages.currentWidget() is workspace.loading_page
+        assert (
+            workspace._loading_purpose == "close"
+            and not workspace.loading_cancel.isEnabled()
+        )
+        workspace.session.closing = False
+        workspace._engine_loading_idle()
+        assert (
+            workspace.loading_cancel.text() == "Retry cleanup"
+            and workspace.loading_cancel.isEnabled()
+        )
+        workspace.loading_cancel.click()
+        assert len(stops) == 2
+    finally:
+        workspace.session.active = False
+        workspace.loading_timer.stop()
+        workspace.table.clear()
+        workspace.close()

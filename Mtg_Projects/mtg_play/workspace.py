@@ -323,6 +323,7 @@ class PlayWorkspace(W.QWidget):
         game_layout.addWidget(self.game_heading)
         self.table = GameTable(service)
         self.table.command.connect(self._command)
+        self.table.returnRequested.connect(self.request_close_game)
         game_layout.addWidget(self.table, 1)
         game_actions = W.QHBoxLayout()
         game_actions.addStretch()
@@ -507,6 +508,7 @@ class PlayWorkspace(W.QWidget):
         self._loading_started = time.monotonic()
         self.loading_title.setText(title)
         self.loading_detail.setText(detail)
+        self.loading_cancel.setText("Cancel preparation")
         self.loading_cancel.setEnabled(True)
         self.pages.setCurrentWidget(self.loading_page)
         self.loading_timer.start()
@@ -525,7 +527,9 @@ class PlayWorkspace(W.QWidget):
     def _cancel_loading(self):
         self.loading_cancel.setEnabled(False)
         self.loading_detail.setText(
-            "Cancelling preparation and waiting for runtime cleanup..."
+            "Retrying local runtime cleanup..."
+            if self._loading_purpose == "close"
+            else "Cancelling preparation and waiting for runtime cleanup..."
         )
         if self._loading_purpose == "opponent":
             self.opponents.cancel()
@@ -535,8 +539,10 @@ class PlayWorkspace(W.QWidget):
     def _engine_loading_idle(self):
         if (
             self.pages.currentWidget() is self.loading_page
-            and self._loading_purpose == "match"
+            and self._loading_purpose in {"match", "close"}
         ):
+            if self._loading_purpose == "close":
+                self.loading_cancel.setText("Retry cleanup")
             self.loading_cancel.setEnabled(
                 self.session.active and not self.session.closing
             )
@@ -962,9 +968,17 @@ class PlayWorkspace(W.QWidget):
     def request_close_game(self):
         if self.session.closing:
             return
-        if not self._confirm_close():
-            return
+        if self._view is None or self._view.result is None:
+            if not self._confirm_close():
+                return
         self.session.stop()
+        self._show_loading(
+            "close",
+            "Closing your match",
+            "Waiting for the local runtime to finish cleanup...",
+        )
+        self.loading_cancel.setText("Closing...")
+        self.loading_cancel.setEnabled(False)
 
     def _confirm_close(self):
         if self._approved_close:
