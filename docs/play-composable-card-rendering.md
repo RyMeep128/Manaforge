@@ -235,8 +235,17 @@ tests pass locally (16 total EditMode checks). This uses supplied catalog
 metadata only. A host-side offline collector now reads the existing Core catalog
 and exact-face local images, verifies decodability and conservatively classifies
 ordinary 2015-frame printings. Eighteen collector tests pass locally. No Unity
-asset delivery, downloader, texture cache or composable renderer is implemented. Online resolution and CI remain
+asset delivery, downloader or texture cache is implemented; the component
+foundation below has no real-artwork demo yet. Online resolution and CI remain
 pending. The acceptance checklist below remains open.
+
+The first reusable UI Toolkit `CardView` now exposes binding, independent value
+updates, compact/full resizing and conceal/dispose interfaces. An editor-only
+mock window demonstrates component structure without pretending artwork exists.
+Eight component checks pass locally (24 total EditMode plus one existing
+PlayMode scene check). Mana glyphs, frame treatment, real artwork transfer,
+readability, screenshots and benchmark acceptance remain pending. This does not
+complete the component or change any acceptance box below.
 
 ## Acceptance criteria
 

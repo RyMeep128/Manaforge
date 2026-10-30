@@ -145,3 +145,43 @@ verify viewer ownership and clear assets on viewer handoff. No shared wire schem
 for that transfer exists yet; these Python records are not public protocol DTOs.
 Eighteen focused collector tests passed locally; Unity delivery, real artwork
 demo, screenshots, dynamic rendering and CI evidence remain pending.
+
+## Reusable UI Toolkit card component
+
+`CardView` is a seat/zone-independent presentation component. Its immutable
+`CardDisplayValues` input contains explicitly supplied name, mana string, type,
+rules text, P/T and status text; null stays unavailable. It does not parse rules,
+compute characteristics or read the catalog. Existing protocol DTOs are unchanged:
+this projection is not permission to fill unsupported fields from printed text.
+The gateway still needs authoritative mana/current-text support before live use.
+
+`Bind` accepts a resolved visual identity, a borrowed texture and normalized
+artwork crop from a verified layout profile. Full standard mode places components
+around that artwork crop; compact mode hides mana/type/rules and retains artwork,
+name/stats/status. Authentic-image-only full mode shows the whole supplied image
+without claiming reconstructed dynamic text. Text values update independently
+without replacing component objects or artwork. Mana symbols currently remain
+literal strings; symbol glyph rendering, frame colors, set symbols, overlays,
+long-text fitting and advanced layouts are still pending.
+
+`SetPresentation(mode, width)` resizes the two layouts and reuses textures.
+`Conceal` clears identity, image reference, all label text and tooltip; `Dispose`
+also detaches the view. The external asset owner must separately revoke/destroy
+private cached textures during viewer changes. This view cannot establish seat
+authorization, authenticate artwork handles or prevent a caller binding the wrong
+texture. Those checks belong to the still-pending trusted asset boundary.
+
+In Unity, open **Window → Manaforge → Card component fixture** to see explicitly
+mock full/compact components and toggle supplied P/T/rules. Artwork is honestly
+marked unavailable; no real card art or assembled-card visual acceptance is
+claimed. This editor fixture is separate from the packaged 20-quad smoke scene.
+It supplies no game interactions. Reusable interfaces for later P3.3 work are
+`Bind`, `UpdateValues`, `SetPresentation`, `Conceal` and `Dispose`.
+
+Local validation: 24 EditMode tests passed, including eight card-component checks
+for updates, shared artwork, modes/resizing, missing assets, concealment and
+cleanup; the existing PlayMode foundation scene check also passed. Reports remain
+in ignored `Artifacts/`. These tests do not prove rendered text readability or
+privacy of the future cache. No new screenshot/benchmark/player evidence exists.
+Real-artwork delivery, reusable verified layout profiles, visual review and CI
+remain required; P3.2a and G0/G1 are open.
