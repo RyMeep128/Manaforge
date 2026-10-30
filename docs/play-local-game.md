@@ -1,7 +1,10 @@
-# Manaforge Play - local delivery and acceptance status
+# Manaforge Play - historic PyQt delivery and regression baseline
 
-The [AI and Focused View rebuild epic](play-ai-focused-view-epic.md) is the
-current delivery plan. Its first target is one local human versus one XMage AI,
+The [Unity + Java roadmap](play-unity-java-roadmap.md) is the proposed replacement
+delivery plan. This document records the historic PyQt implementation and its
+regression/acceptance baseline; retain it until replacement acceptance.
+The [AI and Focused View rebuild epic](play-ai-focused-view-epic.md) records the
+previous delivery plan. Its first target is one local human versus one XMage AI,
 followed by a format-first lobby, local asset preparation, and an immersive
 two-player Focused View. The [long-term Play epic](manaforge-play-epic.md)
 retains the future 2-5-player and private networking roadmap.

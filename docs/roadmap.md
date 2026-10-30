@@ -316,6 +316,11 @@ Print-layout preview and future match surfaces still need reference entry points
 
 ## Phase 7 - Versioned game protocol and rules-engine feasibility
 
+Play architecture and migration gates now follow the proposed [Unity + Java roadmap](play-unity-java-roadmap.md),
+especially P0/P1 (G0/G1). The checklist below retains prior product requirements
+and history; it does not claim those gates are complete. Product phase numbers
+stay unchanged; P0–P9 in the linked roadmap are Play-specific.
+
 - [ ] Evaluate XMage as the preferred initial authoritative engine, with Forge as an investigation alternative; verify feasibility and license compatibility before incorporating code. Keep engine-specific classes out of application models and UI.
 - [ ] Compare embedding, subprocess, and API integration while preserving Manaforge's UI; document supported cards/formats and limitations.
 - [ ] Establish serializable game state, unique card-instance identifiers, and explicit actions/events through engine integration, separate from Qt widgets and the persistent deck model. Do not build a temporary manual-play system or duplicate engine rules.
@@ -328,10 +333,12 @@ Print-layout preview and future match surfaces still need reference entry points
 
 ## Phase 8 - Rules-enforced local play
 
-The [AI and Focused View rebuild](play-ai-focused-view-epic.md) is the current
-incremental delivery plan; [local delivery status](play-local-game.md) records
-the actual repository baseline and adapter/CI acceptance gaps. The first gate
-is a real pinned-engine human-versus-AI scenario in CI, before dependent UI work.
+The proposed [Unity + Java roadmap](play-unity-java-roadmap.md) governs replacement
+delivery: P2/P3 converge at P4, followed by dedicated P5/P6 UX and alpha acceptance.
+Retain Qt/Python until replacement acceptance. The following records historic
+[AI and Focused View work](play-ai-focused-view-epic.md); [local delivery status](play-local-game.md) records
+the historic repository baseline and adapter/CI acceptance gaps. Its first gate
+was a real pinned-engine human-versus-AI scenario in CI, before dependent Qt UI work.
 The first Freeform bridge/adapter increment compiled and initialized in CI, but
 `ai-freeform` failed on an unhandled target decision in run `40977624067`; the
 leading diagnosis and local discard-policy fix are recorded in the delivery doc.
@@ -369,18 +376,21 @@ headless rules and privacy regressions are retained.
 
 ## Phase 9 - Mixed human/AI seats and local deck testing
 
-The first two-player EngineAI integration is now the prerequisite gate for the
-current Phase 8 rebuild. These broader mixed-table goals remain planned; moving
-that first gate forward does not claim AI acceptance or implement future seats.
+Engine AI remains a long-term capability, now optional after multiplayer under
+[P9 of the Unity + Java roadmap](play-unity-java-roadmap.md).
+It is not a prerequisite for the Unity migration. Preserve controller/seat
+independence and existing AI regression evidence.
 
 - [ ] Separate match seat, player, deck, pilot, and controller; support LocalHuman, RemoteHuman, and EngineAI through the same legal-action protocol. Remote connections follow in Phase 10.
-- [ ] Expose usable XMage AI first and an **Add Computer** seat action; support mixed human/AI tables as multiplayer capacity arrives in Phase 11.
+- [ ] Expose usable XMage AI and an **Add Computer** seat action; support mixed human/AI tables as multiplayer capacity arrives in Phase 11.
 - [ ] Improve adapted AI with heuristics, state evaluation/search, and deck-aware strategy only as needed; keep all decisions within engine-provided legal actions.
 - [ ] Cover sensible spell/target choices, interaction, and combat decisions to expose deck weaknesses.
 
 **Exit gate:** Repeatable matches provide useful testing; competitive strength and LLM integration are not prerequisites.
 
 ## Phase 10 - Private 1v1 multiplayer
+
+Follow P7/G5 in the [Unity + Java roadmap](play-unity-java-roadmap.md), after accepted local 1v1.
 
 - [ ] Support host, invite/code, and join; prefer peer-to-peer where practical and evaluate lightweight rendezvous only if needed.
 - [ ] Keep the host authoritative, validate client commands, and transmit only visibility-filtered state/events; never send hidden opponent data merely to conceal it in the UI. Support reconnect.
@@ -390,6 +400,9 @@ that first gate forward does not claim AI acceptance or implement future seats.
 **Exit gate:** Friends can complete and reconnect to private games using existing decks without state divergence or hidden-information leaks.
 
 ## Phase 11 - Adaptive 2-5-player Commander
+
+Follow P8/G6 in the [Unity + Java roadmap](play-unity-java-roadmap.md), after private networked 1v1.
+Spectators and persistence remain optional later expansions, not initial Commander prerequisites.
 
 - [ ] Support 2, 3, 4, and 5 seats with any supported mixture of humans and AI, multiplayer priority/combat, and Commander state; avoid a protocol-level five-seat maximum.
 - [ ] Provide Overview, Compare, Focus, and Inspect contexts with stable player positions and readable adaptive boards.

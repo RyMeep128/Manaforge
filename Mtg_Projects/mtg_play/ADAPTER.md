@@ -1,5 +1,10 @@
 # Manaforge local gameplay adapter
 
+Migration note: the proposed [Unity + Java roadmap](../../docs/play-unity-java-roadmap.md)
+retains this Python API and its acceptance fixtures as the initial behavior-parity
+reference. Java replaces the runtime boundary only after demonstrated parity and
+integration. This document describes the existing adapter, not a completed migration.
+
 The alpha adapter implements engine-backed local games without Qt, rendering,
 AI, or remote multiplayer. Integration acceptance is implemented and has passed
 locally against the pinned engine. **Consult the Tests workflow for CI acceptance
