@@ -1,8 +1,11 @@
 param(
-    [ValidateSet('Prepare', 'EditMode', 'PlayMode', 'Build', 'Smoke')]
+    [ValidateSet('Prepare', 'EditMode', 'PlayMode', 'Build', 'Smoke', 'ArtworkSmoke')]
     [string]$Mode = 'Prepare',
     [string]$EditorPath = $env:MANAFORGE_UNITY_EDITOR,
     [int]$TimeoutSeconds = 1200,
+    [string]$FixtureDirectory,
+    [ValidateSet(20, 70, 200)]
+    [int]$FixtureCount = 20,
     [switch]$DownloadGson
 )
 $ErrorActionPreference = 'Stop'
@@ -25,6 +28,30 @@ function Invoke-OwnedProcess([string]$Executable, [string[]]$Arguments) {
         throw "Owned $Mode process exceeded timeout"
     }
     if ($process.ExitCode -ne 0) { throw "$Mode process failed with exit code $($process.ExitCode); inspect Artifacts" }
+}
+
+if ($Mode -eq 'ArtworkSmoke') {
+    if (-not $FixtureDirectory) { throw 'ArtworkSmoke requires an existing offline fixture directory' }
+    $fixture = (Resolve-Path -LiteralPath $FixtureDirectory).Path
+    $output = Join-Path $artifacts 'ArtworkScene'
+    New-Item -ItemType Directory -Force $output | Out-Null
+    foreach ($extension in @('json', 'png')) {
+        $prior = Join-Path $output "artwork-$FixtureCount.$extension"
+        if (Test-Path -LiteralPath $prior) { Remove-Item -LiteralPath $prior }
+    }
+    Invoke-OwnedProcess (Join-Path $project 'Builds/Windows/ManaforgePlay.exe') @(
+        '-screen-fullscreen', '0', '-screen-width', '1280', '-screen-height', '720',
+        '-logFile', (Join-Path $artifacts "artwork-$FixtureCount.log"),
+        '-manaforgeArtworkFixture', $fixture, '-manaforgeArtworkOutput', $output,
+        '-manaforgeFixtureCount', "$FixtureCount"
+    )
+    $report = Get-Content (Join-Path $output "artwork-$FixtureCount.json") -Raw | ConvertFrom-Json
+    $image = Get-Item (Join-Path $output "artwork-$FixtureCount.png")
+    if (-not $report.fixtureOnly -or $report.objectCount -ne $FixtureCount -or
+        $report.textureCount -lt 1 -or $report.textureBytes -gt 67108864 -or
+        $report.editorVersion -ne $version -or $image.Length -lt 1000) { throw 'Artwork smoke failed' }
+    Write-Output ($report | ConvertTo-Json)
+    exit 0
 }
 
 if ($Mode -eq 'Smoke') {
@@ -69,7 +96,7 @@ Invoke-OwnedProcess $EditorPath $arguments
 if ($Mode -in @('EditMode', 'PlayMode')) {
     [xml]$report = Get-Content -LiteralPath $results
     # Counts include printing policy/card components and attached-panel handoff checks.
-    $minimum = if ($Mode -eq 'EditMode') { 66 } else { 3 }
+    $minimum = if ($Mode -eq 'EditMode') { 67 } else { 3 }
     if ($report.'test-run'.result -ne 'Passed' -or [int]$report.'test-run'.total -lt $minimum) {
         throw "Missing or failed $Mode acceptance"
     }

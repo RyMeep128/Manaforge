@@ -1,8 +1,8 @@
 # Offline real-artwork fixture preparation — G0/P3.2 foundation
 
-Status: one-time public-card asset preparation implemented and exercised locally.
-Unity loading, packaged rendering and the 20/70/200 benchmarks are next; G0 stays
-open. Existing decks, artwork preferences, engine pins and gameplay are unchanged.
+Status: offline preparation, worker loading and packaged real-artwork rendering
+are exercised locally. Packaged 20/70/200 screenshots exist; measured benchmarks
+and remaining G0 requirements stay open. Existing decks, artwork preferences, engine pins and gameplay are unchanged.
 
 ## Existing services, no new downloader
 
@@ -126,3 +126,53 @@ GPU ownership/disposal, visible scene integration and benchmarks remain pending.
 Local validation: 66 focused Unity EditMode checks passed, including the actual
 seven-card/48,219,136-byte bundle, plus the Java protocol preflight. No full
 application suite ran. CI review remains scheduled for the next (third) commit.
+
+## Packaged real-artwork scene — October 30, 2026
+
+`FixtureTextures` shares uploads by immutable asset reference, bounds RGBA pixel
+allocation to 64 MiB, disables mipmaps, discards Unity's readable CPU copy, rejects
+cross-thread access and destroys only its owned textures. Views are cleared before
+the owner is disposed. This public diagnostic owner is not a private game cache.
+
+The existing foundation player accepts `-manaforgeArtworkFixture <bundle>` to
+replace its placeholder view with `ArtworkFixtureScene`. Without that argument the
+original foundation smoke remains available. The opt-in scene exposes 20/70/200
+object buttons, compact artwork cards, full inspection and hover/click callbacks.
+It explicitly labels printed mock characteristics and has no gameplay commands.
+The fixed diagnostic grid is not the intended final seat/table layout. It does
+not demonstrate tapping, target animation, an Arena-quality playmat or live play.
+
+Repeat the packaged capture after building:
+
+```powershell
+./tools/unity-play.ps1 -Mode Build
+./tools/unity-play.ps1 -Mode ArtworkSmoke -FixtureDirectory Mtg_Projects/mtg_play_unity/Artifacts/CardFixture-20261030-bounded -FixtureCount 20
+```
+
+Repeat the last command with 70 or 200. The script bounds the owned process,
+removes only prior known outputs, and validates the fixture report and screenshot.
+UI Toolkit renders to a panel RenderTexture for capture; camera capture alone
+would omit these cards. Outputs stay in ignored `Artifacts/ArtworkScene`.
+For hands-on inspection, launch `Builds/Windows/ManaforgePlay.exe` with the fixture
+argument and omit `-manaforgeArtworkOutput` so it remains open. Keep the entire
+Windows build folder together. No artwork is copied into source or installers.
+
+Actual local packaged screenshots at all three counts were visually inspected:
+upright authentic artwork, cropped compact cards and full inspection are visible.
+All counts use seven textures, 16,074,240 RGBA bytes (~15.3 MiB), on the AMD Radeon
+RX 6600 under Unity 6000.6.7f1. This is raw pixel allocation, not measured total
+GPU/process memory. The 200-card grid intentionally requires inspection to read
+small cards. Pointer interactions still need hands-on owner acceptance.
+
+Sixty-seven focused EditMode checks and three PlayMode checks passed; the Windows
+player built successfully. The new texture check covers shared upload, budget
+rejection, released CPU copy and destruction. No full application suite ran.
+Frame timing, input latency, startup, memory profiling, integrated-GPU evidence,
+licensed CI, approved LTS and licensing/distribution acceptance remain open.
+
+Third-commit CI snapshot: protocol run for `498dbf9` passed
+(https://github.com/RyMeep128/Manaforge/actions/runs/41101096687).
+The `daac5b7` run was still in progress
+(https://github.com/RyMeep128/Manaforge/actions/runs/41104134788); deferred to the
+next scheduled check without waiting. No new licensed Unity CI evidence exists.
+Qt CI was not investigated.

@@ -59,6 +59,34 @@ namespace Manaforge.Play.Tests
             var copy = fixture.Cards[0].Artwork.CopyPixels(); copy[0] = 0;
             Assert.That(fixture.Cards[0].Artwork.CopyPixels()[0], Is.EqualTo(255));
         }
+        [UnityTest]
+        public IEnumerator TextureOwnerSharesUploadsEnforcesBudgetAndDestroysResources()
+        {
+            Publish();
+            var loading = ArtworkFixture.LoadAsync(directory);
+            var deadline = DateTime.UtcNow.AddSeconds(15);
+            while (!loading.IsCompleted && DateTime.UtcNow < deadline) yield return null;
+            Assert.That(loading.IsCompleted, Is.True);
+            var asset = loading.GetAwaiter().GetResult().Cards[0].Artwork;
+            var insufficient = new FixtureTextures(3);
+            Assert.Throws<InvalidOperationException>(() => insufficient.Get(asset));
+            Assert.That(insufficient.Count, Is.Zero);
+            insufficient.Dispose();
+            var owner = new FixtureTextures(4);
+            var texture = owner.Get(asset);
+            try
+            {
+                Assert.That(owner.Get(asset), Is.SameAs(texture));
+                Assert.That(owner.Count, Is.EqualTo(1));
+                Assert.That(owner.Bytes, Is.EqualTo(4));
+                Assert.That(texture.isReadable, Is.False);
+            }
+            finally { owner.Dispose(); }
+            yield return null;
+            Assert.That(texture == null, Is.True);
+            Assert.Throws<ObjectDisposedException>(() => owner.Get(asset));
+        }
+
         [TestCase("live")]
         [TestCase("path")]
         [TestCase("dimensions")]

@@ -392,3 +392,16 @@ identities preserved and standard alternatives available. Twenty-seven focused
 catalog/export checks pass. This removes image decoding from the planned Unity
 rendering path but does not yet connect a player renderer or establish GPU,
 startup, interaction or 20/70/200 performance evidence. G0 remains open.
+
+
+### G0 packaged artwork fixture — October 30, 2026
+
+The [offline artwork fixture](play-artwork-fixtures.md) now loads through a strict
+worker boundary and renders in the packaged Unity player. Visually inspected
+20/70/200-object captures use seven shared textures (~15.3 MiB raw pixels), with
+compact cards and full inspection. Sixty-seven EditMode checks and three PlayMode
+checks pass locally. This is a public printed-mock renderer, not live gameplay or
+a measured performance benchmark. G0 remains open for interaction/performance,
+integrated GPU, licensed CI, approved LTS and distribution review; G1 remains
+open and bulk P2 stays gated. Human-versus-AI and future five-seat support remain
+the playable direction, not claims made by this fixture.

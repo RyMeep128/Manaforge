@@ -16,6 +16,12 @@ namespace Manaforge.Play
         private void Awake()
         {
             Application.targetFrameRate = 60;
+            if (ArtworkFixtureScene.Argument("-manaforgeArtworkFixture") != null)
+            {
+                enabled = false;
+                gameObject.AddComponent<ArtworkFixtureScene>();
+                return;
+            }
             if (cardTemplate == null) throw new InvalidOperationException("Fixture material missing");
             cardMaterial = new Material(cardTemplate);
             cardMaterial.color = new Color(0.14f, 0.35f, 0.43f);
