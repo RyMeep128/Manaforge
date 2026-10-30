@@ -66,6 +66,8 @@ jobs:
 
       - name: Check Play Python protocol inventory
         run: python tools/export_play_protocol_inventory.py --check
+      - name: Check Play baseline schemas and sanitized fixtures
+        run: python Mtg_Projects/mtg_play/tests/generate_protocol_fixtures.py --check
       - name: Install optional library server dependency for CI
         run: python -m pip install -r requirements-library.txt
       - name: Test Proxy, Core, Deck Editor, and their integration

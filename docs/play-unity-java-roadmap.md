@@ -290,6 +290,9 @@ persistence/recovery and shared playgroups.
 
 - P1.1 source inventory and drift check: `42096bf`; 64 focused adapter tests passed
   locally. CI and P1.2 shared schemas remain pending.
+- P1.2 baseline increment: generated DTO JSON Schema and sanitized synthetic
+  adapter fixtures, with 26 focused schema checks plus 64 adapter tests passing
+  locally. Java/C# consumers and the transport contract remain pending; G1 is open.
 - P0.1/P0.2 foundation: installed/licensed `6000.6.7f1`, URP `17.6.0`,
   six EditMode checks, one PlayMode scene check, Windows player build and a
   20-placeholder packaged camera screenshot demonstrated locally. See the

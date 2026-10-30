@@ -75,8 +75,7 @@ def test_ambiguous_printing_binding_fails_instead_of_assigning_art_arbitrarily()
     assert failure.value.issues[0].code == "AMBIGUOUS_INSTANCE_PRINTING"
 
 
-@pytest.fixture
-def session():
+def make_session():
     setup = GameSetup((MatchSeat("one", "One"), MatchSeat("two", "Two")))
     owner = SimpleNamespace()
     decks = (PreparedDeck((), (), {}), PreparedDeck((), (), {}))
@@ -89,6 +88,11 @@ def session():
     session._names = {"internal-one": "one", "internal-two": "two"}
     session._game_ids = {"one": "engine-game", "two": "engine-game"}
     return session
+
+
+@pytest.fixture
+def session():
+    return make_session()
 
 
 def state(sequence, *, zone="hand", hidden=False):
