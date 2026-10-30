@@ -90,3 +90,32 @@ labels, resize the window and close it. This does not exercise real gameplay.
 References: [roadmap](../../docs/play-unity-java-roadmap.md),
 [editor release](https://unity.com/releases/editor/whats-new/6000.6.7f1),
 [official command-line reference](https://docs.unity.com/en-us/engine/6000.6/manual/unity-editor/command-line-arguments/editor).
+
+## Offline visual printing policy — foundation increment
+
+`VisualPrintingPolicy` is a pure presentation helper for P3.2/P3.2a, not a
+renderer or asset loader. It preserves selected printing identity and chooses
+cached standard-compatible artwork before authentic image fallbacks. Ties use
+ordinal printing IDs, independent of catalog ordering. It never writes decks,
+preferences or caches. Missing artwork remains explicit; concealed input returns
+no identity and does not enumerate candidates.
+
+The future trusted asset boundary must supply viewer-permitted candidates from
+Core `get_prints(oracle_id, allow_remote=False)` and verified exact-face local
+assets (`get_image_path`, with the appropriate variant). `Cached` means a usable,
+verified asset, not just an image URL or database row. `FaceKey` means equivalent
+card-face identity across printings, not merely a numeric face index. Do not infer
+compatibility from matching indices. Profile classification must explicitly
+exclude unsupported treatments. Neither catalog classification nor this bridge
+is implemented yet. Never feed the private all-decks launch manifest to Unity.
+
+The existing Qt cache remains unchanged. Core's `ensure_face_image` can fall back
+to the front image for some layouts; a future bridge must verify the actual face
+before marking that result usable. Downloads, resolution caching, invalidation,
+texture reuse, dynamic components and compact/full rendering remain pending.
+This offline helper does not implement the roadmap's complete online fallback
+sequence. Retry policy selection when verified cache availability changes.
+
+Local validation: 16 EditMode tests passed (8 existing and 8 printing-policy
+checks). CI evidence and all rendering/benchmark gates remain pending. There is
+no new visual screenshot or packaged-player behavior in this increment.

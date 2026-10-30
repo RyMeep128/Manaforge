@@ -226,6 +226,16 @@ Handoff must identify final commit, changed files, actual tests and CI status,
 screenshots/artifacts where available, known limitations and remaining gateway
 integration. Confirm reusable interfaces for P3.3 and later gameplay integration.
 
+## Foundation progress — October 30, 2026
+
+The Unity [offline printing policy](../Mtg_Projects/mtg_play_unity/README.md#offline-visual-printing-policy--foundation-increment)
+now separates selected/rendered identities and selects deterministic cached
+same-card/same-face standard or authentic image fallbacks. Eight focused policy
+tests pass locally (16 total EditMode checks). This uses supplied catalog
+metadata only; no live catalog bridge, classification, downloader, texture cache
+or composable renderer has been implemented. Online resolution and CI remain
+pending. The acceptance checklist below remains open.
+
 ## Acceptance criteria
 
 - [ ] Standard cards assemble from reusable Unity components.
