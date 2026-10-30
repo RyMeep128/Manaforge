@@ -75,7 +75,8 @@ Java must resolve cards, canonical-name/catalog context where needed, exact
 printings, format and commander/companion rules using XMage. Stored names/IDs are
 preserved, not certified as engine-resolvable. Never substitute unsupported cards.
 
-P1.4 still needs private workspace permissions, authenticated delivery, consumption,
-cancellation/crash cleanup and orphan handling. P4 must connect saved-deck selection
+The [P1.4 lifecycle foundation](play-launch-lifecycle.md) adds owned-root cleanup,
+cancellation and retry blocking. Private delivery, OS containment and orphan recovery
+remain pending. P4 must connect saved-deck selection
 and owned processes. This increment writes no temporary manifest, changes no Qt
 launcher, and completes neither G0/G1 nor human-versus-AI acceptance.

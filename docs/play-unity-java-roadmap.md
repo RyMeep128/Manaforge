@@ -315,6 +315,11 @@ persistence/recovery and shared playgroups.
   Java launch fixtures passed locally. [Launch boundary](play-launch-boundary.md)
   documents pending engine resolution and authenticated process delivery.
 
+- P1.4 foundation: [owned-child lifecycle coordinator](play-launch-lifecycle.md),
+  explicit readiness/deadlines, cancellation, reverse cleanup and blocked retry.
+  47 focused new/existing lifecycle checks passed, including tiny real child
+  processes. Authenticated delivery, OS containment and orphan recovery remain open.
+
 ## 6. First Codex batch
 
 Run in parallel only where interfaces are fixed:
