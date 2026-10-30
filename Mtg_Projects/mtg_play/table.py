@@ -117,9 +117,9 @@ def live_card_text(view, obj):
         if c.engine_view_text:
             rows.append("Engine card notes (may be incomplete)")
             rows.extend(c.engine_view_text)
-        if c.loyalty is not None:
+        if c.loyalty:
             rows.append("Loyalty: " + c.loyalty)
-        if c.defense is not None:
+        if c.defense:
             rows.append("Defense: " + c.defense)
     if obj.damage is not None:
         rows.append(f"Damage: {obj.damage}")
@@ -582,7 +582,11 @@ class GameTable(W.QWidget):
         self.combat_summary.setWordWrap(True)
         column.addWidget(self.combat_summary)
         self.stack_heading = W.QLabel("Stack")
-        column.addWidget(self.stack_heading)
+        self.stack_panel = W.QFrame(self)
+        stack_layout = W.QVBoxLayout(self.stack_panel)
+        stack_layout.setContentsMargins(4, 4, 4, 4)
+        stack_layout.addWidget(self.stack_heading)
+        self.stack_panel.hide()
         self.zones_dialog = W.QDialog(self, C.Qt.WindowType.Tool)
         self.zones_dialog.setWindowTitle("Other zones")
         self.zones_dialog.resize(720, 300)
@@ -602,7 +606,7 @@ class GameTable(W.QWidget):
             lane = CardLane(self.artwork)
             self.zone_lanes[zone] = lane
             if zone == "stack":
-                column.addWidget(lane)
+                stack_layout.addWidget(lane)
             else:
                 self.zones.addTab(lane, title)
         self.observations = W.QPlainTextEdit()
@@ -670,7 +674,26 @@ class GameTable(W.QWidget):
         self.opening_controls.setMaximumHeight(200)
         opening_layout.addWidget(self.opening_controls)
         self.opening_overlay.hide()
-        self.lanes = [self.opponent, self.player, self.hand, *self.zone_lanes.values()]
+        self.choice_overlay = W.QFrame(self)
+        self.choice_overlay.setObjectName("cardChoiceOverlay")
+        self.choice_overlay.setStyleSheet(
+            "QFrame#cardChoiceOverlay { background: #10191f; border: 1px solid #3d4c58; border-radius: 8px; }"
+        )
+        choice_layout = W.QVBoxLayout(self.choice_overlay)
+        self.choice_prompt = W.QLabel()
+        self.choice_prompt.setWordWrap(True)
+        self.choice_prompt.setTextFormat(C.Qt.TextFormat.PlainText)
+        choice_layout.addWidget(self.choice_prompt)
+        self.choice_cards = CardLane(self.artwork)
+        choice_layout.addWidget(self.choice_cards)
+        self.choice_overlay.hide()
+        self.lanes = [
+            self.opponent,
+            self.player,
+            self.hand,
+            *self.zone_lanes.values(),
+            self.choice_cards,
+        ]
         self.opening_hand.selected.connect(self.select_object)
         self.opening_hand.inspected.connect(
             lambda identifier: self.select_object(identifier, interact=False)
@@ -704,6 +727,8 @@ class GameTable(W.QWidget):
         self._zone_decision = None
         self.view = self.inspected = None
         self.zones_dialog.hide()
+        self.choice_overlay.hide()
+        self.stack_panel.hide()
         self.decision_dock.hide()
         self.stack_heading.hide()
         self.zone_lanes["stack"].hide()
@@ -886,6 +911,7 @@ class GameTable(W.QWidget):
             )
         stack_count = len(self.zone_lanes["stack"].cards)
         self.stack_heading.setText(f"Stack ({stack_count})")
+        self.stack_panel.setVisible(bool(stack_count))
         self.stack_heading.setVisible(bool(stack_count))
         self.zone_lanes["stack"].setVisible(bool(stack_count))
         for index in range(self.zones.count()):
@@ -902,7 +928,22 @@ class GameTable(W.QWidget):
         )
         opening = opening_hand_request(view) and not view.result
         self._dock_decisions(opening)
-        self.decisions.present(view)
+        choice_objects = (
+            tuple(
+                obj
+                for obj in visible
+                if obj.zone in ("decision", "decision_pile_2")
+                or (
+                    obj.object_id in options
+                    and obj.zone in ("graveyard", "exile", "command")
+                )
+            )
+            if view.decision and not opening
+            else ()
+        )
+        self.decisions.present(
+            view, card_choices={obj.object_id for obj in choice_objects}
+        )
         self.decision_dock.setVisible(
             not opening and (view.decision is not None or bool(view.result))
         )
@@ -951,12 +992,10 @@ class GameTable(W.QWidget):
         self._fit_board()
         C.QTimer.singleShot(0, self._fit_board)
         decision_id = view.decision.decision_id if view.decision else None
-        if decision_id != self._zone_decision and options:
-            for zone, lane in self.zone_lanes.items():
-                if zone != "stack" and set(lane.cards) & set(options):
-                    self.zones.setCurrentWidget(lane)
-                    self.zones_dialog.show()
-                    break
+        self.choice_cards.present(choice_objects, actions, options, combat)
+        self.choice_prompt.setText(view.decision.prompt if choice_objects else "")
+        self.choice_overlay.setVisible(bool(choice_objects))
+        self._fit_board()
         self._zone_decision = decision_id
         if self._hover_identifier is not None and not self.hover_timer.isActive():
             self._show_hover()
@@ -1073,7 +1112,6 @@ class GameTable(W.QWidget):
     def _fit_board(self):
         if not hasattr(self, "zone_lanes"):
             return
-        stack = bool(self.zone_lanes["stack"].cards)
         scale = round(
             max(
                 0.6,
@@ -1088,7 +1126,7 @@ class GameTable(W.QWidget):
                             else 0
                         )
                     )
-                    / (382 + (158 if stack else 0)),
+                    / 382,
                 ),
             ),
             2,
@@ -1096,7 +1134,39 @@ class GameTable(W.QWidget):
         self.opponent.fit_cards(scale, battlefield=True)
         self.player.fit_cards(scale, battlefield=True)
         self.hand.fit_cards(scale)
-        self.zone_lanes["stack"].fit_cards(scale)
+        stack_scale = min(1.8, max(0.8, self.height() / 520))
+        self.zone_lanes["stack"].fit_cards(stack_scale)
+        stack_height = round(FULL_CARD_SIZE.height() * stack_scale) + 52
+        stack_width = min(
+            380,
+            max(
+                170,
+                round(len(self.zone_lanes["stack"].cards) * (112 * stack_scale + 8))
+                + 16,
+            ),
+        )
+        self.stack_panel.setGeometry(
+            max(0, self.width() - stack_width - 8), 80, stack_width, stack_height
+        )
+        self.stack_panel.raise_()
+        if not self.choice_overlay.isHidden():
+            choice_scale = min(2.0, max(0.8, (self.height() - 230) / 158))
+            self.choice_cards.fit_cards(choice_scale)
+            width = min(
+                self.width() - 32,
+                max(
+                    300,
+                    round(len(self.choice_cards.cards) * (112 * choice_scale + 8)) + 24,
+                ),
+            )
+            height = round(158 * choice_scale) + 100
+            self.choice_overlay.setGeometry(
+                max(0, (self.width() - width) // 2),
+                max(0, (self.height() - height) // 2 - 35),
+                width,
+                height,
+            )
+            self.choice_overlay.raise_()
         if not self.decision_dock.isHidden():
             height = min(220, max(90, self.decisions.sizeHint().height() + 8))
             self.decision_dock.setGeometry(

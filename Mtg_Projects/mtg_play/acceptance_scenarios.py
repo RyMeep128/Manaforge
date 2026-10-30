@@ -659,6 +659,17 @@ def identity(adapter):
         nonlocal reference
         if view.viewer_id != "one":
             return False
+        for obj in view.objects:
+            if (
+                obj.zone == "stack"
+                and obj.characteristics
+                and obj.characteristics.name == "Cloudshift"
+            ):
+                if (
+                    not obj.card_identity
+                    or obj.card_identity.printing_id != "selected-Cloudshift"
+                ):
+                    raise AdapterError("STACK_PRINTING_LOST")
         report["blink_on_stack"] |= any(
             obj.zone == "stack"
             and obj.characteristics

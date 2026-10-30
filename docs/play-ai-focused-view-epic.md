@@ -1255,3 +1255,24 @@ against the recorded pinned source. It is intentionally not applied to the
 runtime: engine CI, declared artifact provenance and human/AI sequence coverage
 are required before activation. See play-mulligan-engine-followup.md.
 Real-engine acceptance and the user's manual UX sign-off remain open.
+
+
+Stack/revealed artwork and choice presentation (0.5.28-alpha.1): corrected the
+pinned metadata reader to resolve a spell's physical card through its source ID
+when the stack ID has no card. Owner and exact selected printing then survive
+casting. Revealed CardViews without owners now use unambiguous exact printing
+bindings without assigning a guessed owner or deck-entry identity. Hidden,
+face-down, copied, token and ambiguous choices remain guarded.
+
+Moved stack cards to a right-side overlay, preserving battlefield height. Added
+a focused card-choice overlay that updates and disappears with the current
+engine decision, without opening Other zones. Duplicate card-name buttons are
+omitted while non-card options and engine Finish/Cancel remain available.
+
+317 focused tests passed after the final presentation refinements. Regressions cover both choice
+piles, hidden and ambiguous printings, distinct stack/source metadata IDs,
+right-side geometry, choice progression, pending input and automatic dismissal.
+The existing real-engine identity scenario now rejects Cloudshift on the stack
+without its selected printing. The Java change and that assertion require CI;
+no local Java engine or build was run. A synthetic layout using cached artwork
+was visually inspected; this is presentation evidence, not gameplay proof.

@@ -865,3 +865,102 @@ def test_preparation_routes_mainboard_and_legacy_commander_ids_without_undefined
     assert [row["name"] for row in prepared.cards] == ["Forest"]
     assert [row["name"] for row in prepared.sideboard] == ["Isamaru, Hound of Konda"]
     assert document.to_dict() == before
+
+
+@pytest.mark.parametrize("zone", ["cards", "second_pile"])
+@pytest.mark.parametrize("concealed", [False, True])
+def test_revealed_choice_artwork_matches_exact_printing_without_owner(
+    session, zone, concealed
+):
+    identity = CardIdentity("oracle", "selected-print", "entry")
+    session._decks = (
+        PreparedDeck((), (), {("SOM", "174"): identity}),
+        PreparedDeck((), (), {}),
+    )
+    update = state(1)
+    candidate = dict(update["hand"][0], id="revealed-card", hidden=concealed)
+    update["hand"] = []
+    inject(session, update)
+    inject(
+        session,
+        dict(
+            event="decision",
+            decision_id=2,
+            kind="GAME_TARGET",
+            message="Choose",
+            targets=["revealed-card"],
+            **{zone: [candidate]},
+        ),
+    )
+    obj = next(
+        obj
+        for obj in session.snapshot("one").objects
+        if obj.zone.startswith("decision")
+    )
+    assert obj.owner_id is None
+    assert obj.card_identity == (
+        None if concealed else CardIdentity("oracle", "selected-print", None)
+    )
+
+
+def test_revealed_choice_artwork_does_not_guess_ambiguous_printing(session):
+    session._decks = tuple(
+        PreparedDeck((), (), {("SOM", "174"): CardIdentity("oracle", printing, None)})
+        for printing in ("one", "two")
+    )
+    update = state(1)
+    candidate = dict(update["hand"][0], id="revealed-card")
+    inject(session, update)
+    inject(
+        session,
+        dict(
+            event="decision",
+            decision_id=2,
+            kind="GAME_TARGET",
+            message="Choose",
+            targets=["revealed-card"],
+            cards=[candidate],
+        ),
+    )
+    obj = next(obj for obj in session.snapshot("one").objects if obj.zone == "decision")
+    assert obj.card_identity is None
+
+
+def test_stack_metadata_keeps_physical_printing_with_distinct_spell_id(session):
+    from mtg_play.artwork import PlayArtwork
+
+    identity = CardIdentity("oracle", "selected-print", "entry")
+    session._decks = (
+        PreparedDeck((), (), {("SOM", "174"): identity}),
+        PreparedDeck((), (), {}),
+    )
+    update = state(1)
+    spell = dict(update["hand"][0], id="spell-id")
+    update["hand"] = []
+    update["stack"] = [spell]
+    update["cycle"] = 8
+    session._owner._metadata = lambda view: dict(
+        status="ok",
+        cycle=8,
+        objects={
+            "spell-id": dict(
+                owner="engine-player-one",
+                controller="engine-player-one",
+                source="physical-card-id",
+                physical_set="SOM",
+                physical_number="174",
+                incarnation=1,
+            )
+        },
+        commanders=[],
+        players=[
+            dict(id="engine-player-one", lost=False, left=False),
+            dict(id="engine-player-two", lost=False, left=False),
+        ],
+    )
+    inject(session, update)
+    obj = session.snapshot("one").objects[0]
+    assert obj.zone == "stack" and obj.owner_id == "one"
+    assert obj.card_identity == identity
+    assert PlayArtwork.key(obj) == ("selected-print", None, 600, 0)
+    assert PlayArtwork.key(obj, detailed=True) == ("selected-print", None, 1200, 0)

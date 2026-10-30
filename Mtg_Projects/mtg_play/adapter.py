@@ -20,6 +20,7 @@ from .contracts import (
     GAME_PROTOCOL_VERSION,
     Capability,
     CardCharacteristics,
+    CardIdentity,
     CardObservation,
     ChoiceOption,
     ChoiceRequest,
@@ -974,6 +975,29 @@ class XmageGameSession:
                         card.get("physical_number", card.get("number")),
                     )
                 )
+            # Prompt CardViews authorize these visible printings but omit owner IDs.
+            # Match exact set/collector pairs only; ambiguous bindings stay unavailable.
+            if (
+                identity is None
+                and zone in ("decision", "decision_pile_2")
+                and not hidden
+                and not card.get("face_down")
+                and not card.get("token")
+                and not card.get("copy")
+                and not view.get("_metadata_unavailable")
+            ):
+                matches = {
+                    (binding.oracle_id, binding.printing_id)
+                    for deck in self._decks
+                    if (
+                        binding := deck.bindings.get(
+                            (card.get("set"), card.get("number"))
+                        )
+                    )
+                }
+                if len(matches) == 1:
+                    oracle, printing = matches.pop()
+                    identity = CardIdentity(oracle, printing, None)
             characteristics = (
                 None
                 if hidden

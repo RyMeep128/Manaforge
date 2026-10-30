@@ -84,7 +84,7 @@ class DecisionPanel(W.QWidget):
         self.rows.addWidget(button)
         return button
 
-    def present(self, view):
+    def present(self, view, *, card_choices=()):
         self.clear()
         self.view = view
         request = view.decision
@@ -114,6 +114,8 @@ class DecisionPanel(W.QWidget):
         }
         names.update({player.player_id: player.name for player in view.players})
         for option in request.options:
+            if option.object_id in card_choices:
+                continue
             text = (
                 names.get(option.object_id)
                 or names.get(option.player_id)

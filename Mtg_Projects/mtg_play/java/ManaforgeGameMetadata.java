@@ -122,8 +122,11 @@ public final class ManaforgeGameMetadata {
                     metadata.addProperty("incarnation", state.getZoneChangeCounter(id));
                     mage.cards.Card source = game.getCard(id);
                     mage.game.permanent.Permanent permanent = game.getPermanent(id);
-                    UUID owner = source == null ? null : source.getOwnerId();
                     mage.game.stack.StackObject stacked = game.getStack().getStackObject(id);
+                    // A spell has its own stack ID; its physical card retains the source ID.
+                    if (source == null && stacked instanceof mage.game.stack.Spell)
+                        source = game.getCard(stacked.getSourceId());
+                    UUID owner = source == null ? null : source.getOwnerId();
                     UUID control = permanent != null ? permanent.getControllerId() : stacked == null ? null : stacked.getControllerId();
                     if (stacked != null && stacked.getSourceId() != null) metadata.addProperty("source", stacked.getSourceId().toString());
                     if (identified.contains(id)) {

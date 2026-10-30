@@ -551,3 +551,18 @@ and issue reporting remain available through Match menu.
 
 The keep-first London mulligan engine change is prepared separately in
 [the engine follow-up](play-mulligan-engine-followup.md); it is not yet enabled.
+
+
+Stack and revealed-choice update (0.5.28-alpha.1): stack spells resolve physical
+printing and owner from their engine source card rather than their distinct
+stack ID. The stack appears on the right and no longer reduces battlefield
+height. Revealed-choice CardViews without owner IDs match exact set/collector
+bindings across the prepared decks; ambiguous printings, hidden cards, tokens
+and copies keep the placeholder rather than guessing.
+
+Card choices appear in a focused overlay with the offered cards, rather than
+automatically opening the Other zones tabbed browser. Clicking a card submits
+the same engine-offered choice. Duplicate text buttons are omitted; any engine
+Finish/Cancel controls remain available. The overlay updates after each choice
+and closes when the engine finishes the request. Other zones remains available
+for deliberate browsing.

@@ -599,3 +599,80 @@ def test_result_panel_only_reports_engine_outcome_and_requests_cleanup(
     assert returns == [True] and not commands
     table.clear()
     assert table.result_panel.isHidden() and not table.result_label.text()
+
+
+def test_revealed_choices_show_only_cards_and_close_when_request_finishes(app):
+    table = GameTable(object(), artwork_factory=SilentArtwork)
+    objects = tuple(card(str(i), "decision") for i in range(3))
+    request = ChoiceRequest(
+        "order",
+        "one",
+        "target",
+        "Choose the next card",
+        tuple(
+            ChoiceOption("option-" + obj.object_id, "Choose", object_id=obj.object_id)
+            for obj in objects
+        ),
+    )
+    request = replace(request, can_finish=True)
+    view = replace(snapshot(), objects=objects, decision=request)
+    calls = []
+    table.command.connect(lambda *args: calls.append(args))
+    table.resize(1280, 720)
+    table.show()
+    try:
+        table.present(view)
+        app.processEvents()
+        assert table.choice_overlay.isVisible()
+        assert table.zones_dialog.isHidden()
+        assert len(table.choice_cards.cards) == 3 and not calls
+        assert button(table.decisions, "Finish selection").isEnabled()
+        assert not any(
+            getattr(item, "play_method", None) == "choose"
+            for item in table.decisions.findChildren(W.QPushButton)
+        )
+        table.choice_cards.cards["0"].click()
+        assert calls == [(view, "choose", ("option-0",))]
+        table.pending()
+        assert not table.choice_cards.isEnabled()
+        table.present(
+            replace(
+                view,
+                revision=2,
+                objects=objects[1:],
+                decision=replace(
+                    request, decision_id="next", options=request.options[1:]
+                ),
+            )
+        )
+        assert len(table.choice_cards.cards) == 2
+        table.present(replace(view, revision=3, objects=(), decision=None))
+        assert table.choice_overlay.isHidden() and not table.choice_cards.cards
+        assert table.zones_dialog.isHidden()
+    finally:
+        table.clear()
+        table.close()
+
+
+def test_stack_is_on_right_without_consuming_battlefield_height(app):
+    table = GameTable(object(), artwork_factory=SilentArtwork)
+    table.resize(1280, 720)
+    table.show()
+    try:
+        view = replace(snapshot(), objects=(card("mine"),))
+        table.present(view)
+        app.processEvents()
+        height = table.player.height()
+        table.present(
+            replace(view, revision=2, objects=view.objects + (card("spell", "stack"),))
+        )
+        app.processEvents()
+        assert table.stack_panel.isVisible()
+        assert table.stack_panel.x() > table.width() / 2
+        assert table.stack_panel.geometry().right() < table.width()
+        assert table.player.height() == height
+        table.present(replace(view, revision=3))
+        assert table.stack_panel.isHidden()
+    finally:
+        table.clear()
+        table.close()
