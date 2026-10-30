@@ -25,11 +25,11 @@ namespace Manaforge.Play.Tests
             public TcpClient Client;
             public LoopbackFrameReader Reader;
             private bool disposed;
-            public Peer(string directory,bool sessionError=false,bool partialFrame=false)
+            public Peer(string directory,bool sessionError=false,bool partialFrame=false,bool clientPartialFrame=false)
             {
                 Assert.That(File.Exists(Path.Combine(directory,"manaforge/protocol/DummyGateway.class")),Is.True,"Run the Java dummy fixture preparation first");
                 string jar=Path.Combine(directory,"gson.jar"),fixture=Path.Combine(directory,"dummy-session-v1.json");
-                var start=new ProcessStartInfo("java", "-cp \""+directory+Path.PathSeparator+jar+"\" manaforge.protocol.DummyGateway \""+fixture+"\""+(partialFrame?" partial-frame":sessionError?" session-error":""))
+                var start=new ProcessStartInfo("java", "-cp \""+directory+Path.PathSeparator+jar+"\" manaforge.protocol.DummyGateway \""+fixture+"\""+(clientPartialFrame?" client-partial-frame":partialFrame?" partial-frame":sessionError?" session-error":""))
                 { UseShellExecute=false,CreateNoWindow=true,WindowStyle=ProcessWindowStyle.Hidden,
                   RedirectStandardInput=true,RedirectStandardOutput=true,RedirectStandardError=true };
                 Process=new Process { StartInfo=start };
@@ -88,7 +88,7 @@ namespace Manaforge.Play.Tests
             Assert.That((string)body["outcome"],Is.EqualTo(outcome));Assert.That((string)body["code"],Is.EqualTo(code));
             tracker?.Accept(reply.ToString(Formatting.None));
         }
-        private static void Exchange(Peer peer,bool wrongKey,bool ownerEof,bool conflictingDuplicate,bool sessionError,bool partialFrame)
+        private static void Exchange(Peer peer,bool wrongKey,bool ownerEof,bool conflictingDuplicate,bool sessionError,bool partialFrame,bool clientPartialFrame)
         {
             byte[] key=RandomBytes();
             try
@@ -143,6 +143,12 @@ namespace Manaforge.Play.Tests
                     Assert.That(Read(peer.Reader,inbox:inbox),Is.Null,"Repeated snapshot must not be applied twice");
                     var eventMessage=Read(peer.Reader,snapshot.revision,inbox);Assert.That((string)eventMessage["message_type"],Is.EqualTo("event"));
                     Assert.That((string)eventMessage["body"]["event"]["player_id"],Is.EqualTo("two"),"Actor is not the authenticated recipient");
+                    if(clientPartialFrame)
+                    {
+                        stream.Write(new byte[]{0,0},0,2);stream.Flush();
+                        Assert.That(peer.Reader.Read(2000),Is.Null,"Java must close a stalled client frame");
+                        Assert.That(peer.Process.WaitForExit(5000),Is.True);Assert.That(peer.Process.ExitCode,Is.EqualTo(2));return;
+                    }
                     string decision=snapshot.decision.decision_id,action=snapshot.actions.Single().action_id;
                     using var tracker=new CommandTracker(snapshot.session_id,snapshot.viewer_id);
                     SendTracked(stream,Command("stale",snapshot.revision-1,decision,action),tracker);Ack(peer.Reader,"stale",snapshot.revision-1,"rejected","STALE_REVISION",tracker);
@@ -184,12 +190,12 @@ namespace Manaforge.Play.Tests
             }
             finally { Array.Clear(key,0,key.Length); }
         }
-        private static IEnumerator Run(bool wrongKey,bool ownerEof,bool conflictingDuplicate=false,bool sessionError=false,bool partialFrame=false)
+        private static IEnumerator Run(bool wrongKey,bool ownerEof,bool conflictingDuplicate=false,bool sessionError=false,bool partialFrame=false,bool clientPartialFrame=false)
         {
             string directory=Path.GetFullPath(Path.Combine(Application.dataPath,"../Artifacts/JavaDummy"));
-            using(var peer=new Peer(directory,sessionError,partialFrame))
+            using(var peer=new Peer(directory,sessionError,partialFrame,clientPartialFrame))
             {
-                var task=Task.Run(()=>Exchange(peer,wrongKey,ownerEof,conflictingDuplicate,sessionError,partialFrame));var timer=Stopwatch.StartNew();
+                var task=Task.Run(()=>Exchange(peer,wrongKey,ownerEof,conflictingDuplicate,sessionError,partialFrame,clientPartialFrame));var timer=Stopwatch.StartNew();
                 try
                 {
                     while(!task.IsCompleted && timer.Elapsed.TotalSeconds<25)yield return null;
@@ -206,6 +212,7 @@ namespace Manaforge.Play.Tests
         [UnityTest] public IEnumerator JavaPeerExchangesAuthenticatedFixtureAndRejectsStaleAndPendingActions()=>Run(false,false);
         [UnityTest] public IEnumerator WrongViewerKeyReceivesNoSessionData()=>Run(true,false);
         [UnityTest] public IEnumerator OwnerPipeEofStopsTheOwnedListener()=>Run(false,true);
+        [UnityTest] public IEnumerator JavaRejectsAnAuthenticatedClientPartialFrame()=>Run(false,false,false,false,false,true);
         [UnityTest] public IEnumerator PartialJavaFrameTimesOutAndOwnedPeerStops()=>Run(false,false,false,false,true);
         [UnityTest] public IEnumerator TerminalJavaSessionErrorPreservesPendingCommandUncertainty()=>Run(false,false,false,true);
         [UnityTest] public IEnumerator ConflictingDuplicateCannotReplaceTheRecordedCommand()=>Run(false,false,true);

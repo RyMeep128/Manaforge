@@ -35,7 +35,7 @@ public final class DummyGateway {
     }
     private static void send(OutputStream out,JsonObject value) throws IOException { TextFrame.write(out,value.toString()); out.flush(); }
     public static void main(String[] args) {
-        AtomicBoolean ownerGone=new AtomicBoolean(); AtomicReference<Socket> active=new AtomicReference<>();
+        AtomicBoolean ownerGone=new AtomicBoolean(); AtomicReference<LoopbackFrameReader> active=new AtomicReference<>();
         byte[] key=null;
         try(ServerSocket listener=new ServerSocket()) {
             InputStream owner=new BufferedInputStream(System.in);
@@ -50,15 +50,16 @@ public final class DummyGateway {
             require(session.equals(snapshot.get("session_id").getAsString()) && viewer.equals(snapshot.get("viewer_id").getAsString()));
             listener.bind(new InetSocketAddress(InetAddress.getByName("127.0.0.1"),0),1); listener.setSoTimeout(8000);
             Thread lifeline=new Thread(()->{ try { owner.read(); } catch(IOException ignored){} ownerGone.set(true);
-                try { listener.close(); Socket s=active.get(); if(s!=null)s.close(); } catch(IOException ignored){} },"dummy-owner-lifeline");
+                try { listener.close(); } catch(IOException ignored){}
+                LoopbackFrameReader s=active.get();if(s!=null)try { s.close(); } catch(IOException ignored){} },"dummy-owner-lifeline");
             lifeline.setDaemon(true); lifeline.start();
             JsonObject ready=new JsonObject(); ready.addProperty("host","127.0.0.1"); ready.addProperty("port",listener.getLocalPort()); ready.addProperty("server_nonce",serverNonce);
             send(System.out,ready);
-            try(Socket socket=listener.accept()) {
-                active.set(socket); if(ownerGone.get())throw new IOException("OWNER_GONE"); socket.setSoTimeout(5000);
-                InputStream in=socket.getInputStream(); OutputStream out=socket.getOutputStream();
+            try(Socket socket=listener.accept();LoopbackFrameReader frames=new LoopbackFrameReader(socket)) {
+                active.set(frames); if(ownerGone.get())throw new IOException("OWNER_GONE");
+                OutputStream out=socket.getOutputStream();
                 try(ViewerAuthentication.Verifier verifier=new ViewerAuthentication.Verifier(clientHello.toString(),key)) {
-                    require(verifier.verify(TextFrame.read(in)));
+                    require(verifier.verify(frames.read(5000)));
                 }
                 gatewayHello.getAsJsonObject("body").addProperty("proof",ViewerAuthentication.computeProof(gatewayHello.toString(),key));
                 send(out,gatewayHello);
@@ -80,7 +81,7 @@ public final class DummyGateway {
                 List<String> actions=new ArrayList<>(); for(JsonElement a:snapshot.getAsJsonArray("actions"))actions.add(a.getAsJsonObject().get("action_id").getAsString());
                 try(SubmissionLedger ledger=new SubmissionLedger(session,viewer,4096)) {
                 for(int count=0;count<8;count++) {
-                    String text=TextFrame.read(in); require(text!=null);
+                    String text=frames.read(args.length==2 && args[1].equals("client-partial-frame")?500:5000); require(text!=null);
                     JsonObject message=WireMessages.parse(text),request=message.getAsJsonObject("body");
                     String type=message.get("message_type").getAsString();
                     if(type.equals("shutdown")) {

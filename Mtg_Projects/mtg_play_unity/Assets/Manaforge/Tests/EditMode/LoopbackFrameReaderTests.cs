@@ -21,7 +21,9 @@ namespace Manaforge.Play.Tests
                 try {
                     Sender=new TcpClient(AddressFamily.InterNetwork);
                     Assert.That(Sender.ConnectAsync(IPAddress.Loopback,((IPEndPoint)listener.LocalEndpoint).Port).Wait(2000),Is.True);
-                    Reader=new LoopbackFrameReader(listener.AcceptSocket());
+                    var accepted=listener.AcceptSocket();accepted.LingerState=new LingerOption(true,5);
+                    Reader=new LoopbackFrameReader(accepted);
+                    Assert.That(accepted.LingerState.Enabled,Is.False,"Owned close must not wait for configured linger");
                 } catch { Sender?.Dispose();throw; }
                 finally { listener.Stop(); }
             }

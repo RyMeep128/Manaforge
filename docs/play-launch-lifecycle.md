@@ -164,3 +164,13 @@ closes its socket on failure and permits explicit owner disposal to unblock a
 worker. The authenticated Java dummy proves timeout followed by owner-EOF child
 cleanup. This remains separate from LaunchOwner; product bootstrap, complete
 session/handshake deadlines, Java-side parity and containment remain pending.
+
+
+### Java frame-read parity follow-up
+
+The [owned frame reader](../Mtg_Projects/mtg_play/protocol/frame-read-deadlines.md)
+now also bounds Java authentication/command frames with a monotonic total budget.
+Its owner lifeline closes through the reader rather than bypassing ownership.
+An authenticated partial-client-frame scenario verifies Java timeout and child
+exit; 16 Java socket cases and 118 focused EditMode checks pass locally. This
+still does not connect LaunchOwner, bound writes or prove product containment.

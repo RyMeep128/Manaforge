@@ -457,3 +457,14 @@ closes on failure. Fifteen real socket checks and a sixth authenticated dummy
 partial-frame timeout/cleanup case pass within 117 focused EditMode checks.
 Product owner coordination, Java-side deadlines, write/handshake budgets and
 licensed CI remain pending. G1 is not frozen; no bulk P2 port has begun.
+
+
+### G1 Java socket-read deadline parity — October 30, 2026
+
+Java now uses the matching [whole-frame loopback deadline](../Mtg_Projects/mtg_play/protocol/frame-read-deadlines.md)
+for dummy authentication and commands, with cancellation/interruption and owned
+socket closure. Sixteen Java loopback cases and a seventh authenticated Java↔C#
+partial-frame scenario pass locally, within 118 focused EditMode checks. Earlier
+protocol CI runs passed at the scheduled snapshot; new licensed Unity evidence,
+write budgets, product coordinator and G0/G1 acceptance remain pending. Bulk P2
+has not started; this is engine-independent transport work.

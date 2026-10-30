@@ -357,3 +357,13 @@ Fifteen real loopback checks and a sixth authenticated Java-dummy partial-header
 scenario bring local focused EditMode validation to 117. Product coordination,
 write/handshake deadlines, Java-side absolute deadlines and licensed CI remain
 pending; no G1 completion or real engine behavior is claimed.
+
+
+## Java whole-frame read deadline parity
+
+The [owned loopback reader](frame-read-deadlines.md) now has a Java implementation
+with a total monotonic frame budget, cancellation/interruption checks and owned
+socket closure. The dummy uses it for authentication and command reads. Sixteen
+Java socket checks and a seventh Java↔C# authenticated partial-client-frame scenario
+pass locally within 118 focused EditMode checks. No wire/schema change, engine
+port or G1 completion is claimed; writes and product coordination remain pending.

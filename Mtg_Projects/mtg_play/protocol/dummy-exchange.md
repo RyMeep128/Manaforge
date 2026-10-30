@@ -159,5 +159,16 @@ A sixth mode authenticates and then sends only two header bytes. The client
 observes its total frame deadline, confirms the owned socket is closed and
 closes the private owner pipe; the Java child exits cleanly. Other scenarios
 still pass. This is not a real engine timeout or proof of product lifecycle
-coordination. The Java dummy's inbound timeout remains its existing per-read
-setting; absolute Java-side framing is still pending.
+coordination. The subsequent Java follow-up below upgrades inbound frames to absolute deadlines.
+
+
+### Java whole-frame deadline follow-up
+
+The Java peer now owns its accepted socket through LoopbackFrameReader, and its
+owner-EOF lifeline closes through that same reader. All inbound TCP frames use a
+whole-frame budget, while private stdin/bootstrap remains separately owned.
+A seventh scenario authenticates, reads its fixture and then sends two client
+header bytes. Java times out, closes and exits with the expected fixed failure
+status; C# observes EOF. Sixteen Java real-loopback cases and all seven process
+scenarios pass locally, within 118 focused EditMode checks. This remains a protocol
+fixture, not a Java XMage gateway or production cleanup proof.

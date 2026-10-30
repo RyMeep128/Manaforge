@@ -85,6 +85,8 @@ def main():
             PROTOCOL / "java-test/ErrorFixtureConsumer.java",
             PROTOCOL / "java/manaforge/protocol/ReceiveHistory.java",
             PROTOCOL / "java-test/HistoryFixtureConsumer.java",
+            PROTOCOL / "java/manaforge/protocol/LoopbackFrameReader.java",
+            PROTOCOL / "java-test/DeadlineFixtureConsumer.java",
         ]
         subprocess.run(
             [
@@ -202,6 +204,16 @@ def main():
                 str(workspace) + os.pathsep + str(jar),
                 "manaforge.protocol.HistoryFixtureConsumer",
                 str(PROTOCOL / "fixtures/receive-history-v1.json"),
+            ],
+            check=True,
+            timeout=60,
+        )
+        subprocess.run(
+            [
+                runtime,
+                "-cp",
+                str(workspace) + os.pathsep + str(jar),
+                "manaforge.protocol.DeadlineFixtureConsumer",
             ],
             check=True,
             timeout=60,
