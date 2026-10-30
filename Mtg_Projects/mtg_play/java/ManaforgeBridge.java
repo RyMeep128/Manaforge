@@ -106,6 +106,14 @@ public final class ManaforgeBridge implements MageClient {
                 choice.addProperty("decision_id", decisionId);
                 choice.addProperty("cycle", view == null ? -1 : view.getGameCycle());
                 choice.addProperty("kind", method);
+                // Pinned PlayerQueryEvent normalizes absent options to an empty map.
+                // Confirm actual priority on the server, never by prompt text.
+                boolean combatDeclaration = prompt.getOptions() != null
+                    && (prompt.getOptions().containsKey(mage.constants.Constants.Option.POSSIBLE_ATTACKERS)
+                        || prompt.getOptions().containsKey(mage.constants.Constants.Option.POSSIBLE_BLOCKERS));
+                choice.addProperty("is_priority", method.equals("GAME_SELECT") && !combatDeclaration
+                    && prompt.getCardsView1() == null && prompt.getCardsView2() == null
+                    && prompt.getChoice() == null);
                 choice.addProperty("message", prompt.getMessage());
                 choice.addProperty("min", prompt.getMin());
                 choice.addProperty("max", prompt.getMax());
@@ -133,8 +141,10 @@ public final class ManaforgeBridge implements MageClient {
                 choice.addProperty("can_finish", decisionFinishable);
                 if (prompt.getOptions() != null) {
                     choice.add("selected_targets", JSON.toJsonTree(prompt.getOptions().get("chosenTargets")));
-                    choice.add("attackers", JSON.toJsonTree(prompt.getOptions().get(mage.constants.Constants.Option.POSSIBLE_ATTACKERS)));
-                    choice.add("blockers", JSON.toJsonTree(prompt.getOptions().get(mage.constants.Constants.Option.POSSIBLE_BLOCKERS)));
+                    if (prompt.getOptions().containsKey(mage.constants.Constants.Option.POSSIBLE_ATTACKERS))
+                        choice.add("attackers", JSON.toJsonTree(prompt.getOptions().get(mage.constants.Constants.Option.POSSIBLE_ATTACKERS)));
+                    if (prompt.getOptions().containsKey(mage.constants.Constants.Option.POSSIBLE_BLOCKERS))
+                        choice.add("blockers", JSON.toJsonTree(prompt.getOptions().get(mage.constants.Constants.Option.POSSIBLE_BLOCKERS)));
                 }
                 choice.add("targets", JSON.toJsonTree(prompt.getTargets()));
                 if (prompt.getChoice() != null) {
@@ -314,7 +324,7 @@ public final class ManaforgeBridge implements MageClient {
         JsonArray exile = new JsonArray();
         for (ExileView group : view.getExile()) for (CardView card : group.values()) exile.add(card(card));
         data.add("exile", exile);
-        JsonObject actionKinds = new JsonObject();
+        JsonObject actionKinds = new JsonObject(), priorityClasses = new JsonObject();
         if (view.getCanPlayObjects() != null) for (UUID object : view.getCanPlayObjects().getObjects().keySet()) {
             // Pinned engine data, not a Manaforge legality calculation.
             JsonObject stats = JSON.toJsonTree(view.getCanPlayObjects().getStats(object)).getAsJsonObject();
@@ -322,11 +332,16 @@ public final class ManaforgeBridge implements MageClient {
             int cast = stats.getAsJsonArray("basicCastAbilities").size();
             int other = stats.getAsJsonArray("other").size();
             int mana = stats.getAsJsonArray("basicManaAbilities").size();
+            priorityClasses.addProperty(object.toString(), mana > 0 && play == 0 && cast == 0 && other == 0
+                ? "basic_mana" : play + cast + other > 0 ? "meaningful" : "unknown");
             actionKinds.addProperty(object.toString(), other > 0 ? "select_object" :
                 play > 0 && cast == 0 ? "play_land" : cast > 0 && play == 0 ? "cast_spell" :
                 mana > 0 && play == 0 && cast == 0 ? "activate" : "select_object");
         }
         data.add("action_kinds", actionKinds);
+        data.add("priority_classes", priorityClasses);
+        // Special-action choices are not yet enumerated by this bridge. Never auto-pass them.
+        data.addProperty("playable_information_complete", view.getCanPlayObjects() != null && !view.getSpecial());
         data.add("playable", JSON.toJsonTree(view.getCanPlayObjects() == null
             ? java.util.Collections.emptySet() : view.getCanPlayObjects().getObjects().keySet()));
         return data;
@@ -375,6 +390,8 @@ public final class ManaforgeBridge implements MageClient {
                 connection.setProxyType(Connection.ProxyType.NONE);
                 connection.setUserIdStr(UUID.randomUUID().toString());
                 UserData preferences = UserData.getDefaultUserDataView();
+                preferences.setPassPriorityCast(false);
+                preferences.setPassPriorityActivation(false);
                 preferences.setAutoOrderTrigger(false);
                 preferences.setAutoTargetLevel(0);
                 connection.setUserData(preferences);

@@ -9,7 +9,7 @@ of a particular commit.** This does not certify every card or engine mechanic.
 
 `contracts.py` imports only the standard library. Frozen contracts serialize with
 `to_dict()` and JSON. Game protocol 1 is separate from private bridge protocol 1.
-Compatibility records the application version, adapter `0.2.0-alpha.1`, engine
+Compatibility records the application version, adapter `0.2.2-alpha.1`, engine
 `1.4.62-V1`, and the SHA-256 of `artifacts.json`.
 
 ```python
@@ -215,3 +215,40 @@ original installation or weaken integrity checks. XMage is MIT licensed; preserv
 its license and bundled dependency notices. Engine/JRE/dependency redistribution
 requires a separate license review. This work does not package binaries, create
 releases/tags, or authorize pushing/merging.
+
+
+## Priority automation metadata (adapter 0.2.2-alpha.1)
+
+Protocol 1 gains conservative additive fields: `LegalAction.priority_class`
+(default `unknown`), `ChoiceRequest.is_priority` (default false), and
+`GameSnapshot.actions_complete` (default false). Older or incomplete producers
+therefore do not enable automatic passes. No new command or implicit acknowledgement
+is introduced: current `perform(player, decision, pass_action)` remains the only
+pass submission, followed by engine-confirmed new state.
+
+The pinned bridge maps PlayableObjectStats' basicManaAbilities to `basic_mana`
+only when no play, cast or other abilities are offered on that object. Any other
+known operation is `meaningful`; mixed or unknown operations hold. These are
+engine categories, not interpretations of labels, types or rules text.
+
+A noncombat GAME_SELECT is only a candidate priority prompt. XMage normalizes
+absent options to an empty map, so the bridge checks for combat-option keys
+rather than requiring a null options map. The synchronized
+server reader additionally confirms the authorized HumanPlayer response monitor
+is open, the priority player matches, and PlayerResponse.getActiveAction() records
+`priority - HumanPlayer.java:`. This is a pinned internal method/source marker
+from HumanPlayer.waitForResponse and DebugUtil.TraceHelper, not a game prompt or
+card-text heuristic. The marker itself never crosses the adapter boundary.
+Missing confirmation holds priority. Combat declarations and payment/optional
+choices cannot become priority passes merely because a pass/finish action exists.
+
+Completeness requires all offered object IDs to be represented in the seat view
+and playable metadata to be available. GameView.getSpecial() currently prevents
+completeness: special-action enumeration remains unsupported, so it holds rather
+than silently losing an available special action. Native pass-after-cast and
+pass-after-activation preferences are explicitly disabled to preserve Full Control.
+
+Pinned source anchors: [PlayableObjectStats](https://github.com/magefree/mage/blob/xmage_1.4.62V1/Mage/src/main/java/mage/players/PlayableObjectStats.java),
+[HumanPlayer](https://github.com/magefree/mage/blob/xmage_1.4.62V1/Mage.Server.Plugins/Mage.Player.Human/src/mage/player/human/HumanPlayer.java),
+and [PlayerResponse](https://github.com/magefree/mage/blob/xmage_1.4.62V1/Mage.Server.Plugins/Mage.Player.Human/src/mage/player/human/PlayerResponse.java).
+Review these internal anchors on every engine upgrade.

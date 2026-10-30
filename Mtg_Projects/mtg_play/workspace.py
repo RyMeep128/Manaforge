@@ -14,6 +14,7 @@ from .opponents import OpponentRandomizer
 from .presentation import SessionController, local_adapter
 from .setup import prepare_catalog, saved_decks
 from .table import GameTable
+from .priority_ui import PriorityControls
 from mtg_editor.card_views import Thumbnails
 
 
@@ -324,6 +325,11 @@ class PlayWorkspace(W.QWidget):
         self.game_heading.setTextFormat(C.Qt.TextFormat.PlainText)
         game_layout.addWidget(self.game_heading)
         self.table = GameTable(service)
+        self.priority = PriorityControls(
+            self.session, self.lobby.local_seat_id, self.table
+        )
+        self.table.priority_controls = self.priority
+        self.table.board.layout().insertWidget(1, self.priority)
         self.table.command.connect(self._command)
         self.table.returnRequested.connect(self.request_close_game)
         game_layout.addWidget(self.table, 1)
@@ -1008,13 +1014,14 @@ class PlayWorkspace(W.QWidget):
         self.status.hide()
         self.game_heading.setText(view.result or "You versus Opponent")
         self.table.present(view)
+        self.priority.observe(view)
         self.concede_button.setEnabled(
             not view.result and not self.session.concession_pending
         )
 
     @C.pyqtSlot(object, str, object)
     def _command(self, view, method, args):
-        self.session.submit(view, method, *args)
+        self.priority.manual(view, method, args)
 
     def concede(self):
         view = self._view

@@ -582,6 +582,7 @@ def main():
     parser.add_argument(
         "--scenario",
         choices=(
+            "priority",
             "ai-freeform",
             "ai-commander",
             "ai-blockers",
@@ -625,7 +626,10 @@ def main():
         options["bundle"] = args.xmage_root
     if args.jdk_path is not None:
         options["jdk"] = args.jdk_path
+    from . import priority_acceptance
+
     scenarios = {
+        "priority": priority_acceptance.run,
         "ai-freeform": ai_acceptance.freeform,
         "ai-commander": ai_acceptance.commander,
         "ai-blockers": ai_acceptance.blockers,

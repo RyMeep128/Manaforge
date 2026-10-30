@@ -137,6 +137,14 @@ class UIAdapter:
                     seat_ids=tuple(seat.seat_id for seat in setup.seats)
                 ),
             )
+            # This explicit UI fixture pilot owns every click. Priority automation
+            # has a separate real-engine scenario; never race these fixture clicks.
+            self.workspace.priority.policy.seat(
+                setup.seats[0].seat_id
+            ).full_control = True
+            self.workspace.priority.full.blockSignals(True)
+            self.workspace.priority.full.setChecked(True)
+            self.workspace.priority.full.blockSignals(False)
             return self.workspace
 
         controller = ModuleController(

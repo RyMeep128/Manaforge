@@ -5,7 +5,7 @@ from dataclasses import asdict, dataclass
 from typing import Protocol, Literal
 
 GAME_PROTOCOL_VERSION = 1
-ADAPTER_VERSION = "0.2.1-alpha.1"
+ADAPTER_VERSION = "0.2.2-alpha.1"
 
 
 class Serializable:
@@ -122,6 +122,7 @@ class LegalAction(Serializable):
     kind: str
     object_id: str | None
     label: str
+    priority_class: str = "unknown"
 
 
 @dataclass(frozen=True)
@@ -153,6 +154,7 @@ class ChoiceRequest(Serializable):
     cancellable: bool = False
     amounts: tuple[AmountConstraint, ...] = ()
     can_finish: bool = False
+    is_priority: bool = False
 
 
 @dataclass(frozen=True)
@@ -205,6 +207,7 @@ class GameSnapshot(Serializable):
     commanders: tuple[CommanderState, ...] | None = None
     observations: tuple[CardObservation, ...] = ()
     unsupported_fields: tuple[str, ...] = ()
+    actions_complete: bool = False
 
 
 @dataclass(frozen=True)

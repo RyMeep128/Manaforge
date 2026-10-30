@@ -187,7 +187,15 @@ public final class ManaforgeGameMetadata {
                     }
                 }
                 if (game.getState() != state || state.getApplyEffectsCounter() != cycle) return status("retry");
+                // Confirm the engine is waiting in HumanPlayer.priority(), not a
+                // generic GAME_SELECT choice. Never export the diagnostic string.
+                Object activeAction = response.getClass().getMethod("getActiveAction").invoke(response);
+                boolean priorityOpen = player.getId().equals(playerId)
+                        && playerId.equals(game.getPriorityPlayerId())
+                        && activeAction instanceof String
+                        && ((String) activeAction).startsWith("priority - HumanPlayer.java:");
                 JsonObject result = status("ok"); result.addProperty("cycle", cycle);
+                result.addProperty("priority_open", priorityOpen);
                 result.add("objects", objects); result.add("players", players); result.add("commanders", commanders);
                 return result;
             }

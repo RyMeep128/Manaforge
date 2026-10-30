@@ -1121,6 +1121,11 @@ class GameTable(W.QWidget):
                         self.height()
                         - 200
                         - (
+                            self.priority_controls.sizeHint().height()
+                            if hasattr(self, "priority_controls")
+                            else 0
+                        )
+                        - (
                             self.result_panel.sizeHint().height()
                             if not self.result_panel.isHidden()
                             else 0

@@ -752,6 +752,7 @@ class XmageGameSession:
             return False
         for card in cards:
             card.update(metadata["objects"][card["id"]])
+        view["_priority_open"] = metadata.get("priority_open", False)
         players = {row["id"]: row for row in metadata["players"]}
         for row in view["players"]:
             row["eliminated"] = players[row["id"]]["lost"] or players[row["id"]]["left"]
@@ -1124,6 +1125,7 @@ class XmageGameSession:
                             obj.characteristics.name
                             if obj.characteristics and obj.characteristics.name
                             else "Select object",
+                            view.get("priority_classes", {}).get(raw, "unknown"),
                         )
                     )
                 action = token + "-pass"
@@ -1192,6 +1194,13 @@ class XmageGameSession:
                     for row in request.get("amounts", ())
                 ),
                 request.get("can_finish", False),
+                is_priority=bool(
+                    request.get("is_priority")
+                    and method == "GAME_SELECT"
+                    and ("cycle" not in view or view.get("_priority_open") is True)
+                    and "attackers" not in request
+                    and "blockers" not in request
+                ),
             )
         combat = tuple(
             CombatAssignment(
@@ -1220,6 +1229,13 @@ class XmageGameSession:
             result=self._results.get(player_id),
             commanders=tuple(commanders) if "commanders" in view else None,
             observations=view.get("_observations", ()),
+            actions_complete=bool(
+                decision
+                and decision.is_priority
+                and view.get("playable_information_complete")
+                and not view.get("_metadata_unavailable")
+                and all(raw in reverse for raw in view.get("playable", ()))
+            ),
             unsupported_fields=(
                 (
                     "object_incarnations",

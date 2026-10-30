@@ -1276,3 +1276,28 @@ The existing real-engine identity scenario now rejects Cloudshift on the stack
 without its selected printing. The Java change and that assertion require CI;
 no local Java engine or build was run. A synthetic layout using cached artwork
 was visually inspected; this is presentation evidence, not gameplay proof.
+
+
+Automatic priority story (0.5.29-alpha.1): added isolated seat-local policy,
+cancelable UI scheduling, Automatic/Full Control/temporary hold/turn-scoped
+passing, configurable shortcuts, phase stops and persisted defaults. The user's
+additional boundary overrides automation: explicit End Turn in empty postcombat
+main, then explicit final pass in the empty end step. Engine-confirmed priority
+context and action classes are additive conservative public metadata; unknown
+state and special-action gaps hold rather than guessing. No rules logic moved
+into the UI. See play-priority-control.md and mtg_play/ADAPTER.md for semantics,
+pinned metadata anchors, limitations and the next-build manual review.
+
+Added policy/UI/adapter tests and a pinned-engine priority CI scenario. Existing
+UI fixture pilots explicitly hold Full Control. Per the new story, no routine
+local tests, Java builds or local engine acceptance ran. Local lint, formatting
+and diff checks pass; CI and manual UX acceptance remain pending. The earlier
+0.5.28 build did not contain automatic priority, explaining the user's report
+that it still required manual passes.
+
+Priority-path audit also confirmed that pinned PlayerQueryEvent normalizes null
+options into an empty map. The bridge now detects combat-option key presence
+instead of null options, and emits combat fields only for actual declarations.
+A synchronized engine response-method confirmation distinguishes generic SELECT
+prompts from priority. The new engine CI scenario requires actual automatic passes
+and engine advancement, preventing a permanently manual implementation from passing.

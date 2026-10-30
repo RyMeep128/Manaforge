@@ -964,3 +964,101 @@ def test_stack_metadata_keeps_physical_printing_with_distinct_spell_id(session):
     assert obj.card_identity == identity
     assert PlayArtwork.key(obj) == ("selected-print", None, 600, 0)
     assert PlayArtwork.key(obj, detailed=True) == ("selected-print", None, 1200, 0)
+
+
+@pytest.mark.parametrize("attackers", [None, []])
+def test_explicit_priority_classification_is_distinct_from_empty_combat_selection(
+    session, attackers
+):
+    from mtg_play.priority import PriorityController
+
+    update = state(1)
+    update.update(
+        step="UPKEEP",
+        priority_classes={"engine-card": "basic_mana"},
+        playable_information_complete=True,
+    )
+    inject(session, update)
+    request = dict(
+        event="decision",
+        decision_id=2,
+        kind="GAME_SELECT",
+        message="Never parse me",
+        is_priority=True,
+    )
+    if attackers is not None:
+        request["attackers"] = attackers
+    inject(session, request)
+    view = session.snapshot("one")
+    assert view.decision.is_priority is (attackers is None)
+    assert (
+        next(action for action in view.actions if action.object_id).priority_class
+        == "basic_mana"
+    )
+    assert bool(PriorityController().observe(view)) is (attackers is None)
+
+
+def test_missing_playable_object_prevents_priority_automation(session):
+    from mtg_play.priority import PriorityController
+
+    update = state(1)
+    update.update(
+        step="UPKEEP",
+        playable=["unrepresented-object"],
+        playable_information_complete=True,
+    )
+    inject(session, update)
+    inject(
+        session,
+        dict(
+            event="decision",
+            decision_id=2,
+            kind="GAME_SELECT",
+            message="",
+            is_priority=True,
+        ),
+    )
+    view = session.snapshot("one")
+    assert not view.actions_complete
+    assert PriorityController().observe(view) is None
+
+
+@pytest.mark.parametrize("priority_open", [False, True])
+def test_real_frames_require_engine_priority_context_not_just_select_callback(
+    session, priority_open
+):
+    from mtg_play.priority import PriorityController
+
+    update = state(1)
+    update.update(
+        cycle=8,
+        step="UPKEEP",
+        priority_classes={"engine-card": "basic_mana"},
+        playable_information_complete=True,
+    )
+    session._owner._metadata = lambda view: dict(
+        status="ok",
+        cycle=8,
+        priority_open=priority_open,
+        objects={"engine-card": {"incarnation": 1}},
+        commanders=[],
+        players=[
+            dict(id="engine-player-one", lost=False, left=False),
+            dict(id="engine-player-two", lost=False, left=False),
+        ],
+    )
+    inject(session, update)
+    inject(
+        session,
+        dict(
+            event="decision",
+            decision_id=2,
+            kind="GAME_SELECT",
+            message="",
+            is_priority=True,
+        ),
+    )
+    view = session.snapshot("one")
+    assert view.decision.is_priority is priority_open
+    assert view.actions_complete is priority_open
+    assert bool(PriorityController().observe(view)) is priority_open

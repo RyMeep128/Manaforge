@@ -1,6 +1,7 @@
-"""Reusable engine decision controls; every submission is an explicit click."""
+"""Reusable engine decision controls for explicit player choices."""
 
 from PyQt6 import QtCore as C, QtWidgets as W
+from .priority import opportunity, turn_boundary
 
 
 FAMILIES = {
@@ -40,12 +41,18 @@ def opening_hand_request(view):
 
 def pass_label(view):
     kinds = {action.kind for action in view.actions}
-    if view.step == "DECLARE_ATTACKERS" or "declare_attacker" in kinds:
+    if not opportunity(view) and (
+        view.step == "DECLARE_ATTACKERS" or "declare_attacker" in kinds
+    ):
         return "Finish attackers"
-    if view.step == "DECLARE_BLOCKERS" or "declare_blocker" in kinds:
+    if not opportunity(view) and (
+        view.step == "DECLARE_BLOCKERS" or "declare_blocker" in kinds
+    ):
         return "Finish blockers"
     if view.decision is not None and view.decision.family == "mana":
         return "Finish payment"
+    if opportunity(view) and turn_boundary(view) and view.step == "POSTCOMBAT_MAIN":
+        return "End Turn"
     return "Pass priority"
 
 
