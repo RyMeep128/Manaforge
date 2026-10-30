@@ -372,3 +372,31 @@ fixture includes tapped cards and visible printed artist/collector credits. This
 is fixture validation, not final owner approval or live gameplay. No full
 application suite ran. CI is checked after this third commit, with unfinished
 runs deferred rather than awaited.
+
+
+## Upper rim review adjustment — October 30, 2026
+
+Owner screenshots showed the top border intruding on the printed surround. The
+compact top rim is now lighter than the side/bottom rim, and the selection stroke
+is thinner. Corner clipping uses a smaller radius in both modes, retaining more
+of the upper printing corners. Side/bottom coverage and the conditional P/T and
+footer masks remain as before. This is a visual adjustment requiring fresh owner
+review, not new renderer acceptance.
+
+
+The owner supplied a close-up of the Forest footer during this review. Comparing
+it with the actual rendered printing showed that the 90-percent interior boundary
+left a visible strip of original textbox below the replacement. The standard
+inset now ends at 92.3 percent, above the printed credits, and is narrower to keep
+the original vertical outline visible. This is a measured standard-profile
+adjustment based on that printing, not a claim of exact fit for every card frame.
+
+
+Validation: Windows build and the 20-object packaged artwork smoke passed. A
+local, ignored fixture copy places Forest first for a direct comparison with the
+owner's two images; original fixture/source images are unchanged. The corrected
+Forest capture was visually inspected for the lower strip, side outline and
+visible credit lines. An earlier packaged gesture run also exercised the lighter
+top rim. No full application suite ran; this visual-only increment adds no unit
+suite run. Final visual approval remains with the owner. CI follows the owner's
+third-commit cadence; this is the first commit after the last checkpoint.

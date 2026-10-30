@@ -131,14 +131,16 @@ namespace Manaforge.Play
             bool hasStats = !string.IsNullOrEmpty(stats.text);
             style.width = width; style.height = width * (full ? 1.4f : .78f);
             float scale = width / 300f;
-            style.borderTopLeftRadius=style.borderTopRightRadius=style.borderBottomLeftRadius=style.borderBottomRightRadius=width*.045f;
+            style.borderTopLeftRadius=style.borderTopRightRadius=style.borderBottomLeftRadius=style.borderBottomRightRadius=width*.03f;
             Box(edge,0,0,100,100);
             float rim=full?0:Mathf.Max(1.5f,2*scale);
             edge.style.borderLeftWidth=edge.style.borderRightWidth=edge.style.borderBottomWidth=rim;
-            edge.style.borderTopWidth=selected?Mathf.Max(3,rim):rim;
+            // The upper printing surround is narrow; do not cover it with the heavier lower rim.
+            float topRim=full?0:Mathf.Max(.75f,.9f*scale);
+            edge.style.borderTopWidth=selected?Mathf.Max(1.5f,topRim):topRim;
             edge.style.borderLeftColor=edge.style.borderRightColor=edge.style.borderBottomColor=new Color(.025f,.025f,.025f);
             edge.style.borderTopColor=selected?Color.cyan:new Color(.025f,.025f,.025f);
-            edge.style.borderTopLeftRadius=edge.style.borderTopRightRadius=edge.style.borderBottomLeftRadius=edge.style.borderBottomRightRadius=width*.045f;
+            edge.style.borderTopLeftRadius=edge.style.borderTopRightRadius=edge.style.borderBottomLeftRadius=edge.style.borderBottomRightRadius=width*.03f;
             edge.style.display=concealed?DisplayStyle.None:DisplayStyle.Flex;
             foreach(var label in new[]{title,type,rules,stats,status,missing}) {
                 label.style.fontSize=(label==rules?12.8f:label==stats?23:label==status?10:18)*scale;
@@ -157,7 +159,9 @@ namespace Manaforge.Play
             frame.uv=full?new Rect(0,0,1,1):new Rect(0,.47f,1,.53f);
             frame.style.display=concealed || frame.image==null?DisplayStyle.None:DisplayStyle.Flex;
             // Preserve the printing footer: artist/collector credits start below the rules box.
-            Box(interior,7,11,86,79);
+            // Standard-frame inner textbox ends before the collector footer at about 92.3%.
+            // Stay inside the printed vertical outline rather than painting over its right edge.
+            Box(interior,7.6f,11,84.8f,81.3f);
             interior.style.display=!concealed && full && !authenticOnly?DisplayStyle.Flex:DisplayStyle.None;
             // The compact footer hides the underlying printing below the art window, including set symbols.
             Box(printedStatsMask,full?74:0,full?89:90,full?24:100,10);
