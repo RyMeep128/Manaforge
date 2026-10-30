@@ -52,8 +52,8 @@ def test_crop_preserves_upper_card_and_original_and_reuses_shared_cache(tmp_path
     service = LocalOnlyService({("printing", "default"): path})
     key = ("printing", None, 300, 0, RENDER_VERSION)
     cropped = read_local_image(service, key, cache_root=tmp_path / "cache")
-    assert (cropped.width(), cropped.height()) == (100, 81)
-    assert cropped.pixelColor(50, 80) == G.QColor("green")
+    assert (cropped.width(), cropped.height()) == (100, 76)
+    assert cropped.pixelColor(50, 75) == G.QColor("green")
     files = list((tmp_path / "cache").rglob("*.png"))
     assert len(files) == 1
     modified = files[0].stat().st_mtime_ns
@@ -110,7 +110,7 @@ def test_play_reader_generates_crop_off_gui_and_inspection_keeps_full_key(
     assert len(artwork.key(replace(obj, zone="hand"))) == 4
     artwork.get(obj)
     drain(app, lambda: artwork.key(obj) in artwork.cache and artwork.worker is None)
-    assert artwork.get(obj).height() == 81
+    assert artwork.get(obj).height() == 76
     assert service.calls and all(
         thread != get_ident() for _, _, thread in service.calls
     )
@@ -123,3 +123,20 @@ def test_play_reader_generates_crop_off_gui_and_inspection_keeps_full_key(
     )
     assert artwork.get(obj, detailed=True).height() == 140
     assert artwork.shutdown()
+
+
+def test_generic_crop_excludes_top_of_lower_rules_area(tmp_path):
+    path = source(tmp_path / "rules.png")
+    image = G.QImage(str(path))
+    painter = G.QPainter(image)
+    painter.fillRect(0, 78, 100, 62, G.QColor("red"))
+    painter.end()
+    assert image.save(str(path), "PNG")
+    service = LocalOnlyService({("printing", "default"): path}, layout="normal")
+    crop = read_local_image(
+        service,
+        ("printing", None, 300, 0, RENDER_VERSION),
+        cache_root=tmp_path / "cache",
+    )
+    assert crop.height() == 76
+    assert crop.pixelColor(50, crop.height() - 1) == G.QColor("green")

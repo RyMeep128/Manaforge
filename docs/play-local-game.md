@@ -72,6 +72,34 @@ Manual nightly review remains required with ordinary cached decks and real image
 6. Review optional diagnostics before sharing. Report missing images, clipping,
    confusing prompts and unsupported cards without marking the epic accepted.
 
+### Offline real-printing crop review
+
+A local review command renders a full cached printing beside its battlefield crop,
+including alternate or flip faces when supplied. It starts no engine, performs no
+download, leaves source files unchanged, and writes a PNG plus a small digest report
+into a **new** output directory. This is image-review evidence, not gameplay proof.
+
+From `Mtg_Projects`, using the Python environment with the application dependencies:
+
+```powershell
+$env:QT_QPA_PLATFORM = 'offscreen'
+$env:PYTHONPATH = "$PWD;$PWD\mtg_core"
+py -3.13 -m mtg_play.artwork_review --printing-id '<printing UUID>' --front 'C:\cache\front.png' --output 'C:\review\new-printing-review'
+```
+
+Use the exact printing UUID and an existing full image from your local cache.
+For separate double-faced images add `--layout transform --back 'C:\cache\back.png'`
+(or `--layout modal_dfc`). For a classic shared-image flip card use `--layout flip`
+without a separate back. Missing/corrupt source faces fail rather than downloading
+or silently substituting a different printing. Existing output directories are
+rejected. Review `artwork-review.png` and `review.json`; do not treat the report as
+an engine validation or manual game-completion sign-off.
+
+The generic crop now uses rendering version `battlefield-2` and the upper 54 percent
+of the source image. Real-printing inspection found that the earlier 58 percent crop
+could retain a thin rules-text strip. The new version invalidates old derivatives
+for every printing; unusual frames may still crop imperfectly.
+
 Historical implementation notes below describe earlier increments and their state
 at the time. They are not a current claim that every outstanding criterion passed.
 

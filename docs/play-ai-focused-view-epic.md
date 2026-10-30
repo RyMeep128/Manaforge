@@ -1176,3 +1176,31 @@ f1c2bd6 run was superseded/cancelled, not an identified new failure. This increm
 is committed/pushed as requested, starting a fresh CI run. The epic remains open
 until real-engine CI, real printing review and the user's nightly UX sign-off are
 complete; green focused tests alone do not satisfy that gate.
+
+
+Story 14 real-image review increment (0.5.25-alpha.1): a standalone offline artwork
+review command renders full/cropped front and alternate/flip faces from explicitly
+supplied cached printing files. It reuses the frozen local image/crop pipeline,
+records source digests and unchanged-source verification, refuses existing output
+directories, and labels its output as artwork review rather than gameplay proof.
+No engine, remote API, saved-deck write or original-image replacement is involved.
+Tests cover normal/transform/flip sources, network denial, output isolation,
+source preservation and invalid/missing faces.
+
+The user's existing cached Aminatou printing was located through read-only catalog
+queries and reviewed locally. The 58 percent crop retained a thin top strip of
+rules text. A generic 54 percent crop now removes that strip; render version
+battlefield-2 invalidates prior derivatives for all printings. Regenerated review
+confirmed the name bar/artwork/border remain and the rules text strip is absent;
+the cached original's SHA-256 is unchanged. This is one real-printing review, not
+proof that every unusual frame or transformed image has been manually reviewed.
+The local review PNG/report remain outside the repository; the documentation
+explains how to reproduce a review from available cached images.
+
+Python 3.13 verification passes: 295 tests across Play plus Editor readiness,
+including 46 focused crop/review/asset/table tests during development. Ruff lint,
+formatting and diff checks pass. No local XMage acceptance or build ran. CI was
+checked first: no failed steps were reported; the prior run was superseded and the
+latest was pending at that check. This increment is committed and pushed at the
+user's explicit request. Pinned-engine CI completion, broader real-image review
+and the user's nightly manual UX sign-off remain open acceptance gates.

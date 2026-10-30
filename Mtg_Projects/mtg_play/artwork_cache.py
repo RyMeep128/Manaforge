@@ -8,8 +8,8 @@ from PyQt6 import QtCore as C, QtGui as G
 from mtg_core.paths import core_data_root
 from mtg_ui.loading import LoadingThread
 
-RENDER_VERSION = "battlefield-1"
-CROP_HEIGHT = 0.58
+RENDER_VERSION = "battlefield-2"
+CROP_HEIGHT = 0.54
 
 
 def local_source(service, printing_id, face):
