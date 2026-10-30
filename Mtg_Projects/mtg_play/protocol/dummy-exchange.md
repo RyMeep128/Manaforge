@@ -193,3 +193,13 @@ Java verifies FRAME_WRITE_TIMEOUT and exits cleanly; C# checks exit and closes i
 owned socket. No result/command acceptance is inferred from that failure. Private
 readiness pipes and deliberate two-byte malformed probes remain separate test
 paths. All eight scenarios pass within 131 focused local EditMode checks.
+
+
+### Owned client coordinator follow-up
+
+Two additional authenticated scenarios now exercise
+[ClientSessionChannel](client-session-channel.md): perform-token admission through
+ACK/result and matched shutdown with final packet drain, plus a terminal error
+that closes the socket, revokes queued data and retains command uncertainty.
+The existing eight lower-level cases remain. All ten process scenarios pass
+within 151 focused local EditMode checks; no actual XMage action is introduced.

@@ -195,3 +195,13 @@ cleanup. The eighth authenticated process case proves timeout against a
 non-reading client; 131 focused EditMode checks and Java protocol preflight pass.
 This still does not connect LaunchOwner or implement product stop/admission
 coordination, durable reconciliation or containment.
+
+
+### First client session owner follow-up
+
+The [C# client channel](../Mtg_Projects/mtg_play/protocol/client-session-channel.md)
+now couples perform admission, pending receipts, bounded receive data and socket
+closure under one owner. Cancellation releases an active read, and matching
+shutdown preserves final packets to drain. Two new authenticated fixture scenarios
+pass within 151 focused EditMode checks. This starts no processes and does not yet
+connect LaunchOwner, join product workers or prove private renderer handoff.

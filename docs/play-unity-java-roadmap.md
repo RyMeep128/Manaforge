@@ -489,3 +489,14 @@ safety and scheduler cleanup. An eighth authenticated process scenario times out
 non-reading client; all 131 focused EditMode checks pass locally. Product session
 coordination, complete conversation budgets, licensed CI and G0/G1 acceptance
 remain open. This is transport infrastructure, not the bulk P2 engine port.
+
+
+### G1 first client session owner — October 30, 2026
+
+The [C# client session channel](../Mtg_Projects/mtg_play/protocol/client-session-channel.md)
+now coordinates perform-token admission, data/ACK/error routing, uncertainty,
+bounded inbox cleanup and socket closure. Matching shutdown permits final packet
+drain. Two authenticated process scenarios and 18 new focused checks pass within
+151 local EditMode checks. Choice dispatch, complete session budgets, Java owner,
+renderer projection, product containment and licensed CI remain open; G1 is not
+frozen and the bulk P2 engine port has not started.

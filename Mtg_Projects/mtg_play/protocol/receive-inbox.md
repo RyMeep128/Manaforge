@@ -103,3 +103,13 @@ read task. It closes on partial-frame failure; ReceiveInbox still does not own
 that socket. A product coordinator must couple reader failure, inbox cancellation
 and command uncertainty. Explicit inbox cancellation alone does not interrupt an
 unrelated socket read.
+
+
+### Client owner follow-up
+
+The [first client session channel](client-session-channel.md) now owns this inbox,
+command admission/tracking and the connected socket together. It stops admission,
+marks pending uncertainty and revokes queued data on failure; only matched
+shutdown preserves a final packet drain. This does not own caller projection
+workers, scene resources or runtime processes, and it does not complete product
+handoff/lifecycle acceptance.

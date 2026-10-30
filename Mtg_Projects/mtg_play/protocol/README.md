@@ -388,3 +388,14 @@ Fourteen Java write cases plus watchdog cleanup pass, and an eighth authenticate
 process scenario verifies a non-reading client cannot hold Java indefinitely.
 Local focused EditMode count is 131. Product admission/stop coordination, complete
 session budgets and licensed CI remain open; no G1 completion is claimed.
+
+
+## First owned client session slice
+
+The [C# client session channel](client-session-channel.md) now owns command
+admission, receive inbox/history and socket lifetime together. It binds perform
+submissions to current engine-provided tokens, routes data/ACK/error/shutdown,
+stops all owned components on failure and preserves uncertain receipts. Matched
+shutdown permits final packet draining. Two new authenticated process scenarios
+and 18 focused checks bring local EditMode validation to 151. Choice dispatch,
+product lifecycle, renderer projection and licensed CI remain open; G1 is not frozen.

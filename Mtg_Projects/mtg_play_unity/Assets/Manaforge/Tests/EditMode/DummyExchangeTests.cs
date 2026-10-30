@@ -89,7 +89,36 @@ namespace Manaforge.Play.Tests
             Assert.That((string)body["outcome"],Is.EqualTo(outcome));Assert.That((string)body["code"],Is.EqualTo(code));
             tracker?.Accept(reply.ToString(Formatting.None));
         }
-        private static void Exchange(Peer peer,bool wrongKey,bool ownerEof,bool conflictingDuplicate,bool sessionError,bool partialFrame,bool clientPartialFrame,bool blockedClient)
+        private static void Coordinated(Peer peer,bool sessionError)
+        {
+            using var channel=new ClientSessionChannel(peer.Reader,"fixture-session","one",true);
+            Assert.That(channel.ReceiveNext(5000).Type,Is.EqualTo("snapshot"));
+            Assert.That(channel.ReceiveNext(5000).Applied,Is.False);
+            Assert.That(channel.ReceiveNext(5000).Type,Is.EqualTo("event"));
+            Assert.That(channel.TryTake(out var first),Is.True);
+            JObject snapshot;using(first)snapshot=(JObject)ReceiveMessages.Parse(first.ReadJson(),"fixture-session","one",0,true)["body"]["snapshot"];
+            Assert.That(channel.TryTake(out var eventPacket),Is.True);eventPacket.Dispose();
+            long revision=(long)snapshot["revision"];string decision=(string)snapshot["decision"]["decision_id"],action=(string)snapshot["actions"][0]["action_id"];
+            Assert.That(channel.CanSubmit,Is.True);
+            Assert.That(Assert.Throws<WireEnvelope.EnvelopeException>(()=>channel.Submit(Command("stale",revision-1,decision,action).ToString())).Code,Is.EqualTo("STALE_REVISION"));
+            channel.Submit(Command("current",revision,decision,action).ToString());
+            Assert.That(channel.ReceiveNext(5000).Receipt.State,Is.EqualTo(CommandState.Submitted));
+            if(sessionError) {
+                Assert.That(channel.ReceiveNext(5000).Type,Is.EqualTo("error"));
+                Assert.That(channel.State,Is.EqualTo(ClientChannelState.Stopped));Assert.That(channel.Completion.Result.Code,Is.EqualTo("SESSION_FAILED"));
+                Assert.That(channel.Pending.State,Is.EqualTo(CommandState.Uncertain));Assert.That(channel.QueuedCount,Is.Zero);
+            } else {
+                Assert.That(channel.ReceiveNext(5000).Type,Is.EqualTo("result"));Assert.That(channel.CanSubmit,Is.False);
+                Assert.That(channel.Pending.State,Is.EqualTo(CommandState.Submitted),"A result does not confirm a command");
+                channel.RequestShutdown("client_close");Assert.That(channel.ReceiveNext(5000).Type,Is.EqualTo("shutdown"));
+                Assert.That(channel.State,Is.EqualTo(ClientChannelState.Completed));Assert.That(channel.Completion.Result.Graceful,Is.True);
+                Assert.That(channel.TryTake(out var resultPacket),Is.True);using(resultPacket)Assert.That((string)WireEnvelope.Parse(resultPacket.ReadJson())["message_type"],Is.EqualTo("result"));
+                Assert.That(channel.Pending.State,Is.EqualTo(CommandState.Uncertain));
+            }
+            Assert.That(channel.CanSubmit,Is.False);Assert.That(peer.Reader.IsClosed,Is.True);
+            Assert.That(peer.Process.WaitForExit(5000),Is.True);Assert.That(peer.Process.ExitCode,Is.Zero);
+        }
+        private static void Exchange(Peer peer,bool wrongKey,bool ownerEof,bool conflictingDuplicate,bool sessionError,bool partialFrame,bool clientPartialFrame,bool blockedClient,bool coordinated)
         {
             byte[] key=RandomBytes();
             try
@@ -139,6 +168,7 @@ namespace Manaforge.Play.Tests
                         peer.Process.StandardInput.Close();
                         Assert.That(peer.Process.WaitForExit(5000),Is.True);Assert.That(peer.Process.ExitCode,Is.Zero);return;
                     }
+                    if(coordinated){Coordinated(peer,sessionError);return;}
                     using var inbox=new ReceiveInbox("fixture-session","one",true);
                     var incoming=Read(peer.Reader,inbox:inbox);Assert.That((string)incoming["message_type"],Is.EqualTo("snapshot"));
                     var body=(JObject)incoming["body"];Assert.That(body.Count,Is.EqualTo(2));Assert.That((bool)body["fixture_only"],Is.True);
@@ -198,12 +228,12 @@ namespace Manaforge.Play.Tests
             }
             finally { Array.Clear(key,0,key.Length); }
         }
-        private static IEnumerator Run(bool wrongKey,bool ownerEof,bool conflictingDuplicate=false,bool sessionError=false,bool partialFrame=false,bool clientPartialFrame=false,bool blockedClient=false)
+        private static IEnumerator Run(bool wrongKey,bool ownerEof,bool conflictingDuplicate=false,bool sessionError=false,bool partialFrame=false,bool clientPartialFrame=false,bool blockedClient=false,bool coordinated=false)
         {
             string directory=Path.GetFullPath(Path.Combine(Application.dataPath,"../Artifacts/JavaDummy"));
             using(var peer=new Peer(directory,sessionError,partialFrame,clientPartialFrame,blockedClient))
             {
-                var task=Task.Run(()=>Exchange(peer,wrongKey,ownerEof,conflictingDuplicate,sessionError,partialFrame,clientPartialFrame,blockedClient));var timer=Stopwatch.StartNew();
+                var task=Task.Run(()=>Exchange(peer,wrongKey,ownerEof,conflictingDuplicate,sessionError,partialFrame,clientPartialFrame,blockedClient,coordinated));var timer=Stopwatch.StartNew();
                 try
                 {
                     while(!task.IsCompleted && timer.Elapsed.TotalSeconds<25)yield return null;
@@ -220,6 +250,8 @@ namespace Manaforge.Play.Tests
         [UnityTest] public IEnumerator JavaPeerExchangesAuthenticatedFixtureAndRejectsStaleAndPendingActions()=>Run(false,false);
         [UnityTest] public IEnumerator WrongViewerKeyReceivesNoSessionData()=>Run(true,false);
         [UnityTest] public IEnumerator OwnerPipeEofStopsTheOwnedListener()=>Run(false,true);
+        [UnityTest] public IEnumerator CoordinatedSessionOwnsAdmissionShutdownAndFinalPacketDrain()=>Run(false,false,coordinated:true);
+        [UnityTest] public IEnumerator CoordinatedSessionErrorRevokesQueuedDataAndPreservesUncertainty()=>Run(false,false,sessionError:true,coordinated:true);
         [UnityTest] public IEnumerator JavaWriteDeadlineStopsAnAuthenticatedNonReadingClient()=>Run(false,false,false,false,false,false,true);
         [UnityTest] public IEnumerator JavaRejectsAnAuthenticatedClientPartialFrame()=>Run(false,false,false,false,false,true);
         [UnityTest] public IEnumerator PartialJavaFrameTimesOutAndOwnedPeerStops()=>Run(false,false,false,false,true);
