@@ -5,6 +5,7 @@ from mtg_core.paths import data_root
 from mtg_ui.jobs import JobQueue
 from dataclasses import replace
 from .lobby import DeckSelection, offline_lobby
+from .navigation import ModeSelection, PlayLanding, PlayPages
 from .presentation import SessionController, local_adapter
 from .setup import saved_decks
 from .table import GameTable
@@ -32,6 +33,8 @@ class PlayWorkspace(W.QWidget):
         self.lobby = lobby or offline_lobby()
         self.lobby.offline_setup()
         self._approved_close = False
+        self._format_confirmed = False
+        self._confirmed_format = None
         self._view = None
         self._seats = ()
         self._seat_id = self.lobby.local_seat_id
@@ -58,26 +61,73 @@ class PlayWorkspace(W.QWidget):
         title.setProperty("role", "title")
         heading.addWidget(title)
         heading.addStretch()
-        back = W.QPushButton("Home")
-        back.clicked.connect(home)
-        heading.addWidget(back)
+        self.home_button = W.QPushButton("Home")
+        self.home_button.clicked.connect(home)
+        heading.addWidget(self.home_button)
         layout.addLayout(heading)
         intro = W.QLabel("You and your decks against an offline AI opponent.")
         intro.setProperty("role", "subtitle")
         layout.addWidget(intro)
-        self.pages = W.QStackedWidget()
+        self.pages = PlayPages()
         layout.addWidget(self.pages, 1)
-        self.setup_page = W.QWidget()
-        setup_layout = W.QVBoxLayout(self.setup_page)
-        setup_layout.setContentsMargins(0, 16, 0, 0)
+        self.landing_page = PlayLanding()
+        self.mode_page = ModeSelection()
+        self.pages.addWidget(self.landing_page)
+        self.pages.addWidget(self.mode_page)
+        self._format_origin = self.landing_page
+        self.landing_page.playRequested.connect(lambda: self._show_page(self.mode_page))
+        self.landing_page.offlineRequested.connect(self._open_offline)
+        self.mode_page.offlineRequested.connect(self._open_offline)
+        self.mode_page.backRequested.connect(lambda: self._show_page(self.landing_page))
+        self.format_page = W.QWidget()
+        format_layout = W.QVBoxLayout(self.format_page)
+        format_layout.setContentsMargins(0, 24, 0, 24)
+        format_layout.setSpacing(20)
+        format_title = W.QLabel("Choose your format")
+        format_title.setProperty("role", "title")
+        format_layout.addWidget(format_title)
+        format_note = W.QLabel(
+            "Choose a format before selecting your deck and the AI opponent's deck."
+        )
+        format_note.setWordWrap(True)
+        format_layout.addWidget(format_note)
         format_row = W.QFormLayout()
         self.format = W.QComboBox()
+        self.format.addItem("Choose a format", None)
         self.format.addItem("Freeform", "freeform")
         self.format.addItem("Commander", "commander")
-        self.format.setCurrentIndex(self.format.findData(self.lobby.format))
-        self.format.currentIndexChanged.connect(self._selection_changed)
+        self.format.setAccessibleName("Offline match format")
         format_row.addRow("Format", self.format)
-        setup_layout.addLayout(format_row)
+        format_layout.addLayout(format_row)
+        format_layout.addStretch()
+        format_actions = W.QHBoxLayout()
+        self.format_back = W.QPushButton("Back")
+        self.format_back.clicked.connect(self._back_from_format)
+        format_actions.addWidget(self.format_back)
+        format_actions.addStretch()
+        self.format_continue = W.QPushButton("Continue to Lobby")
+        self.format_continue.setProperty("buttonRole", "primary")
+        self.format_continue.setEnabled(False)
+        self.format_continue.clicked.connect(self._enter_lobby)
+        format_actions.addWidget(self.format_continue)
+        format_layout.addLayout(format_actions)
+        self.pages.addWidget(self.format_page)
+        self.setup_page = W.QScrollArea()
+        self.setup_page.setFrameShape(W.QFrame.Shape.NoFrame)
+        self.setup_page.setWidgetResizable(True)
+        setup_content = W.QWidget()
+        self.setup_page.setWidget(setup_content)
+        setup_layout = W.QVBoxLayout(setup_content)
+        setup_layout.setContentsMargins(0, 16, 0, 0)
+        lobby_heading = W.QHBoxLayout()
+        self.setup_format = W.QLabel("Offline match lobby")
+        self.setup_format.setProperty("role", "title")
+        lobby_heading.addWidget(self.setup_format)
+        lobby_heading.addStretch()
+        self.change_format = W.QPushButton("Change format")
+        self.change_format.clicked.connect(self._open_offline)
+        lobby_heading.addWidget(self.change_format)
+        setup_layout.addLayout(lobby_heading)
         seats = W.QHBoxLayout()
         self.selectors, self.details, self.covers = [], [], []
         for index, seat in enumerate(self.lobby.seats):
@@ -125,6 +175,9 @@ class PlayWorkspace(W.QWidget):
         setup_layout.addWidget(note)
         setup_layout.addStretch()
         actions = W.QHBoxLayout()
+        self.lobby_back = W.QPushButton("Back to Play")
+        self.lobby_back.clicked.connect(lambda: self._show_page(self.landing_page))
+        actions.addWidget(self.lobby_back)
         self.reload = W.QPushButton("Refresh decks")
         self.reload.clicked.connect(self.load_decks)
         actions.addWidget(self.reload)
@@ -161,7 +214,51 @@ class PlayWorkspace(W.QWidget):
         self.status.setTextFormat(C.Qt.TextFormat.PlainText)
         self.status.setAccessibleName("Game status")
         layout.addWidget(self.status)
+        self.format.currentIndexChanged.connect(self._format_changed)
+        self._format_changed()
         self.load_decks()
+
+    def _show_page(self, page):
+        if self.session.active or self.session.closing:
+            return
+        self.pages.setCurrentWidget(page)
+        self._selection_changed()
+
+    def _open_offline(self):
+        if self.session.active or self.session.closing:
+            return
+        self._format_origin = self.pages.currentWidget()
+        self._format_confirmed = False
+        self._show_page(self.format_page)
+
+    def _format_changed(self):
+        self._format_confirmed = False
+        self.format_continue.setEnabled(
+            self.format.currentData() in {"freeform", "commander"}
+        )
+        self._selection_changed()
+
+    def _enter_lobby(self):
+        if (
+            self.pages.currentWidget() is not self.format_page
+            or not self.format_continue.isEnabled()
+        ):
+            return
+        self._format_confirmed = True
+        self._confirmed_format = self.format.currentData()
+        self.setup_format.setText(self.format.currentText() + " - Offline lobby")
+        self._show_page(self.setup_page)
+
+    def _back_from_format(self):
+        if (
+            self._format_origin is self.setup_page
+            and self._confirmed_format is not None
+        ):
+            self.format.blockSignals(True)
+            self.format.setCurrentIndex(self.format.findData(self._confirmed_format))
+            self.format.blockSignals(False)
+            self._format_confirmed = True
+        self._show_page(self._format_origin)
 
     def load_decks(self):
         if self.catalog_jobs.busy or self.session.active:
@@ -202,7 +299,11 @@ class PlayWorkspace(W.QWidget):
         self.status.setText(
             "Some saved decks could not be read. Review them in Deck Editor."
             if errors
-            else "Choose your deck and the AI opponent's deck."
+            else (
+                "Choose your deck and the AI opponent's deck."
+                if self.pages.currentWidget() is self.setup_page
+                else "Your saved decks are ready. Choose how you would like to play."
+            )
             if self._decks
             else "Save a deck in Deck Editor, then choose Refresh decks."
         )
@@ -212,7 +313,14 @@ class PlayWorkspace(W.QWidget):
         if self.session.active:
             self.start_button.setEnabled(False)
             return
-        lobby = replace(self.lobby, format=self.format.currentData())
+        chosen_format = self.format.currentData()
+        lobby = (
+            replace(self.lobby, format=chosen_format)
+            if chosen_format in {"freeform", "commander"}
+            else self.lobby
+        )
+        for selector in self.selectors:
+            selector.setEnabled(self._format_confirmed)
         for seat, selector in zip(lobby.seats, self.selectors):
             index = selector.currentData()
             selection = None
@@ -268,7 +376,10 @@ class PlayWorkspace(W.QWidget):
                     )
         self._deck_images()
         self.start_button.setEnabled(
-            not self.session.active
+            self._format_confirmed
+            and self.pages.currentWidget() is self.setup_page
+            and self.format.currentData() in {"freeform", "commander"}
+            and not self.session.active
             and not self.session.busy
             and not self.catalog_jobs.busy
             and all(selector.currentData() is not None for selector in self.selectors)
@@ -325,7 +436,8 @@ class PlayWorkspace(W.QWidget):
     def _status(self, message):
         self.status.setText(message)
         if not self.session.active and not self.session.closing:
-            self.pages.setCurrentWidget(self.setup_page)
+            if self.pages.currentWidget() is self.game_page:
+                self.pages.setCurrentWidget(self.setup_page)
             self._selection_changed()
 
     @C.pyqtSlot()

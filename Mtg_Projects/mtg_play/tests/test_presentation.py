@@ -280,9 +280,12 @@ def test_workspace_selects_existing_documents_without_starting_runtime_on_open(
     )
     drain(app, lambda: not workspace.catalog_jobs.busy)
     assert not owner.calls and not workspace.start_button.isEnabled()
+    assert workspace.pages.currentWidget() is workspace.landing_page
+    workspace.landing_page.offline_button.click()
+    workspace.format.setCurrentIndex(workspace.format.findData("commander"))
+    workspace.format_continue.click()
     for index, selector in enumerate(workspace.selectors):
         selector.setCurrentIndex(index + 1)
-    workspace.format.setCurrentIndex(1)
     assert workspace.start_button.isEnabled()
     workspace.start_game()
     drain(app, lambda: not workspace.session.busy)

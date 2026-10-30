@@ -341,7 +341,10 @@ pending. Measured startup stages, a bounded first-state wait, and cleanup-report
 fixes are also prepared locally; their tests and real-engine recovery acceptance
 remain unverified. The active source setup now uses a fixed local human plus AI
 opponent, with separate seat/player/pilot/deck/owner identities and updated AI UI
-acceptance scenarios; this local increment is also unverified.
+acceptance scenarios; this local increment is also unverified. The new landing
+page now offers Play/mode selection and direct Play Offline, converging on explicit
+format confirmation before shared deck selection. Network controls stay disabled;
+navigation tests, desktop layouts, and screenshot evidence await CI/manual review.
 The subsequent lobby and permanent two-player Focused View preserve future mixed
 controllers and 2-5-player views without implementing networking or larger layouts.
 Source-only preview work does not enable Play in installed releases. The existing

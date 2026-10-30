@@ -6,6 +6,12 @@ followed by a format-first lobby, local asset preparation, and an immersive
 two-player Focused View. The [long-term Play epic](manaforge-play-epic.md)
 retains the future 2-5-player and private networking roadmap.
 
+Current source navigation (implemented locally, unverified): **Play Offline >
+Choose format > Continue to Lobby > choose your deck and an AI deck > Start Game**.
+**Play** opens mode selection before the same offline flow. Host Match, Join Match,
+and Invite Friend are visible but unavailable. Opening Play does not start XMage.
+Installed builds remain gated; the new navigation does not establish acceptance.
+
 ## Rebuild baseline - October 29, 2026
 
 Branch: `feature/play-ai-focused-view`, based on current `origin/main` at
@@ -113,8 +119,9 @@ is changed by this baseline. No release, tag, or merge is part of this increment
 The active setup labels the seats **You** and **Opponent**. The opponent uses
 **Use AI**; **Invite Friend - Coming Soon** is visible and disabled. There is no
 active pass-and-play, seat-handoff screen, or opponent-hand reveal action. Both
-Freeform and Commander still use the current setup page; the new landing page
-and full format-first lobby are subsequent stories.
+Freeform and Commander initially used the existing setup page; the subsequent
+landing/navigation increment below now requires format confirmation first. Full
+lobby eligibility and borrowed-library integration remain later work.
 
 `lobby.py` separates match-seat identity, player identity, pilot/controller,
 canonical deck identity, and optional deck owner. Ownership is not inferred from
@@ -153,6 +160,42 @@ isolation. **Story 2 remains unaccepted** until CI and manual review verify the
 updated workflow. The UI still uses the earlier table renderer and artwork loader;
 this increment does not establish strict offline asset loading, Focused View,
 full lobby validation, or overall playability.
+
+### Story 4 increment: landing and shared format-first navigation (local, unverified)
+
+The landing page prominently offers **Play** and **Play Offline**, with unavailable
+**Host Match** and **Join Match** grouped on the right at desktop widths. On smaller
+widths that group moves below the main panel within a scrollable page. Typography,
+panel styling, and colors reuse Manaforge's visual language. The decorative card
+fan is drawn locally with Qt; it performs no artwork/metadata requests and uses
+no proprietary game assets.
+
+Play opens mode selection; Play Offline enters the offline format step directly.
+Both use the same format picker, lobby model, deck selection widgets, preparation
+controller, and startup path. The initial format prompt has no selection. Deck
+controls remain unavailable until the user confirms Freeform or Commander and
+enters the lobby. Start Game cannot launch a retained selection from the landing
+or format pages.
+
+Back navigation preserves the existing lobby selections. Cancelling a format
+change restores the previous confirmed format; confirming a different format
+retains the chosen decks and displays the existing incompatibility warnings rather
+than silently substituting decks. The lobby is scrollable and the page stack uses
+only its current page's size hints, so hidden battlefield minimum sizes do not
+force an oversized landing window. Home navigation remains available.
+
+The UI acceptance pilot now clicks through landing, format confirmation, and the
+shared lobby before starting its AI scenarios, with landing and format screenshots
+added to its existing capture points. Added Qt regressions cover both entry paths,
+format gating/back/cancel behavior, retained deck selections, disabled network
+controls, lazy runtime construction, and primary-control visibility at 1280x720
+and 1024x768. These tests and screenshots have not been executed locally.
+
+**Story 4 remains unaccepted** pending CI and visual/manual UX review. This increment
+also implements the navigation portion of Story 5, but does not claim full deck
+eligibility, shared-library borrowing, randomization, asset preflight, strict
+offline gameplay, or Focused View. Continued local development uses expected green
+CI as the user's working assumption; no new CI result has been inspected or claimed.
 
 ### Story 3 increment: measured startup and readiness (local, unverified)
 

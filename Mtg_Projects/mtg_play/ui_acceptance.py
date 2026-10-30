@@ -99,9 +99,17 @@ class UIAdapter:
         if self.workspace is None:
             raise AdapterError("UI_PLAY_NAVIGATION_FAILED")
         wait(self.app, lambda: not self.workspace.catalog_jobs.busy)
+        self.capture("landing")
+        self.workspace.landing_page.offline_button.click()
+        if self.workspace.pages.currentWidget() is not self.workspace.format_page:
+            raise AdapterError("UI_OFFLINE_NAVIGATION_FAILED")
         self.workspace.format.setCurrentIndex(
             self.workspace.format.findData(setup.format)
         )
+        self.capture("format")
+        self.workspace.format_continue.click()
+        if self.workspace.pages.currentWidget() is not self.workspace.setup_page:
+            raise AdapterError("UI_LOBBY_NAVIGATION_FAILED")
         for seat, selector in zip(setup.seats, self.workspace.selectors):
             index = next(
                 index
