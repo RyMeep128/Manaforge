@@ -883,3 +883,25 @@ introduced. CI regressions cover worker isolation, candidate exclusion,
 rerandomization, cancellation, cleanup recovery, and lobby gating. Tests/builds
 and engine acceptance have not been run locally. Story 6 remains pending CI and
 manual UX verification; this entry does not declare its acceptance criteria met.
+
+
+Story 7 incremental implementation (0.5.13-alpha.1): active Play now uses its
+own asynchronous local-only printing reader instead of the editor reader's
+remote fallbacks. Battlefield objects request a straightforward upper 58 percent
+crop preserving the source name bar, artwork and border; hand/other zones and
+detailed inspection retain the full image. Compact battlefield cards keep live
+stats and interactions outside the cached bitmap. No special-frame detection
+or live gameplay values are baked into images.
+
+Derived PNGs are atomically cached under the shared Core data directory by exact
+printing, face, flip orientation, rendering version, resolution and source digest.
+Repeated printings and later matches reuse these files; replacing a cached source
+produces a new derivative. Original files remain unchanged. Alternate faces use
+their local face variant; classic flip faces rotate their shared source first.
+Missing/corrupt local images return placeholders. Play's image reader calls no
+ensure/download APIs. CI regressions cover crop content, cache reuse and source
+invalidation, full inspection, missing/corrupt sources, exact alternate/flip
+faces, and worker-thread/local-only access. No local tests/builds or visual
+acceptance have been run. Story 8 still needs pre-match asset preparation and
+missing-artwork Continue/Return handling, including settling lobby image work
+before gameplay; strict offline gameplay is not yet declared accepted.

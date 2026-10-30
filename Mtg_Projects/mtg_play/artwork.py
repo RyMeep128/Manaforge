@@ -3,7 +3,7 @@
 from collections import OrderedDict
 import time
 from PyQt6 import QtCore as C, QtGui as G
-from mtg_editor.card_views import ImageReader
+from .artwork_cache import PlayImageReader, RENDER_VERSION
 
 
 class PlayArtwork(C.QObject):
@@ -39,7 +39,12 @@ class PlayArtwork(C.QObject):
                 and (obj.characteristics.transformed or obj.characteristics.flipped)
             )
         )
-        return obj.card_identity.printing_id, None, 600 if detailed else 300, face
+        key = obj.card_identity.printing_id, None, 600 if detailed else 300, face
+        return (
+            key + (RENDER_VERSION,)
+            if obj.zone == "battlefield" and not detailed
+            else key
+        )
 
     def show_objects(self, objects):
         self.allowed = {
@@ -76,7 +81,7 @@ class PlayArtwork(C.QObject):
             return
         key, _ = self.pending.popitem(last=False)
         self.worker_generation = self.generation
-        self.worker = ImageReader(self.service, key, self)
+        self.worker = PlayImageReader(self.service, key, self)
         self.worker.loaded.connect(self._loaded, C.Qt.ConnectionType.QueuedConnection)
         self.worker.failed.connect(self._failed, C.Qt.ConnectionType.QueuedConnection)
         self.worker.finished.connect(

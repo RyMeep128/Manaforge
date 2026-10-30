@@ -67,6 +67,7 @@ class GameCard(W.QAbstractButton):
             + (" · " + combat if combat else "")
         )
         if changed:
+            self.setFixedSize(112, 132 if obj.zone == "battlefield" else 185)
             self.update()
 
     def paintEvent(self, event):
@@ -83,7 +84,8 @@ class GameCard(W.QAbstractButton):
         )
         p.setBrush(G.QColor(COLORS["surface_raised"]))
         p.drawRoundedRect(C.QRectF(self.rect()).adjusted(2, 2, -2, -2), 7, 7)
-        rect = C.QRect(7, 7, 98, 137)
+        compact = self.obj.zone == "battlefield"
+        rect = C.QRect(7, 7, 98, 83 if compact else 137)
         image = self.artwork.get(self.obj)
         if image is not None and not image.isNull():
             scaled = image.scaled(
@@ -96,8 +98,8 @@ class GameCard(W.QAbstractButton):
                 p.translate(rect.center())
                 p.rotate(90)
                 scaled = image.scaled(
-                    132,
-                    92,
+                    80 if compact else 132,
+                    80 if compact else 92,
                     C.Qt.AspectRatioMode.KeepAspectRatio,
                     C.Qt.TransformationMode.SmoothTransformation,
                 )
@@ -138,7 +140,7 @@ class GameCard(W.QAbstractButton):
         if self.combat:
             badge.append(self.combat)
         p.drawText(
-            C.QRect(6, 145, 100, 36),
+            C.QRect(6, 94 if compact else 145, 100, 36),
             C.Qt.AlignmentFlag.AlignCenter | C.Qt.TextFlag.TextWordWrap,
             " · ".join(badge) or object_name(self.obj),
         )
