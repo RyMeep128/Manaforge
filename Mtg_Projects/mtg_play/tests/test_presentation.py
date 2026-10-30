@@ -699,3 +699,26 @@ def test_startup_cause_codes_never_include_arbitrary_exception_text(error, expec
     from mtg_play.presentation import _setup_cause
 
     assert _setup_cause(error) == expected
+
+
+def test_stop_interrupts_startup_with_shared_token_before_queueing_cleanup(app):
+    class StartingOwner(Owner):
+        def __init__(self):
+            super().__init__(None)
+            self.entered = threading.Event()
+
+        def set_cancel_event(self, event):
+            self.cancel_event = event
+
+        def __enter__(self):
+            self.entered.set()
+            assert self.cancel_event.wait(5)
+            raise AdapterError("RUNTIME_CANCELLED")
+
+    owner = StartingOwner()
+    controller = SessionController(adapter_factory=lambda: owner)
+    controller.start(setup(), (DeckDocument(), DeckDocument()))
+    drain(app, owner.entered.is_set)
+    controller.stop()
+    drain(app, lambda: not controller.busy)
+    assert owner.closed and owner.cancel_event.is_set() and not controller.active

@@ -134,3 +134,24 @@ def test_cancelled_queued_cleanup_retry_keeps_runtime_blocked(app):
     picker.retry_cleanup()
     drain(app, lambda: not picker.busy)
     assert owner.closed
+
+
+def test_cancel_interrupts_runtime_startup_and_reaps_owner_before_return(app):
+    class StartingOwner(Owner):
+        def set_cancel_event(self, cancel):
+            self.cancel_event = cancel
+
+        def __enter__(self):
+            self.entered.set()
+            assert self.cancel_event.wait(5)
+            raise AdapterError("RUNTIME_CANCELLED")
+
+    owner = StartingOwner((True, True, True))
+    picker = OpponentRandomizer(adapter_factory=lambda: owner)
+    selected = []
+    picker.selected.connect(selected.append)
+    picker.start(documents(), "commander")
+    drain(app, owner.entered.is_set)
+    picker.cancel()
+    drain(app, lambda: not picker.busy)
+    assert owner.cancel_event.is_set() and owner.closed and not selected

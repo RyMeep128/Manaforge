@@ -839,3 +839,29 @@ def test_precon_display_commander_is_not_submitted_or_resolved_as_a_playable_car
     assert [query["key"] for query in queries_seen] == ["land"]
     assert len(prepared.cards) == 1 and not prepared.sideboard
     assert document.to_dict() == before
+
+
+def test_preparation_routes_mainboard_and_legacy_commander_ids_without_undefined_state():
+    document = DeckDocument(
+        deck=Deck(
+            entries=[
+                DeckEntry("land", "Forest", 99),
+                DeckEntry("leader", "Isamaru, Hound of Konda", section="mainboard"),
+                DeckEntry(
+                    "display", "Oversized commander", section="display_commander"
+                ),
+            ],
+            commander_entry_ids=["leader"],
+        )
+    )
+    before = deepcopy(document.to_dict())
+    prepared = prepare_deck(
+        document,
+        lambda queries: [
+            dict(q, set="FIX", number=str(i)) for i, q in enumerate(queries)
+        ],
+        commander=True,
+    )
+    assert [row["name"] for row in prepared.cards] == ["Forest"]
+    assert [row["name"] for row in prepared.sideboard] == ["Isamaru, Hound of Konda"]
+    assert document.to_dict() == before

@@ -1002,3 +1002,25 @@ cards in Freeform and Commander translation, immutable source documents, asset
 exclusion, and safe cause propagation after confirmed cleanup. No local tests or
 builds were run. The original startup failure remains unresolved pending its
 new diagnostic cause code.
+
+
+Startup/cancel bug fixes (0.5.18-alpha.1): static inspection identified the actual
+translation defect: prepare_deck used commander_ids after the local-readiness
+refactor had moved its definition into _deck_queries. Successful mainboard
+resolution therefore raised NameError while routing cards. The translator now
+builds that set from its own document before routing mainboard/commander entries;
+this is an application defect, not evidence of an illegal user deck. Safe cause
+classification also recognizes NameError for future diagnostics.
+
+Randomize and match startup now bind a shared cancellation event to the owned
+adapter. Server-startup and bridge-connect/handshake waits check it in short
+intervals and enter the existing owned-process cleanup path instead of waiting
+for startup to complete. Phase boundaries also check cancellation before new
+startup work. Match stop signals this token while still opening, without
+interrupting/replaying established gameplay commands. Cancellation remains
+cooperative: synchronous workspace preparation/compilation must finish their
+current step before cleanup; the UI returns only after cleanup is confirmed.
+CI regressions cover mainboard/legacy commander routing, cancelled server/bridge
+waits, and cancellation propagation/cleanup for both startup controllers. No
+local tests, builds or engine acceptance were run; fixes remain pending CI/user
+verification and are not pushed.

@@ -118,6 +118,7 @@ def prepare_deck(
     )
     resolved = {row["key"]: row for row in resolve(queries)} if queries else {}
     cards, sideboard, bindings = [], [], {}
+    commander_ids = set(document.deck.commander_entry_ids)
     for entry in entries:
         row = resolved.get(entry.entry_id)
         if row is None or row.get("error"):

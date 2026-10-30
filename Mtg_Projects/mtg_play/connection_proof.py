@@ -113,8 +113,16 @@ class BridgeEvents:
         finally:
             self.events.put(None)
 
-    def wait(self, event_name: str, deadline: float, request_id: str | None = None):
+    def wait(
+        self,
+        event_name: str,
+        deadline: float,
+        request_id: str | None = None,
+        *,
+        cancel=None,
+    ):
         while True:
+            check_cancel(cancel)
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 raise ProofError(
@@ -122,8 +130,12 @@ class BridgeEvents:
                     code="ENGINE_OPERATION_TIMEOUT",
                 )
             try:
-                event = self.events.get(timeout=remaining)
+                event = self.events.get(
+                    timeout=min(remaining, 0.1) if cancel is not None else remaining
+                )
             except queue.Empty as error:
+                if cancel is not None:
+                    continue
                 raise ProofError(
                     f"Timed out waiting for bridge {event_name}",
                     code="ENGINE_OPERATION_TIMEOUT",
@@ -255,8 +267,16 @@ def prepare_workspace(bundle: Path, workspace: Path, port: int, secondary: int):
     return server
 
 
-def wait_for_server(process: subprocess.Popen, log: Path, deadline: float):
+def check_cancel(cancel):
+    if cancel is not None and cancel.is_set():
+        raise ProofError("Runtime preparation cancelled", code="RUNTIME_CANCELLED")
+
+
+def wait_for_server(
+    process: subprocess.Popen, log: Path, deadline: float, *, cancel=None
+):
     while time.monotonic() < deadline:
+        check_cancel(cancel)
         if process.poll() is not None:
             raise ProofError(
                 f"XMage server exited ({process.returncode}); inspect {log}"
@@ -281,6 +301,7 @@ def run_proof(
     runtime_consumer=None,
     *,
     diagnostics=None,
+    cancel=None,
 ) -> dict:
     if diagnostics is None:
         if __package__:
@@ -305,11 +326,13 @@ def run_proof(
     reservations = []
     failure = None
     try:
+        check_cancel(cancel)
         with diagnostics.stage("workspace_preparation"):
             reservations.append(reserve_port(port))
             reservations.append(reserve_port())
             port, secondary = [item.getsockname()[1] for item in reservations]
             server = prepare_workspace(bundle, workspace, port, secondary)
+        check_cancel(cancel)
         with diagnostics.stage("bridge_compilation"):
             classes = workspace / "classes"
             classes.mkdir()
@@ -356,6 +379,7 @@ def run_proof(
             "-Djava.net.preferIPv4Stack=true",
             "-Dh2.bindAddress=127.0.0.1",
         ]
+        check_cancel(cancel)
         with diagnostics.stage("server_startup"):
             server_process = subprocess.Popen(
                 [*base, "-Xmx1024m", "-cp", classpath, "ManaforgeServerHost"],
@@ -369,7 +393,10 @@ def run_proof(
             )
             print(f"Waiting for local XMage server; logs: {workspace}", flush=True)
             wait_for_server(
-                server_process, server_log_path, time.monotonic() + START_TIMEOUT
+                server_process,
+                server_log_path,
+                time.monotonic() + START_TIMEOUT,
+                cancel=cancel,
             )
         with diagnostics.stage("client_connection"):
             bridge_dir = workspace / "bridge"
@@ -393,17 +420,17 @@ def run_proof(
                 port=port,
                 username="mf_" + uuid.uuid4().hex[:10],
             )
-            events.wait("connected", deadline, "connect-1")
+            events.wait("connected", deadline, "connect-1", cancel=cancel)
         with diagnostics.stage("engine_handshake"):
             send(bridge_process, "status", "status-1")
-            status = events.wait("status", deadline, "status-1")
+            status = events.wait("status", deadline, "status-1", cancel=cancel)
             if (
                 not status.get("connected")
                 or status.get("engine_version") != manifest["engine"]
             ):
                 raise ProofError(f"Unexpected engine status: {status}")
             if not events.callbacks:
-                events.wait("callback", deadline)
+                events.wait("callback", deadline, cancel=cancel)
             result.update({"status": status, "callbacks": list(events.callbacks)})
         if scenario is not None or runtime_consumer is not None:
 

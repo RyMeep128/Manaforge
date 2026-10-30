@@ -57,6 +57,9 @@ class OpponentRandomizer(C.QObject):
                 if not cancel.is_set():
                     report({"phase": "starting"})
                     self._owner = self.factory()
+                    bind_cancel = getattr(self._owner, "set_cancel_event", None)
+                    if bind_cancel is not None:
+                        bind_cancel(cancel)
                     self._owner.__enter__()
                     for index, document in enumerate(copies):
                         if cancel.is_set():

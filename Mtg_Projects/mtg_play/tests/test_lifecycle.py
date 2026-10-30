@@ -74,7 +74,7 @@ def test_failed_startup_preserves_stage_error_only_after_confirmed_cleanup(
 ):
     from mtg_play import adapter as module
 
-    def failed_proof(bundle, jdk, *, runtime_consumer, diagnostics):
+    def failed_proof(bundle, jdk, *, runtime_consumer, diagnostics, cancel=None):
         try:
             with diagnostics.stage("bridge_compilation"):
                 raise TimeoutError("private compilation payload")

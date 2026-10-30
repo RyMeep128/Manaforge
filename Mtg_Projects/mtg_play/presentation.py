@@ -6,6 +6,7 @@ seat's immutable snapshot; epochs invalidate queued replies after leaving a view
 
 from math import isfinite
 import time
+import threading
 
 from PyQt6 import QtCore as C
 from mtg_ui.jobs import JobQueue
@@ -41,6 +42,8 @@ SETUP_CAUSES = {
     "ENGINE_UNAVAILABLE": "The local engine is no longer available.",
     "LOCAL_CARD_DATABASE_BUSY": "The local card database is busy. Let other library operations finish, then retry.",
     "LOCAL_CARD_DATABASE_ERROR": "The local card database could not resolve the selected cards.",
+    "PYTHON_NAME_ERROR": "An internal deck-preparation variable was undefined.",
+    "RUNTIME_CANCELLED": "Runtime preparation was cancelled.",
     "PYTHON_TYPE_ERROR": "An internal deck-preparation type error occurred.",
     "PYTHON_ATTRIBUTE_ERROR": "An internal deck-preparation interface error occurred.",
     "PYTHON_KEY_ERROR": "The deck response was missing a required field.",
@@ -68,6 +71,7 @@ def _setup_cause(error):
             else "LOCAL_CARD_DATABASE_ERROR"
         )
     for kind, label in (
+        (NameError, "NAME"),
         (TypeError, "TYPE"),
         (AttributeError, "ATTRIBUTE"),
         (KeyError, "KEY"),
@@ -99,6 +103,7 @@ class SessionController(C.QObject):
         )
         self.adapter_factory = adapter_factory
         self._authorized_viewer = authorized_viewer_id
+        self._startup_cancel = threading.Event()
         self._owner = self._session = None  # Worker-owned, never exposed to widgets.
         self._opening_stage = None  # Worker-owned readiness deadline and stage token.
         self._operations = {}
@@ -282,6 +287,8 @@ class SessionController(C.QObject):
         self._submitted.clear()
         self._blocked = False
         self.concession_pending = False
+        self._startup_cancel = threading.Event()
+        startup_cancel = self._startup_cancel
         self.active = True
         self.statusChanged.emit("Starting your local game…")
 
@@ -297,6 +304,9 @@ class SessionController(C.QObject):
                 observer = getattr(self._owner, "set_progress_callback", None)
                 if observer is not None:
                     observer(lambda value: self._lifecycleProgress.emit(epoch, value))
+                bind_cancel = getattr(self._owner, "set_cancel_event", None)
+                if bind_cancel is not None:
+                    bind_cancel(startup_cancel)
                 self._owner.__enter__()
                 self._session = self._owner.create_game(
                     setup, documents, oracle_lookup=oracle_lookup
@@ -477,6 +487,8 @@ class SessionController(C.QObject):
         if self.closing:
             return
         self.closing = True
+        if self._session_id is None:
+            self._startup_cancel.set()
         self.conceal()
         self.statusChanged.emit("Closing the local game…")
 

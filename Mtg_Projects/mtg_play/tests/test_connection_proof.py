@@ -224,3 +224,23 @@ def test_invalid_protocol_error_does_not_echo_private_payload():
     with pytest.raises(proof.ProofError) as failure:
         proof.decode_event('{"protocol":2,"event":"PRIVATE_HAND_IDENTITY"}')
     assert "PRIVATE_HAND_IDENTITY" not in str(failure.value)
+
+
+def test_startup_server_and_bridge_waits_honor_cancel_before_waiting(tmp_path):
+    import queue
+    import threading
+    import time
+    from mtg_play import connection_proof as proof
+
+    cancel = threading.Event()
+    cancel.set()
+    with pytest.raises(proof.ProofError) as failed:
+        proof.wait_for_server(
+            None, tmp_path / "not-read.log", time.monotonic() + 120, cancel=cancel
+        )
+    assert failed.value.code == "RUNTIME_CANCELLED"
+    events = proof.BridgeEvents.__new__(proof.BridgeEvents)
+    events.events = queue.Queue()
+    with pytest.raises(proof.ProofError) as failed:
+        events.wait("connected", time.monotonic() + 30, cancel=cancel)
+    assert failed.value.code == "RUNTIME_CANCELLED"

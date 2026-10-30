@@ -122,10 +122,15 @@ class LocalGameAdapter:
         self._runtime = None
         self._session = None
         self._runtime_result = None
+        self._cancel = threading.Event()
         self.lifecycle = LifecycleDiagnostics()
 
     def set_progress_callback(self, callback):
         self.lifecycle.set_callback(callback)
+
+    def set_cancel_event(self, event):
+        """Bind the caller's thread-safe startup cancellation token before entry."""
+        self._cancel = event
 
     def __enter__(self):
         if self._thread is not None:
@@ -143,6 +148,7 @@ class LocalGameAdapter:
                     self._jdk,
                     runtime_consumer=consume,
                     diagnostics=self.lifecycle,
+                    cancel=self._cancel,
                 )
             except Exception:
                 self._runtime_result = {
@@ -316,6 +322,8 @@ class LocalGameAdapter:
         )
 
     def _resolve(self, queries):
+        if getattr(self, "_cancel", None) is not None and self._cancel.is_set():
+            raise AdapterError("RUNTIME_CANCELLED")
         return self._server_request(cards=queries)
 
     def validate_deck(self, document: DeckDocument, format: str, *, oracle_lookup=None):
