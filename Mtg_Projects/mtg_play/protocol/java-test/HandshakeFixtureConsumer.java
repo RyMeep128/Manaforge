@@ -46,6 +46,7 @@ public final class HandshakeFixtureConsumer {
         try {
             try(Pair p=new Pair()) {
                 byte[] callerKey=key();Future<?> peer=validPeer(p);GatewayHandshake.ViewerContext context=GatewayHandshake.accept(p.frames,client.toString(),gateway.toString(),callerKey,2000);
+                CommandGateFixtureConsumer.run(context,Paths.get(args[0]).resolveSibling("dummy-session-v1.json"));
                 peer.get(2,TimeUnit.SECONDS);require(context.sessionId.equals("fixture-session") && context.viewerId.equals("seat-one") && Arrays.equals(callerKey,key()) && !p.frames.isClosed());passed++;
             }
             for(String defect:new String[]{"proof","pin","viewer","reflection","data"})try(Pair p=new Pair()) {

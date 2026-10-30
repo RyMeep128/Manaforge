@@ -90,6 +90,8 @@ def main():
             PROTOCOL / "java-test/WriteDeadlineFixtureConsumer.java",
             PROTOCOL / "java/manaforge/protocol/GatewayHandshake.java",
             PROTOCOL / "java-test/HandshakeFixtureConsumer.java",
+            PROTOCOL / "java/manaforge/protocol/GatewayCommandGate.java",
+            PROTOCOL / "java-test/CommandGateFixtureConsumer.java",
         ]
         subprocess.run(
             [

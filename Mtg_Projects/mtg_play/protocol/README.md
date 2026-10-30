@@ -451,3 +451,13 @@ the delayed-proof negative fixture remains deliberate. Local validation passed:
 16 new Java authentication cases and 221 Unity EditMode checks, including 19 Java
 process scenarios. Product bootstrap/ownership, artifact verification and licensed
 CI remain open. No UI verification was needed.
+
+
+### G1 Java viewer command admission — October 30, 2026
+
+The [Java command gate](gateway-command-admission.md) now binds all seven command families to an
+authenticated viewer's current offered IDs, flags and numeric bounds. Newer events,
+results and invalid observations revoke permissions; amount totals cannot wrap.
+The dummy uses this gate without claiming real-engine legality or confirmation.
+Thirty-seven new Java checks exercise the boundary. No UI changed. G0/G1 and
+product ownership/dispatch/licensed CI requirements remain open.

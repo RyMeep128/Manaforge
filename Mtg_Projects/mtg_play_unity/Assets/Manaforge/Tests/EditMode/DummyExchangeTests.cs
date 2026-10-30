@@ -254,7 +254,8 @@ namespace Manaforge.Play.Tests
                     Assert.That(tracker.Current.State,Is.EqualTo(CommandState.Submitted),"A terminal fixture snapshot is not command confirmation");
                     Assert.That(Assert.Throws<WireEnvelope.EnvelopeException>(()=>tracker.Begin(Command("blocked",snapshot.revision,decision,action).ToString())).Code,Is.EqualTo("COMMAND_PENDING"));
                     // Deliberate raw protocol probe of the SERVER guard, bypassing normal client submission.
-                    Send(peer.Reader,Command("pending",snapshot.revision,decision,action));Ack(peer.Reader,"pending",snapshot.revision,"rejected","COMMAND_PENDING");
+                    // The authoritative result advanced the gateway revision and revoked offered actions.
+                    Send(peer.Reader,Command("pending",snapshot.revision,decision,action));Ack(peer.Reader,"pending",snapshot.revision,"rejected","STALE_REVISION");
                     var shutdown=Message("shutdown","close",new JObject{["session_id"]=snapshot.session_id,["viewer_id"]=snapshot.viewer_id,["reason"]="client_close"});
                     Send(peer.Reader,shutdown);var closed=WireMessages.Parse(peer.Reader.Read());
                     Assert.That((string)closed["message_type"],Is.EqualTo("shutdown"));Assert.That(JToken.DeepEquals(closed["body"],shutdown["body"]),Is.True);

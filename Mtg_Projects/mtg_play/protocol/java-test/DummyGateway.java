@@ -88,6 +88,7 @@ public final class DummyGateway {
                 active.set(frames); if(ownerGone.get())throw new IOException("OWNER_GONE");
                 OutputStream out=socket.getOutputStream();
                 if(args.length==2 && args[1].equals("blocked-client"))socket.setSendBufferSize(1024);
+                GatewayHandshake.ViewerContext authenticated=null;
                 if(args.length==2 && args[1].equals("delayed-proof")) {
                     // Deliberate negative client-deadline fixture; normal paths use the bounded gateway helper.
                     try(ViewerAuthentication.Verifier verifier=new ViewerAuthentication.Verifier(clientHello.toString(),key)) {require(verifier.verify(frames.read(5000)));}
@@ -96,7 +97,7 @@ public final class DummyGateway {
                     try{GatewayHandshake.accept(frames,clientHello.toString(),gatewayHello.toString(),key,150);throw new IOException("DUMMY_EXPECTED_AUTH_TIMEOUT");}
                     catch(WireEnvelope.EnvelopeException error){require(error.code.equals("AUTH_TIMEOUT"));return;}
                 } else {
-                    GatewayHandshake.ViewerContext authenticated=GatewayHandshake.accept(frames,clientHello.toString(),gatewayHello.toString(),key,5000);
+                    authenticated=GatewayHandshake.accept(frames,clientHello.toString(),gatewayHello.toString(),key,5000);
                     require(authenticated.sessionId.equals(session) && authenticated.viewerId.equals(viewer));
                 }
                 if(args.length==2 && args[1].equals("blocked-client")) {
@@ -109,18 +110,17 @@ public final class DummyGateway {
                     while(!ownerGone.get())Thread.sleep(20);
                     return;
                 }
+                require(authenticated!=null);
+                try(GatewayCommandGate gate=new GatewayCommandGate(authenticated,true,4096);SubmissionLedger ledger=new SubmissionLedger(session,viewer,4096)) {
                 JsonObject body=new JsonObject(); body.addProperty("fixture_only",true); body.add("snapshot",snapshot);
                 JsonObject snapshotMessage=envelope("snapshot","fixture-snapshot",body);
-                ReceiveMessages.parse(snapshotMessage.toString(),session,viewer,0,true);send(frames,snapshotMessage);send(frames,snapshotMessage);
+                gate.observe(snapshotMessage.toString());send(frames,snapshotMessage);send(frames,snapshotMessage);
                 JsonObject event=new JsonObject();event.addProperty("kind","fixture-event");event.addProperty("player_id","two");
                 event.add("revision",snapshot.get("revision"));event.add("code",JsonNull.INSTANCE);event.add("observations",new JsonArray());
                 JsonObject eventBody=new JsonObject();eventBody.addProperty("fixture_only",true);eventBody.addProperty("session_id",session);eventBody.addProperty("viewer_id",viewer);eventBody.add("event",event);
                 JsonObject eventMessage=envelope("event","fixture-event",eventBody);
-                ReceiveMessages.parse(eventMessage.toString(),session,viewer,0,true);send(frames,eventMessage);
+                gate.observe(eventMessage.toString());send(frames,eventMessage);
                 long revision=snapshot.get("revision").getAsLong();
-                String decision=snapshot.getAsJsonObject("decision").get("decision_id").getAsString();
-                List<String> actions=new ArrayList<>(); for(JsonElement a:snapshot.getAsJsonArray("actions"))actions.add(a.getAsJsonObject().get("action_id").getAsString());
-                try(SubmissionLedger ledger=new SubmissionLedger(session,viewer,4096)) {
                 for(int count=0;count<8;count++) {
                     String text=frames.read(args.length==2 && args[1].equals("client-partial-frame")?500:5000); require(text!=null);
                     JsonObject message=WireMessages.parse(text),request=message.getAsJsonObject("body");
@@ -130,22 +130,7 @@ public final class DummyGateway {
                         send(frames,envelope("shutdown","shutdown-ok",request)); return;
                     }
                     require(type.equals("command"));
-                    String rejection;
-                    if(choiceMode) {
-                        rejection=WireMessages.checkBinding(text,session,viewer,revision,decision);
-                        if(rejection==null) {
-                            String operation=request.get("operation").getAsString();
-                            boolean allowed;
-                            if(manaMode)allowed=operation.equals("select_mana_source") && request.get("object_id").getAsString().equals("fixture-mana-object");
-                            else if(numberMode)allowed=operation.equals("choose_number") && request.get("value").getAsLong()==-2;
-                            else if(amountsMode)allowed=operation.equals("choose_amounts") && request.getAsJsonArray("values").size()==2
-                                && request.getAsJsonArray("values").get(0).getAsLong()==-2 && request.getAsJsonArray("values").get(1).getAsLong()==3;
-                            else allowed=operation.equals("choose") && request.get("option_id").getAsString().equals("fixture-option")
-                                || operation.equals("finish_selection") && snapshot.getAsJsonObject("decision").get("can_finish").getAsBoolean()
-                                || operation.equals("cancel") && snapshot.getAsJsonObject("decision").get("cancellable").getAsBoolean();
-                            if(!allowed)rejection="ACTION_UNAVAILABLE";
-                        }
-                    } else rejection=WireMessages.checkCurrent(text,session,viewer,revision,decision,actions);
+                    String rejection=gate.check(text);
                     SubmissionLedger.Prepared prepared=ledger.prepare(text,rejection);
                     JsonObject acknowledgement=prepared.receipt();acknowledgement.addProperty("message_id","ack-"+count);
                     send(frames,acknowledgement);
@@ -165,7 +150,7 @@ public final class DummyGateway {
                         JsonObject terminal=snapshot.deepCopy();terminal.addProperty("status","finished");terminal.addProperty("result","fixture_complete");
                         terminal.addProperty("revision",revision+1);terminal.add("decision",JsonNull.INSTANCE);terminal.add("actions",new JsonArray());
                         result.add("snapshot",terminal);JsonObject resultMessage=envelope("result","fixture-result",result);
-                        ReceiveMessages.parse(resultMessage.toString(),session,viewer,revision,true);send(frames,resultMessage);
+                        gate.observe(resultMessage.toString());send(frames,resultMessage);
                     }
                 }
                 throw new IOException("DUMMY_LIMIT");

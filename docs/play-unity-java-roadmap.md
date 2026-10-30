@@ -565,3 +565,13 @@ and pre-proof EOF. They assert failure/timeout and transport closure before any
 session is returned. Local evidence is 227 Unity EditMode checks and 22 Java
 handshake cases; no production behavior or rendered UI changed. G0/G1 and the
 remaining bootstrap, ownership and licensed CI requirements remain open.
+
+
+### G1 Java viewer command admission — October 30, 2026
+
+The [Java command gate](../Mtg_Projects/mtg_play/protocol/gateway-command-admission.md) now binds all seven command families to an
+authenticated viewer's current offered IDs, flags and numeric bounds. Newer events,
+results and invalid observations revoke permissions; amount totals cannot wrap.
+The dummy uses this gate without claiming real-engine legality or confirmation.
+Thirty-seven new Java checks exercise the boundary. No UI changed. G0/G1 and
+product ownership/dispatch/licensed CI requirements remain open.
