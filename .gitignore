@@ -231,3 +231,14 @@ Mtg_Projects/mtg_proxy/projects/tmp_images/
 # Local XMage feasibility downloads and generated runtime files.
 /Mtg_Projects/mtg_play/mage-full_*/
 /Mtg_Projects/mtg_play/.runtime/
+
+# Unity Play generated state and build evidence.
+/Mtg_Projects/mtg_play_unity/[Ll]ibrary/
+/Mtg_Projects/mtg_play_unity/[Tt]emp/
+/Mtg_Projects/mtg_play_unity/[Oo]bj/
+/Mtg_Projects/mtg_play_unity/[Ll]ogs/
+/Mtg_Projects/mtg_play_unity/[Uu]ser[Ss]ettings/
+/Mtg_Projects/mtg_play_unity/[Bb]uilds/
+/Mtg_Projects/mtg_play_unity/Artifacts/
+/Mtg_Projects/mtg_play_unity/*.csproj
+/Mtg_Projects/mtg_play_unity/*.sln*

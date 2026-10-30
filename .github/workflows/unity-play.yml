@@ -1,0 +1,53 @@
+name: Unity Play feasibility
+
+# Licensed owner-controlled machine only. Do not run untrusted PR code on it.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: unity-play-licensed-runner
+  cancel-in-progress: false
+
+jobs:
+  foundation:
+    runs-on: [self-hosted, Windows, X64, manaforge-unity]
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Prepare deterministic scene
+        shell: pwsh
+        run: ./tools/unity-play.ps1 -Mode Prepare
+      - name: Focused EditMode tests
+        shell: pwsh
+        run: ./tools/unity-play.ps1 -Mode EditMode
+      - name: Focused PlayMode test
+        shell: pwsh
+        run: ./tools/unity-play.ps1 -Mode PlayMode
+      - name: Build Windows player
+        shell: pwsh
+        run: ./tools/unity-play.ps1 -Mode Build
+      - name: Render packaged player smoke screenshot
+        shell: pwsh
+        run: ./tools/unity-play.ps1 -Mode Smoke
+      - name: Record source revision
+        if: always()
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force Mtg_Projects/mtg_play_unity/Artifacts | Out-Null
+          git rev-parse HEAD | Set-Content Mtg_Projects/mtg_play_unity/Artifacts/commit.txt
+      - name: Upload sanitized fixture evidence and player
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: unity-play-${{ github.sha }}
+          if-no-files-found: error
+          path: |
+            Mtg_Projects/mtg_play_unity/Artifacts/*mode.xml
+            Mtg_Projects/mtg_play_unity/Artifacts/commit.txt
+            Mtg_Projects/mtg_play_unity/Artifacts/PlayerSmoke/
+            Mtg_Projects/mtg_play_unity/Builds/Windows/

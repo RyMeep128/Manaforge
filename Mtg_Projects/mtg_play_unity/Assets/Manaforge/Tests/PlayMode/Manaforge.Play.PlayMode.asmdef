@@ -1,0 +1,5 @@
+{
+  "name": "Manaforge.Play.PlayMode",
+  "references": ["Manaforge.Play"],
+  "optionalUnityReferences": ["TestAssemblies"]
+}

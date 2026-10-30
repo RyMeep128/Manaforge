@@ -20,7 +20,9 @@ required before declaring a story complete.
 
 Build an Arena-like, rules-enforced Magic client for eventual 2–5-player Commander
 while retaining Build → Discover → Print → Play, authentic printings and existing
-decks. Deliver excellent local 1v1, private networked 1v1, then 3–5-player Commander.
+decks. Owner clarification: first deliver local 1v1 **human versus XMage AI**,
+then private networked 1v1 and 3–5-player Commander. Design the presentation for
+up to five players from the beginning; this does not impose a five-seat wire maximum.
 
 - XMage alone determines rules, state, legality, timing, costs, triggers, damage
   and outcomes. No duplicate rules engine in Unity, Java gateway or Python.
@@ -121,7 +123,8 @@ fails, reassess Qt Quick before creating a large Unity codebase.
   runtime pinning and update compatibility explicit.
 
 **Exit:** Java/C# deserialize shared fixtures; dummy gateway/client exchange a
-snapshot, legal action, rejection, result and shutdown without per-action Python.
+snapshot, legal action, rejection, result and shutdown without per-action Python. Preserve human/AI controller
+configuration in the launch and gateway contracts.
 
 ### Phase 2 — Java gateway parity (Track A)
 
@@ -164,7 +167,7 @@ choice and private handoff. Explicitly a fake-engine demo, not live gameplay.
 
 ### Phase 4 — First real end-to-end Unity + Java game
 
-- **P4.1 — Launch:** choose saved decks in Manaforge, validate manifest, start owned
+- **P4.1 — Launch:** choose saved human/AI decks in Manaforge, validate manifest, start owned
   engine/gateway and Unity, then return cleanly to Manaforge.
 - **P4.2 — Exchange:** revisioned snapshots/events, exact legal actions and safe
   disconnect/timeouts/retries. Never blindly replay uncertain actions.
@@ -173,7 +176,7 @@ choice and private handoff. Explicitly a fake-engine demo, not live gameplay.
 - **P4.4 — Parity/privacy:** compare original adapter decisions/results; verify
   independent seats without hand leakage in source and packaged builds.
 
-**Exit:** repeatable real-engine 1v1 through Unity, validated results and cleanup.
+**Exit:** repeatable real-engine human-versus-XMage-AI 1v1 through Unity, validated results and cleanup.
 An acknowledgement or concession-only demo does not prove natural completion.
 
 ### Phase 5 — Arena-like 1v1 UX
@@ -246,7 +249,8 @@ correct privacy and confirmed outcomes.
 
 ### Phase 9 — Optional expansions after multiplayer
 
-Not migration prerequisites: engine-backed AI (controllers independent of seats),
+Initial human-versus-XMage-AI play is a migration requirement. Optional later
+expansions include enhanced AI and mixed-controller tables (controllers independent of seats),
 history/replay/statistics/borrowing/precons, advanced frames/shaders/environments/
 audio, macOS/Linux installers/signing/notarization, spectators, flexible hosting,
 persistence/recovery and shared playgroups.
@@ -282,6 +286,22 @@ persistence/recovery and shared playgroups.
 | G5 — Multiplayer ready | Reliable remote games without leaks/divergence | Not demonstrated |
 | G6 — Commander ready | Real 3–5-seat Commander and crowded-board checks | Not demonstrated |
 
+## Local progress — October 30, 2026
+
+- P1.1 source inventory and drift check: `42096bf`; 64 focused adapter tests passed
+  locally. CI and P1.2 shared schemas remain pending.
+- P0.1/P0.2 foundation: installed/licensed `6000.6.7f1`, URP `17.6.0`,
+  six EditMode checks, one PlayMode scene check, Windows player build and a
+  20-placeholder packaged camera screenshot demonstrated locally. See the
+  [Unity foundation guide](../Mtg_Projects/mtg_play_unity/README.md).
+- The installed editor is a current release, not LTS. Approved LTS selection,
+  executed licensed CI, real artwork/interaction benchmarks and distribution
+  review remain open. No G0/G1 completion is claimed.
+- Owner clarified initial gameplay as human versus XMage AI, with five-player
+  presentation in mind. This supersedes the original optional-AI sequencing.
+  These are future design targets; the current increment is only P0 foundation
+  and build/test feasibility, not live gameplay or multiplayer implementation.
+
 ## 6. First Codex batch
 
 Run in parallel only where interfaces are fixed:
@@ -303,7 +323,8 @@ comfortable real 1v1. This plan creates no build/license/benchmark/CI success ev
   implementation approach, not the product vision or unrelated PyQt modules.
 - [Historic Qt local delivery](play-local-game.md) and [AI/Focused View epic](play-ai-focused-view-epic.md)
   retain implementation history and regressions. Their AI-first/Qt delivery order
-  is superseded; AI is optional after multiplayer in this roadmap.
+  is superseded. The owner subsequently confirmed human-versus-XMage-AI as the
+  initial playable target; preserve its AI acceptance evidence and remaining gaps.
 - [Python adapter](../Mtg_Projects/mtg_play/ADAPTER.md) and existing acceptance
   fixtures are initial behavioral truth for parity. Update runtime docs as Java
   actually replaces Python; proposed schemas do not establish parity.

@@ -2,8 +2,8 @@
 
 > Superseded delivery approach: see the [Unity + Java roadmap](play-unity-java-roadmap.md).
 > Preserve this epic as Qt implementation history and a regression reference.
-> Its AI-first ordering and Qt presentation decisions do not govern the migration;
-> AI is optional after multiplayer. Existing evidence gaps remain evidence gaps.
+> Its Qt presentation decisions do not govern the migration. The owner confirmed
+> human-versus-XMage-AI as the initial playable target, with up to five players in mind. Existing evidence gaps remain evidence gaps.
 
 **Priority:** High  
 **Target:** Two-player offline Magic with XMage AI  

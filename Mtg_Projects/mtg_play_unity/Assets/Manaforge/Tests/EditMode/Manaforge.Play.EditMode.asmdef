@@ -1,0 +1,6 @@
+{
+  "name": "Manaforge.Play.EditMode",
+  "references": ["Manaforge.Play"],
+  "includePlatforms": ["Editor"],
+  "optionalUnityReferences": ["TestAssemblies"]
+}

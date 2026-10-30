@@ -8,8 +8,8 @@ The [Unity + Java roadmap](play-unity-java-roadmap.md) supersedes Play’s rende
 and adapter delivery approach. This epic retains long-term requirements for
 2–5 seats, complex boards, private information and playgroups. G0/G1 must be
 proved before the bulk Java migration; retain Python/Qt until replacement acceptance.
-The new sequence is local 1v1, private networked 1v1, then 3–5-player Commander;
-AI is an optional later expansion. Installed Play remains gated.
+The clarified sequence is local human-versus-XMage-AI 1v1, private networked 1v1,
+then 3–5-player Commander. Design for up to five players from the start. Installed Play remains gated.
 
 ## Historic delivery: offline AI and Focused View
 

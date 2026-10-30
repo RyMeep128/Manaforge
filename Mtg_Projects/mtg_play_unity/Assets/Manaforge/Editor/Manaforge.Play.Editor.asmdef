@@ -1,0 +1,6 @@
+{
+  "name": "Manaforge.Play.Editor",
+  "rootNamespace": "Manaforge.Play.Editor",
+  "references": ["Manaforge.Play"],
+  "includePlatforms": ["Editor"]
+}

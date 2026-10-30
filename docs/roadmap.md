@@ -376,10 +376,11 @@ headless rules and privacy regressions are retained.
 
 ## Phase 9 - Mixed human/AI seats and local deck testing
 
-Engine AI remains a long-term capability, now optional after multiplayer under
-[P9 of the Unity + Java roadmap](play-unity-java-roadmap.md).
-It is not a prerequisite for the Unity migration. Preserve controller/seat
-independence and existing AI regression evidence.
+The owner confirmed human-versus-XMage-AI as the first playable Unity target;
+preserve controller/seat independence and existing AI regression evidence.
+Design for up to five players without implementing the full multiplayer UI now.
+Enhanced AI and broader mixed tables remain later expansions under the
+[Unity + Java roadmap](play-unity-java-roadmap.md).
 
 - [ ] Separate match seat, player, deck, pilot, and controller; support LocalHuman, RemoteHuman, and EngineAI through the same legal-action protocol. Remote connections follow in Phase 10.
 - [ ] Expose usable XMage AI and an **Add Computer** seat action; support mixed human/AI tables as multiplayer capacity arrives in Phase 11.
