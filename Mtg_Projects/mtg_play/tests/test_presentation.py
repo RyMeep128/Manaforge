@@ -118,12 +118,19 @@ def test_start_is_lazy_and_all_engine_calls_are_off_ui_thread(app):
     controller.snapshotChanged.connect(views.append)
     assert not owner.calls
     documents = (DeckDocument(), DeckDocument())
-    assert controller.start(setup(), documents)
-    drain(app, lambda: bool(views) and not controller.busy)
-    assert owner.decks is documents
-    assert owner.setup == setup()
-    assert all(view.viewer_id == "one" for view in views)
-    close(app, controller)
+    originals = tuple(document.to_dict() for document in documents)
+    try:
+        assert controller.start(setup(), documents)
+        drain(app, lambda: bool(views) and not controller.busy)
+        # Match submission deliberately receives copies, never saved documents.
+        assert owner.decks is not documents
+        assert all(match is not source for match, source in zip(owner.decks, documents))
+        assert tuple(document.to_dict() for document in owner.decks) == originals
+        assert tuple(document.to_dict() for document in documents) == originals
+        assert owner.setup == setup()
+        assert all(view.viewer_id == "one" for view in views)
+    finally:
+        close(app, controller)
     assert owner.closed
     assert all(thread != app.thread() for _, thread in owner.calls)
 

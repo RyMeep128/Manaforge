@@ -115,6 +115,25 @@ Installed Play remains gated until the full acceptance and manual UX review pass
 No engine pin, compatibility manifest, saved deck, or existing printing identity
 is changed by this baseline. No release, tag, or merge is part of this increment.
 
+### CI follow-up: outdated document-identity assertion
+
+At the user's failure report, the pushed `e6f9e1a9b888eb2253662b85b2f1df134260ac4f`
+run had a completed Python 3.13 job with **1 failed, 1,744 passed**:
+[run 40981801955, Python 3.13](https://github.com/RyMeep128/Manaforge/actions/runs/40981801955/job/123823372643).
+The failing `test_start_is_lazy_and_all_engine_calls_are_off_ui_thread` still
+required `owner.decks is documents`, contradicting the intentional worker-owned,
+per-seat document copies added by Story 2. The production copying behavior is
+retained. The test now requires distinct tuple/document identities, unchanged
+serialized contents in source and match documents, and cleanup even if an assertion
+fails. Existing deep-mutation isolation and worker-thread checks remain intact.
+
+The Python 3.12 application's test step had also failed in the inspected job
+summary, while its pinned-engine acceptance was still running. No engine outcome
+is inferred from that partial run, and no further monitoring or rerun was performed.
+The newer landing/readiness commits were not present in this pushed run. This
+assertion fix is local and unverified; no local tests or builds were executed and
+no push is authorized by the investigation.
+
 ### Story 2 increment: independent seats and a fixed human view (local, unverified)
 
 The active setup labels the seats **You** and **Opponent**. The opponent uses
