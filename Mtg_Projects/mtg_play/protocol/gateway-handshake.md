@@ -33,3 +33,18 @@ for this increment under the owner's every-third-commit cadence.
 Private bootstrap, verified artifacts, product process/worker ownership, Java
 session ownership and renderer handoff remain open. G0/G1 remain open; bulk Java
 engine migration and real XMage parity belong to Phase 2/G2 after those gates.
+
+
+## Authentication framing regression coverage — October 30, 2026
+
+Six additional cases at each public authentication entry point cover stalled
+partial headers, stalled partial payloads, oversized lengths, invalid UTF-8,
+truncated payload EOF and EOF before a proof. Stalled frames must time out;
+malformed/truncated frames must fail. Neither path may return a session/context,
+and every accepted failed attempt closes its owned transport. Java additionally
+asserts the peer receives no proof or game data on these failures.
+
+Local validation passed: 227 focused Unity EditMode checks and 22 Java handshake
+cases, alongside the Java protocol corpora and socket checks. No full application
+suite or UI verification was needed. This adds regression evidence without
+changing production authentication behavior or completing G0/G1.

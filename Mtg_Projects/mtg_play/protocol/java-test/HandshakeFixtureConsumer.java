@@ -81,7 +81,16 @@ public final class HandshakeFixtureConsumer {
                 try{GatewayHandshake.accept(p.frames,client.toString(),gateway.toString(),key(),budget);throw new AssertionError("Accepted budget");}catch(IllegalArgumentException expected){}require(!p.frames.isClosed());passed++;
             }
             try(Pair p=new Pair()) {require("AUTH_CANCELLED".equals(failure(()->GatewayHandshake.accept(p.frames,client.toString(),gateway.toString(),key(),1000,()->true))) && p.frames.isClosed());passed++;}
-            require(passed==16);System.out.println("Java gateway handshake: 16 real loopback cases passed");
+            // Exercise the public authentication boundary, not only the frame primitive.
+            byte[][] fragments={new byte[]{0,0},new byte[]{0,0,0,8,123},new byte[]{0,16,0,1},new byte[]{0,0,0,1,(byte)0xff},new byte[]{0,0,0,8,123},new byte[]{}};
+            for(int i=0;i<fragments.length;i++)try(Pair p=new Pair()) {
+                p.peer.getOutputStream().write(fragments[i]);p.peer.getOutputStream().flush();
+                if(i>=4)p.peer.shutdownOutput();
+                String expected=i<2?"AUTH_TIMEOUT":"AUTH_FAILED";
+                require(failure(()->GatewayHandshake.accept(p.frames,client.toString(),gateway.toString(),key(),150)).equals(expected));
+                require(p.frames.isClosed() && TextFrame.read(p.peer.getInputStream())==null);passed++;
+            }
+            require(passed==22);System.out.println("Java gateway handshake: 22 real loopback cases passed");
         }finally{POOL.shutdownNow();require(POOL.awaitTermination(3,TimeUnit.SECONDS));}
     }
 }

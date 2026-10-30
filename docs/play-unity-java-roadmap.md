@@ -555,3 +555,13 @@ Unity EditMode checks pass locally, including 19 Java process scenarios. No UI
 verification was needed. Private bootstrap, verified artifact/process ownership,
 Java session owner, renderer handoff and licensed CI remain open. G0/G1 are not
 complete; bulk P2 and real Java/XMage parity remain gated.
+
+
+### G1 malformed authentication traffic coverage — October 30, 2026
+
+Both authentication entry points now have six additional framing regression
+cases: stalled headers/payloads, oversized length, invalid UTF-8, truncated payload
+and pre-proof EOF. They assert failure/timeout and transport closure before any
+session is returned. Local evidence is 227 Unity EditMode checks and 22 Java
+handshake cases; no production behavior or rendered UI changed. G0/G1 and the
+remaining bootstrap, ownership and licensed CI requirements remain open.

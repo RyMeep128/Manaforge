@@ -85,6 +85,23 @@ namespace Manaforge.Play.Tests
         {
             using var p=new Pair();Assert.Throws<ArgumentOutOfRangeException>(()=>ClientHandshake.Open(p.Transport,Client().ToString(),Gateway().ToString(),Key(),budget));Assert.That(p.Transport.IsClosed,Is.False);
         }
+        [TestCase(0)] [TestCase(1)] [TestCase(2)] [TestCase(3)] [TestCase(4)] [TestCase(5)]
+        public void IncompleteOrMalformedProofFramesNeverCreateASession(int defect)
+        {
+            using var p=new Pair();
+            byte[][] fragments={new byte[]{0,0},new byte[]{0,0,0,8,123},new byte[]{0,16,0,1},new byte[]{0,0,0,1,255},new byte[]{0,0,0,8,123},Array.Empty<byte>()};
+            using var release=new ManualResetEventSlim();
+            var peer=Task.Run(()=>{
+                TextFrame.Read(p.Peer.GetStream());var fragment=fragments[defect];
+                p.Peer.GetStream().Write(fragment,0,fragment.Length);
+                if(defect>=4)p.Peer.Client.Shutdown(SocketShutdown.Send);
+                release.Wait(2000);
+            });
+            try{
+                Assert.That(Failure(()=>ClientHandshake.Open(p.Transport,Client().ToString(),Gateway().ToString(),Key(),250)),Is.EqualTo(defect<2?"AUTH_TIMEOUT":"AUTH_FAILED"));
+                Assert.That(p.Transport.IsClosed,Is.True);
+            }finally{release.Set();Assert.That(peer.Wait(2000),Is.True);}
+        }
         [Test] public void ValidProofDoesNotEnableFixtureModeFromPeerData()
         {
             using var p=new Pair();var peer=Task.Run(()=>{
