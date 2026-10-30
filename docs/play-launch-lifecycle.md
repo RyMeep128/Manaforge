@@ -141,3 +141,10 @@ now specifies a separate per-seat key and role/nonce/session/pin-bound hello
 proof, with single-use Java/C# verifiers. Credential generation/delivery,
 challenge exchange, verified readiness and owner lifeline remain unimplemented.
 No process lifecycle transition uses proof success yet.
+
+
+The [owned dummy exchange](../Mtg_Projects/mtg_play/protocol/dummy-exchange.md)
+now proves private test bootstrap, actual loopback Java↔Unity EditMode messages,
+wrong-key exclusion and owner-EOF listener cleanup locally. This fixture starts
+no descendants and is separate from LaunchOwner. Product bootstrap/containment,
+packaged client integration and CI evidence remain open.

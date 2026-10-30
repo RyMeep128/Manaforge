@@ -61,3 +61,20 @@ def test_viewer_auth_schema_separates_shape_from_authentication():
             # Wrong proofs, pins, nonce/context and role can be structurally valid.
             # Runtime cryptographic verification must still reject them.
             validator.validate(case["envelope"])
+
+
+def test_dummy_snapshot_uses_existing_dto_shape_without_concealed_identity():
+    schema = json.loads(
+        (ROOT / "python-contracts-v1.schema.json").read_text(encoding="utf-8")
+    )
+    schema["$ref"] = "#/$defs/GameSnapshot"
+    fixture = json.loads(
+        (ROOT / "fixtures/dummy-session-v1.json").read_text(encoding="utf-8")
+    )
+    Draft202012Validator(schema).validate(fixture["snapshot"])
+    assert fixture["snapshot"]["actions"]
+    concealed = [obj for obj in fixture["snapshot"]["objects"] if obj["hidden"]]
+    assert concealed
+    for obj in concealed:
+        assert obj["card_identity"] is None
+        assert obj["characteristics"] is None

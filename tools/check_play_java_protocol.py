@@ -23,7 +23,21 @@ def main():
         action="store_true",
         help="Explicitly allow the pinned CI dependency download",
     )
+    parser.add_argument(
+        "--dummy-output",
+        type=Path,
+        help="Export test-only classes under Unity Artifacts for the CSharp dummy exchange",
+    )
     args = parser.parse_args()
+    if args.dummy_output:
+        allowed = (ROOT / "Mtg_Projects/mtg_play_unity/Artifacts").resolve()
+        if (
+            not args.dummy_output.resolve().is_relative_to(allowed)
+            or args.dummy_output.resolve() == allowed
+        ):
+            parser.error(
+                "Dummy output must be a dedicated directory under Unity Artifacts"
+            )
     manifest = json.loads((PLAY / "artifacts.json").read_text())
     artifact = "xmage/mage-server/lib/gson-2.13.2.jar"
     compiler = shutil.which("javac")
@@ -61,6 +75,7 @@ def main():
             PROTOCOL / "java-test/MessageFixtureConsumer.java",
             PROTOCOL / "java/manaforge/protocol/ViewerAuthentication.java",
             PROTOCOL / "java-test/AuthFixtureConsumer.java",
+            PROTOCOL / "java-test/DummyGateway.java",
         ]
         subprocess.run(
             [
@@ -137,6 +152,28 @@ def main():
             check=True,
             timeout=60,
         )
+
+        if args.dummy_output:
+            output = args.dummy_output.resolve()
+            output.mkdir(parents=True, exist_ok=True)
+            if any(
+                path.is_symlink()
+                or (hasattr(path, "is_junction") and path.is_junction())
+                for path in output.rglob("*")
+            ):
+                parser.error("Dummy output must not contain linked paths")
+            shutil.copytree(
+                workspace / "manaforge", output / "manaforge", dirs_exist_ok=True
+            )
+            if jar.resolve() != (output / "gson.jar").resolve():
+                shutil.copyfile(jar, output / "gson.jar")
+            shutil.copyfile(
+                PROTOCOL / "fixtures/dummy-session-v1.json",
+                output / "dummy-session-v1.json",
+            )
+            print(
+                "Exported test-only Java dummy classes; no credentials or runtime engine"
+            )
 
 
 if __name__ == "__main__":

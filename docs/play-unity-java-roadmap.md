@@ -370,3 +370,14 @@ comfortable real 1v1. This plan creates no build/license/benchmark/CI success ev
 finishes Magic with Arena-like fluidity. Later the same client supports a four-player
 Commander pod with native decks, XMage rules, accurate artwork/current state and
 private information kept private.
+
+
+### G1 local dummy-transport evidence — October 30, 2026
+
+An [owned Java↔Unity EditMode fixture](../Mtg_Projects/mtg_play/protocol/dummy-exchange.md)
+now exchanges private viewer bootstrap/authentication, mock snapshot/action,
+stale/pending rejection, submitted ACK, explicit fixture-only result and clean
+shutdown. Wrong-key and owner-EOF checks pass locally. No Python action relay,
+XMage startup, packaged UI match or real result is involved. Forty focused
+EditMode checks and four schema checks pass; licensed CI and final public body
+validation remain pending. G0/G1 remain open and the bulk P2 port stays gated.

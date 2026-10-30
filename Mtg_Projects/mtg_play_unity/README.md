@@ -1,6 +1,6 @@
 # Manaforge Play Unity foundation
 
-Current scope: P0.1/P0.2 feasibility increment only. Gameplay and multiplayer
+Current scope: P0 feasibility, P1 protocol/dummy-exchange checks and P3 rendering foundations. Gameplay and multiplayer
 are future design targets, not implementation scope for this increment. **Fixture rendering only**, without a game engine,
 deck import, card artwork, gameplay actions or AI integration. First playable
 target is one human versus XMage AI; design for up to five players. The shared
@@ -207,3 +207,19 @@ Scheduled CI snapshot: Tests for `547e30b`, `84fa6d5`, `712cef8` and the earlier
 Qt teardown fix `7501539` were still running. No waits or success claims; defer
 unfinished runs to the next scheduled check. The manual licensed Unity workflow
 has not supplied CI evidence for these components.
+
+## Java↔Unity dummy transport milestone
+
+EditMode now prepares a test-only Java peer and runs three owned process scenarios:
+mutually authenticated fixture exchange, wrong viewer key with no session data,
+and owner EOF stopping the listener. The happy path receives a mock snapshot,
+compares opaque action/decision tokens, rejects stale/pending submissions,
+receives submitted (not confirmed), a fixture-only result and clean shutdown.
+See the [exchange guide](../mtg_play/protocol/dummy-exchange.md) for exact scope.
+
+`EditMode` now requires Python and JDK java/javac on PATH. It verifies the existing
+pinned Gson dependency; add `-DownloadGson` only when explicitly allowing the
+existing pinned Maven download. The licensed workflow installs the same JDK pin
+as hosted protocol CI. No runtime key, bootstrap or proof is written to disk or
+uploaded. Local results: 40 EditMode tests and four schema checks passed; CI is
+pending. The packaged scene still has no real Java connection or gameplay.

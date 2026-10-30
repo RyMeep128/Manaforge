@@ -256,3 +256,15 @@ checks. Local focused evidence: 37 Unity EditMode and three schema checks passed
 This does not deliver bootstrap credentials, open a listener or exchange actual
 peer messages. Private launch delivery, both-direction handshake and G1 remain
 pending. Never pass owner credentials or the all-decks manifest to Unity.
+
+
+## Actual dummy process exchange
+
+The [dummy exchange](dummy-exchange.md) now runs an owned Java loopback peer
+against a Unity EditMode C# client, with private pipe bootstrap, mutual viewer
+proof, mock snapshot/action, stale/pending rejections, submitted ACK,
+fixture-only result and clean shutdown. Wrong-key and owner-EOF scenarios also
+pass. Python is used for build preparation only. Local evidence: 40 Unity
+EditMode tests, the Java corpora and four schema checks passed. This is neither
+packaged-player gameplay nor final public snapshot/result validation; G1 and CI
+acceptance remain pending.

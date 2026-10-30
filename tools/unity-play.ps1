@@ -2,7 +2,8 @@ param(
     [ValidateSet('Prepare', 'EditMode', 'PlayMode', 'Build', 'Smoke')]
     [string]$Mode = 'Prepare',
     [string]$EditorPath = $env:MANAFORGE_UNITY_EDITOR,
-    [int]$TimeoutSeconds = 1200
+    [int]$TimeoutSeconds = 1200,
+    [switch]$DownloadGson
 )
 $ErrorActionPreference = 'Stop'
 $project = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../Mtg_Projects/mtg_play_unity'))
@@ -46,6 +47,15 @@ if ($Mode -eq 'Smoke') {
 if (-not (Test-Path -LiteralPath $EditorPath)) { throw "Pinned Unity editor missing: $EditorPath" }
 $installed = (Get-Item -LiteralPath $EditorPath).VersionInfo.ProductVersion
 if (-not $installed.StartsWith($version)) { throw "Editor version mismatch: expected $version, found $installed" }
+if ($Mode -eq 'EditMode') {
+    # Build a current test-only Java peer; Python does not relay any gameplay frames.
+    $dummyArguments = @((Join-Path $PSScriptRoot 'check_play_java_protocol.py'), '--dummy-output', (Join-Path $artifacts 'JavaDummy'))
+    $cachedGson = Join-Path $artifacts 'JavaDummy/gson.jar'
+    if (Test-Path -LiteralPath $cachedGson) { $dummyArguments += @('--gson', $cachedGson) }
+    if ($DownloadGson) { $dummyArguments += '--download-gson' }
+    & python @dummyArguments
+    if ($LASTEXITCODE -ne 0) { throw 'Java dummy fixture preparation failed' }
+}
 $arguments = @('-batchmode', '-nographics', '-projectPath', $project, '-logFile', (Join-Path $artifacts "$Mode.log"))
 if ($Mode -in @('EditMode', 'PlayMode')) {
     $results = Join-Path $artifacts "$($Mode.ToLowerInvariant()).xml"
@@ -59,7 +69,7 @@ Invoke-OwnedProcess $EditorPath $arguments
 if ($Mode -in @('EditMode', 'PlayMode')) {
     [xml]$report = Get-Content -LiteralPath $results
     # Counts include printing policy/card components and attached-panel handoff checks.
-    $minimum = if ($Mode -eq 'EditMode') { 37 } else { 3 }
+    $minimum = if ($Mode -eq 'EditMode') { 40 } else { 3 }
     if ($report.'test-run'.result -ne 'Passed' -or [int]$report.'test-run'.total -lt $minimum) {
         throw "Missing or failed $Mode acceptance"
     }
