@@ -66,6 +66,7 @@ jobs:
       - name: Install optional library server dependency for CI
         run: python -m pip install -r requirements-library.txt
       - name: Test Proxy, Core, Deck Editor, and their integration
+        id: application-tests
         working-directory: Mtg_Projects
         env:
           PRINT_PROXY_PREP_DATA_DIR: ${{ runner.temp }}/mtg-suite-test-data
@@ -74,7 +75,7 @@ jobs:
         run: python -m pytest -vv --tb=short --durations=10 -o faulthandler_timeout=120 mtg_editor/tests integration_tests mtg_proxy/tests mtg_core/tests mtg_play/tests
       - name: Determine XMage acceptance scope
         id: xmage-scope
-        if: ${{ !cancelled() && matrix.python == '3.12' }}
+        if: ${{ !cancelled() && matrix.python == '3.12' && steps.application-tests.outcome == 'success' }}
         env:
           XMAGE_FORCE: ${{ github.event_name == 'workflow_dispatch' && (inputs.verify_xmage || inputs.stress_xmage) }}
         run: |

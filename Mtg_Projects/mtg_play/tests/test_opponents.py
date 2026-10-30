@@ -2,7 +2,6 @@
 
 from copy import deepcopy
 from threading import Event, get_ident
-from types import SimpleNamespace as NS
 
 import pytest
 from PyQt6 import QtWidgets as W

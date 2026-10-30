@@ -1024,3 +1024,20 @@ CI regressions cover mainboard/legacy commander routing, cancelled server/bridge
 waits, and cancellation propagation/cleanup for both startup controllers. No
 local tests, builds or engine acceptance were run; fixes remain pending CI/user
 verification and are not pushed.
+
+
+CI repair verification (0.5.19-alpha.1): run 40986305301 at a6107df failed on
+both Python versions because Play and Editor tests shared the test_readiness.py
+module basename. Play's module is renamed test_play_readiness.py. The separate
+commander_ids NameError seen by lint and engine scenarios is fixed in 2f9bee1.
+An unused test import is removed. Engine acceptance scope now requires successful
+application tests, preventing long engine runs after basic collection failures.
+
+Local focused verification is explicitly authorized by the user's latest request.
+On Python 3.13, all Play tests plus Editor readiness pass (265 tests); the exact
+CI application-suite roots collect successfully (1823 tests). The broader
+collection initially stopped because this local interpreter lacked QtPdf; using
+the repository-pinned PyQt6 6.11.0 resolved that environment mismatch. Repository
+Ruff lint, scoped formatting and diff checks pass. No local XMage acceptance or
+application build was run. The accumulated commits are pushed at the user's
+explicit request; further epic work remains local unless separately authorized.
