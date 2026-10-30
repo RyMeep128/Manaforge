@@ -38,6 +38,8 @@ namespace Manaforge.Play
         private readonly CardPlate typeplate = new CardPlate("typeplate");
         private readonly VisualElement interior = new VisualElement { name = "frame-interior", pickingMode = PickingMode.Ignore };
         private readonly VisualElement printedStatsMask = new VisualElement { name = "printed-stats-mask", pickingMode = PickingMode.Ignore };
+        private readonly VisualElement edge = new VisualElement { name = "card-edge", pickingMode = PickingMode.Ignore };
+        private bool selected;
         private readonly Label type = Text("type");
         private readonly Label rules = Text("rules");
         private readonly Label stats = Text("stats");
@@ -61,6 +63,7 @@ namespace Manaforge.Play
             printedStatsMask.style.position=Position.Absolute;printedStatsMask.style.backgroundColor=new Color(.07f,.07f,.065f);
             Add(frame); Add(interior); Add(printedStatsMask); Add(artwork); Add(nameplate); Add(typeplate); Add(statplate); Add(missing); Add(title); Add(mana);
             Add(type); Add(rules); Add(stats); Add(status);
+            edge.style.position=Position.Absolute;Add(edge);
             Conceal();
         }
 
@@ -119,12 +122,24 @@ namespace Manaforge.Play
             mode = presentation; width = newWidth; Layout();
         }
 
+        // Selection draws over the card; it must not change the clipped content box when rotated.
+        public void SetSelected(bool value){selected=!concealed && value;Layout();}
+
         private void Layout()
         {
             bool full = mode == CardPresentationMode.Full;
+            bool hasStats = !string.IsNullOrEmpty(stats.text);
             style.width = width; style.height = width * (full ? 1.4f : .78f);
             float scale = width / 300f;
             style.borderTopLeftRadius=style.borderTopRightRadius=style.borderBottomLeftRadius=style.borderBottomRightRadius=width*.045f;
+            Box(edge,0,0,100,100);
+            float rim=full?0:Mathf.Max(1.5f,2*scale);
+            edge.style.borderLeftWidth=edge.style.borderRightWidth=edge.style.borderBottomWidth=rim;
+            edge.style.borderTopWidth=selected?Mathf.Max(3,rim):rim;
+            edge.style.borderLeftColor=edge.style.borderRightColor=edge.style.borderBottomColor=new Color(.025f,.025f,.025f);
+            edge.style.borderTopColor=selected?Color.cyan:new Color(.025f,.025f,.025f);
+            edge.style.borderTopLeftRadius=edge.style.borderTopRightRadius=edge.style.borderBottomLeftRadius=edge.style.borderBottomRightRadius=width*.045f;
+            edge.style.display=concealed?DisplayStyle.None:DisplayStyle.Flex;
             foreach(var label in new[]{title,type,rules,stats,status,missing}) {
                 label.style.fontSize=(label==rules?12.8f:label==stats?23:label==status?10:18)*scale;
                 label.style.backgroundColor=Color.clear;
@@ -141,11 +156,12 @@ namespace Manaforge.Play
             // Keep the exact printing's colored surround and original bevels, not a generic dark panel.
             frame.uv=full?new Rect(0,0,1,1):new Rect(0,.47f,1,.53f);
             frame.style.display=concealed || frame.image==null?DisplayStyle.None:DisplayStyle.Flex;
-            Box(interior,7,11,86,83);
+            // Preserve the printing footer: artist/collector credits start below the rules box.
+            Box(interior,7,11,86,79);
             interior.style.display=!concealed && full && !authenticOnly?DisplayStyle.Flex:DisplayStyle.None;
             // The compact footer hides the underlying printing below the art window, including set symbols.
-            Box(printedStatsMask,full?74:0,full?89:91,full?24:100,full?10:9);
-            printedStatsMask.style.display=!concealed && !(full && authenticOnly)?DisplayStyle.Flex:DisplayStyle.None;
+            Box(printedStatsMask,full?74:0,full?89:90,full?24:100,10);
+            printedStatsMask.style.display=!concealed && !(full && authenticOnly) && (!full || hasStats)?DisplayStyle.Flex:DisplayStyle.None;
             Box(artwork,8,full?12:21,84,full?43:70);
             artwork.scaleMode=ScaleMode.StretchToFill;artwork.uv=artCrop;
             if(full && authenticOnly) {
@@ -164,7 +180,7 @@ namespace Manaforge.Play
             bool reconstructed=!concealed && !(full && authenticOnly);
             nameplate.style.display=reconstructed?DisplayStyle.Flex:DisplayStyle.None;
             typeplate.style.display=reconstructed && full?DisplayStyle.Flex:DisplayStyle.None;
-            statplate.style.display=reconstructed && !string.IsNullOrEmpty(stats.text)?DisplayStyle.Flex:DisplayStyle.None;
+            statplate.style.display=reconstructed && hasStats?DisplayStyle.Flex:DisplayStyle.None;
             mana.style.display=reconstructed && full?DisplayStyle.Flex:DisplayStyle.None;
             foreach(var label in new[]{title,type,rules,stats,status}) {
                 bool show=reconstructed && (full || (label!=type && label!=rules));
@@ -186,6 +202,7 @@ namespace Manaforge.Play
         public void Conceal()
         {
             concealed = true;
+            selected = false;
             Identity = null;
             artwork.image = null; frame.image = null; mana.Conceal();
             foreach (var label in new[] { title, type, rules, stats, status, missing })

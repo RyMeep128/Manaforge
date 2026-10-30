@@ -88,6 +88,16 @@ namespace Manaforge.Play.Tests
             Assert.That(view.Q<Label>("rules").enableRichText, Is.False);
             Assert.That(view.Q<Label>("rules").text, Is.EqualTo("<size=0>supplied</size>"));
         }
+        [Test] public void FullCardStatsSlotTracksSuppliedCharacteristicsWithoutRebinding()
+        {
+            view.SetPresentation(CardPresentationMode.Full,300);
+            foreach(var pt in new string[]{null,"3/3",null,"0/1"}) {
+                view.UpdateValues(Values(pt));var expected=pt==null?DisplayStyle.None:DisplayStyle.Flex;
+                Assert.That(view.Q<CardPlate>("pt-plate").style.display.value,Is.EqualTo(expected));
+                Assert.That(view.Q<VisualElement>("printed-stats-mask").style.display.value,Is.EqualTo(expected));
+                Assert.That(view.Artwork,Is.SameAs(texture));
+            }
+        }
         [Test] public void InvalidLayoutInputIsRejected()
         {
             Assert.Throws<ArgumentOutOfRangeException>(() => view.SetPresentation(CardPresentationMode.Full, float.NaN));

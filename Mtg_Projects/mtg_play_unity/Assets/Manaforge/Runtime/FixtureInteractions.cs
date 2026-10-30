@@ -49,9 +49,9 @@ namespace Manaforge.Play
         {
             if (disposed) throw new ObjectDisposedException(nameof(FixtureInteractions));
             if (index < 0 || index >= cards.Count) throw new ArgumentOutOfRangeException(nameof(index));
-            if (SelectedIndex >= 0) cards[SelectedIndex].style.borderTopWidth = 0;
+            if (SelectedIndex >= 0) cards[SelectedIndex].SetSelected(false);
             SelectedIndex = index; TargetIndex = -1; line.Progress = 0;
-            cards[index].style.borderTopColor = Color.cyan; cards[index].style.borderTopWidth = 3;
+            cards[index].SetSelected(true);
             SelectionCount++; inspect(index); line.MarkDirtyRepaint();
         }
         public void ToggleSelectedTap()
@@ -76,7 +76,7 @@ namespace Manaforge.Play
             for (int i = 0; i < cards.Count; i++)
             {
                 cards[i].UnregisterCallback(enter[i]); cards[i].UnregisterCallback(down[i]);
-                cards[i].style.rotate = new Rotate(new Angle(0)); cards[i].style.borderTopWidth = 0;
+                cards[i].style.rotate = new Rotate(new Angle(0)); cards[i].SetSelected(false);
             }
             tapped.Clear(); SelectedIndex = TargetIndex = -1;
         }

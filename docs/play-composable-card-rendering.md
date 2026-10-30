@@ -346,3 +346,29 @@ for this spacing-only revision uses the Windows build and 20-object packaged
 artwork smoke; no full application suite or additional unit suite is run. Owner
 visual approval remains pending. CI review is due after the next commit under
 the established third-commit cadence; no CI pass is claimed for this increment.
+
+
+## Dynamic P/T slot and footer/rotated-edge follow-up — October 30, 2026
+
+Owner review found a reserved P/T cutout on noncreatures, obscured printed footer
+credits and a thin printing leak visible when tapping a card. The full-view P/T
+mask now follows supplied P/T presence, just like the badge: null removes the
+slot, later P/T restores it without rebinding. No card-type or legality inference
+is introduced. The reconstructed interior stops at 90 percent rather than 94,
+leaving more of the original artist/collector footer visible.
+
+Compact views have an overlapping lower mask and an explicit final rim overlay.
+Selection now changes this overlay rather than the card's layout border, so
+selecting/tapping does not move artwork within its clip. Concealment clears the
+selection highlight. A focused EditMode transition check covers absent/present/
+absent/present P/T, and the existing PlayMode interaction check now requires the
+selected/tapped content rectangle to remain unchanged. These fixes remain subject
+to owner visual review; provided-asset curation remains separate work.
+
+
+Validation passed: 242 focused EditMode checks, four PlayMode checks, the Windows
+build and the 20-object packaged gesture/benchmark invocation. The captured
+fixture includes tapped cards and visible printed artist/collector credits. This
+is fixture validation, not final owner approval or live gameplay. No full
+application suite ran. CI is checked after this third commit, with unfinished
+runs deferred rather than awaited.

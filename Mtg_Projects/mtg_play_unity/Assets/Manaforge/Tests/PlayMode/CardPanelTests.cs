@@ -80,6 +80,7 @@ namespace Manaforge.Play.Tests
             document.rootVisualElement.Add(second);
             second.Bind(Identity("second"), texture, new Rect(0, 0, 1, 1));
             yield return null; yield return null;
+            var contentBeforeSelection=second.contentRect;
             int inspected = -1;
             var interactions = new FixtureInteractions(document.rootVisualElement, new[] { view, second }, index => inspected = index);
             try
@@ -93,6 +94,7 @@ namespace Manaforge.Play.Tests
                 Assert.That(interactions.TargetIndex, Is.Zero);
                 yield return null; yield return null;
                 Assert.That(second.resolvedStyle.rotate.angle.value, Is.EqualTo(90));
+                Assert.That(second.contentRect,Is.EqualTo(contentBeforeSelection),"Selection must not move artwork inside the rotated clip");
                 interactions.ToggleSelectedTap();
                 Assert.That(interactions.IsTapped(1), Is.False);
                 interactions.Select(0);
