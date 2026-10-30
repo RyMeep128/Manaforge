@@ -1,0 +1,838 @@
+# EPIC: Manaforge Play — AI & Arena-Style Experience Rebuild
+
+**Priority:** High  
+**Target:** Two-player offline Magic with XMage AI  
+**Branch:** `feature/play-ai-focused-view`  
+**Type:** Replacement experience / incremental architectural enhancement  
+**Status:** Planned — awaiting implementation
+
+## 1. Epic Overview
+
+### Vision
+
+Manaforge Play should let a player select one of their existing decks, choose an opponent, and enjoy a complete, rules-enforced Magic game through an intuitive, visually appealing interface.
+
+The first playable target is **one local human versus one XMage AI**, operating completely offline once the match begins.
+
+The interface should take inspiration from Magic: The Gathering Arena's usability, battlefield organization, card inspection, decision presentation, and match flow, without copying proprietary assets or rebuilding its visual engine.
+
+Manaforge remains responsible for gameplay presentation and player interactions. XMage remains responsible for rules, priority, legal actions, AI, and authoritative game state.
+
+This epic supersedes the current local pass-and-play UX. It does not discard the existing XMage adapter or validated gameplay contracts.
+
+### Success statement
+
+A user should be able to:
+
+1. Open Play.
+2. Select Play Offline.
+3. Choose a format.
+4. Select their own saved deck.
+5. Choose an AI opponent's deck or randomize a legal deck.
+6. Enter a game with clear loading progress.
+7. View a large, readable opening hand and complete mulligans.
+8. Play Magic through an immersive, responsive battlefield.
+9. Cast spells, attack, block, use abilities, resolve choices, and inspect cards.
+10. Finish a genuine XMage-enforced match and return cleanly to the lobby.
+
+The process must not require a second human, a network connection during gameplay, or external websites.
+
+---
+
+## 2. Non-Negotiable Product Decisions
+
+### Player and lobby model
+
+- The local user always occupies their own seat.
+- Other seats offer **Use AI** or **Invite Friend**.
+- Invite Friend is unavailable until multiplayer networking is implemented.
+- Do not expose technical player-controller abstractions in the UI.
+- Internally, maintain independent match-seat, controller, player, pilot, deck, and ownership concepts.
+- Preserve the ability to support 2–5 players later without imposing that UI complexity now.
+- Remove local human-to-human pass-and-play and the handoff screen from the active Play experience.
+
+### Play navigation
+
+The landing screen includes:
+
+- **Play:** Opens the match-mode selection flow.
+- **Play Offline:** Direct entry to offline AI match setup.
+- **Host Match:** Visible, explicitly unavailable until networking.
+- **Join Match:** Visible on the right, explicitly unavailable until networking.
+
+Do not simulate unavailable networking behavior or fabricate successful connections.
+
+### Battlefield
+
+- Enter gameplay in a maximized application window.
+- Hide normal Manaforge workspace navigation while playing.
+- Use a dedicated, Arena-inspired battlefield.
+- The initial layout is **Focused View**, with one opponent above the local player.
+- Focused View is permanent, not a temporary two-player implementation.
+- Future 3–5-player matches will introduce additional switchable battlefield views.
+- Do not build the complete multiplayer adaptive layout now.
+- Preserve the ability to inspect all relevant information without cluttering the main battlefield.
+
+### Cards and artwork
+
+- Battlefield cards display the original printing's **name bar, artwork, and surrounding border**, with the lower rules-text area cropped away.
+- Generate this battlefield representation locally using a standardized crop of the existing full card.
+- No sophisticated frame recognition, custom-frame reconstruction, or special handling of unusual printings is required.
+- Weird crops for showcase or full-art printings are acceptable for this milestone.
+- Hovering displays the full card, readable rules text, and current game characteristics.
+- Current counters, damage, tapping, power/toughness, and other gameplay changes remain live overlays or inspection data, not baked into cached artwork.
+- Generated assets are shared by printing and face, not duplicated per deck.
+
+### Offline asset policy
+
+- No online artwork requests during a match.
+- No online card metadata searches during a match.
+- Prepare available artwork before entering gameplay.
+- If artwork is missing, show a pre-match warning.
+- Allow **Continue Anyway** or **Return to Lobby**.
+- Use placeholders during gameplay where required.
+- Defer advanced artwork repair and download workflows.
+
+### Engineering rules
+
+- Preserve the existing canonical DeckDocument and exact-printing identities.
+- Do not implement Magic rules or independent AI logic in the UI.
+- Preserve versioned gameplay contracts, seat-specific visibility, and authoritative decisions.
+- Keep all engine and expensive artwork operations off the UI thread.
+- Do not perform unnecessary unrelated refactors.
+- Avoid introducing new network dependencies.
+- Do not run local tests or local engine acceptance; add tests and let GitHub Actions CI execute them.
+- Keep the installed Play feature gated until full acceptance.
+
+---
+
+# 3. Implementation Stories
+
+## Story 1 — Prove XMage AI through the existing adapter
+
+**Priority:** P0  
+**Dependencies:** None
+
+### User story
+
+As a Manaforge player, I want to play against a computer opponent so I can test my decks without requiring another person.
+
+### Requirements
+
+Investigate the pinned XMage engine's AI controller and match-creation interfaces.
+
+The current Manaforge bridge creates all seats as human players. Extend the bridge/adapter to configure one local human and one engine-controlled AI.
+
+Prove that the AI can operate without a second human session or artificial UI button presses.
+
+Validate:
+
+- AI seat creation and deck assignment.
+- Successful game initialization.
+- Human opening-hand decisions.
+- AI opening-hand handling.
+- AI priority and turn advancement.
+- AI land plays and legal actions.
+- AI participation in combat.
+- Game termination and cleanup.
+
+Initially validate Freeform, followed by the existing supported two-player Commander configuration.
+
+Preserve the pinned engine version and runtime integrity checks. Do not silently upgrade XMage.
+
+### Acceptance criteria
+
+- [ ] A real XMage match starts with one human and one AI.
+- [ ] The AI takes turns autonomously.
+- [ ] The human can legally interact with the AI through public adapter commands.
+- [ ] AI decisions do not need Manaforge UI automation.
+- [ ] Hidden AI information remains protected.
+- [ ] Match results and cleanup are handled correctly.
+- [ ] A headless pinned-engine CI acceptance scenario demonstrates the integration.
+- [ ] Unsupported AI capabilities are documented rather than simulated.
+
+**Gate:** Do not declare the AI playable or make the rebuilt UI depend on it until this scenario passes CI.
+
+---
+
+## Story 2 — Refactor match seats and controllers for future multiplayer
+
+**Priority:** P0  
+**Dependencies:** Story 1
+
+### User story
+
+As a player, I want a simple "You versus Opponent" experience now, without limiting Manaforge's ability to support multiplayer later.
+
+### Requirements
+
+Establish a clean separation between:
+
+- Match seat
+- Player identity
+- Deck identity and owner
+- Pilot/controller
+- Engine session
+- Authorized player view
+
+Support LocalHuman and EngineAI now. Reserve RemoteHuman for future work without implementing networking.
+
+The current user's seat is always the local human in the offline interface.
+
+The opponent seat is assigned an AI controller. Later, the same lobby model can substitute or add invited human controllers.
+
+Remove active pass-and-play and seat-handoff UI paths.
+
+Retain the existing adapter's multiplayer-capable seat identity and authoritative visibility mechanisms.
+
+### Acceptance criteria
+
+- [ ] Offline games contain exactly one local human and one AI.
+- [ ] UI code does not assume every seat is human.
+- [ ] UI code does not require changing which human seat owns the screen.
+- [ ] The game model remains compatible with 2–5 seats.
+- [ ] No artificial five-player protocol maximum is introduced.
+- [ ] Existing 2–5-seat adapter regression scenarios remain intact.
+- [ ] Saved decks are not modified by match setup.
+- [ ] Gameplay actions cannot be submitted on behalf of an unauthorized seat.
+
+---
+
+## Story 3 — Reliable startup, diagnostics, and game lifecycle
+
+**Priority:** P0  
+**Dependencies:** Story 1
+
+### User story
+
+As a player, I want a game to start reliably and explain what is happening so I never sit on an unexplained loading screen until it times out.
+
+### Requirements
+
+Audit the existing runtime startup, Java bridge, XMage server, player connection, deck resolution, match creation, and snapshot readiness sequence.
+
+Replace generic waiting states with distinct, observable stages.
+
+Diagnose the existing timeout paths and eliminate avoidable blocking or deadlocks without weakening correctness.
+
+Ensure worker queues do not allow background polling or artwork operations to starve required gameplay commands.
+
+Maintain safe handling of uncertain command outcomes; do not blindly replay potentially successful commands.
+
+Track stage duration and stable error codes in diagnostic logs.
+
+Provide safe cleanup after failed startup.
+
+### Acceptance criteria
+
+- [ ] UI remains responsive during every startup stage.
+- [ ] Startup reports the actual stage being executed.
+- [ ] Each timeout identifies its failing operation in diagnostics.
+- [ ] A failed startup does not leave an inaccessible half-active match.
+- [ ] Return to Lobby is possible after confirmed cleanup.
+- [ ] No orphaned owned XMage processes remain after successful cleanup.
+- [ ] No false progress percentages are shown.
+- [ ] Repeated start/fail/retry/close cycles pass CI acceptance.
+- [ ] No regression to engine-version validation or existing session safety.
+
+---
+
+## Story 4 — Redesign the Play landing page
+
+**Priority:** P1  
+**Dependencies:** None
+
+### User story
+
+As a player, I want an attractive, simple Play screen where starting a game is immediately obvious.
+
+### Requirements
+
+Replace the existing Play setup page with a dedicated Play landing screen.
+
+Present Play and Play Offline prominently, with Host Match and Join Match grouped on the right.
+
+Use Manaforge's existing visual language with larger artwork, deliberate spacing, clear typography, and restrained controls.
+
+Play opens match-mode selection; Play Offline directly selects the available AI mode. Both reach the same underlying match setup rather than maintaining duplicate logic.
+
+Host Match and Join Match are visible but clearly disabled or marked Coming Soon.
+
+Opening Play must not launch XMage.
+
+### Acceptance criteria
+
+- [ ] Navigation is visually clear and consistent with Manaforge.
+- [ ] Play Offline opens the offline setup path.
+- [ ] Host and Join have no fake network behavior.
+- [ ] Opening and leaving Play does not initialize the engine.
+- [ ] Layout works at common desktop sizes.
+- [ ] Existing Home navigation remains functional.
+
+---
+
+## Story 5 — Format-first lobby and deck selection
+
+**Priority:** P1  
+**Dependencies:** Stories 2 and 4
+
+### User story
+
+As a player, I want to select the match format before choosing decks, then prepare my own seat and opponent from one simple lobby.
+
+### Requirements
+
+Create a shared match-lobby model and UI.
+
+Flow:
+
+1. Choose supported format.
+2. Enter lobby.
+3. Choose local player's deck.
+4. Configure opponent as AI.
+5. Choose AI deck.
+6. Start match.
+
+Only expose formats currently supported by the adapter and verified for the chosen match type. Initially prioritize Freeform and Commander.
+
+Show each seat clearly as **You** and **Opponent**.
+
+The local human seat is fixed. The opponent seat offers Use AI and disabled Invite Friend.
+
+Deck selection must use existing Core deck documents and preserve exact printings.
+
+For Commander, publicly display other players' deck names and commander names/artwork in the lobby, but not full deck contents.
+
+Provide access to local decks and, where the existing online library integration allows it, browsing or borrowing a shared deck before the match. A borrowed deck must become a local, isolated match snapshot.
+
+Do not introduce new online library infrastructure as part of this story.
+
+### Acceptance criteria
+
+- [ ] Format is chosen before either deck.
+- [ ] Both seats display correct deck names and available artwork.
+- [ ] Commander lobby metadata is shown correctly.
+- [ ] Ineligible decks cannot be started silently.
+- [ ] Borrowed decks do not modify their owners' documents.
+- [ ] Returning from preparation errors preserves lobby selections.
+- [ ] No remote shared-library access is required once the match starts.
+- [ ] Future 3–5-seat lobby expansion does not require a completely different setup model.
+
+---
+
+## Story 6 — AI deck selection and Randomize
+
+**Priority:** P1  
+**Dependencies:** Stories 1 and 5
+
+### User story
+
+As a player, I want to select a particular deck for the AI or press Randomize to find a legal opponent automatically.
+
+### Requirements
+
+In the opponent panel, provide:
+
+- Select Deck
+- Randomize
+- Chosen deck name
+- Commander display, when applicable
+- Validation/readiness state
+
+Randomize selects from available saved decks verified to be eligible for the chosen format and supported by the pinned engine.
+
+Randomization must never silently substitute a different deck after selection.
+
+If no eligible decks exist, explain that clearly.
+
+The selected AI deck must use the ordinary Core deck representation and match preparation pipeline.
+
+### Acceptance criteria
+
+- [ ] User can select a specific AI deck.
+- [ ] Randomize selects an eligible legal deck.
+- [ ] Unsupported decks are excluded or explicitly rejected by preflight validation.
+- [ ] Commander-specific requirements are respected.
+- [ ] No eligible decks produces a clear message, not an infinite retry.
+- [ ] Repeated randomization can select different eligible decks.
+- [ ] The chosen deck is shown before the match starts.
+- [ ] AI receives the selected deck without modifying the original document.
+- [ ] No online dependency is introduced.
+
+---
+
+## Story 7 — Local battlefield artwork generation
+
+**Priority:** P1  
+**Dependencies:** Story 5
+
+### User story
+
+As a player, I want cards on the battlefield to resemble compact Arena cards, displaying their names, artwork, and borders without occupying space for unreadable rules text.
+
+### Requirements
+
+Extend the existing artwork system with a generated battlefield image variant.
+
+Use the locally cached full printing image as the source.
+
+Generate a consistent upper-card crop containing:
+
+- Card name bar
+- Original artwork
+- Surrounding card border
+
+Crop away the rules text and lower portion.
+
+Use a straightforward image crop. Do not attempt comprehensive special-frame detection.
+
+Cache by printing ID, card face, rendering version, and needed resolution.
+
+Preserve the full original printing for detailed inspection.
+
+Support transformed faces using the existing card-face identity handling.
+
+No duplicated deck documents or per-deck full-image copies.
+
+Do not bake live gameplay values into generated thumbnails.
+
+### Acceptance criteria
+
+- [ ] Standard cards display their names, art, and borders.
+- [ ] Battlefield thumbnails have no normal lower rules-text area.
+- [ ] Repeated printings share the generated cache.
+- [ ] Generated assets are reused across matches.
+- [ ] Unusual printings are allowed to crop imperfectly.
+- [ ] Double-faced card rendering follows the current displayed face.
+- [ ] Missing images produce a placeholder rather than an exception.
+- [ ] Full original card images remain accessible.
+- [ ] Generation runs asynchronously and does not freeze the UI.
+
+---
+
+## Story 8 — Pre-match asset preparation and strict offline gameplay
+
+**Priority:** P0  
+**Dependencies:** Stories 5 and 7
+
+### User story
+
+As a player, I want my match to use locally available artwork and data without downloading anything while I play.
+
+### Requirements
+
+Introduce a pre-match preparation stage.
+
+Resolve the selected decks and locally available artwork. Generate or reuse needed battlefield thumbnails before entering the game.
+
+Produce a match-scoped asset manifest or equivalent frozen set of references.
+
+Explicitly disable remote artwork fallbacks in active Play image loading, including face-image loading and inspection.
+
+If artwork is missing, display a warning identifying the missing cards and offer:
+
+- Continue Anyway
+- Return to Lobby
+
+Do not build an advanced download/repair flow in this epic.
+
+Tokens, copied objects, generated objects, and unusual engine-created representations must work with locally available images or graceful placeholders.
+
+Do not block engine actions because artwork is unavailable.
+
+### Acceptance criteria
+
+- [ ] No online image requests occur during gameplay.
+- [ ] No online metadata requests occur during gameplay.
+- [ ] A normal fully cached deck enters gameplay without artwork warnings.
+- [ ] Missing artwork generates a clear pre-match warning.
+- [ ] Continue Anyway launches the match with placeholders.
+- [ ] Return to Lobby preserves selections.
+- [ ] Hover and inspection never trigger remote downloads.
+- [ ] Locally generated assets are reusable.
+- [ ] CI includes a network-denied gameplay test.
+
+---
+
+## Story 9 — New immersive Focused View battlefield
+
+**Priority:** P1  
+**Dependencies:** Stories 2 and 7
+
+### User story
+
+As a player, I want the game screen to feel like playing Magic rather than using a database management interface.
+
+### Requirements
+
+Replace the existing scroll-heavy battlefield layout with a dedicated Focused View.
+
+Automatically maximize the application when entering a match. Retain normal OS window controls and clean restoration when leaving gameplay.
+
+Position:
+
+- Opponent information and hand at the top.
+- Opponent battlefield in the upper portion.
+- Shared combat/stack area where relevant.
+- Local player's battlefield in the lower portion.
+- Local hand along the bottom.
+- Life totals and key game indicators near the corresponding player.
+- Primary turn/priority controls near the right edge.
+
+Avoid persistent sidebars consuming major battlefield space. Inspection and decisions should appear contextually.
+
+The first layout supports exactly two visible players. Its sizing should remain usable on different desktop resolutions without implementing multiplayer seat arrangements.
+
+Internally introduce a view-mode boundary so future matches can switch between Focused View, Overview/Table View, and specialized contexts.
+
+The local battlefield remains persistent when a different opponent is focused in future multiplayer.
+
+### Acceptance criteria
+
+- [ ] Gameplay enters a maximized, immersive layout.
+- [ ] Opponent is visually above the local player.
+- [ ] Local hand is immediately visible.
+- [ ] Normal gameplay does not require navigating scrollable zone tabs.
+- [ ] Life totals, phases, priority, and important controls remain understandable.
+- [ ] Focused View works in a two-player game.
+- [ ] Resizing does not make controls inaccessible.
+- [ ] No 3–5-player adaptive board is implemented.
+- [ ] Future view switching remains architecturally possible.
+
+---
+
+## Story 10 — Card hover, inspection, and interactions
+
+**Priority:** P1  
+**Dependencies:** Story 9
+
+### User story
+
+As a player, I want to understand and interact with cards directly without permanently displaying their full rules text on the battlefield.
+
+### Requirements
+
+On the battlefield, use simplified card images with compact live indicators where appropriate.
+
+Hovering a card opens a readable large preview showing the full printing and authoritative current game information.
+
+Include current:
+
+- Name and characteristics
+- Mana cost and type when available
+- Rules text/current abilities where supported
+- Power/toughness, loyalty, or defense
+- Counters and damage
+- Relevant modifications, copy state, or transformed face
+
+Do not represent obsolete printed characteristics as though they are current engine state.
+
+Left-click interacts with an engine-offered legal action. When multiple actions exist, show a compact choice menu.
+
+Right-click provides persistent detailed inspection without activating the card.
+
+Keep legal-action highlighting clear but unobtrusive.
+
+Support tapped orientation, attacking/blocking indicators, and target selection.
+
+### Acceptance criteria
+
+- [ ] Battlefield cards remain compact and art-focused.
+- [ ] Hover previews display large readable cards.
+- [ ] Current engine values are distinguishable from printed values.
+- [ ] Right-click inspection never submits an action.
+- [ ] Single-action interactions are straightforward.
+- [ ] Multiple legal actions remain selectable.
+- [ ] Hidden cards cannot leak information through artwork or inspection.
+- [ ] Existing object identity and stale-command protections remain intact.
+
+---
+
+## Story 11 — Arena-style mulligans and decision presentation
+
+**Priority:** P1  
+**Dependencies:** Stories 1, 9, and 10
+
+### User story
+
+As a player, I want clear, prominent choices when opening a game or resolving Magic effects.
+
+### Requirements
+
+Create a dedicated opening-hand overlay:
+
+- Dim the battlefield.
+- Present the opening hand as large, fanned, readable cards.
+- Provide prominent Keep and Mulligan controls.
+- Display the correct number of cards and required bottom-of-library selections.
+- Show appropriate opponent readiness or waiting status.
+
+The AI handles its own mulligans.
+
+For in-game decisions, show contextual panels or overlays rather than forcing the user into a permanent sidebar.
+
+Support engine-provided legal choice families including targets, options, additional costs, mana payments, ordering, selections, and amount allocation.
+
+Choice prompts should show meaningful cards/artwork wherever appropriate.
+
+Keep cancellation and selection-completion behavior tied to actual engine permissions.
+
+### Acceptance criteria
+
+- [ ] Opening hands are large and readable.
+- [ ] Keep and Mulligan are unambiguous.
+- [ ] Required bottom-card selections work.
+- [ ] AI mulligans progress without human control.
+- [ ] Choice dialogs show the relevant card or options.
+- [ ] Targets and selections clearly indicate their current state.
+- [ ] No decisions are automatically answered on the human's behalf.
+- [ ] All submitted decisions use current authoritative decision tokens.
+- [ ] Unsupported decisions show actionable failure/recovery information.
+
+---
+
+## Story 12 — Priority, combat, stack, and match completion
+
+**Priority:** P1  
+**Dependencies:** Stories 1 and 9–11
+
+### User story
+
+As a player, I want the interface to make normal Magic actions natural, including casting, paying costs, attacking, blocking, and passing priority.
+
+### Requirements
+
+Make the normal turn flow visible and intuitive.
+
+Present a contextual Next / Pass Priority control with accurate descriptions of the next available action.
+
+Show the active player, current phase, and current priority holder.
+
+Use readable stack presentation when spells and abilities are waiting to resolve.
+
+For combat, make attackers, blockers, defenders, and relevant assignments obvious.
+
+Preserve engine authority over combat legality, damage, mana, and triggered abilities.
+
+Maintain a readable result display and clean return-to-lobby action.
+
+Avoid excessive animations or effects at this stage. Prioritize responsiveness and correctness.
+
+### Acceptance criteria
+
+- [ ] Player can play lands and cast supported spells.
+- [ ] Mana payments and choices work through XMage.
+- [ ] Priority passes correctly between the human and AI.
+- [ ] Attacking and blocking interactions are clear.
+- [ ] Stack objects are inspectable.
+- [ ] Triggers and choices remain accessible.
+- [ ] Game results reflect the engine's authoritative outcome.
+- [ ] A completed game can be closed without leaving stale engine processes.
+- [ ] Ordinary card interactions do not require multiple unnecessary confirmation screens.
+
+---
+
+## Story 13 — Loading screens, recovery, and diagnostics integration
+
+**Priority:** P1  
+**Dependencies:** Stories 3–12
+
+### User story
+
+As a player, I want meaningful loading feedback and a simple way to recover from a failed match without losing my decks or leaving Manaforge in a broken state.
+
+### Requirements
+
+Build two distinct loading experiences:
+
+**Lobby preparation**
+
+Show actual deck/library preparation work, loading of metadata, and readiness states.
+
+**Match initialization**
+
+Use the available screen to display meaningful runtime stages.
+
+Do not show simulated progress. Real stages and elapsed time are preferable.
+
+When failures occur, retain diagnostic details internally and present simple options to the player.
+
+Integrate with Manaforge's existing feedback/diagnostics workflow. Include permitted session metadata, app version, engine version, error codes, and sanitized logs when available.
+
+Never automatically include opponents' private decks, unrevealed cards, credentials, or other sensitive contents.
+
+### Acceptance criteria
+
+- [ ] Lobby and game loading are visually distinct.
+- [ ] Each loading state corresponds to real work.
+- [ ] Error messages are understandable.
+- [ ] Diagnostics preserve enough information to investigate failures.
+- [ ] Recovery does not blindly replay uncertain commands.
+- [ ] Exiting a failed session cleans up owned resources.
+- [ ] User can return to the lobby and retry safely.
+- [ ] No saved deck or printing selection is modified.
+- [ ] Feedback respects existing privacy/consent behavior.
+
+---
+
+## Story 14 — Real-game acceptance, visual review, and documentation
+
+**Priority:** P0 release gate  
+**Dependencies:** Stories 1–13
+
+### User story
+
+As a developer and player, I want evidence that Manaforge Play is genuinely usable rather than merely passing isolated adapter tests.
+
+### Requirements
+
+Extend the existing Play acceptance infrastructure rather than replace it.
+
+Add an end-to-end scenario covering:
+
+1. Open Play.
+2. Select Play Offline.
+3. Select supported format.
+4. Choose user and AI decks.
+5. Validate and prepare assets.
+6. Start the pinned XMage runtime.
+7. Reach opening hands.
+8. Complete the human mulligan decision.
+9. Allow AI to act.
+10. Play a supported land and spell.
+11. Advance priority and turns.
+12. Complete combat.
+13. Reach an authoritative match result.
+14. Return to the lobby and clean up.
+
+At least one real-engine end-to-end scenario must reach a normal game conclusion rather than relying exclusively on concession.
+
+Continue the existing headless adapter scenarios and 2–5-seat compatibility checks. Retire or update obsolete pass-and-play UI tests without removing meaningful hidden-information or lifecycle regressions.
+
+Produce CI screenshots of the lobby, loading screen, opening hand, battlefield, hover preview, choice overlay, combat, and final result.
+
+Perform visual review using real printing images, not only synthetic fixture artwork.
+
+The user's manual nightly UX testing remains an explicit acceptance requirement.
+
+### Acceptance criteria
+
+- [ ] Existing relevant unit and integration tests pass in CI.
+- [ ] Pinned-engine human-versus-AI acceptance passes in CI.
+- [ ] At least one complete rules-enforced game is demonstrated.
+- [ ] UI screenshots are saved as reviewable CI artifacts.
+- [ ] No gameplay network-artwork requests occur.
+- [ ] Startup/recovery/cleanup scenarios pass.
+- [ ] Existing non-Play workspaces are not regressed.
+- [ ] Real printing images are visually reviewed.
+- [ ] Human testing confirms that the basic game is comfortable and understandable.
+- [ ] Documentation reflects the new offline Play workflow and its limitations.
+
+**Do not mark this epic complete based solely on green CI if the actual UI remains difficult to use.**
+
+---
+
+# 4. Delivery Milestones
+
+| Milestone | Stories | Required result |
+|---|---|---|
+| A — Engine & reliability | 1–3 | Real AI match can start and progress, with reliable lifecycle management |
+| B — Match preparation | 4–8 | New landing page, usable lobby, deck randomization, fully local assets |
+| C — Gameplay experience | 9–12 | Maximized Focused View, clear cards, mulligans, and normal interactions |
+| D — Production-quality preview | 13–14 | Diagnostics, CI evidence, visual review, and a demonstrated playable match |
+
+Stories may be split into smaller commits. Do not sacrifice independently verifiable behavior for a large one-shot implementation.
+
+---
+
+# 5. Explicit Non-Goals
+
+This epic does not include:
+
+- Networked hosting, inviting, or joining.
+- Public matchmaking.
+- 3–5-player battlefield layouts.
+- Fully adaptive multiplayer rendering.
+- Building new AI decision algorithms.
+- Replacing or forking XMage.
+- Full recreation of every Magic card frame.
+- Comprehensive card-layout crop detection.
+- Dynamic rewriting of full printed card frames.
+- Elaborate artwork repair or download interfaces.
+- Particle effects, elaborate animations, or sound systems.
+- Spectators, reconnection, or replay systems.
+- Match history, rankings, or tournament support.
+- General rewrites of the Deck Editor, Proxy Printer, or Card Database.
+
+Future-facing contracts and boundaries are encouraged. Implementing future features is not.
+
+---
+
+# 6. Architectural Constraints
+
+Reuse and extend existing Manaforge facilities wherever practical:
+
+- `mtg_play/adapter.py` — authoritative game integration.
+- `mtg_play/contracts.py` — versioned gameplay representations.
+- `mtg_play/java/ManaforgeBridge.java` — XMage interaction.
+- `mtg_play/presentation.py` — asynchronous session control.
+- `mtg_play/workspace.py` — Play navigation and lifecycle.
+- `mtg_play/table.py` — replace/refactor current battlefield presentation.
+- `mtg_play/decisions.py` — engine-authorized decision presentation.
+- `mtg_play/artwork.py` — extend for local derived battlefield artwork.
+- Existing Core deck, artwork, library, and diagnostics services.
+
+Avoid moving gameplay rules into Qt.
+
+Separate:
+
+**Authoritative state → presentation/view model → battlefield renderer → player interaction**
+
+The renderer should receive permitted, normalized state and must not need to know how XMage internally represents that state.
+
+The final architecture must support adding new view modes and controller types without rewriting the authoritative game model.
+
+---
+
+# 7. Codex Implementation Requirements
+
+1. Create `feature/play-ai-focused-view` from the latest intended integration base. Do not make unrelated changes to main.
+2. Inspect the actual repository, current Play docs, roadmap, and relevant tests before implementation. Do not assume prior implementation status from story descriptions.
+3. Preserve the pinned XMage runtime and existing compatibility manifest unless a separate, justified change is approved.
+4. Implement stories in dependency order, with small, reviewable commits.
+5. Add and update appropriate unit, integration, Qt interaction, and real-engine acceptance tests.
+6. **Do not run local tests, local builds, or local XMage acceptance. Use GitHub Actions CI as the execution environment.**
+7. Do not claim a pass without identifying actual CI evidence.
+8. Address CI failures introduced by the branch; report unrelated pre-existing failures separately.
+9. Preserve offline behavior, existing saved data, printings, and other Manaforge modules.
+10. Use asynchronous workers and bounded caches; don't block the UI with engine or image preparation.
+11. Update `docs/play-local-game.md`, `docs/roadmap.md`, and the relevant long-term Play epic to distinguish implemented behavior from future plans. Keep the existing long-term 2–5-player roadmap intact.
+12. Do not enable installed/released Play by default until its acceptance gates are met.
+13. Do not create a release, tag, or merge to main automatically.
+14. At each story handoff, provide changed files, commit SHA, CI results, verification gaps, and remaining risks.
+15. Do not mark the overall epic complete until all acceptance gates and manual UX review are satisfied.
+
+---
+
+# 8. Final Epic Definition of Done
+
+Manaforge Play is considered successful when:
+
+- One human can play against XMage AI without another person.
+- The AI can use a user-selected or randomized legal deck.
+- A player can launch a match from a clear, format-first lobby.
+- Startup is reliable, understandable, and recoverable.
+- Games run offline with no mid-match artwork or metadata downloads.
+- Battlefield cards display name, art, and border.
+- Hovering provides readable full-card and live-state inspection.
+- Mulligans and choices are clear and visually prominent.
+- The two-player Focused View is attractive, responsive, and enjoyable.
+- Standard gameplay interactions are accessible and rules-enforced.
+- A genuine game can progress to an authoritative result.
+- Existing decks and other application modules remain intact.
+- CI and manual UX verification both support the playable claim.
+- The design is positioned for future invited friends, AI-filled seats, and switchable views in 3–5-player games.
+
+**Guiding principle:**
+
+*Manaforge owns the experience. XMage owns the rules. The player should enjoy the game rather than fight the interface.*

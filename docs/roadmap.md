@@ -328,9 +328,14 @@ Print-layout preview and future match surfaces still need reference entry points
 
 ## Phase 8 - Rules-enforced local play
 
-The [local two-player delivery plan](play-local-game.md) tracks the staged first
-playable experience and its adapter/CI acceptance gates. Source-only preview
-work does not enable Play in installed releases.
+The [AI and Focused View rebuild](play-ai-focused-view-epic.md) is the current
+incremental delivery plan; [local delivery status](play-local-game.md) records
+the actual repository baseline and adapter/CI acceptance gaps. The first gate
+is a real pinned-engine human-versus-AI scenario in CI, before dependent UI work.
+The subsequent lobby and permanent two-player Focused View preserve future mixed
+controllers and 2-5-player views without implementing networking or larger layouts.
+Source-only preview work does not enable Play in installed releases. The existing
+pass-and-play UI is a historical baseline to replace, not the new target.
 
 - [ ] Keep a deterministic, authoritative engine behind presentation/client and game API layers. The engine owns rules enforcement, legal actions, triggers, priority, and game-state transitions; Manaforge owns presentation, navigation, interactions, and user experience. See the [Play architecture](manaforge-play-epic.md#1-stable-game-protocol).
 - [ ] Support legal actions/targets, costs/mana payment, stack/priority, phases/steps, triggers, replacement effects, combat/damage, state-based actions, tokens/counters, and zone movement.
@@ -345,6 +350,10 @@ work does not enable Play in installed releases.
 **Exit gate:** Supported games automate bookkeeping with deterministic tests, serializable state, and action/event logs suitable for replay and networking.
 
 ## Phase 9 - Mixed human/AI seats and local deck testing
+
+The first two-player EngineAI integration is now the prerequisite gate for the
+current Phase 8 rebuild. These broader mixed-table goals remain planned; moving
+that first gate forward does not claim AI acceptance or implement future seats.
 
 - [ ] Separate match seat, player, deck, pilot, and controller; support LocalHuman, RemoteHuman, and EngineAI through the same legal-action protocol. Remote connections follow in Phase 10.
 - [ ] Expose usable XMage AI first and an **Add Computer** seat action; support mixed human/AI tables as multiplayer capacity arrives in Phase 11.

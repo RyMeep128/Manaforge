@@ -2,6 +2,17 @@
 
 Status: **Planned long-term scope.** Delivery order and prerequisites live in the [roadmap](roadmap.md); the [long-term product epic](long-term-product-epic.md) remains the broader product vision. This epic does not authorize immediate gameplay implementation. XMage integration and optional external synchronization remain subject to feasibility, licensing, and supported capabilities.
 
+## Current delivery: offline AI and Focused View
+
+The [AI and Arena-style experience rebuild](play-ai-focused-view-epic.md) is the
+current incremental Play delivery plan. See [local delivery status](play-local-game.md)
+for the inspected implementation baseline and remaining evidence gates. Prove one
+human versus pinned XMage AI in CI before building dependent gameplay UI. The
+initial permanent Focused View displays two players; future view modes and mixed
+controllers retain the long-term 2-5-player scope below. Networking and larger
+battlefield layouts are not part of this rebuild. Installed Play remains gated
+on real-engine acceptance and manual UX review.
+
 ## Vision
 
 **Manaforge Play** turns the same decks built, analyzed, and printed in Manaforge into rules-enforced digital Magic games for private playgroups.

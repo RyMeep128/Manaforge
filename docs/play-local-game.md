@@ -1,9 +1,51 @@
-# Manaforge Play — first local two-player experience
+# Manaforge Play - local delivery and acceptance status
 
-This is the staged Phase 8 implementation of the local two-player epic. It takes
-precedence over the broader future scope in [the long-term Play epic](manaforge-play-epic.md).
-Remote multiplayer, AI, larger tables, dynamic card frames and public Play releases
-are outside this delivery.
+The [AI and Focused View rebuild epic](play-ai-focused-view-epic.md) is the
+current delivery plan. Its first target is one local human versus one XMage AI,
+followed by a format-first lobby, local asset preparation, and an immersive
+two-player Focused View. The [long-term Play epic](manaforge-play-epic.md)
+retains the future 2-5-player and private networking roadmap.
+
+## Rebuild baseline - October 29, 2026
+
+Branch: `feature/play-ai-focused-view`, based on current `origin/main` at
+`fb27c2e` (`0.5.0-alpha.1`). This documentation increment records the requested
+replacement experience; it does not implement AI or change the active UI.
+
+Repository inspection confirms:
+
+- `MatchSeat` currently contains only seat identity and display name.
+- `XmageGameSession._start` launches a client for every seat and joins each deck
+  through that seat's client.
+- `ManaforgeBridge.java` creates every table slot and joins every player as
+  `PlayerType.HUMAN`. Autonomous AI integration has not been demonstrated.
+- The unchanged pinned `1.4.62-V1` artifact manifest includes the AI library and
+  AI plugins. Their presence is not proof of supported match creation or play.
+- The existing Windows/Python 3.12 CI path prepares the pinned engine and runs
+  headless adapter scenarios, 2-5-seat Commander scenarios, and Qt UI acceptance.
+  Extend these facilities rather than replacing them.
+
+Next increment: Story 1. Investigate the pinned engine's AI table creation and
+join interfaces, then extend the bridge and adapter with headless Freeform AI
+acceptance before Commander. Evidence must establish a single human session,
+autonomous AI mulligans/turns/legal actions/combat, protected hidden information,
+authoritative results, and owned-resource cleanup. Do not treat a compiled bridge
+or synthetic session as playable AI evidence. Dependent rebuilt gameplay UI must
+wait for the real pinned-engine AI scenario to pass CI.
+
+No local tests, builds, or engine acceptance are permitted for this rebuild.
+New tests execute in GitHub Actions; identify actual runs before claiming a pass.
+Installed Play remains gated until the full acceptance and manual UX review pass.
+No engine pin, compatibility manifest, saved deck, or existing printing identity
+is changed by this baseline. No release, tag, or merge is part of this increment.
+
+## Existing pass-and-play implementation (historical baseline)
+
+The sections below describe the existing source preview and its recorded
+verification gaps. They are not acceptance evidence for the AI rebuild. Active
+pass-and-play and handoff UI will be removed in the seat/controller story after
+the Story 1 AI gate; existing privacy and lifecycle regression coverage must be
+retained or adapted.
 
 ## Milestone A: foundation
 
