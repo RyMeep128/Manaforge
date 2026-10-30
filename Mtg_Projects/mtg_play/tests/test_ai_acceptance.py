@@ -302,3 +302,62 @@ def test_unhandled_fixture_decision_is_not_reported_as_unsupported_engine_rules(
         diagnostic_category("AI_ACCEPTANCE_UNSUPPORTED_DECISION")
         == "acceptance_pilot_gap"
     )
+
+
+@pytest.mark.parametrize(
+    "enabled,viewer,count,accepted",
+    [
+        (True, "human", 1, True),
+        (False, "human", 1, False),
+        (True, "ai", 1, False),
+        (True, "human", 0, False),
+        (True, "human", 2, False),
+    ],
+)
+def test_blockers_single_ability_policy_is_explicit_and_uses_current_option(
+    enabled, viewer, count, accepted
+):
+    calls = []
+    view = NS(
+        viewer_id=viewer,
+        objects=(),
+        step="PRECOMBAT_MAIN",
+        decision=NS(
+            family="ability",
+            prompt="Private ability prompt",
+            decision_id="current-decision",
+            options=tuple(
+                ChoiceOption(f"option-{i}", "Private label") for i in range(count)
+            ),
+        ),
+    )
+    game = NS(
+        choose=lambda *args: calls.append(args) or CommandResult("cmd", "submitted")
+    )
+    if accepted:
+        result = ai_acceptance._human_choice(
+            game, view, lambda v: None, single_ability=enabled
+        )
+        assert result.outcome == "submitted"
+        assert calls == [("human", "current-decision", "option-0")]
+    else:
+        with pytest.raises(ai_acceptance.AIAcceptanceError):
+            ai_acceptance._human_choice(
+                game, view, lambda v: None, single_ability=enabled
+            )
+        assert not calls
+
+
+def test_blockers_enables_single_ability_policy_for_both_acceptance_drivers(
+    monkeypatch,
+):
+    def drive(adapter, documents, inspect, select, **options):
+        assert options == {"single_ability": True}
+        assert [doc.deck.entries[0].name for doc in documents] == [
+            "Memnite",
+            "Ornithopter",
+        ]
+        return {"fixture_driver_called": True}
+
+    monkeypatch.setattr(ai_acceptance, "_drive_to_evidence", drive)
+    assert ai_acceptance.blockers(object())["fixture_driver_called"]

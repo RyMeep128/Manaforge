@@ -848,3 +848,15 @@ Manaforge Play is considered successful when:
 **Guiding principle:**
 
 *Manaforge owns the experience. XMage owns the rules. The player should enjoy the game rather than fight the interface.*
+
+CI investigation (0.5.11-alpha.1): completed run 40981801955 at e6f9e1a
+confirmed the same obsolete source-document identity assertion on both Python
+versions (already corrected locally in d455c14). The Python 3.12 headless and UI
+AI blockers scenarios also stopped at GAME_CHOOSE_ABILITY with one offered
+option. Both runtimes shut down cleanly. The blockers-only fixture pilot now
+accepts a sole engine-offered ability for its authorized human viewer, using the
+current decision and option tokens. Multiple options, foreign viewers and other
+fixture policies remain rejected. Both acceptance drivers use this shared pilot;
+no product auto-answering was added. CI tests cover these bounds. No local tests,
+builds or engine acceptance were run, and these fixes remain unpushed/unverified
+by a subsequent CI run.

@@ -232,7 +232,7 @@ def _ai_blocks_human(view):
     )
 
 
-def _human_choice(game, view, select):
+def _human_choice(game, view, select, *, single_ability=False):
     """Bounded fixture policy; never answer an unknown human decision."""
     request = view.decision
     discarded = _discard_choice(game, view)
@@ -257,10 +257,19 @@ def _human_choice(game, view, select):
         )
         if option is not None:
             return game.choose("human", request.decision_id, option.option_id)
+    if single_ability and request.family == "ability" and len(request.options) == 1:
+        # Explicit blockers-fixture policy: accept the sole engine-offered
+        # ability continuation. Never guess between abilities or answer AI seats.
+        if view.viewer_id == "human":
+            return game.choose(
+                "human", request.decision_id, request.options[0].option_id
+            )
     raise AIAcceptanceError(view)
 
 
-def _drive_to_evidence(adapter, documents, inspect, select, *, format="freeform"):
+def _drive_to_evidence(
+    adapter, documents, inspect, select, *, format="freeform", single_ability=False
+):
     originals = deepcopy([document.to_dict() for document in documents])
     setup = GameSetup(
         (MatchSeat("human", "You"), MatchSeat("ai", "Opponent", "engine_ai")),
@@ -295,7 +304,9 @@ def _drive_to_evidence(adapter, documents, inspect, select, *, format="freeform"
                 result = game.concede("human")
                 report["conceded_after_evidence"] = True
             elif view.decision is not None:
-                result = _human_choice(game, view, select)
+                result = _human_choice(
+                    game, view, select, single_ability=single_ability
+                )
                 if (
                     view.decision.family == "boolean"
                     and "mulligan" in view.decision.prompt.lower()
@@ -409,6 +420,10 @@ def blockers(adapter):
         return None
 
     result = _drive_to_evidence(
-        adapter, (deck(("Memnite", 60)), deck(("Ornithopter", 60))), inspect, select
+        adapter,
+        (deck(("Memnite", 60)), deck(("Ornithopter", 60))),
+        inspect,
+        select,
+        single_ability=True,
     )
     return dict(result, **report)
