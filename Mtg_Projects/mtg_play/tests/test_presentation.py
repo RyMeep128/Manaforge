@@ -296,7 +296,14 @@ def test_workspace_selects_existing_documents_without_starting_runtime_on_open(
         selector.setCurrentIndex(index + 1)
     assert workspace.start_button.isEnabled()
     workspace.start_game()
-    drain(app, lambda: not workspace.session.busy)
+    drain(
+        app,
+        lambda: (
+            not workspace.asset_jobs.busy and not workspace.asset_continue.isHidden()
+        ),
+    )
+    workspace.asset_continue.click()
+    drain(app, lambda: workspace.session.active and not workspace.session.busy)
     assert owner.setup.format == "commander"
     assert tuple(doc.to_dict() for doc in owner.decks) == tuple(
         doc.to_dict() for doc in documents

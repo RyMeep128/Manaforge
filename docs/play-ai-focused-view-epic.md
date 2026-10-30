@@ -905,3 +905,26 @@ faces, and worker-thread/local-only access. No local tests/builds or visual
 acceptance have been run. Story 8 still needs pre-match asset preparation and
 missing-artwork Continue/Return handling, including settling lobby image work
 before gameplay; strict offline gameplay is not yet declared accepted.
+
+
+Story 8 incremental implementation (0.5.14-alpha.1): Start Game now prepares
+local artwork on a separate queue using isolated Core deck copies. It resolves
+selected printing/front/alternate-face references and generates/reuses battlefield
+crops. A match manifest freezes local source paths, SHA-256 digests and layouts;
+active artwork/inspection use only that manifest. Changed or unlisted images,
+including unknown generated objects, produce placeholders. No network or live
+catalog fallback is exposed by the frozen image service. Original deck documents
+and full printing images remain untouched.
+
+Preflight waits asynchronously for any lobby image worker already in flight
+before launching the engine. Missing or undecodable artwork is listed in a
+plain-text review page with Continue Anyway and Return to Lobby. Fully cached
+decks proceed without a warning. Returning/cancelling preserves both selections,
+waits for worker completion, and does not start a runtime. Setup/navigation and
+closure are gated while preparation is active. The CI UI pilot now explicitly
+uses Continue Anyway for its intentionally uncached synthetic fixture printings.
+CI regressions cover frozen references/source changes, crop generation, front and
+alternate-face inspection with network/live catalog denied, warnings, normal
+cached startup, cancellation, source preservation and explicit continuation.
+No local tests/builds or engine acceptance were run. Story 8 and strict offline
+UX remain pending CI and manual verification rather than declared complete.

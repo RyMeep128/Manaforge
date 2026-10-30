@@ -126,7 +126,22 @@ class UIAdapter:
         )
         self.capture("setup")
         self.workspace.start_button.click()
-        wait(self.app, lambda: not self.workspace.session.busy, timeout=300)
+        wait(
+            self.app,
+            lambda: (
+                self.workspace.asset_continue.isVisible()
+                or self.workspace.session.active
+            ),
+            timeout=300,
+        )
+        if self.workspace.asset_continue.isVisible():
+            self.capture("missing-artwork")
+            self.workspace.asset_continue.click()
+        wait(
+            self.app,
+            lambda: self.workspace.session.active and not self.workspace.session.busy,
+            timeout=300,
+        )
         self.workspace.session.timer.stop()
         if not self.workspace.session.active:
             raise AdapterError("UI_GAME_START_FAILED")

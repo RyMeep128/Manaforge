@@ -4,6 +4,8 @@ from PyQt6 import QtCore as C, QtWidgets as W
 from mtg_core.paths import data_root
 from mtg_ui.jobs import JobQueue
 from dataclasses import replace
+from copy import deepcopy
+from .assets import prepare_assets
 from .lobby import DeckSelection, offline_lobby
 from .navigation import ModeSelection, PlayLanding, PlayPages
 from .opponents import OpponentRandomizer
@@ -36,6 +38,10 @@ class PlayWorkspace(W.QWidget):
         self._approved_close = False
         self._format_confirmed = False
         self._confirmed_format = None
+        self._asset_pending = None
+        self._asset_epoch = 0
+        self._asset_cancelled = False
+        self._prepared_match = None
         self._view = None
         self._seats = ()
         self._seat_id = self.lobby.local_seat_id
@@ -50,6 +56,10 @@ class PlayWorkspace(W.QWidget):
         self.opponents.changed.connect(self._selection_changed)
         self.opponents.message.connect(self._status)
         self.opponents.selected.connect(self._randomized)
+        self.asset_jobs = JobQueue(self)
+        self.asset_jobs.status.connect(self._assets_completed)
+        self.asset_jobs.progress.connect(self._assets_progress)
+        self.asset_jobs.idle.connect(self._assets_idle)
         self.catalog_jobs = JobQueue(self)
         self.catalog_jobs.status.connect(self._catalog_loaded)
         self.catalog_jobs.progress.connect(self._catalog_progress)
@@ -244,9 +254,26 @@ class PlayWorkspace(W.QWidget):
         actions.addWidget(self.start_button)
         setup_layout.addLayout(actions)
         self.pages.addWidget(self.setup_page)
+        self.asset_page = W.QWidget()
+        asset_layout = W.QVBoxLayout(self.asset_page)
+        self.asset_heading = W.QLabel("Preparing local artwork")
+        asset_layout.addWidget(self.asset_heading)
+        self.asset_missing = W.QTextBrowser()
+        asset_layout.addWidget(self.asset_missing, 1)
+        asset_actions = W.QHBoxLayout()
+        self.asset_return = W.QPushButton("Return to Lobby")
+        self.asset_return.clicked.connect(self._return_from_assets)
+        self.asset_continue = W.QPushButton("Continue Anyway")
+        self.asset_continue.clicked.connect(self._launch_prepared)
+        self.asset_continue.hide()
+        asset_actions.addWidget(self.asset_return)
+        asset_actions.addStretch()
+        asset_actions.addWidget(self.asset_continue)
+        asset_layout.addLayout(asset_actions)
+        self.pages.addWidget(self.asset_page)
         self.game_page = W.QWidget()
         game_layout = W.QVBoxLayout(self.game_page)
-        self.game_heading = W.QLabel("Preparing your table…")
+        self.game_heading = W.QLabel("Preparing your tableâ€¦")
         self.game_heading.setProperty("role", "title")
         self.game_heading.setTextFormat(C.Qt.TextFormat.PlainText)
         game_layout.addWidget(self.game_heading)
@@ -264,7 +291,7 @@ class PlayWorkspace(W.QWidget):
         game_actions.addWidget(self.close_button)
         game_layout.addLayout(game_actions)
         self.pages.addWidget(self.game_page)
-        self.status = W.QLabel("Loading your decks…")
+        self.status = W.QLabel("Loading your decksâ€¦")
         self.status.setWordWrap(True)
         self.status.setTextFormat(C.Qt.TextFormat.PlainText)
         self.status.setAccessibleName("Game status")
@@ -274,13 +301,23 @@ class PlayWorkspace(W.QWidget):
         self.load_decks()
 
     def _show_page(self, page):
-        if self.session.active or self.session.closing or self.opponents.busy:
+        if (
+            self.session.active
+            or self.session.closing
+            or self.opponents.busy
+            or self._asset_pending is not None
+        ):
             return
         self.pages.setCurrentWidget(page)
         self._selection_changed()
 
     def _open_offline(self):
-        if self.session.active or self.session.closing or self.opponents.busy:
+        if (
+            self.session.active
+            or self.session.closing
+            or self.opponents.busy
+            or self._asset_pending is not None
+        ):
             return
         self._format_origin = self.pages.currentWidget()
         self._format_confirmed = False
@@ -316,12 +353,17 @@ class PlayWorkspace(W.QWidget):
         self._show_page(self._format_origin)
 
     def load_decks(self):
-        if self.catalog_jobs.busy or self.session.active or self.opponents.busy:
+        if (
+            self.catalog_jobs.busy
+            or self.session.active
+            or self.opponents.busy
+            or self._asset_pending is not None
+        ):
             return
         self.deck_artwork.stopping = False
         self.reload.setEnabled(False)
         self.start_button.setEnabled(False)
-        self.status.setText("Loading your saved decks…")
+        self.status.setText("Loading your saved decksâ€¦")
 
         def prepare(cancel, report):
             rows, errors = self._deck_provider()
@@ -333,7 +375,8 @@ class PlayWorkspace(W.QWidget):
 
     def _browse_shared(self):
         if (
-            not self.opponents.busy
+            self._asset_pending is None
+            and not self.opponents.busy
             and not self.session.active
             and not self.session.closing
             and callable(self._browse_library)
@@ -413,7 +456,7 @@ class PlayWorkspace(W.QWidget):
         self.selectors[1].setCurrentIndex(self.selectors[1].findData(index))
 
     def _selection_changed(self):
-        preparing = self.opponents.busy
+        preparing = self.opponents.busy or self._asset_pending is not None
         self.randomize.setEnabled(
             not preparing
             and not self.session.active
@@ -519,19 +562,132 @@ class PlayWorkspace(W.QWidget):
     def start_game(self):
         if not self.start_button.isEnabled():
             return
-        setup = self.lobby.offline_setup()
+        self._asset_pending = self.lobby.offline_setup()
+        self._asset_epoch += 1
+        self._asset_cancelled = False
+        self._prepared_match = None
         decks = self.lobby.selected_documents()
+        self.deck_artwork.stopping = True
+        self.deck_artwork.pending.clear()
+        self.deck_artwork.next_timer.stop()
+        self.asset_heading.setText("Preparing local artwork")
+        self.asset_missing.setPlainText(
+            "Checking cached printing images and preparing battlefield artwork. No downloads are requested."
+        )
+        self.asset_continue.hide()
+        self.pages.setCurrentWidget(self.asset_page)
+        self._selection_changed()
 
-        def oracle_lookup(oracle_id):
-            return self.service.database.get_oracle_card(oracle_id)
+        def work(cancel, report):
+            try:
+                documents = tuple(deepcopy(document) for document in decks)
+                assets = prepare_assets(
+                    documents, self.service, cancel=cancel, report=report
+                )
+                return (documents, assets) if assets is not None else None
+            except Exception:
+                return None
 
+        self.asset_jobs.submit(work, quiet=True)
+
+    @C.pyqtSlot(str, object)
+    def _assets_progress(self, job, value):
+        if isinstance(value, dict) and value.get("stage") == "match_artwork":
+            self.status.setText(
+                f"Preparing local artwork: {value['current']} of {value['total']}"
+            )
+
+    @C.pyqtSlot(str, str, object)
+    def _assets_completed(self, job, state, value):
+        if state not in {"completed", "cancelled", "failed"}:
+            return
+        if self._asset_cancelled or state != "completed" or value is None:
+            self._return_from_assets()
+            self.status.setText(
+                "Artwork preparation stopped. Your deck selections have been kept."
+            )
+            return
+        self._prepared_match = value
+        self._finish_asset_preparation()
+
+    @C.pyqtSlot()
+    def _assets_idle(self):
+        if self._asset_cancelled and (
+            self._asset_pending is not None
+            or self.pages.currentWidget() is self.asset_page
+        ):
+            self._return_from_assets()
+        self._selection_changed()
+
+    def _finish_asset_preparation(self, epoch=None):
+        if (
+            self._asset_pending is None
+            or self._prepared_match is None
+            or self._asset_cancelled
+            or (epoch is not None and epoch != self._asset_epoch)
+        ):
+            return
+        # Lobby readers may have begun a remote request before Start Game. Let
+        # that owned worker finish before any game starts; never block Qt.
+        if self.deck_artwork.worker is not None:
+            self.status.setText(
+                "Waiting for the current lobby image request to finish..."
+            )
+            current_epoch = self._asset_epoch
+            C.QTimer.singleShot(
+                100, lambda: self._finish_asset_preparation(current_epoch)
+            )
+            return
+        _, assets = self._prepared_match
+        if assets.missing:
+            self.asset_heading.setText("Some artwork is unavailable locally")
+            self.asset_missing.setPlainText(
+                "These cards will use placeholders. Gameplay still works offline.\n\n"
+                + "\n".join(assets.missing)
+            )
+            self.asset_continue.show()
+            self.status.setText("Continue with placeholders or return to the lobby.")
+        else:
+            self._launch_prepared()
+
+    def _return_from_assets(self):
+        self._asset_cancelled = True
+        self.asset_jobs.cancel_all()
+        if self.asset_jobs.busy:
+            self.status.setText("Cancelling artwork preparation...")
+            return
+        self._asset_pending = self._prepared_match = None
+        self._asset_epoch += 1
+        self.deck_artwork.stopping = False
+        self.pages.setCurrentWidget(self.setup_page)
+        self._selection_changed()
+
+    def _launch_prepared(self):
+        if (
+            self._prepared_match is None
+            or self._asset_cancelled
+            or self.deck_artwork.worker is not None
+        ):
+            return
+        setup = self._asset_pending
+        decks, assets = self._prepared_match
+        self._asset_pending = self._prepared_match = None
+        self.table.artwork.service = assets.image_service()
         self._approved_close = False
         self._seats = setup.seats
         self._seat_id = self.lobby.local_seat_id
         self.table.artwork.stopping = False
-        if self.session.start(setup, decks, oracle_lookup=oracle_lookup):
+        if self.session.start(
+            setup,
+            decks,
+            oracle_lookup=lambda oracle_id: self.service.database.get_oracle_card(
+                oracle_id
+            ),
+        ):
             self.pages.setCurrentWidget(self.game_page)
             self.start_button.setEnabled(False)
+        else:
+            self._return_from_assets()
 
     @C.pyqtSlot()
     def _deck_images(self):
@@ -590,7 +746,7 @@ class PlayWorkspace(W.QWidget):
     @C.pyqtSlot()
     def _clear_view(self):
         self._view = None
-        self.game_heading.setText("Waiting for your table…")
+        self.game_heading.setText("Waiting for your tableâ€¦")
         self.table.clear()
         self.concede_button.setEnabled(False)
 
@@ -651,10 +807,14 @@ class PlayWorkspace(W.QWidget):
 
     @C.pyqtSlot()
     def _stopped(self):
+        self.deck_artwork.stopping = False
         self.pages.setCurrentWidget(self.setup_page)
         self._selection_changed()
 
     def prepare_to_close(self):
+        if self._asset_pending is not None:
+            self._return_from_assets()
+            return False
         if self.opponents.busy:
             if self.opponents.cleanup_pending:
                 self.opponents.retry_cleanup()
@@ -678,7 +838,9 @@ class PlayWorkspace(W.QWidget):
     @property
     def busy(self):
         return (
-            self.session.busy
+            self._asset_pending is not None
+            or self.asset_jobs.busy
+            or self.session.busy
             or self.opponents.busy
             or self.catalog_jobs.busy
             or self.table.artwork.worker is not None

@@ -332,3 +332,120 @@ def test_randomize_gates_setup_until_verified_runtime_cleanup(app, tmp_path):
         gate.set()
         drain(app, lambda: not workspace.opponents.jobs.busy)
         workspace.close()
+
+
+def test_missing_artwork_return_preserves_choices_and_continue_uses_frozen_service(
+    app, tmp_path
+):
+    workspace, calls = workspace_fixture(app, tmp_path)
+    starts = []
+    workspace.session.start = lambda setup, decks, **kwargs: (
+        starts.append((setup, decks)) or False
+    )
+    try:
+        workspace.landing_page.offline_button.click()
+        workspace.format.setCurrentIndex(workspace.format.findData("freeform"))
+        workspace.format_continue.click()
+        workspace.selectors[0].setCurrentIndex(1)
+        workspace.selectors[1].setCurrentIndex(2)
+        chosen = workspace.lobby.selected_documents()
+        workspace.start_button.click()
+        drain(
+            app,
+            lambda: (
+                not workspace.asset_jobs.busy
+                and not workspace.asset_continue.isHidden()
+            ),
+        )
+        assert not starts and not calls and not workspace.start_button.isEnabled()
+        assert "Forest" in workspace.asset_missing.toPlainText()
+        workspace.asset_return.click()
+        assert workspace.pages.currentWidget() is workspace.setup_page
+        assert workspace.lobby.selected_documents() == chosen
+        assert workspace.start_button.isEnabled()
+        workspace.start_button.click()
+        drain(
+            app,
+            lambda: (
+                not workspace.asset_jobs.busy
+                and not workspace.asset_continue.isHidden()
+            ),
+        )
+        workspace.asset_continue.click()
+        assert len(starts) == 1 and not calls
+        assert tuple(doc.to_dict() for doc in starts[0][1]) == tuple(
+            doc.to_dict() for doc in chosen
+        )
+        assert all(copy is not original for copy, original in zip(starts[0][1], chosen))
+        assert workspace.table.artwork.service.get_image_path("unknown") is None
+    finally:
+        workspace._return_from_assets()
+        drain(app, lambda: not workspace.asset_jobs.busy)
+        workspace.close()
+
+
+def test_fully_cached_artwork_starts_without_missing_warning(
+    app, tmp_path, monkeypatch
+):
+    from mtg_play.tests.test_artwork_cache import source
+
+    monkeypatch.setenv("PRINT_PROXY_PREP_DATA_DIR", str(tmp_path / "data"))
+    workspace, calls = workspace_fixture(app, tmp_path)
+    path = source(tmp_path / "front.png")
+    workspace.service.get_image_path = lambda *args, **kwargs: str(path)
+    workspace.service.get_card = lambda **kwargs: {"layout": "normal"}
+    starts = []
+    workspace.session.start = lambda *args, **kwargs: starts.append(args) or False
+    try:
+        workspace.landing_page.offline_button.click()
+        workspace.format.setCurrentIndex(workspace.format.findData("freeform"))
+        workspace.format_continue.click()
+        workspace.selectors[0].setCurrentIndex(1)
+        workspace.selectors[1].setCurrentIndex(2)
+        workspace.start_button.click()
+        drain(app, lambda: bool(starts) and not workspace.asset_jobs.busy)
+        assert workspace.asset_continue.isHidden() and not calls
+        assert workspace.table.artwork.service.get_image_path("selected-print") == str(
+            path.resolve()
+        )
+    finally:
+        workspace.close()
+
+
+def test_cancelling_artwork_waits_for_worker_and_keeps_lobby_selection(
+    app, tmp_path, monkeypatch
+):
+    from threading import Event
+
+    workspace, calls = workspace_fixture(app, tmp_path)
+    entered, release = Event(), Event()
+
+    def prepare(documents, service, *, cancel, report):
+        entered.set()
+        assert release.wait(5)
+        assert cancel.is_set()
+        return None
+
+    monkeypatch.setattr("mtg_play.workspace.prepare_assets", prepare)
+    try:
+        workspace.landing_page.offline_button.click()
+        workspace.format.setCurrentIndex(workspace.format.findData("freeform"))
+        workspace.format_continue.click()
+        workspace.selectors[0].setCurrentIndex(1)
+        workspace.selectors[1].setCurrentIndex(2)
+        chosen = workspace.lobby.selected_documents()
+        workspace.start_button.click()
+        drain(app, entered.is_set)
+        workspace.asset_return.click()
+        assert workspace.busy and not workspace.start_button.isEnabled()
+        release.set()
+        drain(
+            app,
+            lambda: workspace._asset_pending is None and not workspace.asset_jobs.busy,
+        )
+        assert workspace.pages.currentWidget() is workspace.setup_page
+        assert workspace.lobby.selected_documents() == chosen and not calls
+    finally:
+        release.set()
+        drain(app, lambda: not workspace.asset_jobs.busy)
+        workspace.close()
