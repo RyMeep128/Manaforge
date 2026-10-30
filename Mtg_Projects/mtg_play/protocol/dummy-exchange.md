@@ -121,3 +121,13 @@ changed-payload ID-conflict scenario. Four owned-process scenarios now pass with
 prevention only in the test harness. No engine is involved and a duplicate
 submission reservation never produces a second fixture result. See the
 [ledger guide](submission-ledger.md) for scope and limits.
+
+
+## Terminal error follow-up
+
+The test-only `session-error` mode now closes after a submitted ACK and validated
+SESSION_FAILED message. The authenticated C# test keeps the current command
+uncertain, rejects reconnect and verifies EOF plus owned child exit. It receives
+no result in this mode. See [session errors](../../../docs/play-session-errors.md)
+for schema/safe-code requirements. Five owned-process scenarios now pass locally;
+this remains a fixture, not proof of a real engine failure or product cleanup.

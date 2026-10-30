@@ -24,11 +24,11 @@ namespace Manaforge.Play.Tests
             public readonly Process Process;
             public TcpClient Client;
             private bool disposed;
-            public Peer(string directory)
+            public Peer(string directory,bool sessionError=false)
             {
                 Assert.That(File.Exists(Path.Combine(directory,"manaforge/protocol/DummyGateway.class")),Is.True,"Run the Java dummy fixture preparation first");
                 string jar=Path.Combine(directory,"gson.jar"),fixture=Path.Combine(directory,"dummy-session-v1.json");
-                var start=new ProcessStartInfo("java", "-cp \""+directory+Path.PathSeparator+jar+"\" manaforge.protocol.DummyGateway \""+fixture+"\"")
+                var start=new ProcessStartInfo("java", "-cp \""+directory+Path.PathSeparator+jar+"\" manaforge.protocol.DummyGateway \""+fixture+"\""+(sessionError?" session-error":""))
                 { UseShellExecute=false,CreateNoWindow=true,WindowStyle=ProcessWindowStyle.Hidden,
                   RedirectStandardInput=true,RedirectStandardOutput=true,RedirectStandardError=true };
                 Process=new Process { StartInfo=start };
@@ -80,7 +80,7 @@ namespace Manaforge.Play.Tests
             Assert.That((string)body["outcome"],Is.EqualTo(outcome));Assert.That((string)body["code"],Is.EqualTo(code));
             tracker?.Accept(reply.ToString(Formatting.None));
         }
-        private static void Exchange(Peer peer,bool wrongKey,bool ownerEof,bool conflictingDuplicate)
+        private static void Exchange(Peer peer,bool wrongKey,bool ownerEof,bool conflictingDuplicate,bool sessionError)
         {
             byte[] key=RandomBytes();
             try
@@ -130,6 +130,15 @@ namespace Manaforge.Play.Tests
                     SendTracked(stream,Command("stale",snapshot.revision-1,decision,action),tracker);Ack(stream,"stale",snapshot.revision-1,"rejected","STALE_REVISION",tracker);
                     Assert.That(tracker.CanSubmit,Is.True,"A matched rejection releases the command slot");
                     SendTracked(stream,Command("current",snapshot.revision,decision,action),tracker);Ack(stream,"current",snapshot.revision,"submitted",null,tracker);
+                    if(sessionError)
+                    {
+                        Assert.That(tracker.AcceptSessionError(TextFrame.Read(stream)),Is.EqualTo("SESSION_FAILED"));
+                        Assert.That(tracker.Current.State,Is.EqualTo(CommandState.Uncertain));
+                        Assert.That(tracker.Current.CommandId,Is.EqualTo("current"));Assert.That(tracker.CanSubmit,Is.False);
+                        Assert.Throws<WireEnvelope.EnvelopeException>(()=>tracker.AuthenticatedReconnect());
+                        Assert.That(TextFrame.Read(stream),Is.Null,"Terminal session failure must close the channel");
+                        Assert.That(peer.Process.WaitForExit(5000),Is.True);Assert.That(peer.Process.ExitCode,Is.Zero);return;
+                    }
                     var result=Read(stream,snapshot.revision);Assert.That((string)result["message_type"],Is.EqualTo("result"));
                     Assert.That((bool)result["body"]["fixture_only"],Is.True);Assert.That((string)result["body"]["snapshot"]["result"],Is.EqualTo("fixture_complete"));
                     Assert.That((string)result["body"]["snapshot"]["status"],Is.EqualTo("finished"));
@@ -157,12 +166,12 @@ namespace Manaforge.Play.Tests
             }
             finally { Array.Clear(key,0,key.Length); }
         }
-        private static IEnumerator Run(bool wrongKey,bool ownerEof,bool conflictingDuplicate=false)
+        private static IEnumerator Run(bool wrongKey,bool ownerEof,bool conflictingDuplicate=false,bool sessionError=false)
         {
             string directory=Path.GetFullPath(Path.Combine(Application.dataPath,"../Artifacts/JavaDummy"));
-            using(var peer=new Peer(directory))
+            using(var peer=new Peer(directory,sessionError))
             {
-                var task=Task.Run(()=>Exchange(peer,wrongKey,ownerEof,conflictingDuplicate));var timer=Stopwatch.StartNew();
+                var task=Task.Run(()=>Exchange(peer,wrongKey,ownerEof,conflictingDuplicate,sessionError));var timer=Stopwatch.StartNew();
                 try
                 {
                     while(!task.IsCompleted && timer.Elapsed.TotalSeconds<25)yield return null;
@@ -179,6 +188,7 @@ namespace Manaforge.Play.Tests
         [UnityTest] public IEnumerator JavaPeerExchangesAuthenticatedFixtureAndRejectsStaleAndPendingActions()=>Run(false,false);
         [UnityTest] public IEnumerator WrongViewerKeyReceivesNoSessionData()=>Run(true,false);
         [UnityTest] public IEnumerator OwnerPipeEofStopsTheOwnedListener()=>Run(false,true);
+        [UnityTest] public IEnumerator TerminalJavaSessionErrorPreservesPendingCommandUncertainty()=>Run(false,false,false,true);
         [UnityTest] public IEnumerator ConflictingDuplicateCannotReplaceTheRecordedCommand()=>Run(false,false,true);
     }
 }

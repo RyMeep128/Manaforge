@@ -88,6 +88,12 @@ public final class DummyGateway {
                     JsonObject acknowledgement=prepared.receipt();acknowledgement.addProperty("message_id","ack-"+count);
                     send(out,acknowledgement);
                     if(prepared.shouldSubmit) {
+                        if(args.length==2 && args[1].equals("session-error")) {
+                            JsonObject failed=new JsonObject();failed.addProperty("session_id",session);failed.addProperty("viewer_id",viewer);
+                            failed.addProperty("terminal",true);failed.addProperty("code","SESSION_FAILED");
+                            JsonObject error=envelope("error","fixture-session-error",failed);
+                            SessionErrors.parse(error.toString(),session,viewer);send(out,error);return;
+                        }
                         JsonObject result=new JsonObject();result.addProperty("fixture_only",true);
                         JsonObject terminal=snapshot.deepCopy();terminal.addProperty("status","finished");terminal.addProperty("result","fixture_complete");
                         terminal.addProperty("revision",revision+1);terminal.add("decision",JsonNull.INSTANCE);terminal.add("actions",new JsonArray());

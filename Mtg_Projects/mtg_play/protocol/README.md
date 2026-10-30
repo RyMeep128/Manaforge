@@ -311,3 +311,15 @@ The live dummy uses it, including duplicate and conflict probes. Java checks and
 57 Unity EditMode tests pass locally. This reserves protocol submissions; it is
 not actual engine exactly-once execution or crash reconciliation. The linked
 guide records this increment's scheduled protocol CI snapshot.
+
+
+## Terminal session-channel failures
+
+[Session errors](../../../docs/play-session-errors.md) add a shared version-1
+terminal error body with fixed safe categories and authenticated session/viewer
+binding. The C# command tracker preserves pending uncertainty and refuses further
+submission/reconnect after valid or malformed terminal error input. A fifth
+owned Java↔Unity dummy scenario proves submitted ACK → session error → EOF without
+a result. Six positive/23 negative corpus cases, 80 focused EditMode checks and
+seven schema checks pass locally. This does not prove actual engine failures,
+production cleanup, licensed CI or G1 completion.

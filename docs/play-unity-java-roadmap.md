@@ -415,3 +415,13 @@ It records five-second offscreen loop/CPU intervals, startup and externally samp
 process memory with raw artifacts. GPU counters were unavailable on this hidden
 Direct3D 12 path; these intervals are not presented FPS or input latency. G0 stays
 open for visible graphics/latency evidence and the other outstanding acceptance.
+
+
+### G1 terminal error boundary — October 30, 2026
+
+The [session-error contract](play-session-errors.md) now validates fixed terminal
+failure categories in Java/C# and preserves pending command uncertainty while
+refusing reconnect. An actual authenticated dummy process sends submitted ACK,
+SESSION_FAILED and EOF without a game result. Eighty focused EditMode checks,
+Java corpora and seven schema checks pass locally. Production error routing,
+cleanup, licensed CI and the G1 freeze remain pending; P2 has not started.

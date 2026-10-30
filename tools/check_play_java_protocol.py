@@ -81,6 +81,8 @@ def main():
             PROTOCOL / "java-test/ReceiveFixtureConsumer.java",
             PROTOCOL / "java/manaforge/protocol/SubmissionLedger.java",
             PROTOCOL / "java-test/LedgerFixtureConsumer.java",
+            PROTOCOL / "java/manaforge/protocol/SessionErrors.java",
+            PROTOCOL / "java-test/ErrorFixtureConsumer.java",
         ]
         subprocess.run(
             [
@@ -176,6 +178,17 @@ def main():
                 str(workspace) + os.pathsep + str(jar),
                 "manaforge.protocol.LedgerFixtureConsumer",
                 str(PROTOCOL / "fixtures/wire-messages-v1.json"),
+            ],
+            check=True,
+            timeout=60,
+        )
+        subprocess.run(
+            [
+                runtime,
+                "-cp",
+                str(workspace) + os.pathsep + str(jar),
+                "manaforge.protocol.ErrorFixtureConsumer",
+                str(PROTOCOL / "fixtures/wire-errors-v1.json"),
             ],
             check=True,
             timeout=60,

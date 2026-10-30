@@ -1,0 +1,493 @@
+{
+  "positive": [
+    {
+      "name": "PROTOCOL_INCOMPATIBLE",
+      "session": "session",
+      "viewer": "seat-one",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "error",
+        "message_id": "error-1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "terminal": true,
+          "code": "PROTOCOL_INCOMPATIBLE"
+        }
+      }
+    },
+    {
+      "name": "SESSION_CLOSED",
+      "session": "session",
+      "viewer": "seat-one",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "error",
+        "message_id": "error-1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "terminal": true,
+          "code": "SESSION_CLOSED"
+        }
+      }
+    },
+    {
+      "name": "SESSION_FAILED",
+      "session": "session",
+      "viewer": "seat-one",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "error",
+        "message_id": "error-1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "terminal": true,
+          "code": "SESSION_FAILED"
+        }
+      }
+    },
+    {
+      "name": "ENGINE_UNAVAILABLE",
+      "session": "session",
+      "viewer": "seat-one",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "error",
+        "message_id": "error-1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "terminal": true,
+          "code": "ENGINE_UNAVAILABLE"
+        }
+      }
+    },
+    {
+      "name": "RECEIVE_OVERFLOW",
+      "session": "session",
+      "viewer": "seat-one",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "error",
+        "message_id": "error-1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "terminal": true,
+          "code": "RECEIVE_OVERFLOW"
+        }
+      }
+    },
+    {
+      "name": "INTERNAL_ERROR",
+      "session": "session",
+      "viewer": "seat-one",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "error",
+        "message_id": "error-1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "terminal": true,
+          "code": "INTERNAL_ERROR"
+        }
+      }
+    }
+  ],
+  "negative": [
+    {
+      "name": "missing-session_id",
+      "session": "session",
+      "viewer": "seat-one",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "error",
+        "message_id": "error-1",
+        "body": {
+          "viewer_id": "seat-one",
+          "terminal": true,
+          "code": "SESSION_FAILED"
+        }
+      },
+      "code": "ERROR_SHAPE"
+    },
+    {
+      "name": "missing-viewer_id",
+      "session": "session",
+      "viewer": "seat-one",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "error",
+        "message_id": "error-1",
+        "body": {
+          "session_id": "session",
+          "terminal": true,
+          "code": "SESSION_FAILED"
+        }
+      },
+      "code": "ERROR_SHAPE"
+    },
+    {
+      "name": "missing-terminal",
+      "session": "session",
+      "viewer": "seat-one",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "error",
+        "message_id": "error-1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "code": "SESSION_FAILED"
+        }
+      },
+      "code": "ERROR_SHAPE"
+    },
+    {
+      "name": "missing-code",
+      "session": "session",
+      "viewer": "seat-one",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "error",
+        "message_id": "error-1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "terminal": true
+        }
+      },
+      "code": "ERROR_SHAPE"
+    },
+    {
+      "name": "type-session_id",
+      "session": "session",
+      "viewer": "seat-one",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "error",
+        "message_id": "error-1",
+        "body": {
+          "session_id": 3,
+          "viewer_id": "seat-one",
+          "terminal": true,
+          "code": "SESSION_FAILED"
+        }
+      },
+      "code": "ERROR_SHAPE"
+    },
+    {
+      "name": "type-viewer_id",
+      "session": "session",
+      "viewer": "seat-one",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "error",
+        "message_id": "error-1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": null,
+          "terminal": true,
+          "code": "SESSION_FAILED"
+        }
+      },
+      "code": "ERROR_SHAPE"
+    },
+    {
+      "name": "type-terminal",
+      "session": "session",
+      "viewer": "seat-one",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "error",
+        "message_id": "error-1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "terminal": "true",
+          "code": "SESSION_FAILED"
+        }
+      },
+      "code": "ERROR_SHAPE"
+    },
+    {
+      "name": "type-code",
+      "session": "session",
+      "viewer": "seat-one",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "error",
+        "message_id": "error-1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "terminal": true,
+          "code": 3
+        }
+      },
+      "code": "ERROR_SHAPE"
+    },
+    {
+      "name": "forbidden-message",
+      "session": "session",
+      "viewer": "seat-one",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "error",
+        "message_id": "error-1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "terminal": true,
+          "code": "SESSION_FAILED",
+          "message": "private looked-at card"
+        }
+      },
+      "code": "ERROR_SHAPE"
+    },
+    {
+      "name": "forbidden-command_id",
+      "session": "session",
+      "viewer": "seat-one",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "error",
+        "message_id": "error-1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "terminal": true,
+          "code": "SESSION_FAILED",
+          "command_id": "command"
+        }
+      },
+      "code": "ERROR_SHAPE"
+    },
+    {
+      "name": "forbidden-revision",
+      "session": "session",
+      "viewer": "seat-one",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "error",
+        "message_id": "error-1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "terminal": true,
+          "code": "SESSION_FAILED",
+          "revision": 7
+        }
+      },
+      "code": "ERROR_SHAPE"
+    },
+    {
+      "name": "forbidden-retry",
+      "session": "session",
+      "viewer": "seat-one",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "error",
+        "message_id": "error-1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "terminal": true,
+          "code": "SESSION_FAILED",
+          "retry": true
+        }
+      },
+      "code": "ERROR_SHAPE"
+    },
+    {
+      "name": "unknown-code",
+      "session": "session",
+      "viewer": "seat-one",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "error",
+        "message_id": "error-1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "terminal": true,
+          "code": "NEW_ERROR"
+        }
+      },
+      "code": "ERROR_SHAPE"
+    },
+    {
+      "name": "raw-code",
+      "session": "session",
+      "viewer": "seat-one",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "error",
+        "message_id": "error-1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "terminal": true,
+          "code": "private looked-at card"
+        }
+      },
+      "code": "ERROR_SHAPE"
+    },
+    {
+      "name": "nonterminal",
+      "session": "session",
+      "viewer": "seat-one",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "error",
+        "message_id": "error-1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "terminal": false,
+          "code": "SESSION_FAILED"
+        }
+      },
+      "code": "ERROR_SHAPE"
+    },
+    {
+      "name": "session-syntax",
+      "session": "session",
+      "viewer": "seat-one",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "error",
+        "message_id": "error-1",
+        "body": {
+          "session_id": "session\n",
+          "viewer_id": "seat-one",
+          "terminal": true,
+          "code": "SESSION_FAILED"
+        }
+      },
+      "code": "ERROR_SHAPE"
+    },
+    {
+      "name": "viewer-length",
+      "session": "session",
+      "viewer": "seat-one",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "error",
+        "message_id": "error-1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+          "terminal": true,
+          "code": "SESSION_FAILED"
+        }
+      },
+      "code": "ERROR_SHAPE"
+    },
+    {
+      "name": "unsupported-type",
+      "session": "session",
+      "viewer": "seat-one",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "ack",
+        "message_id": "error-1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "terminal": true,
+          "code": "SESSION_FAILED"
+        }
+      },
+      "code": "ERROR_UNSUPPORTED"
+    },
+    {
+      "name": "wrong-session",
+      "session": "session",
+      "viewer": "seat-one",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "error",
+        "message_id": "error-1",
+        "body": {
+          "session_id": "other",
+          "viewer_id": "seat-one",
+          "terminal": true,
+          "code": "SESSION_FAILED"
+        }
+      },
+      "code": "ERROR_SESSION"
+    },
+    {
+      "name": "wrong-viewer",
+      "session": "session",
+      "viewer": "seat-one",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "error",
+        "message_id": "error-1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "other",
+          "terminal": true,
+          "code": "SESSION_FAILED"
+        }
+      },
+      "code": "ERROR_VIEWER"
+    },
+    {
+      "name": "empty-local-session",
+      "session": "",
+      "viewer": "seat-one",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "error",
+        "message_id": "error-1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "terminal": true,
+          "code": "SESSION_FAILED"
+        }
+      },
+      "code": "ERROR_CONTEXT"
+    },
+    {
+      "name": "null-local-session",
+      "session": null,
+      "viewer": "seat-one",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "error",
+        "message_id": "error-1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "terminal": true,
+          "code": "SESSION_FAILED"
+        }
+      },
+      "code": "ERROR_CONTEXT"
+    },
+    {
+      "name": "empty-local-viewer",
+      "session": "session",
+      "viewer": "",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "error",
+        "message_id": "error-1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "terminal": true,
+          "code": "SESSION_FAILED"
+        }
+      },
+      "code": "ERROR_CONTEXT"
+    }
+  ]
+}

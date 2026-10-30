@@ -115,3 +115,21 @@ def test_choice_amount_vector_boundary_is_a_transport_limit():
     validator.validate(command)
     command["body"]["values"].append(0)
     assert not validator.is_valid(command)
+
+
+def test_terminal_error_schema_separates_shape_from_viewer_binding():
+    schema = json.loads(
+        (ROOT / "wire-errors-v1.schema.json").read_text(encoding="utf-8")
+    )
+    Draft202012Validator.check_schema(schema)
+    validator = Draft202012Validator(schema)
+    corpus = json.loads(
+        (ROOT / "fixtures/wire-errors-v1.json").read_text(encoding="utf-8")
+    )
+    for case in corpus["positive"]:
+        validator.validate(case["envelope"])
+    for case in corpus["negative"]:
+        if case["code"] in {"ERROR_SESSION", "ERROR_VIEWER", "ERROR_CONTEXT"}:
+            validator.validate(case["envelope"])
+        else:
+            assert not validator.is_valid(case["envelope"]), case["name"]

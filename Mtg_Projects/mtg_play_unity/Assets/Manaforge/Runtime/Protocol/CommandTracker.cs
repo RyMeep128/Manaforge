@@ -103,6 +103,16 @@ namespace Manaforge.Play.Protocol
                 return record.Snapshot();
             }
         }
+        // Authenticated terminal channel error. Preserve uncertain receipts; never reinterpret as an ACK.
+        // Invalid/misrouted error data also fails closed and forbids reconnecting this tracker.
+        public string AcceptSessionError(string text)
+        {
+            lock (gate)
+            {
+                Open(); faulted = true; connected = false; Uncertain(active);
+                return SessionErrors.Parse(text, session, viewer);
+            }
+        }
         public TrackedCommand Current { get { lock (gate) return active?.Snapshot(); } }
         public void Disconnect()
         { lock (gate) { Open(); connected = false; Uncertain(active); } }
