@@ -73,7 +73,7 @@ public final class DummyGateway {
                 long revision=snapshot.get("revision").getAsLong();
                 String decision=snapshot.getAsJsonObject("decision").get("decision_id").getAsString();
                 List<String> actions=new ArrayList<>(); for(JsonElement a:snapshot.getAsJsonArray("actions"))actions.add(a.getAsJsonObject().get("action_id").getAsString());
-                boolean pending=false;
+                try(SubmissionLedger ledger=new SubmissionLedger(session,viewer,4096)) {
                 for(int count=0;count<8;count++) {
                     String text=TextFrame.read(in); require(text!=null);
                     JsonObject message=WireMessages.parse(text),request=message.getAsJsonObject("body");
@@ -84,14 +84,11 @@ public final class DummyGateway {
                     }
                     require(type.equals("command"));
                     String rejection=WireMessages.checkCurrent(text,session,viewer,revision,decision,actions);
-                    if(rejection==null && pending)rejection="COMMAND_PENDING";
-                    JsonObject ack=new JsonObject(); ack.addProperty("session_id",session);ack.addProperty("viewer_id",viewer);
-                    ack.addProperty("command_id",message.get("message_id").getAsString());ack.add("request_revision",request.get("revision"));
-                    ack.addProperty("outcome",rejection==null?"submitted":"rejected");
-                    if(rejection==null)ack.add("code",JsonNull.INSTANCE);else ack.addProperty("code",rejection);
-                    send(out,envelope("ack","ack-"+count,ack));
-                    if(rejection==null) {
-                        pending=true;JsonObject result=new JsonObject();result.addProperty("fixture_only",true);
+                    SubmissionLedger.Prepared prepared=ledger.prepare(text,rejection);
+                    JsonObject acknowledgement=prepared.receipt();acknowledgement.addProperty("message_id","ack-"+count);
+                    send(out,acknowledgement);
+                    if(prepared.shouldSubmit) {
+                        JsonObject result=new JsonObject();result.addProperty("fixture_only",true);
                         JsonObject terminal=snapshot.deepCopy();terminal.addProperty("status","finished");terminal.addProperty("result","fixture_complete");
                         terminal.addProperty("revision",revision+1);terminal.add("decision",JsonNull.INSTANCE);terminal.add("actions",new JsonArray());
                         result.add("snapshot",terminal);JsonObject resultMessage=envelope("result","fixture-result",result);
@@ -99,6 +96,7 @@ public final class DummyGateway {
                     }
                 }
                 throw new IOException("DUMMY_LIMIT");
+                }
             }
         } catch(Exception error) { if(!ownerGone.get()) { System.err.println("DUMMY_FAILED");System.exit(2); } }
         finally { if(key!=null)Arrays.fill(key,(byte)0); }

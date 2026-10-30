@@ -113,3 +113,11 @@ the fixture-only result as a terminal GameSnapshot. It retains the same dummy
 outcome label and does not confirm an engine action. Current focused totals are
 42 Unity EditMode and five Python schema checks; original counts above record
 the earlier increment. No new packaged-player or real-engine evidence is added.
+
+
+The submission-ledger follow-up adds a cached identical retry and a separate
+changed-payload ID-conflict scenario. Four owned-process scenarios now pass within
+57 local EditMode checks. These deliberate raw probes bypass normal client ID
+prevention only in the test harness. No engine is involved and a duplicate
+submission reservation never produces a second fixture result. See the
+[ledger guide](submission-ledger.md) for scope and limits.

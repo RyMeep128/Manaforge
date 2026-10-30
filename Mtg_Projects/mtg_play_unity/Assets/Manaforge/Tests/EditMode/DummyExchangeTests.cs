@@ -80,7 +80,7 @@ namespace Manaforge.Play.Tests
             Assert.That((string)body["outcome"],Is.EqualTo(outcome));Assert.That((string)body["code"],Is.EqualTo(code));
             tracker?.Accept(reply.ToString(Formatting.None));
         }
-        private static void Exchange(Peer peer,bool wrongKey,bool ownerEof)
+        private static void Exchange(Peer peer,bool wrongKey,bool ownerEof,bool conflictingDuplicate)
         {
             byte[] key=RandomBytes();
             try
@@ -134,6 +134,16 @@ namespace Manaforge.Play.Tests
                     Assert.That((bool)result["body"]["fixture_only"],Is.True);Assert.That((string)result["body"]["snapshot"]["result"],Is.EqualTo("fixture_complete"));
                     Assert.That((string)result["body"]["snapshot"]["status"],Is.EqualTo("finished"));
                     Assert.That((string)result["body"]["snapshot"]["session_id"],Is.EqualTo(snapshot.session_id));Assert.That((string)result["body"]["snapshot"]["viewer_id"],Is.EqualTo(snapshot.viewer_id));
+                    if(conflictingDuplicate)
+                    {
+                        // Same ID with different contents must not create another submission reservation.
+                        Send(stream,Command("current",snapshot.revision+1,decision,action));
+                        Assert.That(TextFrame.Read(stream),Is.Null,"Conflicting ID reuse closes the connection");
+                        Assert.That(peer.Process.WaitForExit(5000),Is.True);Assert.That(peer.Process.ExitCode,Is.EqualTo(2));
+                        tracker.Disconnect();Assert.That(tracker.Current.State,Is.EqualTo(CommandState.Uncertain));return;
+                    }
+                    // Deliberate raw retry probe, bypassing the normal client's ID-reuse prevention.
+                    Send(stream,Command("current",snapshot.revision,decision,action));Ack(stream,"current",snapshot.revision,"submitted",null,tracker);
                     Assert.That(tracker.Current.State,Is.EqualTo(CommandState.Submitted),"A terminal fixture snapshot is not command confirmation");
                     Assert.That(Assert.Throws<WireEnvelope.EnvelopeException>(()=>tracker.Begin(Command("blocked",snapshot.revision,decision,action).ToString())).Code,Is.EqualTo("COMMAND_PENDING"));
                     // Deliberate raw protocol probe of the SERVER guard, bypassing normal client submission.
@@ -147,12 +157,12 @@ namespace Manaforge.Play.Tests
             }
             finally { Array.Clear(key,0,key.Length); }
         }
-        private static IEnumerator Run(bool wrongKey,bool ownerEof)
+        private static IEnumerator Run(bool wrongKey,bool ownerEof,bool conflictingDuplicate=false)
         {
             string directory=Path.GetFullPath(Path.Combine(Application.dataPath,"../Artifacts/JavaDummy"));
             using(var peer=new Peer(directory))
             {
-                var task=Task.Run(()=>Exchange(peer,wrongKey,ownerEof));var timer=Stopwatch.StartNew();
+                var task=Task.Run(()=>Exchange(peer,wrongKey,ownerEof,conflictingDuplicate));var timer=Stopwatch.StartNew();
                 try
                 {
                     while(!task.IsCompleted && timer.Elapsed.TotalSeconds<25)yield return null;
@@ -169,5 +179,6 @@ namespace Manaforge.Play.Tests
         [UnityTest] public IEnumerator JavaPeerExchangesAuthenticatedFixtureAndRejectsStaleAndPendingActions()=>Run(false,false);
         [UnityTest] public IEnumerator WrongViewerKeyReceivesNoSessionData()=>Run(true,false);
         [UnityTest] public IEnumerator OwnerPipeEofStopsTheOwnedListener()=>Run(false,true);
+        [UnityTest] public IEnumerator ConflictingDuplicateCannotReplaceTheRecordedCommand()=>Run(false,false,true);
     }
 }

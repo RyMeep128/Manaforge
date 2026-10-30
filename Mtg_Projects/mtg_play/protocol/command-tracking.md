@@ -86,7 +86,8 @@ full suite, actual engine, screenshot or packaged UI is claimed. CI for this
 increment is pending; next scheduled review is every third commit without waits.
 Qt CI investigation is outside the current Unity/Java scope at owner direction.
 
-Remaining: gateway-side command deduplication/reconciliation and authoritative
-confirmation, live choice dispatch, actual transport cancellation/queue
+A subsequent [Java submission ledger](submission-ledger.md) adds in-memory
+duplicate reservations to the dummy gateway. Real gateway reconciliation and
+authoritative engine confirmation remain pending, alongside live choice dispatch, actual transport cancellation/queue
 policy, product bootstrap/lifecycle, immutable renderer projection and licensed
 Unity CI. No fallback retirement or G1 completion is claimed.

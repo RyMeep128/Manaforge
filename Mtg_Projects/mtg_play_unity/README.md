@@ -248,3 +248,10 @@ tracker uses the same uncertain/pending lifecycle for choices. This is contract
 coverage only: the dummy exchange remains perform-only, no choice UI or real
 engine dispatch is added. Fifty-six local EditMode and six schema checks pass;
 see [choice contract scope](../mtg_play/protocol/choice-commands.md).
+
+
+The Java dummy now retains per-viewer submission receipts. Identical retries
+return the existing ACK without another fixture result; changed request contents
+under the same ID close the connection. Fifty-seven local EditMode checks pass,
+including four real Java-process scenarios. This remains protocol-only evidence;
+see the [submission ledger limits](../mtg_play/protocol/submission-ledger.md).

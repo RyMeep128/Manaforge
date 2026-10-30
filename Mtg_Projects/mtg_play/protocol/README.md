@@ -300,3 +300,14 @@ explicitly separate from legality. Concession and real gateway choice execution
 remain pending. Local checks: 12 positive/37 negative bodies, 12 choice-binding
 cases, amount-vector bounds, 56 Unity EditMode and six schema checks passed.
 No G1 completion or actual choice gameplay is claimed.
+
+
+## Java duplicate submission reservations
+
+The [submission ledger](submission-ledger.md) now retains session/viewer-bound
+receipts, returns history for identical retries and refuses changed contents
+under an existing command ID. Uncertainty/capacity cannot silently permit replay.
+The live dummy uses it, including duplicate and conflict probes. Java checks and
+57 Unity EditMode tests pass locally. This reserves protocol submissions; it is
+not actual engine exactly-once execution or crash reconciliation. The linked
+guide records this increment's scheduled protocol CI snapshot.
