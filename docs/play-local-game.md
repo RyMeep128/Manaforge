@@ -23,8 +23,8 @@ local image references and do not fetch missing artwork. Generated objects witho
 a prepared local reference use placeholders.
 
 The match loading page shows real stages and elapsed time. Cancel requests stop
-startup waits and then clean up owned processes; an already-running synchronous
-preparation/compilation step must finish before cleanup. Unconfirmed cleanup blocks
+compiler/server/connection waits and then clean up owned processes. An already-running
+synchronous filesystem preparation step must still finish before cleanup. Unconfirmed cleanup blocks
 new matches and offers a retry. Match entry maximizes the containing window and
 leaving gameplay restores its previous window state.
 

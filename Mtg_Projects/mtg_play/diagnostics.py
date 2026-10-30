@@ -101,6 +101,9 @@ class LifecycleDiagnostics:
             yield
         except BaseException as error:
             code = getattr(error, "code", None)
+            if code == "RUNTIME_CANCELLED":
+                self.end(token, cancelled=True)
+                raise
             failure = (
                 "TIMEOUT"
                 if isinstance(error, (TimeoutError, subprocess.TimeoutExpired))

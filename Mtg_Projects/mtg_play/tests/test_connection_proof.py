@@ -244,3 +244,36 @@ def test_startup_server_and_bridge_waits_honor_cancel_before_waiting(tmp_path):
     with pytest.raises(proof.ProofError) as failed:
         events.wait("connected", time.monotonic() + 30, cancel=cancel)
     assert failed.value.code == "RUNTIME_CANCELLED"
+
+
+def test_cancel_compiler_wait_reaps_only_owned_compiler(children):
+    import threading
+
+    compiler = children(
+        "print('compiler-ready', flush=True); import time; time.sleep(30)"
+    )
+    assert compiler.stdout.readline().strip() == "compiler-ready"
+    unrelated = children("input()")
+    cancel = threading.Event()
+    cancel.set()
+    with pytest.raises(proof.ProofError) as failure:
+        proof.wait_for_compiler(compiler, time.monotonic() + 60, cancel=cancel)
+    assert failure.value.code == "RUNTIME_CANCELLED"
+    record = proof.stop_process(compiler, immediate=True)
+    assert record["reaped"] and record["exit_code"] is not None and record["forced"]
+    assert unrelated.poll() is None
+
+
+def test_compiler_wait_timeout_keeps_process_available_for_owned_cleanup(children):
+    compiler = children("input()")
+    with pytest.raises(proof.ProofError) as failure:
+        proof.wait_for_compiler(compiler, time.monotonic() - 1)
+    assert failure.value.code == "ENGINE_OPERATION_TIMEOUT"
+    assert proof.stop_process(compiler, immediate=True)["reaped"]
+
+
+def test_completed_compiler_is_reported_without_forced_cleanup(children):
+    compiler = children("pass")
+    assert proof.wait_for_compiler(compiler, time.monotonic() + 5) == 0
+    record = proof.stop_process(compiler, immediate=True)
+    assert record["exit_code"] == 0 and record["reaped"] and not record["forced"]

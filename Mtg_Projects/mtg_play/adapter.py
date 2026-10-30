@@ -175,7 +175,13 @@ class LocalGameAdapter:
                 ):
                     raise
             failure = self.lifecycle.failure
-            raise AdapterError(failure["code"] if failure else "ENGINE_STARTUP_FAILED")
+            raise AdapterError(
+                "RUNTIME_CANCELLED"
+                if self._cancel.is_set()
+                else failure["code"]
+                if failure
+                else "ENGINE_STARTUP_FAILED"
+            )
         return self
 
     @property
@@ -185,7 +191,7 @@ class LocalGameAdapter:
         processes = {
             key: value
             for key, value in self._runtime_result.items()
-            if (key in ("server", "bridge") or key.startswith("peer_"))
+            if (key in ("compiler", "server", "bridge") or key.startswith("peer_"))
             and value.get("started", True)
         }
         return RuntimeReport(

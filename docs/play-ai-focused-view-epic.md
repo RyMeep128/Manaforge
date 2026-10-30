@@ -1204,3 +1204,31 @@ checked first: no failed steps were reported; the prior run was superseded and t
 latest was pending at that check. This increment is committed and pushed at the
 user's explicit request. Pinned-engine CI completion, broader real-image review
 and the user's nightly manual UX sign-off remain open acceptance gates.
+
+
+Startup cancellation audit (0.5.26-alpha.1): CI was checked first. No failed
+steps were reported; the previous Python 3.13 job passed and its superseded
+Python 3.12 run was cancelled, while the newest run was pending. There was no
+new CI failure to repair at the time of inspection.
+
+Continued lifecycle review found a remaining blocking compile step. Product
+adapter startup now launches its own hidden compiler process and polls the
+shared cancellation event instead of blocking in subprocess.run. The runner's
+existing finally cleanup terminates/reaps only that owned compiler when needed;
+normal successful compilation is not forced. Compiler state is retained in
+RuntimeReport, including unknown exits, so missing cleanup evidence cannot be
+silently dropped. Server/bridge teardown remains on its existing graceful path.
+Cancelled stages are recorded as cancelled rather than unexplained engine
+failures. A synchronous workspace filesystem preparation step remains cooperative
+at phase boundaries; no gameplay command replay or interruption policy changed.
+
+Python 3.13 verification: 130 focused lifecycle/adapter/controller tests passed
+during development, then 303 tests across Play plus Editor readiness passed.
+Controlled real Python subprocess tests prove compiler wait cancellation,
+timeout cleanup, normal completion and unrelated-process preservation; they do
+not launch Java or XMage. Compile-failure tests cover both cancellable and legacy
+standalone paths and prevent engine launch after compiler failure. Runtime-report
+regressions retain both known and unknown compiler exits. Ruff lint/formatting and
+diff checks pass. No local engine acceptance or application build ran. Committed
+and pushed at the user's request. The remaining epic gates are real-engine CI
+completion and broader real-image/manual nightly UX acceptance.

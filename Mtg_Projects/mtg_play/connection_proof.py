@@ -175,14 +175,22 @@ def send(process: subprocess.Popen, command: str, request_id: str, **fields):
         raise ProofError(f"Cannot send {command} to bridge: {error}") from error
 
 
-def stop_process(process: subprocess.Popen | None, shutdown_line: str | None = None):
+def stop_process(
+    process: subprocess.Popen | None,
+    shutdown_line: str | None = None,
+    *,
+    immediate=False,
+):
     """Reap only a process created by this runner; never kill by name or port."""
     if process is None:
         return {"started": False}
     forced = False
     if process.poll() is None:
         try:
-            if shutdown_line is not None:
+            if immediate:
+                forced = True
+                process.terminate()
+            elif shutdown_line is not None:
                 process.stdin.write(shutdown_line + "\n")
                 process.stdin.flush()
             else:
@@ -272,6 +280,21 @@ def check_cancel(cancel):
         raise ProofError("Runtime preparation cancelled", code="RUNTIME_CANCELLED")
 
 
+def wait_for_compiler(process, deadline, *, cancel=None):
+    """Wait only for this owned compiler; cancellation is reaped by the runner."""
+    while process.poll() is None:
+        check_cancel(cancel)
+        if time.monotonic() >= deadline:
+            raise ProofError(
+                "Java bridge compilation timed out", code="ENGINE_OPERATION_TIMEOUT"
+            )
+        if cancel is not None:
+            cancel.wait(0.1)
+        else:
+            time.sleep(0.1)
+    return process.returncode
+
+
 def wait_for_server(
     process: subprocess.Popen, log: Path, deadline: float, *, cancel=None
 ):
@@ -320,7 +343,7 @@ def run_proof(
         "workspace": str(workspace),
         "engine": manifest["engine"],
     }
-    server_process = bridge_process = events = None
+    compiler_process = server_process = bridge_process = events = None
     logs = []
     peers = []
     reservations = []
@@ -339,25 +362,38 @@ def run_proof(
             classpath = str(server / "lib/*")
             compile_log = (workspace / "compile.log").open("w", encoding="utf-8")
             logs.append(compile_log)
-            compiled = subprocess.run(
-                [
-                    str(javac),
-                    "--release",
-                    "8",
-                    "-encoding",
-                    "UTF-8",
-                    "-cp",
-                    classpath,
-                    "-d",
-                    str(classes),
-                    *map(str, sorted((HERE / "java").glob("*.java"))),
-                ],
-                stdout=compile_log,
-                stderr=subprocess.STDOUT,
-                timeout=60,
-                check=False,
-            )
-            if compiled.returncode:
+            command = [
+                str(javac),
+                "--release",
+                "8",
+                "-encoding",
+                "UTF-8",
+                "-cp",
+                classpath,
+                "-d",
+                str(classes),
+                *map(str, sorted((HERE / "java").glob("*.java"))),
+            ]
+            if cancel is None:
+                compiled_returncode = subprocess.run(
+                    command,
+                    stdout=compile_log,
+                    stderr=subprocess.STDOUT,
+                    timeout=60,
+                    check=False,
+                ).returncode
+            else:
+                compiler_process = subprocess.Popen(
+                    command,
+                    stdin=subprocess.PIPE,
+                    stdout=compile_log,
+                    stderr=subprocess.STDOUT,
+                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                )
+                compiled_returncode = wait_for_compiler(
+                    compiler_process, time.monotonic() + 60, cancel=cancel
+                )
+            if compiled_returncode:
                 raise ProofError(
                     f"Java bridge compilation failed; inspect {compile_log.name}"
                 )
@@ -501,11 +537,12 @@ def run_proof(
                     }
             peer_events.thread.join(timeout=2)
         for name, process, line in (
+            ("compiler", compiler_process, None),
             ("bridge", bridge_process, None),
             ("server", server_process, "shutdown"),
         ):
             try:
-                result[name] = stop_process(process, line)
+                result[name] = stop_process(process, line, immediate=name == "compiler")
             except (OSError, subprocess.SubprocessError) as error:
                 cleanup_errors.append(f"{name}: {error}")
                 # Missing cleanup data is not evidence that a started child exited.
@@ -525,6 +562,7 @@ def run_proof(
             failure = f"{failure or ''} Cleanup failed: {cleanup_errors}"
         if failure is None:
             for name in (
+                *(("compiler",) if result.get("compiler", {}).get("started") else ()),
                 "bridge",
                 "server",
                 *("peer_" + str(i) for i in range(len(peers))),
@@ -533,9 +571,18 @@ def run_proof(
                 if state.get("forced") or state.get("exit_code") != 0:
                     failure = f"{name} did not shut down normally: {state}"
         cleanup_failed = bool(cleanup_errors) or any(
-            state.get("started") and (state.get("forced") or not state.get("reaped"))
+            state.get("started")
+            and (
+                not state.get("reaped")
+                or (
+                    state.get("forced")
+                    and not (
+                        name == "compiler" and cancel is not None and cancel.is_set()
+                    )
+                )
+            )
             for name, state in result.items()
-            if name in ("bridge", "server") or name.startswith("peer_")
+            if name in ("compiler", "bridge", "server") or name.startswith("peer_")
         )
         diagnostics.end(cleanup_stage, failure="FAILED" if cleanup_failed else None)
         result["lifecycle"] = diagnostics.records

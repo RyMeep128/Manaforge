@@ -103,8 +103,9 @@ def test_failed_startup_preserves_stage_error_only_after_confirmed_cleanup(
 
 
 @pytest.mark.parametrize("report_unwritable", [False, True])
+@pytest.mark.parametrize("cancellable", [False, True])
 def test_bridge_compile_failure_reports_stage_and_reaps_only_started_processes(
-    tmp_path, monkeypatch, report_unwritable
+    tmp_path, monkeypatch, report_unwritable, cancellable
 ):
     from types import SimpleNamespace as NS
     from mtg_play import connection_proof as proof
@@ -130,7 +131,12 @@ def test_bridge_compile_failure_reports_stage_and_reaps_only_started_processes(
         proof.subprocess, "run", lambda *args, **kwargs: NS(returncode=1)
     )
 
-    def forbidden_child(*args, **kwargs):
+    def forbidden_child(command, **kwargs):
+        if cancellable and command[0] == str(tmp_path / "javac.exe"):
+            assert kwargs.get("creationflags") == getattr(
+                proof.subprocess, "CREATE_NO_WINDOW", 0
+            )
+            return NS(poll=lambda: 1, returncode=1, pid=123, stdin=None, stdout=None)
         raise AssertionError("Compilation failure must not launch an engine")
 
     monkeypatch.setattr(proof.subprocess, "Popen", forbidden_child)
@@ -143,7 +149,17 @@ def test_bridge_compile_failure_reports_stage_and_reaps_only_started_processes(
             return original_write(path, *args, **kwargs)
 
         monkeypatch.setattr(Path, "write_text", fail_result_write)
-    report = proof.run_proof(tmp_path, tmp_path, diagnostics=tracker)
+    import threading
+
+    report = proof.run_proof(
+        tmp_path,
+        tmp_path,
+        diagnostics=tracker,
+        cancel=threading.Event() if cancellable else None,
+    )
+    assert report["compiler"]["started"] is cancellable
+    if cancellable:
+        assert report["compiler"]["exit_code"] == 1 and report["compiler"]["reaped"]
     assert not report["success"]
     assert report["server"] == report["bridge"] == {"started": False}
     assert tracker.failure["code"] == "PLAY_BRIDGE_COMPILATION_FAILED"
@@ -155,3 +171,27 @@ def test_bridge_compile_failure_reports_stage_and_reaps_only_started_processes(
         assert json.loads((Path(report["workspace"]) / "result.json").read_text())[
             "lifecycle"
         ]
+
+
+def test_cancelled_stage_is_not_recorded_as_an_engine_failure():
+    from mtg_play.adapter import AdapterError
+
+    tracker = LifecycleDiagnostics()
+    with pytest.raises(AdapterError):
+        with tracker.stage("bridge_compilation"):
+            raise AdapterError("RUNTIME_CANCELLED")
+    assert tracker.records[-1]["state"] == "cancelled"
+    assert tracker.failure is None
+
+
+@pytest.mark.parametrize("exit_code", [0, None])
+def test_runtime_report_retains_started_compiler_even_when_exit_is_unknown(exit_code):
+    owner = LocalGameAdapter.__new__(LocalGameAdapter)
+    owner._runtime_result = dict(
+        success=exit_code == 0,
+        compiler=dict(started=True, exit_code=exit_code, forced=False),
+        server=dict(started=False),
+        bridge=dict(started=False),
+    )
+    assert owner.result.process_exit_codes == (("compiler", exit_code),)
+    assert owner.result.success is (exit_code == 0)
