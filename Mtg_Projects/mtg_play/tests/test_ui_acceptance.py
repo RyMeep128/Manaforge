@@ -120,7 +120,11 @@ class PrescribedMatch(ScriptedGameSession):
                 f"step-{self.index}",
                 "one",
                 stage[2],
-                "Discard a card" if stage[1] == "discard" else "Fixture choice",
+                "Discard a card"
+                if stage[1] == "discard"
+                else "Keep your hand?"
+                if stage[1] == "keep"
+                else "Fixture choice",
                 stage[3],
             )
             if stage
@@ -186,13 +190,21 @@ class PrescribedMatch(ScriptedGameSession):
         return result
 
 
-def test_offline_ai_setup_to_result_through_fixed_human_controls(tmp_path, monkeypatch):
+@pytest.mark.parametrize("screenshots", [False, True])
+def test_offline_ai_setup_to_result_through_fixed_human_controls(
+    tmp_path, monkeypatch, screenshots
+):
     monkeypatch.setenv("MANAFORGE_ENABLE_LOCAL_PLAY", "1")
     monkeypatch.setenv("PRINT_PROXY_PREP_DATA_DIR", str(tmp_path))
     app = W.QApplication.instance() or W.QApplication([])
     game = PrescribedMatch()
     owner = Owner(game)
-    pilot = UIAdapter(app, owner, tmp_path)
+    pilot = UIAdapter(
+        app,
+        owner,
+        tmp_path,
+        screenshot_root=tmp_path / "screenshots" if screenshots else None,
+    )
     docs = (DeckDocument(), DeckDocument())
     for document in docs:
         document.deck.entries = [
@@ -230,3 +242,76 @@ def test_offline_ai_setup_to_result_through_fixed_human_controls(tmp_path, monke
     finally:
         pilot.close()
     assert owner.closed
+    assert pilot.returned_to_lobby and pilot.remote_artwork_attempts == 0
+    if screenshots:
+        from PyQt6 import QtGui as G
+
+        assert G.QFontMetrics(app.font()).inFont("A")
+        for name in (
+            "landing",
+            "format",
+            "setup",
+            "loading",
+            "opening-hand",
+            "hover-preview",
+            "lobby-return",
+        ):
+            assert name in pilot.captured
+            image = G.QImage(str(tmp_path / "screenshots" / (name + ".png")))
+            assert not image.isNull() and image.width() > 100
+
+
+def test_ui_pilot_detects_remote_fallback_attempt_during_active_match(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setenv("MANAFORGE_ENABLE_LOCAL_PLAY", "1")
+    monkeypatch.setenv("PRINT_PROXY_PREP_DATA_DIR", str(tmp_path))
+    app = W.QApplication.instance() or W.QApplication([])
+    owner = Owner(PrescribedMatch())
+    pilot = UIAdapter(app, owner, tmp_path)
+    docs = (DeckDocument(), DeckDocument())
+    for document in docs:
+        document.deck.entries = [
+            DeckEntry("forest", "Forest", 60, card_id="selected-forest")
+        ]
+    setup = GameSetup(
+        (MatchSeat("one", "You"), MatchSeat("two", "Opponent", "engine_ai"))
+    )
+    try:
+        pilot.create_game(setup, docs)
+        with pytest.raises(AssertionError, match="remote artwork or metadata"):
+            pilot.fixture_service.ensure_face_image("printing", 1, allow_remote=True)
+        assert pilot.remote_artwork_attempts == 1
+    finally:
+        pilot.close()
+    assert owner.closed
+
+
+def test_loading_indicator_native_destruction_tolerates_cleared_activity_state(
+    monkeypatch,
+):
+    import sys
+    from PyQt6 import QtCore as C
+    from mtg_ui.loading import _Activity
+
+    app = W.QApplication.instance() or W.QApplication([])
+    window = W.QWidget()
+    window.show()
+    window.activateWindow()
+    app.processEvents()
+    activity = _Activity(app)
+    failures = []
+    monkeypatch.setattr(sys, "excepthook", lambda *args: failures.append(args))
+    try:
+        activity.begin()
+        assert activity.indicator is not None
+        activity.timer.stop()
+        # Reproduce partial Python teardown, then destroy the actual native
+        # parent/indicator so its real destroyed signal invokes the callback.
+        del activity.indicator
+        window.deleteLater()
+        C.QCoreApplication.sendPostedEvents(window, C.QEvent.Type.DeferredDelete)
+        assert not failures
+    finally:
+        activity.timer.stop()
+        activity.deleteLater()

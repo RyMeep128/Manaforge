@@ -932,6 +932,10 @@ class GameTable(W.QWidget):
         self.hover_preview.show()
 
     def _update_hover_image(self, obj):
+        if not obj.card_identity or not obj.card_identity.printing_id:
+            self.hover_image.clear()
+            self.hover_image.setText("Local artwork unavailable")
+            return
         image = self.artwork.get(obj, detailed=True)
         self.hover_image.clear()
         if image is not None and not image.isNull():

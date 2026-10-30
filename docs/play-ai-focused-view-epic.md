@@ -1138,3 +1138,41 @@ formatting and diff checks pass. No local engine acceptance, build or external
 feedback submission ran. Committed/pushed at the user's request. The epic remains
 unfinished: real-engine CI acceptance, reviewable real-image screenshots and the
 user's manual nightly UX acceptance are still required; Story 14 is not signed off.
+
+
+Story 14 evidence increment (0.5.24-alpha.1): the existing CI UI pilot now captures
+the transient hover popup separately from its containing window and captures
+observed choice panels. Hover is exercised through a proper Qt enter/leave event
+and must submit no command; capture waits for a local image or explicit missing
+artwork placeholder. Missing printing identity now immediately shows that
+placeholder instead of an indefinite loading message. Successful CLI runs require
+key navigation/loading/opening/hover/lobby-return artifacts and list actual
+screenshots in their report. Results return through the real result-panel button,
+verify lobby return/selection preservation after cleanup, and capture cleanup and
+return views. Fixture image/metadata fallback hooks count and reject any attempt
+while the match is active; a nonzero count fails CLI acceptance.
+
+Screenshot-backed local tests exposed two review-infrastructure issues. The
+Windows Qt offscreen backend had no registered fonts, producing unreadable boxes;
+the pilot now loads an installed font without network access and refuses to
+produce acceptance screenshots without a readable font. The actual application
+is not changed by this pilot-only font setup. The shared loading indicator's
+native destroyed callback could run after Python attributes were cleared during
+application teardown; getattr-based identity checking now makes that callback
+harmless. A native parent/child destruction regression covers the failure.
+
+Python 3.13 focused verification passes: 290 tests across Play plus Editor
+readiness, including screenshot files/hover/return evidence and a forbidden
+remote-fallback injection. Ruff lint/formatting and diff checks pass. Generated
+opening-hand and hover screenshots were visually inspected and are readable;
+these synthetic fixtures use placeholders and do not establish real printing
+visual acceptance. docs/play-local-game.md now documents the current workflow,
+limitations, diagnostics consent and required manual real-image/nightly review.
+No local XMage acceptance or application build ran.
+
+CI was checked at the user's request: run 40997441884 at aa0ebad had Python 3.13
+passed and Python 3.12 in real-engine acceptance with no failed steps. The earlier
+f1c2bd6 run was superseded/cancelled, not an identified new failure. This increment
+is committed/pushed as requested, starting a fresh CI run. The epic remains open
+until real-engine CI, real printing review and the user's nightly UX sign-off are
+complete; green focused tests alone do not satisfy that gate.

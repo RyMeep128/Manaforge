@@ -6,12 +6,74 @@ followed by a format-first lobby, local asset preparation, and an immersive
 two-player Focused View. The [long-term Play epic](manaforge-play-epic.md)
 retains the future 2-5-player and private networking roadmap.
 
-Current source navigation (implemented locally, unverified): **Play Offline >
-Choose format > Continue to Lobby > choose your deck and an AI deck > Start Game**.
-**Play** opens mode selection before the same offline flow. The lobby includes
-local readiness feedback and accepted shared decks already cached by Browse Online.
-Host Match, Join Match, and Invite Friend are visible but unavailable. Opening Play does not start XMage.
-Installed builds remain gated; the new navigation does not establish acceptance.
+## Current offline preview workflow
+
+Open **Play Offline**, choose Freeform or Commander, then **Continue to Lobby**.
+Choose your deck and the AI deck. **Randomize** starts an explicit offline engine
+preflight and chooses only among decks that pass the pinned engine's checks.
+Local readiness labels alone are not engine eligibility certificates. Display-only
+commander entries are omitted for all precons; playable deck documents and exact
+printing choices are preserved. Unsupported cards or exact printings can still
+prevent a match from starting.
+
+**Start Game** prepares cached artwork and battlefield crops on a worker. If any
+artwork is missing, review the list and choose **Continue Anyway** for placeholders
+or **Return to Lobby** to keep your selections. Gameplay and inspection use frozen
+local image references and do not fetch missing artwork. Generated objects without
+a prepared local reference use placeholders.
+
+The match loading page shows real stages and elapsed time. Cancel requests stop
+startup waits and then clean up owned processes; an already-running synchronous
+preparation/compilation step must finish before cleanup. Unconfirmed cleanup blocks
+new matches and offers a retry. Match entry maximizes the containing window and
+leaving gameplay restores its previous window state.
+
+Choose Keep/Mulligan only for your human seat; the AI makes its own choices. Bottom
+selections and their completion/cancellation permissions come from the engine.
+Focused View keeps your hand below both battlefields, with contextual stack and
+combat information. Hover for a full printing and live engine details; right click
+for persistent inspection. A single legal action is direct; multiple actions open
+a menu. Printed artwork is not a promise that printed characteristics are current.
+
+Finished matches show the engine's outcome and **Return to Lobby**. A non-winning
+result is not reinterpreted as a specific loss/draw reason. Failed or uncertain
+sessions offer cleanup recovery rather than replaying a command. **Copy Play
+diagnostics** and **Report a Play issue** provide bounded version/stage/error data;
+the shared feedback composer retains its review and consent controls.
+
+Host Match, Join Match and Invite Friend remain unavailable. Opening Play does not
+start XMage. Installed builds remain gated. Source implementation and focused unit
+verification do not establish full epic acceptance.
+
+## Acceptance evidence and nightly visual review
+
+The CI UI pilot retains the fixed human-versus-AI fixture scenarios and records
+lobby, format, setup, loading, missing artwork, opening hand, hover context/popup,
+observed choices, stack, combat, result, cleanup and lobby-return screenshots as
+those views occur. Its report lists actual screenshots, attempted remote image
+fallbacks and lobby return. Successful runs require key navigation/opening/hover/
+return artifacts. The pilot verifies that hovering submits no command and that
+returning after cleanup preserves deck selections. Synthetic fixture artwork still
+exercises placeholders; it does **not** substitute for real printing visual QA.
+
+Manual nightly review remains required with ordinary cached decks and real images:
+
+1. Check format/lobby actions at 1024x768 and 1280x720 or larger. Verify visible
+   readiness reasons and loading feedback while Randomize and Start prepare work.
+2. Try a fully cached deck and one missing artwork. Review Continue Anyway/Return,
+   selected printing identity, commander and partner artwork, and cancellation.
+3. Inspect actual battlefield crops, full hover previews, transformed/flip faces,
+   live stat/counter changes, and hidden-card privacy. Confirm hovering/right click
+   never submits a decision.
+4. Complete human opening choices and any required bottom selections. Play a land
+   and spell, pay offered costs, pass priority, attack/block and inspect the stack.
+5. Reach an authoritative result, return to the lobby and verify selections/window
+   state and cleanup. Exercise failed-start and cleanup-retry recovery separately.
+6. Review optional diagnostics before sharing. Report missing images, clipping,
+   confusing prompts and unsupported cards without marking the epic accepted.
+
+Historical implementation notes below describe earlier increments and their state
+at the time. They are not a current claim that every outstanding criterion passed.
 
 ## Rebuild baseline - October 29, 2026
 

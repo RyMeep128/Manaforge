@@ -328,6 +328,7 @@ def test_hover_is_delayed_transient_and_uses_current_snapshot_without_actions(ap
         assert table.hover_timer.interval() == 300
         table._show_hover()
         assert "3/3" in table.hover_text.toPlainText()
+        assert table.hover_image.text() == "Local artwork unavailable"
         assert "original printing" in table.hover_text.toPlainText()
         assert (
             table.inspected is None and table.inspection_dialog.isHidden() and not calls
