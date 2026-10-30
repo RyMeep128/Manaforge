@@ -92,6 +92,8 @@ def main():
             PROTOCOL / "java-test/HandshakeFixtureConsumer.java",
             PROTOCOL / "java/manaforge/protocol/GatewayCommandGate.java",
             PROTOCOL / "java-test/CommandGateFixtureConsumer.java",
+            PROTOCOL / "java/manaforge/protocol/GatewaySessionBoundary.java",
+            PROTOCOL / "java-test/SessionBoundaryFixtureConsumer.java",
         ]
         subprocess.run(
             [

@@ -111,15 +111,15 @@ public final class DummyGateway {
                     return;
                 }
                 require(authenticated!=null);
-                try(GatewayCommandGate gate=new GatewayCommandGate(authenticated,true,4096);SubmissionLedger ledger=new SubmissionLedger(session,viewer,4096)) {
+                try(GatewaySessionBoundary boundary=new GatewaySessionBoundary(authenticated,true,4096)) {
                 JsonObject body=new JsonObject(); body.addProperty("fixture_only",true); body.add("snapshot",snapshot);
                 JsonObject snapshotMessage=envelope("snapshot","fixture-snapshot",body);
-                gate.observe(snapshotMessage.toString());send(frames,snapshotMessage);send(frames,snapshotMessage);
+                boundary.observe(snapshotMessage.toString());send(frames,snapshotMessage);send(frames,snapshotMessage);
                 JsonObject event=new JsonObject();event.addProperty("kind","fixture-event");event.addProperty("player_id","two");
                 event.add("revision",snapshot.get("revision"));event.add("code",JsonNull.INSTANCE);event.add("observations",new JsonArray());
                 JsonObject eventBody=new JsonObject();eventBody.addProperty("fixture_only",true);eventBody.addProperty("session_id",session);eventBody.addProperty("viewer_id",viewer);eventBody.add("event",event);
                 JsonObject eventMessage=envelope("event","fixture-event",eventBody);
-                gate.observe(eventMessage.toString());send(frames,eventMessage);
+                boundary.observe(eventMessage.toString());send(frames,eventMessage);
                 long revision=snapshot.get("revision").getAsLong();
                 for(int count=0;count<8;count++) {
                     String text=frames.read(args.length==2 && args[1].equals("client-partial-frame")?500:5000); require(text!=null);
@@ -130,14 +130,13 @@ public final class DummyGateway {
                         send(frames,envelope("shutdown","shutdown-ok",request)); return;
                     }
                     require(type.equals("command"));
-                    String rejection=gate.check(text);
-                    SubmissionLedger.Prepared prepared=ledger.prepare(text,rejection);
+                    SubmissionLedger.Prepared prepared=boundary.prepare(text);
                     JsonObject acknowledgement=prepared.receipt();acknowledgement.addProperty("message_id","ack-"+count);
                     send(frames,acknowledgement);
                     if(prepared.shouldSubmit) {
                         if(choiceMode) {
                             // Explicitly simulated fixture confirmation, never an engine-backed claim.
-                            JsonObject confirmed=ledger.recordOutcome(message.get("message_id").getAsString(),"confirmed",null);
+                            JsonObject confirmed=boundary.recordOutcome(message.get("message_id").getAsString(),"confirmed",null);
                             confirmed.addProperty("message_id","fixture-confirmed");send(frames,confirmed);
                         }
                         if(args.length==2 && args[1].equals("session-error")) {
@@ -150,7 +149,7 @@ public final class DummyGateway {
                         JsonObject terminal=snapshot.deepCopy();terminal.addProperty("status","finished");terminal.addProperty("result","fixture_complete");
                         terminal.addProperty("revision",revision+1);terminal.add("decision",JsonNull.INSTANCE);terminal.add("actions",new JsonArray());
                         result.add("snapshot",terminal);JsonObject resultMessage=envelope("result","fixture-result",result);
-                        gate.observe(resultMessage.toString());send(frames,resultMessage);
+                        boundary.observe(resultMessage.toString());send(frames,resultMessage);
                     }
                 }
                 throw new IOException("DUMMY_LIMIT");

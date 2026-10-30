@@ -47,3 +47,8 @@ third-commit checkpoint; this increment has no claimed CI pass. No rendered UI c
 no hands-on UI verification is required. Product bootstrap, session/worker/process
 ownership, engine dispatch/parity, renderer handoff and licensed CI remain open.
 G0/G1 are not complete; this is protocol infrastructure, not the bulk P2 port.
+
+
+The [viewer session boundary](gateway-session-boundary.md) now owns the gate and
+ledger together, serializing observation/admission/reservation. Actual engine
+dispatch remains future worker integration and is not covered by this monitor.

@@ -461,3 +461,13 @@ results and invalid observations revoke permissions; amount totals cannot wrap.
 The dummy uses this gate without claiming real-engine legality or confirmation.
 Thirty-seven new Java checks exercise the boundary. No UI changed. G0/G1 and
 product ownership/dispatch/licensed CI requirements remain open.
+
+
+### G1 Java admission and receipt ownership — October 30, 2026
+
+The [Java viewer owner](gateway-session-boundary.md) now serializes offered-command admission and
+one-time ledger reservation. Disconnect/fault revokes permissions while retaining
+pending uncertainty; only trusted engine outcomes can resolve it. Thirty new Java
+checks cover ownership, results, failures and concurrent duplicates. The normal
+authenticated dummy uses this owner. No UI changed; full worker/process ownership,
+bootstrap, engine dispatch, licensed CI and G0/G1 acceptance remain open.

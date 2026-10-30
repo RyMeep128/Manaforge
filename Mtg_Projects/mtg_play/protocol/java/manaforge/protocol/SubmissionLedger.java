@@ -76,5 +76,9 @@ public final class SubmissionLedger implements AutoCloseable {
     public synchronized void disconnected() throws IOException {
         open();if(active!=null) {active.outcome="uncertain";active.code="COMMAND_UNCERTAIN";}
     }
+    /** Owner-only observation; does not reserve or replay an engine submission. */
+    public synchronized JsonObject receiptFor(String id) throws IOException {
+        open();Record record=records.get(id);if(record==null)fail("ACK_UNKNOWN");return receipt(record);
+    }
     public synchronized void close() {closed=true;active=null;records.clear();}
 }
