@@ -1,0 +1,252 @@
+# P3.2a — Composable Unity Card Rendering
+
+Project: Manaforge Play. Status: **Planned; implementation and acceptance pending.**
+Priority: **P0**, required for the initial local 1v1 experience.
+Placement: Phase 3, after P3.2 (Printings), before P3.3 (Interaction).
+Parent: [Unity + Java roadmap](play-unity-java-roadmap.md).
+
+This document specifies future implementation. Its addition does not establish
+renderer, artwork, protocol, performance or CI completion.
+
+## Objective
+
+Build one reusable Unity card-rendering foundation assembled from independently
+updateable artwork, name, mana cost, type line, rules text, power/toughness and
+frame components. Support ordinary standard-frame creatures, instants, sorceries,
+artifacts, enchantments and lands, including monocolored, multicolored, colorless
+and artifact frame distinctions. Support variable mana costs, symbols, creature
+subtypes and rules text.
+
+Provide compact cropped battlefield cards and full cards for hand, hover
+enlargement and inspection. Keep the common pipeline extensible to future layouts
+without implementing full-art, showcase, borderless, extended-art, sagas, battles,
+planeswalkers, split cards or promotional frame reconstruction now. Unsupported
+layouts must remain displayable through authentic card images.
+
+## Existing foundations to inspect
+
+Before implementation, inspect the parent roadmap, [Play epic](manaforge-play-epic.md),
+[Unity README](../Mtg_Projects/mtg_play_unity/README.md), foundation scenes,
+renderers, fixtures and tests; shared Java/C# protocol definitions; Manaforge's
+printing identity and artwork services; and existing Play presentation, cropping,
+asset loading, cache and missing-asset behavior.
+
+Build on P0.3 rendering feasibility, P3.1 seat-independent scenes and P3.2 artwork
+retrieval/caching. Do not introduce another downloader, card database, game-state
+model or rules implementation. Deterministic mock data may support visual work
+before the Java gateway is complete; label it explicitly.
+
+## Component architecture
+
+Use a practical `CardRenderer` with shared layout definitions, reusable Unity
+prefabs, cached images and appropriate text rendering. Conceptual responsibilities:
+
+```text
+CardRenderer
+├── CardLayoutProfile
+├── CardFrameRenderer
+├── NameRenderer
+├── ManaCostRenderer
+├── ArtworkRenderer
+├── TypeLineRenderer
+├── SetSymbolRenderer
+├── RulesTextRenderer
+├── PowerToughnessRenderer
+└── CardOverlayRenderer
+    ├── Counters
+    ├── Damage
+    ├── Selection
+    └── StatusIndicators
+```
+
+These need not be individual MonoBehaviours. Components must be reusable across
+supported types and update without recreating the entire card. Layout definitions
+control geometry; printed identity controls frame treatment. Artwork and text
+remain aligned when resized. The renderer must be independent of battlefield,
+zone layout and player seat. New layout profiles must reuse the common pipeline;
+avoid a generalized layout engine or elaborate plugin architecture.
+
+## Presentation modes
+
+**Compact Battlefield:** retain cropped artwork with name, current creature P/T
+where applicable, counters, damage, selection/target highlights, tapped
+orientation, attacking/blocking and other necessary compact status indicators.
+Support creatures and noncreature permanents without assuming P/T exists. Do not
+show the entire traditional frame or full rules box on battlefield objects.
+Use deterministic, consistent, aesthetically reasonable crops that emphasize art.
+Existing image-position metadata may help; do not couple gameplay cropping to
+print-sheet crop settings.
+
+**Full Card:** assemble the border/frame, name, mana cost, full artwork region,
+type line, rules text, applicable P/T and available set symbol. Hand cards may fan
+or overlap while retaining full-card appearance. Use this mode for large previews,
+hover enlargement and inspection.
+
+Both modes consume the same card identity and current game-state projection.
+Switching modes must reuse textures/resources and avoid repeated downloads,
+database queries or authoritative-state reconstruction. Retain separate optimized
+layouts where appropriate. P3.3 owns interaction behavior.
+
+## Printing resolution and authentic fallbacks
+
+For a selected printing with an unsupported visual treatment:
+
+1. Preserve its selected printing identity.
+2. Search the existing Manaforge database for a compatible standard-frame printing
+   of the same Oracle card and relevant face.
+3. Prefer a compatible printing with locally cached artwork.
+4. Otherwise choose a deterministic compatible standard printing.
+5. Retrieve images through the existing artwork service only when downloading is
+   enabled and permitted.
+6. If no standard printing can be obtained, use the best available authentic image
+   of the actual card, preserving the correct face.
+7. If no image exists locally and downloading is unavailable, report the missing
+   asset through the existing asset-handling path.
+
+Never replace an available real Magic card image with a generic placeholder,
+unrelated card, generic illustration, blank rectangle or fabricated artwork.
+Unsupported layouts may use the original card image without claiming that its
+text regions are dynamically reconstructable.
+
+Keep these identities distinct, adapting field names to the existing contract:
+
+```text
+CardVisualIdentity
+├── oracle_id
+├── selected_printing_id
+├── rendered_printing_id
+├── rendered_face
+└── layout_profile_id
+```
+
+Visual substitution must never overwrite selected printings or change legality,
+rules characteristics, saved decks or XMage resolution. Preserve relevant face
+identity for multi-faced cards; never silently show another face. Cache standard
+printing resolutions and retain original assets for later layout support.
+
+## Dynamic characteristics and text
+
+Receive authoritative current name, type/subtypes, supplied rules/ability text,
+P/T, supplied mana cost, counters, controller-relevant appearance and other
+presentation state. Update components independently: a 2/2 reported as 5/5 changes
+P/T without reloading art; supplied flying text updates the rules component;
+copies update current visual identity while retaining underlying object and
+printing information; expiring effects display the next engine-reported values.
+
+Unity must not calculate P/T, infer granted abilities, interpret effects or invent
+current state from printed Oracle text. Document missing Java protocol fields,
+provide clearly identified mock support and make the smallest compatible protocol
+extension where appropriate. Keep schema/generated consumers aligned.
+
+Support long names, multiple paragraphs, ability line breaks, embedded mana
+symbols, hybrid/Phyrexian symbols, variable mana values, basic rich text,
+reminder-text styling where supplied, wrapping and P/T values/modifiers. Prevent
+clipping and overlap; full cards must be readable at practical inspection size.
+Compact cards need no full rules text. Presentation formatting must not become a
+Magic rules parser.
+
+## Performance and demonstration
+
+Share cached textures, avoid decoding artwork on state changes, update only changed
+values, minimize normal-frame allocations, and keep loading/database work off the
+render-critical path where practical. Avoid structures that scale poorly to
+hundreds of objects. Preserve smooth movement, tap rotation, selection and
+enlargement for eventual three-to-five-player Commander boards.
+
+Extend or create a deterministic Unity demo that runs without Java/XMage. Include
+real representative card data and permitted artwork where available, multiple
+standard types/colors, short/long names and rules, full/compact modes, battlefield
+crops, normal/unsupported selections, standard-printing fallbacks, changing P/T
+and rules text, counters, selection, resizing/enlargement, and multiple objects
+sharing a printing with different current characteristics. Make launch and manual
+UX review straightforward.
+
+Preserve benchmark fixtures for approximately 20, 70 and 200 objects, following
+P0.3 scenarios. Report actual frame-time/memory measurements and environment;
+invent neither thresholds nor success evidence. If P0.3's measurement environment
+is unavailable, explicitly leave the gate pending. A working demo does not
+complete this story or P0.3.
+
+## Automated validation
+
+Add appropriate Unity EditMode and PlayMode coverage for:
+
+1. Component/layout selection.
+2. Selected printing identity preservation.
+3. Standard-frame fallback resolution.
+4. Correct face matching.
+5. Offline cached-artwork behavior.
+6. Independent P/T and rules-text changes.
+7. Shared printings with different per-object characteristics.
+8. Compact/full transitions.
+9. Resizing.
+10. Missing/unavailable assets.
+11. Private information under the existing presentation contract.
+12. Render-object cleanup and resource reuse.
+
+Where an approved Unity environment supports it, add deterministic screenshots or
+visual regression checks. Never silently replace baselines to pass tests. Respect
+existing Unity licensing and build constraints. Relevant CI must pass before
+completion is claimed; preserve existing desktop and Play integration behavior.
+
+## Roadmap ownership and boundaries
+
+- P0.3 retains feasibility and benchmarking; no retroactive completion.
+- P3.1 retains table layout, seats and zones; it consumes reusable card objects.
+- P3.2 retains artwork identity, retrieval and caching, including standard visual
+  fallback resolution with original selections/assets preserved.
+- P3.3 consumes compact/full rendering for hover, selection, tapping, drag, zoom,
+  targeting and inspection. This story must expose those interfaces without
+  implementing the entire interaction system.
+- P5 polishes spacing, scaling, transitions and presentation using this foundation.
+- P6.1 retains advanced characteristics, tokens, copies, attachments, transforms
+  and complex permanents. Basic authoritative-value rendering moves to P3.2a.
+- P6.2 retains advanced text correctness, layered effects and unusual-frame
+  research. Basic authoritative dynamic text rendering belongs here.
+- Phase 9 retains optional full-art/showcase/specialized reconstruction.
+
+Do not rewrite Deck Editor, Card Database or Printer; introduce a Python gameplay
+intermediary; duplicate XMage rules; build all frame treatments; add a second
+artwork database/downloader; replace compact battlefield cards with full cards;
+change saved printing preferences; assume one face/layout; require networking;
+expose concealed information to unauthorized views; or replace working code
+without inspection. Prefer a small, scoped implementation.
+
+## Implementation workflow and handoff
+
+Inspect current active branches and create a dedicated feature branch from the
+latest appropriate Unity development baseline. Review the foundations above,
+implement the smallest compatible architecture, and preserve versioning,
+prerelease and pinned-engine practices. Focused local tests/compilation are
+permitted; do not run the full suite locally. Add CI validation, review GitHub
+Actions every third commit, and continue development while runs are pending.
+Never weaken validation or silently change baselines.
+
+Handoff must identify final commit, changed files, actual tests and CI status,
+screenshots/artifacts where available, known limitations and remaining gateway
+integration. Confirm reusable interfaces for P3.3 and later gameplay integration.
+
+## Acceptance criteria
+
+- [ ] Standard cards assemble from reusable Unity components.
+- [ ] Full cards show real artwork, name, mana cost, type, rules and applicable P/T.
+- [ ] Battlefield cards retain compact crops with live stats and indicators.
+- [ ] Hand and inspection use full-card presentation.
+- [ ] Unsupported special selections resolve to compatible standard printings when available.
+- [ ] Original selected identities and correct faces remain preserved.
+- [ ] Authoritative or explicit mock name, type, rules and P/T update independently.
+- [ ] The renderer duplicates no gameplay rules.
+- [ ] Artwork and textures are reused.
+- [ ] Deterministic tests cover both modes and printing fallbacks.
+- [ ] A Unity demo supports manual visual review without XMage.
+- [ ] Benchmarks are recorded or explicitly pending.
+- [ ] Relevant CI passes.
+- [ ] Roadmap dependencies and revised P6 scope are documented.
+- [ ] Existing Play integration and desktop modules do not regress.
+- [ ] Interfaces support P3.3 and later gameplay integration.
+
+Done means one reusable renderer accurately presents standard cards in compact
+and full modes, preserves selected printing identity, uses authentic fallback
+imagery and independently displays authoritative characteristics. It is ready for
+1v1 battlefield/interaction milestones without implementing advanced frames or
+complex multiplayer presentation prematurely.

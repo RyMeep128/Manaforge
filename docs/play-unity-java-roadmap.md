@@ -151,9 +151,20 @@ Do not claim every Magic card is validated.
 - **P3.1 — Scenes:** seat-independent layout, 1v1 table/HUDs, hand fan, lands,
   creatures, stack, command zone, graveyard/exile and adaptive aspect ratios.
 - **P3.2 — Printings:** cached actual artwork by printing ID/face, shared textures,
-  bounded caches, concealed identities and attractive fallbacks. Preserve showcase,
-  full-art, borderless and unusual image sources.
-- **P3.3 — Interaction:** hover/zoom, select, drag, click-to-cast, tap rotation,
+  bounded caches and concealed identities. Initial component rendering resolves
+  nonstandard selections to compatible standard-frame printings of the same Oracle
+  card and face, preferring cached artwork. Preserve selected printing identities
+  and original showcase, full-art, borderless and unusual image sources; use
+  authentic card-image fallbacks when reconstruction is unsupported.
+- **P3.2a — Composable card rendering (planned, P0):** reusable standard-frame
+  components with shared identity/resources, compact cropped battlefield cards and
+  full hand/inspection cards. Render authoritative name, type, rules text, mana
+  cost and P/T independently; support explicit mock projections while the gateway
+  develops. Preserve selected/rendered printing and face distinctions. See the
+  [story and acceptance criteria](play-composable-card-rendering.md). Depends on
+  P3.2, precedes P3.3, and does not complete P0.3's benchmark gate.
+- **P3.3 — Interaction:** use P3.2a's compact/full renderer for hover/zoom,
+  select, drag, click-to-cast, tap rotation,
   targets, inspect, keyboard and contextual legal menus. Require engine tokens
   for every gameplay command; clicks never invent legality.
 - **P3.4 — Decisions:** mulligans, targets/options, amounts, mana, mode/order and
@@ -182,7 +193,8 @@ An acknowledgement or concession-only demo does not prove natural completion.
 ### Phase 5 — Arena-like 1v1 UX
 
 - **P5.1 — Battlefield:** natural scaling/spacing, large hand previews, readable
-  opponent, unobtrusive zones, responsive resize and visual hierarchy.
+  opponent, unobtrusive zones, responsive resize and visual hierarchy. Polish the
+  P3.2a card components rather than replacing their reusable architecture.
 - **P5.2 — Events:** ordered viewer-safe engine-confirmed draw/cast/resolve/zone/
   tap/target/counter/damage/transform transitions. New authoritative state wins;
   animation never infers unconfirmed outcomes.
@@ -201,11 +213,13 @@ retains manual control and makes no illegal/unintended decisions due to presenta
 
 ### Phase 6 — Complex display, stress and local Play alpha
 
-- **P6.1 — Characteristics:** engine-current P/T, counters, damage, token/copy,
-  attachments, transforms, commanders and special permanents with exact artwork.
-- **P6.2 — Dynamic text:** research reliable authoritative text/overlays only after
-  engine fields exist. Full-frame dynamic treatment is separate research; generic
-  replacements cannot claim accuracy for every frame/full-art layout.
+- **P6.1 — Characteristics:** advanced characteristic handling, tokens/copies,
+  attachments, transforms, commanders and complex permanents with exact artwork.
+  Basic rendering of authoritative current characteristics, counters and damage
+  belongs to P3.2a; this milestone extends its projection and components.
+- **P6.2 — Dynamic text:** advanced authoritative-text correctness, complex layered
+  effects and unusual-frame research. Basic authoritative dynamic text rendering
+  belongs to P3.2a. Generic replacements cannot claim accuracy for every layout.
 - **P6.3 — Crowds:** group equivalents while retaining IDs, expand for decisions,
   split diverging states and support large token/trigger counts.
 - **P6.4 — Robustness:** integrated/low-end GPUs, 1366×768 through 4K, cache bounds,
@@ -251,7 +265,8 @@ correct privacy and confirmed outcomes.
 
 Initial human-versus-XMage-AI play is a migration requirement. Optional later
 expansions include enhanced AI and mixed-controller tables (controllers independent of seats),
-history/replay/statistics/borrowing/precons, advanced frames/shaders/environments/
+history/replay/statistics/borrowing/precons, full-art/showcase/specialized frame
+reconstruction, advanced shaders/environments/
 audio, macOS/Linux installers/signing/notarization, spectators, flexible hosting,
 persistence/recovery and shared playgroups.
 
