@@ -247,6 +247,12 @@ PlayMode scene check). Mana glyphs, frame treatment, real artwork transfer,
 readability, screenshots and benchmark acceptance remain pending. This does not
 complete the component or change any acceptance box below.
 
+Attached-panel runtime coverage now checks actual UI Toolkit layout resolution,
+mode changes, an empty viewer-handoff frame and detachment/resource ownership.
+Three PlayMode checks pass locally with a shared default runtime theme. These
+headless checks do not demonstrate rendered pixels, real art or readable fonts;
+all visual acceptance and CI requirements remain open.
+
 ## Acceptance criteria
 
 - [ ] Standard cards assemble from reusable Unity components.

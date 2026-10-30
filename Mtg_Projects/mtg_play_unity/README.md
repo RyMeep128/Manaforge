@@ -185,3 +185,25 @@ in ignored `Artifacts/`. These tests do not prove rendered text readability or
 privacy of the future cache. No new screenshot/benchmark/player evidence exists.
 Real-artwork delivery, reusable verified layout profiles, visual review and CI
 remain required; P3.2a and G0/G1 are open.
+
+### Attached-panel runtime checks
+
+`CardPanelTests` now attaches `CardView` to a runtime `UIDocument` using the shared
+`Resources/CardTheme.tss` import of Unity's default runtime theme. Future runtime
+panels must also assign an appropriate theme; the editor window supplies its own
+editor context. Tests check resolved full/compact geometry (including pixel
+rounding), dynamic updates without texture replacement, an empty handoff frame,
+clean rebinding and disposal from the panel. These use a synthetic tiny texture,
+not real Magic artwork. The fixture owns and destroys its panel/settings/texture;
+the view owns none of those shared resources.
+
+Local validation: three PlayMode tests passed (two attached-panel scenarios and
+the existing foundation scene). The launcher now requires at least 24 EditMode
+and three PlayMode results, so losing the new test assemblies cannot silently
+pass the former eight/one baseline. Headless layout checks do not validate actual
+GPU pixels, font readability or the future private texture-cache lifecycle.
+
+Scheduled CI snapshot: Tests for `547e30b`, `84fa6d5`, `712cef8` and the earlier
+Qt teardown fix `7501539` were still running. No waits or success claims; defer
+unfinished runs to the next scheduled check. The manual licensed Unity workflow
+has not supplied CI evidence for these components.
