@@ -11,6 +11,7 @@ import threading
 from PyQt6 import QtCore as C
 from mtg_ui.jobs import JobQueue
 from .diagnostics import LifecycleDiagnostics, STAGE_LABELS
+from .reporting import PlayReport
 
 OPENING_STATE_TIMEOUT = 60
 
@@ -87,6 +88,7 @@ class SessionController(C.QObject):
     statusChanged = C.pyqtSignal(str)
     startupProgress = C.pyqtSignal(object)
     _lifecycleProgress = C.pyqtSignal(int, object)
+    _diagnosticData = C.pyqtSignal(int, object)
     viewCleared = C.pyqtSignal()
     interactionPending = C.pyqtSignal()
     commandFinished = C.pyqtSignal(object)
@@ -100,6 +102,10 @@ class SessionController(C.QObject):
         self.jobs.status.connect(self._completed)
         self._lifecycleProgress.connect(
             self._lifecycle_progress, C.Qt.ConnectionType.QueuedConnection
+        )
+        self._report = PlayReport(SETUP_CAUSES)
+        self._diagnosticData.connect(
+            self._remember_diagnostics, C.Qt.ConnectionType.QueuedConnection
         )
         self.adapter_factory = adapter_factory
         self._authorized_viewer = authorized_viewer_id
@@ -120,6 +126,24 @@ class SessionController(C.QObject):
         self.timer = C.QTimer(self)
         self.timer.setInterval(250)
         self.timer.timeout.connect(self.refresh)
+
+    @C.pyqtSlot(int, object)
+    def _remember_diagnostics(self, epoch, payload):
+        if epoch == self._epoch:
+            self._report.accept(payload)
+
+    @property
+    def needs_recovery(self):
+        return self.active and self._blocked
+
+    def diagnostic_report(self, *, application_version=None):
+        if application_version is not None:
+            self._report.accept(
+                {"compatibility": {"manaforge_version": application_version}}
+            )
+        return self._report.snapshot(
+            active=self.active, closing=self.closing, busy=self.busy
+        )
 
     @C.pyqtSlot(int, object)
     def _lifecycle_progress(self, epoch, value):
@@ -155,6 +179,7 @@ class SessionController(C.QObject):
         progress = {
             key: value.get(key) for key in ("stage", "state", "elapsed_ms", "code")
         }
+        self._report.accept({"lifecycle": self._report.lifecycle + [progress]})
         self.startupProgress.emit(progress)
         if state == "started":
             self.statusChanged.emit(STAGE_LABELS[stage] + "...")
@@ -190,6 +215,15 @@ class SessionController(C.QObject):
                 or any(code is None for _, code in report.process_exit_codes)
             ):
                 raise
+        finally:
+            try:
+                tracker = getattr(self._owner, "lifecycle", None)
+                if tracker is not None:
+                    self._diagnosticData.emit(
+                        self._epoch, {"lifecycle": tracker.records}
+                    )
+            except Exception:
+                pass  # Report collection must never change cleanup ownership.
         self._owner = self._session = None
 
     def _queue(self, kind, work):
@@ -205,6 +239,16 @@ class SessionController(C.QObject):
                 code = getattr(exc, "code", "")
                 if code == "SNAPSHOT_NOT_READY":
                     return "waiting", None
+                self._diagnosticData.emit(
+                    self._epoch,
+                    {
+                        "failure": {
+                            "operation": kind,
+                            "code": code,
+                            "cause": getattr(exc, "cause", None) or _setup_cause(exc),
+                        }
+                    },
+                )
                 get_logger(__name__).warning(
                     "Play operation failed operation=%s type=%s",
                     kind,
@@ -278,6 +322,8 @@ class SessionController(C.QObject):
         ):
             raise ValueError("Offline Play requires your seat and one AI opponent.")
         self._epoch += 1
+        self._report = PlayReport(SETUP_CAUSES)
+        self._report.format = setup.format
         self._viewer = self._authorized_viewer or setup.seats[0].seat_id
         self._session_id = None
         self._seats = {
@@ -307,6 +353,13 @@ class SessionController(C.QObject):
                 bind_cancel = getattr(self._owner, "set_cancel_event", None)
                 if bind_cancel is not None:
                     bind_cancel(startup_cancel)
+                try:
+                    compatibility = self._owner.compatibility
+                    self._diagnosticData.emit(
+                        epoch, {"compatibility": compatibility.to_dict()}
+                    )
+                except Exception:
+                    pass  # Diagnostics cannot prevent startup or replace its error.
                 self._owner.__enter__()
                 self._session = self._owner.create_game(
                     setup, documents, oracle_lookup=oracle_lookup
@@ -587,6 +640,15 @@ class SessionController(C.QObject):
                     "That decision is no longer available. Refreshing the game…"
                 )
             elif payload.outcome == "uncertain":
+                self._report.accept(
+                    {
+                        "failure": {
+                            "operation": kind,
+                            "code": "COMMAND_OUTCOME_UNCERTAIN",
+                            "cause": "UNCLASSIFIED_SETUP_ERROR",
+                        }
+                    }
+                )
                 self._blocked = True
                 self.timer.stop()
                 self.statusChanged.emit(

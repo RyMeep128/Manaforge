@@ -722,3 +722,32 @@ def test_stop_interrupts_startup_with_shared_token_before_queueing_cleanup(app):
     controller.stop()
     drain(app, lambda: not controller.busy)
     assert owner.closed and owner.cancel_event.is_set() and not controller.active
+
+
+def test_safe_diagnostics_survive_failure_and_confirmed_cleanup(app):
+    from mtg_play.diagnostics import LifecycleDiagnostics
+
+    class ReportingOwner(Owner):
+        def __init__(self):
+            super().__init__(None)
+            self.lifecycle = LifecycleDiagnostics()
+
+        def create_game(self, *args, **kwargs):
+            with self.lifecycle.stage("deck_resolution"):
+                raise NameError("PRIVATE deck name")
+
+        def close(self):
+            with self.lifecycle.stage("process_cleanup"):
+                super().close()
+
+    owner = ReportingOwner()
+    controller = SessionController(adapter_factory=lambda: owner)
+    controller.start(setup(), (DeckDocument(), DeckDocument()))
+    drain(app, lambda: not controller.busy)
+    report = controller.diagnostic_report()
+    assert report["failure"]["cause"] == "PYTHON_NAME_ERROR"
+    assert report["failure"]["code"] == "PLAY_DECK_RESOLUTION_FAILED"
+    assert any(row["stage"] == "process_cleanup" for row in report["lifecycle"])
+    assert not report["session"]["active"] and owner.closed
+    assert "PRIVATE" not in str(report)
+    close(app, controller)

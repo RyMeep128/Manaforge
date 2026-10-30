@@ -6,6 +6,7 @@ from mtg_ui.jobs import JobQueue
 from dataclasses import replace
 from copy import deepcopy
 import time
+import json
 from .assets import prepare_assets
 from .lobby import DeckSelection, offline_lobby
 from .navigation import ModeSelection, PlayLanding, PlayPages
@@ -341,9 +342,41 @@ class PlayWorkspace(W.QWidget):
         self.status.setTextFormat(C.Qt.TextFormat.PlainText)
         self.status.setAccessibleName("Game status")
         layout.insertWidget(2, self.status)
+        support = W.QHBoxLayout()
+        self.recover_button = W.QPushButton("Close failed match")
+        self.recover_button.clicked.connect(self.request_close_game)
+        self.recover_button.hide()
+        support.addWidget(self.recover_button)
+        support.addStretch()
+        self.copy_play_report = W.QPushButton("Copy Play diagnostics")
+        self.copy_play_report.clicked.connect(
+            lambda: W.QApplication.clipboard().setText(self._play_report_text())
+        )
+        support.addWidget(self.copy_play_report)
+        self.report_play_issue = W.QPushButton("Report a Play issue")
+        self.report_play_issue.clicked.connect(self._report_play_issue)
+        support.addWidget(self.report_play_issue)
+        layout.addLayout(support)
         self.format.currentIndexChanged.connect(self._format_changed)
         self._format_changed()
         self.load_decks()
+
+    def _play_report_text(self):
+        from mtg_ui.diagnostics import app_version
+
+        report = self.session.diagnostic_report(application_version=app_version())
+        report["opponent_preparation"] = self.opponents.diagnostic_report()
+        return json.dumps(report, indent=2, sort_keys=True)
+
+    def _report_play_issue(self):
+        from mtg_ui.feedback import FeedbackDialog
+
+        FeedbackDialog(
+            self,
+            operation="Manaforge Play",
+            detail="Describe the Play issue and what you were doing. Review the optional diagnostics before sending.",
+            diagnostics=self._play_report_text(),
+        ).exec()
 
     def _show_page(self, page):
         if (
@@ -564,6 +597,10 @@ class PlayWorkspace(W.QWidget):
 
     def _selection_changed(self):
         preparing = self.opponents.busy or self._asset_pending is not None
+        self.recover_button.setVisible(self.session.needs_recovery)
+        self.recover_button.setEnabled(
+            not self.session.busy and not self.session.closing
+        )
         self.randomize.setEnabled(
             not preparing
             and not self.session.active
@@ -968,7 +1005,9 @@ class PlayWorkspace(W.QWidget):
     def request_close_game(self):
         if self.session.closing:
             return
-        if self._view is None or self._view.result is None:
+        if not self.session.needs_recovery and (
+            self._view is None or self._view.result is None
+        ):
             if not self._confirm_close():
                 return
         self.session.stop()

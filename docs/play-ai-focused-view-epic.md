@@ -1111,3 +1111,30 @@ return/retry behavior. Ruff lint, formatting and diff checks pass. No local XMag
 acceptance or application build ran. This increment is committed and pushed at
 the user's request. The epic is not complete: later recovery/diagnostics review,
 CI engine acceptance and manual UX verification remain outstanding.
+
+
+Story 13 incremental implementation (0.5.23-alpha.1): Play now exposes Copy Play
+diagnostics and Report a Play issue. The report uses fixed operation/error codes,
+validated app/adapter/engine versions and manifest hash when available, supported
+format, worker/session flags and at most 128 numeric lifecycle records. Final
+cleanup records are copied from the worker without exposing adapter ownership;
+report collection cannot block cleanup. Unknown command outcomes are recorded
+without replaying them. Opponent preparation adds only bounded state/cause flags.
+Reports omit views, game/session identifiers, saved deck identities/contents,
+card names, paths, prompts, credentials and arbitrary raw exception/log text.
+
+Report a Play issue opens the existing shared FeedbackDialog with optional
+sanitized Play diagnostics. Its existing review, attachment consent, draft/outbox
+and explicit Send flow is unchanged; no automatic screenshots or submission are
+introduced. An explicit Close failed match action appears for an owned failed or
+uncertain session and uses the existing cleanup/retry flow without a second
+confirmation or replay. Once cleanup succeeds, normal lobby selections remain.
+
+Python 3.13 verification: 67 focused reporting/lifecycle/navigation tests passed,
+then all Play tests plus Editor readiness passed (287 tests). New regressions
+cover report bounds and hostile/malformed fields, privacy, failure/cleanup data,
+existing feedback-composer delegation, and cleanup-only recovery. Ruff lint,
+formatting and diff checks pass. No local engine acceptance, build or external
+feedback submission ran. Committed/pushed at the user's request. The epic remains
+unfinished: real-engine CI acceptance, reviewable real-image screenshots and the
+user's manual nightly UX acceptance are still required; Story 14 is not signed off.

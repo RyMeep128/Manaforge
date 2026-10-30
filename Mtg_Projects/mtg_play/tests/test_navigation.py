@@ -581,3 +581,61 @@ def test_completed_game_return_skips_concession_confirmation_and_shows_cleanup(
         workspace.loading_timer.stop()
         workspace.table.clear()
         workspace.close()
+
+
+def test_play_feedback_opens_existing_composer_without_auto_sending_or_deck_data(
+    app, tmp_path, monkeypatch
+):
+    import json
+    from mtg_ui import feedback
+
+    workspace, calls = workspace_fixture(app, tmp_path)
+    opened = []
+
+    class Composer:
+        def __init__(self, parent, **kwargs):
+            opened.append(kwargs)
+
+        def exec(self):
+            opened.append("reviewed")
+
+    monkeypatch.setattr(feedback, "FeedbackDialog", Composer)
+    try:
+        workspace.report_play_issue.click()
+        assert opened[-1] == "reviewed" and not calls
+        report = json.loads(opened[0]["diagnostics"])
+        assert report["mode"] == "offline_ai"
+        assert "Saved deck" not in opened[0]["diagnostics"]
+        assert "screenshot" not in opened[0] and "report" not in opened[0]
+    finally:
+        workspace.close()
+
+
+def test_uncertain_match_exposes_cleanup_only_recovery_without_replay(
+    app, tmp_path, monkeypatch
+):
+    workspace, calls = workspace_fixture(app, tmp_path)
+    stops = []
+    workspace.session.stop = lambda: stops.append(True)
+    monkeypatch.setattr(
+        W.QMessageBox,
+        "question",
+        lambda *args: pytest.fail(
+            "Explicit recovery must not add a second confirmation"
+        ),
+    )
+    try:
+        workspace.session.active = True
+        workspace.session._blocked = True
+        workspace._selection_changed()
+        assert (
+            not workspace.recover_button.isHidden()
+            and workspace.recover_button.isEnabled()
+        )
+        workspace.recover_button.click()
+        assert stops == [True] and not calls
+        assert workspace._loading_purpose == "close"
+    finally:
+        workspace.session.active = False
+        workspace.loading_timer.stop()
+        workspace.close()

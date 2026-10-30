@@ -6,7 +6,7 @@ from random import SystemRandom
 from PyQt6 import QtCore as C
 from mtg_ui.jobs import JobQueue
 from .decks import DeckTranslationError
-from .presentation import local_adapter
+from .presentation import local_adapter, _setup_cause, SETUP_CAUSES
 
 
 class OpponentRandomizer(C.QObject):
@@ -24,10 +24,20 @@ class OpponentRandomizer(C.QObject):
         self._owner = None  # Worker-only; retained after uncertain cleanup.
         self.cleanup_pending = False
         self._cancelled = False
+        self._last_state = None
+        self._last_cause = None
 
     @property
     def busy(self):
         return self.jobs.busy or self.cleanup_pending
+
+    def diagnostic_report(self):
+        return dict(
+            state=self._last_state,
+            cause=self._last_cause,
+            cleanup_pending=self.cleanup_pending,
+            worker_busy=self.jobs.busy,
+        )
 
     def _close_owner(self):
         if self._owner is None:
@@ -48,6 +58,8 @@ class OpponentRandomizer(C.QObject):
         if self.busy or format not in {"freeform", "commander"}:
             return False
         self._cancelled = False
+        self._last_state = "checking"
+        self._last_cause = None
 
         def work(cancel, report):
             eligible = []
@@ -93,9 +105,9 @@ class OpponentRandomizer(C.QObject):
                             if choices
                             else {"state": "empty"}
                         )
-            except Exception:
+            except Exception as error:
                 # No raw engine exception or private card data reaches queue logs/UI.
-                outcome = {"state": "failed"}
+                outcome = {"state": "failed", "cause": _setup_cause(error)}
             finally:
                 report({"phase": "cleanup"})
                 try:
@@ -112,6 +124,8 @@ class OpponentRandomizer(C.QObject):
 
     def cancel(self):
         self._cancelled = True
+        if self.jobs.busy:
+            self._last_state = "cancelling"
         self.jobs.cancel_all()
 
     def retry_cleanup(self):
@@ -155,6 +169,15 @@ class OpponentRandomizer(C.QObject):
             state = "cleanup"  # Cancelling a queued retry does not prove cleanup.
         if state == "selected" and self._cancelled:
             state = "cancelled"
+        self._last_state = (
+            state
+            if state in {"selected", "empty", "failed", "cleanup", "cancelled"}
+            else "failed"
+        )
+        cause = value.get("cause") if isinstance(value, dict) else None
+        self._last_cause = (
+            cause if isinstance(cause, str) and cause in SETUP_CAUSES else None
+        )
         self.cleanup_pending = state == "cleanup"
         if state == "selected" and not self._cancelled:
             self.selected.emit(value["index"])
