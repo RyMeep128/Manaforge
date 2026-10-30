@@ -4,6 +4,7 @@ Run from repository root using the development Python environment. No engine run
 """
 
 import argparse
+from copy import deepcopy
 import hashlib
 from itertools import count
 import json
@@ -11,7 +12,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from test_adapter import inject, make_session, state
-from mtg_play.contracts import CommandResult
+from mtg_play.contracts import CardIdentity, CommandResult, GameSetup, MatchSeat
 from mtg_play.protocol_schema import contract_schema
 
 DIRECTORY = Path(__file__).resolve().parents[1] / "protocol"
@@ -76,6 +77,86 @@ def artifacts():
                 "payload": CommandResult("synthetic-command", outcome).to_dict(),
             }
         )
+    for seats in (2, 5):
+        setup = GameSetup(
+            tuple(
+                MatchSeat(
+                    f"fixture-seat-{seat}",
+                    f"Fixture seat {seat}",
+                    "local_human" if seat == 0 else "engine_ai",
+                )
+                for seat in range(seats)
+            )
+        )
+        cases.append(
+            dict(
+                name=f"setup-{seats}-seats-dto-only",
+                record="GameSetup",
+                payload=setup.to_dict(),
+            )
+        )
+    cases.append(
+        dict(
+            name="printing-identity-dto-only",
+            record="CardIdentity",
+            payload=CardIdentity(
+                "fixture-oracle", "fixture-print", "fixture-entry"
+            ).to_dict(),
+        )
+    )
+    negative = []
+    visible = next(case["payload"] for case in cases if case["name"] == "visible-hand")
+    hidden = next(
+        case["payload"] for case in cases if case["name"] == "concealed-object"
+    )
+    for name in (
+        "missing-viewer",
+        "wrong-version",
+        "unknown-field",
+        "boolean-life",
+        "null-life",
+        "negative-revision",
+        "malformed-pair",
+        "hidden-characteristics",
+        "hidden-printing",
+        "hidden-commander",
+        "hidden-copy-source",
+    ):
+        value = deepcopy(hidden if name.startswith("hidden-") else visible)
+        if name == "missing-viewer":
+            del value["viewer_id"]
+        elif name == "wrong-version":
+            value["protocol_version"] = 2
+        elif name == "unknown-field":
+            value["raw_engine_state"] = {}
+        elif name == "boolean-life":
+            value["players"][0]["life"] = True
+        elif name == "null-life":
+            value["players"][0]["life"] = None
+        elif name == "negative-revision":
+            value["revision"] = -1
+        elif name == "malformed-pair":
+            value["players"][0]["mana"] = [["G", 1, "extra"]]
+        elif name == "hidden-characteristics":
+            value["objects"][0]["characteristics"] = deepcopy(
+                visible["objects"][0]["characteristics"]
+            )
+        elif name == "hidden-printing":
+            value["objects"][0]["card_identity"] = dict(
+                oracle_id="synthetic", printing_id="synthetic", deck_entry_id=None
+            )
+        elif name == "hidden-commander":
+            value["objects"][0]["commander_id"] = "synthetic"
+        elif name == "hidden-copy-source":
+            value["objects"][0]["copy_source_id"] = "synthetic"
+        negative.append(dict(name=name, record="GameSnapshot", payload=value))
+    negative.append(
+        dict(
+            name="unknown-outcome",
+            record="CommandResult",
+            payload=dict(command_id="synthetic", outcome="accepted", code=None),
+        )
+    )
     sources = {}
     for path in (
         DIRECTORY.parent / "contracts.py",
@@ -95,6 +176,7 @@ def artifacts():
             },
             "cases": cases,
         },
+        "fixtures/python-negative-v1.json": {"fixture_format": 1, "cases": negative},
     }
 
 

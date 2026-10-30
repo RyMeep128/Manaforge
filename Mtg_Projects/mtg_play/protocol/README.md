@@ -81,9 +81,9 @@ Native `DeckDocument` remains persistent truth. `decks.py`/`PreparedDeck` are
 internal translation, not a new deck file. Preserve exact printing mappings,
 unresolved-card/section errors and commander/partner/background/companion checks.
 
-P1.2 still requires reviewed schemas, sanitized golden scenarios and shared
-Java/C# consumers, including positive/negative/privacy fixtures. P1.3/P1.4 still
-require launch-manifest and process-lifecycle contracts. None is completed here.
+P1.2 still requires a reviewed wire contract and engine-derived golden scenarios.
+The fixture consumers below add Java/C# checks without completing G1. P1.3/P1.4
+still require launch-manifest and lifecycle contracts.
 
 ## P1.2 baseline schema and fixtures increment
 
@@ -120,11 +120,57 @@ used as integers, negative revisions, malformed pairs, unknown properties/outcom
 and concealed identity leaks. Existing adapter tests remain intact. CI checks
 regeneration drift and runs these tests with the existing Play tests.
 
-Still pending before P1.2/G1: actual Java/C# consumers of the shared artifacts,
-wire commands/envelopes, handshake/authentication, acknowledgements/error mapping,
-engine-derived complex/reveal/terminal golden transcripts, shared negative cases
+Still pending before P1.2/G1: wire commands/envelopes, handshake/authentication,
+acknowledgements/error mapping and engine-derived complex/reveal/terminal transcripts
 and dummy-process exchange/shutdown. The added fixtures are a reviewable baseline,
 not a frozen replacement protocol or a completed parity claim.
 
 References: [JSON Schema tuple semantics](https://json-schema.org/draft/2020-12/release-notes)
 and [validator documentation](https://python-jsonschema.readthedocs.io/en/v4.23.0/validate/).
+
+
+## Generated Java/C# fixture consumers
+
+`tools/generate_play_models.py` emits every DTO from the schema into
+`java/manaforge/protocol/PlayContracts.java` and Unity's
+`Assets/Manaforge/Runtime/Protocol/PlayContracts.cs`. Do not hand-edit outputs.
+The generator records the normalized schema hash, checks drift and rejects
+schema keywords outside the subset implemented by both test validators.
+
+Both consumers validate the same 14 positive and 12 negative cases, then round-trip
+positives through generated types. Negatives cover missing viewer, wrong version,
+unknown fields, invalid life types, negative revision, malformed pairs, concealed
+identity links/printing and unknown outcome. Positive setup/printing examples are
+DTO-only: two seats include a human and AI; five seats test variable configuration
+without implementing multiplayer. Neither model imports XMage types.
+
+```powershell
+python tools/generate_play_models.py
+python tools/generate_play_models.py --check
+python tools/check_play_java_protocol.py
+./tools/unity-play.ps1 -Mode EditMode
+```
+
+Java requires `javac`/`java` on PATH, compiles Java-8-compatible classes into a
+temporary directory, and verifies Gson 2.13.2 against the existing XMage artifact
+hash. It uses the installed pinned jar or an explicit `--gson` path.
+`--download-gson` explicitly permits that hash-pinned Maven Central download for
+CI. No engine installation/startup or upgrade occurs.
+
+Unity uses official Newtonsoft JSON package 3.2.2, pinned in manifest/lock.
+EditMode reads shared fixtures directly; the corpus is not copied into the player.
+Newtonsoft type-name loading is disabled. The independent `Play protocol fixtures`
+workflow compiles/runs Java without Unity or XMage. Tests also checks model drift;
+C# checks remain in the licensed Unity workflow.
+
+These are **test-only schema-subset readers**, not production parsers or complete
+Draft 2020-12 implementations. Mutable generated DTOs are intermediate values, not
+immutable viewer snapshots for rendering. They use 64-bit integers and token arrays
+for heterogeneous pairs. Final integer limits, immutability, duplicate-key/depth/
+size handling, unknown-field negotiation and authenticated current-decision routing
+remain wire-boundary work. No Unity scene uses these DTOs for live actions or
+receives a root all-seats session.
+
+Local evidence: Java round-tripped 14 positives/rejected 12 negatives; Unity's
+eight EditMode checks passed, including both fixture-consumer checks. CI review
+is every third commit; pending CI permits continued development but is unverified.

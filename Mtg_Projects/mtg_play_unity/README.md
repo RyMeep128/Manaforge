@@ -10,6 +10,8 @@ protocol must not hardcode a five-seat maximum. Existing Qt/Python remains intac
 
 - Installed/editor pin: `6000.6.7f1`, revision `b22767f04f04`.
 - URP `17.6.0`; test framework `1.8.0`. Track manifest and resolved package lock.
+- Official Newtonsoft JSON package `3.2.2` supports generated fixture DTOs. See
+  the [protocol guide](../mtg_play/protocol/README.md); these do not connect the scene to gameplay.
 - Windows x64 development player, Mono, .NET Standard, text serialization and
   visible tracked `.meta` files. No XMage, Python or database calls in Unity.
 - Project starts from the editor's official blank URP template. `FoundationBuild`
@@ -61,16 +63,19 @@ required before P0.2 is complete. Logs remain local because licensing/runtime lo
 can contain host/account information; CI uploads synthetic screenshots, reports,
 source revision and player output only.
 
-## Local evidence — October 30, 2026
+## Local evidence â€” October 30, 2026
 
 On the owner-licensed host: Prepare/import and Windows build exited 0; six focused
 EditMode tests and one PlayMode scene test passed. The packaged smoke passed on
-AMD Radeon RX 6600 at 1280×720 with 20 fixture cards and 102,340 colored card
+AMD Radeon RX 6600 at 1280Ã—720 with 20 fixture cards and 102,340 colored card
 pixels. The camera PNG was visually inspected. Reports are in ignored Artifacts;
 these are local results, not CI evidence or integrated-GPU benchmarks.
 
 No Unity-specific connector was exposed in this session. Automation uses the
 official installed editor command-line interface and Unity Test Framework.
+
+The protocol-consumer increment passed eight EditMode tests: six layout checks
+plus two checks covering 14 positive and 12 negative shared fixtures.
 
 ## Remaining acceptance
 

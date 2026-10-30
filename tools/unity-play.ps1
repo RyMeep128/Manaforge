@@ -58,7 +58,7 @@ if ($Mode -in @('EditMode', 'PlayMode')) {
 Invoke-OwnedProcess $EditorPath $arguments
 if ($Mode -in @('EditMode', 'PlayMode')) {
     [xml]$report = Get-Content -LiteralPath $results
-    $minimum = if ($Mode -eq 'EditMode') { 6 } else { 1 }
+    $minimum = if ($Mode -eq 'EditMode') { 8 } else { 1 }
     if ($report.'test-run'.result -ne 'Passed' -or [int]$report.'test-run'.total -lt $minimum) {
         throw "Missing or failed $Mode acceptance"
     }

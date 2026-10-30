@@ -267,8 +267,10 @@ persistence/recovery and shared playgroups.
 6. Engineer delivery, parsing, unknown fields, disconnect, cancellation and cleanup now.
 7. Add appropriate deterministic fixtures, Java unit/integration, C# EditMode/
    PlayMode, packaged smoke and screenshot checks. Sanitize artifacts.
-8. Check GitHub Actions, record exact commit/evidence and fix failures before
-   completion. Never silently weaken assertions or acceptance gates.
+8. Owner cadence: review GitHub Actions every third commit without waiting
+   between commits. Pending results may be assumed for continued development,
+   but must be reported as unverified. Record exact commit/evidence and resolve
+   known failures before gate acceptance. Never weaken assertions or gates silently.
 9. Preserve data/engine pinning; no unreviewed engine upgrade, installer change
    or automatic public release. Follow repository prerelease/version rules.
 10. Handoff: changes/files, CI link/status, demonstrated behavior, limitations and
@@ -292,7 +294,10 @@ persistence/recovery and shared playgroups.
   locally. CI and P1.2 shared schemas remain pending.
 - P1.2 baseline increment: generated DTO JSON Schema and sanitized synthetic
   adapter fixtures, with 26 focused schema checks plus 64 adapter tests passing
-  locally. Java/C# consumers and the transport contract remain pending; G1 is open.
+  locally. A later increment adds generated Java/C# models and shared readers:
+  14 positive round-trips and 12 negative rejections, with eight Unity EditMode
+  checks passing. Authenticated transport and engine-derived golden transcripts
+  remain pending; G1 is open.
 - P0.1/P0.2 foundation: installed/licensed `6000.6.7f1`, URP `17.6.0`,
   six EditMode checks, one PlayMode scene check, Windows player build and a
   20-placeholder packaged camera screenshot demonstrated locally. See the

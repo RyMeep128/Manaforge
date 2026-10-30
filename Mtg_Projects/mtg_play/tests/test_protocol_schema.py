@@ -13,6 +13,7 @@ from mtg_play.protocol_schema import contract_schema
 DIRECTORY = Path(__file__).resolve().parents[1] / "protocol"
 SCHEMA = json.loads((DIRECTORY / "python-contracts-v1.schema.json").read_text())
 FIXTURES = json.loads((DIRECTORY / "fixtures/python-baseline-v1.json").read_text())
+NEGATIVE = json.loads((DIRECTORY / "fixtures/python-negative-v1.json").read_text())
 
 
 def validate(record, payload):
@@ -46,6 +47,12 @@ def test_sanitized_adapter_fixtures_validate(case):
         "PRIVATE_CARD_NAME",
     ):
         assert private_marker not in payload
+
+
+@pytest.mark.parametrize("case", NEGATIVE["cases"], ids=lambda case: case["name"])
+def test_shared_negative_corpus_is_rejected_by_reference_validator(case):
+    with pytest.raises(ValidationError):
+        validate(case["record"], case["payload"])
 
 
 def test_unknown_null_and_valid_zero_remain_distinct():

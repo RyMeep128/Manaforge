@@ -468,6 +468,70 @@
         "outcome": "uncertain",
         "code": null
       }
+    },
+    {
+      "name": "setup-2-seats-dto-only",
+      "record": "GameSetup",
+      "payload": {
+        "seats": [
+          {
+            "seat_id": "fixture-seat-0",
+            "name": "Fixture seat 0",
+            "controller": "local_human"
+          },
+          {
+            "seat_id": "fixture-seat-1",
+            "name": "Fixture seat 1",
+            "controller": "engine_ai"
+          }
+        ],
+        "format": "freeform",
+        "protocol_version": 1
+      }
+    },
+    {
+      "name": "setup-5-seats-dto-only",
+      "record": "GameSetup",
+      "payload": {
+        "seats": [
+          {
+            "seat_id": "fixture-seat-0",
+            "name": "Fixture seat 0",
+            "controller": "local_human"
+          },
+          {
+            "seat_id": "fixture-seat-1",
+            "name": "Fixture seat 1",
+            "controller": "engine_ai"
+          },
+          {
+            "seat_id": "fixture-seat-2",
+            "name": "Fixture seat 2",
+            "controller": "engine_ai"
+          },
+          {
+            "seat_id": "fixture-seat-3",
+            "name": "Fixture seat 3",
+            "controller": "engine_ai"
+          },
+          {
+            "seat_id": "fixture-seat-4",
+            "name": "Fixture seat 4",
+            "controller": "engine_ai"
+          }
+        ],
+        "format": "freeform",
+        "protocol_version": 1
+      }
+    },
+    {
+      "name": "printing-identity-dto-only",
+      "record": "CardIdentity",
+      "payload": {
+        "oracle_id": "fixture-oracle",
+        "printing_id": "fixture-print",
+        "deck_entry_id": "fixture-entry"
+      }
     }
   ]
 }
