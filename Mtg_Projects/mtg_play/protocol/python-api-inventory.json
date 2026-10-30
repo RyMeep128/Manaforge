@@ -1,0 +1,853 @@
+{
+  "inventory_format": 1,
+  "purpose": "Existing Python source inventory; not a wire schema or parity claim",
+  "versions": {
+    "GAME_PROTOCOL_VERSION": 1,
+    "ADAPTER_VERSION": "0.2.2-alpha.1"
+  },
+  "engine_version": "1.4.62-V1",
+  "engine_upstream_tag": "xmage_1.4.62V1",
+  "artifact_manifest_sha256": "525fe515ed4e7540b3b02884d01c37732a5e1b1e650784ea1c2259e422a700b4",
+  "records": {
+    "MatchSeat": [
+      {
+        "name": "seat_id",
+        "python_type": "str",
+        "required": true
+      },
+      {
+        "name": "name",
+        "python_type": "str",
+        "required": true
+      },
+      {
+        "name": "controller",
+        "python_type": "Literal['local_human', 'engine_ai']",
+        "required": false,
+        "python_default": "'local_human'"
+      }
+    ],
+    "GameSetup": [
+      {
+        "name": "seats",
+        "python_type": "tuple[MatchSeat, ...]",
+        "required": true
+      },
+      {
+        "name": "format",
+        "python_type": "str",
+        "required": false,
+        "python_default": "'freeform'"
+      },
+      {
+        "name": "protocol_version",
+        "python_type": "int",
+        "required": false,
+        "python_default": "GAME_PROTOCOL_VERSION"
+      }
+    ],
+    "Compatibility": [
+      {
+        "name": "manaforge_version",
+        "python_type": "str",
+        "required": true
+      },
+      {
+        "name": "protocol_version",
+        "python_type": "int",
+        "required": true
+      },
+      {
+        "name": "adapter_version",
+        "python_type": "str",
+        "required": true
+      },
+      {
+        "name": "engine_version",
+        "python_type": "str",
+        "required": true
+      },
+      {
+        "name": "artifact_manifest_sha256",
+        "python_type": "str",
+        "required": true
+      }
+    ],
+    "Capability": [
+      {
+        "name": "name",
+        "python_type": "str",
+        "required": true
+      },
+      {
+        "name": "status",
+        "python_type": "Literal['verified', 'unverified', 'unsupported']",
+        "required": true
+      },
+      {
+        "name": "detail",
+        "python_type": "str",
+        "required": false,
+        "python_default": "''"
+      }
+    ],
+    "RuntimeReport": [
+      {
+        "name": "success",
+        "python_type": "bool",
+        "required": true
+      },
+      {
+        "name": "workspace",
+        "python_type": "str | None",
+        "required": true
+      },
+      {
+        "name": "process_exit_codes",
+        "python_type": "tuple[tuple[str, int | None], ...]",
+        "required": true
+      },
+      {
+        "name": "forced_cleanup",
+        "python_type": "bool",
+        "required": true
+      },
+      {
+        "name": "code",
+        "python_type": "str | None",
+        "required": false,
+        "python_default": "None"
+      }
+    ],
+    "CardIdentity": [
+      {
+        "name": "oracle_id",
+        "python_type": "str | None",
+        "required": true
+      },
+      {
+        "name": "printing_id",
+        "python_type": "str | None",
+        "required": true
+      },
+      {
+        "name": "deck_entry_id",
+        "python_type": "str | None",
+        "required": true
+      }
+    ],
+    "CardCharacteristics": [
+      {
+        "name": "name",
+        "python_type": "str | None",
+        "required": false,
+        "python_default": "None"
+      },
+      {
+        "name": "power",
+        "python_type": "str | None",
+        "required": false,
+        "python_default": "None"
+      },
+      {
+        "name": "toughness",
+        "python_type": "str | None",
+        "required": false,
+        "python_default": "None"
+      },
+      {
+        "name": "type_line",
+        "python_type": "str | None",
+        "required": false,
+        "python_default": "None"
+      },
+      {
+        "name": "color",
+        "python_type": "str | None",
+        "required": false,
+        "python_default": "None"
+      },
+      {
+        "name": "engine_view_text",
+        "python_type": "tuple[str, ...] | None",
+        "required": false,
+        "python_default": "None"
+      },
+      {
+        "name": "loyalty",
+        "python_type": "str | None",
+        "required": false,
+        "python_default": "None"
+      },
+      {
+        "name": "defense",
+        "python_type": "str | None",
+        "required": false,
+        "python_default": "None"
+      },
+      {
+        "name": "transformed",
+        "python_type": "bool | None",
+        "required": false,
+        "python_default": "None"
+      },
+      {
+        "name": "counters",
+        "python_type": "tuple[tuple[str, int], ...] | None",
+        "required": false,
+        "python_default": "None"
+      },
+      {
+        "name": "is_copy",
+        "python_type": "bool | None",
+        "required": false,
+        "python_default": "None"
+      },
+      {
+        "name": "flipped",
+        "python_type": "bool | None",
+        "required": false,
+        "python_default": "None"
+      },
+      {
+        "name": "current_abilities",
+        "python_type": "tuple[str, ...] | None",
+        "required": false,
+        "python_default": "None"
+      },
+      {
+        "name": "unsupported_fields",
+        "python_type": "tuple[str, ...]",
+        "required": false,
+        "python_default": "('current_rules_text', 'ability_identities', 'color_identity', 'copy_provenance_history', 'merged_components')"
+      }
+    ],
+    "GameObject": [
+      {
+        "name": "object_id",
+        "python_type": "str",
+        "required": true
+      },
+      {
+        "name": "zone",
+        "python_type": "str",
+        "required": true
+      },
+      {
+        "name": "owner_id",
+        "python_type": "str | None",
+        "required": true
+      },
+      {
+        "name": "controller_id",
+        "python_type": "str | None",
+        "required": true
+      },
+      {
+        "name": "hidden",
+        "python_type": "bool",
+        "required": true
+      },
+      {
+        "name": "characteristics",
+        "python_type": "CardCharacteristics | None",
+        "required": true
+      },
+      {
+        "name": "card_identity",
+        "python_type": "CardIdentity | None",
+        "required": false,
+        "python_default": "None"
+      },
+      {
+        "name": "tapped",
+        "python_type": "bool | None",
+        "required": false,
+        "python_default": "None"
+      },
+      {
+        "name": "damage",
+        "python_type": "int | None",
+        "required": false,
+        "python_default": "None"
+      },
+      {
+        "name": "attacking_available",
+        "python_type": "bool | None",
+        "required": false,
+        "python_default": "None"
+      },
+      {
+        "name": "blocking_available",
+        "python_type": "bool | None",
+        "required": false,
+        "python_default": "None"
+      },
+      {
+        "name": "face_down",
+        "python_type": "bool | None",
+        "required": false,
+        "python_default": "None"
+      },
+      {
+        "name": "attachments",
+        "python_type": "tuple[str, ...] | None",
+        "required": false,
+        "python_default": "None"
+      },
+      {
+        "name": "attached_to",
+        "python_type": "str | None",
+        "required": false,
+        "python_default": "None"
+      },
+      {
+        "name": "commander_id",
+        "python_type": "str | None",
+        "required": false,
+        "python_default": "None"
+      },
+      {
+        "name": "copy_source_id",
+        "python_type": "str | None",
+        "required": false,
+        "python_default": "None"
+      }
+    ],
+    "PlayerView": [
+      {
+        "name": "player_id",
+        "python_type": "str",
+        "required": true
+      },
+      {
+        "name": "name",
+        "python_type": "str",
+        "required": true
+      },
+      {
+        "name": "life",
+        "python_type": "int",
+        "required": true
+      },
+      {
+        "name": "hand_count",
+        "python_type": "int",
+        "required": true
+      },
+      {
+        "name": "library_count",
+        "python_type": "int",
+        "required": true
+      },
+      {
+        "name": "eliminated",
+        "python_type": "bool | None",
+        "required": true
+      },
+      {
+        "name": "left_game",
+        "python_type": "bool | None",
+        "required": false,
+        "python_default": "None"
+      },
+      {
+        "name": "mana",
+        "python_type": "tuple[tuple[str, int], ...] | None",
+        "required": false,
+        "python_default": "None"
+      },
+      {
+        "name": "counters",
+        "python_type": "tuple[tuple[str, int], ...] | None",
+        "required": false,
+        "python_default": "None"
+      }
+    ],
+    "LegalAction": [
+      {
+        "name": "action_id",
+        "python_type": "str",
+        "required": true
+      },
+      {
+        "name": "kind",
+        "python_type": "str",
+        "required": true
+      },
+      {
+        "name": "object_id",
+        "python_type": "str | None",
+        "required": true
+      },
+      {
+        "name": "label",
+        "python_type": "str",
+        "required": true
+      },
+      {
+        "name": "priority_class",
+        "python_type": "str",
+        "required": false,
+        "python_default": "'unknown'"
+      }
+    ],
+    "ChoiceOption": [
+      {
+        "name": "option_id",
+        "python_type": "str",
+        "required": true
+      },
+      {
+        "name": "label",
+        "python_type": "str",
+        "required": true
+      },
+      {
+        "name": "object_id",
+        "python_type": "str | None",
+        "required": false,
+        "python_default": "None"
+      },
+      {
+        "name": "player_id",
+        "python_type": "str | None",
+        "required": false,
+        "python_default": "None"
+      },
+      {
+        "name": "selected",
+        "python_type": "bool",
+        "required": false,
+        "python_default": "False"
+      }
+    ],
+    "AmountConstraint": [
+      {
+        "name": "label",
+        "python_type": "str",
+        "required": true
+      },
+      {
+        "name": "minimum",
+        "python_type": "int",
+        "required": true
+      },
+      {
+        "name": "maximum",
+        "python_type": "int",
+        "required": true
+      },
+      {
+        "name": "default",
+        "python_type": "int | None",
+        "required": false,
+        "python_default": "None"
+      }
+    ],
+    "ChoiceRequest": [
+      {
+        "name": "decision_id",
+        "python_type": "str",
+        "required": true
+      },
+      {
+        "name": "player_id",
+        "python_type": "str",
+        "required": true
+      },
+      {
+        "name": "family",
+        "python_type": "str",
+        "required": true
+      },
+      {
+        "name": "prompt",
+        "python_type": "str",
+        "required": true
+      },
+      {
+        "name": "options",
+        "python_type": "tuple[ChoiceOption, ...]",
+        "required": true
+      },
+      {
+        "name": "minimum",
+        "python_type": "int | None",
+        "required": false,
+        "python_default": "None"
+      },
+      {
+        "name": "maximum",
+        "python_type": "int | None",
+        "required": false,
+        "python_default": "None"
+      },
+      {
+        "name": "cancellable",
+        "python_type": "bool",
+        "required": false,
+        "python_default": "False"
+      },
+      {
+        "name": "amounts",
+        "python_type": "tuple[AmountConstraint, ...]",
+        "required": false,
+        "python_default": "()"
+      },
+      {
+        "name": "can_finish",
+        "python_type": "bool",
+        "required": false,
+        "python_default": "False"
+      },
+      {
+        "name": "is_priority",
+        "python_type": "bool",
+        "required": false,
+        "python_default": "False"
+      }
+    ],
+    "CombatAssignment": [
+      {
+        "name": "attackers",
+        "python_type": "tuple[str, ...]",
+        "required": true
+      },
+      {
+        "name": "blockers",
+        "python_type": "tuple[str, ...]",
+        "required": true
+      },
+      {
+        "name": "defender_id",
+        "python_type": "str | None",
+        "required": true
+      },
+      {
+        "name": "blocked",
+        "python_type": "bool",
+        "required": true
+      }
+    ],
+    "CommanderState": [
+      {
+        "name": "commander_id",
+        "python_type": "str",
+        "required": true
+      },
+      {
+        "name": "owner_id",
+        "python_type": "str",
+        "required": true
+      },
+      {
+        "name": "name",
+        "python_type": "str | None",
+        "required": true
+      },
+      {
+        "name": "card_identity",
+        "python_type": "CardIdentity | None",
+        "required": true
+      },
+      {
+        "name": "command_zone_plays",
+        "python_type": "int | None",
+        "required": true
+      },
+      {
+        "name": "damage_dealt",
+        "python_type": "tuple[tuple[str, int], ...]",
+        "required": true
+      },
+      {
+        "name": "additional_cast_cost",
+        "python_type": "str | None",
+        "required": false,
+        "python_default": "None"
+      }
+    ],
+    "CardObservation": [
+      {
+        "name": "observation_id",
+        "python_type": "str",
+        "required": true
+      },
+      {
+        "name": "source",
+        "python_type": "str",
+        "required": true
+      },
+      {
+        "name": "hidden",
+        "python_type": "bool",
+        "required": true
+      },
+      {
+        "name": "name",
+        "python_type": "str | None",
+        "required": false,
+        "python_default": "None"
+      },
+      {
+        "name": "set_code",
+        "python_type": "str | None",
+        "required": false,
+        "python_default": "None"
+      },
+      {
+        "name": "collector_number",
+        "python_type": "str | None",
+        "required": false,
+        "python_default": "None"
+      }
+    ],
+    "GameSnapshot": [
+      {
+        "name": "session_id",
+        "python_type": "str",
+        "required": true
+      },
+      {
+        "name": "viewer_id",
+        "python_type": "str",
+        "required": true
+      },
+      {
+        "name": "revision",
+        "python_type": "int",
+        "required": true
+      },
+      {
+        "name": "status",
+        "python_type": "str",
+        "required": true
+      },
+      {
+        "name": "turn",
+        "python_type": "int | None",
+        "required": true
+      },
+      {
+        "name": "phase",
+        "python_type": "str | None",
+        "required": true
+      },
+      {
+        "name": "step",
+        "python_type": "str | None",
+        "required": true
+      },
+      {
+        "name": "active_player_id",
+        "python_type": "str | None",
+        "required": true
+      },
+      {
+        "name": "priority_player_id",
+        "python_type": "str | None",
+        "required": true
+      },
+      {
+        "name": "players",
+        "python_type": "tuple[PlayerView, ...]",
+        "required": true
+      },
+      {
+        "name": "objects",
+        "python_type": "tuple[GameObject, ...]",
+        "required": true
+      },
+      {
+        "name": "actions",
+        "python_type": "tuple[LegalAction, ...]",
+        "required": true
+      },
+      {
+        "name": "decision",
+        "python_type": "ChoiceRequest | None",
+        "required": true
+      },
+      {
+        "name": "combat",
+        "python_type": "tuple[CombatAssignment, ...]",
+        "required": false,
+        "python_default": "()"
+      },
+      {
+        "name": "protocol_version",
+        "python_type": "int",
+        "required": false,
+        "python_default": "GAME_PROTOCOL_VERSION"
+      },
+      {
+        "name": "result",
+        "python_type": "str | None",
+        "required": false,
+        "python_default": "None"
+      },
+      {
+        "name": "commanders",
+        "python_type": "tuple[CommanderState, ...] | None",
+        "required": false,
+        "python_default": "None"
+      },
+      {
+        "name": "observations",
+        "python_type": "tuple[CardObservation, ...]",
+        "required": false,
+        "python_default": "()"
+      },
+      {
+        "name": "unsupported_fields",
+        "python_type": "tuple[str, ...]",
+        "required": false,
+        "python_default": "()"
+      },
+      {
+        "name": "actions_complete",
+        "python_type": "bool",
+        "required": false,
+        "python_default": "False"
+      }
+    ],
+    "GameEvent": [
+      {
+        "name": "kind",
+        "python_type": "str",
+        "required": true
+      },
+      {
+        "name": "player_id",
+        "python_type": "str",
+        "required": true
+      },
+      {
+        "name": "revision",
+        "python_type": "int",
+        "required": true
+      },
+      {
+        "name": "code",
+        "python_type": "str | None",
+        "required": false,
+        "python_default": "None"
+      },
+      {
+        "name": "observations",
+        "python_type": "tuple[CardObservation, ...]",
+        "required": false,
+        "python_default": "()"
+      }
+    ],
+    "CommandResult": [
+      {
+        "name": "command_id",
+        "python_type": "str",
+        "required": true
+      },
+      {
+        "name": "outcome",
+        "python_type": "Literal['submitted', 'confirmed', 'rejected', 'uncertain']",
+        "required": true
+      },
+      {
+        "name": "code",
+        "python_type": "str | None",
+        "required": false,
+        "python_default": "None"
+      }
+    ]
+  },
+  "session_methods": {
+    "snapshot": "def snapshot(self, player_id: str) -> GameSnapshot",
+    "poll": "def poll(self, player_id: str, timeout: float=0) -> tuple[GameEvent, ...]",
+    "perform": "def perform(self, player_id: str, decision_id: str, action_id: str) -> CommandResult",
+    "choose": "def choose(self, player_id: str, decision_id: str, option_id: str) -> CommandResult",
+    "select_mana_source": "def select_mana_source(self, player_id: str, decision_id: str, object_id: str) -> CommandResult",
+    "choose_number": "def choose_number(self, player_id: str, decision_id: str, value: int) -> CommandResult",
+    "choose_amounts": "def choose_amounts(self, player_id: str, decision_id: str, values: tuple[int, ...]) -> CommandResult",
+    "finish_selection": "def finish_selection(self, player_id: str, decision_id: str) -> CommandResult",
+    "cancel": "def cancel(self, player_id: str, decision_id: str) -> CommandResult",
+    "concede": "def concede(self, player_id: str) -> CommandResult"
+  },
+  "uppercase_code_candidates_by_source": {
+    "adapter.py": [
+      "AMOUNT_OUT_OF_RANGE",
+      "CANCELLATION_UNSUPPORTED",
+      "COMMAND_OUTCOME_UNCERTAIN",
+      "DECK_REJECTED_BY_ENGINE",
+      "ENGINE_CLEANUP_TIMEOUT",
+      "ENGINE_COMMAND_REJECTED",
+      "ENGINE_CONNECTION_FAILED",
+      "ENGINE_CONNECTION_LOST",
+      "ENGINE_CONTROL_LOST",
+      "ENGINE_DECK_LOAD_FAILED",
+      "ENGINE_EXITED",
+      "ENGINE_METADATA_TIMEOUT",
+      "ENGINE_RESPONSE_NOT_CONFIRMED",
+      "ENGINE_RUNTIME_FAILED",
+      "ENGINE_STARTUP_FAILED",
+      "ENGINE_UNAVAILABLE",
+      "ENGINE_VALIDATOR_UNAVAILABLE",
+      "GAME_ASK",
+      "GAME_CHOOSE_ABILITY",
+      "GAME_CHOOSE_CHOICE",
+      "GAME_CHOOSE_PILE",
+      "GAME_GET_AMOUNT",
+      "GAME_GET_MULTI_AMOUNT",
+      "GAME_PLAY_MANA",
+      "GAME_SELECT",
+      "GAME_TARGET",
+      "INCOHERENT_ENGINE_METADATA",
+      "INCOMPATIBLE_GAME_PROTOCOL",
+      "INCOMPLETE_ENGINE_METADATA",
+      "INVALID_DECK_VALIDATION_RESPONSE",
+      "INVALID_SEATS",
+      "INVALID_SEAT_IDENTITIES",
+      "PINNED_METADATA_INTERFACE_CHANGED",
+      "RUNTIME_ALREADY_STARTED",
+      "RUNTIME_CANCELLED",
+      "SELECTION_NOT_FINISHABLE",
+      "SERVER_CONTROL_TIMEOUT",
+      "SERVER_RESPONSE_ACCESS_TIMEOUT",
+      "SERVER_RESPONSE_INVALID",
+      "SESSION_ALREADY_CREATED",
+      "SESSION_CLOSED",
+      "SESSION_NOT_ACTIVE",
+      "SNAPSHOT_NOT_READY",
+      "STALE_DECISION",
+      "STALE_OR_INVALID_DECISION",
+      "STALE_OR_INVALID_OBJECT",
+      "UNAUTHORIZED_SEAT",
+      "UNEXPECTED_COMMAND_RESPONSE",
+      "UNKNOWN_PLAYER",
+      "UNSUPPORTED_AI_SETUP",
+      "UNSUPPORTED_CONTROLLER",
+      "UNSUPPORTED_DECISION",
+      "UNSUPPORTED_GAME_SETUP",
+      "UNSUPPORTED_SEAT_COUNT"
+    ],
+    "decks.py": [
+      "AMBIGUOUS_INSTANCE_PRINTING",
+      "CARD_NOT_SUPPORTED",
+      "COMMANDER_FORMAT_REQUIRED",
+      "DUPLICATE_ENTRY_ID",
+      "EMPTY_MAINBOARD",
+      "INVALID_QUANTITY",
+      "MISSING_CARD_NAME",
+      "MISSING_COMMANDER_ENTRY",
+      "MISSING_RESOLUTION",
+      "ORACLE_ID_NOT_RESOLVED",
+      "PRINTING_NOT_RESOLVED",
+      "UNSUPPORTED_SECTION"
+    ],
+    "connection_proof.py": [
+      "CREATE_NO_WINDOW",
+      "ENGINE_OPERATION_TIMEOUT",
+      "RUNTIME_CANCELLED",
+      "SO_EXCLUSIVEADDRUSE"
+    ]
+  }
+}

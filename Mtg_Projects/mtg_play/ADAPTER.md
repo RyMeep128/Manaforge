@@ -10,6 +10,9 @@ AI, or remote multiplayer. Integration acceptance is implemented and has passed
 locally against the pinned engine. **Consult the Tests workflow for CI acceptance
 of a particular commit.** This does not certify every card or engine mechanic.
 
+The migration [source inventory](protocol/README.md) records exact Python fields,
+commands and gaps before defining the Java/C# wire contract.
+
 ## Public API
 
 `contracts.py` imports only the standard library. Frozen contracts serialize with

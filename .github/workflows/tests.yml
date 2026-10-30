@@ -63,6 +63,9 @@ jobs:
             Mtg_Projects/mtg_proxy/requirements.txt
       - name: Install test and application dependencies
         run: python -m pip install -r requirements-dev.txt
+
+      - name: Check Play Python protocol inventory
+        run: python tools/export_play_protocol_inventory.py --check
       - name: Install optional library server dependency for CI
         run: python -m pip install -r requirements-library.txt
       - name: Test Proxy, Core, Deck Editor, and their integration
