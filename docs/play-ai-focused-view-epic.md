@@ -957,3 +957,29 @@ in place. Formatting and diff checks only were performed locally: no tests,
 builds, engine acceptance, or manual visual verification. Story 9 remains pending
 CI/UX acceptance; hover previews and further contextual interaction polish belong
 to the following story.
+
+
+Screenshot feedback fixes (0.5.16-alpha.1): format Continue/Back and lobby match
+actions now follow their content instead of being pushed to the bottom by
+stretch spacers. Match readiness sits beside Start, identifies the blocking seat
+and reason, and is also its tooltip. Primary disabled buttons now have an explicit
+disabled style so Start no longer looks active while gated. Unknown active deck
+sections remain blocked and are identified by name.
+
+Read-only inspection of the user's local precon files identified the actual
+Adaptive Enchantment blocker as its `display_commander` section. Core precon
+imports intentionally keep oversized display cards separate from playable cards.
+Play translation/readiness and artwork preparation now omit that display-only
+section without altering the source document; genuinely unsupported gameplay
+sections remain rejected. CI regressions cover exclusion and exact source
+preservation.
+
+Randomize and match startup now display a dedicated loading page with stage
+messages, indeterminate progress, elapsed time and explicit cancellation. Match
+startup switches to the battlefield only after an authorized snapshot arrives;
+cleanup remains owned and retryable. Artwork preparation also has a visible
+progress bar before any missing-artwork review. Overall status text appears near
+the top instead of below the lobby's bottom edge. CI checks cover loading state,
+compact action placement, explanatory gating and section handling. Only static
+inspection, formatting and diff checks were performed locally; no tests, builds,
+push or CI monitoring.

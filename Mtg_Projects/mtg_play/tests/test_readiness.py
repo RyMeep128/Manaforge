@@ -182,3 +182,18 @@ def test_partner_previews_keep_each_selected_printing_independent():
         ("Leader", ("leader-print", "selected-art")),
         ("Other", ("other-print", None)),
     )
+
+
+def test_unknown_play_sections_are_identified_without_ignoring_them():
+    from mtg_core.decks import DeckDocument, DeckEntry
+    from mtg_play.readiness import local_readiness
+
+    document = DeckDocument()
+    document.deck.entries = [
+        DeckEntry("land", "Forest", 60),
+        DeckEntry("special", "Special", section="planar"),
+    ]
+    check = local_readiness(document, "freeform")
+    assert not check.can_start
+    assert "planar" in " ".join(check.messages)
+    assert "Special" not in " ".join(check.messages)

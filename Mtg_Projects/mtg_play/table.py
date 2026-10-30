@@ -62,10 +62,10 @@ class GameCard(W.QAbstractButton):
         )
         self.setAccessibleName(
             object_name(obj)
-            + (" Â· Available action" if actionable else "")
-            + (" Â· Selected" if selected else "")
-            + (" Â· Tapped" if obj.tapped else "")
-            + (" Â· " + combat if combat else "")
+            + (" · Available action" if actionable else "")
+            + (" · Selected" if selected else "")
+            + (" · Tapped" if obj.tapped else "")
+            + (" · " + combat if combat else "")
         )
         if changed:
             self.apply_scale(self.card_scale)
@@ -156,7 +156,7 @@ class GameCard(W.QAbstractButton):
         p.drawText(
             C.QRect(6, 94 if compact else 145, 100, 36),
             C.Qt.AlignmentFlag.AlignCenter | C.Qt.TextFlag.TextWordWrap,
-            " Â· ".join(badge) or object_name(self.obj),
+            " · ".join(badge) or object_name(self.obj),
         )
 
     def contextMenuEvent(self, event):
@@ -410,20 +410,20 @@ class GameTable(W.QWidget):
             "Priority: " + names.get(view.priority_player_id, "Waiting"),
         ]
         self.flow.setText(
-            " Â· ".join(
+            " · ".join(
                 value.replace("_", " ").title() if index in (1, 2) else value
                 for index, value in enumerate(flow)
                 if value
             )
         )
         for player in view.players:
-            text = f"{player.name} Â· {player.life} life Â· Hand {player.hand_count} Â· Library {player.library_count}"
+            text = f"{player.name} · {player.life} life · Hand {player.hand_count} · Library {player.library_count}"
             if player.mana:
-                text += " Â· Mana: " + ", ".join(
+                text += " · Mana: " + ", ".join(
                     f"{amount} {kind}" for kind, amount in player.mana
                 )
             if player.counters:
-                text += " Â· " + ", ".join(
+                text += " · " + ", ".join(
                     f"{amount} {kind}" for kind, amount in player.counters
                 )
             commanders = [
@@ -434,13 +434,11 @@ class GameTable(W.QWidget):
             for commander in commanders:
                 text += "\nCommander: " + (commander.name or "Commander")
                 if commander.command_zone_plays is not None:
-                    text += (
-                        f" Â· Cast from command zone: {commander.command_zone_plays}"
-                    )
+                    text += f" · Cast from command zone: {commander.command_zone_plays}"
                 if commander.additional_cast_cost is not None:
-                    text += " Â· Additional cost: " + commander.additional_cast_cost
+                    text += " · Additional cost: " + commander.additional_cast_cost
                 if commander.damage_dealt:
-                    text += " Â· Damage dealt: " + ", ".join(
+                    text += " · Damage dealt: " + ", ".join(
                         f"{names.get(seat, 'Player')} {amount}"
                         for seat, amount in commander.damage_dealt
                     )
@@ -776,7 +774,7 @@ class GameTable(W.QWidget):
             self.inspection_image.setText(
                 "Artwork unavailable"
                 if image is not None or not obj.card_identity
-                else "Loading artworkâ€¦"
+                else "Loading artwork…"
             )
 
     def keyPressEvent(self, event):

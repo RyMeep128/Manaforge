@@ -62,6 +62,9 @@ def application_stylesheet() -> str:
     QPushButton[buttonRole="primary"]:hover, QToolButton[buttonRole="primary"]:hover {{
         background-color: {c['accent_hover']}; border-color: {c['accent_hover']};
     }}
+    QPushButton[buttonRole="primary"]:disabled, QToolButton[buttonRole="primary"]:disabled {{
+        color: #88919e; border-color: #29303a; background-color: #151920;
+    }}
     QPushButton[buttonRole="danger"] {{ color: #ffb8bd; border-color: #6f3b42; }}
     QPushButton[buttonRole="ghost"], QToolButton[buttonRole="ghost"] {{ background: transparent; border-color: transparent; }}
     QLineEdit, QTextEdit, QComboBox, QSpinBox, QDoubleSpinBox {{

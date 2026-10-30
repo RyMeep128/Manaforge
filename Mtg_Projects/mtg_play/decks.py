@@ -46,7 +46,7 @@ def _deck_queries(document, oracle_lookup=None, *, commander=False, resolve_name
     for missing in commander_ids - {entry.entry_id for entry in document.deck.entries}:
         issues.append(DeckIssue(missing, "MISSING_COMMANDER_ENTRY"))
     for entry in document.deck.entries:
-        if entry.section in ("considering", "excluded"):
+        if entry.section in ("considering", "excluded", "display_commander"):
             continue
         if type(entry.quantity) is not int or entry.quantity < 0:
             issues.append(DeckIssue(entry.entry_id, "INVALID_QUANTITY"))

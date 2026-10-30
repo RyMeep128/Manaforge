@@ -80,8 +80,30 @@ def local_readiness(document, format, records=None):
             format,
             "blocked",
             tuple(
-                STRUCTURAL_MESSAGES.get(
-                    code, "Review the deck configuration in Deck Editor."
+                (
+                    "Unsupported deck sections: "
+                    + ", ".join(
+                        sorted(
+                            {
+                                str(entry.section)
+                                for entry in document.deck.entries
+                                if entry.section
+                                not in {
+                                    "mainboard",
+                                    "sideboard",
+                                    "commander",
+                                    "considering",
+                                    "excluded",
+                                    "display_commander",
+                                }
+                            }
+                        )
+                    )
+                    + ". Review this deck in Deck Editor."
+                    if code == "UNSUPPORTED_SECTION"
+                    else STRUCTURAL_MESSAGES.get(
+                        code, "Review the deck configuration in Deck Editor."
+                    )
                 )
                 for code in codes
             )[:6],

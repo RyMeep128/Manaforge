@@ -319,7 +319,10 @@ def test_randomize_gates_setup_until_verified_runtime_cleanup(app, tmp_path):
         assert not workspace.reload.isEnabled()
         assert not any(selector.isEnabled() for selector in workspace.selectors)
         workspace._show_page(workspace.landing_page)
-        assert workspace.pages.currentWidget() is workspace.setup_page
+        assert workspace.pages.currentWidget() is workspace.loading_page
+        assert "opponent" in workspace.loading_title.text().lower()
+        assert workspace.loading_bar.maximum() == 0
+        assert workspace.loading_cancel.isEnabled()
         gate.set()
         drain(app, lambda: not workspace.opponents.busy)
         assert workspace.selectors[1].currentData() == 1
@@ -470,4 +473,66 @@ def test_focused_view_restores_previous_window_mode(app, tmp_path, maximized):
         assert not workspace.intro.isHidden() and workspace._window_snapshot is None
         assert not calls
     finally:
+        workspace.close()
+
+
+def test_setup_actions_are_adjacent_and_start_explains_blocking_deck(app, tmp_path):
+    from dataclasses import replace
+    from mtg_play.readiness import DeckReadiness
+
+    workspace, calls = workspace_fixture(app, tmp_path)
+    try:
+        workspace.landing_page.offline_button.click()
+        workspace.resize(1280, 850)
+        workspace.show()
+        workspace.format.setCurrentIndex(workspace.format.findData("freeform"))
+        app.processEvents()
+        assert workspace.format_continue.mapTo(workspace, C.QPoint()).y() < 450
+        workspace.format_continue.click()
+        workspace.selectors[0].setCurrentIndex(1)
+        bad = DeckReadiness(
+            "freeform",
+            "blocked",
+            ("Unsupported deck sections: planar.",),
+            ("UNSUPPORTED_SECTION",),
+        )
+        workspace._decks = (
+            workspace._decks[0],
+            replace(workspace._decks[1], checks=(bad,)),
+        )
+        workspace.selectors[1].setCurrentIndex(2)
+        app.processEvents()
+        assert not workspace.start_button.isEnabled()
+        assert (
+            "Opponent" in workspace.start_reason.text()
+            and "planar" in workspace.start_reason.text()
+        )
+        assert workspace.start_button.toolTip() == workspace.start_reason.text()
+        assert (
+            workspace.start_button.mapTo(workspace, C.QPoint()).y()
+            < workspace.height() - 100
+        )
+        assert not calls
+    finally:
+        workspace.close()
+
+
+def test_match_loading_waits_for_authorized_opening_snapshot(app, tmp_path):
+    from mtg_play.tests.test_presentation import snapshot
+
+    workspace, calls = workspace_fixture(app, tmp_path)
+    try:
+        workspace.session.active = True
+        workspace._show_loading("match", "Starting your match", "Starting engine...")
+        workspace._status("Preparing opening hand...")
+        assert workspace.pages.currentWidget() is workspace.loading_page
+        assert workspace.loading_detail.text() == "Preparing opening hand..."
+        workspace._show_snapshot(snapshot("two"))
+        assert workspace.pages.currentWidget() is workspace.loading_page
+        workspace._show_snapshot(snapshot(workspace.lobby.local_seat_id))
+        assert workspace.pages.currentWidget() is workspace.game_page
+        assert not workspace.loading_timer.isActive() and not calls
+    finally:
+        workspace.session.active = False
+        workspace.table.clear()
         workspace.close()

@@ -5,6 +5,7 @@ from mtg_core.paths import data_root
 from mtg_ui.jobs import JobQueue
 from dataclasses import replace
 from copy import deepcopy
+import time
 from .assets import prepare_assets
 from .lobby import DeckSelection, offline_lobby
 from .navigation import ModeSelection, PlayLanding, PlayPages
@@ -55,6 +56,7 @@ class PlayWorkspace(W.QWidget):
         )
         self.opponents = OpponentRandomizer(self, adapter_factory=adapter_factory)
         self.opponents.changed.connect(self._selection_changed)
+        self.opponents.changed.connect(self._opponent_loading_changed)
         self.opponents.message.connect(self._status)
         self.opponents.selected.connect(self._randomized)
         self.asset_jobs = JobQueue(self)
@@ -70,6 +72,7 @@ class PlayWorkspace(W.QWidget):
         self.session.viewCleared.connect(self._clear_view)
         self.session.stopped.connect(self._stopped)
         self.session.jobs.idle.connect(self._selection_changed)
+        self.session.jobs.idle.connect(self._engine_loading_idle)
         self.session.interactionPending.connect(self._pending)
         layout = W.QVBoxLayout(self)
         layout.setContentsMargins(24, 20, 24, 20)
@@ -115,10 +118,10 @@ class PlayWorkspace(W.QWidget):
         self.format.addItem("Choose a format", None)
         self.format.addItem("Freeform", "freeform")
         self.format.addItem("Commander", "commander")
+        self.format.setMaximumWidth(640)
         self.format.setAccessibleName("Offline match format")
         format_row.addRow("Format", self.format)
         format_layout.addLayout(format_row)
-        format_layout.addStretch()
         format_actions = W.QHBoxLayout()
         self.format_back = W.QPushButton("Back")
         self.format_back.clicked.connect(self._back_from_format)
@@ -130,6 +133,7 @@ class PlayWorkspace(W.QWidget):
         self.format_continue.clicked.connect(self._enter_lobby)
         format_actions.addWidget(self.format_continue)
         format_layout.addLayout(format_actions)
+        format_layout.addStretch()
         self.pages.addWidget(self.format_page)
         self.setup_page = W.QScrollArea()
         self.setup_page.setFrameShape(W.QFrame.Shape.NoFrame)
@@ -241,7 +245,11 @@ class PlayWorkspace(W.QWidget):
         shared_hint.setWordWrap(True)
         shared_hint.setProperty("role", "muted")
         setup_layout.addWidget(shared_hint)
-        setup_layout.addStretch()
+        self.start_reason = W.QLabel()
+        self.start_reason.setWordWrap(True)
+        self.start_reason.setTextFormat(C.Qt.TextFormat.PlainText)
+        self.start_reason.setAccessibleName("Match readiness")
+        setup_layout.addWidget(self.start_reason)
         actions = W.QHBoxLayout()
         self.lobby_back = W.QPushButton("Back to Play")
         self.lobby_back.clicked.connect(lambda: self._show_page(self.landing_page))
@@ -256,11 +264,15 @@ class PlayWorkspace(W.QWidget):
         self.start_button.clicked.connect(self.start_game)
         actions.addWidget(self.start_button)
         setup_layout.addLayout(actions)
+        setup_layout.addStretch()
         self.pages.addWidget(self.setup_page)
         self.asset_page = W.QWidget()
         asset_layout = W.QVBoxLayout(self.asset_page)
         self.asset_heading = W.QLabel("Preparing local artwork")
         asset_layout.addWidget(self.asset_heading)
+        self.asset_progress = W.QProgressBar()
+        self.asset_progress.setRange(0, 0)
+        asset_layout.addWidget(self.asset_progress)
         self.asset_missing = W.QTextBrowser()
         asset_layout.addWidget(self.asset_missing, 1)
         asset_actions = W.QHBoxLayout()
@@ -274,9 +286,38 @@ class PlayWorkspace(W.QWidget):
         asset_actions.addWidget(self.asset_continue)
         asset_layout.addLayout(asset_actions)
         self.pages.addWidget(self.asset_page)
+        self.loading_page = W.QWidget()
+        loading_layout = W.QVBoxLayout(self.loading_page)
+        loading_layout.addStretch()
+        self.loading_title = W.QLabel("Preparing your match")
+        self.loading_title.setProperty("role", "title")
+        self.loading_title.setWordWrap(True)
+        self.loading_detail = W.QLabel()
+        self.loading_detail.setWordWrap(True)
+        self.loading_detail.setTextFormat(C.Qt.TextFormat.PlainText)
+        self.loading_bar = W.QProgressBar()
+        self.loading_bar.setRange(0, 0)
+        self.loading_elapsed = W.QLabel()
+        self.loading_cancel = W.QPushButton("Cancel preparation")
+        self.loading_cancel.clicked.connect(self._cancel_loading)
+        for widget in (
+            self.loading_title,
+            self.loading_detail,
+            self.loading_bar,
+            self.loading_elapsed,
+            self.loading_cancel,
+        ):
+            loading_layout.addWidget(widget)
+        loading_layout.addStretch()
+        self.pages.addWidget(self.loading_page)
+        self._loading_purpose = None
+        self._loading_started = 0
+        self.loading_timer = C.QTimer(self)
+        self.loading_timer.setInterval(1000)
+        self.loading_timer.timeout.connect(self._loading_tick)
         self.game_page = W.QWidget()
         game_layout = W.QVBoxLayout(self.game_page)
-        self.game_heading = W.QLabel("Preparing your tableÃ¢â‚¬Â¦")
+        self.game_heading = W.QLabel("Preparing your table…")
         self.game_heading.setProperty("role", "title")
         self.game_heading.setTextFormat(C.Qt.TextFormat.PlainText)
         game_layout.addWidget(self.game_heading)
@@ -294,11 +335,11 @@ class PlayWorkspace(W.QWidget):
         game_actions.addWidget(self.close_button)
         game_layout.addLayout(game_actions)
         self.pages.addWidget(self.game_page)
-        self.status = W.QLabel("Loading your decksÃ¢â‚¬Â¦")
+        self.status = W.QLabel("Loading your decks…")
         self.status.setWordWrap(True)
         self.status.setTextFormat(C.Qt.TextFormat.PlainText)
         self.status.setAccessibleName("Game status")
-        layout.addWidget(self.status)
+        layout.insertWidget(2, self.status)
         self.format.currentIndexChanged.connect(self._format_changed)
         self._format_changed()
         self.load_decks()
@@ -366,7 +407,7 @@ class PlayWorkspace(W.QWidget):
         self.deck_artwork.stopping = False
         self.reload.setEnabled(False)
         self.start_button.setEnabled(False)
-        self.status.setText("Loading your saved decksÃ¢â‚¬Â¦")
+        self.status.setText("Loading your saved decks…")
 
         def prepare(cancel, report):
             rows, errors = self._deck_provider()
@@ -445,7 +486,7 @@ class PlayWorkspace(W.QWidget):
     def _randomize(self):
         if not self.randomize.isEnabled():
             return
-        self.opponents.start(
+        started = self.opponents.start(
             tuple(item.document for item in self._decks),
             self.format.currentData(),
             self.selectors[1].currentData(),
@@ -453,6 +494,63 @@ class PlayWorkspace(W.QWidget):
                 oracle_id
             ),
         )
+
+        if started:
+            self._show_loading(
+                "opponent",
+                "Finding an eligible opponent deck",
+                "Starting offline XMage. This can take a few minutes...",
+            )
+
+    def _show_loading(self, purpose, title, detail):
+        self._loading_purpose = purpose
+        self._loading_started = time.monotonic()
+        self.loading_title.setText(title)
+        self.loading_detail.setText(detail)
+        self.loading_cancel.setEnabled(True)
+        self.pages.setCurrentWidget(self.loading_page)
+        self.loading_timer.start()
+        self._loading_tick()
+        self._selection_changed()
+
+    def _loading_tick(self):
+        if self.pages.currentWidget() is not self.loading_page:
+            self.loading_timer.stop()
+            return
+        elapsed = int(time.monotonic() - self._loading_started)
+        self.loading_elapsed.setText(
+            f"Elapsed: {elapsed // 60}:{elapsed % 60:02d}. Keep this window open while preparation finishes."
+        )
+
+    def _cancel_loading(self):
+        self.loading_cancel.setEnabled(False)
+        self.loading_detail.setText(
+            "Cancelling preparation and waiting for runtime cleanup..."
+        )
+        if self._loading_purpose == "opponent":
+            self.opponents.cancel()
+        else:
+            self.session.stop()
+
+    def _engine_loading_idle(self):
+        if (
+            self.pages.currentWidget() is self.loading_page
+            and self._loading_purpose == "match"
+        ):
+            self.loading_cancel.setEnabled(
+                self.session.active and not self.session.closing
+            )
+
+    def _opponent_loading_changed(self):
+        if (
+            hasattr(self, "loading_page")
+            and self._loading_purpose == "opponent"
+            and self.pages.currentWidget() is self.loading_page
+            and not self.opponents.jobs.busy
+        ):
+            self.loading_timer.stop()
+            self.pages.setCurrentWidget(self.setup_page)
+            self._selection_changed()
 
     @C.pyqtSlot(int)
     def _randomized(self, index):
@@ -550,6 +648,29 @@ class PlayWorkspace(W.QWidget):
                         + "\nIsolated match copy; the shared deck is not edited."
                     )
         self._deck_images()
+        reasons = []
+        if preparing:
+            reasons.append("Preparation is running. Wait for completion or cancel it.")
+        elif self.session.busy:
+            reasons.append("Finishing match preparation or runtime cleanup...")
+        elif self.catalog_jobs.busy:
+            reasons.append("Loading and checking saved decks...")
+        else:
+            for seat, check in zip(self.lobby.seats, selected_checks):
+                if check is None:
+                    reasons.append(seat.player.name + ": choose a deck.")
+                elif not check.can_start:
+                    reasons.append(seat.player.name + ": " + " ".join(check.messages))
+        if self.opponents.cleanup_pending:
+            reasons = [
+                "Runtime cleanup is unconfirmed. Use Retry preparation cleanup before starting."
+            ]
+        self.start_reason.setText(
+            "\n".join(reasons)
+            if reasons
+            else "Both decks selected. Ready to prepare your match."
+        )
+        self.start_button.setToolTip(self.start_reason.text())
         self.start_button.setEnabled(
             self._format_confirmed
             and self.pages.currentWidget() is self.setup_page
@@ -573,6 +694,8 @@ class PlayWorkspace(W.QWidget):
         self.deck_artwork.stopping = True
         self.deck_artwork.pending.clear()
         self.deck_artwork.next_timer.stop()
+        self.asset_progress.setRange(0, 0)
+        self.asset_progress.show()
         self.asset_heading.setText("Preparing local artwork")
         self.asset_missing.setPlainText(
             "Checking cached printing images and preparing battlefield artwork. No downloads are requested."
@@ -596,6 +719,8 @@ class PlayWorkspace(W.QWidget):
     @C.pyqtSlot(str, object)
     def _assets_progress(self, job, value):
         if isinstance(value, dict) and value.get("stage") == "match_artwork":
+            self.asset_progress.setRange(0, max(1, value["total"]))
+            self.asset_progress.setValue(value["current"])
             self.status.setText(
                 f"Preparing local artwork: {value['current']} of {value['total']}"
             )
@@ -643,6 +768,7 @@ class PlayWorkspace(W.QWidget):
             return
         _, assets = self._prepared_match
         if assets.missing:
+            self.asset_progress.hide()
             self.asset_heading.setText("Some artwork is unavailable locally")
             self.asset_missing.setPlainText(
                 "These cards will use placeholders. Gameplay still works offline.\n\n"
@@ -688,7 +814,11 @@ class PlayWorkspace(W.QWidget):
             ),
         ):
             self._enter_focused_view()
-            self.pages.setCurrentWidget(self.game_page)
+            self._show_loading(
+                "match",
+                "Starting your match",
+                "Starting offline XMage and preparing the opening hand...",
+            )
             self.start_button.setEnabled(False)
         else:
             self._return_from_assets()
@@ -770,8 +900,13 @@ class PlayWorkspace(W.QWidget):
     @C.pyqtSlot(str)
     def _status(self, message):
         self.status.setText(message)
+        if self.pages.currentWidget() is self.loading_page:
+            self.loading_detail.setText(message)
         if not self.session.active and not self.session.closing:
-            if self.pages.currentWidget() is self.game_page:
+            if self.pages.currentWidget() is self.game_page or (
+                self.pages.currentWidget() is self.loading_page
+                and self._loading_purpose == "match"
+            ):
                 self._leave_focused_view()
                 self.pages.setCurrentWidget(self.setup_page)
             self._selection_changed()
@@ -779,7 +914,7 @@ class PlayWorkspace(W.QWidget):
     @C.pyqtSlot()
     def _clear_view(self):
         self._view = None
-        self.game_heading.setText("Waiting for your tableÃ¢â‚¬Â¦")
+        self.game_heading.setText("Waiting for your table…")
         self.table.clear()
         self.concede_button.setEnabled(False)
 
@@ -793,6 +928,12 @@ class PlayWorkspace(W.QWidget):
     def _show_snapshot(self, view):
         if view.viewer_id != self.lobby.local_seat_id:
             return
+        if (
+            self.pages.currentWidget() is self.loading_page
+            and self._loading_purpose == "match"
+        ):
+            self.loading_timer.stop()
+            self.pages.setCurrentWidget(self.game_page)
         self._view = view
         self.game_heading.setText(view.result or "You versus Opponent")
         self.table.present(view)
@@ -840,6 +981,7 @@ class PlayWorkspace(W.QWidget):
 
     @C.pyqtSlot()
     def _stopped(self):
+        self.loading_timer.stop()
         self._leave_focused_view()
         self.deck_artwork.stopping = False
         self.pages.setCurrentWidget(self.setup_page)

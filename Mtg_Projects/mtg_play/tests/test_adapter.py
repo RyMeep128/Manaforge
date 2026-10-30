@@ -792,3 +792,33 @@ def test_engine_deck_validation_rejects_unavailable_or_active_runtime(
     owner._session = session
     with pytest.raises(AdapterError, match=code):
         owner.validate_deck(object(), format)
+
+
+def test_precon_display_commander_is_not_submitted_or_resolved_as_a_playable_card():
+    from mtg_play.decks import deck_document_issues
+
+    document = DeckDocument(
+        deck=Deck(
+            entries=[
+                DeckEntry("land", "Forest", 60),
+                DeckEntry(
+                    "oversized",
+                    "Display card",
+                    section="display_commander",
+                    do_not_print=True,
+                ),
+            ]
+        )
+    )
+    before = deepcopy(document.to_dict())
+    queries_seen = []
+
+    def resolver(queries):
+        queries_seen.extend(queries)
+        return resolve(queries)
+
+    assert not deck_document_issues(document)
+    prepared = prepare_deck(document, resolver)
+    assert [query["key"] for query in queries_seen] == ["land"]
+    assert len(prepared.cards) == 1 and not prepared.sideboard
+    assert document.to_dict() == before

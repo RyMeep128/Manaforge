@@ -44,7 +44,8 @@ def prepare_assets(documents, service, *, cancel, report):
         entry
         for document in documents
         for entry in document.deck.entries
-        if entry.section not in {"considering", "excluded"} and entry.quantity > 0
+        if entry.section not in {"considering", "excluded", "display_commander"}
+        and entry.quantity > 0
     ]
     for index, entry in enumerate(entries):
         if cancel.is_set():
