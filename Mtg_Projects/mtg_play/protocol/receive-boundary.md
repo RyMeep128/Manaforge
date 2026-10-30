@@ -108,3 +108,13 @@ validator; its equal-revision support is unchanged. The wrapper adds a proposed
 nondecreasing-revision emission contract, to be proven against real adapter
 behavior. Same-revision event order, loss detection, resynchronization and real
 privacy filtering are not established by this history.
+
+
+### Choice option identity follow-up
+
+Java/C# now also reject empty or duplicate ChoiceRequest option IDs before data
+admission. The shared receive corpus is eight positive/26 negative cases. These
+are identity/context checks rather than new schema fields or engine legality.
+The [client owner](client-session-channel.md) retains only current option IDs and
+finish/cancel flags for admission; renderer projection and real privacy filtering
+remain separate requirements.

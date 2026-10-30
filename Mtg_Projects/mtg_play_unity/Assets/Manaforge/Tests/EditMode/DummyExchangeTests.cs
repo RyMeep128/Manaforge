@@ -25,11 +25,11 @@ namespace Manaforge.Play.Tests
             public TcpClient Client;
             public LoopbackFrameReader Reader;
             private bool disposed;
-            public Peer(string directory,bool sessionError=false,bool partialFrame=false,bool clientPartialFrame=false,bool blockedClient=false)
+            public Peer(string directory,bool sessionError=false,bool partialFrame=false,bool clientPartialFrame=false,bool blockedClient=false,string choiceOperation=null)
             {
                 Assert.That(File.Exists(Path.Combine(directory,"manaforge/protocol/DummyGateway.class")),Is.True,"Run the Java dummy fixture preparation first");
                 string jar=Path.Combine(directory,"gson.jar"),fixture=Path.Combine(directory,"dummy-session-v1.json");
-                var start=new ProcessStartInfo("java", "-cp \""+directory+Path.PathSeparator+jar+"\" manaforge.protocol.DummyGateway \""+fixture+"\""+(blockedClient?" blocked-client":clientPartialFrame?" client-partial-frame":partialFrame?" partial-frame":sessionError?" session-error":""))
+                var start=new ProcessStartInfo("java", "-cp \""+directory+Path.PathSeparator+jar+"\" manaforge.protocol.DummyGateway \""+fixture+"\""+(choiceOperation!=null?" choice":blockedClient?" blocked-client":clientPartialFrame?" client-partial-frame":partialFrame?" partial-frame":sessionError?" session-error":""))
                 { UseShellExecute=false,CreateNoWindow=true,WindowStyle=ProcessWindowStyle.Hidden,
                   RedirectStandardInput=true,RedirectStandardOutput=true,RedirectStandardError=true };
                 Process=new Process { StartInfo=start };
@@ -118,7 +118,26 @@ namespace Manaforge.Play.Tests
             Assert.That(channel.CanSubmit,Is.False);Assert.That(peer.Reader.IsClosed,Is.True);
             Assert.That(peer.Process.WaitForExit(5000),Is.True);Assert.That(peer.Process.ExitCode,Is.Zero);
         }
-        private static void Exchange(Peer peer,bool wrongKey,bool ownerEof,bool conflictingDuplicate,bool sessionError,bool partialFrame,bool clientPartialFrame,bool blockedClient,bool coordinated)
+        private static void CoordinatedChoice(Peer peer,string operation)
+        {
+            using var channel=new ClientSessionChannel(peer.Reader,"fixture-session","one",true);
+            Assert.That(channel.ReceiveNext(5000).Type,Is.EqualTo("snapshot"));Assert.That(channel.ReceiveNext(5000).Applied,Is.False);
+            channel.ReceiveNext(5000);Assert.That(channel.TryTake(out var first),Is.True);
+            JObject snapshot;using(first)snapshot=(JObject)WireEnvelope.Parse(first.ReadJson())["body"]["snapshot"];
+            Assert.That(channel.TryTake(out var e),Is.True);e.Dispose();Assert.That(channel.CanSubmit,Is.True);
+            var body=new JObject{["session_id"]="fixture-session",["viewer_id"]="one",["revision"]=snapshot["revision"],
+                ["decision_id"]=snapshot["decision"]["decision_id"],["operation"]=operation};
+            if(operation=="choose")body["option_id"]=snapshot["decision"]["options"][0]["option_id"];
+            channel.Submit(Message("command","choice-submit",body).ToString());
+            Assert.That(channel.ReceiveNext(5000).Receipt.State,Is.EqualTo(CommandState.Submitted));
+            Assert.That(channel.ReceiveNext(5000).Receipt.State,Is.EqualTo(CommandState.Confirmed),"Explicit fixture confirmation only");
+            Assert.That(channel.ReceiveNext(5000).Type,Is.EqualTo("result"));Assert.That(channel.CanSubmit,Is.False);
+            channel.RequestShutdown("client_close");channel.ReceiveNext(5000);
+            Assert.That(channel.TryTake(out var result),Is.True);using(result)Assert.That((bool)WireEnvelope.Parse(result.ReadJson())["body"]["fixture_only"],Is.True);
+            Assert.That(channel.Pending,Is.Null);Assert.That(channel.Completion.Result.Graceful,Is.True);
+            Assert.That(peer.Process.WaitForExit(5000),Is.True);Assert.That(peer.Process.ExitCode,Is.Zero);
+        }
+        private static void Exchange(Peer peer,bool wrongKey,bool ownerEof,bool conflictingDuplicate,bool sessionError,bool partialFrame,bool clientPartialFrame,bool blockedClient,bool coordinated,string choiceOperation)
         {
             byte[] key=RandomBytes();
             try
@@ -168,6 +187,7 @@ namespace Manaforge.Play.Tests
                         peer.Process.StandardInput.Close();
                         Assert.That(peer.Process.WaitForExit(5000),Is.True);Assert.That(peer.Process.ExitCode,Is.Zero);return;
                     }
+                    if(choiceOperation!=null){CoordinatedChoice(peer,choiceOperation);return;}
                     if(coordinated){Coordinated(peer,sessionError);return;}
                     using var inbox=new ReceiveInbox("fixture-session","one",true);
                     var incoming=Read(peer.Reader,inbox:inbox);Assert.That((string)incoming["message_type"],Is.EqualTo("snapshot"));
@@ -228,12 +248,12 @@ namespace Manaforge.Play.Tests
             }
             finally { Array.Clear(key,0,key.Length); }
         }
-        private static IEnumerator Run(bool wrongKey,bool ownerEof,bool conflictingDuplicate=false,bool sessionError=false,bool partialFrame=false,bool clientPartialFrame=false,bool blockedClient=false,bool coordinated=false)
+        private static IEnumerator Run(bool wrongKey,bool ownerEof,bool conflictingDuplicate=false,bool sessionError=false,bool partialFrame=false,bool clientPartialFrame=false,bool blockedClient=false,bool coordinated=false,string choiceOperation=null)
         {
             string directory=Path.GetFullPath(Path.Combine(Application.dataPath,"../Artifacts/JavaDummy"));
-            using(var peer=new Peer(directory,sessionError,partialFrame,clientPartialFrame,blockedClient))
+            using(var peer=new Peer(directory,sessionError,partialFrame,clientPartialFrame,blockedClient,choiceOperation))
             {
-                var task=Task.Run(()=>Exchange(peer,wrongKey,ownerEof,conflictingDuplicate,sessionError,partialFrame,clientPartialFrame,blockedClient,coordinated));var timer=Stopwatch.StartNew();
+                var task=Task.Run(()=>Exchange(peer,wrongKey,ownerEof,conflictingDuplicate,sessionError,partialFrame,clientPartialFrame,blockedClient,coordinated,choiceOperation));var timer=Stopwatch.StartNew();
                 try
                 {
                     while(!task.IsCompleted && timer.Elapsed.TotalSeconds<25)yield return null;
@@ -250,6 +270,9 @@ namespace Manaforge.Play.Tests
         [UnityTest] public IEnumerator JavaPeerExchangesAuthenticatedFixtureAndRejectsStaleAndPendingActions()=>Run(false,false);
         [UnityTest] public IEnumerator WrongViewerKeyReceivesNoSessionData()=>Run(true,false);
         [UnityTest] public IEnumerator OwnerPipeEofStopsTheOwnedListener()=>Run(false,true);
+        [UnityTest] public IEnumerator CoordinatedOpaqueOptionUsesFixtureReceipts()=>Run(false,false,choiceOperation:"choose");
+        [UnityTest] public IEnumerator CoordinatedFinishUsesExplicitFixtureFlag()=>Run(false,false,choiceOperation:"finish_selection");
+        [UnityTest] public IEnumerator CoordinatedCancelUsesExplicitFixtureFlag()=>Run(false,false,choiceOperation:"cancel");
         [UnityTest] public IEnumerator CoordinatedSessionOwnsAdmissionShutdownAndFinalPacketDrain()=>Run(false,false,coordinated:true);
         [UnityTest] public IEnumerator CoordinatedSessionErrorRevokesQueuedDataAndPreservesUncertainty()=>Run(false,false,sessionError:true,coordinated:true);
         [UnityTest] public IEnumerator JavaWriteDeadlineStopsAnAuthenticatedNonReadingClient()=>Run(false,false,false,false,false,false,true);

@@ -203,3 +203,14 @@ ACK/result and matched shutdown with final packet drain, plus a terminal error
 that closes the socket, revokes queued data and retains command uncertainty.
 The existing eight lower-level cases remain. All ten process scenarios pass
 within 151 focused local EditMode checks; no actual XMage action is introduced.
+
+
+### Opaque choices and explicit controls
+
+A test-only choice mode now supplies a public synthetic selection request with
+one option and explicit finish/cancel flags. Three new authenticated C# owner cases
+submit choose/finish_selection/cancel. The Java fixture checks context/fixture
+permissions, emits submitted then explicitly simulated confirmed receipts, and
+sends its existing fixture-only result before matched shutdown. It starts no
+engine and makes no natural-game or actual choice-parity claim. All thirteen
+process scenarios pass within 164 focused local EditMode checks.

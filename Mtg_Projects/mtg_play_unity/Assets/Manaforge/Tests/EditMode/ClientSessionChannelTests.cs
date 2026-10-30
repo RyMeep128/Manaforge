@@ -125,10 +125,59 @@ namespace Manaforge.Play.Tests
             p.Send(Snapshot("s2",8));p.Channel.ReceiveNext(1000);Assert.That(p.Channel.CanSubmit,Is.True);
             p.Channel.Submit(Command(revision:8).ToString());Assert.That((long)WireMessages.Parse(TextFrame.Read(p.Peer.GetStream()))["body"]["revision"],Is.EqualTo(8));
         }
-        [Test] public void ChoiceFamiliesRemainExplicitlyUnsupportedByThisCoordinatorSlice()
+        [Test] public void NumericFamiliesRemainExplicitlyUnsupportedByThisCoordinatorSlice()
         {
-            using var p=new Pair();p.Prime();var choice=Command();choice["body"]["operation"]="choose";((JObject)choice["body"]).Remove("action_id");choice["body"]["option_id"]="option";
+            using var p=new Pair();p.Prime();var choice=Command();choice["body"]["operation"]="choose_number";((JObject)choice["body"]).Remove("action_id");choice["body"]["value"]=1;
             Assert.That(Assert.Throws<WireEnvelope.EnvelopeException>(()=>p.Channel.Submit(choice.ToString())).Code,Is.EqualTo("SESSION_COMMAND_UNSUPPORTED"));Assert.That(p.Channel.CanSubmit,Is.True);
+        }
+        private static JObject ChoiceSnapshot(string id="s1",long revision=7,string option="offered",bool controls=true)
+        {
+            var snapshot=Snapshot(id,revision);snapshot["body"]["snapshot"]["actions"]=new JArray();
+            var request=snapshot["body"]["snapshot"]["decision"];request["family"]="selection";request["is_priority"]=false;
+            request["can_finish"]=controls;request["cancellable"]=controls;
+            request["options"]=option==null?new JArray():new JArray(new JObject{["option_id"]=option,["label"]="Public fixture",["object_id"]=JValue.CreateNull(),["player_id"]=JValue.CreateNull(),["selected"]=false});
+            return snapshot;
+        }
+        private static JObject Choice(string operation,string option="offered",long revision=7)
+        {
+            var command=Command(revision:revision);var body=(JObject)command["body"];body.Remove("action_id");body["operation"]=operation;
+            if(operation=="choose")body["option_id"]=option;return command;
+        }
+        [TestCase("choose")] [TestCase("finish_selection")] [TestCase("cancel")]
+        public void OfferedChoicesAndFlagsUseTheSameReceiptAndUncertaintyPath(string operation)
+        {
+            using var p=new Pair();p.Send(ChoiceSnapshot());p.Channel.ReceiveNext(1000);Assert.That(p.Channel.CanSubmit,Is.True);
+            p.Channel.Submit(Choice(operation).ToString());Assert.That((string)WireMessages.Parse(TextFrame.Read(p.Peer.GetStream()))["body"]["operation"],Is.EqualTo(operation));
+            p.Send(Ack());Assert.That(p.Channel.ReceiveNext(1000).Receipt.State,Is.EqualTo(CommandState.Submitted));
+            p.Peer.Client.Shutdown(SocketShutdown.Send);p.Channel.ReceiveNext(1000);Stopped(p,"SESSION_EOF");
+        }
+        [TestCase("choose","OPTION_UNAVAILABLE")] [TestCase("finish_selection","SELECTION_NOT_FINISHABLE")] [TestCase("cancel","CANCELLATION_UNSUPPORTED")]
+        public void UnofferedOptionOrControlNeverWritesOrPoisonsAHealthySession(string operation,string code)
+        {
+            using var p=new Pair();p.Send(ChoiceSnapshot(controls:false));p.Channel.ReceiveNext(1000);
+            Assert.That(Assert.Throws<WireEnvelope.EnvelopeException>(()=>p.Channel.Submit(Choice(operation,"not-offered").ToString())).Code,Is.EqualTo(code));
+            Assert.That(p.Channel.Pending,Is.Null);Assert.That(p.Channel.CanSubmit,Is.True);
+            p.Channel.Submit(Choice("choose").ToString());Assert.That((string)WireMessages.Parse(TextFrame.Read(p.Peer.GetStream()))["body"]["option_id"],Is.EqualTo("offered"));
+        }
+        [TestCase("finish_selection")] [TestCase("cancel")]
+        public void ExplicitControlsDoNotRequireAnActionOrOptionList(string operation)
+        {
+            using var p=new Pair();p.Send(ChoiceSnapshot(option:null));p.Channel.ReceiveNext(1000);Assert.That(p.Channel.CanSubmit,Is.True);
+            p.Channel.Submit(Choice(operation).ToString());Assert.That((string)WireMessages.Parse(TextFrame.Read(p.Peer.GetStream()))["body"]["operation"],Is.EqualTo(operation));
+        }
+        [Test] public void NewSnapshotReplacesOptionIdsAndFlagsWithoutKeepingOldPermissions()
+        {
+            using var p=new Pair();p.Send(ChoiceSnapshot());p.Channel.ReceiveNext(1000);
+            p.Send(ChoiceSnapshot("s2",8,"new-option",false));p.Channel.ReceiveNext(1000);
+            Assert.That(Assert.Throws<WireEnvelope.EnvelopeException>(()=>p.Channel.Submit(Choice("choose",revision:8).ToString())).Code,Is.EqualTo("OPTION_UNAVAILABLE"));
+            Assert.That(Assert.Throws<WireEnvelope.EnvelopeException>(()=>p.Channel.Submit(Choice("finish_selection",revision:8).ToString())).Code,Is.EqualTo("SELECTION_NOT_FINISHABLE"));
+            Assert.That(Assert.Throws<WireEnvelope.EnvelopeException>(()=>p.Channel.Submit(Choice("cancel",revision:8).ToString())).Code,Is.EqualTo("CANCELLATION_UNSUPPORTED"));
+        }
+        [Test] public void HigherRevisionEventRevokesChoiceAndControlPermissions()
+        {
+            using var p=new Pair();p.Send(ChoiceSnapshot());p.Channel.ReceiveNext(1000);
+            var e=(JObject)Corpus()["cases"][0]["steps"][2]["envelope"].DeepClone();e["body"]["event"]["revision"]=8;p.Send(e);p.Channel.ReceiveNext(1000);
+            Assert.That(p.Channel.CanSubmit,Is.False);Assert.That(Assert.Throws<WireEnvelope.EnvelopeException>(()=>p.Channel.Submit(Choice("cancel").ToString())).Code,Is.EqualTo("SESSION_NO_DECISION"));
         }
         [TestCase("finished")] [TestCase("unknown")] [TestCase("empty-decision")]
         public void SnapshotsWithoutActiveDecisionsDoNotEnableProvidedActionTokens(string status)

@@ -78,3 +78,23 @@ bootstrap/lifecycle, gateway deduplication and authoritative reconciliation,
 choice dispatch/engine parity, immutable viewer scene projection, transport
 queue/cancellation handling and licensed Unity CI. G0/G1 remain open; the bulk
 P2 engine migration has not started.
+
+
+## Client opaque-option/control admission follow-up
+
+The [client session owner](client-session-channel.md) now admits choose using only
+the current engine-provided option ID, and finish_selection/cancel only when their
+current flags permit them. Viewer/session/revision/decision binding and receipt
+uncertainty remain the same as perform. Labels, prompts and card facts do not grant
+permission. New snapshots replace IDs/flags; higher-revision events revoke them.
+
+This mirrors the existing Python opaque-choice and explicit-control boundary,
+without porting XMage execution. Numeric/amount/mana-source operations remain
+explicitly unsupported in this owner slice. Local lifecycle Cancel() is separate
+from Submit(operation=cancel); neither concedes the game.
+
+Three authenticated Java-dummy cases simulate choice/finish/cancel with submitted
+and explicitly simulated confirmed receipts. Twenty-eight owner checks, thirteen
+process scenarios, Java corpora and eight schema checks pass within 164 focused
+local EditMode checks. Duplicate/empty option IDs now fail RECEIVE_CONTEXT in both
+readers. No actual engine choice behavior or G1 completion is claimed.

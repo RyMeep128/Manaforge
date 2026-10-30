@@ -49,6 +49,14 @@ public final class DummyGateway {
             ViewerAuthentication.parse(clientHello.toString());
             JsonObject snapshot=JsonParser.parseString(new String(Files.readAllBytes(Paths.get(args[0])),StandardCharsets.UTF_8)).getAsJsonObject().getAsJsonObject("snapshot");
             require(session.equals(snapshot.get("session_id").getAsString()) && viewer.equals(snapshot.get("viewer_id").getAsString()));
+            boolean choiceMode=args.length==2 && args[1].equals("choice");
+            if(choiceMode) {
+                snapshot.add("actions",new JsonArray());JsonObject request=snapshot.getAsJsonObject("decision");
+                request.addProperty("family","selection");request.addProperty("is_priority",false);request.addProperty("can_finish",true);request.addProperty("cancellable",true);
+                JsonObject option=new JsonObject();option.addProperty("option_id","fixture-option");option.addProperty("label","Public fixture option");
+                option.add("object_id",JsonNull.INSTANCE);option.add("player_id",JsonNull.INSTANCE);option.addProperty("selected",false);
+                JsonArray options=new JsonArray();options.add(option);request.add("options",options);
+            }
             listener.bind(new InetSocketAddress(InetAddress.getByName("127.0.0.1"),0),1); listener.setSoTimeout(8000);
             Thread lifeline=new Thread(()->{ try { owner.read(); } catch(IOException ignored){} ownerGone.set(true);
                 try { listener.close(); } catch(IOException ignored){}
@@ -96,11 +104,26 @@ public final class DummyGateway {
                         send(frames,envelope("shutdown","shutdown-ok",request)); return;
                     }
                     require(type.equals("command"));
-                    String rejection=WireMessages.checkCurrent(text,session,viewer,revision,decision,actions);
+                    String rejection;
+                    if(choiceMode) {
+                        rejection=WireMessages.checkBinding(text,session,viewer,revision,decision);
+                        if(rejection==null) {
+                            String operation=request.get("operation").getAsString();
+                            boolean allowed=operation.equals("choose") && request.get("option_id").getAsString().equals("fixture-option")
+                                || operation.equals("finish_selection") && snapshot.getAsJsonObject("decision").get("can_finish").getAsBoolean()
+                                || operation.equals("cancel") && snapshot.getAsJsonObject("decision").get("cancellable").getAsBoolean();
+                            if(!allowed)rejection="ACTION_UNAVAILABLE";
+                        }
+                    } else rejection=WireMessages.checkCurrent(text,session,viewer,revision,decision,actions);
                     SubmissionLedger.Prepared prepared=ledger.prepare(text,rejection);
                     JsonObject acknowledgement=prepared.receipt();acknowledgement.addProperty("message_id","ack-"+count);
                     send(frames,acknowledgement);
                     if(prepared.shouldSubmit) {
+                        if(choiceMode) {
+                            // Explicitly simulated fixture confirmation, never an engine-backed claim.
+                            JsonObject confirmed=ledger.recordOutcome(message.get("message_id").getAsString(),"confirmed",null);
+                            confirmed.addProperty("message_id","fixture-confirmed");send(frames,confirmed);
+                        }
                         if(args.length==2 && args[1].equals("session-error")) {
                             JsonObject failed=new JsonObject();failed.addProperty("session_id",session);failed.addProperty("viewer_id",viewer);
                             failed.addProperty("terminal",true);failed.addProperty("code","SESSION_FAILED");

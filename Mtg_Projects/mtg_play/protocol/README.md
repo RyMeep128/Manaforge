@@ -399,3 +399,14 @@ stops all owned components on failure and preserves uncertain receipts. Matched
 shutdown permits final packet draining. Two new authenticated process scenarios
 and 18 focused checks bring local EditMode validation to 151. Choice dispatch,
 product lifecycle, renderer projection and licensed CI remain open; G1 is not frozen.
+
+
+## Opaque option and finish/cancel admission
+
+The [client owner](client-session-channel.md) now supports choose, finish_selection
+and cancel alongside perform. It uses exact current option IDs/explicit flags,
+revokes old permissions and preserves correlated receipt/uncertainty handling.
+Java/C# reject ambiguous empty/duplicate option identities. Three authenticated
+fixture cases and ten new owner checks bring local EditMode validation to 164;
+eight schema checks and all Java corpora pass. Numeric/mana dispatch, real-engine
+parity, renderer integration and licensed CI remain open.

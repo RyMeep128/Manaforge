@@ -31,6 +31,8 @@ namespace Manaforge.Play.Protocol
         private readonly CommandTracker commands;
         private readonly string session,viewer;
         private readonly HashSet<string> actions=new HashSet<string>(StringComparer.Ordinal);
+        private readonly HashSet<string> options=new HashSet<string>(StringComparer.Ordinal);
+        private bool canFinish,cancellable;
         private readonly TaskCompletionSource<ClientChannelStop> completion=new TaskCompletionSource<ClientChannelStop>(TaskCreationOptions.RunContinuationsAsynchronously);
         private ClientChannelState state;
         private string decision,shutdownReason;
@@ -48,20 +50,21 @@ namespace Manaforge.Play.Protocol
         public TrackedCommand Pending {get{lock(gate)return commands.Current;}}
         public int QueuedCount {get{lock(gate)return inbox.Count;}}
         public bool CanSubmit {get{lock(gate)return state==ClientChannelState.Active && !transport.IsClosed && !resultSeen
-            && !shutdownRequested && !string.IsNullOrEmpty(decision) && actions.Count>0 && commands.CanSubmit;}}
+            && !shutdownRequested && !string.IsNullOrEmpty(decision) && (actions.Count>0 || options.Count>0 || canFinish || cancellable) && commands.CanSubmit;}}
         private static void Fail(string code)=>throw new WireEnvelope.EnvelopeException(code);
         private void Open()
         {
             if(state!=ClientChannelState.Active)Fail("SESSION_STOPPED");
             if(transport.IsClosed){Stop("SESSION_TRANSPORT_CLOSED");Fail("SESSION_STOPPED");}
         }
+        private void ClearDecision(){decision=null;actions.Clear();options.Clear();canFinish=false;cancellable=false;}
         // Called under gate. Blocking socket IO never runs under gate; closing releases siblings.
         private void Stop(string code,bool graceful=false)
         {
             if(state==ClientChannelState.Disposed || state==ClientChannelState.Stopped)return;
             if(state==ClientChannelState.Completed && graceful)return;
             state=graceful?ClientChannelState.Completed:ClientChannelState.Stopped;
-            actions.Clear();decision=null;commands.Disconnect();
+            ClearDecision();commands.Disconnect();
             if(graceful)inbox.FinishInput();else inbox.Cancel();
             transport.Dispose();completion.TrySetResult(new ClientChannelStop(graceful,code));
         }
@@ -73,10 +76,16 @@ namespace Manaforge.Play.Protocol
             {
                 Open();if(resultSeen)Fail("SESSION_RESULT");if(shutdownRequested)Fail("SESSION_SHUTDOWN_PENDING");
                 var envelope=WireMessages.Parse(text);
-                if((string)envelope["message_type"]!="command" || (string)envelope["body"]["operation"]!="perform")Fail("SESSION_COMMAND_UNSUPPORTED");
+                if((string)envelope["message_type"]!="command")Fail("SESSION_COMMAND_UNSUPPORTED");
+                var body=envelope["body"];string operation=(string)body["operation"];
+                if(operation!="perform" && operation!="choose" && operation!="finish_selection" && operation!="cancel")Fail("SESSION_COMMAND_UNSUPPORTED");
                 if(string.IsNullOrEmpty(decision))Fail("SESSION_NO_DECISION");
-                string rejection=WireMessages.CheckCurrent(text,session,viewer,revision,decision,actions);
+                string rejection=operation=="perform"?WireMessages.CheckCurrent(text,session,viewer,revision,decision,actions)
+                    :WireMessages.CheckBinding(text,session,viewer,revision,decision);
                 if(rejection!=null)Fail(rejection);
+                if(operation=="choose" && !options.Contains((string)body["option_id"]))Fail("OPTION_UNAVAILABLE");
+                if(operation=="finish_selection" && !canFinish)Fail("SELECTION_NOT_FINISHABLE");
+                if(operation=="cancel" && !cancellable)Fail("CANCELLATION_UNSUPPORTED");
                 receipt=commands.Begin(text); // reservation is atomic with admission, before first write
             }
             try{transport.Write(text,milliseconds,cancellation);return receipt;}
@@ -101,13 +110,17 @@ namespace Manaforge.Play.Protocol
                             var body=envelope["body"];
                             if(type=="event") {
                                 long incoming=(long)body["event"]["revision"];
-                                if(incoming>revision){revision=incoming;decision=null;actions.Clear();}
+                                if(incoming>revision){revision=incoming;ClearDecision();}
                             } else {
                                 var snapshot=body["snapshot"];revision=(long)snapshot["revision"];
-                                decision=snapshot["decision"].Type==JTokenType.Null?null:(string)snapshot["decision"]["decision_id"];
-                                actions.Clear();foreach(var action in snapshot["actions"])actions.Add((string)action["action_id"]);
-                                if((string)snapshot["status"]!="active"){decision=null;actions.Clear();}
-                                if(type=="result"){resultSeen=true;decision=null;actions.Clear();}
+                                ClearDecision();var request=snapshot["decision"];
+                                if(request.Type!=JTokenType.Null) {
+                                    decision=(string)request["decision_id"];canFinish=(bool)request["can_finish"];cancellable=(bool)request["cancellable"];
+                                    foreach(var option in request["options"])options.Add((string)option["option_id"]);
+                                }
+                                foreach(var action in snapshot["actions"])actions.Add((string)action["action_id"]);
+                                if((string)snapshot["status"]!="active")ClearDecision();
+                                if(type=="result"){resultSeen=true;ClearDecision();}
                             }
                         }
                         return new ClientReceive(type,applied);

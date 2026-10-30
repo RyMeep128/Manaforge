@@ -96,6 +96,7 @@ public final class ReceiveMessages {
             if(type.equals("result") && (!snapshot.get("status").getAsString().equals("finished") || !string(snapshot.get("result")) || snapshot.get("result").getAsString().isEmpty()))fail("RECEIVE_SHAPE");
             if(!unique(snapshot.getAsJsonArray("players"),"player_id") || !unique(snapshot.getAsJsonArray("objects"),"object_id") || !unique(snapshot.getAsJsonArray("actions"),"action_id"))fail("RECEIVE_CONTEXT");
             if(!snapshot.get("decision").isJsonNull() && !snapshot.getAsJsonObject("decision").get("player_id").getAsString().equals(viewer))fail("RECEIVE_VIEWER");
+            if(!snapshot.get("decision").isJsonNull() && !unique(snapshot.getAsJsonObject("decision").getAsJsonArray("options"),"option_id"))fail("RECEIVE_CONTEXT");
         }
         if(!receivedSession.equals(session))fail("RECEIVE_SESSION");
         if(!receivedViewer.equals(viewer))fail("RECEIVE_VIEWER");

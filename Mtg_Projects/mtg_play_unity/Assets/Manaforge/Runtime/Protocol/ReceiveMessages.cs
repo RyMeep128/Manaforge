@@ -91,6 +91,7 @@ namespace Manaforge.Play.Protocol
                 if(!Unique((JArray)snapshot["players"],"player_id") || !Unique((JArray)snapshot["objects"],"object_id")
                     || !Unique((JArray)snapshot["actions"],"action_id"))Fail("RECEIVE_CONTEXT");
                 if(snapshot["decision"].Type!=JTokenType.Null && (string)snapshot["decision"]["player_id"]!=viewer)Fail("RECEIVE_VIEWER");
+                if(snapshot["decision"].Type!=JTokenType.Null && !Unique((JArray)snapshot["decision"]["options"],"option_id"))Fail("RECEIVE_CONTEXT");
             }
             if(receivedSession!=session)Fail("RECEIVE_SESSION");
             if(receivedViewer!=viewer)Fail("RECEIVE_VIEWER");

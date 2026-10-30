@@ -2995,6 +2995,255 @@
       "minimum_revision": 0,
       "fixture_mode": false,
       "code": "RECEIVE_MODE"
+    },
+    {
+      "name": "duplicate-option-id",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "snapshot",
+        "message_id": "receive",
+        "body": {
+          "fixture_only": true,
+          "snapshot": {
+            "session_id": "fixture-0001",
+            "viewer_id": "one",
+            "revision": 1,
+            "status": "active",
+            "turn": 1,
+            "phase": null,
+            "step": null,
+            "active_player_id": "one",
+            "priority_player_id": "one",
+            "players": [
+              {
+                "player_id": "one",
+                "name": "One",
+                "life": 0,
+                "hand_count": 1,
+                "library_count": 0,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              },
+              {
+                "player_id": "two",
+                "name": "Two",
+                "life": 20,
+                "hand_count": 7,
+                "library_count": 53,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              }
+            ],
+            "objects": [
+              {
+                "object_id": "fixture-0002",
+                "zone": "hand",
+                "owner_id": "one",
+                "controller_id": "one",
+                "hidden": false,
+                "characteristics": {
+                  "name": "Synthetic Fixture Card",
+                  "power": "1",
+                  "toughness": "1",
+                  "type_line": "Artifact Creature",
+                  "color": null,
+                  "engine_view_text": null,
+                  "loyalty": null,
+                  "defense": null,
+                  "transformed": null,
+                  "counters": null,
+                  "is_copy": null,
+                  "flipped": null,
+                  "current_abilities": null,
+                  "unsupported_fields": [
+                    "current_rules_text",
+                    "ability_identities",
+                    "color_identity",
+                    "copy_provenance_history",
+                    "merged_components"
+                  ]
+                },
+                "card_identity": null,
+                "tapped": null,
+                "damage": null,
+                "attacking_available": null,
+                "blocking_available": null,
+                "face_down": null,
+                "attachments": null,
+                "attached_to": null,
+                "commander_id": null,
+                "copy_source_id": null
+              }
+            ],
+            "actions": [],
+            "decision": {
+              "decision_id": "decision",
+              "player_id": "one",
+              "family": "selection",
+              "prompt": "Public fixture",
+              "options": [
+                {
+                  "option_id": "option",
+                  "label": "Public fixture",
+                  "object_id": null,
+                  "player_id": null,
+                  "selected": false
+                },
+                {
+                  "option_id": "option",
+                  "label": "Public fixture",
+                  "object_id": null,
+                  "player_id": null,
+                  "selected": false
+                }
+              ],
+              "minimum": null,
+              "maximum": null,
+              "cancellable": false,
+              "amounts": [],
+              "can_finish": false,
+              "is_priority": false
+            },
+            "combat": [],
+            "protocol_version": 1,
+            "result": null,
+            "commanders": null,
+            "observations": [],
+            "unsupported_fields": [],
+            "actions_complete": false
+          }
+        }
+      },
+      "session": "fixture-0001",
+      "viewer": "one",
+      "minimum_revision": 0,
+      "fixture_mode": true,
+      "code": "RECEIVE_CONTEXT"
+    },
+    {
+      "name": "empty-option-id",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "snapshot",
+        "message_id": "receive",
+        "body": {
+          "fixture_only": true,
+          "snapshot": {
+            "session_id": "fixture-0001",
+            "viewer_id": "one",
+            "revision": 1,
+            "status": "active",
+            "turn": 1,
+            "phase": null,
+            "step": null,
+            "active_player_id": "one",
+            "priority_player_id": "one",
+            "players": [
+              {
+                "player_id": "one",
+                "name": "One",
+                "life": 0,
+                "hand_count": 1,
+                "library_count": 0,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              },
+              {
+                "player_id": "two",
+                "name": "Two",
+                "life": 20,
+                "hand_count": 7,
+                "library_count": 53,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              }
+            ],
+            "objects": [
+              {
+                "object_id": "fixture-0002",
+                "zone": "hand",
+                "owner_id": "one",
+                "controller_id": "one",
+                "hidden": false,
+                "characteristics": {
+                  "name": "Synthetic Fixture Card",
+                  "power": "1",
+                  "toughness": "1",
+                  "type_line": "Artifact Creature",
+                  "color": null,
+                  "engine_view_text": null,
+                  "loyalty": null,
+                  "defense": null,
+                  "transformed": null,
+                  "counters": null,
+                  "is_copy": null,
+                  "flipped": null,
+                  "current_abilities": null,
+                  "unsupported_fields": [
+                    "current_rules_text",
+                    "ability_identities",
+                    "color_identity",
+                    "copy_provenance_history",
+                    "merged_components"
+                  ]
+                },
+                "card_identity": null,
+                "tapped": null,
+                "damage": null,
+                "attacking_available": null,
+                "blocking_available": null,
+                "face_down": null,
+                "attachments": null,
+                "attached_to": null,
+                "commander_id": null,
+                "copy_source_id": null
+              }
+            ],
+            "actions": [],
+            "decision": {
+              "decision_id": "decision",
+              "player_id": "one",
+              "family": "selection",
+              "prompt": "Public fixture",
+              "options": [
+                {
+                  "option_id": "",
+                  "label": "Public fixture",
+                  "object_id": null,
+                  "player_id": null,
+                  "selected": false
+                }
+              ],
+              "minimum": null,
+              "maximum": null,
+              "cancellable": false,
+              "amounts": [],
+              "can_finish": false,
+              "is_priority": false
+            },
+            "combat": [],
+            "protocol_version": 1,
+            "result": null,
+            "commanders": null,
+            "observations": [],
+            "unsupported_fields": [],
+            "actions_complete": false
+          }
+        }
+      },
+      "session": "fixture-0001",
+      "viewer": "one",
+      "minimum_revision": 0,
+      "fixture_mode": true,
+      "code": "RECEIVE_CONTEXT"
     }
   ]
 }

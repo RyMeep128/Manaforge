@@ -500,3 +500,14 @@ drain. Two authenticated process scenarios and 18 new focused checks pass within
 151 local EditMode checks. Choice dispatch, complete session budgets, Java owner,
 renderer projection, product containment and licensed CI remain open; G1 is not
 frozen and the bulk P2 engine port has not started.
+
+
+### G1 opaque choices and explicit controls — October 30, 2026
+
+The [client owner](../Mtg_Projects/mtg_play/protocol/client-session-channel.md) now
+admits offered option IDs plus explicitly permitted finish/cancel commands using
+current viewer/revision/decision tokens. No prompt/card inference or automatic
+choice occurs. Java/C# reject duplicate/empty option IDs. Three authenticated
+choice fixtures, ten new owner checks, Java corpora and eight schema checks pass
+within 164 local EditMode checks. Numeric/mana dispatch, actual engine choice
+parity, product lifecycle and licensed CI remain open; G1 is not frozen.
