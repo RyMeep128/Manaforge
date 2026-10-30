@@ -323,3 +323,15 @@ owned Java↔Unity dummy scenario proves submitted ACK → session error → EOF
 a result. Six positive/23 negative corpus cases, 80 focused EditMode checks and
 seven schema checks pass locally. This does not prove actual engine failures,
 production cleanup, licensed CI or G1 completion.
+
+
+## Bounded receive history
+
+[Receive history](receive-history.md) adds matching Java/C# admission for an
+ordered authenticated viewer stream: duplicate IDs with identical content are
+dropped, conflicting IDs/rollback/full history fail closed, and results terminate
+new data. IDs/digests are bounded and raw private messages are not retained.
+Ten shared sequences plus mutation/concurrency/disposal checks pass; the real
+Java-dummy exchange now drops a repeated snapshot. Local evidence is 86 focused
+EditMode and eight schema checks. Missing-event detection, rejoin/recovery and
+immutable renderer projections remain pending; no G1 completion is claimed.

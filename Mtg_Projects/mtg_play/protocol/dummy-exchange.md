@@ -131,3 +131,12 @@ uncertain, rejects reconnect and verifies EOF plus owned child exit. It receives
 no result in this mode. See [session errors](../../../docs/play-session-errors.md)
 for schema/safe-code requirements. Five owned-process scenarios now pass locally;
 this remains a fixture, not proof of a real engine failure or product cleanup.
+
+
+### Receive history follow-up
+
+The peer deliberately repeats the initial snapshot. Authenticated C# clients now
+use [ReceiveHistory](receive-history.md) to drop the duplicate, then admit the
+same-revision event and later result. This exercises receive idempotency through
+the actual pipe/bootstrap/loopback path without adding a second game model.
+All five existing process scenarios continue to pass locally.

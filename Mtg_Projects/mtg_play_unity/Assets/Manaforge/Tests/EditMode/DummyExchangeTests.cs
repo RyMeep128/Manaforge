@@ -62,7 +62,8 @@ namespace Manaforge.Play.Tests
             ["server_nonce"]=ready["server_nonce"],["role"]=role,["proof"]=new string('0',64)
         });
         private static void Send(Stream stream,JObject message) { TextFrame.Write(stream,message.ToString(Formatting.None));stream.Flush(); }
-        private static JObject Read(Stream stream,long minimumRevision=0)=>ReceiveMessages.Parse(TextFrame.Read(stream),"fixture-session","one",minimumRevision,true);
+        private static JObject Read(Stream stream,long minimumRevision=0,ReceiveHistory history=null)
+            =>history==null?ReceiveMessages.Parse(TextFrame.Read(stream),"fixture-session","one",minimumRevision,true):history.Accept(TextFrame.Read(stream));
         private static JObject Command(string id,long revision,string decision,string action)=>Message("command",id,new JObject
         { ["session_id"]="fixture-session",["viewer_id"]="one",["revision"]=revision,["operation"]="perform",["decision_id"]=decision,["action_id"]=action });
         private static void SendTracked(Stream stream,JObject command,CommandTracker tracker)
@@ -115,7 +116,8 @@ namespace Manaforge.Play.Tests
                     }
                     using(var verifier=new ViewerAuthentication.Verifier(Hello(boot,ready,"gateway").ToString(),key))
                         Assert.That(verifier.Verify(TextFrame.Read(stream)),Is.True,"Gateway proof failed");
-                    var incoming=Read(stream);Assert.That((string)incoming["message_type"],Is.EqualTo("snapshot"));
+                    using var history=new ReceiveHistory("fixture-session","one",true);
+                    var incoming=Read(stream,history:history);Assert.That((string)incoming["message_type"],Is.EqualTo("snapshot"));
                     var body=(JObject)incoming["body"];Assert.That(body.Count,Is.EqualTo(2));Assert.That((bool)body["fixture_only"],Is.True);
                     var snapshot=JsonConvert.DeserializeObject<GameSnapshot>(body["snapshot"].ToString(),new JsonSerializerSettings
                     { TypeNameHandling=TypeNameHandling.None,MissingMemberHandling=MissingMemberHandling.Error,DateParseHandling=DateParseHandling.None });
@@ -123,7 +125,8 @@ namespace Manaforge.Play.Tests
                     foreach(var obj in snapshot.objects.Where(o=>o.hidden || o.face_down == true))
                     { Assert.That(obj.card_identity,Is.Null);Assert.That(obj.characteristics,Is.Null); }
                     Assert.That(snapshot.objects.Any(o=>o.hidden),Is.True,"Fixture must exercise concealment");
-                    var eventMessage=Read(stream,snapshot.revision);Assert.That((string)eventMessage["message_type"],Is.EqualTo("event"));
+                    Assert.That(Read(stream,history:history),Is.Null,"Repeated snapshot must not be applied twice");
+                    var eventMessage=Read(stream,snapshot.revision,history);Assert.That((string)eventMessage["message_type"],Is.EqualTo("event"));
                     Assert.That((string)eventMessage["body"]["event"]["player_id"],Is.EqualTo("two"),"Actor is not the authenticated recipient");
                     string decision=snapshot.decision.decision_id,action=snapshot.actions.Single().action_id;
                     using var tracker=new CommandTracker(snapshot.session_id,snapshot.viewer_id);
@@ -139,7 +142,7 @@ namespace Manaforge.Play.Tests
                         Assert.That(TextFrame.Read(stream),Is.Null,"Terminal session failure must close the channel");
                         Assert.That(peer.Process.WaitForExit(5000),Is.True);Assert.That(peer.Process.ExitCode,Is.Zero);return;
                     }
-                    var result=Read(stream,snapshot.revision);Assert.That((string)result["message_type"],Is.EqualTo("result"));
+                    var result=Read(stream,snapshot.revision,history);Assert.That((string)result["message_type"],Is.EqualTo("result"));
                     Assert.That((bool)result["body"]["fixture_only"],Is.True);Assert.That((string)result["body"]["snapshot"]["result"],Is.EqualTo("fixture_complete"));
                     Assert.That((string)result["body"]["snapshot"]["status"],Is.EqualTo("finished"));
                     Assert.That((string)result["body"]["snapshot"]["session_id"],Is.EqualTo(snapshot.session_id));Assert.That((string)result["body"]["snapshot"]["viewer_id"],Is.EqualTo(snapshot.viewer_id));

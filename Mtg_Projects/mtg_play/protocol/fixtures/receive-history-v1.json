@@ -1,0 +1,2308 @@
+{
+  "cases": [
+    {
+      "name": "semantic-duplicate",
+      "capacity": 4096,
+      "fixture_mode": true,
+      "steps": [
+        {
+          "envelope": {
+            "wire_version": 1,
+            "message_type": "snapshot",
+            "message_id": "s1",
+            "body": {
+              "fixture_only": true,
+              "snapshot": {
+                "session_id": "fixture-session",
+                "viewer_id": "one",
+                "revision": 7,
+                "status": "active",
+                "turn": 1,
+                "phase": null,
+                "step": null,
+                "active_player_id": "one",
+                "priority_player_id": "one",
+                "players": [
+                  {
+                    "player_id": "one",
+                    "name": "One",
+                    "life": 0,
+                    "hand_count": 1,
+                    "library_count": 0,
+                    "eliminated": null,
+                    "left_game": null,
+                    "mana": null,
+                    "counters": null
+                  },
+                  {
+                    "player_id": "two",
+                    "name": "Two",
+                    "life": 20,
+                    "hand_count": 7,
+                    "library_count": 53,
+                    "eliminated": null,
+                    "left_game": null,
+                    "mana": null,
+                    "counters": null
+                  }
+                ],
+                "objects": [
+                  {
+                    "object_id": "fixture-0002",
+                    "zone": "hand",
+                    "owner_id": "one",
+                    "controller_id": "one",
+                    "hidden": true,
+                    "characteristics": null,
+                    "card_identity": null,
+                    "tapped": null,
+                    "damage": null,
+                    "attacking_available": null,
+                    "blocking_available": null,
+                    "face_down": null,
+                    "attachments": null,
+                    "attached_to": null,
+                    "commander_id": null,
+                    "copy_source_id": null
+                  }
+                ],
+                "actions": [
+                  {
+                    "action_id": "fixture-action",
+                    "kind": "fixture-only",
+                    "object_id": null,
+                    "label": "Synthetic transport action",
+                    "priority_class": "unknown"
+                  }
+                ],
+                "decision": {
+                  "decision_id": "fixture-decision",
+                  "player_id": "one",
+                  "family": "priority",
+                  "prompt": "Fixture only; no engine connected",
+                  "options": [],
+                  "minimum": null,
+                  "maximum": null,
+                  "cancellable": false,
+                  "amounts": [],
+                  "can_finish": false,
+                  "is_priority": true
+                },
+                "combat": [],
+                "protocol_version": 1,
+                "result": null,
+                "commanders": null,
+                "observations": [],
+                "unsupported_fields": [],
+                "actions_complete": false
+              }
+            }
+          },
+          "outcome": "applied"
+        },
+        {
+          "envelope": {
+            "body": {
+              "snapshot": {
+                "actions_complete": false,
+                "unsupported_fields": [],
+                "observations": [],
+                "commanders": null,
+                "result": null,
+                "protocol_version": 1,
+                "combat": [],
+                "decision": {
+                  "is_priority": true,
+                  "can_finish": false,
+                  "amounts": [],
+                  "cancellable": false,
+                  "maximum": null,
+                  "minimum": null,
+                  "options": [],
+                  "prompt": "Fixture only; no engine connected",
+                  "family": "priority",
+                  "player_id": "one",
+                  "decision_id": "fixture-decision"
+                },
+                "actions": [
+                  {
+                    "priority_class": "unknown",
+                    "label": "Synthetic transport action",
+                    "object_id": null,
+                    "kind": "fixture-only",
+                    "action_id": "fixture-action"
+                  }
+                ],
+                "objects": [
+                  {
+                    "copy_source_id": null,
+                    "commander_id": null,
+                    "attached_to": null,
+                    "attachments": null,
+                    "face_down": null,
+                    "blocking_available": null,
+                    "attacking_available": null,
+                    "damage": null,
+                    "tapped": null,
+                    "card_identity": null,
+                    "characteristics": null,
+                    "hidden": true,
+                    "controller_id": "one",
+                    "owner_id": "one",
+                    "zone": "hand",
+                    "object_id": "fixture-0002"
+                  }
+                ],
+                "players": [
+                  {
+                    "counters": null,
+                    "mana": null,
+                    "left_game": null,
+                    "eliminated": null,
+                    "library_count": 0,
+                    "hand_count": 1,
+                    "life": 0,
+                    "name": "One",
+                    "player_id": "one"
+                  },
+                  {
+                    "counters": null,
+                    "mana": null,
+                    "left_game": null,
+                    "eliminated": null,
+                    "library_count": 53,
+                    "hand_count": 7,
+                    "life": 20,
+                    "name": "Two",
+                    "player_id": "two"
+                  }
+                ],
+                "priority_player_id": "one",
+                "active_player_id": "one",
+                "step": null,
+                "phase": null,
+                "turn": 1,
+                "status": "active",
+                "revision": 7,
+                "viewer_id": "one",
+                "session_id": "fixture-session"
+              },
+              "fixture_only": true
+            },
+            "message_id": "s1",
+            "message_type": "snapshot",
+            "wire_version": 1
+          },
+          "outcome": "duplicate"
+        },
+        {
+          "envelope": {
+            "wire_version": 1,
+            "message_type": "event",
+            "message_id": "e1",
+            "body": {
+              "fixture_only": true,
+              "session_id": "fixture-session",
+              "viewer_id": "one",
+              "event": {
+                "kind": "fixture",
+                "player_id": "two",
+                "revision": 7,
+                "code": null,
+                "observations": []
+              }
+            }
+          },
+          "outcome": "applied"
+        }
+      ]
+    },
+    {
+      "name": "changed-id-faults",
+      "capacity": 4096,
+      "fixture_mode": true,
+      "steps": [
+        {
+          "envelope": {
+            "wire_version": 1,
+            "message_type": "snapshot",
+            "message_id": "s1",
+            "body": {
+              "fixture_only": true,
+              "snapshot": {
+                "session_id": "fixture-session",
+                "viewer_id": "one",
+                "revision": 7,
+                "status": "active",
+                "turn": 1,
+                "phase": null,
+                "step": null,
+                "active_player_id": "one",
+                "priority_player_id": "one",
+                "players": [
+                  {
+                    "player_id": "one",
+                    "name": "One",
+                    "life": 0,
+                    "hand_count": 1,
+                    "library_count": 0,
+                    "eliminated": null,
+                    "left_game": null,
+                    "mana": null,
+                    "counters": null
+                  },
+                  {
+                    "player_id": "two",
+                    "name": "Two",
+                    "life": 20,
+                    "hand_count": 7,
+                    "library_count": 53,
+                    "eliminated": null,
+                    "left_game": null,
+                    "mana": null,
+                    "counters": null
+                  }
+                ],
+                "objects": [
+                  {
+                    "object_id": "fixture-0002",
+                    "zone": "hand",
+                    "owner_id": "one",
+                    "controller_id": "one",
+                    "hidden": true,
+                    "characteristics": null,
+                    "card_identity": null,
+                    "tapped": null,
+                    "damage": null,
+                    "attacking_available": null,
+                    "blocking_available": null,
+                    "face_down": null,
+                    "attachments": null,
+                    "attached_to": null,
+                    "commander_id": null,
+                    "copy_source_id": null
+                  }
+                ],
+                "actions": [
+                  {
+                    "action_id": "fixture-action",
+                    "kind": "fixture-only",
+                    "object_id": null,
+                    "label": "Synthetic transport action",
+                    "priority_class": "unknown"
+                  }
+                ],
+                "decision": {
+                  "decision_id": "fixture-decision",
+                  "player_id": "one",
+                  "family": "priority",
+                  "prompt": "Fixture only; no engine connected",
+                  "options": [],
+                  "minimum": null,
+                  "maximum": null,
+                  "cancellable": false,
+                  "amounts": [],
+                  "can_finish": false,
+                  "is_priority": true
+                },
+                "combat": [],
+                "protocol_version": 1,
+                "result": null,
+                "commanders": null,
+                "observations": [],
+                "unsupported_fields": [],
+                "actions_complete": false
+              }
+            }
+          },
+          "outcome": "applied"
+        },
+        {
+          "envelope": {
+            "wire_version": 1,
+            "message_type": "snapshot",
+            "message_id": "s1",
+            "body": {
+              "fixture_only": true,
+              "snapshot": {
+                "session_id": "fixture-session",
+                "viewer_id": "one",
+                "revision": 7,
+                "status": "active",
+                "turn": 2,
+                "phase": null,
+                "step": null,
+                "active_player_id": "one",
+                "priority_player_id": "one",
+                "players": [
+                  {
+                    "player_id": "one",
+                    "name": "One",
+                    "life": 0,
+                    "hand_count": 1,
+                    "library_count": 0,
+                    "eliminated": null,
+                    "left_game": null,
+                    "mana": null,
+                    "counters": null
+                  },
+                  {
+                    "player_id": "two",
+                    "name": "Two",
+                    "life": 20,
+                    "hand_count": 7,
+                    "library_count": 53,
+                    "eliminated": null,
+                    "left_game": null,
+                    "mana": null,
+                    "counters": null
+                  }
+                ],
+                "objects": [
+                  {
+                    "object_id": "fixture-0002",
+                    "zone": "hand",
+                    "owner_id": "one",
+                    "controller_id": "one",
+                    "hidden": true,
+                    "characteristics": null,
+                    "card_identity": null,
+                    "tapped": null,
+                    "damage": null,
+                    "attacking_available": null,
+                    "blocking_available": null,
+                    "face_down": null,
+                    "attachments": null,
+                    "attached_to": null,
+                    "commander_id": null,
+                    "copy_source_id": null
+                  }
+                ],
+                "actions": [
+                  {
+                    "action_id": "fixture-action",
+                    "kind": "fixture-only",
+                    "object_id": null,
+                    "label": "Synthetic transport action",
+                    "priority_class": "unknown"
+                  }
+                ],
+                "decision": {
+                  "decision_id": "fixture-decision",
+                  "player_id": "one",
+                  "family": "priority",
+                  "prompt": "Fixture only; no engine connected",
+                  "options": [],
+                  "minimum": null,
+                  "maximum": null,
+                  "cancellable": false,
+                  "amounts": [],
+                  "can_finish": false,
+                  "is_priority": true
+                },
+                "combat": [],
+                "protocol_version": 1,
+                "result": null,
+                "commanders": null,
+                "observations": [],
+                "unsupported_fields": [],
+                "actions_complete": false
+              }
+            }
+          },
+          "outcome": "HISTORY_ID_CONFLICT"
+        },
+        {
+          "envelope": {
+            "wire_version": 1,
+            "message_type": "event",
+            "message_id": "e1",
+            "body": {
+              "fixture_only": true,
+              "session_id": "fixture-session",
+              "viewer_id": "one",
+              "event": {
+                "kind": "fixture",
+                "player_id": "two",
+                "revision": 7,
+                "code": null,
+                "observations": []
+              }
+            }
+          },
+          "outcome": "HISTORY_FAULTED"
+        }
+      ]
+    },
+    {
+      "name": "revision-rollback",
+      "capacity": 4096,
+      "fixture_mode": true,
+      "steps": [
+        {
+          "envelope": {
+            "wire_version": 1,
+            "message_type": "snapshot",
+            "message_id": "s1",
+            "body": {
+              "fixture_only": true,
+              "snapshot": {
+                "session_id": "fixture-session",
+                "viewer_id": "one",
+                "revision": 8,
+                "status": "active",
+                "turn": 1,
+                "phase": null,
+                "step": null,
+                "active_player_id": "one",
+                "priority_player_id": "one",
+                "players": [
+                  {
+                    "player_id": "one",
+                    "name": "One",
+                    "life": 0,
+                    "hand_count": 1,
+                    "library_count": 0,
+                    "eliminated": null,
+                    "left_game": null,
+                    "mana": null,
+                    "counters": null
+                  },
+                  {
+                    "player_id": "two",
+                    "name": "Two",
+                    "life": 20,
+                    "hand_count": 7,
+                    "library_count": 53,
+                    "eliminated": null,
+                    "left_game": null,
+                    "mana": null,
+                    "counters": null
+                  }
+                ],
+                "objects": [
+                  {
+                    "object_id": "fixture-0002",
+                    "zone": "hand",
+                    "owner_id": "one",
+                    "controller_id": "one",
+                    "hidden": true,
+                    "characteristics": null,
+                    "card_identity": null,
+                    "tapped": null,
+                    "damage": null,
+                    "attacking_available": null,
+                    "blocking_available": null,
+                    "face_down": null,
+                    "attachments": null,
+                    "attached_to": null,
+                    "commander_id": null,
+                    "copy_source_id": null
+                  }
+                ],
+                "actions": [
+                  {
+                    "action_id": "fixture-action",
+                    "kind": "fixture-only",
+                    "object_id": null,
+                    "label": "Synthetic transport action",
+                    "priority_class": "unknown"
+                  }
+                ],
+                "decision": {
+                  "decision_id": "fixture-decision",
+                  "player_id": "one",
+                  "family": "priority",
+                  "prompt": "Fixture only; no engine connected",
+                  "options": [],
+                  "minimum": null,
+                  "maximum": null,
+                  "cancellable": false,
+                  "amounts": [],
+                  "can_finish": false,
+                  "is_priority": true
+                },
+                "combat": [],
+                "protocol_version": 1,
+                "result": null,
+                "commanders": null,
+                "observations": [],
+                "unsupported_fields": [],
+                "actions_complete": false
+              }
+            }
+          },
+          "outcome": "applied"
+        },
+        {
+          "envelope": {
+            "wire_version": 1,
+            "message_type": "event",
+            "message_id": "e1",
+            "body": {
+              "fixture_only": true,
+              "session_id": "fixture-session",
+              "viewer_id": "one",
+              "event": {
+                "kind": "fixture",
+                "player_id": "two",
+                "revision": 7,
+                "code": null,
+                "observations": []
+              }
+            }
+          },
+          "outcome": "RECEIVE_REVISION"
+        },
+        {
+          "envelope": {
+            "wire_version": 1,
+            "message_type": "event",
+            "message_id": "e1",
+            "body": {
+              "fixture_only": true,
+              "session_id": "fixture-session",
+              "viewer_id": "one",
+              "event": {
+                "kind": "fixture",
+                "player_id": "two",
+                "revision": 9,
+                "code": null,
+                "observations": []
+              }
+            }
+          },
+          "outcome": "HISTORY_FAULTED"
+        }
+      ]
+    },
+    {
+      "name": "shared-revision",
+      "capacity": 4096,
+      "fixture_mode": true,
+      "steps": [
+        {
+          "envelope": {
+            "wire_version": 1,
+            "message_type": "snapshot",
+            "message_id": "s1",
+            "body": {
+              "fixture_only": true,
+              "snapshot": {
+                "session_id": "fixture-session",
+                "viewer_id": "one",
+                "revision": 7,
+                "status": "active",
+                "turn": 1,
+                "phase": null,
+                "step": null,
+                "active_player_id": "one",
+                "priority_player_id": "one",
+                "players": [
+                  {
+                    "player_id": "one",
+                    "name": "One",
+                    "life": 0,
+                    "hand_count": 1,
+                    "library_count": 0,
+                    "eliminated": null,
+                    "left_game": null,
+                    "mana": null,
+                    "counters": null
+                  },
+                  {
+                    "player_id": "two",
+                    "name": "Two",
+                    "life": 20,
+                    "hand_count": 7,
+                    "library_count": 53,
+                    "eliminated": null,
+                    "left_game": null,
+                    "mana": null,
+                    "counters": null
+                  }
+                ],
+                "objects": [
+                  {
+                    "object_id": "fixture-0002",
+                    "zone": "hand",
+                    "owner_id": "one",
+                    "controller_id": "one",
+                    "hidden": true,
+                    "characteristics": null,
+                    "card_identity": null,
+                    "tapped": null,
+                    "damage": null,
+                    "attacking_available": null,
+                    "blocking_available": null,
+                    "face_down": null,
+                    "attachments": null,
+                    "attached_to": null,
+                    "commander_id": null,
+                    "copy_source_id": null
+                  }
+                ],
+                "actions": [
+                  {
+                    "action_id": "fixture-action",
+                    "kind": "fixture-only",
+                    "object_id": null,
+                    "label": "Synthetic transport action",
+                    "priority_class": "unknown"
+                  }
+                ],
+                "decision": {
+                  "decision_id": "fixture-decision",
+                  "player_id": "one",
+                  "family": "priority",
+                  "prompt": "Fixture only; no engine connected",
+                  "options": [],
+                  "minimum": null,
+                  "maximum": null,
+                  "cancellable": false,
+                  "amounts": [],
+                  "can_finish": false,
+                  "is_priority": true
+                },
+                "combat": [],
+                "protocol_version": 1,
+                "result": null,
+                "commanders": null,
+                "observations": [],
+                "unsupported_fields": [],
+                "actions_complete": false
+              }
+            }
+          },
+          "outcome": "applied"
+        },
+        {
+          "envelope": {
+            "wire_version": 1,
+            "message_type": "event",
+            "message_id": "e1",
+            "body": {
+              "fixture_only": true,
+              "session_id": "fixture-session",
+              "viewer_id": "one",
+              "event": {
+                "kind": "fixture",
+                "player_id": "two",
+                "revision": 7,
+                "code": null,
+                "observations": []
+              }
+            }
+          },
+          "outcome": "applied"
+        },
+        {
+          "envelope": {
+            "wire_version": 1,
+            "message_type": "event",
+            "message_id": "e2",
+            "body": {
+              "fixture_only": true,
+              "session_id": "fixture-session",
+              "viewer_id": "one",
+              "event": {
+                "kind": "fixture",
+                "player_id": "two",
+                "revision": 7,
+                "code": null,
+                "observations": []
+              }
+            }
+          },
+          "outcome": "applied"
+        }
+      ]
+    },
+    {
+      "name": "revision-gaps",
+      "capacity": 4096,
+      "fixture_mode": true,
+      "steps": [
+        {
+          "envelope": {
+            "wire_version": 1,
+            "message_type": "snapshot",
+            "message_id": "s1",
+            "body": {
+              "fixture_only": true,
+              "snapshot": {
+                "session_id": "fixture-session",
+                "viewer_id": "one",
+                "revision": 7,
+                "status": "active",
+                "turn": 1,
+                "phase": null,
+                "step": null,
+                "active_player_id": "one",
+                "priority_player_id": "one",
+                "players": [
+                  {
+                    "player_id": "one",
+                    "name": "One",
+                    "life": 0,
+                    "hand_count": 1,
+                    "library_count": 0,
+                    "eliminated": null,
+                    "left_game": null,
+                    "mana": null,
+                    "counters": null
+                  },
+                  {
+                    "player_id": "two",
+                    "name": "Two",
+                    "life": 20,
+                    "hand_count": 7,
+                    "library_count": 53,
+                    "eliminated": null,
+                    "left_game": null,
+                    "mana": null,
+                    "counters": null
+                  }
+                ],
+                "objects": [
+                  {
+                    "object_id": "fixture-0002",
+                    "zone": "hand",
+                    "owner_id": "one",
+                    "controller_id": "one",
+                    "hidden": true,
+                    "characteristics": null,
+                    "card_identity": null,
+                    "tapped": null,
+                    "damage": null,
+                    "attacking_available": null,
+                    "blocking_available": null,
+                    "face_down": null,
+                    "attachments": null,
+                    "attached_to": null,
+                    "commander_id": null,
+                    "copy_source_id": null
+                  }
+                ],
+                "actions": [
+                  {
+                    "action_id": "fixture-action",
+                    "kind": "fixture-only",
+                    "object_id": null,
+                    "label": "Synthetic transport action",
+                    "priority_class": "unknown"
+                  }
+                ],
+                "decision": {
+                  "decision_id": "fixture-decision",
+                  "player_id": "one",
+                  "family": "priority",
+                  "prompt": "Fixture only; no engine connected",
+                  "options": [],
+                  "minimum": null,
+                  "maximum": null,
+                  "cancellable": false,
+                  "amounts": [],
+                  "can_finish": false,
+                  "is_priority": true
+                },
+                "combat": [],
+                "protocol_version": 1,
+                "result": null,
+                "commanders": null,
+                "observations": [],
+                "unsupported_fields": [],
+                "actions_complete": false
+              }
+            }
+          },
+          "outcome": "applied"
+        },
+        {
+          "envelope": {
+            "wire_version": 1,
+            "message_type": "event",
+            "message_id": "e1",
+            "body": {
+              "fixture_only": true,
+              "session_id": "fixture-session",
+              "viewer_id": "one",
+              "event": {
+                "kind": "fixture",
+                "player_id": "two",
+                "revision": 10,
+                "code": null,
+                "observations": []
+              }
+            }
+          },
+          "outcome": "applied"
+        },
+        {
+          "envelope": {
+            "wire_version": 1,
+            "message_type": "snapshot",
+            "message_id": "s2",
+            "body": {
+              "fixture_only": true,
+              "snapshot": {
+                "session_id": "fixture-session",
+                "viewer_id": "one",
+                "revision": 10,
+                "status": "active",
+                "turn": 1,
+                "phase": null,
+                "step": null,
+                "active_player_id": "one",
+                "priority_player_id": "one",
+                "players": [
+                  {
+                    "player_id": "one",
+                    "name": "One",
+                    "life": 0,
+                    "hand_count": 1,
+                    "library_count": 0,
+                    "eliminated": null,
+                    "left_game": null,
+                    "mana": null,
+                    "counters": null
+                  },
+                  {
+                    "player_id": "two",
+                    "name": "Two",
+                    "life": 20,
+                    "hand_count": 7,
+                    "library_count": 53,
+                    "eliminated": null,
+                    "left_game": null,
+                    "mana": null,
+                    "counters": null
+                  }
+                ],
+                "objects": [
+                  {
+                    "object_id": "fixture-0002",
+                    "zone": "hand",
+                    "owner_id": "one",
+                    "controller_id": "one",
+                    "hidden": true,
+                    "characteristics": null,
+                    "card_identity": null,
+                    "tapped": null,
+                    "damage": null,
+                    "attacking_available": null,
+                    "blocking_available": null,
+                    "face_down": null,
+                    "attachments": null,
+                    "attached_to": null,
+                    "commander_id": null,
+                    "copy_source_id": null
+                  }
+                ],
+                "actions": [
+                  {
+                    "action_id": "fixture-action",
+                    "kind": "fixture-only",
+                    "object_id": null,
+                    "label": "Synthetic transport action",
+                    "priority_class": "unknown"
+                  }
+                ],
+                "decision": {
+                  "decision_id": "fixture-decision",
+                  "player_id": "one",
+                  "family": "priority",
+                  "prompt": "Fixture only; no engine connected",
+                  "options": [],
+                  "minimum": null,
+                  "maximum": null,
+                  "cancellable": false,
+                  "amounts": [],
+                  "can_finish": false,
+                  "is_priority": true
+                },
+                "combat": [],
+                "protocol_version": 1,
+                "result": null,
+                "commanders": null,
+                "observations": [],
+                "unsupported_fields": [],
+                "actions_complete": false
+              }
+            }
+          },
+          "outcome": "applied"
+        }
+      ]
+    },
+    {
+      "name": "capacity-never-evicts",
+      "capacity": 1,
+      "fixture_mode": true,
+      "steps": [
+        {
+          "envelope": {
+            "wire_version": 1,
+            "message_type": "snapshot",
+            "message_id": "s1",
+            "body": {
+              "fixture_only": true,
+              "snapshot": {
+                "session_id": "fixture-session",
+                "viewer_id": "one",
+                "revision": 7,
+                "status": "active",
+                "turn": 1,
+                "phase": null,
+                "step": null,
+                "active_player_id": "one",
+                "priority_player_id": "one",
+                "players": [
+                  {
+                    "player_id": "one",
+                    "name": "One",
+                    "life": 0,
+                    "hand_count": 1,
+                    "library_count": 0,
+                    "eliminated": null,
+                    "left_game": null,
+                    "mana": null,
+                    "counters": null
+                  },
+                  {
+                    "player_id": "two",
+                    "name": "Two",
+                    "life": 20,
+                    "hand_count": 7,
+                    "library_count": 53,
+                    "eliminated": null,
+                    "left_game": null,
+                    "mana": null,
+                    "counters": null
+                  }
+                ],
+                "objects": [
+                  {
+                    "object_id": "fixture-0002",
+                    "zone": "hand",
+                    "owner_id": "one",
+                    "controller_id": "one",
+                    "hidden": true,
+                    "characteristics": null,
+                    "card_identity": null,
+                    "tapped": null,
+                    "damage": null,
+                    "attacking_available": null,
+                    "blocking_available": null,
+                    "face_down": null,
+                    "attachments": null,
+                    "attached_to": null,
+                    "commander_id": null,
+                    "copy_source_id": null
+                  }
+                ],
+                "actions": [
+                  {
+                    "action_id": "fixture-action",
+                    "kind": "fixture-only",
+                    "object_id": null,
+                    "label": "Synthetic transport action",
+                    "priority_class": "unknown"
+                  }
+                ],
+                "decision": {
+                  "decision_id": "fixture-decision",
+                  "player_id": "one",
+                  "family": "priority",
+                  "prompt": "Fixture only; no engine connected",
+                  "options": [],
+                  "minimum": null,
+                  "maximum": null,
+                  "cancellable": false,
+                  "amounts": [],
+                  "can_finish": false,
+                  "is_priority": true
+                },
+                "combat": [],
+                "protocol_version": 1,
+                "result": null,
+                "commanders": null,
+                "observations": [],
+                "unsupported_fields": [],
+                "actions_complete": false
+              }
+            }
+          },
+          "outcome": "applied"
+        },
+        {
+          "envelope": {
+            "wire_version": 1,
+            "message_type": "snapshot",
+            "message_id": "s1",
+            "body": {
+              "fixture_only": true,
+              "snapshot": {
+                "session_id": "fixture-session",
+                "viewer_id": "one",
+                "revision": 7,
+                "status": "active",
+                "turn": 1,
+                "phase": null,
+                "step": null,
+                "active_player_id": "one",
+                "priority_player_id": "one",
+                "players": [
+                  {
+                    "player_id": "one",
+                    "name": "One",
+                    "life": 0,
+                    "hand_count": 1,
+                    "library_count": 0,
+                    "eliminated": null,
+                    "left_game": null,
+                    "mana": null,
+                    "counters": null
+                  },
+                  {
+                    "player_id": "two",
+                    "name": "Two",
+                    "life": 20,
+                    "hand_count": 7,
+                    "library_count": 53,
+                    "eliminated": null,
+                    "left_game": null,
+                    "mana": null,
+                    "counters": null
+                  }
+                ],
+                "objects": [
+                  {
+                    "object_id": "fixture-0002",
+                    "zone": "hand",
+                    "owner_id": "one",
+                    "controller_id": "one",
+                    "hidden": true,
+                    "characteristics": null,
+                    "card_identity": null,
+                    "tapped": null,
+                    "damage": null,
+                    "attacking_available": null,
+                    "blocking_available": null,
+                    "face_down": null,
+                    "attachments": null,
+                    "attached_to": null,
+                    "commander_id": null,
+                    "copy_source_id": null
+                  }
+                ],
+                "actions": [
+                  {
+                    "action_id": "fixture-action",
+                    "kind": "fixture-only",
+                    "object_id": null,
+                    "label": "Synthetic transport action",
+                    "priority_class": "unknown"
+                  }
+                ],
+                "decision": {
+                  "decision_id": "fixture-decision",
+                  "player_id": "one",
+                  "family": "priority",
+                  "prompt": "Fixture only; no engine connected",
+                  "options": [],
+                  "minimum": null,
+                  "maximum": null,
+                  "cancellable": false,
+                  "amounts": [],
+                  "can_finish": false,
+                  "is_priority": true
+                },
+                "combat": [],
+                "protocol_version": 1,
+                "result": null,
+                "commanders": null,
+                "observations": [],
+                "unsupported_fields": [],
+                "actions_complete": false
+              }
+            }
+          },
+          "outcome": "duplicate"
+        },
+        {
+          "envelope": {
+            "wire_version": 1,
+            "message_type": "event",
+            "message_id": "e1",
+            "body": {
+              "fixture_only": true,
+              "session_id": "fixture-session",
+              "viewer_id": "one",
+              "event": {
+                "kind": "fixture",
+                "player_id": "two",
+                "revision": 7,
+                "code": null,
+                "observations": []
+              }
+            }
+          },
+          "outcome": "HISTORY_FULL"
+        },
+        {
+          "envelope": {
+            "wire_version": 1,
+            "message_type": "snapshot",
+            "message_id": "s1",
+            "body": {
+              "fixture_only": true,
+              "snapshot": {
+                "session_id": "fixture-session",
+                "viewer_id": "one",
+                "revision": 7,
+                "status": "active",
+                "turn": 1,
+                "phase": null,
+                "step": null,
+                "active_player_id": "one",
+                "priority_player_id": "one",
+                "players": [
+                  {
+                    "player_id": "one",
+                    "name": "One",
+                    "life": 0,
+                    "hand_count": 1,
+                    "library_count": 0,
+                    "eliminated": null,
+                    "left_game": null,
+                    "mana": null,
+                    "counters": null
+                  },
+                  {
+                    "player_id": "two",
+                    "name": "Two",
+                    "life": 20,
+                    "hand_count": 7,
+                    "library_count": 53,
+                    "eliminated": null,
+                    "left_game": null,
+                    "mana": null,
+                    "counters": null
+                  }
+                ],
+                "objects": [
+                  {
+                    "object_id": "fixture-0002",
+                    "zone": "hand",
+                    "owner_id": "one",
+                    "controller_id": "one",
+                    "hidden": true,
+                    "characteristics": null,
+                    "card_identity": null,
+                    "tapped": null,
+                    "damage": null,
+                    "attacking_available": null,
+                    "blocking_available": null,
+                    "face_down": null,
+                    "attachments": null,
+                    "attached_to": null,
+                    "commander_id": null,
+                    "copy_source_id": null
+                  }
+                ],
+                "actions": [
+                  {
+                    "action_id": "fixture-action",
+                    "kind": "fixture-only",
+                    "object_id": null,
+                    "label": "Synthetic transport action",
+                    "priority_class": "unknown"
+                  }
+                ],
+                "decision": {
+                  "decision_id": "fixture-decision",
+                  "player_id": "one",
+                  "family": "priority",
+                  "prompt": "Fixture only; no engine connected",
+                  "options": [],
+                  "minimum": null,
+                  "maximum": null,
+                  "cancellable": false,
+                  "amounts": [],
+                  "can_finish": false,
+                  "is_priority": true
+                },
+                "combat": [],
+                "protocol_version": 1,
+                "result": null,
+                "commanders": null,
+                "observations": [],
+                "unsupported_fields": [],
+                "actions_complete": false
+              }
+            }
+          },
+          "outcome": "HISTORY_FAULTED"
+        }
+      ]
+    },
+    {
+      "name": "result-terminal",
+      "capacity": 4096,
+      "fixture_mode": true,
+      "steps": [
+        {
+          "envelope": {
+            "wire_version": 1,
+            "message_type": "snapshot",
+            "message_id": "s1",
+            "body": {
+              "fixture_only": true,
+              "snapshot": {
+                "session_id": "fixture-session",
+                "viewer_id": "one",
+                "revision": 7,
+                "status": "active",
+                "turn": 1,
+                "phase": null,
+                "step": null,
+                "active_player_id": "one",
+                "priority_player_id": "one",
+                "players": [
+                  {
+                    "player_id": "one",
+                    "name": "One",
+                    "life": 0,
+                    "hand_count": 1,
+                    "library_count": 0,
+                    "eliminated": null,
+                    "left_game": null,
+                    "mana": null,
+                    "counters": null
+                  },
+                  {
+                    "player_id": "two",
+                    "name": "Two",
+                    "life": 20,
+                    "hand_count": 7,
+                    "library_count": 53,
+                    "eliminated": null,
+                    "left_game": null,
+                    "mana": null,
+                    "counters": null
+                  }
+                ],
+                "objects": [
+                  {
+                    "object_id": "fixture-0002",
+                    "zone": "hand",
+                    "owner_id": "one",
+                    "controller_id": "one",
+                    "hidden": true,
+                    "characteristics": null,
+                    "card_identity": null,
+                    "tapped": null,
+                    "damage": null,
+                    "attacking_available": null,
+                    "blocking_available": null,
+                    "face_down": null,
+                    "attachments": null,
+                    "attached_to": null,
+                    "commander_id": null,
+                    "copy_source_id": null
+                  }
+                ],
+                "actions": [
+                  {
+                    "action_id": "fixture-action",
+                    "kind": "fixture-only",
+                    "object_id": null,
+                    "label": "Synthetic transport action",
+                    "priority_class": "unknown"
+                  }
+                ],
+                "decision": {
+                  "decision_id": "fixture-decision",
+                  "player_id": "one",
+                  "family": "priority",
+                  "prompt": "Fixture only; no engine connected",
+                  "options": [],
+                  "minimum": null,
+                  "maximum": null,
+                  "cancellable": false,
+                  "amounts": [],
+                  "can_finish": false,
+                  "is_priority": true
+                },
+                "combat": [],
+                "protocol_version": 1,
+                "result": null,
+                "commanders": null,
+                "observations": [],
+                "unsupported_fields": [],
+                "actions_complete": false
+              }
+            }
+          },
+          "outcome": "applied"
+        },
+        {
+          "envelope": {
+            "wire_version": 1,
+            "message_type": "result",
+            "message_id": "r1",
+            "body": {
+              "fixture_only": true,
+              "snapshot": {
+                "session_id": "fixture-session",
+                "viewer_id": "one",
+                "revision": 8,
+                "status": "finished",
+                "turn": 1,
+                "phase": null,
+                "step": null,
+                "active_player_id": "one",
+                "priority_player_id": "one",
+                "players": [
+                  {
+                    "player_id": "one",
+                    "name": "One",
+                    "life": 0,
+                    "hand_count": 1,
+                    "library_count": 0,
+                    "eliminated": null,
+                    "left_game": null,
+                    "mana": null,
+                    "counters": null
+                  },
+                  {
+                    "player_id": "two",
+                    "name": "Two",
+                    "life": 20,
+                    "hand_count": 7,
+                    "library_count": 53,
+                    "eliminated": null,
+                    "left_game": null,
+                    "mana": null,
+                    "counters": null
+                  }
+                ],
+                "objects": [
+                  {
+                    "object_id": "fixture-0002",
+                    "zone": "hand",
+                    "owner_id": "one",
+                    "controller_id": "one",
+                    "hidden": true,
+                    "characteristics": null,
+                    "card_identity": null,
+                    "tapped": null,
+                    "damage": null,
+                    "attacking_available": null,
+                    "blocking_available": null,
+                    "face_down": null,
+                    "attachments": null,
+                    "attached_to": null,
+                    "commander_id": null,
+                    "copy_source_id": null
+                  }
+                ],
+                "actions": [],
+                "decision": null,
+                "combat": [],
+                "protocol_version": 1,
+                "result": "fixture_complete",
+                "commanders": null,
+                "observations": [],
+                "unsupported_fields": [],
+                "actions_complete": false
+              }
+            }
+          },
+          "outcome": "applied"
+        },
+        {
+          "envelope": {
+            "wire_version": 1,
+            "message_type": "result",
+            "message_id": "r1",
+            "body": {
+              "fixture_only": true,
+              "snapshot": {
+                "session_id": "fixture-session",
+                "viewer_id": "one",
+                "revision": 8,
+                "status": "finished",
+                "turn": 1,
+                "phase": null,
+                "step": null,
+                "active_player_id": "one",
+                "priority_player_id": "one",
+                "players": [
+                  {
+                    "player_id": "one",
+                    "name": "One",
+                    "life": 0,
+                    "hand_count": 1,
+                    "library_count": 0,
+                    "eliminated": null,
+                    "left_game": null,
+                    "mana": null,
+                    "counters": null
+                  },
+                  {
+                    "player_id": "two",
+                    "name": "Two",
+                    "life": 20,
+                    "hand_count": 7,
+                    "library_count": 53,
+                    "eliminated": null,
+                    "left_game": null,
+                    "mana": null,
+                    "counters": null
+                  }
+                ],
+                "objects": [
+                  {
+                    "object_id": "fixture-0002",
+                    "zone": "hand",
+                    "owner_id": "one",
+                    "controller_id": "one",
+                    "hidden": true,
+                    "characteristics": null,
+                    "card_identity": null,
+                    "tapped": null,
+                    "damage": null,
+                    "attacking_available": null,
+                    "blocking_available": null,
+                    "face_down": null,
+                    "attachments": null,
+                    "attached_to": null,
+                    "commander_id": null,
+                    "copy_source_id": null
+                  }
+                ],
+                "actions": [],
+                "decision": null,
+                "combat": [],
+                "protocol_version": 1,
+                "result": "fixture_complete",
+                "commanders": null,
+                "observations": [],
+                "unsupported_fields": [],
+                "actions_complete": false
+              }
+            }
+          },
+          "outcome": "duplicate"
+        },
+        {
+          "envelope": {
+            "wire_version": 1,
+            "message_type": "snapshot",
+            "message_id": "s1",
+            "body": {
+              "fixture_only": true,
+              "snapshot": {
+                "session_id": "fixture-session",
+                "viewer_id": "one",
+                "revision": 7,
+                "status": "active",
+                "turn": 1,
+                "phase": null,
+                "step": null,
+                "active_player_id": "one",
+                "priority_player_id": "one",
+                "players": [
+                  {
+                    "player_id": "one",
+                    "name": "One",
+                    "life": 0,
+                    "hand_count": 1,
+                    "library_count": 0,
+                    "eliminated": null,
+                    "left_game": null,
+                    "mana": null,
+                    "counters": null
+                  },
+                  {
+                    "player_id": "two",
+                    "name": "Two",
+                    "life": 20,
+                    "hand_count": 7,
+                    "library_count": 53,
+                    "eliminated": null,
+                    "left_game": null,
+                    "mana": null,
+                    "counters": null
+                  }
+                ],
+                "objects": [
+                  {
+                    "object_id": "fixture-0002",
+                    "zone": "hand",
+                    "owner_id": "one",
+                    "controller_id": "one",
+                    "hidden": true,
+                    "characteristics": null,
+                    "card_identity": null,
+                    "tapped": null,
+                    "damage": null,
+                    "attacking_available": null,
+                    "blocking_available": null,
+                    "face_down": null,
+                    "attachments": null,
+                    "attached_to": null,
+                    "commander_id": null,
+                    "copy_source_id": null
+                  }
+                ],
+                "actions": [
+                  {
+                    "action_id": "fixture-action",
+                    "kind": "fixture-only",
+                    "object_id": null,
+                    "label": "Synthetic transport action",
+                    "priority_class": "unknown"
+                  }
+                ],
+                "decision": {
+                  "decision_id": "fixture-decision",
+                  "player_id": "one",
+                  "family": "priority",
+                  "prompt": "Fixture only; no engine connected",
+                  "options": [],
+                  "minimum": null,
+                  "maximum": null,
+                  "cancellable": false,
+                  "amounts": [],
+                  "can_finish": false,
+                  "is_priority": true
+                },
+                "combat": [],
+                "protocol_version": 1,
+                "result": null,
+                "commanders": null,
+                "observations": [],
+                "unsupported_fields": [],
+                "actions_complete": false
+              }
+            }
+          },
+          "outcome": "duplicate"
+        },
+        {
+          "envelope": {
+            "wire_version": 1,
+            "message_type": "event",
+            "message_id": "e1",
+            "body": {
+              "fixture_only": true,
+              "session_id": "fixture-session",
+              "viewer_id": "one",
+              "event": {
+                "kind": "fixture",
+                "player_id": "two",
+                "revision": 8,
+                "code": null,
+                "observations": []
+              }
+            }
+          },
+          "outcome": "HISTORY_TERMINAL"
+        }
+      ]
+    },
+    {
+      "name": "concealed-identity",
+      "capacity": 4096,
+      "fixture_mode": true,
+      "steps": [
+        {
+          "envelope": {
+            "wire_version": 1,
+            "message_type": "snapshot",
+            "message_id": "s1",
+            "body": {
+              "fixture_only": true,
+              "snapshot": {
+                "session_id": "fixture-session",
+                "viewer_id": "one",
+                "revision": 7,
+                "status": "active",
+                "turn": 1,
+                "phase": null,
+                "step": null,
+                "active_player_id": "one",
+                "priority_player_id": "one",
+                "players": [
+                  {
+                    "player_id": "one",
+                    "name": "One",
+                    "life": 0,
+                    "hand_count": 1,
+                    "library_count": 0,
+                    "eliminated": null,
+                    "left_game": null,
+                    "mana": null,
+                    "counters": null
+                  },
+                  {
+                    "player_id": "two",
+                    "name": "Two",
+                    "life": 20,
+                    "hand_count": 7,
+                    "library_count": 53,
+                    "eliminated": null,
+                    "left_game": null,
+                    "mana": null,
+                    "counters": null
+                  }
+                ],
+                "objects": [
+                  {
+                    "object_id": "fixture-0002",
+                    "zone": "hand",
+                    "owner_id": "one",
+                    "controller_id": "one",
+                    "hidden": true,
+                    "characteristics": null,
+                    "card_identity": null,
+                    "tapped": null,
+                    "damage": null,
+                    "attacking_available": null,
+                    "blocking_available": null,
+                    "face_down": null,
+                    "attachments": null,
+                    "attached_to": null,
+                    "commander_id": null,
+                    "copy_source_id": null
+                  }
+                ],
+                "actions": [
+                  {
+                    "action_id": "fixture-action",
+                    "kind": "fixture-only",
+                    "object_id": null,
+                    "label": "Synthetic transport action",
+                    "priority_class": "unknown"
+                  }
+                ],
+                "decision": {
+                  "decision_id": "fixture-decision",
+                  "player_id": "one",
+                  "family": "priority",
+                  "prompt": "Fixture only; no engine connected",
+                  "options": [],
+                  "minimum": null,
+                  "maximum": null,
+                  "cancellable": false,
+                  "amounts": [],
+                  "can_finish": false,
+                  "is_priority": true
+                },
+                "combat": [],
+                "protocol_version": 1,
+                "result": null,
+                "commanders": null,
+                "observations": [],
+                "unsupported_fields": [],
+                "actions_complete": false
+              }
+            }
+          },
+          "outcome": "applied"
+        },
+        {
+          "envelope": {
+            "wire_version": 1,
+            "message_type": "snapshot",
+            "message_id": "s1",
+            "body": {
+              "fixture_only": true,
+              "snapshot": {
+                "session_id": "fixture-session",
+                "viewer_id": "one",
+                "revision": 7,
+                "status": "active",
+                "turn": 1,
+                "phase": null,
+                "step": null,
+                "active_player_id": "one",
+                "priority_player_id": "one",
+                "players": [
+                  {
+                    "player_id": "one",
+                    "name": "One",
+                    "life": 0,
+                    "hand_count": 1,
+                    "library_count": 0,
+                    "eliminated": null,
+                    "left_game": null,
+                    "mana": null,
+                    "counters": null
+                  },
+                  {
+                    "player_id": "two",
+                    "name": "Two",
+                    "life": 20,
+                    "hand_count": 7,
+                    "library_count": 53,
+                    "eliminated": null,
+                    "left_game": null,
+                    "mana": null,
+                    "counters": null
+                  }
+                ],
+                "objects": [
+                  {
+                    "object_id": "fixture-0002",
+                    "zone": "hand",
+                    "owner_id": "one",
+                    "controller_id": "one",
+                    "hidden": true,
+                    "characteristics": null,
+                    "card_identity": {
+                      "oracle_id": "private",
+                      "printing_id": "private",
+                      "deck_entry_id": null
+                    },
+                    "tapped": null,
+                    "damage": null,
+                    "attacking_available": null,
+                    "blocking_available": null,
+                    "face_down": null,
+                    "attachments": null,
+                    "attached_to": null,
+                    "commander_id": null,
+                    "copy_source_id": null
+                  }
+                ],
+                "actions": [
+                  {
+                    "action_id": "fixture-action",
+                    "kind": "fixture-only",
+                    "object_id": null,
+                    "label": "Synthetic transport action",
+                    "priority_class": "unknown"
+                  }
+                ],
+                "decision": {
+                  "decision_id": "fixture-decision",
+                  "player_id": "one",
+                  "family": "priority",
+                  "prompt": "Fixture only; no engine connected",
+                  "options": [],
+                  "minimum": null,
+                  "maximum": null,
+                  "cancellable": false,
+                  "amounts": [],
+                  "can_finish": false,
+                  "is_priority": true
+                },
+                "combat": [],
+                "protocol_version": 1,
+                "result": null,
+                "commanders": null,
+                "observations": [],
+                "unsupported_fields": [],
+                "actions_complete": false
+              }
+            }
+          },
+          "outcome": "RECEIVE_SHAPE"
+        },
+        {
+          "envelope": {
+            "wire_version": 1,
+            "message_type": "snapshot",
+            "message_id": "s1",
+            "body": {
+              "fixture_only": true,
+              "snapshot": {
+                "session_id": "fixture-session",
+                "viewer_id": "one",
+                "revision": 7,
+                "status": "active",
+                "turn": 1,
+                "phase": null,
+                "step": null,
+                "active_player_id": "one",
+                "priority_player_id": "one",
+                "players": [
+                  {
+                    "player_id": "one",
+                    "name": "One",
+                    "life": 0,
+                    "hand_count": 1,
+                    "library_count": 0,
+                    "eliminated": null,
+                    "left_game": null,
+                    "mana": null,
+                    "counters": null
+                  },
+                  {
+                    "player_id": "two",
+                    "name": "Two",
+                    "life": 20,
+                    "hand_count": 7,
+                    "library_count": 53,
+                    "eliminated": null,
+                    "left_game": null,
+                    "mana": null,
+                    "counters": null
+                  }
+                ],
+                "objects": [
+                  {
+                    "object_id": "fixture-0002",
+                    "zone": "hand",
+                    "owner_id": "one",
+                    "controller_id": "one",
+                    "hidden": true,
+                    "characteristics": null,
+                    "card_identity": null,
+                    "tapped": null,
+                    "damage": null,
+                    "attacking_available": null,
+                    "blocking_available": null,
+                    "face_down": null,
+                    "attachments": null,
+                    "attached_to": null,
+                    "commander_id": null,
+                    "copy_source_id": null
+                  }
+                ],
+                "actions": [
+                  {
+                    "action_id": "fixture-action",
+                    "kind": "fixture-only",
+                    "object_id": null,
+                    "label": "Synthetic transport action",
+                    "priority_class": "unknown"
+                  }
+                ],
+                "decision": {
+                  "decision_id": "fixture-decision",
+                  "player_id": "one",
+                  "family": "priority",
+                  "prompt": "Fixture only; no engine connected",
+                  "options": [],
+                  "minimum": null,
+                  "maximum": null,
+                  "cancellable": false,
+                  "amounts": [],
+                  "can_finish": false,
+                  "is_priority": true
+                },
+                "combat": [],
+                "protocol_version": 1,
+                "result": null,
+                "commanders": null,
+                "observations": [],
+                "unsupported_fields": [],
+                "actions_complete": false
+              }
+            }
+          },
+          "outcome": "HISTORY_FAULTED"
+        }
+      ]
+    },
+    {
+      "name": "wrong-viewer",
+      "capacity": 4096,
+      "fixture_mode": true,
+      "steps": [
+        {
+          "envelope": {
+            "wire_version": 1,
+            "message_type": "snapshot",
+            "message_id": "s1",
+            "body": {
+              "fixture_only": true,
+              "snapshot": {
+                "session_id": "fixture-session",
+                "viewer_id": "one",
+                "revision": 7,
+                "status": "active",
+                "turn": 1,
+                "phase": null,
+                "step": null,
+                "active_player_id": "one",
+                "priority_player_id": "one",
+                "players": [
+                  {
+                    "player_id": "one",
+                    "name": "One",
+                    "life": 0,
+                    "hand_count": 1,
+                    "library_count": 0,
+                    "eliminated": null,
+                    "left_game": null,
+                    "mana": null,
+                    "counters": null
+                  },
+                  {
+                    "player_id": "two",
+                    "name": "Two",
+                    "life": 20,
+                    "hand_count": 7,
+                    "library_count": 53,
+                    "eliminated": null,
+                    "left_game": null,
+                    "mana": null,
+                    "counters": null
+                  }
+                ],
+                "objects": [
+                  {
+                    "object_id": "fixture-0002",
+                    "zone": "hand",
+                    "owner_id": "one",
+                    "controller_id": "one",
+                    "hidden": true,
+                    "characteristics": null,
+                    "card_identity": null,
+                    "tapped": null,
+                    "damage": null,
+                    "attacking_available": null,
+                    "blocking_available": null,
+                    "face_down": null,
+                    "attachments": null,
+                    "attached_to": null,
+                    "commander_id": null,
+                    "copy_source_id": null
+                  }
+                ],
+                "actions": [
+                  {
+                    "action_id": "fixture-action",
+                    "kind": "fixture-only",
+                    "object_id": null,
+                    "label": "Synthetic transport action",
+                    "priority_class": "unknown"
+                  }
+                ],
+                "decision": {
+                  "decision_id": "fixture-decision",
+                  "player_id": "one",
+                  "family": "priority",
+                  "prompt": "Fixture only; no engine connected",
+                  "options": [],
+                  "minimum": null,
+                  "maximum": null,
+                  "cancellable": false,
+                  "amounts": [],
+                  "can_finish": false,
+                  "is_priority": true
+                },
+                "combat": [],
+                "protocol_version": 1,
+                "result": null,
+                "commanders": null,
+                "observations": [],
+                "unsupported_fields": [],
+                "actions_complete": false
+              }
+            }
+          },
+          "outcome": "applied"
+        },
+        {
+          "envelope": {
+            "wire_version": 1,
+            "message_type": "snapshot",
+            "message_id": "s1",
+            "body": {
+              "fixture_only": true,
+              "snapshot": {
+                "session_id": "fixture-session",
+                "viewer_id": "two",
+                "revision": 7,
+                "status": "active",
+                "turn": 1,
+                "phase": null,
+                "step": null,
+                "active_player_id": "one",
+                "priority_player_id": "one",
+                "players": [
+                  {
+                    "player_id": "one",
+                    "name": "One",
+                    "life": 0,
+                    "hand_count": 1,
+                    "library_count": 0,
+                    "eliminated": null,
+                    "left_game": null,
+                    "mana": null,
+                    "counters": null
+                  },
+                  {
+                    "player_id": "two",
+                    "name": "Two",
+                    "life": 20,
+                    "hand_count": 7,
+                    "library_count": 53,
+                    "eliminated": null,
+                    "left_game": null,
+                    "mana": null,
+                    "counters": null
+                  }
+                ],
+                "objects": [
+                  {
+                    "object_id": "fixture-0002",
+                    "zone": "hand",
+                    "owner_id": "one",
+                    "controller_id": "one",
+                    "hidden": true,
+                    "characteristics": null,
+                    "card_identity": null,
+                    "tapped": null,
+                    "damage": null,
+                    "attacking_available": null,
+                    "blocking_available": null,
+                    "face_down": null,
+                    "attachments": null,
+                    "attached_to": null,
+                    "commander_id": null,
+                    "copy_source_id": null
+                  }
+                ],
+                "actions": [
+                  {
+                    "action_id": "fixture-action",
+                    "kind": "fixture-only",
+                    "object_id": null,
+                    "label": "Synthetic transport action",
+                    "priority_class": "unknown"
+                  }
+                ],
+                "decision": {
+                  "decision_id": "fixture-decision",
+                  "player_id": "one",
+                  "family": "priority",
+                  "prompt": "Fixture only; no engine connected",
+                  "options": [],
+                  "minimum": null,
+                  "maximum": null,
+                  "cancellable": false,
+                  "amounts": [],
+                  "can_finish": false,
+                  "is_priority": true
+                },
+                "combat": [],
+                "protocol_version": 1,
+                "result": null,
+                "commanders": null,
+                "observations": [],
+                "unsupported_fields": [],
+                "actions_complete": false
+              }
+            }
+          },
+          "outcome": "RECEIVE_VIEWER"
+        },
+        {
+          "envelope": {
+            "wire_version": 1,
+            "message_type": "snapshot",
+            "message_id": "s1",
+            "body": {
+              "fixture_only": true,
+              "snapshot": {
+                "session_id": "fixture-session",
+                "viewer_id": "one",
+                "revision": 7,
+                "status": "active",
+                "turn": 1,
+                "phase": null,
+                "step": null,
+                "active_player_id": "one",
+                "priority_player_id": "one",
+                "players": [
+                  {
+                    "player_id": "one",
+                    "name": "One",
+                    "life": 0,
+                    "hand_count": 1,
+                    "library_count": 0,
+                    "eliminated": null,
+                    "left_game": null,
+                    "mana": null,
+                    "counters": null
+                  },
+                  {
+                    "player_id": "two",
+                    "name": "Two",
+                    "life": 20,
+                    "hand_count": 7,
+                    "library_count": 53,
+                    "eliminated": null,
+                    "left_game": null,
+                    "mana": null,
+                    "counters": null
+                  }
+                ],
+                "objects": [
+                  {
+                    "object_id": "fixture-0002",
+                    "zone": "hand",
+                    "owner_id": "one",
+                    "controller_id": "one",
+                    "hidden": true,
+                    "characteristics": null,
+                    "card_identity": null,
+                    "tapped": null,
+                    "damage": null,
+                    "attacking_available": null,
+                    "blocking_available": null,
+                    "face_down": null,
+                    "attachments": null,
+                    "attached_to": null,
+                    "commander_id": null,
+                    "copy_source_id": null
+                  }
+                ],
+                "actions": [
+                  {
+                    "action_id": "fixture-action",
+                    "kind": "fixture-only",
+                    "object_id": null,
+                    "label": "Synthetic transport action",
+                    "priority_class": "unknown"
+                  }
+                ],
+                "decision": {
+                  "decision_id": "fixture-decision",
+                  "player_id": "one",
+                  "family": "priority",
+                  "prompt": "Fixture only; no engine connected",
+                  "options": [],
+                  "minimum": null,
+                  "maximum": null,
+                  "cancellable": false,
+                  "amounts": [],
+                  "can_finish": false,
+                  "is_priority": true
+                },
+                "combat": [],
+                "protocol_version": 1,
+                "result": null,
+                "commanders": null,
+                "observations": [],
+                "unsupported_fields": [],
+                "actions_complete": false
+              }
+            }
+          },
+          "outcome": "HISTORY_FAULTED"
+        }
+      ]
+    },
+    {
+      "name": "fixture-mode",
+      "capacity": 4096,
+      "fixture_mode": false,
+      "steps": [
+        {
+          "envelope": {
+            "wire_version": 1,
+            "message_type": "snapshot",
+            "message_id": "s1",
+            "body": {
+              "fixture_only": true,
+              "snapshot": {
+                "session_id": "fixture-session",
+                "viewer_id": "one",
+                "revision": 7,
+                "status": "active",
+                "turn": 1,
+                "phase": null,
+                "step": null,
+                "active_player_id": "one",
+                "priority_player_id": "one",
+                "players": [
+                  {
+                    "player_id": "one",
+                    "name": "One",
+                    "life": 0,
+                    "hand_count": 1,
+                    "library_count": 0,
+                    "eliminated": null,
+                    "left_game": null,
+                    "mana": null,
+                    "counters": null
+                  },
+                  {
+                    "player_id": "two",
+                    "name": "Two",
+                    "life": 20,
+                    "hand_count": 7,
+                    "library_count": 53,
+                    "eliminated": null,
+                    "left_game": null,
+                    "mana": null,
+                    "counters": null
+                  }
+                ],
+                "objects": [
+                  {
+                    "object_id": "fixture-0002",
+                    "zone": "hand",
+                    "owner_id": "one",
+                    "controller_id": "one",
+                    "hidden": true,
+                    "characteristics": null,
+                    "card_identity": null,
+                    "tapped": null,
+                    "damage": null,
+                    "attacking_available": null,
+                    "blocking_available": null,
+                    "face_down": null,
+                    "attachments": null,
+                    "attached_to": null,
+                    "commander_id": null,
+                    "copy_source_id": null
+                  }
+                ],
+                "actions": [
+                  {
+                    "action_id": "fixture-action",
+                    "kind": "fixture-only",
+                    "object_id": null,
+                    "label": "Synthetic transport action",
+                    "priority_class": "unknown"
+                  }
+                ],
+                "decision": {
+                  "decision_id": "fixture-decision",
+                  "player_id": "one",
+                  "family": "priority",
+                  "prompt": "Fixture only; no engine connected",
+                  "options": [],
+                  "minimum": null,
+                  "maximum": null,
+                  "cancellable": false,
+                  "amounts": [],
+                  "can_finish": false,
+                  "is_priority": true
+                },
+                "combat": [],
+                "protocol_version": 1,
+                "result": null,
+                "commanders": null,
+                "observations": [],
+                "unsupported_fields": [],
+                "actions_complete": false
+              }
+            }
+          },
+          "outcome": "RECEIVE_MODE"
+        }
+      ]
+    }
+  ]
+}

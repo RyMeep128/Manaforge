@@ -97,3 +97,14 @@ and `c446c1f` ([dummy preparation](https://github.com/RyMeep128/Manaforge/action
 passed. Those hosted jobs do not run Unity or the cross-process C# scenarios.
 Licensed Unity CI evidence is pending. At the owner's direction, Qt CI issues
 are not being investigated as part of this Unity/Java increment.
+
+
+### Ordered-stream admission follow-up
+
+The separate [receive history](receive-history.md) now retains bounded IDs/digests,
+drops semantic duplicate messages and rejects rollback/conflicts before handing
+new data to consumers. ReceiveMessages remains the stateless schema/context
+validator; its equal-revision support is unchanged. The wrapper adds a proposed
+nondecreasing-revision emission contract, to be proven against real adapter
+behavior. Same-revision event order, loss detection, resynchronization and real
+privacy filtering are not established by this history.

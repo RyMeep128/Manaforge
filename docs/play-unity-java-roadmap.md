@@ -425,3 +425,14 @@ refusing reconnect. An actual authenticated dummy process sends submitted ACK,
 SESSION_FAILED and EOF without a game result. Eighty focused EditMode checks,
 Java corpora and seven schema checks pass locally. Production error routing,
 cleanup, licensed CI and the G1 freeze remain pending; P2 has not started.
+
+
+### G1 receive history — October 30, 2026
+
+The [bounded receive history](../Mtg_Projects/mtg_play/protocol/receive-history.md)
+now drops identical data-message retries and rejects conflicting IDs, revision
+rollback and capacity overflow in Java/C#. A result terminates new data admission;
+events can share revisions. Ten shared sequences, mutation/concurrency checks and
+a duplicated snapshot in the actual dummy exchange pass locally, within 86
+focused EditMode and eight schema checks. Missing-event detection, recovery,
+licensed Unity CI and real-engine emission parity remain open. G1 is not frozen.

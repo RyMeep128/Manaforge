@@ -64,7 +64,7 @@ public final class DummyGateway {
                 send(out,gatewayHello);
                 JsonObject body=new JsonObject(); body.addProperty("fixture_only",true); body.add("snapshot",snapshot);
                 JsonObject snapshotMessage=envelope("snapshot","fixture-snapshot",body);
-                ReceiveMessages.parse(snapshotMessage.toString(),session,viewer,0,true);send(out,snapshotMessage);
+                ReceiveMessages.parse(snapshotMessage.toString(),session,viewer,0,true);send(out,snapshotMessage);send(out,snapshotMessage);
                 JsonObject event=new JsonObject();event.addProperty("kind","fixture-event");event.addProperty("player_id","two");
                 event.add("revision",snapshot.get("revision"));event.add("code",JsonNull.INSTANCE);event.add("observations",new JsonArray());
                 JsonObject eventBody=new JsonObject();eventBody.addProperty("fixture_only",true);eventBody.addProperty("session_id",session);eventBody.addProperty("viewer_id",viewer);eventBody.add("event",event);

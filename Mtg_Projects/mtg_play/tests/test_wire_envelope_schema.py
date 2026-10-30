@@ -133,3 +133,19 @@ def test_terminal_error_schema_separates_shape_from_viewer_binding():
             validator.validate(case["envelope"])
         else:
             assert not validator.is_valid(case["envelope"]), case["name"]
+
+
+def test_receive_history_cases_preserve_existing_wire_shapes():
+    schema = json.loads(
+        (ROOT / "wire-receive-v1.schema.json").read_text(encoding="utf-8")
+    )
+    validator = Draft202012Validator(schema)
+    corpus = json.loads(
+        (ROOT / "fixtures/receive-history-v1.json").read_text(encoding="utf-8")
+    )
+    for case in corpus["cases"]:
+        for step in case["steps"]:
+            if step["outcome"] == "RECEIVE_SHAPE":
+                assert not validator.is_valid(step["envelope"])
+            else:
+                validator.validate(step["envelope"])
