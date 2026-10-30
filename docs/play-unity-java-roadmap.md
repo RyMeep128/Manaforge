@@ -605,3 +605,14 @@ uses an offline symbol font for costs and gives P/T a beveled badge. Unknown cos
 remain explicit; concealed views clear both frame/art references. This responds
 to owner screenshots and remains pending a fresh hands-on visual review. No
 live-game, G0/G1 or final renderer acceptance is claimed.
+
+
+### P3.2a specialized-layout display gallery — October 30, 2026
+
+Owner-expanded visual scope now includes planeswalkers, sagas, battles, tokens and
+other layouts in a [25-entry gallery](play-layout-gallery.md). Specialized compact
+and inspection views retain complete authentic images; normal-layout planeswalkers
+are excluded from ordinary-frame reconstruction. A dropdown exposes all faces.
+The supplied Downloads assets contain loyalty, chapter, defense and token parts;
+curated component import and dynamic authoritative fields remain separate work.
+This is printed-fixture presentation, not new gameplay support or G0/G1 acceptance.

@@ -35,6 +35,19 @@ def _standard(payload):
     # Conservative initial profile: unknown or specialized metadata stays authentic.
     return (
         payload.get("layout") == "normal"
+        and not any(
+            kind in (payload.get("type_line") or "").split("\u2014", 1)[0].split()
+            for kind in (
+                "Planeswalker",
+                "Battle",
+                "Plane",
+                "Phenomenon",
+                "Scheme",
+                "Vanguard",
+                "Dungeon",
+                "Emblem",
+            )
+        )
         and payload.get("frame") == "2015"
         and payload.get("border_color") in ("black", "white")
         and payload.get("full_art") is False

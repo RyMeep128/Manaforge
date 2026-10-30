@@ -129,7 +129,9 @@ namespace Manaforge.Play
         {
             bool full = mode == CardPresentationMode.Full;
             bool hasStats = !string.IsNullOrEmpty(stats.text);
-            style.width = width; style.height = width * (full ? 1.4f : .78f);
+            style.width = width;
+            style.height = full && authenticOnly && artwork.image!=null
+                ? width*artwork.image.height/artwork.image.width : width*(full?1.4f:.78f);
             float scale = width / 300f;
             style.borderTopLeftRadius=style.borderTopRightRadius=style.borderBottomLeftRadius=style.borderBottomRightRadius=width*.03f;
             Box(edge,0,0,100,100);
@@ -157,7 +159,7 @@ namespace Manaforge.Play
             Box(frame,0,0,100,100);frame.scaleMode=ScaleMode.StretchToFill;
             // Keep the exact printing's colored surround and original bevels, not a generic dark panel.
             frame.uv=full?new Rect(0,0,1,1):new Rect(0,.47f,1,.53f);
-            frame.style.display=concealed || frame.image==null?DisplayStyle.None:DisplayStyle.Flex;
+            frame.style.display=concealed || authenticOnly || frame.image==null?DisplayStyle.None:DisplayStyle.Flex;
             // Preserve the printing footer: artist/collector credits start below the rules box.
             // Standard-frame inner textbox ends before the collector footer at about 92.3%.
             // Stay inside the printed vertical outline rather than painting over its right edge.
@@ -165,10 +167,10 @@ namespace Manaforge.Play
             interior.style.display=!concealed && full && !authenticOnly?DisplayStyle.Flex:DisplayStyle.None;
             // The compact footer hides the underlying printing below the art window, including set symbols.
             Box(printedStatsMask,full?74:0,full?89:90,full?24:100,10);
-            printedStatsMask.style.display=!concealed && !(full && authenticOnly) && (!full || hasStats)?DisplayStyle.Flex:DisplayStyle.None;
+            printedStatsMask.style.display=!concealed && !authenticOnly && (!full || hasStats)?DisplayStyle.Flex:DisplayStyle.None;
             Box(artwork,8,full?12:21,84,full?43:70);
             artwork.scaleMode=ScaleMode.StretchToFill;artwork.uv=artCrop;
-            if(full && authenticOnly) {
+            if(authenticOnly) {
                 Box(artwork,0,0,100,100);artwork.uv=new Rect(0,0,1,1);artwork.scaleMode=ScaleMode.ScaleToFit;
             }
             Box(nameplate,5.5f,full?4:5,89,full?7:16);
@@ -181,7 +183,7 @@ namespace Manaforge.Play
             Box(statplate,75,full?90:79,22,full?8:19);
             Box(stats,77,full?90.3f:79.5f,18,full?7:17);
             Box(status,8,full?94:82,60,full?4:12);Box(missing,8,35,84,25);
-            bool reconstructed=!concealed && !(full && authenticOnly);
+            bool reconstructed=!concealed && !authenticOnly;
             nameplate.style.display=reconstructed?DisplayStyle.Flex:DisplayStyle.None;
             typeplate.style.display=reconstructed && full?DisplayStyle.Flex:DisplayStyle.None;
             statplate.style.display=reconstructed && hasStats?DisplayStyle.Flex:DisplayStyle.None;

@@ -182,3 +182,37 @@ def test_opt_in_budget_preserves_selected_then_prefers_standard_without_decoding
 def test_invalid_preparation_budget_fails_before_catalog_access():
     with pytest.raises(ValueError, match="VISUAL_CANDIDATE_BUDGET"):
         collect_visual_candidates(None, "selected", max_cached_candidates=0)
+
+
+@pytest.mark.parametrize(
+    "layout,type_line",
+    [
+        ("normal", "Legendary Planeswalker — Jace"),
+        ("normal", "Battle — Siege"),
+        ("normal", "Dungeon"),
+        ("saga", "Enchantment — Saga"),
+        ("token", "Token Creature — Soldier"),
+        ("double_faced_token", "Token Creature"),
+        ("emblem", "Emblem"),
+        ("transform", "Creature"),
+        ("modal_dfc", "Land"),
+        ("split", "Instant // Instant"),
+        ("adventure", "Creature"),
+        ("leveler", "Creature"),
+        ("class", "Enchantment — Class"),
+        ("case", "Enchantment — Case"),
+        ("prototype", "Artifact Creature"),
+        ("mutate", "Creature"),
+        ("planar", "Plane"),
+        ("scheme", "Scheme"),
+        ("vanguard", "Vanguard"),
+    ],
+)
+def test_special_layouts_never_receive_an_ordinary_reconstructed_frame(
+    layout, type_line
+):
+    selected = card("special")
+    selected.update(layout=layout, type_line=type_line)
+    candidates = collect_visual_candidates(Service(selected), "special")
+    assert len(candidates) == 1
+    assert candidates[0].standard_compatible is False

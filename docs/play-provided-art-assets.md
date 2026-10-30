@@ -37,3 +37,28 @@ our URP/UI Toolkit pipeline. SDF atlases require glyph metadata/material handlin
 not just importing their PNGs. Keep XMage, native decks, viewer privacy and the
 public game protocol unchanged. A fresh owner visual review will be required
 when the imported components are wired into the fixture.
+
+
+## Specialized card parts — October 30, 2026
+
+The owner confirmed the same Downloads folder for specialized-layout inspection.
+The manifest and selected bundles were read directly; the original folder remains
+unchanged. Decoded local inventory is in ignored
+`Artifacts/AssetInspection/special-layout-inventory.json`.
+
+| Need | Confirmed resource | Integration help |
+|---|---|---|
+| Planeswalker | LoyaltyPart: `LoyaltyBox - Default`, `Card_Loyalty`, `Loyalty Label`; RulesTextComponent: `LoyaltyAbility`, plus/neutral/negative entries | Badge geometry, label anchors and ability-row presentation |
+| Saga | `DefaultEntry_CreatureSaga`, `ChapterEntry` prefab and `Card_Chapter` textures | Chapter rows, icons and dividers |
+| Battle | DefensePart: `DefenseBox`, `Defense Label`, `Card_Defense`; TitleBarPart_5: `Card Part - Titlebar Battle DoubleFaced Front` | Defense badge and front-face title treatment |
+| Tokens | Double-faced token, legendary-token and Battle-front-token title-bar variants | Shared components with token variants |
+| Class | `DefaultEntry_Class` and Class art-in-frame entries in the manifest | Per-level text-row structure |
+| Adventure / Room | Omission-box and specialized highlight/component entries in the manifest | Distinct subcard treatment and room highlights |
+
+These are concrete implementation references/resources, not drop-in UI Toolkit
+components. Some use shared materials, SDF atlases or external texture dependencies;
+those references still need a curated import and URP/UI Toolkit adaptation. Do not
+infer that arbitrary source shaders, prefabs or gameplay scripts are compatible.
+The current gallery uses Core printing images instead. Engine-supplied loyalty,
+chapters, defense, counters and legal actions remain future runtime integration;
+asset discovery does not authorize reconstructing those facts client-side.

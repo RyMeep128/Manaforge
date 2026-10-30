@@ -75,6 +75,14 @@ namespace Manaforge.Play
             foreach (var card in fixture.Cards)
             { textures.Get(card.Artwork); yield return null; } // at most one upload per frame
             uploadMs = (Time.realtimeSinceStartupAsDouble - uploadStarted) * 1000;
+            var names = new List<string>();
+            foreach(var card in fixture.Cards)names.Add(card.MockValues.Name ?? card.Identity.RenderedFace);
+            var inspector = new DropdownField("Inspect",names,0);inspector.style.width=420;
+            inspector.labelElement.style.color=Color.white;
+            inspector.RegisterValueChangedCallback(_ => {
+                if(inspector.index>=0 && inspector.index<fixture.Cards.Count)Show(fixture.Cards[inspector.index]);
+            });
+            controls.Add(inspector);
             int initial = 20;
             if (int.TryParse(Argument("-manaforgeFixtureCount"), out int countArg)
                 && (countArg == 20 || countArg == 70 || countArg == 200)) initial = countArg;

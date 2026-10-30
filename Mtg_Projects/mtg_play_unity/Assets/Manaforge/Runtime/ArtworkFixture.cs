@@ -118,7 +118,7 @@ namespace Manaforge.Play
                 assets.Add(id, new Asset(w, h, bytes));
             }
             var cards = new List<Card>();
-            foreach (var item in Array(manifest["cards"], 16))
+            foreach (var item in Array(manifest["cards"], 32))
             {
                 cancellation.ThrowIfCancellationRequested();
                 Fields(item, "oracle_id", "selected_printing_id", "selected_face", "values_source", "mock_values", "candidates");

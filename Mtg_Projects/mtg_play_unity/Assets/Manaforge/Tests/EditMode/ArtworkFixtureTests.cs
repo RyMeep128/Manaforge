@@ -87,6 +87,20 @@ namespace Manaforge.Play.Tests
             Assert.Throws<ObjectDisposedException>(() => owner.Get(asset));
         }
 
+        [UnityTest]
+        public IEnumerator LayoutGalleryCapacitySharesAssetsWithoutRemovingBounds()
+        {
+            var cards=(JArray)manifest["cards"];
+            while(cards.Count<32)cards.Add(cards[0].DeepClone());
+            Publish();var loading=ArtworkFixture.LoadAsync(directory);
+            var deadline=DateTime.UtcNow.AddSeconds(15);
+            while(!loading.IsCompleted && DateTime.UtcNow<deadline)yield return null;
+            Assert.That(loading.IsCompleted,Is.True);
+            var fixture=loading.GetAwaiter().GetResult();
+            Assert.That(fixture.Cards.Count,Is.EqualTo(32));Assert.That(fixture.RawBytes,Is.EqualTo(4));
+            Assert.That(fixture.Cards[0].Artwork,Is.SameAs(fixture.Cards[31].Artwork));
+        }
+        [TestCase("card_limit")]
         [TestCase("live")]
         [TestCase("path")]
         [TestCase("dimensions")]
@@ -98,6 +112,7 @@ namespace Manaforge.Play.Tests
         {
             switch (mutation)
             {
+                case "card_limit": while(((JArray)manifest["cards"]).Count<33)((JArray)manifest["cards"]).Add(manifest["cards"][0].DeepClone()); break;
                 case "live": manifest["fixture_only"] = false; break;
                 case "path": manifest["assets"][0]["file"] = "../outside.rgba"; break;
                 case "dimensions": manifest["assets"][0]["width"] = 1025; break;

@@ -19,9 +19,11 @@ subtypes and rules text.
 
 Provide compact cropped battlefield cards and full cards for hand, hover
 enlargement and inspection. Keep the common pipeline extensible to future layouts
-without implementing full-art, showcase, borderless, extended-art, sagas, battles,
-planeswalkers, split cards or promotional frame reconstruction now. Unsupported
-layouts must remain displayable through authentic card images.
+without prematurely reconstructing full-art, showcase, borderless, extended-art,
+sagas, battles, planeswalkers, split cards or promotional frames. Owner scope
+expansion on October 30 now includes these families in the
+[layout gallery](play-layout-gallery.md), using complete authentic printings for
+specialized layouts; bespoke dynamic components remain separate work.
 
 ## Existing foundations to inspect
 

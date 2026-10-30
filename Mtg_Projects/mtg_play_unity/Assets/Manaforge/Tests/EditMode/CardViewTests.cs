@@ -71,6 +71,23 @@ namespace Manaforge.Play.Tests
             Assert.That(view.Q<Label>("name").style.display.value, Is.EqualTo(DisplayStyle.None));
             Assert.That(view.Q<Image>("artwork").uv, Is.EqualTo(new Rect(0, 0, 1, 1)));
         }
+        [Test] public void SpecializedCompactCardsKeepTheWholePrintingWithoutStandardOverlays()
+        {
+            view.Bind(Identity(false),texture,new Rect(.08f,.45f,.84f,.42f));
+            view.UpdateValues(Values());view.SetPresentation(CardPresentationMode.Compact,160);
+            Assert.That(view.Q<Image>("artwork").uv,Is.EqualTo(new Rect(0,0,1,1)));
+            Assert.That(view.Q<Image>("artwork").scaleMode,Is.EqualTo(ScaleMode.ScaleToFit));
+            foreach(var name in new[]{"name","stats","rules"})Assert.That(view.Q<Label>(name).style.display.value,Is.EqualTo(DisplayStyle.None));
+            Assert.That(view.Q<VisualElement>("printed-stats-mask").style.display.value,Is.EqualTo(DisplayStyle.None));
+            Assert.That(view.Q<Image>("printing-frame").style.display.value,Is.EqualTo(DisplayStyle.None));
+        }
+        [Test] public void LandscapePrintingInspectionPreservesItsAspectRatio()
+        {
+            var landscape=new Texture2D(8,4);
+            try{view.Bind(Identity(false),landscape,new Rect(0,0,1,1));view.SetPresentation(CardPresentationMode.Full,300);
+                Assert.That(view.style.height.value.value,Is.EqualTo(150));}
+            finally{UnityEngine.Object.DestroyImmediate(landscape);}
+        }
         [Test] public void MissingAssetIsExplicitAndNoStatsAreInvented()
         {
             var identity = VisualPrintingPolicy.Resolve(false,

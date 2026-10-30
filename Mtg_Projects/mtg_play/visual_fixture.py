@@ -10,7 +10,8 @@ from PyQt6.QtGui import QImage
 
 from .visual_catalog import collect_visual_candidates
 
-MAX_CARDS = 16
+MAX_CARDS = 32
+MAX_ASSETS = 48
 MAX_CANDIDATES = 2048
 MAX_ASSET_BYTES = 64 * 1024 * 1024
 MAX_MANIFEST_BYTES = 1024 * 1024
@@ -86,6 +87,8 @@ def export_visual_fixture(
                 struct.pack(">II", width, height) + raw
             ).hexdigest()
             if asset_id not in assets:
+                if len(assets) >= MAX_ASSETS:
+                    raise VisualFixtureError("VISUAL_FIXTURE_ASSET_LIMIT")
                 if total_bytes + len(raw) > max_asset_bytes:
                     raise VisualFixtureError("VISUAL_FIXTURE_BUDGET")
                 filename = asset_id + ".rgba"

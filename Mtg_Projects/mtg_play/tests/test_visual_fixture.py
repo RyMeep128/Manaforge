@@ -120,3 +120,40 @@ def test_scaling_is_bounded_and_never_upscales(tmp_path):
         service, [("selected", 0)], tmp_path / "normal", max_edge=100
     )["assets"][0]
     assert (asset["width"], asset["height"]) == (2, 3)
+
+
+def test_expanded_gallery_capacity_still_shares_artwork(tmp_path):
+    path = source(tmp_path)
+    service = Service(card("selected"), paths={("selected", "default"): path})
+    manifest = export_visual_fixture(
+        service, [("selected", 0)] * 32, tmp_path / "gallery"
+    )
+    assert len(manifest["cards"]) == 32
+    assert len(manifest["assets"]) == 1
+
+
+def test_expanded_gallery_keeps_the_unity_48_asset_limit(tmp_path, monkeypatch):
+    from mtg_play.visual_catalog import VisualAssetCandidate
+
+    def candidates(service, printing, face_index, **kwargs):
+        result = []
+        for i in range(3):
+            index = int(printing.split("-")[1]) * 3 + i
+            path = tmp_path / f"source-{index}.png"
+            image = QImage(1, 1, QImage.Format.Format_RGBA8888)
+            image.fill(QColor(index, 0, 0, 255))
+            assert image.save(str(path), "PNG")
+            result.append(
+                VisualAssetCandidate(
+                    "oracle", f"{printing}-{i}", "Card", 0, True, True, str(path)
+                )
+            )
+        return result
+
+    monkeypatch.setattr("mtg_play.visual_fixture.collect_visual_candidates", candidates)
+    output = tmp_path / "bounded"
+    with pytest.raises(VisualFixtureError, match="VISUAL_FIXTURE_ASSET_LIMIT"):
+        export_visual_fixture(
+            Service(card("selected")), [(f"p-{i}", 0) for i in range(17)], output
+        )
+    assert not (output / "manifest.json").exists()
