@@ -377,3 +377,14 @@ without retrying chunks. One reader and writer can operate together; concurrent
 writers fail closed. All seven actual dummy scenarios use it for normal client
 TCP sends. Twelve new checks bring focused local EditMode validation to 130.
 Java write budgets, product stop/admission coordination and G1 freeze remain open.
+
+
+## Java write deadline parity
+
+The [write boundary](frame-write-deadlines.md) now includes Java's plain socket
+path, using an owner-scoped watchdog that closes stalled writes, observes
+cancellation/interruption and cannot outlive/seize a later completed frame.
+Fourteen Java write cases plus watchdog cleanup pass, and an eighth authenticated
+process scenario verifies a non-reading client cannot hold Java indefinitely.
+Local focused EditMode count is 131. Product admission/stop coordination, complete
+session budgets and licensed CI remain open; no G1 completion is claimed.

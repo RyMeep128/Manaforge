@@ -478,3 +478,14 @@ uncertain chunks. The seven actual Java-dummy scenarios use it for normal client
 sends. Twelve new socket/ownership checks bring focused local EditMode validation
 to 130. Java write parity, product session coordination and licensed CI remain
 pending. G1 is not frozen and bulk P2 remains gated.
+
+
+### G1 Java frame-write parity — October 30, 2026
+
+The [Java writer](../Mtg_Projects/mtg_play/protocol/frame-write-deadlines.md) now
+bounds blocking output with an owned watchdog and closes uncertain failures
+without retrying. Fourteen Java write checks include interruption, stale-watch
+safety and scheduler cleanup. An eighth authenticated process scenario times out against a
+non-reading client; all 131 focused EditMode checks pass locally. Product session
+coordination, complete conversation budgets, licensed CI and G0/G1 acceptance
+remain open. This is transport infrastructure, not the bulk P2 engine port.

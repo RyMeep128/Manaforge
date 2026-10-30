@@ -34,6 +34,7 @@ public final class DummyGateway {
         return envelope("hello","auth-"+role,b);
     }
     private static void send(OutputStream out,JsonObject value) throws IOException { TextFrame.write(out,value.toString()); out.flush(); }
+    private static void send(LoopbackFrameReader frames,JsonObject value) throws IOException { frames.write(value.toString(),5000); }
     public static void main(String[] args) {
         AtomicBoolean ownerGone=new AtomicBoolean(); AtomicReference<LoopbackFrameReader> active=new AtomicReference<>();
         byte[] key=null;
@@ -58,11 +59,17 @@ public final class DummyGateway {
             try(Socket socket=listener.accept();LoopbackFrameReader frames=new LoopbackFrameReader(socket)) {
                 active.set(frames); if(ownerGone.get())throw new IOException("OWNER_GONE");
                 OutputStream out=socket.getOutputStream();
+                if(args.length==2 && args[1].equals("blocked-client"))socket.setSendBufferSize(1024);
                 try(ViewerAuthentication.Verifier verifier=new ViewerAuthentication.Verifier(clientHello.toString(),key)) {
                     require(verifier.verify(frames.read(5000)));
                 }
                 gatewayHello.getAsJsonObject("body").addProperty("proof",ViewerAuthentication.computeProof(gatewayHello.toString(),key));
-                send(out,gatewayHello);
+                send(frames,gatewayHello);
+                if(args.length==2 && args[1].equals("blocked-client")) {
+                    char[] text=new char[TextFrame.MAX_BYTES];Arrays.fill(text,'x');
+                    try{frames.write(new String(text),150);throw new IOException("DUMMY_EXPECTED_WRITE_TIMEOUT");}
+                    catch(TextFrame.FrameException error){require(error.code.equals("FRAME_WRITE_TIMEOUT"));return;}
+                }
                 if(args.length==2 && args[1].equals("partial-frame")) {
                     out.write(new byte[]{0,0});out.flush();
                     while(!ownerGone.get())Thread.sleep(20);
@@ -70,12 +77,12 @@ public final class DummyGateway {
                 }
                 JsonObject body=new JsonObject(); body.addProperty("fixture_only",true); body.add("snapshot",snapshot);
                 JsonObject snapshotMessage=envelope("snapshot","fixture-snapshot",body);
-                ReceiveMessages.parse(snapshotMessage.toString(),session,viewer,0,true);send(out,snapshotMessage);send(out,snapshotMessage);
+                ReceiveMessages.parse(snapshotMessage.toString(),session,viewer,0,true);send(frames,snapshotMessage);send(frames,snapshotMessage);
                 JsonObject event=new JsonObject();event.addProperty("kind","fixture-event");event.addProperty("player_id","two");
                 event.add("revision",snapshot.get("revision"));event.add("code",JsonNull.INSTANCE);event.add("observations",new JsonArray());
                 JsonObject eventBody=new JsonObject();eventBody.addProperty("fixture_only",true);eventBody.addProperty("session_id",session);eventBody.addProperty("viewer_id",viewer);eventBody.add("event",event);
                 JsonObject eventMessage=envelope("event","fixture-event",eventBody);
-                ReceiveMessages.parse(eventMessage.toString(),session,viewer,0,true);send(out,eventMessage);
+                ReceiveMessages.parse(eventMessage.toString(),session,viewer,0,true);send(frames,eventMessage);
                 long revision=snapshot.get("revision").getAsLong();
                 String decision=snapshot.getAsJsonObject("decision").get("decision_id").getAsString();
                 List<String> actions=new ArrayList<>(); for(JsonElement a:snapshot.getAsJsonArray("actions"))actions.add(a.getAsJsonObject().get("action_id").getAsString());
@@ -86,25 +93,25 @@ public final class DummyGateway {
                     String type=message.get("message_type").getAsString();
                     if(type.equals("shutdown")) {
                         require(request.get("session_id").getAsString().equals(session) && request.get("viewer_id").getAsString().equals(viewer));
-                        send(out,envelope("shutdown","shutdown-ok",request)); return;
+                        send(frames,envelope("shutdown","shutdown-ok",request)); return;
                     }
                     require(type.equals("command"));
                     String rejection=WireMessages.checkCurrent(text,session,viewer,revision,decision,actions);
                     SubmissionLedger.Prepared prepared=ledger.prepare(text,rejection);
                     JsonObject acknowledgement=prepared.receipt();acknowledgement.addProperty("message_id","ack-"+count);
-                    send(out,acknowledgement);
+                    send(frames,acknowledgement);
                     if(prepared.shouldSubmit) {
                         if(args.length==2 && args[1].equals("session-error")) {
                             JsonObject failed=new JsonObject();failed.addProperty("session_id",session);failed.addProperty("viewer_id",viewer);
                             failed.addProperty("terminal",true);failed.addProperty("code","SESSION_FAILED");
                             JsonObject error=envelope("error","fixture-session-error",failed);
-                            SessionErrors.parse(error.toString(),session,viewer);send(out,error);return;
+                            SessionErrors.parse(error.toString(),session,viewer);send(frames,error);return;
                         }
                         JsonObject result=new JsonObject();result.addProperty("fixture_only",true);
                         JsonObject terminal=snapshot.deepCopy();terminal.addProperty("status","finished");terminal.addProperty("result","fixture_complete");
                         terminal.addProperty("revision",revision+1);terminal.add("decision",JsonNull.INSTANCE);terminal.add("actions",new JsonArray());
                         result.add("snapshot",terminal);JsonObject resultMessage=envelope("result","fixture-result",result);
-                        ReceiveMessages.parse(resultMessage.toString(),session,viewer,revision,true);send(out,resultMessage);
+                        ReceiveMessages.parse(resultMessage.toString(),session,viewer,revision,true);send(frames,resultMessage);
                     }
                 }
                 throw new IOException("DUMMY_LIMIT");

@@ -87,6 +87,7 @@ def main():
             PROTOCOL / "java-test/HistoryFixtureConsumer.java",
             PROTOCOL / "java/manaforge/protocol/LoopbackFrameReader.java",
             PROTOCOL / "java-test/DeadlineFixtureConsumer.java",
+            PROTOCOL / "java-test/WriteDeadlineFixtureConsumer.java",
         ]
         subprocess.run(
             [
@@ -214,6 +215,16 @@ def main():
                 "-cp",
                 str(workspace) + os.pathsep + str(jar),
                 "manaforge.protocol.DeadlineFixtureConsumer",
+            ],
+            check=True,
+            timeout=60,
+        )
+        subprocess.run(
+            [
+                runtime,
+                "-cp",
+                str(workspace) + os.pathsep + str(jar),
+                "manaforge.protocol.WriteDeadlineFixtureConsumer",
             ],
             check=True,
             timeout=60,

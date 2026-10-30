@@ -184,3 +184,14 @@ fixture uses it for normal outbound TCP frames; 130 focused EditMode checks pass
 Product orchestration must still couple failure with command admission, inbox
 cancellation and process cleanup. This does not connect LaunchOwner or implement
 Java outbound deadlines.
+
+
+### Java write deadline follow-up
+
+The Java [socket writer](../Mtg_Projects/mtg_play/protocol/frame-write-deadlines.md)
+now closes stalled output via an owner-scoped, canceled-on-completion watchdog.
+Tests cover cancellation/interruption, stale watcher safety and watchdog-thread
+cleanup. The eighth authenticated process case proves timeout against a
+non-reading client; 131 focused EditMode checks and Java protocol preflight pass.
+This still does not connect LaunchOwner or implement product stop/admission
+coordination, durable reconciliation or containment.

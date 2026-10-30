@@ -182,3 +182,14 @@ and shutdown. Registration still precedes sending, with tracking disconnected on
 write failure. Deliberate malformed two-byte probes and private bootstrap pipes
 remain separate test paths. Seven scenarios and 130 focused EditMode checks pass
 locally; no Java outbound deadline or production session coordinator is implied.
+
+
+### Java write deadline follow-up
+
+Normal Java TCP sends now use the same owned socket's
+[bounded write method](frame-write-deadlines.md). An eighth mode authenticates,
+then writes a maximum-size public stress frame to a client that stops reading.
+Java verifies FRAME_WRITE_TIMEOUT and exits cleanly; C# checks exit and closes its
+owned socket. No result/command acceptance is inferred from that failure. Private
+readiness pipes and deliberate two-byte malformed probes remain separate test
+paths. All eight scenarios pass within 131 focused local EditMode checks.
