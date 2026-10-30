@@ -62,6 +62,11 @@ public final class DummyGateway {
                 }
                 gatewayHello.getAsJsonObject("body").addProperty("proof",ViewerAuthentication.computeProof(gatewayHello.toString(),key));
                 send(out,gatewayHello);
+                if(args.length==2 && args[1].equals("partial-frame")) {
+                    out.write(new byte[]{0,0});out.flush();
+                    while(!ownerGone.get())Thread.sleep(20);
+                    return;
+                }
                 JsonObject body=new JsonObject(); body.addProperty("fixture_only",true); body.add("snapshot",snapshot);
                 JsonObject snapshotMessage=envelope("snapshot","fixture-snapshot",body);
                 ReceiveMessages.parse(snapshotMessage.toString(),session,viewer,0,true);send(out,snapshotMessage);send(out,snapshotMessage);

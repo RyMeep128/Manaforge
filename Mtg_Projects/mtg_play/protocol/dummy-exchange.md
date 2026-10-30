@@ -150,3 +150,14 @@ before validating/deserializing it. Five owned-process scenarios pass within 101
 focused local EditMode checks. This test immediately drains packets; overflow,
 consumer races and cancellation are covered separately by focused inbox checks,
 not claimed as real socket-pump or renderer behavior.
+
+
+### Partial-frame deadline follow-up
+
+Client socket reads now use [LoopbackFrameReader](frame-read-deadlines.md).
+A sixth mode authenticates and then sends only two header bytes. The client
+observes its total frame deadline, confirms the owned socket is closed and
+closes the private owner pipe; the Java child exits cleanly. Other scenarios
+still pass. This is not a real engine timeout or proof of product lifecycle
+coordination. The Java dummy's inbound timeout remains its existing per-read
+setting; absolute Java-side framing is still pending.

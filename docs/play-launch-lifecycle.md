@@ -154,3 +154,13 @@ The [receive-body follow-up](../Mtg_Projects/mtg_play/protocol/receive-boundary.
 now validates generated existing DTO shapes and authenticated viewer/session,
 revision and fixture mode before dummy client deserialization. It does not wire
 product launch ownership or prove real engine visibility. G1 remains open.
+
+
+### Client frame-read deadline follow-up
+
+An [owned C# loopback reader](../Mtg_Projects/mtg_play/protocol/frame-read-deadlines.md)
+now stops partial-frame waits using a total monotonic deadline/cancellation check,
+closes its socket on failure and permits explicit owner disposal to unblock a
+worker. The authenticated Java dummy proves timeout followed by owner-EOF child
+cleanup. This remains separate from LaunchOwner; product bootstrap, complete
+session/handshake deadlines, Java-side parity and containment remain pending.

@@ -23,12 +23,13 @@ namespace Manaforge.Play.Tests
         {
             public readonly Process Process;
             public TcpClient Client;
+            public LoopbackFrameReader Reader;
             private bool disposed;
-            public Peer(string directory,bool sessionError=false)
+            public Peer(string directory,bool sessionError=false,bool partialFrame=false)
             {
                 Assert.That(File.Exists(Path.Combine(directory,"manaforge/protocol/DummyGateway.class")),Is.True,"Run the Java dummy fixture preparation first");
                 string jar=Path.Combine(directory,"gson.jar"),fixture=Path.Combine(directory,"dummy-session-v1.json");
-                var start=new ProcessStartInfo("java", "-cp \""+directory+Path.PathSeparator+jar+"\" manaforge.protocol.DummyGateway \""+fixture+"\""+(sessionError?" session-error":""))
+                var start=new ProcessStartInfo("java", "-cp \""+directory+Path.PathSeparator+jar+"\" manaforge.protocol.DummyGateway \""+fixture+"\""+(partialFrame?" partial-frame":sessionError?" session-error":""))
                 { UseShellExecute=false,CreateNoWindow=true,WindowStyle=ProcessWindowStyle.Hidden,
                   RedirectStandardInput=true,RedirectStandardOutput=true,RedirectStandardError=true };
                 Process=new Process { StartInfo=start };
@@ -40,7 +41,7 @@ namespace Manaforge.Play.Tests
             {
                 if(disposed)return;
                 disposed=true;
-                Client?.Close();
+                Reader?.Dispose();Client?.Close();
                 if(!Process.HasExited)
                 {
                     Process.StandardInput.Close();
@@ -62,9 +63,9 @@ namespace Manaforge.Play.Tests
             ["server_nonce"]=ready["server_nonce"],["role"]=role,["proof"]=new string('0',64)
         });
         private static void Send(Stream stream,JObject message) { TextFrame.Write(stream,message.ToString(Formatting.None));stream.Flush(); }
-        private static JObject Read(Stream stream,long minimumRevision=0,ReceiveInbox inbox=null)
+        private static JObject Read(LoopbackFrameReader input,long minimumRevision=0,ReceiveInbox inbox=null)
         {
-            string text=TextFrame.Read(stream);
+            string text=input.Read();
             if(inbox==null)return ReceiveMessages.Parse(text,"fixture-session","one",minimumRevision,true);
             if(!inbox.Enqueue(text))return null;
             Assert.That(inbox.TryTake(out var packet),Is.True);
@@ -78,16 +79,16 @@ namespace Manaforge.Play.Tests
             try { TextFrame.Write(stream,text);stream.Flush(); }
             catch { tracker.Disconnect();throw; }
         }
-        private static void Ack(Stream stream,string id,long revision,string outcome,string code,CommandTracker tracker=null)
+        private static void Ack(LoopbackFrameReader input,string id,long revision,string outcome,string code,CommandTracker tracker=null)
         {
-            var reply=WireMessages.Parse(TextFrame.Read(stream)); var body=(JObject)reply["body"];
+            var reply=WireMessages.Parse(input.Read()); var body=(JObject)reply["body"];
             Assert.That((string)reply["message_type"],Is.EqualTo("ack"));
             Assert.That((string)body["session_id"],Is.EqualTo("fixture-session"));Assert.That((string)body["viewer_id"],Is.EqualTo("one"));
             Assert.That((string)body["command_id"],Is.EqualTo(id));Assert.That((long)body["request_revision"],Is.EqualTo(revision));
             Assert.That((string)body["outcome"],Is.EqualTo(outcome));Assert.That((string)body["code"],Is.EqualTo(code));
             tracker?.Accept(reply.ToString(Formatting.None));
         }
-        private static void Exchange(Peer peer,bool wrongKey,bool ownerEof,bool conflictingDuplicate,bool sessionError)
+        private static void Exchange(Peer peer,bool wrongKey,bool ownerEof,bool conflictingDuplicate,bool sessionError,bool partialFrame)
         {
             byte[] key=RandomBytes();
             try
@@ -109,6 +110,7 @@ namespace Manaforge.Play.Tests
                 }
                 peer.Client=new TcpClient(AddressFamily.InterNetwork);peer.Client.Connect(IPAddress.Loopback,port);
                 peer.Client.ReceiveTimeout=5000;peer.Client.SendTimeout=5000;
+                peer.Reader=new LoopbackFrameReader(peer.Client.Client);
                 using(var stream=peer.Client.GetStream())
                 {
                     var clientHello=Hello(boot,ready,"client");
@@ -117,13 +119,20 @@ namespace Manaforge.Play.Tests
                     Send(stream,clientHello);
                     if(wrongKey)
                     {
-                        Assert.That(TextFrame.Read(stream),Is.Null,"Unauthenticated peer must receive no snapshot");
+                        Assert.That(peer.Reader.Read(),Is.Null,"Unauthenticated peer must receive no snapshot");
                         Assert.That(peer.Process.WaitForExit(5000),Is.True);Assert.That(peer.Process.ExitCode,Is.EqualTo(2));return;
                     }
                     using(var verifier=new ViewerAuthentication.Verifier(Hello(boot,ready,"gateway").ToString(),key))
-                        Assert.That(verifier.Verify(TextFrame.Read(stream)),Is.True,"Gateway proof failed");
+                        Assert.That(verifier.Verify(peer.Reader.Read()),Is.True,"Gateway proof failed");
+                    if(partialFrame)
+                    {
+                        Assert.That(Assert.Throws<TextFrame.FrameException>(()=>peer.Reader.Read(150)).Code,Is.EqualTo("FRAME_TIMEOUT"));
+                        Assert.That(peer.Reader.IsClosed,Is.True);
+                        peer.Process.StandardInput.Close();
+                        Assert.That(peer.Process.WaitForExit(5000),Is.True);Assert.That(peer.Process.ExitCode,Is.Zero);return;
+                    }
                     using var inbox=new ReceiveInbox("fixture-session","one",true);
-                    var incoming=Read(stream,inbox:inbox);Assert.That((string)incoming["message_type"],Is.EqualTo("snapshot"));
+                    var incoming=Read(peer.Reader,inbox:inbox);Assert.That((string)incoming["message_type"],Is.EqualTo("snapshot"));
                     var body=(JObject)incoming["body"];Assert.That(body.Count,Is.EqualTo(2));Assert.That((bool)body["fixture_only"],Is.True);
                     var snapshot=JsonConvert.DeserializeObject<GameSnapshot>(body["snapshot"].ToString(),new JsonSerializerSettings
                     { TypeNameHandling=TypeNameHandling.None,MissingMemberHandling=MissingMemberHandling.Error,DateParseHandling=DateParseHandling.None });
@@ -131,24 +140,24 @@ namespace Manaforge.Play.Tests
                     foreach(var obj in snapshot.objects.Where(o=>o.hidden || o.face_down == true))
                     { Assert.That(obj.card_identity,Is.Null);Assert.That(obj.characteristics,Is.Null); }
                     Assert.That(snapshot.objects.Any(o=>o.hidden),Is.True,"Fixture must exercise concealment");
-                    Assert.That(Read(stream,inbox:inbox),Is.Null,"Repeated snapshot must not be applied twice");
-                    var eventMessage=Read(stream,snapshot.revision,inbox);Assert.That((string)eventMessage["message_type"],Is.EqualTo("event"));
+                    Assert.That(Read(peer.Reader,inbox:inbox),Is.Null,"Repeated snapshot must not be applied twice");
+                    var eventMessage=Read(peer.Reader,snapshot.revision,inbox);Assert.That((string)eventMessage["message_type"],Is.EqualTo("event"));
                     Assert.That((string)eventMessage["body"]["event"]["player_id"],Is.EqualTo("two"),"Actor is not the authenticated recipient");
                     string decision=snapshot.decision.decision_id,action=snapshot.actions.Single().action_id;
                     using var tracker=new CommandTracker(snapshot.session_id,snapshot.viewer_id);
-                    SendTracked(stream,Command("stale",snapshot.revision-1,decision,action),tracker);Ack(stream,"stale",snapshot.revision-1,"rejected","STALE_REVISION",tracker);
+                    SendTracked(stream,Command("stale",snapshot.revision-1,decision,action),tracker);Ack(peer.Reader,"stale",snapshot.revision-1,"rejected","STALE_REVISION",tracker);
                     Assert.That(tracker.CanSubmit,Is.True,"A matched rejection releases the command slot");
-                    SendTracked(stream,Command("current",snapshot.revision,decision,action),tracker);Ack(stream,"current",snapshot.revision,"submitted",null,tracker);
+                    SendTracked(stream,Command("current",snapshot.revision,decision,action),tracker);Ack(peer.Reader,"current",snapshot.revision,"submitted",null,tracker);
                     if(sessionError)
                     {
-                        Assert.That(tracker.AcceptSessionError(TextFrame.Read(stream)),Is.EqualTo("SESSION_FAILED"));
+                        Assert.That(tracker.AcceptSessionError(peer.Reader.Read()),Is.EqualTo("SESSION_FAILED"));
                         Assert.That(tracker.Current.State,Is.EqualTo(CommandState.Uncertain));
                         Assert.That(tracker.Current.CommandId,Is.EqualTo("current"));Assert.That(tracker.CanSubmit,Is.False);
                         Assert.Throws<WireEnvelope.EnvelopeException>(()=>tracker.AuthenticatedReconnect());
-                        Assert.That(TextFrame.Read(stream),Is.Null,"Terminal session failure must close the channel");
+                        Assert.That(peer.Reader.Read(),Is.Null,"Terminal session failure must close the channel");
                         Assert.That(peer.Process.WaitForExit(5000),Is.True);Assert.That(peer.Process.ExitCode,Is.Zero);return;
                     }
-                    var result=Read(stream,snapshot.revision,inbox);Assert.That((string)result["message_type"],Is.EqualTo("result"));
+                    var result=Read(peer.Reader,snapshot.revision,inbox);Assert.That((string)result["message_type"],Is.EqualTo("result"));
                     Assert.That((bool)result["body"]["fixture_only"],Is.True);Assert.That((string)result["body"]["snapshot"]["result"],Is.EqualTo("fixture_complete"));
                     Assert.That((string)result["body"]["snapshot"]["status"],Is.EqualTo("finished"));
                     Assert.That((string)result["body"]["snapshot"]["session_id"],Is.EqualTo(snapshot.session_id));Assert.That((string)result["body"]["snapshot"]["viewer_id"],Is.EqualTo(snapshot.viewer_id));
@@ -156,31 +165,31 @@ namespace Manaforge.Play.Tests
                     {
                         // Same ID with different contents must not create another submission reservation.
                         Send(stream,Command("current",snapshot.revision+1,decision,action));
-                        Assert.That(TextFrame.Read(stream),Is.Null,"Conflicting ID reuse closes the connection");
+                        Assert.That(peer.Reader.Read(),Is.Null,"Conflicting ID reuse closes the connection");
                         Assert.That(peer.Process.WaitForExit(5000),Is.True);Assert.That(peer.Process.ExitCode,Is.EqualTo(2));
                         tracker.Disconnect();Assert.That(tracker.Current.State,Is.EqualTo(CommandState.Uncertain));return;
                     }
                     // Deliberate raw retry probe, bypassing the normal client's ID-reuse prevention.
-                    Send(stream,Command("current",snapshot.revision,decision,action));Ack(stream,"current",snapshot.revision,"submitted",null,tracker);
+                    Send(stream,Command("current",snapshot.revision,decision,action));Ack(peer.Reader,"current",snapshot.revision,"submitted",null,tracker);
                     Assert.That(tracker.Current.State,Is.EqualTo(CommandState.Submitted),"A terminal fixture snapshot is not command confirmation");
                     Assert.That(Assert.Throws<WireEnvelope.EnvelopeException>(()=>tracker.Begin(Command("blocked",snapshot.revision,decision,action).ToString())).Code,Is.EqualTo("COMMAND_PENDING"));
                     // Deliberate raw protocol probe of the SERVER guard, bypassing normal client submission.
-                    Send(stream,Command("pending",snapshot.revision,decision,action));Ack(stream,"pending",snapshot.revision,"rejected","COMMAND_PENDING");
+                    Send(stream,Command("pending",snapshot.revision,decision,action));Ack(peer.Reader,"pending",snapshot.revision,"rejected","COMMAND_PENDING");
                     var shutdown=Message("shutdown","close",new JObject{["session_id"]=snapshot.session_id,["viewer_id"]=snapshot.viewer_id,["reason"]="client_close"});
-                    Send(stream,shutdown);var closed=WireMessages.Parse(TextFrame.Read(stream));
+                    Send(stream,shutdown);var closed=WireMessages.Parse(peer.Reader.Read());
                     Assert.That((string)closed["message_type"],Is.EqualTo("shutdown"));Assert.That(JToken.DeepEquals(closed["body"],shutdown["body"]),Is.True);
-                    Assert.That(TextFrame.Read(stream),Is.Null);Assert.That(peer.Process.WaitForExit(5000),Is.True);Assert.That(peer.Process.ExitCode,Is.Zero);
+                    Assert.That(peer.Reader.Read(),Is.Null);Assert.That(peer.Process.WaitForExit(5000),Is.True);Assert.That(peer.Process.ExitCode,Is.Zero);
                     tracker.Disconnect();Assert.That(tracker.Current.State,Is.EqualTo(CommandState.Uncertain));
                 }
             }
             finally { Array.Clear(key,0,key.Length); }
         }
-        private static IEnumerator Run(bool wrongKey,bool ownerEof,bool conflictingDuplicate=false,bool sessionError=false)
+        private static IEnumerator Run(bool wrongKey,bool ownerEof,bool conflictingDuplicate=false,bool sessionError=false,bool partialFrame=false)
         {
             string directory=Path.GetFullPath(Path.Combine(Application.dataPath,"../Artifacts/JavaDummy"));
-            using(var peer=new Peer(directory,sessionError))
+            using(var peer=new Peer(directory,sessionError,partialFrame))
             {
-                var task=Task.Run(()=>Exchange(peer,wrongKey,ownerEof,conflictingDuplicate,sessionError));var timer=Stopwatch.StartNew();
+                var task=Task.Run(()=>Exchange(peer,wrongKey,ownerEof,conflictingDuplicate,sessionError,partialFrame));var timer=Stopwatch.StartNew();
                 try
                 {
                     while(!task.IsCompleted && timer.Elapsed.TotalSeconds<25)yield return null;
@@ -197,6 +206,7 @@ namespace Manaforge.Play.Tests
         [UnityTest] public IEnumerator JavaPeerExchangesAuthenticatedFixtureAndRejectsStaleAndPendingActions()=>Run(false,false);
         [UnityTest] public IEnumerator WrongViewerKeyReceivesNoSessionData()=>Run(true,false);
         [UnityTest] public IEnumerator OwnerPipeEofStopsTheOwnedListener()=>Run(false,true);
+        [UnityTest] public IEnumerator PartialJavaFrameTimesOutAndOwnedPeerStops()=>Run(false,false,false,false,true);
         [UnityTest] public IEnumerator TerminalJavaSessionErrorPreservesPendingCommandUncertainty()=>Run(false,false,false,true);
         [UnityTest] public IEnumerator ConflictingDuplicateCannotReplaceTheRecordedCommand()=>Run(false,false,true);
     }

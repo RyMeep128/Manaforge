@@ -447,3 +447,13 @@ normal input completion permits draining. Fifteen new checks plus the actual
 Java-dummy handoff bring local focused EditMode validation to 101. Socket read
 deadlines/cancellation, owner coordination, renderer projection and licensed CI
 remain pending; G1 is not frozen and bulk P2 remains gated.
+
+
+### G1 client socket-read deadlines — October 30, 2026
+
+An [owned loopback frame reader](../Mtg_Projects/mtg_play/protocol/frame-read-deadlines.md)
+now uses one monotonic budget for header/payload reads, observes cancellation and
+closes on failure. Fifteen real socket checks and a sixth authenticated dummy
+partial-frame timeout/cleanup case pass within 117 focused EditMode checks.
+Product owner coordination, Java-side deadlines, write/handshake budgets and
+licensed CI remain pending. G1 is not frozen; no bulk P2 port has begun.

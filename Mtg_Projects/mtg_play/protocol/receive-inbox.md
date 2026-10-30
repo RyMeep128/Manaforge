@@ -93,3 +93,13 @@ client-only increment. Licensed Unity CI, product transport/lifecycle integratio
 real engine visibility and G0/G1 acceptance remain open. CI review stays on the
 owner's third-commit cadence; no new CI pass is claimed here and Qt CI was not
 investigated.
+
+
+### Socket-read deadline follow-up
+
+The separate [owned loopback reader](frame-read-deadlines.md) now bounds complete
+C# socket frame reads and observes lifetime cancellation without abandoning a
+read task. It closes on partial-frame failure; ReceiveInbox still does not own
+that socket. A product coordinator must couple reader failure, inbox cancellation
+and command uncertainty. Explicit inbox cancellation alone does not interrupt an
+unrelated socket read.

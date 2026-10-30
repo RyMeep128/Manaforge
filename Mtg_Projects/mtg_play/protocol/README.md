@@ -346,3 +346,14 @@ invalid viewer data clears the queue. The actual dummy worker now passes data
 through it. Fifteen new checks bring focused EditMode validation to 101 locally;
 Java preflight also passes. Socket read cancellation/deadlines, product pump
 coordination and immutable renderer projection remain pending. G1 remains open.
+
+
+## Absolute client socket-read deadlines
+
+[Loopback frame read ownership](frame-read-deadlines.md) now bounds an entire
+client socket frame and observes cancellation while waiting for header/payload
+fragments. Failure closes the owned socket rather than resuming a partial frame.
+Fifteen real loopback checks and a sixth authenticated Java-dummy partial-header
+scenario bring local focused EditMode validation to 117. Product coordination,
+write/handshake deadlines, Java-side absolute deadlines and licensed CI remain
+pending; no G1 completion or real engine behavior is claimed.
