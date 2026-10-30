@@ -80,6 +80,20 @@ namespace Manaforge.Play.Protocol
         }
         public static JObject Parse(string text)
         {
+            var envelope = ParseObject(text);
+            if (envelope == null || envelope.Count != 4 || envelope["wire_version"]?.Type != JTokenType.Integer
+                || envelope["message_type"]?.Type != JTokenType.String || envelope["message_id"]?.Type != JTokenType.String
+                || !(envelope["body"] is JObject)) throw new EnvelopeException("ENVELOPE_INVALID");
+            if ((long)envelope["wire_version"] != 1) throw new EnvelopeException("ENVELOPE_VERSION");
+            string type = (string)envelope["message_type"];
+            if (Array.IndexOf(new[] {"hello", "snapshot", "command", "ack", "event", "result", "shutdown", "error"}, type) < 0
+                || !Regex.IsMatch((string)envelope["message_id"], @"\A[A-Za-z0-9_-]{1,128}\z"))
+                throw new EnvelopeException("ENVELOPE_INVALID");
+            return envelope; // Body remains unvalidated.
+        }
+
+        internal static JObject ParseObject(string text)
+        {
             Syntax(text);
             try
             {
@@ -98,14 +112,6 @@ namespace Manaforge.Play.Protocol
                 }
                 JObject envelope;
                 using (var reader = Reader(text)) envelope = JToken.ReadFrom(reader) as JObject;
-                if (envelope == null || envelope.Count != 4 || envelope["wire_version"]?.Type != JTokenType.Integer
-                    || envelope["message_type"]?.Type != JTokenType.String || envelope["message_id"]?.Type != JTokenType.String
-                    || !(envelope["body"] is JObject)) throw new EnvelopeException("ENVELOPE_INVALID");
-                if ((long)envelope["wire_version"] != 1) throw new EnvelopeException("ENVELOPE_VERSION");
-                string type = (string)envelope["message_type"];
-                if (Array.IndexOf(new[] {"hello", "snapshot", "command", "ack", "event", "result", "shutdown", "error"}, type) < 0
-                    || !Regex.IsMatch((string)envelope["message_id"], @"\A[A-Za-z0-9_-]{1,128}\z"))
-                    throw new EnvelopeException("ENVELOPE_INVALID");
                 return envelope; // body is UNVALIDATED; never dispatch directly
             }
             catch (JsonException) { throw new EnvelopeException("JSON_INVALID"); }

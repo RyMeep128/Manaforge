@@ -100,3 +100,29 @@ Next: connect this validated raw bundle to a worker-loaded, bounded/shared Unity
 texture owner; produce the packaged real-artwork renderer fixture; then capture
 20/70/200-object interactions and actual timings/memory/startup evidence. G0,
 P0.3, P3.2/P3.2a and the LTS/licensed-CI/distribution decisions remain open.
+
+## Unity worker loader — October 30, 2026
+
+`ArtworkFixture.LoadAsync` now reads the bundle on a task worker, with cancellation,
+strict JSON parsing, exact field/type checks and the exporter's manifest/card/asset
+budgets. It rejects linked directories/files, non-hash resource filenames, invalid
+pixel format/origin/dimensions, mismatched byte lengths, raw SHA-256 and
+content/dimension asset IDs. Candidate Oracle/face identities and cache references
+must agree. No Unity APIs, database access or image decoding run in the loader.
+
+The immutable result resolves display printings with `VisualPrintingPolicy`, keeps
+selected printing identities, labels every display value PRINTED MOCK and shares
+asset objects. Pixel access returns a defensive copy. This is an explicitly public
+fixture API; it is not a live-session asset cache or private seat handoff mechanism.
+The shared strict JSON parser was factored internally without changing wire error
+codes or envelope validation.
+
+Focused EditMode checks cover selection preservation, pixel ownership, invalid
+fixture markers, resource paths, dimensions, checksums, identities, faces and cache
+references. An optional local diagnostic also loads the actual seven-card bundle;
+CI skips that diagnostic when its uncommitted artwork is absent. Texture creation,
+GPU ownership/disposal, visible scene integration and benchmarks remain pending.
+
+Local validation: 66 focused Unity EditMode checks passed, including the actual
+seven-card/48,219,136-byte bundle, plus the Java protocol preflight. No full
+application suite ran. CI review remains scheduled for the next (third) commit.
