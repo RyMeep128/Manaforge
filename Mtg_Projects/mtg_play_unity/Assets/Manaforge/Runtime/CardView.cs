@@ -130,6 +130,7 @@ namespace Manaforge.Play
                 label.style.backgroundColor=Color.clear;
                 label.style.color=label==status?new Color(.85f,.85f,.81f):new Color(.06f,.065f,.055f);
                 label.style.paddingLeft=label.style.paddingRight=label.style.paddingTop=label.style.paddingBottom=0;
+                label.style.marginLeft=label.style.marginRight=label.style.marginTop=label.style.marginBottom=0;
             }
             title.style.unityFontStyleAndWeight=type.style.unityFontStyleAndWeight=stats.style.unityFontStyleAndWeight=FontStyle.Bold;
             title.style.whiteSpace=type.style.whiteSpace=stats.style.whiteSpace=WhiteSpace.NoWrap;
@@ -138,20 +139,22 @@ namespace Manaforge.Play
             frame.style.position=artwork.style.position=Position.Absolute;
             Box(frame,0,0,100,100);frame.scaleMode=ScaleMode.StretchToFill;
             // Keep the exact printing's colored surround and original bevels, not a generic dark panel.
-            frame.uv=full?new Rect(0,0,1,1):new Rect(0,.42f,1,.58f);
+            frame.uv=full?new Rect(0,0,1,1):new Rect(0,.47f,1,.53f);
             frame.style.display=concealed || frame.image==null?DisplayStyle.None:DisplayStyle.Flex;
             Box(interior,7,11,86,83);
             interior.style.display=!concealed && full && !authenticOnly?DisplayStyle.Flex:DisplayStyle.None;
-            Box(printedStatsMask,74,89,24,10);
-            printedStatsMask.style.display=!concealed && full && !authenticOnly?DisplayStyle.Flex:DisplayStyle.None;
+            // The compact footer hides the underlying printing below the art window, including set symbols.
+            Box(printedStatsMask,full?74:0,full?89:91,full?24:100,full?10:9);
+            printedStatsMask.style.display=!concealed && !(full && authenticOnly)?DisplayStyle.Flex:DisplayStyle.None;
             Box(artwork,8,full?12:21,84,full?43:70);
             artwork.scaleMode=ScaleMode.StretchToFill;artwork.uv=artCrop;
             if(full && authenticOnly) {
                 Box(artwork,0,0,100,100);artwork.uv=new Rect(0,0,1,1);artwork.scaleMode=ScaleMode.ScaleToFit;
             }
             Box(nameplate,5.5f,full?4:5,89,full?7:16);
-            Box(title,8,full?4.3f:5.5f,full?Mathf.Max(40,84-mana.SymbolCount*6):84,full?6:14);
-            Box(mana,57,4.7f,34,5.5f);mana.Resize(17*scale);
+            // Share the nameplate centerline; default Label margins otherwise shift small names.
+            Box(title,8,full?4:5,full?Mathf.Max(40,84-mana.SymbolCount*6):84,full?7:16);
+            Box(mana,57,4,34,7);mana.Resize(17*scale);
             Box(typeplate,5.5f,55.5f,89,7);Box(type,8,56,84,6);
             Box(rules,8,64,84,24);rules.style.backgroundColor=new Color(.88f,.88f,.80f);
             rules.style.paddingLeft=rules.style.paddingRight=4*scale;rules.style.paddingTop=3*scale;

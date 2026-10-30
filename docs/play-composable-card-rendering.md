@@ -326,3 +326,23 @@ The final 20-object capture was inspected for visible content after the stencil
 fix; no final aesthetic approval is claimed. No full application suite ran. CI
 review follows the owner's every-third-commit cadence; this is the first increment
 after the prior checkpoint, so no new CI pass is claimed.
+
+
+## Pip/name alignment and compact lower trim — October 30, 2026
+
+Owner screenshots showed displaced mana glyphs, compact names off their plate
+centerline and an exposed set symbol at the compact lower edge. The renderer now
+removes inherited label margins, aligns title and mana row to the nameplate's
+vertical bounds, and keeps symbol glyphs in normal weight with zero margins.
+Compact printing surrounds sample only the upper 53 percent rather than 58,
+removing the printed type/set-symbol region without changing full-card inspection
+or object/printing identities. This remains a presentation adjustment, pending
+owner review of the rebuilt fixture; provided-asset integration is separate work.
+
+
+The compact lower strip is explicitly masked below the art window, preventing
+underlying printing pixels from leaking around the cropped overlay. Validation
+for this spacing-only revision uses the Windows build and 20-object packaged
+artwork smoke; no full application suite or additional unit suite is run. Owner
+visual approval remains pending. CI review is due after the next commit under
+the established third-commit cadence; no CI pass is claimed for this increment.

@@ -72,6 +72,8 @@ namespace Manaforge.Play
             label.style.position=Position.Absolute;label.style.left=Length.Percent(hybrid?(second?45:0):0);
             label.style.top=Length.Percent(hybrid?(second?42:0):0);label.style.width=Length.Percent(hybrid?55:100);label.style.height=Length.Percent(hybrid?58:100);
             label.style.paddingLeft=label.style.paddingRight=label.style.paddingTop=label.style.paddingBottom=0;
+            label.style.marginLeft=label.style.marginRight=label.style.marginTop=label.style.marginBottom=0;
+            label.style.unityFontStyleAndWeight=FontStyle.Normal;
             label.userData=hybrid;parent.Add(label);
         }
         public void Resize(float value)
