@@ -188,3 +188,48 @@ fixtures. Local Java checks and 28 Unity EditMode tests pass. These codecs do no
 parse JSON, authenticate a peer or dispatch gameplay; dummy process exchange,
 shutdown and G1 acceptance remain pending. The Java protocol CI helper includes
 the framing corpus without starting Unity or XMage.
+
+
+## Strict JSON envelope foundation — G1 remains open
+
+`wire-envelope-v1.schema.json` defines a header with exactly `wire_version` (1),
+`message_type`, `message_id` and object `body`. The type vocabulary is hello,
+snapshot, command, ack, event, result, shutdown and error. Message IDs use 1–128
+ASCII letters/digits/underscore/hyphen. IDs correlate messages; they confer no
+identity or authorization. This header version is separate from existing DTO
+protocol versions and does not establish a compatibility handshake.
+
+Java/C# `WireEnvelope` readers validate strict JSON, reject duplicate keys at
+every object depth (including escaped aliases), preserve date-like strings,
+reject lone surrogates/BOM/comments/trailing data, enforce 32 container levels
+including the envelope, and cap encoded text at 1 MiB. This initial protocol
+accepts signed 64-bit integer numbers only: decimal/exponent syntax is rejected
+rather than silently rounded or coerced. No current DTO requires float values.
+A future fractional field requires an explicit compatible contract decision.
+
+The schema expresses structure, not lexical number spelling, duplicate-key or
+nesting checks; the readers enforce those extra wire constraints. The C# reader
+uses a bounded lexical guard before Newtonsoft, which otherwise accepts several
+non-JSON spellings and replaces lone escaped surrogates. Java uses strict Gson
+streaming with duplicate detection. Both return JSON trees, not separately
+maintained typed models; generated existing DTOs remain unchanged. No type-name
+or polymorphic object loading is enabled. Trees remain intermediate mutable data.
+
+The five positive/25 negative shared cases in `fixtures/wire-envelopes-v1.json`
+run in Java's existing hosted protocol helper and Unity's focused EditMode suite.
+A focused Python check validates the corpus against the schema. Local Java checks,
+30 Unity EditMode checks and the focused schema check pass. CI remains pending.
+
+**Bodies are unvalidated.** Never dispatch these trees directly or treat a valid
+header as a viewer-safe snapshot. Still required: per-message body schemas,
+compatibility/seat authentication, session/revision/decision/action binding,
+acknowledgement outcomes, stale-command rejection, unknown-field evolution,
+private DTO validation, deadlines/cancellation, and the actual dummy exchange.
+Unknown header fields/types/versions currently fail closed. Before enabling any
+future extension, negotiate and test its handling in both consumers.
+
+Readers expose only JSON_INVALID, JSON_DUPLICATE, JSON_DEPTH, ENVELOPE_INVALID or
+ENVELOPE_VERSION; never reflect raw content in diagnostics. Multiple defects may
+fail at the first parser-specific check; no recovery/replay is implied. Framing,
+JSON and semantic validation are distinct layers. Run these readers on workers.
+No socket listener, real engine, launcher or gameplay dispatcher is introduced.

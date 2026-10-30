@@ -55,6 +55,8 @@ def main():
             PROTOCOL / "java-test/FixtureConsumer.java",
             PROTOCOL / "java/manaforge/protocol/TextFrame.java",
             PROTOCOL / "java-test/FrameFixtureConsumer.java",
+            PROTOCOL / "java/manaforge/protocol/WireEnvelope.java",
+            PROTOCOL / "java-test/EnvelopeFixtureConsumer.java",
         ]
         subprocess.run(
             [
@@ -91,6 +93,18 @@ def main():
                 str(workspace) + os.pathsep + str(jar),
                 "manaforge.protocol.FrameFixtureConsumer",
                 str(PROTOCOL / "fixtures/text-frames-v1.json"),
+            ],
+            check=True,
+            timeout=60,
+        )
+
+        subprocess.run(
+            [
+                runtime,
+                "-cp",
+                str(workspace) + os.pathsep + str(jar),
+                "manaforge.protocol.EnvelopeFixtureConsumer",
+                str(PROTOCOL / "fixtures/wire-envelopes-v1.json"),
             ],
             check=True,
             timeout=60,

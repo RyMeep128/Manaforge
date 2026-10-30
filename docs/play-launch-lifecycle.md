@@ -121,3 +121,10 @@ now provides matching Java/C# length caps, strict UTF-8 and fragmented/truncated
 stream checks. No bootstrap pipes or loopback service use it yet. JSON envelopes,
 authentication, cancellation/deadlines, acknowledgements and the actual dummy
 exchange are still required; P1.4/G1 remain open.
+
+
+The subsequent strict JSON envelope increment adds the shared header schema,
+duplicate-key/depth/Unicode checks and an explicit header-only type vocabulary.
+See the [protocol guide](../Mtg_Projects/mtg_play/protocol/README.md#strict-json-envelope-foundation--g1-remains-open).
+Bodies, peer authentication, live command safety and dummy exchange remain pending;
+this does not mark G1 complete or begin the XMage gateway port.

@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:manaforge:play:wire-envelope:1",
+  "title": "Play wire envelope header v1; body semantics unvalidated",
+  "type": "object",
+  "required": [
+    "wire_version",
+    "message_type",
+    "message_id",
+    "body"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "wire_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "message_type": {
+      "enum": [
+        "hello",
+        "snapshot",
+        "command",
+        "ack",
+        "event",
+        "result",
+        "shutdown",
+        "error"
+      ]
+    },
+    "message_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,128}(?![\\s\\S])"
+    },
+    "body": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/value"
+      }
+    }
+  },
+  "$defs": {
+    "value": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "type": "integer",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/value"
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/value"
+          }
+        }
+      ]
+    }
+  }
+}
