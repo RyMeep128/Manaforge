@@ -62,3 +62,14 @@ infer that arbitrary source shaders, prefabs or gameplay scripts are compatible.
 The current gallery uses Core printing images instead. Engine-supplied loyalty,
 chapters, defense, counters and legal actions remain future runtime integration;
 asset discovery does not authorize reconstructing those facts client-side.
+
+
+## Local research handoff reference — October 30, 2026
+
+The owner pointed to the ignored `UNITY_ASSETS_AI_HANDOFF.local.md`, which was
+read along with `Downloads/Unity Asset Catalog/README.md`. The searchable
+`catalog.html` and `inventory.json` provide filename/category indexes for future
+focused work. The handoff also identifies raw ArtCropDatabase, lookup and card
+metadata files; their schemas and crop semantics have not been verified here.
+Its suggested projects are research leads, not authorization to implement all of
+them. Keep originals unchanged and machine-specific indexes/extractions local.

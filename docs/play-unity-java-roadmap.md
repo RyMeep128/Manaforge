@@ -616,3 +616,13 @@ are excluded from ordinary-frame reconstruction. A dropdown exposes all faces.
 The supplied Downloads assets contain loyalty, chapter, defense and token parts;
 curated component import and dynamic authoritative fields remain separate work.
 This is printed-fixture presentation, not new gameplay support or G0/G1 acceptance.
+
+
+### P3.2a cost and inline rules symbols — October 30, 2026
+
+The [symbol component](play-card-symbol-rendering.md) centers actual glyph bounds
+inside pips and formats supplied tap/untap/colorless/mana tokens inline in rules
+text. Unknown/oversized notation retains a literal fallback. Concealment clears
+inline runs; source text is never interpreted as gameplay or injected rich text.
+The local Unity asset research handoff was reviewed for subsequent asset work.
+The symbol review build still requires owner visual approval; G0/G1 stay open.

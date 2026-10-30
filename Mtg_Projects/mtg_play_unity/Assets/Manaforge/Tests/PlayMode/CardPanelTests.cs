@@ -107,6 +107,21 @@ namespace Manaforge.Play.Tests
         }
 
         [UnityTest]
+        public IEnumerator RulesSymbolsUpdateOnAnAttachedPanelAndClearOnHandoff()
+        {
+            view.UpdateValues(new CardDisplayValues("Symbol fixture","{1}","Artifact","{T}: Add {C}{C}.",null,null));
+            yield return null;yield return null;
+            var symbols=view.Q<RulesTextView>();
+            Assert.That(symbols.resolvedStyle.display,Is.EqualTo(DisplayStyle.Flex));
+            Assert.That(symbols.Query<ManaSymbolView>().ToList().Count,Is.EqualTo(3));
+            Assert.That(symbols.Q<ManaSymbolView>().worldBound.y,Is.LessThan(symbols.worldBound.y+20),"Inline symbols belong on the first text line, not the middle of the box");
+            Assert.That(view.Q<Label>("rules").resolvedStyle.opacity,Is.Zero);
+            view.Conceal();yield return null;
+            Assert.That(symbols.SourceText,Is.Empty);Assert.That(symbols.childCount,Is.Zero);
+            Assert.That(symbols.resolvedStyle.display,Is.EqualTo(DisplayStyle.None));
+        }
+
+        [UnityTest]
         public IEnumerator ViewerHandoffHasAnEmptyFrameBeforeRebindingAndDisposeDetaches()
         {
             view.tooltip = "Private first viewer tooltip";

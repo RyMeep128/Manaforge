@@ -61,6 +61,7 @@ namespace Manaforge.Play.Tests
             Assert.That(view.tooltip, Is.Null.Or.Empty);
             foreach(var image in view.Query<Image>().ToList())Assert.That(image.image,Is.Null);
             Assert.That(view.Q<ManaCostView>().Cost,Is.Empty);
+            Assert.That(view.Q<RulesTextView>().SourceText,Is.Empty);
             foreach (var label in view.Query<Label>().ToList()) Assert.That(label.text, Is.Empty);
         }
         [Test] public void RebindingClearsOldValuesAndAuthenticFullImageAvoidsFakeDynamicFrame()

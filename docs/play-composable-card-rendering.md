@@ -402,3 +402,13 @@ visible credit lines. An earlier packaged gesture run also exercised the lighter
 top rim. No full application suite ran; this visual-only increment adds no unit
 suite run. Final visual approval remains with the owner. CI follows the owner's
 third-commit cadence; this is the first commit after the last checkpoint.
+
+
+## Glyph-bound centering and inline rules symbols — October 30, 2026
+
+The [shared symbol renderer](play-card-symbol-rendering.md) replaces baseline-based
+pip labels with glyph-bound geometry and adds tap/untap/colorless/mana symbols to
+rules text. Unknown notation stays literal and supplied text cannot inject rich
+text. Current printing identities, authentic fallback images and game protocol
+are unchanged. The dedicated four-card review fixture requires owner visual
+approval; this does not establish live mana payment or activated-ability support.

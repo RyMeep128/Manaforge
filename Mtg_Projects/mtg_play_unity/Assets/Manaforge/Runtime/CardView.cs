@@ -42,6 +42,7 @@ namespace Manaforge.Play
         private bool selected;
         private readonly Label type = Text("type");
         private readonly Label rules = Text("rules");
+        private readonly RulesTextView rulesSymbols = new RulesTextView();
         private readonly Label stats = Text("stats");
         private readonly Label status = Text("status");
         private CardPresentationMode mode;
@@ -62,7 +63,7 @@ namespace Manaforge.Play
             interior.style.position=Position.Absolute;interior.style.backgroundColor=new Color(.88f,.88f,.80f);
             printedStatsMask.style.position=Position.Absolute;printedStatsMask.style.backgroundColor=new Color(.07f,.07f,.065f);
             Add(frame); Add(interior); Add(printedStatsMask); Add(artwork); Add(nameplate); Add(typeplate); Add(statplate); Add(missing); Add(title); Add(mana);
-            Add(type); Add(rules); Add(stats); Add(status);
+            Add(type); Add(rules); Add(rulesSymbols); Add(stats); Add(status);
             edge.style.position=Position.Absolute;Add(edge);
             Conceal();
         }
@@ -104,7 +105,7 @@ namespace Manaforge.Play
             if (concealed) return;
             if (values == null) throw new ArgumentNullException(nameof(values));
             Set(title, values.Name); mana.SetCost(values.ManaCost); Set(type, values.TypeLine);
-            Set(rules, values.RulesText); Set(stats, values.PowerToughness); Set(status, values.Status); Layout();
+            Set(rules, values.RulesText); rulesSymbols.SetText(values.RulesText); Set(stats, values.PowerToughness); Set(status, values.Status); Layout();
         }
 
         private static void Set(Label label, string value)
@@ -180,6 +181,9 @@ namespace Manaforge.Play
             Box(typeplate,5.5f,55.5f,89,7);Box(type,8,56,84,6);
             Box(rules,8,64,84,24);rules.style.backgroundColor=new Color(.88f,.88f,.80f);
             rules.style.paddingLeft=rules.style.paddingRight=4*scale;rules.style.paddingTop=3*scale;
+            Box(rulesSymbols,8,64,84,24);rulesSymbols.style.paddingLeft=rulesSymbols.style.paddingRight=4*scale;rulesSymbols.style.paddingTop=3*scale;
+            rulesSymbols.Resize(12.8f*scale);rules.style.opacity=rulesSymbols.SymbolCount>0?0:1;
+            rulesSymbols.style.display=!concealed && full && !authenticOnly && rulesSymbols.SymbolCount>0?DisplayStyle.Flex:DisplayStyle.None;
             Box(statplate,75,full?90:79,22,full?8:19);
             Box(stats,77,full?90.3f:79.5f,18,full?7:17);
             Box(status,8,full?94:82,60,full?4:12);Box(missing,8,35,84,25);
@@ -210,7 +214,7 @@ namespace Manaforge.Play
             concealed = true;
             selected = false;
             Identity = null;
-            artwork.image = null; frame.image = null; mana.Conceal();
+            artwork.image = null; frame.image = null; mana.Conceal(); rulesSymbols.Conceal();
             foreach (var label in new[] { title, type, rules, stats, status, missing })
                 label.text = "";
             tooltip = null;
