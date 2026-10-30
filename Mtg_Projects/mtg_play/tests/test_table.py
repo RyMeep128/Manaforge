@@ -305,3 +305,88 @@ def test_contextual_zones_and_inspection_do_not_submit_or_reopen_after_dismissal
         assert not table.inspection.toPlainText()
     finally:
         table.close()
+
+
+def test_hover_is_delayed_transient_and_uses_current_snapshot_without_actions(app):
+    table = GameTable(object(), artwork_factory=SilentArtwork)
+    obj = card("hovered")
+    view = replace(snapshot(), objects=(obj,))
+    calls = []
+    table.command.connect(lambda *args: calls.append(args))
+    table.present(view)
+    try:
+        table._schedule_hover(obj.object_id)
+        assert table.hover_timer.isActive() and table.hover_preview.isHidden()
+        assert table.hover_timer.interval() == 300
+        table._show_hover()
+        assert "3/3" in table.hover_text.toPlainText()
+        assert "original printing" in table.hover_text.toPlainText()
+        assert (
+            table.inspected is None and table.inspection_dialog.isHidden() and not calls
+        )
+        changed = replace(
+            obj,
+            characteristics=replace(
+                obj.characteristics,
+                power="8",
+                toughness="9",
+                current_abilities=("Engine-reported ability",),
+            ),
+        )
+        table.present(replace(view, revision=2, objects=(changed,)))
+        assert "8/9" in table.hover_text.toPlainText()
+        assert "Engine-reported ability" in table.hover_text.toPlainText()
+        table.pending()
+        assert table.hover_preview.isHidden() and not table.hover_text.toPlainText()
+        table._schedule_hover(obj.object_id)
+        assert not table.hover_timer.isActive() and not calls
+    finally:
+        table.clear()
+        table.close()
+
+
+@pytest.mark.parametrize("kind", ["hidden", "face_down", "foreign_hand", "removed"])
+def test_hover_cannot_expose_concealed_or_removed_card_details(app, kind):
+    table = GameTable(object(), artwork_factory=SilentArtwork)
+    obj = card("private", name="PRIVATE NAME")
+    if kind == "hidden":
+        obj = replace(obj, hidden=True)
+    elif kind == "face_down":
+        obj = replace(obj, face_down=True)
+    elif kind == "foreign_hand":
+        obj = replace(obj, zone="hand", owner_id="two")
+    table.present(replace(snapshot(), objects=() if kind == "removed" else (obj,)))
+    table._schedule_hover(obj.object_id)
+    table._show_hover()
+    assert table.hover_preview.isHidden() and not table.hover_text.toPlainText()
+    assert table.inspected is None
+    table.clear()
+
+
+def test_multiple_actions_use_explicit_menu_and_are_invalidated_by_next_view(app):
+    table = GameTable(object(), artwork_factory=SilentArtwork)
+    obj = card("choice")
+    view = replace(
+        snapshot(),
+        objects=(obj,),
+        actions=(
+            LegalAction("first", "activate_ability", obj.object_id, "First ability"),
+            LegalAction("second", "activate_ability", obj.object_id, "Second ability"),
+        ),
+    )
+    calls = []
+    table.command.connect(lambda *args: calls.append(args))
+    table.present(view)
+    try:
+        table.select_object(obj.object_id)
+        assert table.inspection_dialog.isHidden() and not calls
+        assert len(table.action_menu.actions()) == 2
+        table.action_menu.actions()[1].trigger()
+        assert calls == [(view, "perform", ("second",))]
+        table.present(replace(view, revision=2, actions=()))
+        assert not table.action_menu.actions() and table.action_menu.isHidden()
+        table.select_object(obj.object_id, interact=False)
+        assert len(calls) == 1 and not table.inspection_dialog.isHidden()
+    finally:
+        table.clear()
+        table.close()

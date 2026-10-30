@@ -29,8 +29,83 @@ def is_land(obj):
     )
 
 
+def live_card_text(view, obj):
+    """Authorized engine observations only; printed artwork is never current rules."""
+    names = {player.player_id: player.name for player in view.players}
+    c = obj.characteristics if not obj.face_down and not obj.hidden else None
+    rows = [
+        object_name(obj),
+        "Live game information",
+        "Zone: " + obj.zone.replace("_", " ").title(),
+        "Owner: " + names.get(obj.owner_id, "Unknown"),
+        "Controller: " + names.get(obj.controller_id, "Unknown"),
+    ]
+    if c:
+        rows.extend(
+            value
+            for value in [
+                c.type_line,
+                "Color: " + c.color if c.color else None,
+                f"{c.power}/{c.toughness}" if c.power is not None else None,
+                "Transformed" if c.transformed else None,
+                "Copy" if c.is_copy else None,
+                "Flipped" if c.flipped else None,
+            ]
+            if value
+        )
+        rows.extend(f"{count} {kind} counters" for kind, count in c.counters or ())
+        if c.current_abilities is not None:
+            rows.append("Current abilities")
+            rows.extend(c.current_abilities or ("None reported",))
+        if c.engine_view_text:
+            rows.append("Engine card notes (may be incomplete)")
+            rows.extend(c.engine_view_text)
+        if c.loyalty is not None:
+            rows.append("Loyalty: " + c.loyalty)
+        if c.defense is not None:
+            rows.append("Defense: " + c.defense)
+    if obj.damage is not None:
+        rows.append(f"Damage: {obj.damage}")
+    lookup = {
+        item.object_id: object_name(item)
+        for item in view.objects
+        if item.zone != "hand" or item.owner_id == view.viewer_id
+    }
+    if obj.attachments:
+        rows.append(
+            "Attachments: "
+            + ", ".join(lookup.get(item, "Card") for item in obj.attachments)
+        )
+    if obj.attached_to:
+        rows.append("Attached to: " + lookup.get(obj.attached_to, "Card"))
+    for group in view.combat:
+        if obj.object_id in group.attackers:
+            rows.append(
+                "Attacking: "
+                + names.get(
+                    group.defender_id, lookup.get(group.defender_id, "Defender")
+                )
+            )
+            rows.append(
+                "Blocked by: "
+                + (
+                    ", ".join(lookup.get(item, "Creature") for item in group.blockers)
+                    or "None"
+                )
+            )
+        if obj.object_id in group.blockers:
+            rows.append(
+                "Blocking: "
+                + ", ".join(lookup.get(item, "Creature") for item in group.attackers)
+            )
+    rows.append("Artwork shows the original printing; live values above may differ.")
+    return "\n".join(rows)
+
+
 class GameCard(W.QAbstractButton):
     inspectRequested = C.pyqtSignal()
+    hoverRequested = C.pyqtSignal()
+    hoverEnded = C.pyqtSignal()
 
     def __init__(self, artwork, parent=None):
         super().__init__(parent)
@@ -159,6 +234,14 @@ class GameCard(W.QAbstractButton):
             " · ".join(badge) or object_name(self.obj),
         )
 
+    def enterEvent(self, event):
+        super().enterEvent(event)
+        self.hoverRequested.emit()
+
+    def leaveEvent(self, event):
+        self.hoverEnded.emit()
+        super().leaveEvent(event)
+
     def contextMenuEvent(self, event):
         self.inspectRequested.emit()
         event.accept()
@@ -167,6 +250,8 @@ class GameCard(W.QAbstractButton):
 class CardLane(W.QScrollArea):
     selected = C.pyqtSignal(str)
     inspected = C.pyqtSignal(str)
+    hovered = C.pyqtSignal(str)
+    hoverEnded = C.pyqtSignal()
 
     def __init__(self, artwork, parent=None):
         super().__init__(parent)
@@ -213,6 +298,10 @@ class CardLane(W.QScrollArea):
                 card.inspectRequested.connect(
                     lambda value=identifier: self.inspected.emit(value)
                 )
+                card.hoverRequested.connect(
+                    lambda value=identifier: self.hovered.emit(value)
+                )
+                card.hoverEnded.connect(self.hoverEnded)
                 self.cards[identifier] = card
             self.cards[obj.object_id].present(
                 obj,
@@ -260,6 +349,26 @@ class GameTable(W.QWidget):
         super().__init__(parent)
         self.view = None
         self.inspected = None
+        self._interactions_pending = False
+        self._hover_identifier = None
+        self.hover_timer = C.QTimer(self)
+        self.hover_timer.setSingleShot(True)
+        self.hover_timer.setInterval(300)
+        self.hover_timer.timeout.connect(self._show_hover)
+        self.hover_preview = W.QFrame(self, C.Qt.WindowType.ToolTip)
+        self.hover_preview.setAttribute(
+            C.Qt.WidgetAttribute.WA_TransparentForMouseEvents
+        )
+        self.hover_preview.setFocusPolicy(C.Qt.FocusPolicy.NoFocus)
+        preview_layout = W.QVBoxLayout(self.hover_preview)
+        self.hover_image = W.QLabel()
+        self.hover_image.setAlignment(C.Qt.AlignmentFlag.AlignCenter)
+        preview_layout.addWidget(self.hover_image)
+        self.hover_text = W.QPlainTextEdit()
+        self.hover_text.setReadOnly(True)
+        self.hover_text.setFocusPolicy(C.Qt.FocusPolicy.NoFocus)
+        preview_layout.addWidget(self.hover_text, 1)
+        self.action_menu = W.QMenu(self)
         self.view_mode = "focused"
         self._zone_decision = None
         self.artwork = artwork_factory(service, self)
@@ -364,12 +473,17 @@ class GameTable(W.QWidget):
         self.combat_summary.hide()
         self.decision_dock.hide()
         for lane in self.lanes:
+            lane.hovered.connect(self._schedule_hover)
+            lane.hoverEnded.connect(self._hide_hover)
             lane.selected.connect(self.select_object)
             lane.inspected.connect(
                 lambda identifier: self.select_object(identifier, interact=False)
             )
 
     def clear(self):
+        self._hide_hover()
+        self.action_menu.clear()
+        self.action_menu.hide()
         self.combat_summary.clear()
         self.combat_summary.hide()
         self._zone_decision = None
@@ -389,12 +503,18 @@ class GameTable(W.QWidget):
         self._clear_inspection()
 
     def pending(self):
+        self._interactions_pending = True
+        self._hide_hover()
+        self.action_menu.hide()
         self.decisions.setEnabled(False)
         self.object_actions.setEnabled(False)
         for lane in self.lanes:
             lane.setEnabled(False)
 
     def present(self, view):
+        self._interactions_pending = False
+        self.action_menu.hide()
+        self.action_menu.clear()
         if self.view and self.view.viewer_id != view.viewer_id:
             self.clear()
         self.view = view
@@ -555,10 +675,94 @@ class GameTable(W.QWidget):
                     self.zones_dialog.show()
                     break
         self._zone_decision = decision_id
+        if self._hover_identifier is not None and not self.hover_timer.isActive():
+            self._show_hover()
         if self.inspected and any(obj.object_id == self.inspected for obj in visible):
             self.select_object(self.inspected, interact=False, show_inspection=False)
         else:
             self._clear_inspection()
+
+    def _schedule_hover(self, identifier):
+        if self._interactions_pending:
+            return
+        self._hover_identifier = identifier
+        self.hover_timer.start()
+
+    def _hide_hover(self):
+        self.hover_timer.stop()
+        self._hover_identifier = None
+        self.hover_preview.hide()
+        self.hover_image.clear()
+        self.hover_text.clear()
+
+    def _show_hover(self):
+        self.hover_timer.stop()
+        view = self.view
+        obj = (
+            next(
+                (
+                    obj
+                    for obj in view.objects
+                    if obj.object_id == self._hover_identifier
+                ),
+                None,
+            )
+            if view
+            else None
+        )
+        if (
+            obj is None
+            or obj.hidden
+            or obj.face_down
+            or self._interactions_pending
+            or (obj.zone == "hand" and obj.owner_id != view.viewer_id)
+        ):
+            self._hide_hover()
+            return
+        self.hover_text.setPlainText(live_card_text(view, obj))
+        self._update_hover_image(obj)
+        screen = (
+            G.QGuiApplication.screenAt(G.QCursor.pos())
+            or G.QGuiApplication.primaryScreen()
+        )
+        available = screen.availableGeometry()
+        self.hover_preview.resize(
+            min(360, available.width() - 16), min(620, available.height() - 24)
+        )
+        position = G.QCursor.pos() + C.QPoint(20, 16)
+        position.setX(
+            max(
+                available.left(),
+                min(position.x(), available.right() - self.hover_preview.width()),
+            )
+        )
+        position.setY(
+            max(
+                available.top(),
+                min(position.y(), available.bottom() - self.hover_preview.height()),
+            )
+        )
+        self.hover_preview.move(position)
+        self.hover_preview.show()
+
+    def _update_hover_image(self, obj):
+        image = self.artwork.get(obj, detailed=True)
+        self.hover_image.clear()
+        if image is not None and not image.isNull():
+            self.hover_image.setPixmap(
+                image.scaled(
+                    270,
+                    370,
+                    C.Qt.AspectRatioMode.KeepAspectRatio,
+                    C.Qt.TransformationMode.SmoothTransformation,
+                )
+            )
+        else:
+            self.hover_image.setText(
+                "Local artwork unavailable"
+                if image is not None
+                else "Loading local artwork..."
+            )
 
     def set_view_mode(self, mode):
         if mode != "focused":
@@ -620,80 +824,20 @@ class GameTable(W.QWidget):
         )
         if obj is None:
             return
+        self.action_menu.hide()
+        self.action_menu.clear()
         self._clear_inspection(hide=False)
-        if show_inspection:
+        offered_count = (
+            sum(action.object_id == identifier for action in view.actions)
+            + sum(option.object_id == identifier for option in view.decision.options)
+            if view.decision
+            else 0
+        )
+        if show_inspection and (not interact or offered_count == 0):
+            self._hide_hover()
             self.inspection_dialog.show()
         self.inspected = identifier
-        names = {player.player_id: player.name for player in view.players}
-        c = obj.characteristics if not obj.face_down and not obj.hidden else None
-        rows = [
-            object_name(obj),
-            "Live game information",
-            "Zone: " + obj.zone.replace("_", " ").title(),
-            "Owner: " + names.get(obj.owner_id, "Unknown"),
-            "Controller: " + names.get(obj.controller_id, "Unknown"),
-        ]
-        if c:
-            rows.extend(
-                value
-                for value in [
-                    c.type_line,
-                    f"{c.power}/{c.toughness}" if c.power is not None else None,
-                    "Transformed" if c.transformed else None,
-                    "Copy" if c.is_copy else None,
-                    "Flipped" if c.flipped else None,
-                ]
-                if value
-            )
-            rows.extend(f"{count} {kind} counters" for kind, count in c.counters or ())
-            if c.current_abilities is not None:
-                rows.append("Current abilities")
-                rows.extend(c.current_abilities or ("None reported",))
-            if c.engine_view_text:
-                rows.append("Engine card notes (may be incomplete)")
-                rows.extend(c.engine_view_text)
-            if c.loyalty is not None:
-                rows.append("Loyalty: " + c.loyalty)
-            if c.defense is not None:
-                rows.append("Defense: " + c.defense)
-        if obj.damage is not None:
-            rows.append(f"Damage: {obj.damage}")
-        lookup = {item.object_id: object_name(item) for item in view.objects}
-        if obj.attachments:
-            rows.append(
-                "Attachments: "
-                + ", ".join(lookup.get(item, "Card") for item in obj.attachments)
-            )
-        if obj.attached_to:
-            rows.append("Attached to: " + lookup.get(obj.attached_to, "Card"))
-        for group in view.combat:
-            if identifier in group.attackers:
-                rows.append(
-                    "Attacking: "
-                    + names.get(
-                        group.defender_id, lookup.get(group.defender_id, "Defender")
-                    )
-                )
-                rows.append(
-                    "Blocked by: "
-                    + (
-                        ", ".join(
-                            lookup.get(item, "Creature") for item in group.blockers
-                        )
-                        or "None"
-                    )
-                )
-            if identifier in group.blockers:
-                rows.append(
-                    "Blocking: "
-                    + ", ".join(
-                        lookup.get(item, "Creature") for item in group.attackers
-                    )
-                )
-        rows.append(
-            "Artwork shows the original printing; live values above may differ."
-        )
-        self.inspection.setPlainText("\n".join(rows))
+        self.inspection.setPlainText(live_card_text(view, obj))
         self._update_image()
         options = (
             [
@@ -722,8 +866,15 @@ class GameTable(W.QWidget):
             "select_object": "Use card",
         }
         for action in actions:
+            label = labels.get(action.kind, action.label)
+            if (
+                sum(other.kind == action.kind for other in actions) > 1
+                and action.label
+                and action.label != object_name(obj)
+            ):
+                label += ": " + action.label
             self._action_button(
-                labels.get(action.kind, action.label),
+                label,
                 view,
                 "perform",
                 (action.action_id,),
@@ -737,6 +888,18 @@ class GameTable(W.QWidget):
             self._action_button(
                 "Select mana source", view, "select_mana_source", (identifier,)
             )
+        if interact and len(options) + len(actions) > 1:
+            self._hide_hover()
+            self.action_menu.clear()
+            for index in range(self.action_rows.count()):
+                button = self.action_rows.itemAt(index).widget()
+                action = self.action_menu.addAction(button.text())
+                action.triggered.connect(
+                    lambda checked=False, target=button: (
+                        target.click() if target.isEnabled() else None
+                    )
+                )
+            self.action_menu.popup(G.QCursor.pos())
         # A single engine-offered target/action is direct; multiple options stay explicit.
         if interact and len(options) + len(actions) == 1:
             if options:
@@ -752,6 +915,28 @@ class GameTable(W.QWidget):
 
     @C.pyqtSlot()
     def _update_image(self):
+        if (
+            self._hover_identifier is not None
+            and self.hover_preview.isVisible()
+            and self.view is not None
+        ):
+            obj = next(
+                (
+                    obj
+                    for obj in self.view.objects
+                    if obj.object_id == self._hover_identifier
+                ),
+                None,
+            )
+            if (
+                obj is not None
+                and not obj.hidden
+                and not obj.face_down
+                and (obj.zone != "hand" or obj.owner_id == self.view.viewer_id)
+            ):
+                self._update_hover_image(obj)
+            else:
+                self._hide_hover()
         if self.view is None or self.inspected is None:
             return
         obj = next(
@@ -779,6 +964,8 @@ class GameTable(W.QWidget):
 
     def keyPressEvent(self, event):
         if event.key() == C.Qt.Key.Key_Escape:
+            self._hide_hover()
+            self.action_menu.hide()
             self._clear_inspection()
             event.accept()
         else:

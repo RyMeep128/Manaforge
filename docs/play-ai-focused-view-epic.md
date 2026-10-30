@@ -1041,3 +1041,25 @@ the repository-pinned PyQt6 6.11.0 resolved that environment mismatch. Repositor
 Ruff lint, scoped formatting and diff checks pass. No local XMage acceptance or
 application build was run. The accumulated commits are pushed at the user's
 explicit request; further epic work remains local unless separately authorized.
+
+
+Story 10 incremental implementation (0.5.20-alpha.1): hovering a card now schedules
+a 300 ms transient preview with full local printing artwork and the current
+engine-authorized inspection text. Preview text shares the persistent inspector's
+builder and explicitly distinguishes original printed artwork from live values.
+It refreshes from new snapshots; hidden/face-down/foreign-hand/removed objects
+never open a preview. Leaving the card, pending interaction, Escape and clear
+remove the preview and its contents. The preview takes no keyboard focus and
+submits no actions; persistent right-click inspection remains separate.
+
+A single offered card action/target remains a direct click. Multiple offers now
+open a compact, nonmodal menu using existing explicit command buttons/tokens;
+new snapshots dismiss the menu before replacing stale controls. Repeated action
+kinds retain available engine labels to distinguish options. Revealed-object
+inspection lookups exclude foreign hands defensively. Local-only frozen artwork
+loading remains unchanged. Focused regression tests cover delayed/non-submitting
+hover, live value refresh, privacy, disappearance/pending invalidation, explicit
+multiple-action menus and right-click inspection. Local Python 3.13 focused UI
+checks pass (69 targeted UI tests; final Play plus Editor readiness run: 271 passed); no local engine or application
+build was launched. This follow-on work is committed locally, not pushed; manual
+hover positioning and visual UX acceptance remain pending.
