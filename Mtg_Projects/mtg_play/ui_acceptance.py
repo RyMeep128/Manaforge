@@ -315,6 +315,8 @@ def main():
             result["error"] = (
                 getattr(exc, "code", None) or "UI_ACCEPTANCE_FAILED"
             ).split(":", 1)[0]
+            if isinstance(exc, ai_acceptance.AIAcceptanceError):
+                result["failure_context"] = exc.context
         finally:
             try:
                 pilot.close()

@@ -11,6 +11,64 @@ from .contracts import GameSetup, MatchSeat
 from .acceptance_scenarios import deck
 
 
+def _visible_human_hand(view):
+    if getattr(view, "viewer_id", None) != "human":
+        return set()
+    return {
+        obj.object_id
+        for obj in getattr(view, "objects", ())
+        if obj.zone == "hand" and obj.owner_id == "human" and not obj.hidden
+    }
+
+
+class AIAcceptanceError(AdapterError):
+    """Safe failure shape; never export prompts, option labels, or card identities."""
+
+    def __init__(self, view):
+        super().__init__("AI_ACCEPTANCE_UNSUPPORTED_DECISION")
+        request = view.decision
+        family = request.family
+        options = getattr(request, "options", ())
+        hand = _visible_human_hand(view)
+        self.context = dict(
+            decision_family=family
+            if family
+            in {
+                "boolean",
+                "target",
+                "selection",
+                "ability",
+                "mana",
+                "number",
+                "options",
+                "amounts",
+                "piles",
+            }
+            else "unknown",
+            choice_count=len(options),
+            hand_option_count=sum(option.object_id in hand for option in options),
+        )
+
+
+def _discard_choice(game, view):
+    request = view.decision
+    if request.family != "target" or "discard" not in request.prompt.lower():
+        return None
+    hand = _visible_human_hand(view)
+    option = next(
+        (
+            option
+            for option in request.options
+            if option.object_id in hand and not option.selected
+        ),
+        None,
+    )
+    if option is None:
+        raise AIAcceptanceError(view)
+    # Explicit fixture choice, using only this prompt's legal local-hand options.
+    return game.choose("human", request.decision_id, option.option_id)
+
+
 def freeform(adapter):
     documents = (fixture_deck(), fixture_deck())
     originals = deepcopy([document.to_dict() for document in documents])
@@ -88,7 +146,10 @@ def freeform(adapter):
         if request is None:
             time.sleep(0.005)
             continue
-        if request.family == "boolean" and "mulligan" in request.prompt.lower():
+        discarded = _discard_choice(game, view)
+        if discarded is not None:
+            result = discarded
+        elif request.family == "boolean" and "mulligan" in request.prompt.lower():
             option = next(option for option in request.options if option.label == "No")
             result = game.choose("human", request.decision_id, option.option_id)
             report["human_keep"] = True
@@ -126,7 +187,7 @@ def freeform(adapter):
             result = game.perform("human", request.decision_id, action.action_id)
             cast_submitted |= action.kind == "cast_spell"
         else:
-            raise AdapterError("AI_ACCEPTANCE_UNSUPPORTED_DECISION")
+            raise AIAcceptanceError(view)
         if result.outcome != "submitted":
             raise AdapterError(result.code or "AI_ACCEPTANCE_COMMAND_FAILED")
         time.sleep(0.005)
@@ -174,6 +235,9 @@ def _ai_blocks_human(view):
 def _human_choice(game, view, select):
     """Bounded fixture policy; never answer an unknown human decision."""
     request = view.decision
+    discarded = _discard_choice(game, view)
+    if discarded is not None:
+        return discarded
     if request.family == "boolean" and "mulligan" in request.prompt.lower():
         option = next(option for option in request.options if option.label == "No")
         return game.choose("human", request.decision_id, option.option_id)
@@ -193,7 +257,7 @@ def _human_choice(game, view, select):
         )
         if option is not None:
             return game.choose("human", request.decision_id, option.option_id)
-    raise AdapterError("AI_ACCEPTANCE_UNSUPPORTED_DECISION")
+    raise AIAcceptanceError(view)
 
 
 def _drive_to_evidence(adapter, documents, inspect, select, *, format="freeform"):

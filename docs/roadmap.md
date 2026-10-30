@@ -332,8 +332,10 @@ The [AI and Focused View rebuild](play-ai-focused-view-epic.md) is the current
 incremental delivery plan; [local delivery status](play-local-game.md) records
 the actual repository baseline and adapter/CI acceptance gaps. The first gate
 is a real pinned-engine human-versus-AI scenario in CI, before dependent UI work.
-The first Freeform bridge/adapter increment and its `ai-freeform` CI scenario are
-implemented but unverified. Follow-on Commander AI and blocking scenarios are
+The first Freeform bridge/adapter increment compiled and initialized in CI, but
+`ai-freeform` failed on an unhandled target decision in run `40977624067`; the
+leading diagnosis and local discard-policy fix are recorded in the delivery doc.
+The natural-completion gate remains unmet. Follow-on Commander AI and blocking scenarios are
 prepared locally for a later CI run; all Story 1 acceptance evidence remains
 pending. Measured startup stages, a bounded first-state wait, and cleanup-report
 fixes are also prepared locally; their tests and real-engine recovery acceptance

@@ -686,6 +686,8 @@ def main():
     except AdapterError as error:
         code = error.code.split(":", 1)[0]
         result["error"] = dict(code=code, category=diagnostic_category(code))
+        if isinstance(error, ai_acceptance.AIAcceptanceError):
+            result["failure_context"] = error.context
     finally:
         result["lifecycle"] = adapter.lifecycle.records
         if adapter.result is not None:

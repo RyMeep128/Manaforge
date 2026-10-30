@@ -82,6 +82,17 @@ class PrescribedMatch(ScriptedGameSession):
                 (),
                 (LegalAction("block", "declare_blocker", "creature", "Memnite"),),
             ),
+            (
+                "choose",
+                "discard",
+                "target",
+                (
+                    ChoiceOption(
+                        "discard", "Discard this card", object_id="discard-card"
+                    ),
+                ),
+                (),
+            ),
         )
         self._frame()
 
@@ -106,7 +117,11 @@ class PrescribedMatch(ScriptedGameSession):
         previous = self._snapshots["one"]
         decision = (
             ChoiceRequest(
-                f"step-{self.index}", "one", stage[2], "Fixture choice", stage[3]
+                f"step-{self.index}",
+                "one",
+                stage[2],
+                "Discard a card" if stage[1] == "discard" else "Fixture choice",
+                stage[3],
             )
             if stage
             else None
@@ -121,7 +136,12 @@ class PrescribedMatch(ScriptedGameSession):
                 previous,
                 revision=previous.revision + 1,
                 turn=1 if self.index < 4 else 2,
-                objects=(land, creature, opponent),
+                objects=(land, creature, opponent)
+                + (
+                    (replace(self.creature, object_id="discard-card"),)
+                    if self.index < len(self.steps)
+                    else ()
+                ),
                 decision=decision,
                 actions=stage[4] if stage else (),
                 combat=combat,

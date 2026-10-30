@@ -64,18 +64,43 @@ without an AI peer client. Fixture driver tests cover evidence ordering, rejecti
 of premature results and unrelated combat, and canonical Commander preservation.
 AI strategy is not overridden if it declines to block; missing evidence fails CI.
 
-The Freeform increment is being evaluated by
+The first Freeform increment failed in
 [CI run 40977624067](https://github.com/RyMeep128/Manaforge/actions/runs/40977624067)
-at `ef38464050689315480d033dd87dee18f96171ce`. The user will supply its outcome;
-do not monitor CI or push further work. Expected success is a development
-assumption, not verified evidence. The local follow-on scenarios have not run
-and are not part of that run's evidence.
+at `ef38464050689315480d033dd87dee18f96171ce`. The user requested investigation;
+no further push or automatic CI monitoring is authorized. The local follow-on
+scenarios and later UI/lifecycle changes were not part of that run.
 
-Story 1 is **not accepted**. Freeform CI evidence is pending, and Commander/blocking
-scenarios are unverified local work. Wider deck behavior also remains outstanding.
-Continued local work uses expected green CI as the user's working assumption,
-not recorded acceptance evidence. The source preview now uses a fixed human seat
-and AI opponent as described below; installed Play remains disabled.
+The Python 3.12 and 3.13 application suites passed, as did lint/format checks,
+the other 25 headless XMage scenarios (including 2-5-seat Commander), and all four
+legacy UI scenarios. The new `ai-freeform` pilot failed with
+`AI_ACCEPTANCE_UNSUPPORTED_DECISION`. Its artifact confirms normal bridge/server
+exit codes of zero, no peer client, and no forced cleanup:
+[XMage acceptance artifact](https://github.com/RyMeep128/Manaforge/actions/runs/40977624067/artifacts/12944488011).
+
+The redacted transcript contains 73 acknowledged human responses, ending with
+an unanswered `GAME_TARGET`. It deliberately excludes private prompt/card data,
+so it does not prove the final prompt text. The leading diagnosis is a cleanup
+discard: the fixture casts only one Memnite, keeps drawing cards, and had no
+human discard handler. The fixture has no targeted spells and does not select
+attackers or blockers, while pinned XMage's
+[cleanup step](https://github.com/magefree/mage/blob/xmage_1.4.62V1/Mage/src/main/java/mage/game/turn/CleanupStep.java)
+requests discards to maximum hand size.
+
+The local fix adds a shared CI-only discard policy using the current decision
+token and an engine-offered, unselected card from the visible human hand. It
+cannot select AI, hidden, or unoffered cards, and it does not answer unrelated
+target prompts. Production human decisions remain manual. Unknown fixture choices
+now report only an allowlisted family and option/hand-option counts, without
+prompts, names, labels, object IDs, or deck contents; their diagnostic category is
+`acceptance_pilot_gap`. Regression tests cover these restrictions, a prescribed
+Freeform discard-to-normal-result sequence, and a discard through actual UI
+controls. None of these tests has run locally.
+
+Story 1 is **not accepted**. The Freeform fix requires a fresh CI result; no
+normal completed AI match has yet been demonstrated. Commander/blocking and the
+later fixed-view source workspace remain unverified local work. The previous
+expected-green assumption is superseded by the recorded failure. Installed Play
+remains disabled, and further feature expansion must not be treated as acceptance.
 
 No local tests, builds, or engine acceptance are permitted for this rebuild.
 New tests execute in GitHub Actions; identify actual runs before claiming a pass.

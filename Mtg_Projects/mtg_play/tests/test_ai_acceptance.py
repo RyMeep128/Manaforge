@@ -1,6 +1,7 @@
 """AI acceptance evidence regressions; execution belongs to GitHub Actions."""
 
 from copy import deepcopy
+import json
 from pathlib import Path
 import sys
 from types import SimpleNamespace as NS
@@ -13,6 +14,7 @@ from mtg_play import ai_acceptance
 from mtg_play.adapter import AdapterError
 from mtg_play.contracts import ChoiceOption, CombatAssignment, CommandResult
 from mtg_play.decks import prepare_deck
+from mtg_play.diagnostics import diagnostic_category
 
 
 def test_commander_ai_fixture_preserves_canonical_deck_and_printing_bindings():
@@ -145,3 +147,158 @@ def test_additional_ai_driver_cannot_accept_result_without_evidence(result):
         ai_acceptance._drive_to_evidence(
             adapter, (), lambda view: False, lambda view: None
         )
+
+
+def discard_view(
+    *,
+    prompt="Discard a card",
+    owner="human",
+    hidden=False,
+    selected=False,
+    option_object="hand-card",
+    family="target",
+):
+    return NS(
+        viewer_id="human",
+        step="CLEANUP",
+        decision=NS(
+            family=family,
+            prompt=prompt,
+            decision_id="current-token",
+            options=(
+                ChoiceOption(
+                    "offered-discard",
+                    "PRIVATE_OPTION_LABEL",
+                    object_id=option_object,
+                    selected=selected,
+                ),
+            ),
+        ),
+        objects=(
+            NS(object_id="hand-card", zone="hand", owner_id=owner, hidden=hidden),
+        ),
+    )
+
+
+def test_fixture_discards_only_an_engine_offered_card_from_the_visible_human_hand():
+    calls = []
+    game = NS(
+        choose=lambda *args: calls.append(args) or CommandResult("command", "submitted")
+    )
+    result = ai_acceptance._human_choice(game, discard_view(), lambda view: None)
+    assert result.outcome == "submitted"
+    assert calls == [("human", "current-token", "offered-discard")]
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        dict(owner="ai"),
+        dict(hidden=True),
+        dict(selected=True),
+        dict(option_object="unoffered-card"),
+    ],
+)
+def test_fixture_never_discards_a_foreign_hidden_selected_or_unoffered_card(changes):
+    with pytest.raises(ai_acceptance.AIAcceptanceError) as failure:
+        ai_acceptance._human_choice(NS(), discard_view(**changes), lambda view: None)
+    assert failure.value.context["decision_family"] == "target"
+    assert "PRIVATE" not in json.dumps(failure.value.context)
+
+
+def test_fixture_does_not_treat_other_target_choices_as_discard():
+    view = discard_view(prompt="Choose a PRIVATE_OPTION_LABEL target")
+    with pytest.raises(ai_acceptance.AIAcceptanceError) as failure:
+        ai_acceptance._human_choice(NS(), view, lambda view: None)
+    assert failure.value.context == dict(
+        decision_family="target", choice_count=1, hand_option_count=1
+    )
+    assert "PRIVATE" not in json.dumps(failure.value.context)
+
+
+def test_freeform_fixture_continues_after_cleanup_discard_to_a_natural_result(
+    monkeypatch,
+):
+    calls = []
+    hand = tuple(
+        NS(
+            object_id=f"hand-{index}",
+            zone="hand",
+            owner_id="human",
+            hidden=False,
+            controller_id="human",
+            characteristics=None,
+        )
+        for index in range(7)
+    )
+    battlefield = tuple(
+        NS(
+            object_id=player + name,
+            zone="battlefield",
+            owner_id=player,
+            controller_id=player,
+            hidden=False,
+            characteristics=NS(name=name),
+        )
+        for player in ("human", "ai")
+        for name in ("Forest", "Memnite")
+    )
+    keep = NS(
+        family="boolean",
+        prompt="Mulligan?",
+        decision_id="keep",
+        options=(ChoiceOption("no", "No"),),
+    )
+    discard = NS(
+        family="target",
+        prompt="Discard a card",
+        decision_id="discard",
+        options=(ChoiceOption("discard-option", "Discard", object_id="hand-0"),),
+    )
+    views = iter(
+        NS(
+            viewer_id="human",
+            objects=hand + battlefield,
+            active_player_id="ai",
+            turn=2,
+            combat=(CombatAssignment(("aiMemnite",), (), "human", False),),
+            status=status,
+            decision=decision,
+            result=result,
+        )
+        for status, decision, result in (
+            ("active", keep, None),
+            ("active", discard, None),
+            ("finished", None, "did_not_win"),
+        )
+    )
+
+    def snapshot(player):
+        if player == "ai":
+            raise AdapterError("UNAUTHORIZED_SEAT")
+        assert player == "human"
+        return next(views)
+
+    def concede(player):
+        assert player == "ai", (
+            "Natural completion must not be replaced by human concession"
+        )
+        raise AdapterError("UNAUTHORIZED_SEAT")
+
+    def choose(*args):
+        calls.append(args)
+        return CommandResult("command", "submitted")
+
+    game = NS(snapshot=snapshot, concede=concede, choose=choose, poll=lambda player: ())
+    adapter = NS(create_game=lambda setup, documents: game)
+    monkeypatch.setattr(ai_acceptance.time, "sleep", lambda seconds: None)
+    report = ai_acceptance.freeform(adapter)
+    assert report["natural_result"] and report["human_keep"]
+    assert calls == [("human", "keep", "no"), ("human", "discard", "discard-option")]
+
+
+def test_unhandled_fixture_decision_is_not_reported_as_unsupported_engine_rules():
+    assert (
+        diagnostic_category("AI_ACCEPTANCE_UNSUPPORTED_DECISION")
+        == "acceptance_pilot_gap"
+    )

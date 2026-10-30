@@ -117,6 +117,8 @@ class LifecycleDiagnostics:
 
 
 def diagnostic_category(code):
+    if code == "AI_ACCEPTANCE_UNSUPPORTED_DECISION":
+        return "acceptance_pilot_gap"
     if any(code.startswith("PLAY_" + stage.upper() + "_") for stage in STAGE_LABELS):
         return "game_lifecycle_failure"
     if code == "CARD_NOT_SUPPORTED":
