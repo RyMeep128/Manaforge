@@ -1,0 +1,9 @@
+Mana v1.18.0 by Andrew Gioia
+Source: https://github.com/andrewgioia/mana/tree/6ca9e696d3bda2519dcf3eebd96598f84ad9ddd8
+File: fonts/mana.ttf (unmodified)
+SHA256: a23809f7c0af7f9866734216bdd73bce2cfedd67333f5cde86a9ee066fa69819
+
+The Mana font is licensed under SIL OFL 1.1; see Mana-OFL.txt.
+All mana, tap, and card type symbol images are copyright Wizards of the Coast.
+Upstream license statement: https://github.com/andrewgioia/mana/blob/6ca9e696d3bda2519dcf3eebd96598f84ad9ddd8/README.md#license
+Bundling this font does not resolve the broader card-art/distribution review.

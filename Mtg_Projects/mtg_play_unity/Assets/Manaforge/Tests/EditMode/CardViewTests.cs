@@ -59,6 +59,8 @@ namespace Manaforge.Play.Tests
             view.UpdateValues(Values("SECRET"));
             Assert.That(view.Identity, Is.Null); Assert.That(view.Artwork, Is.Null);
             Assert.That(view.tooltip, Is.Null.Or.Empty);
+            foreach(var image in view.Query<Image>().ToList())Assert.That(image.image,Is.Null);
+            Assert.That(view.Q<ManaCostView>().Cost,Is.Empty);
             foreach (var label in view.Query<Label>().ToList()) Assert.That(label.text, Is.Empty);
         }
         [Test] public void RebindingClearsOldValuesAndAuthenticFullImageAvoidsFakeDynamicFrame()
@@ -77,6 +79,7 @@ namespace Manaforge.Play.Tests
             view.UpdateValues(new CardDisplayValues("Land", null, null, null, null, null));
             Assert.That(view.Q<Label>("asset-status").text, Is.EqualTo("Artwork unavailable"));
             Assert.That(view.Q<Label>("stats").text, Is.Empty);
+            Assert.That(view.Q<CardPlate>("pt-plate").style.display.value,Is.EqualTo(DisplayStyle.None));
             Assert.Throws<ArgumentException>(() => view.Bind(identity, texture, new Rect(0, 0, 1, 1)));
         }
         [Test] public void SuppliedTextCannotInjectRichText()

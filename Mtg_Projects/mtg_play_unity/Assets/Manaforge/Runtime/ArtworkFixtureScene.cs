@@ -99,7 +99,7 @@ namespace Manaforge.Play
             {
                 var card = fixture.Cards[i % fixture.Cards.Count];
                 var view = new CardView();
-                view.Bind(card.Identity, textures.Get(card.Artwork), new Rect(0.08f, 0.45f, 0.84f, 0.38f));
+                view.Bind(card.Identity, textures.Get(card.Artwork), new Rect(0.08f, 0.45f, 0.84f, 0.42f));
                 view.UpdateValues(card.MockValues); view.SetPresentation(CardPresentationMode.Compact, width);
                 view.style.position = Position.Absolute;
                 view.style.left = (i % columns) * (width + 5); view.style.top = (i / columns) * (width * 0.78f + 5);
@@ -112,13 +112,14 @@ namespace Manaforge.Play
         }
         private void Show(ArtworkFixture.Card card)
         {
-            preview.Bind(card.Identity, textures.Get(card.Artwork), new Rect(0.08f, 0.45f, 0.84f, 0.38f));
+            preview.Bind(card.Identity, textures.Get(card.Artwork), new Rect(0.08f, 0.45f, 0.84f, 0.42f));
             preview.SetPresentation(CardPresentationMode.Full, 285); preview.UpdateValues(card.MockValues);
         }
         private IEnumerator Capture(string output)
         {
             // UI Toolkit renders into its own target; camera-only capture omits the panel.
-            var target = new RenderTexture(1280, 720, 0);
+            // Rounded card clipping requires stencil, including in the offscreen review capture.
+            var target = new RenderTexture(1280, 720, 24);
             target.Create(); settings.targetTexture = target;
             int oldVsync = QualitySettings.vSyncCount, oldTarget = Application.targetFrameRate;
             Texture2D image = null;

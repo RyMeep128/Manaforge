@@ -31,7 +31,13 @@ namespace Manaforge.Play
         private readonly Image artwork = new Image { name = "artwork", pickingMode = PickingMode.Ignore };
         private readonly Label missing = Text("asset-status");
         private readonly Label title = Text("name");
-        private readonly Label mana = Text("mana");
+        private readonly ManaCostView mana = new ManaCostView();
+        private readonly Image frame = new Image { name = "printing-frame", pickingMode = PickingMode.Ignore };
+        private readonly CardPlate nameplate = new CardPlate("nameplate");
+        private readonly CardPlate statplate = new CardPlate("pt-plate");
+        private readonly CardPlate typeplate = new CardPlate("typeplate");
+        private readonly VisualElement interior = new VisualElement { name = "frame-interior", pickingMode = PickingMode.Ignore };
+        private readonly VisualElement printedStatsMask = new VisualElement { name = "printed-stats-mask", pickingMode = PickingMode.Ignore };
         private readonly Label type = Text("type");
         private readonly Label rules = Text("rules");
         private readonly Label stats = Text("stats");
@@ -51,7 +57,9 @@ namespace Manaforge.Play
             style.position = Position.Relative;
             style.backgroundColor = new Color(0.09f, 0.11f, 0.13f);
             style.overflow = Overflow.Hidden;
-            Add(artwork); Add(missing); Add(title); Add(mana);
+            interior.style.position=Position.Absolute;interior.style.backgroundColor=new Color(.88f,.88f,.80f);
+            printedStatsMask.style.position=Position.Absolute;printedStatsMask.style.backgroundColor=new Color(.07f,.07f,.065f);
+            Add(frame); Add(interior); Add(printedStatsMask); Add(artwork); Add(nameplate); Add(typeplate); Add(statplate); Add(missing); Add(title); Add(mana);
             Add(type); Add(rules); Add(stats); Add(status);
             Conceal();
         }
@@ -83,7 +91,7 @@ namespace Manaforge.Play
             Identity = identity;
             authenticOnly = identity.LayoutProfileId == "authentic-image-v1";
             artCrop = crop;
-            artwork.image = texture;
+            artwork.image = texture; frame.image = texture;
             missing.text = texture == null ? "Artwork unavailable" : "";
             Layout();
         }
@@ -92,8 +100,8 @@ namespace Manaforge.Play
         {
             if (concealed) return;
             if (values == null) throw new ArgumentNullException(nameof(values));
-            Set(title, values.Name); Set(mana, values.ManaCost); Set(type, values.TypeLine);
-            Set(rules, values.RulesText); Set(stats, values.PowerToughness); Set(status, values.Status);
+            Set(title, values.Name); mana.SetCost(values.ManaCost); Set(type, values.TypeLine);
+            Set(rules, values.RulesText); Set(stats, values.PowerToughness); Set(status, values.Status); Layout();
         }
 
         private static void Set(Label label, string value)
@@ -114,34 +122,54 @@ namespace Manaforge.Play
         private void Layout()
         {
             bool full = mode == CardPresentationMode.Full;
-            style.width = width;
-            style.height = width * (full ? 1.4f : 0.78f);
+            style.width = width; style.height = width * (full ? 1.4f : .78f);
             float scale = width / 300f;
-            foreach (var label in new[] { title, mana, type, rules, stats, status, missing })
-                label.style.fontSize = (label == rules ? 13 : 16) * scale;
-            artwork.style.position = Position.Absolute;
-            Box(artwork, 3, full ? 14 : 0, 94, full ? 42 : 100);
-            artwork.scaleMode = ScaleMode.ScaleAndCrop;
-            artwork.uv = artCrop;
-            if (full && authenticOnly)
-            {
-                Box(artwork, 0, 0, 100, 100);
-                artwork.uv = new Rect(0, 0, 1, 1);
-                artwork.scaleMode = ScaleMode.ScaleToFit;
+            style.borderTopLeftRadius=style.borderTopRightRadius=style.borderBottomLeftRadius=style.borderBottomRightRadius=width*.045f;
+            foreach(var label in new[]{title,type,rules,stats,status,missing}) {
+                label.style.fontSize=(label==rules?12.8f:label==stats?23:label==status?10:18)*scale;
+                label.style.backgroundColor=Color.clear;
+                label.style.color=label==status?new Color(.85f,.85f,.81f):new Color(.06f,.065f,.055f);
+                label.style.paddingLeft=label.style.paddingRight=label.style.paddingTop=label.style.paddingBottom=0;
             }
-            Box(title, 4, 3, 68, 10); Box(mana, 72, 3, 24, 10);
-            Box(type, 4, 57, 92, 9); Box(rules, 4, 67, 92, 24);
-            Box(stats, 70, 91, 26, 9); Box(status, 4, 91, 64, 9);
-            if (!full) { Box(stats, 70, 76, 26, 22); Box(status, 4, 76, 64, 22); }
-            Box(missing, 8, 35, 84, 25);
-            foreach (var label in new[] { title, mana, type, rules, stats, status })
-            {
-                bool fullOnly = label == mana || label == type || label == rules;
-                label.style.display = concealed || (full && authenticOnly) || (!full && fullOnly)
-                    ? DisplayStyle.None : DisplayStyle.Flex;
-                label.style.backgroundColor = new Color(0.04f, 0.05f, 0.06f, 0.90f);
+            title.style.unityFontStyleAndWeight=type.style.unityFontStyleAndWeight=stats.style.unityFontStyleAndWeight=FontStyle.Bold;
+            title.style.whiteSpace=type.style.whiteSpace=stats.style.whiteSpace=WhiteSpace.NoWrap;
+            title.style.unityTextAlign=type.style.unityTextAlign=TextAnchor.MiddleLeft;
+            title.style.textOverflow=TextOverflow.Ellipsis; stats.style.unityTextAlign=TextAnchor.MiddleCenter;
+            frame.style.position=artwork.style.position=Position.Absolute;
+            Box(frame,0,0,100,100);frame.scaleMode=ScaleMode.StretchToFill;
+            // Keep the exact printing's colored surround and original bevels, not a generic dark panel.
+            frame.uv=full?new Rect(0,0,1,1):new Rect(0,.42f,1,.58f);
+            frame.style.display=concealed || frame.image==null?DisplayStyle.None:DisplayStyle.Flex;
+            Box(interior,7,11,86,83);
+            interior.style.display=!concealed && full && !authenticOnly?DisplayStyle.Flex:DisplayStyle.None;
+            Box(printedStatsMask,74,89,24,10);
+            printedStatsMask.style.display=!concealed && full && !authenticOnly?DisplayStyle.Flex:DisplayStyle.None;
+            Box(artwork,8,full?12:21,84,full?43:70);
+            artwork.scaleMode=ScaleMode.StretchToFill;artwork.uv=artCrop;
+            if(full && authenticOnly) {
+                Box(artwork,0,0,100,100);artwork.uv=new Rect(0,0,1,1);artwork.scaleMode=ScaleMode.ScaleToFit;
             }
-            missing.style.display = !concealed && artwork.image == null ? DisplayStyle.Flex : DisplayStyle.None;
+            Box(nameplate,5.5f,full?4:5,89,full?7:16);
+            Box(title,8,full?4.3f:5.5f,full?Mathf.Max(40,84-mana.SymbolCount*6):84,full?6:14);
+            Box(mana,57,4.7f,34,5.5f);mana.Resize(17*scale);
+            Box(typeplate,5.5f,55.5f,89,7);Box(type,8,56,84,6);
+            Box(rules,8,64,84,24);rules.style.backgroundColor=new Color(.88f,.88f,.80f);
+            rules.style.paddingLeft=rules.style.paddingRight=4*scale;rules.style.paddingTop=3*scale;
+            Box(statplate,75,full?90:79,22,full?8:19);
+            Box(stats,77,full?90.3f:79.5f,18,full?7:17);
+            Box(status,8,full?94:82,60,full?4:12);Box(missing,8,35,84,25);
+            bool reconstructed=!concealed && !(full && authenticOnly);
+            nameplate.style.display=reconstructed?DisplayStyle.Flex:DisplayStyle.None;
+            typeplate.style.display=reconstructed && full?DisplayStyle.Flex:DisplayStyle.None;
+            statplate.style.display=reconstructed && !string.IsNullOrEmpty(stats.text)?DisplayStyle.Flex:DisplayStyle.None;
+            mana.style.display=reconstructed && full?DisplayStyle.Flex:DisplayStyle.None;
+            foreach(var label in new[]{title,type,rules,stats,status}) {
+                bool show=reconstructed && (full || (label!=type && label!=rules));
+                if(label==stats && string.IsNullOrEmpty(stats.text))show=false;
+                if(label==status && (string.IsNullOrEmpty(status.text) || status.text=="PRINTED MOCK"))show=false;
+                label.style.display=show?DisplayStyle.Flex:DisplayStyle.None;
+            }
+            missing.style.display=!concealed && artwork.image==null?DisplayStyle.Flex:DisplayStyle.None;
         }
 
         private static void Box(VisualElement element, float x, float y, float w, float h)
@@ -156,8 +184,8 @@ namespace Manaforge.Play
         {
             concealed = true;
             Identity = null;
-            artwork.image = null;
-            foreach (var label in new[] { title, mana, type, rules, stats, status, missing })
+            artwork.image = null; frame.image = null; mana.Conceal();
+            foreach (var label in new[] { title, type, rules, stats, status, missing })
                 label.text = "";
             tooltip = null;
             Layout();

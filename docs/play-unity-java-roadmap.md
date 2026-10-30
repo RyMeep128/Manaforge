@@ -595,3 +595,13 @@ admission; duplicate/rejected requests never invoke it. Thirty-six new Java chec
 cover failures, interruption, reentry and concurrent duplicates. The dummy uses a
 synthetic recorder. No UI changed; engine worker/queue/process containment and
 G0/G1 acceptance remain open. No bulk P2 port has started.
+
+
+### P3.2a owner visual feedback revision — October 30, 2026
+
+The [composable renderer](play-composable-card-rendering.md) now retains exact
+printing surrounds, raises the artwork coverage, restores compact nameplates,
+uses an offline symbol font for costs and gives P/T a beveled badge. Unknown costs
+remain explicit; concealed views clear both frame/art references. This responds
+to owner screenshots and remains pending a fresh hands-on visual review. No
+live-game, G0/G1 or final renderer acceptance is claimed.

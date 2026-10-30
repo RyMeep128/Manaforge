@@ -283,3 +283,46 @@ and full modes, preserves selected printing identity, uses authentic fallback
 imagery and independently displays authoritative characteristics. It is ready for
 1v1 battlefield/interaction milestones without implementing advanced frames or
 complex multiplayer presentation prematurely.
+
+
+## Owner visual feedback revision — October 30, 2026
+
+Owner review requested a higher artwork crop, Magic-style framing, symbol mana
+costs, framed compact names and a better P/T treatment. CardView now borrows the
+exact rendered printing texture for the outer surround, uses beveled inset name/
+type/P/T components, and hides empty P/T plates. Full-view interior masks prevent
+printed text from showing through the independently supplied labels. Compact
+cards retain a framed nameplate and more upper artwork; the diagnostic source UV
+extends from (0.08, 0.45, 0.84, 0.38) to (0.08, 0.45, 0.84, 0.42).
+
+ManaCostView uses the unmodified Mana v1.18.0 symbol font, pinned to upstream commit
+6ca9e696d3bda2519dcf3eebd96598f84ad9ddd8, bundled offline with OFL and notices.
+Colored/generic/variable/colorless/snow glyphs and two-part compound symbols are
+presentation only. Unknown/malformed notation remains visible as literal text,
+without rich-text interpretation or guessed glyphs. Compound symbols currently
+use paired glyphs in one disk rather than exact diagonal printed treatments.
+This does not implement inline rules-text symbols or final typography.
+
+The outer frame and artwork share borrowed printing textures; views release both
+references, symbol text and tooltips on conceal/disposal. Unsupported full-image
+layouts retain the existing authentic-image fallback. These are standard-layout
+fixture adjustments, not reconstruction of every printing frame. The owner's
+new visual review remains required before acceptance boxes can be checked.
+Prior benchmark results describe the earlier renderer, not this revision.
+
+
+The packaged capture now uses depth/stencil for rounded clipping; a depthless
+capture produced blank white cards and was corrected before handoff. The rebuilt
+20-object capture contains the card frames, artwork, symbol costs and P/T badge.
+The subsequent [owner-provided asset inventory](play-provided-art-assets.md)
+confirmed candidates for a more faithful renderer. No supplied assets have yet
+been imported into the tracked project; their next curation should replace
+prototype treatments where appropriate. Visual acceptance remains pending.
+
+
+Validation for this revision: 241 focused EditMode checks, four PlayMode checks,
+the Windows development build, and the 20-object packaged artwork smoke passed.
+The final 20-object capture was inspected for visible content after the stencil
+fix; no final aesthetic approval is claimed. No full application suite ran. CI
+review follows the owner's every-third-commit cadence; this is the first increment
+after the prior checkpoint, so no new CI pass is claimed.
