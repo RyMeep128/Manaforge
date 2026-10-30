@@ -585,3 +585,13 @@ pending uncertainty; only trusted engine outcomes can resolve it. Thirty new Jav
 checks cover ownership, results, failures and concurrent duplicates. The normal
 authenticated dummy uses this owner. No UI changed; full worker/process ownership,
 bootstrap, engine dispatch, licensed CI and G0/G1 acceptance remain open.
+
+
+### G1 Java reservation-to-enqueue handoff — October 30, 2026
+
+The [dispatch handoff](../Mtg_Projects/mtg_play/protocol/gateway-dispatch-handoff.md) invokes a trusted enqueue once per new reservation,
+under the viewer owner's monitor. Failures preserve uncertainty and revoke further
+admission; duplicate/rejected requests never invoke it. Thirty-six new Java checks
+cover failures, interruption, reentry and concurrent duplicates. The dummy uses a
+synthetic recorder. No UI changed; engine worker/queue/process containment and
+G0/G1 acceptance remain open. No bulk P2 port has started.

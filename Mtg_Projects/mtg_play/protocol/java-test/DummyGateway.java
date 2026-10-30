@@ -121,6 +121,7 @@ public final class DummyGateway {
                 JsonObject eventMessage=envelope("event","fixture-event",eventBody);
                 boundary.observe(eventMessage.toString());send(frames,eventMessage);
                 long revision=snapshot.get("revision").getAsLong();
+                Set<String> fixtureSubmissions=new HashSet<>(); // Explicit synthetic enqueue recorder; no engine.
                 for(int count=0;count<8;count++) {
                     String text=frames.read(args.length==2 && args[1].equals("client-partial-frame")?500:5000); require(text!=null);
                     JsonObject message=WireMessages.parse(text),request=message.getAsJsonObject("body");
@@ -130,7 +131,7 @@ public final class DummyGateway {
                         send(frames,envelope("shutdown","shutdown-ok",request)); return;
                     }
                     require(type.equals("command"));
-                    SubmissionLedger.Prepared prepared=boundary.prepare(text);
+                    SubmissionLedger.Prepared prepared=boundary.dispatch(text,value->require(fixtureSubmissions.add(value.get("message_id").getAsString())));
                     JsonObject acknowledgement=prepared.receipt();acknowledgement.addProperty("message_id","ack-"+count);
                     send(frames,acknowledgement);
                     if(prepared.shouldSubmit) {

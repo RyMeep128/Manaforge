@@ -51,3 +51,12 @@ authentication cases and the other Java protocol corpora. All 227 focused Unity
 EditMode checks passed, including 19 Java process scenarios. No full application
 suite ran. CI checking follows the owner's third-commit cadence; the next commit
 is the next checkpoint. No CI pass is claimed for this increment.
+
+
+## Explicit enqueue follow-up — October 30, 2026
+
+The [dispatch handoff](gateway-dispatch-handoff.md) now combines admission,
+reservation and one trusted prompt enqueue callback under the owner monitor.
+Enqueue failure revokes permissions and preserves uncertainty without retrying.
+The lower-level prepare lock still ends at reservation. Actual engine worker,
+queue bounds, callback containment and product lifecycle remain unimplemented.

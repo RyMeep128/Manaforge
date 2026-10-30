@@ -54,5 +54,6 @@ public final class SessionBoundaryFixtureConsumer {
             Future<Boolean> a=workers.submit(submit),b=workers.submit(submit);require(ready.await(2,TimeUnit.SECONDS));go.countDown();require(a.get(2,TimeUnit.SECONDS)^b.get(2,TimeUnit.SECONDS));require(outcome(owner.receiptFor("first")).equals("submitted"));
         }finally{workers.shutdownNow();require(workers.awaitTermination(3,TimeUnit.SECONDS));}
         System.out.println("Java viewer session boundary: "+count+" checks passed");
+        DispatchFixtureConsumer.run(context,offered,request);
     }
 }
