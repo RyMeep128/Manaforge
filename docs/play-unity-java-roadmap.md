@@ -310,6 +310,11 @@ persistence/recovery and shared playgroups.
   These are future design targets; the current increment is only P0 foundation
   and build/test feasibility, not live gameplay or multiplayer implementation.
 
+- P1.3 foundation: immutable one-time native-deck export, separate private schema
+  and Java-only DTOs; 29 focused Python checks and three positive/nine negative
+  Java launch fixtures passed locally. [Launch boundary](play-launch-boundary.md)
+  documents pending engine resolution and authenticated process delivery.
+
 ## 6. First Codex batch
 
 Run in parallel only where interfaces are fixed:

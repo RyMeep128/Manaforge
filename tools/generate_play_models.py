@@ -80,8 +80,8 @@ def field_type(shape, language):
     }[kind][language == "java"]
 
 
-def outputs():
-    raw = (PROTOCOL / "python-contracts-v1.schema.json").read_text(encoding="utf-8")
+def _schema_outputs(schema_name, java_class, *, include_cs):
+    raw = (PROTOCOL / schema_name).read_text(encoding="utf-8")
     schema = json.loads(raw)
     check_fixture_schema_subset(schema)
     digest = hashlib.sha256(raw.encode()).hexdigest()
@@ -92,7 +92,8 @@ def outputs():
     ]
     java = [
         header,
-        "package manaforge.protocol;\n\nimport com.google.gson.JsonElement;\nimport com.google.gson.annotations.SerializedName;\n\npublic final class PlayContracts {\n    private PlayContracts() {}\n",
+        "package manaforge.protocol;\n\nimport com.google.gson.JsonElement;\nimport com.google.gson.annotations.SerializedName;\n\n"
+        + f"public final class {java_class} {{\n    private {java_class}() {{}}\n",
     ]
     for name, definition in schema["$defs"].items():
         cs.append(f"    public sealed class {name}\n    {{\n")
@@ -114,12 +115,27 @@ def outputs():
         java.append("    }\n")
     cs.append("}\n")
     java.append("}\n")
-    return {
+    result = {
         ROOT
         / "Mtg_Projects/mtg_play_unity/Assets/Manaforge/Runtime/Protocol/PlayContracts.cs": "".join(
             cs
         ),
-        PROTOCOL / "java/manaforge/protocol/PlayContracts.java": "".join(java),
+    }
+    if not include_cs:
+        result.clear()
+    result[PROTOCOL / f"java/manaforge/protocol/{java_class}.java"] = "".join(java)
+    return result
+
+
+def outputs():
+    return {
+        **_schema_outputs(
+            "python-contracts-v1.schema.json", "PlayContracts", include_cs=True
+        ),
+        # Owner-only all-decks input is deliberately not generated for Unity.
+        **_schema_outputs(
+            "launch-manifest-v1.schema.json", "LaunchContracts", include_cs=False
+        ),
     }
 
 

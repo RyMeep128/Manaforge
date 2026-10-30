@@ -51,6 +51,7 @@ def main():
             parser.error("Gson SHA-256 does not match the pinned engine artifact")
         sources = [
             PROTOCOL / "java/manaforge/protocol/PlayContracts.java",
+            PROTOCOL / "java/manaforge/protocol/LaunchContracts.java",
             PROTOCOL / "java-test/FixtureConsumer.java",
         ]
         subprocess.run(

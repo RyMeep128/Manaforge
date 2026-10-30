@@ -1,0 +1,633 @@
+{
+  "fixture_format": 1,
+  "provenance": "Synthetic native DeckDocuments; no engine or user data",
+  "cases": [
+    {
+      "name": "launch-2-freeform",
+      "record": "LaunchManifest",
+      "payload": {
+        "launch_manifest_version": 1,
+        "protocol_version": 1,
+        "manifest_id": "00000000000000000000000000000001",
+        "manaforge_version": "fixture-alpha.1",
+        "engine": {
+          "engine_version": "1.4.62-V1",
+          "adapter_version": "0.2.2-alpha.1",
+          "artifact_manifest_sha256": "525fe515ed4e7540b3b02884d01c37732a5e1b1e650784ea1c2259e422a700b4"
+        },
+        "format": "freeform",
+        "seats": [
+          {
+            "seat_id": "seat-0",
+            "name": "Fixture 0",
+            "controller": "local_human",
+            "deck_owner_id": null,
+            "document": {
+              "schema_version": 1,
+              "deck": {
+                "deck_id": "fixture-deck",
+                "name": "Synthetic native deck",
+                "format": "Custom",
+                "entries": [
+                  {
+                    "entry_id": "main",
+                    "name": "Fixture Front // Fixture Back",
+                    "quantity": 3,
+                    "section": "mainboard",
+                    "card_id": "selected-print",
+                    "oracle_id": "fixture-oracle",
+                    "set_code": "SYN",
+                    "collector_number": "1",
+                    "owned": 2,
+                    "image_asset_id": "fixture-front",
+                    "backside_asset_id": "fixture-back"
+                  }
+                ],
+                "commander_entry_ids": [],
+                "companion_entry_id": null
+              }
+            }
+          },
+          {
+            "seat_id": "seat-1",
+            "name": "Fixture 1",
+            "controller": "engine_ai",
+            "deck_owner_id": "fixture-lender",
+            "document": {
+              "schema_version": 1,
+              "deck": {
+                "deck_id": "fixture-deck",
+                "name": "Synthetic native deck",
+                "format": "Custom",
+                "entries": [
+                  {
+                    "entry_id": "main",
+                    "name": "Fixture Front // Fixture Back",
+                    "quantity": 3,
+                    "section": "mainboard",
+                    "card_id": "selected-print",
+                    "oracle_id": "fixture-oracle",
+                    "set_code": "SYN",
+                    "collector_number": "1",
+                    "owned": 2,
+                    "image_asset_id": "fixture-front",
+                    "backside_asset_id": "fixture-back"
+                  }
+                ],
+                "commander_entry_ids": [],
+                "companion_entry_id": null
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "launch-2-commander",
+      "record": "LaunchManifest",
+      "payload": {
+        "launch_manifest_version": 1,
+        "protocol_version": 1,
+        "manifest_id": "00000000000000000000000000000001",
+        "manaforge_version": "fixture-alpha.1",
+        "engine": {
+          "engine_version": "1.4.62-V1",
+          "adapter_version": "0.2.2-alpha.1",
+          "artifact_manifest_sha256": "525fe515ed4e7540b3b02884d01c37732a5e1b1e650784ea1c2259e422a700b4"
+        },
+        "format": "commander",
+        "seats": [
+          {
+            "seat_id": "seat-0",
+            "name": "Fixture 0",
+            "controller": "local_human",
+            "deck_owner_id": null,
+            "document": {
+              "schema_version": 1,
+              "deck": {
+                "deck_id": "fixture-deck",
+                "name": "Synthetic native deck",
+                "format": "Commander",
+                "entries": [
+                  {
+                    "entry_id": "main",
+                    "name": "Fixture Front // Fixture Back",
+                    "quantity": 3,
+                    "section": "mainboard",
+                    "card_id": "selected-print",
+                    "oracle_id": "fixture-oracle",
+                    "set_code": "SYN",
+                    "collector_number": "1",
+                    "owned": 2,
+                    "image_asset_id": "fixture-front",
+                    "backside_asset_id": "fixture-back"
+                  },
+                  {
+                    "entry_id": "commander",
+                    "name": "Fixture Commander",
+                    "quantity": 1,
+                    "section": "commander",
+                    "card_id": "commander-print",
+                    "oracle_id": null,
+                    "set_code": null,
+                    "collector_number": null,
+                    "owned": 0,
+                    "image_asset_id": null,
+                    "backside_asset_id": null
+                  },
+                  {
+                    "entry_id": "partner",
+                    "name": "Fixture Partner or Background",
+                    "quantity": 1,
+                    "section": "commander",
+                    "card_id": "partner-print",
+                    "oracle_id": null,
+                    "set_code": null,
+                    "collector_number": null,
+                    "owned": 0,
+                    "image_asset_id": null,
+                    "backside_asset_id": null
+                  },
+                  {
+                    "entry_id": "companion",
+                    "name": "Fixture Companion",
+                    "quantity": 1,
+                    "section": "sideboard",
+                    "card_id": "companion-print",
+                    "oracle_id": null,
+                    "set_code": null,
+                    "collector_number": null,
+                    "owned": 0,
+                    "image_asset_id": null,
+                    "backside_asset_id": null
+                  }
+                ],
+                "commander_entry_ids": [
+                  "commander",
+                  "partner"
+                ],
+                "companion_entry_id": "companion"
+              }
+            }
+          },
+          {
+            "seat_id": "seat-1",
+            "name": "Fixture 1",
+            "controller": "engine_ai",
+            "deck_owner_id": "fixture-lender",
+            "document": {
+              "schema_version": 1,
+              "deck": {
+                "deck_id": "fixture-deck",
+                "name": "Synthetic native deck",
+                "format": "Commander",
+                "entries": [
+                  {
+                    "entry_id": "main",
+                    "name": "Fixture Front // Fixture Back",
+                    "quantity": 3,
+                    "section": "mainboard",
+                    "card_id": "selected-print",
+                    "oracle_id": "fixture-oracle",
+                    "set_code": "SYN",
+                    "collector_number": "1",
+                    "owned": 2,
+                    "image_asset_id": "fixture-front",
+                    "backside_asset_id": "fixture-back"
+                  },
+                  {
+                    "entry_id": "commander",
+                    "name": "Fixture Commander",
+                    "quantity": 1,
+                    "section": "commander",
+                    "card_id": "commander-print",
+                    "oracle_id": null,
+                    "set_code": null,
+                    "collector_number": null,
+                    "owned": 0,
+                    "image_asset_id": null,
+                    "backside_asset_id": null
+                  },
+                  {
+                    "entry_id": "partner",
+                    "name": "Fixture Partner or Background",
+                    "quantity": 1,
+                    "section": "commander",
+                    "card_id": "partner-print",
+                    "oracle_id": null,
+                    "set_code": null,
+                    "collector_number": null,
+                    "owned": 0,
+                    "image_asset_id": null,
+                    "backside_asset_id": null
+                  },
+                  {
+                    "entry_id": "companion",
+                    "name": "Fixture Companion",
+                    "quantity": 1,
+                    "section": "sideboard",
+                    "card_id": "companion-print",
+                    "oracle_id": null,
+                    "set_code": null,
+                    "collector_number": null,
+                    "owned": 0,
+                    "image_asset_id": null,
+                    "backside_asset_id": null
+                  }
+                ],
+                "commander_entry_ids": [
+                  "commander",
+                  "partner"
+                ],
+                "companion_entry_id": "companion"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "launch-5-commander",
+      "record": "LaunchManifest",
+      "payload": {
+        "launch_manifest_version": 1,
+        "protocol_version": 1,
+        "manifest_id": "00000000000000000000000000000001",
+        "manaforge_version": "fixture-alpha.1",
+        "engine": {
+          "engine_version": "1.4.62-V1",
+          "adapter_version": "0.2.2-alpha.1",
+          "artifact_manifest_sha256": "525fe515ed4e7540b3b02884d01c37732a5e1b1e650784ea1c2259e422a700b4"
+        },
+        "format": "commander",
+        "seats": [
+          {
+            "seat_id": "seat-0",
+            "name": "Fixture 0",
+            "controller": "local_human",
+            "deck_owner_id": null,
+            "document": {
+              "schema_version": 1,
+              "deck": {
+                "deck_id": "fixture-deck",
+                "name": "Synthetic native deck",
+                "format": "Commander",
+                "entries": [
+                  {
+                    "entry_id": "main",
+                    "name": "Fixture Front // Fixture Back",
+                    "quantity": 3,
+                    "section": "mainboard",
+                    "card_id": "selected-print",
+                    "oracle_id": "fixture-oracle",
+                    "set_code": "SYN",
+                    "collector_number": "1",
+                    "owned": 2,
+                    "image_asset_id": "fixture-front",
+                    "backside_asset_id": "fixture-back"
+                  },
+                  {
+                    "entry_id": "commander",
+                    "name": "Fixture Commander",
+                    "quantity": 1,
+                    "section": "commander",
+                    "card_id": "commander-print",
+                    "oracle_id": null,
+                    "set_code": null,
+                    "collector_number": null,
+                    "owned": 0,
+                    "image_asset_id": null,
+                    "backside_asset_id": null
+                  },
+                  {
+                    "entry_id": "partner",
+                    "name": "Fixture Partner or Background",
+                    "quantity": 1,
+                    "section": "commander",
+                    "card_id": "partner-print",
+                    "oracle_id": null,
+                    "set_code": null,
+                    "collector_number": null,
+                    "owned": 0,
+                    "image_asset_id": null,
+                    "backside_asset_id": null
+                  },
+                  {
+                    "entry_id": "companion",
+                    "name": "Fixture Companion",
+                    "quantity": 1,
+                    "section": "sideboard",
+                    "card_id": "companion-print",
+                    "oracle_id": null,
+                    "set_code": null,
+                    "collector_number": null,
+                    "owned": 0,
+                    "image_asset_id": null,
+                    "backside_asset_id": null
+                  }
+                ],
+                "commander_entry_ids": [
+                  "commander",
+                  "partner"
+                ],
+                "companion_entry_id": "companion"
+              }
+            }
+          },
+          {
+            "seat_id": "seat-1",
+            "name": "Fixture 1",
+            "controller": "local_human",
+            "deck_owner_id": "fixture-lender",
+            "document": {
+              "schema_version": 1,
+              "deck": {
+                "deck_id": "fixture-deck",
+                "name": "Synthetic native deck",
+                "format": "Commander",
+                "entries": [
+                  {
+                    "entry_id": "main",
+                    "name": "Fixture Front // Fixture Back",
+                    "quantity": 3,
+                    "section": "mainboard",
+                    "card_id": "selected-print",
+                    "oracle_id": "fixture-oracle",
+                    "set_code": "SYN",
+                    "collector_number": "1",
+                    "owned": 2,
+                    "image_asset_id": "fixture-front",
+                    "backside_asset_id": "fixture-back"
+                  },
+                  {
+                    "entry_id": "commander",
+                    "name": "Fixture Commander",
+                    "quantity": 1,
+                    "section": "commander",
+                    "card_id": "commander-print",
+                    "oracle_id": null,
+                    "set_code": null,
+                    "collector_number": null,
+                    "owned": 0,
+                    "image_asset_id": null,
+                    "backside_asset_id": null
+                  },
+                  {
+                    "entry_id": "partner",
+                    "name": "Fixture Partner or Background",
+                    "quantity": 1,
+                    "section": "commander",
+                    "card_id": "partner-print",
+                    "oracle_id": null,
+                    "set_code": null,
+                    "collector_number": null,
+                    "owned": 0,
+                    "image_asset_id": null,
+                    "backside_asset_id": null
+                  },
+                  {
+                    "entry_id": "companion",
+                    "name": "Fixture Companion",
+                    "quantity": 1,
+                    "section": "sideboard",
+                    "card_id": "companion-print",
+                    "oracle_id": null,
+                    "set_code": null,
+                    "collector_number": null,
+                    "owned": 0,
+                    "image_asset_id": null,
+                    "backside_asset_id": null
+                  }
+                ],
+                "commander_entry_ids": [
+                  "commander",
+                  "partner"
+                ],
+                "companion_entry_id": "companion"
+              }
+            }
+          },
+          {
+            "seat_id": "seat-2",
+            "name": "Fixture 2",
+            "controller": "local_human",
+            "deck_owner_id": null,
+            "document": {
+              "schema_version": 1,
+              "deck": {
+                "deck_id": "fixture-deck",
+                "name": "Synthetic native deck",
+                "format": "Commander",
+                "entries": [
+                  {
+                    "entry_id": "main",
+                    "name": "Fixture Front // Fixture Back",
+                    "quantity": 3,
+                    "section": "mainboard",
+                    "card_id": "selected-print",
+                    "oracle_id": "fixture-oracle",
+                    "set_code": "SYN",
+                    "collector_number": "1",
+                    "owned": 2,
+                    "image_asset_id": "fixture-front",
+                    "backside_asset_id": "fixture-back"
+                  },
+                  {
+                    "entry_id": "commander",
+                    "name": "Fixture Commander",
+                    "quantity": 1,
+                    "section": "commander",
+                    "card_id": "commander-print",
+                    "oracle_id": null,
+                    "set_code": null,
+                    "collector_number": null,
+                    "owned": 0,
+                    "image_asset_id": null,
+                    "backside_asset_id": null
+                  },
+                  {
+                    "entry_id": "partner",
+                    "name": "Fixture Partner or Background",
+                    "quantity": 1,
+                    "section": "commander",
+                    "card_id": "partner-print",
+                    "oracle_id": null,
+                    "set_code": null,
+                    "collector_number": null,
+                    "owned": 0,
+                    "image_asset_id": null,
+                    "backside_asset_id": null
+                  },
+                  {
+                    "entry_id": "companion",
+                    "name": "Fixture Companion",
+                    "quantity": 1,
+                    "section": "sideboard",
+                    "card_id": "companion-print",
+                    "oracle_id": null,
+                    "set_code": null,
+                    "collector_number": null,
+                    "owned": 0,
+                    "image_asset_id": null,
+                    "backside_asset_id": null
+                  }
+                ],
+                "commander_entry_ids": [
+                  "commander",
+                  "partner"
+                ],
+                "companion_entry_id": "companion"
+              }
+            }
+          },
+          {
+            "seat_id": "seat-3",
+            "name": "Fixture 3",
+            "controller": "local_human",
+            "deck_owner_id": null,
+            "document": {
+              "schema_version": 1,
+              "deck": {
+                "deck_id": "fixture-deck",
+                "name": "Synthetic native deck",
+                "format": "Commander",
+                "entries": [
+                  {
+                    "entry_id": "main",
+                    "name": "Fixture Front // Fixture Back",
+                    "quantity": 3,
+                    "section": "mainboard",
+                    "card_id": "selected-print",
+                    "oracle_id": "fixture-oracle",
+                    "set_code": "SYN",
+                    "collector_number": "1",
+                    "owned": 2,
+                    "image_asset_id": "fixture-front",
+                    "backside_asset_id": "fixture-back"
+                  },
+                  {
+                    "entry_id": "commander",
+                    "name": "Fixture Commander",
+                    "quantity": 1,
+                    "section": "commander",
+                    "card_id": "commander-print",
+                    "oracle_id": null,
+                    "set_code": null,
+                    "collector_number": null,
+                    "owned": 0,
+                    "image_asset_id": null,
+                    "backside_asset_id": null
+                  },
+                  {
+                    "entry_id": "partner",
+                    "name": "Fixture Partner or Background",
+                    "quantity": 1,
+                    "section": "commander",
+                    "card_id": "partner-print",
+                    "oracle_id": null,
+                    "set_code": null,
+                    "collector_number": null,
+                    "owned": 0,
+                    "image_asset_id": null,
+                    "backside_asset_id": null
+                  },
+                  {
+                    "entry_id": "companion",
+                    "name": "Fixture Companion",
+                    "quantity": 1,
+                    "section": "sideboard",
+                    "card_id": "companion-print",
+                    "oracle_id": null,
+                    "set_code": null,
+                    "collector_number": null,
+                    "owned": 0,
+                    "image_asset_id": null,
+                    "backside_asset_id": null
+                  }
+                ],
+                "commander_entry_ids": [
+                  "commander",
+                  "partner"
+                ],
+                "companion_entry_id": "companion"
+              }
+            }
+          },
+          {
+            "seat_id": "seat-4",
+            "name": "Fixture 4",
+            "controller": "local_human",
+            "deck_owner_id": null,
+            "document": {
+              "schema_version": 1,
+              "deck": {
+                "deck_id": "fixture-deck",
+                "name": "Synthetic native deck",
+                "format": "Commander",
+                "entries": [
+                  {
+                    "entry_id": "main",
+                    "name": "Fixture Front // Fixture Back",
+                    "quantity": 3,
+                    "section": "mainboard",
+                    "card_id": "selected-print",
+                    "oracle_id": "fixture-oracle",
+                    "set_code": "SYN",
+                    "collector_number": "1",
+                    "owned": 2,
+                    "image_asset_id": "fixture-front",
+                    "backside_asset_id": "fixture-back"
+                  },
+                  {
+                    "entry_id": "commander",
+                    "name": "Fixture Commander",
+                    "quantity": 1,
+                    "section": "commander",
+                    "card_id": "commander-print",
+                    "oracle_id": null,
+                    "set_code": null,
+                    "collector_number": null,
+                    "owned": 0,
+                    "image_asset_id": null,
+                    "backside_asset_id": null
+                  },
+                  {
+                    "entry_id": "partner",
+                    "name": "Fixture Partner or Background",
+                    "quantity": 1,
+                    "section": "commander",
+                    "card_id": "partner-print",
+                    "oracle_id": null,
+                    "set_code": null,
+                    "collector_number": null,
+                    "owned": 0,
+                    "image_asset_id": null,
+                    "backside_asset_id": null
+                  },
+                  {
+                    "entry_id": "companion",
+                    "name": "Fixture Companion",
+                    "quantity": 1,
+                    "section": "sideboard",
+                    "card_id": "companion-print",
+                    "oracle_id": null,
+                    "set_code": null,
+                    "collector_number": null,
+                    "owned": 0,
+                    "image_asset_id": null,
+                    "backside_asset_id": null
+                  }
+                ],
+                "commander_entry_ids": [
+                  "commander",
+                  "partner"
+                ],
+                "companion_entry_id": "companion"
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

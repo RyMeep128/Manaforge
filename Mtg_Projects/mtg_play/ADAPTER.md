@@ -48,6 +48,10 @@ snapshots and no rules implementation.
 
 ## Decks and object identity
 
+The migration's [launch boundary](../../docs/play-launch-boundary.md) exports a
+minimal native projection once, without changing this adapter's deck resolution
+or per-action runtime. Engine eligibility remains a separate check.
+
 Existing Core `DeckDocument`s are consumed without modification. Oracle entries
 require Core's existing lookup; legacy entries use their stored names. The engine
 CardRepository resolves canonical names and preferred set/collector numbers.

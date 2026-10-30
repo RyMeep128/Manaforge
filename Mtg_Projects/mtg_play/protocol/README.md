@@ -1,5 +1,9 @@
 # Python protocol inventory — P1.1
 
+The private [launch boundary](../../../docs/play-launch-boundary.md) adds a separate
+native-deck export schema and Java-only DTOs. It is never a Unity snapshot or a
+second persistent deck format.
+
 Status: source inventory, pending review and CI. Not a frozen Java/C# wire schema,
 captured engine transcript, or G1 acceptance. See the [migration roadmap](../../../docs/play-unity-java-roadmap.md).
 

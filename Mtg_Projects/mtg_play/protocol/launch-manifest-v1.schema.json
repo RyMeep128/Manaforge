@@ -1,0 +1,271 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:manaforge:play:launch-manifest:1",
+  "title": "Private one-time native deck projection; not a persistent deck format",
+  "$ref": "#/$defs/LaunchManifest",
+  "$defs": {
+    "NativeLaunchEntry": {
+      "type": "object",
+      "properties": {
+        "entry_id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "quantity": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "section": {
+          "enum": [
+            "mainboard",
+            "sideboard",
+            "commander"
+          ]
+        },
+        "card_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "oracle_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "set_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "collector_number": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "owned": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "image_asset_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "backside_asset_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "entry_id",
+        "name",
+        "quantity",
+        "section",
+        "card_id",
+        "oracle_id",
+        "set_code",
+        "collector_number",
+        "owned",
+        "image_asset_id",
+        "backside_asset_id"
+      ],
+      "additionalProperties": false
+    },
+    "NativeLaunchDeck": {
+      "type": "object",
+      "properties": {
+        "deck_id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "format": {
+          "type": "string"
+        },
+        "entries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/NativeLaunchEntry"
+          },
+          "maxItems": 4096
+        },
+        "commander_entry_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "companion_entry_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "deck_id",
+        "name",
+        "format",
+        "entries",
+        "commander_entry_ids",
+        "companion_entry_id"
+      ],
+      "additionalProperties": false
+    },
+    "NativeLaunchDocument": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": 1
+        },
+        "deck": {
+          "$ref": "#/$defs/NativeLaunchDeck"
+        }
+      },
+      "required": [
+        "schema_version",
+        "deck"
+      ],
+      "additionalProperties": false
+    },
+    "LaunchSeat": {
+      "type": "object",
+      "properties": {
+        "seat_id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "controller": {
+          "enum": [
+            "local_human",
+            "engine_ai"
+          ]
+        },
+        "deck_owner_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "document": {
+          "$ref": "#/$defs/NativeLaunchDocument"
+        }
+      },
+      "required": [
+        "seat_id",
+        "name",
+        "controller",
+        "deck_owner_id",
+        "document"
+      ],
+      "additionalProperties": false
+    },
+    "LaunchEnginePin": {
+      "type": "object",
+      "properties": {
+        "engine_version": {
+          "type": "string"
+        },
+        "adapter_version": {
+          "type": "string"
+        },
+        "artifact_manifest_sha256": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "engine_version",
+        "adapter_version",
+        "artifact_manifest_sha256"
+      ],
+      "additionalProperties": false
+    },
+    "LaunchManifest": {
+      "type": "object",
+      "properties": {
+        "launch_manifest_version": {
+          "const": 1
+        },
+        "protocol_version": {
+          "const": 1
+        },
+        "manifest_id": {
+          "type": "string"
+        },
+        "manaforge_version": {
+          "type": "string"
+        },
+        "engine": {
+          "$ref": "#/$defs/LaunchEnginePin"
+        },
+        "format": {
+          "enum": [
+            "freeform",
+            "commander"
+          ]
+        },
+        "seats": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LaunchSeat"
+          },
+          "minItems": 2
+        }
+      },
+      "required": [
+        "launch_manifest_version",
+        "protocol_version",
+        "manifest_id",
+        "manaforge_version",
+        "engine",
+        "format",
+        "seats"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

@@ -88,7 +88,7 @@ public final class FixtureConsumer {
         return true;
     }
 
-    private int check(Path path, boolean expected) throws Exception {
+    private int check(Path path, boolean expected, String modelPrefix) throws Exception {
         int count = 0;
         for (JsonElement item : read(path).getAsJsonObject().getAsJsonArray("cases")) {
             JsonObject fixture = item.getAsJsonObject();
@@ -98,7 +98,7 @@ public final class FixtureConsumer {
             if (valid(payload, definitions.get(record)) != expected)
                 throw new AssertionError("Fixture validation mismatch: " + fixture.get("name").getAsString());
             if (expected) {
-                Class<?> type = Class.forName("manaforge.protocol.PlayContracts$" + record);
+                Class<?> type = Class.forName("manaforge.protocol." + modelPrefix + "$" + record);
                 Object model = gson.fromJson(payload, type);
                 if (!payload.equals(gson.toJsonTree(model))) throw new AssertionError("DTO round-trip lost data");
             }
@@ -110,9 +110,14 @@ public final class FixtureConsumer {
     public static void main(String[] args) throws Exception {
         Path directory = Paths.get(args[0]);
         FixtureConsumer consumer = new FixtureConsumer(read(directory.resolve("python-contracts-v1.schema.json")).getAsJsonObject());
-        int positive = consumer.check(directory.resolve("fixtures/python-baseline-v1.json"), true);
-        int negative = consumer.check(directory.resolve("fixtures/python-negative-v1.json"), false);
+        int positive = consumer.check(directory.resolve("fixtures/python-baseline-v1.json"), true, "PlayContracts");
+        int negative = consumer.check(directory.resolve("fixtures/python-negative-v1.json"), false, "PlayContracts");
         if (positive < 9 || negative < 12) throw new AssertionError("Missing fixture coverage");
         System.out.println("Java fixture DTOs: " + positive + " positive round-trips, " + negative + " negative rejections");
+        FixtureConsumer launch = new FixtureConsumer(read(directory.resolve("launch-manifest-v1.schema.json")).getAsJsonObject());
+        int launchPositive = launch.check(directory.resolve("fixtures/launch-positive-v1.json"), true, "LaunchContracts");
+        int launchNegative = launch.check(directory.resolve("fixtures/launch-negative-v1.json"), false, "LaunchContracts");
+        if (launchPositive < 3 || launchNegative < 9) throw new AssertionError("Missing launch fixture coverage");
+        System.out.println("Java launch DTOs: " + launchPositive + " positive round-trips, " + launchNegative + " negative rejections");
     }
 }
