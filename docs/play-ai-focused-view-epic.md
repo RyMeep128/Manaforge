@@ -983,3 +983,22 @@ the top instead of below the lobby's bottom edge. CI checks cover loading state,
 compact action placement, explanatory gating and section handling. Only static
 inspection, formatting and diff checks were performed locally; no tests, builds,
 push or CI monitoring.
+
+
+Startup investigation (0.5.17-alpha.1): the user's 20261029-205003-e8e38cd0
+runtime connected successfully and exited cleanly. The application recorded a
+deck-resolution failure at 20:50:38 but discarded its underlying exception code;
+this evidence does not identify or fix the original resolution cause. Startup
+now records a fixed, allowlisted cause code before cleanup and preserves it with
+the lifecycle stage in the user-facing error. Database, transport/protocol and
+internal type/interface errors are distinguishable without exporting raw
+exception messages or private deck payloads. A subsequent attempt is needed to
+identify the actual cause; no engine was started locally for this investigation.
+
+The display-card behavior is section-wide, not name-specific: all
+`display_commander` entries are omitted from translation and asset requirements.
+Expanded CI coverage includes multiple differently named/future unresolved display
+cards in Freeform and Commander translation, immutable source documents, asset
+exclusion, and safe cause propagation after confirmed cleanup. No local tests or
+builds were run. The original startup failure remains unresolved pending its
+new diagnostic cause code.

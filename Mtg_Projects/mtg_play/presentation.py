@@ -26,9 +26,56 @@ class _SetupFailure(RuntimeError):
 
 
 class _SessionFailure(RuntimeError):
-    def __init__(self, code):
+    def __init__(self, code, cause=None):
         self.code = code
+        self.cause = cause
         super().__init__(code)
+
+
+SETUP_CAUSES = {
+    "SERVER_RESPONSE_INVALID": "The local engine returned an unreadable deck response.",
+    "SERVER_CONTROL_TIMEOUT": "The local engine did not answer the deck request in time.",
+    "SERVER_RESPONSE_ACCESS_TIMEOUT": "Windows kept the local engine response file locked.",
+    "ENGINE_CONTROL_LOST": "The local engine control connection was lost.",
+    "ENGINE_EXITED": "The local engine exited during preparation.",
+    "ENGINE_UNAVAILABLE": "The local engine is no longer available.",
+    "LOCAL_CARD_DATABASE_BUSY": "The local card database is busy. Let other library operations finish, then retry.",
+    "LOCAL_CARD_DATABASE_ERROR": "The local card database could not resolve the selected cards.",
+    "PYTHON_TYPE_ERROR": "An internal deck-preparation type error occurred.",
+    "PYTHON_ATTRIBUTE_ERROR": "An internal deck-preparation interface error occurred.",
+    "PYTHON_KEY_ERROR": "The deck response was missing a required field.",
+    "PYTHON_VALUE_ERROR": "Deck preparation received an invalid value.",
+    "DECK_TRANSLATION_FAILED": "Selected deck entries could not be translated for the engine.",
+    "UNCLASSIFIED_SETUP_ERROR": "An internal preparation error occurred.",
+}
+
+
+def _setup_cause(error):
+    """Fixed codes only: never retain exception text, prompts or deck payloads."""
+    import sqlite3
+    from .decks import DeckTranslationError
+
+    code = getattr(error, "code", None)
+    if isinstance(code, str) and code in SETUP_CAUSES:
+        return code
+    if isinstance(error, DeckTranslationError):
+        return "DECK_TRANSLATION_FAILED"
+    if isinstance(error, sqlite3.Error):
+        return (
+            "LOCAL_CARD_DATABASE_BUSY"
+            if getattr(error, "sqlite_errorcode", None)
+            in (sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED)
+            else "LOCAL_CARD_DATABASE_ERROR"
+        )
+    for kind, label in (
+        (TypeError, "TYPE"),
+        (AttributeError, "ATTRIBUTE"),
+        (KeyError, "KEY"),
+        (ValueError, "VALUE"),
+    ):
+        if isinstance(error, kind):
+            return "PYTHON_" + label + "_ERROR"
+    return "UNCLASSIFIED_SETUP_ERROR"
 
 
 class SessionController(C.QObject):
@@ -187,10 +234,20 @@ class SessionController(C.QObject):
                     )
                     if stage is not None:
                         label = STAGE_LABELS[stage].lower()
+                        cause = getattr(exc, "cause", None)
+                        detail = (
+                            " "
+                            + SETUP_CAUSES[cause]
+                            + " Details: "
+                            + code
+                            + " / "
+                            + cause
+                            + "."
+                            if cause in SETUP_CAUSES
+                            else " Check the local runtime or selected decks, then try again."
+                        )
                         return "error", (
-                            "Could not start the game while "
-                            + label
-                            + ". Check the local runtime or selected decks, then try again."
+                            "Could not start the game while " + label + "." + detail
                         )
                     return (
                         "error",
@@ -247,6 +304,14 @@ class SessionController(C.QObject):
             except Exception as error:
                 lifecycle = getattr(self._owner, "lifecycle", None)
                 failure = lifecycle.failure if lifecycle is not None else None
+                cause = _setup_cause(error)
+                from mtg_core.diagnostics import get_logger
+
+                get_logger(__name__).warning(
+                    "Play setup failed stage=%s cause=%s",
+                    failure["stage"] if failure is not None else "setup",
+                    cause,
+                )
                 # Preserve the owner on unconfirmed cleanup for an explicit retry.
                 self._close_owner()
                 from .decks import DeckTranslationError
@@ -271,7 +336,7 @@ class SessionController(C.QObject):
                         + ". Their cards, selected printings, or configuration could not be loaded. No cards were replaced."
                     ) from error
                 if failure is not None:
-                    raise _SessionFailure(failure["code"]) from error
+                    raise _SessionFailure(failure["code"], cause=cause) from error
                 raise
             tracker = getattr(self._owner, "lifecycle", None) or LifecycleDiagnostics(
                 lambda value: self._lifecycleProgress.emit(epoch, value)

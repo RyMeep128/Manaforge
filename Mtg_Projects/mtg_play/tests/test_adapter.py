@@ -794,7 +794,10 @@ def test_engine_deck_validation_rejects_unavailable_or_active_runtime(
         owner.validate_deck(object(), format)
 
 
-def test_precon_display_commander_is_not_submitted_or_resolved_as_a_playable_card():
+@pytest.mark.parametrize("commander", [False, True])
+def test_precon_display_commander_is_not_submitted_or_resolved_as_a_playable_card(
+    commander,
+):
     from mtg_play.decks import deck_document_issues
 
     document = DeckDocument(
@@ -810,6 +813,20 @@ def test_precon_display_commander_is_not_submitted_or_resolved_as_a_playable_car
             ]
         )
     )
+    document.deck.entries.extend(
+        [
+            DeckEntry(
+                "display-other", "Another commander", section="display_commander"
+            ),
+            DeckEntry(
+                "display-future",
+                "Unresolved future card",
+                section="display_commander",
+                oracle_id="unavailable",
+                card_id="unknown-print",
+            ),
+        ]
+    )
     before = deepcopy(document.to_dict())
     queries_seen = []
 
@@ -817,8 +834,8 @@ def test_precon_display_commander_is_not_submitted_or_resolved_as_a_playable_car
         queries_seen.extend(queries)
         return resolve(queries)
 
-    assert not deck_document_issues(document)
-    prepared = prepare_deck(document, resolver)
+    assert not deck_document_issues(document, commander=commander)
+    prepared = prepare_deck(document, resolver, commander=commander)
     assert [query["key"] for query in queries_seen] == ["land"]
     assert len(prepared.cards) == 1 and not prepared.sideboard
     assert document.to_dict() == before

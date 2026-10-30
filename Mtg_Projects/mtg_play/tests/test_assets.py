@@ -98,3 +98,22 @@ def test_cancelled_preparation_returns_no_manifest():
     assert (
         prepare_assets((deck,), object(), cancel=cancel, report=lambda v: None) is None
     )
+
+
+def test_all_display_commanders_are_omitted_from_asset_requirements():
+    deck = document(
+        DeckEntry("land", "Forest"),
+        DeckEntry("display-a", "First display commander", section="display_commander"),
+        DeckEntry(
+            "display-b",
+            "Different display commander",
+            section="display_commander",
+            card_id="unknown",
+        ),
+    )
+    before = deepcopy(deck.to_dict())
+    assets = prepare_assets(
+        (deck,), object(), cancel=Event(), report=lambda value: None
+    )
+    assert assets.missing == ("Forest",)
+    assert not assets.sources and deck.to_dict() == before

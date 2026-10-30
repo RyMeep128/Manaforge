@@ -19,6 +19,7 @@ from mtg_play.contracts import (
     PlayerView,
 )
 from mtg_play.fake import ScriptedGameSession
+from mtg_play.adapter import AdapterError
 from mtg_play.presentation import SessionController
 from mtg_play.setup import SavedDeck, saved_decks
 from mtg_play.workspace import PlayWorkspace
@@ -659,3 +660,42 @@ def test_match_deck_copies_are_isolated_per_seat_on_worker(app):
     assert owner.decks[0].deck.entries[0].card_id == "selected-print"
     assert all(thread is not app.thread() for _, thread in owner.calls)
     close(app, controller)
+
+
+def test_deck_resolution_failure_retains_safe_cause_after_cleanup(app):
+    from mtg_play.diagnostics import LifecycleDiagnostics
+
+    class BrokenPreparation(Owner):
+        def __init__(self):
+            super().__init__(None)
+            self.lifecycle = LifecycleDiagnostics()
+
+        def create_game(self, *args, **kwargs):
+            with self.lifecycle.stage("deck_resolution"):
+                raise TypeError("PRIVATE deck name and payload must not appear")
+
+    owner = BrokenPreparation()
+    controller = SessionController(adapter_factory=lambda: owner)
+    messages = []
+    controller.statusChanged.connect(messages.append)
+    controller.start(setup(), (DeckDocument(), DeckDocument()))
+    drain(app, lambda: not controller.busy)
+    assert owner.closed and not controller.active
+    assert "PLAY_DECK_RESOLUTION_FAILED / PYTHON_TYPE_ERROR" in messages[-1]
+    assert "PRIVATE" not in str(messages)
+    close(app, controller)
+
+
+@pytest.mark.parametrize(
+    "error,expected",
+    [
+        (AdapterError("SERVER_RESPONSE_INVALID"), "SERVER_RESPONSE_INVALID"),
+        (KeyError("PRIVATE"), "PYTHON_KEY_ERROR"),
+        (RuntimeError("PRIVATE"), "UNCLASSIFIED_SETUP_ERROR"),
+        (AdapterError("PRIVATE"), "UNCLASSIFIED_SETUP_ERROR"),
+    ],
+)
+def test_startup_cause_codes_never_include_arbitrary_exception_text(error, expected):
+    from mtg_play.presentation import _setup_cause
+
+    assert _setup_cause(error) == expected
