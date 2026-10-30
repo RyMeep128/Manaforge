@@ -76,5 +76,11 @@ namespace Manaforge.Play.Tests
             Assert.That(tracker.Current,Is.Null);Assert.That(tracker.CanSubmit,Is.False);
             Assert.That(Assert.Throws<WireEnvelope.EnvelopeException>(()=>tracker.Begin(Command("c2"))).Code,Is.EqualTo("TRACKER_CLOSED"));
         }
+        [Test] public void ChoiceCommandsUseTheSamePendingAndUncertainLifecycle()
+        {
+            var command=JObject.Parse(Command());command["body"]["operation"]="choose";((JObject)command["body"]).Remove("action_id");command["body"]["option_id"]="engine-option";
+            using var tracker=new CommandTracker("session","one");tracker.Begin(command.ToString());tracker.Accept(Ack());tracker.Disconnect();tracker.AuthenticatedReconnect();
+            Assert.That(tracker.Current.State,Is.EqualTo(CommandState.Uncertain));Assert.That(tracker.CanSubmit,Is.False);
+        }
     }
 }

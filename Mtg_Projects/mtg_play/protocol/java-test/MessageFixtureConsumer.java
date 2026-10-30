@@ -23,6 +23,21 @@ public final class MessageFixtureConsumer {
             String expected = test.get("code").isJsonNull() ? null : test.get("code").getAsString();
             if (!Objects.equals(code, expected)) throw new AssertionError("Current-decision check " + test.get("name"));
         }
-        System.out.println("Message bodies passed: " + corpus.getAsJsonArray("positive").size() + " positive / " + corpus.getAsJsonArray("negative").size() + " negative / 6 current-decision checks");
+        for (JsonElement item : corpus.getAsJsonArray("bindings")) {
+            JsonObject test=item.getAsJsonObject();
+            String code=WireMessages.checkBinding(test.get("envelope").toString(),"session","seat-one",7,"decision");
+            String expected=test.get("code").isJsonNull()?null:test.get("code").getAsString();
+            if(!Objects.equals(code,expected))throw new AssertionError("Choice binding mismatch");
+            try { WireMessages.checkCurrent(test.get("envelope").toString(),"session","seat-one",7,"decision",Arrays.asList("action"));throw new AssertionError("Choice admitted as perform"); }
+            catch(WireEnvelope.EnvelopeException error) {if(!error.code.equals("MESSAGE_UNSUPPORTED"))throw error;}
+        }
+        JsonObject amounts=null;
+        for(JsonElement item:corpus.getAsJsonArray("positive"))if(item.getAsJsonObject().get("name").getAsString().equals("choose_amounts"))amounts=item.getAsJsonObject().getAsJsonObject("envelope").deepCopy();
+        if(corpus.get("max_amount_values").getAsInt()!=WireMessages.MAX_AMOUNT_VALUES)throw new AssertionError("Amount cap drift");
+        JsonArray values=new JsonArray();for(int i=0;i<WireMessages.MAX_AMOUNT_VALUES;i++)values.add(0);
+        amounts.getAsJsonObject("body").add("values",values);WireMessages.parse(amounts.toString());values.add(0);
+        try {WireMessages.parse(amounts.toString());throw new AssertionError("Oversized amounts accepted");}
+        catch(WireEnvelope.EnvelopeException error) {if(!error.code.equals("MESSAGE_INVALID"))throw error;}
+        System.out.println("Message bodies passed: " + corpus.getAsJsonArray("positive").size() + " positive / " + corpus.getAsJsonArray("negative").size() + " negative / 6 perform and 12 choice binding checks plus amount boundary");
     }
 }

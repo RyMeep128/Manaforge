@@ -37,7 +37,7 @@ def test_shared_envelopes_match_schema(stem):
                 json.loads(case["text"]) if "text" in case else case["envelope"]
             ), case["name"]
 
-    for case in corpus.get("current", []):
+    for case in corpus.get("current", []) + corpus.get("bindings", []):
         # A stale or unauthorized command may be structurally valid; current engine
         # context and authenticated seat binding are separate checks in both peers.
         validator.validate(case["envelope"])
@@ -96,3 +96,22 @@ def test_receive_schema_and_context_checks_have_separate_responsibilities():
             assert not validator.is_valid(case["envelope"]), case["name"]
         else:
             validator.validate(case["envelope"])
+
+
+def test_choice_amount_vector_boundary_is_a_transport_limit():
+    schema = json.loads(
+        (ROOT / "wire-messages-v1.schema.json").read_text(encoding="utf-8")
+    )
+    corpus = json.loads(
+        (ROOT / "fixtures/wire-messages-v1.json").read_text(encoding="utf-8")
+    )
+    command = next(
+        case["envelope"]
+        for case in corpus["positive"]
+        if case["name"] == "choose_amounts"
+    )
+    command["body"]["values"] = [0] * corpus["max_amount_values"]
+    validator = Draft202012Validator(schema)
+    validator.validate(command)
+    command["body"]["values"].append(0)
+    assert not validator.is_valid(command)

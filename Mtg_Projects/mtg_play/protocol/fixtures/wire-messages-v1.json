@@ -92,6 +92,104 @@
           "reason": "client_close"
         }
       }
+    },
+    {
+      "name": "choose",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "command",
+        "message_id": "m1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "revision": 7,
+          "operation": "choose",
+          "decision_id": "decision",
+          "option_id": "engine-option"
+        }
+      }
+    },
+    {
+      "name": "select_mana_source",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "command",
+        "message_id": "m1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "revision": 7,
+          "operation": "select_mana_source",
+          "decision_id": "decision",
+          "object_id": "engine-object"
+        }
+      }
+    },
+    {
+      "name": "choose_number",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "command",
+        "message_id": "m1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "revision": 7,
+          "operation": "choose_number",
+          "decision_id": "decision",
+          "value": -9223372036854775808
+        }
+      }
+    },
+    {
+      "name": "choose_amounts",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "command",
+        "message_id": "m1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "revision": 7,
+          "operation": "choose_amounts",
+          "decision_id": "decision",
+          "values": [
+            -9223372036854775808,
+            0,
+            9223372036854775807
+          ]
+        }
+      }
+    },
+    {
+      "name": "finish_selection",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "command",
+        "message_id": "m1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "revision": 7,
+          "operation": "finish_selection",
+          "decision_id": "decision"
+        }
+      }
+    },
+    {
+      "name": "cancel",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "command",
+        "message_id": "m1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "revision": 7,
+          "operation": "cancel",
+          "decision_id": "decision"
+        }
+      }
     }
   ],
   "negative": [
@@ -406,6 +504,317 @@
         }
       },
       "code": "MESSAGE_INVALID"
+    },
+    {
+      "name": "choose-missing",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "command",
+        "message_id": "m1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "revision": 7,
+          "operation": "choose",
+          "decision_id": "decision"
+        }
+      },
+      "code": "MESSAGE_INVALID"
+    },
+    {
+      "name": "choose-extra",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "command",
+        "message_id": "m1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "revision": 7,
+          "operation": "choose",
+          "decision_id": "decision",
+          "option_id": "engine-option",
+          "invented_arg": "private value"
+        }
+      },
+      "code": "MESSAGE_INVALID"
+    },
+    {
+      "name": "select_mana_source-missing",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "command",
+        "message_id": "m1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "revision": 7,
+          "operation": "select_mana_source",
+          "decision_id": "decision"
+        }
+      },
+      "code": "MESSAGE_INVALID"
+    },
+    {
+      "name": "select_mana_source-extra",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "command",
+        "message_id": "m1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "revision": 7,
+          "operation": "select_mana_source",
+          "decision_id": "decision",
+          "object_id": "engine-object",
+          "invented_arg": "private value"
+        }
+      },
+      "code": "MESSAGE_INVALID"
+    },
+    {
+      "name": "choose_number-missing",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "command",
+        "message_id": "m1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "revision": 7,
+          "operation": "choose_number",
+          "decision_id": "decision"
+        }
+      },
+      "code": "MESSAGE_INVALID"
+    },
+    {
+      "name": "choose_number-extra",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "command",
+        "message_id": "m1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "revision": 7,
+          "operation": "choose_number",
+          "decision_id": "decision",
+          "value": -9223372036854775808,
+          "invented_arg": "private value"
+        }
+      },
+      "code": "MESSAGE_INVALID"
+    },
+    {
+      "name": "choose_amounts-missing",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "command",
+        "message_id": "m1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "revision": 7,
+          "operation": "choose_amounts",
+          "decision_id": "decision"
+        }
+      },
+      "code": "MESSAGE_INVALID"
+    },
+    {
+      "name": "choose_amounts-extra",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "command",
+        "message_id": "m1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "revision": 7,
+          "operation": "choose_amounts",
+          "decision_id": "decision",
+          "values": [
+            -9223372036854775808,
+            0,
+            9223372036854775807
+          ],
+          "invented_arg": "private value"
+        }
+      },
+      "code": "MESSAGE_INVALID"
+    },
+    {
+      "name": "finish_selection-extra",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "command",
+        "message_id": "m1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "revision": 7,
+          "operation": "finish_selection",
+          "decision_id": "decision",
+          "invented_arg": "private value"
+        }
+      },
+      "code": "MESSAGE_INVALID"
+    },
+    {
+      "name": "cancel-extra",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "command",
+        "message_id": "m1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "revision": 7,
+          "operation": "cancel",
+          "decision_id": "decision",
+          "invented_arg": "private value"
+        }
+      },
+      "code": "MESSAGE_INVALID"
+    },
+    {
+      "name": "invalid-option_id-None",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "command",
+        "message_id": "m1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "revision": 7,
+          "operation": "choose",
+          "decision_id": "decision",
+          "option_id": null
+        }
+      },
+      "code": "MESSAGE_INVALID"
+    },
+    {
+      "name": "invalid-object_id-True",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "command",
+        "message_id": "m1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "revision": 7,
+          "operation": "select_mana_source",
+          "decision_id": "decision",
+          "object_id": true
+        }
+      },
+      "code": "MESSAGE_INVALID"
+    },
+    {
+      "name": "invalid-value-False",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "command",
+        "message_id": "m1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "revision": 7,
+          "operation": "choose_number",
+          "decision_id": "decision",
+          "value": false
+        }
+      },
+      "code": "MESSAGE_INVALID"
+    },
+    {
+      "name": "invalid-values-[True]",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "command",
+        "message_id": "m1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "revision": 7,
+          "operation": "choose_amounts",
+          "decision_id": "decision",
+          "values": [
+            true
+          ]
+        }
+      },
+      "code": "MESSAGE_INVALID"
+    },
+    {
+      "name": "invalid-values-None",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "command",
+        "message_id": "m1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "revision": 7,
+          "operation": "choose_amounts",
+          "decision_id": "decision",
+          "values": null
+        }
+      },
+      "code": "MESSAGE_INVALID"
+    },
+    {
+      "name": "concede-still-unsupported",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "command",
+        "message_id": "m1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "revision": 7,
+          "operation": "concede",
+          "decision_id": "decision"
+        }
+      },
+      "code": "MESSAGE_INVALID"
+    },
+    {
+      "name": "number-overflow",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "command",
+        "message_id": "m1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "revision": 7,
+          "operation": "choose_number",
+          "decision_id": "decision",
+          "value": 9223372036854775808
+        }
+      },
+      "code": "JSON_INVALID"
+    },
+    {
+      "name": "fractional-number",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "command",
+        "message_id": "m1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "revision": 7,
+          "operation": "choose_number",
+          "decision_id": "decision",
+          "value": 1.5
+        }
+      },
+      "code": "JSON_INVALID"
     }
   ],
   "current": [
@@ -510,6 +919,217 @@
         }
       },
       "code": "ACTION_UNAVAILABLE"
+    }
+  ],
+  "max_amount_values": 1024,
+  "bindings": [
+    {
+      "name": "choose",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "command",
+        "message_id": "m1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "revision": 7,
+          "operation": "choose",
+          "decision_id": "decision",
+          "option_id": "engine-option"
+        }
+      },
+      "code": null
+    },
+    {
+      "name": "choose-stale",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "command",
+        "message_id": "m1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "revision": 7,
+          "operation": "choose",
+          "decision_id": "stale",
+          "option_id": "engine-option"
+        }
+      },
+      "code": "STALE_DECISION"
+    },
+    {
+      "name": "select_mana_source",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "command",
+        "message_id": "m1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "revision": 7,
+          "operation": "select_mana_source",
+          "decision_id": "decision",
+          "object_id": "engine-object"
+        }
+      },
+      "code": null
+    },
+    {
+      "name": "select_mana_source-stale",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "command",
+        "message_id": "m1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "revision": 7,
+          "operation": "select_mana_source",
+          "decision_id": "stale",
+          "object_id": "engine-object"
+        }
+      },
+      "code": "STALE_DECISION"
+    },
+    {
+      "name": "choose_number",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "command",
+        "message_id": "m1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "revision": 7,
+          "operation": "choose_number",
+          "decision_id": "decision",
+          "value": -9223372036854775808
+        }
+      },
+      "code": null
+    },
+    {
+      "name": "choose_number-stale",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "command",
+        "message_id": "m1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "revision": 7,
+          "operation": "choose_number",
+          "decision_id": "stale",
+          "value": -9223372036854775808
+        }
+      },
+      "code": "STALE_DECISION"
+    },
+    {
+      "name": "choose_amounts",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "command",
+        "message_id": "m1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "revision": 7,
+          "operation": "choose_amounts",
+          "decision_id": "decision",
+          "values": [
+            -9223372036854775808,
+            0,
+            9223372036854775807
+          ]
+        }
+      },
+      "code": null
+    },
+    {
+      "name": "choose_amounts-stale",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "command",
+        "message_id": "m1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "revision": 7,
+          "operation": "choose_amounts",
+          "decision_id": "stale",
+          "values": [
+            -9223372036854775808,
+            0,
+            9223372036854775807
+          ]
+        }
+      },
+      "code": "STALE_DECISION"
+    },
+    {
+      "name": "finish_selection",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "command",
+        "message_id": "m1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "revision": 7,
+          "operation": "finish_selection",
+          "decision_id": "decision"
+        }
+      },
+      "code": null
+    },
+    {
+      "name": "finish_selection-stale",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "command",
+        "message_id": "m1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "revision": 7,
+          "operation": "finish_selection",
+          "decision_id": "stale"
+        }
+      },
+      "code": "STALE_DECISION"
+    },
+    {
+      "name": "cancel",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "command",
+        "message_id": "m1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "revision": 7,
+          "operation": "cancel",
+          "decision_id": "decision"
+        }
+      },
+      "code": null
+    },
+    {
+      "name": "cancel-stale",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "command",
+        "message_id": "m1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "revision": 7,
+          "operation": "cancel",
+          "decision_id": "stale"
+        }
+      },
+      "code": "STALE_DECISION"
     }
   ]
 }

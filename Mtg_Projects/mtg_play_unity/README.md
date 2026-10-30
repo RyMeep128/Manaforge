@@ -240,3 +240,11 @@ ACKs in the dummy client. Neither a submitted receipt nor a terminal fixture
 snapshot confirms a command; disconnect blocks replay. Eleven new focused checks
 bring EditMode to 53 passing local tests. See [tracking scope and capacity limits](../mtg_play/protocol/command-tracking.md).
 No actual gameplay, UI change or licensed CI evidence is added.
+
+
+The wire parser now accepts all six existing choice-family shapes alongside
+perform, preserving engine option/source IDs and signed numeric values. The
+tracker uses the same uncertain/pending lifecycle for choices. This is contract
+coverage only: the dummy exchange remains perform-only, no choice UI or real
+engine dispatch is added. Fifty-six local EditMode and six schema checks pass;
+see [choice contract scope](../mtg_play/protocol/choice-commands.md).

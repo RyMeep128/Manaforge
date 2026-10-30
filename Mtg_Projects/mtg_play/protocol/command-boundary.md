@@ -1,7 +1,8 @@
 # First wire command boundary — P1.2/G1 increment
 
 Status: shared command/ack/shutdown schema, Java/C# readers and current-decision
-comparison tests implemented. Follow-ups add [viewer authentication](viewer-authentication.md),
+comparison tests implemented. The [choice-family follow-up](choice-commands.md)
+extends the original perform slice below. Follow-ups also add [viewer authentication](viewer-authentication.md),
 a [dummy exchange](dummy-exchange.md), [receive validation](receive-boundary.md)
 and [client ACK tracking](command-tracking.md). No actual engine execution is
 implemented by this wire boundary; G1 stays open.
@@ -25,10 +26,10 @@ first runs strict envelope validation, then accepts only these message types:
   kill a process or end another seat's game. Ownership policy remains required.
 
 Other header types fail MESSAGE_UNSUPPORTED in this reader; malformed/unknown
-body fields fail MESSAGE_INVALID. Valid snapshots/hello/results still need their
-own validators and routing. Other existing adapter command families (choices,
-amounts, mana sources, cancellation and concession) are deliberately not exposed
-yet. No installed application path uses these new bodies.
+body fields fail MESSAGE_INVALID. Follow-ups provide snapshot/hello/result
+validators and [choice-family shapes](choice-commands.md). Concession remains
+unsupported and live choice dispatch is not implemented. No installed application
+path uses these new bodies.
 
 ## Outcomes stay distinct
 

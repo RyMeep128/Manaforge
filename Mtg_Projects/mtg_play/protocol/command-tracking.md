@@ -7,7 +7,7 @@ The Java peer/ACK schema remains unchanged. G1 is still open.
 ## Register before sending
 
 Create one `CommandTracker` for an authenticated session/viewer. `Begin` validates
-an existing perform command, binds its session/viewer and reserves its correlation
+an existing supported decision-family command, binds its session/viewer and reserves its correlation
 ID before the transport writes any bytes. Send exactly that immutable command
 text. Any potentially partial write, timeout or lost connection must close the
 transport and call `Disconnect`; never resubmit because a write failed.
@@ -87,6 +87,6 @@ increment is pending; next scheduled review is every third commit without waits.
 Qt CI investigation is outside the current Unity/Java scope at owner direction.
 
 Remaining: gateway-side command deduplication/reconciliation and authoritative
-confirmation, remaining choice families, actual transport cancellation/queue
+confirmation, live choice dispatch, actual transport cancellation/queue
 policy, product bootstrap/lifecycle, immutable renderer projection and licensed
 Unity CI. No fallback retirement or G1 completion is claimed.

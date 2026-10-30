@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:manaforge:play:wire-messages:1",
-  "title": "First perform/ack/shutdown wire bodies",
+  "title": "Existing decision-family commands, acknowledgements and viewer shutdown",
   "type": "object",
   "required": [
     "wire_version",
@@ -77,42 +77,270 @@
       "then": {
         "properties": {
           "body": {
-            "type": "object",
-            "required": [
-              "session_id",
-              "viewer_id",
-              "revision",
-              "operation",
-              "decision_id",
-              "action_id"
-            ],
-            "additionalProperties": false,
-            "properties": {
-              "session_id": {
-                "type": "string",
-                "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+            "oneOf": [
+              {
+                "type": "object",
+                "required": [
+                  "session_id",
+                  "viewer_id",
+                  "revision",
+                  "operation",
+                  "decision_id",
+                  "action_id"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "session_id": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+                  },
+                  "viewer_id": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+                  },
+                  "revision": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9223372036854775807
+                  },
+                  "operation": {
+                    "const": "perform"
+                  },
+                  "decision_id": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+                  },
+                  "action_id": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+                  }
+                }
               },
-              "viewer_id": {
-                "type": "string",
-                "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+              {
+                "type": "object",
+                "required": [
+                  "session_id",
+                  "viewer_id",
+                  "revision",
+                  "operation",
+                  "decision_id",
+                  "option_id"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "session_id": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+                  },
+                  "viewer_id": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+                  },
+                  "revision": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9223372036854775807
+                  },
+                  "operation": {
+                    "const": "choose"
+                  },
+                  "decision_id": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+                  },
+                  "option_id": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+                  }
+                }
               },
-              "revision": {
-                "type": "integer",
-                "minimum": 0,
-                "maximum": 9223372036854775807
+              {
+                "type": "object",
+                "required": [
+                  "session_id",
+                  "viewer_id",
+                  "revision",
+                  "operation",
+                  "decision_id",
+                  "object_id"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "session_id": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+                  },
+                  "viewer_id": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+                  },
+                  "revision": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9223372036854775807
+                  },
+                  "operation": {
+                    "const": "select_mana_source"
+                  },
+                  "decision_id": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+                  },
+                  "object_id": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+                  }
+                }
               },
-              "operation": {
-                "const": "perform"
+              {
+                "type": "object",
+                "required": [
+                  "session_id",
+                  "viewer_id",
+                  "revision",
+                  "operation",
+                  "decision_id",
+                  "value"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "session_id": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+                  },
+                  "viewer_id": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+                  },
+                  "revision": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9223372036854775807
+                  },
+                  "operation": {
+                    "const": "choose_number"
+                  },
+                  "decision_id": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+                  },
+                  "value": {
+                    "type": "integer",
+                    "minimum": -9223372036854775808,
+                    "maximum": 9223372036854775807
+                  }
+                }
               },
-              "decision_id": {
-                "type": "string",
-                "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+              {
+                "type": "object",
+                "required": [
+                  "session_id",
+                  "viewer_id",
+                  "revision",
+                  "operation",
+                  "decision_id",
+                  "values"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "session_id": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+                  },
+                  "viewer_id": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+                  },
+                  "revision": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9223372036854775807
+                  },
+                  "operation": {
+                    "const": "choose_amounts"
+                  },
+                  "decision_id": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+                  },
+                  "values": {
+                    "type": "array",
+                    "maxItems": 1024,
+                    "items": {
+                      "type": "integer",
+                      "minimum": -9223372036854775808,
+                      "maximum": 9223372036854775807
+                    }
+                  }
+                }
               },
-              "action_id": {
-                "type": "string",
-                "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+              {
+                "type": "object",
+                "required": [
+                  "session_id",
+                  "viewer_id",
+                  "revision",
+                  "operation",
+                  "decision_id"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "session_id": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+                  },
+                  "viewer_id": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+                  },
+                  "revision": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9223372036854775807
+                  },
+                  "operation": {
+                    "const": "finish_selection"
+                  },
+                  "decision_id": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "required": [
+                  "session_id",
+                  "viewer_id",
+                  "revision",
+                  "operation",
+                  "decision_id"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "session_id": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+                  },
+                  "viewer_id": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+                  },
+                  "revision": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9223372036854775807
+                  },
+                  "operation": {
+                    "const": "cancel"
+                  },
+                  "decision_id": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+                  }
+                }
               }
-            }
+            ]
           }
         }
       }

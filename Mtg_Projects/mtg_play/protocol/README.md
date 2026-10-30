@@ -289,3 +289,14 @@ rejects ID reuse/conflicting receipts and prevents blind replay after disconnect
 The live dummy exchange uses it. Local evidence: 53 focused Unity EditMode
 checks passed, including Java process scenarios. This is C# client bookkeeping;
 Java engine deduplication/reconciliation and licensed CI remain pending.
+
+
+## Choice command-family shapes
+
+The [choice-family contract](choice-commands.md) now covers option IDs, mana-source
+IDs, signed numbers/amount vectors, finish and cancellation alongside perform.
+Both consumers enforce exact fields and bounded values; context comparison is
+explicitly separate from legality. Concession and real gateway choice execution
+remain pending. Local checks: 12 positive/37 negative bodies, 12 choice-binding
+cases, amount-vector bounds, 56 Unity EditMode and six schema checks passed.
+No G1 completion or actual choice gameplay is claimed.
