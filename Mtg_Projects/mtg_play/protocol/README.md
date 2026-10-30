@@ -279,3 +279,13 @@ checks in both languages. Local evidence: eight positive/24 negative receive
 cases, 42 Unity EditMode checks and five schema checks passed. No engine privacy
 filter, immutable renderer projection or G1 completion is claimed. See the guide
 for the scheduled protocol CI snapshot; licensed Unity CI remains pending.
+
+
+## Pending and uncertain client commands
+
+[Command acknowledgement tracking](command-tracking.md) now binds receipts to
+registered session/viewer/command/revision, preserves pending and uncertain state,
+rejects ID reuse/conflicting receipts and prevents blind replay after disconnect.
+The live dummy exchange uses it. Local evidence: 53 focused Unity EditMode
+checks passed, including Java process scenarios. This is C# client bookkeeping;
+Java engine deduplication/reconciliation and licensed CI remain pending.

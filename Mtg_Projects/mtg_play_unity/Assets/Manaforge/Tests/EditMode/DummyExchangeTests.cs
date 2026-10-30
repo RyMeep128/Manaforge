@@ -65,13 +65,20 @@ namespace Manaforge.Play.Tests
         private static JObject Read(Stream stream,long minimumRevision=0)=>ReceiveMessages.Parse(TextFrame.Read(stream),"fixture-session","one",minimumRevision,true);
         private static JObject Command(string id,long revision,string decision,string action)=>Message("command",id,new JObject
         { ["session_id"]="fixture-session",["viewer_id"]="one",["revision"]=revision,["operation"]="perform",["decision_id"]=decision,["action_id"]=action });
-        private static void Ack(Stream stream,string id,long revision,string outcome,string code)
+        private static void SendTracked(Stream stream,JObject command,CommandTracker tracker)
+        {
+            string text=command.ToString(Formatting.None);tracker.Begin(text);
+            try { TextFrame.Write(stream,text);stream.Flush(); }
+            catch { tracker.Disconnect();throw; }
+        }
+        private static void Ack(Stream stream,string id,long revision,string outcome,string code,CommandTracker tracker=null)
         {
             var reply=WireMessages.Parse(TextFrame.Read(stream)); var body=(JObject)reply["body"];
             Assert.That((string)reply["message_type"],Is.EqualTo("ack"));
             Assert.That((string)body["session_id"],Is.EqualTo("fixture-session"));Assert.That((string)body["viewer_id"],Is.EqualTo("one"));
             Assert.That((string)body["command_id"],Is.EqualTo(id));Assert.That((long)body["request_revision"],Is.EqualTo(revision));
             Assert.That((string)body["outcome"],Is.EqualTo(outcome));Assert.That((string)body["code"],Is.EqualTo(code));
+            tracker?.Accept(reply.ToString(Formatting.None));
         }
         private static void Exchange(Peer peer,bool wrongKey,bool ownerEof)
         {
@@ -119,17 +126,23 @@ namespace Manaforge.Play.Tests
                     var eventMessage=Read(stream,snapshot.revision);Assert.That((string)eventMessage["message_type"],Is.EqualTo("event"));
                     Assert.That((string)eventMessage["body"]["event"]["player_id"],Is.EqualTo("two"),"Actor is not the authenticated recipient");
                     string decision=snapshot.decision.decision_id,action=snapshot.actions.Single().action_id;
-                    Send(stream,Command("stale",snapshot.revision-1,decision,action));Ack(stream,"stale",snapshot.revision-1,"rejected","STALE_REVISION");
-                    Send(stream,Command("current",snapshot.revision,decision,action));Ack(stream,"current",snapshot.revision,"submitted",null);
+                    using var tracker=new CommandTracker(snapshot.session_id,snapshot.viewer_id);
+                    SendTracked(stream,Command("stale",snapshot.revision-1,decision,action),tracker);Ack(stream,"stale",snapshot.revision-1,"rejected","STALE_REVISION",tracker);
+                    Assert.That(tracker.CanSubmit,Is.True,"A matched rejection releases the command slot");
+                    SendTracked(stream,Command("current",snapshot.revision,decision,action),tracker);Ack(stream,"current",snapshot.revision,"submitted",null,tracker);
                     var result=Read(stream,snapshot.revision);Assert.That((string)result["message_type"],Is.EqualTo("result"));
                     Assert.That((bool)result["body"]["fixture_only"],Is.True);Assert.That((string)result["body"]["snapshot"]["result"],Is.EqualTo("fixture_complete"));
                     Assert.That((string)result["body"]["snapshot"]["status"],Is.EqualTo("finished"));
                     Assert.That((string)result["body"]["snapshot"]["session_id"],Is.EqualTo(snapshot.session_id));Assert.That((string)result["body"]["snapshot"]["viewer_id"],Is.EqualTo(snapshot.viewer_id));
+                    Assert.That(tracker.Current.State,Is.EqualTo(CommandState.Submitted),"A terminal fixture snapshot is not command confirmation");
+                    Assert.That(Assert.Throws<WireEnvelope.EnvelopeException>(()=>tracker.Begin(Command("blocked",snapshot.revision,decision,action).ToString())).Code,Is.EqualTo("COMMAND_PENDING"));
+                    // Deliberate raw protocol probe of the SERVER guard, bypassing normal client submission.
                     Send(stream,Command("pending",snapshot.revision,decision,action));Ack(stream,"pending",snapshot.revision,"rejected","COMMAND_PENDING");
                     var shutdown=Message("shutdown","close",new JObject{["session_id"]=snapshot.session_id,["viewer_id"]=snapshot.viewer_id,["reason"]="client_close"});
                     Send(stream,shutdown);var closed=WireMessages.Parse(TextFrame.Read(stream));
                     Assert.That((string)closed["message_type"],Is.EqualTo("shutdown"));Assert.That(JToken.DeepEquals(closed["body"],shutdown["body"]),Is.True);
                     Assert.That(TextFrame.Read(stream),Is.Null);Assert.That(peer.Process.WaitForExit(5000),Is.True);Assert.That(peer.Process.ExitCode,Is.Zero);
+                    tracker.Disconnect();Assert.That(tracker.Current.State,Is.EqualTo(CommandState.Uncertain));
                 }
             }
             finally { Array.Clear(key,0,key.Length); }

@@ -1,8 +1,10 @@
 # First wire command boundary — P1.2/G1 increment
 
 Status: shared command/ack/shutdown schema, Java/C# readers and current-decision
-comparison tests implemented. No peer authentication, running gateway, engine
-execution or dummy-process exchange. G1 stays open.
+comparison tests implemented. Follow-ups add [viewer authentication](viewer-authentication.md),
+a [dummy exchange](dummy-exchange.md), [receive validation](receive-boundary.md)
+and [client ACK tracking](command-tracking.md). No actual engine execution is
+implemented by this wire boundary; G1 stays open.
 
 ## Supported vertical slice
 

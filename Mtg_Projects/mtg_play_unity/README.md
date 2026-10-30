@@ -233,3 +233,10 @@ comes from the original contracts, not another game-state model. Forty-two
 EditMode checks and five focused schema checks pass locally; licensed CI,
 immutable scene projection and real gateway visibility remain pending. See the
 [receive guide](../mtg_play/protocol/receive-boundary.md).
+
+
+`CommandTracker` now preserves pending/uncertain commands and validates correlated
+ACKs in the dummy client. Neither a submitted receipt nor a terminal fixture
+snapshot confirms a command; disconnect blocks replay. Eleven new focused checks
+bring EditMode to 53 passing local tests. See [tracking scope and capacity limits](../mtg_play/protocol/command-tracking.md).
+No actual gameplay, UI change or licensed CI evidence is added.
