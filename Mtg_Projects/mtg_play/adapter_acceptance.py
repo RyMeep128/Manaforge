@@ -582,6 +582,7 @@ def main():
     parser.add_argument(
         "--scenario",
         choices=(
+            "ai-freeform",
             "basic",
             "combat",
             "commander",
@@ -612,6 +613,7 @@ def main():
     parser.add_argument("--seats", type=int, default=2)
     args = parser.parse_args()
     from . import acceptance_scenarios
+    from . import ai_acceptance
     from . import real_deck_acceptance
     from .decks import DeckTranslationError
     from .diagnostics import diagnostic_category
@@ -622,6 +624,7 @@ def main():
     if args.jdk_path is not None:
         options["jdk"] = args.jdk_path
     scenarios = {
+        "ai-freeform": ai_acceptance.freeform,
         "basic": acceptance,
         "combat": combat_acceptance,
         "commander": lambda adapter: commander_acceptance(adapter, args.seats),
@@ -657,6 +660,18 @@ def main():
         with adapter:
             result["compatibility"] = adapter.compatibility.to_dict()
             result["gameplay"] = scenarios[args.scenario](adapter)
+        if args.scenario == "ai-freeform":
+            runtime = adapter.result
+            if (
+                runtime is None
+                or not runtime.success
+                or runtime.forced_cleanup
+                or any(code is None for _, code in runtime.process_exit_codes)
+                or any(
+                    name.startswith("peer_") for name, _ in runtime.process_exit_codes
+                )
+            ):
+                raise AdapterError("AI_RUNTIME_CLEANUP_OR_CLIENT_COUNT_FAILED")
         result["success"] = True
     except DeckTranslationError as error:
         # Fixture entry IDs only; never export a source deck or raw JVM log.

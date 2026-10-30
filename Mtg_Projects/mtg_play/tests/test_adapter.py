@@ -611,3 +611,103 @@ def test_terminal_view_does_not_guess_printing_after_metadata_controller_is_remo
     assert "object_incarnations" in view.unsupported_fields
     assert "physical_printing" in view.unsupported_fields
     assert view.objects[0].card_identity is None
+
+
+@pytest.mark.parametrize(
+    "operation", ["snapshot", "poll", "concede", "perform", "choose"]
+)
+def test_engine_ai_seat_cannot_be_viewed_or_commanded(session, operation):
+    session._setup = GameSetup(
+        (MatchSeat("one", "You"), MatchSeat("two", "AI", "engine_ai"))
+    )
+    arguments = (
+        ("two", "decision", "action")
+        if operation in ("perform", "choose")
+        else ("two",)
+    )
+    with pytest.raises(AdapterError, match="UNAUTHORIZED_SEAT"):
+        getattr(session, operation)(*arguments)
+
+
+def test_ai_start_uses_only_owner_client_and_selected_ai_deck(monkeypatch):
+    from mtg_play import adapter as module
+
+    first, stream = object(), object()
+
+    def forbidden_launch():
+        raise AssertionError("AI must not launch a second client")
+
+    owner = SimpleNamespace(
+        _runtime=(first, stream, forbidden_launch, 1234, None, None)
+    )
+    setup = GameSetup((MatchSeat("one", "You"), MatchSeat("two", "AI", "engine_ai")))
+    decks = (
+        PreparedDeck((dict(name="Forest", quantity=60),), (), {}),
+        PreparedDeck((dict(name="Memnite", quantity=60),), (), {}),
+    )
+    game = XmageGameSession(owner, setup, decks)
+    requests = []
+
+    def request(player, operation, expected, **fields):
+        requests.append((player, operation, fields))
+        return dict(table_id="table")
+
+    game._request = request
+    monkeypatch.setattr(module.transport, "send", forbidden_launch)
+    game._start()
+    assert game._clients == {"one": (first, stream)}
+    create = next(
+        fields for _, operation, fields in requests if operation == "create_game"
+    )
+    assert create["controllers"] == ["local_human", "engine_ai"]
+    joins = [
+        (player, fields)
+        for player, operation, fields in requests
+        if operation == "join_table"
+    ]
+    assert [player for player, _ in joins] == ["one", "one"]
+    ai_join, human_join = [fields for _, fields in joins]
+    assert ai_join["controller"] == "engine_ai"
+    assert ai_join["cards"] == decks[1].cards
+    assert human_join["cards"] == decks[0].cards
+    assert game._names[ai_join["player_name"]] == "two"
+
+
+@pytest.mark.parametrize(
+    "seats, code",
+    [
+        (
+            (MatchSeat("one", "You"), MatchSeat("two", "Remote", "remote_human")),
+            "UNSUPPORTED_CONTROLLER",
+        ),
+        (
+            (MatchSeat("one", "AI", "engine_ai"), MatchSeat("two", "You")),
+            "UNSUPPORTED_AI_SETUP",
+        ),
+        (
+            (
+                MatchSeat("one", "You"),
+                MatchSeat("two", "AI", "engine_ai"),
+                MatchSeat("three", "Other"),
+            ),
+            "UNSUPPORTED_AI_SETUP",
+        ),
+    ],
+)
+def test_unsupported_controllers_rejected_before_deck_resolution(seats, code):
+    adapter = LocalGameAdapter()
+    adapter._runtime = object()
+    with pytest.raises(AdapterError, match=code):
+        adapter.create_game(GameSetup(seats, format="commander"), (None,) * len(seats))
+
+
+def test_ai_identity_maps_from_public_name_without_an_ai_client(session):
+    session._setup = GameSetup(
+        (MatchSeat("one", "You"), MatchSeat("two", "AI", "engine_ai"))
+    )
+    del session._clients["two"]
+    del session._player_ids["engine-player-two"]
+    inject(session, state(1))
+    view = session.snapshot("one")
+    assert {player.player_id for player in view.players} == {"one", "two"}
+    assert all(obj.owner_id == "one" for obj in view.objects if obj.zone == "hand")

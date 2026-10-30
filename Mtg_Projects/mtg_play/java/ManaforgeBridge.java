@@ -42,6 +42,12 @@ public final class ManaforgeBridge implements MageClient {
         PROTOCOL.flush();
     }
 
+    private static PlayerType controllerType(String controller) {
+        if (controller.equals("local_human")) return PlayerType.HUMAN;
+        if (controller.equals("engine_ai")) return PlayerType.COMPUTER_MAD;
+        throw new IllegalArgumentException("UNSUPPORTED_CONTROLLER");
+    }
+
     private static void message(String event, String id, String text) {
         JsonObject data = new JsonObject();
         data.addProperty("message", text);
@@ -410,16 +416,25 @@ public final class ManaforgeBridge implements MageClient {
                 options.setWinsNeeded(1);
                 options.setAttackOption(mage.constants.MultiplayerAttackOption.MULTIPLE);
                 options.setSpectatorsAllowed(false);
-                for (int index = 0; index < seats; index++) options.getPlayerTypes().add(PlayerType.HUMAN);
+                JsonArray controllers = command.has("controllers") ? command.getAsJsonArray("controllers") : null;
+                if (controllers != null && controllers.size() != seats)
+                    throw new IllegalArgumentException("INVALID_SEATS");
+                for (int index = 0; index < seats; index++) {
+                    options.getPlayerTypes().add(controllers == null ? PlayerType.HUMAN
+                        : controllerType(controllers.get(index).getAsString()));
+                }
                 TableView table = session.createTable(session.getMainRoomId(), options);
                 if (table == null) throw new IllegalStateException("Table creation rejected");
                 JsonObject data = new JsonObject();
                 data.addProperty("table_id", table.getTableId().toString());
                 emit("table_created", id, data);
             } else if (operation.equals("join_table")) {
+                PlayerType playerType = controllerType(command.has("controller")
+                    ? requiredString(command, "controller") : "local_human");
+                String playerName = playerType.isAI() ? requiredString(command, "player_name") : session.getUserName();
                 boolean accepted = session.joinTable(session.getMainRoomId(),
-                    UUID.fromString(requiredString(command, "table_id")), session.getUserName(),
-                    PlayerType.HUMAN, 1, deck(command), "");
+                    UUID.fromString(requiredString(command, "table_id")), playerName,
+                    playerType, 1, deck(command), "");
                 if (!accepted) throw new IllegalStateException("Join table rejected");
                 message("joined", id, "Joined table");
             } else if (operation.equals("start_game")) {

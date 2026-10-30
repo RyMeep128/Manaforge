@@ -12,26 +12,40 @@ Branch: `feature/play-ai-focused-view`, based on current `origin/main` at
 `fb27c2e` (`0.5.0-alpha.1`). This documentation increment records the requested
 replacement experience; it does not implement AI or change the active UI.
 
-Repository inspection confirms:
+### Story 1 increment: Freeform AI integration (CI pending)
 
-- `MatchSeat` currently contains only seat identity and display name.
-- `XmageGameSession._start` launches a client for every seat and joins each deck
-  through that seat's client.
-- `ManaforgeBridge.java` creates every table slot and joins every player as
-  `PlayerType.HUMAN`. Autonomous AI integration has not been demonstrated.
-- The unchanged pinned `1.4.62-V1` artifact manifest includes the AI library and
-  AI plugins. Their presence is not proof of supported match creation or play.
-- The existing Windows/Python 3.12 CI path prepares the pinned engine and runs
-  headless adapter scenarios, 2-5-seat Commander scenarios, and Qt UI acceptance.
-  Extend these facilities rather than replacing them.
+The adapter accepts an optional seat controller (`local_human` by default or
+`engine_ai`). Existing all-human 2-5-seat regression setups retain their previous
+behavior. Initial AI setups require exactly one local human followed by one AI;
+this is a capability restriction, not a protocol-wide player maximum. Remote
+controllers are unsupported.
 
-Next increment: Story 1. Investigate the pinned engine's AI table creation and
-join interfaces, then extend the bridge and adapter with headless Freeform AI
-acceptance before Commander. Evidence must establish a single human session,
-autonomous AI mulligans/turns/legal actions/combat, protected hidden information,
-authoritative results, and owned-resource cleanup. Do not treat a compiled bridge
-or synthetic session as playable AI evidence. Dependent rebuilt gameplay UI must
-wait for the real pinned-engine AI scenario to pass CI.
+The bridge uses pinned XMage `COMPUTER_MAD`, the engine's existing AI controller,
+and joins its selected deck through the human table owner's session before the
+human joins. No second bridge client is created for AI. AI identity maps through
+its generated public player name; it receives no private Manaforge view or command
+channel. Public attempts to inspect or command the AI seat are rejected.
+
+The new `ai-freeform` headless scenario is wired into existing pinned-engine CI.
+Its fixture pilot controls only the human: keep the opening hand, play lands,
+cast one Memnite, and pass while leaving AI attacks unblocked. Required evidence
+includes AI lands, resolved creatures, turn advancement, combat, a natural human
+loss, unchanged source documents, rejection of AI-seat access, no peer client,
+and confirmed runtime cleanup without forced termination. A timeout or missing
+evidence fails the scenario. This is fixture coverage, not a claim of arbitrary
+deck strength or comprehensive card support.
+
+The pinned upstream interfaces were inspected at `xmage_1.4.62V1`:
+[PlayerType](https://github.com/magefree/mage/blob/xmage_1.4.62V1/Mage/src/main/java/mage/players/PlayerType.java),
+[NewTableDialog](https://github.com/magefree/mage/blob/xmage_1.4.62V1/Mage.Client/src/main/java/mage/client/dialog/NewTableDialog.java),
+and [TableController](https://github.com/magefree/mage/blob/xmage_1.4.62V1/Mage.Server/src/main/java/mage/server/TableController.java).
+The unchanged artifact integrity checks and CI compilation against the actual
+pinned bundle remain authoritative; source inspection is not runtime evidence.
+
+Story 1 is **not accepted**. Freeform CI evidence is pending. Two-player Commander
+AI acceptance, explicit AI blocking coverage, and wider deck behavior remain
+outstanding. The active UI still uses pass-and-play; no rebuilt gameplay UI or
+installed feature enablement depends on this unverified integration.
 
 No local tests, builds, or engine acceptance are permitted for this rebuild.
 New tests execute in GitHub Actions; identify actual runs before claiming a pass.

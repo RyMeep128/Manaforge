@@ -250,6 +250,9 @@ class LocalGameAdapter:
             Capability("complete_dynamic_rules_text", "unsupported"),
             Capability("reconnection", "unsupported"),
             Capability("remote_multiplayer", "unsupported"),
+            Capability(
+                "engine_ai", "unverified", "Pinned-engine AI acceptance pending CI"
+            ),
         )
 
     def _server_request(self, **fields):
@@ -339,6 +342,16 @@ class LocalGameAdapter:
             setup.format == "freeform" and len(setup.seats) != 2
         ):
             raise AdapterError("UNSUPPORTED_GAME_SETUP")
+        if any(
+            seat.controller not in ("local_human", "engine_ai") for seat in setup.seats
+        ):
+            raise AdapterError("UNSUPPORTED_CONTROLLER")
+        if any(seat.controller == "engine_ai" for seat in setup.seats) and (
+            len(setup.seats) != 2
+            or setup.seats[0].controller != "local_human"
+            or setup.seats[1].controller != "engine_ai"
+        ):
+            raise AdapterError("UNSUPPORTED_AI_SETUP")
         prepared = tuple(
             prepare_deck(
                 deck,
@@ -395,7 +408,10 @@ class XmageGameSession:
 
     def _start(self):
         first, events, launch, port, _, _ = self._owner._runtime
-        for index, seat in enumerate(self._setup.seats):
+        humans = [
+            seat for seat in self._setup.seats if seat.controller == "local_human"
+        ]
+        for index, seat in enumerate(humans):
             if index == 0:
                 process, stream = first, events
             else:
@@ -418,20 +434,37 @@ class XmageGameSession:
             "table_created",
             format=self._setup.format,
             seats=len(self._setup.seats),
+            controllers=[seat.controller for seat in self._setup.seats],
         )
         table = created["table_id"]
-        for seat, deck in zip(self._setup.seats, self._decks):
+        # XMage's own lobby joins AI through the table owner's session before
+        # joining the human. AI has no client, private view, or response channel.
+        entries = tuple(zip(self._setup.seats, self._decks))
+        for seat, deck in sorted(
+            entries, key=lambda item: item[0].controller != "engine_ai"
+        ):
+            fields = {}
+            if seat.controller == "engine_ai":
+                username = "ai_" + _id()[:10]
+                self._names[username] = seat.seat_id
+                fields = dict(controller="engine_ai", player_name=username)
             self._request(
-                seat.seat_id,
+                first_seat if seat.controller == "engine_ai" else seat.seat_id,
                 "join_table",
                 "joined",
                 table_id=table,
                 cards=deck.cards,
                 sideboard=deck.sideboard,
+                **fields,
             )
         self._request(first_seat, "start_game", "started", table_id=table)
 
     def _check(self, player):
+        if any(
+            seat.seat_id == player and seat.controller == "engine_ai"
+            for seat in self._setup.seats
+        ):
+            raise AdapterError("UNAUTHORIZED_SEAT")
         if player not in self._clients:
             raise AdapterError("UNKNOWN_PLAYER")
         if self._closed:

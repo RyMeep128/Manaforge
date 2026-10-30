@@ -5,7 +5,7 @@ from dataclasses import asdict, dataclass
 from typing import Protocol, Literal
 
 GAME_PROTOCOL_VERSION = 1
-ADAPTER_VERSION = "0.2.0-alpha.1"
+ADAPTER_VERSION = "0.2.1-alpha.1"
 
 
 class Serializable:
@@ -17,6 +17,7 @@ class Serializable:
 class MatchSeat(Serializable):
     seat_id: str
     name: str
+    controller: Literal["local_human", "engine_ai"] = "local_human"
 
 
 @dataclass(frozen=True)
