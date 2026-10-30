@@ -62,7 +62,7 @@ namespace Manaforge.Play.Tests
             ["server_nonce"]=ready["server_nonce"],["role"]=role,["proof"]=new string('0',64)
         });
         private static void Send(Stream stream,JObject message) { TextFrame.Write(stream,message.ToString(Formatting.None));stream.Flush(); }
-        private static JObject Read(Stream stream)=>WireEnvelope.Parse(TextFrame.Read(stream));
+        private static JObject Read(Stream stream,long minimumRevision=0)=>ReceiveMessages.Parse(TextFrame.Read(stream),"fixture-session","one",minimumRevision,true);
         private static JObject Command(string id,long revision,string decision,string action)=>Message("command",id,new JObject
         { ["session_id"]="fixture-session",["viewer_id"]="one",["revision"]=revision,["operation"]="perform",["decision_id"]=decision,["action_id"]=action });
         private static void Ack(Stream stream,string id,long revision,string outcome,string code)
@@ -116,12 +116,15 @@ namespace Manaforge.Play.Tests
                     foreach(var obj in snapshot.objects.Where(o=>o.hidden || o.face_down == true))
                     { Assert.That(obj.card_identity,Is.Null);Assert.That(obj.characteristics,Is.Null); }
                     Assert.That(snapshot.objects.Any(o=>o.hidden),Is.True,"Fixture must exercise concealment");
+                    var eventMessage=Read(stream,snapshot.revision);Assert.That((string)eventMessage["message_type"],Is.EqualTo("event"));
+                    Assert.That((string)eventMessage["body"]["event"]["player_id"],Is.EqualTo("two"),"Actor is not the authenticated recipient");
                     string decision=snapshot.decision.decision_id,action=snapshot.actions.Single().action_id;
                     Send(stream,Command("stale",snapshot.revision-1,decision,action));Ack(stream,"stale",snapshot.revision-1,"rejected","STALE_REVISION");
                     Send(stream,Command("current",snapshot.revision,decision,action));Ack(stream,"current",snapshot.revision,"submitted",null);
-                    var result=Read(stream);Assert.That((string)result["message_type"],Is.EqualTo("result"));
-                    Assert.That((bool)result["body"]["fixture_only"],Is.True);Assert.That((string)result["body"]["result"],Is.EqualTo("fixture_complete"));
-                    Assert.That((string)result["body"]["session_id"],Is.EqualTo(snapshot.session_id));Assert.That((string)result["body"]["viewer_id"],Is.EqualTo(snapshot.viewer_id));
+                    var result=Read(stream,snapshot.revision);Assert.That((string)result["message_type"],Is.EqualTo("result"));
+                    Assert.That((bool)result["body"]["fixture_only"],Is.True);Assert.That((string)result["body"]["snapshot"]["result"],Is.EqualTo("fixture_complete"));
+                    Assert.That((string)result["body"]["snapshot"]["status"],Is.EqualTo("finished"));
+                    Assert.That((string)result["body"]["snapshot"]["session_id"],Is.EqualTo(snapshot.session_id));Assert.That((string)result["body"]["snapshot"]["viewer_id"],Is.EqualTo(snapshot.viewer_id));
                     Send(stream,Command("pending",snapshot.revision,decision,action));Ack(stream,"pending",snapshot.revision,"rejected","COMMAND_PENDING");
                     var shutdown=Message("shutdown","close",new JObject{["session_id"]=snapshot.session_id,["viewer_id"]=snapshot.viewer_id,["reason"]="client_close"});
                     Send(stream,shutdown);var closed=WireMessages.Parse(TextFrame.Read(stream));

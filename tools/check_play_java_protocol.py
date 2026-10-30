@@ -76,6 +76,9 @@ def main():
             PROTOCOL / "java/manaforge/protocol/ViewerAuthentication.java",
             PROTOCOL / "java-test/AuthFixtureConsumer.java",
             PROTOCOL / "java-test/DummyGateway.java",
+            PROTOCOL / "java/manaforge/protocol/ReceiveContractSchema.java",
+            PROTOCOL / "java/manaforge/protocol/ReceiveMessages.java",
+            PROTOCOL / "java-test/ReceiveFixtureConsumer.java",
         ]
         subprocess.run(
             [
@@ -153,6 +156,17 @@ def main():
             timeout=60,
         )
 
+        subprocess.run(
+            [
+                runtime,
+                "-cp",
+                str(workspace) + os.pathsep + str(jar),
+                "manaforge.protocol.ReceiveFixtureConsumer",
+                str(PROTOCOL / "fixtures/wire-receive-v1.json"),
+            ],
+            check=True,
+            timeout=60,
+        )
         if args.dummy_output:
             output = args.dummy_output.resolve()
             output.mkdir(parents=True, exist_ok=True)

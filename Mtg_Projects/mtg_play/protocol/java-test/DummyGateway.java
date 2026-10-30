@@ -63,7 +63,13 @@ public final class DummyGateway {
                 gatewayHello.getAsJsonObject("body").addProperty("proof",ViewerAuthentication.computeProof(gatewayHello.toString(),key));
                 send(out,gatewayHello);
                 JsonObject body=new JsonObject(); body.addProperty("fixture_only",true); body.add("snapshot",snapshot);
-                send(out,envelope("snapshot","fixture-snapshot",body));
+                JsonObject snapshotMessage=envelope("snapshot","fixture-snapshot",body);
+                ReceiveMessages.parse(snapshotMessage.toString(),session,viewer,0,true);send(out,snapshotMessage);
+                JsonObject event=new JsonObject();event.addProperty("kind","fixture-event");event.addProperty("player_id","two");
+                event.add("revision",snapshot.get("revision"));event.add("code",JsonNull.INSTANCE);event.add("observations",new JsonArray());
+                JsonObject eventBody=new JsonObject();eventBody.addProperty("fixture_only",true);eventBody.addProperty("session_id",session);eventBody.addProperty("viewer_id",viewer);eventBody.add("event",event);
+                JsonObject eventMessage=envelope("event","fixture-event",eventBody);
+                ReceiveMessages.parse(eventMessage.toString(),session,viewer,0,true);send(out,eventMessage);
                 long revision=snapshot.get("revision").getAsLong();
                 String decision=snapshot.getAsJsonObject("decision").get("decision_id").getAsString();
                 List<String> actions=new ArrayList<>(); for(JsonElement a:snapshot.getAsJsonArray("actions"))actions.add(a.getAsJsonObject().get("action_id").getAsString());
@@ -86,8 +92,10 @@ public final class DummyGateway {
                     send(out,envelope("ack","ack-"+count,ack));
                     if(rejection==null) {
                         pending=true;JsonObject result=new JsonObject();result.addProperty("fixture_only",true);
-                        result.addProperty("session_id",session);result.addProperty("viewer_id",viewer);result.addProperty("result","fixture_complete");
-                        send(out,envelope("result","fixture-result",result));
+                        JsonObject terminal=snapshot.deepCopy();terminal.addProperty("status","finished");terminal.addProperty("result","fixture_complete");
+                        terminal.addProperty("revision",revision+1);terminal.add("decision",JsonNull.INSTANCE);terminal.add("actions",new JsonArray());
+                        result.add("snapshot",terminal);JsonObject resultMessage=envelope("result","fixture-result",result);
+                        ReceiveMessages.parse(resultMessage.toString(),session,viewer,revision,true);send(out,resultMessage);
                     }
                 }
                 throw new IOException("DUMMY_LIMIT");

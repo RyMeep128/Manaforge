@@ -1,0 +1,3000 @@
+{
+  "positive": [
+    {
+      "name": "visible-hand",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "snapshot",
+        "message_id": "receive",
+        "body": {
+          "fixture_only": true,
+          "snapshot": {
+            "session_id": "fixture-0001",
+            "viewer_id": "one",
+            "revision": 1,
+            "status": "active",
+            "turn": 1,
+            "phase": null,
+            "step": null,
+            "active_player_id": "one",
+            "priority_player_id": "one",
+            "players": [
+              {
+                "player_id": "one",
+                "name": "One",
+                "life": 0,
+                "hand_count": 1,
+                "library_count": 0,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              },
+              {
+                "player_id": "two",
+                "name": "Two",
+                "life": 20,
+                "hand_count": 7,
+                "library_count": 53,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              }
+            ],
+            "objects": [
+              {
+                "object_id": "fixture-0002",
+                "zone": "hand",
+                "owner_id": "one",
+                "controller_id": "one",
+                "hidden": false,
+                "characteristics": {
+                  "name": "Synthetic Fixture Card",
+                  "power": "1",
+                  "toughness": "1",
+                  "type_line": "Artifact Creature",
+                  "color": null,
+                  "engine_view_text": null,
+                  "loyalty": null,
+                  "defense": null,
+                  "transformed": null,
+                  "counters": null,
+                  "is_copy": null,
+                  "flipped": null,
+                  "current_abilities": null,
+                  "unsupported_fields": [
+                    "current_rules_text",
+                    "ability_identities",
+                    "color_identity",
+                    "copy_provenance_history",
+                    "merged_components"
+                  ]
+                },
+                "card_identity": null,
+                "tapped": null,
+                "damage": null,
+                "attacking_available": null,
+                "blocking_available": null,
+                "face_down": null,
+                "attachments": null,
+                "attached_to": null,
+                "commander_id": null,
+                "copy_source_id": null
+              }
+            ],
+            "actions": [],
+            "decision": null,
+            "combat": [],
+            "protocol_version": 1,
+            "result": null,
+            "commanders": null,
+            "observations": [],
+            "unsupported_fields": [],
+            "actions_complete": false
+          }
+        }
+      },
+      "session": "fixture-0001",
+      "viewer": "one",
+      "minimum_revision": 0,
+      "fixture_mode": true
+    },
+    {
+      "name": "concealed-object",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "snapshot",
+        "message_id": "receive",
+        "body": {
+          "fixture_only": true,
+          "snapshot": {
+            "session_id": "fixture-0001",
+            "viewer_id": "one",
+            "revision": 1,
+            "status": "active",
+            "turn": 1,
+            "phase": null,
+            "step": null,
+            "active_player_id": "one",
+            "priority_player_id": "one",
+            "players": [
+              {
+                "player_id": "one",
+                "name": "One",
+                "life": 0,
+                "hand_count": 1,
+                "library_count": 0,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              },
+              {
+                "player_id": "two",
+                "name": "Two",
+                "life": 20,
+                "hand_count": 7,
+                "library_count": 53,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              }
+            ],
+            "objects": [
+              {
+                "object_id": "fixture-0002",
+                "zone": "hand",
+                "owner_id": "one",
+                "controller_id": "one",
+                "hidden": true,
+                "characteristics": null,
+                "card_identity": null,
+                "tapped": null,
+                "damage": null,
+                "attacking_available": null,
+                "blocking_available": null,
+                "face_down": null,
+                "attachments": null,
+                "attached_to": null,
+                "commander_id": null,
+                "copy_source_id": null
+              }
+            ],
+            "actions": [],
+            "decision": null,
+            "combat": [],
+            "protocol_version": 1,
+            "result": null,
+            "commanders": null,
+            "observations": [],
+            "unsupported_fields": [],
+            "actions_complete": false
+          }
+        }
+      },
+      "session": "fixture-0001",
+      "viewer": "one",
+      "minimum_revision": 0,
+      "fixture_mode": true
+    },
+    {
+      "name": "mulligan-choice",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "snapshot",
+        "message_id": "receive",
+        "body": {
+          "fixture_only": true,
+          "snapshot": {
+            "session_id": "fixture-0001",
+            "viewer_id": "one",
+            "revision": 2,
+            "status": "active",
+            "turn": 1,
+            "phase": null,
+            "step": null,
+            "active_player_id": "one",
+            "priority_player_id": "one",
+            "players": [
+              {
+                "player_id": "one",
+                "name": "One",
+                "life": 0,
+                "hand_count": 1,
+                "library_count": 0,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              },
+              {
+                "player_id": "two",
+                "name": "Two",
+                "life": 20,
+                "hand_count": 7,
+                "library_count": 53,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              }
+            ],
+            "objects": [
+              {
+                "object_id": "fixture-0002",
+                "zone": "hand",
+                "owner_id": "one",
+                "controller_id": "one",
+                "hidden": false,
+                "characteristics": {
+                  "name": "Synthetic Fixture Card",
+                  "power": "1",
+                  "toughness": "1",
+                  "type_line": "Artifact Creature",
+                  "color": null,
+                  "engine_view_text": null,
+                  "loyalty": null,
+                  "defense": null,
+                  "transformed": null,
+                  "counters": null,
+                  "is_copy": null,
+                  "flipped": null,
+                  "current_abilities": null,
+                  "unsupported_fields": [
+                    "current_rules_text",
+                    "ability_identities",
+                    "color_identity",
+                    "copy_provenance_history",
+                    "merged_components"
+                  ]
+                },
+                "card_identity": null,
+                "tapped": null,
+                "damage": null,
+                "attacking_available": null,
+                "blocking_available": null,
+                "face_down": null,
+                "attachments": null,
+                "attached_to": null,
+                "commander_id": null,
+                "copy_source_id": null
+              }
+            ],
+            "actions": [],
+            "decision": {
+              "decision_id": "fixture-0003",
+              "player_id": "one",
+              "family": "boolean",
+              "prompt": "Synthetic fixture choice",
+              "options": [
+                {
+                  "option_id": "fixture-0003-yes",
+                  "label": "Yes",
+                  "object_id": null,
+                  "player_id": null,
+                  "selected": false
+                },
+                {
+                  "option_id": "fixture-0003-no",
+                  "label": "No",
+                  "object_id": null,
+                  "player_id": null,
+                  "selected": false
+                }
+              ],
+              "minimum": null,
+              "maximum": null,
+              "cancellable": false,
+              "amounts": [],
+              "can_finish": false,
+              "is_priority": false
+            },
+            "combat": [],
+            "protocol_version": 1,
+            "result": null,
+            "commanders": null,
+            "observations": [],
+            "unsupported_fields": [],
+            "actions_complete": false
+          }
+        }
+      },
+      "session": "fixture-0001",
+      "viewer": "one",
+      "minimum_revision": 0,
+      "fixture_mode": true
+    },
+    {
+      "name": "numeric-choice",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "snapshot",
+        "message_id": "receive",
+        "body": {
+          "fixture_only": true,
+          "snapshot": {
+            "session_id": "fixture-0001",
+            "viewer_id": "one",
+            "revision": 2,
+            "status": "active",
+            "turn": 1,
+            "phase": null,
+            "step": null,
+            "active_player_id": "one",
+            "priority_player_id": "one",
+            "players": [
+              {
+                "player_id": "one",
+                "name": "One",
+                "life": 0,
+                "hand_count": 1,
+                "library_count": 0,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              },
+              {
+                "player_id": "two",
+                "name": "Two",
+                "life": 20,
+                "hand_count": 7,
+                "library_count": 53,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              }
+            ],
+            "objects": [
+              {
+                "object_id": "fixture-0002",
+                "zone": "hand",
+                "owner_id": "one",
+                "controller_id": "one",
+                "hidden": false,
+                "characteristics": {
+                  "name": "Synthetic Fixture Card",
+                  "power": "1",
+                  "toughness": "1",
+                  "type_line": "Artifact Creature",
+                  "color": null,
+                  "engine_view_text": null,
+                  "loyalty": null,
+                  "defense": null,
+                  "transformed": null,
+                  "counters": null,
+                  "is_copy": null,
+                  "flipped": null,
+                  "current_abilities": null,
+                  "unsupported_fields": [
+                    "current_rules_text",
+                    "ability_identities",
+                    "color_identity",
+                    "copy_provenance_history",
+                    "merged_components"
+                  ]
+                },
+                "card_identity": null,
+                "tapped": null,
+                "damage": null,
+                "attacking_available": null,
+                "blocking_available": null,
+                "face_down": null,
+                "attachments": null,
+                "attached_to": null,
+                "commander_id": null,
+                "copy_source_id": null
+              }
+            ],
+            "actions": [],
+            "decision": {
+              "decision_id": "fixture-0003",
+              "player_id": "one",
+              "family": "number",
+              "prompt": "Synthetic fixture choice",
+              "options": [],
+              "minimum": 0,
+              "maximum": 4,
+              "cancellable": false,
+              "amounts": [],
+              "can_finish": false,
+              "is_priority": false
+            },
+            "combat": [],
+            "protocol_version": 1,
+            "result": null,
+            "commanders": null,
+            "observations": [],
+            "unsupported_fields": [],
+            "actions_complete": false
+          }
+        }
+      },
+      "session": "fixture-0001",
+      "viewer": "one",
+      "minimum_revision": 0,
+      "fixture_mode": true
+    },
+    {
+      "name": "failed-session",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "snapshot",
+        "message_id": "receive",
+        "body": {
+          "fixture_only": true,
+          "snapshot": {
+            "session_id": "fixture-0001",
+            "viewer_id": "one",
+            "revision": 1,
+            "status": "failed",
+            "turn": null,
+            "phase": null,
+            "step": null,
+            "active_player_id": null,
+            "priority_player_id": null,
+            "players": [],
+            "objects": [],
+            "actions": [],
+            "decision": null,
+            "combat": [],
+            "protocol_version": 1,
+            "result": null,
+            "commanders": null,
+            "observations": [],
+            "unsupported_fields": [
+              "state_unavailable"
+            ],
+            "actions_complete": false
+          }
+        }
+      },
+      "session": "fixture-0001",
+      "viewer": "one",
+      "minimum_revision": 0,
+      "fixture_mode": true
+    },
+    {
+      "name": "terminal-result",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "result",
+        "message_id": "receive",
+        "body": {
+          "fixture_only": true,
+          "snapshot": {
+            "session_id": "fixture-0001",
+            "viewer_id": "one",
+            "revision": 8,
+            "status": "finished",
+            "turn": 1,
+            "phase": null,
+            "step": null,
+            "active_player_id": "one",
+            "priority_player_id": "one",
+            "players": [
+              {
+                "player_id": "one",
+                "name": "One",
+                "life": 0,
+                "hand_count": 1,
+                "library_count": 0,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              },
+              {
+                "player_id": "two",
+                "name": "Two",
+                "life": 20,
+                "hand_count": 7,
+                "library_count": 53,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              }
+            ],
+            "objects": [
+              {
+                "object_id": "fixture-0002",
+                "zone": "hand",
+                "owner_id": "one",
+                "controller_id": "one",
+                "hidden": false,
+                "characteristics": {
+                  "name": "Synthetic Fixture Card",
+                  "power": "1",
+                  "toughness": "1",
+                  "type_line": "Artifact Creature",
+                  "color": null,
+                  "engine_view_text": null,
+                  "loyalty": null,
+                  "defense": null,
+                  "transformed": null,
+                  "counters": null,
+                  "is_copy": null,
+                  "flipped": null,
+                  "current_abilities": null,
+                  "unsupported_fields": [
+                    "current_rules_text",
+                    "ability_identities",
+                    "color_identity",
+                    "copy_provenance_history",
+                    "merged_components"
+                  ]
+                },
+                "card_identity": null,
+                "tapped": null,
+                "damage": null,
+                "attacking_available": null,
+                "blocking_available": null,
+                "face_down": null,
+                "attachments": null,
+                "attached_to": null,
+                "commander_id": null,
+                "copy_source_id": null
+              }
+            ],
+            "actions": [],
+            "decision": null,
+            "combat": [],
+            "protocol_version": 1,
+            "result": "fixture_complete",
+            "commanders": null,
+            "observations": [],
+            "unsupported_fields": [],
+            "actions_complete": false
+          }
+        }
+      },
+      "session": "fixture-0001",
+      "viewer": "one",
+      "minimum_revision": 8,
+      "fixture_mode": true
+    },
+    {
+      "name": "other-actor-event",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "event",
+        "message_id": "receive",
+        "body": {
+          "fixture_only": true,
+          "session_id": "fixture-0001",
+          "viewer_id": "one",
+          "event": {
+            "kind": "fixture-event",
+            "player_id": "two",
+            "revision": 8,
+            "code": null,
+            "observations": [
+              {
+                "observation_id": "hidden-observation",
+                "source": "fixture",
+                "hidden": true,
+                "name": null,
+                "set_code": null,
+                "collector_number": null
+              }
+            ]
+          }
+        }
+      },
+      "session": "fixture-0001",
+      "viewer": "one",
+      "minimum_revision": 8,
+      "fixture_mode": true
+    },
+    {
+      "name": "production-mode-shape-only",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "snapshot",
+        "message_id": "receive",
+        "body": {
+          "fixture_only": false,
+          "snapshot": {
+            "session_id": "fixture-0001",
+            "viewer_id": "one",
+            "revision": 1,
+            "status": "active",
+            "turn": 1,
+            "phase": null,
+            "step": null,
+            "active_player_id": "one",
+            "priority_player_id": "one",
+            "players": [
+              {
+                "player_id": "one",
+                "name": "One",
+                "life": 0,
+                "hand_count": 1,
+                "library_count": 0,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              },
+              {
+                "player_id": "two",
+                "name": "Two",
+                "life": 20,
+                "hand_count": 7,
+                "library_count": 53,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              }
+            ],
+            "objects": [
+              {
+                "object_id": "fixture-0002",
+                "zone": "hand",
+                "owner_id": "one",
+                "controller_id": "one",
+                "hidden": false,
+                "characteristics": {
+                  "name": "Synthetic Fixture Card",
+                  "power": "1",
+                  "toughness": "1",
+                  "type_line": "Artifact Creature",
+                  "color": null,
+                  "engine_view_text": null,
+                  "loyalty": null,
+                  "defense": null,
+                  "transformed": null,
+                  "counters": null,
+                  "is_copy": null,
+                  "flipped": null,
+                  "current_abilities": null,
+                  "unsupported_fields": [
+                    "current_rules_text",
+                    "ability_identities",
+                    "color_identity",
+                    "copy_provenance_history",
+                    "merged_components"
+                  ]
+                },
+                "card_identity": null,
+                "tapped": null,
+                "damage": null,
+                "attacking_available": null,
+                "blocking_available": null,
+                "face_down": null,
+                "attachments": null,
+                "attached_to": null,
+                "commander_id": null,
+                "copy_source_id": null
+              }
+            ],
+            "actions": [],
+            "decision": null,
+            "combat": [],
+            "protocol_version": 1,
+            "result": null,
+            "commanders": null,
+            "observations": [],
+            "unsupported_fields": [],
+            "actions_complete": false
+          }
+        }
+      },
+      "session": "fixture-0001",
+      "viewer": "one",
+      "minimum_revision": 0,
+      "fixture_mode": false
+    }
+  ],
+  "negative": [
+    {
+      "name": "missing-viewer",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "snapshot",
+        "message_id": "receive",
+        "body": {
+          "fixture_only": true,
+          "snapshot": {
+            "session_id": "fixture-0001",
+            "revision": 1,
+            "status": "active",
+            "turn": 1,
+            "phase": null,
+            "step": null,
+            "active_player_id": "one",
+            "priority_player_id": "one",
+            "players": [
+              {
+                "player_id": "one",
+                "name": "One",
+                "life": 0,
+                "hand_count": 1,
+                "library_count": 0,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              },
+              {
+                "player_id": "two",
+                "name": "Two",
+                "life": 20,
+                "hand_count": 7,
+                "library_count": 53,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              }
+            ],
+            "objects": [
+              {
+                "object_id": "fixture-0002",
+                "zone": "hand",
+                "owner_id": "one",
+                "controller_id": "one",
+                "hidden": false,
+                "characteristics": {
+                  "name": "Synthetic Fixture Card",
+                  "power": "1",
+                  "toughness": "1",
+                  "type_line": "Artifact Creature",
+                  "color": null,
+                  "engine_view_text": null,
+                  "loyalty": null,
+                  "defense": null,
+                  "transformed": null,
+                  "counters": null,
+                  "is_copy": null,
+                  "flipped": null,
+                  "current_abilities": null,
+                  "unsupported_fields": [
+                    "current_rules_text",
+                    "ability_identities",
+                    "color_identity",
+                    "copy_provenance_history",
+                    "merged_components"
+                  ]
+                },
+                "card_identity": null,
+                "tapped": null,
+                "damage": null,
+                "attacking_available": null,
+                "blocking_available": null,
+                "face_down": null,
+                "attachments": null,
+                "attached_to": null,
+                "commander_id": null,
+                "copy_source_id": null
+              }
+            ],
+            "actions": [],
+            "decision": null,
+            "combat": [],
+            "protocol_version": 1,
+            "result": null,
+            "commanders": null,
+            "observations": [],
+            "unsupported_fields": [],
+            "actions_complete": false
+          }
+        }
+      },
+      "session": "fixture-0001",
+      "viewer": "one",
+      "minimum_revision": 0,
+      "fixture_mode": true,
+      "code": "RECEIVE_SHAPE"
+    },
+    {
+      "name": "wrong-version",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "snapshot",
+        "message_id": "receive",
+        "body": {
+          "fixture_only": true,
+          "snapshot": {
+            "session_id": "fixture-0001",
+            "viewer_id": "one",
+            "revision": 1,
+            "status": "active",
+            "turn": 1,
+            "phase": null,
+            "step": null,
+            "active_player_id": "one",
+            "priority_player_id": "one",
+            "players": [
+              {
+                "player_id": "one",
+                "name": "One",
+                "life": 0,
+                "hand_count": 1,
+                "library_count": 0,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              },
+              {
+                "player_id": "two",
+                "name": "Two",
+                "life": 20,
+                "hand_count": 7,
+                "library_count": 53,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              }
+            ],
+            "objects": [
+              {
+                "object_id": "fixture-0002",
+                "zone": "hand",
+                "owner_id": "one",
+                "controller_id": "one",
+                "hidden": false,
+                "characteristics": {
+                  "name": "Synthetic Fixture Card",
+                  "power": "1",
+                  "toughness": "1",
+                  "type_line": "Artifact Creature",
+                  "color": null,
+                  "engine_view_text": null,
+                  "loyalty": null,
+                  "defense": null,
+                  "transformed": null,
+                  "counters": null,
+                  "is_copy": null,
+                  "flipped": null,
+                  "current_abilities": null,
+                  "unsupported_fields": [
+                    "current_rules_text",
+                    "ability_identities",
+                    "color_identity",
+                    "copy_provenance_history",
+                    "merged_components"
+                  ]
+                },
+                "card_identity": null,
+                "tapped": null,
+                "damage": null,
+                "attacking_available": null,
+                "blocking_available": null,
+                "face_down": null,
+                "attachments": null,
+                "attached_to": null,
+                "commander_id": null,
+                "copy_source_id": null
+              }
+            ],
+            "actions": [],
+            "decision": null,
+            "combat": [],
+            "protocol_version": 2,
+            "result": null,
+            "commanders": null,
+            "observations": [],
+            "unsupported_fields": [],
+            "actions_complete": false
+          }
+        }
+      },
+      "session": "fixture-0001",
+      "viewer": "one",
+      "minimum_revision": 0,
+      "fixture_mode": true,
+      "code": "RECEIVE_SHAPE"
+    },
+    {
+      "name": "unknown-field",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "snapshot",
+        "message_id": "receive",
+        "body": {
+          "fixture_only": true,
+          "snapshot": {
+            "session_id": "fixture-0001",
+            "viewer_id": "one",
+            "revision": 1,
+            "status": "active",
+            "turn": 1,
+            "phase": null,
+            "step": null,
+            "active_player_id": "one",
+            "priority_player_id": "one",
+            "players": [
+              {
+                "player_id": "one",
+                "name": "One",
+                "life": 0,
+                "hand_count": 1,
+                "library_count": 0,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              },
+              {
+                "player_id": "two",
+                "name": "Two",
+                "life": 20,
+                "hand_count": 7,
+                "library_count": 53,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              }
+            ],
+            "objects": [
+              {
+                "object_id": "fixture-0002",
+                "zone": "hand",
+                "owner_id": "one",
+                "controller_id": "one",
+                "hidden": false,
+                "characteristics": {
+                  "name": "Synthetic Fixture Card",
+                  "power": "1",
+                  "toughness": "1",
+                  "type_line": "Artifact Creature",
+                  "color": null,
+                  "engine_view_text": null,
+                  "loyalty": null,
+                  "defense": null,
+                  "transformed": null,
+                  "counters": null,
+                  "is_copy": null,
+                  "flipped": null,
+                  "current_abilities": null,
+                  "unsupported_fields": [
+                    "current_rules_text",
+                    "ability_identities",
+                    "color_identity",
+                    "copy_provenance_history",
+                    "merged_components"
+                  ]
+                },
+                "card_identity": null,
+                "tapped": null,
+                "damage": null,
+                "attacking_available": null,
+                "blocking_available": null,
+                "face_down": null,
+                "attachments": null,
+                "attached_to": null,
+                "commander_id": null,
+                "copy_source_id": null
+              }
+            ],
+            "actions": [],
+            "decision": null,
+            "combat": [],
+            "protocol_version": 1,
+            "result": null,
+            "commanders": null,
+            "observations": [],
+            "unsupported_fields": [],
+            "actions_complete": false,
+            "raw_engine_state": {}
+          }
+        }
+      },
+      "session": "fixture-0001",
+      "viewer": "one",
+      "minimum_revision": 0,
+      "fixture_mode": true,
+      "code": "RECEIVE_SHAPE"
+    },
+    {
+      "name": "boolean-life",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "snapshot",
+        "message_id": "receive",
+        "body": {
+          "fixture_only": true,
+          "snapshot": {
+            "session_id": "fixture-0001",
+            "viewer_id": "one",
+            "revision": 1,
+            "status": "active",
+            "turn": 1,
+            "phase": null,
+            "step": null,
+            "active_player_id": "one",
+            "priority_player_id": "one",
+            "players": [
+              {
+                "player_id": "one",
+                "name": "One",
+                "life": true,
+                "hand_count": 1,
+                "library_count": 0,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              },
+              {
+                "player_id": "two",
+                "name": "Two",
+                "life": 20,
+                "hand_count": 7,
+                "library_count": 53,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              }
+            ],
+            "objects": [
+              {
+                "object_id": "fixture-0002",
+                "zone": "hand",
+                "owner_id": "one",
+                "controller_id": "one",
+                "hidden": false,
+                "characteristics": {
+                  "name": "Synthetic Fixture Card",
+                  "power": "1",
+                  "toughness": "1",
+                  "type_line": "Artifact Creature",
+                  "color": null,
+                  "engine_view_text": null,
+                  "loyalty": null,
+                  "defense": null,
+                  "transformed": null,
+                  "counters": null,
+                  "is_copy": null,
+                  "flipped": null,
+                  "current_abilities": null,
+                  "unsupported_fields": [
+                    "current_rules_text",
+                    "ability_identities",
+                    "color_identity",
+                    "copy_provenance_history",
+                    "merged_components"
+                  ]
+                },
+                "card_identity": null,
+                "tapped": null,
+                "damage": null,
+                "attacking_available": null,
+                "blocking_available": null,
+                "face_down": null,
+                "attachments": null,
+                "attached_to": null,
+                "commander_id": null,
+                "copy_source_id": null
+              }
+            ],
+            "actions": [],
+            "decision": null,
+            "combat": [],
+            "protocol_version": 1,
+            "result": null,
+            "commanders": null,
+            "observations": [],
+            "unsupported_fields": [],
+            "actions_complete": false
+          }
+        }
+      },
+      "session": "fixture-0001",
+      "viewer": "one",
+      "minimum_revision": 0,
+      "fixture_mode": true,
+      "code": "RECEIVE_SHAPE"
+    },
+    {
+      "name": "null-life",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "snapshot",
+        "message_id": "receive",
+        "body": {
+          "fixture_only": true,
+          "snapshot": {
+            "session_id": "fixture-0001",
+            "viewer_id": "one",
+            "revision": 1,
+            "status": "active",
+            "turn": 1,
+            "phase": null,
+            "step": null,
+            "active_player_id": "one",
+            "priority_player_id": "one",
+            "players": [
+              {
+                "player_id": "one",
+                "name": "One",
+                "life": null,
+                "hand_count": 1,
+                "library_count": 0,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              },
+              {
+                "player_id": "two",
+                "name": "Two",
+                "life": 20,
+                "hand_count": 7,
+                "library_count": 53,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              }
+            ],
+            "objects": [
+              {
+                "object_id": "fixture-0002",
+                "zone": "hand",
+                "owner_id": "one",
+                "controller_id": "one",
+                "hidden": false,
+                "characteristics": {
+                  "name": "Synthetic Fixture Card",
+                  "power": "1",
+                  "toughness": "1",
+                  "type_line": "Artifact Creature",
+                  "color": null,
+                  "engine_view_text": null,
+                  "loyalty": null,
+                  "defense": null,
+                  "transformed": null,
+                  "counters": null,
+                  "is_copy": null,
+                  "flipped": null,
+                  "current_abilities": null,
+                  "unsupported_fields": [
+                    "current_rules_text",
+                    "ability_identities",
+                    "color_identity",
+                    "copy_provenance_history",
+                    "merged_components"
+                  ]
+                },
+                "card_identity": null,
+                "tapped": null,
+                "damage": null,
+                "attacking_available": null,
+                "blocking_available": null,
+                "face_down": null,
+                "attachments": null,
+                "attached_to": null,
+                "commander_id": null,
+                "copy_source_id": null
+              }
+            ],
+            "actions": [],
+            "decision": null,
+            "combat": [],
+            "protocol_version": 1,
+            "result": null,
+            "commanders": null,
+            "observations": [],
+            "unsupported_fields": [],
+            "actions_complete": false
+          }
+        }
+      },
+      "session": "fixture-0001",
+      "viewer": "one",
+      "minimum_revision": 0,
+      "fixture_mode": true,
+      "code": "RECEIVE_SHAPE"
+    },
+    {
+      "name": "negative-revision",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "snapshot",
+        "message_id": "receive",
+        "body": {
+          "fixture_only": true,
+          "snapshot": {
+            "session_id": "fixture-0001",
+            "viewer_id": "one",
+            "revision": -1,
+            "status": "active",
+            "turn": 1,
+            "phase": null,
+            "step": null,
+            "active_player_id": "one",
+            "priority_player_id": "one",
+            "players": [
+              {
+                "player_id": "one",
+                "name": "One",
+                "life": 0,
+                "hand_count": 1,
+                "library_count": 0,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              },
+              {
+                "player_id": "two",
+                "name": "Two",
+                "life": 20,
+                "hand_count": 7,
+                "library_count": 53,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              }
+            ],
+            "objects": [
+              {
+                "object_id": "fixture-0002",
+                "zone": "hand",
+                "owner_id": "one",
+                "controller_id": "one",
+                "hidden": false,
+                "characteristics": {
+                  "name": "Synthetic Fixture Card",
+                  "power": "1",
+                  "toughness": "1",
+                  "type_line": "Artifact Creature",
+                  "color": null,
+                  "engine_view_text": null,
+                  "loyalty": null,
+                  "defense": null,
+                  "transformed": null,
+                  "counters": null,
+                  "is_copy": null,
+                  "flipped": null,
+                  "current_abilities": null,
+                  "unsupported_fields": [
+                    "current_rules_text",
+                    "ability_identities",
+                    "color_identity",
+                    "copy_provenance_history",
+                    "merged_components"
+                  ]
+                },
+                "card_identity": null,
+                "tapped": null,
+                "damage": null,
+                "attacking_available": null,
+                "blocking_available": null,
+                "face_down": null,
+                "attachments": null,
+                "attached_to": null,
+                "commander_id": null,
+                "copy_source_id": null
+              }
+            ],
+            "actions": [],
+            "decision": null,
+            "combat": [],
+            "protocol_version": 1,
+            "result": null,
+            "commanders": null,
+            "observations": [],
+            "unsupported_fields": [],
+            "actions_complete": false
+          }
+        }
+      },
+      "session": "fixture-0001",
+      "viewer": "one",
+      "minimum_revision": 0,
+      "fixture_mode": true,
+      "code": "RECEIVE_SHAPE"
+    },
+    {
+      "name": "malformed-pair",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "snapshot",
+        "message_id": "receive",
+        "body": {
+          "fixture_only": true,
+          "snapshot": {
+            "session_id": "fixture-0001",
+            "viewer_id": "one",
+            "revision": 1,
+            "status": "active",
+            "turn": 1,
+            "phase": null,
+            "step": null,
+            "active_player_id": "one",
+            "priority_player_id": "one",
+            "players": [
+              {
+                "player_id": "one",
+                "name": "One",
+                "life": 0,
+                "hand_count": 1,
+                "library_count": 0,
+                "eliminated": null,
+                "left_game": null,
+                "mana": [
+                  [
+                    "G",
+                    1,
+                    "extra"
+                  ]
+                ],
+                "counters": null
+              },
+              {
+                "player_id": "two",
+                "name": "Two",
+                "life": 20,
+                "hand_count": 7,
+                "library_count": 53,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              }
+            ],
+            "objects": [
+              {
+                "object_id": "fixture-0002",
+                "zone": "hand",
+                "owner_id": "one",
+                "controller_id": "one",
+                "hidden": false,
+                "characteristics": {
+                  "name": "Synthetic Fixture Card",
+                  "power": "1",
+                  "toughness": "1",
+                  "type_line": "Artifact Creature",
+                  "color": null,
+                  "engine_view_text": null,
+                  "loyalty": null,
+                  "defense": null,
+                  "transformed": null,
+                  "counters": null,
+                  "is_copy": null,
+                  "flipped": null,
+                  "current_abilities": null,
+                  "unsupported_fields": [
+                    "current_rules_text",
+                    "ability_identities",
+                    "color_identity",
+                    "copy_provenance_history",
+                    "merged_components"
+                  ]
+                },
+                "card_identity": null,
+                "tapped": null,
+                "damage": null,
+                "attacking_available": null,
+                "blocking_available": null,
+                "face_down": null,
+                "attachments": null,
+                "attached_to": null,
+                "commander_id": null,
+                "copy_source_id": null
+              }
+            ],
+            "actions": [],
+            "decision": null,
+            "combat": [],
+            "protocol_version": 1,
+            "result": null,
+            "commanders": null,
+            "observations": [],
+            "unsupported_fields": [],
+            "actions_complete": false
+          }
+        }
+      },
+      "session": "fixture-0001",
+      "viewer": "one",
+      "minimum_revision": 0,
+      "fixture_mode": true,
+      "code": "RECEIVE_SHAPE"
+    },
+    {
+      "name": "hidden-characteristics",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "snapshot",
+        "message_id": "receive",
+        "body": {
+          "fixture_only": true,
+          "snapshot": {
+            "session_id": "fixture-0001",
+            "viewer_id": "one",
+            "revision": 1,
+            "status": "active",
+            "turn": 1,
+            "phase": null,
+            "step": null,
+            "active_player_id": "one",
+            "priority_player_id": "one",
+            "players": [
+              {
+                "player_id": "one",
+                "name": "One",
+                "life": 0,
+                "hand_count": 1,
+                "library_count": 0,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              },
+              {
+                "player_id": "two",
+                "name": "Two",
+                "life": 20,
+                "hand_count": 7,
+                "library_count": 53,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              }
+            ],
+            "objects": [
+              {
+                "object_id": "fixture-0002",
+                "zone": "hand",
+                "owner_id": "one",
+                "controller_id": "one",
+                "hidden": true,
+                "characteristics": {
+                  "name": "Synthetic Fixture Card",
+                  "power": "1",
+                  "toughness": "1",
+                  "type_line": "Artifact Creature",
+                  "color": null,
+                  "engine_view_text": null,
+                  "loyalty": null,
+                  "defense": null,
+                  "transformed": null,
+                  "counters": null,
+                  "is_copy": null,
+                  "flipped": null,
+                  "current_abilities": null,
+                  "unsupported_fields": [
+                    "current_rules_text",
+                    "ability_identities",
+                    "color_identity",
+                    "copy_provenance_history",
+                    "merged_components"
+                  ]
+                },
+                "card_identity": null,
+                "tapped": null,
+                "damage": null,
+                "attacking_available": null,
+                "blocking_available": null,
+                "face_down": null,
+                "attachments": null,
+                "attached_to": null,
+                "commander_id": null,
+                "copy_source_id": null
+              }
+            ],
+            "actions": [],
+            "decision": null,
+            "combat": [],
+            "protocol_version": 1,
+            "result": null,
+            "commanders": null,
+            "observations": [],
+            "unsupported_fields": [],
+            "actions_complete": false
+          }
+        }
+      },
+      "session": "fixture-0001",
+      "viewer": "one",
+      "minimum_revision": 0,
+      "fixture_mode": true,
+      "code": "RECEIVE_SHAPE"
+    },
+    {
+      "name": "hidden-printing",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "snapshot",
+        "message_id": "receive",
+        "body": {
+          "fixture_only": true,
+          "snapshot": {
+            "session_id": "fixture-0001",
+            "viewer_id": "one",
+            "revision": 1,
+            "status": "active",
+            "turn": 1,
+            "phase": null,
+            "step": null,
+            "active_player_id": "one",
+            "priority_player_id": "one",
+            "players": [
+              {
+                "player_id": "one",
+                "name": "One",
+                "life": 0,
+                "hand_count": 1,
+                "library_count": 0,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              },
+              {
+                "player_id": "two",
+                "name": "Two",
+                "life": 20,
+                "hand_count": 7,
+                "library_count": 53,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              }
+            ],
+            "objects": [
+              {
+                "object_id": "fixture-0002",
+                "zone": "hand",
+                "owner_id": "one",
+                "controller_id": "one",
+                "hidden": true,
+                "characteristics": null,
+                "card_identity": {
+                  "oracle_id": "synthetic",
+                  "printing_id": "synthetic",
+                  "deck_entry_id": null
+                },
+                "tapped": null,
+                "damage": null,
+                "attacking_available": null,
+                "blocking_available": null,
+                "face_down": null,
+                "attachments": null,
+                "attached_to": null,
+                "commander_id": null,
+                "copy_source_id": null
+              }
+            ],
+            "actions": [],
+            "decision": null,
+            "combat": [],
+            "protocol_version": 1,
+            "result": null,
+            "commanders": null,
+            "observations": [],
+            "unsupported_fields": [],
+            "actions_complete": false
+          }
+        }
+      },
+      "session": "fixture-0001",
+      "viewer": "one",
+      "minimum_revision": 0,
+      "fixture_mode": true,
+      "code": "RECEIVE_SHAPE"
+    },
+    {
+      "name": "hidden-commander",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "snapshot",
+        "message_id": "receive",
+        "body": {
+          "fixture_only": true,
+          "snapshot": {
+            "session_id": "fixture-0001",
+            "viewer_id": "one",
+            "revision": 1,
+            "status": "active",
+            "turn": 1,
+            "phase": null,
+            "step": null,
+            "active_player_id": "one",
+            "priority_player_id": "one",
+            "players": [
+              {
+                "player_id": "one",
+                "name": "One",
+                "life": 0,
+                "hand_count": 1,
+                "library_count": 0,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              },
+              {
+                "player_id": "two",
+                "name": "Two",
+                "life": 20,
+                "hand_count": 7,
+                "library_count": 53,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              }
+            ],
+            "objects": [
+              {
+                "object_id": "fixture-0002",
+                "zone": "hand",
+                "owner_id": "one",
+                "controller_id": "one",
+                "hidden": true,
+                "characteristics": null,
+                "card_identity": null,
+                "tapped": null,
+                "damage": null,
+                "attacking_available": null,
+                "blocking_available": null,
+                "face_down": null,
+                "attachments": null,
+                "attached_to": null,
+                "commander_id": "synthetic",
+                "copy_source_id": null
+              }
+            ],
+            "actions": [],
+            "decision": null,
+            "combat": [],
+            "protocol_version": 1,
+            "result": null,
+            "commanders": null,
+            "observations": [],
+            "unsupported_fields": [],
+            "actions_complete": false
+          }
+        }
+      },
+      "session": "fixture-0001",
+      "viewer": "one",
+      "minimum_revision": 0,
+      "fixture_mode": true,
+      "code": "RECEIVE_SHAPE"
+    },
+    {
+      "name": "hidden-copy-source",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "snapshot",
+        "message_id": "receive",
+        "body": {
+          "fixture_only": true,
+          "snapshot": {
+            "session_id": "fixture-0001",
+            "viewer_id": "one",
+            "revision": 1,
+            "status": "active",
+            "turn": 1,
+            "phase": null,
+            "step": null,
+            "active_player_id": "one",
+            "priority_player_id": "one",
+            "players": [
+              {
+                "player_id": "one",
+                "name": "One",
+                "life": 0,
+                "hand_count": 1,
+                "library_count": 0,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              },
+              {
+                "player_id": "two",
+                "name": "Two",
+                "life": 20,
+                "hand_count": 7,
+                "library_count": 53,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              }
+            ],
+            "objects": [
+              {
+                "object_id": "fixture-0002",
+                "zone": "hand",
+                "owner_id": "one",
+                "controller_id": "one",
+                "hidden": true,
+                "characteristics": null,
+                "card_identity": null,
+                "tapped": null,
+                "damage": null,
+                "attacking_available": null,
+                "blocking_available": null,
+                "face_down": null,
+                "attachments": null,
+                "attached_to": null,
+                "commander_id": null,
+                "copy_source_id": "synthetic"
+              }
+            ],
+            "actions": [],
+            "decision": null,
+            "combat": [],
+            "protocol_version": 1,
+            "result": null,
+            "commanders": null,
+            "observations": [],
+            "unsupported_fields": [],
+            "actions_complete": false
+          }
+        }
+      },
+      "session": "fixture-0001",
+      "viewer": "one",
+      "minimum_revision": 0,
+      "fixture_mode": true,
+      "code": "RECEIVE_SHAPE"
+    },
+    {
+      "name": "session",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "snapshot",
+        "message_id": "receive",
+        "body": {
+          "fixture_only": true,
+          "snapshot": {
+            "session_id": "fixture-0001",
+            "viewer_id": "one",
+            "revision": 1,
+            "status": "active",
+            "turn": 1,
+            "phase": null,
+            "step": null,
+            "active_player_id": "one",
+            "priority_player_id": "one",
+            "players": [
+              {
+                "player_id": "one",
+                "name": "One",
+                "life": 0,
+                "hand_count": 1,
+                "library_count": 0,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              },
+              {
+                "player_id": "two",
+                "name": "Two",
+                "life": 20,
+                "hand_count": 7,
+                "library_count": 53,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              }
+            ],
+            "objects": [
+              {
+                "object_id": "fixture-0002",
+                "zone": "hand",
+                "owner_id": "one",
+                "controller_id": "one",
+                "hidden": false,
+                "characteristics": {
+                  "name": "Synthetic Fixture Card",
+                  "power": "1",
+                  "toughness": "1",
+                  "type_line": "Artifact Creature",
+                  "color": null,
+                  "engine_view_text": null,
+                  "loyalty": null,
+                  "defense": null,
+                  "transformed": null,
+                  "counters": null,
+                  "is_copy": null,
+                  "flipped": null,
+                  "current_abilities": null,
+                  "unsupported_fields": [
+                    "current_rules_text",
+                    "ability_identities",
+                    "color_identity",
+                    "copy_provenance_history",
+                    "merged_components"
+                  ]
+                },
+                "card_identity": null,
+                "tapped": null,
+                "damage": null,
+                "attacking_available": null,
+                "blocking_available": null,
+                "face_down": null,
+                "attachments": null,
+                "attached_to": null,
+                "commander_id": null,
+                "copy_source_id": null
+              }
+            ],
+            "actions": [],
+            "decision": null,
+            "combat": [],
+            "protocol_version": 1,
+            "result": null,
+            "commanders": null,
+            "observations": [],
+            "unsupported_fields": [],
+            "actions_complete": false
+          }
+        }
+      },
+      "session": "other",
+      "viewer": "one",
+      "minimum_revision": 0,
+      "fixture_mode": true,
+      "code": "RECEIVE_SESSION"
+    },
+    {
+      "name": "viewer",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "snapshot",
+        "message_id": "receive",
+        "body": {
+          "fixture_only": true,
+          "snapshot": {
+            "session_id": "fixture-0001",
+            "viewer_id": "one",
+            "revision": 1,
+            "status": "active",
+            "turn": 1,
+            "phase": null,
+            "step": null,
+            "active_player_id": "one",
+            "priority_player_id": "one",
+            "players": [
+              {
+                "player_id": "one",
+                "name": "One",
+                "life": 0,
+                "hand_count": 1,
+                "library_count": 0,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              },
+              {
+                "player_id": "two",
+                "name": "Two",
+                "life": 20,
+                "hand_count": 7,
+                "library_count": 53,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              }
+            ],
+            "objects": [
+              {
+                "object_id": "fixture-0002",
+                "zone": "hand",
+                "owner_id": "one",
+                "controller_id": "one",
+                "hidden": false,
+                "characteristics": {
+                  "name": "Synthetic Fixture Card",
+                  "power": "1",
+                  "toughness": "1",
+                  "type_line": "Artifact Creature",
+                  "color": null,
+                  "engine_view_text": null,
+                  "loyalty": null,
+                  "defense": null,
+                  "transformed": null,
+                  "counters": null,
+                  "is_copy": null,
+                  "flipped": null,
+                  "current_abilities": null,
+                  "unsupported_fields": [
+                    "current_rules_text",
+                    "ability_identities",
+                    "color_identity",
+                    "copy_provenance_history",
+                    "merged_components"
+                  ]
+                },
+                "card_identity": null,
+                "tapped": null,
+                "damage": null,
+                "attacking_available": null,
+                "blocking_available": null,
+                "face_down": null,
+                "attachments": null,
+                "attached_to": null,
+                "commander_id": null,
+                "copy_source_id": null
+              }
+            ],
+            "actions": [],
+            "decision": null,
+            "combat": [],
+            "protocol_version": 1,
+            "result": null,
+            "commanders": null,
+            "observations": [],
+            "unsupported_fields": [],
+            "actions_complete": false
+          }
+        }
+      },
+      "session": "fixture-0001",
+      "viewer": "other",
+      "minimum_revision": 0,
+      "fixture_mode": true,
+      "code": "RECEIVE_VIEWER"
+    },
+    {
+      "name": "minimum_revision",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "snapshot",
+        "message_id": "receive",
+        "body": {
+          "fixture_only": true,
+          "snapshot": {
+            "session_id": "fixture-0001",
+            "viewer_id": "one",
+            "revision": 1,
+            "status": "active",
+            "turn": 1,
+            "phase": null,
+            "step": null,
+            "active_player_id": "one",
+            "priority_player_id": "one",
+            "players": [
+              {
+                "player_id": "one",
+                "name": "One",
+                "life": 0,
+                "hand_count": 1,
+                "library_count": 0,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              },
+              {
+                "player_id": "two",
+                "name": "Two",
+                "life": 20,
+                "hand_count": 7,
+                "library_count": 53,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              }
+            ],
+            "objects": [
+              {
+                "object_id": "fixture-0002",
+                "zone": "hand",
+                "owner_id": "one",
+                "controller_id": "one",
+                "hidden": false,
+                "characteristics": {
+                  "name": "Synthetic Fixture Card",
+                  "power": "1",
+                  "toughness": "1",
+                  "type_line": "Artifact Creature",
+                  "color": null,
+                  "engine_view_text": null,
+                  "loyalty": null,
+                  "defense": null,
+                  "transformed": null,
+                  "counters": null,
+                  "is_copy": null,
+                  "flipped": null,
+                  "current_abilities": null,
+                  "unsupported_fields": [
+                    "current_rules_text",
+                    "ability_identities",
+                    "color_identity",
+                    "copy_provenance_history",
+                    "merged_components"
+                  ]
+                },
+                "card_identity": null,
+                "tapped": null,
+                "damage": null,
+                "attacking_available": null,
+                "blocking_available": null,
+                "face_down": null,
+                "attachments": null,
+                "attached_to": null,
+                "commander_id": null,
+                "copy_source_id": null
+              }
+            ],
+            "actions": [],
+            "decision": null,
+            "combat": [],
+            "protocol_version": 1,
+            "result": null,
+            "commanders": null,
+            "observations": [],
+            "unsupported_fields": [],
+            "actions_complete": false
+          }
+        }
+      },
+      "session": "fixture-0001",
+      "viewer": "one",
+      "minimum_revision": 99,
+      "fixture_mode": true,
+      "code": "RECEIVE_REVISION"
+    },
+    {
+      "name": "fixture_mode",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "snapshot",
+        "message_id": "receive",
+        "body": {
+          "fixture_only": true,
+          "snapshot": {
+            "session_id": "fixture-0001",
+            "viewer_id": "one",
+            "revision": 1,
+            "status": "active",
+            "turn": 1,
+            "phase": null,
+            "step": null,
+            "active_player_id": "one",
+            "priority_player_id": "one",
+            "players": [
+              {
+                "player_id": "one",
+                "name": "One",
+                "life": 0,
+                "hand_count": 1,
+                "library_count": 0,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              },
+              {
+                "player_id": "two",
+                "name": "Two",
+                "life": 20,
+                "hand_count": 7,
+                "library_count": 53,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              }
+            ],
+            "objects": [
+              {
+                "object_id": "fixture-0002",
+                "zone": "hand",
+                "owner_id": "one",
+                "controller_id": "one",
+                "hidden": false,
+                "characteristics": {
+                  "name": "Synthetic Fixture Card",
+                  "power": "1",
+                  "toughness": "1",
+                  "type_line": "Artifact Creature",
+                  "color": null,
+                  "engine_view_text": null,
+                  "loyalty": null,
+                  "defense": null,
+                  "transformed": null,
+                  "counters": null,
+                  "is_copy": null,
+                  "flipped": null,
+                  "current_abilities": null,
+                  "unsupported_fields": [
+                    "current_rules_text",
+                    "ability_identities",
+                    "color_identity",
+                    "copy_provenance_history",
+                    "merged_components"
+                  ]
+                },
+                "card_identity": null,
+                "tapped": null,
+                "damage": null,
+                "attacking_available": null,
+                "blocking_available": null,
+                "face_down": null,
+                "attachments": null,
+                "attached_to": null,
+                "commander_id": null,
+                "copy_source_id": null
+              }
+            ],
+            "actions": [],
+            "decision": null,
+            "combat": [],
+            "protocol_version": 1,
+            "result": null,
+            "commanders": null,
+            "observations": [],
+            "unsupported_fields": [],
+            "actions_complete": false
+          }
+        }
+      },
+      "session": "fixture-0001",
+      "viewer": "one",
+      "minimum_revision": 0,
+      "fixture_mode": false,
+      "code": "RECEIVE_MODE"
+    },
+    {
+      "name": "unknown-body-field",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "snapshot",
+        "message_id": "receive",
+        "body": {
+          "fixture_only": true,
+          "snapshot": {
+            "session_id": "fixture-0001",
+            "viewer_id": "one",
+            "revision": 1,
+            "status": "active",
+            "turn": 1,
+            "phase": null,
+            "step": null,
+            "active_player_id": "one",
+            "priority_player_id": "one",
+            "players": [
+              {
+                "player_id": "one",
+                "name": "One",
+                "life": 0,
+                "hand_count": 1,
+                "library_count": 0,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              },
+              {
+                "player_id": "two",
+                "name": "Two",
+                "life": 20,
+                "hand_count": 7,
+                "library_count": 53,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              }
+            ],
+            "objects": [
+              {
+                "object_id": "fixture-0002",
+                "zone": "hand",
+                "owner_id": "one",
+                "controller_id": "one",
+                "hidden": false,
+                "characteristics": {
+                  "name": "Synthetic Fixture Card",
+                  "power": "1",
+                  "toughness": "1",
+                  "type_line": "Artifact Creature",
+                  "color": null,
+                  "engine_view_text": null,
+                  "loyalty": null,
+                  "defense": null,
+                  "transformed": null,
+                  "counters": null,
+                  "is_copy": null,
+                  "flipped": null,
+                  "current_abilities": null,
+                  "unsupported_fields": [
+                    "current_rules_text",
+                    "ability_identities",
+                    "color_identity",
+                    "copy_provenance_history",
+                    "merged_components"
+                  ]
+                },
+                "card_identity": null,
+                "tapped": null,
+                "damage": null,
+                "attacking_available": null,
+                "blocking_available": null,
+                "face_down": null,
+                "attachments": null,
+                "attached_to": null,
+                "commander_id": null,
+                "copy_source_id": null
+              }
+            ],
+            "actions": [],
+            "decision": null,
+            "combat": [],
+            "protocol_version": 1,
+            "result": null,
+            "commanders": null,
+            "observations": [],
+            "unsupported_fields": [],
+            "actions_complete": false
+          },
+          "owner_decks": []
+        }
+      },
+      "session": "fixture-0001",
+      "viewer": "one",
+      "minimum_revision": 0,
+      "fixture_mode": true,
+      "code": "RECEIVE_SHAPE"
+    },
+    {
+      "name": "duplicate-object",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "snapshot",
+        "message_id": "receive",
+        "body": {
+          "fixture_only": true,
+          "snapshot": {
+            "session_id": "fixture-0001",
+            "viewer_id": "one",
+            "revision": 1,
+            "status": "active",
+            "turn": 1,
+            "phase": null,
+            "step": null,
+            "active_player_id": "one",
+            "priority_player_id": "one",
+            "players": [
+              {
+                "player_id": "one",
+                "name": "One",
+                "life": 0,
+                "hand_count": 1,
+                "library_count": 0,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              },
+              {
+                "player_id": "two",
+                "name": "Two",
+                "life": 20,
+                "hand_count": 7,
+                "library_count": 53,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              }
+            ],
+            "objects": [
+              {
+                "object_id": "fixture-0002",
+                "zone": "hand",
+                "owner_id": "one",
+                "controller_id": "one",
+                "hidden": false,
+                "characteristics": {
+                  "name": "Synthetic Fixture Card",
+                  "power": "1",
+                  "toughness": "1",
+                  "type_line": "Artifact Creature",
+                  "color": null,
+                  "engine_view_text": null,
+                  "loyalty": null,
+                  "defense": null,
+                  "transformed": null,
+                  "counters": null,
+                  "is_copy": null,
+                  "flipped": null,
+                  "current_abilities": null,
+                  "unsupported_fields": [
+                    "current_rules_text",
+                    "ability_identities",
+                    "color_identity",
+                    "copy_provenance_history",
+                    "merged_components"
+                  ]
+                },
+                "card_identity": null,
+                "tapped": null,
+                "damage": null,
+                "attacking_available": null,
+                "blocking_available": null,
+                "face_down": null,
+                "attachments": null,
+                "attached_to": null,
+                "commander_id": null,
+                "copy_source_id": null
+              },
+              {
+                "object_id": "fixture-0002",
+                "zone": "hand",
+                "owner_id": "one",
+                "controller_id": "one",
+                "hidden": false,
+                "characteristics": {
+                  "name": "Synthetic Fixture Card",
+                  "power": "1",
+                  "toughness": "1",
+                  "type_line": "Artifact Creature",
+                  "color": null,
+                  "engine_view_text": null,
+                  "loyalty": null,
+                  "defense": null,
+                  "transformed": null,
+                  "counters": null,
+                  "is_copy": null,
+                  "flipped": null,
+                  "current_abilities": null,
+                  "unsupported_fields": [
+                    "current_rules_text",
+                    "ability_identities",
+                    "color_identity",
+                    "copy_provenance_history",
+                    "merged_components"
+                  ]
+                },
+                "card_identity": null,
+                "tapped": null,
+                "damage": null,
+                "attacking_available": null,
+                "blocking_available": null,
+                "face_down": null,
+                "attachments": null,
+                "attached_to": null,
+                "commander_id": null,
+                "copy_source_id": null
+              }
+            ],
+            "actions": [],
+            "decision": null,
+            "combat": [],
+            "protocol_version": 1,
+            "result": null,
+            "commanders": null,
+            "observations": [],
+            "unsupported_fields": [],
+            "actions_complete": false
+          }
+        }
+      },
+      "session": "fixture-0001",
+      "viewer": "one",
+      "minimum_revision": 0,
+      "fixture_mode": true,
+      "code": "RECEIVE_CONTEXT"
+    },
+    {
+      "name": "other-viewer-decision",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "snapshot",
+        "message_id": "receive",
+        "body": {
+          "fixture_only": true,
+          "snapshot": {
+            "session_id": "fixture-0001",
+            "viewer_id": "one",
+            "revision": 2,
+            "status": "active",
+            "turn": 1,
+            "phase": null,
+            "step": null,
+            "active_player_id": "one",
+            "priority_player_id": "one",
+            "players": [
+              {
+                "player_id": "one",
+                "name": "One",
+                "life": 0,
+                "hand_count": 1,
+                "library_count": 0,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              },
+              {
+                "player_id": "two",
+                "name": "Two",
+                "life": 20,
+                "hand_count": 7,
+                "library_count": 53,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              }
+            ],
+            "objects": [
+              {
+                "object_id": "fixture-0002",
+                "zone": "hand",
+                "owner_id": "one",
+                "controller_id": "one",
+                "hidden": false,
+                "characteristics": {
+                  "name": "Synthetic Fixture Card",
+                  "power": "1",
+                  "toughness": "1",
+                  "type_line": "Artifact Creature",
+                  "color": null,
+                  "engine_view_text": null,
+                  "loyalty": null,
+                  "defense": null,
+                  "transformed": null,
+                  "counters": null,
+                  "is_copy": null,
+                  "flipped": null,
+                  "current_abilities": null,
+                  "unsupported_fields": [
+                    "current_rules_text",
+                    "ability_identities",
+                    "color_identity",
+                    "copy_provenance_history",
+                    "merged_components"
+                  ]
+                },
+                "card_identity": null,
+                "tapped": null,
+                "damage": null,
+                "attacking_available": null,
+                "blocking_available": null,
+                "face_down": null,
+                "attachments": null,
+                "attached_to": null,
+                "commander_id": null,
+                "copy_source_id": null
+              }
+            ],
+            "actions": [],
+            "decision": {
+              "decision_id": "fixture-0003",
+              "player_id": "two",
+              "family": "boolean",
+              "prompt": "Synthetic fixture choice",
+              "options": [
+                {
+                  "option_id": "fixture-0003-yes",
+                  "label": "Yes",
+                  "object_id": null,
+                  "player_id": null,
+                  "selected": false
+                },
+                {
+                  "option_id": "fixture-0003-no",
+                  "label": "No",
+                  "object_id": null,
+                  "player_id": null,
+                  "selected": false
+                }
+              ],
+              "minimum": null,
+              "maximum": null,
+              "cancellable": false,
+              "amounts": [],
+              "can_finish": false,
+              "is_priority": false
+            },
+            "combat": [],
+            "protocol_version": 1,
+            "result": null,
+            "commanders": null,
+            "observations": [],
+            "unsupported_fields": [],
+            "actions_complete": false
+          }
+        }
+      },
+      "session": "fixture-0001",
+      "viewer": "one",
+      "minimum_revision": 0,
+      "fixture_mode": true,
+      "code": "RECEIVE_VIEWER"
+    },
+    {
+      "name": "result-without-terminal-status",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "result",
+        "message_id": "receive",
+        "body": {
+          "fixture_only": true,
+          "snapshot": {
+            "session_id": "fixture-0001",
+            "viewer_id": "one",
+            "revision": 8,
+            "status": "active",
+            "turn": 1,
+            "phase": null,
+            "step": null,
+            "active_player_id": "one",
+            "priority_player_id": "one",
+            "players": [
+              {
+                "player_id": "one",
+                "name": "One",
+                "life": 0,
+                "hand_count": 1,
+                "library_count": 0,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              },
+              {
+                "player_id": "two",
+                "name": "Two",
+                "life": 20,
+                "hand_count": 7,
+                "library_count": 53,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              }
+            ],
+            "objects": [
+              {
+                "object_id": "fixture-0002",
+                "zone": "hand",
+                "owner_id": "one",
+                "controller_id": "one",
+                "hidden": false,
+                "characteristics": {
+                  "name": "Synthetic Fixture Card",
+                  "power": "1",
+                  "toughness": "1",
+                  "type_line": "Artifact Creature",
+                  "color": null,
+                  "engine_view_text": null,
+                  "loyalty": null,
+                  "defense": null,
+                  "transformed": null,
+                  "counters": null,
+                  "is_copy": null,
+                  "flipped": null,
+                  "current_abilities": null,
+                  "unsupported_fields": [
+                    "current_rules_text",
+                    "ability_identities",
+                    "color_identity",
+                    "copy_provenance_history",
+                    "merged_components"
+                  ]
+                },
+                "card_identity": null,
+                "tapped": null,
+                "damage": null,
+                "attacking_available": null,
+                "blocking_available": null,
+                "face_down": null,
+                "attachments": null,
+                "attached_to": null,
+                "commander_id": null,
+                "copy_source_id": null
+              }
+            ],
+            "actions": [],
+            "decision": null,
+            "combat": [],
+            "protocol_version": 1,
+            "result": "fixture_complete",
+            "commanders": null,
+            "observations": [],
+            "unsupported_fields": [],
+            "actions_complete": false
+          }
+        }
+      },
+      "session": "fixture-0001",
+      "viewer": "one",
+      "minimum_revision": 8,
+      "fixture_mode": true,
+      "code": "RECEIVE_SHAPE"
+    },
+    {
+      "name": "result-null",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "result",
+        "message_id": "receive",
+        "body": {
+          "fixture_only": true,
+          "snapshot": {
+            "session_id": "fixture-0001",
+            "viewer_id": "one",
+            "revision": 8,
+            "status": "finished",
+            "turn": 1,
+            "phase": null,
+            "step": null,
+            "active_player_id": "one",
+            "priority_player_id": "one",
+            "players": [
+              {
+                "player_id": "one",
+                "name": "One",
+                "life": 0,
+                "hand_count": 1,
+                "library_count": 0,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              },
+              {
+                "player_id": "two",
+                "name": "Two",
+                "life": 20,
+                "hand_count": 7,
+                "library_count": 53,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              }
+            ],
+            "objects": [
+              {
+                "object_id": "fixture-0002",
+                "zone": "hand",
+                "owner_id": "one",
+                "controller_id": "one",
+                "hidden": false,
+                "characteristics": {
+                  "name": "Synthetic Fixture Card",
+                  "power": "1",
+                  "toughness": "1",
+                  "type_line": "Artifact Creature",
+                  "color": null,
+                  "engine_view_text": null,
+                  "loyalty": null,
+                  "defense": null,
+                  "transformed": null,
+                  "counters": null,
+                  "is_copy": null,
+                  "flipped": null,
+                  "current_abilities": null,
+                  "unsupported_fields": [
+                    "current_rules_text",
+                    "ability_identities",
+                    "color_identity",
+                    "copy_provenance_history",
+                    "merged_components"
+                  ]
+                },
+                "card_identity": null,
+                "tapped": null,
+                "damage": null,
+                "attacking_available": null,
+                "blocking_available": null,
+                "face_down": null,
+                "attachments": null,
+                "attached_to": null,
+                "commander_id": null,
+                "copy_source_id": null
+              }
+            ],
+            "actions": [],
+            "decision": null,
+            "combat": [],
+            "protocol_version": 1,
+            "result": null,
+            "commanders": null,
+            "observations": [],
+            "unsupported_fields": [],
+            "actions_complete": false
+          }
+        }
+      },
+      "session": "fixture-0001",
+      "viewer": "one",
+      "minimum_revision": 8,
+      "fixture_mode": true,
+      "code": "RECEIVE_SHAPE"
+    },
+    {
+      "name": "result-empty",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "result",
+        "message_id": "receive",
+        "body": {
+          "fixture_only": true,
+          "snapshot": {
+            "session_id": "fixture-0001",
+            "viewer_id": "one",
+            "revision": 8,
+            "status": "finished",
+            "turn": 1,
+            "phase": null,
+            "step": null,
+            "active_player_id": "one",
+            "priority_player_id": "one",
+            "players": [
+              {
+                "player_id": "one",
+                "name": "One",
+                "life": 0,
+                "hand_count": 1,
+                "library_count": 0,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              },
+              {
+                "player_id": "two",
+                "name": "Two",
+                "life": 20,
+                "hand_count": 7,
+                "library_count": 53,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              }
+            ],
+            "objects": [
+              {
+                "object_id": "fixture-0002",
+                "zone": "hand",
+                "owner_id": "one",
+                "controller_id": "one",
+                "hidden": false,
+                "characteristics": {
+                  "name": "Synthetic Fixture Card",
+                  "power": "1",
+                  "toughness": "1",
+                  "type_line": "Artifact Creature",
+                  "color": null,
+                  "engine_view_text": null,
+                  "loyalty": null,
+                  "defense": null,
+                  "transformed": null,
+                  "counters": null,
+                  "is_copy": null,
+                  "flipped": null,
+                  "current_abilities": null,
+                  "unsupported_fields": [
+                    "current_rules_text",
+                    "ability_identities",
+                    "color_identity",
+                    "copy_provenance_history",
+                    "merged_components"
+                  ]
+                },
+                "card_identity": null,
+                "tapped": null,
+                "damage": null,
+                "attacking_available": null,
+                "blocking_available": null,
+                "face_down": null,
+                "attachments": null,
+                "attached_to": null,
+                "commander_id": null,
+                "copy_source_id": null
+              }
+            ],
+            "actions": [],
+            "decision": null,
+            "combat": [],
+            "protocol_version": 1,
+            "result": "",
+            "commanders": null,
+            "observations": [],
+            "unsupported_fields": [],
+            "actions_complete": false
+          }
+        }
+      },
+      "session": "fixture-0001",
+      "viewer": "one",
+      "minimum_revision": 8,
+      "fixture_mode": true,
+      "code": "RECEIVE_SHAPE"
+    },
+    {
+      "name": "hidden-event-name",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "event",
+        "message_id": "receive",
+        "body": {
+          "fixture_only": true,
+          "session_id": "fixture-0001",
+          "viewer_id": "one",
+          "event": {
+            "kind": "fixture-event",
+            "player_id": "two",
+            "revision": 8,
+            "code": null,
+            "observations": [
+              {
+                "observation_id": "hidden-observation",
+                "source": "fixture",
+                "hidden": true,
+                "name": "private name",
+                "set_code": null,
+                "collector_number": null
+              }
+            ]
+          }
+        }
+      },
+      "session": "fixture-0001",
+      "viewer": "one",
+      "minimum_revision": 8,
+      "fixture_mode": true,
+      "code": "RECEIVE_SHAPE"
+    },
+    {
+      "name": "event-wrong-viewer",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "event",
+        "message_id": "receive",
+        "body": {
+          "fixture_only": true,
+          "session_id": "fixture-0001",
+          "viewer_id": "two",
+          "event": {
+            "kind": "fixture-event",
+            "player_id": "two",
+            "revision": 8,
+            "code": null,
+            "observations": [
+              {
+                "observation_id": "hidden-observation",
+                "source": "fixture",
+                "hidden": true,
+                "name": null,
+                "set_code": null,
+                "collector_number": null
+              }
+            ]
+          }
+        }
+      },
+      "session": "fixture-0001",
+      "viewer": "one",
+      "minimum_revision": 8,
+      "fixture_mode": true,
+      "code": "RECEIVE_VIEWER"
+    },
+    {
+      "name": "fixture-mode-spoof",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "snapshot",
+        "message_id": "receive",
+        "body": {
+          "fixture_only": true,
+          "snapshot": {
+            "session_id": "fixture-0001",
+            "viewer_id": "one",
+            "revision": 1,
+            "status": "active",
+            "turn": 1,
+            "phase": null,
+            "step": null,
+            "active_player_id": "one",
+            "priority_player_id": "one",
+            "players": [
+              {
+                "player_id": "one",
+                "name": "One",
+                "life": 0,
+                "hand_count": 1,
+                "library_count": 0,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              },
+              {
+                "player_id": "two",
+                "name": "Two",
+                "life": 20,
+                "hand_count": 7,
+                "library_count": 53,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              }
+            ],
+            "objects": [
+              {
+                "object_id": "fixture-0002",
+                "zone": "hand",
+                "owner_id": "one",
+                "controller_id": "one",
+                "hidden": false,
+                "characteristics": {
+                  "name": "Synthetic Fixture Card",
+                  "power": "1",
+                  "toughness": "1",
+                  "type_line": "Artifact Creature",
+                  "color": null,
+                  "engine_view_text": null,
+                  "loyalty": null,
+                  "defense": null,
+                  "transformed": null,
+                  "counters": null,
+                  "is_copy": null,
+                  "flipped": null,
+                  "current_abilities": null,
+                  "unsupported_fields": [
+                    "current_rules_text",
+                    "ability_identities",
+                    "color_identity",
+                    "copy_provenance_history",
+                    "merged_components"
+                  ]
+                },
+                "card_identity": null,
+                "tapped": null,
+                "damage": null,
+                "attacking_available": null,
+                "blocking_available": null,
+                "face_down": null,
+                "attachments": null,
+                "attached_to": null,
+                "commander_id": null,
+                "copy_source_id": null
+              }
+            ],
+            "actions": [],
+            "decision": null,
+            "combat": [],
+            "protocol_version": 1,
+            "result": null,
+            "commanders": null,
+            "observations": [],
+            "unsupported_fields": [],
+            "actions_complete": false
+          }
+        }
+      },
+      "session": "fixture-0001",
+      "viewer": "one",
+      "minimum_revision": 0,
+      "fixture_mode": false,
+      "code": "RECEIVE_MODE"
+    }
+  ]
+}

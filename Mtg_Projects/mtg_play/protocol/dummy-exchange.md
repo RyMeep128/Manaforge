@@ -94,10 +94,10 @@ next scheduled third-commit checkpoint without waiting for unfinished runs.
 
 ## Remaining G1 boundaries
 
-This is an EditMode client, not a packaged Unity player or UI match. Snapshot and
-result transport bodies are deliberately test-only and do not yet have a final
-public wire validator. DTO deserialization and explicit concealed-field checks
-are fixture evidence, not a production privacy filter. The Java dummy performs
+This is an EditMode client, not a packaged Unity player or UI match. Snapshot/event/result bodies now use the [generated receive boundary](receive-boundary.md)
+before DTO deserialization, including expected viewer/session, fixture mode and
+explicit concealed-field checks. This is still not a production engine privacy
+filter or a frozen protocol. The Java dummy performs
 opaque ID comparisons only and emits no engine-confirmed outcome.
 
 Still required: finalized public snapshot/event/result/compatibility body schemas,
@@ -106,3 +106,10 @@ tracking, compatibility with actual pin metadata, private product bootstrap,
 owner/seat authorization, robust transport cancellation/queue limits, lifecycle
 containment and actual licensed CI. Keep G1 and G0 open; the bulk Java/XMage port
 and retirement of Python/Qt remain gated.
+
+
+The receive-boundary follow-up adds an event with a different actor and represents
+the fixture-only result as a terminal GameSnapshot. It retains the same dummy
+outcome label and does not confirm an engine action. Current focused totals are
+42 Unity EditMode and five Python schema checks; original counts above record
+the earlier increment. No new packaged-player or real-engine evidence is added.

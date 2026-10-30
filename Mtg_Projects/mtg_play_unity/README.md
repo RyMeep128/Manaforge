@@ -223,3 +223,13 @@ existing pinned Maven download. The licensed workflow installs the same JDK pin
 as hosted protocol CI. No runtime key, bootstrap or proof is written to disk or
 uploaded. Local results: 40 EditMode tests and four schema checks passed; CI is
 pending. The packaged scene still has no real Java connection or gameplay.
+
+
+The receive-boundary follow-up validates nested snapshot/event/result DTO shape,
+explicit concealment fields and authenticated session/viewer/revision context
+before deserialization in the dummy exchange. Fixture mode must be explicitly
+allowed and is refused by default in production contexts. Generated schema data
+comes from the original contracts, not another game-state model. Forty-two
+EditMode checks and five focused schema checks pass locally; licensed CI,
+immutable scene projection and real gateway visibility remain pending. See the
+[receive guide](../mtg_play/protocol/receive-boundary.md).

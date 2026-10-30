@@ -148,3 +148,9 @@ now proves private test bootstrap, actual loopback Java↔Unity EditMode message
 wrong-key exclusion and owner-EOF listener cleanup locally. This fixture starts
 no descendants and is separate from LaunchOwner. Product bootstrap/containment,
 packaged client integration and CI evidence remain open.
+
+
+The [receive-body follow-up](../Mtg_Projects/mtg_play/protocol/receive-boundary.md)
+now validates generated existing DTO shapes and authenticated viewer/session,
+revision and fixture mode before dummy client deserialization. It does not wire
+product launch ownership or prove real engine visibility. G1 remains open.

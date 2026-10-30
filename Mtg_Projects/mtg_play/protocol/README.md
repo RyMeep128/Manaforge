@@ -268,3 +268,14 @@ pass. Python is used for build preparation only. Local evidence: 40 Unity
 EditMode tests, the Java corpora and four schema checks passed. This is neither
 packaged-player gameplay nor final public snapshot/result validation; G1 and CI
 acceptance remain pending.
+
+
+## Viewer-bound receive validation
+
+The [receive boundary](receive-boundary.md) now validates snapshot/event/result
+bodies from generated existing DTO schemas, then binds viewer/session/revision
+and fixture mode before deserialization. The dummy exchange exercises these
+checks in both languages. Local evidence: eight positive/24 negative receive
+cases, 42 Unity EditMode checks and five schema checks passed. No engine privacy
+filter, immutable renderer projection or G1 completion is claimed. See the guide
+for the scheduled protocol CI snapshot; licensed Unity CI remains pending.

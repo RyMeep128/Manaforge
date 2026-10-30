@@ -78,3 +78,21 @@ def test_dummy_snapshot_uses_existing_dto_shape_without_concealed_identity():
     for obj in concealed:
         assert obj["card_identity"] is None
         assert obj["characteristics"] is None
+
+
+def test_receive_schema_and_context_checks_have_separate_responsibilities():
+    schema = json.loads(
+        (ROOT / "wire-receive-v1.schema.json").read_text(encoding="utf-8")
+    )
+    Draft202012Validator.check_schema(schema)
+    validator = Draft202012Validator(schema)
+    corpus = json.loads(
+        (ROOT / "fixtures/wire-receive-v1.json").read_text(encoding="utf-8")
+    )
+    for case in corpus["positive"]:
+        validator.validate(case["envelope"])
+    for case in corpus["negative"]:
+        if case["code"] == "RECEIVE_SHAPE":
+            assert not validator.is_valid(case["envelope"]), case["name"]
+        else:
+            validator.validate(case["envelope"])
