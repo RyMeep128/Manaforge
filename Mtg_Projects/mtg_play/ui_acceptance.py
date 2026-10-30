@@ -23,6 +23,7 @@ from mtg_home.launcher import ModuleController
 from .adapter import AdapterError, LocalGameAdapter
 from .contracts import CommandResult
 from .setup import saved_decks
+from .lobby import offline_lobby
 from .workspace import PlayWorkspace
 
 
@@ -40,7 +41,7 @@ class UIAdapter:
         self.app, self.runtime, self.root = app, runtime, root
         self.home = self.workspace = None
         self.receipts = []
-        self.handoffs = 0
+        self.viewer_id = None
         self.closed = False
         self.screenshot_root = screenshot_root
         self.captured = set()
@@ -54,11 +55,14 @@ class UIAdapter:
         self.captured.add(name)
 
     def create_game(self, setup, documents):
-        if len(setup.seats) != 2 or tuple(seat.seat_id for seat in setup.seats) != (
-            "one",
-            "two",
+        if (
+            len(setup.seats) != 2
+            or len(documents) != 2
+            or setup.seats[0].controller != "local_human"
+            or setup.seats[1].controller != "engine_ai"
         ):
-            raise AdapterError("UI_FIXTURE_REQUIRES_TWO_LOCAL_SEATS")
+            raise AdapterError("UI_FIXTURE_REQUIRES_OFFLINE_AI")
+        self.viewer_id = setup.seats[0].seat_id
         for seat, document in zip(setup.seats, documents):
             DeckStore().save(
                 self.root / "decks" / (seat.seat_id + ".manaforge.json"), document
@@ -80,6 +84,9 @@ class UIAdapter:
                 lambda: controller.show_home(),
                 adapter_factory=lambda: self.runtime,
                 deck_provider=lambda: saved_decks(self.root),
+                lobby=offline_lobby(
+                    seat_ids=tuple(seat.seat_id for seat in setup.seats)
+                ),
             )
             return self.workspace
 
@@ -92,20 +99,22 @@ class UIAdapter:
         if self.workspace is None:
             raise AdapterError("UI_PLAY_NAVIGATION_FAILED")
         wait(self.app, lambda: not self.workspace.catalog_jobs.busy)
-        for seat, name, selector in zip(
-            setup.seats, self.workspace.names, self.workspace.selectors
-        ):
-            name.setText(seat.name)
+        self.workspace.format.setCurrentIndex(
+            self.workspace.format.findData(setup.format)
+        )
+        for seat, selector in zip(setup.seats, self.workspace.selectors):
             index = next(
                 index
                 for index, item in enumerate(self.workspace._decks)
                 if item.path.name == seat.seat_id + ".manaforge.json"
             )
             selector.setCurrentIndex(index + 1)
-        self.workspace.format.setCurrentIndex(
-            self.workspace.format.findData(setup.format)
-        )
         self.workspace.session.commandFinished.connect(self.receipts.append)
+        self.workspace.session.startupProgress.connect(
+            lambda progress: (
+                self.capture("loading") if progress["state"] == "started" else None
+            )
+        )
         self.capture("setup")
         self.workspace.start_button.click()
         wait(self.app, lambda: not self.workspace.session.busy, timeout=300)
@@ -118,19 +127,8 @@ class UIAdapter:
         if self.closed:
             raise AdapterError("SESSION_CLOSED")
         workspace = self.workspace
-        if workspace._seat_id != player:
-            workspace.handoff_button.click()
-            if (
-                workspace._view is not None
-                or workspace.table.view is not None
-                or workspace.table.artwork.cache
-            ):
-                raise AdapterError("UI_HANDOFF_PRIVATE_STATE_RETAINED")
-            if workspace.pages.currentWidget() is not workspace.handoff_page:
-                raise AdapterError("UI_HANDOFF_SCREEN_MISSING")
-            self.capture("handoff")
-            workspace.reveal_button.click()
-            self.handoffs += 1
+        if player != self.viewer_id:
+            raise AdapterError("UNAUTHORIZED_SEAT")
         workspace.session.timer.stop()
         wait(self.app, lambda: not workspace.session.busy)
         if workspace.session._blocked:
@@ -159,7 +157,9 @@ class UIAdapter:
         }
         if set(self.workspace.table.hand.cards) != expected_hand:
             raise AdapterError("UI_HAND_PRESENTATION_MISMATCH")
-        self.capture("table-" + player)
+        self.capture("table-local")
+        if view.decision and "mulligan" in view.decision.prompt.lower():
+            self.capture("opening-hand")
         if any(obj.zone == "stack" for obj in view.objects):
             self.capture("stack")
         if view.combat:
@@ -274,13 +274,12 @@ class UIAdapter:
 
 
 def main():
-    from .adapter_acceptance import acceptance, combat_acceptance
-    from .acceptance_scenarios import blockers, commander_play
+    from . import ai_acceptance
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--scenario",
-        choices=("basic", "combat", "blockers", "commander-play"),
+        choices=("ai-freeform", "ai-commander", "ai-blockers"),
         required=True,
     )
     parser.add_argument("--xmage-root", type=Path, required=True)
@@ -306,28 +305,33 @@ def main():
         )
         try:
             result["gameplay"] = {
-                "basic": acceptance,
-                "combat": combat_acceptance,
-                "blockers": blockers,
-                "commander-play": commander_play,
+                "ai-freeform": ai_acceptance.freeform,
+                "ai-commander": ai_acceptance.commander,
+                "ai-blockers": ai_acceptance.blockers,
             }[args.scenario](pilot)
-            if not pilot.handoffs:
-                raise AdapterError("UI_HANDOFF_EVIDENCE_MISSING")
-            result["handoffs"] = pilot.handoffs
+            result["authorized_viewer"] = pilot.viewer_id
             result["success"] = True
         except Exception as exc:
-            result["error"] = getattr(exc, "code", "UI_ACCEPTANCE_FAILED").split(
-                ":", 1
-            )[0]
+            result["error"] = (
+                getattr(exc, "code", None) or "UI_ACCEPTANCE_FAILED"
+            ).split(":", 1)[0]
         finally:
             try:
                 pilot.close()
             except Exception:
                 result["success"] = False
                 result["cleanup_error"] = "UI_CLEANUP_NOT_CONFIRMED"
+            result["lifecycle"] = runtime.lifecycle.records
             if runtime.result is not None:
                 result["runtime"] = runtime.result.to_dict()
-                if not runtime.result.success:
+                if (
+                    not runtime.result.success
+                    or runtime.result.forced_cleanup
+                    or any(
+                        name.startswith("peer_")
+                        for name, _ in runtime.result.process_exit_codes
+                    )
+                ):
                     result["success"] = False
             # This standalone pilot owns the process logging lifecycle. Windows
             # cannot remove its temporary data directory while handlers are open.

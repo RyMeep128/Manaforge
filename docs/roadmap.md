@@ -337,11 +337,14 @@ implemented but unverified. Follow-on Commander AI and blocking scenarios are
 prepared locally for a later CI run; all Story 1 acceptance evidence remains
 pending. Measured startup stages, a bounded first-state wait, and cleanup-report
 fixes are also prepared locally; their tests and real-engine recovery acceptance
-remain unverified.
+remain unverified. The active source setup now uses a fixed local human plus AI
+opponent, with separate seat/player/pilot/deck/owner identities and updated AI UI
+acceptance scenarios; this local increment is also unverified.
 The subsequent lobby and permanent two-player Focused View preserve future mixed
 controllers and 2-5-player views without implementing networking or larger layouts.
 Source-only preview work does not enable Play in installed releases. The existing
-pass-and-play UI is a historical baseline to replace, not the new target.
+pass-and-play UI has been removed from the active source workspace; its relevant
+headless rules and privacy regressions are retained.
 
 - [ ] Keep a deterministic, authoritative engine behind presentation/client and game API layers. The engine owns rules enforcement, legal actions, triggers, priority, and game-state transitions; Manaforge owns presentation, navigation, interactions, and user experience. See the [Play architecture](manaforge-play-epic.md#1-stable-game-protocol).
 - [ ] Support legal actions/targets, costs/mana payment, stack/priority, phases/steps, triggers, replacement effects, combat/damage, state-based actions, tokens/counters, and zone movement.

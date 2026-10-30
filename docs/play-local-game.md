@@ -9,8 +9,9 @@ retains the future 2-5-player and private networking roadmap.
 ## Rebuild baseline - October 29, 2026
 
 Branch: `feature/play-ai-focused-view`, based on current `origin/main` at
-`fb27c2e` (`0.5.0-alpha.1`). This documentation increment records the requested
-replacement experience; it does not implement AI or change the active UI.
+`fb27c2e` (`0.5.0-alpha.1`). The original documentation increment recorded the
+requested replacement experience without changing the UI. Subsequent local
+implementation increments and their verification gaps are recorded below.
 
 ### Story 1 increment: Freeform AI integration (CI pending)
 
@@ -72,14 +73,61 @@ and are not part of that run's evidence.
 
 Story 1 is **not accepted**. Freeform CI evidence is pending, and Commander/blocking
 scenarios are unverified local work. Wider deck behavior also remains outstanding.
-The active UI still uses pass-and-play; no rebuilt gameplay UI or installed
-feature enablement depends on this unverified integration.
+Continued local work uses expected green CI as the user's working assumption,
+not recorded acceptance evidence. The source preview now uses a fixed human seat
+and AI opponent as described below; installed Play remains disabled.
 
 No local tests, builds, or engine acceptance are permitted for this rebuild.
 New tests execute in GitHub Actions; identify actual runs before claiming a pass.
 Installed Play remains gated until the full acceptance and manual UX review pass.
 No engine pin, compatibility manifest, saved deck, or existing printing identity
 is changed by this baseline. No release, tag, or merge is part of this increment.
+
+### Story 2 increment: independent seats and a fixed human view (local, unverified)
+
+The active setup labels the seats **You** and **Opponent**. The opponent uses
+**Use AI**; **Invite Friend - Coming Soon** is visible and disabled. There is no
+active pass-and-play, seat-handoff screen, or opponent-hand reveal action. Both
+Freeform and Commander still use the current setup page; the new landing page
+and full format-first lobby are subsequent stories.
+
+`lobby.py` separates match-seat identity, player identity, pilot/controller,
+canonical deck identity, and optional deck owner. Ownership is not inferred from
+piloting or written into saved Core documents. A borrowed deck can retain an
+owner distinct from its human or AI pilot. Engine session identity stays in the
+session controller, separate from this preparation model. Only the engine-facing
+seat name/controller and canonical deck snapshots cross the adapter boundary.
+
+The offline request requires one local human followed by one engine AI. The
+shared lobby model can represent larger mixed tables and reserves RemoteHuman
+without implementing networking or imposing a five-seat protocol maximum.
+Existing headless all-human 2-5-seat adapter regressions remain in CI.
+
+The product controller is bound to the local human's authorized viewer. It cannot
+switch to the AI seat or submit/concede using a foreign view. The generic
+controller's all-human seat-switch privacy and uncertain-command regressions
+remain as boundary coverage, independent of the removed handoff UI.
+
+Each selected Core document is copied independently on the background worker
+before engine submission. Selecting the same saved deck for both seats therefore
+creates two isolated in-memory match copies while preserving deck IDs, selected
+printings, commander selections, preferences, and owner metadata in the lobby.
+No deck is saved, transferred to a pilot, or converted to a persistent match format.
+
+The UI pilot now runs `ai-freeform`, `ai-commander`, and `ai-blockers` through the
+fixed human controls. It rejects AI-seat inspection/commands and captures setup,
+loading, opening hand, battlefield, stack, combat, and result states when reached.
+The previous pass-and-play UI scenarios are retired; their headless rules scenarios,
+hidden-information regressions, and lifecycle coverage remain. The prescribed UI
+fixture now covers human choices and permitted AI battlefield frames without
+inventing AI decisions or rules.
+
+New lobby/Qt tests cover independent ownership, larger-table representation,
+foreign-view rejection, absence of active handoff controls, and per-seat document
+isolation. **Story 2 remains unaccepted** until CI and manual review verify the
+updated workflow. The UI still uses the earlier table renderer and artwork loader;
+this increment does not establish strict offline asset loading, Focused View,
+full lobby validation, or overall playability.
 
 ### Story 3 increment: measured startup and readiness (local, unverified)
 
@@ -126,10 +174,10 @@ review remain required. No CI results have been assumed as verified evidence.
 ## Existing pass-and-play implementation (historical baseline)
 
 The sections below describe the existing source preview and its recorded
-verification gaps. They are not acceptance evidence for the AI rebuild. Active
-pass-and-play and handoff UI will be removed in the seat/controller story after
-the Story 1 AI gate; existing privacy and lifecycle regression coverage must be
-retained or adapted.
+verification gaps. They are not acceptance evidence for the AI rebuild. The active
+pass-and-play and handoff UI has now been removed under the user's instruction to
+continue using green CI as a working assumption. Relevant privacy and lifecycle
+regression coverage has been retained or adapted; no actual CI pass is claimed.
 
 ## Milestone A: foundation
 

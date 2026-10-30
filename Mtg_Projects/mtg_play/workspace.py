@@ -3,7 +3,8 @@
 from PyQt6 import QtCore as C, QtWidgets as W
 from mtg_core.paths import data_root
 from mtg_ui.jobs import JobQueue
-from .contracts import GameSetup, MatchSeat
+from dataclasses import replace
+from .lobby import DeckSelection, offline_lobby
 from .presentation import SessionController, local_adapter
 from .setup import saved_decks
 from .table import GameTable
@@ -19,6 +20,7 @@ class PlayWorkspace(W.QWidget):
         *,
         adapter_factory=local_adapter,
         deck_provider=None,
+        lobby=None,
     ):
         super().__init__(parent)
         self.setWindowTitle("Play")
@@ -27,13 +29,19 @@ class PlayWorkspace(W.QWidget):
             lambda: saved_decks(data_root(), service)
         )
         self._decks = ()
+        self.lobby = lobby or offline_lobby()
+        self.lobby.offline_setup()
         self._approved_close = False
         self._view = None
         self._seats = ()
-        self._seat_id = self._handoff_to = None
+        self._seat_id = self.lobby.local_seat_id
         self.deck_artwork = Thumbnails(service, self)
         self.deck_artwork.updated.connect(self._deck_images)
-        self.session = SessionController(self, adapter_factory=adapter_factory)
+        self.session = SessionController(
+            self,
+            adapter_factory=adapter_factory,
+            authorized_viewer_id=self.lobby.local_seat_id,
+        )
         self.catalog_jobs = JobQueue(self)
         self.catalog_jobs.status.connect(self._catalog_loaded)
         self.catalog_jobs.idle.connect(self._selection_changed)
@@ -54,7 +62,7 @@ class PlayWorkspace(W.QWidget):
         back.clicked.connect(home)
         heading.addWidget(back)
         layout.addLayout(heading)
-        intro = W.QLabel("Two players. Your decks. One table.")
+        intro = W.QLabel("You and your decks against an offline AI opponent.")
         intro.setProperty("role", "subtitle")
         layout.addWidget(intro)
         self.pages = W.QStackedWidget()
@@ -66,15 +74,29 @@ class PlayWorkspace(W.QWidget):
         self.format = W.QComboBox()
         self.format.addItem("Freeform", "freeform")
         self.format.addItem("Commander", "commander")
+        self.format.setCurrentIndex(self.format.findData(self.lobby.format))
         self.format.currentIndexChanged.connect(self._selection_changed)
         format_row.addRow("Format", self.format)
         setup_layout.addLayout(format_row)
         seats = W.QHBoxLayout()
-        self.names, self.selectors, self.details, self.covers = [], [], [], []
-        for index in range(2):
-            box = W.QGroupBox(f"Player {index + 1}")
+        self.selectors, self.details, self.covers = [], [], []
+        for index, seat in enumerate(self.lobby.seats):
+            box = W.QGroupBox(seat.player.name)
             form = W.QFormLayout(box)
-            name = W.QLineEdit(f"Player {index + 1}")
+            if index == 1:
+                opponent_options = W.QHBoxLayout()
+                self.use_ai = W.QPushButton("Use AI")
+                self.use_ai.setCheckable(True)
+                self.use_ai.setChecked(True)
+                self.use_ai.setAutoExclusive(True)
+                self.invite_friend = W.QPushButton("Invite Friend - Coming Soon")
+                self.invite_friend.setEnabled(False)
+                self.invite_friend.setToolTip(
+                    "Inviting friends will be available with multiplayer."
+                )
+                opponent_options.addWidget(self.use_ai)
+                opponent_options.addWidget(self.invite_friend)
+                form.addRow(opponent_options)
             selector = W.QComboBox()
             selector.setMinimumContentsLength(18)
             selector.setSizeAdjustPolicy(
@@ -83,24 +105,20 @@ class PlayWorkspace(W.QWidget):
             details = W.QLabel("Choose a saved deck")
             details.setWordWrap(True)
             details.setTextFormat(C.Qt.TextFormat.PlainText)
-            form.addRow("Name", name)
             form.addRow("Deck", selector)
             form.addRow(details)
             cover = W.QLabel()
             cover.setMinimumHeight(140)
             cover.setAlignment(C.Qt.AlignmentFlag.AlignCenter)
             form.addRow(cover)
-            self.names.append(name)
             self.selectors.append(selector)
             self.details.append(details)
             self.covers.append(cover)
             selector.currentIndexChanged.connect(self._selection_changed)
-            name.textChanged.connect(self._selection_changed)
             seats.addWidget(box)
         setup_layout.addLayout(seats)
         note = W.QLabel(
-            "Local Play preview • Two people share this computer. Use Hand off to player "
-            "to conceal your cards before passing control."
+            "Offline Play preview. You control your own seat; the AI handles its own decisions."
         )
         note.setWordWrap(True)
         note.setProperty("role", "muted")
@@ -128,9 +146,6 @@ class PlayWorkspace(W.QWidget):
         self.table.command.connect(self._command)
         game_layout.addWidget(self.table, 1)
         game_actions = W.QHBoxLayout()
-        self.handoff_button = W.QPushButton("Hand off to player")
-        self.handoff_button.clicked.connect(self.handoff)
-        game_actions.addWidget(self.handoff_button)
         game_actions.addStretch()
         self.concede_button = W.QPushButton("Concede")
         self.concede_button.setEnabled(False)
@@ -141,25 +156,6 @@ class PlayWorkspace(W.QWidget):
         game_actions.addWidget(self.close_button)
         game_layout.addLayout(game_actions)
         self.pages.addWidget(self.game_page)
-        self.handoff_page = W.QWidget()
-        handoff_layout = W.QVBoxLayout(self.handoff_page)
-        handoff_layout.addStretch()
-        self.handoff_label = W.QLabel("Pass the computer to the next player")
-        self.handoff_label.setProperty("role", "title")
-        self.handoff_label.setWordWrap(True)
-        self.handoff_label.setTextFormat(C.Qt.TextFormat.PlainText)
-        handoff_layout.addWidget(self.handoff_label)
-        privacy = W.QLabel(
-            "The previous hand and card inspection have been concealed. Reveal your view when you are ready."
-        )
-        privacy.setWordWrap(True)
-        handoff_layout.addWidget(privacy)
-        self.reveal_button = W.QPushButton("Reveal my view")
-        self.reveal_button.setProperty("buttonRole", "primary")
-        self.reveal_button.clicked.connect(self.reveal_seat)
-        handoff_layout.addWidget(self.reveal_button)
-        handoff_layout.addStretch()
-        self.pages.addWidget(self.handoff_page)
         self.status = W.QLabel("Loading your decks…")
         self.status.setWordWrap(True)
         self.status.setTextFormat(C.Qt.TextFormat.PlainText)
@@ -206,7 +202,7 @@ class PlayWorkspace(W.QWidget):
         self.status.setText(
             "Some saved decks could not be read. Review them in Deck Editor."
             if errors
-            else "Choose a deck for each player."
+            else "Choose your deck and the AI opponent's deck."
             if self._decks
             else "Save a deck in Deck Editor, then choose Refresh decks."
         )
@@ -216,6 +212,20 @@ class PlayWorkspace(W.QWidget):
         if self.session.active:
             self.start_button.setEnabled(False)
             return
+        lobby = replace(self.lobby, format=self.format.currentData())
+        for seat, selector in zip(lobby.seats, self.selectors):
+            index = selector.currentData()
+            selection = None
+            if index is not None:
+                document = self._decks[index].document
+                owner = (
+                    seat.deck.owner_id
+                    if seat.deck and seat.deck.deck_id == document.deck.deck_id
+                    else None
+                )
+                selection = DeckSelection.local(document, owner_id=owner)
+            lobby = lobby.select_deck(seat.seat_id, selection)
+        self.lobby = lobby
         for selector, label in zip(self.selectors, self.details):
             index = selector.currentData()
             if index is None:
@@ -259,9 +269,9 @@ class PlayWorkspace(W.QWidget):
         self._deck_images()
         self.start_button.setEnabled(
             not self.session.active
+            and not self.session.busy
             and not self.catalog_jobs.busy
             and all(selector.currentData() is not None for selector in self.selectors)
-            and all(name.text().strip() for name in self.names)
             and all(
                 bool(self._decks[selector.currentData()].commanders)
                 == (self.format.currentData() == "commander")
@@ -272,27 +282,15 @@ class PlayWorkspace(W.QWidget):
     def start_game(self):
         if not self.start_button.isEnabled():
             return
-        from copy import deepcopy
-
-        setup = GameSetup(
-            tuple(
-                MatchSeat(("one", "two")[index], name.text().strip())
-                for index, name in enumerate(self.names)
-            ),
-            self.format.currentData(),
-        )
-        # Isolate selected documents from edits while starting; retain every field.
-        decks = tuple(
-            deepcopy(self._decks[selector.currentData()].document)
-            for selector in self.selectors
-        )
+        setup = self.lobby.offline_setup()
+        decks = self.lobby.selected_documents()
 
         def oracle_lookup(oracle_id):
             return self.service.database.get_oracle_card(oracle_id)
 
         self._approved_close = False
         self._seats = setup.seats
-        self._seat_id = setup.seats[0].seat_id
+        self._seat_id = self.lobby.local_seat_id
         self.table.artwork.stopping = False
         if self.session.start(setup, decks, oracle_lookup=oracle_lookup):
             self.pages.setCurrentWidget(self.game_page)
@@ -345,18 +343,10 @@ class PlayWorkspace(W.QWidget):
 
     @C.pyqtSlot(object)
     def _show_snapshot(self, view):
+        if view.viewer_id != self.lobby.local_seat_id:
+            return
         self._view = view
-        self.game_heading.setText(
-            view.result
-            or next(
-                (
-                    seat.name + "’s view"
-                    for seat in self._seats
-                    if seat.seat_id == view.viewer_id
-                ),
-                "Local game",
-            )
-        )
+        self.game_heading.setText(view.result or "You versus Opponent")
         self.table.present(view)
         self.concede_button.setEnabled(
             not view.result and not self.session.concession_pending
@@ -366,25 +356,6 @@ class PlayWorkspace(W.QWidget):
     def _command(self, view, method, args):
         self.session.submit(view, method, *args)
 
-    def handoff(self):
-        if not self.session.active or self.session.closing or not self._seats:
-            return
-        target = next(seat for seat in self._seats if seat.seat_id != self._seat_id)
-        self.session.conceal()
-        self._handoff_to = target.seat_id
-        self.handoff_label.setText("Pass the computer to " + target.name)
-        self.pages.setCurrentWidget(self.handoff_page)
-        self.status.setText("Private game view concealed")
-        self.reveal_button.setFocus()
-
-    def reveal_seat(self):
-        if self._handoff_to is None:
-            return
-        self._seat_id = self._handoff_to
-        self._handoff_to = None
-        self.pages.setCurrentWidget(self.game_page)
-        self.session.reveal(self._seat_id)
-
     def concede(self):
         view = self._view
         if view is None:
@@ -392,7 +363,7 @@ class PlayWorkspace(W.QWidget):
         answer = W.QMessageBox.question(
             self,
             "Concede game?",
-            "Concede for the player whose view is open?",
+            "Concede this game to the AI opponent?",
             W.QMessageBox.StandardButton.Yes | W.QMessageBox.StandardButton.No,
             W.QMessageBox.StandardButton.No,
         )

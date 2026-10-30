@@ -119,7 +119,7 @@ jobs:
           $reports = Join-Path $env:RUNNER_TEMP 'manaforge-xmage-reports'
           New-Item -ItemType Directory -Path $reports -Force | Out-Null
           $failures = @()
-          foreach ($scenario in @('basic', 'combat', 'blockers', 'commander-play')) {
+          foreach ($scenario in @('ai-freeform', 'ai-commander', 'ai-blockers')) {
             python -m mtg_play.ui_acceptance --scenario $scenario --xmage-root "$env:RUNNER_TEMP/manaforge-xmage" --jdk-path "$env:JAVA_HOME" --output "$reports/ui-$scenario.json"
             if ($LASTEXITCODE -ne 0) { $failures += $scenario }
           }

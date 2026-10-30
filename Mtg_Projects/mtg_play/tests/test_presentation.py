@@ -591,3 +591,53 @@ def test_startup_progress_rejects_private_or_invalid_payload_fields(app, field, 
     app.processEvents()
     assert not received
     controller.active = False
+
+
+def test_offline_controller_keeps_fixed_authorized_human_view(app):
+    owner = Owner(ScriptedGameSession((snapshot(), snapshot("two"))))
+    controller = SessionController(
+        adapter_factory=lambda: owner, authorized_viewer_id="one"
+    )
+    views = []
+    controller.snapshotChanged.connect(views.append)
+    ai_setup = GameSetup(
+        (MatchSeat("one", "You"), MatchSeat("two", "Opponent", "engine_ai"))
+    )
+    assert controller.start(ai_setup, (DeckDocument(), DeckDocument()))
+    drain(app, lambda: bool(views) and not controller.busy)
+    controller.timer.stop()
+    original = controller._snapshot
+    controller.reveal("two")
+    assert controller._viewer == "one" and controller._snapshot is original
+    assert all(view.viewer_id == "one" for view in views)
+    assert not controller.submit(snapshot("two"), "choose", "keep")
+    assert not controller.concede(snapshot("two"))
+    close(app, controller)
+
+
+def test_offline_controller_rejects_second_human_before_runtime_start(app):
+    owner = Owner(ScriptedGameSession((snapshot(),)))
+    controller = SessionController(
+        adapter_factory=lambda: owner, authorized_viewer_id="one"
+    )
+    with pytest.raises(ValueError, match="one AI opponent"):
+        controller.start(setup(), (DeckDocument(), DeckDocument()))
+    assert not owner.calls and not controller.active
+
+
+def test_match_deck_copies_are_isolated_per_seat_on_worker(app):
+    source = DeckDocument()
+    source.deck.entries = [DeckEntry("entry", "Forest", card_id="selected-print")]
+    source.editor_preferences["preserve"] = ["selected face"]
+    owner = Owner(ScriptedGameSession((snapshot(),)))
+    controller = SessionController(adapter_factory=lambda: owner)
+    assert controller.start(setup(), (source, source))
+    drain(app, lambda: not controller.busy)
+    assert owner.decks[0] is not source and owner.decks[1] is not source
+    assert owner.decks[0] is not owner.decks[1]
+    assert all(document.to_dict() == source.to_dict() for document in owner.decks)
+    owner.decks[1].deck.entries[0].card_id = "changed-only-in-match"
+    assert source.deck.entries[0].card_id == "selected-print"
+    assert owner.decks[0].deck.entries[0].card_id == "selected-print"
+    assert all(thread is not app.thread() for _, thread in owner.calls)
+    close(app, controller)

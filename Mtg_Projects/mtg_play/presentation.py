@@ -41,7 +41,9 @@ class SessionController(C.QObject):
     commandFinished = C.pyqtSignal(object)
     stopped = C.pyqtSignal()
 
-    def __init__(self, parent=None, *, adapter_factory=local_adapter):
+    def __init__(
+        self, parent=None, *, adapter_factory=local_adapter, authorized_viewer_id=None
+    ):
         super().__init__(parent)
         self.jobs = JobQueue(self)
         self.jobs.status.connect(self._completed)
@@ -49,6 +51,7 @@ class SessionController(C.QObject):
             self._lifecycle_progress, C.Qt.ConnectionType.QueuedConnection
         )
         self.adapter_factory = adapter_factory
+        self._authorized_viewer = authorized_viewer_id
         self._owner = self._session = None  # Worker-owned, never exposed to widgets.
         self._opening_stage = None  # Worker-owned readiness deadline and stage token.
         self._operations = {}
@@ -206,10 +209,18 @@ class SessionController(C.QObject):
             return False
         if len(setup.seats) != 2 or len(decks) != 2:
             raise ValueError("Choose two local seats and decks.")
+        if self._authorized_viewer is not None and (
+            setup.seats[0].seat_id != self._authorized_viewer
+            or setup.seats[0].controller != "local_human"
+            or setup.seats[1].controller != "engine_ai"
+        ):
+            raise ValueError("Offline Play requires your seat and one AI opponent.")
         self._epoch += 1
-        self._viewer = setup.seats[0].seat_id
+        self._viewer = self._authorized_viewer or setup.seats[0].seat_id
         self._session_id = None
-        self._seats = {seat.seat_id for seat in setup.seats}
+        self._seats = {
+            seat.seat_id for seat in setup.seats if seat.controller == "local_human"
+        }
         self._revision = -1
         self._submitted.clear()
         self._blocked = False
@@ -220,6 +231,10 @@ class SessionController(C.QObject):
         epoch = self._epoch
 
         def create():
+            from copy import deepcopy
+
+            # Preserve canonical identities and isolate both pilots from saved decks.
+            documents = tuple(deepcopy(document) for document in decks)
             self._owner = self.adapter_factory()
             try:
                 observer = getattr(self._owner, "set_progress_callback", None)
@@ -227,7 +242,7 @@ class SessionController(C.QObject):
                     observer(lambda value: self._lifecycleProgress.emit(epoch, value))
                 self._owner.__enter__()
                 self._session = self._owner.create_game(
-                    setup, decks, oracle_lookup=oracle_lookup
+                    setup, documents, oracle_lookup=oracle_lookup
                 )
             except Exception as error:
                 lifecycle = getattr(self._owner, "lifecycle", None)
@@ -284,6 +299,8 @@ class SessionController(C.QObject):
             or self.closing
             or self._blocked
             or seat_id not in self._seats
+            or self._authorized_viewer is not None
+            and seat_id != self._authorized_viewer
         ):
             return
         self.conceal()
@@ -350,6 +367,7 @@ class SessionController(C.QObject):
             or self._blocked
             or view is None
             or view is not self._snapshot
+            or view.viewer_id != self._viewer
             or view.result is not None
             or view.decision is None
             or self._viewer in self._submitted
@@ -378,6 +396,7 @@ class SessionController(C.QObject):
             or self._blocked
             or view is None
             or view is not self._snapshot
+            or view.viewer_id != self._viewer
             or view.result
         ):
             return False
