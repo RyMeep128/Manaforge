@@ -88,6 +88,8 @@ def main():
             PROTOCOL / "java/manaforge/protocol/LoopbackFrameReader.java",
             PROTOCOL / "java-test/DeadlineFixtureConsumer.java",
             PROTOCOL / "java-test/WriteDeadlineFixtureConsumer.java",
+            PROTOCOL / "java/manaforge/protocol/GatewayHandshake.java",
+            PROTOCOL / "java-test/HandshakeFixtureConsumer.java",
         ]
         subprocess.run(
             [
@@ -225,6 +227,17 @@ def main():
                 "-cp",
                 str(workspace) + os.pathsep + str(jar),
                 "manaforge.protocol.WriteDeadlineFixtureConsumer",
+            ],
+            check=True,
+            timeout=60,
+        )
+        subprocess.run(
+            [
+                runtime,
+                "-cp",
+                str(workspace) + os.pathsep + str(jar),
+                "manaforge.protocol.HandshakeFixtureConsumer",
+                str(PROTOCOL / "fixtures/viewer-auth-v1.json"),
             ],
             check=True,
             timeout=60,

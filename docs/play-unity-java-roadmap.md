@@ -544,3 +544,14 @@ returning the session owner. Sixteen new checks and two process cases pass withi
 220 local EditMode checks. This changes no rendered UI and needs no hands-on UI
 verification. Product bootstrap, Java total authentication budgets, artifact/
 process ownership and licensed CI remain open; G1 is not frozen.
+
+
+### G1 bounded Java authentication boundary — October 30, 2026
+
+The [gateway handshake](../Mtg_Projects/mtg_play/protocol/gateway-handshake.md)
+now applies one monotonic deadline to proof receipt, validation and reply before
+returning trusted viewer context. Sixteen Java authentication checks and 221
+Unity EditMode checks pass locally, including 19 Java process scenarios. No UI
+verification was needed. Private bootstrap, verified artifact/process ownership,
+Java session owner, renderer handoff and licensed CI remain open. G0/G1 are not
+complete; bulk P2 and real Java/XMage parity remain gated.

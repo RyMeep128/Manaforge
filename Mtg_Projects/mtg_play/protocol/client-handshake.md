@@ -55,3 +55,14 @@ worker/process ownership and renderer handoff. This helper starts no process,
 reads no deck manifest and performs no automatic engine upgrade. Java/XMage
 behavior parity remains Phase 2/G2 work after G0/G1. CI follows the owner's
 third-commit cadence; no new CI pass is claimed here. Qt CI was not investigated.
+
+
+## Java authentication follow-up — October 30, 2026
+
+The [Java gateway handshake](gateway-handshake.md) now enforces a total deadline,
+closes failed attempts, clears its cloned key and returns a trusted viewer context
+only after proof validation and reply completion. The ordinary dummy uses it;
+the delayed-proof negative fixture remains deliberate. Local validation passed:
+16 new Java authentication cases and 221 Unity EditMode checks, including 19 Java
+process scenarios. Product bootstrap/ownership, artifact verification and licensed
+CI remain open. No UI verification was needed.

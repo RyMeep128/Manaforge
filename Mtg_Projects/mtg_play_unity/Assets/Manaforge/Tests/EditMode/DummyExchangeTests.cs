@@ -29,7 +29,7 @@ namespace Manaforge.Play.Tests
             {
                 Assert.That(File.Exists(Path.Combine(directory,"manaforge/protocol/DummyGateway.class")),Is.True,"Run the Java dummy fixture preparation first");
                 string jar=Path.Combine(directory,"gson.jar"),fixture=Path.Combine(directory,"dummy-session-v1.json");
-                var start=new ProcessStartInfo("java", "-cp \""+directory+Path.PathSeparator+jar+"\" manaforge.protocol.DummyGateway \""+fixture+"\""+(authMode=="timeout"?" delayed-proof":choiceOperation=="select_mana_source"?" mana":choiceOperation=="choose_number"?" number":choiceOperation=="choose_amounts"?" amounts":choiceOperation!=null?" choice":blockedClient?" blocked-client":clientPartialFrame?" client-partial-frame":partialFrame?" partial-frame":sessionError?" session-error":""))
+                var start=new ProcessStartInfo("java", "-cp \""+directory+Path.PathSeparator+jar+"\" manaforge.protocol.DummyGateway \""+fixture+"\""+(authMode=="gateway-timeout"?" server-auth-timeout":authMode=="timeout"?" delayed-proof":choiceOperation=="select_mana_source"?" mana":choiceOperation=="choose_number"?" number":choiceOperation=="choose_amounts"?" amounts":choiceOperation!=null?" choice":blockedClient?" blocked-client":clientPartialFrame?" client-partial-frame":partialFrame?" partial-frame":sessionError?" session-error":""))
                 { UseShellExecute=false,CreateNoWindow=true,WindowStyle=ProcessWindowStyle.Hidden,
                   RedirectStandardInput=true,RedirectStandardOutput=true,RedirectStandardError=true };
                 Process=new Process { StartInfo=start };
@@ -168,6 +168,10 @@ namespace Manaforge.Play.Tests
                 using(var stream=peer.Client.GetStream())
                 {
                     if(authMode!=null) {
+                        if(authMode=="gateway-timeout") {
+                            Assert.That(peer.Reader.Read(2000),Is.Null,"Unauthenticated stalled client must receive no gateway proof/session data");
+                            Assert.That(peer.Process.WaitForExit(5000),Is.True);Assert.That(peer.Process.ExitCode,Is.Zero);return;
+                        }
                         if(authMode=="timeout") {
                             Assert.That(Assert.Throws<WireEnvelope.EnvelopeException>(()=>ClientHandshake.Open(peer.Reader,Hello(boot,ready,"client").ToString(),Hello(boot,ready,"gateway").ToString(),key,150,fixtureMode:true)).Code,Is.EqualTo("AUTH_TIMEOUT"));
                             Assert.That(peer.Reader.IsClosed,Is.True);peer.Process.StandardInput.Close();
@@ -282,6 +286,7 @@ namespace Manaforge.Play.Tests
         [UnityTest] public IEnumerator JavaPeerExchangesAuthenticatedFixtureAndRejectsStaleAndPendingActions()=>Run(false,false);
         [UnityTest] public IEnumerator WrongViewerKeyReceivesNoSessionData()=>Run(true,false);
         [UnityTest] public IEnumerator OwnerPipeEofStopsTheOwnedListener()=>Run(false,true);
+        [UnityTest] public IEnumerator GatewayHandshakeDeadlineClosesAnIdleUnauthenticatedClient()=>Run(false,false,authMode:"gateway-timeout");
         [UnityTest] public IEnumerator BoundedHandshakeReturnsAnOwnedAuthenticatedSession()=>Run(false,false,authMode:"success");
         [UnityTest] public IEnumerator BoundedHandshakeStopsDelayedProofAndOwnedPeer()=>Run(false,false,authMode:"timeout");
         [UnityTest] public IEnumerator CoordinatedManaSourcePreservesViewerObjectIdentity()=>Run(false,false,choiceOperation:"select_mana_source");

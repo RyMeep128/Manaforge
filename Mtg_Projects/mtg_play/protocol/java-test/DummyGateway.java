@@ -88,12 +88,17 @@ public final class DummyGateway {
                 active.set(frames); if(ownerGone.get())throw new IOException("OWNER_GONE");
                 OutputStream out=socket.getOutputStream();
                 if(args.length==2 && args[1].equals("blocked-client"))socket.setSendBufferSize(1024);
-                try(ViewerAuthentication.Verifier verifier=new ViewerAuthentication.Verifier(clientHello.toString(),key)) {
-                    require(verifier.verify(frames.read(5000)));
+                if(args.length==2 && args[1].equals("delayed-proof")) {
+                    // Deliberate negative client-deadline fixture; normal paths use the bounded gateway helper.
+                    try(ViewerAuthentication.Verifier verifier=new ViewerAuthentication.Verifier(clientHello.toString(),key)) {require(verifier.verify(frames.read(5000)));}
+                    Thread.sleep(350);gatewayHello.getAsJsonObject("body").addProperty("proof",ViewerAuthentication.computeProof(gatewayHello.toString(),key));send(frames,gatewayHello);
+                } else if(args.length==2 && args[1].equals("server-auth-timeout")) {
+                    try{GatewayHandshake.accept(frames,clientHello.toString(),gatewayHello.toString(),key,150);throw new IOException("DUMMY_EXPECTED_AUTH_TIMEOUT");}
+                    catch(WireEnvelope.EnvelopeException error){require(error.code.equals("AUTH_TIMEOUT"));return;}
+                } else {
+                    GatewayHandshake.ViewerContext authenticated=GatewayHandshake.accept(frames,clientHello.toString(),gatewayHello.toString(),key,5000);
+                    require(authenticated.sessionId.equals(session) && authenticated.viewerId.equals(viewer));
                 }
-                gatewayHello.getAsJsonObject("body").addProperty("proof",ViewerAuthentication.computeProof(gatewayHello.toString(),key));
-                if(args.length==2 && args[1].equals("delayed-proof"))Thread.sleep(350);
-                send(frames,gatewayHello);
                 if(args.length==2 && args[1].equals("blocked-client")) {
                     char[] text=new char[TextFrame.MAX_BYTES];Arrays.fill(text,'x');
                     try{frames.write(new String(text),150);throw new IOException("DUMMY_EXPECTED_WRITE_TIMEOUT");}

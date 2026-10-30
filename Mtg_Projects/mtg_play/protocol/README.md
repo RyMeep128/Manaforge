@@ -440,3 +440,14 @@ canceled attempts close the socket; the helper clears its cloned key. Sixteen
 checks and two actual process cases bring local EditMode evidence to 220.
 Private bootstrap, complete launch ownership and licensed CI remain open. No UI
 verification is needed for this protocol-only increment.
+
+
+## Java authentication follow-up — October 30, 2026
+
+The [Java gateway handshake](gateway-handshake.md) now enforces a total deadline,
+closes failed attempts, clears its cloned key and returns a trusted viewer context
+only after proof validation and reply completion. The ordinary dummy uses it;
+the delayed-proof negative fixture remains deliberate. Local validation passed:
+16 new Java authentication cases and 221 Unity EditMode checks, including 19 Java
+process scenarios. Product bootstrap/ownership, artifact verification and licensed
+CI remain open. No UI verification was needed.

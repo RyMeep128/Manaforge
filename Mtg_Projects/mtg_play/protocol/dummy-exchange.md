@@ -243,3 +243,14 @@ that exceeds the total client budget. The latter closes its socket/private owner
 pipe and verifies child exit before admitting session data. All eighteen process
 scenarios pass within 220 focused local EditMode checks. No real engine or rendered
 UI behavior is demonstrated by these cases.
+
+
+## Java authentication follow-up — October 30, 2026
+
+The [Java gateway handshake](gateway-handshake.md) now enforces a total deadline,
+closes failed attempts, clears its cloned key and returns a trusted viewer context
+only after proof validation and reply completion. The ordinary dummy uses it;
+the delayed-proof negative fixture remains deliberate. Local validation passed:
+16 new Java authentication cases and 221 Unity EditMode checks, including 19 Java
+process scenarios. Product bootstrap/ownership, artifact verification and licensed
+CI remain open. No UI verification was needed.
