@@ -6,6 +6,7 @@ from mtg_ui.jobs import JobQueue
 from dataclasses import replace
 from .lobby import DeckSelection, offline_lobby
 from .navigation import ModeSelection, PlayLanding, PlayPages
+from .opponents import OpponentRandomizer
 from .presentation import SessionController, local_adapter
 from .setup import prepare_catalog, saved_decks
 from .table import GameTable
@@ -45,6 +46,10 @@ class PlayWorkspace(W.QWidget):
             adapter_factory=adapter_factory,
             authorized_viewer_id=self.lobby.local_seat_id,
         )
+        self.opponents = OpponentRandomizer(self, adapter_factory=adapter_factory)
+        self.opponents.changed.connect(self._selection_changed)
+        self.opponents.message.connect(self._status)
+        self.opponents.selected.connect(self._randomized)
         self.catalog_jobs = JobQueue(self)
         self.catalog_jobs.status.connect(self._catalog_loaded)
         self.catalog_jobs.progress.connect(self._catalog_progress)
@@ -158,6 +163,21 @@ class PlayWorkspace(W.QWidget):
             details.setWordWrap(True)
             details.setTextFormat(C.Qt.TextFormat.PlainText)
             form.addRow("Deck", selector)
+            if index == 1:
+                random_actions = W.QHBoxLayout()
+                self.randomize = W.QPushButton("Randomize")
+                self.randomize.setToolTip(
+                    "Check saved decks with offline XMage and choose an eligible opponent."
+                )
+                self.randomize.clicked.connect(self._randomize)
+                self.cancel_randomize = W.QPushButton("Cancel preparation")
+                self.cancel_randomize.clicked.connect(self.opponents.cancel)
+                self.retry_preparation = W.QPushButton("Retry preparation cleanup")
+                self.retry_preparation.clicked.connect(self.opponents.retry_cleanup)
+                random_actions.addWidget(self.randomize)
+                random_actions.addWidget(self.cancel_randomize)
+                random_actions.addWidget(self.retry_preparation)
+                form.addRow(random_actions)
             form.addRow(details)
             readiness = W.QLabel("Choose a deck to check readiness.")
             readiness.setWordWrap(True)
@@ -254,13 +274,13 @@ class PlayWorkspace(W.QWidget):
         self.load_decks()
 
     def _show_page(self, page):
-        if self.session.active or self.session.closing:
+        if self.session.active or self.session.closing or self.opponents.busy:
             return
         self.pages.setCurrentWidget(page)
         self._selection_changed()
 
     def _open_offline(self):
-        if self.session.active or self.session.closing:
+        if self.session.active or self.session.closing or self.opponents.busy:
             return
         self._format_origin = self.pages.currentWidget()
         self._format_confirmed = False
@@ -296,7 +316,7 @@ class PlayWorkspace(W.QWidget):
         self._show_page(self._format_origin)
 
     def load_decks(self):
-        if self.catalog_jobs.busy or self.session.active:
+        if self.catalog_jobs.busy or self.session.active or self.opponents.busy:
             return
         self.deck_artwork.stopping = False
         self.reload.setEnabled(False)
@@ -313,7 +333,8 @@ class PlayWorkspace(W.QWidget):
 
     def _browse_shared(self):
         if (
-            not self.session.active
+            not self.opponents.busy
+            and not self.session.active
             and not self.session.closing
             and callable(self._browse_library)
         ):
@@ -375,7 +396,41 @@ class PlayWorkspace(W.QWidget):
         )
         self._selection_changed()
 
+    def _randomize(self):
+        if not self.randomize.isEnabled():
+            return
+        self.opponents.start(
+            tuple(item.document for item in self._decks),
+            self.format.currentData(),
+            self.selectors[1].currentData(),
+            oracle_lookup=lambda oracle_id: self.service.database.get_oracle_card(
+                oracle_id
+            ),
+        )
+
+    @C.pyqtSlot(int)
+    def _randomized(self, index):
+        self.selectors[1].setCurrentIndex(self.selectors[1].findData(index))
+
     def _selection_changed(self):
+        preparing = self.opponents.busy
+        self.randomize.setEnabled(
+            not preparing
+            and not self.session.active
+            and not self.session.busy
+            and not self.catalog_jobs.busy
+            and self._format_confirmed
+            and self.pages.currentWidget() is self.setup_page
+            and bool(self._decks)
+        )
+        self.cancel_randomize.setVisible(self.opponents.jobs.busy)
+        self.retry_preparation.setVisible(self.opponents.cleanup_pending)
+        self.format.setEnabled(not preparing)
+        self.change_format.setEnabled(not preparing)
+        self.reload.setEnabled(not preparing and not self.catalog_jobs.busy)
+        self.lobby_back.setEnabled(not preparing)
+        self.home_button.setEnabled(not preparing)
+        self.shared_decks.setEnabled(not preparing and callable(self._browse_library))
         if self.session.active:
             self.start_button.setEnabled(False)
             return
@@ -386,7 +441,7 @@ class PlayWorkspace(W.QWidget):
             else self.lobby
         )
         for selector in self.selectors:
-            selector.setEnabled(self._format_confirmed)
+            selector.setEnabled(self._format_confirmed and not preparing)
         for seat, selector in zip(lobby.seats, self.selectors):
             index = selector.currentData()
             selection = None
@@ -456,6 +511,7 @@ class PlayWorkspace(W.QWidget):
             and not self.session.active
             and not self.session.busy
             and not self.catalog_jobs.busy
+            and not preparing
             and all(selector.currentData() is not None for selector in self.selectors)
             and all(check is not None and check.can_start for check in selected_checks)
         )
@@ -599,6 +655,12 @@ class PlayWorkspace(W.QWidget):
         self._selection_changed()
 
     def prepare_to_close(self):
+        if self.opponents.busy:
+            if self.opponents.cleanup_pending:
+                self.opponents.retry_cleanup()
+            else:
+                self.opponents.cancel()
+            return False
         if self.session.active or self.session.closing:
             if not self.session.closing and self._confirm_close():
                 self.session.stop()
@@ -617,6 +679,7 @@ class PlayWorkspace(W.QWidget):
     def busy(self):
         return (
             self.session.busy
+            or self.opponents.busy
             or self.catalog_jobs.busy
             or self.table.artwork.worker is not None
             or self.deck_artwork.worker is not None

@@ -860,3 +860,26 @@ fixture policies remain rejected. Both acceptance drivers use this shared pilot;
 no product auto-answering was added. CI tests cover these bounds. No local tests,
 builds or engine acceptance were run, and these fixes remain unpushed/unverified
 by a subsequent CI run.
+
+
+Story 6 incremental implementation (0.5.12-alpha.1): the opponent panel now has
+Randomize. An explicit click starts a separate worker-owned offline runtime,
+clones the ordinary Core documents, and asks the pinned engine to validate every
+candidate for the chosen format. Translation failures and explicit validator
+rejections exclude a candidate; uncertain validation aborts the attempt. No
+eligibility cache is retained. When several decks pass, the next choice excludes
+the current opponent. The chosen deck is applied only after confirmed cleanup,
+and remains visible in the existing selector, commander/artwork and readiness
+presentation before Start Game. Match startup still prepares that exact selected
+document through the ordinary pipeline.
+
+Cancel waits for an in-flight engine call and then cleans up without replacing
+the selection. Empty pools and failures preserve the selection with a clear
+message. Unconfirmed cleanup retains runtime ownership, blocks startup and
+navigation, and exposes an explicit cleanup retry; workspace closure also waits
+for cleanup. Setup edits and catalog refresh are blocked during preparation.
+Opening Play does not start a runtime. No network or source-document writes are
+introduced. CI regressions cover worker isolation, candidate exclusion,
+rerandomization, cancellation, cleanup recovery, and lobby gating. Tests/builds
+and engine acceptance have not been run locally. Story 6 remains pending CI and
+manual UX verification; this entry does not declare its acceptance criteria met.

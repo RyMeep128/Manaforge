@@ -15,7 +15,7 @@ OPENING_STATE_TIMEOUT = 60
 
 
 def local_adapter():
-    # Import and start the optional runtime only after an explicit Start Game.
+    # Import the optional runtime only for an explicit match or deck preflight.
     from .adapter import LocalGameAdapter
 
     return LocalGameAdapter()

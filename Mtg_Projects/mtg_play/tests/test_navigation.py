@@ -281,3 +281,54 @@ def test_shared_browse_opens_existing_library_module_and_preserves_play(
         assert workspace.lobby.format == "freeform"
     finally:
         home.close()
+
+
+def test_randomize_gates_setup_until_verified_runtime_cleanup(app, tmp_path):
+    from threading import Event
+
+    workspace, calls = workspace_fixture(app, tmp_path)
+    gate, entered = Event(), Event()
+    closed = []
+
+    def validate(document, format, **kwargs):
+        entered.set()
+        assert gate.wait(5)
+        return True
+
+    class Runtime:
+        def __enter__(self):
+            return self
+
+        validate_deck = staticmethod(validate)
+
+        def close(self):
+            closed.append(True)
+
+    workspace.opponents.factory = Runtime
+    try:
+        workspace.landing_page.offline_button.click()
+        workspace.format.setCurrentIndex(workspace.format.findData("freeform"))
+        workspace.format_continue.click()
+        workspace.selectors[0].setCurrentIndex(1)
+        workspace.selectors[1].setCurrentIndex(1)
+        assert workspace.start_button.isEnabled()
+        workspace.randomize.click()
+        drain(app, entered.is_set)
+        assert not workspace.start_button.isEnabled()
+        assert not workspace.change_format.isEnabled()
+        assert not workspace.reload.isEnabled()
+        assert not any(selector.isEnabled() for selector in workspace.selectors)
+        workspace._show_page(workspace.landing_page)
+        assert workspace.pages.currentWidget() is workspace.setup_page
+        gate.set()
+        drain(app, lambda: not workspace.opponents.busy)
+        assert workspace.selectors[1].currentData() == 1
+        assert (
+            workspace.lobby.seats[1].deck.deck_id
+            == workspace._decks[1].document.deck.deck_id
+        )
+        assert closed and not calls and workspace.start_button.isEnabled()
+    finally:
+        gate.set()
+        drain(app, lambda: not workspace.opponents.jobs.busy)
+        workspace.close()
