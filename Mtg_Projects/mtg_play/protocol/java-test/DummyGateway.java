@@ -49,13 +49,26 @@ public final class DummyGateway {
             ViewerAuthentication.parse(clientHello.toString());
             JsonObject snapshot=JsonParser.parseString(new String(Files.readAllBytes(Paths.get(args[0])),StandardCharsets.UTF_8)).getAsJsonObject().getAsJsonObject("snapshot");
             require(session.equals(snapshot.get("session_id").getAsString()) && viewer.equals(snapshot.get("viewer_id").getAsString()));
-            boolean choiceMode=args.length==2 && args[1].equals("choice");
+            boolean numberMode=args.length==2 && args[1].equals("number");
+            boolean amountsMode=args.length==2 && args[1].equals("amounts");
+            boolean choiceMode=args.length==2 && args[1].equals("choice") || numberMode || amountsMode;
             if(choiceMode) {
                 snapshot.add("actions",new JsonArray());JsonObject request=snapshot.getAsJsonObject("decision");
                 request.addProperty("family","selection");request.addProperty("is_priority",false);request.addProperty("can_finish",true);request.addProperty("cancellable",true);
                 JsonObject option=new JsonObject();option.addProperty("option_id","fixture-option");option.addProperty("label","Public fixture option");
                 option.add("object_id",JsonNull.INSTANCE);option.add("player_id",JsonNull.INSTANCE);option.addProperty("selected",false);
                 JsonArray options=new JsonArray();options.add(option);request.add("options",options);
+                if(numberMode || amountsMode) {
+                    request.addProperty("family",numberMode?"number":"amounts");request.add("options",new JsonArray());
+                    request.addProperty("can_finish",false);request.addProperty("cancellable",false);
+                    request.addProperty("minimum",numberMode?-3:1);request.addProperty("maximum",numberMode?3:1);
+                    if(amountsMode) {
+                        JsonArray constraints=new JsonArray();
+                        for(int i=0;i<2;i++) {JsonObject range=new JsonObject();range.addProperty("label","Public fixture amount");
+                            range.addProperty("minimum",i==0?-3:0);range.addProperty("maximum",i==0?0:5);range.add("default",JsonNull.INSTANCE);constraints.add(range);}
+                        request.add("amounts",constraints);
+                    }
+                }
             }
             listener.bind(new InetSocketAddress(InetAddress.getByName("127.0.0.1"),0),1); listener.setSoTimeout(8000);
             Thread lifeline=new Thread(()->{ try { owner.read(); } catch(IOException ignored){} ownerGone.set(true);
@@ -109,7 +122,11 @@ public final class DummyGateway {
                         rejection=WireMessages.checkBinding(text,session,viewer,revision,decision);
                         if(rejection==null) {
                             String operation=request.get("operation").getAsString();
-                            boolean allowed=operation.equals("choose") && request.get("option_id").getAsString().equals("fixture-option")
+                            boolean allowed;
+                            if(numberMode)allowed=operation.equals("choose_number") && request.get("value").getAsLong()==-2;
+                            else if(amountsMode)allowed=operation.equals("choose_amounts") && request.getAsJsonArray("values").size()==2
+                                && request.getAsJsonArray("values").get(0).getAsLong()==-2 && request.getAsJsonArray("values").get(1).getAsLong()==3;
+                            else allowed=operation.equals("choose") && request.get("option_id").getAsString().equals("fixture-option")
                                 || operation.equals("finish_selection") && snapshot.getAsJsonObject("decision").get("can_finish").getAsBoolean()
                                 || operation.equals("cancel") && snapshot.getAsJsonObject("decision").get("cancellable").getAsBoolean();
                             if(!allowed)rejection="ACTION_UNAVAILABLE";

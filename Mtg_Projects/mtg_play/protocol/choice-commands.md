@@ -98,3 +98,14 @@ and explicitly simulated confirmed receipts. Twenty-eight owner checks, thirteen
 process scenarios, Java corpora and eight schema checks pass within 164 focused
 local EditMode checks. Duplicate/empty option IDs now fail RECEIVE_CONTEXT in both
 readers. No actual engine choice behavior or G1 completion is claimed.
+
+
+## Client numeric admission follow-up
+
+The [numeric projection](numeric-choices.md) now admits choose_number and
+choose_amounts in the client owner using the current engine family/ranges, exact
+vector length and an overflow-safe mathematical total. Values remain signed
+64-bit on the wire; no defaults, clamping or automatic distribution are used.
+Twenty new owner checks and two authenticated numeric fixture scenarios pass
+within 186 focused local EditMode checks. Mana-source admission and real-engine
+parity remain pending; this is not G1 completion.

@@ -511,3 +511,14 @@ choice occurs. Java/C# reject duplicate/empty option IDs. Three authenticated
 choice fixtures, ten new owner checks, Java corpora and eight schema checks pass
 within 164 local EditMode checks. Numeric/mana dispatch, actual engine choice
 parity, product lifecycle and licensed CI remain open; G1 is not frozen.
+
+
+### G1 numeric choice admission — October 30, 2026
+
+The [client numeric boundary](../Mtg_Projects/mtg_play/protocol/numeric-choices.md)
+now compares explicit number/amount entries with current engine-supplied bounds,
+using exact mathematical totals without clamping or defaults. Twenty new owner
+checks and two authenticated fixture modes pass within 186 local EditMode checks.
+Mana-source admission, full session/lifecycle boundary work and licensed CI remain
+open; G1 is not frozen and bulk P2 remains gated. Java/XMage choice behavior parity
+is Phase 2/G2 acceptance after G0/G1.

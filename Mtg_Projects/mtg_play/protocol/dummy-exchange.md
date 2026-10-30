@@ -214,3 +214,13 @@ permissions, emits submitted then explicitly simulated confirmed receipts, and
 sends its existing fixture-only result before matched shutdown. It starts no
 engine and makes no natural-game or actual choice-parity claim. All thirteen
 process scenarios pass within 164 focused local EditMode checks.
+
+
+### Explicit numeric fixture choices
+
+Two additional modes supply public number/amount constraints. The authenticated
+client owner submits an explicitly entered negative number or signed vector;
+the dummy matches only those fixed fixture values and emits its simulated
+submitted/confirmed receipts plus fixture-only result. All fifteen process
+scenarios pass within 186 local focused EditMode checks. There is no actual XMage
+numeric choice or natural-game proof in these modes.

@@ -29,7 +29,7 @@ namespace Manaforge.Play.Tests
             {
                 Assert.That(File.Exists(Path.Combine(directory,"manaforge/protocol/DummyGateway.class")),Is.True,"Run the Java dummy fixture preparation first");
                 string jar=Path.Combine(directory,"gson.jar"),fixture=Path.Combine(directory,"dummy-session-v1.json");
-                var start=new ProcessStartInfo("java", "-cp \""+directory+Path.PathSeparator+jar+"\" manaforge.protocol.DummyGateway \""+fixture+"\""+(choiceOperation!=null?" choice":blockedClient?" blocked-client":clientPartialFrame?" client-partial-frame":partialFrame?" partial-frame":sessionError?" session-error":""))
+                var start=new ProcessStartInfo("java", "-cp \""+directory+Path.PathSeparator+jar+"\" manaforge.protocol.DummyGateway \""+fixture+"\""+(choiceOperation=="choose_number"?" number":choiceOperation=="choose_amounts"?" amounts":choiceOperation!=null?" choice":blockedClient?" blocked-client":clientPartialFrame?" client-partial-frame":partialFrame?" partial-frame":sessionError?" session-error":""))
                 { UseShellExecute=false,CreateNoWindow=true,WindowStyle=ProcessWindowStyle.Hidden,
                   RedirectStandardInput=true,RedirectStandardOutput=true,RedirectStandardError=true };
                 Process=new Process { StartInfo=start };
@@ -128,6 +128,8 @@ namespace Manaforge.Play.Tests
             var body=new JObject{["session_id"]="fixture-session",["viewer_id"]="one",["revision"]=snapshot["revision"],
                 ["decision_id"]=snapshot["decision"]["decision_id"],["operation"]=operation};
             if(operation=="choose")body["option_id"]=snapshot["decision"]["options"][0]["option_id"];
+            if(operation=="choose_number")body["value"]=-2;
+            if(operation=="choose_amounts")body["values"]=new JArray(-2,3);
             channel.Submit(Message("command","choice-submit",body).ToString());
             Assert.That(channel.ReceiveNext(5000).Receipt.State,Is.EqualTo(CommandState.Submitted));
             Assert.That(channel.ReceiveNext(5000).Receipt.State,Is.EqualTo(CommandState.Confirmed),"Explicit fixture confirmation only");
@@ -270,6 +272,8 @@ namespace Manaforge.Play.Tests
         [UnityTest] public IEnumerator JavaPeerExchangesAuthenticatedFixtureAndRejectsStaleAndPendingActions()=>Run(false,false);
         [UnityTest] public IEnumerator WrongViewerKeyReceivesNoSessionData()=>Run(true,false);
         [UnityTest] public IEnumerator OwnerPipeEofStopsTheOwnedListener()=>Run(false,true);
+        [UnityTest] public IEnumerator CoordinatedNumberPreservesExplicitSignedFixtureValue()=>Run(false,false,choiceOperation:"choose_number");
+        [UnityTest] public IEnumerator CoordinatedAmountsPreserveExplicitFixtureVector()=>Run(false,false,choiceOperation:"choose_amounts");
         [UnityTest] public IEnumerator CoordinatedOpaqueOptionUsesFixtureReceipts()=>Run(false,false,choiceOperation:"choose");
         [UnityTest] public IEnumerator CoordinatedFinishUsesExplicitFixtureFlag()=>Run(false,false,choiceOperation:"finish_selection");
         [UnityTest] public IEnumerator CoordinatedCancelUsesExplicitFixtureFlag()=>Run(false,false,choiceOperation:"cancel");

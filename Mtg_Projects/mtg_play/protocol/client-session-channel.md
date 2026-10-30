@@ -30,7 +30,7 @@ may already have sent bytes; cancellation cannot undo them. No new submission is
 admitted after the coordinator observes termination, and a stopped socket cannot
 be reused for transmission.
 
-The coordinator now supports **perform, choose, finish_selection and cancel**.
+The coordinator now supports **perform, choose, finish_selection, cancel, choose_number and choose_amounts**.
 It requires an active viewer snapshot, a nonempty engine-provided decision token
 and the current revision. Perform uses exact offered action IDs; choose uses exact
 offered option IDs. Finish/cancel require the explicit can_finish/cancellable flag.
@@ -45,13 +45,17 @@ do not enable submissions. Local stale/unoffered/unsupported commands are reject
 before writing; they do not poison an otherwise healthy session. This is current
 viewer/token admission, not a second legality engine or strategic decision maker.
 
-Choose_number, choose_amounts and select_mana_source remain validated by shared
-protocol readers but this coordinator refuses them with SESSION_COMMAND_UNSUPPORTED.
-Their authoritative constraints/source handling still need implementation. No
-operation is selected automatically. Submit(operation=cancel) is an engine decision
-command bound to its token/flag; the owner's Cancel() closes the local channel.
-Neither is a substitute for concession. Existing Qt/Python behavior remains the
-regression reference.
+[Numeric admission](numeric-choices.md) uses only supplied number/amount ranges,
+exact vector length and overflow-safe mathematical totals. It does not select,
+clamp or infer values. Missing/unsupported constraints do not enable numeric
+submission. Select_mana_source remains validated by the shared protocol readers
+but this owner refuses it with SESSION_COMMAND_UNSUPPORTED until its separate
+source-identity boundary is implemented.
+
+No operation is selected automatically. Submit(operation=cancel) is an engine
+decision command bound to its token/flag; the owner's Cancel() closes the local
+channel. Neither substitutes for concession. Existing Qt/Python behavior remains
+the regression reference.
 
 Commands are registered before writing. Data messages go through the existing
 receive inbox and history; duplicates are dropped. ACKs go to the exact pending
@@ -94,11 +98,11 @@ transition is performed by this coordinator.
 
 ## Evidence and open gates
 
-Twenty-eight focused loopback checks exercise token admission, duplicate delivery,
+Forty-eight focused loopback checks exercise token admission, duplicate delivery,
 correlated receipts, malformed/wrong-viewer input, overflow, cancellation during
 an active read, unexpected EOF, terminal error, unsolicited/matched shutdown,
 final packet draining, results versus ACKs, disposal, canceled writes, revision
-advance, unsupported numeric families and inactive/empty-decision state. New cases cover
+advance, unsupported mana submission and inactive/empty-decision state. New cases cover
 offered options, absent finish/cancel flags, controls without an option list,
 replacement permissions and revision-based choice revocation.
 
@@ -111,11 +115,13 @@ uncertain. Existing eight lower-level scenarios remain for independent regressio
 coverage. Three further authenticated cases use choose/finish/cancel against an
 explicitly simulated Java choice decision. They observe submitted and simulated
 confirmed receipts, a fixture-only result and matched shutdown. There are thirteen
-actual process scenarios, not real engine games or choice-parity evidence.
+actual process scenarios in that slice, not real engine games or choice-parity evidence.
+Two more authenticated numeric scenarios now bring the total to fifteen; see
+[numeric admission](numeric-choices.md).
 
-Local evidence: 164 focused Unity EditMode checks, all Java corpora including
+Local evidence: 186 focused Unity EditMode checks, all Java corpora including
 16 read and 14 write loopback checks, passed. No full application suite ran.
-Numeric/mana choice dispatch, authentication/session deadline coordination, Java
+Mana-source dispatch, authentication/session deadline coordination, Java
 session ownership, immutable renderer projection, product lifecycle containment
 and licensed Unity CI remain pending. G0/G1 stay open; bulk P2 is not started.
 

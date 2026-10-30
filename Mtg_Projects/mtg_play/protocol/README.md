@@ -410,3 +410,13 @@ Java/C# reject ambiguous empty/duplicate option identities. Three authenticated
 fixture cases and ten new owner checks bring local EditMode validation to 164;
 eight schema checks and all Java corpora pass. Numeric/mana dispatch, real-engine
 parity, renderer integration and licensed CI remain open.
+
+
+## Exact numeric admission
+
+The [client numeric boundary](numeric-choices.md) now supports number/amount
+commands with current engine-provided bounds and overflow-safe totals. It rejects
+missing/inverted/unsupported constraints without inventing defaults or truncating.
+Twenty owner checks and two authenticated fixture scenarios bring local EditMode
+validation to 186. Mana-source handling, actual engine parity, product lifecycle
+and licensed CI remain pending; no G1 completion is claimed.

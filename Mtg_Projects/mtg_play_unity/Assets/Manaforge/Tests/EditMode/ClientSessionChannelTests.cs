@@ -125,9 +125,9 @@ namespace Manaforge.Play.Tests
             p.Send(Snapshot("s2",8));p.Channel.ReceiveNext(1000);Assert.That(p.Channel.CanSubmit,Is.True);
             p.Channel.Submit(Command(revision:8).ToString());Assert.That((long)WireMessages.Parse(TextFrame.Read(p.Peer.GetStream()))["body"]["revision"],Is.EqualTo(8));
         }
-        [Test] public void NumericFamiliesRemainExplicitlyUnsupportedByThisCoordinatorSlice()
+        [Test] public void ManaSourcesRemainExplicitlyUnsupportedByThisCoordinatorSlice()
         {
-            using var p=new Pair();p.Prime();var choice=Command();choice["body"]["operation"]="choose_number";((JObject)choice["body"]).Remove("action_id");choice["body"]["value"]=1;
+            using var p=new Pair();p.Prime();var choice=Command();choice["body"]["operation"]="select_mana_source";((JObject)choice["body"]).Remove("action_id");choice["body"]["object_id"]="object";
             Assert.That(Assert.Throws<WireEnvelope.EnvelopeException>(()=>p.Channel.Submit(choice.ToString())).Code,Is.EqualTo("SESSION_COMMAND_UNSUPPORTED"));Assert.That(p.Channel.CanSubmit,Is.True);
         }
         private static JObject ChoiceSnapshot(string id="s1",long revision=7,string option="offered",bool controls=true)
@@ -178,6 +178,89 @@ namespace Manaforge.Play.Tests
             using var p=new Pair();p.Send(ChoiceSnapshot());p.Channel.ReceiveNext(1000);
             var e=(JObject)Corpus()["cases"][0]["steps"][2]["envelope"].DeepClone();e["body"]["event"]["revision"]=8;p.Send(e);p.Channel.ReceiveNext(1000);
             Assert.That(p.Channel.CanSubmit,Is.False);Assert.That(Assert.Throws<WireEnvelope.EnvelopeException>(()=>p.Channel.Submit(Choice("cancel").ToString())).Code,Is.EqualTo("SESSION_NO_DECISION"));
+        }
+        private static JObject NumericSnapshot(string family,long? minimum,long? maximum,params long[] ranges)
+        {
+            var snapshot=ChoiceSnapshot(option:null,controls:false);var request=snapshot["body"]["snapshot"]["decision"];
+            request["family"]=family;request["minimum"]=minimum.HasValue?new JValue(minimum.Value):JValue.CreateNull();
+            request["maximum"]=maximum.HasValue?new JValue(maximum.Value):JValue.CreateNull();
+            var amounts=new JArray();for(int i=0;i<ranges.Length;i+=2)amounts.Add(new JObject{["label"]="Public constraint",["minimum"]=ranges[i],["maximum"]=ranges[i+1],["default"]=JValue.CreateNull()});
+            request["amounts"]=amounts;return snapshot;
+        }
+        private static JObject Numeric(string operation,params long[] values)
+        {
+            var command=Choice(operation);command["body"][operation=="choose_number"?"value":"values"]=operation=="choose_number"
+                ?(JToken)new JValue(values[0]):new JArray(values.Select(value=>new JValue(value)));return command;
+        }
+        private static void PresentNumeric(Pair p,JObject snapshot)
+        {
+            var send=Task.Run(()=>p.Send(snapshot));p.Channel.ReceiveNext(2000);Assert.That(send.Wait(2000),Is.True);
+        }
+        [TestCase(long.MinValue)] [TestCase(long.MaxValue)] [TestCase(0L)]
+        public void NumberRangePreservesSignedIntegerExtremes(long value)
+        {
+            using var p=new Pair();PresentNumeric(p,NumericSnapshot("number",long.MinValue,long.MaxValue));Assert.That(p.Channel.CanSubmit,Is.True);
+            p.Channel.Submit(Numeric("choose_number",value).ToString());Assert.That((long)WireMessages.Parse(TextFrame.Read(p.Peer.GetStream()))["body"]["value"],Is.EqualTo(value));
+        }
+        [TestCase(-4L)] [TestCase(4L)] public void NumberOutsideTheSuppliedRangeIsNotWritten(long value)
+        {
+            using var p=new Pair();PresentNumeric(p,NumericSnapshot("number",-3,3));
+            Assert.That(Assert.Throws<WireEnvelope.EnvelopeException>(()=>p.Channel.Submit(Numeric("choose_number",value).ToString())).Code,Is.EqualTo("AMOUNT_OUT_OF_RANGE"));
+            Assert.That(p.Channel.Pending,Is.Null);p.Channel.Submit(Numeric("choose_number",0).ToString());Assert.That((long)WireMessages.Parse(TextFrame.Read(p.Peer.GetStream()))["body"]["value"],Is.Zero);
+        }
+        [TestCase("signed")] [TestCase("empty")] [TestCase("overflow-cancellation")]
+        public void AmountsPreserveValuesAndUseExactMathematicalTotals(string kind)
+        {
+            using var p=new Pair();long[] values;JObject snapshot;
+            if(kind=="signed"){values=new[]{-2L,3L};snapshot=NumericSnapshot("amounts",1,1,-3,0,0,5);}
+            else if(kind=="empty"){values=Array.Empty<long>();snapshot=NumericSnapshot("amounts",0,0);}
+            else{values=new[]{long.MaxValue,long.MaxValue,long.MinValue};snapshot=NumericSnapshot("amounts",long.MinValue,long.MaxValue,long.MinValue,long.MaxValue,long.MinValue,long.MaxValue,long.MinValue,long.MaxValue);}
+            PresentNumeric(p,snapshot);Assert.That(p.Channel.CanSubmit,Is.True);p.Channel.Submit(Numeric("choose_amounts",values).ToString());
+            Assert.That(WireMessages.Parse(TextFrame.Read(p.Peer.GetStream()))["body"]["values"].Select(v=>(long)v),Is.EqualTo(values));
+        }
+        [Test] public void AmountTotalCannotWrapIntoAnApparentlyValidRange()
+        {
+            using var p=new Pair();PresentNumeric(p,NumericSnapshot("amounts",-3,3,long.MinValue,long.MaxValue,long.MinValue,long.MaxValue));
+            Assert.That(Assert.Throws<WireEnvelope.EnvelopeException>(()=>p.Channel.Submit(Numeric("choose_amounts",long.MaxValue,long.MaxValue).ToString())).Code,Is.EqualTo("AMOUNT_OUT_OF_RANGE"));Assert.That(p.Channel.Pending,Is.Null);
+        }
+        [TestCase("count")] [TestCase("entry")] [TestCase("total")]
+        public void AmountConstraintsAreCheckedWithoutPaddingClampingOrRedistributing(string defect)
+        {
+            using var p=new Pair();PresentNumeric(p,NumericSnapshot("amounts",3,5,0,3,0,3));
+            long[] values=defect=="count"?new[]{3L}:defect=="entry"?new[]{4L,0L}:new[]{1L,1L};
+            Assert.That(Assert.Throws<WireEnvelope.EnvelopeException>(()=>p.Channel.Submit(Numeric("choose_amounts",values).ToString())).Code,Is.EqualTo("AMOUNT_OUT_OF_RANGE"));Assert.That(p.Channel.Pending,Is.Null);
+        }
+        [TestCase("missing")] [TestCase("inverted")] [TestCase("amount-range")] [TestCase("amount-total")] [TestCase("oversized")]
+        public void UnsupportedNumericConstraintsStayUnavailable(string defect)
+        {
+            using var p=new Pair();bool number=defect=="missing" || defect=="inverted";
+            var snapshot=number?NumericSnapshot("number",defect=="missing"?(long?)null:5,1):NumericSnapshot("amounts",0,0,0,0);
+            var request=snapshot["body"]["snapshot"]["decision"];
+            if(defect=="amount-range")request["amounts"][0]["minimum"]=1;
+            if(defect=="amount-total")request["minimum"]=JValue.CreateNull();
+            if(defect=="oversized")request["amounts"]=new JArray(Enumerable.Range(0,WireMessages.MaxAmountValues+1).Select(_=>request["amounts"][0].DeepClone()));
+            PresentNumeric(p,snapshot);Assert.That(p.Channel.CanSubmit,Is.False);
+            var command=Numeric(number?"choose_number":"choose_amounts",0);
+            Assert.That(Assert.Throws<WireEnvelope.EnvelopeException>(()=>p.Channel.Submit(command.ToString())).Code,Is.EqualTo("SESSION_NUMERIC_UNAVAILABLE"));Assert.That(p.Channel.State,Is.EqualTo(ClientChannelState.Active));
+        }
+        [Test] public void AmountVectorAtTheTransportLimitIsPreserved()
+        {
+            using var p=new Pair();var snapshot=NumericSnapshot("amounts",0,0,0,0);var request=snapshot["body"]["snapshot"]["decision"];
+            request["amounts"]=new JArray(Enumerable.Range(0,WireMessages.MaxAmountValues).Select(_=>request["amounts"][0].DeepClone()));
+            PresentNumeric(p,snapshot);p.Channel.Submit(Numeric("choose_amounts",new long[WireMessages.MaxAmountValues]).ToString());
+            Assert.That(WireMessages.Parse(TextFrame.Read(p.Peer.GetStream()))["body"]["values"].Count(),Is.EqualTo(WireMessages.MaxAmountValues));
+        }
+        [Test] public void NumericConstraintsAreReplacedAndRevokedWithTheDecision()
+        {
+            using var p=new Pair();PresentNumeric(p,NumericSnapshot("number",0,10));var next=NumericSnapshot("number",20,30);next["message_id"]="s2";next["body"]["snapshot"]["revision"]=8;PresentNumeric(p,next);
+            var command=Numeric("choose_number",5);command["body"]["revision"]=8;
+            Assert.That(Assert.Throws<WireEnvelope.EnvelopeException>(()=>p.Channel.Submit(command.ToString())).Code,Is.EqualTo("AMOUNT_OUT_OF_RANGE"));
+            var e=(JObject)Corpus()["cases"][0]["steps"][2]["envelope"].DeepClone();e["body"]["event"]["revision"]=9;p.Send(e);p.Channel.ReceiveNext(1000);Assert.That(p.Channel.CanSubmit,Is.False);
+        }
+        [Test] public void NumericOperationCannotUseADifferentDecisionFamily()
+        {
+            using var p=new Pair();PresentNumeric(p,NumericSnapshot("number",0,10));
+            Assert.That(Assert.Throws<WireEnvelope.EnvelopeException>(()=>p.Channel.Submit(Numeric("choose_amounts",1).ToString())).Code,Is.EqualTo("DECISION_FAMILY_MISMATCH"));Assert.That(p.Channel.Pending,Is.Null);
         }
         [TestCase("finished")] [TestCase("unknown")] [TestCase("empty-decision")]
         public void SnapshotsWithoutActiveDecisionsDoNotEnableProvidedActionTokens(string status)
