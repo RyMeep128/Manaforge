@@ -16,6 +16,28 @@ FAMILIES = {
 }
 
 
+def opening_hand_request(view):
+    request = view.decision
+    if request is None or request.player_id != view.viewer_id:
+        return False
+    prompt = request.prompt.lower()
+    if request.family == "boolean":
+        return "mulligan" in prompt or "keep your hand" in prompt
+    if request.family != "target" or "bottom" not in prompt:
+        return False
+    hand = {
+        obj.object_id
+        for obj in view.objects
+        if obj.zone == "hand"
+        and obj.owner_id == view.viewer_id
+        and not obj.hidden
+        and not obj.face_down
+    }
+    return bool(request.options) and all(
+        option.object_id in hand for option in request.options
+    )
+
+
 class DecisionPanel(W.QWidget):
     command = C.pyqtSignal(object, str, object)
 
@@ -86,8 +108,20 @@ class DecisionPanel(W.QWidget):
                 or names.get(option.player_id)
                 or option.label
             )
+            if opening_hand_request(view) and request.family == "boolean":
+                affirmative = option.label.lower() in {"yes", "true"}
+                negative = option.label.lower() in {"no", "false"}
+                prompt = request.prompt.lower()
+                unambiguous = ("mulligan" in prompt) != ("keep your hand" in prompt)
+                if (affirmative or negative) and unambiguous:
+                    mulligan_question = "mulligan" in request.prompt.lower()
+                    text = "Mulligan" if affirmative == mulligan_question else "Keep"
             text = ("Selected · " if option.selected else "") + (text or "Choose")
-            self.button(text, "choose", (option.option_id,))
+            button = self.button(text, "choose", (option.option_id,))
+            if opening_hand_request(view) and request.family == "boolean":
+                button.setMinimumHeight(44)
+                if text == "Keep":
+                    button.setProperty("buttonRole", "primary")
         for action in view.actions:
             if action.object_id is None:
                 label = action.label

@@ -7,7 +7,7 @@ no legality, timing, costs, damage calculation or automatic decision policy.
 from PyQt6 import QtCore as C, QtGui as G, QtWidgets as W
 from mtg_ui.theme import COLORS
 from .artwork import PlayArtwork
-from .decisions import DecisionPanel
+from .decisions import DecisionPanel, opening_hand_request
 
 
 def object_name(obj):
@@ -342,6 +342,79 @@ class CardLane(W.QScrollArea):
         self.present((), {}, {}, {})
 
 
+class OpeningHandFan(W.QWidget):
+    selected = C.pyqtSignal(str)
+    inspected = C.pyqtSignal(str)
+    hovered = C.pyqtSignal(str)
+    hoverEnded = C.pyqtSignal()
+
+    def __init__(self, artwork, parent=None):
+        super().__init__(parent)
+        self.artwork = artwork
+        self.cards = {}
+        self.setMinimumHeight(180)
+
+    def clear(self):
+        for card in self.cards.values():
+            card.setEnabled(False)
+            card.obj = None
+            card.setAccessibleName("")
+            card.hide()
+            card.deleteLater()
+        self.cards.clear()
+
+    def present(self, objects, options):
+        identifiers = {obj.object_id for obj in objects}
+        for identifier in set(self.cards) - identifiers:
+            card = self.cards.pop(identifier)
+            card.setEnabled(False)
+            card.obj = None
+            card.setAccessibleName("")
+            card.hide()
+            card.deleteLater()
+        for obj in objects:
+            identifier = obj.object_id
+            if identifier not in self.cards:
+                card = GameCard(self.artwork, self)
+                card.clicked.connect(
+                    lambda checked=False, value=identifier: self.selected.emit(value)
+                )
+                card.inspectRequested.connect(
+                    lambda value=identifier: self.inspected.emit(value)
+                )
+                card.hoverRequested.connect(card.raise_)
+                card.hoverRequested.connect(
+                    lambda value=identifier: self.hovered.emit(value)
+                )
+                card.hoverEnded.connect(self.hoverEnded)
+                self.cards[identifier] = card
+            card = self.cards[identifier]
+            card.present(obj, identifier in options, options.get(identifier, False))
+            card.show()
+        self.cards = {obj.object_id: self.cards[obj.object_id] for obj in objects}
+        self._arrange()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._arrange()
+
+    def _arrange(self):
+        count = len(self.cards)
+        if not count:
+            return
+        scale = max(0.6, min(1.65, (self.height() - 35) / 185))
+        width = round(112 * scale)
+        spacing = min(
+            width + 8, max(1, (self.width() - width - 16) / max(1, count - 1))
+        )
+        left = max(4, (self.width() - width - spacing * (count - 1)) / 2)
+        center = (count - 1) / 2
+        for index, card in enumerate(self.cards.values()):
+            card.apply_scale(scale)
+            card.move(round(left + index * spacing), round(5 + abs(index - center) * 5))
+            card.raise_()
+
+
 class GameTable(W.QWidget):
     command = C.pyqtSignal(object, str, object)
 
@@ -467,7 +540,35 @@ class GameTable(W.QWidget):
         self.decision_dock.setMinimumWidth(200)
         self.decision_dock.setMaximumWidth(240)
         root.addWidget(self.decision_dock)
+        self.opening_overlay = W.QFrame(self)
+        self.opening_overlay.setObjectName("openingOverlay")
+        self.opening_overlay.setStyleSheet(
+            "QFrame#openingOverlay { background-color: rgba(5, 8, 13, 238); border: 1px solid #3d4c58; border-radius: 10px; }"
+        )
+        opening_layout = W.QVBoxLayout(self.opening_overlay)
+        opening_layout.setContentsMargins(20, 14, 20, 14)
+        self.opening_title = W.QLabel("Your opening hand")
+        self.opening_title.setProperty("role", "title")
+        opening_layout.addWidget(self.opening_title)
+        self.opening_status = W.QLabel()
+        self.opening_status.setWordWrap(True)
+        self.opening_status.setTextFormat(C.Qt.TextFormat.PlainText)
+        opening_layout.addWidget(self.opening_status)
+        self.opening_hand = OpeningHandFan(self.artwork)
+        opening_layout.addWidget(self.opening_hand, 1)
+        self.opening_controls = W.QScrollArea()
+        self.opening_controls.setWidgetResizable(True)
+        self.opening_controls.setMinimumHeight(120)
+        self.opening_controls.setMaximumHeight(200)
+        opening_layout.addWidget(self.opening_controls)
+        self.opening_overlay.hide()
         self.lanes = [self.opponent, self.player, self.hand, *self.zone_lanes.values()]
+        self.opening_hand.selected.connect(self.select_object)
+        self.opening_hand.inspected.connect(
+            lambda identifier: self.select_object(identifier, interact=False)
+        )
+        self.opening_hand.hovered.connect(self._schedule_hover)
+        self.opening_hand.hoverEnded.connect(self._hide_hover)
         self.stack_heading.hide()
         self.zone_lanes["stack"].hide()
         self.combat_summary.hide()
@@ -481,6 +582,9 @@ class GameTable(W.QWidget):
             )
 
     def clear(self):
+        self.opening_overlay.hide()
+        self.opening_hand.clear()
+        self._dock_decisions(False)
         self._hide_hover()
         self.action_menu.clear()
         self.action_menu.hide()
@@ -504,6 +608,7 @@ class GameTable(W.QWidget):
 
     def pending(self):
         self._interactions_pending = True
+        self.opening_hand.setEnabled(False)
         self._hide_hover()
         self.action_menu.hide()
         self.decisions.setEnabled(False)
@@ -663,8 +768,54 @@ class GameTable(W.QWidget):
                 if not observation.hidden
             )
         )
+        opening = opening_hand_request(view) and not view.result
+        self._dock_decisions(opening)
         self.decisions.present(view)
-        self.decision_dock.setVisible(view.decision is not None or bool(view.result))
+        self.decision_dock.setVisible(
+            not opening and (view.decision is not None or bool(view.result))
+        )
+        self.opening_overlay.setVisible(opening)
+        if opening:
+            own_hand = tuple(
+                obj
+                for obj in visible
+                if obj.zone == "hand"
+                and obj.owner_id == view.viewer_id
+                and not obj.hidden
+                and not obj.face_down
+            )
+            bottom = view.decision.family == "target"
+            self.opening_title.setText(
+                "Choose cards for the bottom of your library"
+                if bottom
+                else "Your opening hand"
+            )
+            self.opening_status.setText(
+                f"{len(own_hand)} cards in your hand. "
+                + (
+                    view.decision.prompt
+                    if bottom
+                    else "Choose for your seat. The AI handles its own opening choices."
+                )
+            )
+            if (
+                bottom
+                and view.decision.minimum is not None
+                and view.decision.maximum is not None
+            ):
+                selected_count = sum(
+                    option.selected for option in view.decision.options
+                )
+                self.opening_status.setText(
+                    self.opening_status.text()
+                    + f" Required selection: {view.decision.minimum} to {view.decision.maximum}; {selected_count} selected."
+                )
+            self.opening_hand.setEnabled(True)
+            self.opening_hand.present(own_hand, options)
+            self.opening_overlay.setGeometry(self.rect().adjusted(4, 4, -4, -4))
+            self.opening_overlay.raise_()
+        else:
+            self.opening_hand.clear()
         self._fit_board()
         C.QTimer.singleShot(0, self._fit_board)
         decision_id = view.decision.decision_id if view.decision else None
@@ -681,6 +832,14 @@ class GameTable(W.QWidget):
             self.select_object(self.inspected, interact=False, show_inspection=False)
         else:
             self._clear_inspection()
+
+    def _dock_decisions(self, opening):
+        target = self.opening_controls if opening else self.decision_dock
+        source = self.decision_dock if opening else self.opening_controls
+        if target.widget() is not self.decisions:
+            source.takeWidget()
+            target.setWidget(self.decisions)
+            self.decisions.show()
 
     def _schedule_hover(self, identifier):
         if self._interactions_pending:
@@ -771,6 +930,8 @@ class GameTable(W.QWidget):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
+        if hasattr(self, "opening_overlay"):
+            self.opening_overlay.setGeometry(self.rect().adjusted(4, 4, -4, -4))
         self._fit_board()
 
     def _fit_board(self):

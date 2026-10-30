@@ -1063,3 +1063,27 @@ multiple-action menus and right-click inspection. Local Python 3.13 focused UI
 checks pass (69 targeted UI tests; final Play plus Editor readiness run: 271 passed); no local engine or application
 build was launched. This follow-on work is committed locally, not pushed; manual
 hover positioning and visual UX acceptance remain pending.
+
+
+Story 11 incremental implementation (0.5.21-alpha.1): human opening choices now
+use a dimmed, table-sized overlay with larger, shallow-fanned local hand cards.
+The overlay shows the authorized hand count and leaves AI opening choices to the
+engine. Unambiguous Yes/No mulligan or keep prompts receive explicit Keep and
+Mulligan labels without changing their engine tokens; ambiguous prompts retain
+their supplied labels. Relevant bottom-of-library card choices use the same
+current target tokens, selected states and supplied min/max limits. Finish and
+Cancel controls still exist only when the engine permits them.
+
+The existing decision panel moves into the overlay rather than creating duplicate
+live command controls. It returns to the right-edge dock for normal gameplay.
+Pending commands disable both the hand and controls; clear/removal disables and
+erases old cards. Only authorized local hand cards enter the fan. Card hover and
+right-click inspection remain available. CI/UX acceptance is not declared complete;
+other contextual decisions and subsequent priority/combat/result polish remain.
+
+Python 3.13 verification: 73 targeted UI tests passed, followed by 275 tests across
+Play plus Editor readiness. Ruff lint, formatting and diff checks pass. No local
+XMage acceptance or application build ran. On the user's explicit request CI was
+checked: run 40995778446 at 5519e68 was in progress with neither Python job yet
+failed. This commit is pushed as requested and supersedes that running build;
+there was no completed new CI failure to diagnose at the time of the check.

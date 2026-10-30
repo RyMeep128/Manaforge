@@ -260,7 +260,15 @@ def test_focused_board_keeps_battlefields_hand_and_decisions_in_view(
     table.resize(width, height)
     table.show()
     try:
-        table.present(replace(snapshot(), objects=objects))
+        table.present(
+            replace(
+                snapshot(),
+                objects=objects,
+                decision=ChoiceRequest(
+                    "priority", "one", "selection", "Select an action", ()
+                ),
+            )
+        )
         app.processEvents()
         assert table.view_mode == "focused"
         assert table.board.parentWidget() is table
@@ -390,3 +398,123 @@ def test_multiple_actions_use_explicit_menu_and_are_invalidated_by_next_view(app
     finally:
         table.clear()
         table.close()
+
+
+@pytest.mark.parametrize(
+    "prompt,keep_token,mulligan_token",
+    [
+        ("Mulligan?", "no", "yes"),
+        ("Keep your hand?", "yes", "no"),
+    ],
+)
+def test_opening_overlay_has_readable_own_hand_and_explicit_engine_choices(
+    app, prompt, keep_token, mulligan_token
+):
+    table = GameTable(object(), artwork_factory=SilentArtwork)
+    own = tuple(card(f"hand-{i}", "hand") for i in range(7))
+    foreign = card("private-opponent", "hand", owner="two", name="PRIVATE")
+    request = ChoiceRequest(
+        "opening-current",
+        "one",
+        "boolean",
+        prompt,
+        (ChoiceOption("yes", "Yes"), ChoiceOption("no", "No")),
+    )
+    view = replace(snapshot(), objects=own + (foreign,), decision=request)
+    calls = []
+    table.command.connect(lambda *args: calls.append(args))
+    table.resize(1000, 610)
+    table.show()
+    try:
+        table.present(view)
+        app.processEvents()
+        assert table.opening_overlay.isVisible() and table.decision_dock.isHidden()
+        assert (
+            len(table.opening_hand.cards) == 7
+            and "private-opponent" not in table.opening_hand.cards
+        )
+        assert "7 cards" in table.opening_status.text()
+        assert table.opening_controls.widget() is table.decisions and not calls
+        assert all(
+            widget.height() >= 185 for widget in table.opening_hand.cards.values()
+        )
+        assert button(table.decisions, "Mulligan").play_args == (mulligan_token,)
+        button(table.decisions, "Keep").click()
+        assert calls == [(view, "choose", (keep_token,))]
+        table.pending()
+        assert not table.opening_hand.isEnabled() and not table.decisions.isEnabled()
+        table.clear()
+        assert table.opening_overlay.isHidden() and not table.opening_hand.cards
+    finally:
+        table.close()
+
+
+def test_bottom_selection_is_engine_authorized_and_overlay_returns_controls_to_board(
+    app,
+):
+    table = GameTable(object(), artwork_factory=SilentArtwork)
+    obj = card("bottom-card", "hand")
+    request = ChoiceRequest(
+        "bottom-current",
+        "one",
+        "target",
+        "Put a card on the bottom of your library",
+        (ChoiceOption("select-card", "Card", object_id=obj.object_id),),
+        minimum=1,
+        maximum=1,
+    )
+    view = replace(snapshot(), objects=(obj,), decision=request)
+    calls = []
+    table.command.connect(lambda *args: calls.append(args))
+    table.present(view)
+    try:
+        assert not table.opening_overlay.isHidden()
+        assert "Required selection: 1 to 1" in table.opening_status.text()
+        assert not any(
+            item.text() == "Finish selection"
+            for item in table.decisions.findChildren(W.QPushButton)
+        )
+        table.opening_hand.cards[obj.object_id].click()
+        assert calls == [(view, "choose", ("select-card",))]
+        old = table.opening_hand.cards[obj.object_id]
+        table.present(
+            replace(
+                view,
+                revision=2,
+                decision=ChoiceRequest(
+                    "priority", "one", "selection", "Select an action", ()
+                ),
+            )
+        )
+        assert (
+            table.opening_overlay.isHidden()
+            and table.decision_dock.widget() is table.decisions
+        )
+        old.click()
+        assert len(calls) == 1 and old.obj is None
+    finally:
+        table.clear()
+        table.close()
+
+
+def test_ai_or_non_hand_bottom_choices_do_not_open_human_opening_overlay(app):
+    from mtg_play.decisions import opening_hand_request
+
+    view = replace(
+        snapshot(),
+        decision=ChoiceRequest(
+            "ai", "two", "boolean", "Mulligan?", (ChoiceOption("yes", "Yes"),)
+        ),
+    )
+    assert not opening_hand_request(view)
+    view = replace(
+        view,
+        decision=ChoiceRequest(
+            "foreign",
+            "one",
+            "target",
+            "Bottom of library",
+            (ChoiceOption("foreign-option", "PRIVATE", object_id="not-your-hand"),),
+        ),
+    )
+    assert not opening_hand_request(view)
