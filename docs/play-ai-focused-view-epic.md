@@ -928,3 +928,32 @@ alternate-face inspection with network/live catalog denied, warnings, normal
 cached startup, cancellation, source preservation and explicit continuation.
 No local tests/builds or engine acceptance were run. Story 8 and strict offline
 UX remain pending CI and manual verification rather than declared complete.
+
+
+Story 9 incremental implementation (0.5.15-alpha.1): the first Focused View
+removes the whole-board vertical scroll area and permanent inspection sidebar.
+Opponent information/battlefield sit above the local player/battlefield and
+bottom hand. The stack appears directly between battlefields only when occupied,
+with a contextual combat summary. Public secondary zones remain accessible in a
+separate nonmodal window, which opens for a newly offered object choice in those
+zones. Inspection and object action choices use a separate contextual window;
+closing inspection does not reopen it on every snapshot. Clear/conceal hides both
+windows and erases their contents. Decision controls remain at the right edge.
+
+A Focused View mode entry point currently accepts only the supported focused
+mode. Local and opponent battlefield widgets retain separate identities; no
+multiplayer adaptive layout or opponent switching is introduced. Card lanes fit
+the available height/width, including when the shared stack is visible, while
+retaining horizontal access to crowded zones. Match startup saves the containing
+window's geometry/state and maximizes it, reduces workspace chrome, and restores
+the original state on leaving gameplay or failed startup. Native OS window
+controls remain available.
+
+CI regressions cover board ordering and viewport bounds at two desktop sizes,
+stack visibility, right-edge decisions, contextual inspection/zone privacy and
+non-submission, dismissal persistence, mode boundaries, and restoration of normal
+and already-maximized windows. Existing object/decision token handling remains
+in place. Formatting and diff checks only were performed locally: no tests,
+builds, engine acceptance, or manual visual verification. Story 9 remains pending
+CI/UX acceptance; hover previews and further contextual interaction polish belong
+to the following story.

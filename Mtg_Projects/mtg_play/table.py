@@ -36,6 +36,7 @@ class GameCard(W.QAbstractButton):
         super().__init__(parent)
         self.artwork = artwork
         self.obj = None
+        self.card_scale = 1.0
         self.actionable = self.selected = False
         self.combat = ""
         self.setFixedSize(112, 185)
@@ -61,19 +62,26 @@ class GameCard(W.QAbstractButton):
         )
         self.setAccessibleName(
             object_name(obj)
-            + (" · Available action" if actionable else "")
-            + (" · Selected" if selected else "")
-            + (" · Tapped" if obj.tapped else "")
-            + (" · " + combat if combat else "")
+            + (" Â· Available action" if actionable else "")
+            + (" Â· Selected" if selected else "")
+            + (" Â· Tapped" if obj.tapped else "")
+            + (" Â· " + combat if combat else "")
         )
         if changed:
-            self.setFixedSize(112, 132 if obj.zone == "battlefield" else 185)
+            self.apply_scale(self.card_scale)
             self.update()
+
+    def apply_scale(self, scale):
+        self.card_scale = scale
+        height = 132 if self.obj and self.obj.zone == "battlefield" else 185
+        self.setFixedSize(round(112 * scale), round(height * scale))
+        self.update()
 
     def paintEvent(self, event):
         if self.obj is None:
             return
         p = G.QPainter(self)
+        p.scale(self.card_scale, self.card_scale)
         p.setRenderHint(G.QPainter.RenderHint.Antialiasing)
         border = COLORS["accent"] if self.actionable else COLORS["border_strong"]
         p.setPen(
@@ -83,7 +91,13 @@ class GameCard(W.QAbstractButton):
             )
         )
         p.setBrush(G.QColor(COLORS["surface_raised"]))
-        p.drawRoundedRect(C.QRectF(self.rect()).adjusted(2, 2, -2, -2), 7, 7)
+        p.drawRoundedRect(
+            C.QRectF(
+                0, 0, 112, 132 if self.obj.zone == "battlefield" else 185
+            ).adjusted(2, 2, -2, -2),
+            7,
+            7,
+        )
         compact = self.obj.zone == "battlefield"
         rect = C.QRect(7, 7, 98, 83 if compact else 137)
         image = self.artwork.get(self.obj)
@@ -142,7 +156,7 @@ class GameCard(W.QAbstractButton):
         p.drawText(
             C.QRect(6, 94 if compact else 145, 100, 36),
             C.Qt.AlignmentFlag.AlignCenter | C.Qt.TextFlag.TextWordWrap,
-            " · ".join(badge) or object_name(self.obj),
+            " Â· ".join(badge) or object_name(self.obj),
         )
 
     def contextMenuEvent(self, event):
@@ -158,6 +172,7 @@ class CardLane(W.QScrollArea):
         super().__init__(parent)
         self.artwork = artwork
         self.cards = {}
+        self.card_scale = 1.0
         self.order = ()
         self.setWidgetResizable(True)
         self.setMinimumHeight(211)
@@ -228,6 +243,12 @@ class CardLane(W.QScrollArea):
                 position += 1
             self.order = layout_key
 
+    def fit_cards(self, scale, *, battlefield=False):
+        self.card_scale = scale
+        self.setFixedHeight(round((132 if battlefield else 185) * scale) + 24)
+        for card in self.cards.values():
+            card.apply_scale(scale)
+
     def clear(self):
         self.present((), {}, {}, {})
 
@@ -239,17 +260,26 @@ class GameTable(W.QWidget):
         super().__init__(parent)
         self.view = None
         self.inspected = None
+        self.view_mode = "focused"
+        self._zone_decision = None
         self.artwork = artwork_factory(service, self)
         self.artwork.updated.connect(self._update_image)
         root = W.QHBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         table = W.QWidget()
+        self.board = table
         column = W.QVBoxLayout(table)
+        column.setContentsMargins(0, 0, 0, 0)
+        column.setSpacing(4)
         self.flow = W.QLabel()
         self.flow.setWordWrap(True)
         self.flow.setTextFormat(C.Qt.TextFormat.PlainText)
         self.flow.setProperty("role", "subtitle")
-        column.addWidget(self.flow)
+        top = W.QHBoxLayout()
+        top.addWidget(self.flow, 1)
+        self.zone_button = W.QPushButton("Other zones")
+        top.addWidget(self.zone_button)
+        column.addLayout(top)
         self.opponent_label = W.QLabel()
         self.player_label = W.QLabel()
         for label in (self.opponent_label, self.player_label):
@@ -258,7 +288,19 @@ class GameTable(W.QWidget):
         column.addWidget(self.opponent_label)
         self.opponent = CardLane(self.artwork)
         column.addWidget(self.opponent)
+        self.combat_summary = W.QLabel()
+        self.combat_summary.setTextFormat(C.Qt.TextFormat.PlainText)
+        self.combat_summary.setWordWrap(True)
+        column.addWidget(self.combat_summary)
+        self.stack_heading = W.QLabel("Stack")
+        column.addWidget(self.stack_heading)
+        self.zones_dialog = W.QDialog(self, C.Qt.WindowType.Tool)
+        self.zones_dialog.setWindowTitle("Other zones")
+        self.zones_dialog.resize(720, 300)
+        zone_layout = W.QVBoxLayout(self.zones_dialog)
         self.zones = W.QTabWidget()
+        zone_layout.addWidget(self.zones)
+        self.zone_button.clicked.connect(self.zones_dialog.show)
         self.zone_lanes = {}
         for zone, title in [
             ("stack", "Stack"),
@@ -270,7 +312,10 @@ class GameTable(W.QWidget):
         ]:
             lane = CardLane(self.artwork)
             self.zone_lanes[zone] = lane
-            self.zones.addTab(lane, title)
+            if zone == "stack":
+                column.addWidget(lane)
+            else:
+                self.zones.addTab(lane, title)
         self.observations = W.QPlainTextEdit()
         self.observations.setReadOnly(True)
         self.observations.setUndoRedoEnabled(False)
@@ -278,22 +323,18 @@ class GameTable(W.QWidget):
             "Permitted revealed information will appear here."
         )
         self.zones.addTab(self.observations, "Revealed information")
-        column.addWidget(self.zones)
+        column.addStretch(1)
         column.addWidget(self.player_label)
         self.player = CardLane(self.artwork)
         column.addWidget(self.player)
         column.addWidget(W.QLabel("Your hand"))
         self.hand = CardLane(self.artwork)
         column.addWidget(self.hand)
-        table_scroll = W.QScrollArea()
-        table_scroll.setWidgetResizable(True)
-        table_scroll.setWidget(table)
-        table_scroll.setMinimumHeight(460)
-        root.addWidget(table_scroll, 1)
-        side = W.QWidget()
-        side.setMinimumWidth(260)
-        side.setMaximumWidth(360)
-        sidebar = W.QVBoxLayout(side)
+        root.addWidget(table, 1)
+        self.inspection_dialog = W.QDialog(self, C.Qt.WindowType.Tool)
+        self.inspection_dialog.setWindowTitle("Card inspection")
+        self.inspection_dialog.resize(360, 620)
+        sidebar = W.QVBoxLayout(self.inspection_dialog)
         self.inspection_image = W.QLabel()
         self.inspection_image.setAlignment(C.Qt.AlignmentFlag.AlignCenter)
         self.inspection_image.setMinimumHeight(180)
@@ -311,13 +352,17 @@ class GameTable(W.QWidget):
         sidebar.addWidget(self.object_actions)
         self.decisions = DecisionPanel()
         self.decisions.command.connect(self.command)
-        scroll = W.QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setWidget(self.decisions)
-        scroll.setMinimumHeight(240)
-        sidebar.addWidget(scroll, 1)
-        root.addWidget(side)
+        self.decision_dock = W.QScrollArea()
+        self.decision_dock.setWidgetResizable(True)
+        self.decision_dock.setWidget(self.decisions)
+        self.decision_dock.setMinimumWidth(200)
+        self.decision_dock.setMaximumWidth(240)
+        root.addWidget(self.decision_dock)
         self.lanes = [self.opponent, self.player, self.hand, *self.zone_lanes.values()]
+        self.stack_heading.hide()
+        self.zone_lanes["stack"].hide()
+        self.combat_summary.hide()
+        self.decision_dock.hide()
         for lane in self.lanes:
             lane.selected.connect(self.select_object)
             lane.inspected.connect(
@@ -325,7 +370,14 @@ class GameTable(W.QWidget):
             )
 
     def clear(self):
+        self.combat_summary.clear()
+        self.combat_summary.hide()
+        self._zone_decision = None
         self.view = self.inspected = None
+        self.zones_dialog.hide()
+        self.decision_dock.hide()
+        self.stack_heading.hide()
+        self.zone_lanes["stack"].hide()
         self.artwork.conceal()
         for lane in self.lanes:
             lane.clear()
@@ -358,20 +410,20 @@ class GameTable(W.QWidget):
             "Priority: " + names.get(view.priority_player_id, "Waiting"),
         ]
         self.flow.setText(
-            " · ".join(
+            " Â· ".join(
                 value.replace("_", " ").title() if index in (1, 2) else value
                 for index, value in enumerate(flow)
                 if value
             )
         )
         for player in view.players:
-            text = f"{player.name} · {player.life} life · Hand {player.hand_count} · Library {player.library_count}"
+            text = f"{player.name} Â· {player.life} life Â· Hand {player.hand_count} Â· Library {player.library_count}"
             if player.mana:
-                text += " · Mana: " + ", ".join(
+                text += " Â· Mana: " + ", ".join(
                     f"{amount} {kind}" for kind, amount in player.mana
                 )
             if player.counters:
-                text += " · " + ", ".join(
+                text += " Â· " + ", ".join(
                     f"{amount} {kind}" for kind, amount in player.counters
                 )
             commanders = [
@@ -382,11 +434,13 @@ class GameTable(W.QWidget):
             for commander in commanders:
                 text += "\nCommander: " + (commander.name or "Commander")
                 if commander.command_zone_plays is not None:
-                    text += f" · Cast from command zone: {commander.command_zone_plays}"
+                    text += (
+                        f" Â· Cast from command zone: {commander.command_zone_plays}"
+                    )
                 if commander.additional_cast_cost is not None:
-                    text += " · Additional cost: " + commander.additional_cast_cost
+                    text += " Â· Additional cost: " + commander.additional_cast_cost
                 if commander.damage_dealt:
-                    text += " · Damage dealt: " + ", ".join(
+                    text += " Â· Damage dealt: " + ", ".join(
                         f"{names.get(seat, 'Player')} {amount}"
                         for seat, amount in commander.damage_dealt
                     )
@@ -466,7 +520,24 @@ class GameTable(W.QWidget):
         for zone, lane in self.zone_lanes.items():
             objects = tuple(obj for obj in visible if obj.zone == zone)
             lane.present(objects, actions, options, combat)
-        self.zones.setTabText(0, f"Stack ({len(self.zone_lanes['stack'].cards)})")
+        self.combat_summary.setText(
+            f"Combat: {sum(len(group.attackers) for group in view.combat)} attackers ? "
+            f"{sum(len(group.blockers) for group in view.combat)} blockers"
+        )
+        self.combat_summary.setVisible(bool(view.combat))
+        if view.result:
+            self.flow.setText(
+                "Game result: " + view.result.replace("_", " ").capitalize()
+            )
+        stack_count = len(self.zone_lanes["stack"].cards)
+        self.stack_heading.setText(f"Stack ({stack_count})")
+        self.stack_heading.setVisible(bool(stack_count))
+        self.zone_lanes["stack"].setVisible(bool(stack_count))
+        for index in range(self.zones.count()):
+            lane = self.zones.widget(index)
+            if hasattr(lane, "cards"):
+                base = self.zones.tabText(index).split(" (")[0]
+                self.zones.setTabText(index, f"{base} ({len(lane.cards)})")
         self.observations.setPlainText(
             "\n".join(
                 (observation.name or "Revealed card")
@@ -475,12 +546,54 @@ class GameTable(W.QWidget):
             )
         )
         self.decisions.present(view)
+        self.decision_dock.setVisible(view.decision is not None or bool(view.result))
+        self._fit_board()
+        C.QTimer.singleShot(0, self._fit_board)
+        decision_id = view.decision.decision_id if view.decision else None
+        if decision_id != self._zone_decision and options:
+            for zone, lane in self.zone_lanes.items():
+                if zone != "stack" and set(lane.cards) & set(options):
+                    self.zones.setCurrentWidget(lane)
+                    self.zones_dialog.show()
+                    break
+        self._zone_decision = decision_id
         if self.inspected and any(obj.object_id == self.inspected for obj in visible):
-            self.select_object(self.inspected, interact=False)
+            self.select_object(self.inspected, interact=False, show_inspection=False)
         else:
             self._clear_inspection()
 
-    def _clear_inspection(self):
+    def set_view_mode(self, mode):
+        if mode != "focused":
+            raise ValueError("Only Focused View is currently supported")
+        self.view_mode = mode
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._fit_board()
+
+    def _fit_board(self):
+        if not hasattr(self, "zone_lanes"):
+            return
+        stack = bool(self.zone_lanes["stack"].cards)
+        scale = round(
+            max(
+                0.55,
+                min(
+                    1.0,
+                    max(0.0, self.board.width() - 30) / 826,
+                    (self.height() - 190) / (449 + (185 if stack else 0)),
+                ),
+            ),
+            2,
+        )
+        self.opponent.fit_cards(scale, battlefield=True)
+        self.player.fit_cards(scale, battlefield=True)
+        self.hand.fit_cards(scale)
+        self.zone_lanes["stack"].fit_cards(scale)
+
+    def _clear_inspection(self, *, hide=True):
+        if hide:
+            self.inspection_dialog.hide()
         self.inspected = None
         self.inspection.clear()
         self.inspection_image.clear()
@@ -493,7 +606,7 @@ class GameTable(W.QWidget):
                 item.widget().setText("")
                 item.widget().deleteLater()
 
-    def select_object(self, identifier, *, interact=True):
+    def select_object(self, identifier, *, interact=True, show_inspection=True):
         view = self.view
         if view is None:
             return
@@ -509,7 +622,9 @@ class GameTable(W.QWidget):
         )
         if obj is None:
             return
-        self._clear_inspection()
+        self._clear_inspection(hide=False)
+        if show_inspection:
+            self.inspection_dialog.show()
         self.inspected = identifier
         names = {player.player_id: player.name for player in view.players}
         c = obj.characteristics if not obj.face_down and not obj.hidden else None
@@ -661,7 +776,7 @@ class GameTable(W.QWidget):
             self.inspection_image.setText(
                 "Artwork unavailable"
                 if image is not None or not obj.card_identity
-                else "Loading artwork…"
+                else "Loading artworkâ€¦"
             )
 
     def keyPressEvent(self, event):

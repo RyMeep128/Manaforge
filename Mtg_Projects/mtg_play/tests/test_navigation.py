@@ -449,3 +449,25 @@ def test_cancelling_artwork_waits_for_worker_and_keeps_lobby_selection(
         release.set()
         drain(app, lambda: not workspace.asset_jobs.busy)
         workspace.close()
+
+
+@pytest.mark.parametrize("maximized", [False, True])
+def test_focused_view_restores_previous_window_mode(app, tmp_path, maximized):
+    workspace, calls = workspace_fixture(app, tmp_path)
+    workspace.resize(1000, 720)
+    workspace.show()
+    if maximized:
+        workspace.showMaximized()
+    app.processEvents()
+    try:
+        workspace._enter_focused_view()
+        app.processEvents()
+        assert workspace.isMaximized()
+        assert workspace.intro.isHidden() and workspace.workspace_title.isHidden()
+        workspace._leave_focused_view()
+        app.processEvents()
+        assert workspace.isMaximized() == maximized
+        assert not workspace.intro.isHidden() and workspace._window_snapshot is None
+        assert not calls
+    finally:
+        workspace.close()

@@ -244,3 +244,64 @@ def test_unknown_decision_is_explicit_and_stack_objects_remain_distinct(app):
         for label in table.decisions.findChildren(W.QLabel)
     )
     table.clear()
+
+
+@pytest.mark.parametrize("width,height", [(1000, 610), (1200, 730)])
+@pytest.mark.parametrize("stack", [False, True])
+def test_focused_board_keeps_battlefields_hand_and_decisions_in_view(
+    app, width, height, stack
+):
+    table = GameTable(object(), artwork_factory=SilentArtwork)
+    objects = (
+        (card("mine"), card("theirs", owner="two"))
+        + tuple(card(f"hand-{index}", "hand") for index in range(7))
+        + ((card("spell", "stack"),) if stack else ())
+    )
+    table.resize(width, height)
+    table.show()
+    try:
+        table.present(replace(snapshot(), objects=objects))
+        app.processEvents()
+        assert table.view_mode == "focused"
+        assert table.board.parentWidget() is table
+        assert table.inspection_dialog.isHidden() and table.zones_dialog.isHidden()
+        positions = [
+            lane.mapTo(table, C.QPoint(0, 0)).y()
+            for lane in (table.opponent, table.player, table.hand)
+        ]
+        assert positions[0] < positions[1] < positions[2]
+        assert positions[-1] + table.hand.height() <= table.height()
+        assert table.decision_dock.isVisible()
+        assert (
+            table.decision_dock.mapTo(table, C.QPoint(0, 0)).x()
+            > table.player.mapTo(table, C.QPoint(0, 0)).x()
+        )
+        assert table.zone_lanes["stack"].isVisible() == stack
+        with pytest.raises(ValueError):
+            table.set_view_mode("overview")
+    finally:
+        table.clear()
+        table.close()
+
+
+def test_contextual_zones_and_inspection_do_not_submit_or_reopen_after_dismissal(app):
+    table = GameTable(object(), artwork_factory=SilentArtwork)
+    obj = card("mine")
+    view = replace(snapshot(), objects=(obj,))
+    calls = []
+    table.command.connect(lambda *args: calls.append(args))
+    table.show()
+    try:
+        table.present(view)
+        table.zone_button.click()
+        assert table.zones_dialog.isVisible()
+        table.select_object(obj.object_id, interact=False)
+        assert table.inspection_dialog.isVisible() and not calls
+        table.inspection_dialog.close()
+        table.present(replace(view, revision=2))
+        assert not table.inspection_dialog.isVisible() and not calls
+        table.clear()
+        assert table.zones_dialog.isHidden() and table.inspection_dialog.isHidden()
+        assert not table.inspection.toPlainText()
+    finally:
+        table.close()

@@ -35,6 +35,7 @@ class PlayWorkspace(W.QWidget):
         self._browse_library = browse_library
         self.lobby = lobby or offline_lobby()
         self.lobby.offline_setup()
+        self._window_snapshot = None
         self._approved_close = False
         self._format_confirmed = False
         self._confirmed_format = None
@@ -73,7 +74,7 @@ class PlayWorkspace(W.QWidget):
         layout = W.QVBoxLayout(self)
         layout.setContentsMargins(24, 20, 24, 20)
         heading = W.QHBoxLayout()
-        title = W.QLabel("Play")
+        title = self.workspace_title = W.QLabel("Play")
         title.setProperty("role", "title")
         heading.addWidget(title)
         heading.addStretch()
@@ -81,7 +82,9 @@ class PlayWorkspace(W.QWidget):
         self.home_button.clicked.connect(home)
         heading.addWidget(self.home_button)
         layout.addLayout(heading)
-        intro = W.QLabel("You and your decks against an offline AI opponent.")
+        intro = self.intro = W.QLabel(
+            "You and your decks against an offline AI opponent."
+        )
         intro.setProperty("role", "subtitle")
         layout.addWidget(intro)
         self.pages = PlayPages()
@@ -273,7 +276,7 @@ class PlayWorkspace(W.QWidget):
         self.pages.addWidget(self.asset_page)
         self.game_page = W.QWidget()
         game_layout = W.QVBoxLayout(self.game_page)
-        self.game_heading = W.QLabel("Preparing your tableâ€¦")
+        self.game_heading = W.QLabel("Preparing your tableÃ¢â‚¬Â¦")
         self.game_heading.setProperty("role", "title")
         self.game_heading.setTextFormat(C.Qt.TextFormat.PlainText)
         game_layout.addWidget(self.game_heading)
@@ -291,7 +294,7 @@ class PlayWorkspace(W.QWidget):
         game_actions.addWidget(self.close_button)
         game_layout.addLayout(game_actions)
         self.pages.addWidget(self.game_page)
-        self.status = W.QLabel("Loading your decksâ€¦")
+        self.status = W.QLabel("Loading your decksÃ¢â‚¬Â¦")
         self.status.setWordWrap(True)
         self.status.setTextFormat(C.Qt.TextFormat.PlainText)
         self.status.setAccessibleName("Game status")
@@ -363,7 +366,7 @@ class PlayWorkspace(W.QWidget):
         self.deck_artwork.stopping = False
         self.reload.setEnabled(False)
         self.start_button.setEnabled(False)
-        self.status.setText("Loading your saved decksâ€¦")
+        self.status.setText("Loading your saved decksÃ¢â‚¬Â¦")
 
         def prepare(cancel, report):
             rows, errors = self._deck_provider()
@@ -684,10 +687,39 @@ class PlayWorkspace(W.QWidget):
                 oracle_id
             ),
         ):
+            self._enter_focused_view()
             self.pages.setCurrentWidget(self.game_page)
             self.start_button.setEnabled(False)
         else:
             self._return_from_assets()
+
+    def _enter_focused_view(self):
+        window = self.window()
+        if self._window_snapshot is None and window.isVisible():
+            self._window_snapshot = (
+                window,
+                window.saveGeometry(),
+                window.windowState(),
+            )
+            window.showMaximized()
+        self.table.set_view_mode("focused")
+        self.workspace_title.hide()
+        self.intro.hide()
+        self.home_button.hide()
+        self.game_heading.hide()
+        self.layout().setContentsMargins(8, 6, 8, 6)
+
+    def _leave_focused_view(self):
+        if self._window_snapshot is not None:
+            window, geometry, state = self._window_snapshot
+            self._window_snapshot = None
+            window.setWindowState(state)
+            window.restoreGeometry(geometry)
+        self.workspace_title.show()
+        self.intro.show()
+        self.home_button.show()
+        self.game_heading.show()
+        self.layout().setContentsMargins(24, 20, 24, 20)
 
     @C.pyqtSlot()
     def _deck_images(self):
@@ -740,13 +772,14 @@ class PlayWorkspace(W.QWidget):
         self.status.setText(message)
         if not self.session.active and not self.session.closing:
             if self.pages.currentWidget() is self.game_page:
+                self._leave_focused_view()
                 self.pages.setCurrentWidget(self.setup_page)
             self._selection_changed()
 
     @C.pyqtSlot()
     def _clear_view(self):
         self._view = None
-        self.game_heading.setText("Waiting for your tableâ€¦")
+        self.game_heading.setText("Waiting for your tableÃ¢â‚¬Â¦")
         self.table.clear()
         self.concede_button.setEnabled(False)
 
@@ -807,6 +840,7 @@ class PlayWorkspace(W.QWidget):
 
     @C.pyqtSlot()
     def _stopped(self):
+        self._leave_focused_view()
         self.deck_artwork.stopping = False
         self.pages.setCurrentWidget(self.setup_page)
         self._selection_changed()
