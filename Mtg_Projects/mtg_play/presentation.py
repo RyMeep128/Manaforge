@@ -4,8 +4,14 @@ Only the worker queue touches the adapter/session. Qt consumers receive a single
 seat's immutable snapshot; epochs invalidate queued replies after leaving a view.
 """
 
+from math import isfinite
+import time
+
 from PyQt6 import QtCore as C
 from mtg_ui.jobs import JobQueue
+from .diagnostics import LifecycleDiagnostics, STAGE_LABELS
+
+OPENING_STATE_TIMEOUT = 60
 
 
 def local_adapter():
@@ -28,6 +34,8 @@ class _SessionFailure(RuntimeError):
 class SessionController(C.QObject):
     snapshotChanged = C.pyqtSignal(object)
     statusChanged = C.pyqtSignal(str)
+    startupProgress = C.pyqtSignal(object)
+    _lifecycleProgress = C.pyqtSignal(int, object)
     viewCleared = C.pyqtSignal()
     interactionPending = C.pyqtSignal()
     commandFinished = C.pyqtSignal(object)
@@ -37,8 +45,12 @@ class SessionController(C.QObject):
         super().__init__(parent)
         self.jobs = JobQueue(self)
         self.jobs.status.connect(self._completed)
+        self._lifecycleProgress.connect(
+            self._lifecycle_progress, C.Qt.ConnectionType.QueuedConnection
+        )
         self.adapter_factory = adapter_factory
         self._owner = self._session = None  # Worker-owned, never exposed to widgets.
+        self._opening_stage = None  # Worker-owned readiness deadline and stage token.
         self._operations = {}
         self._epoch = 0
         self._viewer = None
@@ -54,6 +66,53 @@ class SessionController(C.QObject):
         self.timer.setInterval(250)
         self.timer.timeout.connect(self.refresh)
 
+    @C.pyqtSlot(int, object)
+    def _lifecycle_progress(self, epoch, value):
+        if epoch != self._epoch or not self.active or self.closing:
+            return
+        if not isinstance(value, dict):
+            return
+        stage, state = value.get("stage"), value.get("state")
+        if not isinstance(stage, str) or stage not in STAGE_LABELS:
+            return
+        if not isinstance(state, str) or state not in {
+            "started",
+            "completed",
+            "failed",
+            "cancelled",
+        }:
+            return
+        elapsed = value.get("elapsed_ms")
+        if type(elapsed) not in (int, float) or not isfinite(elapsed) or elapsed < 0:
+            return
+        code = value.get("code")
+        if code is not None and not isinstance(code, str):
+            return
+        if code not in {
+            None,
+            *(
+                "PLAY_" + stage.upper() + "_" + suffix
+                for suffix in ("FAILED", "TIMEOUT", "UNCERTAIN")
+            ),
+        }:
+            return
+        # Forward only fixed stage data, never an arbitrary adapter payload.
+        progress = {
+            key: value.get(key) for key in ("stage", "state", "elapsed_ms", "code")
+        }
+        self.startupProgress.emit(progress)
+        if state == "started":
+            self.statusChanged.emit(STAGE_LABELS[stage] + "...")
+        elif state == "failed":
+            from mtg_core.diagnostics import get_logger
+
+            get_logger(__name__).warning(
+                "Play lifecycle failed stage=%s elapsed_ms=%s code=%s",
+                stage,
+                progress["elapsed_ms"],
+                code,
+            )
+
     @property
     def busy(self):
         return self.jobs.busy
@@ -62,6 +121,10 @@ class SessionController(C.QObject):
         """Close on the worker; a failed game can still have confirmed cleanup."""
         if self._owner is None:
             return
+        if self._opening_stage is not None:
+            tracker, token, _ = self._opening_stage
+            tracker.end(token, cancelled=True)
+            self._opening_stage = None
         try:
             self._owner.close()
         except Exception as exc:
@@ -87,7 +150,11 @@ class SessionController(C.QObject):
                 code = getattr(exc, "code", "")
                 if code == "SNAPSHOT_NOT_READY":
                     return "waiting", None
-                get_logger(__name__).exception("Play operation failed: %s", kind)
+                get_logger(__name__).warning(
+                    "Play operation failed operation=%s type=%s",
+                    kind,
+                    type(exc).__name__,
+                )
                 if code.startswith("UNSUPPORTED_DECISION"):
                     return (
                         "error",
@@ -102,7 +169,26 @@ class SessionController(C.QObject):
                         "error",
                         "A selected deck contains unsupported cards or printing information. Review it in Deck Editor; no cards were replaced.",
                     )
-                if kind == "start":
+                if kind == "start" or code.startswith("PLAY_OPENING_STATE_"):
+                    stage = next(
+                        (
+                            stage
+                            for stage in STAGE_LABELS
+                            if code
+                            in {
+                                "PLAY_" + stage.upper() + "_" + suffix
+                                for suffix in ("FAILED", "TIMEOUT", "UNCERTAIN")
+                            }
+                        ),
+                        None,
+                    )
+                    if stage is not None:
+                        label = STAGE_LABELS[stage].lower()
+                        return "error", (
+                            "Could not start the game while "
+                            + label
+                            + ". Check the local runtime or selected decks, then try again."
+                        )
                     return (
                         "error",
                         "Could not start the game. Check that the compatible local Play runtime is installed and both decks are supported.",
@@ -131,14 +217,21 @@ class SessionController(C.QObject):
         self.active = True
         self.statusChanged.emit("Starting your local game…")
 
+        epoch = self._epoch
+
         def create():
             self._owner = self.adapter_factory()
             try:
+                observer = getattr(self._owner, "set_progress_callback", None)
+                if observer is not None:
+                    observer(lambda value: self._lifecycleProgress.emit(epoch, value))
                 self._owner.__enter__()
                 self._session = self._owner.create_game(
                     setup, decks, oracle_lookup=oracle_lookup
                 )
             except Exception as error:
+                lifecycle = getattr(self._owner, "lifecycle", None)
+                failure = lifecycle.failure if lifecycle is not None else None
                 # Preserve the owner on unconfirmed cleanup for an explicit retry.
                 self._close_owner()
                 from .decks import DeckTranslationError
@@ -162,7 +255,17 @@ class SessionController(C.QObject):
                         + detail
                         + ". Their cards, selected printings, or configuration could not be loaded. No cards were replaced."
                     ) from error
+                if failure is not None:
+                    raise _SessionFailure(failure["code"]) from error
                 raise
+            tracker = getattr(self._owner, "lifecycle", None) or LifecycleDiagnostics(
+                lambda value: self._lifecycleProgress.emit(epoch, value)
+            )
+            self._opening_stage = (
+                tracker,
+                tracker.begin("opening_state"),
+                time.monotonic() + OPENING_STATE_TIMEOUT,
+            )
             return "started", self._session.session_id
 
         self._queue("start", create)
@@ -200,11 +303,32 @@ class SessionController(C.QObject):
         viewer = self._viewer
 
         def read():
-            events = self._session.poll(viewer, timeout=0)
-            for event in events:
-                if event.kind == "session_failed":
-                    raise _SessionFailure(event.code or "ENGINE_UNAVAILABLE")
-            return "snapshot", self._session.snapshot(viewer)
+            try:
+                events = self._session.poll(viewer, timeout=0)
+                for event in events:
+                    if event.kind == "session_failed":
+                        raise _SessionFailure(event.code or "ENGINE_UNAVAILABLE")
+                view = self._session.snapshot(viewer)
+            except Exception as error:
+                if self._opening_stage is None:
+                    raise
+                tracker, token, deadline = self._opening_stage
+                waiting = getattr(error, "code", None) == "SNAPSHOT_NOT_READY"
+                if waiting and time.monotonic() < deadline:
+                    raise
+                tracker.end(token, failure="TIMEOUT" if waiting else "FAILED")
+                self._opening_stage = None
+                self._close_owner()
+                raise _SessionFailure(
+                    "PLAY_OPENING_STATE_TIMEOUT"
+                    if waiting
+                    else "PLAY_OPENING_STATE_FAILED"
+                ) from error
+            if self._opening_stage is not None:
+                tracker, token, _ = self._opening_stage
+                tracker.end(token)
+                self._opening_stage = None
+            return "snapshot", view
 
         self._queue("refresh", read)
 
@@ -383,7 +507,7 @@ class SessionController(C.QObject):
             self.timer.stop()
             self._snapshot = None
             self.viewCleared.emit()
-            if kind == "start":
+            if kind == "start" or self._owner is None:
                 self.active = self._owner is not None
             if kind == "stop":
                 self.closing = False

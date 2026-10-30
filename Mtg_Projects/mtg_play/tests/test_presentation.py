@@ -450,3 +450,144 @@ def test_cleanup_failure_preserves_owner_until_explicit_retry(app):
     assert not owner.closed
     close(app, controller)
     assert owner.closed and owner.attempts == 2
+
+
+def test_startup_progress_is_queued_to_gui_thread_and_contains_only_stage_data(app):
+    from mtg_play.diagnostics import LifecycleDiagnostics
+
+    class ReportingOwner(Owner):
+        def __init__(self, session):
+            super().__init__(session)
+            self.lifecycle = LifecycleDiagnostics()
+
+        def set_progress_callback(self, callback):
+            self.lifecycle.set_callback(callback)
+
+        def __enter__(self):
+            with self.lifecycle.stage("runtime_validation"):
+                super().__enter__()
+            with self.lifecycle.stage("server_startup"):
+                pass
+            return self
+
+    owner = ReportingOwner(ScriptedGameSession((snapshot(),)))
+    controller = SessionController(adapter_factory=lambda: owner)
+    delivered, messages = [], []
+    controller.startupProgress.connect(
+        lambda row: delivered.append((row, C.QThread.currentThread()))
+    )
+    controller.statusChanged.connect(messages.append)
+    controller.start(setup(), (DeckDocument(), DeckDocument()))
+    drain(app, lambda: not controller.busy)
+    assert [
+        row["stage"] for row, _ in delivered if row["stage"] != "opening_state"
+    ] == [
+        "runtime_validation",
+        "runtime_validation",
+        "server_startup",
+        "server_startup",
+    ]
+    controller.timer.stop()
+    controller.refresh()
+    drain(app, lambda: not controller.busy)
+    assert [
+        row["state"] for row, _ in delivered if row["stage"] == "opening_state"
+    ] == ["started", "completed"]
+    assert all(thread is app.thread() for _, thread in delivered)
+    assert any("Starting the local rules engine" in message for message in messages)
+    assert all(
+        set(row) == {"stage", "state", "elapsed_ms", "code"} for row, _ in delivered
+    )
+    close(app, controller)
+
+
+def test_late_startup_progress_cannot_overwrite_closing_or_newer_session(app):
+    controller = SessionController()
+    controller.active = True
+    controller._epoch = 2
+    received, messages = [], []
+    controller.startupProgress.connect(received.append)
+    controller.statusChanged.connect(messages.append)
+    row = dict(stage="server_startup", state="started", elapsed_ms=0.0, code=None)
+    controller._lifecycleProgress.emit(1, row)
+    app.processEvents()
+    assert not received and not messages
+    controller.closing = True
+    controller._lifecycleProgress.emit(2, row)
+    app.processEvents()
+    assert not received and not messages
+    controller.active = controller.closing = False
+
+
+def test_staged_startup_failure_is_specific_and_cleanup_allows_retry(app, caplog):
+    from mtg_play.diagnostics import LifecycleDiagnostics
+
+    class FailingOwner(Owner):
+        def __init__(self):
+            super().__init__(None)
+            self.lifecycle = LifecycleDiagnostics()
+
+        def set_progress_callback(self, callback):
+            self.lifecycle.set_callback(callback)
+
+        def __enter__(self):
+            with self.lifecycle.stage("server_startup"):
+                raise TimeoutError("PRIVATE_CARD_AND_ENGINE_PAYLOAD")
+
+    owner = FailingOwner()
+    controller = SessionController(adapter_factory=lambda: owner)
+    messages = []
+    controller.statusChanged.connect(messages.append)
+    controller.start(setup(), (DeckDocument(), DeckDocument()))
+    drain(app, lambda: not controller.busy)
+    assert owner.closed and not controller.active
+    assert "starting the local rules engine" in messages[-1]
+    assert "PRIVATE" not in " ".join(messages) + caplog.text
+    controller.adapter_factory = lambda: Owner(ScriptedGameSession((snapshot(),)))
+    assert controller.start(setup(), (DeckDocument(), DeckDocument()))
+    drain(app, lambda: not controller.busy)
+    close(app, controller)
+
+
+def test_opening_state_timeout_cleans_up_before_retry(app, monkeypatch):
+    from mtg_play import presentation
+    from mtg_play.adapter import AdapterError
+
+    class NeverReady(ScriptedGameSession):
+        def snapshot(self, player_id):
+            raise AdapterError("SNAPSHOT_NOT_READY")
+
+    monkeypatch.setattr(presentation, "OPENING_STATE_TIMEOUT", 0)
+    owner = Owner(NeverReady((snapshot(),)))
+    controller = SessionController(adapter_factory=lambda: owner)
+    progress, messages = [], []
+    controller.startupProgress.connect(progress.append)
+    controller.statusChanged.connect(messages.append)
+    controller.start(setup(), (DeckDocument(), DeckDocument()))
+    drain(app, lambda: not controller.busy)
+    controller.refresh()
+    drain(app, lambda: not controller.busy)
+    assert owner.closed and not controller.active and controller._owner is None
+    assert any(row["code"] == "PLAY_OPENING_STATE_TIMEOUT" for row in progress)
+    assert "waiting for the opening game state" in messages[-1]
+    controller.adapter_factory = lambda: Owner(ScriptedGameSession((snapshot(),)))
+    assert controller.start(setup(), (DeckDocument(), DeckDocument()))
+    drain(app, lambda: not controller.busy)
+    close(app, controller)
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [("elapsed_ms", "PRIVATE"), ("code", "PRIVATE"), ("stage", "PRIVATE")],
+)
+def test_startup_progress_rejects_private_or_invalid_payload_fields(app, field, value):
+    controller = SessionController()
+    controller.active = True
+    received = []
+    controller.startupProgress.connect(received.append)
+    progress = dict(stage="server_startup", state="started", elapsed_ms=0.0, code=None)
+    progress[field] = value
+    controller._lifecycleProgress.emit(controller._epoch, progress)
+    app.processEvents()
+    assert not received
+    controller.active = False

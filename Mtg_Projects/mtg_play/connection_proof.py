@@ -47,7 +47,11 @@ EVENTS = {
 
 
 class ProofError(RuntimeError):
-    """An actionable feasibility failure."""
+    """An actionable feasibility failure with an optional stable timeout code."""
+
+    def __init__(self, message, *, code=None):
+        self.code = code
+        super().__init__(message)
 
 
 def decode_event(line: str) -> dict:
@@ -113,12 +117,16 @@ class BridgeEvents:
         while True:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
-                raise ProofError(f"Timed out waiting for bridge {event_name}")
+                raise ProofError(
+                    f"Timed out waiting for bridge {event_name}",
+                    code="ENGINE_OPERATION_TIMEOUT",
+                )
             try:
                 event = self.events.get(timeout=remaining)
             except queue.Empty as error:
                 raise ProofError(
-                    f"Timed out waiting for bridge {event_name}"
+                    f"Timed out waiting for bridge {event_name}",
+                    code="ENGINE_OPERATION_TIMEOUT",
                 ) from error
             if event is None:
                 raise ProofError(
@@ -259,13 +267,29 @@ def wait_for_server(process: subprocess.Popen, log: Path, deadline: float):
         if "Failed to start server" in text or "Unable to start MAGE server" in text:
             raise ProofError(f"XMage server startup failed; inspect {log}")
         time.sleep(0.1)
-    raise ProofError(f"XMage server startup timed out; inspect {log}")
+    raise ProofError(
+        f"XMage server startup timed out; inspect {log}",
+        code="ENGINE_OPERATION_TIMEOUT",
+    )
 
 
 def run_proof(
-    bundle: Path, jdk: Path, port: int = 0, scenario=None, runtime_consumer=None
+    bundle: Path,
+    jdk: Path,
+    port: int = 0,
+    scenario=None,
+    runtime_consumer=None,
+    *,
+    diagnostics=None,
 ) -> dict:
-    java, javac, manifest = validate_installation(bundle, jdk)
+    if diagnostics is None:
+        if __package__:
+            from .diagnostics import LifecycleDiagnostics
+        else:
+            from diagnostics import LifecycleDiagnostics
+        diagnostics = LifecycleDiagnostics()
+    with diagnostics.stage("runtime_validation"):
+        java, javac, manifest = validate_installation(bundle, jdk)
     workspace = (
         HERE / ".runtime" / (time.strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:8])
     )
@@ -281,37 +305,39 @@ def run_proof(
     reservations = []
     failure = None
     try:
-        reservations.append(reserve_port(port))
-        reservations.append(reserve_port())
-        port, secondary = [item.getsockname()[1] for item in reservations]
-        server = prepare_workspace(bundle, workspace, port, secondary)
-        classes = workspace / "classes"
-        classes.mkdir()
-        classpath = str(server / "lib/*")
-        compile_log = (workspace / "compile.log").open("w", encoding="utf-8")
-        logs.append(compile_log)
-        compiled = subprocess.run(
-            [
-                str(javac),
-                "--release",
-                "8",
-                "-encoding",
-                "UTF-8",
-                "-cp",
-                classpath,
-                "-d",
-                str(classes),
-                *map(str, sorted((HERE / "java").glob("*.java"))),
-            ],
-            stdout=compile_log,
-            stderr=subprocess.STDOUT,
-            timeout=60,
-            check=False,
-        )
-        if compiled.returncode:
-            raise ProofError(
-                f"Java bridge compilation failed; inspect {compile_log.name}"
+        with diagnostics.stage("workspace_preparation"):
+            reservations.append(reserve_port(port))
+            reservations.append(reserve_port())
+            port, secondary = [item.getsockname()[1] for item in reservations]
+            server = prepare_workspace(bundle, workspace, port, secondary)
+        with diagnostics.stage("bridge_compilation"):
+            classes = workspace / "classes"
+            classes.mkdir()
+            classpath = str(server / "lib/*")
+            compile_log = (workspace / "compile.log").open("w", encoding="utf-8")
+            logs.append(compile_log)
+            compiled = subprocess.run(
+                [
+                    str(javac),
+                    "--release",
+                    "8",
+                    "-encoding",
+                    "UTF-8",
+                    "-cp",
+                    classpath,
+                    "-d",
+                    str(classes),
+                    *map(str, sorted((HERE / "java").glob("*.java"))),
+                ],
+                stdout=compile_log,
+                stderr=subprocess.STDOUT,
+                timeout=60,
+                check=False,
             )
+            if compiled.returncode:
+                raise ProofError(
+                    f"Java bridge compilation failed; inspect {compile_log.name}"
+                )
         result.update({"primary_port": port, "secondary_port": secondary})
         classpath = os.pathsep.join((str(classes), classpath))
         server_log_path = workspace / "server.log"
@@ -330,52 +356,55 @@ def run_proof(
             "-Djava.net.preferIPv4Stack=true",
             "-Dh2.bindAddress=127.0.0.1",
         ]
-        server_process = subprocess.Popen(
-            [*base, "-Xmx1024m", "-cp", classpath, "ManaforgeServerHost"],
-            cwd=server,
-            stdin=subprocess.PIPE,
-            stdout=server_log,
-            stderr=subprocess.STDOUT,
-            text=True,
-            encoding="utf-8",
-            creationflags=flags,
-        )
-        print(f"Waiting for local XMage server; logs: {workspace}", flush=True)
-        wait_for_server(
-            server_process, server_log_path, time.monotonic() + START_TIMEOUT
-        )
-        bridge_dir = workspace / "bridge"
-        bridge_dir.mkdir()
-        bridge_process = subprocess.Popen(
-            [*base, "-Xmx256m", "-cp", classpath, "ManaforgeBridge"],
-            cwd=bridge_dir,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=bridge_log,
-            text=True,
-            encoding="utf-8",
-            creationflags=flags,
-        )
-        events = BridgeEvents(bridge_process, transcript)
-        deadline = time.monotonic() + CONNECT_TIMEOUT
-        send(
-            bridge_process,
-            "connect",
-            "connect-1",
-            port=port,
-            username="mf_" + uuid.uuid4().hex[:10],
-        )
-        events.wait("connected", deadline, "connect-1")
-        send(bridge_process, "status", "status-1")
-        status = events.wait("status", deadline, "status-1")
-        if (
-            not status.get("connected")
-            or status.get("engine_version") != manifest["engine"]
-        ):
-            raise ProofError(f"Unexpected engine status: {status}")
-        if not events.callbacks:
-            events.wait("callback", deadline)
-        result.update({"status": status, "callbacks": list(events.callbacks)})
+        with diagnostics.stage("server_startup"):
+            server_process = subprocess.Popen(
+                [*base, "-Xmx1024m", "-cp", classpath, "ManaforgeServerHost"],
+                cwd=server,
+                stdin=subprocess.PIPE,
+                stdout=server_log,
+                stderr=subprocess.STDOUT,
+                text=True,
+                encoding="utf-8",
+                creationflags=flags,
+            )
+            print(f"Waiting for local XMage server; logs: {workspace}", flush=True)
+            wait_for_server(
+                server_process, server_log_path, time.monotonic() + START_TIMEOUT
+            )
+        with diagnostics.stage("client_connection"):
+            bridge_dir = workspace / "bridge"
+            bridge_dir.mkdir()
+            bridge_process = subprocess.Popen(
+                [*base, "-Xmx256m", "-cp", classpath, "ManaforgeBridge"],
+                cwd=bridge_dir,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=bridge_log,
+                text=True,
+                encoding="utf-8",
+                creationflags=flags,
+            )
+            events = BridgeEvents(bridge_process, transcript)
+            deadline = time.monotonic() + CONNECT_TIMEOUT
+            send(
+                bridge_process,
+                "connect",
+                "connect-1",
+                port=port,
+                username="mf_" + uuid.uuid4().hex[:10],
+            )
+            events.wait("connected", deadline, "connect-1")
+        with diagnostics.stage("engine_handshake"):
+            send(bridge_process, "status", "status-1")
+            status = events.wait("status", deadline, "status-1")
+            if (
+                not status.get("connected")
+                or status.get("engine_version") != manifest["engine"]
+            ):
+                raise ProofError(f"Unexpected engine status: {status}")
+            if not events.callbacks:
+                events.wait("callback", deadline)
+            result.update({"status": status, "callbacks": list(events.callbacks)})
         if scenario is not None or runtime_consumer is not None:
 
             def launch_peer():
@@ -406,20 +435,25 @@ def run_proof(
                 )
             if scenario is not None:
                 result["gameplay"] = scenario(bridge_process, events, launch_peer, port)
-        send(bridge_process, "shutdown", "shutdown-1")
-        shutdown = events.wait(
-            "shutdown", time.monotonic() + STOP_TIMEOUT, "shutdown-1"
-        )
-        if shutdown.get("connected") is not False:
-            raise ProofError("Bridge did not confirm disconnection")
-        result["disconnected"] = True
+        with diagnostics.stage("runtime_shutdown"):
+            send(bridge_process, "shutdown", "shutdown-1")
+            shutdown = events.wait(
+                "shutdown", time.monotonic() + STOP_TIMEOUT, "shutdown-1"
+            )
+            if shutdown.get("connected") is not False:
+                raise ProofError("Bridge did not confirm disconnection")
+            result["disconnected"] = True
     except (Exception, KeyboardInterrupt) as error:
         failure = str(error) or type(error).__name__
     finally:
-        for reservation in reservations:
-            reservation.close()
-        # Continue cleanup even if one process cannot be reaped.
+        cleanup_stage = diagnostics.begin("process_cleanup")
         cleanup_errors = []
+        for reservation in reservations:
+            try:
+                reservation.close()
+            except OSError:
+                cleanup_errors.append("Port reservation cleanup failed")
+        # Continue cleanup even if one process cannot be reaped.
         for index, (peer, peer_events) in enumerate(peers):
             try:
                 if peer.poll() is None:
@@ -430,7 +464,14 @@ def run_proof(
                 result["peer_" + str(index)] = stop_process(peer)
             except (ProofError, OSError, subprocess.SubprocessError) as error:
                 cleanup_errors.append(f"peer {index}: {error}")
-                result["peer_" + str(index)] = stop_process(peer)
+                try:
+                    result["peer_" + str(index)] = stop_process(peer)
+                except (OSError, subprocess.SubprocessError):
+                    result["peer_" + str(index)] = {
+                        "started": True,
+                        "exit_code": None,
+                        "reaped": False,
+                    }
             peer_events.thread.join(timeout=2)
         for name, process, line in (
             ("bridge", bridge_process, None),
@@ -440,10 +481,19 @@ def run_proof(
                 result[name] = stop_process(process, line)
             except (OSError, subprocess.SubprocessError) as error:
                 cleanup_errors.append(f"{name}: {error}")
+                # Missing cleanup data is not evidence that a started child exited.
+                result[name] = {
+                    "started": process is not None,
+                    "exit_code": None,
+                    "reaped": False,
+                }
         if events is not None:
             events.thread.join(timeout=2)
         for log in logs:
-            log.close()
+            try:
+                log.close()
+            except OSError:
+                cleanup_errors.append("Diagnostic stream cleanup failed")
         if cleanup_errors:
             failure = f"{failure or ''} Cleanup failed: {cleanup_errors}"
         if failure is None:
@@ -455,13 +505,24 @@ def run_proof(
                 state = result[name]
                 if state.get("forced") or state.get("exit_code") != 0:
                     failure = f"{name} did not shut down normally: {state}"
+        cleanup_failed = bool(cleanup_errors) or any(
+            state.get("started") and (state.get("forced") or not state.get("reaped"))
+            for name, state in result.items()
+            if name in ("bridge", "server") or name.startswith("peer_")
+        )
+        diagnostics.end(cleanup_stage, failure="FAILED" if cleanup_failed else None)
+        result["lifecycle"] = diagnostics.records
         result["success"] = failure is None
         if failure:
             result["error"] = failure
-        (workspace / "result.json").write_text(
-            json.dumps(result, indent=2) + "\n",
-            encoding="utf-8",
-        )
+        try:
+            (workspace / "result.json").write_text(
+                json.dumps(result, indent=2) + "\n",
+                encoding="utf-8",
+            )
+        except OSError:
+            # Do not discard process-exit evidence if diagnostic storage fails.
+            result["diagnostics_write_failed"] = True
     return result
 
 

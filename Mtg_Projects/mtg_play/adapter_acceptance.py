@@ -687,6 +687,7 @@ def main():
         code = error.code.split(":", 1)[0]
         result["error"] = dict(code=code, category=diagnostic_category(code))
     finally:
+        result["lifecycle"] = adapter.lifecycle.records
         if adapter.result is not None:
             result["runtime"] = adapter.result.to_dict()
     payload = json.dumps(result, indent=2)

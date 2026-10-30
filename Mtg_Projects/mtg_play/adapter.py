@@ -36,6 +36,7 @@ from .contracts import (
     RuntimeReport,
 )
 from .decks import prepare_deck
+from .diagnostics import LifecycleDiagnostics
 
 if TYPE_CHECKING:
     from mtg_core.decks import DeckDocument
@@ -121,6 +122,10 @@ class LocalGameAdapter:
         self._runtime = None
         self._session = None
         self._runtime_result = None
+        self.lifecycle = LifecycleDiagnostics()
+
+    def set_progress_callback(self, callback):
+        self.lifecycle.set_callback(callback)
 
     def __enter__(self):
         if self._thread is not None:
@@ -134,7 +139,10 @@ class LocalGameAdapter:
         def run():
             try:
                 self._runtime_result = transport.run_proof(
-                    self._bundle, self._jdk, runtime_consumer=consume
+                    self._bundle,
+                    self._jdk,
+                    runtime_consumer=consume,
+                    diagnostics=self.lifecycle,
                 )
             except Exception:
                 self._runtime_result = {
@@ -150,8 +158,18 @@ class LocalGameAdapter:
         )
         self._thread.start()
         if not self._ready.wait(240) or self._runtime is None or self._done.is_set():
-            self.close()
-            raise AdapterError("ENGINE_STARTUP_FAILED")
+            try:
+                self.close()
+            except AdapterError as error:
+                report = self.result
+                if (
+                    error.code != "ENGINE_RUNTIME_FAILED"
+                    or report is None
+                    or any(code is None for _, code in report.process_exit_codes)
+                ):
+                    raise
+            failure = self.lifecycle.failure
+            raise AdapterError(failure["code"] if failure else "ENGINE_STARTUP_FAILED")
         return self
 
     @property
@@ -161,7 +179,8 @@ class LocalGameAdapter:
         processes = {
             key: value
             for key, value in self._runtime_result.items()
-            if key in ("server", "bridge") or key.startswith("peer_")
+            if (key in ("server", "bridge") or key.startswith("peer_"))
+            and value.get("started", True)
         }
         return RuntimeReport(
             bool(self._runtime_result.get("success")),
@@ -352,15 +371,16 @@ class LocalGameAdapter:
             or setup.seats[1].controller != "engine_ai"
         ):
             raise AdapterError("UNSUPPORTED_AI_SETUP")
-        prepared = tuple(
-            prepare_deck(
-                deck,
-                self._resolve,
-                oracle_lookup,
-                commander=setup.format == "commander",
+        with self.lifecycle.stage("deck_resolution"):
+            prepared = tuple(
+                prepare_deck(
+                    deck,
+                    self._resolve,
+                    oracle_lookup,
+                    commander=setup.format == "commander",
+                )
+                for deck in decks
             )
-            for deck in decks
-        )
         self._session = XmageGameSession(self, setup, prepared)
         self._session._start()
         return self._session
@@ -389,6 +409,7 @@ class XmageGameSession:
         self._timings = {}
         self.session_id = _id()
         self._owner, self._setup, self._decks = owner, setup, decks
+        self._lifecycle = getattr(owner, "lifecycle", None) or LifecycleDiagnostics()
         self._clients, self._views, self._pending, self._replies = {}, {}, {}, {}
         self._player_ids, self._names, self._game_ids = {}, {}, {}
         self._objects, self._wire_objects, self._choices, self._actions = {}, {}, {}, {}
@@ -411,53 +432,57 @@ class XmageGameSession:
         humans = [
             seat for seat in self._setup.seats if seat.controller == "local_human"
         ]
-        for index, seat in enumerate(humans):
-            if index == 0:
-                process, stream = first, events
-            else:
-                process, stream = launch()
-            self._clients[seat.seat_id] = process, stream
-            if index > 0:
-                request = _id()
-                username = "mf_" + _id()[:10]
-                self._names[username] = seat.seat_id
-                transport.send(
-                    process, "connect", request, port=port, username=username
-                )
-                stream.wait("connected", time.monotonic() + 30, request)
-        # The initial proof client already connected; discover its generated username.
-        first_seat = self._setup.seats[0].seat_id
-        self._request(first_seat, "status", "status")
-        created = self._request(
-            first_seat,
-            "create_game",
-            "table_created",
-            format=self._setup.format,
-            seats=len(self._setup.seats),
-            controllers=[seat.controller for seat in self._setup.seats],
-        )
-        table = created["table_id"]
-        # XMage's own lobby joins AI through the table owner's session before
-        # joining the human. AI has no client, private view, or response channel.
-        entries = tuple(zip(self._setup.seats, self._decks))
-        for seat, deck in sorted(
-            entries, key=lambda item: item[0].controller != "engine_ai"
-        ):
-            fields = {}
-            if seat.controller == "engine_ai":
-                username = "ai_" + _id()[:10]
-                self._names[username] = seat.seat_id
-                fields = dict(controller="engine_ai", player_name=username)
-            self._request(
-                first_seat if seat.controller == "engine_ai" else seat.seat_id,
-                "join_table",
-                "joined",
-                table_id=table,
-                cards=deck.cards,
-                sideboard=deck.sideboard,
-                **fields,
+        with self._lifecycle.stage("player_connections"):
+            for index, seat in enumerate(humans):
+                if index == 0:
+                    process, stream = first, events
+                else:
+                    process, stream = launch()
+                self._clients[seat.seat_id] = process, stream
+                if index > 0:
+                    request = _id()
+                    username = "mf_" + _id()[:10]
+                    self._names[username] = seat.seat_id
+                    transport.send(
+                        process, "connect", request, port=port, username=username
+                    )
+                    stream.wait("connected", time.monotonic() + 30, request)
+            # The initial proof client already connected; discover its generated username.
+            first_seat = self._setup.seats[0].seat_id
+            self._request(first_seat, "status", "status")
+        with self._lifecycle.stage("table_creation"):
+            created = self._request(
+                first_seat,
+                "create_game",
+                "table_created",
+                format=self._setup.format,
+                seats=len(self._setup.seats),
+                controllers=[seat.controller for seat in self._setup.seats],
             )
-        self._request(first_seat, "start_game", "started", table_id=table)
+        with self._lifecycle.stage("deck_submission"):
+            table = created["table_id"]
+            # XMage's own lobby joins AI through the table owner's session before
+            # joining the human. AI has no client, private view, or response channel.
+            entries = tuple(zip(self._setup.seats, self._decks))
+            for seat, deck in sorted(
+                entries, key=lambda item: item[0].controller != "engine_ai"
+            ):
+                fields = {}
+                if seat.controller == "engine_ai":
+                    username = "ai_" + _id()[:10]
+                    self._names[username] = seat.seat_id
+                    fields = dict(controller="engine_ai", player_name=username)
+                self._request(
+                    first_seat if seat.controller == "engine_ai" else seat.seat_id,
+                    "join_table",
+                    "joined",
+                    table_id=table,
+                    cards=deck.cards,
+                    sideboard=deck.sideboard,
+                    **fields,
+                )
+        with self._lifecycle.stage("match_start"):
+            self._request(first_seat, "start_game", "started", table_id=table)
 
     def _check(self, player):
         if any(

@@ -65,9 +65,10 @@ AI strategy is not overridden if it declines to block; missing evidence fails CI
 
 The Freeform increment is being evaluated by
 [CI run 40977624067](https://github.com/RyMeep128/Manaforge/actions/runs/40977624067)
-at `ef38464050689315480d033dd87dee18f96171ce`. No subsequent push is permitted until
-that run finishes and its outcome has been reviewed. The local follow-on scenarios
-have not run and are not part of that run's evidence.
+at `ef38464050689315480d033dd87dee18f96171ce`. The user will supply its outcome;
+do not monitor CI or push further work. Expected success is a development
+assumption, not verified evidence. The local follow-on scenarios have not run
+and are not part of that run's evidence.
 
 Story 1 is **not accepted**. Freeform CI evidence is pending, and Commander/blocking
 scenarios are unverified local work. Wider deck behavior also remains outstanding.
@@ -79,6 +80,48 @@ New tests execute in GitHub Actions; identify actual runs before claiming a pass
 Installed Play remains gated until the full acceptance and manual UX review pass.
 No engine pin, compatibility manifest, saved deck, or existing printing identity
 is changed by this baseline. No release, tag, or merge is part of this increment.
+
+### Story 3 increment: measured startup and readiness (local, unverified)
+
+The runtime and adapter report actual work stages: runtime validation, workspace
+preparation, bridge compilation, server startup, client connection, engine
+handshake, deck resolution, player connections, table creation, deck submission,
+match start, runtime disconnection, and process cleanup. Presentation also tracks
+waiting for the first authorized game state. The existing status label receives
+stage descriptions through queued Qt signals; no percentage or simulated progress
+is introduced. This is lifecycle feedback, not the final loading-screen design.
+
+Lifecycle diagnostics retain at most 128 events with fixed stage/state identifiers,
+measured elapsed milliseconds, and stable `PLAY_<STAGE>_<FAILURE>` codes. Timeout
+and uncertain outcomes are distinguished. These records are included in sanitized
+adapter acceptance reports and the runtime result file. Failure logs contain
+stage/timing codes rather than private exception messages or tracebacks. Observer
+failures cannot interrupt engine work; stale UI epochs cannot overwrite a newer
+session or a closing screen.
+
+A 60-second readiness deadline applies after match creation. If no first snapshot
+is available at the next failed readiness check after that deadline, worker-owned
+cleanup runs before returning to setup. In-flight engine requests finish under
+their existing timeouts; this is not a hard interruption of uncertain work.
+Closing during the wait records cancellation. Later transient snapshot gaps retain
+the existing recovery behavior and are not treated as a new opening-state timeout.
+
+Processes explicitly reported as never started are omitted from the runtime's
+exit-code list. Started processes with unconfirmed cleanup remain represented by
+unknown exit codes, preventing an unsafe retry. Startup errors retain their
+specific stage only after cleanup is confirmed. The existing ownership rules,
+engine integrity checks, and prohibition on replaying uncertain commands remain.
+
+Queue inspection found that artwork already has its own worker and refresh skips
+submission while another gameplay job is queued/running. No shared queue rewrite
+or additional polling backlog is introduced by this increment.
+
+New tests cover measured/private-data-free failures, bounded history, broken
+observers, compilation failure before any child starts, repeated failed startup
+with confirmed/unconfirmed cleanup, queued GUI delivery, obsolete progress, and
+opening-state timeout/retry. They have not run locally. Story 3 is **not accepted**:
+real-engine repeated start/fail/retry/close evidence and full failure-path UX
+review remain required. No CI results have been assumed as verified evidence.
 
 ## Existing pass-and-play implementation (historical baseline)
 

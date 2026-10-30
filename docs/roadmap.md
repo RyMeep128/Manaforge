@@ -335,7 +335,9 @@ is a real pinned-engine human-versus-AI scenario in CI, before dependent UI work
 The first Freeform bridge/adapter increment and its `ai-freeform` CI scenario are
 implemented but unverified. Follow-on Commander AI and blocking scenarios are
 prepared locally for a later CI run; all Story 1 acceptance evidence remains
-pending.
+pending. Measured startup stages, a bounded first-state wait, and cleanup-report
+fixes are also prepared locally; their tests and real-engine recovery acceptance
+remain unverified.
 The subsequent lobby and permanent two-player Focused View preserve future mixed
 controllers and 2-5-player views without implementing networking or larger layouts.
 Source-only preview work does not enable Play in installed releases. The existing
