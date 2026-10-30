@@ -1,0 +1,27 @@
+--- a/Mage/src/main/java/mage/game/mulligan/LondonMulligan.java
++++ b/Mage/src/main/java/mage/game/mulligan/LondonMulligan.java
+@@ -109,6 +109,13 @@
+         }
+         drawHand(numCards, player, game);
+ 
++
++    }
++
++    @Override
++    public void endMulligan(Game game, UUID playerId) {
++        Player player = game.getPlayer(playerId);
++        int newHandSize = openingHandSizes.get(playerId);
+         while (player.canRespond() && player.getHand().size() > newHandSize) {
+             Target target = new TargetCardInHand(new FilterCard("card (" + (player.getHand().size() - newHandSize) + " more) to put on the bottom of your library"));
+             player.chooseTarget(Outcome.Discard, target, null, game);
+@@ -117,10 +124,6 @@
+     }
+ 
+     @Override
+-    public void endMulligan(Game game, UUID playerId) {
+-    }
+-
+-    @Override
+     public LondonMulligan copy() {
+         return new LondonMulligan(this);
+     }

@@ -29,6 +29,59 @@ def is_land(obj):
     )
 
 
+BATTLEFIELD_SIZE = C.QSize(112, 88)
+FULL_CARD_SIZE = C.QSize(112, 158)
+
+
+def permanent_badge(obj):
+    if (
+        obj.hidden
+        or obj.face_down
+        or not obj.characteristics
+        or obj.zone != "battlefield"
+    ):
+        return None
+    c = obj.characteristics
+    if (
+        "Creature" in (c.type_line or "")
+        and c.power is not None
+        and c.toughness is not None
+    ):
+        return f"{c.power}/{c.toughness}"
+    if "Planeswalker" in (c.type_line or "") and c.loyalty is not None:
+        return str(c.loyalty)
+    if "Battle" in (c.type_line or "") and c.defense is not None:
+        return str(c.defense)
+    return None
+
+
+def inspection_pixmap(image, widget, width, height):
+    """Sample once at the display's physical resolution, including high DPI."""
+    ratio = max(1.0, widget.devicePixelRatioF())
+    pixmap = image.scaled(
+        round(width * ratio),
+        round(height * ratio),
+        C.Qt.AspectRatioMode.KeepAspectRatio,
+        C.Qt.TransformationMode.SmoothTransformation,
+    )
+    pixmap.setDevicePixelRatio(ratio)
+    return pixmap
+
+
+class FocusedBoard(W.QWidget):
+    """Code-drawn playmat; no downloaded backgrounds or gameplay information."""
+
+    def paintEvent(self, event):
+        painter = G.QPainter(self)
+        gradient = G.QLinearGradient(0, 0, 0, self.height())
+        gradient.setColorAt(0, G.QColor("#16252b"))
+        gradient.setColorAt(0.5, G.QColor("#10191f"))
+        gradient.setColorAt(1, G.QColor("#192c30"))
+        painter.fillRect(self.rect(), gradient)
+        painter.setPen(G.QPen(G.QColor("#2b3c42"), 1))
+        painter.drawLine(16, self.height() // 2, self.width() - 16, self.height() // 2)
+
+
 def live_card_text(view, obj):
     """Authorized engine observations only; printed artwork is never current rules."""
     names = {player.player_id: player.name for player in view.players}
@@ -46,7 +99,11 @@ def live_card_text(view, obj):
             for value in [
                 c.type_line,
                 "Color: " + c.color if c.color else None,
-                f"{c.power}/{c.toughness}" if c.power is not None else None,
+                f"{c.power}/{c.toughness}"
+                if "Creature" in (c.type_line or "")
+                and c.power is not None
+                and c.toughness is not None
+                else None,
                 "Transformed" if c.transformed else None,
                 "Copy" if c.is_copy else None,
                 "Flipped" if c.flipped else None,
@@ -146,93 +203,95 @@ class GameCard(W.QAbstractButton):
             self.apply_scale(self.card_scale)
             self.update()
 
+    def base_size(self):
+        if self.obj and self.obj.zone == "battlefield":
+            size = C.QSize(BATTLEFIELD_SIZE)
+            if self.obj.tapped:
+                size.transpose()
+            return size
+        return C.QSize(FULL_CARD_SIZE)
+
     def apply_scale(self, scale):
         self.card_scale = scale
-        height = 132 if self.obj and self.obj.zone == "battlefield" else 185
-        self.setFixedSize(round(112 * scale), round(height * scale))
+        size = self.base_size()
+        self.setFixedSize(round(size.width() * scale), round(size.height() * scale))
         self.update()
 
     def paintEvent(self, event):
         if self.obj is None:
             return
-        p = G.QPainter(self)
-        p.scale(self.card_scale, self.card_scale)
-        p.setRenderHint(G.QPainter.RenderHint.Antialiasing)
-        border = COLORS["accent"] if self.actionable else COLORS["border_strong"]
-        p.setPen(
-            G.QPen(
-                G.QColor("#efc36d" if self.selected or self.hasFocus() else border),
-                3 if self.actionable or self.selected else 1,
-            )
-        )
-        p.setBrush(G.QColor(COLORS["surface_raised"]))
-        p.drawRoundedRect(
-            C.QRectF(
-                0, 0, 112, 132 if self.obj.zone == "battlefield" else 185
-            ).adjusted(2, 2, -2, -2),
-            7,
-            7,
-        )
         compact = self.obj.zone == "battlefield"
-        rect = C.QRect(7, 7, 98, 83 if compact else 137)
+        logical = BATTLEFIELD_SIZE if compact else FULL_CARD_SIZE
+        p = G.QPainter(self)
+        p.setRenderHint(G.QPainter.RenderHint.Antialiasing)
+        p.setRenderHint(G.QPainter.RenderHint.SmoothPixmapTransform)
+        p.scale(self.card_scale, self.card_scale)
+        if compact and self.obj.tapped:
+            p.translate(logical.height() / 2, logical.width() / 2)
+            p.rotate(90)
+            p.translate(-logical.width() / 2, -logical.height() / 2)
+        frame = C.QRectF(1.5, 1.5, logical.width() - 3, logical.height() - 3)
+        color = (
+            "#efc36d"
+            if self.selected or self.hasFocus()
+            else COLORS["accent"]
+            if self.actionable
+            else "#3b454a"
+        )
+        p.setPen(
+            G.QPen(G.QColor(color), 2.5 if self.actionable or self.selected else 1)
+        )
+        p.setBrush(G.QColor("#080d11"))
+        p.drawRoundedRect(frame, 4, 4)
+        rect = C.QRect(4, 4, logical.width() - 8, logical.height() - 8)
         image = self.artwork.get(self.obj)
         if image is not None and not image.isNull():
-            scaled = image.scaled(
-                rect.size(),
-                C.Qt.AspectRatioMode.KeepAspectRatio,
-                C.Qt.TransformationMode.SmoothTransformation,
+            size = image.size()
+            size.scale(rect.size(), C.Qt.AspectRatioMode.KeepAspectRatio)
+            target = C.QRect(
+                rect.center().x() - size.width() // 2,
+                rect.center().y() - size.height() // 2,
+                size.width(),
+                size.height(),
             )
-            p.save()
-            if self.obj.tapped:
-                p.translate(rect.center())
-                p.rotate(90)
-                scaled = image.scaled(
-                    80 if compact else 132,
-                    80 if compact else 92,
-                    C.Qt.AspectRatioMode.KeepAspectRatio,
-                    C.Qt.TransformationMode.SmoothTransformation,
-                )
-                p.drawPixmap(-scaled.width() // 2, -scaled.height() // 2, scaled)
-            else:
-                p.drawPixmap(
-                    rect.center().x() - scaled.width() // 2, rect.top(), scaled
-                )
-            p.restore()
+            p.drawPixmap(target, image, image.rect())
         else:
             p.setPen(G.QColor(COLORS["text_secondary"]))
             p.drawText(
-                rect.adjusted(4, 4, -4, -4),
+                rect.adjusted(3, 3, -3, -3),
                 C.Qt.AlignmentFlag.AlignCenter | C.Qt.TextFlag.TextWordWrap,
                 object_name(self.obj),
             )
-        p.setPen(G.QColor(COLORS["text"]))
+        badge = permanent_badge(self.obj)
+        if badge:
+            width = max(27, min(74, p.fontMetrics().horizontalAdvance(badge) + 10))
+            box = C.QRect(logical.width() - width - 3, logical.height() - 19, width, 16)
+            p.setPen(G.QColor("#9aabae"))
+            p.setBrush(G.QColor("#10151e"))
+            p.drawRoundedRect(C.QRectF(box), 3, 3)
+            p.setPen(G.QColor("#ffffff"))
+            p.drawText(box, C.Qt.AlignmentFlag.AlignCenter, badge)
+        # Small live markers overlay the art instead of reserving a text footer.
+        markers = []
+        if self.obj.damage:
+            markers.append((str(self.obj.damage), "#a53b39"))
         c = (
             self.obj.characteristics
             if not self.obj.hidden and not self.obj.face_down
             else None
         )
-        badge = []
-        if self.selected:
-            badge.append("Selected")
-        elif self.actionable:
-            badge.append("Available")
-        if c and "Land" in (c.type_line or ""):
-            badge.append("Land")
-        if c and c.power is not None and c.toughness is not None:
-            badge.append(f"{c.power}/{c.toughness}")
-        if self.obj.tapped:
-            badge.append("Tapped")
-        if self.obj.damage:
-            badge.append(f"{self.obj.damage} damage")
         if c and c.counters:
-            badge.extend(f"{count} {name}" for name, count in c.counters)
+            markers.append((str(sum(value for _, value in c.counters)), "#395b83"))
         if self.combat:
-            badge.append(self.combat)
-        p.drawText(
-            C.QRect(6, 94 if compact else 145, 100, 36),
-            C.Qt.AlignmentFlag.AlignCenter | C.Qt.TextFlag.TextWordWrap,
-            " · ".join(badge) or object_name(self.obj),
-        )
+            markers.append(
+                ("A" if self.combat.startswith("Attacking") else "B", "#a06b2a")
+            )
+        for index, (text, background) in enumerate(markers):
+            box = C.QRect(4 + index * 19, 4, 17, 16)
+            p.setPen(G.QColor("#ffffff"))
+            p.setBrush(G.QColor(background))
+            p.drawRoundedRect(C.QRectF(box), 3, 3)
+            p.drawText(box, C.Qt.AlignmentFlag.AlignCenter, text)
 
     def enterEvent(self, event):
         super().enterEvent(event)
@@ -265,13 +324,19 @@ class CardLane(W.QScrollArea):
         self.setVerticalScrollBarPolicy(C.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.content = W.QWidget()
         self.row = W.QHBoxLayout(self.content)
+        self.setFrameShape(W.QFrame.Shape.NoFrame)
+        self.setStyleSheet(
+            "QScrollArea { background: transparent; border: none; } QWidget { background: transparent; }"
+        )
         self.row.setContentsMargins(3, 3, 3, 3)
+        self.row.setSpacing(8)
         self.row.addStretch()
         self.section_labels = {}
         for title in ("Lands", "Other permanents"):
-            label = W.QLabel(title)
-            label.setWordWrap(True)
-            label.setMaximumWidth(64)
+            label = W.QLabel("|")
+            label.setToolTip(title)
+            label.setAccessibleName(title)
+            label.setMaximumWidth(8)
             label.hide()
             self.section_labels[title] = label
         self.setWidget(self.content)
@@ -334,7 +399,9 @@ class CardLane(W.QScrollArea):
 
     def fit_cards(self, scale, *, battlefield=False):
         self.card_scale = scale
-        self.setFixedHeight(round((132 if battlefield else 185) * scale) + 24)
+        self.setFixedHeight(
+            round((112 if battlefield else FULL_CARD_SIZE.height()) * scale) + 12
+        )
         for card in self.cards.values():
             card.apply_scale(scale)
 
@@ -348,11 +415,13 @@ class OpeningHandFan(W.QWidget):
     hovered = C.pyqtSignal(str)
     hoverEnded = C.pyqtSignal()
 
-    def __init__(self, artwork, parent=None):
+    def __init__(self, artwork, parent=None, *, opening=True):
         super().__init__(parent)
         self.artwork = artwork
+        self.opening = opening
+        self.card_scale = 1.0
         self.cards = {}
-        self.setMinimumHeight(180)
+        self.setMinimumHeight(180 if opening else 120)
 
     def clear(self):
         for card in self.cards.values():
@@ -363,7 +432,9 @@ class OpeningHandFan(W.QWidget):
             card.deleteLater()
         self.cards.clear()
 
-    def present(self, objects, options):
+    def present(self, objects, actions, options=None, combat=None):
+        if options is None:
+            options, actions = actions, set()
         identifiers = {obj.object_id for obj in objects}
         for identifier in set(self.cards) - identifiers:
             card = self.cards.pop(identifier)
@@ -389,7 +460,12 @@ class OpeningHandFan(W.QWidget):
                 card.hoverEnded.connect(self.hoverEnded)
                 self.cards[identifier] = card
             card = self.cards[identifier]
-            card.present(obj, identifier in options, options.get(identifier, False))
+            card.present(
+                obj,
+                identifier in options or identifier in actions,
+                options.get(identifier, False),
+                (combat or {}).get(identifier, ""),
+            )
             card.show()
         self.cards = {obj.object_id: self.cards[obj.object_id] for obj in objects}
         self._arrange()
@@ -398,16 +474,26 @@ class OpeningHandFan(W.QWidget):
         super().resizeEvent(event)
         self._arrange()
 
+    def fit_cards(self, scale):
+        self.card_scale = scale
+        self.setFixedHeight(round(FULL_CARD_SIZE.height() * scale) + 26)
+        self._arrange()
+
     def _arrange(self):
         count = len(self.cards)
         if not count:
             return
-        scale = max(0.6, min(1.65, (self.height() - 35) / 185))
+        scale = (
+            max(0.6, min(2.3, (self.height() - 35) / FULL_CARD_SIZE.height()))
+            if self.opening
+            else self.card_scale
+        )
+        available_width = max(112, self.width() - (250 if not self.opening else 0))
         width = round(112 * scale)
         spacing = min(
-            width + 8, max(1, (self.width() - width - 16) / max(1, count - 1))
+            width + 8, max(1, (available_width - width - 16) / max(1, count - 1))
         )
-        left = max(4, (self.width() - width - spacing * (count - 1)) / 2)
+        left = max(4, (available_width - width - spacing * (count - 1)) / 2)
         center = (count - 1) / 2
         for index, card in enumerate(self.cards.values()):
             card.apply_scale(scale)
@@ -449,10 +535,12 @@ class GameTable(W.QWidget):
         self.artwork.updated.connect(self._update_image)
         root = W.QHBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
-        table = W.QWidget()
+        root.setSizeConstraint(W.QLayout.SizeConstraint.SetNoConstraint)
+        table = FocusedBoard()
         self.board = table
         column = W.QVBoxLayout(table)
         column.setContentsMargins(0, 0, 0, 0)
+        column.setSizeConstraint(W.QLayout.SizeConstraint.SetNoConstraint)
         column.setSpacing(4)
         self.flow = W.QLabel()
         self.flow.setWordWrap(True)
@@ -481,6 +569,11 @@ class GameTable(W.QWidget):
         for label in (self.opponent_label, self.player_label):
             label.setTextFormat(C.Qt.TextFormat.PlainText)
             label.setWordWrap(True)
+            label.setAlignment(C.Qt.AlignmentFlag.AlignCenter)
+            font = label.font()
+            font.setPointSize(12)
+            font.setBold(True)
+            label.setFont(font)
         column.addWidget(self.opponent_label)
         self.opponent = CardLane(self.artwork)
         column.addWidget(self.opponent)
@@ -524,17 +617,17 @@ class GameTable(W.QWidget):
         self.player = CardLane(self.artwork)
         column.addWidget(self.player)
         column.addWidget(W.QLabel("Your hand"))
-        self.hand = CardLane(self.artwork)
+        self.hand = OpeningHandFan(self.artwork, opening=False)
         column.addWidget(self.hand)
         root.addWidget(table, 1)
         self.inspection_dialog = W.QDialog(self, C.Qt.WindowType.Tool)
         self.inspection_dialog.setWindowTitle("Card inspection")
-        self.inspection_dialog.resize(360, 620)
+        self.inspection_dialog.resize(440, 820)
         sidebar = W.QVBoxLayout(self.inspection_dialog)
         self.inspection_image = W.QLabel()
         self.inspection_image.setAlignment(C.Qt.AlignmentFlag.AlignCenter)
-        self.inspection_image.setMinimumHeight(180)
-        self.inspection_image.setMaximumHeight(320)
+        self.inspection_image.setMinimumHeight(240)
+        self.inspection_image.setMaximumHeight(560)
         sidebar.addWidget(self.inspection_image)
         self.inspection = W.QPlainTextEdit()
         self.inspection.setReadOnly(True)
@@ -553,7 +646,8 @@ class GameTable(W.QWidget):
         self.decision_dock.setWidget(self.decisions)
         self.decision_dock.setMinimumWidth(200)
         self.decision_dock.setMaximumWidth(240)
-        root.addWidget(self.decision_dock)
+        self.decision_dock.setParent(self)
+        self.decision_dock.setFrameShape(W.QFrame.Shape.NoFrame)
         self.opening_overlay = W.QFrame(self)
         self.opening_overlay.setObjectName("openingOverlay")
         self.opening_overlay.setStyleSheet(
@@ -657,7 +751,7 @@ class GameTable(W.QWidget):
         flow = [
             f"Turn {view.turn}" if view.turn is not None else "",
             view.phase or "",
-            view.step or "",
+            view.step if view.step != view.phase else "",
             "Active: " + names.get(view.active_player_id, "Waiting"),
             "Priority: " + names.get(view.priority_player_id, "Waiting"),
         ]
@@ -694,11 +788,22 @@ class GameTable(W.QWidget):
                         f"{names.get(seat, 'Player')} {amount}"
                         for seat, amount in commander.damage_dealt
                     )
-            (
+            label = (
                 self.player_label
                 if player.player_id == view.viewer_id
                 else self.opponent_label
-            ).setText(text)
+            )
+            summary = f"{player.name}   {player.life} life   Hand {player.hand_count}   Library {player.library_count}"
+            nonzero_mana = [
+                (kind, amount) for kind, amount in player.mana or () if amount
+            ]
+            if nonzero_mana:
+                summary += "   Mana " + ", ".join(
+                    f"{amount} {kind}" for kind, amount in nonzero_mana
+                )
+            label.setText(summary)
+            label.setToolTip(text)
+            label.setAccessibleDescription(text)
         # Defensively exclude concealed zones even if a malformed fake includes identities.
         visible = tuple(
             obj
@@ -906,14 +1011,13 @@ class GameTable(W.QWidget):
             self._hide_hover()
             return
         self.hover_text.setPlainText(live_card_text(view, obj))
-        self._update_hover_image(obj)
         screen = (
             G.QGuiApplication.screenAt(G.QCursor.pos())
             or G.QGuiApplication.primaryScreen()
         )
         available = screen.availableGeometry()
         self.hover_preview.resize(
-            min(360, available.width() - 16), min(620, available.height() - 24)
+            min(460, available.width() - 16), min(850, available.height() - 24)
         )
         position = G.QCursor.pos() + C.QPoint(20, 16)
         position.setX(
@@ -928,6 +1032,7 @@ class GameTable(W.QWidget):
                 min(position.y(), available.bottom() - self.hover_preview.height()),
             )
         )
+        self._update_hover_image(obj)
         self.hover_preview.move(position)
         self.hover_preview.show()
 
@@ -940,11 +1045,11 @@ class GameTable(W.QWidget):
         self.hover_image.clear()
         if image is not None and not image.isNull():
             self.hover_image.setPixmap(
-                image.scaled(
-                    270,
-                    370,
-                    C.Qt.AspectRatioMode.KeepAspectRatio,
-                    C.Qt.TransformationMode.SmoothTransformation,
+                inspection_pixmap(
+                    image,
+                    self.hover_image,
+                    max(270, min(420, self.hover_preview.width() - 24)),
+                    max(300, min(560, round(self.hover_preview.height() * 0.64))),
                 )
             )
         else:
@@ -971,11 +1076,19 @@ class GameTable(W.QWidget):
         stack = bool(self.zone_lanes["stack"].cards)
         scale = round(
             max(
-                0.55,
+                0.6,
                 min(
-                    1.0,
-                    max(0.0, self.board.width() - 30) / 826,
-                    (self.height() - 190) / (449 + (185 if stack else 0)),
+                    1.35,
+                    (
+                        self.height()
+                        - 200
+                        - (
+                            self.result_panel.sizeHint().height()
+                            if not self.result_panel.isHidden()
+                            else 0
+                        )
+                    )
+                    / (382 + (158 if stack else 0)),
                 ),
             ),
             2,
@@ -984,6 +1097,16 @@ class GameTable(W.QWidget):
         self.player.fit_cards(scale, battlefield=True)
         self.hand.fit_cards(scale)
         self.zone_lanes["stack"].fit_cards(scale)
+        if not self.decision_dock.isHidden():
+            height = min(220, max(90, self.decisions.sizeHint().height() + 8))
+            self.decision_dock.setGeometry(
+                max(0, self.width() - 248),
+                max(0, self.height() - height - 6),
+                240,
+                height,
+            )
+            if self.opening_overlay.isHidden():
+                self.decision_dock.raise_()
 
     def _clear_inspection(self, *, hide=True):
         if hide:
@@ -1139,11 +1262,11 @@ class GameTable(W.QWidget):
         image = self.artwork.get(obj, detailed=True)
         if image is not None and not image.isNull():
             self.inspection_image.setPixmap(
-                image.scaled(
-                    240,
-                    320,
-                    C.Qt.AspectRatioMode.KeepAspectRatio,
-                    C.Qt.TransformationMode.SmoothTransformation,
+                inspection_pixmap(
+                    image,
+                    self.inspection_image,
+                    min(400, max(240, self.inspection_dialog.width() - 32)),
+                    min(560, max(300, self.inspection_dialog.height() - 260)),
                 )
             )
 

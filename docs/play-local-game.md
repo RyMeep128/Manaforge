@@ -533,3 +533,21 @@ stage. New offscreen tests and existing navigation/module regressions must pass 
 Full end-to-end acceptance remains gated on both real-engine evidence and the
 complete UI scenarios in Milestone E. No release, tag, push or merge is authorized
 by this implementation.
+
+
+Card readability update (0.5.27-alpha.1): Play requests 600-pixel local artwork
+for cards and up to 1,200 pixels for enlarged inspection, bounded by the native
+source. Card painting samples directly from that source at the final display
+size; enlarged viewers account for display pixel density. Opening cards are
+larger, with tighter frames; hover or inspect a card for more reading space.
+No network image retrieval is added during a match. Low-resolution cached
+originals still limit available detail.
+
+Battlefield cards use tight artwork frames with live creature, loyalty or defense
+badges where relevant. Noncreature cards no longer show placeholder 0/0 stats.
+The hand is centered, priority controls overlay the lower right, and the global
+app toolbar hides during a focused match and restores on return. Diagnostics
+and issue reporting remain available through Match menu.
+
+The keep-first London mulligan engine change is prepared separately in
+[the engine follow-up](play-mulligan-engine-followup.md); it is not yet enabled.

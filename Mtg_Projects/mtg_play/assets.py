@@ -4,7 +4,12 @@ from dataclasses import dataclass
 import hashlib
 from pathlib import Path
 
-from .artwork_cache import local_source, read_local_image, RENDER_VERSION
+from .artwork_cache import (
+    local_source,
+    read_local_image,
+    RENDER_VERSION,
+    CARD_RESOLUTION,
+)
 
 
 @dataclass(frozen=True)
@@ -98,7 +103,7 @@ def prepare_assets(documents, service, *, cancel, report):
                 )
                 image = read_local_image(
                     provisional.image_service(),
-                    (printing, None, 300, face, RENDER_VERSION),
+                    (printing, None, CARD_RESOLUTION, face, RENDER_VERSION),
                 )
                 if image.isNull():
                     raise OSError()

@@ -3,7 +3,12 @@
 from collections import OrderedDict
 import time
 from PyQt6 import QtCore as C, QtGui as G
-from .artwork_cache import PlayImageReader, RENDER_VERSION
+from .artwork_cache import (
+    PlayImageReader,
+    RENDER_VERSION,
+    CARD_RESOLUTION,
+    INSPECTION_RESOLUTION,
+)
 
 
 class PlayArtwork(C.QObject):
@@ -39,7 +44,12 @@ class PlayArtwork(C.QObject):
                 and (obj.characteristics.transformed or obj.characteristics.flipped)
             )
         )
-        key = obj.card_identity.printing_id, None, 600 if detailed else 300, face
+        key = (
+            obj.card_identity.printing_id,
+            None,
+            INSPECTION_RESOLUTION if detailed else CARD_RESOLUTION,
+            face,
+        )
         return (
             key + (RENDER_VERSION,)
             if obj.zone == "battlefield" and not detailed

@@ -37,6 +37,7 @@ class PlayWorkspace(W.QWidget):
         self._browse_library = browse_library
         self.lobby = lobby or offline_lobby()
         self.lobby.offline_setup()
+        self._focused_toolbar_state = None
         self._window_snapshot = None
         self._approved_close = False
         self._format_confirmed = False
@@ -327,6 +328,17 @@ class PlayWorkspace(W.QWidget):
         self.table.returnRequested.connect(self.request_close_game)
         game_layout.addWidget(self.table, 1)
         game_actions = W.QHBoxLayout()
+        self.match_menu = W.QToolButton()
+        self.match_menu.setText("Match menu")
+        self.match_menu.setPopupMode(W.QToolButton.ToolButtonPopupMode.InstantPopup)
+        menu = W.QMenu(self.match_menu)
+        menu.addAction(
+            "Copy Play diagnostics",
+            lambda: W.QApplication.clipboard().setText(self._play_report_text()),
+        )
+        menu.addAction("Report a Play issue", self._report_play_issue)
+        self.match_menu.setMenu(menu)
+        game_actions.addWidget(self.match_menu)
         game_actions.addStretch()
         self.concede_button = W.QPushButton("Concede")
         self.concede_button.setEnabled(False)
@@ -875,6 +887,12 @@ class PlayWorkspace(W.QWidget):
                 window.windowState(),
             )
             window.showMaximized()
+        toolbar = getattr(window, "navigation_toolbar", None)
+        if toolbar is not None and self._focused_toolbar_state is None:
+            self._focused_toolbar_state = (toolbar, not toolbar.isHidden())
+            toolbar.hide()
+        self.copy_play_report.hide()
+        self.report_play_issue.hide()
         self.table.set_view_mode("focused")
         self.workspace_title.hide()
         self.intro.hide()
@@ -883,6 +901,13 @@ class PlayWorkspace(W.QWidget):
         self.layout().setContentsMargins(8, 6, 8, 6)
 
     def _leave_focused_view(self):
+        if self._focused_toolbar_state is not None:
+            toolbar, visible = self._focused_toolbar_state
+            self._focused_toolbar_state = None
+            toolbar.setVisible(visible)
+        self.copy_play_report.show()
+        self.report_play_issue.show()
+        self.status.show()
         if self._window_snapshot is not None:
             window, geometry, state = self._window_snapshot
             self._window_snapshot = None
@@ -943,6 +968,8 @@ class PlayWorkspace(W.QWidget):
     @C.pyqtSlot(str)
     def _status(self, message):
         self.status.setText(message)
+        if self.session.needs_recovery or not self.session.active:
+            self.status.show()
         if self.pages.currentWidget() is self.loading_page:
             self.loading_detail.setText(message)
         if not self.session.active and not self.session.closing:
@@ -978,6 +1005,7 @@ class PlayWorkspace(W.QWidget):
             self.loading_timer.stop()
             self.pages.setCurrentWidget(self.game_page)
         self._view = view
+        self.status.hide()
         self.game_heading.setText(view.result or "You versus Opponent")
         self.table.present(view)
         self.concede_button.setEnabled(

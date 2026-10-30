@@ -61,6 +61,35 @@ def button(panel, text):
     )
 
 
+@pytest.mark.parametrize(
+    "kind,expected", [("Land", None), ("Enchantment", None), ("Creature", "0/0")]
+)
+def test_only_creatures_display_power_toughness(kind, expected):
+    from mtg_play.table import permanent_badge
+
+    obj = replace(
+        card("permanent"),
+        characteristics=CardCharacteristics(type_line=kind, power="0", toughness="0"),
+    )
+    assert permanent_badge(obj) == expected
+    assert permanent_badge(replace(obj, hidden=True)) is None
+    assert permanent_badge(replace(obj, zone="hand")) is None
+
+
+def test_card_frame_tracks_artwork_and_tapped_orientation(app):
+    from mtg_play.table import GameCard
+
+    artwork = SilentArtwork(None, None)
+    obj = card("permanent")
+    widget = GameCard(artwork)
+    widget.present(obj)
+    assert widget.base_size() == C.QSize(112, 88)
+    widget.obj = replace(obj, tapped=True)
+    assert widget.base_size() == C.QSize(88, 112)
+    widget.obj = replace(obj, zone="hand")
+    assert widget.base_size() == C.QSize(112, 158)
+
+
 def test_distinct_objects_live_stats_and_replacement_invalidate_controls(app):
     table = GameTable(object(), artwork_factory=SilentArtwork)
     one, two = card("one-card"), card("two-card")

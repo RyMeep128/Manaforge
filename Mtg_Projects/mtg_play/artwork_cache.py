@@ -10,6 +10,8 @@ from mtg_ui.loading import LoadingThread
 
 RENDER_VERSION = "battlefield-2"
 CROP_HEIGHT = 0.54
+CARD_RESOLUTION = 600
+INSPECTION_RESOLUTION = 1200
 
 
 def local_source(service, printing_id, face):

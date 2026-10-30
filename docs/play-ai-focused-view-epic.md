@@ -1232,3 +1232,26 @@ regressions retain both known and unknown compiler exits. Ruff lint/formatting a
 diff checks pass. No local engine acceptance or application build ran. Committed
 and pushed at the user's request. The remaining epic gates are real-engine CI
 completion and broader real-image/manual nightly UX acceptance.
+
+
+Card readability and battlefield revision (0.5.27-alpha.1): addressed the user's
+Arena comparisons with tight artwork frames, relevant stat badges, a centered
+hand, full-width playmat, overlaid priority controls and restored navigation
+after matches. Raised local image requests to 600 pixels (1,200 for inspection),
+removed thumbnail pre-scaling in the painter, enlarged opening cards/viewers and
+accounted for high-DPI sampling. This applies to all visible printings and faces.
+
+309 focused Play and Editor readiness tests passed on Python 3.13 with offscreen
+Qt. New regressions cover native-resolution bounds, high-DPI inspection, tight
+card dimensions/tapped orientation and suppression of noncreature 0/0 badges.
+Lint, formatting and diff checks pass. A synthetic seven-card rendering using
+real cached 745x1040 commander artwork was visually reviewed; it demonstrates
+rendering quality only, not engine behavior or deck validity. Earlier table
+reviews covered 1920- and 1280-pixel layouts. No Java engine or app build ran.
+
+At the user's request, a separate source patch moves pinned XMage London's
+bottom-selection loop from redraw to endMulligan. Its dry-run application passes
+against the recorded pinned source. It is intentionally not applied to the
+runtime: engine CI, declared artifact provenance and human/AI sequence coverage
+are required before activation. See play-mulligan-engine-followup.md.
+Real-engine acceptance and the user's manual UX sign-off remain open.

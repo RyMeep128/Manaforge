@@ -27,6 +27,40 @@ def source(path, top="green", bottom="red"):
     return path
 
 
+def test_readable_resolution_keeps_native_detail_without_upscaling(tmp_path, app):
+    path = tmp_path / "native.png"
+    image = G.QImage(1400, 1960, G.QImage.Format.Format_RGB32)
+    image.fill(G.QColor("green"))
+    assert image.save(str(path), "PNG")
+    obj = replace(
+        card("visible", zone="hand"), card_identity=CardIdentity(None, "printing", None)
+    )
+    service = LocalOnlyService({("printing", "default"): path})
+    normal = PlayArtwork.key(obj)
+    detailed = PlayArtwork.key(obj, detailed=True)
+    assert normal[2] == 600
+    assert detailed[2] == 1200
+    assert read_local_image(service, normal).width() == 600
+    assert read_local_image(service, detailed).width() == 1200
+    source(path)
+    assert read_local_image(service, detailed).width() == 100
+
+
+def test_inspection_samples_physical_pixels_for_high_dpi(app):
+    from mtg_play.table import inspection_pixmap
+
+    class Display:
+        def devicePixelRatioF(self):
+            return 2.0
+
+    image = G.QPixmap(1200, 1680)
+    image.fill(G.QColor("green"))
+    result = inspection_pixmap(image, Display(), 400, 560)
+    assert result.width() == 800
+    assert result.height() == 1120
+    assert result.devicePixelRatioF() == 2.0
+
+
 class LocalOnlyService:
     def __init__(self, paths, layout="transform"):
         self.paths, self.layout, self.calls = paths, layout, []
