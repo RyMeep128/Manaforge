@@ -8,8 +8,9 @@ retains the future 2-5-player and private networking roadmap.
 
 Current source navigation (implemented locally, unverified): **Play Offline >
 Choose format > Continue to Lobby > choose your deck and an AI deck > Start Game**.
-**Play** opens mode selection before the same offline flow. Host Match, Join Match,
-and Invite Friend are visible but unavailable. Opening Play does not start XMage.
+**Play** opens mode selection before the same offline flow. The lobby includes
+local readiness feedback and accepted shared decks already cached by Browse Online.
+Host Match, Join Match, and Invite Friend are visible but unavailable. Opening Play does not start XMage.
 Installed builds remain gated; the new navigation does not establish acceptance.
 
 ## Rebuild baseline - October 29, 2026
@@ -196,6 +197,57 @@ also implements the navigation portion of Story 5, but does not claim full deck
 eligibility, shared-library borrowing, randomization, asset preflight, strict
 offline gameplay, or Focused View. Continued local development uses expected green
 CI as the user's working assumption; no new CI result has been inspected or claimed.
+
+### Story 5 increment: local readiness and cached shared decks (local, unverified)
+
+Lobby preparation runs on the catalog worker and reports real completed-deck
+counts. It reuses the adapter's structural checks and Core's local Commander
+checker rather than introducing Magic rules in Qt. Known problems disable Start
+Game; incomplete, malformed, undated, or stale local card data stays a visible
+review state unless Core also finds a blocking problem. Freeform receives structural
+checks without imposing Standard/Modern constructed restrictions. A failing local
+metadata database is not retried once per deck in the same preparation job.
+
+The labels deliberately distinguish local checks from engine validation. Missing
+Oracle resolution, unsupported engine cards, printing mismatches, and engine deck
+legality remain authoritative startup checks. Local availability is **not** proof
+of pinned-engine support and must not be used alone as a Randomize eligibility
+certificate. No card, printing, commander choice, or saved format is substituted.
+Core error categories are displayed without exposing an opponent's individual
+private card names or entry identities.
+
+Commander names and artwork keys come from Core's active commander selections.
+The lobby uses the selected printing/custom image key for each of up to two
+commanders, preserving separate partner previews. Missing art remains a placeholder;
+full asset preparation and the strict gameplay network policy belong to Story 8.
+
+**Browse shared decks** opens the existing Browse Online module before the match.
+Follow a deck there, return to Play, and choose **Refresh decks**. Play reads the
+accepted local FollowedDecks snapshot; it does not sign in, contact a library,
+check for updates, accept pending revisions, or create new sharing infrastructure.
+Already accepted caches remain selectable when the library is offline. The visible
+source/owner label distinguishes cached shared decks from saved native documents.
+
+Each cached source has a stable library/deck selection key, independent of its
+canonical local DeckDocument ID. Its owner reference namespaces the accepted
+publication's public owner handle by server; it is provenance, not a RemoteHuman
+authentication identity. Lobby ownership remains independent of the human/AI pilot.
+The existing worker makes isolated per-seat match copies. Play does not save or
+modify the shared source, its accepted revision, pending update, or owner's deck.
+Refreshing the catalog preserves the selected source keys and owner references.
+
+Added tests cover local/engine validation boundaries, malformed quantities and
+partial metadata, Core Commander failures, exact commander-art keys and partners,
+worker-thread metadata reads, blocking known-invalid starts, preserved selections,
+accepted-versus-pending shared revisions, network-denied cache reads, source
+immutability, and navigation into the existing library workspace. Synthetic UI
+decks now contain their land/creature fixture cards and valid Commander counts;
+production validation is not relaxed for test fixtures.
+
+**Story 5 remains unaccepted** pending CI and manual UX/artwork review. No tests,
+builds, or engine acceptance were run locally, and no new CI result was monitored.
+This increment does not provide pre-certified pinned-engine deck eligibility,
+Randomize, asset manifests, gameplay artwork isolation, or completed AI-match proof.
 
 ### Story 3 increment: measured startup and readiness (local, unverified)
 

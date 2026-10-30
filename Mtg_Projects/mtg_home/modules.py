@@ -25,5 +25,5 @@ MODULES = (
     Module('rules', 'Rules & Rulings', 'Explore Magic rules, card information, and rulings.', 'book', 'rules'),
     Module('print', 'Print Studio', 'Prepare custom proxies, print sheets, and PDF exports.', 'printer', 'printer'),
     Module('library', 'Browse Online', 'Join friend libraries, browse shared decks, and copy them to My Decks.', 'book', 'library'),
-    Module('play', 'Play', 'Play Magic digitally with friends.', 'swords', 'play', False),
+    Module('play', 'Play', 'Play against an AI opponent using your saved decks.', 'swords', 'play', False),
 )

@@ -263,7 +263,8 @@ def test_workspace_selects_existing_documents_without_starting_runtime_on_open(
     documents = (DeckDocument(), DeckDocument())
     for document in documents:
         document.deck.entries = [
-            DeckEntry("commander", "Isamaru, Hound of Konda", section="commander")
+            DeckEntry("commander", "Isamaru, Hound of Konda", section="commander"),
+            DeckEntry("plains", "Plains", 99, card_id="selected-plains"),
         ]
         document.deck.commander_entry_ids = ["commander"]
     documents[0].deck.extras["preserve"] = ["selected printing"]

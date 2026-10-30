@@ -7,7 +7,7 @@ from dataclasses import replace
 from .lobby import DeckSelection, offline_lobby
 from .navigation import ModeSelection, PlayLanding, PlayPages
 from .presentation import SessionController, local_adapter
-from .setup import saved_decks
+from .setup import prepare_catalog, saved_decks
 from .table import GameTable
 from mtg_editor.card_views import Thumbnails
 
@@ -22,14 +22,14 @@ class PlayWorkspace(W.QWidget):
         adapter_factory=local_adapter,
         deck_provider=None,
         lobby=None,
+        browse_library=None,
     ):
         super().__init__(parent)
         self.setWindowTitle("Play")
         self.service = service
-        self._deck_provider = deck_provider or (
-            lambda: saved_decks(data_root(), service)
-        )
+        self._deck_provider = deck_provider or (lambda: saved_decks(data_root()))
         self._decks = ()
+        self._browse_library = browse_library
         self.lobby = lobby or offline_lobby()
         self.lobby.offline_setup()
         self._approved_close = False
@@ -47,6 +47,7 @@ class PlayWorkspace(W.QWidget):
         )
         self.catalog_jobs = JobQueue(self)
         self.catalog_jobs.status.connect(self._catalog_loaded)
+        self.catalog_jobs.progress.connect(self._catalog_progress)
         self.catalog_jobs.idle.connect(self._selection_changed)
         self.session.statusChanged.connect(self._status)
         self.session.snapshotChanged.connect(self._show_snapshot)
@@ -130,6 +131,7 @@ class PlayWorkspace(W.QWidget):
         setup_layout.addLayout(lobby_heading)
         seats = W.QHBoxLayout()
         self.selectors, self.details, self.covers = [], [], []
+        self.readiness_labels, self.partner_covers = [], []
         for index, seat in enumerate(self.lobby.seats):
             box = W.QGroupBox(seat.player.name)
             form = W.QFormLayout(box)
@@ -157,10 +159,24 @@ class PlayWorkspace(W.QWidget):
             details.setTextFormat(C.Qt.TextFormat.PlainText)
             form.addRow("Deck", selector)
             form.addRow(details)
+            readiness = W.QLabel("Choose a deck to check readiness.")
+            readiness.setWordWrap(True)
+            readiness.setTextFormat(C.Qt.TextFormat.PlainText)
+            readiness.setAccessibleName(seat.player.name + " deck readiness")
+            form.addRow(readiness)
+            self.readiness_labels.append(readiness)
             cover = W.QLabel()
             cover.setMinimumHeight(140)
             cover.setAlignment(C.Qt.AlignmentFlag.AlignCenter)
-            form.addRow(cover)
+            partner = W.QLabel()
+            partner.setMinimumHeight(140)
+            partner.setAlignment(C.Qt.AlignmentFlag.AlignCenter)
+            partner.hide()
+            cover_row = W.QHBoxLayout()
+            cover_row.addWidget(cover)
+            cover_row.addWidget(partner)
+            form.addRow(cover_row)
+            self.partner_covers.append(partner)
             self.selectors.append(selector)
             self.details.append(details)
             self.covers.append(cover)
@@ -173,6 +189,25 @@ class PlayWorkspace(W.QWidget):
         note.setWordWrap(True)
         note.setProperty("role", "muted")
         setup_layout.addWidget(note)
+        engine_note = W.QLabel(
+            "XMage validates the selected cards and printings when you start."
+        )
+        engine_note.setWordWrap(True)
+        engine_note.setProperty("role", "muted")
+        setup_layout.addWidget(engine_note)
+        self.shared_decks = W.QPushButton("Browse shared decks")
+        self.shared_decks.setEnabled(callable(self._browse_library))
+        self.shared_decks.setToolTip(
+            "Use Browse Online to follow a shared deck, then return here and refresh. Accepted cached decks can be used offline."
+        )
+        self.shared_decks.clicked.connect(self._browse_shared)
+        setup_layout.addWidget(self.shared_decks, 0, C.Qt.AlignmentFlag.AlignLeft)
+        shared_hint = W.QLabel(
+            "Follow a deck in Browse Online, then return here and Refresh decks. Accepted cached copies remain available offline."
+        )
+        shared_hint.setWordWrap(True)
+        shared_hint.setProperty("role", "muted")
+        setup_layout.addWidget(shared_hint)
         setup_layout.addStretch()
         actions = W.QHBoxLayout()
         self.lobby_back = W.QPushButton("Back to Play")
@@ -267,7 +302,35 @@ class PlayWorkspace(W.QWidget):
         self.reload.setEnabled(False)
         self.start_button.setEnabled(False)
         self.status.setText("Loading your saved decks…")
-        self.catalog_jobs.submit(lambda cancel, report: self._deck_provider())
+
+        def prepare(cancel, report):
+            rows, errors = self._deck_provider()
+            return prepare_catalog(
+                rows, self.service, cancel=cancel, report=report
+            ), errors
+
+        self.catalog_jobs.submit(prepare)
+
+    def _browse_shared(self):
+        if (
+            not self.session.active
+            and not self.session.closing
+            and callable(self._browse_library)
+        ):
+            self._browse_library()
+
+    @C.pyqtSlot(str, object)
+    def _catalog_progress(self, job, value):
+        if (
+            self.session.active
+            or self.session.closing
+            or job != self.catalog_jobs.current_id
+        ):
+            return
+        if isinstance(value, dict) and value.get("stage") == "local_deck_checks":
+            self.status.setText(
+                f"Checking local decks: {value['current']} of {value['total']}"
+            )
 
     @C.pyqtSlot(str, str, object)
     def _catalog_loaded(self, job, state, value):
@@ -280,7 +343,7 @@ class PlayWorkspace(W.QWidget):
             )
             return
         previous_paths = [
-            self._decks[selector.currentData()].path
+            self._decks[selector.currentData()].key
             if selector.currentData() is not None
             else None
             for selector in self.selectors
@@ -291,13 +354,16 @@ class PlayWorkspace(W.QWidget):
             selector.clear()
             selector.addItem("Choose a saved deck", None)
             for index, deck in enumerate(self._decks):
-                selector.addItem(deck.document.deck.name, index)
+                title = deck.document.deck.name
+                if deck.source_id:
+                    title += " [" + deck.source_label + "]"
+                selector.addItem(title, index)
             for index, deck in enumerate(self._decks):
-                if deck.path == previous:
+                if deck.key == previous:
                     selector.setCurrentIndex(index + 1)
             selector.blockSignals(False)
         self.status.setText(
-            "Some saved decks could not be read. Review them in Deck Editor."
+            "Some decks could not be read. Review Deck Editor or Browse Online, then refresh."
             if errors
             else (
                 "Choose your deck and the AI opponent's deck."
@@ -326,20 +392,31 @@ class PlayWorkspace(W.QWidget):
             selection = None
             if index is not None:
                 document = self._decks[index].document
-                owner = (
-                    seat.deck.owner_id
-                    if seat.deck and seat.deck.deck_id == document.deck.deck_id
-                    else None
+                item = self._decks[index]
+                selection = DeckSelection.local(
+                    document, owner_id=item.owner_id, source_id=item.key
                 )
-                selection = DeckSelection.local(document, owner_id=owner)
             lobby = lobby.select_deck(seat.seat_id, selection)
         self.lobby = lobby
-        for selector, label in zip(self.selectors, self.details):
+        selected_checks = []
+        for selector, label, readiness in zip(
+            self.selectors, self.details, self.readiness_labels
+        ):
             index = selector.currentData()
             if index is None:
                 label.setText("Choose a saved deck")
+                readiness.setText("Choose a deck to check readiness.")
+                selected_checks.append(None)
             else:
                 item = self._decks[index]
+                check = item.readiness(self.format.currentData())
+                selected_checks.append(check)
+                readiness.setText(
+                    check.summary
+                    + ("\n" + "\n".join(check.messages) if check.messages else "")
+                    if check
+                    else "Choose a format to check this deck."
+                )
                 label.setText(
                     item.document.deck.format
                     + (
@@ -364,15 +441,12 @@ class PlayWorkspace(W.QWidget):
                             or "Colorless"
                         )
                     )
-                if self.format.currentData() == "commander" and not item.commanders:
+                if item.source_id:
                     label.setText(
                         label.text()
-                        + "\nChoose a commander in Deck Editor before starting."
-                    )
-                elif self.format.currentData() == "freeform" and item.commanders:
-                    label.setText(
-                        label.text()
-                        + "\nThis deck has commanders selected. Choose Commander format."
+                        + "\n"
+                        + item.source_label
+                        + "\nIsolated match copy; the shared deck is not edited."
                     )
         self._deck_images()
         self.start_button.setEnabled(
@@ -383,11 +457,7 @@ class PlayWorkspace(W.QWidget):
             and not self.session.busy
             and not self.catalog_jobs.busy
             and all(selector.currentData() is not None for selector in self.selectors)
-            and all(
-                bool(self._decks[selector.currentData()].commanders)
-                == (self.format.currentData() == "commander")
-                for selector in self.selectors
-            )
+            and all(check is not None and check.can_start for check in selected_checks)
         )
 
     def start_game(self):
@@ -412,17 +482,38 @@ class PlayWorkspace(W.QWidget):
         if self.session.active:
             return
         keys = []
-        for selector, cover in zip(self.selectors, self.covers):
+        for selector, cover, partner in zip(
+            self.selectors, self.covers, self.partner_covers
+        ):
             index = selector.currentData()
             cover.clear()
-            if index is not None:
-                cover.setText("No artwork preview")
-                key = self._decks[index].cover
+            partner.clear()
+            partner.hide()
+            if index is None:
+                continue
+            item = self._decks[index]
+            previews = (
+                item.commander_art[:2]
+                if self.format.currentData() == "commander"
+                else ()
+            )
+            if previews:
+                artwork = [(cover, previews[0][1], "Commander: " + previews[0][0])]
+                if len(previews) == 2:
+                    partner.show()
+                    artwork.append(
+                        (partner, previews[1][1], "Commander: " + previews[1][0])
+                    )
+            else:
+                artwork = [(cover, item.cover, "Deck artwork")]
+            for target, key, description in artwork:
+                target.setAccessibleName(description)
+                target.setText("No artwork preview")
                 if any(key):
                     keys.append(key)
                     image = self.deck_artwork.get(*key)
                     if image is not None and not image.isNull():
-                        cover.setPixmap(
+                        target.setPixmap(
                             image.scaled(
                                 110,
                                 154,

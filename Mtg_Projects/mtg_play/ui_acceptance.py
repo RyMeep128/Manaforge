@@ -114,7 +114,8 @@ class UIAdapter:
             index = next(
                 index
                 for index, item in enumerate(self.workspace._decks)
-                if item.path.name == seat.seat_id + ".manaforge.json"
+                if item.path is not None
+                and item.path.name == seat.seat_id + ".manaforge.json"
             )
             selector.setCurrentIndex(index + 1)
         self.workspace.session.commandFinished.connect(self.receipts.append)

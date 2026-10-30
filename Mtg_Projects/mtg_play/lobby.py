@@ -28,11 +28,12 @@ class DeckSelection:
     deck_id: str
     owner_id: str | None
     document: DeckDocument = field(repr=False, compare=False)
+    source_id: str | None = None
 
     @classmethod
-    def local(cls, document, *, owner_id=None):
+    def local(cls, document, *, owner_id=None, source_id=None):
         # Core documents do not establish ownership; do not infer it from piloting.
-        return cls(document.deck.deck_id, owner_id, document)
+        return cls(document.deck.deck_id, owner_id, document, source_id)
 
 
 @dataclass(frozen=True)

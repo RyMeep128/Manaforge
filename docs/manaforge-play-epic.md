@@ -17,7 +17,10 @@ Local implementation now separates seat/player/pilot/deck/owner identities and
 fixes the source workspace to one human view versus an AI opponent. This is
 unverified source work, not acceptance of this epic or its future mixed tables.
 The larger-table model and existing headless 2-5-seat regression paths remain;
-networking and adaptive multiplayer UI are still planned.
+networking and adaptive multiplayer UI are still planned. Local lobby preparation
+also reuses Core readiness checks and existing accepted followed-deck snapshots,
+retaining source ownership independently from the pilot. This does not establish
+pinned-engine eligibility, networked borrowing, or acceptance of shared gameplay.
 
 ## Vision
 

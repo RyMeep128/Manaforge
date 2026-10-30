@@ -4,7 +4,7 @@ from dataclasses import replace
 from PyQt6 import QtWidgets as W
 import pytest
 
-from mtg_core.decks import DeckDocument
+from mtg_core.decks import DeckDocument, DeckEntry
 from mtg_play.adapter import AdapterError
 from mtg_play.contracts import (
     CardCharacteristics,
@@ -194,6 +194,11 @@ def test_offline_ai_setup_to_result_through_fixed_human_controls(tmp_path, monke
     owner = Owner(game)
     pilot = UIAdapter(app, owner, tmp_path)
     docs = (DeckDocument(), DeckDocument())
+    for document in docs:
+        document.deck.entries = [
+            DeckEntry("forest", "Forest", 30, card_id="selected-forest"),
+            DeckEntry("memnite", "Memnite", 30, card_id="selected-memnite"),
+        ]
     originals = [doc.to_dict() for doc in docs]
     setup = GameSetup(
         (MatchSeat("one", "You"), MatchSeat("two", "Opponent", "engine_ai"))

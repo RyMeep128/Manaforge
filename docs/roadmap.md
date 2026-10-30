@@ -345,6 +345,10 @@ acceptance scenarios; this local increment is also unverified. The new landing
 page now offers Play/mode selection and direct Play Offline, converging on explicit
 format confirmation before shared deck selection. Network controls stay disabled;
 navigation tests, desktop layouts, and screenshot evidence await CI/manual review.
+The shared lobby now has asynchronous adapter/Core readiness checks, per-commander
+printing previews, and borrowing from accepted local followed-deck caches through
+the existing Browse Online workflow. These are unverified local increments;
+local checks do not certify pinned-engine eligibility for Randomize.
 The subsequent lobby and permanent two-player Focused View preserve future mixed
 controllers and 2-5-player views without implementing networking or larger layouts.
 Source-only preview work does not enable Play in installed releases. The existing
