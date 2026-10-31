@@ -803,3 +803,15 @@ private assets. A small result/receipt/uncertainty summary survives revocation.
 Local evidence: 44 graphics-enabled PlayMode checks passed without skips. Real
 scene mounting, choice/event UI projection, OS containment, installed-artifact
 verification and G0/G1 remain open. The public gallery is unchanged.
+
+### G1/P3 authenticated viewer session host
+
+The [session host](play-viewer-session-host.md) joins trusted bootstrap, bounded
+loopback connection, fresh authentication, ordered receive and UI pumping under
+one viewer lifetime. Owner loss revokes the mailbox before the next UI update;
+late attempts and retired hosts cannot populate or clear a replacement epoch.
+The host waits for worker retirement and captures stop evidence before channel
+disposal. Local evidence: 50 graphics-enabled PlayMode checks passed without skips.
+This is attached-panel fixture integration; product mounting, artwork-sidecar
+loading, full decision/event UI, idle policy, OS containment, installed-artifact
+verification and G0/G1 acceptance remain open. No public gallery changes.

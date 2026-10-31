@@ -81,3 +81,8 @@ exited before tests with Unity exit 198: its licensing client had no access toke
 or valid Editor entitlement. That rerun is blocked by local license restoration,
 not recorded as a new passing run. No source test failure or license workaround
 is inferred; the existing Hub sign-in/license must be restored by the owner.
+
+After the owner reopened Hub, the recovery rerun passed all 44 graphics checks;
+that local license interruption is resolved. The later
+[session host](play-viewer-session-host.md) coordinates the authenticated connector,
+receiver and UI pump, and observes owner loss across their lifetime.
