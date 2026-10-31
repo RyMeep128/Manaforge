@@ -1008,3 +1008,16 @@ with two source submissions, two tapped lands, mana spent and 1/1 Ballista
 resolution; all owned roots exited 0 without forced cleanup. Also passed: 65
 coordinator, 77 source-response guard, 31 native utility and 105 focused Python
 checks. No full application suite or new UI build ran. Next CI review is 0.5.114.
+
+### P2.3 native unpaid-cost context observation
+
+An [opt-in owned human-player extension](play-payment-coordinator.md) now observes
+the exact native unpaid Ability/ManaCost while delegating payment unchanged to
+XMage. A real number fixture observed native remaining counts 2 and 1 across two
+payment scopes and still proved source taps, spending and resolution. The original
+HumanPlayer control case also passed; both cleaned up without force. The observer
+is absent from default runtime compilation/configuration and never patches the
+installed engine. Passed 111 focused Python, 65 coordinator, 77 response-guard and
+36 native object checks. Native source safety/planning and live gateway automation
+remain open; this is not automatic-payment or Unity end-to-end acceptance. Next CI
+review is 0.5.114, with no waiting on unfinished runs.

@@ -52,7 +52,7 @@ def main():
     expected = {
         "mage.players.ManaPool": ["setAutoPayment(boolean)", "setAutoPaymentRestricted(boolean)"],
         "mage.util.ManaUtil": ["tryToAutoPay(mage.abilities.costs.mana.ManaCost,", "tryToAutoSelectAManaColor(mage.choices.Choice,"],
-        "mage.player.human.HumanPlayer": ["playMana(mage.abilities.Ability,", "playManaAbilities(java.util.UUID,", "currentlyUnpaidMana"],
+        "mage.player.human.HumanPlayer": ["playMana(mage.abilities.Ability,", "playManaHandling(mage.abilities.Ability,", "playManaAbilities(java.util.UUID,", "currentlyUnpaidMana", "responseOpenedForAnswer"],
         "mage.players.net.UserData": ["setManaPoolAutomatic(boolean)", "setManaPoolAutomaticRestricted(boolean)"],
         "mage.players.PlayerImpl": ["setPayManaMode(boolean)"],
     }
@@ -66,6 +66,7 @@ def main():
         # Do not execute a classpath wildcard or an unverified local dependency.
         dependencies = sorted(key for key in manifest["artifacts"]
                               if key.startswith("xmage/mage-server/lib/") and key.endswith(".jar"))
+        dependencies.append(jars[1])
         for key in dependencies:
             if hashlib.sha256((engine / key).read_bytes()).hexdigest() != manifest["artifacts"][key]:
                 raise SystemExit("Pinned payment helper dependency mismatch")
@@ -74,9 +75,10 @@ def main():
             source = PLAY / "java/payment-native-test/manaforge/payment/PinnedPaymentChecks.java"
             adapter = PLAY / "java/payment-xmage/manaforge/payment/xmage/SelectedSourceMana.java"
             response = PLAY / "java/payment-xmage/manaforge/payment/xmage/ManaResponseExecutor.java"
+            context_source = PLAY / "java/payment-xmage/manaforge/payment/xmage/ContextHumanPlayer.java"
             bridge_sources = sorted((PLAY / "java").glob("*.java"))
             subprocess.run([compiler, "--release", "8", "-encoding", "UTF-8", "-cp", native_classpath, "-d", output,
-                            str(source), str(adapter), str(response), *map(str, bridge_sources)],
+                            str(source), str(adapter), str(response), str(context_source), *map(str, bridge_sources)],
                            check=True, timeout=60)
             subprocess.run([runtime, "-cp", output + os.pathsep + native_classpath,
                             "manaforge.payment.PinnedPaymentChecks"], cwd=output, check=True, timeout=30)

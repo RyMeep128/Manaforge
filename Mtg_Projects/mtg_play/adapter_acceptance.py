@@ -580,6 +580,10 @@ def main():
     parser.add_argument("--xmage-root", type=Path)
     parser.add_argument("--jdk-path", type=Path)
     parser.add_argument(
+        "--payment-context-probe", action="store_true",
+        help="Opt-in owned human-player observer; payment remains manual",
+    )
+    parser.add_argument(
         "--scenario",
         choices=(
             "priority",
@@ -622,6 +626,10 @@ def main():
     from .diagnostics import diagnostic_category
 
     options = {}
+    if args.payment_context_probe:
+        if args.scenario != "number":
+            parser.error("Payment context probe is limited to the number fixture")
+        options["payment_context_probe"] = True
     if args.xmage_root is not None:
         options["bundle"] = args.xmage_root
     if args.jdk_path is not None:
@@ -682,6 +690,10 @@ def main():
                     raise AdapterError("SOURCE_DECK_CHANGED")
                 result["engine_deck_validation"] = True
             result["gameplay"] = scenarios[args.scenario](adapter)
+            if args.payment_context_probe:
+                result["payment_context_probe"] = adapter.payment_context_diagnostics()
+                if not result["payment_context_probe"]["observations"]:
+                    raise AdapterError("NATIVE_PAYMENT_CONTEXT_NOT_OBSERVED")
         if args.scenario.startswith("ai-"):
             runtime = adapter.result
             if (

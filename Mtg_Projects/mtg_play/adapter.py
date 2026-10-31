@@ -112,7 +112,13 @@ class LocalGameAdapter:
         *,
         bundle: Path = transport.DEFAULT_BUNDLE,
         jdk: Path = transport.DEFAULT_JDK,
+        payment_context_probe: bool = False,
     ):
+        if type(payment_context_probe) is not bool:
+            raise ValueError("PAYMENT_CONTEXT_PROBE")
+        self._payment_context_probe = payment_context_probe
+        self._payment_probe_scopes = set()
+        self._payment_probe_counts = []
         self._bundle, self._jdk = Path(bundle).resolve(), Path(jdk).resolve()
         self._ready, self._release, self._done = (
             threading.Event(),
@@ -144,12 +150,16 @@ class LocalGameAdapter:
 
         def run():
             try:
+                probe_options = (
+                    {"payment_context_probe": True} if self._payment_context_probe else {}
+                )
                 self._runtime_result = transport.run_proof(
                     self._bundle,
                     self._jdk,
                     runtime_consumer=consume,
                     diagnostics=self.lifecycle,
                     cancel=self._cancel,
+                    **probe_options,
                 )
             except Exception:
                 self._runtime_result = {
@@ -379,7 +389,7 @@ class LocalGameAdapter:
             for zone in ("battlefield", "graveyard", "command")
             for card in row.get(zone, ())
         ]
-        return self._server_request(
+        result = self._server_request(
             command="metadata",
             game=view["game_id"],
             player=view["viewer"],
@@ -388,6 +398,35 @@ class LocalGameAdapter:
             identified_ids=[
                 card["id"] for card in cards if not card.get("hidden", True)
             ],
+        )
+        probe = (
+            result.get("payment_probe")
+            if self._payment_context_probe and isinstance(result, dict)
+            else None
+        )
+        if isinstance(probe, dict) and probe.get("available") is True:
+            sequence, count = probe.get("sequence"), probe.get("unpaid_mana_count")
+            if (
+                type(sequence) is int and 0 < sequence <= 2**63 - 1
+                and type(count) is int and 0 <= count <= 128
+            ):
+                if len(self._payment_probe_scopes) < 128:
+                    self._payment_probe_scopes.add(
+                        (view["game_id"], view["viewer"], view["cycle"], sequence)
+                    )
+                if len(self._payment_probe_counts) < 128:
+                    self._payment_probe_counts.append(count)
+        return result
+
+    def payment_context_diagnostics(self):
+        """Bounded opt-in research evidence; no raw IDs, costs, cards or native references."""
+        counts = self._payment_probe_counts
+        return dict(
+            enabled=self._payment_context_probe,
+            observations=len(counts),
+            scopes=len(self._payment_probe_scopes),
+            minimum=min(counts) if counts else None,
+            maximum=max(counts) if counts else None,
         )
 
     def create_game(

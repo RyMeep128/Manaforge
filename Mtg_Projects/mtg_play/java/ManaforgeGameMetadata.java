@@ -66,10 +66,12 @@ public final class ManaforgeGameMetadata {
             if (player.hasLost() || player.hasLeft()) continue;
             Object human = player.getRealPlayer();
             Class<?> type = human.getClass();
-            if (!type.getName().equals("mage.player.human.HumanPlayer")) continue;
-            Object response = field(human, type, "response");
+            boolean paymentProbe=type.getName().equals("manaforge.payment.xmage.ContextHumanPlayer");
+            Class<?> humanType=paymentProbe?type.getSuperclass():type;
+            if (!humanType.getName().equals("mage.player.human.HumanPlayer")) continue;
+            Object response = field(human, humanType, "response");
             synchronized (response) {
-                if (!Boolean.TRUE.equals(field(human, type, "responseOpenedForAnswer"))) continue;
+                if (!Boolean.TRUE.equals(field(human, humanType, "responseOpenedForAnswer"))) continue;
                 // Eliminated seats stop receiving fresh views while other seats
                 // continue playing. Their last cycle cannot become current again.
                 if (game.hasEnded() || (viewer != null && (viewer.hasLost() || viewer.hasLeft())))
@@ -196,6 +198,10 @@ public final class ManaforgeGameMetadata {
                         && ((String) activeAction).startsWith("priority - HumanPlayer.java:");
                 JsonObject result = status("ok"); result.addProperty("cycle", cycle);
                 result.addProperty("priority_open", priorityOpen);
+                if(paymentProbe && player.getId().equals(playerId)) {
+                    Object probe=type.getMethod("paymentProbe",Game.class,UUID.class,int.class).invoke(human,game,playerId,cycle);
+                    if(probe instanceof JsonObject)result.add("payment_probe",(JsonObject)probe);
+                }
                 result.add("objects", objects); result.add("players", players); result.add("commanders", commanders);
                 return result;
             }

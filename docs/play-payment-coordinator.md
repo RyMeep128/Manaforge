@@ -1,6 +1,6 @@
 # Safe automatic mana payment â€” Java coordinator
 
-Status: isolated foundation through 0.5.112-alpha.1 for P2.3; production automation is
+Status: isolated foundation through 0.5.113-alpha.1 for P2.3; production automation is
 **disabled/unmounted**. P4.3 real-engine acceptance has not happened. This implements
 the fallback scope explicitly allowed by the [owner story](play-safe-automatic-mana-payment-story.md),
 not the story's end-to-end definition of done. The existing manual command contract and Unity renderer are preserved. The manual
@@ -334,3 +334,69 @@ the established cadence. Public game/launch schemas and private bridge response
 fields are unchanged; only the acceptance report gains bounded evidence counters.
 Packaged distribution was not rebuilt and automatic-source story acceptance
 remains open.
+
+## Opt-in native unpaid-cost observer — 0.5.113
+
+ContextHumanPlayer is a Manaforge-owned human-player extension used only by the
+explicit payment-context diagnostic. Its protected playManaHandling override sees
+the exact Ability/ManaCost arguments supplied by XMage, delegates every payment
+operation to super, and clears its borrowed frame in finally. There is no copied
+HumanPlayer implementation, bytecode patch, source activation, solver or automatic
+response in this observer. The installed pinned engine is unchanged.
+
+The trusted server-only inspectPayment callback requires the player's own native
+response monitor, an open response, native pay-mana mode, matching payer identity,
+current live player instance, exact Game instance and cycle, and nonterminal game.
+It revalidates after the read. The callback is read-only: no IO, mutation, retained
+native references or client serialization is allowed. Frames are transient and
+are not copied into HumanPlayer bookmarks; copy() preserves the extension type
+while dropping borrowed context. Nested scope exit restores its outer frame and
+clears the inner references. This is scoped reference cleanup, not secure erasure.
+
+The existing metadata reader recognizes only the original native HumanPlayer and
+this exact owned extension, using the original HumanPlayer fields for its response
+monitor guards. Existing viewer/cycle/known-object filtering remains in place. The
+diagnostic only adds a current payer's bounded unpaid-mana count and scope sequence
+to the private server metadata response. No ability, cost text, source ID, printing,
+hand data or Game crosses that response. The sequence is diagnostic, not a command
+token or a stable identity across bookmarks. No public protocol schema changed.
+
+Normal startup still uses and compiles the original path. Only the explicit probe
+changes the copied workspace's Human className and adds the already pinned human
+plugin JAR to that owned JVM's classpath. It compiles the additional extension into
+owned classes; no original config/JAR is modified. LocalGameAdapter accepts a
+strict boolean diagnostic option, default false. The acceptance CLI restricts the
+option to the number fixture. This is research configuration, not Auto mode or a
+new persistent user setting. Python records bounded evidence only and performs no
+native cost interpretation, payment planning or automatic source selection.
+
+Reproduce the actual-engine diagnostic:
+
+```powershell
+$env:PYTHONPATH = 'Mtg_Projects;Mtg_Projects/mtg_core'
+./Mtg_Projects/mtg_proxy/venv/Scripts/python.exe -m mtg_play.adapter_acceptance --scenario number --payment-context-probe --jdk-path 'C:/Program Files/Java/jdk-23' --output Mtg_Projects/mtg_play_unity/Artifacts/PaymentContext113.json
+```
+
+Local evidence: PaymentContext113.json succeeded with two observed payment scopes,
+remaining native mana counts 2 and 1, two manually submitted sources, two lands
+observed tapped, mana spent, Ballista resolved as a 1/1 and an authoritative fixture
+result. The original-player control run PaymentContext113Default.json also passed
+and did not compile the observer. Both runs' compiler, bridge, peer and server roots
+exited 0 without forced cleanup. The fixture still concludes by concession after
+its semantic checks; neither run proves natural-match completion or auto-payment.
+The original installed config still selects mage.player.human.HumanPlayer and its
+JAR still matches the pinned hash. No OS descendant containment claim is made.
+
+Also passed: 65 coordinator, 77 response guard, 36 native object checks, pinned API
+inspection and all 111 focused Python adapter/connection/lifecycle checks. New
+Python checks cover explicit opt-in, default-off behavior, malformed/unsupported
+diagnostic values, bounded counts and omission of private routing/card strings.
+No full application suite, Unity UI build or packaged distribution rebuild ran.
+CI is next checked at 0.5.114; no current result or story completion is inferred.
+
+This resolves the exact-unpaid-cost access question in an isolated real engine
+runtime. Still required: source suitability/safety assessment using native data,
+plan identity and execution revalidation, connection of the native provider to the
+Java session owner/coordinator, and Auto/Manual/Full Control acceptance. The trusted
+read hook alone is not an automatic payment plan, and production automatic source
+selection remains disabled. The default original-player regression path is retained.

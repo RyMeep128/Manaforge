@@ -276,3 +276,10 @@ the public adapter/game protocol are unchanged. No automatic source planner is
 enabled by this extraction. See [native executor and evidence](../../docs/play-payment-coordinator.md).
 The owned runtime compiler includes its additional Java source; original XMage
 binaries and artifact hashes remain unchanged.
+
+The explicit `payment_context_probe=True` diagnostic (default false) uses an owned
+human-player observer only in its copied runtime workspace. It delegates payment
+to XMage and records bounded native cost evidence through the existing private
+metadata reader. It is not an automatic-payment preference or public snapshot
+field. The normal runtime continues using the original native human class. See
+[probe isolation and real-engine evidence](../../docs/play-payment-coordinator.md).

@@ -9,12 +9,19 @@ import mage.players.ManaPool;
 import mage.players.net.UserData;
 import mage.util.ManaUtil;
 import manaforge.payment.xmage.SelectedSourceMana;
+import manaforge.payment.xmage.ContextHumanPlayer;
+import mage.constants.RangeOfInfluence;
 
 /** Real pinned utility objects only. No Game, server, deck, source activation or gameplay claim. */
 public final class PinnedPaymentChecks {
     private static int checks;
     private static void check(boolean value){checks++;if(!value)throw new AssertionError("PINNED_PAYMENT_CHECK_"+checks);}
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
+        ContextHumanPlayer observed=new ContextHumanPlayer("Public fixture",RangeOfInfluence.ALL,0);
+        ContextHumanPlayer copied=observed.copy();
+        check(copied.getClass()==ContextHumanPlayer.class);check(copied.getId().equals(observed.getId()));
+        check(java.lang.reflect.Modifier.isTransient(ContextHumanPlayer.class.getDeclaredField("payment").getModifiers()));
+        check(observed.paymentProbe(null,observed.getId(),0)==null);check(copied.paymentProbe(null,copied.getId(),0)==null);
         UserData manual=UserData.getDefaultUserDataView(),automatic=UserData.getDefaultUserDataView();
         check(manual!=automatic);
         manual.setManaPoolAutomatic(false);manual.setManaPoolAutomaticRestricted(false);

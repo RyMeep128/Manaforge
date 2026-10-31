@@ -325,7 +325,10 @@ def run_proof(
     *,
     diagnostics=None,
     cancel=None,
+    payment_context_probe=False,
 ) -> dict:
+    if type(payment_context_probe) is not bool:
+        raise ValueError("PAYMENT_CONTEXT_PROBE")
     if diagnostics is None:
         if __package__:
             from .diagnostics import LifecycleDiagnostics
@@ -355,11 +358,25 @@ def run_proof(
             reservations.append(reserve_port())
             port, secondary = [item.getsockname()[1] for item in reservations]
             server = prepare_workspace(bundle, workspace, port, secondary)
+            if payment_context_probe:
+                config = server / "config/config.xml"
+                tree = ET.parse(config)
+                human = tree.getroot().find(".//playerType[@name='Human']")
+                if human is None:
+                    raise ProofError("PINNED_PAYMENT_CONTEXT_CHANGED")
+                human.set("className", "manaforge.payment.xmage.ContextHumanPlayer")
+                tree.write(config, encoding="utf-8", xml_declaration=True)
         check_cancel(cancel)
         with diagnostics.stage("bridge_compilation"):
             classes = workspace / "classes"
             classes.mkdir()
             classpath = str(server / "lib/*")
+            context_sources = []
+            if payment_context_probe:
+                classpath += os.pathsep + str(server / "plugins/mage-player-human-1.4.62.jar")
+                context_sources.append(
+                    HERE / "java/payment-xmage/manaforge/payment/xmage/ContextHumanPlayer.java"
+                )
             compile_log = (workspace / "compile.log").open("w", encoding="utf-8")
             logs.append(compile_log)
             command = [
@@ -376,6 +393,7 @@ def run_proof(
                 str(
                     HERE / "java/payment-xmage/manaforge/payment/xmage/ManaResponseExecutor.java"
                 ),
+                *map(str, context_sources),
             ]
             if cancel is None:
                 compiled_returncode = subprocess.run(

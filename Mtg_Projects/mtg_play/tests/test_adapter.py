@@ -19,6 +19,41 @@ from mtg_play.decks import DeckTranslationError, PreparedDeck, prepare_deck
 from mtg_play.fake import ScriptedGameSession
 
 
+@pytest.mark.parametrize("value", [None, 1, "auto", []])
+def test_payment_context_diagnostic_requires_explicit_boolean(value):
+    with pytest.raises(ValueError, match="PAYMENT_CONTEXT_PROBE"):
+        LocalGameAdapter(payment_context_probe=value)
+
+
+def test_payment_context_evidence_is_bounded_and_does_not_export_private_ids(monkeypatch):
+    adapter = LocalGameAdapter(payment_context_probe=True)
+    payload = dict(status="ok", payment_probe=dict(available=True, sequence=1, unpaid_mana_count=2,
+                                                  card_name="private-fixture-card"))
+    monkeypatch.setattr(adapter, "_server_request", lambda **fields: payload)
+    view = dict(game_id="private-fixture-game", viewer="private-fixture-viewer", cycle=0, players=[])
+    for cycle in range(256):
+        view["cycle"] = cycle
+        adapter._metadata(view)
+    report = adapter.payment_context_diagnostics()
+    assert report == dict(enabled=True, observations=128, scopes=128, minimum=2, maximum=2)
+    assert "private-fixture" not in json.dumps(report)
+
+
+def test_payment_context_probe_is_off_by_default_and_ignores_invalid_evidence(monkeypatch):
+    view = dict(game_id="fixture", viewer="viewer", cycle=7, players=[])
+    payload = dict(status="ok", payment_probe=dict(available=True, sequence=1, unpaid_mana_count=2))
+    adapter = LocalGameAdapter()
+    monkeypatch.setattr(adapter, "_server_request", lambda **fields: payload)
+    adapter._metadata(view)
+    assert adapter.payment_context_diagnostics() == dict(enabled=False, observations=0, scopes=0, minimum=None, maximum=None)
+    probe = LocalGameAdapter(payment_context_probe=True)
+    monkeypatch.setattr(probe, "_server_request", lambda **fields: payload)
+    for sequence, count in [(True, 2), (0, 2), (2**64, 2), (1, True), (1, -1), (1, 129)]:
+        payload["payment_probe"].update(sequence=sequence, unpaid_mana_count=count)
+        probe._metadata(view)
+    assert probe.payment_context_diagnostics()["observations"] == 0
+
+
 def resolve(queries):
     return [dict(query, name="Forest", set="M10", number="248") for query in queries]
 
