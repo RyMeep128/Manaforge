@@ -129,6 +129,14 @@ namespace Manaforge.Play
             Layout();
         }
 
+        // Known viewer-permitted values without an authorized current-face artwork binding.
+        // Does not invent a printing ID, face key, crop profile or substitute image.
+        public void BindUnavailable()
+        {
+            Conceal();concealed=false;authenticOnly=false;artCrop=new Rect(0,0,1,1);
+            missing.text="Artwork unavailable";Layout();
+        }
+
         public void UpdateValues(CardDisplayValues values)
         {
             if (concealed) return;

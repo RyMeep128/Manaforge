@@ -22,6 +22,16 @@ namespace Manaforge.Play.Tests
         }
         [TearDown] public void Cleanup() { view.Dispose(); UnityEngine.Object.DestroyImmediate(texture); }
 
+        [Test] public void UnresolvedBindingDoesNotRetainOrInventPrintingArtworkOrOldText()
+        {
+            view.UpdateValues(Values());view.tooltip="Private previous card";var previous=view.ViewRevision;
+            view.BindUnavailable();view.UpdateValues(new CardDisplayValues("Current name",null,"Creature",null,"3/4",null));
+            Assert.That(view.ViewRevision,Is.GreaterThan(previous));Assert.That(view.Identity,Is.Null);Assert.That(view.Artwork,Is.Null);
+            Assert.That(view.Q<Label>("name").text,Is.EqualTo("Current name"));Assert.That(view.Q<Label>("rules").text,Is.Empty);
+            Assert.That(view.Q<ManaCostView>().Cost,Is.Empty);Assert.That(view.tooltip,Is.Null.Or.Empty);
+            foreach(var image in view.Query<Image>().ToList())Assert.That(image.image,Is.Null);
+            Assert.That(texture==null,Is.False,"Borrowed previous artwork remains owned by its resource scope");
+        }
         [Test] public void DynamicValuesChangeWithoutReplacingArtworkOrElements()
         {
             var stats = view.Q<Label>("stats");

@@ -51,3 +51,7 @@ escape, event rejection and missing trusted context. No visual behavior changes.
 Local validation at 0.5.84-alpha.1: 313 Unity EditMode checks passed, including
 ten new projection checks and the existing Java protocol preflight. No full
 application suite, visual build acceptance or live engine parity is claimed.
+
+A subsequent [viewer surface owner](../../../docs/play-viewer-surface.md) now
+consumes these projections in attached-panel lifecycle tests. Production scene
+mounting, authorized face assets and the bounded UI mailbox remain open.

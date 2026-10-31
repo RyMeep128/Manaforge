@@ -1,5 +1,14 @@
 {
   "name": "Manaforge.Play.PlayMode",
-  "references": ["Manaforge.Play"],
-  "optionalUnityReferences": ["TestAssemblies"]
+  "references": [
+    "Manaforge.Play"
+  ],
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ],
+  "overrideReferences": true,
+  "precompiledReferences": [
+    "nunit.framework.dll",
+    "Newtonsoft.Json.dll"
+  ]
 }

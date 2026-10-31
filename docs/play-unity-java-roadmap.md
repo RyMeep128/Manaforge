@@ -655,3 +655,21 @@ required for this nonvisual increment.
 Local evidence: 313 Unity EditMode checks, including ten new projection checks
 and existing Java protocol preflight, passed. CI review follows the scheduled
 third-commit checkpoint; local evidence is not licensed Unity CI acceptance.
+
+
+### G1/P3 viewer surface handoff — October 30, 2026
+
+The [viewer surface owner](play-viewer-surface.md) now connects immutable card
+projections to reusable CardViews under an epoch ticket and revision watermark.
+It clears old inspection/cards before private-scope disposal, enforces a whole
+empty frame on viewer switch, rejects late work and blocks callback reentry.
+Current-face artwork is deliberately unavailable until an authorized asset
+binding exists; no name/flip-based image inference or printed-rule substitution
+occurs. The existing public gallery is unchanged. This component is tested on an
+attached panel but not yet mounted in a live session; full scene/mailbox, private
+asset loading, G0/G1 acceptance and P2 parity remain open.
+
+Local evidence: 314 EditMode and 13 PlayMode checks passed. Lifecycle tests cover
+private-resource cleanup order, a complete empty frame, retired disconnect and
+inspection tickets, reentry, failure retention/retry and thread rejection. The
+public fixture scene remains unchanged; production scene acceptance is pending.
