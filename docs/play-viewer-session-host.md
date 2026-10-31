@@ -73,3 +73,7 @@ Java/player path. Owner UI review remains pending; this does not enable product 
 
 The [decision offer binding](play-viewer-decision-binding.md) adds CurrentDecision
 for future controls, with owner-loss and retired-epoch checks. It submits no commands.
+
+The [bound command dispatcher](play-viewer-command-dispatch.md) now provides
+explicit action, option, finish and cancel APIs. The host waits for its outgoing
+worker on shutdown. Product controls remain unmounted.

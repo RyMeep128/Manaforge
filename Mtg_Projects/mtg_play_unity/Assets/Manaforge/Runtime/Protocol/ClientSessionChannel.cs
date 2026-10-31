@@ -78,6 +78,18 @@ namespace Manaforge.Play.Protocol
         }
         private void Failed(string code){lock(gate)Stop(code);}
         public TrackedCommand Submit(string text,int milliseconds=5000,CancellationToken cancellation=default)
+        {using(var prepared=PrepareSubmission(text))return WriteSubmission(prepared,milliseconds,cancellation);}
+        // Internal split lets a presentation lease hold only bounded admission, never socket IO.
+        internal sealed class PreparedSubmission : IDisposable
+        {
+            private readonly ClientSessionChannel owner;private string text;private int claimed;
+            internal TrackedCommand Receipt {get;}
+            internal PreparedSubmission(ClientSessionChannel owner,string text,TrackedCommand receipt){this.owner=owner;this.text=text;Receipt=receipt;}
+            internal string Claim(ClientSessionChannel supplied)
+            {if(!ReferenceEquals(owner,supplied) || Interlocked.CompareExchange(ref claimed,1,0)!=0 || text==null)throw new WireEnvelope.EnvelopeException("SESSION_SUBMISSION_INVALID");return text;}
+            public void Dispose(){Interlocked.Exchange(ref text,null);}
+        }
+        internal PreparedSubmission PrepareSubmission(string text)
         {
             TrackedCommand receipt;
             lock(gate)
@@ -103,10 +115,16 @@ namespace Manaforge.Play.Protocol
                     if(!objectIds.Contains((string)body["object_id"]))Fail("STALE_OR_INVALID_OBJECT");
                 }
                 receipt=commands.Begin(text); // reservation is atomic with admission, before first write
+                return new PreparedSubmission(this,text,receipt);
             }
-            try{transport.Write(text,milliseconds,cancellation);return receipt;}
+        }
+        internal TrackedCommand WriteSubmission(PreparedSubmission prepared,int milliseconds,CancellationToken cancellation)
+        {
+            string text=prepared.Claim(this);
+            try{transport.Write(text,milliseconds,cancellation);return prepared.Receipt;}
             catch(TextFrame.FrameException error){Failed(error.Code);throw;}
             catch{Failed("SESSION_WRITE_FAILED");throw new WireEnvelope.EnvelopeException("SESSION_WRITE_FAILED");}
+            finally{prepared.Dispose();}
         }
         public ClientReceive ReceiveNext(int milliseconds,CancellationToken cancellation=default)
         {

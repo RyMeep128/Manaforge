@@ -1,7 +1,7 @@
 # Viewer decision offer binding
 
-Status: lifecycle/availability boundary at 0.5.101-alpha.1. No controls, command
-builder, auto-pass or outgoing-action API are enabled. The fixture UI review and
+Status: lifecycle/availability boundary at 0.5.101-alpha.1. No controls or auto-pass are enabled. The subsequent
+[bound dispatcher](play-viewer-command-dispatch.md) supplies outgoing APIs. The fixture UI review and
 real-engine/G0/G1 acceptance remain pending.
 
 Each ViewerSessionReceiver owns a ViewerDecisionBinding. An applied active

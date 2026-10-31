@@ -17,7 +17,7 @@ namespace Manaforge.Play
         private readonly ViewerCardSurface surface;private readonly ViewerSurfaceTicket ticket;private readonly ViewerBootstrap bootstrap;
         private readonly Task ownerEnded;private readonly CancellationTokenSource cancellation=new CancellationTokenSource();
         private readonly CancellationToken token;private readonly TaskCompletionSource<ViewerHostStop> completion=new TaskCompletionSource<ViewerHostStop>(TaskCreationOptions.RunContinuationsAsynchronously);
-        private ViewerSessionReceiver receiver;private ClientSessionChannel channel;private CoreArtworkBundle artwork;private ViewerArtworkJobs artworkJobs;
+        private ViewerSessionReceiver receiver;private ClientSessionChannel channel;private CoreArtworkBundle artwork;private ViewerArtworkJobs artworkJobs;private ViewerCommandDispatcher commands;
         private bool stopped,disposed;private string stopCode;
         public Task<ViewerHostStop> Completion=>completion.Task;
         public bool Authenticated {get{lock(gate)return !stopped && channel!=null;}}
@@ -44,7 +44,7 @@ namespace Manaforge.Play
                     try{loaded=await CoreArtworkBundle.OpenAsync(bootstrap.ArtworkDirectory,bootstrap.ArtworkManifestSha256,bootstrap.SessionId,bootstrap.ViewerId,token).ConfigureAwait(false);}
                     catch{Stop("VIEWER_ARTWORK_FAILED");return;}
                 }
-                lock(gate){if(stopped)return;artwork=loaded;receiver=new ViewerSessionReceiver(channel,ticket,fixtureMode);}
+                lock(gate){if(stopped)return;artwork=loaded;receiver=new ViewerSessionReceiver(channel,ticket,fixtureMode);commands=new ViewerCommandDispatcher(channel,receiver.Decisions,5000);}
                 while(receiver.ReceiveOnce(readMilliseconds,token)){}
                 Stop("VIEWER_RECEIVE_ENDED");
             }
@@ -52,6 +52,7 @@ namespace Manaforge.Play
             finally {
                 Stop("VIEWER_HOST_ENDED");
                 if(receiver!=null)summary=await receiver.Completion.ConfigureAwait(false);
+                if(commands!=null)await commands.Completion.ConfigureAwait(false);
                 ViewerArtworkJobs jobs;lock(gate)jobs=artworkJobs;
                 if(jobs!=null)await jobs.Completion.ConfigureAwait(false);
                 try{loaded?.Dispose();}catch{cleanup=false;}
@@ -62,10 +63,19 @@ namespace Manaforge.Play
         }
         private void Stop(string code)
         {
-            ViewerSessionReceiver active;ClientSessionChannel connected;ViewerArtworkJobs jobs;
-            lock(gate){if(stopped)return;stopped=true;stopCode=code;ticket.Mailbox.Dispose();active=receiver;connected=channel;jobs=artworkJobs;}
-            active?.Cancel();connected?.Cancel();jobs?.Dispose();try{cancellation.Cancel();}catch(ObjectDisposedException){}
+            ViewerSessionReceiver active;ClientSessionChannel connected;ViewerArtworkJobs jobs;ViewerCommandDispatcher dispatch;
+            lock(gate){if(stopped)return;stopped=true;stopCode=code;ticket.Mailbox.Dispose();active=receiver;connected=channel;jobs=artworkJobs;dispatch=commands;}
+            active?.Cancel();connected?.Cancel();dispatch?.Dispose();jobs?.Dispose();try{cancellation.Cancel();}catch(ObjectDisposedException){}
         }
+        private Task<TrackedCommand> Dispatch(Func<ViewerCommandDispatcher,Task<TrackedCommand>> send)
+        {
+            if(ownerEnded.IsCompleted)Stop("VIEWER_OWNER_ENDED");ViewerCommandDispatcher target;lock(gate)target=stopped?null:commands;
+            return target==null?Task.FromException<TrackedCommand>(new WireEnvelope.EnvelopeException("SESSION_STOPPED")):send(target);
+        }
+        public Task<TrackedCommand> PerformAsync(ViewerDecisionOffer offer,ProjectedAction action,CancellationToken cancellation=default)=>Dispatch(target=>target.PerformAsync(offer,action,cancellation));
+        public Task<TrackedCommand> ChooseAsync(ViewerDecisionOffer offer,ProjectedChoiceOption option,CancellationToken cancellation=default)=>Dispatch(target=>target.ChooseAsync(offer,option,cancellation));
+        public Task<TrackedCommand> FinishSelectionAsync(ViewerDecisionOffer offer,CancellationToken cancellation=default)=>Dispatch(target=>target.FinishSelectionAsync(offer,cancellation));
+        public Task<TrackedCommand> CancelChoiceAsync(ViewerDecisionOffer offer,CancellationToken cancellation=default)=>Dispatch(target=>target.CancelChoiceAsync(offer,cancellation));
         public bool TryTake(out ViewerSessionUpdate update)
         {lock(gate){update=null;return !stopped && receiver!=null && receiver.TryTake(out update);}}
         private void ThreadOnly(){if(Thread.CurrentThread.ManagedThreadId!=thread)throw new InvalidOperationException("VIEWER_HOST_THREAD");}

@@ -15,7 +15,9 @@ namespace Manaforge.Play
     public sealed class ViewerDecisionBinding : IDisposable
     {
         private readonly object gate=new object();private readonly ClientSessionChannel channel;private readonly ViewerSurfaceTicket ticket;
-        private ProjectedDecisionFrame frame;private ViewerDecisionOffer offer;private bool stopped;
+        private ProjectedDecisionFrame frame;private ViewerDecisionOffer offer;private Reservation reserved;private bool stopped;
+        internal sealed class Reservation
+        {internal readonly ViewerDecisionOffer Offer;internal readonly ProjectedDecisionFrame Frame;internal Reservation(ViewerDecisionOffer offer,ProjectedDecisionFrame frame){Offer=offer;Frame=frame;}}
         internal ViewerDecisionBinding(ClientSessionChannel channel,ViewerSurfaceTicket ticket){this.channel=channel;this.ticket=ticket;}
         private bool CurrentLocked()=>!stopped && frame!=null && offer!=null && frame.Status=="active" && frame.Decision!=null
             && ticket.Mailbox.AllowsFrame(frame.Context.Revision)
@@ -23,7 +25,26 @@ namespace Manaforge.Play
         public ViewerDecisionOffer Current {get{lock(gate)return CurrentLocked()?offer:null;}}
         public bool IsCurrent(ViewerDecisionOffer supplied){lock(gate)return ReferenceEquals(supplied,offer) && CurrentLocked();}
         internal ProjectedDecisionFrame Read(ViewerDecisionOffer supplied){lock(gate)return ReferenceEquals(supplied,offer) && CurrentLocked()?frame:null;}
-        internal bool CanSubmit(ViewerDecisionOffer supplied){lock(gate)return ReferenceEquals(supplied,offer) && CurrentLocked() && channel.MatchesDecision(ticket.SessionId,ticket.ViewerId,frame.Context.Revision,frame.Decision.DecisionId,true);}
+        internal bool CanSubmit(ViewerDecisionOffer supplied){lock(gate)return reserved==null && ReferenceEquals(supplied,offer) && CurrentLocked() && channel.MatchesDecision(ticket.SessionId,ticket.ViewerId,frame.Context.Revision,frame.Decision.DecisionId,true);}
+        internal Reservation Reserve(ViewerDecisionOffer supplied)
+        {
+            lock(gate) {
+                if(!ReferenceEquals(supplied,offer) || !CurrentLocked())throw new WireEnvelope.EnvelopeException("STALE_DECISION");
+                if(reserved!=null)throw new WireEnvelope.EnvelopeException("COMMAND_PENDING");
+                if(!channel.MatchesDecision(ticket.SessionId,ticket.ViewerId,frame.Context.Revision,frame.Decision.DecisionId,true)) {
+                    var pending=channel.Pending;throw new WireEnvelope.EnvelopeException(pending==null?"COMMAND_UNAVAILABLE":pending.State==CommandState.Uncertain?"COMMAND_UNCERTAIN":"COMMAND_PENDING");
+                }
+                reserved=new Reservation(supplied,frame);return reserved;
+            }
+        }
+        internal ClientSessionChannel.PreparedSubmission Prepare(Reservation supplied,string text)
+        {
+            lock(gate) {
+                if(!ReferenceEquals(supplied,reserved) || !ReferenceEquals(supplied.Offer,offer) || !CurrentLocked())throw new WireEnvelope.EnvelopeException("STALE_DECISION");
+                return channel.PrepareSubmission(text);
+            }
+        }
+        internal void Release(Reservation supplied){lock(gate){if(ReferenceEquals(supplied,reserved))reserved=null;}}
         internal void Observe(ProjectedDecisionFrame snapshot)
         {
             lock(gate) {
@@ -40,6 +61,6 @@ namespace Manaforge.Play
             if(receipt.State!=CommandState.Rejected || (receipt.Code!="STALE_REVISION" && receipt.Code!="STALE_DECISION" && receipt.Code!="ACTION_UNAVAILABLE" && receipt.Code!="SESSION_MISMATCH" && receipt.Code!="VIEWER_MISMATCH"))return;
             lock(gate){if(frame!=null && receipt.RequestRevision==frame.Context.Revision && receipt.DecisionId==frame.Decision.DecisionId){frame=null;offer=null;}}
         }
-        public void Dispose(){lock(gate){stopped=true;frame=null;offer=null;}}
+        public void Dispose(){lock(gate){stopped=true;frame=null;offer=null;reserved=null;}}
     }
 }

@@ -861,3 +861,13 @@ late receipts for another decision do not clear fresh state. Local evidence: 362
 EditMode and 65 graphics-enabled PlayMode checks passed with no graphics skips.
 No outgoing dispatcher or new controls are enabled. The visible fixture and
 pending owner UI review are unchanged; real-engine and G0/G1 acceptance remain open.
+
+### P3.3/P3.4 bound outgoing commands
+
+The [dispatcher](play-viewer-command-dispatch.md) accepts current opaque offers
+and their exact engine-provided action/option objects. It reserves before worker
+scheduling, revalidates at admission, writes off the UI thread and preserves
+receipt versus confirmation versus uncertainty. Local evidence: 362 EditMode and
+71 graphics-enabled PlayMode checks passed without skips, including concurrent
+clicks, stale/replacement offers and owner cancellation. No new controls, numeric
+or mana entry UI, live-engine acceptance or owner UI approval is claimed.

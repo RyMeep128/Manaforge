@@ -23,7 +23,7 @@ namespace Manaforge.Play.Tests
         internal sealed class Peer:IDisposable
         {
             private readonly TcpListener listener=new TcpListener(IPAddress.Loopback,0);private readonly TaskCompletionSource<bool> release=Signal();private readonly Task work;
-            private TcpClient client;private int disposed;public readonly TaskCompletionSource<bool> Accepted=Signal();public int Port {get;}
+            private TcpClient client;private int disposed;public readonly TaskCompletionSource<bool> Accepted=Signal(),Sent=Signal();public int Port {get;}
             public Peer(string frame,bool silent=false,bool wrongPin=false)
             {
                 listener.Start();Port=((IPEndPoint)listener.LocalEndpoint).Port;
@@ -35,7 +35,7 @@ namespace Manaforge.Play.Tests
                             var expected=Hello("client",server,nonce,false);byte[] key=new byte[32];for(int i=0;i<32;i++)key[i]=(byte)i;
                             try {
                                 using(var verifier=new ViewerAuthentication.Verifier(expected.ToString(),key))Assert.That(verifier.Verify(TextFrame.Read(stream)),Is.True);
-                                var gateway=Hello("gateway",server,nonce,wrongPin);gateway["body"]["proof"]=ViewerAuthentication.ComputeProof(gateway.ToString(),key);TextFrame.Write(stream,gateway.ToString());TextFrame.Write(stream,frame);stream.Flush();
+                                var gateway=Hello("gateway",server,nonce,wrongPin);gateway["body"]["proof"]=ViewerAuthentication.ComputeProof(gateway.ToString(),key);TextFrame.Write(stream,gateway.ToString());TextFrame.Write(stream,frame);stream.Flush();Sent.TrySetResult(true);
                             }finally{Array.Clear(key,0,key.Length);}
                         }
                         await release.Task.ConfigureAwait(false);
@@ -48,7 +48,11 @@ namespace Manaforge.Play.Tests
                 byte[] key=new byte[32];for(int i=0;i<32;i++)key[i]=(byte)i;string hex=BitConverter.ToString(key).Replace("-","").ToLowerInvariant();Array.Clear(key,0,key.Length);
                 var value=new JObject{["viewer_bootstrap_version"]=1,["protocol_version"]=1,["endpoint"]=new JObject{["host"]="127.0.0.1",["port"]=Port},["session_id"]="fixture-session",["viewer_id"]="one",["engine_version"]="fixture-engine",["artifact_manifest_sha256"]=new string('a',64),["viewer_key_hex"]=hex,["artwork"]=artworkDirectory==null?JValue.CreateNull():(JToken)new JObject{["directory"]=artworkDirectory,["manifest_sha256"]=artworkPin}};return ViewerBootstrap.Parse(Encoding.UTF8.GetBytes(value.ToString()));
             }
-            public void Dispose(){if(Interlocked.Exchange(ref disposed,1)!=0)return;release.TrySetResult(true);client?.Dispose();listener.Stop();Assert.That(SpinWait.SpinUntil(()=>work.IsCompleted,3000),Is.True);work.GetAwaiter().GetResult();}
+            // Test-driver worker methods. The handshake writer has retired before these run.
+            public string ReadCommandForFixture(){Sent.Task.GetAwaiter().GetResult();return TextFrame.Read(client.GetStream());}
+            public void ReplyForFixture(JObject value){Sent.Task.GetAwaiter().GetResult();TextFrame.Write(client.GetStream(),value.ToString());client.GetStream().Flush();}
+            public int PendingCommandBytes=>client?.Available??0;
+            public void Dispose(){if(Interlocked.Exchange(ref disposed,1)!=0)return;release.TrySetResult(true);Sent.TrySetCanceled();client?.Dispose();listener.Stop();Assert.That(SpinWait.SpinUntil(()=>work.IsCompleted,3000),Is.True);work.GetAwaiter().GetResult();}
         }
         private string Frame(string name)
         {var value=(JObject)source.DeepClone();value["body"]["snapshot"]["session_id"]="fixture-session";value["body"]["snapshot"]["objects"][0]["characteristics"]["name"]=name;return value.ToString();}
