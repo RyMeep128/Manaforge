@@ -19,6 +19,7 @@ namespace Manaforge.Play.Tests
     public sealed class ViewerCommandDispatchTests
     {
         private GameObject node;private PanelSettings settings;private ViewerCardSurface surface;private JObject source;
+        private readonly List<ViewerDecisionPanel> panels=new List<ViewerDecisionPanel>();
         private readonly List<ViewerSessionHost> hosts=new List<ViewerSessionHost>();private readonly List<ViewerSessionHostTests.Peer> peers=new List<ViewerSessionHostTests.Peer>();
         private JObject Snapshot(string id="snapshot",bool selection=false)
         {
@@ -40,7 +41,7 @@ namespace Manaforge.Play.Tests
             node=new GameObject("Bound command test");settings=ScriptableObject.CreateInstance<PanelSettings>();settings.themeStyleSheet=Resources.Load<ThemeStyleSheet>("CardTheme");var doc=node.AddComponent<UIDocument>();doc.panelSettings=settings;surface=new ViewerCardSurface(doc.rootVisualElement);yield return null;
         }
         [UnityTearDown] public IEnumerator Cleanup()
-        {foreach(var host in hosts)host.Dispose();yield return Until(()=>hosts.TrueForAll(host=>host.Completion.IsCompleted));hosts.Clear();foreach(var peer in peers)peer.Dispose();peers.Clear();surface.Dispose();UnityEngine.Object.Destroy(node);UnityEngine.Object.Destroy(settings);yield return null;}
+        {foreach(var panel in panels)panel.Dispose();panels.Clear();foreach(var host in hosts)host.Dispose();yield return Until(()=>hosts.TrueForAll(host=>host.Completion.IsCompleted));hosts.Clear();foreach(var peer in peers)peer.Dispose();peers.Clear();surface.Dispose();UnityEngine.Object.Destroy(node);UnityEngine.Object.Destroy(settings);yield return null;}
         [UnityTest] public IEnumerator PerformWritesOneExactCommandAndOnlyReceiptsAdvanceItsOutcome()
         {
             var host=Start(Snapshot(),out var peer,out var owner);yield return Until(()=>host.CurrentDecision!=null);var offer=host.CurrentDecision;var action=offer.Frame.Actions[0];
@@ -75,6 +76,45 @@ namespace Manaforge.Play.Tests
         {
             var host=Start(Snapshot(),out var peer,out var owner);yield return Until(()=>host.CurrentDecision!=null);var offer=host.CurrentDecision;var action=offer.Frame.Actions[0];using var cancel=new CancellationTokenSource();cancel.Cancel();var local=host.PerformAsync(offer,action,cancel.Token);Assert.That(local.IsCanceled,Is.True);Assert.That(offer.CanSubmit,Is.True);Assert.That(peer.PendingCommandBytes,Is.Zero);
             owner.TrySetResult(true);var ended=host.PerformAsync(offer,action);yield return Until(()=>ended.IsCompleted && host.Completion.IsCompleted);Assert.That(Error(ended),Is.EqualTo("SESSION_STOPPED"));Assert.That(host.Completion.Result.Session.Pending,Is.Null);
+        }
+        private ViewerDecisionPanel Panel(ViewerSessionHost host)
+        {var panel=new ViewerDecisionPanel(node.GetComponent<UIDocument>().rootVisualElement,host);panels.Add(panel);return panel;}
+        private static void Click(Button button)
+        {Assert.That(button,Is.Not.Null);using(var submit=NavigationSubmitEvent.GetPooled()){submit.target=button;button.SendEvent(submit);}}
+        private IEnumerator Show(ViewerSessionHost host,ViewerDecisionPanel panel)
+        {yield return Until(()=>{host.Tick();panel.Tick();return host.PresentedDecision!=null;});}
+        [UnityTest] public IEnumerator DecisionPanelWaitsForPresentedSnapshotAndClearsOnOwnerLoss()
+        {
+            var host=Start(Snapshot(selection:true),out var peer,out var owner);var panel=Panel(host);yield return Until(()=>host.CurrentDecision!=null);panel.Tick();Assert.That(panel.Root.style.display.value,Is.EqualTo(DisplayStyle.None));Assert.That(panel.Root.Q<Label>("decision-prompt").text,Is.Empty);
+            yield return Show(host,panel);var cached=panel.Root.Q<Button>("decision-option-0");Assert.That(cached,Is.Not.Null);owner.TrySetResult(true);panel.Tick();Assert.That(panel.Root.style.display.value,Is.EqualTo(DisplayStyle.None));Assert.That(panel.Root.Q<Label>("decision-prompt").text,Is.Empty);Click(cached);Assert.That(peer.PendingCommandBytes,Is.Zero);
+        }
+        [UnityTest] public IEnumerator DecisionPanelSubmitsExactOptionAndNeverCallsAWriteConfirmation()
+        {
+            var frame=Snapshot(selection:true);frame["body"]["snapshot"]["decision"]["prompt"]="Choose a public fixture option";frame["body"]["snapshot"]["decision"]["options"][0]["label"]="Select the engine-provided option";
+            var host=Start(frame,out var peer,out var owner);var panel=Panel(host);yield return Show(host,panel);Click(panel.Root.Q<Button>("decision-option-0"));Assert.That(panel.Root.Q<VisualElement>("decision-controls").enabledSelf,Is.False);
+            var read=Task.Run(()=>WireMessages.Parse(peer.ReadCommandForFixture()));yield return Until(()=>read.IsCompleted);Assert.That((string)read.Result["body"]["option_id"],Is.EqualTo("fixture-option"));yield return Until(()=>{panel.Tick();return panel.Root.Q<Label>("decision-status").text=="Command sent. Waiting for gateway state.";});Assert.That(panel.Root.Q<VisualElement>("decision-controls").enabledSelf,Is.False);
+            surface.CardsRoot.style.display=DisplayStyle.None;surface.InspectionView.style.display=DisplayStyle.None;panel.Root.style.width=620;
+            var target=new RenderTexture(1280,720,24);Texture2D pixels=null;var previous=RenderTexture.active;
+            try{target.Create();settings.targetTexture=target;for(int i=0;i<5;i++){host.Tick();panel.Tick();yield return null;}pixels=new Texture2D(1280,720,TextureFormat.RGBA32,false);RenderTexture.active=target;pixels.ReadPixels(new Rect(0,0,1280,720),0,0);pixels.Apply();File.WriteAllBytes(Path.Combine(Application.dataPath,"../Artifacts/DecisionPanelProof.png"),pixels.EncodeToPNG());}
+            finally{settings.targetTexture=null;RenderTexture.active=previous;if(pixels!=null)UnityEngine.Object.Destroy(pixels);target.Release();UnityEngine.Object.Destroy(target);}
+        }
+        [UnityTest] public IEnumerator DecisionPanelActionFinishAndCancelUseOnlyExplicitEngineControls()
+        {
+            foreach(string operation in new[]{"perform","finish_selection","cancel"}) {
+                var frame=Snapshot(selection:operation!="perform");frame["body"]["snapshot"]["decision"]["prompt"]="<b>Literal engine prompt</b>";var host=Start(frame,out var peer,out var owner);var panel=Panel(host);yield return Show(host,panel);Assert.That(panel.Root.Q<Label>("decision-prompt").enableRichText,Is.False);Assert.That(panel.Root.Q<Label>("decision-prompt").text,Is.EqualTo("<b>Literal engine prompt</b>"));
+                string button=operation=="perform"?"decision-action-0":operation=="cancel"?"decision-cancel":"decision-finish";Click(panel.Root.Q<Button>(button));var read=Task.Run(()=>WireMessages.Parse(peer.ReadCommandForFixture()));yield return Until(()=>read.IsCompleted);Assert.That((string)read.Result["body"]["operation"],Is.EqualTo(operation));host.Cancel();yield return Until(()=>host.Completion.IsCompleted);panel.Tick();Assert.That(panel.Root.style.display.value,Is.EqualTo(DisplayStyle.None));
+            }
+        }
+        [UnityTest] public IEnumerator DecisionPanelPagesEveryEngineOptionWithoutAutomaticallyChoosing()
+        {
+            var frame=Snapshot(selection:true);var options=(JArray)frame["body"]["snapshot"]["decision"]["options"];options.Clear();for(int i=0;i<ViewerDecisionPanel.PageSize+1;i++)options.Add(new JObject{["option_id"]="option-"+i,["label"]="Public option "+i,["object_id"]=JValue.CreateNull(),["player_id"]=JValue.CreateNull(),["selected"]=false});
+            var host=Start(frame,out var peer,out var owner);var panel=Panel(host);yield return Show(host,panel);Assert.That(panel.Root.Q<Button>("decision-option-16"),Is.Null);Assert.That(peer.PendingCommandBytes,Is.Zero);Click(panel.Root.Q<Button>("decision-next"));Assert.That(panel.Root.Q<Button>("decision-option-16"),Is.Not.Null);Assert.That(panel.Root.Q<Button>("decision-option-0"),Is.Null);Assert.That(peer.PendingCommandBytes,Is.Zero);
+            Click(panel.Root.Q<Button>("decision-option-16"));var read=Task.Run(()=>WireMessages.Parse(peer.ReadCommandForFixture()));yield return Until(()=>read.IsCompleted);Assert.That((string)read.Result["body"]["option_id"],Is.EqualTo("option-16"));
+        }
+        [UnityTest] public IEnumerator RetainedButtonsCannotSubmitAfterNewSnapshotOrViewerReplacement()
+        {
+            var host=Start(Snapshot(),out var peer,out var owner);var panel=Panel(host);yield return Show(host,panel);var button=panel.Root.Q<Button>("decision-action-0");var old=host.CurrentDecision;var next=Snapshot("new-panel");next["body"]["snapshot"]["revision"]=8;var send=Task.Run(()=>peer.ReplyForFixture(next));yield return Until(()=>send.IsCompleted);send.GetAwaiter().GetResult();yield return Until(()=>host.CurrentDecision!=null && !ReferenceEquals(host.CurrentDecision,old));Click(button);Assert.That(peer.PendingCommandBytes,Is.Zero);panel.Tick();Assert.That(panel.Root.style.display.value,Is.EqualTo(DisplayStyle.None));
+            yield return Show(host,panel);var cached=panel.Root.Q<Button>("decision-action-0");var replacement=Start(next,out var nextPeer,out var nextOwner);panel.Tick();Assert.That(panel.Root.style.display.value,Is.EqualTo(DisplayStyle.None));Click(cached);Assert.That(peer.PendingCommandBytes,Is.Zero);Assert.That(nextPeer.PendingCommandBytes,Is.Zero);yield return Until(()=>replacement.CurrentDecision!=null);
         }
         private JObject ManaSnapshot()
         {var frame=Snapshot(selection:true);var decision=frame["body"]["snapshot"]["decision"];decision["family"]="mana";decision["options"]=new JArray();decision["can_finish"]=false;decision["cancellable"]=false;return frame;}

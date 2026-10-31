@@ -892,3 +892,18 @@ Old offers, incarnations and foreign same-ID references are refused before a
 write. Local evidence: 364 EditMode and 79 graphics-enabled PlayMode checks passed
 without skips, plus Java preflight. Mana UI, owner fixture review and live-engine
 acceptance remain open. CI is next checked at 0.5.105 without waiting on active runs.
+
+### P3.3/P3.4 explicit decision controls
+
+The reusable [decision panel](play-viewer-decision-panel.md) displays prompts,
+engine actions/options and flagged finish/cancel controls through the existing
+bound dispatcher. Its display gate requires the current viewer's card snapshot
+to be presented, including the empty-frame handoff barrier. Retained callbacks
+revalidate their captured offer. All options remain reachable through bounded
+pages; navigation never chooses. The component remains unmounted in product and
+packaged session scenes pending owner visual review. Numeric/mana widgets,
+ordered receipt UX and real-engine/G0/G1 acceptance remain open.
+
+Local panel evidence: 364 EditMode and 84 graphics-enabled PlayMode checks passed
+without skips, plus Java preflight. A synthetic pending-state capture is available
+for owner review. The reusable component is not enabled in existing scenes.

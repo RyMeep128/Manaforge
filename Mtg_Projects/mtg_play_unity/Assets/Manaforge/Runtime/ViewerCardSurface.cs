@@ -96,6 +96,8 @@ namespace Manaforge.Play
             catch{faulted=true;throw new InvalidOperationException("VIEWER_SURFACE_CLEANUP_FAILED");}
             finally{transitioning=false;}
         }
+        internal bool HasPresentedFrame(ViewerSurfaceTicket supplied,long expectedRevision)
+        {ThreadOnly();return !disposed && !transitioning && !faulted && ReferenceEquals(ticket,supplied) && ticket!=null && Time.frameCount>=readyFrame && revision==expectedRevision && ticket.Mailbox.AllowsFrame(expectedRevision);}
         public bool TryPresent(ViewerSurfaceTicket supplied,ProjectedCardFrame frame)
         {
             Open();if(frame==null)throw new ArgumentNullException(nameof(frame));
