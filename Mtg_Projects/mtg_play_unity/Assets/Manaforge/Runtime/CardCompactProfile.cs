@@ -7,6 +7,7 @@ namespace Manaforge.Play
     {
         public string Kind {get;}
         public Rect Crop {get;}
+        public Rect FullCrop=>Kind=="Class"?new Rect(.08f,.15f,.35f,.72f):Crop;
         public Rect? SecondaryCrop {get;}
         public int Rotation {get;}
         public int InspectionRotation {get;}

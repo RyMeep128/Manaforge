@@ -122,6 +122,24 @@ namespace Manaforge.Play.Tests
         }
 
         [UnityTest]
+        public IEnumerator RoomDoorButtonChangesInspectionOnAnAttachedPanel()
+        {
+            view.UpdateValues(new CardDisplayValues("First","{W}","Enchantment — Room","First text",null,null,
+                CardCompactProfile.FromMetadata("split","Enchantment — Room"),roomDoors:new[]{
+                    new RoomDoorDisplay("First","{W}","First text"),new RoomDoorDisplay("Second","{U}","Second text")}));
+            yield return null;
+            var buttons=view.Q<VisualElement>("room-doors").Query<Button>().ToList();
+            Assert.That(buttons.Count,Is.EqualTo(2));
+            using(var submit=NavigationSubmitEvent.GetPooled()){submit.target=buttons[1];buttons[1].SendEvent(submit);}
+            yield return null;
+            Assert.That(view.Q<Label>("name").text,Is.EqualTo("Second"));
+            Assert.That(view.Q<Label>("rules").text,Is.EqualTo("Second text"));
+            view.Conceal();yield return null;
+            Assert.That(view.Q<VisualElement>("room-doors").childCount,Is.Zero);
+            Assert.That(view.Q<CardRuleSections>().childCount,Is.Zero);
+        }
+
+        [UnityTest]
         public IEnumerator ViewerHandoffHasAnEmptyFrameBeforeRebindingAndDisposeDetaches()
         {
             view.tooltip = "Private first viewer tooltip";

@@ -110,6 +110,20 @@ namespace Manaforge.Play.Tests
             Assert.That(loading.IsCompleted,Is.True);var values=loading.GetAwaiter().GetResult().Cards[0].MockValues;
             Assert.That(values.CompactProfile.Kind,Is.EqualTo("Planeswalker"));Assert.That(values.Loyalty,Is.EqualTo("3"));Assert.That(values.Defense,Is.Null);
         }
+        [TestCase(false)] [TestCase(true)]
+        public void V3RoomDoorsAreBoundedAndCannotAppearOnOtherCardTypes(bool invalid)
+        {
+            manifest["fixture_version"]=3;var card=manifest["cards"][0];card["layout"]="split";
+            card["mock_values"]["type_line"]=invalid?"Instant":"Enchantment — Room";
+            card["mock_values"]["loyalty"]=JValue.CreateNull();card["mock_values"]["defense"]=JValue.CreateNull();
+            card["room_doors"]=JArray.Parse(@"[{'name':'Left','mana_cost':'{W}','oracle_text':'Left text'},{'name':'Right','mana_cost':'{U}','oracle_text':'Right text'}]");
+            Publish();
+            if(invalid)Assert.Throws<IOException>(()=>ArtworkFixture.LoadAsync(directory).GetAwaiter().GetResult());
+            else {
+                var values=ArtworkFixture.LoadAsync(directory).GetAwaiter().GetResult().Cards[0].MockValues;
+                Assert.That(values.RoomDoors.Count,Is.EqualTo(2));Assert.That(values.RoomDoors[1].RulesText,Is.EqualTo("Right text"));
+            }
+        }
         [TestCase("card_limit")]
         [TestCase("live")]
         [TestCase("path")]

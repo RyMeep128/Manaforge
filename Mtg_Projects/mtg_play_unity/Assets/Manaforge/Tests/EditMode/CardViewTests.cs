@@ -103,7 +103,7 @@ namespace Manaforge.Play.Tests
             view.SetPresentation(CardPresentationMode.Full,300);
             Assert.That(view.Q<Image>("artwork").uv,Is.Not.EqualTo(new Rect(0,0,1,1)));
             Assert.That(view.Q<Label>("name").style.display.value,Is.EqualTo(DisplayStyle.Flex));
-            Assert.That(view.Q<Label>("rules").style.display.value,Is.EqualTo(DisplayStyle.Flex));
+            Assert.That(view.Q<VisualElement>("rules-scroll").style.display.value,Is.EqualTo(DisplayStyle.Flex));
         }
         [TestCase("Instant",false)] [TestCase("Sorcery",false)] [TestCase("Instant // Instant",false)]
         [TestCase("Token Creature — Soldier",true)] [TestCase("Artifact",true)] [TestCase("Enchantment — Room",true)]

@@ -144,3 +144,60 @@ Local validation: 283 EditMode checks and five PlayMode checks passed; Windows
 build and packaged 20-object capture succeeded. The capture was visually inspected
 and used to correct title/mana spacing. Both panels remain present for known
 split-art profiles in full inspection. This increment remains fixture-only.
+
+
+## Shared renderer and structured layouts — October 30, 2026
+
+The 0.5.82 increment corrects the plain-surround detour above. Known full-card
+layouts again retain the exact printing image as their outer frame, using the
+same CardView layering as standard creatures and auras. There is one renderer:
+printing identity and borrowed texture, a layout profile, cropped artwork,
+shared title/type plates, the same typography and mana resources, supplied text,
+and optional supplied stats. Compact and full are presentation modes of that
+same view. No per-card-name rendering branches were added. Unknown layouts retain
+the authentic-image fallback; arbitrary card/frame combinations are not claimed
+validated. Perfect dynamic frame composition remains roadmap research.
+
+Specialized profiles change geometry and text organization:
+
+- Planeswalkers use a taller inspection card, smaller art region and separated
+  ability rows with costs at the left. Static text and unfamiliar costs remain
+  visible; loyalty is supplied independently and the baked original badge is
+  masked without extending into the collector footer.
+- Classes use the tall left art panel and level sections at the right, following
+  the [official Arena Class screenshot](https://media.wizards.com/2021/images/daily/MhmHVZHbLg.jpg)
+  from [Wizards' AFR digital release notes](https://magic.wizards.com/en/news/mtg-arena/mtg-arena-digital-release-notes-adventures-forgotten-realms-2021-07).
+  A separate full art crop avoids magnifying the mini crop into a tall panel.
+- Level-up cards preserve explicit level-range headings, printed P/T and ability
+  text in separated sections. Class levels and level counters are not conflated.
+- Rooms retain the two-panel mini and provide door selectors in inspection. Each
+  selector changes only displayed name, mana, rules, crop and printing surround.
+  It never unlocks a door or creates a second card. The two-door relationship was
+  checked against [Wizards' Duskmourn notes](https://magic.wizards.com/en/news/feature/duskmourn-house-of-horror-release-notes).
+  A verified Arena Room gameplay screenshot was not found in this research;
+  the door inspector is a Manaforge presentation, not a claim of exact Arena UX.
+
+`CardRuleSection` recognizes explicit printed typography markers only (signed
+loyalty costs, Class cost/level headings and LEVEL ranges). It does not calculate
+legality, levels, unlocked doors or current characteristics. Unrecognized text
+stays literal, rich text remains disabled and all sections clear on handoff.
+Future live projections must supply viewer-permitted engine state and decisions;
+no sections are dimmed or enabled based on inferred printed text.
+
+Offline artwork fixture v3 carries two bounded Room display records on the same
+card, fixing the earlier first-door-only export. The loader retains v1/v2 support
+and rejects door metadata attached to unrelated types. This version is a local
+renderer-fixture schema, not a new game-protocol version or persistent deck model.
+All names move one percentage point right inside the existing plates.
+
+Local validation: 293 EditMode checks, six PlayMode checks (including an attached
+Room selector and cleared handoff), 12 focused Python fixture checks and Ruff
+passed. Windows player build and five packaged captures cover Jace, Ranger Class,
+Student of Warfare, Dollmaker's Shop and Bruna. Owner visual approval remains
+open. Captures live in ignored `Artifacts/ArtworkScene/shared-*.png`. CI was last
+checked at 22f4b88: no newer relevant runs existed; next check remains the third
+commit checkpoint. No Qt CI was investigated or full application suite run.
+
+Room inspection masks the compound printing perimeter with the shared black edge
+to prevent rotated credits/text bleeding around the focused door. Exact Room
+frame composition and Arena-equivalent door styling remain owner-review items.

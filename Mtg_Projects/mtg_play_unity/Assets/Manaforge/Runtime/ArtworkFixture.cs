@@ -94,7 +94,7 @@ namespace Manaforge.Play
             var manifest = WireEnvelope.ParseObject(new UTF8Encoding(false, true).GetString(
                 Read(Path.Combine(root.FullName, "manifest.json"), 1024 * 1024, cancellation)));
             Fields(manifest, "fixture_version", "fixture_only", "description", "assets", "cards");
-            int version=Number(manifest["fixture_version"],2);
+            int version=Number(manifest["fixture_version"],3);
             if(version<1 || !Flag(manifest["fixture_only"]))throw Invalid();
             Text(manifest["description"]);
             var assets = new Dictionary<string, Asset>(StringComparer.Ordinal);
@@ -123,7 +123,8 @@ namespace Manaforge.Play
             {
                 cancellation.ThrowIfCancellationRequested();
                 if(version==1)Fields(item, "oracle_id", "selected_printing_id", "selected_face", "values_source", "mock_values", "candidates");
-                else Fields(item, "oracle_id", "selected_printing_id", "selected_face", "values_source", "layout", "mock_values", "candidates");
+                else if(version==2)Fields(item, "oracle_id", "selected_printing_id", "selected_face", "values_source", "layout", "mock_values", "candidates");
+                else Fields(item, "oracle_id", "selected_printing_id", "selected_face", "values_source", "layout", "mock_values", "candidates", "room_doors");
                 if (Text(item["values_source"]) != "printed_reference_mock") throw Invalid();
                 string oracle = Text(item["oracle_id"]), selectedId = Text(item["selected_printing_id"]), face = Text(item["selected_face"]);
                 var candidates = new List<VisualPrintingCandidate>();
@@ -147,11 +148,17 @@ namespace Manaforge.Play
                 if(version==1)Fields(values, "name", "mana_cost", "type_line", "oracle_text", "power", "toughness");
                 else Fields(values, "name", "mana_cost", "type_line", "oracle_text", "power", "toughness", "loyalty", "defense");
                 string power = Optional(values["power"]), toughness = Optional(values["toughness"]);
+                var doors=new List<RoomDoorDisplay>();
+                if(version==3){
+                    if(!(item["room_doors"] is JArray doorArray) || doorArray.Count>2)throw Invalid();
+                    if(doorArray.Count>0 && (doorArray.Count!=2 || CardCompactProfile.FromMetadata(Text(item["layout"]),Optional(values["type_line"]))?.Kind!="Room"))throw Invalid();
+                    foreach(var door in doorArray){Fields(door,"name","mana_cost","oracle_text");doors.Add(new RoomDoorDisplay(Text(door["name"]),Optional(door["mana_cost"]),Optional(door["oracle_text"])));}
+                }
                 cards.Add(new Card(identity, new CardDisplayValues(Optional(values["name"]), Optional(values["mana_cost"]),
                     Optional(values["type_line"]), Optional(values["oracle_text"]),
                     power == null || toughness == null ? null : power + "/" + toughness, "PRINTED MOCK",
-                    version==2?CardCompactProfile.FromMetadata(Text(item["layout"]),Optional(values["type_line"])):null,
-                    version==2?Optional(values["loyalty"]):null,version==2?Optional(values["defense"]):null),
+                    version>=2?CardCompactProfile.FromMetadata(Text(item["layout"]),Optional(values["type_line"])):null,
+                    version>=2?Optional(values["loyalty"]):null,version>=2?Optional(values["defense"]):null,roomDoors:doors),
                     identity.MissingAsset ? null : art[identity.RenderedPrintingId]));
             }
             return new ArtworkFixture(cards, total);

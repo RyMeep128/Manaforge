@@ -112,6 +112,12 @@ def export_visual_fixture(
                 selected_face=candidates[0].face_key,
                 values_source="printed_reference_mock",
                 layout=payload.get("layout") or "unknown",
+                room_doors=[
+                    {key: door.get(key) for key in ("name", "mana_cost", "oracle_text")}
+                    for door in (payload.get("card_faces") or [])[:2]
+                ]
+                if "Room" in (face.get("type_line") or "").split()
+                else [],
                 mock_values={
                     name: face.get(name)
                     for name in (
@@ -142,7 +148,7 @@ def export_visual_fixture(
     if not assets:
         raise VisualFixtureError("VISUAL_FIXTURE_NO_ARTWORK")
     manifest = dict(
-        fixture_version=2,
+        fixture_version=3,
         fixture_only=True,
         description="Offline public-card renderer fixture; no engine or authoritative current characteristics",
         assets=list(assets.values()),

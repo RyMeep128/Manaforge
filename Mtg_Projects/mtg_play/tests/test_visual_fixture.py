@@ -180,7 +180,38 @@ def test_v2_export_preserves_printed_layout_and_supplied_badges(
         tmp_path / "v2",
     )
     visual = manifest["cards"][0]
-    assert manifest["fixture_version"] == 2 and visual["layout"] == layout
+    assert manifest["fixture_version"] == 3 and visual["layout"] == layout
     assert visual["mock_values"]["loyalty"] == loyalty
     assert visual["mock_values"]["defense"] == defense
     assert "chapter" not in visual["mock_values"]
+
+
+def test_room_export_preserves_both_door_texts_without_creating_a_second_card(tmp_path):
+    path = source(tmp_path)
+    selected = card("room")
+    selected.update(
+        layout="split",
+        card_faces=[
+            {
+                "name": "Left",
+                "type_line": "Enchantment \u2014 Room",
+                "mana_cost": "{W}",
+                "oracle_text": "Left text",
+            },
+            {
+                "name": "Right",
+                "type_line": "Enchantment \u2014 Room",
+                "mana_cost": "{2}{U}",
+                "oracle_text": "Right text",
+            },
+        ],
+    )
+    service = Service(selected, paths={("room", "default"): path})
+    manifest = export_visual_fixture(service, [("room", 0)], tmp_path / "bundle")
+    assert len(manifest["cards"]) == 1
+    assert manifest["cards"][0]["room_doors"][1] == {
+        "name": "Right",
+        "mana_cost": "{2}{U}",
+        "oracle_text": "Right text",
+    }
+    assert "unlocked" not in json.dumps(manifest)
