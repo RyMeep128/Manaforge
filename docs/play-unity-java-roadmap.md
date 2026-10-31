@@ -1046,3 +1046,12 @@ modified structures are excluded; a passing ordinary tap structure is not a safe
 payment certificate. World-state safety, native plan feasibility, equivalent
 source decisions and serialized owner execution remain open. No production auto
 payment, architecture gate or owner UX acceptance is claimed.
+
+
+Desktop preview increment 0.5.117 implements the owner-supplied P3.5
+[Desktop-to-Unity deck preview](play-desktop-deck-preview.md): the development
+lobby can launch the packaged player with a bounded projection of only the human
+saved deck and offline verified artwork. No Java/XMage, AI, game snapshots or
+mana automation is involved. Existing rendering, bootstrap and process ownership
+components are reused. Windows build evidence exists; new CI checks and owner
+UI verification remain pending. This is not P4.1, a live-game claim or a gate waiver.

@@ -16,6 +16,9 @@ namespace Manaforge.Play
         private void Awake()
         {
             Application.targetFrameRate = 60;
+            if(ArtworkFixtureScene.Argument("-manaforgeDeckPreview")=="1") {
+                enabled=false;gameObject.AddComponent<DeckPreviewScene>();return;
+            }
             if (ArtworkFixtureScene.Argument("-manaforgeSessionFixture") != null)
             {
                 enabled = false;

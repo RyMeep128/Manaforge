@@ -20,6 +20,7 @@ def export_artwork_bundle(
     session_id,
     viewer_id,
     max_edge=896,
+    preview_only=False,
     max_asset_bytes=256 * 1024 * 1024,
 ):
     """Caller supplies only viewer-permitted IDs and owns temporary-folder cleanup.
@@ -27,9 +28,11 @@ def export_artwork_bundle(
     No decks are read or persisted. No downloads, fallback printings or per-action
     calls are introduced. Publish a new directory; originals/preferences stay intact.
     """
+    if type(preview_only) is not bool:
+        raise ArtworkBundleError("CORE_ARTWORK_CONTEXT")
     ids = tuple(printing_ids)
     if (
-        not 1 <= len(ids) <= 256
+        not (0 if preview_only else 1) <= len(ids) <= 256
         or any(
             not isinstance(item, str) or not item or len(item) > 1024 for item in ids
         )
@@ -71,9 +74,8 @@ def export_artwork_bundle(
             not selected
             or selected.printing_id != printing
             or selected.oracle_id != payload["oracle_id"]
-            or not selected.standard_compatible
-            or payload.get("layout") != "normal"
-            or payload.get("card_faces")
+            or (not preview_only and (not selected.standard_compatible
+                or payload.get("layout") != "normal" or payload.get("card_faces")))
             or not payload.get("type_line")
         ):
             unavailable.append(
@@ -97,9 +99,9 @@ def export_artwork_bundle(
                 oracle_id=selected.oracle_id,
                 printing_id=printing,
                 face_key=selected.face_key,
-                layout="normal",
-                face_count=1,
-                standard_compatible=True,
+                layout=payload.get("layout") or "unknown",
+                face_count=len(payload.get("card_faces") or [payload]),
+                standard_compatible=selected.standard_compatible,
                 printed_type_line=payload["type_line"],
                 file=digest + ".rgba",
                 width=width,

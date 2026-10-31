@@ -248,6 +248,24 @@ class LaunchOwner:
             if frame is not None:
                 frame[:] = b"\x00" * len(frame)
 
+    def start_preview(self, command, *, cwd=None, preview_bootstrap):
+        """Preview-only child, no gateway readiness or runtime claim is fabricated."""
+        try:
+            frame = bytearray(frame_viewer_bootstrap(preview_bootstrap))
+        except ViewerBootstrapError:
+            raise LaunchLifecycleError("INVALID_CLIENT_BOOTSTRAP") from None
+        try:
+            self._spawn("client", command, cwd=cwd, expected=LaunchState.NEW,
+                starting=LaunchState.STARTING_CLIENT, bootstrap=frame)
+        finally:
+            frame[:] = b"\x00" * len(frame)
+
+    @property
+    def client_exit_code(self):
+        with self._lock:
+            process = self._children.get("client")
+            return process.poll() if process is not None else None
+
     def client_ready(self):
         with self._lock:
             self._require(LaunchState.STARTING_CLIENT)

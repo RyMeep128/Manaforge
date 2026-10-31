@@ -469,3 +469,8 @@ Spectators and persistence remain optional later expansions, not initial Command
 5. Add mixed human/AI seats (Phase 9), private host-authoritative 1v1 (Phase 10), then adaptive 2-5-player Commander (Phase 11).
 6. Add local playgroups, borrowing, precons, brackets, and history (Phase 12), with optional external sync.
 7. Invest in complete-loop polish (Phase 13); essential onboarding, usability, accessibility, and responsiveness belong in earlier milestones.
+
+
+Development Play preview: [Desktop-to-Unity saved-deck preview](play-desktop-deck-preview.md)
+implements the P3.5 visual handoff for owner review; CI/UI acceptance is pending.
+It does not activate installed Play or implement authoritative P4 gameplay.

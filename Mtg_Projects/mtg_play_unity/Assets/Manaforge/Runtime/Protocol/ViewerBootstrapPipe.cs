@@ -68,22 +68,26 @@ namespace Manaforge.Play.Protocol
             Check(cancellation,timer,milliseconds);return true;
         }
         public Task<ViewerBootstrap> ReadBootstrapAsync(int milliseconds=5000,CancellationToken cancellation=default)
+            => ReadPayloadAsync(ViewerBootstrap.Parse,milliseconds,cancellation);
+        // Preview uses the same bounded inherited frame and owner-EOF lifeline, with its own codec.
+        public Task<T> ReadPayloadAsync<T>(Func<byte[],T> parse,int milliseconds=5000,CancellationToken cancellation=default) where T:class
         {
+            if(parse==null)throw new ArgumentNullException(nameof(parse));
             if(milliseconds<1 || milliseconds>60000)throw new ArgumentOutOfRangeException(nameof(milliseconds));
             if(Interlocked.CompareExchange(ref stage,1,0)!=0)throw Error("BOOTSTRAP_PIPE_STATE");
             var timer=Stopwatch.StartNew();
             return Task.Run(()=>{
-                byte[] header=new byte[4],payload=null;ViewerBootstrap bootstrap=null;
+                byte[] header=new byte[4],payload=null;T bootstrap=null;
                 try {
                     if(!Exact(header,cancellation,timer,milliseconds))throw Error("BOOTSTRAP_PIPE_EOF");
                     uint size=((uint)header[0]<<24)|((uint)header[1]<<16)|((uint)header[2]<<8)|header[3];
                     if(size<1 || size>ViewerBootstrap.MaximumBytes)throw Error("BOOTSTRAP_PIPE_SIZE");
                     payload=new byte[(int)size];if(!Exact(payload,cancellation,timer,milliseconds))throw Error("BOOTSTRAP_PIPE_TRUNCATED");
-                    try{bootstrap=ViewerBootstrap.Parse(payload);}catch(IOException){throw Error("BOOTSTRAP_PIPE_PAYLOAD");}
+                    try{bootstrap=parse(payload);if(bootstrap==null)throw Error("BOOTSTRAP_PIPE_PAYLOAD");}catch(IOException){throw Error("BOOTSTRAP_PIPE_PAYLOAD");}
                     Check(cancellation,timer,milliseconds);Volatile.Write(ref stage,2);return bootstrap;
                 }
-                catch(PipeException){bootstrap?.Dispose();Dispose();throw;}
-                catch{bootstrap?.Dispose();string code=cancellation.IsCancellationRequested?"BOOTSTRAP_PIPE_CANCELLED":Volatile.Read(ref stopped)!=0?"BOOTSTRAP_PIPE_CLOSED":"BOOTSTRAP_PIPE_READ_FAILED";Dispose();throw Error(code);}
+                catch(PipeException){(bootstrap as IDisposable)?.Dispose();Dispose();throw;}
+                catch{(bootstrap as IDisposable)?.Dispose();string code=cancellation.IsCancellationRequested?"BOOTSTRAP_PIPE_CANCELLED":Volatile.Read(ref stopped)!=0?"BOOTSTRAP_PIPE_CLOSED":"BOOTSTRAP_PIPE_READ_FAILED";Dispose();throw Error(code);}
                 finally{Array.Clear(header,0,header.Length);if(payload!=null)Array.Clear(payload,0,payload.Length);}
             });
         }

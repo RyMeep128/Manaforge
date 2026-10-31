@@ -18,8 +18,8 @@ namespace Manaforge.Play
         private readonly object gate=new object();
         private readonly string root,session,viewer;
         private readonly Dictionary<string,Entry> entries=new Dictionary<string,Entry>(StringComparer.Ordinal);
-        private bool disposed;
-        private sealed class Entry
+        private bool disposed;private bool previewOnly;
+        internal sealed class Entry
         {public CatalogArtworkFace Catalog;public string File,Digest;public int Width,Height,Bytes;}
         private static readonly Regex Hash=new Regex("^[0-9a-f]{64}$",RegexOptions.CultureInvariant);
         public int EntryCount {get{lock(gate)return entries.Count;}}
@@ -33,7 +33,7 @@ namespace Manaforge.Play
         {if(value?.Type!=JTokenType.Integer || (long)value<1 || (long)value>maximum)throw Invalid();return (int)value;}
         private static void DirectorySafe(string root)
         {for(var dir=new DirectoryInfo(root);dir!=null;dir=dir.Parent)if((dir.Attributes&FileAttributes.ReparsePoint)!=0)throw Invalid();}
-        private static byte[] Read(string root,string file,int maximum,CancellationToken cancellation)
+        internal static byte[] Read(string root,string file,int maximum,CancellationToken cancellation)
         {
             DirectorySafe(root);string path=Path.Combine(root,file);
             if((File.GetAttributes(path)&FileAttributes.ReparsePoint)!=0)throw Invalid();
@@ -47,10 +47,12 @@ namespace Manaforge.Play
                 catch{Array.Clear(bytes,0,bytes.Length);throw;}
             }
         }
-        private static string Digest(byte[] bytes){using(var hash=SHA256.Create())return BitConverter.ToString(hash.ComputeHash(bytes)).Replace("-","").ToLowerInvariant();}
+        internal static string Digest(byte[] bytes){using(var hash=SHA256.Create())return BitConverter.ToString(hash.ComputeHash(bytes)).Replace("-","").ToLowerInvariant();}
         public static Task<CoreArtworkBundle> OpenAsync(string directory,string manifestSha256,string session,string viewer,CancellationToken cancellation=default)
             =>Task.Run(()=>Open(directory,manifestSha256,session,viewer,cancellation),cancellation);
-        private static CoreArtworkBundle Open(string directory,string pin,string session,string viewer,CancellationToken cancellation)
+        public static Task<CoreArtworkBundle> OpenPreviewAsync(string directory,string pin,string preview,CancellationToken cancellation=default)
+            =>Task.Run(()=>Open(directory,pin,preview,"deck-preview",cancellation,true),cancellation);
+        private static CoreArtworkBundle Open(string directory,string pin,string session,string viewer,CancellationToken cancellation,bool previewOnly=false)
         {
             byte[] bytes=null;CoreArtworkBundle bundle=null;
             try {
@@ -63,20 +65,20 @@ namespace Manaforge.Play
                 if(Number(manifest["artwork_bundle_version"],1)!=1 || Text(manifest["source"])!="manaforge_core_cache"
                     || Text(manifest["session_id"])!=session || Text(manifest["viewer_id"])!=viewer)throw Invalid();
                 if(!(manifest["entries"] is JArray records) || !(manifest["unavailable"] is JArray missing)
-                    || records.Count+missing.Count<1 || records.Count+missing.Count>256)throw Invalid();
-                bundle=new CoreArtworkBundle(root,session,viewer);var seen=new HashSet<string>(StringComparer.Ordinal);var files=new Dictionary<string,int>();long total=0;
+                    || records.Count+missing.Count<(previewOnly?0:1) || records.Count+missing.Count>256)throw Invalid();
+                bundle=new CoreArtworkBundle(root,session,viewer){previewOnly=previewOnly};var seen=new HashSet<string>(StringComparer.Ordinal);var files=new Dictionary<string,int>();long total=0;
                 foreach(var record in records) {
                     cancellation.ThrowIfCancellationRequested();
                     Fields(record,"oracle_id","printing_id","face_key","layout","face_count","standard_compatible","printed_type_line","file","width","height","byte_length","sha256","pixel_format","row_origin");
                     string printing=Text(record["printing_id"]),digest=Text(record["sha256"]),file=Text(record["file"]);
                     int width=Number(record["width"],1024),height=Number(record["height"],1024),length=Number(record["byte_length"],4*1024*1024);
                     if(!seen.Add(printing) || !Hash.IsMatch(digest) || file!=digest+".rgba" || length!=width*height*4
-                        || Text(record["layout"])!="normal" || Number(record["face_count"],1)!=1
-                        || record["standard_compatible"]?.Type!=JTokenType.Boolean || !(bool)record["standard_compatible"]
+                        || record["standard_compatible"]?.Type!=JTokenType.Boolean
+                        || (!previewOnly && (Text(record["layout"])!="normal" || Number(record["face_count"],1)!=1 || !(bool)record["standard_compatible"]))
                         || Text(record["pixel_format"])!="RGBA8" || Text(record["row_origin"])!="bottom_left")throw Invalid();
                     if(files.TryGetValue(file,out var previous)){if(previous!=length)throw Invalid();}
                     else{files.Add(file,length);if((total+=length)>256*1024*1024)throw Invalid();}
-                    bundle.entries.Add(printing,new Entry{Catalog=new CatalogArtworkFace(Text(record["oracle_id"]),printing,Text(record["face_key"]),"normal",1,true,Text(record["printed_type_line"])),File=file,Digest=digest,Width=width,Height=height,Bytes=length});
+                    bundle.entries.Add(printing,new Entry{Catalog=new CatalogArtworkFace(Text(record["oracle_id"]),printing,Text(record["face_key"]),Text(record["layout"]),Number(record["face_count"],8),(bool)record["standard_compatible"],Text(record["printed_type_line"])),File=file,Digest=digest,Width=width,Height=height,Bytes=length});
                 }
                 foreach(var record in missing) {
                     Fields(record,"printing_id","code");if(!seen.Add(Text(record["printing_id"])))throw Invalid();
@@ -110,6 +112,20 @@ namespace Manaforge.Play
             catch{prepared?.Dispose();throw Invalid();}
             finally{if(bytes!=null)Array.Clear(bytes,0,bytes.Length);}
         }
+        public sealed class PreviewPixels : IDisposable
+        {
+            public CatalogArtworkFace Catalog {get;} public int Width {get;} public int Height {get;}
+            public byte[] Bytes {get;private set;}
+            internal PreviewPixels(Entry entry,byte[] bytes){Catalog=entry.Catalog;Width=entry.Width;Height=entry.Height;Bytes=bytes;}
+            public void Dispose(){if(Bytes!=null){Array.Clear(Bytes,0,Bytes.Length);Bytes=null;}}
+        }
+        public Task<PreviewPixels> LoadPreviewAsync(string oracle,string printing,CancellationToken cancellation)
+            =>Task.Run(()=>{
+                Entry entry;lock(gate){if(disposed || !previewOnly)throw Invalid();if(printing==null || !entries.TryGetValue(printing,out entry) || entry.Catalog.OracleId!=oracle)return null;}
+                byte[] bytes=Read(root,entry.File,entry.Bytes,cancellation);
+                if(bytes.Length!=entry.Bytes || Digest(bytes)!=entry.Digest){Array.Clear(bytes,0,bytes.Length);throw Invalid();}
+                return new PreviewPixels(entry,bytes);
+            },cancellation);
         public void Dispose(){lock(gate){disposed=true;entries.Clear();}}
     }
 }

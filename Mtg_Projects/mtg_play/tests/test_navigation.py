@@ -660,3 +660,22 @@ def test_uncertain_match_exposes_cleanup_only_recovery_without_replay(
         workspace.session.active = False
         workspace.loading_timer.stop()
         workspace.close()
+
+
+def test_unity_preview_uses_only_local_deck_and_preserves_lobby(app,tmp_path,monkeypatch):
+    workspace,calls=workspace_fixture(app,tmp_path)
+    workspace.landing_page.offline_button.click()
+    workspace.format.setCurrentIndex(workspace.format.findData("commander"))
+    workspace.format_continue.click()
+    workspace.selectors[0].setCurrentIndex(1)
+    assert workspace.preview_button.isEnabled()  # AI deck is optional for preview.
+    before=[selector.currentData() for selector in workspace.selectors]
+    captured=[]
+    monkeypatch.setattr("mtg_core.decks.DeckStore.load",lambda self,path: workspace._decks[workspace.selectors[0].currentData()].document)
+    monkeypatch.setattr("mtg_play.workspace.run_preview",lambda document,format,service,cancel,report,**kw: captured.append((document.deck.deck_id,format)))
+    workspace.preview_button.click()
+    assert not workspace.preview_button.isEnabled()
+    drain(app,lambda:not workspace.preview_jobs.busy)
+    assert captured==[(workspace._decks[before[0]].document.deck.deck_id,"commander")]
+    assert [selector.currentData() for selector in workspace.selectors]==before
+    assert not calls

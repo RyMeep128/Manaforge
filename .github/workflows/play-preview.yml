@@ -1,0 +1,26 @@
+name: Play desktop preview
+on:
+  push:
+    paths: ['Mtg_Projects/mtg_play/**', 'Mtg_Projects/mtg_play_unity/Assets/Manaforge/**', '.github/workflows/play-preview.yml']
+  pull_request:
+    paths: ['Mtg_Projects/mtg_play/**', 'Mtg_Projects/mtg_play_unity/Assets/Manaforge/**', '.github/workflows/play-preview.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  preview-contract-and-ownership:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    env:
+      QT_QPA_PLATFORM: offscreen
+      PYTHONPATH: '${{ github.workspace }}/Mtg_Projects;${{ github.workspace }}/Mtg_Projects/mtg_core'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r requirements-dev.txt
+      - name: Focused desktop preview and navigation contracts
+        run: python -m pytest -q Mtg_Projects/mtg_play/tests/test_deck_preview.py Mtg_Projects/mtg_play/tests/test_launch_lifecycle.py Mtg_Projects/mtg_play/tests/test_artwork_bundle.py Mtg_Projects/mtg_play/tests/test_navigation.py Mtg_Projects/mtg_play/tests/test_bootstrap_launch.py

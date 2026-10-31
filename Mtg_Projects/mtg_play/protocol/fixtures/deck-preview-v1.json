@@ -1,0 +1,25 @@
+{
+  "deck_preview_version": 1,
+  "mode": "deck_preview",
+  "deck_name": "Public test deck",
+  "format": "freeform",
+  "total_entries": 1,
+  "cards": [
+    {
+      "entry_id": "public-entry",
+      "quantity": 3,
+      "section": "mainboard",
+      "oracle_id": "public-oracle",
+      "printing_id": "public-printing",
+      "name": "Public card",
+      "mana_cost": "{G}",
+      "type_line": "Creature",
+      "rules_text": null,
+      "power": "2",
+      "toughness": "2",
+      "loyalty": null,
+      "defense": null,
+      "artwork_printing_id": "public-printing"
+    }
+  ]
+}

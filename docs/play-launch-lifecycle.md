@@ -220,3 +220,14 @@ closure under one owner. Cancellation releases an active read, and matching
 shutdown preserves final packets to drain. Two new authenticated fixture scenarios
 pass within 151 focused EditMode checks. This starts no processes and does not yet
 connect LaunchOwner, join product workers or prove private renderer handoff.
+
+
+### Preview-only owned child (0.5.117)
+
+LaunchOwner.start_preview starts one client directly from NEW with no invented
+gateway handshake. The existing bounded stdin writer, startup/health checks and
+exact child-handle cleanup are reused. A preview-specific codec and ready marker
+remain separate from authenticated gameplay bootstrap/session readiness.
+PreviewLaunch retains temporary assets and the owner if cleanup fails, allowing
+worker-based retry without overlapping launches. See the
+[desktop preview handoff and acceptance](play-desktop-deck-preview.md).
