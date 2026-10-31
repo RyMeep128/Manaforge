@@ -377,6 +377,9 @@ def run_proof(
                 context_sources.append(
                     HERE / "java/payment-xmage/manaforge/payment/xmage/ContextHumanPlayer.java"
                 )
+                context_sources.append(
+                    HERE / "java/payment-xmage/manaforge/payment/xmage/OrdinaryManaShape.java"
+                )
             compile_log = (workspace / "compile.log").open("w", encoding="utf-8")
             logs.append(compile_log)
             command = [

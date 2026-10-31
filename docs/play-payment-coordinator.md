@@ -466,3 +466,50 @@ complete-plan feasibility, plan identity/revalidation and serialized Java owner
 integration. Production automatic source selection remains disabled. CI was last
 checked at 0.5.114 (its run was in progress; 0.5.111–113 passed); the next scheduled
 check is 0.5.117. No CI result is inferred for this increment.
+
+
+### Ordinary native ability structure screen (0.5.116)
+
+OrdinaryManaShape is a structural exclusion screen, not a safe-payment
+certificate. It recognizes only the exact pinned White/Blue/Black/Red/Green
+ManaAbility classes, never arbitrary subclasses or card names. It requires the
+native one-source tap cost, no mana/additional costs, one mode without mode cost
+or optional selection, no targets/subabilities/watchers/adjusters/cost tags,
+no stack use or pool dependence, and a single exact BasicManaEffect whose plain
+Mana template matches one unit of the class's native color. Conditional Mana
+subclasses and dynamic amounts are rejected. The pinned BasicManaEffect.netAmount
+field is read reflectively because the public template alone hides dynamic
+production; unavailable internals return UNKNOWN. No abilities are activated and
+no engine objects are modified. Unknown and unsupported structures stay manual.
+Colorless and other mana abilities remain outside this first allowlist.
+
+Passing ORDINARY_TAP_SHAPE does NOT prove a source interchangeable or safe:
+game-wide triggers, replacement effects, paid-spell restrictions, source utility,
+full unpaid-cost feasibility and current execution authority remain separate
+requirements. This screen cannot emit the coordinator's
+VERIFIED_ORDINARY_EQUIVALENT assessment. It never calls a cost solver or invents
+native legality. Production automatic payment remains disabled.
+
+The opt-in observer now reports only an additional ordinary_shape_abilities
+aggregate after the scoped source read passes its post-read guards. Python
+accepts only bounded integer counts no greater than observed native candidates;
+the shared 128-sample bound still applies. The diagnostic acceptance requires
+two matching native ability structures. No public snapshot, UI, preferences or
+default human-player implementation changed.
+
+Local PaymentShape116.json passed: two candidate/ordinary-structure observations,
+maximum two ordinary abilities, remaining cost counts 2 and 1, two manually
+submitted/tapped sources, mana spent, Ballista resolved as 1/1, and the fixture's
+concession-derived authoritative result. Compiler, peer, bridge and server roots
+exited 0 without forced cleanup. This proves the screen runs on live native
+abilities, not automatic payment or natural-game completion.
+
+Validation passed: 113 focused Python adapter/connection/lifecycle checks,
+65 coordinator checks, 77 response guards, 71 native-object/synthetic-scope
+checks, pinned API/hash validation and owned Java bridge compilation. Added
+native cases cover all five standard classes and copies, unknown subclasses,
+missing/extra costs, life costs, dynamic/conditional/wrong-color production,
+extra effects, mode costs, pool dependence and cost tags. Added Python evidence
+checks reject malformed/oversized counts and preserve diagnostic bounds/privacy.
+No full suite, Unity UI or packaged build ran. CI next checks at 0.5.117; this
+increment has no claimed CI result.

@@ -291,3 +291,8 @@ report; no source or ability identifiers are exported. Python validates and
 records counts only; source selection and payment rules remain native/Java
 responsibilities. The number acceptance fixture requires at least two candidate
 sources to have been observed. This diagnostic never submits an action.
+
+The 0.5.116 opt-in probe adds only an aggregate count of native abilities passing
+the OrdinaryManaShape structural exclusion screen. This is not a safe-payment
+assessment or permission to activate a source. Nonstandard ability types, costs,
+effects and choices fail the screen; game-wide safety/planning remains required.

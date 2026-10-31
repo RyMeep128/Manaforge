@@ -82,17 +82,23 @@ public final class ContextHumanPlayer extends HumanPlayer {
     /** Source IDs must already be visible to this payer; diagnostics export aggregate counts only. */
     public JsonObject paymentProbe(Game game,UUID payer,int cycle,UUID[] visibleSources) throws ReflectiveOperationException {
         if(visibleSources==null || visibleSources.length>128)return null;
-        final int[] counts={0,0};
+        final int[] counts={0,0,0};
         for(UUID source:new java.util.LinkedHashSet<>(java.util.Arrays.asList(visibleSources))) {
-            Integer count=inspectBattlefieldSource(game,payer,cycle,source,(ability,unpaid,candidates)->candidates.size());
-            if(count!=null && count>0){counts[0]++;counts[1]+=count;}
+            int[] count=inspectBattlefieldSource(game,payer,cycle,source,(ability,unpaid,candidates)->{
+                int ordinary=0;
+                for(ActivatedManaAbilityImpl candidate:candidates.values())
+                    if(OrdinaryManaShape.inspect(candidate)==OrdinaryManaShape.Result.ORDINARY_TAP_SHAPE)ordinary++;
+                return new int[]{candidates.size(),ordinary};
+            });
+            if(count!=null && count[0]>0){counts[0]++;counts[1]+=count[0];counts[2]+=count[1];}
         }
         return inspectPayment(game,payer,cycle,(ability,unpaid)->{
             JsonObject result=new JsonObject();result.addProperty("available",true);
             result.addProperty("unpaid_mana_count",unpaid.getUnpaid().getMana().count());
             result.addProperty("sequence",payment.sequence);
             result.addProperty("candidate_sources",counts[0]);
-            result.addProperty("candidate_abilities",counts[1]);return result;
+            result.addProperty("candidate_abilities",counts[1]);
+            result.addProperty("ordinary_shape_abilities",counts[2]);return result;
         });
     }
 }

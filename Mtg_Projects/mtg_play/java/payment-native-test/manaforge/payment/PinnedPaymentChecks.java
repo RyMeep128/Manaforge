@@ -11,9 +11,10 @@ import mage.players.net.UserData;
 import mage.util.ManaUtil;
 import manaforge.payment.xmage.SelectedSourceMana;
 import manaforge.payment.xmage.ContextHumanPlayer;
+import manaforge.payment.xmage.OrdinaryManaShape;
 import mage.constants.RangeOfInfluence;
 
-/** Real pinned utility objects only. No Game, server, deck, source activation or gameplay claim. */
+/** Pinned utility objects and synthetic scope guards. No server, deck, activation or real-game claim. */
 public final class PinnedPaymentChecks {
     private static int checks;
     private static void check(boolean value){checks++;if(!value)throw new AssertionError("PINNED_PAYMENT_CHECK_"+checks);}
@@ -68,6 +69,35 @@ public final class PinnedPaymentChecks {
         }
         payment.set(player,null);open.set(player,false);
     }
+    private static void ordinaryShapeChecks() {
+        for(ActivatedManaAbilityImpl basic:Arrays.asList(new WhiteManaAbility(),new BlueManaAbility(),new BlackManaAbility(),new RedManaAbility(),new GreenManaAbility())) {
+            check(OrdinaryManaShape.inspect(basic)==OrdinaryManaShape.Result.ORDINARY_TAP_SHAPE);
+            check(OrdinaryManaShape.inspect((ActivatedManaAbilityImpl)basic.copy())==OrdinaryManaShape.Result.ORDINARY_TAP_SHAPE);
+        }
+        check(OrdinaryManaShape.inspect(null)==OrdinaryManaShape.Result.UNKNOWN);
+        check(OrdinaryManaShape.inspect(new GreenManaAbility(){})==OrdinaryManaShape.Result.UNSUPPORTED_ABILITY);
+        GreenManaAbility life=new GreenManaAbility();life.addCost(new mage.abilities.costs.common.PayLifeCost(1));
+        check(OrdinaryManaShape.inspect(life)==OrdinaryManaShape.Result.ADDITIONAL_COST);
+        GreenManaAbility noTap=new GreenManaAbility();noTap.getCosts().clear();
+        check(OrdinaryManaShape.inspect(noTap)==OrdinaryManaShape.Result.ADDITIONAL_COST);
+        GreenManaAbility manaCost=new GreenManaAbility();manaCost.getManaCostsToPay().add(new ManaCostsImpl<>("{1}"));
+        check(OrdinaryManaShape.inspect(manaCost)==OrdinaryManaShape.Result.ADDITIONAL_COST);
+        GreenManaAbility multiple=new GreenManaAbility();multiple.addEffect(new mage.abilities.effects.mana.BasicManaEffect(Mana.GreenMana(1)));
+        check(OrdinaryManaShape.inspect(multiple)==OrdinaryManaShape.Result.NONSTANDARD_EFFECT);
+        GreenManaAbility dynamic=new GreenManaAbility();dynamic.getEffects().clear();dynamic.addEffect(new mage.abilities.effects.mana.BasicManaEffect(Mana.GreenMana(1),mage.abilities.dynamicvalue.common.StaticValue.get(2)));
+        check(OrdinaryManaShape.inspect(dynamic)==OrdinaryManaShape.Result.NONSTANDARD_EFFECT);
+        GreenManaAbility restricted=new GreenManaAbility();restricted.getEffects().clear();restricted.addEffect(new mage.abilities.effects.mana.BasicManaEffect(new mage.ConditionalMana(Mana.GreenMana(1))));
+        check(OrdinaryManaShape.inspect(restricted)==OrdinaryManaShape.Result.NONSTANDARD_EFFECT);
+        GreenManaAbility changed=new GreenManaAbility();changed.getEffects().clear();changed.addEffect(new mage.abilities.effects.mana.BasicManaEffect(Mana.BlueMana(1)));
+        check(OrdinaryManaShape.inspect(changed)==OrdinaryManaShape.Result.NONSTANDARD_EFFECT);
+        GreenManaAbility pool=new GreenManaAbility();pool.setPoolDependant(true);
+        check(OrdinaryManaShape.inspect(pool)==OrdinaryManaShape.Result.CHOICE_OR_ADJUSTER);
+        GreenManaAbility mode=new GreenManaAbility();mode.getModes().getMode().withCost(new mage.abilities.costs.common.PayLifeCost(1));
+        check(OrdinaryManaShape.inspect(mode)==OrdinaryManaShape.Result.CHOICE_OR_ADJUSTER);
+        GreenManaAbility tagged=new GreenManaAbility();tagged.setCostsTag("unsupported",true);
+        check(OrdinaryManaShape.inspect(tagged)==OrdinaryManaShape.Result.CHOICE_OR_ADJUSTER);
+        check(life.getCosts().size()==2 && dynamic.getEffects().size()==1); // Inspection never rewrites native inputs.
+    }
     public static void main(String[] args) throws Exception {
         ContextHumanPlayer observed=new ContextHumanPlayer("Public fixture",RangeOfInfluence.ALL,0);
         ContextHumanPlayer copied=observed.copy();
@@ -75,6 +105,7 @@ public final class PinnedPaymentChecks {
         check(java.lang.reflect.Modifier.isTransient(ContextHumanPlayer.class.getDeclaredField("payment").getModifiers()));
         check(observed.paymentProbe(null,observed.getId(),0)==null);check(copied.paymentProbe(null,copied.getId(),0)==null);
         sourceScopeChecks(observed);
+        ordinaryShapeChecks();
         UserData manual=UserData.getDefaultUserDataView(),automatic=UserData.getDefaultUserDataView();
         check(manual!=automatic);
         manual.setManaPoolAutomatic(false);manual.setManaPoolAutomaticRestricted(false);

@@ -696,6 +696,8 @@ def main():
                     raise AdapterError("NATIVE_PAYMENT_CONTEXT_NOT_OBSERVED")
                 if (result["payment_context_probe"]["maximum_candidate_sources"] or 0) < 2:
                     raise AdapterError("NATIVE_PAYMENT_CANDIDATES_NOT_OBSERVED")
+                if (result["payment_context_probe"]["maximum_ordinary_shape_abilities"] or 0) < 2:
+                    raise AdapterError("NATIVE_ORDINARY_SHAPES_NOT_OBSERVED")
         if args.scenario.startswith("ai-"):
             runtime = adapter.result
             if (

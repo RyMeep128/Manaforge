@@ -78,7 +78,8 @@ def main():
             context_source = PLAY / "java/payment-xmage/manaforge/payment/xmage/ContextHumanPlayer.java"
             bridge_sources = sorted((PLAY / "java").glob("*.java"))
             subprocess.run([compiler, "--release", "8", "-encoding", "UTF-8", "-cp", native_classpath, "-d", output,
-                            str(source), str(adapter), str(response), str(context_source), *map(str, bridge_sources)],
+                            str(source), str(adapter), str(response), str(context_source),
+                            str(PLAY / "java/payment-xmage/manaforge/payment/xmage/OrdinaryManaShape.java"), *map(str, bridge_sources)],
                            check=True, timeout=60)
             subprocess.run([runtime, "-cp", output + os.pathsep + native_classpath,
                             "manaforge.payment.PinnedPaymentChecks"], cwd=output, check=True, timeout=30)

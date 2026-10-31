@@ -35,7 +35,7 @@ def test_payment_context_evidence_is_bounded_and_does_not_export_private_ids(mon
         view["cycle"] = cycle
         adapter._metadata(view)
     report = adapter.payment_context_diagnostics()
-    assert report == dict(enabled=True, observations=128, scopes=128, minimum=2, maximum=2, candidate_observations=0, maximum_candidate_sources=None, maximum_candidate_abilities=None)
+    assert report == dict(enabled=True, observations=128, scopes=128, minimum=2, maximum=2, candidate_observations=0, maximum_candidate_sources=None, maximum_candidate_abilities=None, ordinary_shape_observations=0, maximum_ordinary_shape_abilities=None)
     assert "private-fixture" not in json.dumps(report)
 
 
@@ -45,7 +45,7 @@ def test_payment_context_probe_is_off_by_default_and_ignores_invalid_evidence(mo
     adapter = LocalGameAdapter()
     monkeypatch.setattr(adapter, "_server_request", lambda **fields: payload)
     adapter._metadata(view)
-    assert adapter.payment_context_diagnostics() == dict(enabled=False, observations=0, scopes=0, minimum=None, maximum=None, candidate_observations=0, maximum_candidate_sources=None, maximum_candidate_abilities=None)
+    assert adapter.payment_context_diagnostics() == dict(enabled=False, observations=0, scopes=0, minimum=None, maximum=None, candidate_observations=0, maximum_candidate_sources=None, maximum_candidate_abilities=None, ordinary_shape_observations=0, maximum_ordinary_shape_abilities=None)
     probe = LocalGameAdapter(payment_context_probe=True)
     monkeypatch.setattr(probe, "_server_request", lambda **fields: payload)
     for sequence, count in [(True, 2), (0, 2), (2**64, 2), (1, True), (1, -1), (1, 129)]:
@@ -1119,3 +1119,21 @@ def test_payment_candidate_evidence_is_bounded_typed_and_private(monkeypatch):
     assert report["candidate_observations"] == 128
     assert report["maximum_candidate_sources"] == report["maximum_candidate_abilities"] == 2
     assert "private-" not in json.dumps(report)
+
+
+def test_ordinary_shape_counts_do_not_certify_safety(monkeypatch):
+    adapter = LocalGameAdapter(payment_context_probe=True)
+    view = dict(game_id="private-game", viewer="private-viewer", cycle=7, players=[])
+    evidence = dict(available=True, sequence=1, unpaid_mana_count=2, candidate_sources=2, candidate_abilities=2)
+    monkeypatch.setattr(adapter, "_server_request", lambda **fields: dict(status="ok", payment_probe=evidence))
+    for invalid in [True, -1, 3, "2", None]:
+        evidence["ordinary_shape_abilities"] = invalid
+        adapter._metadata(view)
+    assert adapter.payment_context_diagnostics()["ordinary_shape_observations"] == 0
+    evidence["ordinary_shape_abilities"] = 2
+    for _ in range(140):
+        adapter._metadata(view)
+    report = adapter.payment_context_diagnostics()
+    assert report["ordinary_shape_observations"] == 123  # Shared 128-candidate observation bound.
+    assert report["maximum_ordinary_shape_abilities"] == 2
+    assert "safe" not in report and "private-" not in json.dumps(report)

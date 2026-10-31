@@ -1038,3 +1038,11 @@ counts remain opt-in, bounded and free of card/ability identifiers. The fixture
 ends by concession; this is neither automatic payment nor natural-match proof.
 Safe planning and Java owner integration remain open. All existing architecture,
 privacy and owner acceptance gates remain in force.
+
+
+Payment research increment 0.5.116 adds a conservative native ability structure
+screen and demonstrates it on two live XMage mana candidates. Unsupported or
+modified structures are excluded; a passing ordinary tap structure is not a safe
+payment certificate. World-state safety, native plan feasibility, equivalent
+source decisions and serialized owner execution remain open. No production auto
+payment, architecture gate or owner UX acceptance is claimed.
