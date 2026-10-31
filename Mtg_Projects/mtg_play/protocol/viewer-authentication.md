@@ -1,9 +1,14 @@
-# Viewer authentication v1 — G1 primitive, bootstrap delivery pending
+# Viewer authentication v1 — G1 primitive
 
 Status: shared hello schema, HMAC known-answer vectors and single-use verifiers
 implemented in Java/C#. The later dummy exchange and bounded client handoff now
 exercise actual peer authentication; product credential delivery, launcher and
 engine startup remain pending. G1 is still open.
+
+Later increments prove [private packaged bootstrap](../../../docs/play-packaged-bootstrap-proof.md)
+and add the [fresh challenge exchange](viewer-challenges.md). Product engine/session
+mounting remains pending; the historical sections below describe the primitive's
+original evidence and remaining work at that point.
 
 ## Separate credentials and audiences
 

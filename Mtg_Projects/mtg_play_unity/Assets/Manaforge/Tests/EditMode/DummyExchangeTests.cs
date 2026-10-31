@@ -29,7 +29,7 @@ namespace Manaforge.Play.Tests
             {
                 Assert.That(File.Exists(Path.Combine(directory,"manaforge/protocol/DummyGateway.class")),Is.True,"Run the Java dummy fixture preparation first");
                 string jar=Path.Combine(directory,"gson.jar"),fixture=Path.Combine(directory,"dummy-session-v1.json");
-                var start=new ProcessStartInfo("java", "-cp \""+directory+Path.PathSeparator+jar+"\" manaforge.protocol.DummyGateway \""+fixture+"\""+(authMode=="gateway-timeout"?" server-auth-timeout":authMode=="timeout"?" delayed-proof":choiceOperation=="select_mana_source"?" mana":choiceOperation=="choose_number"?" number":choiceOperation=="choose_amounts"?" amounts":choiceOperation!=null?" choice":blockedClient?" blocked-client":clientPartialFrame?" client-partial-frame":partialFrame?" partial-frame":sessionError?" session-error":""))
+                var start=new ProcessStartInfo("java", "-cp \""+directory+Path.PathSeparator+jar+"\" manaforge.protocol.DummyGateway \""+fixture+"\""+(authMode=="fresh"?" fresh-challenge":authMode=="gateway-timeout"?" server-auth-timeout":authMode=="timeout"?" delayed-proof":choiceOperation=="select_mana_source"?" mana":choiceOperation=="choose_number"?" number":choiceOperation=="choose_amounts"?" amounts":choiceOperation!=null?" choice":blockedClient?" blocked-client":clientPartialFrame?" client-partial-frame":partialFrame?" partial-frame":sessionError?" session-error":""))
                 { UseShellExecute=false,CreateNoWindow=true,WindowStyle=ProcessWindowStyle.Hidden,
                   RedirectStandardInput=true,RedirectStandardOutput=true,RedirectStandardError=true };
                 Process=new Process { StartInfo=start };
@@ -168,6 +168,12 @@ namespace Manaforge.Play.Tests
                 using(var stream=peer.Client.GetStream())
                 {
                     if(authMode!=null) {
+                        if(authMode=="fresh") {
+                            var settings=new JObject{["viewer_bootstrap_version"]=1,["protocol_version"]=1,["endpoint"]=new JObject{["host"]="127.0.0.1",["port"]=port},["session_id"]=boot["session_id"],["viewer_id"]=boot["viewer_id"],["engine_version"]=boot["engine_version"],["artifact_manifest_sha256"]=boot["artifact_manifest_sha256"],["viewer_key_hex"]=wrongKey?Hex(RandomBytes()):Hex(key),["artwork"]=JValue.CreateNull()};
+                            using var bootstrap=ViewerBootstrap.Parse(System.Text.Encoding.UTF8.GetBytes(settings.ToString()));
+                            if(wrongKey){Assert.That(Assert.Throws<WireEnvelope.EnvelopeException>(()=>ViewerChallengeHandshake.Open(peer.Reader,bootstrap,5000,fixtureMode:true)).Code,Is.EqualTo("AUTH_FAILED"));Assert.That(peer.Reader.IsClosed,Is.True);return;}
+                            using var fresh=ViewerChallengeHandshake.Open(peer.Reader,bootstrap,5000,fixtureMode:true);Coordinated(peer,false,fresh);return;
+                        }
                         if(authMode=="gateway-timeout") {
                             Assert.That(peer.Reader.Read(2000),Is.Null,"Unauthenticated stalled client must receive no gateway proof/session data");
                             Assert.That(peer.Process.WaitForExit(5000),Is.True);Assert.That(peer.Process.ExitCode,Is.Zero);return;
@@ -287,6 +293,8 @@ namespace Manaforge.Play.Tests
         [UnityTest] public IEnumerator JavaPeerExchangesAuthenticatedFixtureAndRejectsStaleAndPendingActions()=>Run(false,false);
         [UnityTest] public IEnumerator WrongViewerKeyReceivesNoSessionData()=>Run(true,false);
         [UnityTest] public IEnumerator OwnerPipeEofStopsTheOwnedListener()=>Run(false,true);
+        [UnityTest] public IEnumerator FreshJavaChallengesAuthenticateAndRunTheCoordinatedFixture()=>Run(false,false,authMode:"fresh");
+        [UnityTest] public IEnumerator FreshJavaChallengesRejectWrongViewerKeys()=>Run(true,false,authMode:"fresh");
         [UnityTest] public IEnumerator GatewayHandshakeDeadlineClosesAnIdleUnauthenticatedClient()=>Run(false,false,authMode:"gateway-timeout");
         [UnityTest] public IEnumerator BoundedHandshakeReturnsAnOwnedAuthenticatedSession()=>Run(false,false,authMode:"success");
         [UnityTest] public IEnumerator BoundedHandshakeStopsDelayedProofAndOwnedPeer()=>Run(false,false,authMode:"timeout");

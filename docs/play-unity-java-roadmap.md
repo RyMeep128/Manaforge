@@ -779,3 +779,15 @@ case; owner EOF reached main-thread diagnostic quit. The Windows build and 338
 EditMode checks passed. This is a public-fixture diagnostic, not authenticated
 gameplay or live private-view cleanup. Fresh challenges, real mounting, OS
 containment and G0/G1 acceptance remain open. The public gallery is unchanged.
+
+### G1 fresh viewer challenge exchange
+
+The [challenge wrappers](../Mtg_Projects/mtg_play/protocol/viewer-challenges.md)
+now generate independent gateway/client nonces on each connection before the
+existing signed hello. Trusted bootstrap/template identity and pins are preserved;
+unsigned peer context is never adopted. One budget covers the exchange and failed
+attempts close their transport. Local evidence: 344 Unity EditMode checks, Java
+shared-corpus/real-loopback checks and Python schema validation passed. A real
+Java-process/C# test authenticates then runs the coordinated dummy session; wrong
+keys are rejected. Real session mounting, installed artifact verification, OS
+containment and G0/G1 remain open. No UI changed.

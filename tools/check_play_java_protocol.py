@@ -89,6 +89,8 @@ def main():
             PROTOCOL / "java-test/DeadlineFixtureConsumer.java",
             PROTOCOL / "java-test/WriteDeadlineFixtureConsumer.java",
             PROTOCOL / "java/manaforge/protocol/GatewayHandshake.java",
+            PROTOCOL / "java/manaforge/protocol/ViewerChallengeHandshake.java",
+            PROTOCOL / "java-test/ChallengeFixtureConsumer.java",
             PROTOCOL / "java-test/HandshakeFixtureConsumer.java",
             PROTOCOL / "java/manaforge/protocol/GatewayCommandGate.java",
             PROTOCOL / "java-test/CommandGateFixtureConsumer.java",
@@ -246,6 +248,18 @@ def main():
             ],
             check=True,
             timeout=60,
+        )
+        subprocess.run(
+            [
+                runtime,
+                "-cp",
+                str(workspace) + os.pathsep + str(jar),
+                "manaforge.protocol.ChallengeFixtureConsumer",
+                str(PROTOCOL / "fixtures/viewer-challenge-v1.json"),
+                str(PROTOCOL / "fixtures/viewer-auth-v1.json"),
+            ],
+            check=True,
+            timeout=30,
         )
         if args.dummy_output:
             output = args.dummy_output.resolve()

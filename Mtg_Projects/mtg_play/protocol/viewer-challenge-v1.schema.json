@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:manaforge:play:viewer-challenge:1",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "wire_version": {
+          "type": "integer",
+          "const": 1
+        },
+        "message_type": {
+          "const": "hello"
+        },
+        "message_id": {
+          "const": "auth-challenge"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "auth_exchange_version": {
+              "type": "integer",
+              "const": 1
+            },
+            "stage": {
+              "const": "gateway_challenge"
+            },
+            "server_nonce": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "required": [
+            "auth_exchange_version",
+            "stage",
+            "server_nonce"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "wire_version",
+        "message_type",
+        "message_id",
+        "body"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "wire_version": {
+          "type": "integer",
+          "const": 1
+        },
+        "message_type": {
+          "const": "hello"
+        },
+        "message_id": {
+          "const": "auth-nonce"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "auth_exchange_version": {
+              "type": "integer",
+              "const": 1
+            },
+            "stage": {
+              "const": "client_nonce"
+            },
+            "server_nonce": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "client_nonce": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "required": [
+            "auth_exchange_version",
+            "stage",
+            "server_nonce",
+            "client_nonce"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "wire_version",
+        "message_type",
+        "message_id",
+        "body"
+      ],
+      "additionalProperties": false
+    }
+  ]
+}

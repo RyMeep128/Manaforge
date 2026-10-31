@@ -97,7 +97,9 @@ public final class DummyGateway {
                     try{GatewayHandshake.accept(frames,clientHello.toString(),gatewayHello.toString(),key,150);throw new IOException("DUMMY_EXPECTED_AUTH_TIMEOUT");}
                     catch(WireEnvelope.EnvelopeException error){require(error.code.equals("AUTH_TIMEOUT"));return;}
                 } else {
-                    authenticated=GatewayHandshake.accept(frames,clientHello.toString(),gatewayHello.toString(),key,5000);
+                    authenticated=args.length==2 && args[1].equals("fresh-challenge")
+                        ?ViewerChallengeHandshake.accept(frames,clientHello.toString(),gatewayHello.toString(),key,5000,ownerGone::get)
+                        :GatewayHandshake.accept(frames,clientHello.toString(),gatewayHello.toString(),key,5000);
                     require(authenticated.sessionId.equals(session) && authenticated.viewerId.equals(viewer));
                 }
                 if(args.length==2 && args[1].equals("blocked-client")) {

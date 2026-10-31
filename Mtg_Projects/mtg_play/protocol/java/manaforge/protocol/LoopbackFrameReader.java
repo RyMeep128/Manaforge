@@ -10,7 +10,7 @@ import java.util.function.BooleanSupplier;
 /** Owns one connected loopback socket. Worker-side, one reader and one writer; session/handshake policy stays outside. */
 public final class LoopbackFrameReader implements AutoCloseable {
     private final Socket socket;
-    private final AtomicBoolean closed=new AtomicBoolean(),reading=new AtomicBoolean(),writing=new AtomicBoolean(),handshakeAttempted=new AtomicBoolean();
+    private final AtomicBoolean closed=new AtomicBoolean(),reading=new AtomicBoolean(),writing=new AtomicBoolean(),handshakeAttempted=new AtomicBoolean(),challengeAttempted=new AtomicBoolean();
     private final ScheduledThreadPoolExecutor watchdog;
     public LoopbackFrameReader(Socket ownedSocket) throws IOException {
         if(ownedSocket==null || !ownedSocket.isConnected() || ownedSocket.isClosed()
@@ -22,6 +22,7 @@ public final class LoopbackFrameReader implements AutoCloseable {
     }
     // Attempt marker only; never use as proof of authentication.
     boolean beginViewerHandshake(){return !closed.get() && handshakeAttempted.compareAndSet(false,true);}
+    boolean beginViewerChallenge(){return !closed.get() && !handshakeAttempted.get() && challengeAttempted.compareAndSet(false,true);}
     public boolean isClosed(){return closed.get();}
     public boolean writeInProgress(){return writing.get();}
     public boolean readInProgress(){return reading.get();}
