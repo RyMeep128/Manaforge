@@ -5,8 +5,7 @@ import json
 from pathlib import Path
 import struct
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QImage
+from .artwork_pixels import cached_rgba
 
 from .visual_catalog import collect_visual_candidates
 
@@ -67,22 +66,10 @@ def export_visual_fixture(
         )[:assets_per_card]
         exported = {}
         for candidate in cached:
-            image = QImage(candidate.local_path)
-            if image.isNull():
-                continue  # Cache may have changed since the collector verified it.
-            if max(image.width(), image.height()) > max_edge:
-                image = image.scaled(
-                    max_edge,
-                    max_edge,
-                    Qt.AspectRatioMode.KeepAspectRatio,
-                    Qt.TransformationMode.SmoothTransformation,
-                )
-            # Unity raw RGBA starts at bottom-left. Decode/flip here, not in Unity.
-            image = image.convertToFormat(QImage.Format.Format_RGBA8888).mirrored(
-                False, True
-            )
-            width, height = image.width(), image.height()
-            raw = image.constBits().asstring(width * height * 4)
+            pixels = cached_rgba(candidate.local_path, max_edge)
+            if pixels is None:
+                continue  # Cache may have changed after verification.
+            width, height, raw = pixels
             asset_id = hashlib.sha256(
                 struct.pack(">II", width, height) + raw
             ).hexdigest()

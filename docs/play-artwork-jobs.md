@@ -58,3 +58,7 @@ cancellation callback containment, and 64 concurrent admissions with fast
 providers and no stranded accepted work. No full application suite ran. The
 public fixture remains unchanged and no owner UX review is needed for this
 scheduler-only increment. Core provider integration and G0/G1 remain open.
+
+The subsequent [offline Core provider](play-core-artwork-provider.md) now supplies
+pinned launch-sidecar pixels to these jobs. Product launcher/scene mounting and
+general face contracts remain open.

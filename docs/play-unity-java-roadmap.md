@@ -715,3 +715,14 @@ passed, including Java preflight and the GPU copy test, with no graphics skips.
 The concrete Core cache provider, provider deadlines/global retirement policy and
 session-scene mounting remain open. No public UI changed; G0/G1 and P2 parity
 acceptance are not claimed. CI review remains on the third-commit cadence.
+
+### G1/P3 offline Core artwork provider
+
+The [Core artwork provider](play-core-artwork-provider.md) now exports exact,
+viewer-permitted cached printings once into a pinned launch sidecar and reads
+verified raw pixels lazily on Unity workers. It reuses existing Core conversion,
+reports unavailable/unsupported printings explicitly, and connects to the bounded
+jobs/mailbox without a Python action loop. Initial support is standard normal
+single-face artwork. Local evidence: 20 Python, 321 EditMode and 32 graphics-enabled
+PlayMode checks passed. Product launch/scene mounting, specialized live face
+contracts, G0/G1 and P2 parity remain open. The public UI is unchanged.
