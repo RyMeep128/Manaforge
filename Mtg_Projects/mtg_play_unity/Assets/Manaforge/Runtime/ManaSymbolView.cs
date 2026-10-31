@@ -11,6 +11,11 @@ namespace Manaforge.Play
         public ManaSymbolView(string value)
         {
             token=value;name="mana-symbol";pickingMode=PickingMode.Ignore;
+            AddToClassList("CardManaSymbol");
+            if(CardSymbolSprites.TryLoad(value,out var sprite)) {
+                var image=new Image{image=sprite,scaleMode=ScaleMode.ScaleToFit,pickingMode=PickingMode.Ignore};
+                image.StretchToParentSize();Add(image);return;
+            }
             if(font==null)font=Resources.Load<Font>("Mana");
             // One fixed raster size keeps the shared font atlas bounded across zoom levels.
             var characters="";

@@ -39,7 +39,7 @@ namespace Manaforge.Play.Tests
             Assert.That(view.style.height.value.value, Is.EqualTo(840));
             view.SetPresentation(CardPresentationMode.Compact, 300);
             Assert.That(view.Q<Label>("rules").style.display.value, Is.EqualTo(DisplayStyle.None));
-            Assert.That(view.style.height.value.value, Is.EqualTo(234).Within(0.01));
+            Assert.That(view.style.height.value.value, Is.EqualTo(300*BattlefieldFrame.Aspect).Within(0.01));
             Assert.That(view.Artwork, Is.SameAs(texture));
         }
         [Test] public void ObjectsSharingArtworkKeepIndependentCharacteristics()
@@ -86,7 +86,6 @@ namespace Manaforge.Play.Tests
         [TestCase("saga","Enchantment — Saga")]
         [TestCase("transform","Battle — Siege")]
         [TestCase("token","Token Creature — Soldier")]
-        [TestCase("split","Instant // Instant")]
         [TestCase("split","Enchantment — Room")]
         [TestCase("class","Enchantment — Class")]
         [TestCase("modal_dfc","Land")]
@@ -105,19 +104,29 @@ namespace Manaforge.Play.Tests
             Assert.That(view.Q<Image>("artwork").uv,Is.EqualTo(new Rect(0,0,1,1)));
             Assert.That(view.Q<Label>("name").style.display.value,Is.EqualTo(DisplayStyle.None));
         }
+        [TestCase("Instant",false)] [TestCase("Sorcery",false)] [TestCase("Instant // Instant",false)]
+        [TestCase("Token Creature — Soldier",true)] [TestCase("Artifact",true)] [TestCase("Enchantment — Room",true)]
+        [TestCase("Legendary Planeswalker — Jace",true)] [TestCase("Battle — Siege",true)] [TestCase("Land",true)]
+        [TestCase("Emblem",false)] [TestCase("Dungeon",false)] [TestCase("Plane — Ravnica",false)]
+        public void FixtureGridContainsPermanentExamplesAndKeepsOtherCardsForInspection(string typeLine,bool expected)
+        {Assert.That(CardCompactProfile.IsFixturePermanent(typeLine),Is.EqualTo(expected));}
+        [TestCase("Instant")] [TestCase("Sorcery")]
+        public void NonPermanentSpellsDoNotReceiveBattlefieldProfiles(string typeLine)
+        {Assert.That(CardCompactProfile.FromMetadata("normal",typeLine),Is.Null);}
         [Test] public void LoyaltyBadgeUpdatesWithoutInventingAMissingValue()
         {
             view.Bind(Identity(false),texture,new Rect(0,0,1,1));var profile=CardCompactProfile.FromMetadata("normal","Planeswalker");
             foreach(var loyalty in new string[]{"3","5",null}) {
                 view.UpdateValues(new CardDisplayValues("PW",null,"Planeswalker",null,null,null,profile,loyalty));
-                Assert.That(view.Q<Label>("stats").text,Is.EqualTo(loyalty==null?"":"L "+loyalty));
-                Assert.That(view.Q<CardPlate>("pt-plate").style.display.value,Is.EqualTo(loyalty==null?DisplayStyle.None:DisplayStyle.Flex));
+                Assert.That(view.Q<LoyaltyCounterView>().Value,Is.EqualTo(loyalty??""));
+                Assert.That(view.Q<Label>("stats").text,Is.Empty);
+                Assert.That(view.Q<LoyaltyCounterView>().style.display.value,Is.EqualTo(loyalty==null?DisplayStyle.None:DisplayStyle.Flex));
             }
         }
         [Test] public void SplitMinisBorrowOnePrintingForBothArtPanesAndClearBoth()
         {
             view.Bind(Identity(false),texture,new Rect(0,0,1,1));
-            view.UpdateValues(new CardDisplayValues("Split",null,"Instant",null,null,null,CardCompactProfile.FromMetadata("split","Instant")));
+            view.UpdateValues(new CardDisplayValues("Split",null,"Instant",null,null,null,CardCompactProfile.FromMetadata("split","Enchantment — Room")));
             Assert.That(view.Q<VisualElement>("second-art-window").style.display.value,Is.EqualTo(DisplayStyle.Flex));
             Assert.That(view.Q<Image>("second-artwork").image,Is.SameAs(view.Artwork));
             view.Conceal();Assert.That(view.Q<Image>("second-artwork").image,Is.Null);

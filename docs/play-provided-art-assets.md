@@ -73,3 +73,47 @@ focused work. The handoff also identifies raw ArtCropDatabase, lookup and card
 metadata files; their schemas and crop semantics have not been verified here.
 Its suggested projects are research leads, not authorization to implement all of
 them. Keep originals unchanged and machine-specific indexes/extractions local.
+
+
+## Battlefield frame, typography and symbols — October 30, 2026
+
+The compact fixture now filters battlefield examples to permanent card types;
+instants and sorceries remain available in the inspection selector. This is a
+fixture filter only, not a client-side rule for live zone membership. Room cards
+retain both art panels. The dark compact surround uses the projected contour of
+`BattlefieldPart_Cardbase_Default` (path ID 4091911210820854842). The independent
+numeric loyalty shield uses `Card_Loyalty` (5550224334418384154), allowing loyalty
+and P/T together. Neither supplied shaders nor gameplay scripts were imported.
+The visual reference was [Arena's planeswalker presentation](https://www.forbes.com/sites/laurenorsini/2019/05/22/magic-the-gathering-arena-launches-first-story-based-event-may-23/).
+
+`CardTypography` assigns Beleren Bold to title, type and P/T, Plantin MT Pro's
+regular/bold/italic/bold-italic faces to rules, and Beleren Small Caps to supplied
+collector text. Emphasis is explicit presentation metadata; rules text is never
+interpreted as rich-text markup. Existing printing credits remain visible when
+no replacement collector text is supplied.
+
+The local review build includes six fonts and 82 128-pixel symbol sprites.
+`tools/prepare_play_card_visuals.py` prepares these offline from local font files
+and cached SVGs. Run it with `--plantin-directory`, `--beleren-directory` and
+`--svg-directory`; outputs live in the locally ignored Unity Resources folder
+`LocalCardVisuals`. The tool records SHA-256 provenance. Mana cost symbols use
+20-unit sizing (previously 17); inline rules use the same sprite resources for
+supported tap, untap and mana tokens. Unknown tokens remain literal text.
+
+Plantin faces come from the owner's Downloads folder. Beleren sources are pinned
+to [Saeris commit cdbe3dc](https://github.com/Saeris/typeface-beleren-bold/tree/cdbe3dc354a51b620636f8effd4c4b143d8969a1);
+the repository's MIT notice applies to its CSS, not the Wizards-owned fonts.
+Symbol SVG references come from the [Scryfall symbology API](https://api.scryfall.com/symbology).
+Font and symbol binaries remain local rather than being redistributed in Git.
+Source-only checkouts retain default typography and the existing mana-font
+fallback. Optional-pack tests explicitly skip when their local resources are
+absent. These changes do not close G0/G1 or demonstrate live engine gameplay.
+
+
+Validation for 0.5.80-alpha.1: 283 EditMode checks (including the installed font
+and sprite pack), five PlayMode checks, Windows player build and two packaged
+20-object artwork smoke captures. Captures are local under
+`Artifacts/ArtworkScene/compact-review.png` and `artwork-20.png`. Owner review
+should focus on mana size/alignment, compact title positioning, frame edges,
+loyalty and preserved printing credits. CI is deferred to the next scheduled
+third-commit checkpoint; these results are local evidence only.

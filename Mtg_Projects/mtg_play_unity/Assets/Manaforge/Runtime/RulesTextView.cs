@@ -19,10 +19,7 @@ namespace Manaforge.Play
         private static bool Known(string value)
         {
             if(!value.StartsWith("{") || !value.EndsWith("}"))return false;
-            var tokens=value.Substring(1,value.Length-2).Split('/');
-            if(tokens.Length>2)return false;
-            foreach(var token in tokens)if(!ManaCostView.TryGlyph(token,out _))return false;
-            return true;
+            return ManaCostView.CanRenderSymbol(value.Substring(1,value.Length-2));
         }
         public void SetText(string value)
         {
@@ -48,10 +45,10 @@ namespace Manaforge.Play
                 element.style.flexShrink=0;Add(element);
             }
         }
-        public void Resize(float size)
+        public void Resize(float size,FontStyle emphasis=FontStyle.Normal)
         {
             foreach(var child in Children()) {
-                if(child is Label label){label.style.fontSize=size;label.style.height=size*1.35f;}
+                if(child is Label label){label.style.fontSize=size;label.style.height=size*1.35f;CardTypography.Apply(label,CardTextRole.Rules,emphasis);}
                 else if(child is ManaSymbolView){child.style.width=child.style.height=size;child.style.marginTop=size*.175f;}
                 else if(child.userData is int spaces){child.style.width=size*.28f*spaces;child.style.height=size*1.35f;}
             }

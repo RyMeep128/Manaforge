@@ -19,12 +19,14 @@ namespace Manaforge.Play
         public CardCompactProfile CompactProfile {get;}
         public string Loyalty {get;}
         public string Defense {get;}
+        public FontStyle RulesStyle {get;}
+        public string CollectorText {get;}
         public CardDisplayValues(string name, string manaCost, string typeLine,
-            string rulesText, string powerToughness, string status, CardCompactProfile compactProfile=null, string loyalty=null,string defense=null)
+            string rulesText, string powerToughness, string status, CardCompactProfile compactProfile=null, string loyalty=null,string defense=null,FontStyle rulesStyle=FontStyle.Normal,string collectorText=null)
         {
             Name = name; ManaCost = manaCost; TypeLine = typeLine;
             RulesText = rulesText; PowerToughness = powerToughness; Status = status;
-            CompactProfile=compactProfile;Loyalty=loyalty;Defense=defense;
+            CompactProfile=compactProfile;Loyalty=loyalty;Defense=defense;RulesStyle=rulesStyle;CollectorText=collectorText;
         }
     }
 
@@ -36,7 +38,8 @@ namespace Manaforge.Play
         private readonly VisualElement artWindow=new VisualElement {name="art-window",pickingMode=PickingMode.Ignore};
         private readonly VisualElement secondWindow=new VisualElement {name="second-art-window",pickingMode=PickingMode.Ignore};
         private readonly Image secondArt=new Image {name="second-artwork",pickingMode=PickingMode.Ignore};
-        private readonly CardPlate miniSurround=new CardPlate("mini-surround");
+        private readonly BattlefieldFrame miniSurround=new BattlefieldFrame();
+        private readonly LoyaltyCounterView loyaltyCounter=new LoyaltyCounterView();
         private readonly Label miniKind=Text("mini-kind");
         private CardCompactProfile compactProfile;
         private readonly Label missing = Text("asset-status");
@@ -55,6 +58,8 @@ namespace Manaforge.Play
         private readonly RulesTextView rulesSymbols = new RulesTextView();
         private readonly Label stats = Text("stats");
         private readonly Label status = Text("status");
+        private readonly Label collector=Text("collector");
+        private FontStyle rulesEmphasis;
         private CardPresentationMode mode;
         private Rect artCrop;
         private bool authenticOnly;
@@ -76,7 +81,7 @@ namespace Manaforge.Play
             artWindow.style.overflow=secondWindow.style.overflow=Overflow.Hidden;
             artWindow.Add(artwork);secondWindow.Add(secondArt);
             Add(frame);Add(miniSurround); Add(interior); Add(printedStatsMask); Add(artWindow);Add(secondWindow); Add(nameplate); Add(typeplate); Add(statplate); Add(missing); Add(title); Add(mana);
-            Add(type); Add(rules); Add(rulesSymbols); Add(stats); Add(status);Add(miniKind);
+            Add(type); Add(rules); Add(rulesSymbols); Add(stats); Add(status);Add(miniKind);Add(loyaltyCounter);Add(collector);
             edge.style.position=Position.Absolute;Add(edge);
             Conceal();
         }
@@ -121,8 +126,8 @@ namespace Manaforge.Play
             compactProfile=values.CompactProfile;
             authenticOnly=Identity?.LayoutProfileId=="authentic-image-v1" || !string.IsNullOrEmpty(compactProfile?.Kind);
             Set(rules, values.RulesText); rulesSymbols.SetText(values.RulesText);
-            Set(stats,values.PowerToughness ?? (values.Loyalty!=null?"L " + values.Loyalty:values.Defense!=null?"D " + values.Defense:null));
-            Set(status, values.Status);Set(miniKind,compactProfile?.Kind); Layout();
+            Set(stats,values.PowerToughness ?? values.Defense);loyaltyCounter.SetValue(values.Loyalty);
+            Set(status, values.Status);Set(miniKind,compactProfile?.Kind);Set(collector,values.CollectorText);rulesEmphasis=values.RulesStyle; Layout();
         }
 
         private static void Set(Label label, string value)
@@ -151,7 +156,7 @@ namespace Manaforge.Play
             bool hasStats = !string.IsNullOrEmpty(stats.text);
             style.width = width;
             style.height = full && authenticOnly && artwork.image!=null
-                ? (inspectionRotation==90?width*artwork.image.width/artwork.image.height:width*artwork.image.height/artwork.image.width) : width*(full?1.4f:.78f);
+                ? (inspectionRotation==90?width*artwork.image.width/artwork.image.height:width*artwork.image.height/artwork.image.width) : width*(full?1.4f:BattlefieldFrame.Aspect);
             float scale = width / 300f;
             style.borderTopLeftRadius=style.borderTopRightRadius=style.borderBottomLeftRadius=style.borderBottomRightRadius=width*.03f;
             Box(edge,0,0,100,100);
@@ -175,6 +180,11 @@ namespace Manaforge.Play
             title.style.whiteSpace=type.style.whiteSpace=stats.style.whiteSpace=WhiteSpace.NoWrap;
             title.style.unityTextAlign=type.style.unityTextAlign=TextAnchor.MiddleLeft;
             title.style.textOverflow=TextOverflow.Ellipsis; stats.style.unityTextAlign=TextAnchor.MiddleCenter;
+            CardTypography.Apply(title,CardTextRole.Title);CardTypography.Apply(type,CardTextRole.Type);
+            CardTypography.Apply(stats,CardTextRole.PowerToughness);CardTypography.Apply(rules,CardTextRole.Rules,rulesEmphasis);
+            CardTypography.Apply(collector,CardTextRole.Collector);collector.style.fontSize=8*scale;
+            Box(collector,8,94,84,4);collector.style.color=Color.white;collector.style.backgroundColor=new Color(.04f,.04f,.035f);
+            collector.style.display=!concealed && full && !authenticOnly && !string.IsNullOrEmpty(collector.text)?DisplayStyle.Flex:DisplayStyle.None;
             frame.style.position=artwork.style.position=Position.Absolute;
             Box(frame,0,0,100,100);frame.scaleMode=ScaleMode.StretchToFill;
             // Keep the exact printing's colored surround and original bevels, not a generic dark panel.
@@ -187,31 +197,33 @@ namespace Manaforge.Play
             Box(interior,7.6f,11,84.8f,81.3f);
             interior.style.display=!concealed && full && !authenticOnly?DisplayStyle.Flex:DisplayStyle.None;
             // The compact footer hides the underlying printing below the art window, including set symbols.
-            Box(printedStatsMask,full?74:0,full?89:90,full?24:100,10);
+            Box(printedStatsMask,full?74:0,full?89:94,full?24:100,10);
             printedStatsMask.style.display=!concealed && !imageFallback && (!full || hasStats)?DisplayStyle.Flex:DisplayStyle.None;
             float height=style.height.value.value;
             bool split=!full && !imageFallback && compactProfile?.SecondaryCrop!=null;
-            Rect area=imageFallback?new Rect(0,0,100,100):new Rect(8,full?12:21,split?41:84,full?43:70);
+            Rect area=imageFallback?new Rect(0,0,100,100):new Rect(full?8:4,full?12:21,split?45:full?84:92,full?43:73);
             Rect crop=imageFallback?new Rect(0,0,1,1):!full && compactProfile!=null?compactProfile.Crop:artCrop;
             int rotation=imageFallback?inspectionRotation:!full?(compactProfile?.Rotation??0):0;
             LayoutArtwork(artWindow,artwork,area,crop,rotation,width,height,imageFallback || (!full && compactProfile?.Kind=="Dungeon"));
             secondWindow.style.display=!concealed && split?DisplayStyle.Flex:DisplayStyle.None;
-            if(split)LayoutArtwork(secondWindow,secondArt,new Rect(51,21,41,70),compactProfile.SecondaryCrop.Value,compactProfile.Rotation,width,height,false);
+            if(split)LayoutArtwork(secondWindow,secondArt,new Rect(51,21,45,73),compactProfile.SecondaryCrop.Value,compactProfile.Rotation,width,height,false);
             artWindow.style.display=concealed?DisplayStyle.None:DisplayStyle.Flex;
-            Box(nameplate,5.5f,full?4:5,89,full?7:16);
+            Box(nameplate,full?5.5f:3,full?4:5,full?89:94,full?7:16);
             // Share the nameplate centerline; default Label margins otherwise shift small names.
-            Box(title,8,full?4:5,full?Mathf.Max(40,84-mana.SymbolCount*6):84,full?7:16);
-            Box(mana,57,4,34,7);mana.Resize(17*scale);
+            Box(title,full?8:5,full?4:5,full?Mathf.Max(40,84-mana.SymbolCount*6):90,full?7:16);
+            Box(mana,57,4,34,7);mana.Resize(20*scale);
             Box(typeplate,5.5f,55.5f,89,7);Box(type,8,56,84,6);
             Box(rules,8,64,84,24);rules.style.backgroundColor=new Color(.88f,.88f,.80f);
             rules.style.paddingLeft=rules.style.paddingRight=4*scale;rules.style.paddingTop=3*scale;
             Box(rulesSymbols,8,64,84,24);rulesSymbols.style.paddingLeft=rulesSymbols.style.paddingRight=4*scale;rulesSymbols.style.paddingTop=3*scale;
-            rulesSymbols.Resize(12.8f*scale);rules.style.opacity=rulesSymbols.SymbolCount>0?0:1;
+            rulesSymbols.Resize(12.8f*scale,rulesEmphasis);rules.style.opacity=rulesSymbols.SymbolCount>0?0:1;
             rulesSymbols.style.display=!concealed && full && !authenticOnly && rulesSymbols.SymbolCount>0?DisplayStyle.Flex:DisplayStyle.None;
             Box(statplate,75,full?90:79,22,full?8:19);
             Box(stats,77,full?90.3f:79.5f,18,full?7:17);
             Box(status,8,full?94:82,60,full?4:12);Box(missing,8,35,84,25);
-            Box(miniKind,8,91,65,8);miniKind.style.fontSize=12*scale;miniKind.style.display=!concealed && !full && !imageFallback && compactProfile!=null?DisplayStyle.Flex:DisplayStyle.None;
+            Box(miniKind,8,91,65,8);miniKind.style.fontSize=12*scale;miniKind.style.display=DisplayStyle.None;
+            Box(loyaltyCounter,39,79,22,20);loyaltyCounter.Resize(28*scale);
+            loyaltyCounter.style.display=!concealed && !full && !imageFallback && !string.IsNullOrEmpty(loyaltyCounter.Value)?DisplayStyle.Flex:DisplayStyle.None;
             bool reconstructed=!concealed && !imageFallback;
             nameplate.style.display=reconstructed?DisplayStyle.Flex:DisplayStyle.None;
             typeplate.style.display=reconstructed && full?DisplayStyle.Flex:DisplayStyle.None;
@@ -250,8 +262,9 @@ namespace Manaforge.Play
             concealed = true;
             selected = false;
             Identity = null;
-            artwork.image = null;secondArt.image=null; frame.image = null;compactProfile=null;miniKind.text=""; mana.Conceal(); rulesSymbols.Conceal();
-            foreach (var label in new[] { title, type, rules, stats, status, missing })
+            artwork.image = null;secondArt.image=null; frame.image = null;compactProfile=null;miniKind.text="";loyaltyCounter.SetValue(null); mana.Conceal(); rulesSymbols.Conceal();
+            rulesEmphasis=FontStyle.Normal;
+            foreach (var label in new[] { title, type, rules, stats, status, missing,collector })
                 label.text = "";
             tooltip = null;
             Layout();

@@ -30,6 +30,14 @@ namespace Manaforge.Play
                 case "T":glyph='\ue61a';return true;case "Q":glyph='\ue61b';return true;case "E":glyph='\ue907';return true;
                 case "P":glyph='\ue618';return true;case "S":glyph='\ue619';return true;case "C":glyph='\ue904';return true;default:glyph='\0';return false;}
         }
+        public static bool CanRenderSymbol(string token)
+        {
+            if(string.IsNullOrEmpty(token))return false;
+            if(CardSymbolSprites.TryLoad(token,out _))return true;
+            var parts=token.Split('/');if(parts.Length>2)return false;
+            foreach(var part in parts)if(!TryGlyph(part,out _))return false;
+            return true;
+        }
         internal static Color ColorFor(string token)
         {
             switch(token){case "W":return new Color(.98f,.96f,.80f);case "U":return new Color(.65f,.81f,.91f);
@@ -46,9 +54,7 @@ namespace Manaforge.Play
             foreach(Match match in tokens)
             {
                 string token = match.Groups[1].Value;
-                var parts = token.Split('/');
-                bool hybrid = parts.Length == 2 && TryGlyph(parts[0],out _) && TryGlyph(parts[1],out _);
-                if(font == null || (!TryGlyph(token,out _) && !hybrid)){Fallback(value);return;}
+                if(!CanRenderSymbol(token) || (font==null && !CardSymbolSprites.TryLoad(token,out _))){Fallback(value);return;}
                 var symbol = new ManaSymbolView(token);
                 Add(symbol);SymbolCount++;
             }

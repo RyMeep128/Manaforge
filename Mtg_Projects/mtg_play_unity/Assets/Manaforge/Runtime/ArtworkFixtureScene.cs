@@ -100,22 +100,25 @@ namespace Manaforge.Play
             interactions?.Dispose();
             foreach (var view in views) view.Dispose(); views.Clear();
             preview.Conceal();
+            var permanents=new List<ArtworkFixture.Card>();
+            foreach(var card in fixture.Cards)if(CardCompactProfile.IsFixturePermanent(card.MockValues.TypeLine))permanents.Add(card);
+            if(permanents.Count==0){ObjectCount=0;message.text="No permanent examples in this fixture. Use Inspect for spells and auxiliary cards.";return;}
             int columns = count == 20 ? 5 : count == 70 ? 10 : 20;
             int rows = (count + columns - 1) / columns;
-            float width = Mathf.Min(160, Mathf.Min(880f / columns - 5, 535f / rows / 0.78f - 5));
+            float width = Mathf.Min(160, Mathf.Min(880f / columns - 5, 535f / rows / BattlefieldFrame.Aspect - 5));
             for (int i = 0; i < count; i++)
             {
-                var card = fixture.Cards[i % fixture.Cards.Count];
+                var card = permanents[i % permanents.Count];
                 var view = new CardView();
                 view.Bind(card.Identity, textures.Get(card.Artwork), new Rect(0.08f, 0.45f, 0.84f, 0.42f));
                 view.UpdateValues(card.MockValues); view.SetPresentation(CardPresentationMode.Compact, width);
                 view.style.position = Position.Absolute;
-                view.style.left = (i % columns) * (width + 5); view.style.top = (i / columns) * (width * 0.78f + 5);
+                view.style.left = (i % columns) * (width + 5); view.style.top = (i / columns) * (width * BattlefieldFrame.Aspect + 5);
                 board.Add(view); views.Add(view);
             }
-            interactions = new FixtureInteractions(board, views, index => Show(fixture.Cards[index % fixture.Cards.Count]));
+            interactions = new FixtureInteractions(board, views, index => Show(permanents[index % permanents.Count]));
             ObjectCount = count;
-            message.text = $"{count} display objects · {textures.Count} shared textures · PRINTED MOCK values · Hover / select · Mock tap / target · No live game";
+            message.text = $"{count} battlefield examples · {textures.Count} shared textures · PRINTED MOCK values · Hover / select · Mock tap / target · No live game";
             Show(fixture.Cards[0]);
         }
         private void Show(ArtworkFixture.Card card)

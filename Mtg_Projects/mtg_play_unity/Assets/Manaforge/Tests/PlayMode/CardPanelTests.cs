@@ -67,7 +67,7 @@ namespace Manaforge.Play.Tests
             yield return null;
             yield return null;
             Assert.That(view.resolvedStyle.width, Is.EqualTo(240).Within(0.1));
-            Assert.That(view.resolvedStyle.height, Is.EqualTo(Mathf.Round(240 * 0.78f)).Within(0.1));
+            Assert.That(view.resolvedStyle.height, Is.EqualTo(Mathf.Round(240 * BattlefieldFrame.Aspect)).Within(0.1));
             Assert.That(view.Q<Label>("rules").resolvedStyle.display, Is.EqualTo(DisplayStyle.None));
             Assert.That(view.Q<Label>("stats").text, Is.EqualTo("5/5"));
             Assert.That(view.Artwork, Is.SameAs(texture));
