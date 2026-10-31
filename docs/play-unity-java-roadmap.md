@@ -1029,3 +1029,12 @@ checks and pinned bridge compilation passed; candidate scope tests use synthetic
 game objects. No safe plan, automatic activation or new live-game acceptance is
 claimed. Production automatic payment stays disabled; G0/G1 and later gates
 remain subject to their existing evidence and owner acceptance requirements.
+
+
+Payment research increment 0.5.115 demonstrates the guarded native source query
+in a real XMage payment window: two candidate sources/abilities were observed,
+and the fixture's manual responses paid and resolved a 1/1 Ballista. Diagnostic
+counts remain opt-in, bounded and free of card/ability identifiers. The fixture
+ends by concession; this is neither automatic payment nor natural-match proof.
+Safe planning and Java owner integration remain open. All existing architecture,
+privacy and owner acceptance gates remain in force.

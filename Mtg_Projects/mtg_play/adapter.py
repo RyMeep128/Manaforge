@@ -119,6 +119,7 @@ class LocalGameAdapter:
         self._payment_context_probe = payment_context_probe
         self._payment_probe_scopes = set()
         self._payment_probe_counts = []
+        self._payment_candidate_counts = []
         self._bundle, self._jdk = Path(bundle).resolve(), Path(jdk).resolve()
         self._ready, self._release, self._done = (
             threading.Event(),
@@ -416,6 +417,11 @@ class LocalGameAdapter:
                     )
                 if len(self._payment_probe_counts) < 128:
                     self._payment_probe_counts.append(count)
+                sources, abilities = probe.get("candidate_sources"), probe.get("candidate_abilities")
+                if (type(sources) is int and 0 <= sources <= 128
+                        and type(abilities) is int and sources <= abilities <= sources * 128
+                        and len(self._payment_candidate_counts) < 128):
+                    self._payment_candidate_counts.append((sources, abilities))
         return result
 
     def payment_context_diagnostics(self):
@@ -427,6 +433,9 @@ class LocalGameAdapter:
             scopes=len(self._payment_probe_scopes),
             minimum=min(counts) if counts else None,
             maximum=max(counts) if counts else None,
+            candidate_observations=len(self._payment_candidate_counts),
+            maximum_candidate_sources=max((s for s, _ in self._payment_candidate_counts), default=None),
+            maximum_candidate_abilities=max((a for _, a in self._payment_candidate_counts), default=None),
         )
 
     def create_game(

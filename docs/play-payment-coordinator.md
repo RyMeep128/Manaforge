@@ -430,3 +430,39 @@ with an empty ability list to exercise monitor, payer, revision, controller,
 missing-source and post-read invalidation, plus map immutability. They are not
 live-engine candidate or automatic-payment acceptance. No new live match, full
 application suite, Unity UI or packaged build was run for this increment.
+
+
+### Live native candidate evidence (0.5.115)
+
+The opt-in metadata reader now passes only its already-filtered, requested
+viewer-visible object IDs to the observer (maximum 128; over-limit observations
+are omitted). For current payer-controlled battlefield sources the observer calls
+the guarded native source hook and exports only aggregate positive-source and
+ability counts. Duplicate IDs are collapsed. No source is activated, selected or
+certified safe. Native ability objects never cross this diagnostic boundary.
+Python only validates bounded integer counts and retains at most 128 samples;
+malformed, inconsistent, boolean or oversized counts are ignored. No public
+snapshot, wire schema or settings UI changed; the default runtime stays original.
+
+The number fixture's explicit --payment-context-probe acceptance now also fails
+unless at least two native candidate sources were observed. Reproduce with the
+0.5.113 command above, changing the output to PaymentCandidates115.json.
+Local PaymentCandidates115.json passed: two payment/candidate observations,
+maximum two native candidate sources and two abilities, remaining cost counts 2
+and 1, two manually submitted sources, both tapped, mana spent, Ballista resolved
+as 1/1, and an authoritative result after the fixture's deliberate concession.
+Compiler, bridge, peer and server owned roots exited 0 without forced cleanup.
+This is live native candidate-query evidence, not automatic-payment or natural
+match completion. No full application suite, Unity or packaged build ran.
+
+Also passed: 112 focused Python adapter/connection/lifecycle checks, 65 Java
+coordinator checks, 77 response guards, 48 native-object/synthetic-scope checks,
+five pinned API inspections and owned bridge compilation. Candidate diagnostics
+have an added malformed-value/bounds/privacy test. Original runtime dependencies
+were hash-verified by the helper probe before native execution.
+
+Next implementation dependencies remain safe candidate classification,
+complete-plan feasibility, plan identity/revalidation and serialized Java owner
+integration. Production automatic source selection remains disabled. CI was last
+checked at 0.5.114 (its run was in progress; 0.5.111–113 passed); the next scheduled
+check is 0.5.117. No CI result is inferred for this increment.

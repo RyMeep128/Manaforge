@@ -35,7 +35,7 @@ def test_payment_context_evidence_is_bounded_and_does_not_export_private_ids(mon
         view["cycle"] = cycle
         adapter._metadata(view)
     report = adapter.payment_context_diagnostics()
-    assert report == dict(enabled=True, observations=128, scopes=128, minimum=2, maximum=2)
+    assert report == dict(enabled=True, observations=128, scopes=128, minimum=2, maximum=2, candidate_observations=0, maximum_candidate_sources=None, maximum_candidate_abilities=None)
     assert "private-fixture" not in json.dumps(report)
 
 
@@ -45,7 +45,7 @@ def test_payment_context_probe_is_off_by_default_and_ignores_invalid_evidence(mo
     adapter = LocalGameAdapter()
     monkeypatch.setattr(adapter, "_server_request", lambda **fields: payload)
     adapter._metadata(view)
-    assert adapter.payment_context_diagnostics() == dict(enabled=False, observations=0, scopes=0, minimum=None, maximum=None)
+    assert adapter.payment_context_diagnostics() == dict(enabled=False, observations=0, scopes=0, minimum=None, maximum=None, candidate_observations=0, maximum_candidate_sources=None, maximum_candidate_abilities=None)
     probe = LocalGameAdapter(payment_context_probe=True)
     monkeypatch.setattr(probe, "_server_request", lambda **fields: payload)
     for sequence, count in [(True, 2), (0, 2), (2**64, 2), (1, True), (1, -1), (1, 129)]:
@@ -1101,3 +1101,21 @@ def test_real_frames_require_engine_priority_context_not_just_select_callback(
     assert view.decision.is_priority is priority_open
     assert view.actions_complete is priority_open
     assert bool(PriorityController().observe(view)) is priority_open
+
+
+def test_payment_candidate_evidence_is_bounded_typed_and_private(monkeypatch):
+    adapter = LocalGameAdapter(payment_context_probe=True)
+    view = dict(game_id="private-game", viewer="private-viewer", cycle=7, players=[])
+    payload = dict(status="ok", payment_probe=dict(available=True, sequence=1, unpaid_mana_count=2))
+    monkeypatch.setattr(adapter, "_server_request", lambda **fields: payload)
+    for sources, abilities in [(True, 1), (-1, 1), (129, 129), (1, True), (2, 1), (1, 129), (0, 1)]:
+        payload["payment_probe"].update(candidate_sources=sources, candidate_abilities=abilities)
+        adapter._metadata(view)
+    assert adapter.payment_context_diagnostics()["candidate_observations"] == 0
+    payload["payment_probe"].update(candidate_sources=2, candidate_abilities=2)
+    for _ in range(140):
+        adapter._metadata(view)
+    report = adapter.payment_context_diagnostics()
+    assert report["candidate_observations"] == 128
+    assert report["maximum_candidate_sources"] == report["maximum_candidate_abilities"] == 2
+    assert "private-" not in json.dumps(report)

@@ -77,10 +77,22 @@ public final class ContextHumanPlayer extends HumanPlayer {
     }
     /** Bounded diagnostic evidence only. Never exports cost text, names, IDs, abilities or Game. */
     public JsonObject paymentProbe(Game game,UUID payer,int cycle) throws ReflectiveOperationException {
+        return paymentProbe(game,payer,cycle,new UUID[0]);
+    }
+    /** Source IDs must already be visible to this payer; diagnostics export aggregate counts only. */
+    public JsonObject paymentProbe(Game game,UUID payer,int cycle,UUID[] visibleSources) throws ReflectiveOperationException {
+        if(visibleSources==null || visibleSources.length>128)return null;
+        final int[] counts={0,0};
+        for(UUID source:new java.util.LinkedHashSet<>(java.util.Arrays.asList(visibleSources))) {
+            Integer count=inspectBattlefieldSource(game,payer,cycle,source,(ability,unpaid,candidates)->candidates.size());
+            if(count!=null && count>0){counts[0]++;counts[1]+=count;}
+        }
         return inspectPayment(game,payer,cycle,(ability,unpaid)->{
             JsonObject result=new JsonObject();result.addProperty("available",true);
             result.addProperty("unpaid_mana_count",unpaid.getUnpaid().getMana().count());
-            result.addProperty("sequence",payment.sequence);return result;
+            result.addProperty("sequence",payment.sequence);
+            result.addProperty("candidate_sources",counts[0]);
+            result.addProperty("candidate_abilities",counts[1]);return result;
         });
     }
 }

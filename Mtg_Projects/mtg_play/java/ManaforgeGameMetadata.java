@@ -199,7 +199,8 @@ public final class ManaforgeGameMetadata {
                 JsonObject result = status("ok"); result.addProperty("cycle", cycle);
                 result.addProperty("priority_open", priorityOpen);
                 if(paymentProbe && player.getId().equals(playerId)) {
-                    Object probe=type.getMethod("paymentProbe",Game.class,UUID.class,int.class).invoke(human,game,playerId,cycle);
+                    Object probe=type.getMethod("paymentProbe",Game.class,UUID.class,int.class,UUID[].class)
+                        .invoke(human,game,playerId,cycle,visible.toArray(new UUID[0]));
                     if(probe instanceof JsonObject)result.add("payment_probe",(JsonObject)probe);
                 }
                 result.add("objects", objects); result.add("players", players); result.add("commanders", commanders);

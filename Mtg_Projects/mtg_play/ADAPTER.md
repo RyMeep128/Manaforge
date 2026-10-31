@@ -283,3 +283,11 @@ to XMage and records bounded native cost evidence through the existing private
 metadata reader. It is not an automatic-payment preference or public snapshot
 field. The normal runtime continues using the original native human class. See
 [probe isolation and real-engine evidence](../../docs/play-payment-coordinator.md).
+
+At 0.5.115-alpha.1, the opt-in diagnostic also reads XMage usable mana abilities
+for up to 128 requested, viewer-visible objects, filtered to current payer-owned
+battlefield permanents. Only bounded aggregate counts enter the diagnostic
+report; no source or ability identifiers are exported. Python validates and
+records counts only; source selection and payment rules remain native/Java
+responsibilities. The number acceptance fixture requires at least two candidate
+sources to have been observed. This diagnostic never submits an action.
