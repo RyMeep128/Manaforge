@@ -40,6 +40,7 @@ public final class DummyGateway {
         byte[] key=null;
         try(ServerSocket listener=new ServerSocket()) {
             InputStream owner=new BufferedInputStream(System.in);
+            boolean sceneMode=args.length==2 && args[1].startsWith("scene-fixture:");
             JsonObject boot=object(TextFrame.read(owner));
             require(boot.size()==7 && boot.keySet().containsAll(Arrays.asList("viewer_key_hex","engine_version","artifact_manifest_sha256","session_id","viewer_id","client_nonce","fixture_only")));
             require(boot.get("fixture_only").isJsonPrimitive() && boot.get("fixture_only").getAsJsonPrimitive().isBoolean() && boot.get("fixture_only").getAsBoolean());
@@ -83,7 +84,10 @@ public final class DummyGateway {
                 LoopbackFrameReader s=active.get();if(s!=null)try { s.close(); } catch(IOException ignored){} },"dummy-owner-lifeline");
             lifeline.setDaemon(true); lifeline.start();
             JsonObject ready=new JsonObject(); ready.addProperty("host","127.0.0.1"); ready.addProperty("port",listener.getLocalPort()); ready.addProperty("server_nonce",serverNonce);
-            send(System.out,ready);
+            if(sceneMode) {
+                JsonObject address=new JsonObject();address.addProperty("host","127.0.0.1");address.addProperty("port",listener.getLocalPort());
+                Path path=Paths.get(args[1].substring("scene-fixture:".length())),temporary=Paths.get(path.toString()+".tmp");Files.write(temporary,address.toString().getBytes(StandardCharsets.UTF_8));Files.move(temporary,path,StandardCopyOption.ATOMIC_MOVE);
+            }else send(System.out,ready);
             try(Socket socket=listener.accept();LoopbackFrameReader frames=new LoopbackFrameReader(socket)) {
                 active.set(frames); if(ownerGone.get())throw new IOException("OWNER_GONE");
                 OutputStream out=socket.getOutputStream();
@@ -97,7 +101,7 @@ public final class DummyGateway {
                     try{GatewayHandshake.accept(frames,clientHello.toString(),gatewayHello.toString(),key,150);throw new IOException("DUMMY_EXPECTED_AUTH_TIMEOUT");}
                     catch(WireEnvelope.EnvelopeException error){require(error.code.equals("AUTH_TIMEOUT"));return;}
                 } else {
-                    authenticated=args.length==2 && args[1].equals("fresh-challenge")
+                    authenticated=sceneMode || args.length==2 && args[1].equals("fresh-challenge")
                         ?ViewerChallengeHandshake.accept(frames,clientHello.toString(),gatewayHello.toString(),key,5000,ownerGone::get)
                         :GatewayHandshake.accept(frames,clientHello.toString(),gatewayHello.toString(),key,5000);
                     require(authenticated.sessionId.equals(session) && authenticated.viewerId.equals(viewer));
@@ -122,6 +126,12 @@ public final class DummyGateway {
                 JsonObject eventBody=new JsonObject();eventBody.addProperty("fixture_only",true);eventBody.addProperty("session_id",session);eventBody.addProperty("viewer_id",viewer);eventBody.add("event",event);
                 JsonObject eventMessage=envelope("event","fixture-event",eventBody);
                 boundary.observe(eventMessage.toString());send(frames,eventMessage);
+                if(sceneMode) {
+                    int heartbeat=0;while(!ownerGone.get() && heartbeat<1800){Thread.sleep(1000);if(ownerGone.get())break;
+                        JsonObject pulse=eventMessage.deepCopy();pulse.addProperty("message_id","fixture-heartbeat-"+(heartbeat++));pulse.getAsJsonObject("body").getAsJsonObject("event").addProperty("kind","fixture-heartbeat");
+                        try{boundary.observe(pulse.toString());send(frames,pulse);}catch(IOException closed){while(!ownerGone.get())Thread.sleep(20);return;}}
+                    return;
+                }
                 long revision=snapshot.get("revision").getAsLong();
                 Set<String> fixtureSubmissions=new HashSet<>(); // Explicit synthetic enqueue recorder; no engine.
                 for(int count=0;count<8;count++) {

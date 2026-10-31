@@ -815,3 +815,15 @@ disposal. Local evidence: 50 graphics-enabled PlayMode checks passed without ski
 This is attached-panel fixture integration; product mounting, artwork-sidecar
 loading, full decision/event UI, idle policy, OS containment, installed-artifact
 verification and G0/G1 acceptance remain open. No public gallery changes.
+
+### G1/P3 packaged authenticated session fixture — owner UI review pending
+
+The [explicit fixture scene](play-session-fixture.md) now joins inherited bootstrap,
+real Java/C# authentication, receive projection, shared card views and owner-loss
+cleanup in the packaged graphics player. The fixture shows one public and one
+concealed object, with inspection but no gameplay commands or artwork sidecar.
+Local evidence: 350 EditMode checks, Windows build and the packaged Java/player
+proof passed; connected/cleared captures were inspected. Both roots exited 0
+without force. Owner UI review is now required before treating this fixture UX
+as accepted. Product launch, real engine play, full decisions, artwork binding,
+OS containment and G0/G1 remain open. Existing gallery and Qt Play are preserved.
