@@ -947,3 +947,20 @@ Local mana-input evidence: 98 graphics-enabled PlayMode checks passed without
 skips, including five new authenticated-loopback UI scenarios and a synthetic
 capture. Hands-on review is pending. Relevant CI is checked at 0.5.108 without
 waiting; no current CI success or engine acceptance is inferred from local tests.
+
+### P2.3 safe automatic mana-payment foundation
+
+The owner supplied a [payment story](play-safe-automatic-mana-payment-story.md).
+The [isolated Java coordinator and pinned API investigation](play-payment-coordinator.md)
+provide per-human-seat Auto/Manual/Full Control policy, conservative fallback,
+serialized manual/automatic ownership and separately observed outcomes. No native
+source solver or Unity payment rules were added. The live Java/XMage execution
+port is absent, so production automation stays unmounted and all real-payment
+acceptance remains open. This is the story's permitted isolated increment, not a
+bulk P2 port, G2 parity claim or relaxation of G0/G1 gates.
+
+Local coordinator evidence: 65 synthetic Java safety/lifecycle checks passed;
+five native API classes were inspected after pin/hash verification. The protocol
+CI workflow now includes these isolated checks. Real-engine payment, applied
+native preferences and live gateway dispatch are explicitly not demonstrated.
+Next scheduled CI review is 0.5.111; no current CI success is inferred.
