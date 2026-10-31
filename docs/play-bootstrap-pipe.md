@@ -58,3 +58,7 @@ CI review remains on the third-commit cadence, next at 0.5.93.
 The subsequent [launch-owned writer](play-owned-bootstrap-write.md) now delivers
 this frame through the owned client's stdin with a bounded nonblocking write.
 The combined path still needs packaged Unity and owner-to-UI cleanup evidence.
+
+The [packaged diagnostic](play-packaged-bootstrap-proof.md) subsequently verifies
+actual Windows player stdin and EOF-to-main-thread quit with public fixtures.
+Live-session revocation/cleanup and OS containment remain separate requirements.

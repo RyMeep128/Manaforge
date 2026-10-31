@@ -54,3 +54,8 @@ inherited handle, owner-loss behavior and sanitized acknowledgement. OS containm
 and real authentication still gate product readiness. Relevant CI is reviewed at
 this third-commit checkpoint without waiting for unfinished runs; local evidence
 does not imply CI success or G0/G1 acceptance.
+
+The subsequent [packaged Unity diagnostic](play-packaged-bootstrap-proof.md) now
+proves this owned writer reaches the real Windows player's inherited stdin and
+that owner EOF causes main-thread diagnostic quit. Live private-view cleanup,
+real authentication and OS containment remain pending.

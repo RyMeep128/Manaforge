@@ -768,3 +768,14 @@ evidence: 67 focused Python lifecycle/bootstrap checks passed, including real
 children and stalled pipes. Packaged Unity startup, owner-loss UI wiring, fresh
 challenges and OS containment remain open; G0/G1 acceptance is not claimed. No UI
 changed. CI is reviewed at this third-commit checkpoint without awaiting runs.
+
+### G1 packaged private-bootstrap diagnostic
+
+The [headless packaged proof](play-packaged-bootstrap-proof.md) now connects the
+owned Python writer to the actual Windows Unity player's inherited stdin. Four
+cases passed: owner EOF, malformed payload, missing-frame timeout and non-fixture
+context rejection. Both owned roots exited without forced termination in every
+case; owner EOF reached main-thread diagnostic quit. The Windows build and 338
+EditMode checks passed. This is a public-fixture diagnostic, not authenticated
+gameplay or live private-view cleanup. Fresh challenges, real mounting, OS
+containment and G0/G1 acceptance remain open. The public gallery is unchanged.

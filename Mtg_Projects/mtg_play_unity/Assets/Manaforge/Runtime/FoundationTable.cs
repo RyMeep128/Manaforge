@@ -16,6 +16,12 @@ namespace Manaforge.Play
         private void Awake()
         {
             Application.targetFrameRate = 60;
+            if (ArtworkFixtureScene.Argument("-manaforgeBootstrapDiagnostic") != null)
+            {
+                enabled = false;
+                gameObject.AddComponent<BootstrapDiagnosticScene>();
+                return;
+            }
             if (ArtworkFixtureScene.Argument("-manaforgeArtworkFixture") != null)
             {
                 enabled = false;
