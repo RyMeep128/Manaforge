@@ -383,6 +383,9 @@ def run_proof(
                 context_sources.append(
                     HERE / "java/payment-xmage/manaforge/payment/xmage/OrdinaryCostCoverage.java"
                 )
+                context_sources.append(
+                    HERE / "java/payment-xmage/manaforge/payment/xmage/NativePaymentHazards.java"
+                )
             compile_log = (workspace / "compile.log").open("w", encoding="utf-8")
             logs.append(compile_log)
             command = [

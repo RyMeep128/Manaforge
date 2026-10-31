@@ -13,6 +13,7 @@ import manaforge.payment.xmage.SelectedSourceMana;
 import manaforge.payment.xmage.ContextHumanPlayer;
 import manaforge.payment.xmage.OrdinaryManaShape;
 import manaforge.payment.xmage.OrdinaryCostCoverage;
+import manaforge.payment.xmage.NativePaymentHazards;
 import mage.constants.RangeOfInfluence;
 
 /** Pinned utility objects and synthetic scope guards. No server, deck, activation or real-game claim. */
@@ -128,6 +129,52 @@ public final class PinnedPaymentChecks {
         check(OrdinaryCostCoverage.inspect(paid,green)==OrdinaryCostCoverage.Result.NO_UNPAID_COST);check(paid.isPaid());
         check(OrdinaryCostCoverage.inspect(new ManaCostsImpl<mage.abilities.costs.mana.ManaCost>("{G}"){},green)==OrdinaryCostCoverage.Result.UNSUPPORTED);
     }
+    private static final class PublicCard extends mage.cards.CardImpl {
+        PublicCard(){super(UUID.randomUUID(),"Public fixture");}
+        private PublicCard(PublicCard original){super(original);}
+        @Override public PublicCard copy(){return new PublicCard(this);}
+    }
+    private static void registeredHazardChecks() {
+        PublicCard card=new PublicCard();mage.game.GameState[] state={new mage.game.GameState()};
+        ContextHumanPlayer payer=new ContextHumanPlayer("Public fixture",RangeOfInfluence.ALL,0);
+        state[0].getPlayers().put(payer.getId(),payer);
+        mage.abilities.SpellAbility paying=new mage.abilities.SpellAbility(new ManaCostsImpl<>("{G}"),"Public fixture");
+        paying.setSourceId(card.getId());paying.setControllerId(payer.getId());
+        boolean[] ended={false},missing={false},replace={false};
+        mage.game.Game game=(mage.game.Game)java.lang.reflect.Proxy.newProxyInstance(PinnedPaymentChecks.class.getClassLoader(),new Class<?>[]{mage.game.Game.class},(proxy,method,args)->{
+            switch(method.getName()) {
+                case "hasEnded":return ended[0];
+                case "getState":return state[0];
+                case "getCard":if(replace[0])state[0]=new mage.game.GameState();return missing[0]?null:card;
+                default:throw new AssertionError("UNEXPECTED_HAZARD_CALL_"+method.getName());
+            }
+        });
+        check(NativePaymentHazards.inspect(null,paying)==NativePaymentHazards.Result.UNKNOWN);
+        check(NativePaymentHazards.inspect(game,null)==NativePaymentHazards.Result.UNKNOWN);
+        check(NativePaymentHazards.inspect(game,paying)==NativePaymentHazards.Result.NO_REGISTERED_HAZARD);
+        for(int i=0;i<5;i++){ContextHumanPlayer extra=new ContextHumanPlayer("Public fixture",RangeOfInfluence.ALL,0);state[0].getPlayers().put(extra.getId(),extra);}
+        check(NativePaymentHazards.inspect(game,paying)==NativePaymentHazards.Result.NO_REGISTERED_HAZARD); // Six is not a protocol limit.
+        ended[0]=true;check(NativePaymentHazards.inspect(game,paying)==NativePaymentHazards.Result.UNKNOWN);ended[0]=false;
+        state[0].setManaBurn(true);check(NativePaymentHazards.inspect(game,paying)==NativePaymentHazards.Result.REQUIRES_MANUAL);state[0].setManaBurn(false);
+        mage.abilities.common.delayed.AtTheBeginOfNextEndStepDelayedTriggeredAbility trigger=new mage.abilities.common.delayed.AtTheBeginOfNextEndStepDelayedTriggeredAbility(new mage.abilities.effects.mana.BasicManaEffect(Mana.GreenMana(1)));
+        trigger.setControllerId(payer.getId());trigger.setSourceId(card.getId());
+        state[0].getTriggers().put("private-key-never-exported",trigger);
+        check(NativePaymentHazards.inspect(game,paying)==NativePaymentHazards.Result.REQUIRES_MANUAL);state[0].getTriggers().clear();
+        state[0].getDelayed().add(trigger);
+        check(NativePaymentHazards.inspect(game,paying)==NativePaymentHazards.Result.REQUIRES_MANUAL);state[0].getDelayed().clear();
+        state[0].addTriggeredAbility(trigger);
+        check(NativePaymentHazards.inspect(game,paying)==NativePaymentHazards.Result.REQUIRES_MANUAL);state[0].clearTriggeredAbilities();
+        state[0].getContinuousEffects().addEffect(new mage.abilities.effects.common.continuous.GainAbilityAllEffect(new GreenManaAbility(),mage.constants.Duration.WhileOnBattlefield,new mage.filter.FilterPermanent()),paying);
+        int before=state[0].getContinuousEffects().getTotalEffectsCount();check(before>0);
+        check(NativePaymentHazards.inspect(game,paying)==NativePaymentHazards.Result.REQUIRES_MANUAL);
+        check(state[0].getContinuousEffects().getTotalEffectsCount()==before);state[0].getContinuousEffects().clear();
+        missing[0]=true;check(NativePaymentHazards.inspect(game,paying)==NativePaymentHazards.Result.UNKNOWN);missing[0]=false;
+        check(NativePaymentHazards.inspect(game,new GreenManaAbility())==NativePaymentHazards.Result.UNKNOWN);
+        card.addAbility(new mage.abilities.keyword.SunburstAbility(card));
+        check(NativePaymentHazards.inspect(game,paying)==NativePaymentHazards.Result.REQUIRES_MANUAL);
+        card.getAbilities().clear();replace[0]=true;
+        check(NativePaymentHazards.inspect(game,paying)==NativePaymentHazards.Result.UNKNOWN);
+    }
     public static void main(String[] args) throws Exception {
         ContextHumanPlayer observed=new ContextHumanPlayer("Public fixture",RangeOfInfluence.ALL,0);
         ContextHumanPlayer copied=observed.copy();
@@ -137,6 +184,7 @@ public final class PinnedPaymentChecks {
         sourceScopeChecks(observed);
         ordinaryShapeChecks();
         ordinaryCoverageChecks();
+        registeredHazardChecks();
         UserData manual=UserData.getDefaultUserDataView(),automatic=UserData.getDefaultUserDataView();
         check(manual!=automatic);
         manual.setManaPoolAutomatic(false);manual.setManaPoolAutomaticRestricted(false);

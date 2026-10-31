@@ -1164,3 +1164,30 @@ def test_native_coverage_evidence_is_fixed_bounded_and_default_off(monkeypatch):
     report = adapter.payment_cost_coverage_diagnostics()
     assert report["observations"] == 123  # The shared 128 candidate-sample budget includes five invalid statuses.
     assert "private-" not in json.dumps(report) and "safe" not in report
+
+
+def test_private_hazard_evidence_never_exports_registries_or_claims_safety(monkeypatch):
+    view = dict(game_id="private-game", viewer="private-viewer", cycle=7, players=[])
+    evidence = dict(available=True, sequence=1, unpaid_mana_count=2, candidate_sources=2,
+                    candidate_abilities=2, ordinary_shape_abilities=2, registered_hazards="REQUIRES_MANUAL")
+    default = LocalGameAdapter()
+    monkeypatch.setattr(default, "_server_request", lambda **fields: dict(payment_probe=evidence))
+    default._metadata(view)
+    assert default.payment_hazard_diagnostics()["observations"] == 0
+    adapter = LocalGameAdapter(payment_context_probe=True)
+    monkeypatch.setattr(adapter, "_server_request", lambda **fields: dict(payment_probe=evidence))
+    for invalid in [True, {}, "SAFE", "private-trigger-name"]:
+        evidence["registered_hazards"] = invalid
+        adapter._metadata(view)
+    assert adapter.payment_hazard_diagnostics()["observations"] == 0
+    for value in ["REQUIRES_MANUAL", "NO_REGISTERED_HAZARD", "UNKNOWN"]:
+        evidence["registered_hazards"] = value
+        adapter._metadata(view)
+    assert adapter.payment_hazard_diagnostics()["requires_manual"] == 1
+    assert adapter.payment_hazard_diagnostics()["no_registered_hazard"] == 1
+    evidence["registered_hazards"] = "REQUIRES_MANUAL"
+    for _ in range(140):
+        adapter._metadata(view)
+    report = adapter.payment_hazard_diagnostics()
+    assert report["observations"] == 124  # Shared 128 candidate samples, four invalid labels.
+    assert "private-" not in json.dumps(report) and "safe" not in report

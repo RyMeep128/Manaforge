@@ -304,3 +304,10 @@ Python records those bounded enum counts only; no cost/source solver or new
 public game model is introduced. Native helper and single-game probe validation
 now have a dedicated Play native payment CI workflow; automatic selection stays
 disabled and the original human runtime remains the default.
+
+At 0.5.119 the opt-in server observer also screens registered native effects,
+triggers, mana burn and spell spent-color sensitivity conservatively. Python
+records only bounded fixed private research labels. No registry contents or
+hazard reasons enter the public snapshot/client path. The real diagnostic fixture
+requires manual review despite sufficient base mana; no automatic source
+submission is enabled. See the payment coordinator evidence for precise limits.

@@ -575,3 +575,58 @@ CI success for 0.5.114–116; its own runs were still queued/running at that che
 Next: native world-state/source-safety assessment, equivalent-source and plan
 identity, and serialized Java session-owner execution. Base-total coverage alone
 must never activate a source or bypass manual/Full Control authority.
+
+
+### Native registered-hazard exclusion screen (0.5.119)
+
+NativePaymentHazards adds a conservative read-only screen inside the opt-in
+observer's existing paused-payment guard. It reads the pinned GameState's native
+continuous-effect count, registered triggers, delayed triggers, pending triggers
+for each registered player and mana-burn flag. Any such hazard requires manual
+review, including effects unrelated to mana. It does not evaluate hypothetical
+events, fire triggers, activate abilities or recreate effect applicability rules.
+The native ContinuousEffects.getTotalEffectsCount implementation sums registered
+effect-list sizes; it is not an exhaustive proof that no engine behavior exists.
+
+Initial spell-payment scope additionally resolves the native paying card and
+calls CardImpl.caresAboutManaColor(Game), exactly as pinned HumanPlayer does
+before narrowing mana abilities. Native Sunburst behavior is tested through that
+API rather than a card-name or rules-text heuristic. Other payment families,
+missing sources, malformed state and native read failures return UNKNOWN.
+Positive reads recheck GameState identity, effects revision, source identity and
+termination. The caller still owns viewer/decision authority and serialization;
+the production observation is wrapped by ContextHumanPlayer.inspectPayment.
+
+Results are only REQUIRES_MANUAL, NO_REGISTERED_HAZARD or UNKNOWN.
+NO_REGISTERED_HAZARD is emphatically not a safety certificate, equivalence class,
+legal action or permission to submit a payment. Source utility, other strategic
+choices, engine built-ins, restrictions, source/plan identity and serialized
+execution remain separate requirements. No VERIFIED_ORDINARY_EQUIVALENT native
+assessment can be issued from this helper alone; automatic selection is disabled.
+
+These are private server research observations, not public snapshot fields,
+renderer data or player-facing failure reasons. No trigger/effect names, source
+IDs, hidden-zone contents or registry counts are exported. Only three fixed
+bounded counters enter the explicit public-fixture diagnostic report. The player
+iteration has an internal 128-read budget, not a two-/five-seat protocol limit.
+A synthetic six-player case verifies that distinction.
+
+Local PaymentHazards119.json passed: two REQUIRES_MANUAL observations alongside
+two COVERS arithmetic observations, two manually submitted/tapped sources, mana
+spent and Ballista resolved as 1/1. The fixture ends through deliberate concession
+and an authoritative result, not a naturally completed match. Compiler, peer,
+bridge and server roots exited 0 without forced cleanup. The diagnostic records
+no specific registered hazard identities, and the observation does not claim that
+the whole source-safety problem is solved.
+
+Passed: 115 focused Python adapter/connection/lifecycle checks; 65 coordinator,
+77 response guards and 114 pinned-object/synthetic-scope checks; ten pinned API
+class inspections and owned bridge compilation. Native cases cover empty
+inventory, six players, terminal state, mana burn, registered/delayed/pending
+triggers, continuous effects with unchanged counts, missing sources, unsupported
+payment families, actual Sunburst detection and replacement state during reads.
+Python cases cover default-off behavior, fixed/malformed labels, sample bounds
+and omission of private names/IDs. No full suite, Unity UI or packaged build ran.
+The existing native-payment CI job includes these helper checks and the same
+real-engine probe automatically. CI status is next checked at 0.5.120; no current
+CI outcome is inferred or awaited. The deck preview remains awaiting owner review.

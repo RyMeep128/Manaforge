@@ -1066,3 +1066,12 @@ execution are still open. A dedicated native-payment CI workflow adds pinned
 helper and one real-engine probe coverage without depending on Qt CI. All
 existing acceptance gates remain in force; the desktop preview still awaits UI
 review and no production automatic payment is enabled.
+
+
+Payment increment 0.5.119 adds a conservative native registered-hazard screen.
+A real payment fixture returns manual-review-required twice despite positive base
+cost coverage; manual payment/resolution and owned cleanup still pass. Native
+world registries and spent-color sensitivity are queried without simulating or
+activating anything. The private diagnostic exports fixed labels only. An empty
+screen is not safe source selection; strategic/source/plan identity and Java
+owner execution remain open, as do all existing acceptance gates.

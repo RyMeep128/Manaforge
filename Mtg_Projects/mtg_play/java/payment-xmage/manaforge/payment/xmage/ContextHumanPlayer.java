@@ -111,7 +111,8 @@ public final class ContextHumanPlayer extends HumanPlayer {
             result.addProperty("ordinary_shape_abilities",counts[2]);
             // BASE templates only: replacement effects, restrictions, floating mana and strategy
             // have not been reviewed. This does NOT authorize selection or activation.
-            result.addProperty("base_cost_coverage",OrdinaryCostCoverage.inspect(unpaid,baseTotal).name());return result;
+            result.addProperty("base_cost_coverage",OrdinaryCostCoverage.inspect(unpaid,baseTotal).name());
+            result.addProperty("registered_hazards",NativePaymentHazards.inspect(game,ability).name());return result;
         });
     }
 }

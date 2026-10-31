@@ -58,13 +58,16 @@ def main():
         "mage.players.PlayerImpl": ["setPayManaMode(boolean)"],
         "mage.Mana": ["boolean enough(mage.Mana)", "mage.Mana copy()"],
         "mage.abilities.mana.ManaOptions": ["boolean enough(mage.Mana)"],
+        "mage.abilities.effects.ContinuousEffects": ["int getTotalEffectsCount()"],
+        "mage.game.GameState": ["getTriggers()", "getDelayed()", "getTriggered(java.util.UUID)", "isManaBurn()"],
+        "mage.cards.CardImpl": ["boolean caresAboutManaColor(mage.game.Game)"],
     }
     classpath = os.pathsep.join(str(engine / key) for key in jars)
     for name, signatures in expected.items():
         report = subprocess.run([javap, "-p", "-classpath", classpath, name], capture_output=True, text=True, check=True, timeout=30)
         if not all(signature in report.stdout for signature in signatures):
             raise SystemExit("Pinned payment API signature mismatch: " + name)
-    print("Pinned XMage payment APIs: 7 classes verified against artifact hashes; inspection only, no real-game acceptance")
+    print("Pinned XMage payment APIs: 10 classes verified against artifact hashes; inspection only, no real-game acceptance")
     if args.probe_pinned_helpers:
         # Do not execute a classpath wildcard or an unverified local dependency.
         dependencies = sorted(key for key in manifest["artifacts"]
@@ -83,7 +86,8 @@ def main():
             subprocess.run([compiler, "--release", "8", "-encoding", "UTF-8", "-cp", native_classpath, "-d", output,
                             str(source), str(adapter), str(response), str(context_source),
                             str(PLAY / "java/payment-xmage/manaforge/payment/xmage/OrdinaryManaShape.java"),
-                            str(PLAY / "java/payment-xmage/manaforge/payment/xmage/OrdinaryCostCoverage.java"), *map(str, bridge_sources)],
+                            str(PLAY / "java/payment-xmage/manaforge/payment/xmage/OrdinaryCostCoverage.java"),
+                            str(PLAY / "java/payment-xmage/manaforge/payment/xmage/NativePaymentHazards.java"), *map(str, bridge_sources)],
                            check=True, timeout=60)
             subprocess.run([runtime, "-cp", output + os.pathsep + native_classpath,
                             "manaforge.payment.PinnedPaymentChecks"], cwd=output, check=True, timeout=30)
