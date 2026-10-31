@@ -1,7 +1,8 @@
 # Play launch ownership and lifecycle — P1.4 foundation
 
-Status: owned-child coordinator and failure tests implemented. Private IPC,
-OS containment, orphan recovery and the real launcher are not yet implemented.
+Status: owned-child coordinator, private viewer pipe primitives and failure tests
+implemented. Packaged Unity wiring, OS containment, orphan recovery and the real
+product launcher remain pending.
 See the [roadmap](play-unity-java-roadmap.md) and [manifest boundary](play-launch-boundary.md).
 
 ## Ownership contract
@@ -92,6 +93,11 @@ pending; parsing this payload is not authenticated readiness.
 The [Windows bootstrap pipe primitive](play-bootstrap-pipe.md) now reads bounded
 private frames and watches owner EOF on workers. It is not yet connected to this
 LaunchOwner or packaged Unity startup, and provides no descendant containment.
+
+The subsequent [launch-owned writer](play-owned-bootstrap-write.md) now connects
+one-time private viewer delivery to `start_client` using nonblocking writes and
+owned cleanup on failure. Packaged Unity startup, owner-loss UI wiring and OS
+containment remain pending; successful writing never marks the client ready.
 
 ## Crashes, workspaces and orphan recovery
 

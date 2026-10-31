@@ -54,3 +54,7 @@ packaged stdin handle availability still requires separate evidence.
 
 No full application suite or visual scene change. No new owner UI review needed.
 CI review remains on the third-commit cadence, next at 0.5.93.
+
+The subsequent [launch-owned writer](play-owned-bootstrap-write.md) now delivers
+this frame through the owned client's stdin with a bounded nonblocking write.
+The combined path still needs packaged Unity and owner-to-UI cleanup evidence.

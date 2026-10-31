@@ -11,6 +11,7 @@ import threading
 import time
 
 from .connection_proof import stop_process
+from .viewer_bootstrap import ViewerBootstrapError, frame_viewer_bootstrap
 
 
 class LaunchState(StrEnum):
@@ -78,6 +79,7 @@ class LaunchOwner:
         self._startup_timeout = startup_timeout
         self._deadline = None
         self._runtime_cleanup = runtime_cleanup
+        self._client_bootstrap_written = False
 
     def __enter__(self):
         with self._lock:
@@ -102,6 +104,12 @@ class LaunchOwner:
         with self._lock:
             return self._report
 
+    @property
+    def client_bootstrap_written(self):
+        """Bytes entered the owned pipe; not an acknowledgement or readiness proof."""
+        with self._lock:
+            return self._client_bootstrap_written
+
     def request_cancel(self):
         self._cancel.set()
 
@@ -112,7 +120,17 @@ class LaunchOwner:
             self.close()
             raise LaunchLifecycleError("LAUNCH_CANCELLED")
 
-    def _spawn(self, role, command, *, cwd, expected, starting):
+    def _spawn(
+        self,
+        role,
+        command,
+        *,
+        cwd,
+        expected,
+        starting,
+        bootstrap=None,
+        bootstrap_timeout=5.0,
+    ):
         with self._lock:
             self._require(expected)
             if role == "client":
@@ -146,6 +164,45 @@ class LaunchOwner:
             if self._cancel.is_set():
                 self.close()
                 raise LaunchLifecycleError("LAUNCH_CANCELLED")
+            if bootstrap is not None:
+                self._write_client_bootstrap(process, bootstrap, bootstrap_timeout)
+
+    def _write_client_bootstrap(self, process, frame, timeout):
+        """Launch worker only; exclusive unbuffered writes to our owned stdin.
+
+        Never use BufferedWriter.write here: an unresponsive reader must not hold
+        startup or cancellation hostage. A successfully written pipe stays open
+        as the client owner lifeline, with no further payload writes.
+        """
+        deadline = min(self._deadline, self._clock() + timeout)
+        try:
+            descriptor = process.stdin.fileno()
+            os.set_blocking(descriptor, False)
+            offset = 0
+            while offset < len(frame):
+                self.check_health()
+                if self._clock() >= deadline:
+                    raise LaunchLifecycleError("CLIENT_BOOTSTRAP_TIMEOUT")
+                try:
+                    written = os.write(
+                        descriptor, memoryview(frame)[offset : offset + 1024]
+                    )
+                except BlockingIOError:
+                    written = 0
+                if written:
+                    offset += written
+                else:
+                    self._cancel.wait(0.01)
+            self.check_health()
+            if self._clock() >= deadline:
+                raise LaunchLifecycleError("CLIENT_BOOTSTRAP_TIMEOUT")
+            self._client_bootstrap_written = True
+        except LaunchLifecycleError:
+            self.close()
+            raise
+        except Exception:
+            self.close()
+            raise LaunchLifecycleError("CLIENT_BOOTSTRAP_WRITE_FAILED") from None
 
     def start_gateway(self, command, *, cwd=None):
         self._spawn(
@@ -162,14 +219,34 @@ class LaunchOwner:
             self.check_health()
             self._state = LaunchState.GATEWAY_READY
 
-    def start_client(self, command, *, cwd=None):
-        self._spawn(
-            "client",
-            command,
-            cwd=cwd,
-            expected=LaunchState.GATEWAY_READY,
-            starting=LaunchState.STARTING_CLIENT,
-        )
+    def start_client(
+        self, command, *, cwd=None, viewer_bootstrap=None, bootstrap_timeout=5.0
+    ):
+        frame = None
+        if viewer_bootstrap is not None:
+            if (
+                type(bootstrap_timeout) not in (int, float)
+                or not math.isfinite(bootstrap_timeout)
+                or not 0 < bootstrap_timeout <= 60
+            ):
+                raise LaunchLifecycleError("INVALID_BOOTSTRAP_TIMEOUT")
+            try:
+                frame = bytearray(frame_viewer_bootstrap(viewer_bootstrap))
+            except ViewerBootstrapError:
+                raise LaunchLifecycleError("INVALID_CLIENT_BOOTSTRAP") from None
+        try:
+            self._spawn(
+                "client",
+                command,
+                cwd=cwd,
+                expected=LaunchState.GATEWAY_READY,
+                starting=LaunchState.STARTING_CLIENT,
+                bootstrap=frame,
+                bootstrap_timeout=bootstrap_timeout,
+            )
+        finally:
+            if frame is not None:
+                frame[:] = b"\x00" * len(frame)
 
     def client_ready(self):
         with self._lock:

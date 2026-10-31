@@ -757,3 +757,14 @@ cancellation and lifeline behavior; a Python child verifies inherited delivery.
 Local evidence: 20 Python and 334 Unity EditMode checks passed. Product launcher
 writing, packaged Unity stdin verification, UI shutdown wiring, fresh challenges
 and OS containment remain open. No public UI changed; G0/G1 remain unaccepted.
+
+### G1 launch-owned bootstrap writing
+
+The [launch coordinator writer](play-owned-bootstrap-write.md) now supplies one
+framed viewer payload to its owned client using bounded nonblocking writes.
+Partial writes and pipe backpressure preserve cancellation and health checks;
+failure invokes owned cleanup. A completed write is not client readiness. Local
+evidence: 67 focused Python lifecycle/bootstrap checks passed, including real
+children and stalled pipes. Packaged Unity startup, owner-loss UI wiring, fresh
+challenges and OS containment remain open; G0/G1 acceptance is not claimed. No UI
+changed. CI is reviewed at this third-commit checkpoint without awaiting runs.
