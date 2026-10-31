@@ -373,6 +373,9 @@ def run_proof(
                 "-d",
                 str(classes),
                 *map(str, sorted((HERE / "java").glob("*.java"))),
+                str(
+                    HERE / "java/payment-xmage/manaforge/payment/xmage/ManaResponseExecutor.java"
+                ),
             ]
             if cancel is None:
                 compiled_returncode = subprocess.run(

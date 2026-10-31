@@ -29,9 +29,12 @@ def main():
         parser.error("A JDK with javac and java is required")
     with tempfile.TemporaryDirectory(prefix="manaforge-payment-") as output:
         sources = [PLAY / "java/payment/manaforge/payment/PaymentCoordinator.java",
-                   PLAY / "java/payment-test/manaforge/payment/PaymentCoordinatorChecks.java"]
+                   PLAY / "java/payment-test/manaforge/payment/PaymentCoordinatorChecks.java",
+                   PLAY / "java/payment-xmage/manaforge/payment/xmage/ManaResponseExecutor.java",
+                   PLAY / "java/payment-native-test/manaforge/payment/NativeManaResponseChecks.java"]
         subprocess.run([compiler, "--release", "8", "-d", output, *map(str, sources)], check=True, timeout=60)
         subprocess.run([runtime, "-cp", output, "manaforge.payment.PaymentCoordinatorChecks"], check=True, timeout=30)
+        subprocess.run([runtime, "-cp", output, "manaforge.payment.NativeManaResponseChecks"], check=True, timeout=30)
     if not (args.verify_pinned_api or args.probe_pinned_helpers):
         return
     javap = str(args.javap) if args.javap else shutil.which("javap")
@@ -70,10 +73,14 @@ def main():
         with tempfile.TemporaryDirectory(prefix="manaforge-native-payment-") as output:
             source = PLAY / "java/payment-native-test/manaforge/payment/PinnedPaymentChecks.java"
             adapter = PLAY / "java/payment-xmage/manaforge/payment/xmage/SelectedSourceMana.java"
-            subprocess.run([compiler, "--release", "8", "-cp", native_classpath, "-d", output, str(source), str(adapter)],
+            response = PLAY / "java/payment-xmage/manaforge/payment/xmage/ManaResponseExecutor.java"
+            bridge_sources = sorted((PLAY / "java").glob("*.java"))
+            subprocess.run([compiler, "--release", "8", "-encoding", "UTF-8", "-cp", native_classpath, "-d", output,
+                            str(source), str(adapter), str(response), *map(str, bridge_sources)],
                            check=True, timeout=60)
             subprocess.run([runtime, "-cp", output + os.pathsep + native_classpath,
                             "manaforge.payment.PinnedPaymentChecks"], cwd=output, check=True, timeout=30)
+            print("Owned Java bridge compiled against unchanged pinned SDK; no server/game started by this probe")
 
 
 if __name__ == "__main__":

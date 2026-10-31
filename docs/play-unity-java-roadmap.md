@@ -991,3 +991,20 @@ Local shared-admission evidence: all focused Java protocol checks passed, includ
 110 new synthetic admission/port checks; the 65 coordinator and 31 pinned native
 utility checks also passed. No actual source activation or payment completion is
 claimed. Relevant CI is checked at 0.5.111 without waiting on unfinished runs.
+
+### P2.3 native source-response executor reused by the reference bridge
+
+The [native response executor](play-payment-coordinator.md) is now used by the
+existing Java headless bridge's manual mana-source path. It consumes the exact
+current callback decision before the unchanged XMage SDK call and preserves
+Submitted versus Uncertain. The number scenario now requires two submitted
+sources, tapped lands, mana spending and Walking Ballista resolution from real
+engine state. This is native manual execution evidence, not automatic planning,
+a naturally completed match or Unity/Java end-to-end acceptance. The production
+automatic planner/controller remains absent; existing gates are not relaxed.
+
+Final native manual-execution evidence: the strengthened number scenario passed
+with two source submissions, two tapped lands, mana spent and 1/1 Ballista
+resolution; all owned roots exited 0 without forced cleanup. Also passed: 65
+coordinator, 77 source-response guard, 31 native utility and 105 focused Python
+checks. No full application suite or new UI build ran. Next CI review is 0.5.114.

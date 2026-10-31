@@ -264,3 +264,15 @@ Pinned source anchors: [PlayableObjectStats](https://github.com/magefree/mage/bl
 [HumanPlayer](https://github.com/magefree/mage/blob/xmage_1.4.62V1/Mage.Server.Plugins/Mage.Player.Human/src/mage/player/human/HumanPlayer.java),
 and [PlayerResponse](https://github.com/magefree/mage/blob/xmage_1.4.62V1/Mage.Server.Plugins/Mage.Player.Human/src/mage/player/human/PlayerResponse.java).
 Review these internal anchors on every engine upgrade.
+
+## Shared native mana-response executor
+
+At 0.5.112-alpha.1, object responses to the private bridge's GAME_PLAY_MANA prompt
+use the shared Java ManaResponseExecutor. It atomically claims the current native
+decision under the existing bridge callback monitor before calling the unchanged
+SessionImpl.sendPlayerUUID API. SDK acceptance remains only Submitted; false or
+transport exception is Uncertain and never replayed. Other decision families and
+the public adapter/game protocol are unchanged. No automatic source planner is
+enabled by this extraction. See [native executor and evidence](../../docs/play-payment-coordinator.md).
+The owned runtime compiler includes its additional Java source; original XMage
+binaries and artifact hashes remain unchanged.

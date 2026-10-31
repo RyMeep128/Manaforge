@@ -17,12 +17,14 @@ import mage.players.net.UserData;
 import mage.remote.Connection;
 import mage.remote.SessionImpl;
 import mage.utils.MageVersion;
+import manaforge.payment.xmage.ManaResponseExecutor;
 
 /** Minimal headless client: no MageFrame or desktop-client dependency. */
 public final class ManaforgeBridge implements MageClient {
     private static final PrintStream PROTOCOL = System.out;
     private static final Gson JSON = new Gson();
     private final SessionImpl session = new SessionImpl(this);
+    private final ManaResponseExecutor manaResponses = new ManaResponseExecutor(this::claimManaResponse, session::sendPlayerUUID);
 
     private volatile UUID gameId;
     private volatile int decisionId = -1;
@@ -33,6 +35,12 @@ public final class ManaforgeBridge implements MageClient {
     private volatile boolean decisionFinishable;
     private int lastDecisionMessageId = -1;
     private int lastStateMessageId = -1;
+
+    private synchronized boolean claimManaResponse(UUID expectedGame,int expectedDecision,UUID source) {
+        if(gameId==null || !gameId.equals(expectedGame) || expectedDecision!=decisionId || decisionId<0
+                || !"GAME_PLAY_MANA".equals(decisionMethod))return false;
+        decisionId=-1;return true;
+    }
 
     private static synchronized void emit(String event, String requestId, JsonObject data) {
         data.addProperty("protocol", 1);
@@ -483,10 +491,17 @@ public final class ManaforgeBridge implements MageClient {
                         if (amount < amountMin || amount > amountMax) throw new IllegalArgumentException("AMOUNT_OUT_OF_RANGE");
                     }
                     if (kind.equals("string")) requiredString(command, "value");
-                    decisionId = -1;
+                    // The shared executor claims mana-source responses immediately before native IO.
+                    if(!(kind.equals("object") && pendingMethod.equals("GAME_PLAY_MANA")))decisionId = -1;
                 }
                 boolean accepted;
                 if (kind.equals("boolean")) accepted = session.sendPlayerBoolean(gameId, command.get("value").getAsBoolean());
+                else if (kind.equals("object") && pendingMethod.equals("GAME_PLAY_MANA")) {
+                    ManaResponseExecutor.Outcome outcome=manaResponses.submit(UUID.fromString(requiredString(command,"game_id")),
+                        command.get("decision_id").getAsInt(),UUID.fromString(requiredString(command,"value")));
+                    if(outcome==ManaResponseExecutor.Outcome.STALE)throw new IllegalArgumentException("STALE_DECISION");
+                    accepted=outcome==ManaResponseExecutor.Outcome.SUBMITTED;
+                }
                 else if (kind.equals("object")) accepted = session.sendPlayerUUID(gameId, UUID.fromString(requiredString(command, "value")));
                 else if (kind.equals("integer")) accepted = session.sendPlayerInteger(gameId, command.get("value").getAsInt());
                 else if (kind.equals("string")) accepted = session.sendPlayerString(gameId, requiredString(command, "value"));

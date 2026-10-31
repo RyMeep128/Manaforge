@@ -1,10 +1,10 @@
 # Safe automatic mana payment â€” Java coordinator
 
-Status: isolated foundation through 0.5.111-alpha.1 for P2.3; production automation is
+Status: isolated foundation through 0.5.112-alpha.1 for P2.3; production automation is
 **disabled/unmounted**. P4.3 real-engine acceptance has not happened. This implements
 the fallback scope explicitly allowed by the [owner story](play-safe-automatic-mana-payment-story.md),
-not the story's end-to-end definition of done. The existing manual command path,
-Python adapter and Unity renderer are unchanged. No XMage fork/source copy,
+not the story's end-to-end definition of done. The existing manual command contract and Unity renderer are preserved. The manual
+Java bridge now shares the native response executor described below. No XMage fork/source copy,
 binary edit, upgrade, new download or weakened artifact verification is introduced.
 
 ## Pinned API investigation
@@ -47,7 +47,8 @@ context; prompt/card-name parsing cannot fill that gap.
 Consequently there is no production EnginePort and no call site instantiates this
 coordinator in a real session. No existing engine defaults were changed to imply
 this feature is enabled. All actual automatic basic-land, multi-source and floating
-mana acceptance cases remain unproven. No engine process was launched for this work.
+mana acceptance cases remain unproven. No engine process was launched for that isolated increment. The native executor
+follow-up below has a focused real-engine proof.
 
 ## Implemented boundary
 
@@ -257,3 +258,79 @@ receipts. The separate 65 coordinator and 31 pinned native-helper checks also
 passed. No full application suite, Unity tests or real-game acceptance ran for
 this backend increment. CI is checked at the 0.5.111 checkpoint without waiting
 for unfinished runs; no result is inferred from these local tests.
+
+## Native response executor and manual-path reuse — 0.5.112
+
+ManaResponseExecutor provides the selected-source transport step. The existing
+ManaforgeBridge now uses it for object responses to GAME_PLAY_MANA. Its authority
+callback validates the owned game ID, exact native callback decision ID and mana
+prompt method under the bridge's existing monitor, then consumes the decision
+immediately before IO. Callback publication uses that same monitor. The initial
+bridge validation remains in place, and other response families retain their
+existing dispatch path. Source address authorization and legality still belong to
+the viewer adapter/gateway and XMage; this executor does not calculate eligibility.
+
+The bridge supplies the unchanged native SessionImpl.sendPlayerUUID method as its
+sender. A true SDK result is Submitted, never payment progress/completion. False
+or an ordinary exception is Uncertain, with no retry and no exception detail
+added to viewer messages. Interrupts retain the thread interrupt flag. Fatal errors
+propagate while the native decision claim remains consumed. A later callback is
+not cleared by completion of an older send. The borrowed session remains owned by
+the existing bridge; the helper creates no connection, process, deck or game state.
+
+Execute the sender on the serialized native-response worker. SDK IO must not run
+inside GatewaySessionBoundary's prompt enqueue callback or on Unity's rendering
+thread. The future native port must enqueue that worker and correlate subsequent
+engine state before resolving its internal reservation. This source-response step
+does not provide the still-missing engine-safe automatic planner or a live Java
+session/controller integrating the coordinator. No automatic source activation
+has been enabled. Native floating-mana behavior is preserved.
+
+The response guard uses a small injectable sender, so the default CI check now
+runs 65 coordinator checks plus 77 response-claim/transport checks without any
+engine dependency. The optional pinned probe additionally compiles all three owned
+bridge entry points and the executor against the verified SDK and runs 31 native
+utility checks. The existing runtime launcher includes the extra Java source in
+its owned workspace compilation. It changes no installed engine artifact or pin.
+
+### Real-engine manual execution evidence
+
+The existing `number` fixture was strengthened to require two explicitly submitted
+manual sources, two Forests observed tapped, spent mana observed after resolution,
+and Walking Ballista on the battlefield as a 1/1 after choosing X=1. Fixture-only
+source selection remains in the acceptance driver, not in production automation.
+The result comes from XMage snapshots and authoritative game result, not a response
+acknowledgement. The fixture concludes by concession after its semantic checks;
+it is not natural-match completion, Unity integration, or automatic-payment proof.
+
+Reproduce from the repository root with the existing installed runtime:
+
+```powershell
+$env:PYTHONPATH = 'Mtg_Projects;Mtg_Projects/mtg_core'
+./Mtg_Projects/mtg_proxy/venv/Scripts/python.exe -m mtg_play.adapter_acceptance --scenario number --jdk-path 'C:/Program Files/Java/jdk-23' --output Mtg_Projects/mtg_play_unity/Artifacts/ManaResponseNumber112Final.json
+```
+
+Focused Python checks cover connection proof, lifecycle and the adapter. An
+existing forced-cleanup test initially failed while measuring a child before
+interpreter startup completed. It now waits for a child-ready marker before the
+same 200 ms timeout; forced/reaped assertions and product cleanup timeouts are
+unchanged. All 105 checks passed after that synchronization fix. No full
+application suite or Unity UI test/build ran, and no owner UX review is needed.
+
+Final-source evidence is in ignored Artifacts/ManaResponseNumber112Final.json:
+success=true, mana_sources_submitted=2, two_sources_tapped=true, mana_spent=true,
+resolved=true and engine_result=true. The peer_0, compiler, bridge and server owned
+roots all exited 0; forced_cleanup=false. Root exit is not a claim of OS descendant
+containment. Compiled source evidence from that owned workspace:
+
+- ManaforgeBridge.class SHA-256: 416ec8fe38f9eea5df6a761c7e0d1d6b1d778f99789b898f667ebc9abe68f8dd
+- ManaResponseExecutor.class SHA-256: d1de2b259330627eb0d3d7432f37c9bf323705f828563c5fc9d16d7851724dce
+
+The default 65 coordinator / 77 response-guard checks and opt-in 31 pinned native
+checks passed, as did bridge SDK compilation and the 105 focused Python checks.
+Reports were produced from the 0.5.112 working tree before commit; no clean-commit
+provenance or current CI success is inferred. CI is next checked at 0.5.114 under
+the established cadence. Public game/launch schemas and private bridge response
+fields are unchanged; only the acceptance report gains bounded evidence counters.
+Packaged distribution was not rebuilt and automatic-source story acceptance
+remains open.
