@@ -737,3 +737,13 @@ revocation and the empty-frame barrier. Local evidence: 321 EditMode and 37
 graphics-enabled PlayMode checks passed with no graphics skips. This provides the host integration seam;
 private bootstrap, actual scene mounting, G0/G1 and P2 parity remain open. The
 public fixture is unchanged and needs no new owner UI review.
+
+### G1 private viewer bootstrap contract
+
+The [viewer bootstrap boundary](play-viewer-bootstrap.md) now shares a bounded
+one-viewer schema between Python export and Unity parsing. It carries a loopback
+endpoint, trusted expected context/pins, one seat-only key and optional artwork
+pin, rejecting owner/deck fields. Key transfer is single-use and disposal revokes
+unclaimed keys. Local evidence: 14 Python and 326 Unity EditMode checks passed.
+Actual inherited delivery, fresh authentication challenge exchange, OS containment
+and production mounting remain open; G0/G1 acceptance is not claimed. No UI changed.

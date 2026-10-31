@@ -84,6 +84,11 @@ These schemas/readers must be proven with dummy-process exchanges under G1 befor
 connecting this coordinator to the real client. Current readiness calls and child
 EOF fixtures do not substitute for that evidence.
 
+The subsequent [private viewer bootstrap](play-viewer-bootstrap.md) defines the
+bounded one-viewer export/parse payload, separate from the gateway's all-decks
+manifest. Actual inherited delivery, lifeline handling and containment remain
+pending; parsing this payload is not authenticated readiness.
+
 ## Crashes, workspaces and orphan recovery
 
 Before P4, add containment that proves descendant ownership and survives owner
