@@ -626,3 +626,14 @@ text. Unknown/oversized notation retains a literal fallback. Concealment clears
 inline runs; source text is never interpreted as gameplay or injected rich text.
 The local Unity asset research handoff was reviewed for subsequent asset work.
 The symbol review build still requires owner visual approval; G0/G1 stay open.
+
+
+### P3.2a specialized minis follow-up — October 30, 2026
+
+The [gallery](play-layout-gallery.md) now adds explicit compact profiles instead
+of full-printing thumbnails for known families. Minis have art crops, independent
+nameplates, kind indicators and supplied P/T/loyalty/defense. Split panes share one
+texture; Battle, Room and plane orientations are supported. V2 printed-reference
+fixture metadata remains separate from the game protocol and v1 remains readable.
+Full specialized frames remain authentic images; no rules or chapter progression
+are inferred. Owner visual review and G0/G1 acceptance remain open.

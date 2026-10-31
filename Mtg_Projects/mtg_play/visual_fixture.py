@@ -111,6 +111,7 @@ def export_visual_fixture(
                 selected_printing_id=printing,
                 selected_face=candidates[0].face_key,
                 values_source="printed_reference_mock",
+                layout=payload.get("layout") or "unknown",
                 mock_values={
                     name: face.get(name)
                     for name in (
@@ -120,6 +121,8 @@ def export_visual_fixture(
                         "oracle_text",
                         "power",
                         "toughness",
+                        "loyalty",
+                        "defense",
                     )
                 },
                 candidates=[
@@ -139,7 +142,7 @@ def export_visual_fixture(
     if not assets:
         raise VisualFixtureError("VISUAL_FIXTURE_NO_ARTWORK")
     manifest = dict(
-        fixture_version=1,
+        fixture_version=2,
         fixture_only=True,
         description="Offline public-card renderer fixture; no engine or authoritative current characteristics",
         assets=list(assets.values()),

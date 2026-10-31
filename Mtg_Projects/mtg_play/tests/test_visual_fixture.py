@@ -157,3 +157,30 @@ def test_expanded_gallery_keeps_the_unity_48_asset_limit(tmp_path, monkeypatch):
             Service(card("selected")), [(f"p-{i}", 0) for i in range(17)], output
         )
     assert not (output / "manifest.json").exists()
+
+
+@pytest.mark.parametrize(
+    "layout,type_line,loyalty,defense",
+    [
+        ("normal", "Legendary Planeswalker — Jace", "3", None),
+        ("normal", "Battle — Siege", None, "5"),
+    ],
+)
+def test_v2_export_preserves_printed_layout_and_supplied_badges(
+    tmp_path, layout, type_line, loyalty, defense
+):
+    path = source(tmp_path)
+    selected = card("selected")
+    selected.update(
+        layout=layout, type_line=type_line, loyalty=loyalty, defense=defense
+    )
+    manifest = export_visual_fixture(
+        Service(selected, paths={("selected", "default"): path}),
+        [("selected", 0)],
+        tmp_path / "v2",
+    )
+    visual = manifest["cards"][0]
+    assert manifest["fixture_version"] == 2 and visual["layout"] == layout
+    assert visual["mock_values"]["loyalty"] == loyalty
+    assert visual["mock_values"]["defense"] == defense
+    assert "chapter" not in visual["mock_values"]

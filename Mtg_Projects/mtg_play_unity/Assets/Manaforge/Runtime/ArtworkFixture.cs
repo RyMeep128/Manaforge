@@ -94,7 +94,8 @@ namespace Manaforge.Play
             var manifest = WireEnvelope.ParseObject(new UTF8Encoding(false, true).GetString(
                 Read(Path.Combine(root.FullName, "manifest.json"), 1024 * 1024, cancellation)));
             Fields(manifest, "fixture_version", "fixture_only", "description", "assets", "cards");
-            if (Number(manifest["fixture_version"], 1) != 1 || !Flag(manifest["fixture_only"])) throw Invalid();
+            int version=Number(manifest["fixture_version"],2);
+            if(version<1 || !Flag(manifest["fixture_only"]))throw Invalid();
             Text(manifest["description"]);
             var assets = new Dictionary<string, Asset>(StringComparer.Ordinal);
             long total = 0;
@@ -121,7 +122,8 @@ namespace Manaforge.Play
             foreach (var item in Array(manifest["cards"], 32))
             {
                 cancellation.ThrowIfCancellationRequested();
-                Fields(item, "oracle_id", "selected_printing_id", "selected_face", "values_source", "mock_values", "candidates");
+                if(version==1)Fields(item, "oracle_id", "selected_printing_id", "selected_face", "values_source", "mock_values", "candidates");
+                else Fields(item, "oracle_id", "selected_printing_id", "selected_face", "values_source", "layout", "mock_values", "candidates");
                 if (Text(item["values_source"]) != "printed_reference_mock") throw Invalid();
                 string oracle = Text(item["oracle_id"]), selectedId = Text(item["selected_printing_id"]), face = Text(item["selected_face"]);
                 var candidates = new List<VisualPrintingCandidate>();
@@ -142,11 +144,14 @@ namespace Manaforge.Play
                 if (selected == null) throw Invalid();
                 var identity = VisualPrintingPolicy.Resolve(false, selected, candidates);
                 var values = item["mock_values"];
-                Fields(values, "name", "mana_cost", "type_line", "oracle_text", "power", "toughness");
+                if(version==1)Fields(values, "name", "mana_cost", "type_line", "oracle_text", "power", "toughness");
+                else Fields(values, "name", "mana_cost", "type_line", "oracle_text", "power", "toughness", "loyalty", "defense");
                 string power = Optional(values["power"]), toughness = Optional(values["toughness"]);
                 cards.Add(new Card(identity, new CardDisplayValues(Optional(values["name"]), Optional(values["mana_cost"]),
                     Optional(values["type_line"]), Optional(values["oracle_text"]),
-                    power == null || toughness == null ? null : power + "/" + toughness, "PRINTED MOCK"),
+                    power == null || toughness == null ? null : power + "/" + toughness, "PRINTED MOCK",
+                    version==2?CardCompactProfile.FromMetadata(Text(item["layout"]),Optional(values["type_line"])):null,
+                    version==2?Optional(values["loyalty"]):null,version==2?Optional(values["defense"]):null),
                     identity.MissingAsset ? null : art[identity.RenderedPrintingId]));
             }
             return new ArtworkFixture(cards, total);

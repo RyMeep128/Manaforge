@@ -100,6 +100,16 @@ namespace Manaforge.Play.Tests
             Assert.That(fixture.Cards.Count,Is.EqualTo(32));Assert.That(fixture.RawBytes,Is.EqualTo(4));
             Assert.That(fixture.Cards[0].Artwork,Is.SameAs(fixture.Cards[31].Artwork));
         }
+        [UnityTest]
+        public IEnumerator V2MetadataProducesACompactProfileAndPrintedBadgeWithoutChangingV1()
+        {
+            manifest["fixture_version"]=2;var card=manifest["cards"][0];card["layout"]="normal";
+            card["mock_values"]["type_line"]="Planeswalker";card["mock_values"]["loyalty"]="3";card["mock_values"]["defense"]=JValue.CreateNull();
+            Publish();var loading=ArtworkFixture.LoadAsync(directory);var deadline=DateTime.UtcNow.AddSeconds(15);
+            while(!loading.IsCompleted && DateTime.UtcNow<deadline)yield return null;
+            Assert.That(loading.IsCompleted,Is.True);var values=loading.GetAwaiter().GetResult().Cards[0].MockValues;
+            Assert.That(values.CompactProfile.Kind,Is.EqualTo("Planeswalker"));Assert.That(values.Loyalty,Is.EqualTo("3"));Assert.That(values.Defense,Is.Null);
+        }
         [TestCase("card_limit")]
         [TestCase("live")]
         [TestCase("path")]

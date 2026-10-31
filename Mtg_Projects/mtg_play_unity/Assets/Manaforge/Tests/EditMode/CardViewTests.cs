@@ -82,6 +82,46 @@ namespace Manaforge.Play.Tests
             Assert.That(view.Q<VisualElement>("printed-stats-mask").style.display.value,Is.EqualTo(DisplayStyle.None));
             Assert.That(view.Q<Image>("printing-frame").style.display.value,Is.EqualTo(DisplayStyle.None));
         }
+        [TestCase("normal","Legendary Planeswalker — Jace")]
+        [TestCase("saga","Enchantment — Saga")]
+        [TestCase("transform","Battle — Siege")]
+        [TestCase("token","Token Creature — Soldier")]
+        [TestCase("split","Instant // Instant")]
+        [TestCase("split","Enchantment — Room")]
+        [TestCase("class","Enchantment — Class")]
+        [TestCase("modal_dfc","Land")]
+        [TestCase("prototype","Artifact Creature")]
+        [TestCase("meld","Creature")]
+        [TestCase("vanguard","Vanguard")]
+        public void KnownSpecializedProfilesUseMiniArtAndNameButKeepFullInspection(string layout,string typeLine)
+        {
+            view.Bind(Identity(false),texture,new Rect(0,0,1,1));
+            view.UpdateValues(new CardDisplayValues("Mini",null,typeLine,null,null,null,CardCompactProfile.FromMetadata(layout,typeLine)));
+            view.SetPresentation(CardPresentationMode.Compact,160);
+            Assert.That(view.Q<Label>("name").style.display.value,Is.EqualTo(DisplayStyle.Flex));
+            Assert.That(view.Q<Image>("artwork").uv,Is.Not.EqualTo(new Rect(0,0,1,1)));
+            Assert.That(view.Q<Label>("rules").style.display.value,Is.EqualTo(DisplayStyle.None));
+            view.SetPresentation(CardPresentationMode.Full,300);
+            Assert.That(view.Q<Image>("artwork").uv,Is.EqualTo(new Rect(0,0,1,1)));
+            Assert.That(view.Q<Label>("name").style.display.value,Is.EqualTo(DisplayStyle.None));
+        }
+        [Test] public void LoyaltyBadgeUpdatesWithoutInventingAMissingValue()
+        {
+            view.Bind(Identity(false),texture,new Rect(0,0,1,1));var profile=CardCompactProfile.FromMetadata("normal","Planeswalker");
+            foreach(var loyalty in new string[]{"3","5",null}) {
+                view.UpdateValues(new CardDisplayValues("PW",null,"Planeswalker",null,null,null,profile,loyalty));
+                Assert.That(view.Q<Label>("stats").text,Is.EqualTo(loyalty==null?"":"L "+loyalty));
+                Assert.That(view.Q<CardPlate>("pt-plate").style.display.value,Is.EqualTo(loyalty==null?DisplayStyle.None:DisplayStyle.Flex));
+            }
+        }
+        [Test] public void SplitMinisBorrowOnePrintingForBothArtPanesAndClearBoth()
+        {
+            view.Bind(Identity(false),texture,new Rect(0,0,1,1));
+            view.UpdateValues(new CardDisplayValues("Split",null,"Instant",null,null,null,CardCompactProfile.FromMetadata("split","Instant")));
+            Assert.That(view.Q<VisualElement>("second-art-window").style.display.value,Is.EqualTo(DisplayStyle.Flex));
+            Assert.That(view.Q<Image>("second-artwork").image,Is.SameAs(view.Artwork));
+            view.Conceal();Assert.That(view.Q<Image>("second-artwork").image,Is.Null);
+        }
         [Test] public void LandscapePrintingInspectionPreservesItsAspectRatio()
         {
             var landscape=new Texture2D(8,4);

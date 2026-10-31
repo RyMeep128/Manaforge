@@ -412,3 +412,19 @@ rules text. Unknown notation stays literal and supplied text cannot inject rich
 text. Current printing identities, authentic fallback images and game protocol
 are unchanged. The dedicated four-card review fixture requires owner visual
 approval; this does not establish live mana payment or activated-ability support.
+
+
+## Specialized compact views — October 30, 2026
+
+Owner feedback expanded the earlier image-fallback increment into actual
+[compact profiles](play-layout-gallery.md#compact-layout-follow-up--october-30-2026).
+The gallery now supplies layout metadata, nullable loyalty and defense, and draws
+cropped art with independent names/badges for specialized layouts. Split art panes
+share their source texture; Battle/Room/plane views support reading rotation.
+Specialized full inspection remains an authentic printing. This is not completed
+full-frame dynamic text/ability reconstruction or live engine integration.
+
+The small-card surround is currently a common bevel with per-family art crops,
+not an import of every supplied Arena frame variant. Saga progress is not guessed.
+Source/runtime ownership and concealed clearing remain intact. Fresh owner visual
+review is required before accepting these layouts or art-focus choices.

@@ -11,14 +11,20 @@ transforming creature front/back, modal DFC front/back, split, Adventure, level-
 Class, Case, Room, prototype, mutate, meld parts/result, dungeon, plane, scheme and
 Vanguard. These are representative cases, not coverage of every Magic printing.
 
-Specialized cards use complete authentic images in both compact and full views,
-with no ordinary-frame overlays, art-only crop or fabricated P/T/rules boxes.
-Full inspection preserves source-image aspect ratio; compact thumbnails letterbox
-inside the existing board slot. The Inspect dropdown provides access to entries
-beyond the first 20 grid slots. Printed loyalty, chapter, defense, token and
-emblem information is preserved in the source image, not presented as mutable
-current engine state. Catalog scanning orientation is retained; dedicated Battle/
-plane orientation and dynamic frame profiles remain future work.
+The updated version-2 gallery now uses actual compact battlefield profiles for
+recognized layouts: cropped illustrations, independent framed names, kind labels
+and supplied P/T, loyalty or defense badges. Split cards use two art panes from
+one borrowed printing texture. Room/Battle/plane profiles rotate their artwork and
+full inspection for reading. The ordinary-card renderer and unknown-layout image
+fallback remain available. Full specialized inspection still uses the authentic
+printing, so printed ability rows and chapter text are preserved rather than
+pretended to be dynamic components.
+
+Loyalty and defense in this gallery are explicitly printed-reference mock values;
+only supplied values render. Saga chapter/lore progress is not inferred from
+rules text. Future live projections must supply engine-authoritative current
+values. Per-family crops are initial geometry profiles reviewed on these gallery
+printings, not guaranteed art-focus coordinates for every alternate printing.
 
 Normal-layout planeswalkers and auxiliary types are now conservatively excluded
 from the ordinary 2015-frame reconstruction policy. No card text is interpreted
@@ -46,7 +52,7 @@ For manual review from the repository folder:
 
 ```powershell
 $project = (Resolve-Path "Mtg_Projects/mtg_play_unity").Path
-& "$project/Builds/Windows/ManaforgePlay.exe" -manaforgeArtworkFixture "$project/Artifacts/LayoutGallery-20261030-complete"
+& "$project/Builds/Windows/ManaforgePlay.exe" -manaforgeArtworkFixture "$project/Artifacts/CompactLayoutGallery-20261030"
 ```
 
 Use Inspect to review every face, particularly planeswalker loyalty boxes, Saga
@@ -68,3 +74,26 @@ gallery smoke. The capture was inspected for complete specialized printings and
 readable full-card inspection. No full application suite ran. Owner visual review
 is pending. CI checking is due after the next commit under the third-commit
 cadence; no new CI pass is claimed for this increment.
+
+
+## Compact-layout follow-up — October 30, 2026
+
+The owner correctly identified the first gallery as printing thumbnails rather
+than mini cards. The v2 fixture now carries printing layout plus nullable printed
+loyalty/defense, while v1 remains loadable with its prior fallback. This changes
+only the local diagnostic fixture, not the public Java/C# game protocol. Original
+v1 bundles must be regenerated to opt into the explicit compact metadata.
+
+Reproduce with --preset layouts as above, using a fresh output directory. The
+current local review bundle is `Artifacts/CompactLayoutGallery-20261030` (25 faces,
+25 shared textures). Full inspection and minis remain separate modes; names and
+numeric badges are independent of artwork. Unknown fields do not receive default
+values. Missing/faulted artwork and viewer concealment retain existing behavior.
+
+
+Compact follow-up validation passed: 268 focused Unity EditMode checks, five
+PlayMode checks, 50 focused Python catalog/export checks, Ruff, the Windows build
+and the 20-object packaged compact-gallery smoke. Captures were inspected for
+cropped minis, nameplates, badge values and split panes; owner visual approval is
+still pending. No full application suite ran. CI checking is due after two more
+commits under the owner's third-commit cadence; no new CI pass is claimed here.
