@@ -39,7 +39,8 @@ refers only to those owned managed/transport resources, not processes, descendan
 containment, transferred updates, or deferred Unity texture destruction. The
 receiver captures command uncertainty/result/receipt evidence before the host
 disposes the channel. Parent code must await Completion away from the UI thread
-and separately manage its pipe, artwork jobs/workspace and process containment.
+and separately manage its pipe, workspace deletion and process containment.
+At 0.5.99 the host also owns retirement of its sidecar artwork jobs/index.
 
 Ordered notifications remain available through TryTake for a worker consumer,
 which owns/disposes transferred updates and builds future choice/event UI models.
@@ -47,10 +48,12 @@ The host never silently drains/discards this queue while active. Failure to cons
 it eventually reaches the existing explicit queue limit and revokes the session.
 Only card snapshots coalesce in the rendering mailbox.
 
-Current limits: this host does not load bootstrap artwork sidecars or submit game
-commands yet. Engine fields and unavailable-artwork/rules placeholders use the
-existing shared renderer. Core provider mounting and full decision/event UI follow
-separately. The existing read API has a maximum/default 60-second per-read budget;
+At 0.5.99 the [artwork lifetime integration](play-host-artwork-lifecycle.md) adds
+optional pinned standard single-face sidecars after authentication, and waits for
+its jobs before disposing their index. The parent still owns workspace deletion
+and the UI must clear GPU resources through Tick/Dispose. Game commands and full
+decision/event UI remain unmounted; unavailable fields retain explicit placeholders.
+The existing read API has a maximum/default 60-second per-read budget;
 real-session idle/heartbeat policy is not accepted yet, and read timeouts are not
 automatically retried. There is no reconnection, automatic play or inferred legality.
 

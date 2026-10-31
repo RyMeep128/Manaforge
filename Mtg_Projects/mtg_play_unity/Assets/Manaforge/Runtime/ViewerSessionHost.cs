@@ -17,7 +17,8 @@ namespace Manaforge.Play
         private readonly ViewerCardSurface surface;private readonly ViewerSurfaceTicket ticket;private readonly ViewerBootstrap bootstrap;
         private readonly Task ownerEnded;private readonly CancellationTokenSource cancellation=new CancellationTokenSource();
         private readonly CancellationToken token;private readonly TaskCompletionSource<ViewerHostStop> completion=new TaskCompletionSource<ViewerHostStop>(TaskCreationOptions.RunContinuationsAsynchronously);
-        private ViewerSessionReceiver receiver;private ClientSessionChannel channel;private bool stopped,disposed;private string stopCode;
+        private ViewerSessionReceiver receiver;private ClientSessionChannel channel;private CoreArtworkBundle artwork;private ViewerArtworkJobs artworkJobs;
+        private bool stopped,disposed;private string stopCode;
         public Task<ViewerHostStop> Completion=>completion.Task;
         public bool Authenticated {get{lock(gate)return !stopped && channel!=null;}}
         // Bootstrap ownership transfers only after BeginViewer succeeds. Parent owns its pipe/lifeline task.
@@ -33,10 +34,15 @@ namespace Manaforge.Play
         }
         private async Task Run(bool fixtureMode,int connectionMilliseconds,int readMilliseconds)
         {
-            ClientSessionChannel opened=null;ViewerSessionStop summary=null;bool cleanup=true;
+            ClientSessionChannel opened=null;CoreArtworkBundle loaded=null;ViewerSessionStop summary=null;bool cleanup=true;
             try {
                 opened=await ViewerSessionConnection.OpenAsync(bootstrap,connectionMilliseconds,token,fixtureMode).ConfigureAwait(false);
-                lock(gate){if(stopped)return;channel=opened;receiver=new ViewerSessionReceiver(channel,ticket,fixtureMode);}
+                lock(gate){if(stopped)return;channel=opened;}
+                if(bootstrap.ArtworkDirectory!=null) {
+                    try{loaded=await CoreArtworkBundle.OpenAsync(bootstrap.ArtworkDirectory,bootstrap.ArtworkManifestSha256,bootstrap.SessionId,bootstrap.ViewerId,token).ConfigureAwait(false);}
+                    catch{Stop("VIEWER_ARTWORK_FAILED");return;}
+                }
+                lock(gate){if(stopped)return;artwork=loaded;receiver=new ViewerSessionReceiver(channel,ticket,fixtureMode);}
                 while(receiver.ReceiveOnce(readMilliseconds,token)){}
                 Stop("VIEWER_RECEIVE_ENDED");
             }
@@ -44,6 +50,9 @@ namespace Manaforge.Play
             finally {
                 Stop("VIEWER_HOST_ENDED");
                 if(receiver!=null)summary=await receiver.Completion.ConfigureAwait(false);
+                ViewerArtworkJobs jobs;lock(gate)jobs=artworkJobs;
+                if(jobs!=null)await jobs.Completion.ConfigureAwait(false);
+                try{loaded?.Dispose();}catch{cleanup=false;}
                 try{opened?.Dispose();}catch{cleanup=false;}
                 try{bootstrap.Dispose();cancellation.Dispose();}catch{cleanup=false;}
                 completion.TrySetResult(new ViewerHostStop(stopCode,summary,cleanup));
@@ -51,9 +60,9 @@ namespace Manaforge.Play
         }
         private void Stop(string code)
         {
-            ViewerSessionReceiver active;ClientSessionChannel connected;
-            lock(gate){if(stopped)return;stopped=true;stopCode=code;ticket.Mailbox.Dispose();active=receiver;connected=channel;}
-            active?.Cancel();connected?.Cancel();try{cancellation.Cancel();}catch(ObjectDisposedException){}
+            ViewerSessionReceiver active;ClientSessionChannel connected;ViewerArtworkJobs jobs;
+            lock(gate){if(stopped)return;stopped=true;stopCode=code;ticket.Mailbox.Dispose();active=receiver;connected=channel;jobs=artworkJobs;}
+            active?.Cancel();connected?.Cancel();jobs?.Dispose();try{cancellation.Cancel();}catch(ObjectDisposedException){}
         }
         public bool TryTake(out ViewerSessionUpdate update)
         {lock(gate){update=null;return !stopped && receiver!=null && receiver.TryTake(out update);}}
@@ -61,7 +70,13 @@ namespace Manaforge.Play
         public int Tick(int maximumArtworkUploads=2,int maximumArtworkRequests=4)
         {
             ThreadOnly();if(disposed)return 0;
-            if(ownerEnded.IsCompleted)Stop("VIEWER_OWNER_ENDED");return surface.Pump(ticket,maximumArtworkUploads,maximumArtworkRequests);
+            if(maximumArtworkUploads<0 || maximumArtworkUploads>16)throw new ArgumentOutOfRangeException(nameof(maximumArtworkUploads));
+            if(maximumArtworkRequests<0 || maximumArtworkRequests>16)throw new ArgumentOutOfRangeException(nameof(maximumArtworkRequests));
+            if(ownerEnded.IsCompleted)Stop("VIEWER_OWNER_ENDED");
+            if(ticket.Mailbox.IsStopped)Stop("VIEWER_EPOCH_REVOKED");
+            try{lock(gate){if(!stopped && artwork!=null && artworkJobs==null)artworkJobs=surface.CreateArtworkJobs(ticket,artwork.LoadAsync);}}
+            catch{Stop("VIEWER_ARTWORK_MOUNT_FAILED");}
+            return surface.Pump(ticket,maximumArtworkUploads,maximumArtworkRequests);
         }
         // Inspection is presentation-only; no action/decision token is fabricated or submitted.
         public bool Inspect(string objectId)

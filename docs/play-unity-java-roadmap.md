@@ -827,3 +827,15 @@ proof passed; connected/cleared captures were inspected. Both roots exited 0
 without force. Owner UI review is now required before treating this fixture UX
 as accepted. Product launch, real engine play, full decisions, artwork binding,
 OS containment and G0/G1 remain open. Existing gallery and Qt Play are preserved.
+
+### G1/P3 authenticated host artwork lifetime
+
+The [host sidecar integration](play-host-artwork-lifecycle.md) now opens matching
+pinned Core artwork after peer authentication, mounts its bounded jobs on the UI
+thread, and awaits their retirement before index/channel cleanup. Wrong manifest
+context/pins fail closed; missing/corrupt pixels remain unavailable. Hidden objects
+and replacement epochs retain their existing permission/cache boundaries. Local
+evidence: 56 graphics-enabled PlayMode checks passed with no skips. The packaged
+fixture layout and pending owner review are unchanged; product artwork wiring,
+specialized faces, real gameplay, OS containment and G0/G1 remain open. CI is
+checked at this third-commit checkpoint without waiting for unfinished runs.

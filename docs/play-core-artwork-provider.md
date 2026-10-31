@@ -61,3 +61,7 @@ commit, next at 0.5.90. Public fixture UI is unchanged; no owner UI review neede
 The subsequent [presentation pump](play-presentation-pump.md) provides bounded
 per-update snapshot, texture-upload and artwork-admission coordination. The
 product host still needs private bootstrap and actual scene mounting.
+
+The subsequent [authenticated host integration](play-host-artwork-lifecycle.md)
+now opens a matching optional sidecar after peer proof and owns its artwork job
+retirement/index disposal. Product/fixture artwork scene wiring remains pending.
