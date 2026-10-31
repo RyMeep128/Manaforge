@@ -47,7 +47,7 @@ namespace Manaforge.Play.Tests
             Assert.That(ticket.Mailbox.MinimumRevision,Is.EqualTo(8));
             var result=(JObject)corpus["positive"][5]["envelope"].DeepClone();result["message_id"]="result";result["body"]["snapshot"]["session_id"]="fixture-session";result["body"]["snapshot"]["revision"]=9;pair.Send(result);yield return Read(receiver);
             Assert.That(receiver.Count,Is.EqualTo(3));surface.Pump(ticket);
-            foreach(string type in new[]{"snapshot","event","result"}){Assert.That(receiver.TryTake(out var update),Is.True);using(update){Assert.That(update.Receive.Type,Is.EqualTo(type));Assert.That(update.Packet.ReadJson(),Is.Not.Empty);}}
+            foreach(string type in new[]{"snapshot","event","result"}){Assert.That(receiver.TryTake(out var update),Is.True);using(update){Assert.That(update.Receive.Type,Is.EqualTo(type));Assert.That(update.Packet.ReadJson(),Is.Not.Empty);if(type=="event")Assert.That(update.Decision,Is.Null);else Assert.That(update.Decision.Context.ViewerId,Is.EqualTo("one"));}Assert.That(update.Decision,Is.Null);}
             var shutdown=Task.Run(()=>pair.Channel.RequestShutdown("client_close"));yield return Until(()=>shutdown.IsCompleted);shutdown.GetAwaiter().GetResult();var reply=WireMessages.Parse(TextFrame.Read(pair.Peer.GetStream()));pair.Send(reply);yield return Read(receiver,ok=>Assert.That(ok,Is.False));yield return Until(()=>receiver.Completion.IsCompleted);
             Assert.That(receiver.Completion.Result.Graceful,Is.True);Assert.That(receiver.Completion.Result.Outcome.Context.Revision,Is.EqualTo(9));Assert.That(receiver.Completion.Result.Outcome.Status,Is.EqualTo((string)result["body"]["snapshot"]["status"]));Assert.That(receiver.Count,Is.Zero);surface.Pump(ticket);Assert.That(surface.CardsRoot.childCount,Is.Zero);
         }
@@ -92,7 +92,7 @@ namespace Manaforge.Play.Tests
                 pair.Send(new JObject{["wire_version"]=1,["message_type"]="ack",["message_id"]="ack-"+outcome,["body"]=new JObject{["session_id"]="fixture-session",["viewer_id"]="one",["command_id"]="c1",["request_revision"]=7,["outcome"]=outcome,["code"]=JValue.CreateNull()}});yield return Read(receiver);
             }
             Assert.That(receiver.Count,Is.EqualTo(2));Assert.That(receiver.QueuedBytes,Is.Zero);
-            foreach(var state in new[]{CommandState.Submitted,CommandState.Confirmed}){Assert.That(receiver.TryTake(out var update),Is.True);using(update){Assert.That(update.Receive.Receipt.State,Is.EqualTo(state));Assert.That(update.Packet,Is.Null);}}
+            foreach(var state in new[]{CommandState.Submitted,CommandState.Confirmed}){Assert.That(receiver.TryTake(out var update),Is.True);using(update){Assert.That(update.Receive.Receipt.State,Is.EqualTo(state));Assert.That(update.Packet,Is.Null);Assert.That(update.Decision,Is.Null);}}
             receiver.Cancel();yield return Until(()=>receiver.Completion.IsCompleted);Assert.That(receiver.Completion.Result.Pending,Is.Null);Assert.That(receiver.Completion.Result.LastReceipt.State,Is.EqualTo(CommandState.Confirmed));
         }
         [UnityTest] public IEnumerator ConcurrentReceiveAttemptsRevokeAndReleaseTheFirstReader()

@@ -10,9 +10,11 @@ namespace Manaforge.Play
     public sealed class ViewerSessionUpdate : IDisposable
     {
         public ClientReceive Receive {get;} public ReceivePacket Packet {get;}
+        private ProjectedDecisionFrame decision;
+        public ProjectedDecisionFrame Decision=>Volatile.Read(ref decision);
         public int ByteCount=>Packet?.ByteCount??0;
-        internal ViewerSessionUpdate(ClientReceive receive,ReceivePacket packet){Receive=receive;Packet=packet;}
-        public void Dispose(){Packet?.Dispose();}
+        internal ViewerSessionUpdate(ClientReceive receive,ReceivePacket packet,ProjectedDecisionFrame decision=null){Receive=receive;Packet=packet;this.decision=decision;}
+        public void Dispose(){Interlocked.Exchange(ref decision,null);Packet?.Dispose();}
     }
     public sealed class ViewerSessionOutcome
     {
@@ -73,14 +75,14 @@ namespace Manaforge.Play
                 if(ticket.Mailbox.IsStopped){Stop("VIEWER_REVOKED");return false;}
                 var received=channel.ReceiveNext(milliseconds,cancellation);
                 if(channel.State!=ClientChannelState.Active){Stop("VIEWER_CHANNEL_STOPPED",channel.Completion.Result.Graceful);return false;}
-                ProjectedCardFrame frame=null;long? minimum=null;
+                ProjectedCardFrame frame=null;ProjectedDecisionFrame decisions=null;long? minimum=null;
                 if(received.Applied && (received.Type=="snapshot" || received.Type=="event" || received.Type=="result")) {
                     if(!channel.TryTake(out packet))throw new InvalidOperationException();
                     string text=packet.ReadJson();
                     if(received.Type=="event")minimum=(long)ReceiveMessages.Parse(text,ticket.SessionId,ticket.ViewerId,0,fixtureMode)["body"]["event"]["revision"];
-                    else frame=ViewerCardProjection.ParseSnapshot(text,ticket.SessionId,ticket.ViewerId,0,fixtureMode);
+                    else {var snapshot=ViewerCardProjection.ValidateSnapshot(text,ticket.SessionId,ticket.ViewerId,0,fixtureMode);frame=new ProjectedCardFrame(snapshot);decisions=ViewerDecisionProjection.Project(snapshot);}
                 }
-                update=new ViewerSessionUpdate(received,packet);packet=null;
+                update=new ViewerSessionUpdate(received,packet,decisions);packet=null;
                 lock(gate) {
                     if(stopped || ticket.Mailbox.IsStopped){Stop("VIEWER_REVOKED");return false;}
                     if(received.Receipt!=null)lastReceipt=received.Receipt;

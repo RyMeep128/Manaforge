@@ -839,3 +839,14 @@ evidence: 56 graphics-enabled PlayMode checks passed with no skips. The packaged
 fixture layout and pending owner review are unchanged; product artwork wiring,
 specialized faces, real gameplay, OS containment and G0/G1 remain open. CI is
 checked at this third-commit checkpoint without waiting for unfinished runs.
+
+### P3.4 immutable decision-data boundary
+
+The [decision projection](play-viewer-decisions.md) now carries exact viewer-scoped
+engine actions, choice tokens, prompts, flags and numeric constraints as immutable
+data. It shares receive validation with cards, preserves unknown/null values and
+adds no legality inference or default submission. The ordered receiver carries
+typed decision frames on applied snapshots/results and releases references on
+update disposal. Local evidence: 361 EditMode and 56 graphics-enabled PlayMode
+checks passed without graphics skips. No new controls or visible fixture changes;
+scoped UI binding, command submission, owner UI review and G0/G1 remain pending.

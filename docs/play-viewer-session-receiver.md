@@ -24,8 +24,9 @@ Every receive notification is also retained in a bounded ordered queue, includin
 events, results, duplicate indications and command receipts. Packet ownership
 transfers from the channel inbox without copying another byte buffer. TryTake
 transfers a ViewerSessionUpdate to a worker consumer, which must Dispose it.
-That worker must build suitable immutable choice/event UI projections before any
-scene use. Receipt-only updates have no packet; their immutable tracked receipt
+The [decision projection](play-viewer-decisions.md) now accompanies applied
+snapshots/results; event UI projection remains separate work. Raw packets stay
+worker-only before any scene use. Receipt-only updates have no packet; their immutable tracked receipt
 preserves submitted/confirmed/rejected/uncertain distinctions. These notifications
 are not coalesced or silently dropped while the receiver is active.
 

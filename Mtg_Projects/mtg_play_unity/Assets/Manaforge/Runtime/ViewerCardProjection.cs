@@ -86,14 +86,17 @@ namespace Manaforge.Play
         // Worker-side boundary. No file IO, Unity APIs, artwork lookup, logging or mutable JSON escapes.
         // Caller supplies authenticated context and monotonic minimum revision; history remains owned by the channel.
         public static ProjectedCardFrame ParseSnapshot(string text,string session,string viewer,long minimumRevision,bool fixtureMode=false)
+            =>new ProjectedCardFrame(ValidateSnapshot(text,session,viewer,minimumRevision,fixtureMode));
+        // Worker-only shared validation; mutable intermediate never leaves projection/receive internals.
+        internal static JObject ValidateSnapshot(string text,string session,string viewer,long minimumRevision,bool fixtureMode)
         {
             if(string.IsNullOrWhiteSpace(session) || string.IsNullOrWhiteSpace(viewer) || minimumRevision<0)
                 throw new WireEnvelope.EnvelopeException("PROJECTION_CONTEXT");
             var envelope=ReceiveMessages.Parse(text,session,viewer,minimumRevision,fixtureMode);
             if((string)envelope["message_type"]=="event")throw new WireEnvelope.EnvelopeException("PROJECTION_SNAPSHOT_REQUIRED");
-            var snapshot=envelope["body"]["snapshot"];
+            var snapshot=(JObject)envelope["body"]["snapshot"];
             if(((JArray)snapshot["objects"]).Count>MaximumObjects)throw new WireEnvelope.EnvelopeException("PROJECTION_OBJECT_LIMIT");
-            return new ProjectedCardFrame(snapshot);
+            return snapshot;
         }
     }
 }
