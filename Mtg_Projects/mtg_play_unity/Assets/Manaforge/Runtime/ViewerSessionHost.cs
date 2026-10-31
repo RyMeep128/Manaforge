@@ -84,6 +84,13 @@ namespace Manaforge.Play
         {
             get {ThreadOnly();if(disposed)return null;var offer=CurrentDecision;var frame=offer?.Frame;return frame!=null && surface.HasPresentedFrame(ticket,frame.Context.Revision)?offer:null;}
         }
+        internal TrackedCommand CommandFeedback(ViewerDecisionOffer supplied,TrackedCommand submission)
+        {
+            ThreadOnly();if(supplied==null || submission==null || !ReferenceEquals(PresentedDecision,supplied))return null;
+            var frame=supplied.Frame;if(frame==null || submission.RequestRevision!=frame.Context.Revision || submission.DecisionId!=frame.Decision.DecisionId)return null;
+            TrackedCommand feedback;lock(gate)feedback=!stopped?channel?.FindCommand(submission.CommandId):null;
+            return feedback!=null && feedback.RequestRevision==submission.RequestRevision && feedback.DecisionId==submission.DecisionId && ReferenceEquals(PresentedDecision,supplied)?feedback:null;
+        }
         public bool TryTake(out ViewerSessionUpdate update)
         {lock(gate){update=null;return !stopped && receiver!=null && receiver.TryTake(out update);}}
         private void ThreadOnly(){if(Thread.CurrentThread.ManagedThreadId!=thread)throw new InvalidOperationException("VIEWER_HOST_THREAD");}

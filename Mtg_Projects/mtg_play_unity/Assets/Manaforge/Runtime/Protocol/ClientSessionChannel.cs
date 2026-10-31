@@ -52,6 +52,8 @@ namespace Manaforge.Play.Protocol
         public string ViewerId=>viewer;
         public Task<ClientChannelStop> Completion=>completion.Task;
         public TrackedCommand Pending {get{lock(gate)return commands.Current;}}
+        internal TrackedCommand FindCommand(string commandId)
+        {lock(gate)return state==ClientChannelState.Active?commands.Find(commandId):null;}
         public int QueuedCount {get{lock(gate)return inbox.Count;}}
         private bool DecisionAvailable()=>state==ClientChannelState.Active && !transport.IsClosed && !resultSeen && !shutdownRequested && !string.IsNullOrEmpty(decision);
         private bool CanSubmitLocked()=>DecisionAvailable() && (actions.Count>0 || options.Count>0 || canFinish || cancellable || (mana && objectIds.Count>0) || (numeric?.Available ?? false)) && commands.CanSubmit;

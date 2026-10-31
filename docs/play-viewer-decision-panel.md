@@ -1,6 +1,6 @@
 # Viewer decision panel
 
-Status: reusable presentation component through 0.5.106-alpha.1. Not mounted in the
+Status: reusable presentation component through 0.5.107-alpha.1. Not mounted in the
 product launcher or packaged session fixture. Owner visual review is pending.
 
 ViewerDecisionPanel renders the engine prompt and exact action/option labels,
@@ -20,10 +20,12 @@ The application must continue pumping or dispose the panel on close; it cannot
 promise UI-thread destruction while the application stops pumping.
 
 Clicks recheck the presented offer and use the existing bound dispatcher. A
-pending task disables the decision controls. Local write success says only
-"Command sent. Waiting for gateway state." It is not displayed as confirmed,
-submitted or a game result. The panel does not consume the ordered receive queue,
-interpret ACKs, retry uncertainty or choose strategic actions. A retired task's
+pending task disables the decision controls. Local write success alone says only
+"Command sent. Waiting for gateway state." Typed receipt feedback from its own
+host can subsequently distinguish submitted, confirmed, rejected or uncertain.
+These labels report gateway command status, not a game result. The panel does
+not consume the ordered receive queue, parse ACKs, retry uncertainty or choose
+strategic actions. A retired task's
 exception is observed without a worker touching Unity UI. Disposing the panel
 removes its subtree; host/process ownership remains with the existing owner.
 
@@ -69,3 +71,34 @@ application suite, EditMode rerun or packaged build was needed for this UI-only
 increment. Owner review remains pending and the panel stays unmounted in existing
 scenes. CI is next checked at 0.5.108 under the third-commit cadence; no new CI
 success is inferred from these local results.
+
+Receipt-feedback follow-up (0.5.107): CommandTracker.Find returns an immutable
+snapshot of a record already owned by that authenticated tracker. Unknown IDs or
+disposed history return null. Observation never advances a receipt, releases a
+pending command or performs IO. The channel exposes that lookup internally only
+while active. The host additionally requires the exact currently presented offer
+and matching revision/decision metadata before returning its own command record.
+A caller-supplied receipt never becomes the source of displayed confirmation.
+
+The panel retains the locally returned submission only for its current offer.
+It samples the latest validated tracker state, which is updated by the existing
+ordered receive worker. Intermediate states may pass between rendered frames;
+the ordered notification queue remains intact for its separate owner to consume.
+A repeated receipt for an old command cannot overwrite a new command's display.
+A new offer, owner loss or surface epoch replacement drops cached feedback. No
+receipt history is shown after revocation; stopped-session uncertainty remains
+in the existing host stop summary for a future recovery view.
+
+Submitted remains disabled while waiting for confirmation. An explicit uncertain
+receipt says "Command outcome is uncertain. Do not retry." and leaves submission
+blocked. Gateway-confirmed/rejected terminal receipts retain the existing channel
+availability behavior; they do not invent a new decision or automatically play.
+
+Receipt feedback evidence: Java preflight, 366 EditMode and 93 graphics-enabled
+PlayMode checks passed without skips. Two new tracker checks verify immutable,
+non-mutating lookups and old-terminal isolation. Four new authenticated-loopback
+panel checks verify submitted/confirmed distinctions even when ACKs precede UI
+polling, queue preservation, rejection and repeated-old-receipt isolation, late
+confirmation after a new decision, uncertain/late-submitted blocking, and owner
+loss cleanup. No full application suite or packaged build ran. CI is next checked
+at 0.5.108; product mounting and owner visual acceptance remain pending.

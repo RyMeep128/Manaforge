@@ -20,6 +20,7 @@ namespace Manaforge.Play
         private readonly VisualElement controls=new VisualElement{name="decision-controls"};
         private readonly VisualElement pages=new VisualElement{name="decision-pages"};
         private string[] numericText;private int numericPage;private Button numericSubmit;
+        private TrackedCommand submitted;
         private ViewerDecisionOffer offer;private int page;private bool disposed;private Task<TrackedCommand> pending;
         public ViewerDecisionPanel(VisualElement parent,ViewerSessionHost host)
         {
@@ -32,7 +33,7 @@ namespace Manaforge.Play
         private void ThreadOnly(){if(Thread.CurrentThread.ManagedThreadId!=thread)throw new InvalidOperationException("VIEWER_DECISION_THREAD");}
         private void Clear()
         {
-            offer=null;page=0;numericText=null;numericPage=0;numericSubmit=null;prompt.text="";status.text="";controls.Clear();pages.Clear();Root.style.display=DisplayStyle.None;
+            offer=null;submitted=null;page=0;numericText=null;numericPage=0;numericSubmit=null;prompt.text="";status.text="";controls.Clear();pages.Clear();Root.style.display=DisplayStyle.None;
             // Observe a retired task without carrying its result or touching UI from its worker.
             if(pending!=null)pending.ContinueWith(task=>{_=task.Exception;},TaskScheduler.Default);pending=null;
         }
@@ -42,9 +43,12 @@ namespace Manaforge.Play
             if(!ReferenceEquals(current,offer)){Clear();offer=current;if(offer!=null)Build();}
             if(offer==null)return;
             if(pending!=null && pending.IsCompleted){
+                if(pending.Status==TaskStatus.RanToCompletion)submitted=pending.Result;
                 var error=pending.Exception?.GetBaseException() as WireEnvelope.EnvelopeException;
                 status.text=error?.Code=="AMOUNT_OUT_OF_RANGE"?"Enter values within the displayed limits.":error?.Code=="SESSION_NUMERIC_UNAVAILABLE"?"Numeric limits are unavailable. Wait for gateway state.":pending.IsCanceled || pending.IsFaulted?"Command was not confirmed. Check the current decision.":"Command sent. Waiting for gateway state.";pending=null;
             }
+            var feedback=host.CommandFeedback(offer,submitted);
+            if(feedback!=null)status.text=FeedbackText(feedback.State);
             controls.SetEnabled(offer.CanSubmit && pending==null);
             numericSubmit?.SetEnabled(TryNumbers(out _,false));
             if(!offer.CanSubmit && pending==null && string.IsNullOrEmpty(status.text))status.text="Waiting for gateway state.";
@@ -52,7 +56,17 @@ namespace Manaforge.Play
         private void Send(ViewerDecisionOffer captured,Func<Task<TrackedCommand>> submit)
         {
             ThreadOnly();if(disposed || pending!=null || !ReferenceEquals(offer,captured) || !ReferenceEquals(host.PresentedDecision,captured) || !captured.CanSubmit)return;
-            pending=submit();status.text="Sending command...";controls.SetEnabled(false);
+            submitted=null;pending=submit();status.text="Sending command...";controls.SetEnabled(false);
+        }
+        private static string FeedbackText(CommandState state)
+        {
+            switch(state) {
+                case CommandState.Submitted:return "Gateway reports submitted. Waiting for confirmation.";
+                case CommandState.Confirmed:return "Gateway confirmed command. Waiting for updated state.";
+                case CommandState.Rejected:return "Gateway rejected command. Check the current decision.";
+                case CommandState.Uncertain:return "Command outcome is uncertain. Do not retry.";
+                default:return "Command sent. Waiting for gateway state.";
+            }
         }
         private static Button Button(string name,string text,Action click)
         {var button=new Button(click){name=name,text=text??"Unlabelled engine option"};foreach(var label in button.Query<TextElement>().ToList())label.enableRichText=false;button.enableRichText=false;button.style.fontSize=16;button.style.color=Color.white;button.style.backgroundColor=new Color(.18f,.24f,.30f);button.style.paddingTop=8;button.style.paddingBottom=8;button.style.marginBottom=4;return button;}

@@ -14,6 +14,14 @@ namespace Manaforge.Play.Tests
         private static string Ack(string outcome="submitted",string code=null,string id="c1",long revision=7,string viewer="one")=>new JObject
         { ["wire_version"]=1,["message_type"]="ack",["message_id"]="reply",["body"]=new JObject
           { ["session_id"]="session",["viewer_id"]=viewer,["command_id"]=id,["request_revision"]=revision,["outcome"]=outcome,["code"]=code==null?JValue.CreateNull():new JValue(code) } }.ToString();
+        [Test] public void ReceiptLookupIsReadOnlyAndRetainsImmutableSnapshots()
+        {
+            var tracker=new CommandTracker("session","one");tracker.Begin(Command());Assert.That(tracker.Find(null),Is.Null);Assert.That(tracker.Find("unknown"),Is.Null);var before=tracker.Find("c1");Assert.That(before.State,Is.EqualTo(CommandState.AwaitingAck));Assert.That(before.DecisionId,Is.EqualTo("decision"));tracker.Accept(Ack("confirmed"));Assert.That(tracker.Find("c1").State,Is.EqualTo(CommandState.Confirmed));Assert.That(before.State,Is.EqualTo(CommandState.AwaitingAck));tracker.Dispose();Assert.That(tracker.Find("c1"),Is.Null);
+        }
+        [Test] public void LookingUpAnOldTerminalReceiptCannotReleaseANewPendingCommand()
+        {
+            using var tracker=new CommandTracker("session","one");tracker.Begin(Command());tracker.Accept(Ack("confirmed"));tracker.Begin(Command("c2"));Assert.That(tracker.Find("c1").State,Is.EqualTo(CommandState.Confirmed));Assert.That(tracker.Current.CommandId,Is.EqualTo("c2"));Assert.That(tracker.CanSubmit,Is.False);tracker.Disconnect();Assert.That(tracker.Find("c2").State,Is.EqualTo(CommandState.Uncertain));
+        }
         [Test] public void SubmittedKeepsTheCommandPendingUntilCorrelatedTerminalReceipt()
         {
             using var tracker=new CommandTracker("session","one");var initial=tracker.Begin(Command());

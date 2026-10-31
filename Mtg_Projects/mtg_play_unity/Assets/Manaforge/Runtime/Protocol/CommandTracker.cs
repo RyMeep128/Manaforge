@@ -115,6 +115,9 @@ namespace Manaforge.Play.Protocol
                 return SessionErrors.Parse(text, session, viewer);
             }
         }
+        // Read-only observation of this authenticated tracker's own immutable receipt history.
+        public TrackedCommand Find(string commandId)
+        {lock(gate)return !disposed && commandId!=null && records.TryGetValue(commandId,out var record)?record.Snapshot():null;}
         public TrackedCommand Current { get { lock (gate) return active?.Snapshot(); } }
         public void Disconnect()
         { lock (gate) { Open(); connected = false; Uncertain(active); } }

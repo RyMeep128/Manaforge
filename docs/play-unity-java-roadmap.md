@@ -918,3 +918,17 @@ the offer and input is cleared at replacement/revocation. Local evidence: 89
 graphics-enabled PlayMode checks passed without skips, including five new real
 loopback UI scenarios and a synthetic capture. Numeric visual acceptance, mana
 widgets, ordered receipt UX, fixture mounting and real-engine gates remain open.
+
+### P3.4 scoped gateway command feedback
+
+The [decision panel](play-viewer-decision-panel.md) now distinguishes gateway
+submitted/confirmed/rejected/uncertain status for its own current command. It
+samples immutable records from the existing authenticated tracker, preserving
+the separate ordered receive queue. It neither promotes a socket write to
+confirmation nor applies an old command's receipt to a new offer. Revocation
+clears feedback; uncertain commands remain blocked without retry. This leaves
+product/fixture mounting, owner visual acceptance, recovery UI and engine gates open.
+
+Local receipt-feedback evidence: Java preflight, 366 EditMode and 93 graphics
+PlayMode checks passed without skips. Current CI status is not inferred; the next
+scheduled check is 0.5.108. Existing scenes remain unchanged.
