@@ -726,3 +726,14 @@ jobs/mailbox without a Python action loop. Initial support is standard normal
 single-face artwork. Local evidence: 20 Python, 321 EditMode and 32 graphics-enabled
 PlayMode checks passed. Product launch/scene mounting, specialized live face
 contracts, G0/G1 and P2 parity remain open. The public UI is unchanged.
+
+### G1/P3 bounded presentation pump
+
+The [viewer presentation pump](play-presentation-pump.md) now joins mailbox drain,
+bounded texture uploads and bounded artwork job admission in one per-update UI
+entry point. It keeps queue backpressure without replaying accepted failed work
+every frame, replaces pending requests on new snapshots, and preserves viewer
+revocation and the empty-frame barrier. Local evidence: 321 EditMode and 37
+graphics-enabled PlayMode checks passed with no graphics skips. This provides the host integration seam;
+private bootstrap, actual scene mounting, G0/G1 and P2 parity remain open. The
+public fixture is unchanged and needs no new owner UI review.

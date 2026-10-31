@@ -20,6 +20,7 @@ namespace Manaforge.Play
         private readonly Dictionary<string,CardView> views=new Dictionary<string,CardView>(StringComparer.Ordinal);
         private readonly Dictionary<string,ProjectedCard> cards=new Dictionary<string,ProjectedCard>(StringComparer.Ordinal);
         private readonly Dictionary<string,ViewerArtworkRequest> requests=new Dictionary<string,ViewerArtworkRequest>(StringComparer.Ordinal);
+        private readonly Queue<string> pendingArtwork=new Queue<string>();
         private readonly Dictionary<string,ArtworkBinding> artwork=new Dictionary<string,ArtworkBinding>(StringComparer.Ordinal);
         private string inspectedObject;
         private sealed class ArtworkBinding
@@ -53,7 +54,7 @@ namespace Manaforge.Play
         // Clear references before asking an explicitly transferred private resource scope to dispose.
         private void ClearOwnedState()
         {
-            ticket?.Mailbox.Dispose();artworkJobs?.Dispose();artworkJobs=null;ticket=null;revision=-1;cards.Clear();requests.Clear();artwork.Clear();inspectedObject=null;InspectionView.Conceal();
+            ticket?.Mailbox.Dispose();artworkJobs?.Dispose();artworkJobs=null;ticket=null;revision=-1;cards.Clear();requests.Clear();pendingArtwork.Clear();artwork.Clear();inspectedObject=null;InspectionView.Conceal();
             foreach(var view in views.Values)view.Dispose();views.Clear();CardsRoot.Clear();
             var assets=privateAssets;privateAssets=null;
             try{assets?.Dispose();}catch{privateAssets=assets;throw;}
@@ -83,7 +84,9 @@ namespace Manaforge.Play
         {
             Open();if(minimum<0)throw new ArgumentOutOfRangeException(nameof(minimum));
             if(ticket==null || !ReferenceEquals(ticket,supplied) || minimum<=minimumRevision)return false;
-            minimumRevision=minimum;requests.Clear();ticket.Mailbox.AdvanceMinimumRevision(minimum);return true;
+            minimumRevision=minimum;
+            if(revision<minimum){requests.Clear();pendingArtwork.Clear();}
+            ticket.Mailbox.AdvanceMinimumRevision(minimum);return true;
         }
         public bool ClearViewer(ViewerSurfaceTicket supplied)
         {
@@ -103,7 +106,7 @@ namespace Manaforge.Play
             // No wire decision/action IDs are stored here. Inspection never submits a game command.
             transitioning=true;
             try {
-                InspectionView.Conceal();inspectedObject=null;cards.Clear();requests.Clear();
+                InspectionView.Conceal();inspectedObject=null;cards.Clear();requests.Clear();pendingArtwork.Clear();
                 var present=new HashSet<string>(StringComparer.Ordinal);
                 foreach(var card in frame.Cards) {
                     present.Add(card.ObjectId);cards.Add(card.ObjectId,card);
@@ -115,6 +118,7 @@ namespace Manaforge.Play
                         || binding.Oracle!=card.Printing.OracleId || binding.Printing!=card.Printing.PrintingId))artwork.Remove(card.ObjectId);
                     view.SetPresentation(card.Zone=="battlefield"?CardPresentationMode.Compact:CardPresentationMode.Full,card.Zone=="battlefield"?160:220);
                     Bind(view,card);
+                    if(ArtworkPermitted(card) && !artwork.ContainsKey(card.ObjectId))pendingArtwork.Enqueue(card.ObjectId);
                 }
                 foreach(var id in new List<string>(views.Keys))if(!present.Contains(id)){views[id].Dispose();views.Remove(id);artwork.Remove(id);}
                 revision=frame.Context.Revision;ticket.Mailbox.ObserveAppliedFrame(revision);return true;
@@ -216,6 +220,24 @@ namespace Manaforge.Play
                 TryApplyArtwork(supplied,prepared);processed++;
             }
             if(mailbox.IsStopped)ClearViewer(supplied);
+            return processed;
+        }
+        // Product host's per-update entry point. Snapshot application always precedes job admission.
+        // Accepted jobs are attempted once per applied revision, including missing/failed/dropped results.
+        // Capacity refusal keeps the head for a later update; no frame scans or IO occur here.
+        public int Pump(ViewerSurfaceTicket supplied,int maximumArtworkUploads=2,int maximumArtworkRequests=4)
+        {
+            Open();
+            if(maximumArtworkUploads<0 || maximumArtworkUploads>16)throw new ArgumentOutOfRangeException(nameof(maximumArtworkUploads));
+            if(maximumArtworkRequests<0 || maximumArtworkRequests>16)throw new ArgumentOutOfRangeException(nameof(maximumArtworkRequests));
+            int processed=DrainMailbox(supplied,maximumArtworkUploads);
+            if(ticket==null || !ReferenceEquals(ticket,supplied) || artworkJobs==null || artworkJobs.IsStopped)return processed;
+            for(int i=0;i<maximumArtworkRequests && pendingArtwork.Count>0;i++) {
+                var request=RequestArtwork(supplied,pendingArtwork.Peek());
+                if(request==null){pendingArtwork.Dequeue();continue;}
+                if(!artworkJobs.TryQueue(request))break;
+                pendingArtwork.Dequeue();processed++;
+            }
             return processed;
         }
         public void Dispose()

@@ -57,3 +57,7 @@ locally. Installed-cache Grizzly Bears/Pacifism name lookups reported their exac
 selected printings unavailable, without fallback or downloads.
 No full application suite ran. CI review remains every third implementation
 commit, next at 0.5.90. Public fixture UI is unchanged; no owner UI review needed.
+
+The subsequent [presentation pump](play-presentation-pump.md) provides bounded
+per-update snapshot, texture-upload and artwork-admission coordination. The
+product host still needs private bootstrap and actual scene mounting.
