@@ -121,6 +121,7 @@ class LocalGameAdapter:
         self._payment_probe_counts = []
         self._payment_candidate_counts = []
         self._payment_ordinary_counts = []
+        self._payment_ticket_counts = []
         self._payment_hazard_counts = dict.fromkeys(("REQUIRES_MANUAL", "NO_REGISTERED_HAZARD", "UNKNOWN"), 0)
         self._payment_coverage_counts = dict.fromkeys(("COVERS", "INSUFFICIENT", "NO_UNPAID_COST", "UNSUPPORTED", "UNKNOWN"), 0)
         self._bundle, self._jdk = Path(bundle).resolve(), Path(jdk).resolve()
@@ -425,6 +426,9 @@ class LocalGameAdapter:
                         and type(abilities) is int and sources <= abilities <= sources * 128
                         and len(self._payment_candidate_counts) < 128):
                     self._payment_candidate_counts.append((sources, abilities))
+                    tickets = probe.get("source_tickets_revalidated")
+                    if type(tickets) is int and 0 <= tickets <= sources:
+                        self._payment_ticket_counts.append(tickets)
                     ordinary = probe.get("ordinary_shape_abilities")
                     if type(ordinary) is int and 0 <= ordinary <= abilities:
                         self._payment_ordinary_counts.append(ordinary)
@@ -435,6 +439,12 @@ class LocalGameAdapter:
                     if type(hazards) is str and hazards in self._payment_hazard_counts:
                         self._payment_hazard_counts[hazards] += 1
         return result
+
+    def payment_ticket_diagnostics(self):
+        """Aggregate identity-read evidence only; never exports native tickets or IDs."""
+        values = self._payment_ticket_counts
+        return dict(enabled=self._payment_context_probe, observations=len(values),
+                    maximum_revalidated=max(values, default=None))
 
     def payment_hazard_diagnostics(self):
         """Private research counters only; no registry contents or public failure reasons."""

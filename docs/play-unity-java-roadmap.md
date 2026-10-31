@@ -1075,3 +1075,12 @@ world registries and spent-color sensitivity are queried without simulating or
 activating anything. The private diagnostic exports fixed labels only. An empty
 screen is not safe source selection; strategic/source/plan identity and Java
 owner execution remain open, as do all existing acceptance gates.
+
+
+Payment increment 0.5.120 binds read-only source observations to the exact native
+payment frame, engine state, object/ability incarnation and source state, with
+fresh native legality checks before/after inspection. Live fixture identity
+revalidation passes while the hazard screen continues requiring manual review.
+Opaque weak-reference tickets stay server-only and confer no action permission.
+Safe plan/equivalent-source policy and serialized owner execution remain open;
+there is no production automatic payment or change to existing acceptance gates.

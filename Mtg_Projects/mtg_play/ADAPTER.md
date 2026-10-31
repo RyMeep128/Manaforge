@@ -311,3 +311,9 @@ records only bounded fixed private research labels. No registry contents or
 hazard reasons enter the public snapshot/client path. The real diagnostic fixture
 requires manual review despite sufficient base mana; no automatic source
 submission is enabled. See the payment coordinator evidence for precise limits.
+
+At 0.5.120 the opt-in native observer binds source-read tickets to the exact
+payment frame, state, incarnation and usable ability, rechecking before/after a
+trusted read. Python receives only bounded aggregate revalidation counts. Native
+tickets never leave the Java server, are not gameplay commands and do not grant
+source safety or single-use plan authority. Default payment remains unchanged.

@@ -694,6 +694,9 @@ def main():
                 result["payment_context_probe"] = adapter.payment_context_diagnostics()
                 result["payment_cost_coverage_probe"] = adapter.payment_cost_coverage_diagnostics()
                 result["payment_hazard_probe"] = adapter.payment_hazard_diagnostics()
+                result["payment_ticket_probe"] = adapter.payment_ticket_diagnostics()
+                if (result["payment_ticket_probe"]["maximum_revalidated"] or 0) < 2:
+                    raise AdapterError("NATIVE_SOURCE_TICKETS_NOT_REVALIDATED")
                 if not result["payment_hazard_probe"]["observations"]:
                     raise AdapterError("NATIVE_PAYMENT_HAZARDS_NOT_OBSERVED")
                 if not result["payment_cost_coverage_probe"]["observations"]:

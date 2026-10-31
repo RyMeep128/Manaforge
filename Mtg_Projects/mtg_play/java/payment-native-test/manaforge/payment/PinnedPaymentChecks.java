@@ -175,6 +175,68 @@ public final class PinnedPaymentChecks {
         card.getAbilities().clear();replace[0]=true;
         check(NativePaymentHazards.inspect(game,paying)==NativePaymentHazards.Result.UNKNOWN);
     }
+    private static void sourceTicketChecks() throws Exception {
+        ContextHumanPlayer player=new ContextHumanPlayer("Public fixture",RangeOfInfluence.ALL,0);
+        UUID source=UUID.randomUUID();UUID[] controller={player.getId()};boolean[] tapped={false},legal={true};
+        int[] transforms={0};
+        GreenManaAbility candidate=new GreenManaAbility(){@Override public mage.abilities.ActivatedAbility.ActivationStatus canActivate(UUID payer,mage.game.Game game){return mage.abilities.ActivatedAbility.ActivationStatus.withoutApprovingObject(legal[0]);}};
+        candidate.setControllerId(player.getId());candidate.setSourceId(source);
+        java.util.function.Supplier<mage.game.permanent.Permanent> make=()->(mage.game.permanent.Permanent)java.lang.reflect.Proxy.newProxyInstance(PinnedPaymentChecks.class.getClassLoader(),new Class<?>[]{mage.game.permanent.Permanent.class},(proxy,method,args)->{
+            switch(method.getName()) {
+                case "getId":return source;
+                case "getControllerId":return controller[0];
+                case "canUseActivatedAbilities":return true;
+                case "getAbilities":mage.abilities.AbilitiesImpl<Ability> abilities=new mage.abilities.AbilitiesImpl<>();abilities.add(candidate);return abilities;
+                case "isTapped":return tapped[0];
+                case "isPhasedIn":return true;
+                case "isFlipped":return false;
+                case "getTransformCount":return transforms[0];
+                default:throw new AssertionError("UNEXPECTED_TICKET_SOURCE_CALL_"+method.getName());
+            }
+        });
+        mage.game.permanent.Permanent[] permanent={make.get()};mage.game.GameState[] state={new mage.game.GameState()};
+        mage.game.Game game=(mage.game.Game)java.lang.reflect.Proxy.newProxyInstance(PinnedPaymentChecks.class.getClassLoader(),new Class<?>[]{mage.game.Game.class},(proxy,method,args)->{
+            switch(method.getName()) {
+                case "getPlayer":return player;
+                case "getPermanent":return source.equals(args[0])?permanent[0]:null;
+                case "getState":return state[0];
+                case "hasEnded":return false;
+                default:throw new AssertionError("UNEXPECTED_TICKET_GAME_CALL_"+method.getName());
+            }
+        });
+        java.lang.reflect.Field response=mage.player.human.HumanPlayer.class.getDeclaredField("response");response.setAccessible(true);
+        java.lang.reflect.Field open=mage.player.human.HumanPlayer.class.getDeclaredField("responseOpenedForAnswer");open.setAccessible(true);
+        java.lang.reflect.Field payment=ContextHumanPlayer.class.getDeclaredField("payment");payment.setAccessible(true);
+        java.lang.reflect.Constructor<?> frame=Class.forName("manaforge.payment.xmage.ContextHumanPlayer$Frame").getDeclaredConstructors()[0];frame.setAccessible(true);
+        Object originalFrame=frame.newInstance(game,new GreenManaAbility(),new ManaCostsImpl<>("{G}"),1L);
+        payment.set(player,originalFrame);open.set(player,true);player.setPayManaMode(true);
+        int cycle=state[0].getApplyEffectsCounter();int[] calls={0};
+        ContextHumanPlayer.SourceInspector<Boolean> read=(paying,unpaid,available)->{calls[0]++;return true;};
+        check(player.captureSourceTicket(game,player.getId(),cycle,source,candidate.getId())==null);
+        synchronized(response.get(player)) {
+            ContextHumanPlayer.SourceTicket ticket=player.captureSourceTicket(game,player.getId(),cycle,source,candidate.getId());check(ticket!=null);
+            check(ticket.toString().equals("NativeSourceTicket(private)"));
+            check(Boolean.TRUE.equals(player.inspectSourceTicket(game,player.getId(),cycle,ticket,read)));
+            check(player.inspectSourceTicket(game,UUID.randomUUID(),cycle,ticket,read)==null);
+            check(player.inspectSourceTicket(game,player.getId(),cycle+1,ticket,read)==null);
+            check(player.copy().inspectSourceTicket(game,player.getId(),cycle,ticket,read)==null);
+            tapped[0]=true;check(player.inspectSourceTicket(game,player.getId(),cycle,ticket,read)==null);tapped[0]=false;
+            controller[0]=UUID.randomUUID();check(player.inspectSourceTicket(game,player.getId(),cycle,ticket,read)==null);controller[0]=player.getId();
+            transforms[0]=1;check(player.inspectSourceTicket(game,player.getId(),cycle,ticket,read)==null);transforms[0]=0;
+            int incarnation=state[0].getZoneChangeCounter(source);state[0].setZoneChangeCounter(source,incarnation+1);check(player.inspectSourceTicket(game,player.getId(),cycle,ticket,read)==null);state[0].setZoneChangeCounter(source,incarnation);
+            mage.game.permanent.Permanent previous=permanent[0];permanent[0]=make.get();check(player.inspectSourceTicket(game,player.getId(),cycle,ticket,read)==null);permanent[0]=previous;
+            mage.game.GameState previousState=state[0];state[0]=new mage.game.GameState();check(player.inspectSourceTicket(game,player.getId(),cycle,ticket,read)==null);state[0]=previousState;
+            legal[0]=false;check(player.inspectSourceTicket(game,player.getId(),cycle,ticket,read)==null);legal[0]=true;
+            open.set(player,false);check(player.inspectSourceTicket(game,player.getId(),cycle,ticket,read)==null);open.set(player,true);
+            payment.set(player,frame.newInstance(game,new GreenManaAbility(),new ManaCostsImpl<>("{G}"),1L));
+            check(player.inspectSourceTicket(game,player.getId(),cycle,ticket,read)==null);payment.set(player,originalFrame);
+            check(player.inspectSourceTicket(game,player.getId(),cycle,ticket,(a,c,m)->{tapped[0]=true;return true;})==null);tapped[0]=false;
+            check(calls[0]==1);candidate.newId();check(player.inspectSourceTicket(game,player.getId(),cycle,ticket,read)==null);
+            for(java.lang.reflect.Field field:ContextHumanPlayer.SourceTicket.class.getDeclaredFields())
+                check(!mage.game.Game.class.isAssignableFrom(field.getType()) && !mage.abilities.Ability.class.isAssignableFrom(field.getType()) && !mage.game.GameState.class.isAssignableFrom(field.getType()) && !mage.game.permanent.Permanent.class.isAssignableFrom(field.getType()));
+        }
+        payment.set(player,null);open.set(player,false);player.setPayManaMode(false);
+    }
     public static void main(String[] args) throws Exception {
         ContextHumanPlayer observed=new ContextHumanPlayer("Public fixture",RangeOfInfluence.ALL,0);
         ContextHumanPlayer copied=observed.copy();
@@ -185,6 +247,7 @@ public final class PinnedPaymentChecks {
         ordinaryShapeChecks();
         ordinaryCoverageChecks();
         registeredHazardChecks();
+        sourceTicketChecks();
         UserData manual=UserData.getDefaultUserDataView(),automatic=UserData.getDefaultUserDataView();
         check(manual!=automatic);
         manual.setManaPoolAutomatic(false);manual.setManaPoolAutomaticRestricted(false);

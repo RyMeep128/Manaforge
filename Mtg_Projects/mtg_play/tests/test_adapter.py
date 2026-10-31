@@ -1191,3 +1191,25 @@ def test_private_hazard_evidence_never_exports_registries_or_claims_safety(monke
     report = adapter.payment_hazard_diagnostics()
     assert report["observations"] == 124  # Shared 128 candidate samples, four invalid labels.
     assert "private-" not in json.dumps(report) and "safe" not in report
+
+
+def test_native_source_ticket_evidence_is_aggregate_bounded_and_default_off(monkeypatch):
+    view = dict(game_id="private-game", viewer="private-viewer", cycle=7, players=[])
+    evidence = dict(available=True, sequence=1, unpaid_mana_count=2, candidate_sources=2,
+                    candidate_abilities=2, source_tickets_revalidated=2)
+    default = LocalGameAdapter()
+    monkeypatch.setattr(default, "_server_request", lambda **fields: dict(payment_probe=evidence))
+    default._metadata(view)
+    assert default.payment_ticket_diagnostics()["observations"] == 0
+    adapter = LocalGameAdapter(payment_context_probe=True)
+    monkeypatch.setattr(adapter, "_server_request", lambda **fields: dict(payment_probe=evidence))
+    for invalid in [True, -1, 3, "private-source-ticket", None]:
+        evidence["source_tickets_revalidated"] = invalid
+        adapter._metadata(view)
+    assert adapter.payment_ticket_diagnostics()["observations"] == 0
+    evidence["source_tickets_revalidated"] = 2
+    for _ in range(140):
+        adapter._metadata(view)
+    report = adapter.payment_ticket_diagnostics()
+    assert report == dict(enabled=True, observations=123, maximum_revalidated=2)
+    assert "private-" not in json.dumps(report)

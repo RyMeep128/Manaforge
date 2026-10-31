@@ -630,3 +630,59 @@ and omission of private names/IDs. No full suite, Unity UI or packaged build ran
 The existing native-payment CI job includes these helper checks and the same
 real-engine probe automatically. CI status is next checked at 0.5.120; no current
 CI outcome is inferred or awaited. The deck preview remains awaiting owner review.
+
+
+### Native source observation identity (0.5.120)
+
+ContextHumanPlayer now issues opaque server-only SourceTicket observations for an
+exact currently usable native mana ability. Tickets bind their issuing player,
+active payment Frame identity, GameState identity/revision, native Permanent and
+ability object identity, source/ability UUIDs, controller, zone-change counter,
+tap/phasing/flipped state and transform count. A copied player, replaced frame,
+restored/replaced state or a different incarnation cannot reuse the observation.
+The native zone counter is read from XMage; no default value is assumed.
+
+inspectSourceTicket runs through the existing viewer/payment-response-monitor
+checks, queries current usable abilities, validates the ticket, calls a trusted
+read-only callback, then queries usable abilities again and rechecks identity and
+state. A source that becomes unusable or changes during the callback fails the
+read. There is no source activation, command enqueue or native mutation in these
+methods. Callbacks retain the existing no-IO/no-mutation/no-serialization contract.
+
+Tickets contain only bounded scalars/UUIDs, a private issuer marker and weak native
+references. They cannot keep a completed private game, payment frame or source
+alive; toString is fixed and contains no identity. Tickets are never serialized,
+exported to Python/Unity, or accepted as protocol commands. They are reusable
+read observations, not single-use action/plan tokens. Session/viewer/revision/
+decision admission, payment-mode authority, single-use claims, safety assessment
+and engine-confirmed outcomes still belong to the future serialized native owner.
+A current observation must never be promoted to a safe payment plan by itself.
+
+The opt-in diagnostic issues/revalidates tickets only for sources with one current
+native usable ability and exports only an aggregate count. Python validates this
+integer against observed source counts, rejects booleans/malformed values and
+keeps the existing shared 128-sample bound. No native IDs, ticket contents,
+printing identities or game references enter the report or public snapshots.
+
+Local PaymentTickets120.json passed: two ticket observations, maximum two
+revalidated sources in a payment window, two manual-review-required hazard
+observations, two manually submitted/tapped sources, mana spent and Ballista
+resolved as 1/1. The fixture still concludes by deliberate concession. Compiler,
+peer, bridge and server roots exited 0 without forced cleanup. This is identity
+revalidation evidence, not automatic payment or natural-match completion.
+
+Passed: 116 focused Python adapter/connection/lifecycle cases; 65 coordinator,
+77 response guards and 147 native-object/synthetic-scope checks; eleven pinned
+API class inspections and owned bridge compilation. New identity cases cover
+monitor/payer/revision/copy mismatch, tap/control/transform/zone changes, object
+and GameState replacement, lost native legality, response/frame replacement,
+post-read mutation, ability ID replacement and absence of strong native fields.
+The synthetic legality predicate is explicit; the real-engine probe separately
+checks the unmodified pinned source query on actual native sources.
+
+The existing Play native payment CI workflow includes these checks/probe. CI is
+checked at this increment without waiting for unfinished runs; next routine
+checkpoint is 0.5.123. No full suite, Unity UI or packaged build ran. The deck
+preview still awaits owner review, and production automatic selection remains
+disabled pending complete source strategy/equivalence, plan claims and Java
+session-owner execution.
