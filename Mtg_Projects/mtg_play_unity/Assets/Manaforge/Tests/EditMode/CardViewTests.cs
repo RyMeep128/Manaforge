@@ -92,7 +92,7 @@ namespace Manaforge.Play.Tests
         [TestCase("prototype","Artifact Creature")]
         [TestCase("meld","Creature")]
         [TestCase("vanguard","Vanguard")]
-        public void KnownSpecializedProfilesUseMiniArtAndNameButKeepFullInspection(string layout,string typeLine)
+        public void KnownProfilesUseCroppedArtworkAndCustomTextInBothPresentations(string layout,string typeLine)
         {
             view.Bind(Identity(false),texture,new Rect(0,0,1,1));
             view.UpdateValues(new CardDisplayValues("Mini",null,typeLine,null,null,null,CardCompactProfile.FromMetadata(layout,typeLine)));
@@ -101,8 +101,9 @@ namespace Manaforge.Play.Tests
             Assert.That(view.Q<Image>("artwork").uv,Is.Not.EqualTo(new Rect(0,0,1,1)));
             Assert.That(view.Q<Label>("rules").style.display.value,Is.EqualTo(DisplayStyle.None));
             view.SetPresentation(CardPresentationMode.Full,300);
-            Assert.That(view.Q<Image>("artwork").uv,Is.EqualTo(new Rect(0,0,1,1)));
-            Assert.That(view.Q<Label>("name").style.display.value,Is.EqualTo(DisplayStyle.None));
+            Assert.That(view.Q<Image>("artwork").uv,Is.Not.EqualTo(new Rect(0,0,1,1)));
+            Assert.That(view.Q<Label>("name").style.display.value,Is.EqualTo(DisplayStyle.Flex));
+            Assert.That(view.Q<Label>("rules").style.display.value,Is.EqualTo(DisplayStyle.Flex));
         }
         [TestCase("Instant",false)] [TestCase("Sorcery",false)] [TestCase("Instant // Instant",false)]
         [TestCase("Token Creature — Soldier",true)] [TestCase("Artifact",true)] [TestCase("Enchantment — Room",true)]

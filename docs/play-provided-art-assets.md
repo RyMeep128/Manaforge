@@ -117,3 +117,30 @@ and sprite pack), five PlayMode checks, Windows player build and two packaged
 should focus on mana size/alignment, compact title positioning, frame edges,
 loyalty and preserved printing credits. CI is deferred to the next scheduled
 third-commit checkpoint; these results are local evidence only.
+
+
+## Custom inspection and readable titles — October 30, 2026
+
+Known compact profiles now also provide artwork crops for a Manaforge-rendered
+full inspection card: title, mana, type, scrollable rules and supplied P/T,
+defense or loyalty. This replaces the previous whole-printing-only inspector
+for those profiles. Unknown layouts retain the original-image fallback. The
+custom inspection is a shared presentation, not a recreation of each printed
+Saga chapter, Class level or planeswalker ability frame. Horizontal layouts use
+their profiled art rotation; their original horizontal credits are not overlaid
+onto an unrelated upright footer. Upright specialized printings retain a source
+footer strip. All values still come from fixture metadata, not inferred rules.
+
+Local fonts now use cached TextCore distance-field assets rather than a direct
+Font definition. Mini titles have a minimum 11-unit size and scale from 21 at
+300-unit card width, avoiding the previous approximately nine-pixel titles at
+fixture size. Long titles ellipsize and remain readable in full inspection.
+Rules scroll position clears on viewer handoff; symbol-bearing rules hide the
+plain-text duplicate rather than reserving a transparent duplicate text block.
+Owner review is required for final typography and custom inspection styling.
+
+
+Local validation: 283 EditMode checks and five PlayMode checks passed; Windows
+build and packaged 20-object capture succeeded. The capture was visually inspected
+and used to correct title/mana spacing. Both panels remain present for known
+split-art profiles in full inspection. This increment remains fixture-only.

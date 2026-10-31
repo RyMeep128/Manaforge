@@ -14,7 +14,7 @@ namespace Manaforge.Play.Tests
             foreach(var style in new[]{FontStyle.Normal,FontStyle.Bold,FontStyle.Italic,FontStyle.BoldAndItalic}) {
                 var expected=Resources.Load<Font>(CardTypography.ResourceName(CardTextRole.Rules,style));
                 Assert.That(expected,Is.Not.Null);Assert.That(CardTypography.Apply(label,CardTextRole.Rules,style),Is.True);
-                Assert.That(label.style.unityFontDefinition.value.font,Is.SameAs(expected));
+                Assert.That(label.style.unityFontDefinition.value.fontAsset.sourceFontFile,Is.SameAs(expected));
                 Assert.That(label.text,Is.EqualTo("Literal <b>text</b>"));Assert.That(label.enableRichText,Is.False);
             }
         }

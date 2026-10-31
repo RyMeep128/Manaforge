@@ -115,7 +115,7 @@ namespace Manaforge.Play.Tests
             Assert.That(symbols.resolvedStyle.display,Is.EqualTo(DisplayStyle.Flex));
             Assert.That(symbols.Query<ManaSymbolView>().ToList().Count,Is.EqualTo(3));
             Assert.That(symbols.Q<ManaSymbolView>().worldBound.y,Is.LessThan(symbols.worldBound.y+20),"Inline symbols belong on the first text line, not the middle of the box");
-            Assert.That(view.Q<Label>("rules").resolvedStyle.opacity,Is.Zero);
+            Assert.That(view.Q<Label>("rules").resolvedStyle.display,Is.EqualTo(DisplayStyle.None));
             view.Conceal();yield return null;
             Assert.That(symbols.SourceText,Is.Empty);Assert.That(symbols.childCount,Is.Zero);
             Assert.That(symbols.resolvedStyle.display,Is.EqualTo(DisplayStyle.None));
