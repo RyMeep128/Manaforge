@@ -10,6 +10,7 @@ param(
     [string]$FixtureInspectName,
     [switch]$AbilityPreview,
     [switch]$FlipPreview,
+    [switch]$Graphics,
     [switch]$DownloadGson
 )
 $ErrorActionPreference = 'Stop'
@@ -131,7 +132,8 @@ if ($Mode -eq 'EditMode') {
     & python @dummyArguments
     if ($LASTEXITCODE -ne 0) { throw 'Java dummy fixture preparation failed' }
 }
-$arguments = @('-batchmode', '-nographics', '-projectPath', $project, '-logFile', (Join-Path $artifacts "$Mode.log"))
+$arguments = @('-batchmode', '-projectPath', $project, '-logFile', (Join-Path $artifacts "$Mode.log"))
+if (-not $Graphics) { $arguments += '-nographics' }
 if ($Mode -in @('EditMode', 'PlayMode')) {
     $results = Join-Path $artifacts "$($Mode.ToLowerInvariant()).xml"
     if (Test-Path -LiteralPath $results) { Remove-Item -LiteralPath $results }
@@ -144,9 +146,13 @@ Invoke-OwnedProcess $EditorPath $arguments
 if ($Mode -in @('EditMode', 'PlayMode')) {
     [xml]$report = Get-Content -LiteralPath $results
     # Counts include printing policy/card components and attached-panel handoff checks.
-    $minimum = if ($Mode -eq 'EditMode') { 314 } else { 13 }
+    $minimum = if ($Mode -eq 'EditMode') { 315 } else { 19 }
     if ($report.'test-run'.result -ne 'Passed' -or [int]$report.'test-run'.total -lt $minimum) {
         throw "Missing or failed $Mode acceptance"
     }
+    if ($Graphics -and $Mode -eq 'PlayMode' -and [int]$report.'test-run'.skipped -ne 0) {
+        throw 'Graphics PlayMode requires every check to execute without skips'
+    }
+    if ($Mode -eq 'PlayMode' -and -not $Graphics) { Write-Output 'GPU pixel readback requires -Graphics; headless results are not GPU evidence' }
     Write-Output "${Mode}: $($report.'test-run'.passed) passed"
 }

@@ -32,6 +32,14 @@ namespace Manaforge.Play.Tests
             foreach(var image in view.Query<Image>().ToList())Assert.That(image.image,Is.Null);
             Assert.That(texture==null,Is.False,"Borrowed previous artwork remains owned by its resource scope");
         }
+        [Test] public void LiveProjectionCanMaskPrintedStatsWhenCurrentStatsAreUnavailable()
+        {
+            view.SetPresentation(CardPresentationMode.Full,300);
+            view.UpdateValues(new CardDisplayValues("Current",null,"Artifact",null,null,null,hidePrintedStats:true));
+            Assert.That(view.Q<CardPlate>("pt-plate").style.display.value,Is.EqualTo(DisplayStyle.None));
+            Assert.That(view.Q<VisualElement>("printed-stats-mask").style.display.value,Is.EqualTo(DisplayStyle.Flex));
+            Assert.That(view.Q<Label>("stats").text,Is.Empty);
+        }
         [Test] public void DynamicValuesChangeWithoutReplacingArtworkOrElements()
         {
             var stats = view.Q<Label>("stats");

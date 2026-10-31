@@ -17,6 +17,16 @@ namespace Manaforge.Play
         private readonly int thread=Thread.CurrentThread.ManagedThreadId;
         private readonly Dictionary<string,CardView> views=new Dictionary<string,CardView>(StringComparer.Ordinal);
         private readonly Dictionary<string,ProjectedCard> cards=new Dictionary<string,ProjectedCard>(StringComparer.Ordinal);
+        private readonly Dictionary<string,ViewerArtworkRequest> requests=new Dictionary<string,ViewerArtworkRequest>(StringComparer.Ordinal);
+        private readonly Dictionary<string,ArtworkBinding> artwork=new Dictionary<string,ArtworkBinding>(StringComparer.Ordinal);
+        private string inspectedObject;
+        private sealed class ArtworkBinding
+        {
+            public readonly Texture2D Texture;public readonly CardVisualIdentity Identity;public readonly CardCompactProfile Profile;
+            public readonly string Oracle,Printing;
+            public ArtworkBinding(PreparedCardArtwork prepared,Texture2D texture)
+            {Texture=texture;Identity=prepared.Identity;Profile=prepared.Profile;Oracle=prepared.Request.OracleId;Printing=prepared.Request.PrintingId;}
+        }
         private ViewerSurfaceTicket ticket;
         private IDisposable privateAssets;
         private long revision=-1,minimumRevision;
@@ -40,7 +50,7 @@ namespace Manaforge.Play
         // Clear references before asking an explicitly transferred private resource scope to dispose.
         private void ClearOwnedState()
         {
-            ticket=null;revision=-1;cards.Clear();InspectionView.Conceal();
+            ticket=null;revision=-1;cards.Clear();requests.Clear();artwork.Clear();inspectedObject=null;InspectionView.Conceal();
             foreach(var view in views.Values)view.Dispose();views.Clear();CardsRoot.Clear();
             var assets=privateAssets;privateAssets=null;
             try{assets?.Dispose();}catch{privateAssets=assets;throw;}
@@ -50,6 +60,7 @@ namespace Manaforge.Play
         {
             Open();
             if(string.IsNullOrWhiteSpace(session) || string.IsNullOrWhiteSpace(viewer) || minimumRevision<0)throw new ArgumentException("VIEWER_SURFACE_CONTEXT");
+            var artworkScope=newPrivateAssets as ViewerArtworkScope;artworkScope?.CheckUnowned();
             transitioning=true;
             try{ClearOwnedState();}
             catch{faulted=true;throw new InvalidOperationException("VIEWER_SURFACE_CLEANUP_FAILED");}
@@ -57,7 +68,9 @@ namespace Manaforge.Play
             // One whole empty rendered frame, including deferred Unity texture destruction.
             readyFrame=Time.frameCount+2;
             this.minimumRevision=minimumRevision;
-            privateAssets=newPrivateAssets;ticket=new ViewerSurfaceTicket(session,viewer);return ticket;
+            var next=new ViewerSurfaceTicket(session,viewer);
+            try{artworkScope?.Claim(next);}catch{faulted=true;throw new InvalidOperationException("VIEWER_SURFACE_ASSET_SCOPE");}
+            privateAssets=newPrivateAssets;ticket=next;return ticket;
         }
         // Trusted receive owner advances this watermark when newer events precede their full snapshot.
         // Visibility revocation/disconnect must use ClearViewer, not merely advance this watermark.
@@ -65,7 +78,7 @@ namespace Manaforge.Play
         {
             Open();if(minimum<0)throw new ArgumentOutOfRangeException(nameof(minimum));
             if(ticket==null || !ReferenceEquals(ticket,supplied) || minimum<=minimumRevision)return false;
-            minimumRevision=minimum;return true;
+            minimumRevision=minimum;requests.Clear();return true;
         }
         public bool ClearViewer(ViewerSurfaceTicket supplied)
         {
@@ -84,7 +97,7 @@ namespace Manaforge.Play
             // No wire decision/action IDs are stored here. Inspection never submits a game command.
             transitioning=true;
             try {
-                InspectionView.Conceal();cards.Clear();
+                InspectionView.Conceal();inspectedObject=null;cards.Clear();requests.Clear();
                 var present=new HashSet<string>(StringComparer.Ordinal);
                 foreach(var card in frame.Cards) {
                     present.Add(card.ObjectId);cards.Add(card.ObjectId,card);
@@ -92,9 +105,12 @@ namespace Manaforge.Play
                         view=new CardView();view.SetPresentation(CardPresentationMode.Compact,160);
                         views.Add(card.ObjectId,view);CardsRoot.Add(view);
                     }
+                    if(artwork.TryGetValue(card.ObjectId,out var binding) && (!ArtworkPermitted(card)
+                        || binding.Oracle!=card.Printing.OracleId || binding.Printing!=card.Printing.PrintingId))artwork.Remove(card.ObjectId);
+                    view.SetPresentation(card.Zone=="battlefield"?CardPresentationMode.Compact:CardPresentationMode.Full,card.Zone=="battlefield"?160:220);
                     Bind(view,card);
                 }
-                foreach(var id in new List<string>(views.Keys))if(!present.Contains(id)){views[id].Dispose();views.Remove(id);}
+                foreach(var id in new List<string>(views.Keys))if(!present.Contains(id)){views[id].Dispose();views.Remove(id);artwork.Remove(id);}
                 revision=frame.Context.Revision;return true;
             }
             catch {
@@ -104,16 +120,53 @@ namespace Manaforge.Play
             }
             finally{transitioning=false;}
         }
-        private static void Bind(CardView view,ProjectedCard card)
+        private static bool ArtworkPermitted(ProjectedCard card)=>!card.Hidden && card.FaceDown==false
+            && !string.IsNullOrWhiteSpace(card.Printing?.PrintingId) && !string.IsNullOrWhiteSpace(card.Printing?.OracleId);
+        public ViewerArtworkRequest RequestArtwork(ViewerSurfaceTicket supplied,string objectId)
+        {
+            Open();
+            if(ticket==null || !ReferenceEquals(ticket,supplied) || !(privateAssets is ViewerArtworkScope) || revision<minimumRevision
+                || objectId==null || !cards.TryGetValue(objectId,out var card) || !ArtworkPermitted(card) || artwork.ContainsKey(objectId))return null;
+            if(!requests.TryGetValue(objectId,out var request)){request=new ViewerArtworkRequest(ticket,card);requests.Add(objectId,request);}return request;
+        }
+        // On a valid UI-thread entry, consumes/clears the prepared CPU buffer even when rejected.
+        public bool TryApplyArtwork(ViewerSurfaceTicket supplied,PreparedCardArtwork prepared)
+        {
+            Open();if(prepared==null)throw new ArgumentNullException(nameof(prepared));
+            try {
+                var request=prepared.Request;
+                if(prepared.IsDisposed || ticket==null || !ReferenceEquals(ticket,supplied) || !ReferenceEquals(ticket,request.Ticket)
+                    || request.Revision!=revision || revision<minimumRevision || !(privateAssets is ViewerArtworkScope scope)
+                    || !requests.TryGetValue(request.ObjectId,out var pending) || !ReferenceEquals(pending,request)
+                    || !cards.TryGetValue(request.ObjectId,out var card) || !ArtworkPermitted(card))return false;
+                transitioning=true;
+                try {
+                    requests.Remove(request.ObjectId);
+                    if(!scope.TryUpload(prepared,out var texture))return false;
+                    artwork[card.ObjectId]=new ArtworkBinding(prepared,texture);Bind(views[card.ObjectId],card);
+                    if(inspectedObject==card.ObjectId){Bind(InspectionView,card);InspectionView.style.rotate=new Rotate(new Angle(0));}
+                    return true;
+                }
+                catch {
+                    faulted=true;try{ClearOwnedState();}catch{}
+                    throw new InvalidOperationException("VIEWER_SURFACE_ARTWORK_FAILED");
+                }
+                finally{transitioning=false;}
+            }
+            finally{prepared.Dispose();}
+        }
+        private void Bind(CardView view,ProjectedCard card)
         {
             view.style.rotate=new Rotate(new Angle(0));
             if(card.Hidden){view.Conceal();return;}
-            view.BindUnavailable();
+            artwork.TryGetValue(card.ObjectId,out var binding);
+            if(binding==null)view.BindUnavailable();else view.Bind(binding.Identity,binding.Texture,binding.Profile?.Crop??CardCompactProfile.StandardArtCrop);
             var c=card.Characteristics;
             string pt=c?.Power!=null && c.Toughness!=null?c.Power+"/"+c.Toughness:null;
             // No printed text, invented mana cost, inferred artwork/face or reconstructed current rules.
-            string unavailable=card.Tapped==null?"Artwork / rules / tap state unavailable":"Artwork / rules unavailable";
-            view.UpdateValues(new CardDisplayValues(c?.Name,null,c?.TypeLine,null,pt,unavailable,loyalty:c?.Loyalty,defense:c?.Defense));
+            string unavailable=binding==null?"Artwork / rules unavailable":"Current rules unavailable";
+            if(card.Tapped==null)unavailable+=" / tap state unavailable";
+            view.UpdateValues(new CardDisplayValues(c?.Name,null,c?.TypeLine,null,pt,unavailable,binding?.Profile,loyalty:c?.Loyalty,defense:c?.Defense,hidePrintedStats:true));
             if(card.Tapped==true)view.style.rotate=new Rotate(new Angle(90));
         }
         public bool Inspect(ViewerSurfaceTicket supplied,string objectId)
@@ -121,9 +174,9 @@ namespace Manaforge.Play
             Open();if(ticket==null || !ReferenceEquals(ticket,supplied))return false;
             transitioning=true;
             try {
-                InspectionView.Conceal();
+                InspectionView.Conceal();inspectedObject=null;
                 if(objectId==null || !cards.TryGetValue(objectId,out var card) || card.Hidden)return false;
-                Bind(InspectionView,card);InspectionView.style.rotate=new Rotate(new Angle(0));return true;
+                Bind(InspectionView,card);InspectionView.style.rotate=new Rotate(new Angle(0));inspectedObject=objectId;return true;
             }
             catch {
                 faulted=true;try{ClearOwnedState();}catch{}

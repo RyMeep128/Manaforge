@@ -673,3 +673,18 @@ Local evidence: 314 EditMode and 13 PlayMode checks passed. Lifecycle tests cove
 private-resource cleanup order, a complete empty frame, retired disconnect and
 inspection tickets, reentry, failure retention/retry and thread rejection. The
 public fixture scene remains unchanged; production scene acceptance is pending.
+
+
+### G1/P3 authorized single-face artwork
+
+The [artwork boundary](play-viewer-artwork.md) now accepts exact, compatible
+normal one-face catalog printings for visible, explicitly face-up projected
+objects. Requests/completions are tied to the viewer ticket, applied revision,
+watermark and current opaque object. Unknown/multi-face cases remain unavailable;
+current names and transform flags do not choose another printing. Private GPU
+scopes enforce budgets, share identical pixels only within an epoch and are
+revoked after views clear. Current text/stats remain separate from printing art.
+Local evidence: 315 EditMode checks and 19 graphics-enabled PlayMode checks passed,
+including a real GPU readback with no skips. Core cache job integration, the UI
+mailbox, scene mounting, general face contracts and G0/G1 acceptance remain open.
+The public gallery is unchanged; no new owner UI verification is needed yet.

@@ -7,6 +7,7 @@ namespace Manaforge.Play
     {
         public string Kind {get;}
         public Rect Crop {get;}
+        public static Rect StandardArtCrop=>new Rect(.08f,.45f,.84f,.42f);
         public bool OriginalInspection=>Kind=="Dungeon" || Kind=="Scheme" || Kind=="Plane" || Kind=="Vanguard";
         public bool LandscapeInspection=>Kind=="Battle" || Kind=="Room" || Kind=="Plane" || Kind=="Vanguard";
         public Rect FullCrop=>Kind=="Class"?new Rect(.08f,.15f,.35f,.72f):Crop;
@@ -28,7 +29,7 @@ namespace Manaforge.Play
             var types=(typeLine??"").Split('—')[0].Split(' ');
             bool Has(string type)=>System.Array.IndexOf(types,type)>=0;
             if((Has("Instant") || Has("Sorcery")) && !IsFixturePermanent(typeLine))return null;
-            var normal=new Rect(.08f,.45f,.84f,.42f);
+            var normal=StandardArtCrop;
             if(Has("Battle"))return new CardCompactProfile("Battle",new Rect(.14f,.12f,.42f,.75f),90,90);
             if(Has("Planeswalker"))return new CardCompactProfile("Planeswalker",new Rect(.08f,.52f,.84f,.35f));
             if(System.Array.IndexOf((typeLine??"").Replace('—',' ').Split(' '),"Room")>=0)return new CardCompactProfile("Room",new Rect(.14f,.12f,.39f,.35f),90,90,new Rect(.14f,.53f,.39f,.35f));

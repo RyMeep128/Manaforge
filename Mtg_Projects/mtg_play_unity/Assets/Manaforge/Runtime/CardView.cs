@@ -22,11 +22,12 @@ namespace Manaforge.Play
         public FontStyle RulesStyle {get;}
         public string CollectorText {get;}
         public bool IsAbility {get;}
+        public bool HidePrintedStats {get;}
         public System.Collections.Generic.IReadOnlyList<RoomDoorDisplay> RoomDoors {get;}
         public CardDisplayValues(string name, string manaCost, string typeLine,
-            string rulesText, string powerToughness, string status, CardCompactProfile compactProfile=null, string loyalty=null,string defense=null,FontStyle rulesStyle=FontStyle.Normal,string collectorText=null,System.Collections.Generic.IReadOnlyList<RoomDoorDisplay> roomDoors=null,bool isAbility=false)
+            string rulesText, string powerToughness, string status, CardCompactProfile compactProfile=null, string loyalty=null,string defense=null,FontStyle rulesStyle=FontStyle.Normal,string collectorText=null,System.Collections.Generic.IReadOnlyList<RoomDoorDisplay> roomDoors=null,bool isAbility=false,bool hidePrintedStats=false)
         {
-            IsAbility=isAbility;Name = name; ManaCost = manaCost; TypeLine = typeLine;
+            HidePrintedStats=hidePrintedStats;IsAbility=isAbility;Name = name; ManaCost = manaCost; TypeLine = typeLine;
             RulesText = rulesText; PowerToughness = powerToughness; Status = status;
             CompactProfile=compactProfile;Loyalty=loyalty;Defense=defense;RulesStyle=rulesStyle;CollectorText=collectorText;RoomDoors=roomDoors==null?null:new System.Collections.Generic.List<RoomDoorDisplay>(roomDoors).AsReadOnly();
         }
@@ -251,7 +252,7 @@ namespace Manaforge.Play
             bool hasLoyalty=!string.IsNullOrEmpty(loyaltyCounter.Value);
             printedStatsMask.style.backgroundColor=full && hasLoyalty?new Color(.88f,.88f,.80f):new Color(.07f,.07f,.065f);
             Box(printedStatsMask,landscape?0:full?74:0,landscape?89:full?(hasLoyalty?86:89):94,landscape?100:full?(hasLoyalty?26:24):100,landscape?11:full && hasLoyalty?8:10);
-            printedStatsMask.style.display=!concealed && !imageFallback && (!full || landscape || !ability && (hasStats || hasLoyalty))?DisplayStyle.Flex:DisplayStyle.None;
+            printedStatsMask.style.display=!concealed && !imageFallback && (!full || landscape || !ability && (hasStats || hasLoyalty || displayValues?.HidePrintedStats==true))?DisplayStyle.Flex:DisplayStyle.None;
             float height=style.height.value.value;
             bool split=!full && !imageFallback && compactProfile?.SecondaryCrop!=null;
             Rect area=imageFallback?new Rect(0,0,100,100):new Rect(full?8:4,full?12:21,split?(full?41:45):full?84:92,full?43:73);

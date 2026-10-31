@@ -21,16 +21,18 @@ namespace Manaforge.Play.Tests
             public Scope(Action dispose){this.dispose=dispose;}
             public void Dispose(){dispose();}
         }
-        private static ProjectedCardFrame Frame(string viewer="one",long revision=1,bool hidden=false,string name="Viewer text",bool empty=false,string session="fixture-0001")
+        internal static ProjectedCardFrame Frame(string viewer="one",long revision=1,bool hidden=false,string name="Viewer text",bool empty=false,string session="fixture-0001",bool artwork=false,bool? faceDownState=false,int objectCount=1)
         {
             var corpus=JObject.Parse(File.ReadAllText(Path.Combine(Application.dataPath,"../../mtg_play/protocol/fixtures/wire-receive-v1.json")));
             var message=(JObject)corpus["positive"][0]["envelope"];var snapshot=message["body"]["snapshot"];
             snapshot["session_id"]=session;snapshot["viewer_id"]=viewer;snapshot["revision"]=revision;
             snapshot["decision"]=JValue.CreateNull();snapshot["actions"]=new JArray();
             var card=snapshot["objects"][0];card["hidden"]=hidden;
+            if(artwork && !hidden){card["card_identity"]=new JObject{["oracle_id"]="oracle",["printing_id"]="exact-printing",["deck_entry_id"]=JValue.CreateNull()};card["face_down"]=faceDownState.HasValue?new JValue(faceDownState.Value):JValue.CreateNull();}
             if(hidden){card["characteristics"]=JValue.CreateNull();card["card_identity"]=JValue.CreateNull();}
             else {card["characteristics"]["name"]=name;card["characteristics"]["power"]="4";card["characteristics"]["toughness"]="5";card["characteristics"]["engine_view_text"]=new JArray("Not complete Oracle text");}
             if(empty)snapshot["objects"]=new JArray();
+            else for(int i=1;i<objectCount;i++){var extra=card.DeepClone();extra["object_id"]="fixture-extra-"+i;((JArray)snapshot["objects"]).Add(extra);}
             return ViewerCardProjection.ParseSnapshot(message.ToString(),session,viewer,0,true);
         }
         [UnitySetUp] public IEnumerator Setup()

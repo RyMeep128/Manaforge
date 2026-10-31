@@ -42,8 +42,10 @@ faulted surface. Reentrant disposal is rejected along with other mutations.
 
 ## Deliberately unresolved artwork and text
 
-The current protocol lacks an explicit authorized current-face artwork binding.
-`CardView.BindUnavailable` therefore presents supplied name, type and current P/T,
+The current protocol lacks a general authorized current-face artwork binding.
+A subsequent [single-face boundary](play-viewer-artwork.md) supports verified
+normal one-face printings. For unresolved cases, `CardView.BindUnavailable`
+presents supplied name, type and current P/T,
 loyalty or defense without a fabricated printing/face identity or substitute
 texture. Engine presentation text is not promoted to complete Oracle rules text;
 unknown artwork/rules/tap state is marked unavailable. Exact printing and current
@@ -72,3 +74,7 @@ passed, including the existing Java protocol preflight. No full application suit
 ran. The public fixture scene was not changed or rebuilt for this owner-only
 increment, so no new owner UX verification is required. Production mounting
 remains open. CI follows the every-third-commit schedule (next at 0.5.87).
+
+The single-face follow-up adds bounded private texture scopes and one-shot
+revision-bound artwork requests. Core cache jobs, general face resolution and
+the session-scene mailbox are still separate integration work.
