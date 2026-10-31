@@ -637,3 +637,21 @@ texture; Battle, Room and plane orientations are supported. V2 printed-reference
 fixture metadata remains separate from the game protocol and v1 remains readable.
 Full specialized frames remain authentic images; no rules or chapter progression
 are inferred. Owner visual review and G0/G1 acceptance remain open.
+
+
+### G1 immutable viewer card slice — October 30, 2026
+
+The [card projection](../Mtg_Projects/mtg_play/protocol/viewer-card-projection.md)
+now turns validated snapshot/result messages into immutable, viewer-scoped card
+inputs without retaining mutable wire objects, action authority or private
+observations. Current characteristics and exact printing identity remain
+independent; unknown and unsupported engine text is not replaced with printed
+text. Concealed cards retain opaque routing only. This is a worker-side card
+slice, not scene handoff, private cache lifecycle, live engine integration or full
+G1 acceptance. G0/G1 remain open and bulk P2 remains gated. Owner accepted the
+preceding visual foundation as sufficient to continue; no new UI review is
+required for this nonvisual increment.
+
+Local evidence: 313 Unity EditMode checks, including ten new projection checks
+and existing Java protocol preflight, passed. CI review follows the scheduled
+third-commit checkpoint; local evidence is not licensed Unity CI acceptance.
