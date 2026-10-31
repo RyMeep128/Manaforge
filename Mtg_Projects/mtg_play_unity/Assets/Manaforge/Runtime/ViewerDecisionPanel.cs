@@ -13,7 +13,7 @@ namespace Manaforge.Play
     {
         public const int PageSize=16;
         private readonly int thread=Thread.CurrentThread.ManagedThreadId;
-        private readonly ViewerSessionHost host;
+        private readonly ViewerSessionHost host;private readonly ViewerManaSourceInput manaInput;
         public VisualElement Root {get;}=new VisualElement{name="viewer-decision-panel"};
         private readonly Label prompt=new Label{name="decision-prompt",enableRichText=false};
         private readonly Label status=new Label{name="decision-status",enableRichText=false};
@@ -24,7 +24,7 @@ namespace Manaforge.Play
         private ViewerDecisionOffer offer;private int page;private bool disposed;private Task<TrackedCommand> pending;
         public ViewerDecisionPanel(VisualElement parent,ViewerSessionHost host)
         {
-            if(parent==null || host==null)throw new ArgumentNullException();this.host=host;
+            if(parent==null || host==null)throw new ArgumentNullException();this.host=host;manaInput=new ViewerManaSourceInput(host,(captured,source)=>Send(captured,()=>host.SelectManaSourceAsync(captured,source)));
             Root.style.backgroundColor=new Color(.07f,.10f,.13f);Root.style.paddingLeft=16;Root.style.paddingRight=16;Root.style.paddingTop=12;Root.style.paddingBottom=12;
             prompt.style.fontSize=20;prompt.style.color=Color.white;prompt.style.marginBottom=8;prompt.style.whiteSpace=WhiteSpace.Normal;
             status.style.fontSize=14;status.style.color=new Color(.8f,.85f,.9f);status.style.marginBottom=8;status.style.whiteSpace=WhiteSpace.Normal;pages.style.flexDirection=FlexDirection.Row;
@@ -33,7 +33,7 @@ namespace Manaforge.Play
         private void ThreadOnly(){if(Thread.CurrentThread.ManagedThreadId!=thread)throw new InvalidOperationException("VIEWER_DECISION_THREAD");}
         private void Clear()
         {
-            offer=null;submitted=null;page=0;numericText=null;numericPage=0;numericSubmit=null;prompt.text="";status.text="";controls.Clear();pages.Clear();Root.style.display=DisplayStyle.None;
+            manaInput.Refresh(null);offer=null;submitted=null;page=0;numericText=null;numericPage=0;numericSubmit=null;prompt.text="";status.text="";controls.Clear();pages.Clear();Root.style.display=DisplayStyle.None;
             // Observe a retired task without carrying its result or touching UI from its worker.
             if(pending!=null)pending.ContinueWith(task=>{_=task.Exception;},TaskScheduler.Default);pending=null;
         }
@@ -41,7 +41,7 @@ namespace Manaforge.Play
         {
             ThreadOnly();if(disposed)return;var current=host.PresentedDecision;
             if(!ReferenceEquals(current,offer)){Clear();offer=current;if(offer!=null)Build();}
-            if(offer==null)return;
+            manaInput.Refresh(offer);if(offer==null)return;
             if(pending!=null && pending.IsCompleted){
                 if(pending.Status==TaskStatus.RanToCompletion)submitted=pending.Result;
                 var error=pending.Exception?.GetBaseException() as WireEnvelope.EnvelopeException;
@@ -49,14 +49,14 @@ namespace Manaforge.Play
             }
             var feedback=host.CommandFeedback(offer,submitted);
             if(feedback!=null)status.text=FeedbackText(feedback.State);
-            controls.SetEnabled(offer.CanSubmit && pending==null);
+            controls.SetEnabled(offer.CanSubmit && pending==null);manaInput.SetEnabled(offer.CanSubmit && pending==null);
             numericSubmit?.SetEnabled(TryNumbers(out _,false));
             if(!offer.CanSubmit && pending==null && string.IsNullOrEmpty(status.text))status.text="Waiting for gateway state.";
         }
         private void Send(ViewerDecisionOffer captured,Func<Task<TrackedCommand>> submit)
         {
             ThreadOnly();if(disposed || pending!=null || !ReferenceEquals(offer,captured) || !ReferenceEquals(host.PresentedDecision,captured) || !captured.CanSubmit)return;
-            submitted=null;pending=submit();status.text="Sending command...";controls.SetEnabled(false);
+            submitted=null;pending=submit();status.text="Sending command...";controls.SetEnabled(false);manaInput.SetEnabled(false);
         }
         private static string FeedbackText(CommandState state)
         {
@@ -82,7 +82,7 @@ namespace Manaforge.Play
             if(frame.Decision.CanFinish)controls.Add(Button("decision-finish","Finish selection",()=>Send(captured,()=>host.FinishSelectionAsync(captured))));
             if(frame.Decision.Cancellable)controls.Add(Button("decision-cancel","Cancel choice",()=>Send(captured,()=>host.CancelChoiceAsync(captured))));
             if(frame.Decision.Family=="number" || frame.Decision.Family=="amounts")BuildNumbers(captured,frame.Decision);
-            if(frame.Decision.Family=="mana")status.text="Mana-source input controls are not available in this panel yet.";
+            if(frame.Decision.Family=="mana")status.text=frame.ManaSourceReferences.Count==0?"No cards are available for mana-source selection.":"Choose a card to use as a mana source. The game validates your selection.";
             if(total>PageSize) {
                 var previous=Button("decision-previous","Previous",()=>Move(captured,-1));previous.SetEnabled(page>0);pages.Add(previous);
                 pages.Add(new Label("Page "+(page+1)+" of "+((total+PageSize-1)/PageSize)){enableRichText=false});
@@ -143,6 +143,6 @@ namespace Manaforge.Play
             if(disposed || !ReferenceEquals(offer,captured) || !ReferenceEquals(host.PresentedDecision,captured))return;
             var frame=captured.Frame;if(frame==null)return;int last=Math.Max(0,(frame.Actions.Count+frame.Decision.Options.Count-1)/PageSize);page=Math.Max(0,Math.Min(last,page+delta));Build();
         }
-        public void Dispose(){ThreadOnly();if(disposed)return;disposed=true;Clear();Root.RemoveFromHierarchy();}
+        public void Dispose(){ThreadOnly();if(disposed)return;disposed=true;manaInput.Dispose();Clear();Root.RemoveFromHierarchy();}
     }
 }

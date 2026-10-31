@@ -141,6 +141,43 @@ namespace Manaforge.Play.Tests
         }
         private JObject ManaSnapshot()
         {var frame=Snapshot(selection:true);var decision=frame["body"]["snapshot"]["decision"];decision["family"]="mana";decision["options"]=new JArray();decision["can_finish"]=false;decision["cancellable"]=false;return frame;}
+        private static void SubmitCard(CardView card)
+        {Assert.That(card,Is.Not.Null);using(var submit=NavigationSubmitEvent.GetPooled()){submit.target=card;card.SendEvent(submit);}}
+        private static void ClickCard(CardView card,int button=0)
+        {Assert.That(card,Is.Not.Null);using(var click=ClickEvent.GetPooled(new Event{type=EventType.MouseUp,button=button,clickCount=1})){Assert.That(click.button,Is.EqualTo(button));click.target=card;card.SendEvent(click);}}
+        private JObject VisibleManaSnapshot()
+        {
+            var frame=ManaSnapshot();var sample=JObject.Parse(File.ReadAllText(Path.Combine(Application.dataPath,"../../mtg_play/protocol/fixtures/wire-receive-v1.json")))["positive"][0]["envelope"]["body"]["snapshot"]["objects"][0];frame["body"]["snapshot"]["objects"]=new JArray(sample.DeepClone());return frame;
+        }
+        [UnityTest] public IEnumerator ManaPanelCardClickUsesBoundSourceAndDoesNotOverrideEmbeddedControls()
+        {
+            var host=Start(VisibleManaSnapshot(),out var peer,out var owner);var panel=Panel(host);yield return Show(host,panel);var card=surface.CardsRoot.Q<CardView>();Assert.That(card.focusable,Is.True);var embedded=new Button(){text="Inspect only"};card.Add(embedded);using(var click=ClickEvent.GetPooled(new Event{type=EventType.MouseUp,button=0,clickCount=1})){click.target=embedded;embedded.SendEvent(click);}Assert.That(peer.PendingCommandBytes,Is.Zero);embedded.RemoveFromHierarchy();ClickCard(card,1);Assert.That(peer.PendingCommandBytes,Is.Zero);
+            surface.InspectionView.style.display=DisplayStyle.None;panel.Root.style.width=720;var target=new RenderTexture(1280,720,24);Texture2D pixels=null;var previous=RenderTexture.active;
+            try{target.Create();settings.targetTexture=target;for(int i=0;i<5;i++){host.Tick();panel.Tick();yield return null;}pixels=new Texture2D(1280,720,TextureFormat.RGBA32,false);RenderTexture.active=target;pixels.ReadPixels(new Rect(0,0,1280,720),0,0);pixels.Apply();File.WriteAllBytes(Path.Combine(Application.dataPath,"../Artifacts/DecisionManaProof.png"),pixels.EncodeToPNG());}
+            finally{settings.targetTexture=null;RenderTexture.active=previous;if(pixels!=null)UnityEngine.Object.Destroy(pixels);target.Release();UnityEngine.Object.Destroy(target);}
+            ClickCard(card);var read=Task.Run(()=>WireMessages.Parse(peer.ReadCommandForFixture()));yield return Until(()=>read.IsCompleted);Assert.That((string)read.Result["body"]["operation"],Is.EqualTo("select_mana_source"));Assert.That((string)read.Result["body"]["object_id"],Is.EqualTo("fixture-0002"));Assert.That(peer.PendingCommandBytes,Is.Zero);
+        }
+        [UnityTest] public IEnumerator ManaPanelDoesNotInferEligibilityOrExposeConcealedIdentity()
+        {
+            foreach(string kind in new[]{"hidden","tapped","other-controller"}) {
+                var frame=kind=="hidden"?ManaSnapshot():VisibleManaSnapshot();var obj=frame["body"]["snapshot"]["objects"][0];if(kind=="tapped")obj["tapped"]=true;if(kind=="other-controller")obj["controller_id"]="two";
+                var host=Start(frame,out var peer,out var owner);var panel=Panel(host);yield return Show(host,panel);var card=surface.CardsRoot.Q<CardView>();if(kind=="hidden"){Assert.That(card.Q<Label>("name").text,Is.Empty);Assert.That(card.Artwork,Is.Null);}SubmitCard(card);var read=Task.Run(()=>WireMessages.Parse(peer.ReadCommandForFixture()));yield return Until(()=>read.IsCompleted);Assert.That((string)read.Result["body"]["object_id"],Is.EqualTo((string)obj["object_id"]));Assert.That(read.Result["body"]["card_identity"],Is.Null);host.Cancel();yield return Until(()=>host.Completion.IsCompleted);panel.Tick();
+            }
+        }
+        [UnityTest] public IEnumerator ManaPanelRetainedCardCannotSubmitAfterSnapshotChangeOrOwnerLoss()
+        {
+            var host=Start(VisibleManaSnapshot(),out var peer,out var owner);var panel=Panel(host);yield return Show(host,panel);var retained=surface.CardsRoot.Q<CardView>();var old=host.CurrentDecision;var next=VisibleManaSnapshot();next["message_id"]="new-card-input";next["body"]["snapshot"]["revision"]=8;next["body"]["snapshot"]["objects"][0]["object_id"]="replacement-source";var send=Task.Run(()=>peer.ReplyForFixture(next));yield return Until(()=>send.IsCompleted);send.GetAwaiter().GetResult();yield return Until(()=>host.CurrentDecision!=null && !ReferenceEquals(host.CurrentDecision,old));SubmitCard(retained);Assert.That(peer.PendingCommandBytes,Is.Zero);yield return Show(host,panel);Assert.That(retained.focusable,Is.False);SubmitCard(retained);Assert.That(peer.PendingCommandBytes,Is.Zero);
+            var current=surface.CardsRoot.Q<CardView>();owner.TrySetResult(true);panel.Tick();Assert.That(current.focusable,Is.False);SubmitCard(current);Assert.That(peer.PendingCommandBytes,Is.Zero);Assert.That(panel.Root.Q<Label>("decision-status").text,Is.Empty);
+        }
+        [UnityTest] public IEnumerator ManaPanelOnlyBindsManaDecisionsAndBlocksPendingInputUntilExplicitRetry()
+        {
+            var host=Start(Snapshot(),out var peer,out var owner);var panel=Panel(host);yield return Show(host,panel);var card=surface.CardsRoot.Q<CardView>();Assert.That(card.focusable,Is.False);SubmitCard(card);Assert.That(peer.PendingCommandBytes,Is.Zero);var old=host.CurrentDecision;var next=VisibleManaSnapshot();next["message_id"]="mana-input-enabled";next["body"]["snapshot"]["revision"]=8;var send=Task.Run(()=>peer.ReplyForFixture(next));yield return Until(()=>send.IsCompleted);send.GetAwaiter().GetResult();yield return Until(()=>host.CurrentDecision!=null && !ReferenceEquals(host.CurrentDecision,old));yield return Show(host,panel);card=surface.CardsRoot.Q<CardView>();SubmitCard(card);var first=Task.Run(()=>WireMessages.Parse(peer.ReadCommandForFixture()));yield return Until(()=>first.IsCompleted);Assert.That(card.focusable,Is.False);SubmitCard(card);ClickCard(card);Assert.That(peer.PendingCommandBytes,Is.Zero);
+            var rejected=Ack(first.Result,"rejected");rejected["body"]["request_revision"]=8;rejected["body"]["code"]="ENGINE_REJECTED";send=Task.Run(()=>peer.ReplyForFixture(rejected));yield return Until(()=>send.IsCompleted);send.GetAwaiter().GetResult();var receipt=Receipt(host);yield return Until(()=>receipt.IsCompleted);Assert.That(receipt.Result.State,Is.EqualTo(CommandState.Rejected));panel.Tick();Assert.That(card.focusable,Is.True);Assert.That(peer.PendingCommandBytes,Is.Zero);SubmitCard(card);var second=Task.Run(()=>WireMessages.Parse(peer.ReadCommandForFixture()));yield return Until(()=>second.IsCompleted);Assert.That((string)second.Result["message_id"],Is.Not.EqualTo((string)first.Result["message_id"]));panel.Dispose();Assert.That(card.focusable,Is.False);SubmitCard(card);Assert.That(peer.PendingCommandBytes,Is.Zero);
+        }
+        [UnityTest] public IEnumerator EmptyManaObjectSetDoesNotCreateSourceOrAutomaticCommand()
+        {
+            var frame=ManaSnapshot();frame["body"]["snapshot"]["objects"]=new JArray();var host=Start(frame,out var peer,out var owner);var panel=Panel(host);yield return Show(host,panel);Assert.That(surface.CardsRoot.Query<CardView>().ToList(),Is.Empty);Assert.That(panel.Root.Q<Label>("decision-status").text,Is.EqualTo("No cards are available for mana-source selection."));Assert.That(peer.PendingCommandBytes,Is.Zero);
+        }
         [UnityTest] public IEnumerator ManaSourceReferenceWritesExactOpaqueTokenAndPreservesUncertainty()
         {
             var frame=ManaSnapshot();var host=Start(frame,out var peer,out var owner);yield return Until(()=>host.CurrentDecision!=null);var offer=host.CurrentDecision;var reference=offer.Frame.ManaSourceReferences[0];var sent=host.SelectManaSourceAsync(offer,reference);yield return Until(()=>sent.IsCompleted);Assert.That(sent.Result.State,Is.EqualTo(CommandState.AwaitingAck));

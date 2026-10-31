@@ -98,6 +98,8 @@ namespace Manaforge.Play
         }
         internal bool HasPresentedFrame(ViewerSurfaceTicket supplied,long expectedRevision)
         {ThreadOnly();return !disposed && !transitioning && !faulted && ReferenceEquals(ticket,supplied) && ticket!=null && Time.frameCount>=readyFrame && revision==expectedRevision && ticket.Mailbox.AllowsFrame(expectedRevision);}
+        internal CardView PresentedCardView(ViewerSurfaceTicket supplied,long expectedRevision,string objectId)
+        {ThreadOnly();return objectId!=null && HasPresentedFrame(supplied,expectedRevision) && views.TryGetValue(objectId,out var view)?view:null;}
         public bool TryPresent(ViewerSurfaceTicket supplied,ProjectedCardFrame frame)
         {
             Open();if(frame==null)throw new ArgumentNullException(nameof(frame));

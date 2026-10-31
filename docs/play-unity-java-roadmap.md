@@ -932,3 +932,18 @@ product/fixture mounting, owner visual acceptance, recovery UI and engine gates 
 Local receipt-feedback evidence: Java preflight, 366 EditMode and 93 graphics
 PlayMode checks passed without skips. Current CI status is not inferred; the next
 scheduled check is 0.5.108. Existing scenes remain unchanged.
+
+### P3.3/P3.4 explicit card-based mana input
+
+The [decision panel](play-viewer-decision-panel.md) binds primary-card clicks and
+keyboard submit on existing displayed CardViews to the exact current mana source
+reference. It adds no renderer, inferred source eligibility or automatic payment.
+Hidden identities stay hidden; pending input, old callbacks and non-mana decisions
+cannot submit. View focus/tooltips/handlers are restored on replacement or disposal.
+The component remains unmounted pending owner review and integration; engine,
+fixture and product acceptance gates remain open.
+
+Local mana-input evidence: 98 graphics-enabled PlayMode checks passed without
+skips, including five new authenticated-loopback UI scenarios and a synthetic
+capture. Hands-on review is pending. Relevant CI is checked at 0.5.108 without
+waiting; no current CI success or engine acceptance is inferred from local tests.

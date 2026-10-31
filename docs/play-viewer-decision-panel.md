@@ -1,13 +1,14 @@
 # Viewer decision panel
 
-Status: reusable presentation component through 0.5.107-alpha.1. Not mounted in the
+Status: reusable presentation component through 0.5.108-alpha.1. Not mounted in the
 product launcher or packaged session fixture. Owner visual review is pending.
 
 ViewerDecisionPanel renders the engine prompt and exact action/option labels,
 plus finish/cancel only when the decision flags allow them. Labels disable rich
 text interpretation. Actions/options share pages of sixteen entries; navigation
 never submits a command and all entries remain individually reachable. Number and amount decisions have explicit text entry described below. Mana
-decisions still state that their source-selection widget is not available. No default choice, inferred legality or smart pass is implemented.
+decisions bind source selection to the current displayed cards. No default choice,
+inferred legality or smart pass is implemented.
 
 The owning UI calls host.Tick followed by panel.Tick each frame. The panel reads
 host.PresentedDecision, which requires the current offer's revision to match the
@@ -102,3 +103,37 @@ polling, queue preservation, rejection and repeated-old-receipt isolation, late
 confirmation after a new decision, uncertain/late-submitted blocking, and owner
 loss cleanup. No full application suite or packaged build ran. CI is next checked
 at 0.5.108; product mounting and owner visual acceptance remain pending.
+
+Mana-input follow-up (0.5.108): the panel owns a scoped ViewerManaSourceInput
+binding on the existing displayed CardViews. During a presented mana decision,
+primary-card clicks or keyboard navigation-submit send the exact source reference
+from that offer through the existing dispatcher. Embedded buttons/text inputs
+keep their own meaning, and secondary clicks do not submit. No new card renderer,
+card-name parsing, legal-source highlighting, land detection, inferred eligibility
+or automatic payment is introduced. Source membership means viewer addressability;
+the gateway must still check every selection against the engine. Concealed cards
+remain concealed and contribute no printing/name/characteristic data to commands.
+
+The host resolves a view only for a reference actually belonging to its exact
+current presented mana offer and surface epoch. Bindings do not appear before the
+presentation barrier or during non-mana decisions. Pending/uncertain submissions
+block activation. Focusability and tooltip changes are scoped and restored when
+the offer changes, ownership ends or the panel is disposed; event handlers are
+unregistered. Even retained old CardViews cannot submit against a new decision.
+After a terminal rejection, another choice requires deliberate user input.
+An empty object set creates no source or default selection.
+
+The synthetic DecisionManaProof.png capture shows the shared card view and panel
+with artwork unavailable deliberately. It is not a real-game or Arena UX claim.
+The component remains unmounted in product and packaged session scenes; owner
+visual review, complete gameplay integration and G0/G1 acceptance remain open.
+
+Mana input evidence: 98 graphics-enabled PlayMode checks passed without skips.
+Five new real authenticated-loopback UI tests cover primary mouse/keyboard input,
+secondary-click and embedded-control isolation, concealed/tapped/other-controller
+addressability without legality inference, stale-incarnation/owner revocation,
+non-mana isolation, pending-command suppression, explicit retry after rejection,
+disposal restoring input state, and an empty source set. The synthetic capture
+was visually inspected; hands-on acceptance is not recorded. No full application
+suite, EditMode rerun or packaged build was needed for this UI-only increment.
+CI is checked at this third-commit checkpoint without waiting for unfinished runs.

@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Manaforge.Play.Protocol;
@@ -83,6 +84,12 @@ namespace Manaforge.Play
         public ViewerDecisionOffer PresentedDecision
         {
             get {ThreadOnly();if(disposed)return null;var offer=CurrentDecision;var frame=offer?.Frame;return frame!=null && surface.HasPresentedFrame(ticket,frame.Context.Revision)?offer:null;}
+        }
+        internal CardView ManaSourceView(ViewerDecisionOffer supplied,ProjectedManaSource source)
+        {
+            ThreadOnly();if(supplied==null || source==null || !ReferenceEquals(PresentedDecision,supplied))return null;
+            var frame=supplied.Frame;return frame!=null && frame.Decision.Family=="mana" && frame.ManaSourceReferences.Any(value=>ReferenceEquals(value,source))
+                ?surface.PresentedCardView(ticket,frame.Context.Revision,source.ObjectId):null;
         }
         internal TrackedCommand CommandFeedback(ViewerDecisionOffer supplied,TrackedCommand submission)
         {
