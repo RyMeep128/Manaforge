@@ -907,3 +907,14 @@ ordered receipt UX and real-engine/G0/G1 acceptance remain open.
 Local panel evidence: 364 EditMode and 84 graphics-enabled PlayMode checks passed
 without skips, plus Java preflight. A synthetic pending-state capture is available
 for owner review. The reusable component is not enabled in existing scenes.
+
+### P3.4 explicit numeric entry controls
+
+The [decision panel](play-viewer-decision-panel.md) adds initially blank number
+and ordered amount fields, engine-provided bounds, deliberate submit, bounded
+pagination and recoverable admission errors. Defaults are not selected. Existing
+channel validation retains range/total/overflow authority; callbacks revalidate
+the offer and input is cleared at replacement/revocation. Local evidence: 89
+graphics-enabled PlayMode checks passed without skips, including five new real
+loopback UI scenarios and a synthetic capture. Numeric visual acceptance, mana
+widgets, ordered receipt UX, fixture mounting and real-engine gates remain open.

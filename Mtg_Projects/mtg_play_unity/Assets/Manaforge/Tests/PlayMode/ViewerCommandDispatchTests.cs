@@ -147,6 +147,42 @@ namespace Manaforge.Play.Tests
             var frame=Snapshot(selection:true);var decision=frame["body"]["snapshot"]["decision"];decision["family"]=family;decision["minimum"]=minimum;decision["maximum"]=maximum;decision["options"]=new JArray();decision["can_finish"]=false;decision["cancellable"]=false;
             var amounts=new JArray();for(int i=0;i<ranges.Length;i+=2)amounts.Add(new JObject{["label"]="Engine constraint",["minimum"]=ranges[i],["maximum"]=ranges[i+1],["default"]=JValue.CreateNull()});decision["amounts"]=amounts;return frame;
         }
+        [UnityTest] public IEnumerator NumericPanelRequiresExplicitWholeNumberAndPreservesZeroAndSignedLimits()
+        {
+            foreach(string input in new[]{"0",long.MinValue.ToString(System.Globalization.CultureInfo.InvariantCulture),long.MaxValue.ToString(System.Globalization.CultureInfo.InvariantCulture)}) {
+                var host=Start(NumericSnapshot("number",long.MinValue,long.MaxValue),out var peer,out var owner);var panel=Panel(host);yield return Show(host,panel);var field=panel.Root.Q<TextField>("decision-number-0");var submit=panel.Root.Q<Button>("decision-number-submit");Assert.That(field.value,Is.Empty);Assert.That(submit.enabledSelf,Is.False);Assert.That(peer.PendingCommandBytes,Is.Zero);
+                foreach(string invalid in new[]{"","1.5","1,000","9223372036854775808"," 1"}){field.value=invalid;panel.Tick();Assert.That(submit.enabledSelf,Is.False);Click(submit);Assert.That(peer.PendingCommandBytes,Is.Zero);}
+                field.value=input;panel.Tick();Assert.That(submit.enabledSelf,Is.True);Assert.That(peer.PendingCommandBytes,Is.Zero);Click(submit);var read=Task.Run(()=>WireMessages.Parse(peer.ReadCommandForFixture()));yield return Until(()=>read.IsCompleted);Assert.That((string)read.Result["body"]["operation"],Is.EqualTo("choose_number"));Assert.That((long)read.Result["body"]["value"],Is.EqualTo(long.Parse(input,System.Globalization.CultureInfo.InvariantCulture)));host.Cancel();yield return Until(()=>host.Completion.IsCompleted);
+            }
+        }
+        [UnityTest] public IEnumerator AmountPanelIgnoresDefaultsAndPreservesExplicitValuesAcrossPages()
+        {
+            var ranges=Enumerable.Range(0,ViewerDecisionPanel.PageSize+1).SelectMany(_=>new long[]{0,5}).ToArray();var frame=NumericSnapshot("amounts",5,5,ranges);foreach(var amount in frame["body"]["snapshot"]["decision"]["amounts"])amount["default"]=5;
+            var host=Start(frame,out var peer,out var owner);var panel=Panel(host);yield return Show(host,panel);for(int i=0;i<ViewerDecisionPanel.PageSize;i++){var field=panel.Root.Q<TextField>("decision-number-"+i);Assert.That(field.value,Is.Empty);field.value="0";}
+            Assert.That(panel.Root.Q<Button>("decision-number-submit").enabledSelf,Is.False);Click(panel.Root.Q<Button>("decision-numeric-next"));Assert.That(panel.Root.Q<TextField>("decision-number-16").value,Is.Empty);panel.Root.Q<TextField>("decision-number-16").value="5";Click(panel.Root.Q<Button>("decision-numeric-previous"));Assert.That(panel.Root.Q<TextField>("decision-number-0").value,Is.EqualTo("0"));Assert.That(peer.PendingCommandBytes,Is.Zero);
+            Assert.That(panel.Root.Q<Button>("decision-number-submit").enabledSelf,Is.True);Click(panel.Root.Q<Button>("decision-number-submit"));var read=Task.Run(()=>WireMessages.Parse(peer.ReadCommandForFixture()));yield return Until(()=>read.IsCompleted);CollectionAssert.AreEqual(Enumerable.Repeat(0L,16).Concat(new[]{5L}),read.Result["body"]["values"].Select(value=>(long)value));
+        }
+        [UnityTest] public IEnumerator AmountPanelKeepsInvalidRangeInputEditableUntilExplicitCorrection()
+        {
+            var frame=NumericSnapshot("amounts",5,5,0,5,0,5);frame["body"]["snapshot"]["decision"]["prompt"]="Distribute five between these public fixture amounts";var host=Start(frame,out var peer,out var owner);var panel=Panel(host);yield return Show(host,panel);
+            panel.Root.Q<TextField>("decision-number-0").value="1";panel.Root.Q<TextField>("decision-number-1").value="1";Click(panel.Root.Q<Button>("decision-number-submit"));yield return Until(()=>{panel.Tick();return panel.Root.Q<Label>("decision-status").text=="Enter values within the displayed limits.";});Assert.That(peer.PendingCommandBytes,Is.Zero);Assert.That(panel.Root.Q<TextField>("decision-number-0").value,Is.EqualTo("1"));Assert.That(panel.Root.Q<VisualElement>("decision-controls").enabledSelf,Is.True);
+            panel.Root.Q<TextField>("decision-number-0").value="2";panel.Root.Q<TextField>("decision-number-1").value="3";
+            surface.CardsRoot.style.display=DisplayStyle.None;surface.InspectionView.style.display=DisplayStyle.None;panel.Root.style.width=700;var target=new RenderTexture(1280,720,24);Texture2D pixels=null;var previous=RenderTexture.active;
+            try{target.Create();settings.targetTexture=target;for(int i=0;i<5;i++){host.Tick();panel.Tick();yield return null;}pixels=new Texture2D(1280,720,TextureFormat.RGBA32,false);RenderTexture.active=target;pixels.ReadPixels(new Rect(0,0,1280,720),0,0);pixels.Apply();File.WriteAllBytes(Path.Combine(Application.dataPath,"../Artifacts/DecisionNumbersProof.png"),pixels.EncodeToPNG());}
+            finally{settings.targetTexture=null;RenderTexture.active=previous;if(pixels!=null)UnityEngine.Object.Destroy(pixels);target.Release();UnityEngine.Object.Destroy(target);}
+            Click(panel.Root.Q<Button>("decision-number-submit"));var read=Task.Run(()=>WireMessages.Parse(peer.ReadCommandForFixture()));yield return Until(()=>read.IsCompleted);CollectionAssert.AreEqual(new long[]{2,3},read.Result["body"]["values"].Select(value=>(long)value));
+        }
+        [UnityTest] public IEnumerator NumericPanelDropsOldInputAndCallbacksWhenSnapshotChanges()
+        {
+            var host=Start(NumericSnapshot("number",0,10),out var peer,out var owner);var panel=Panel(host);yield return Show(host,panel);var field=panel.Root.Q<TextField>("decision-number-0");field.value="7";var cached=panel.Root.Q<Button>("decision-number-submit");var old=host.CurrentDecision;var next=NumericSnapshot("number",0,10);next["message_id"]="next-numeric-panel";next["body"]["snapshot"]["revision"]=8;
+            var send=Task.Run(()=>peer.ReplyForFixture(next));yield return Until(()=>send.IsCompleted);send.GetAwaiter().GetResult();yield return Until(()=>host.CurrentDecision!=null && !ReferenceEquals(old,host.CurrentDecision));Click(cached);Assert.That(peer.PendingCommandBytes,Is.Zero);yield return Show(host,panel);Assert.That(panel.Root.Q<TextField>("decision-number-0").value,Is.Empty);field.value="8";Assert.That(panel.Root.Q<TextField>("decision-number-0").value,Is.Empty);Assert.That(panel.Root.Q<Button>("decision-number-submit").enabledSelf,Is.False);owner.TrySetResult(true);panel.Tick();Assert.That(panel.Root.Query<TextField>().ToList(),Is.Empty);
+        }
+        [UnityTest] public IEnumerator NumericPanelDoesNotGuessMissingLimitsOrRenderBeyondWireCapacity()
+        {
+            foreach(bool excessive in new[]{false,true}) {
+                var frame=excessive?NumericSnapshot("amounts",0,0,new long[(WireMessages.MaxAmountValues+1)*2]):NumericSnapshot("number",0,5);if(!excessive)frame["body"]["snapshot"]["decision"]["minimum"]=JValue.CreateNull();var host=Start(frame,out var peer,out var owner);var panel=Panel(host);yield return Show(host,panel);Assert.That(panel.Root.Q<TextField>(),Is.Null);Assert.That(panel.Root.Q<Button>("decision-number-submit"),Is.Null);Assert.That(peer.PendingCommandBytes,Is.Zero);host.Cancel();yield return Until(()=>host.Completion.IsCompleted);
+            }
+        }
         [UnityTest] public IEnumerator NumberCommandsPreserveSignedExtremesWithoutDefaults()
         {
             foreach(long value in new[]{long.MinValue,0L,long.MaxValue}) {
