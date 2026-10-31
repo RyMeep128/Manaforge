@@ -50,3 +50,7 @@ single-use key transfer. All committed credentials/pins are public fake vectors.
 The public scene is unchanged; no new owner UI verification is needed. No full
 application suite ran. CI review remains every third implementation commit, next
 at 0.5.93; no current CI success is claimed for this increment.
+
+The subsequent [private pipe reader](play-bootstrap-pipe.md) implements bounded
+Windows framed reads and owner-lifeline EOF monitoring. Product launcher writing,
+packaged Unity stdin verification and UI shutdown wiring remain pending.

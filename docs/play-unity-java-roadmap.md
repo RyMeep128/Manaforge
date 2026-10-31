@@ -747,3 +747,13 @@ pin, rejecting owner/deck fields. Key transfer is single-use and disposal revoke
 unclaimed keys. Local evidence: 14 Python and 326 Unity EditMode checks passed.
 Actual inherited delivery, fresh authentication challenge exchange, OS containment
 and production mounting remain open; G0/G1 acceptance is not claimed. No UI changed.
+
+### G1 private bootstrap pipe reader
+
+The [Windows private pipe primitive](play-bootstrap-pipe.md) now receives one
+bounded framed bootstrap and watches owner EOF without a blocking render-thread
+read. Real anonymous-pipe checks cover fragments, truncation, deadlines,
+cancellation and lifeline behavior; a Python child verifies inherited delivery.
+Local evidence: 20 Python and 334 Unity EditMode checks passed. Product launcher
+writing, packaged Unity stdin verification, UI shutdown wiring, fresh challenges
+and OS containment remain open. No public UI changed; G0/G1 remain unaccepted.

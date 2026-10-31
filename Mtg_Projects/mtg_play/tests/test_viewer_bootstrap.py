@@ -1,13 +1,56 @@
 import json
+import os
 from pathlib import Path
+import subprocess
+import sys
 
 import pytest
 from jsonschema import Draft202012Validator
 
 from mtg_play.viewer_bootstrap import ViewerBootstrapError, export_viewer_bootstrap
+from mtg_play.viewer_bootstrap import frame_viewer_bootstrap
 
 
 ROOT = Path(__file__).resolve().parents[1] / "protocol"
+
+
+def test_private_frame_has_exact_big_endian_length_and_no_extra_lifeline_data():
+    payload = export_viewer_bootstrap(**arguments())
+    framed = frame_viewer_bootstrap(payload)
+    assert int.from_bytes(framed[:4], "big") == len(payload)
+    assert framed[4:] == payload
+
+
+def test_private_frame_reaches_inherited_child_stdin_without_argument_credentials():
+    child = """
+import json, sys
+stream = sys.stdin.buffer
+header = stream.read(4)
+assert len(header) == 4
+size = int.from_bytes(header, 'big')
+assert 1 <= size <= 16384
+value = json.loads(stream.read(size))
+assert value['viewer_id'] == 'seat-one'
+assert stream.read(1) == b''
+print('bootstrap-received')
+"""
+    result = subprocess.run(
+        [sys.executable, "-I", "-c", child],
+        input=frame_viewer_bootstrap(export_viewer_bootstrap(**arguments())),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=5,
+        check=True,
+        creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+    )
+    assert result.stdout.strip() == b"bootstrap-received"
+    assert result.stderr == b""
+
+
+@pytest.mark.parametrize("value", [b"", b"x" * 16385, "private", None])
+def test_invalid_frame_input_is_sanitized(value):
+    with pytest.raises(ViewerBootstrapError, match="^VIEWER_BOOTSTRAP_INVALID$"):
+        frame_viewer_bootstrap(value)
 
 
 def arguments():

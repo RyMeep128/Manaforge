@@ -89,6 +89,10 @@ bounded one-viewer export/parse payload, separate from the gateway's all-decks
 manifest. Actual inherited delivery, lifeline handling and containment remain
 pending; parsing this payload is not authenticated readiness.
 
+The [Windows bootstrap pipe primitive](play-bootstrap-pipe.md) now reads bounded
+private frames and watches owner EOF on workers. It is not yet connected to this
+LaunchOwner or packaged Unity startup, and provides no descendant containment.
+
 ## Crashes, workspaces and orphan recovery
 
 Before P4, add containment that proves descendant ownership and survives owner

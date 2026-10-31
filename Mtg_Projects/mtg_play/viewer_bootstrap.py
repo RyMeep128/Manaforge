@@ -12,6 +12,20 @@ class ViewerBootstrapError(ValueError):
     pass
 
 
+def frame_viewer_bootstrap(private_payload):
+    """One big-endian frame for an inherited stdin pipe. Keep writer open afterward.
+
+    The launch worker owns bounded writing/child cleanup; this only creates bytes.
+    Pass the result directly to the private writer, never to diagnostics or disk.
+    """
+    if (
+        not isinstance(private_payload, bytes)
+        or not 1 <= len(private_payload) <= MAX_BOOTSTRAP_BYTES
+    ):
+        raise ViewerBootstrapError("VIEWER_BOOTSTRAP_INVALID")
+    return len(private_payload).to_bytes(4, "big") + private_payload
+
+
 def export_viewer_bootstrap(
     *,
     port,
