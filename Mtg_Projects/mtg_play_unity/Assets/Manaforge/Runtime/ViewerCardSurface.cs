@@ -31,6 +31,7 @@ namespace Manaforge.Play
         }
         private ViewerSurfaceTicket ticket;
         private IDisposable privateAssets;
+        private ViewerArtworkJobs artworkJobs;
         private long revision=-1,minimumRevision;
         private int readyFrame;
         private bool disposed,transitioning,faulted;
@@ -52,7 +53,7 @@ namespace Manaforge.Play
         // Clear references before asking an explicitly transferred private resource scope to dispose.
         private void ClearOwnedState()
         {
-            ticket?.Mailbox.Dispose();ticket=null;revision=-1;cards.Clear();requests.Clear();artwork.Clear();inspectedObject=null;InspectionView.Conceal();
+            ticket?.Mailbox.Dispose();artworkJobs?.Dispose();artworkJobs=null;ticket=null;revision=-1;cards.Clear();requests.Clear();artwork.Clear();inspectedObject=null;InspectionView.Conceal();
             foreach(var view in views.Values)view.Dispose();views.Clear();CardsRoot.Clear();
             var assets=privateAssets;privateAssets=null;
             try{assets?.Dispose();}catch{privateAssets=assets;throw;}
@@ -127,6 +128,14 @@ namespace Manaforge.Play
         }
         private static bool ArtworkPermitted(ProjectedCard card)=>!card.Hidden && card.FaceDown==false
             && !string.IsNullOrWhiteSpace(card.Printing?.PrintingId) && !string.IsNullOrWhiteSpace(card.Printing?.OracleId);
+        public ViewerArtworkJobs CreateArtworkJobs(ViewerSurfaceTicket supplied,
+            Func<ViewerArtworkRequest,CancellationToken,System.Threading.Tasks.Task<PreparedCardArtwork>> provider,int concurrency=2,int maximumQueued=32)
+        {
+            Open();
+            if(ticket==null || !ReferenceEquals(ticket,supplied) || ticket.Mailbox.IsStopped || !(privateAssets is ViewerArtworkScope) || artworkJobs!=null)
+                throw new InvalidOperationException("VIEWER_SURFACE_JOBS_UNAVAILABLE");
+            artworkJobs=new ViewerArtworkJobs(ticket,provider,concurrency,maximumQueued);return artworkJobs;
+        }
         public ViewerArtworkRequest RequestArtwork(ViewerSurfaceTicket supplied,string objectId)
         {
             Open();

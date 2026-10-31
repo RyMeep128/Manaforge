@@ -60,3 +60,8 @@ invalid-budget safety, the empty UI handoff frame, bounded drain/queue work,
 rejected and obsolete pixel disposal, duplicate ownership, concurrent completion
 budgets, and shutdown. No full application suite ran. The public fixture is
 unchanged; no new owner UX review or live-game acceptance is claimed.
+
+A subsequent [artwork coordinator](play-artwork-jobs.md) now provides bounded
+per-epoch active/queued jobs and asynchronous lifetime cancellation. The concrete
+Core provider, provider deadlines/global retirement policy and live mounting
+remain separate work.

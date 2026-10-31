@@ -92,3 +92,7 @@ with the next checkpoint after 0.5.87; licensed Unity CI and G0/G1 remain open.
 A subsequent [render mailbox](play-render-mailbox.md) now bounds queued
 completions and connects them to the UI drain. Active Core job scheduling and
 production mounting remain open; captured tickets must be used for late results.
+
+The [job coordinator](play-artwork-jobs.md) now owns per-epoch provider scheduling
+and late-result disposal. The concrete existing-Core cache adapter has not yet
+been mounted; provider cooperation/deadlines remain required.

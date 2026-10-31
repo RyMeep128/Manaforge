@@ -701,3 +701,17 @@ queue overflow and shutdown are covered by local checks. Local evidence is 321
 EditMode and 22 graphics-enabled PlayMode checks, including the GPU copy test;
 no skips occurred in that graphics run. Active Core job scheduling and production
 session mounting remain open, as do G0/G1 and P2 parity. No public scene changed.
+
+
+### G1/P3 bounded artwork jobs
+
+The [artwork coordinator](play-artwork-jobs.md) now runs asset providers off the
+UI thread under per-epoch concurrency/queue limits. Viewer cleanup stops owned
+jobs without waiting, signals cancellation on workers and disposes late or
+mismatched results. Provider errors expose only fixed diagnostic codes. Fast
+provider/concurrent admission coverage guards worker retirement against stranded
+queues. Local evidence: 321 EditMode and 28 graphics-enabled PlayMode checks
+passed, including Java preflight and the GPU copy test, with no graphics skips.
+The concrete Core cache provider, provider deadlines/global retirement policy and
+session-scene mounting remain open. No public UI changed; G0/G1 and P2 parity
+acceptance are not claimed. CI review remains on the third-commit cadence.
