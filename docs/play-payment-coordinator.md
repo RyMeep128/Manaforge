@@ -1,6 +1,6 @@
 # Safe automatic mana payment â€” Java coordinator
 
-Status: isolated foundation at 0.5.109-alpha.1 for P2.3; production automation is
+Status: isolated foundation through 0.5.110-alpha.1 for P2.3; production automation is
 **disabled/unmounted**. P4.3 real-engine acceptance has not happened. This implements
 the fallback scope explicitly allowed by the [owner story](play-safe-automatic-mana-payment-story.md),
 not the story's end-to-end definition of done. The existing manual command path,
@@ -125,3 +125,78 @@ five pinned native classes after artifact hash checks. No full application suite
 or real engine game ran. CI wiring is added; no new CI result is claimed. The next
 scheduled relevant CI checkpoint is 0.5.111 under the established every-third-
 commit cadence. No owner UI verification is needed for this backend-only increment.
+
+## Native helper adapter and executable probe — 0.5.110
+
+SelectedSourceMana is a small optional Java/XMage adapter around the native
+ManaUtil.tryToAutoPay helper for ONE already-selected source. It validates native
+ability-map keys, copies the map before delegation and returns an unmodifiable
+map. Native ability objects remain borrowed engine objects; no deep copy, rules
+calculation, safety certificate or source-activation permission is implied. This
+adapter has no production call site and cannot enable automatic gameplay.
+
+Execute focused native object checks with the installed pinned runtime:
+
+```powershell
+./Mtg_Projects/mtg_proxy/venv/Scripts/python.exe tools/check_play_payment_coordinator.py --probe-pinned-helpers --javap 'C:/Program Files/Java/jdk-23/bin/javap.exe'
+```
+
+This opt-in probe verifies every explicit runtime classpath JAR against the
+existing artifact manifest before loading native classes, compiles the adapter
+and tests in a temporary workspace, and invokes only utility-object operations.
+It starts no game/server, loads no decks, downloads nothing and modifies no engine
+artifact. The default CI invocation still runs the dependency-free coordinator
+checks; it does not imply native helper or real-game CI coverage.
+
+Verified native behavior includes three integration traps:
+
+1. ManaCostsImpl.testPay(Mana) is an ANY-component contribution predicate. The
+   pinned bytecode returns on the first component that accepts mana. It returns
+   true for a {2}{G} cost against a two-mana green/blue value. This is recorded as
+   native behavior, NOT a weakened payment-feasibility acceptance gate. It cannot
+   certify that the entire cost is payable.
+2. ManaUtil.tryToAutoPay can clear/replace its input map, and that map uses native
+   ability IDs, not battlefield source IDs or Unity object IDs. The adapter keeps
+   the original map intact while narrowing copies for different unpaid costs.
+3. tryToAutoSelectAManaColor selects the first offered color for generic-only
+   costs. It chooses green for an unambiguous {G} choice and declines a {G}{U}
+   choice, but its generic fallback is not strategic equivalence/safety evidence.
+
+Local evidence: 65 coordinator lifecycle checks and 31 real pinned utility-object
+checks passed, plus five-class signature/hash verification. Checks cover separate
+UserData instances, pool flags, native cost contribution, actual green/blue ability
+narrowing, preserved maps, rejected foreign keys, immutable result maps and color
+selection. No source was activated and no payment or spell resolved in a game.
+Production activation and all P4.3 real-game acceptance remain open. No full app
+suite or UI changes. Next scheduled CI check remains 0.5.111.
+
+## Downloaded reference implementation — October 31, 2026
+
+Per the owner request, selected managed types were inspected from Downloads/
+Assets from Wizards, given with permission/Managed. This was code-path inspection,
+not just prefab/sprite discovery. Original files were read only. ILSpyCmd 9.1.0.7988
+and local decompiled reports stay under ignored Unity Artifacts; no supplied DLL,
+source implementation or reference engine is added to Manaforge.
+
+| Inspected reference path | Observed behavior |
+|---|---|
+| Core: SettingsPanelGameplay.OnAutoPayToggled | Sends the change through AutoResponseManager and disables the toggle until a changed current-settings object is observed. |
+| Core: AutoResponseManager.SetManaAutoPayment | Requests Auto/Manual ManaSelectionType and records the local preference. Startup also sends the configured selection type. |
+| SharedClientCore: GreInterface.SetAutoPayMana / SetAutoPass | Sends engine settings. Full Control changes ManaPaymentStrategyType to Manual; leaving it requests Auto. Manaforge's payment and priority preferences remain separate as required by the owner story. |
+| SharedClientCore: AutoTapActionsRequest | Copies AutoTapSolutions supplied by the GRE request. SubmitSolution verifies membership and sends the ORIGINAL solution index in PerformAutoTapActionsResp. This inspected path does not construct a battlefield payment plan. |
+| Core: AutoTapActionsWorkflow | Previews source/mana highlights, presents engine-offered alternatives and confirmations, and maps display-sanitized solutions back to originals before submission. |
+| Core: PayCostsRequestHandler_AutoTap | Its loop/playback response validation correlates request/response IDs, payment request type and available auto-tap solutions. This is not proof of when every live automatic payment is triggered. |
+
+Reference file SHA-256 provenance:
+
+- Core.dll: 48347a833961d311da7a3ccdecc6116f3ee75b6db8fa313b1871aecea8b54e85
+- SharedClientCore.dll: aceb0cd5004b322ceb59b28b0ad44ec799b3d47a46666b17a50150da5449e392
+- Wizards.MDN.GreProtobuf.dll: 9569420c5ba7f6b33316d74d8208ffa29a872ab96566a45fe26cd63cf1e75306
+
+The useful Manaforge pattern is engine-owned proposals, immutable current-request
+identity, manual override, engine-confirmed settings and source previews. It does
+not supply an XMage planning API or prove a safe XMage combination. Keep payment
+planning/execution in the Java engine adapter, render only viewer-permitted state,
+and preserve the original engine proposal identity through any presentation sort.
+The existing coordinator already requires trusted engine-certified step handles;
+reference findings do not justify replacing that contract with client heuristics.

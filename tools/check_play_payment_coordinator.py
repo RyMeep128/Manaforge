@@ -20,6 +20,8 @@ PLAY = ROOT / "Mtg_Projects/mtg_play"
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--verify-pinned-api", action="store_true")
+    parser.add_argument("--probe-pinned-helpers", action="store_true",
+                        help="Also execute focused native utility-object checks after verifying every runtime JAR")
     parser.add_argument("--javap", type=Path)
     args = parser.parse_args()
     compiler, runtime = shutil.which("javac"), shutil.which("java")
@@ -30,7 +32,7 @@ def main():
                    PLAY / "java/payment-test/manaforge/payment/PaymentCoordinatorChecks.java"]
         subprocess.run([compiler, "--release", "8", "-d", output, *map(str, sources)], check=True, timeout=60)
         subprocess.run([runtime, "-cp", output, "manaforge.payment.PaymentCoordinatorChecks"], check=True, timeout=30)
-    if not args.verify_pinned_api:
+    if not (args.verify_pinned_api or args.probe_pinned_helpers):
         return
     javap = str(args.javap) if args.javap else shutil.which("javap")
     if not javap:
@@ -57,6 +59,21 @@ def main():
         if not all(signature in report.stdout for signature in signatures):
             raise SystemExit("Pinned payment API signature mismatch: " + name)
     print("Pinned XMage payment APIs: 5 classes verified against artifact hashes; inspection only, no real-game acceptance")
+    if args.probe_pinned_helpers:
+        # Do not execute a classpath wildcard or an unverified local dependency.
+        dependencies = sorted(key for key in manifest["artifacts"]
+                              if key.startswith("xmage/mage-server/lib/") and key.endswith(".jar"))
+        for key in dependencies:
+            if hashlib.sha256((engine / key).read_bytes()).hexdigest() != manifest["artifacts"][key]:
+                raise SystemExit("Pinned payment helper dependency mismatch")
+        native_classpath = os.pathsep.join(str((engine / key).resolve()) for key in dependencies)
+        with tempfile.TemporaryDirectory(prefix="manaforge-native-payment-") as output:
+            source = PLAY / "java/payment-native-test/manaforge/payment/PinnedPaymentChecks.java"
+            adapter = PLAY / "java/payment-xmage/manaforge/payment/xmage/SelectedSourceMana.java"
+            subprocess.run([compiler, "--release", "8", "-cp", native_classpath, "-d", output, str(source), str(adapter)],
+                           check=True, timeout=60)
+            subprocess.run([runtime, "-cp", output + os.pathsep + native_classpath,
+                            "manaforge.payment.PinnedPaymentChecks"], cwd=output, check=True, timeout=30)
 
 
 if __name__ == "__main__":

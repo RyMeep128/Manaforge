@@ -964,3 +964,15 @@ five native API classes were inspected after pin/hash verification. The protocol
 CI workflow now includes these isolated checks. Real-engine payment, applied
 native preferences and live gateway dispatch are explicitly not demonstrated.
 Next scheduled CI review is 0.5.111; no current CI success is inferred.
+
+### P2.3 native payment helper adapter and reference implementation
+
+The [native helper probe and reference findings](play-payment-coordinator.md)
+exercise unchanged pinned XMage objects and add a map-preserving selected-source
+adapter around ManaUtil. The downloaded reference client receives payment plans
+from its engine and submits original solution indices; it does not remove the need
+for an XMage-backed planning/execution port. Local evidence: 65 coordinator and
+31 native utility-object checks passed. Native map mutation, partial-cost testPay
+semantics and generic-color fallback are documented as integration limits. No
+production automation, source activation, real-game payment or UI acceptance is
+claimed. Next scheduled CI review is 0.5.111.

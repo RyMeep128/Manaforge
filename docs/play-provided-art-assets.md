@@ -250,3 +250,15 @@ or rebinding the same identity. Packaged captures cover Jace, Battle, Room,
 Dungeon, Planechase, Scheme, Vanguard, Soul Warden ability and a flipped Delver.
 Owner visual review remains required; these are fixture examples, not live-game
 acceptance. CI remains on the every-third-commit cadence (next after 0.5.84).
+
+## Auto-pay reference code inspection — October 31, 2026
+
+Selected Core.dll and SharedClientCore.dll code paths were inspected, including
+AutoResponseManager, GreInterface, AutoTapActionsRequest and the payment workflow.
+The inspected client path receives engine-provided AutoTapSolutions and submits
+the selected original index; settings request Auto/Manual behavior and Full Control
+changes payment strategy. Source/mana previews and confirmation affordances can
+inform Manaforge's UI. This does not provide an XMage source planner. See
+[exact findings and provenance](play-payment-coordinator.md#downloaded-reference-implementation--october-31-2026).
+Decompiled reports and the pinned inspection tool remain ignored local artifacts;
+original downloads and production gameplay remain unchanged.
