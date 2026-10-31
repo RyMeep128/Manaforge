@@ -23,6 +23,7 @@ def main():
     parser.add_argument("--probe-pinned-helpers", action="store_true",
                         help="Also execute focused native utility-object checks after verifying every runtime JAR")
     parser.add_argument("--javap", type=Path)
+    parser.add_argument("--xmage-root", type=Path, default=PLAY / "mage-full_1.4.62-dev_2026-10-03_20-47")
     args = parser.parse_args()
     compiler, runtime = shutil.which("javac"), shutil.which("java")
     if not compiler or not runtime:
@@ -41,7 +42,7 @@ def main():
     if not javap:
         parser.error("--verify-pinned-api requires javap on PATH or --javap")
     manifest = json.loads((PLAY / "artifacts.json").read_text())
-    engine = PLAY / "mage-full_1.4.62-dev_2026-10-03_20-47"
+    engine = args.xmage_root.resolve()
     jars = ["xmage/mage-server/lib/mage-1.4.62.jar",
             "xmage/mage-server/plugins/players/mage-player-human-1.4.62.jar"]
     # Resolve the human plugin by the existing manifest rather than assuming its directory.
@@ -55,13 +56,15 @@ def main():
         "mage.player.human.HumanPlayer": ["playMana(mage.abilities.Ability,", "playManaHandling(mage.abilities.Ability,", "playManaAbilities(java.util.UUID,", "currentlyUnpaidMana", "responseOpenedForAnswer"],
         "mage.players.net.UserData": ["setManaPoolAutomatic(boolean)", "setManaPoolAutomaticRestricted(boolean)"],
         "mage.players.PlayerImpl": ["setPayManaMode(boolean)"],
+        "mage.Mana": ["boolean enough(mage.Mana)", "mage.Mana copy()"],
+        "mage.abilities.mana.ManaOptions": ["boolean enough(mage.Mana)"],
     }
     classpath = os.pathsep.join(str(engine / key) for key in jars)
     for name, signatures in expected.items():
         report = subprocess.run([javap, "-p", "-classpath", classpath, name], capture_output=True, text=True, check=True, timeout=30)
         if not all(signature in report.stdout for signature in signatures):
             raise SystemExit("Pinned payment API signature mismatch: " + name)
-    print("Pinned XMage payment APIs: 5 classes verified against artifact hashes; inspection only, no real-game acceptance")
+    print("Pinned XMage payment APIs: 7 classes verified against artifact hashes; inspection only, no real-game acceptance")
     if args.probe_pinned_helpers:
         # Do not execute a classpath wildcard or an unverified local dependency.
         dependencies = sorted(key for key in manifest["artifacts"]
@@ -79,7 +82,8 @@ def main():
             bridge_sources = sorted((PLAY / "java").glob("*.java"))
             subprocess.run([compiler, "--release", "8", "-encoding", "UTF-8", "-cp", native_classpath, "-d", output,
                             str(source), str(adapter), str(response), str(context_source),
-                            str(PLAY / "java/payment-xmage/manaforge/payment/xmage/OrdinaryManaShape.java"), *map(str, bridge_sources)],
+                            str(PLAY / "java/payment-xmage/manaforge/payment/xmage/OrdinaryManaShape.java"),
+                            str(PLAY / "java/payment-xmage/manaforge/payment/xmage/OrdinaryCostCoverage.java"), *map(str, bridge_sources)],
                            check=True, timeout=60)
             subprocess.run([runtime, "-cp", output + os.pathsep + native_classpath,
                             "manaforge.payment.PinnedPaymentChecks"], cwd=output, check=True, timeout=30)

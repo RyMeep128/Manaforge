@@ -1055,3 +1055,14 @@ saved deck and offline verified artwork. No Java/XMage, AI, game snapshots or
 mana automation is involved. Existing rendering, bootstrap and process ownership
 components are reused. Windows build evidence exists; new CI checks and owner
 UI verification remain pending. This is not P4.1, a live-game claim or a gate waiver.
+
+
+Regular payment work resumed at 0.5.118 after the separate desktop preview
+handoff. The native ordinary-cost coverage check delegates arithmetic to pinned
+XMage Mana.enough, declines unsupported inputs, and demonstrates two positive
+base-total observations in a real payment window. Sources remain manually
+submitted: source/world-state safety, plan identity and serialized Java owner
+execution are still open. A dedicated native-payment CI workflow adds pinned
+helper and one real-engine probe coverage without depending on Qt CI. All
+existing acceptance gates remain in force; the desktop preview still awaits UI
+review and no production automatic payment is enabled.

@@ -12,6 +12,7 @@ import mage.util.ManaUtil;
 import manaforge.payment.xmage.SelectedSourceMana;
 import manaforge.payment.xmage.ContextHumanPlayer;
 import manaforge.payment.xmage.OrdinaryManaShape;
+import manaforge.payment.xmage.OrdinaryCostCoverage;
 import mage.constants.RangeOfInfluence;
 
 /** Pinned utility objects and synthetic scope guards. No server, deck, activation or real-game claim. */
@@ -98,6 +99,35 @@ public final class PinnedPaymentChecks {
         check(OrdinaryManaShape.inspect(tagged)==OrdinaryManaShape.Result.CHOICE_OR_ADJUSTER);
         check(life.getCosts().size()==2 && dynamic.getEffects().size()==1); // Inspection never rewrites native inputs.
     }
+    private static void ordinaryCoverageChecks() {
+        Mana green=Mana.GreenMana(1),blue=Mana.BlueMana(1),mixed=green.copy();mixed.add(blue);
+        ManaCostsImpl<?> cost=new ManaCostsImpl<>("{2}{G}");
+        check(cost.testPay(mixed)); // Contribution alone is not coverage.
+        check(OrdinaryCostCoverage.inspect(cost,mixed)==OrdinaryCostCoverage.Result.INSUFFICIENT);
+        mixed.add(blue);check(OrdinaryCostCoverage.inspect(cost,mixed)==OrdinaryCostCoverage.Result.COVERS);
+        check(!cost.isPaid() && cost.getMana().count()==3 && mixed.getBlue()==2 && mixed.getGreen()==1);
+        check(OrdinaryCostCoverage.inspect(new ManaCostsImpl<>("{1}{U}"),mixed)==OrdinaryCostCoverage.Result.COVERS);
+        check(OrdinaryCostCoverage.inspect(new ManaCostsImpl<>("{G}"),blue)==OrdinaryCostCoverage.Result.INSUFFICIENT);
+        check(OrdinaryCostCoverage.inspect(new ManaCostsImpl<>("{G}"),green)==OrdinaryCostCoverage.Result.COVERS);
+        check(OrdinaryCostCoverage.inspect(new ManaCostsImpl<>("{C}"),green)==OrdinaryCostCoverage.Result.INSUFFICIENT);
+        check(OrdinaryCostCoverage.inspect(new ManaCostsImpl<>("{C}"),Mana.ColorlessMana(1))==OrdinaryCostCoverage.Result.COVERS);
+        check(OrdinaryCostCoverage.inspect(new ManaCostsImpl<>("{0}"),green)==OrdinaryCostCoverage.Result.NO_UNPAID_COST);
+        check(OrdinaryCostCoverage.inspect(new ManaCostsImpl<>("{1}"),new Mana())==OrdinaryCostCoverage.Result.INSUFFICIENT);
+        for(String special:Arrays.asList("{G/U}","{G/P}","{S}","{X}","{129}"))
+            check(OrdinaryCostCoverage.inspect(new ManaCostsImpl<>(special),mixed)==OrdinaryCostCoverage.Result.UNSUPPORTED);
+        check(OrdinaryCostCoverage.inspect(cost,new mage.ConditionalMana(mixed))==OrdinaryCostCoverage.Result.UNSUPPORTED);
+        check(OrdinaryCostCoverage.inspect(cost,Mana.AnyMana(3))==OrdinaryCostCoverage.Result.UNSUPPORTED);
+        check(OrdinaryCostCoverage.inspect(cost,Mana.GenericMana(3))==OrdinaryCostCoverage.Result.UNSUPPORTED);
+        check(OrdinaryCostCoverage.inspect(cost,Mana.GreenMana(129))==OrdinaryCostCoverage.Result.UNSUPPORTED);
+        Mana flagged=green.copy();flagged.setFlag(true);check(OrdinaryCostCoverage.inspect(cost,flagged)==OrdinaryCostCoverage.Result.UNSUPPORTED);
+        check(OrdinaryCostCoverage.inspect(null,green)==OrdinaryCostCoverage.Result.UNKNOWN);
+        check(OrdinaryCostCoverage.inspect(cost,null)==OrdinaryCostCoverage.Result.UNKNOWN);
+        ManaCostsImpl<?> filtered=new ManaCostsImpl<>("{G}");filtered.setSourceFilter(new mage.filter.FilterPermanent());
+        check(OrdinaryCostCoverage.inspect(filtered,green)==OrdinaryCostCoverage.Result.UNSUPPORTED);
+        ManaCostsImpl<?> paid=new ManaCostsImpl<>("{G}");paid.setPaid();
+        check(OrdinaryCostCoverage.inspect(paid,green)==OrdinaryCostCoverage.Result.NO_UNPAID_COST);check(paid.isPaid());
+        check(OrdinaryCostCoverage.inspect(new ManaCostsImpl<mage.abilities.costs.mana.ManaCost>("{G}"){},green)==OrdinaryCostCoverage.Result.UNSUPPORTED);
+    }
     public static void main(String[] args) throws Exception {
         ContextHumanPlayer observed=new ContextHumanPlayer("Public fixture",RangeOfInfluence.ALL,0);
         ContextHumanPlayer copied=observed.copy();
@@ -106,6 +136,7 @@ public final class PinnedPaymentChecks {
         check(observed.paymentProbe(null,observed.getId(),0)==null);check(copied.paymentProbe(null,copied.getId(),0)==null);
         sourceScopeChecks(observed);
         ordinaryShapeChecks();
+        ordinaryCoverageChecks();
         UserData manual=UserData.getDefaultUserDataView(),automatic=UserData.getDefaultUserDataView();
         check(manual!=automatic);
         manual.setManaPoolAutomatic(false);manual.setManaPoolAutomaticRestricted(false);

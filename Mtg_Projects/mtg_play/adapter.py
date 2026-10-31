@@ -121,6 +121,7 @@ class LocalGameAdapter:
         self._payment_probe_counts = []
         self._payment_candidate_counts = []
         self._payment_ordinary_counts = []
+        self._payment_coverage_counts = dict.fromkeys(("COVERS", "INSUFFICIENT", "NO_UNPAID_COST", "UNSUPPORTED", "UNKNOWN"), 0)
         self._bundle, self._jdk = Path(bundle).resolve(), Path(jdk).resolve()
         self._ready, self._release, self._done = (
             threading.Event(),
@@ -426,7 +427,16 @@ class LocalGameAdapter:
                     ordinary = probe.get("ordinary_shape_abilities")
                     if type(ordinary) is int and 0 <= ordinary <= abilities:
                         self._payment_ordinary_counts.append(ordinary)
+                    coverage = probe.get("base_cost_coverage")
+                    if type(coverage) is str and coverage in self._payment_coverage_counts:
+                        self._payment_coverage_counts[coverage] += 1
         return result
+
+    def payment_cost_coverage_diagnostics(self):
+        """Fixed bounded native base-total evidence, never source safety or payment success."""
+        counts = self._payment_coverage_counts
+        return dict(enabled=self._payment_context_probe, observations=sum(counts.values()),
+                    **{key.lower(): value for key, value in counts.items()})
 
     def payment_context_diagnostics(self):
         """Bounded opt-in research evidence; no raw IDs, costs, cards or native references."""

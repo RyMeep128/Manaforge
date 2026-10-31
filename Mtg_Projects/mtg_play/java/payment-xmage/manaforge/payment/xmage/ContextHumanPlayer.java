@@ -6,6 +6,8 @@ import java.util.UUID;
 import java.util.Map;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import mage.Mana;
+import mage.abilities.effects.mana.BasicManaEffect;
 import mage.abilities.mana.ActivatedManaAbilityImpl;
 import mage.constants.Zone;
 import mage.game.permanent.Permanent;
@@ -75,6 +77,9 @@ public final class ContextHumanPlayer extends HumanPlayer {
             return game.getPermanent(source)==permanent && payer.equals(permanent.getControllerId())?result:null;
         });
     }
+    private static final class SourceEvidence {
+        int candidates,ordinary;Mana base;
+    }
     /** Bounded diagnostic evidence only. Never exports cost text, names, IDs, abilities or Game. */
     public JsonObject paymentProbe(Game game,UUID payer,int cycle) throws ReflectiveOperationException {
         return paymentProbe(game,payer,cycle,new UUID[0]);
@@ -83,14 +88,19 @@ public final class ContextHumanPlayer extends HumanPlayer {
     public JsonObject paymentProbe(Game game,UUID payer,int cycle,UUID[] visibleSources) throws ReflectiveOperationException {
         if(visibleSources==null || visibleSources.length>128)return null;
         final int[] counts={0,0,0};
+        final Mana baseTotal=new Mana();
         for(UUID source:new java.util.LinkedHashSet<>(java.util.Arrays.asList(visibleSources))) {
-            int[] count=inspectBattlefieldSource(game,payer,cycle,source,(ability,unpaid,candidates)->{
-                int ordinary=0;
-                for(ActivatedManaAbilityImpl candidate:candidates.values())
-                    if(OrdinaryManaShape.inspect(candidate)==OrdinaryManaShape.Result.ORDINARY_TAP_SHAPE)ordinary++;
-                return new int[]{candidates.size(),ordinary};
+            SourceEvidence count=inspectBattlefieldSource(game,payer,cycle,source,(ability,unpaid,candidates)->{
+                SourceEvidence evidence=new SourceEvidence();evidence.candidates=candidates.size();
+                for(ActivatedManaAbilityImpl candidate:candidates.values()) {
+                    if(OrdinaryManaShape.inspect(candidate)==OrdinaryManaShape.Result.ORDINARY_TAP_SHAPE) {
+                        evidence.ordinary++;
+                        if(candidates.size()==1)evidence.base=((BasicManaEffect)candidate.getEffects().get(0)).getManaTemplate().copy();
+                    }
+                }
+                return evidence;
             });
-            if(count!=null && count[0]>0){counts[0]++;counts[1]+=count[0];counts[2]+=count[1];}
+            if(count!=null && count.candidates>0){counts[0]++;counts[1]+=count.candidates;counts[2]+=count.ordinary;if(count.base!=null)baseTotal.add(count.base);}
         }
         return inspectPayment(game,payer,cycle,(ability,unpaid)->{
             JsonObject result=new JsonObject();result.addProperty("available",true);
@@ -98,7 +108,10 @@ public final class ContextHumanPlayer extends HumanPlayer {
             result.addProperty("sequence",payment.sequence);
             result.addProperty("candidate_sources",counts[0]);
             result.addProperty("candidate_abilities",counts[1]);
-            result.addProperty("ordinary_shape_abilities",counts[2]);return result;
+            result.addProperty("ordinary_shape_abilities",counts[2]);
+            // BASE templates only: replacement effects, restrictions, floating mana and strategy
+            // have not been reviewed. This does NOT authorize selection or activation.
+            result.addProperty("base_cost_coverage",OrdinaryCostCoverage.inspect(unpaid,baseTotal).name());return result;
         });
     }
 }

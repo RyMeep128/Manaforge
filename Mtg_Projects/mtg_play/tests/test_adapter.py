@@ -1137,3 +1137,30 @@ def test_ordinary_shape_counts_do_not_certify_safety(monkeypatch):
     assert report["ordinary_shape_observations"] == 123  # Shared 128-candidate observation bound.
     assert report["maximum_ordinary_shape_abilities"] == 2
     assert "safe" not in report and "private-" not in json.dumps(report)
+
+
+def test_native_coverage_evidence_is_fixed_bounded_and_default_off(monkeypatch):
+    view = dict(game_id="private-game", viewer="private-viewer", cycle=7, players=[])
+    evidence = dict(available=True, sequence=1, unpaid_mana_count=2, candidate_sources=2,
+                    candidate_abilities=2, ordinary_shape_abilities=2, base_cost_coverage="COVERS")
+    default = LocalGameAdapter()
+    monkeypatch.setattr(default, "_server_request", lambda **fields: dict(payment_probe=evidence))
+    default._metadata(view)
+    assert default.payment_cost_coverage_diagnostics()["observations"] == 0
+    adapter = LocalGameAdapter(payment_context_probe=True)
+    monkeypatch.setattr(adapter, "_server_request", lambda **fields: dict(payment_probe=evidence))
+    for invalid in [True, {}, None, "SAFE", "private-card-name"]:
+        evidence["base_cost_coverage"] = invalid
+        adapter._metadata(view)
+    assert adapter.payment_cost_coverage_diagnostics()["observations"] == 0
+    for status in ["COVERS", "INSUFFICIENT", "NO_UNPAID_COST", "UNSUPPORTED", "UNKNOWN"]:
+        evidence["base_cost_coverage"] = status
+        adapter._metadata(view)
+    assert all(adapter.payment_cost_coverage_diagnostics()[key] == 1 for key in
+               ("covers", "insufficient", "no_unpaid_cost", "unsupported", "unknown"))
+    evidence["base_cost_coverage"] = "COVERS"
+    for _ in range(140):
+        adapter._metadata(view)
+    report = adapter.payment_cost_coverage_diagnostics()
+    assert report["observations"] == 123  # The shared 128 candidate-sample budget includes five invalid statuses.
+    assert "private-" not in json.dumps(report) and "safe" not in report

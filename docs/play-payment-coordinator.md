@@ -127,7 +127,7 @@ or real engine game ran. CI wiring is added; no new CI result is claimed. The ne
 scheduled relevant CI checkpoint is 0.5.111 under the established every-third-
 commit cadence. No owner UI verification is needed for this backend-only increment.
 
-## Native helper adapter and executable probe — 0.5.110
+## Native helper adapter and executable probe â€” 0.5.110
 
 SelectedSourceMana is a small optional Java/XMage adapter around the native
 ManaUtil.tryToAutoPay helper for ONE already-selected source. It validates native
@@ -171,7 +171,7 @@ selection. No source was activated and no payment or spell resolved in a game.
 Production activation and all P4.3 real-game acceptance remain open. No full app
 suite or UI changes. Next scheduled CI check remains 0.5.111.
 
-## Downloaded reference implementation — October 31, 2026
+## Downloaded reference implementation â€” October 31, 2026
 
 Per the owner request, selected managed types were inspected from Downloads/
 Assets from Wizards, given with permission/Managed. This was code-path inspection,
@@ -202,7 +202,7 @@ and preserve the original engine proposal identity through any presentation sort
 The existing coordinator already requires trusted engine-certified step handles;
 reference findings do not justify replacing that contract with client heuristics.
 
-## Shared manual/internal session admission — 0.5.111
+## Shared manual/internal session admission â€” 0.5.111
 
 GatewayPaymentPort now connects PaymentCoordinator.EnginePort to the existing
 GatewaySessionBoundary before a trusted native enqueue. This is a tested
@@ -259,7 +259,7 @@ passed. No full application suite, Unity tests or real-game acceptance ran for
 this backend increment. CI is checked at the 0.5.111 checkpoint without waiting
 for unfinished runs; no result is inferred from these local tests.
 
-## Native response executor and manual-path reuse — 0.5.112
+## Native response executor and manual-path reuse â€” 0.5.112
 
 ManaResponseExecutor provides the selected-source transport step. The existing
 ManaforgeBridge now uses it for object responses to GAME_PLAY_MANA. Its authority
@@ -335,7 +335,7 @@ fields are unchanged; only the acceptance report gains bounded evidence counters
 Packaged distribution was not rebuilt and automatic-source story acceptance
 remains open.
 
-## Opt-in native unpaid-cost observer — 0.5.113
+## Opt-in native unpaid-cost observer â€” 0.5.113
 
 ContextHumanPlayer is a Manaforge-owned human-player extension used only by the
 explicit payment-context diagnostic. Its protected playManaHandling override sees
@@ -464,7 +464,7 @@ were hash-verified by the helper probe before native execution.
 Next implementation dependencies remain safe candidate classification,
 complete-plan feasibility, plan identity/revalidation and serialized Java owner
 integration. Production automatic source selection remains disabled. CI was last
-checked at 0.5.114 (its run was in progress; 0.5.111–113 passed); the next scheduled
+checked at 0.5.114 (its run was in progress; 0.5.111â€“113 passed); the next scheduled
 check is 0.5.117. No CI result is inferred for this increment.
 
 
@@ -513,3 +513,65 @@ extra effects, mode costs, pool dependence and cost tags. Added Python evidence
 checks reject malformed/oversized counts and preserve diagnostic bounds/privacy.
 No full suite, Unity UI or packaged build ran. CI next checks at 0.5.117; this
 increment has no claimed CI result.
+
+
+### Native ordinary-cost coverage (0.5.118)
+
+OrdinaryCostCoverage adds a read-only arithmetic check for a proposed plain mana
+total. It does not select sources or implement a custom cost solver. Pinned
+ManaOptions.enough bytecode confirms the native direction is
+`required.enough(available)`: Mana.enough copies the available argument, subtracts
+the required amount natively and evaluates remaining colored/generic/colorless
+coverage. The earlier ManaCostsImpl.testPay remains a contribution test and must
+not be substituted for complete-total coverage.
+
+The adapter accepts only exact native ManaCostsImpl, GenericManaCost,
+ColoredManaCost and ColorlessManaCost nodes, validates bounds before copying,
+then revalidates the copied native unpaid projection. Unknown subclasses,
+source-filtered/targeted costs, Phyrexian flags, hybrid/snow/variable nodes and
+non-plain/conditional/any/generic-production/flagged/oversized totals decline.
+Input bounds are 128 nodes/mana with a depth cap of eight. A resolved X may pass
+only if XMage already presents an ordinary unpaid cost; this helper never chooses
+X or converts special costs. Results are COVERS, INSUFFICIENT, NO_UNPAID_COST,
+UNSUPPORTED or UNKNOWN. NO_UNPAID_COST is not engine-confirmed payment completion.
+Both caller inputs remain unchanged.
+
+The opt-in server diagnostic aggregates only base templates of guarded sources
+with exactly one native usable ability passing OrdinaryManaShape. Multiple
+ability sources do not contribute twice. The templates are not a prediction of
+production after game-wide replacements/triggers; floating mana is not added.
+The fixed base_cost_coverage label therefore establishes only arithmetic for that
+proposed base total. It cannot certify source safety, strategic equivalence,
+applicable restrictions or a complete executable plan, and cannot emit the
+coordinator's VERIFIED_ORDINARY_EQUIVALENT assessment. Production automatic
+selection remains disabled and the default original-human runtime stays intact.
+Python records bounded fixed-label counters only, with no mana calculation,
+cost text, source IDs or native references.
+
+Local PaymentCoverage118.json passed: two COVERS observations for the native
+remaining costs 2 and 1, two manually submitted/tapped sources, mana spent,
+Ballista resolved as 1/1 and the fixture's authoritative result after deliberate
+concession. Compiler, bridge, peer and server roots exited 0 without forced
+cleanup. No automatic activation, natural-game completion, Unity build or UX
+claim is made. The deck preview remains awaiting its separate owner visual review.
+
+Passed focused checks: 114 Python adapter/connection/lifecycle cases, 65 Java
+coordinator checks, 77 response guards, 98 native-object/synthetic-scope cases,
+seven pinned API class inspections and owned bridge compilation. New cases cover
+the testPay-versus-total-coverage distinction, native direction, generic/colored/
+colorless totals, copied/paid input preservation and unsupported cost/production
+forms. Diagnostic checks cover fixed labels, default-off behavior, malformed
+values, shared sample bounds and privacy. No full application suite ran.
+
+A separate [Play native payment workflow](https://github.com/RyMeep128/Manaforge/actions/workflows/play-payment-native.yml)
+now prepares a hash-pinned engine in an isolated CI directory, runs the helper
+checks against that root and executes the one opt-in real-engine number fixture.
+Only sanitized fixture JSON is uploaded; no licensed Unity or Qt workflow is
+required. The helper now accepts --xmage-root and validates the same manifest
+hashes for that root. No current CI result is claimed; following the owner's
+cadence, CI is next checked at 0.5.120. The 0.5.117 checkpoint confirmed protocol
+CI success for 0.5.114â€“116; its own runs were still queued/running at that check.
+
+Next: native world-state/source-safety assessment, equivalent-source and plan
+identity, and serialized Java session-owner execution. Base-total coverage alone
+must never activate a source or bypass manual/Full Control authority.

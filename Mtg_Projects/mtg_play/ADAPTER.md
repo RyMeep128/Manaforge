@@ -296,3 +296,11 @@ The 0.5.116 opt-in probe adds only an aggregate count of native abilities passin
 the OrdinaryManaShape structural exclusion screen. This is not a safe-payment
 assessment or permission to activate a source. Nonstandard ability types, costs,
 effects and choices fail the screen; game-wide safety/planning remains required.
+
+At 0.5.118 the opt-in diagnostic adds fixed base-cost coverage counters from the
+Java OrdinaryCostCoverage helper. It uses pinned native arithmetic on a proposed
+plain base-production total, not a source-safety certificate or executable plan.
+Python records those bounded enum counts only; no cost/source solver or new
+public game model is introduced. Native helper and single-game probe validation
+now have a dedicated Play native payment CI workflow; automatic selection stays
+disabled and the original human runtime remains the default.
