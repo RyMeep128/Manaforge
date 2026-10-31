@@ -122,6 +122,23 @@ namespace Manaforge.Play.Tests
         }
 
         [UnityTest]
+        public IEnumerator ScheduledInspectionFlipCompletesAndClearsOnConcealment()
+        {
+            using(var flip=new CardInspectionFlip(view)) {
+                int swaps=0;
+                Assert.That(flip.Begin(()=>{swaps++;view.Bind(Identity("other-face"),texture,new Rect(0,0,1,1));view.UpdateValues(Values("Other face","3/3"));}),Is.True);
+                yield return new WaitForSecondsRealtime(.5f);
+                Assert.That(swaps,Is.EqualTo(1));Assert.That(flip.Running,Is.False);
+                Assert.That(view.Q<Label>("name").text,Is.EqualTo("Other face"));
+                Assert.That(view.style.scale.value.value,Is.EqualTo(Vector3.one));
+                Assert.That(flip.Begin(()=>swaps++),Is.True);view.Conceal();
+                yield return new WaitForSecondsRealtime(.5f);
+                Assert.That(swaps,Is.EqualTo(1));Assert.That(flip.Running,Is.False);
+                Assert.That(view.Identity,Is.Null);
+            }
+        }
+
+        [UnityTest]
         public IEnumerator RoomDoorButtonChangesInspectionOnAnAttachedPanel()
         {
             view.UpdateValues(new CardDisplayValues("First","{W}","Enchantment — Room","First text",null,null,

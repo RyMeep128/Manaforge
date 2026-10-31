@@ -42,6 +42,7 @@ LAYOUT_NAMES = (
     "The Aether Flues",
     "Behold My Grandeur",
     "Urza",
+    "Soul Warden",
 )
 
 

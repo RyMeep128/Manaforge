@@ -23,6 +23,11 @@ namespace Manaforge.Play
         private PanelSettings settings;
         private UIDocument document;
         private CardView preview;
+        private CardInspectionFlip flip;
+        private ArtworkFixture.Card inspected;
+        private Button flipButton;
+        private Toggle reducedMotion;
+        private Toggle abilityPreview;
         private ArtworkFixture fixture;
         private Label message;
         private VisualElement board;
@@ -61,7 +66,12 @@ namespace Manaforge.Play
             board.style.width = 900; board.style.height = 560;
             root.Add(board);
             preview = new CardView(); preview.style.position = Position.Absolute;
-            preview.style.left = 952; preview.style.top = 160; root.Add(preview);
+            preview.style.left = 952; preview.style.top = 160; root.Add(preview);flip=new CardInspectionFlip(preview);
+            var inspectControls=new VisualElement();inspectControls.style.position=Position.Absolute;inspectControls.style.left=840;inspectControls.style.top=130;inspectControls.style.flexDirection=FlexDirection.Row;root.Add(inspectControls);
+            flipButton=new Button(FlipInspection){text="Inspect other face"};inspectControls.Add(flipButton);
+            reducedMotion=new Toggle("Reduced motion");reducedMotion.style.color=Color.white;inspectControls.Add(reducedMotion);
+            abilityPreview=new Toggle("Mock ability");abilityPreview.style.color=Color.white;inspectControls.Add(abilityPreview);
+            abilityPreview.RegisterValueChangedCallback(_=>{if(inspected!=null)Show(inspected);});
             var loading = ArtworkFixture.LoadAsync(Argument("-manaforgeArtworkFixture"), cancellation.Token);
             while (!loading.IsCompleted) yield return null;
             if (loading.IsFaulted || loading.IsCanceled)
@@ -87,6 +97,11 @@ namespace Manaforge.Play
             if (int.TryParse(Argument("-manaforgeFixtureCount"), out int countArg)
                 && (countArg == 20 || countArg == 70 || countArg == 200)) initial = countArg;
             Populate(initial);
+            abilityPreview.SetValueWithoutNotify(Argument("-manaforgeAbilityPreview")=="1");
+            if(inspected!=null)Show(inspected);
+            string inspectName=Argument("-manaforgeInspectName");
+            if(inspectName!=null)foreach(var card in fixture.Cards)if(card.MockValues.Name==inspectName){Show(card);break;}
+            if(Argument("-manaforgeFlipPreview")=="1"){FlipInspection();yield return new WaitForSecondsRealtime(.45f);}
             yield return null; yield return null; // allow panel layout/render work to run
             using (var process = System.Diagnostics.Process.GetCurrentProcess())
                 processToReadyMs = (DateTime.UtcNow - process.StartTime.ToUniversalTime()).TotalMilliseconds;
@@ -99,7 +114,7 @@ namespace Manaforge.Play
             if (fixture == null || textures == null) return;
             interactions?.Dispose();
             foreach (var view in views) view.Dispose(); views.Clear();
-            preview.Conceal();
+            flip.Cancel();preview.Conceal();
             var permanents=new List<ArtworkFixture.Card>();
             foreach(var card in fixture.Cards)if(CardCompactProfile.IsFixturePermanent(card.MockValues.TypeLine))permanents.Add(card);
             if(permanents.Count==0){ObjectCount=0;message.text="No permanent examples in this fixture. Use Inspect for spells and auxiliary cards.";return;}
@@ -123,8 +138,27 @@ namespace Manaforge.Play
         }
         private void Show(ArtworkFixture.Card card)
         {
+            flip.Cancel();ShowFace(card);
+        }
+        private ArtworkFixture.Card OtherFace(ArtworkFixture.Card card)
+        {
+            if(card==null)return null;
+            foreach(var other in fixture.Cards)if(other.Identity.OracleId==card.Identity.OracleId && other.Identity.SelectedPrintingId==card.Identity.SelectedPrintingId && other.Identity.RenderedFace!=card.Identity.RenderedFace)return other;
+            return null;
+        }
+        private void FlipInspection()
+        {
+            var other=OtherFace(inspected);if(other!=null && !abilityPreview.value)flip.Begin(()=>ShowFace(other),reducedMotion.value);
+        }
+        private void ShowFace(ArtworkFixture.Card card)
+        {
+            inspected=card;bool landscape=!abilityPreview.value && card.MockValues.CompactProfile?.LandscapeInspection==true;
+            preview.style.left=landscape?840:952;
             preview.Bind(card.Identity, textures.Get(card.Artwork), new Rect(0.08f, 0.45f, 0.84f, 0.42f));
-            preview.SetPresentation(CardPresentationMode.Full, 285); preview.UpdateValues(card.MockValues);
+            preview.SetPresentation(CardPresentationMode.Full, landscape?400:285);
+            // Diagnostic uses supplied printed text as placeholder effect text, never parses live abilities.
+            preview.UpdateValues(abilityPreview.value?new CardDisplayValues(card.MockValues.Name,null,"Ability",card.MockValues.RulesText,null,"PRINTED MOCK",card.MockValues.CompactProfile,rulesStyle:FontStyle.Bold,isAbility:true):card.MockValues);
+            flipButton.SetEnabled(!abilityPreview.value && OtherFace(card)!=null);
         }
         private IEnumerator Capture(string output)
         {
@@ -187,6 +221,7 @@ namespace Manaforge.Play
                 File.WriteAllBytes(Path.Combine(output, "artwork-" + ObjectCount + ".png"), image.EncodeToPNG());
                 File.WriteAllText(Path.Combine(output, "artwork-" + ObjectCount + ".json"),
                     JsonUtility.ToJson(new CaptureReport { fixtureOnly = true, objectCount = ObjectCount,
+                        inspectionFace=inspected?.Identity.RenderedFace, abilityExample=abilityPreview.value,
                         textureCount = textures.Count, textureBytes = textures.Bytes,
                         graphicsDevice = SystemInfo.graphicsDeviceName, editorVersion = Application.unityVersion,
                         graphicsApi = SystemInfo.graphicsDeviceVersion, processor = SystemInfo.processorType,
@@ -217,6 +252,7 @@ namespace Manaforge.Play
         }
         private void OnDestroy()
         {
+            flip?.Dispose();
             cancellation.Cancel(); cancellation.Dispose();
             interactions?.Dispose();
             foreach (var view in views) view.Dispose(); views.Clear(); preview?.Dispose();
@@ -226,7 +262,8 @@ namespace Manaforge.Play
         }
         [Serializable] private sealed class CaptureReport
         {
-            public string graphicsApi, processor, capturedUtc;
+            public string graphicsApi, processor, capturedUtc, inspectionFace;
+            public bool abilityExample;
             public int systemMemoryMiB;
             public bool developmentBuild;
             public int reportVersion;

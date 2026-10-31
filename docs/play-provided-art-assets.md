@@ -201,3 +201,52 @@ commit checkpoint. No Qt CI was investigated or full application suite run.
 Room inspection masks the compound printing perimeter with the shared black edge
 to prevent rotated credits/text bleeding around the focused door. Exact Room
 frame composition and Arena-equivalent door styling remain owner-review items.
+
+
+## Landscape inspection, original-printing exceptions and abilities — October 30, 2026
+
+0.5.83 extends the same CardView/profile path. Planeswalker body masks extend
+farther outward and the baked loyalty area is fully masked before drawing the
+supplied counter. Battles and Rooms now use a landscape canvas, art at the left,
+supplied text at the right, and a bottom type line. Room selectors still change
+inspection only. Their old printed text is masked through the lower body; a
+separate strip borrows the exact source printing's collector footer. Rotated
+source images are not treated as an excuse to infer missing characteristics.
+
+Per the owner's updated direction, Dungeons always show the original printing;
+Schemes show the original printing in portrait; Planechase shows the original
+printing rotated into landscape. Vanguard retains its complete original image
+inside a landscape inspection panel, preserving printed hand/life modifiers that
+the current projection does not model. It remains upright rather than turning
+its text sideways. No generic textbox is painted over these original-only views.
+
+Ability presentation is an explicit `CardDisplayValues.IsAbility` input. The
+shared renderer shows the supplied source name, source artwork, supplied ability
+type and effect text with a strongly rounded lower edge, without mana or P/T.
+The owner's Soul Warden screenshot is the visual reference. The fixture now
+includes cached Soul Warden and a **Mock ability** toggle. For diagnostics only,
+that toggle uses the selected card's printed rules as placeholder effect text;
+it does not extract individual abilities from arbitrary cards. A live stack
+projection must supply the exact viewer-permitted ability text and source. No
+live stack integration or engine behavior is claimed by this visual increment.
+
+**Inspect other face** performs a 360 ms horizontal compression/expansion with a
+single midpoint rebinding. Both faces must already be in the public fixture and
+share oracle and selected-printing identities. It cannot transform a game object.
+No meld counterpart is invented by card name. The controller checks the view's
+binding revision on every tick; concealment, rebinding, disposal and a new
+inspection cancel the old callback. Reduced motion switches immediately.
+
+The fixture supports repeatable capture selection with `-FixtureInspectName`,
+`-AbilityPreview` and `-FlipPreview` on `tools/unity-play.ps1 -Mode ArtworkSmoke`.
+Reports include the public inspected face and ability-example flag. The flipped
+Delver capture is checked for Insectile Aberration, not merely animation completion.
+The layouts preset contains 26 public faces/textures, 30,392,320 raw RGBA bytes.
+Source files remain unchanged and no downloaded artwork enters Git.
+
+Validation: 303 EditMode checks and seven PlayMode checks passed, including a
+scheduled flip, one midpoint swap, reduced motion and cancellation after clearing
+or rebinding the same identity. Packaged captures cover Jace, Battle, Room,
+Dungeon, Planechase, Scheme, Vanguard, Soul Warden ability and a flipped Delver.
+Owner visual review remains required; these are fixture examples, not live-game
+acceptance. CI remains on the every-third-commit cadence (next after 0.5.84).

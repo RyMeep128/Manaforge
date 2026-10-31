@@ -91,7 +91,6 @@ namespace Manaforge.Play.Tests
         [TestCase("modal_dfc","Land")]
         [TestCase("prototype","Artifact Creature")]
         [TestCase("meld","Creature")]
-        [TestCase("vanguard","Vanguard")]
         public void KnownProfilesUseCroppedArtworkAndCustomTextInBothPresentations(string layout,string typeLine)
         {
             view.Bind(Identity(false),texture,new Rect(0,0,1,1));

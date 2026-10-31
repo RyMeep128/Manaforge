@@ -7,6 +7,9 @@ param(
     [ValidateSet(20, 70, 200)]
     [int]$FixtureCount = 20,
     [switch]$Benchmark,
+    [string]$FixtureInspectName,
+    [switch]$AbilityPreview,
+    [switch]$FlipPreview,
     [switch]$DownloadGson
 )
 $ErrorActionPreference = 'Stop'
@@ -75,7 +78,10 @@ if ($Mode -eq 'ArtworkSmoke') {
         '-screen-fullscreen', '0', '-screen-width', '1280', '-screen-height', '720',
         '-logFile', (Join-Path $artifacts "artwork-$FixtureCount.log"),
         '-manaforgeArtworkFixture', $fixture, '-manaforgeArtworkOutput', $output,
-        '-manaforgeFixtureCount', "$FixtureCount", '-manaforgeArtworkBenchmark', $(if ($Benchmark) { '1' } else { '0' })
+        '-manaforgeFixtureCount', "$FixtureCount", '-manaforgeArtworkBenchmark', $(if ($Benchmark) { '1' } else { '0' }),
+        '-manaforgeInspectName', $(if ($FixtureInspectName) { $FixtureInspectName } else { '' }),
+        '-manaforgeAbilityPreview', $(if ($AbilityPreview) { '1' } else { '0' }),
+        '-manaforgeFlipPreview', $(if ($FlipPreview) { '1' } else { '0' })
     )
     $report = Get-Content (Join-Path $output "artwork-$FixtureCount.json") -Raw | ConvertFrom-Json
     $image = Get-Item (Join-Path $output "artwork-$FixtureCount.png")
@@ -138,7 +144,7 @@ Invoke-OwnedProcess $EditorPath $arguments
 if ($Mode -in @('EditMode', 'PlayMode')) {
     [xml]$report = Get-Content -LiteralPath $results
     # Counts include printing policy/card components and attached-panel handoff checks.
-    $minimum = if ($Mode -eq 'EditMode') { 293 } else { 6 }
+    $minimum = if ($Mode -eq 'EditMode') { 303 } else { 7 }
     if ($report.'test-run'.result -ne 'Passed' -or [int]$report.'test-run'.total -lt $minimum) {
         throw "Missing or failed $Mode acceptance"
     }

@@ -21,11 +21,12 @@ namespace Manaforge.Play
         public string Defense {get;}
         public FontStyle RulesStyle {get;}
         public string CollectorText {get;}
+        public bool IsAbility {get;}
         public System.Collections.Generic.IReadOnlyList<RoomDoorDisplay> RoomDoors {get;}
         public CardDisplayValues(string name, string manaCost, string typeLine,
-            string rulesText, string powerToughness, string status, CardCompactProfile compactProfile=null, string loyalty=null,string defense=null,FontStyle rulesStyle=FontStyle.Normal,string collectorText=null,System.Collections.Generic.IReadOnlyList<RoomDoorDisplay> roomDoors=null)
+            string rulesText, string powerToughness, string status, CardCompactProfile compactProfile=null, string loyalty=null,string defense=null,FontStyle rulesStyle=FontStyle.Normal,string collectorText=null,System.Collections.Generic.IReadOnlyList<RoomDoorDisplay> roomDoors=null,bool isAbility=false)
         {
-            Name = name; ManaCost = manaCost; TypeLine = typeLine;
+            IsAbility=isAbility;Name = name; ManaCost = manaCost; TypeLine = typeLine;
             RulesText = rulesText; PowerToughness = powerToughness; Status = status;
             CompactProfile=compactProfile;Loyalty=loyalty;Defense=defense;RulesStyle=rulesStyle;CollectorText=collectorText;RoomDoors=roomDoors==null?null:new System.Collections.Generic.List<RoomDoorDisplay>(roomDoors).AsReadOnly();
         }
@@ -46,6 +47,7 @@ namespace Manaforge.Play
         private readonly Label missing = Text("asset-status");
         private readonly Label title = Text("name");
         private readonly ManaCostView mana = new ManaCostView();
+        private readonly Image printingFooter=new Image{name="printing-footer",pickingMode=PickingMode.Ignore};
         private readonly Image frame = new Image { name = "printing-frame", pickingMode = PickingMode.Ignore };
         private readonly CardPlate nameplate = new CardPlate("nameplate");
         private readonly CardPlate statplate = new CardPlate("pt-plate");
@@ -71,6 +73,7 @@ namespace Manaforge.Play
         private bool authenticOnly;
         private bool concealed = true;
         private float width = 300;
+        public uint ViewRevision {get;private set;}
         public CardVisualIdentity Identity { get; private set; }
         public Texture Artwork => artwork.image;
         public CardPresentationMode Mode => mode;
@@ -89,7 +92,7 @@ namespace Manaforge.Play
             Add(frame);Add(miniSurround); Add(interior); Add(printedStatsMask); Add(artWindow);Add(secondWindow); Add(nameplate); Add(typeplate); Add(statplate); Add(missing); Add(title); Add(mana);
             rulesScroll.style.position=Position.Absolute;rulesScroll.Add(rules);rulesScroll.Add(rulesSymbols);rulesScroll.Add(sections);
             doorTabs.style.position=Position.Absolute;doorTabs.style.flexDirection=FlexDirection.Row;Add(doorTabs);
-            Add(type); Add(rulesScroll); Add(stats); Add(status);Add(miniKind);Add(loyaltyCounter);Add(collector);
+            Add(printingFooter);Add(type); Add(rulesScroll); Add(stats); Add(status);Add(miniKind);Add(loyaltyCounter);Add(collector);
             edge.style.position=Position.Absolute;Add(edge);
             Conceal();
         }
@@ -121,7 +124,7 @@ namespace Manaforge.Play
             Identity = identity;
             authenticOnly = identity.LayoutProfileId == "authentic-image-v1";
             artCrop = crop;
-            artwork.image = texture; frame.image = texture;secondArt.image=texture;
+            artwork.image = texture; frame.image = texture;printingFooter.image=texture;secondArt.image=texture;
             missing.text = texture == null ? "Artwork unavailable" : "";
             Layout();
         }
@@ -130,6 +133,7 @@ namespace Manaforge.Play
         {
             if (concealed) return;
             if (values == null) throw new ArgumentNullException(nameof(values));
+            ViewRevision++;
             displayValues=values;doorIndex=0;doorTabs.Clear();
             if(values.CompactProfile?.Kind=="Room" && values.RoomDoors!=null) {
                 for(int i=0;i<values.RoomDoors.Count && i<2;i++){int index=i;var button=new Button(()=>InspectRoomDoor(index)){text=(i+1)+". "+values.RoomDoors[i].Name,tooltip=values.RoomDoors[i].Name};
@@ -172,30 +176,35 @@ namespace Manaforge.Play
         private void Layout()
         {
             bool full = mode == CardPresentationMode.Full;
-            bool customInspection=full && compactProfile!=null;
-            bool imageFallback=authenticOnly && compactProfile==null;
+            bool ability=full && displayValues?.IsAbility==true;
+            bool landscape=full && !ability && compactProfile?.LandscapeInspection==true;
+            bool original=compactProfile?.OriginalInspection==true;
+            bool customInspection=full && compactProfile!=null && !original;
+            bool imageFallback=!ability && (original || authenticOnly && compactProfile==null);
             int inspectionRotation=imageFallback && full?(compactProfile?.InspectionRotation??0):0;
             string kind=compactProfile?.Kind;
-            bool classLayout=full && kind=="Class";
-            bool levelLayout=full && kind=="Level up";
-            bool walkerLayout=full && kind=="Planeswalker";
-            bool roomLayout=full && kind=="Room";
+            bool classLayout=full && !ability && kind=="Class";
+            bool levelLayout=full && !ability && kind=="Level up";
+            bool walkerLayout=full && !ability && kind=="Planeswalker";
+            bool roomLayout=full && !ability && kind=="Room";
             bool structured=classLayout || levelLayout || walkerLayout;
             bool hasStats = !string.IsNullOrEmpty(stats.text);
             style.width = width;
-            style.height = full && imageFallback && artwork.image!=null
+            style.height = landscape?width*.714f:full && imageFallback && artwork.image!=null
                 ? (inspectionRotation==90?width*artwork.image.width/artwork.image.height:width*artwork.image.height/artwork.image.width) : width*(full?(walkerLayout || levelLayout || roomLayout?1.65f:1.4f):BattlefieldFrame.Aspect);
-            float scale = width / 300f;
-            style.borderTopLeftRadius=style.borderTopRightRadius=style.borderBottomLeftRadius=style.borderBottomRightRadius=width*.03f;
+            float scale = width / (landscape?400f:300f);
+            style.borderTopLeftRadius=style.borderTopRightRadius=width*.03f;
+            style.borderBottomLeftRadius=style.borderBottomRightRadius=width*(ability ? .43f : .03f);
             Box(edge,0,0,100,100);
-            float rim=roomLayout?width*.025f:full?0:Mathf.Max(1.5f,2*scale);
+            float rim=landscape && !imageFallback || ability?width*.025f:full?0:Mathf.Max(1.5f,2*scale);
             edge.style.borderLeftWidth=edge.style.borderRightWidth=edge.style.borderBottomWidth=rim;
             // The upper printing surround is narrow; do not cover it with the heavier lower rim.
-            float topRim=roomLayout?rim:full?0:Mathf.Max(.75f,.9f*scale);
+            float topRim=landscape && !imageFallback || ability?rim:full?0:Mathf.Max(.75f,.9f*scale);
             edge.style.borderTopWidth=selected?Mathf.Max(1.5f,topRim):topRim;
             edge.style.borderLeftColor=edge.style.borderRightColor=edge.style.borderBottomColor=new Color(.025f,.025f,.025f);
             edge.style.borderTopColor=selected?Color.cyan:new Color(.025f,.025f,.025f);
-            edge.style.borderTopLeftRadius=edge.style.borderTopRightRadius=edge.style.borderBottomLeftRadius=edge.style.borderBottomRightRadius=width*.03f;
+            edge.style.borderTopLeftRadius=edge.style.borderTopRightRadius=width*.03f;
+            edge.style.borderBottomLeftRadius=edge.style.borderBottomRightRadius=width*(ability ? .43f : .03f);
             edge.style.display=concealed?DisplayStyle.None:DisplayStyle.Flex;
             foreach(var label in new[]{title,type,rules,stats,status,missing,miniKind}) {
                 label.style.fontSize=(label==rules?12.8f:label==stats?23:label==status?10:18)*scale;
@@ -213,29 +222,33 @@ namespace Manaforge.Play
             CardTypography.Apply(stats,CardTextRole.PowerToughness);CardTypography.Apply(rules,CardTextRole.Rules,rulesEmphasis);
             CardTypography.Apply(collector,CardTextRole.Collector);collector.style.fontSize=8*scale;
             Box(collector,8,94,84,4);collector.style.color=Color.white;collector.style.backgroundColor=new Color(.04f,.04f,.035f);
-            collector.style.display=!concealed && full && !imageFallback && !string.IsNullOrEmpty(collector.text)?DisplayStyle.Flex:DisplayStyle.None;
+            collector.style.display=!concealed && full && !ability && !imageFallback && !string.IsNullOrEmpty(collector.text)?DisplayStyle.Flex:DisplayStyle.None;
             frame.style.position=artwork.style.position=Position.Absolute;
             Box(frame,0,0,100,100);frame.scaleMode=ScaleMode.StretchToFill;
             // Keep the exact printing's colored surround and original bevels, not a generic dark panel.
             frame.uv=full?new Rect(0,0,1,1):new Rect(0,.47f,1,.53f);
             frame.style.display=concealed || (authenticOnly && !customInspection) || frame.image==null?DisplayStyle.None:DisplayStyle.Flex;
             frame.style.rotate=new Rotate(new Angle(0));
-            if(roomLayout){frame.scaleMode=ScaleMode.ScaleAndCrop;frame.uv=new Rect(0,doorIndex==0?0:.5f,1,.5f);frame.style.left=(width-style.height.value.value)/2;frame.style.top=(style.height.value.value-width)/2;frame.style.width=style.height.value.value;frame.style.height=width;frame.style.rotate=new Rotate(new Angle(90));}
+            if(landscape && !imageFallback){frame.uv=new Rect(0,0,1,1);frame.style.left=(width-style.height.value.value)/2;frame.style.top=(style.height.value.value-width)/2;frame.style.width=style.height.value.value;frame.style.height=width;frame.style.rotate=new Rotate(new Angle(90));}
+
+            printingFooter.style.position=Position.Absolute;Box(printingFooter,3,89,94,7);printingFooter.uv=new Rect(.02f,0,.96f,.06f);printingFooter.scaleMode=ScaleMode.StretchToFill;printingFooter.style.backgroundColor=Color.black;
+            printingFooter.style.display=!concealed && landscape && !imageFallback?DisplayStyle.Flex:DisplayStyle.None;
             Box(miniSurround,0,0,100,100);miniSurround.style.display=!concealed && !full && authenticOnly && compactProfile!=null?DisplayStyle.Flex:DisplayStyle.None;
             // Preserve the printing footer: artist/collector credits start below the rules box.
             // Standard-frame inner textbox ends before the collector footer at about 92.3%.
             // Stay inside the printed vertical outline rather than painting over its right edge.
-            Box(interior,roomLayout?1:structured?4.5f:7.6f,roomLayout?2:11,roomLayout?98:structured?91:84.8f,roomLayout?96:81.3f);
+            Box(interior,landscape?3:walkerLayout?3:ability?4:structured?4.5f:7.6f,landscape?15:11,landscape?94:walkerLayout?94:ability?92:structured?91:84.8f,landscape?79:ability?87:81.3f);
             interior.style.display=!concealed && full && !imageFallback?DisplayStyle.Flex:DisplayStyle.None;
             // The compact footer hides the underlying printing below the art window, including set symbols.
             bool hasLoyalty=!string.IsNullOrEmpty(loyaltyCounter.Value);
             printedStatsMask.style.backgroundColor=full && hasLoyalty?new Color(.88f,.88f,.80f):new Color(.07f,.07f,.065f);
-            Box(printedStatsMask,full?74:0,full?(hasLoyalty?87:89):94,full?24:100,full && hasLoyalty?7:10);
-            printedStatsMask.style.display=!concealed && !imageFallback && (!full || hasStats || hasLoyalty)?DisplayStyle.Flex:DisplayStyle.None;
+            Box(printedStatsMask,landscape?0:full?74:0,landscape?89:full?(hasLoyalty?86:89):94,landscape?100:full?(hasLoyalty?26:24):100,landscape?11:full && hasLoyalty?8:10);
+            printedStatsMask.style.display=!concealed && !imageFallback && (!full || landscape || !ability && (hasStats || hasLoyalty))?DisplayStyle.Flex:DisplayStyle.None;
             float height=style.height.value.value;
             bool split=!full && !imageFallback && compactProfile?.SecondaryCrop!=null;
             Rect area=imageFallback?new Rect(0,0,100,100):new Rect(full?8:4,full?12:21,split?(full?41:45):full?84:92,full?43:73);
-            if(classLayout)area=new Rect(8,12,37,72);
+            if(landscape && !imageFallback)area=new Rect(5,18,43,61);
+            else if(classLayout)area=new Rect(8,12,37,72);
             else if(walkerLayout || levelLayout)area=new Rect(8,12,84,31);
             Rect crop=imageFallback?new Rect(0,0,1,1):compactProfile!=null?(full?compactProfile.FullCrop:compactProfile.Crop):artCrop;
             if(roomLayout && doorIndex==1 && compactProfile.SecondaryCrop!=null)crop=compactProfile.SecondaryCrop.Value;
@@ -244,38 +257,39 @@ namespace Manaforge.Play
             secondWindow.style.display=!concealed && split?DisplayStyle.Flex:DisplayStyle.None;
             if(split)LayoutArtwork(secondWindow,secondArt,new Rect(51,full?12:21,full?41:45,full?43:73),compactProfile.SecondaryCrop.Value,compactProfile.Rotation,width,height,false);
             artWindow.style.display=concealed?DisplayStyle.None:DisplayStyle.Flex;
-            Box(nameplate,full?5.5f:3,full?4:5,full?89:94,full?7:16);
+            Box(nameplate,landscape?3:full?5.5f:3,landscape?4:full?4:5,landscape?94:full?89:94,landscape?11:full?7:16);
             // Share the nameplate centerline; default Label margins otherwise shift small names.
-            Box(title,full?9:6,full?4:5,full?Mathf.Max(38,82-mana.SymbolCount*8):89,full?7:16);
-            Box(mana,57,4,34,7);mana.Resize(20*scale);
-            float typeY=classLayout?85:walkerLayout || levelLayout?44:55.5f;
-            Box(typeplate,5.5f,typeY,89,7);Box(type,9,typeY+.5f,82,6);
-            Box(rulesScroll,classLayout?48:8,classLayout?12:walkerLayout || levelLayout?53:roomLayout?71:64,classLayout?44:84,classLayout?71:walkerLayout || levelLayout?36:roomLayout?18:24);rulesScroll.style.display=!concealed && full && !imageFallback?DisplayStyle.Flex:DisplayStyle.None;
+            Box(title,landscape?6:full?9:6,full?4:5,full?Mathf.Max(38,82-mana.SymbolCount*8):89,landscape?11:full?7:16);
+            Box(mana,57,4,34,landscape?11:7);mana.Resize(20*scale);
+            float typeY=landscape?79:classLayout?85:walkerLayout || levelLayout?44:55.5f;
+            Box(typeplate,5.5f,typeY,89,landscape?10:7);Box(type,9,typeY+.5f,82,landscape?9:6);
+            Box(rulesScroll,landscape?51:classLayout?48:8,landscape?(roomLayout?30:18):classLayout?12:walkerLayout || levelLayout?53:64,landscape?44:classLayout?44:84,landscape?(roomLayout?48:60):classLayout?71:walkerLayout || levelLayout?36:ability?28:24);rulesScroll.style.display=!concealed && full && !imageFallback?DisplayStyle.Flex:DisplayStyle.None;
             Box(rules,0,0,100,100);rules.style.backgroundColor=new Color(.88f,.88f,.80f);
             rules.style.paddingLeft=rules.style.paddingRight=4*scale;rules.style.paddingTop=3*scale;
             Box(rulesSymbols,0,0,100,100);rulesSymbols.style.paddingLeft=rulesSymbols.style.paddingRight=4*scale;rulesSymbols.style.paddingTop=3*scale;
             rules.style.position=rulesSymbols.style.position=Position.Relative;
             rules.style.height=rulesSymbols.style.height=StyleKeyword.Auto;
             rules.style.flexShrink=rulesSymbols.style.flexShrink=0;
-            rulesSymbols.Resize(12.8f*scale,rulesEmphasis);rules.style.opacity=1;
+            rulesSymbols.Resize((ability?14.5f:12.8f)*scale,rulesEmphasis);
+            if(ability){rules.style.fontSize=14.5f*scale;CardTypography.Apply(rules,CardTextRole.Rules,FontStyle.Bold);}rules.style.opacity=1;
             sections.Resize((classLayout?13:14)*scale);sections.style.display=!concealed && structured?DisplayStyle.Flex:DisplayStyle.None;
-            Box(doorTabs,8,63,84,7);doorTabs.style.display=!concealed && roomLayout && doorTabs.childCount>0?DisplayStyle.Flex:DisplayStyle.None;
+            Box(doorTabs,51,17,44,11);doorTabs.style.display=!concealed && roomLayout && doorTabs.childCount>0?DisplayStyle.Flex:DisplayStyle.None;
             rulesSymbols.style.display=!concealed && full && !imageFallback && !structured && rulesSymbols.SymbolCount>0?DisplayStyle.Flex:DisplayStyle.None;
-            Box(statplate,75,full?90:79,22,full?8:19);
-            Box(stats,77,full?90.3f:79.5f,18,full?7:17);
+            Box(statplate,landscape?83:75,landscape?79:full?90:79,landscape?14:22,landscape?12:full?8:19);
+            Box(stats,landscape?85:77,landscape?79.5f:full?90.3f:79.5f,landscape?10:18,landscape?11:full?7:17);
             Box(status,8,full?94:82,60,full?4:12);Box(missing,8,35,84,25);
             Box(miniKind,8,91,65,8);miniKind.style.fontSize=12*scale;miniKind.style.display=DisplayStyle.None;
             Box(loyaltyCounter,39,full?88:79,22,full?10:20);loyaltyCounter.Resize(28*scale);
-            loyaltyCounter.style.display=!concealed && !imageFallback && !string.IsNullOrEmpty(loyaltyCounter.Value)?DisplayStyle.Flex:DisplayStyle.None;
+            loyaltyCounter.style.display=!concealed && !ability && !imageFallback && !string.IsNullOrEmpty(loyaltyCounter.Value)?DisplayStyle.Flex:DisplayStyle.None;
             bool reconstructed=!concealed && !imageFallback;
             nameplate.style.display=reconstructed?DisplayStyle.Flex:DisplayStyle.None;
             typeplate.style.display=reconstructed && full?DisplayStyle.Flex:DisplayStyle.None;
-            statplate.style.display=reconstructed && hasStats?DisplayStyle.Flex:DisplayStyle.None;
-            mana.style.display=reconstructed && full?DisplayStyle.Flex:DisplayStyle.None;
+            statplate.style.display=reconstructed && hasStats && !ability?DisplayStyle.Flex:DisplayStyle.None;
+            mana.style.display=reconstructed && full && !ability?DisplayStyle.Flex:DisplayStyle.None;
             foreach(var label in new[]{title,type,rules,stats,status}) {
                 bool show=reconstructed && (full || (label!=type && label!=rules));
                 if(label==rules && (structured || rulesSymbols.SymbolCount>0))show=false;
-                if(label==stats && string.IsNullOrEmpty(stats.text))show=false;
+                if(label==stats && (ability || string.IsNullOrEmpty(stats.text)))show=false;
                 if(label==status && (string.IsNullOrEmpty(status.text) || status.text=="PRINTED MOCK"))show=false;
                 label.style.display=show?DisplayStyle.Flex:DisplayStyle.None;
             }
@@ -303,10 +317,10 @@ namespace Manaforge.Play
         // The shared asset owner must separately revoke/destroy private cached textures.
         public void Conceal()
         {
-            concealed = true;
+            ViewRevision++;concealed = true;
             selected = false;
             Identity = null;
-            artwork.image = null;secondArt.image=null; frame.image = null;compactProfile=null;miniKind.text="";loyaltyCounter.SetValue(null); mana.Conceal(); rulesSymbols.Conceal();
+            artwork.image = null;secondArt.image=null; frame.image = null;printingFooter.image=null;compactProfile=null;miniKind.text="";loyaltyCounter.SetValue(null); mana.Conceal(); rulesSymbols.Conceal();
             rulesEmphasis=FontStyle.Normal;rulesScroll.scrollOffset=Vector2.zero;sections.Conceal();doorTabs.Clear();displayValues=null;doorIndex=0;
             foreach (var label in new[] { title, type, rules, stats, status, missing,collector })
                 label.text = "";
