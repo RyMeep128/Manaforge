@@ -48,6 +48,8 @@ namespace Manaforge.Play.Protocol
             commands=new CommandTracker(session,viewer);transport=ownedTransport;this.session=session;this.viewer=viewer;
         }
         public ClientChannelState State {get{lock(gate)return state;}}
+        public string SessionId=>session;
+        public string ViewerId=>viewer;
         public Task<ClientChannelStop> Completion=>completion.Task;
         public TrackedCommand Pending {get{lock(gate)return commands.Current;}}
         public int QueuedCount {get{lock(gate)return inbox.Count;}}

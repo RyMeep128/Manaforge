@@ -55,3 +55,8 @@ latest observed protocol success remains commit 0e8f028, [run 41170567675](https
 That is historical protocol evidence, not validation of this renderer increment.
 The protocol workflow's path filters exclude these presentation-only changes;
 licensed Unity CI remains manually dispatched. No unfinished run was awaited.
+
+The subsequent [session receiver](play-viewer-session-receiver.md) now feeds
+validated card projections and event watermarks into this pump while preserving
+ordered worker notifications separately. It revokes the captured mailbox on
+channel/owner cancellation; the UI host must keep pumping to perform visual cleanup.

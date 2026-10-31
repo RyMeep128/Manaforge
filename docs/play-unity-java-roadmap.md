@@ -791,3 +791,15 @@ shared-corpus/real-loopback checks and Python schema validation passed. A real
 Java-process/C# test authenticates then runs the coordinated dummy session; wrong
 keys are rejected. Real session mounting, installed artifact verification, OS
 containment and G0/G1 remain open. No UI changed.
+
+### G1/P3 viewer session receive bridge
+
+The [session receiver](play-viewer-session-receiver.md) now connects a matching
+authenticated channel to its viewer mailbox on the connection worker. Ordered
+events/results/receipts are retained under explicit queue budgets, while only
+render snapshots coalesce. Channel stop, owner cancellation, malformed data or
+overflow revoke the captured mailbox; the UI pump clears the card surface and
+private assets. A small result/receipt/uncertainty summary survives revocation.
+Local evidence: 44 graphics-enabled PlayMode checks passed without skips. Real
+scene mounting, choice/event UI projection, OS containment, installed-artifact
+verification and G0/G1 remain open. The public gallery is unchanged.
