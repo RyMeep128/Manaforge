@@ -97,6 +97,9 @@ def main():
             PROTOCOL / "java/manaforge/protocol/GatewaySessionBoundary.java",
             PROTOCOL / "java-test/SessionBoundaryFixtureConsumer.java",
             PROTOCOL / "java-test/DispatchFixtureConsumer.java",
+            PLAY / "java/payment/manaforge/payment/PaymentCoordinator.java",
+            PLAY / "java/payment-gateway/manaforge/payment/gateway/GatewayPaymentPort.java",
+            PROTOCOL / "java-test/InternalPaymentFixtureConsumer.java",
         ]
         subprocess.run(
             [

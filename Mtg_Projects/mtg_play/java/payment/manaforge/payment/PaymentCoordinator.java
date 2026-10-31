@@ -7,7 +7,7 @@ import java.util.Objects;
 
 /** Trusted Java engine-owner policy. Not a rules solver, wire command or client receipt authority.
  * All calls, including manual admission and observations, belong on ONE serialized engine owner.
- * No production EnginePort exists yet. A view's object list is NOT a safe payment assessment. */
+ * No production native EnginePort exists yet. A view's object list is NOT a safe payment assessment. */
 public final class PaymentCoordinator implements AutoCloseable {
     public enum Mode { AUTO, MANUAL, FULL_CONTROL }
     public enum State { IDLE, MANUAL_REQUIRED, SUBMITTED, PROGRESSED, COMPLETED, REJECTED, UNCERTAIN, STOPPED }
@@ -95,7 +95,8 @@ public final class PaymentCoordinator implements AutoCloseable {
             if(result==Submission.ENQUEUED){state=State.SUBMITTED;return attempt;}
             if(result==Submission.REJECTED){pending=null;state=State.REJECTED;return null;}
             uncertain();return attempt;
-        }catch(Exception failure){uncertain();return attempt;}finally{calling=false;}
+        }catch(Exception failure){uncertain();return attempt;}
+        catch(Error failure){uncertain();throw failure;}finally{calling=false;}
     }
     /** Only engine-correlated semantic observations, not queue ACKs or changed client revisions. */
     public boolean observe(Attempt attempt,Observation result) {

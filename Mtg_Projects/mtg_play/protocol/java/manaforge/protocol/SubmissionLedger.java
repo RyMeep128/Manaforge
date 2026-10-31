@@ -32,6 +32,7 @@ public final class SubmissionLedger implements AutoCloseable {
         this.session=session;this.viewer=viewer;this.capacity=capacity;
     }
     private void open() throws WireEnvelope.EnvelopeException {if(closed)fail("LEDGER_CLOSED");}
+    synchronized boolean hasUnresolved(){return active!=null;}
     private static void fail(String code) throws WireEnvelope.EnvelopeException {throw new WireEnvelope.EnvelopeException(code);}
     private JsonObject receipt(Record record) throws IOException {
         JsonObject body=new JsonObject();body.addProperty("session_id",session);body.addProperty("viewer_id",viewer);

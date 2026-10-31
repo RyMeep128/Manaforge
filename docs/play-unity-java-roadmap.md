@@ -976,3 +976,18 @@ for an XMage-backed planning/execution port. Local evidence: 65 coordinator and
 semantics and generic-color fallback are documented as integration limits. No
 production automation, source activation, real-game payment or UI acceptance is
 claimed. Next scheduled CI review is 0.5.111.
+
+### P2.3 shared manual/internal payment admission
+
+The [gateway payment port](play-payment-coordinator.md) now reserves automatic
+internal work through the same existing session boundary used by authenticated
+client commands. Manual and internal work cannot both win admission; uncertainty,
+replacement and disconnect do not silently release pending work. This adds no
+payment policy to the command gate/ledger and creates no automatic client ACKs.
+The real native XMage delegate remains absent, so production automation and P4.3
+payment acceptance stay open. No Unity UI or shared wire schema changed.
+
+Local shared-admission evidence: all focused Java protocol checks passed, including
+110 new synthetic admission/port checks; the 65 coordinator and 31 pinned native
+utility checks also passed. No actual source activation or payment completion is
+claimed. Relevant CI is checked at 0.5.111 without waiting on unfinished runs.

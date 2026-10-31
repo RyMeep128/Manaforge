@@ -5,6 +5,7 @@ on:
     paths:
       - 'Mtg_Projects/mtg_play/protocol/**'
       - 'Mtg_Projects/mtg_play/java/payment/**'
+      - 'Mtg_Projects/mtg_play/java/payment-gateway/**'
       - 'Mtg_Projects/mtg_play/java/payment-test/**'
       - 'Mtg_Projects/mtg_play/java/payment-xmage/**'
       - 'Mtg_Projects/mtg_play/java/payment-native-test/**'
@@ -19,6 +20,7 @@ on:
     paths:
       - 'Mtg_Projects/mtg_play/protocol/**'
       - 'Mtg_Projects/mtg_play/java/payment/**'
+      - 'Mtg_Projects/mtg_play/java/payment-gateway/**'
       - 'Mtg_Projects/mtg_play/java/payment-test/**'
       - 'Mtg_Projects/mtg_play/java/payment-xmage/**'
       - 'Mtg_Projects/mtg_play/java/payment-native-test/**'

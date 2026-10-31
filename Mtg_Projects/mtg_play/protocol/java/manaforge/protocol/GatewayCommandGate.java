@@ -47,6 +47,11 @@ public final class GatewayCommandGate implements AutoCloseable {
             for(JsonElement object:snapshot.getAsJsonArray("objects"))objects.add(object.getAsJsonObject().get("object_id").getAsString());
         }catch(IOException | RuntimeException error){clear();faulted=true;history.close();throw error;}
     }
+    /** Current binding only, for trusted internal session ownership. No action eligibility implied. */
+    synchronized boolean matchesDecision(String expectedSession,String expectedViewer,long revision,String decisionId) {
+        return !closed && !faulted && decision!=null && session.equals(expectedSession) && viewer.equals(expectedViewer)
+            && history.revision()==revision && decision.get("decision_id").getAsString().equals(decisionId);
+    }
     /** Null means offered, not legal or submitted. No state mutation, replay reservation or engine call. */
     public synchronized String check(String text) throws IOException {
         open();JsonObject envelope=WireMessages.parse(text);

@@ -1,6 +1,6 @@
 # Safe automatic mana payment â€” Java coordinator
 
-Status: isolated foundation through 0.5.110-alpha.1 for P2.3; production automation is
+Status: isolated foundation through 0.5.111-alpha.1 for P2.3; production automation is
 **disabled/unmounted**. P4.3 real-engine acceptance has not happened. This implements
 the fallback scope explicitly allowed by the [owner story](play-safe-automatic-mana-payment-story.md),
 not the story's end-to-end definition of done. The existing manual command path,
@@ -200,3 +200,60 @@ planning/execution in the Java engine adapter, render only viewer-permitted stat
 and preserve the original engine proposal identity through any presentation sort.
 The existing coordinator already requires trusted engine-certified step handles;
 reference findings do not justify replacing that contract with client heuristics.
+
+## Shared manual/internal session admission — 0.5.111
+
+GatewayPaymentPort now connects PaymentCoordinator.EnginePort to the existing
+GatewaySessionBoundary before a trusted native enqueue. This is a tested
+adapter-to-session integration, not live XMage execution: its native delegate is
+still absent in production, so automatic gameplay remains disabled.
+
+The boundary has a generic private InternalReservation, scoped to its authenticated
+session/viewer and current revision/decision. It contains no payment policy or
+native game state. GatewayCommandGate supplies a current-binding comparison only;
+SubmissionLedger supplies unresolved-client-command status only. All safety
+classification and automatic selection remain outside those components.
+
+Internal reservations and client-command reservations share the same boundary
+monitor. A valid manual command admitted first blocks internal reservation. An
+internal reservation acquired first causes overlapping client commands to receive
+the existing COMMAND_PENDING rejection. Invalid/stale command rejections retain
+their original meaning, and duplicate command history remains unchanged. No client
+command, command ID or acknowledgement is invented for internal automatic work.
+A repeated old client terminal receipt cannot release an internal reservation.
+
+GatewayPaymentPort acquires that reservation, rechecks currentness, then calls the
+trusted native enqueue without holding the boundary monitor. Native enqueue must
+still atomically validate its engine context/source before executing. A failed
+read-only preflight or definite nonexecution releases the reservation so manual
+input is available. An enqueued result stays pending until a correlated semantic
+observation, not a queue acknowledgement. Exceptions after native enqueue begins,
+null/uncertain results, decision replacement and disconnect retain a blocking
+reservation rather than permit replay.
+
+The serialized engine owner must notify both the port and coordinator of semantic
+observations. A resolved observation releases only its own opaque reservation;
+progress does not initiate a further action without fresh assessment. Per-instance
+attempt identity history is bounded to 4096 and prevents repeated internal enqueue.
+Cross-owner/thread and reentrant native callbacks cannot release the reservation.
+Fatal JVM/programming errors retain uncertainty and propagate their original error.
+Closing the port clears its private attempt references, leaves unresolved ownership
+marked uncertain, and does not close the borrowed session boundary. The session
+owner must close both coordinator and boundary during shutdown.
+
+The existing authenticated client admission/deduplication path remains the authority
+for manual commands. Parent integration must serialize engine callbacks, manual
+enqueue and coordinator operations on one engine owner; invoking the wrapper from
+arbitrary UI/socket threads is forbidden. The boundary itself remains synchronized
+so even competing admission attempts cannot both win. No protocol/schema or Unity
+fields changed and no complete native source planner is added.
+
+Local shared-admission evidence: the focused Java protocol runner passed its
+existing checks plus 110 new synthetic admission/port checks, including sixteen
+competing manual/internal races with exactly one winner, native definite rejection,
+preflight failure, enqueue exception/fatal/null outcomes, reentrant close, stale
+bindings, disconnect, foreign reservations, repeated attempts and old manual
+receipts. The separate 65 coordinator and 31 pinned native-helper checks also
+passed. No full application suite, Unity tests or real-game acceptance ran for
+this backend increment. CI is checked at the 0.5.111 checkpoint without waiting
+for unfinished runs; no result is inferred from these local tests.

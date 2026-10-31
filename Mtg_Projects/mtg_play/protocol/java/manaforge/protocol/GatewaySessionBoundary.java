@@ -12,6 +12,16 @@ public final class GatewaySessionBoundary implements AutoCloseable {
     private final SubmissionLedger ledger;
     private State state=State.ACTIVE;
     private boolean dispatching;
+    /** Generic trusted internal work reservation, not a client command or rules/payment policy. */
+    public static final class InternalReservation {
+        private final GatewaySessionBoundary owner;
+        private final String session,viewer,decision;private final long revision;
+        private boolean uncertain;
+        private InternalReservation(GatewaySessionBoundary owner,String session,String viewer,long revision,String decision) {
+            this.owner=owner;this.session=session;this.viewer=viewer;this.revision=revision;this.decision=decision;
+        }
+    }
+    private InternalReservation internal;
     public GatewaySessionBoundary(GatewayHandshake.ViewerContext context,boolean fixtureMode,int capacity) {
         if(context==null)throw new IllegalArgumentException("SESSION_CONTEXT");
         // Both constituents use the same validated capacity and authenticated ownership.
@@ -31,15 +41,33 @@ public final class GatewaySessionBoundary implements AutoCloseable {
         if(dispatching)throw new WireEnvelope.EnvelopeException("SESSION_REENTRANT");
     }
     private void stop(State reason) throws IOException {
-        state=reason;gate.close();ledger.disconnected();
+        state=reason;gate.close();ledger.disconnected();if(internal!=null)internal.uncertain=true;
     }
     public synchronized void observe(String text) throws IOException {
-        active();try{gate.observe(text);}catch(IOException | RuntimeException error){stop(State.FAULTED);throw error;}
+        active();try{gate.observe(text);if(internal!=null && !gate.matchesDecision(internal.session,internal.viewer,internal.revision,internal.decision))internal.uncertain=true;}
+        catch(IOException | RuntimeException error){stop(State.FAULTED);throw error;}
     }
     /** Admission and one-time reservation share this monitor. shouldSubmit is not an engine outcome. */
     public synchronized SubmissionLedger.Prepared prepare(String text) throws IOException {
-        active();try{return ledger.prepare(text,gate.check(text));}
+        active();try{String rejection=gate.check(text);if(rejection==null && internal!=null)rejection="COMMAND_PENDING";return ledger.prepare(text,rejection);}
         catch(IOException | RuntimeException error){stop(State.FAULTED);throw error;}
+    }
+    /** Trusted owner only. Native validation is still required; this is current binding, not legality. */
+    public synchronized boolean matchesInternalDecision(String session,String viewer,long revision,String decision) {
+        return !dispatching && state==State.ACTIVE && gate.matchesDecision(session,viewer,revision,decision);
+    }
+    public synchronized InternalReservation reserveInternal(String session,String viewer,long revision,String decision) throws IOException {
+        active();if(internal!=null || ledger.hasUnresolved() || !gate.matchesDecision(session,viewer,revision,decision))return null;
+        internal=new InternalReservation(this,session,viewer,revision,decision);return internal;
+    }
+    public synchronized boolean internalCurrent(InternalReservation reservation) {
+        return reservation!=null && reservation.owner==this && reservation==internal && !reservation.uncertain
+            && matchesInternalDecision(reservation.session,reservation.viewer,reservation.revision,reservation.decision);
+    }
+    /** false means outcome unresolved; true requires trusted semantic confirmation or definite nonexecution. */
+    public synchronized boolean settleInternal(InternalReservation reservation,boolean resolved) throws IOException {
+        retained();if(reservation==null || reservation.owner!=this || reservation!=internal)return false;
+        if(resolved)internal=null;else internal.uncertain=true;return true;
     }
     /** Reserve and invoke the trusted enqueue once under the owner monitor. Never confirms execution. */
     public synchronized SubmissionLedger.Prepared dispatch(String text,Submission submission) throws IOException {
@@ -68,5 +96,5 @@ public final class GatewaySessionBoundary implements AutoCloseable {
     /** Private owner diagnostic/reconciliation API; never send to another viewer. */
     public synchronized JsonObject receiptFor(String id) throws IOException {retained();return ledger.receiptFor(id);}
     public synchronized void disconnected() throws IOException {notDispatching();if(state==State.ACTIVE)stop(State.DISCONNECTED);}
-    public synchronized void close(){if(dispatching)throw new IllegalStateException("SESSION_REENTRANT");if(state==State.CLOSED)return;state=State.CLOSED;gate.close();ledger.close();}
+    public synchronized void close(){if(dispatching)throw new IllegalStateException("SESSION_REENTRANT");if(state==State.CLOSED)return;state=State.CLOSED;internal=null;gate.close();ledger.close();}
 }
