@@ -1,14 +1,18 @@
 # Bound viewer command dispatch
 
-Status: backend boundary at 0.5.102-alpha.1. No new scene controls or live-game
+Status: backend boundary through 0.5.103-alpha.1. No new scene controls or live-game
 claim. Packaged fixture owner review and G0/G1 remain pending.
 
 ViewerSessionHost exposes PerformAsync, ChooseAsync, FinishSelectionAsync and
 CancelChoiceAsync. Callers supply the current opaque ViewerDecisionOffer and,
 where applicable, the exact action/option object from that offer. Matching ID
 strings from another projection do not authorize submission. Finish and cancel
-require the engine-provided flags. Numeric and mana selection dispatch remain
-future work; no defaults, strategic choices, auto-pass or retry are introduced.
+require the engine-provided flags. ChooseNumberAsync accepts an explicit signed 64-bit value. ChooseAmountsAsync
+accepts an explicitly ordered array and copies it before worker scheduling, with
+the existing protocol length cap. The channel checks engine-provided per-value
+and aggregate bounds using its existing overflow-safe validation. No labels,
+printed text or defaults supply values. Mana selection dispatch remains future
+work; no defaults, strategic choices, auto-pass or retry are introduced.
 
 A CPU-only reservation disables CanSubmit before scheduling a worker. The worker
 constructs context and token fields from the captured frame, rechecks the offer
@@ -30,3 +34,11 @@ passed with no skips. Six new real authenticated-loopback tests cover exact wire
 tokens, distinct receipts, choose/finish/cancel, foreign same-ID objects, stale and
 replacement epochs, cancellation, ended ownership and sixteen concurrent clicks.
 The full application suite was not run. No UI behavior changed in this increment.
+
+Numeric follow-up evidence: 362 EditMode and 75 graphics-enabled PlayMode checks
+passed without skips. Four additional authenticated-loopback tests cover signed
+extremes, ordered copied arrays, length/count/range and family errors, overflow,
+and stale numeric offers. Rejected local input writes no command, consumes no
+pending tracker slot, and leaves a current offer available for corrected input.
+There is no new number-entry widget or visible fixture change. CI is next checked
+at 0.5.105 under the every-third-commit cadence; no CI success is inferred here.

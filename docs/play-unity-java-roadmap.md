@@ -871,3 +871,13 @@ receipt versus confirmation versus uncertainty. Local evidence: 362 EditMode and
 71 graphics-enabled PlayMode checks passed without skips, including concurrent
 clicks, stale/replacement offers and owner cancellation. No new controls, numeric
 or mana entry UI, live-engine acceptance or owner UI approval is claimed.
+
+### P3.4 explicit numeric command dispatch
+
+The [dispatcher](play-viewer-command-dispatch.md) now accepts explicit numbers
+and ordered amount arrays through the same current-offer reservation. It copies
+caller arrays, preserves signed integer limits, and delegates authoritative
+constraint validation to the existing channel contract. Invalid input releases
+the reservation without writing. Local evidence: 362 EditMode and 75 graphics
+PlayMode checks passed with no skips. Numeric controls, mana-source references,
+owner fixture UI review and real-engine/G0/G1 acceptance remain open.

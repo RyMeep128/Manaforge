@@ -76,6 +76,39 @@ namespace Manaforge.Play.Tests
             var host=Start(Snapshot(),out var peer,out var owner);yield return Until(()=>host.CurrentDecision!=null);var offer=host.CurrentDecision;var action=offer.Frame.Actions[0];using var cancel=new CancellationTokenSource();cancel.Cancel();var local=host.PerformAsync(offer,action,cancel.Token);Assert.That(local.IsCanceled,Is.True);Assert.That(offer.CanSubmit,Is.True);Assert.That(peer.PendingCommandBytes,Is.Zero);
             owner.TrySetResult(true);var ended=host.PerformAsync(offer,action);yield return Until(()=>ended.IsCompleted && host.Completion.IsCompleted);Assert.That(Error(ended),Is.EqualTo("SESSION_STOPPED"));Assert.That(host.Completion.Result.Session.Pending,Is.Null);
         }
+        private JObject NumericSnapshot(string family,long minimum,long maximum,params long[] ranges)
+        {
+            var frame=Snapshot(selection:true);var decision=frame["body"]["snapshot"]["decision"];decision["family"]=family;decision["minimum"]=minimum;decision["maximum"]=maximum;decision["options"]=new JArray();decision["can_finish"]=false;decision["cancellable"]=false;
+            var amounts=new JArray();for(int i=0;i<ranges.Length;i+=2)amounts.Add(new JObject{["label"]="Engine constraint",["minimum"]=ranges[i],["maximum"]=ranges[i+1],["default"]=JValue.CreateNull()});decision["amounts"]=amounts;return frame;
+        }
+        [UnityTest] public IEnumerator NumberCommandsPreserveSignedExtremesWithoutDefaults()
+        {
+            foreach(long value in new[]{long.MinValue,0L,long.MaxValue}) {
+                var host=Start(NumericSnapshot("number",long.MinValue,long.MaxValue),out var peer,out var owner);yield return Until(()=>host.CurrentDecision!=null);var sent=host.ChooseNumberAsync(host.CurrentDecision,value);yield return Until(()=>sent.IsCompleted);Assert.That(sent.Result.State,Is.EqualTo(CommandState.AwaitingAck));
+                var read=Task.Run(()=>WireMessages.Parse(peer.ReadCommandForFixture()));yield return Until(()=>read.IsCompleted);Assert.That((string)read.Result["body"]["operation"],Is.EqualTo("choose_number"));Assert.That((long)read.Result["body"]["value"],Is.EqualTo(value));host.Cancel();yield return Until(()=>host.Completion.IsCompleted);
+            }
+        }
+        [UnityTest] public IEnumerator OrderedAmountsCopyCallerInputBeforeWorkerDispatch()
+        {
+            var host=Start(NumericSnapshot("amounts",5,5,0,5,0,5),out var peer,out var owner);yield return Until(()=>host.CurrentDecision!=null);var values=new long[]{2,3};var sent=host.ChooseAmountsAsync(host.CurrentDecision,values);values[0]=999;yield return Until(()=>sent.IsCompleted);Assert.That(sent.Result.State,Is.EqualTo(CommandState.AwaitingAck));
+            var read=Task.Run(()=>WireMessages.Parse(peer.ReadCommandForFixture()));yield return Until(()=>read.IsCompleted);Assert.That((string)read.Result["body"]["operation"],Is.EqualTo("choose_amounts"));CollectionAssert.AreEqual(new long[]{2,3},read.Result["body"]["values"].Select(value=>(long)value));
+        }
+        [UnityTest] public IEnumerator InvalidNumericValuesDoNotWriteOrConsumeTheOffer()
+        {
+            var host=Start(NumericSnapshot("amounts",5,5,0,5,0,5),out var peer,out var owner);yield return Until(()=>host.CurrentDecision!=null);var offer=host.CurrentDecision;
+            foreach(var values in new[]{new long[]{1},new long[]{1,1},new long[]{6,-1},new long[WireMessages.MaxAmountValues+1],null}) {
+                var sent=host.ChooseAmountsAsync(offer,values);yield return Until(()=>sent.IsCompleted);Assert.That(Error(sent),Is.EqualTo("AMOUNT_OUT_OF_RANGE"));Assert.That(offer.CanSubmit,Is.True);Assert.That(peer.PendingCommandBytes,Is.Zero);
+            }
+            var wrong=host.ChooseNumberAsync(offer,5);yield return Until(()=>wrong.IsCompleted);Assert.That(Error(wrong),Is.EqualTo("DECISION_FAMILY_MISMATCH"));Assert.That(offer.CanSubmit,Is.True);
+            var valid=host.ChooseAmountsAsync(offer,new long[]{0,5});yield return Until(()=>valid.IsCompleted);Assert.That(valid.Result.State,Is.EqualTo(CommandState.AwaitingAck));
+        }
+        [UnityTest] public IEnumerator NumericOverflowAndStaleOffersNeverBecomeCommands()
+        {
+            var host=Start(NumericSnapshot("amounts",0,long.MaxValue,0,long.MaxValue,0,long.MaxValue),out var peer,out var owner);yield return Until(()=>host.CurrentDecision!=null);var old=host.CurrentDecision;
+            var overflow=host.ChooseAmountsAsync(old,new[]{long.MaxValue,long.MaxValue});yield return Until(()=>overflow.IsCompleted);Assert.That(Error(overflow),Is.EqualTo("AMOUNT_OUT_OF_RANGE"));Assert.That(peer.PendingCommandBytes,Is.Zero);
+            var next=NumericSnapshot("number",0,10);next["message_id"]="new-number";next["body"]["snapshot"]["revision"]=8;var send=Task.Run(()=>peer.ReplyForFixture(next));yield return Until(()=>send.IsCompleted);send.GetAwaiter().GetResult();yield return Until(()=>host.CurrentDecision!=null && !ReferenceEquals(host.CurrentDecision,old));
+            var stale=host.ChooseAmountsAsync(old,new long[]{0,0});yield return Until(()=>stale.IsCompleted);Assert.That(Error(stale),Is.EqualTo("STALE_DECISION"));var range=host.ChooseNumberAsync(host.CurrentDecision,11);yield return Until(()=>range.IsCompleted);Assert.That(Error(range),Is.EqualTo("AMOUNT_OUT_OF_RANGE"));Assert.That(peer.PendingCommandBytes,Is.Zero);
+        }
         [UnityTest] public IEnumerator ConcurrentClicksAdmitExactlyOneCommand()
         {
             var host=Start(Snapshot(),out var peer,out var owner);yield return Until(()=>host.CurrentDecision!=null);var offer=host.CurrentDecision;var action=offer.Frame.Actions[0];var attempts=new Task<TrackedCommand>[16];var launch=Task.Run(()=>Parallel.For(0,attempts.Length,i=>attempts[i]=host.PerformAsync(offer,action)));yield return Until(()=>launch.IsCompleted);launch.GetAwaiter().GetResult();yield return Until(()=>attempts.All(task=>task.IsCompleted));

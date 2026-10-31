@@ -76,6 +76,8 @@ namespace Manaforge.Play
         public Task<TrackedCommand> ChooseAsync(ViewerDecisionOffer offer,ProjectedChoiceOption option,CancellationToken cancellation=default)=>Dispatch(target=>target.ChooseAsync(offer,option,cancellation));
         public Task<TrackedCommand> FinishSelectionAsync(ViewerDecisionOffer offer,CancellationToken cancellation=default)=>Dispatch(target=>target.FinishSelectionAsync(offer,cancellation));
         public Task<TrackedCommand> CancelChoiceAsync(ViewerDecisionOffer offer,CancellationToken cancellation=default)=>Dispatch(target=>target.CancelChoiceAsync(offer,cancellation));
+        public Task<TrackedCommand> ChooseNumberAsync(ViewerDecisionOffer offer,long value,CancellationToken cancellation=default)=>Dispatch(target=>target.ChooseNumberAsync(offer,value,cancellation));
+        public Task<TrackedCommand> ChooseAmountsAsync(ViewerDecisionOffer offer,long[] values,CancellationToken cancellation=default)=>Dispatch(target=>target.ChooseAmountsAsync(offer,values,cancellation));
         public bool TryTake(out ViewerSessionUpdate update)
         {lock(gate){update=null;return !stopped && receiver!=null && receiver.TryTake(out update);}}
         private void ThreadOnly(){if(Thread.CurrentThread.ManagedThreadId!=thread)throw new InvalidOperationException("VIEWER_HOST_THREAD");}
