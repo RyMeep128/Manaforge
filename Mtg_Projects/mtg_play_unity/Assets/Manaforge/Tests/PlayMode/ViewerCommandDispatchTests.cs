@@ -76,6 +76,32 @@ namespace Manaforge.Play.Tests
             var host=Start(Snapshot(),out var peer,out var owner);yield return Until(()=>host.CurrentDecision!=null);var offer=host.CurrentDecision;var action=offer.Frame.Actions[0];using var cancel=new CancellationTokenSource();cancel.Cancel();var local=host.PerformAsync(offer,action,cancel.Token);Assert.That(local.IsCanceled,Is.True);Assert.That(offer.CanSubmit,Is.True);Assert.That(peer.PendingCommandBytes,Is.Zero);
             owner.TrySetResult(true);var ended=host.PerformAsync(offer,action);yield return Until(()=>ended.IsCompleted && host.Completion.IsCompleted);Assert.That(Error(ended),Is.EqualTo("SESSION_STOPPED"));Assert.That(host.Completion.Result.Session.Pending,Is.Null);
         }
+        private JObject ManaSnapshot()
+        {var frame=Snapshot(selection:true);var decision=frame["body"]["snapshot"]["decision"];decision["family"]="mana";decision["options"]=new JArray();decision["can_finish"]=false;decision["cancellable"]=false;return frame;}
+        [UnityTest] public IEnumerator ManaSourceReferenceWritesExactOpaqueTokenAndPreservesUncertainty()
+        {
+            var frame=ManaSnapshot();var host=Start(frame,out var peer,out var owner);yield return Until(()=>host.CurrentDecision!=null);var offer=host.CurrentDecision;var reference=offer.Frame.ManaSourceReferences[0];var sent=host.SelectManaSourceAsync(offer,reference);yield return Until(()=>sent.IsCompleted);Assert.That(sent.Result.State,Is.EqualTo(CommandState.AwaitingAck));
+            var read=Task.Run(()=>WireMessages.Parse(peer.ReadCommandForFixture()));yield return Until(()=>read.IsCompleted);Assert.That((string)read.Result["body"]["operation"],Is.EqualTo("select_mana_source"));Assert.That((string)read.Result["body"]["object_id"],Is.EqualTo(reference.ObjectId));Assert.That((string)read.Result["body"]["decision_id"],Is.EqualTo(reference.DecisionId));Assert.That(read.Result["body"]["card_identity"],Is.Null);
+            host.Cancel();yield return Until(()=>host.Completion.IsCompleted);Assert.That(host.Completion.Result.Session.Pending.State,Is.EqualTo(CommandState.Uncertain));
+        }
+        [UnityTest] public IEnumerator ForeignAndNullManaReferencesNeverWriteAndCurrentReferenceRemainsUsable()
+        {
+            var frame=ManaSnapshot();var foreign=ViewerDecisionProjection.ParseSnapshot(frame.ToString(),"fixture-session","one",0,true);var host=Start(frame,out var peer,out var owner);yield return Until(()=>host.CurrentDecision!=null);var offer=host.CurrentDecision;
+            foreach(var reference in new[]{foreign.ManaSourceReferences[0],null}){var denied=host.SelectManaSourceAsync(offer,reference);yield return Until(()=>denied.IsCompleted);Assert.That(Error(denied),Is.EqualTo("STALE_OR_INVALID_OBJECT"));Assert.That(offer.CanSubmit,Is.True);Assert.That(peer.PendingCommandBytes,Is.Zero);}
+            var sent=host.SelectManaSourceAsync(offer,offer.Frame.ManaSourceReferences[0]);yield return Until(()=>sent.IsCompleted);Assert.That(sent.Result.State,Is.EqualTo(CommandState.AwaitingAck));
+        }
+        [UnityTest] public IEnumerator ReplacedManaIncarnationsAndOffersNeverWrite()
+        {
+            var host=Start(ManaSnapshot(),out var peer,out var owner);yield return Until(()=>host.CurrentDecision!=null);var old=host.CurrentDecision;var reference=old.Frame.ManaSourceReferences[0];var next=ManaSnapshot();next["message_id"]="next-mana";next["body"]["snapshot"]["revision"]=8;next["body"]["snapshot"]["objects"][0]["object_id"]="new-incarnation";
+            var send=Task.Run(()=>peer.ReplyForFixture(next));yield return Until(()=>send.IsCompleted);send.GetAwaiter().GetResult();yield return Until(()=>host.CurrentDecision!=null && !ReferenceEquals(old,host.CurrentDecision));
+            var stale=host.SelectManaSourceAsync(old,reference);yield return Until(()=>stale.IsCompleted);Assert.That(Error(stale),Is.EqualTo("STALE_DECISION"));var rebound=host.SelectManaSourceAsync(host.CurrentDecision,reference);yield return Until(()=>rebound.IsCompleted);Assert.That(Error(rebound),Is.EqualTo("STALE_OR_INVALID_OBJECT"));Assert.That(peer.PendingCommandBytes,Is.Zero);
+            var valid=host.SelectManaSourceAsync(host.CurrentDecision,host.CurrentDecision.Frame.ManaSourceReferences[0]);yield return Until(()=>valid.IsCompleted);Assert.That(valid.Result.State,Is.EqualTo(CommandState.AwaitingAck));
+        }
+        [UnityTest] public IEnumerator NonManaDecisionsCannotBorrowSourceReferences()
+        {
+            var frame=ManaSnapshot();var references=ViewerDecisionProjection.ParseSnapshot(frame.ToString(),"fixture-session","one",0,true).ManaSourceReferences;var host=Start(Snapshot(),out var peer,out var owner);yield return Until(()=>host.CurrentDecision!=null);Assert.That(host.CurrentDecision.Frame.ManaSourceReferences,Is.Empty);
+            var denied=host.SelectManaSourceAsync(host.CurrentDecision,references[0]);yield return Until(()=>denied.IsCompleted);Assert.That(Error(denied),Is.EqualTo("STALE_OR_INVALID_OBJECT"));Assert.That(peer.PendingCommandBytes,Is.Zero);
+        }
         private JObject NumericSnapshot(string family,long minimum,long maximum,params long[] ranges)
         {
             var frame=Snapshot(selection:true);var decision=frame["body"]["snapshot"]["decision"];decision["family"]=family;decision["minimum"]=minimum;decision["maximum"]=maximum;decision["options"]=new JArray();decision["can_finish"]=false;decision["cancellable"]=false;

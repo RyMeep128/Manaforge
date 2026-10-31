@@ -1,6 +1,6 @@
 # Bound viewer command dispatch
 
-Status: backend boundary through 0.5.103-alpha.1. No new scene controls or live-game
+Status: backend boundary through 0.5.104-alpha.1. No new scene controls or live-game
 claim. Packaged fixture owner review and G0/G1 remain pending.
 
 ViewerSessionHost exposes PerformAsync, ChooseAsync, FinishSelectionAsync and
@@ -11,8 +11,8 @@ require the engine-provided flags. ChooseNumberAsync accepts an explicit signed 
 accepts an explicitly ordered array and copies it before worker scheduling, with
 the existing protocol length cap. The channel checks engine-provided per-value
 and aggregate bounds using its existing overflow-safe validation. No labels,
-printed text or defaults supply values. Mana selection dispatch remains future
-work; no defaults, strategic choices, auto-pass or retry are introduced.
+printed text or defaults supply values. SelectManaSourceAsync accepts an exact ProjectedManaSource reference from the
+current offer. No defaults, strategic choices, auto-pass or retry are introduced.
 
 A CPU-only reservation disables CanSubmit before scheduling a worker. The worker
 constructs context and token fields from the captured frame, rechecks the offer
@@ -42,3 +42,25 @@ and stale numeric offers. Rejected local input writes no command, consumes no
 pending tracker slot, and leaves a current offer available for corrected input.
 There is no new number-entry widget or visible fixture change. CI is next checked
 at 0.5.105 under the every-third-commit cadence; no CI success is inferred here.
+
+Mana references are created only for mana-family decisions, from the snapshot's
+viewer-filtered object set, and contain only context, decision ID and opaque
+object ID. The read-only collection expresses addressability, not legal mana
+eligibility. It does not filter by printed card text, zone, controller, tapped
+state, concealed identity or inferred abilities. The gateway must validate every
+attempt against the engine. No hidden identity or printing field is added.
+
+The dispatcher requires reference membership in the exact current offer, then
+uses the existing reservation, final channel admission, bounded worker write and
+receipt/uncertainty lifecycle. A separately parsed object with the same ID is not
+accepted. New snapshots replace all references even if IDs are unchanged; old
+offers or incarnations cannot be rebound to fresh state. Non-mana decisions have
+no source references. This adds no mana-source UI, automatic payment or game rules.
+
+Mana follow-up evidence: 364 EditMode and 79 graphics-enabled PlayMode checks
+passed with no skips, plus Java preflight. New checks cover the immutable
+routing-only reference shape, independent snapshots, empty/non-mana collections,
+exact tokens on authenticated loopback, foreign/null references, replaced
+incarnations, non-mana offers and uncertainty on shutdown after a write.
+No full application suite or visible scene change. The next CI check remains
+0.5.105; fixture owner review and real-engine/G0/G1 acceptance remain pending.

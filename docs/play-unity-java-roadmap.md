@@ -881,3 +881,14 @@ constraint validation to the existing channel contract. Invalid input releases
 the reservation without writing. Local evidence: 362 EditMode and 75 graphics
 PlayMode checks passed with no skips. Numeric controls, mana-source references,
 owner fixture UI review and real-engine/G0/G1 acceptance remain open.
+
+### P3.4 viewer-bound mana-source submission
+
+The [dispatcher](play-viewer-command-dispatch.md) accepts only exact source
+references from the current mana decision frame. These contain opaque viewer
+object routing, not eligibility or private identity. Engine validation remains
+mandatory; no printed-text heuristics or automatic mana choices are introduced.
+Old offers, incarnations and foreign same-ID references are refused before a
+write. Local evidence: 364 EditMode and 79 graphics-enabled PlayMode checks passed
+without skips, plus Java preflight. Mana UI, owner fixture review and live-engine
+acceptance remain open. CI is next checked at 0.5.105 without waiting on active runs.

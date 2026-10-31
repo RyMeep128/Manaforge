@@ -23,6 +23,12 @@ namespace Manaforge.Play
         internal ProjectedChoiceOption(CardProjectionContext context,string decision,JToken source)
         {Context=context;DecisionId=decision;OptionId=(string)source["option_id"];Label=(string)source["label"];ObjectId=(string)source["object_id"];PlayerId=(string)source["player_id"];Selected=(bool)source["selected"];}
     }
+    // Addressable viewer object only; membership never means the engine permits mana production.
+    public sealed class ProjectedManaSource
+    {
+        public CardProjectionContext Context {get;} public string DecisionId {get;} public string ObjectId {get;}
+        internal ProjectedManaSource(CardProjectionContext context,string decision,string objectId){Context=context;DecisionId=decision;ObjectId=objectId;}
+    }
     public sealed class ProjectedAmountConstraint
     {
         public string Label {get;} public long Minimum {get;} public long Maximum {get;} public long? Default {get;}
@@ -46,11 +52,15 @@ namespace Manaforge.Play
     {
         public CardProjectionContext Context {get;} public string Status {get;} public bool ActionsComplete {get;}
         public IReadOnlyList<ProjectedAction> Actions {get;} public ProjectedDecision Decision {get;}
+        public IReadOnlyList<ProjectedManaSource> ManaSourceReferences {get;}
         public IReadOnlyList<string> UnsupportedFields {get;}
         internal ProjectedDecisionFrame(JObject source)
         {
             Context=new CardProjectionContext((string)source["session_id"],(string)source["viewer_id"],(long)source["revision"]);Status=(string)source["status"];ActionsComplete=(bool)source["actions_complete"];
             if(source["decision"].Type!=JTokenType.Null)Decision=new ProjectedDecision(Context,source["decision"]);
+            ManaSourceReferences=Array.AsReadOnly(Decision?.Family=="mana"
+                ?source["objects"].Select(value=>new ProjectedManaSource(Context,Decision.DecisionId,(string)value["object_id"])).ToArray()
+                :Array.Empty<ProjectedManaSource>());
             Actions=Array.AsReadOnly(source["actions"].Select(value=>new ProjectedAction(Context,Decision?.DecisionId,value)).ToArray());UnsupportedFields=ViewerCardProjection.Strings(source["unsupported_fields"]);
         }
     }

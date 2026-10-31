@@ -11,7 +11,7 @@ namespace Manaforge.Play
     // Explicit input only. No JSON/network writes on UI, defaults, retries or inferred game choices.
     public sealed class ViewerCommandDispatcher : IDisposable
     {
-        private enum Operation { Perform,Choose,Finish,Cancel,Number,Amounts }
+        private enum Operation { Perform,Choose,Finish,Cancel,Number,Amounts,Mana }
         private readonly object gate=new object();private readonly ClientSessionChannel channel;private readonly ViewerDecisionBinding binding;private readonly int milliseconds;
         private bool stopped;private int running;private readonly TaskCompletionSource<bool> completion=new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         public Task Completion=>completion.Task;
@@ -29,8 +29,10 @@ namespace Manaforge.Play
             if(values==null || values.Length>WireMessages.MaxAmountValues)return Task.FromException<TrackedCommand>(new WireEnvelope.EnvelopeException("AMOUNT_OUT_OF_RANGE"));
             return Queue(offer,Operation.Amounts,null,null,cancellation,0,(long[])values.Clone());
         }
+        public Task<TrackedCommand> SelectManaSourceAsync(ViewerDecisionOffer offer,ProjectedManaSource source,CancellationToken cancellation=default)
+            =>Queue(offer,Operation.Mana,null,null,cancellation,source:source);
         private static void Fail(string code)=>throw new WireEnvelope.EnvelopeException(code);
-        private Task<TrackedCommand> Queue(ViewerDecisionOffer offer,Operation operation,ProjectedAction action,ProjectedChoiceOption option,CancellationToken cancellation,long number=0,long[] amounts=null)
+        private Task<TrackedCommand> Queue(ViewerDecisionOffer offer,Operation operation,ProjectedAction action,ProjectedChoiceOption option,CancellationToken cancellation,long number=0,long[] amounts=null,ProjectedManaSource source=null)
         {
             if(cancellation.IsCancellationRequested)return Task.FromCanceled<TrackedCommand>(cancellation);
             ViewerDecisionBinding.Reservation reservation=null;
@@ -42,19 +44,21 @@ namespace Manaforge.Play
                     if(operation==Operation.Choose && (option==null || !frame.Decision.Options.Any(value=>ReferenceEquals(value,option))))Fail("OPTION_UNAVAILABLE");
                     if(operation==Operation.Finish && !frame.Decision.CanFinish)Fail("SELECTION_NOT_FINISHABLE");
                     if(operation==Operation.Cancel && !frame.Decision.Cancellable)Fail("CANCELLATION_UNSUPPORTED");
-                    running++;var owned=reservation;return Task.Run(()=>Send(owned,operation,action,option,cancellation,number,amounts));
+                    if(operation==Operation.Mana && (source==null || !frame.ManaSourceReferences.Any(value=>ReferenceEquals(value,source))))Fail("STALE_OR_INVALID_OBJECT");
+                    running++;var owned=reservation;return Task.Run(()=>Send(owned,operation,action,option,cancellation,number,amounts,source));
                 }
                 catch(Exception error){if(reservation!=null)binding.Release(reservation);return Task.FromException<TrackedCommand>(error is WireEnvelope.EnvelopeException?error:new WireEnvelope.EnvelopeException("COMMAND_UNAVAILABLE"));}
             }
         }
-        private TrackedCommand Send(ViewerDecisionBinding.Reservation reservation,Operation operation,ProjectedAction action,ProjectedChoiceOption option,CancellationToken cancellation,long number,long[] amounts)
+        private TrackedCommand Send(ViewerDecisionBinding.Reservation reservation,Operation operation,ProjectedAction action,ProjectedChoiceOption option,CancellationToken cancellation,long number,long[] amounts,ProjectedManaSource source)
         {
             ClientSessionChannel.PreparedSubmission prepared=null;
             try {
                 cancellation.ThrowIfCancellationRequested();lock(gate){if(stopped)Fail("SESSION_STOPPED");}
                 var frame=reservation.Frame;var body=new JObject{["session_id"]=frame.Context.SessionId,["viewer_id"]=frame.Context.ViewerId,["revision"]=frame.Context.Revision,["decision_id"]=frame.Decision.DecisionId,
-                    ["operation"]=operation==Operation.Perform?"perform":operation==Operation.Choose?"choose":operation==Operation.Finish?"finish_selection":operation==Operation.Number?"choose_number":operation==Operation.Amounts?"choose_amounts":"cancel"};
+                    ["operation"]=operation==Operation.Perform?"perform":operation==Operation.Choose?"choose":operation==Operation.Finish?"finish_selection":operation==Operation.Number?"choose_number":operation==Operation.Amounts?"choose_amounts":operation==Operation.Mana?"select_mana_source":"cancel"};
                 if(operation==Operation.Number)body["value"]=number;if(operation==Operation.Amounts)body["values"]=new JArray(amounts.Select(value=>new JValue(value)));
+                if(source!=null)body["object_id"]=source.ObjectId;
                 if(action!=null)body["action_id"]=action.ActionId;if(option!=null)body["option_id"]=option.OptionId;
                 string text=new JObject{["wire_version"]=1,["message_type"]="command",["message_id"]="ui_"+Guid.NewGuid().ToString("N"),["body"]=body}.ToString(Formatting.None);
                 prepared=binding.Prepare(reservation,text);return channel.WriteSubmission(prepared,milliseconds,cancellation);

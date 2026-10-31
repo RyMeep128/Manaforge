@@ -16,6 +16,16 @@ namespace Manaforge.Play.Tests
         private static JObject Choice()=>(JObject)Corpus()["positive"][2]["envelope"].DeepClone();
         private static JObject Priority()=>(JObject)JObject.Parse(File.ReadAllText(Path.Combine(Application.dataPath,"../../mtg_play/protocol/fixtures/receive-history-v1.json")))["cases"][0]["steps"][0]["envelope"].DeepClone();
         private static ProjectedDecisionFrame Project(JObject source)=>ViewerDecisionProjection.ParseSnapshot(source.ToString(Formatting.None),(string)source["body"]["snapshot"]["session_id"],(string)source["body"]["snapshot"]["viewer_id"],0,true);
+        [Test] public void ManaReferencesCarryOnlyViewerRoutingAndDoNotInferEligibility()
+        {
+            var frame=Priority();var snapshot=frame["body"]["snapshot"];snapshot["decision"]["family"]="mana";var obj=snapshot["objects"][0];obj["hidden"]=true;obj["tapped"]=true;obj["controller_id"]="two";
+            var projected=Project(frame);Assert.That(projected.ManaSourceReferences.Count,Is.EqualTo(((JArray)snapshot["objects"]).Count));var reference=projected.ManaSourceReferences[0];Assert.That(reference.ObjectId,Is.EqualTo((string)obj["object_id"]));Assert.That(reference.Context.ViewerId,Is.EqualTo("one"));Assert.That(reference.DecisionId,Is.EqualTo(projected.Decision.DecisionId));
+            CollectionAssert.AreEquivalent(new[]{"Context","DecisionId","ObjectId"},typeof(ProjectedManaSource).GetProperties().Select(property=>property.Name));Assert.That(((System.Collections.Generic.IList<ProjectedManaSource>)projected.ManaSourceReferences).IsReadOnly,Is.True);
+        }
+        [Test] public void ManaReferencesAreEmptyOutsideManaAndIndependentAcrossSnapshots()
+        {
+            var source=Priority();Assert.That(Project(source).ManaSourceReferences,Is.Empty);source["body"]["snapshot"]["decision"]["family"]="mana";var first=Project(source);var second=Project(source);Assert.That(ReferenceEquals(first.ManaSourceReferences[0],second.ManaSourceReferences[0]),Is.False);source["body"]["snapshot"]["objects"]=new JArray();Assert.That(Project(source).ManaSourceReferences,Is.Empty);Assert.That(first.ManaSourceReferences,Is.Not.Empty);
+        }
         [Test] public void SharedPositiveSnapshotsPreserveExactDecisionAndCompletenessFields()
         {
             foreach(var test in Corpus()["positive"]) {
