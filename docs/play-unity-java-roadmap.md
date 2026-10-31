@@ -1084,3 +1084,10 @@ revalidation passes while the hazard screen continues requiring manual review.
 Opaque weak-reference tickets stay server-only and confer no action permission.
 Safe plan/equivalent-source policy and serialized owner execution remain open;
 there is no production automatic payment or change to existing acceptance gates.
+
+
+The 0.5.120 CI check confirmed native/protocol success for 0.5.118–119 and queued
+current runs. Preview-only CI exposed a Windows 8.3 temporary-path spelling
+failure, corrected in 0.5.121 by canonical ownership and directory identity checks
+with added regressions. No assertions or preview acceptance requirements were
+weakened; fix CI and owner UI review remain pending.

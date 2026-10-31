@@ -117,3 +117,29 @@ Python/C# tests, shared fixture, preview CI, licensed smoke helper/workflow.
 P4.1 follow-up remains authoritative Java gateway/XMage launch, viewer-filtered
 state/actions/results, actual human-vs-AI integration and all associated acceptance.
 Preview mode must remain separate until those boundaries are proven.
+
+
+## CI cleanup correction (0.5.121)
+
+The 0.5.120 CI checkpoint found that the dedicated preview job failed three
+cleanup cases on Windows. The actual job log showed a temporary path under
+`C:/Users/RUNNER~1/...`; resolve() expands that valid 8.3 spelling to the same
+`runneradmin` directory. Comparing the original spelling with the resolved path
+incorrectly rejected the owned directory. The other 88 checks passed in that run:
+[failed evidence](https://github.com/RyMeep128/Manaforge/actions/runs/41254073829).
+
+PreviewLaunch now canonicalizes a newly adopted generated directory once, checks
+its resolved temporary parent/prefix, rejects symlink/junction roots and records
+its filesystem device/inode identity. Cleanup requires the same canonical path,
+parent and directory identity before recursive deletion. This accepts valid
+Windows aliases without allowing replacement directories or linked targets to be
+removed. Failure still retains the existing owner/assets for explicit retry.
+No process names, user data/cache folders or unrelated Unity processes are used.
+
+The original three assertions remain intact. Added CI regressions exercise
+Windows GetShortPathNameW (normal canonical ownership on other platforms),
+replacement-directory preservation and refusal to adopt unrelated directories.
+Changed Python files parse successfully; no routine local tests, Unity build or
+UI verification were run for this correction, following the preview story policy.
+CI is pending for the fix; do not call the preview story accepted. The next routine
+status checkpoint remains 0.5.123. Owner visual review is still required.

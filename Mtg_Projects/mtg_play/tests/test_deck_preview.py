@@ -298,3 +298,62 @@ def test_preview_can_render_cached_standard_without_changing_selected_identity(
         row["printing_id"] == "selected" and row["artwork_printing_id"] == "standard"
         for row in data["cards"]
     )
+
+
+def test_owned_cleanup_accepts_windows_short_path_spelling():
+    import os
+    import tempfile
+
+    root = Path(tempfile.mkdtemp(prefix="manaforge-deck-preview-"))
+    supplied = root
+    if os.name == "nt":
+        import ctypes
+        from ctypes import wintypes
+
+        short_path = ctypes.windll.kernel32.GetShortPathNameW
+        short_path.argtypes = [wintypes.LPCWSTR, wintypes.LPWSTR, wintypes.DWORD]
+        short_path.restype = wintypes.DWORD
+        buffer = ctypes.create_unicode_buffer(32768)
+        length = short_path(str(root), buffer, len(buffer))
+        assert 0 < length < len(buffer)
+        supplied = Path(buffer.value)
+    launch = PreviewLaunch()
+    launch.root = supplied
+    assert launch.root == root.resolve()
+    launch.close()
+    assert launch.root is None and not root.exists()
+
+
+def test_cleanup_rejects_replaced_directory_and_preserves_both_targets():
+    import tempfile
+
+    root = Path(tempfile.mkdtemp(prefix="manaforge-deck-preview-"))
+    launch = PreviewLaunch()
+    launch.root = root
+    canonical = launch.root
+    backup = canonical.with_name(canonical.name + "-original")
+    # Both move targets are verified within the explicitly owned temporary parent.
+    assert canonical.is_absolute() and backup.is_absolute()
+    assert canonical.parent == backup.parent == Path(tempfile.gettempdir()).resolve()
+    canonical.rename(backup)
+    canonical.mkdir()
+    marker = canonical / "replacement.txt"
+    marker.write_text("not owned by the launch", encoding="utf-8")
+    try:
+        with pytest.raises(PreviewError, match="PREVIEW_FILES_CLEANUP_FAILED"):
+            launch.close()
+        assert marker.read_text(encoding="utf-8") == "not owned by the launch"
+        assert backup.is_dir() and launch.root == canonical
+    finally:
+        marker.unlink()
+        canonical.rmdir()
+        backup.rmdir()
+
+
+def test_preview_cannot_adopt_an_unrelated_directory(tmp_path):
+    marker = tmp_path / "keep.txt"
+    marker.write_text("keep", encoding="utf-8")
+    launch = PreviewLaunch()
+    with pytest.raises(PreviewError, match="PREVIEW_FILES_CLEANUP_FAILED"):
+        launch.root = tmp_path
+    assert marker.read_text(encoding="utf-8") == "keep" and launch.root is None

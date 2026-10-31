@@ -686,3 +686,13 @@ checkpoint is 0.5.123. No full suite, Unity UI or packaged build ran. The deck
 preview still awaits owner review, and production automatic selection remains
 disabled pending complete source strategy/equivalence, plan claims and Java
 session-owner execution.
+
+
+At the 0.5.120 checkpoint, native-payment CI passed for
+[0.5.118](https://github.com/RyMeep128/Manaforge/actions/runs/41241340499) and
+[0.5.119](https://github.com/RyMeep128/Manaforge/actions/runs/41254073836), as did
+their protocol checks. The current
+[0.5.120 native run](https://github.com/RyMeep128/Manaforge/actions/runs/41254473507)
+was queued and was not awaited. A separate preview CI failure was inspected and
+corrected in 0.5.121 (canonical Windows temporary-path ownership); it does not
+change payment behavior. Next routine CI checkpoint remains 0.5.123.

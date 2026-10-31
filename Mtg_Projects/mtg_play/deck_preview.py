@@ -162,23 +162,63 @@ class PreviewLaunch:
 
     def __init__(self, owner=None):
         self.owner = owner or LaunchOwner(startup_timeout=120)
-        self.root = None
+        self._root = None
+        self._root_identity = None
+        self._temp_parent = None
+
+    @staticmethod
+    def _linked(path):
+        return path.is_symlink() or getattr(path, "is_junction", lambda: False)()
+
+    @property
+    def root(self):
+        return self._root
+
+    @root.setter
+    def root(self, value):
+        if value is None:
+            self._root = self._root_identity = self._temp_parent = None
+            return
+        if self._root is not None:
+            raise PreviewError("PREVIEW_FILES_CLEANUP_FAILED")
+        try:
+            supplied = Path(value)
+            resolved = supplied.resolve(strict=True)
+            parent = Path(tempfile.gettempdir()).resolve(strict=True)
+            if (
+                self._linked(supplied)
+                or resolved.parent != parent
+                or not resolved.name.startswith("manaforge-deck-preview-")
+            ):
+                raise PreviewError("PREVIEW_FILES_CLEANUP_FAILED")
+            stat = resolved.stat()
+            if not resolved.is_dir() or not stat.st_ino:
+                raise PreviewError("PREVIEW_FILES_CLEANUP_FAILED")
+        except OSError:
+            raise PreviewError("PREVIEW_FILES_CLEANUP_FAILED") from None
+        # Windows 8.3 spellings may differ from resolve() while naming the SAME directory.
+        # Store the canonical path and actual file identity once, before preparation begins.
+        self._root, self._temp_parent = resolved, parent
+        self._root_identity = (stat.st_dev, stat.st_ino)
 
     def close(self):
         if not self.owner.close().confirmed:
             raise PreviewError("PREVIEW_CLEANUP_UNCONFIRMED")
         if self.root is None:
             return
-        resolved = self.root.resolve()
-        if (
-            resolved != self.root
-            or resolved.parent != Path(tempfile.gettempdir()).resolve()
-            or not resolved.name.startswith("manaforge-deck-preview-")
-            or self.root.is_symlink()
-        ):
-            raise PreviewError("PREVIEW_FILES_CLEANUP_FAILED")
         try:
+            resolved = self.root.resolve()
+            if (
+                resolved != self.root
+                or resolved.parent != self._temp_parent
+                or not resolved.name.startswith("manaforge-deck-preview-")
+                or self._linked(self.root)
+            ):
+                raise PreviewError("PREVIEW_FILES_CLEANUP_FAILED")
             if resolved.exists():
+                stat = resolved.stat()
+                if (stat.st_dev, stat.st_ino) != self._root_identity:
+                    raise PreviewError("PREVIEW_FILES_CLEANUP_FAILED")
                 shutil.rmtree(resolved)
         except OSError:
             raise PreviewError("PREVIEW_FILES_CLEANUP_FAILED") from None
