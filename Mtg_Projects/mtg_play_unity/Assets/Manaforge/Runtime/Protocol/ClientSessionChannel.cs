@@ -53,8 +53,12 @@ namespace Manaforge.Play.Protocol
         public Task<ClientChannelStop> Completion=>completion.Task;
         public TrackedCommand Pending {get{lock(gate)return commands.Current;}}
         public int QueuedCount {get{lock(gate)return inbox.Count;}}
-        public bool CanSubmit {get{lock(gate)return state==ClientChannelState.Active && !transport.IsClosed && !resultSeen
-            && !shutdownRequested && !string.IsNullOrEmpty(decision) && (actions.Count>0 || options.Count>0 || canFinish || cancellable || (mana && objectIds.Count>0) || (numeric?.Available ?? false)) && commands.CanSubmit;}}
+        private bool DecisionAvailable()=>state==ClientChannelState.Active && !transport.IsClosed && !resultSeen && !shutdownRequested && !string.IsNullOrEmpty(decision);
+        private bool CanSubmitLocked()=>DecisionAvailable() && (actions.Count>0 || options.Count>0 || canFinish || cancellable || (mana && objectIds.Count>0) || (numeric?.Available ?? false)) && commands.CanSubmit;
+        public bool CanSubmit {get{lock(gate)return CanSubmitLocked();}}
+        // Availability snapshot only. Submit still performs final atomic admission and command validation.
+        public bool MatchesDecision(string expectedSession,string expectedViewer,long expectedRevision,string expectedDecision,bool requireCanSubmit=false)
+        {lock(gate)return DecisionAvailable() && session==expectedSession && viewer==expectedViewer && revision==expectedRevision && decision==expectedDecision && (!requireCanSubmit || CanSubmitLocked());}
         private static void Fail(string code)=>throw new WireEnvelope.EnvelopeException(code);
         private void Open()
         {

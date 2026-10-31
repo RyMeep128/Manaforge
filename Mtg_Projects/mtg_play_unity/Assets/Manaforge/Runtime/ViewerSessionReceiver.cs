@@ -39,6 +39,7 @@ namespace Manaforge.Play
         private TrackedCommand lastReceipt;private ViewerSessionOutcome outcome;
         private readonly TaskCompletionSource<ViewerSessionStop> completion=new TaskCompletionSource<ViewerSessionStop>(TaskCreationOptions.RunContinuationsAsynchronously);
         public Task<ViewerSessionStop> Completion=>completion.Task;
+        public ViewerDecisionBinding Decisions {get;}
         public int Count {get{lock(gate)return updates.Count;}}
         public int QueuedBytes {get{lock(gate)return bytes;}}
         public bool IsStopped {get{lock(gate)return stopped;}}
@@ -48,6 +49,7 @@ namespace Manaforge.Play
                 || channel.State!=ClientChannelState.Active || channel.QueuedCount!=0 || ticket.Mailbox.IsStopped
                 || maximumUpdates<1 || maximumUpdates>1024 || maximumBytes<1 || maximumBytes>64*1024*1024)throw new ArgumentException("VIEWER_RECEIVE_CONTEXT");
             this.channel=channel;this.ticket=ticket;this.fixtureMode=fixtureMode;this.maximumUpdates=maximumUpdates;this.maximumBytes=maximumBytes;
+            Decisions=new ViewerDecisionBinding(channel,ticket);
             channel.Completion.ContinueWith(task=>Stop("VIEWER_CHANNEL_STOPPED",task.Result.Graceful),TaskScheduler.Default);
         }
         private void Stop(string code,bool graceful=false)
@@ -55,7 +57,7 @@ namespace Manaforge.Play
             TrackedCommand receipt;ViewerSessionOutcome result;
             lock(gate) {
                 if(stopped)return;stopped=true;while(updates.Count>0)updates.Dequeue().Dispose();bytes=0;
-                ticket.Mailbox.Dispose();receipt=lastReceipt;result=outcome;
+                ticket.Mailbox.Dispose();Decisions.Dispose();receipt=lastReceipt;result=outcome;
             }
             // Do not dispose the borrowed tracker: the host still owns uncertain-command evidence.
             if(channel.State==ClientChannelState.Active)channel.Cancel();
@@ -85,11 +87,12 @@ namespace Manaforge.Play
                 update=new ViewerSessionUpdate(received,packet,decisions);packet=null;
                 lock(gate) {
                     if(stopped || ticket.Mailbox.IsStopped){Stop("VIEWER_REVOKED");return false;}
-                    if(received.Receipt!=null)lastReceipt=received.Receipt;
+                    if(received.Receipt!=null){lastReceipt=received.Receipt;Decisions.ObserveReceipt(received.Receipt);}
                     if(received.Type=="result" && frame!=null)outcome=new ViewerSessionOutcome(frame);
                     if(updates.Count>=maximumUpdates || update.ByteCount>maximumBytes-bytes){Stop("VIEWER_RECEIVE_OVERFLOW");return false;}
-                    if(minimum.HasValue)ticket.Mailbox.AdvanceMinimumRevision(minimum.Value);
+                    if(minimum.HasValue){ticket.Mailbox.AdvanceMinimumRevision(minimum.Value);Decisions.AdvanceMinimumRevision(minimum.Value);}
                     if(frame!=null)ticket.Mailbox.TryPostFrame(frame);
+                    if(decisions!=null)Decisions.Observe(decisions);
                     updates.Enqueue(update);bytes+=update.ByteCount;update=null;return true;
                 }
             }

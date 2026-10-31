@@ -10,10 +10,11 @@ namespace Manaforge.Play.Protocol
     {
         public string CommandId { get; }
         public long RequestRevision { get; }
+        public string DecisionId { get; }
         public CommandState State { get; }
         public string Code { get; }
-        internal TrackedCommand(string id, long revision, CommandState state, string code)
-        { CommandId = id; RequestRevision = revision; State = state; Code = code; }
+        internal TrackedCommand(string id, long revision, CommandState state, string code,string decisionId=null)
+        { CommandId = id; RequestRevision = revision; State = state; Code = code;DecisionId=decisionId; }
     }
 
     // Client transport bookkeeping only. Construct after viewer authentication.
@@ -26,7 +27,8 @@ namespace Manaforge.Play.Protocol
             internal long Revision;
             internal CommandState State;
             internal string Code;
-            internal TrackedCommand Snapshot() => new TrackedCommand(Id, Revision, State, Code);
+            internal string DecisionId;
+            internal TrackedCommand Snapshot() => new TrackedCommand(Id, Revision, State, Code,DecisionId);
         }
         private readonly object gate = new object();
         private readonly string session, viewer;
@@ -69,7 +71,7 @@ namespace Manaforge.Play.Protocol
                 string id = (string)envelope["message_id"];
                 if (records.ContainsKey(id)) throw new WireEnvelope.EnvelopeException("COMMAND_ID_REUSED");
                 if (records.Count >= capacity) throw new WireEnvelope.EnvelopeException("COMMAND_HISTORY_FULL");
-                active = new Record { Id = id, Revision = (long)body["revision"], State = CommandState.AwaitingAck };
+                active = new Record { Id = id, Revision = (long)body["revision"], State = CommandState.AwaitingAck,DecisionId=(string)body["decision_id"] };
                 records.Add(id, active);
                 return active.Snapshot();
             }

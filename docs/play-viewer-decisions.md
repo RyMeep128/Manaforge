@@ -68,3 +68,7 @@ Receive integration checks verify typed frames on snapshots/results, absence on
 events/receipts, and reference release on update disposal. No full application
 suite or visible fixture change. G0/G1 and real-engine gameplay remain open.
 CI review remains every third commit, next at 0.5.102.
+
+The subsequent [offer binding](play-viewer-decision-binding.md) supplies an opaque
+per-snapshot lifetime and channel-backed availability checks. Actual UI controls,
+outgoing dispatch and owner UI acceptance remain separate work.

@@ -71,6 +71,13 @@ namespace Manaforge.Play.Tests
             Assert.That(SpinWait.SpinUntil(()=>p.Transport.ReadInProgress,1000),Is.True);p.Channel.Cancel();
             Assert.That(read.Wait(2000),Is.True);Assert.That(read.Result,Is.EqualTo("FRAME_CLOSED"));Stopped(p,"SESSION_CANCELLED");
         }
+        [Test] public void DecisionMatchingSeparatesDisplayContextFromPendingSubmissionAvailability()
+        {
+            using var p=new Pair();p.Prime();Assert.That(p.Channel.MatchesDecision("fixture-session","one",7,"fixture-decision",true),Is.True);
+            Assert.That(p.Channel.MatchesDecision("other","one",7,"fixture-decision"),Is.False);Assert.That(p.Channel.MatchesDecision("fixture-session","other",7,"fixture-decision"),Is.False);Assert.That(p.Channel.MatchesDecision("fixture-session","one",8,"fixture-decision"),Is.False);Assert.That(p.Channel.MatchesDecision("fixture-session","one",7,"other"),Is.False);
+            p.Channel.Submit(Command().ToString());TextFrame.Read(p.Peer.GetStream());Assert.That(p.Channel.Pending.DecisionId,Is.EqualTo("fixture-decision"));Assert.That(p.Channel.MatchesDecision("fixture-session","one",7,"fixture-decision"),Is.True);Assert.That(p.Channel.MatchesDecision("fixture-session","one",7,"fixture-decision",true),Is.False);
+            p.Channel.Cancel();Assert.That(p.Channel.MatchesDecision("fixture-session","one",7,"fixture-decision"),Is.False);
+        }
         [Test] public void UnexpectedEofIsNotARejectedActionOrGracefulOutcome()
         {
             using var p=new Pair();p.Prime(true);p.Peer.Client.Shutdown(SocketShutdown.Send);

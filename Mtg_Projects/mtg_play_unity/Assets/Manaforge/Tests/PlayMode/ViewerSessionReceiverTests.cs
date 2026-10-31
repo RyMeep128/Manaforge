@@ -18,7 +18,7 @@ namespace Manaforge.Play.Tests
     {
         private GameObject host;private PanelSettings settings;private ViewerCardSurface surface;
         private JObject corpus,history;
-        private sealed class Pair:IDisposable
+        internal sealed class Pair:IDisposable
         {
             public readonly TcpClient Peer;public readonly LoopbackFrameReader Transport;public readonly ClientSessionChannel Channel;
             public Pair(){var listener=new TcpListener(IPAddress.Loopback,0);listener.Start();try{Peer=new TcpClient();Peer.ReceiveTimeout=2000;Peer.Connect(IPAddress.Loopback,((IPEndPoint)listener.LocalEndpoint).Port);Transport=new LoopbackFrameReader(listener.AcceptSocket());Channel=new ClientSessionChannel(Transport,"fixture-session","one",true);}finally{listener.Stop();}}

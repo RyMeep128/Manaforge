@@ -21,6 +21,8 @@ namespace Manaforge.Play
         private bool stopped,disposed;private string stopCode;
         public Task<ViewerHostStop> Completion=>completion.Task;
         public bool Authenticated {get{lock(gate)return !stopped && channel!=null;}}
+        public ViewerDecisionOffer CurrentDecision
+        {get{if(ownerEnded.IsCompleted)Stop("VIEWER_OWNER_ENDED");lock(gate)return !stopped && receiver!=null?receiver.Decisions.Current:null;}}
         // Bootstrap ownership transfers only after BeginViewer succeeds. Parent owns its pipe/lifeline task.
         public ViewerSessionHost(ViewerCardSurface surface,ViewerBootstrap ownedBootstrap,Task ownerEnded,bool fixtureMode=false,int connectionMilliseconds=5000,int readMilliseconds=60000)
         {

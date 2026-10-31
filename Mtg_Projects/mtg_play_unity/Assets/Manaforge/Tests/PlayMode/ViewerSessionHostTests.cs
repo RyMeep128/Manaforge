@@ -97,5 +97,12 @@ namespace Manaforge.Play.Tests
             using var peer=new Peer(Frame("Never connected"),silent:true);var bootstrap=peer.Bootstrap();peer.Dispose();var owner=Signal();using var host=new ViewerSessionHost(surface,bootstrap,owner.Task,true,connectionMilliseconds:500);
             yield return Until(()=>host.Completion.IsCompleted);host.Tick();Assert.That(host.Completion.Result.Code,Is.EqualTo("VIEWER_CONNECT_FAILED"));Assert.That(host.Completion.Result.CleanupConfirmed,Is.True);Assert.That(surface.CardsRoot.childCount,Is.Zero);
         }
+        [UnityTest] public IEnumerator HostExposesOnlyItsCurrentOfferAndOwnerLossRevokesItBeforeTick()
+        {
+            var frame=JObject.Parse(Frame("Decision fixture"));var priority=JObject.Parse(File.ReadAllText(Path.Combine(Application.dataPath,"../../mtg_play/protocol/fixtures/receive-history-v1.json")))["cases"][0]["steps"][0]["envelope"]["body"]["snapshot"];
+            frame["body"]["snapshot"]["decision"]=priority["decision"].DeepClone();frame["body"]["snapshot"]["actions"]=priority["actions"].DeepClone();
+            using var peer=new Peer(frame.ToString());var owner=Signal();using var host=new ViewerSessionHost(surface,peer.Bootstrap(),owner.Task,true);yield return Until(()=>host.CurrentDecision!=null);var offer=host.CurrentDecision;Assert.That(offer.CanSubmit,Is.True);
+            owner.TrySetResult(true);Assert.That(host.CurrentDecision,Is.Null);Assert.That(offer.Frame,Is.Null);Assert.That(offer.CanSubmit,Is.False);host.Tick();yield return Until(()=>host.Completion.IsCompleted);
+        }
     }
 }

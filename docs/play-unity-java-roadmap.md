@@ -850,3 +850,14 @@ typed decision frames on applied snapshots/results and releases references on
 update disposal. Local evidence: 361 EditMode and 56 graphics-enabled PlayMode
 checks passed without graphics skips. No new controls or visible fixture changes;
 scoped UI binding, command submission, owner UI review and G0/G1 remain pending.
+
+### P3.4 decision offer lifetime and availability
+
+The [offer binding](play-viewer-decision-binding.md) now ties immutable decision
+data to one receiver/snapshot identity and checks live channel context. Pending
+commands disable submission without discarding the prompt. New state, newer
+events, terminal/revoked scopes and matching stale rejections retire old offers;
+late receipts for another decision do not clear fresh state. Local evidence: 362
+EditMode and 65 graphics-enabled PlayMode checks passed with no graphics skips.
+No outgoing dispatcher or new controls are enabled. The visible fixture and
+pending owner UI review are unchanged; real-engine and G0/G1 acceptance remain open.

@@ -70,3 +70,6 @@ Relevant CI is next checked at 0.5.99 under the third-commit cadence.
 The subsequent [packaged session fixture](play-session-fixture.md) now mounts this
 host through an explicit public-data scene entry point and proves the complete
 Java/player path. Owner UI review remains pending; this does not enable product Play.
+
+The [decision offer binding](play-viewer-decision-binding.md) adds CurrentDecision
+for future controls, with owner-loss and retired-epoch checks. It submits no commands.
