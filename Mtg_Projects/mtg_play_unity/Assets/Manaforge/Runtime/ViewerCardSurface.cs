@@ -10,7 +10,9 @@ namespace Manaforge.Play
     public sealed class ViewerSurfaceTicket
     {
         public string SessionId {get;} public string ViewerId {get;}
-        internal ViewerSurfaceTicket(string session,string viewer){SessionId=session;ViewerId=viewer;}
+        public ViewerRenderMailbox Mailbox {get;}
+        internal ViewerSurfaceTicket(string session,string viewer,int maximumArtwork,long maximumBytes)
+        {SessionId=session;ViewerId=viewer;Mailbox=new ViewerRenderMailbox(this,maximumArtwork,maximumBytes);}
     }
     public sealed class ViewerCardSurface : IDisposable
     {
@@ -50,16 +52,18 @@ namespace Manaforge.Play
         // Clear references before asking an explicitly transferred private resource scope to dispose.
         private void ClearOwnedState()
         {
-            ticket=null;revision=-1;cards.Clear();requests.Clear();artwork.Clear();inspectedObject=null;InspectionView.Conceal();
+            ticket?.Mailbox.Dispose();ticket=null;revision=-1;cards.Clear();requests.Clear();artwork.Clear();inspectedObject=null;InspectionView.Conceal();
             foreach(var view in views.Values)view.Dispose();views.Clear();CardsRoot.Clear();
             var assets=privateAssets;privateAssets=null;
             try{assets?.Dispose();}catch{privateAssets=assets;throw;}
         }
         // Ownership of newPrivateAssets transfers only on success. Never pass a shared/public cache.
-        public ViewerSurfaceTicket BeginViewer(string session,string viewer,IDisposable newPrivateAssets=null,long minimumRevision=0)
+        public ViewerSurfaceTicket BeginViewer(string session,string viewer,IDisposable newPrivateAssets=null,long minimumRevision=0,
+            int maximumArtworkCompletions=32,long maximumArtworkBytes=8*1024*1024)
         {
             Open();
             if(string.IsNullOrWhiteSpace(session) || string.IsNullOrWhiteSpace(viewer) || minimumRevision<0)throw new ArgumentException("VIEWER_SURFACE_CONTEXT");
+            ViewerRenderMailbox.ValidateLimits(maximumArtworkCompletions,maximumArtworkBytes);
             var artworkScope=newPrivateAssets as ViewerArtworkScope;artworkScope?.CheckUnowned();
             transitioning=true;
             try{ClearOwnedState();}
@@ -68,7 +72,7 @@ namespace Manaforge.Play
             // One whole empty rendered frame, including deferred Unity texture destruction.
             readyFrame=Time.frameCount+2;
             this.minimumRevision=minimumRevision;
-            var next=new ViewerSurfaceTicket(session,viewer);
+            var next=new ViewerSurfaceTicket(session,viewer,maximumArtworkCompletions,maximumArtworkBytes);next.Mailbox.AdvanceMinimumRevision(minimumRevision);
             try{artworkScope?.Claim(next);}catch{faulted=true;throw new InvalidOperationException("VIEWER_SURFACE_ASSET_SCOPE");}
             privateAssets=newPrivateAssets;ticket=next;return ticket;
         }
@@ -78,7 +82,7 @@ namespace Manaforge.Play
         {
             Open();if(minimum<0)throw new ArgumentOutOfRangeException(nameof(minimum));
             if(ticket==null || !ReferenceEquals(ticket,supplied) || minimum<=minimumRevision)return false;
-            minimumRevision=minimum;requests.Clear();return true;
+            minimumRevision=minimum;requests.Clear();ticket.Mailbox.AdvanceMinimumRevision(minimum);return true;
         }
         public bool ClearViewer(ViewerSurfaceTicket supplied)
         {
@@ -92,6 +96,7 @@ namespace Manaforge.Play
         {
             Open();if(frame==null)throw new ArgumentNullException(nameof(frame));
             if(ticket==null || !ReferenceEquals(ticket,supplied) || Time.frameCount<readyFrame
+                || !ticket.Mailbox.AllowsFrame(frame.Context.Revision)
                 || frame.Context.SessionId!=ticket.SessionId || frame.Context.ViewerId!=ticket.ViewerId
                 || frame.Context.Revision<minimumRevision || frame.Context.Revision<=revision)return false;
             // No wire decision/action IDs are stored here. Inspection never submits a game command.
@@ -111,7 +116,7 @@ namespace Manaforge.Play
                     Bind(view,card);
                 }
                 foreach(var id in new List<string>(views.Keys))if(!present.Contains(id)){views[id].Dispose();views.Remove(id);artwork.Remove(id);}
-                revision=frame.Context.Revision;return true;
+                revision=frame.Context.Revision;ticket.Mailbox.ObserveAppliedFrame(revision);return true;
             }
             catch {
                 faulted=true;
@@ -126,6 +131,7 @@ namespace Manaforge.Play
         {
             Open();
             if(ticket==null || !ReferenceEquals(ticket,supplied) || !(privateAssets is ViewerArtworkScope) || revision<minimumRevision
+                || !ticket.Mailbox.AllowsArtwork(revision)
                 || objectId==null || !cards.TryGetValue(objectId,out var card) || !ArtworkPermitted(card) || artwork.ContainsKey(objectId))return null;
             if(!requests.TryGetValue(objectId,out var request)){request=new ViewerArtworkRequest(ticket,card);requests.Add(objectId,request);}return request;
         }
@@ -136,6 +142,7 @@ namespace Manaforge.Play
             try {
                 var request=prepared.Request;
                 if(prepared.IsDisposed || ticket==null || !ReferenceEquals(ticket,supplied) || !ReferenceEquals(ticket,request.Ticket)
+                    || !ticket.Mailbox.AllowsArtwork(request.Revision)
                     || request.Revision!=revision || revision<minimumRevision || !(privateAssets is ViewerArtworkScope scope)
                     || !requests.TryGetValue(request.ObjectId,out var pending) || !ReferenceEquals(pending,request)
                     || !cards.TryGetValue(request.ObjectId,out var card) || !ArtworkPermitted(card))return false;
@@ -171,7 +178,7 @@ namespace Manaforge.Play
         }
         public bool Inspect(ViewerSurfaceTicket supplied,string objectId)
         {
-            Open();if(ticket==null || !ReferenceEquals(ticket,supplied))return false;
+            Open();if(ticket==null || !ReferenceEquals(ticket,supplied) || !ticket.Mailbox.AllowsFrame(revision))return false;
             transitioning=true;
             try {
                 InspectionView.Conceal();inspectedObject=null;
@@ -183,6 +190,24 @@ namespace Manaforge.Play
                 throw new InvalidOperationException("VIEWER_SURFACE_INSPECTION_FAILED");
             }
             finally{transitioning=false;}
+        }
+        // Host calls once per UI update. No waiting, decoding or unbounded draining.
+        public int DrainMailbox(ViewerSurfaceTicket supplied,int maximumArtworkUploads=2)
+        {
+            Open();if(maximumArtworkUploads<0 || maximumArtworkUploads>16)throw new ArgumentOutOfRangeException(nameof(maximumArtworkUploads));
+            if(ticket==null || !ReferenceEquals(ticket,supplied))return 0;
+            var mailbox=ticket.Mailbox;
+            if(mailbox.IsStopped){ClearViewer(supplied);return 0;}
+            SetMinimumRevision(supplied,mailbox.MinimumRevision);
+            int processed=0;
+            if(mailbox.TryPeekFrame(out var frame)) {
+                if(!TryPresent(supplied,frame)){if(mailbox.IsStopped)ClearViewer(supplied);return 0;}processed++;
+            }
+            for(int i=0;i<maximumArtworkUploads && mailbox.TryTakeArtwork(out var prepared);i++) {
+                TryApplyArtwork(supplied,prepared);processed++;
+            }
+            if(mailbox.IsStopped)ClearViewer(supplied);
+            return processed;
         }
         public void Dispose()
         {

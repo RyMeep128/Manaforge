@@ -688,3 +688,16 @@ Local evidence: 315 EditMode checks and 19 graphics-enabled PlayMode checks pass
 including a real GPU readback with no skips. Core cache job integration, the UI
 mailbox, scene mounting, general face contracts and G0/G1 acceptance remain open.
 The public gallery is unchanged; no new owner UI verification is needed yet.
+
+
+### G1/P3 bounded worker-to-UI handoff
+
+The [render mailbox](play-render-mailbox.md) now coalesces complete projected
+snapshots per viewer epoch and bounds queued private artwork by count/bytes.
+Newer state retires obsolete completions; shutdown clears queued pixels. The UI
+owner drains snapshots before a limited number of texture uploads without
+bypassing its empty-frame barrier. Concurrent producers, watermarks, stale tickets,
+queue overflow and shutdown are covered by local checks. Local evidence is 321
+EditMode and 22 graphics-enabled PlayMode checks, including the GPU copy test;
+no skips occurred in that graphics run. Active Core job scheduling and production
+session mounting remain open, as do G0/G1 and P2 parity. No public scene changed.

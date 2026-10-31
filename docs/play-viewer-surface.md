@@ -78,3 +78,9 @@ remains open. CI follows the every-third-commit schedule (next at 0.5.87).
 The single-face follow-up adds bounded private texture scopes and one-shot
 revision-bound artwork requests. Core cache jobs, general face resolution and
 the session-scene mailbox are still separate integration work.
+
+The [render-mailbox follow-up](play-render-mailbox.md) adds one coalesced frame,
+bounded owned artwork completions and a main-thread drain per ticket. Begin/clear
+closes prior mailboxes; newer worker state also blocks obsolete direct artwork
+admission. This does not mount the surface into a live session or create a Core
+asset job scheduler.

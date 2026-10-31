@@ -1,7 +1,7 @@
 # Authorized single-face artwork binding
 
 Status: tested asset boundary for the viewer surface. The production Core cache
-provider, bounded job/completion mailbox and session-scene mounting remain open.
+provider, bounded active-job scheduling and session-scene mounting remain open.
 This is not a new card database, persistent deck format, wire schema or XMage
 adapter. It extends the [viewer surface owner](play-viewer-surface.md).
 
@@ -88,3 +88,7 @@ headless run explicitly skips the GPU-readback check and is not GPU evidence;
 in both modes. No full application suite ran. The public scene is unchanged and
 no new UX/real-engine acceptance is claimed. CI review remains every third commit,
 with the next checkpoint after 0.5.87; licensed Unity CI and G0/G1 remain open.
+
+A subsequent [render mailbox](play-render-mailbox.md) now bounds queued
+completions and connects them to the UI drain. Active Core job scheduling and
+production mounting remain open; captured tickets must be used for late results.
