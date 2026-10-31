@@ -2,6 +2,7 @@ package manaforge.payment;
 
 import java.util.*;
 import mage.Mana;
+import mage.abilities.Ability;
 import mage.abilities.costs.mana.ManaCostsImpl;
 import mage.abilities.mana.*;
 import mage.choices.ChoiceColor;
@@ -16,12 +17,64 @@ import mage.constants.RangeOfInfluence;
 public final class PinnedPaymentChecks {
     private static int checks;
     private static void check(boolean value){checks++;if(!value)throw new AssertionError("PINNED_PAYMENT_CHECK_"+checks);}
+    private static void sourceScopeChecks(ContextHumanPlayer player) throws Exception {
+        UUID source=UUID.randomUUID();UUID[] controller={player.getId()};boolean[] present={true};
+        mage.game.permanent.Permanent permanent=(mage.game.permanent.Permanent)java.lang.reflect.Proxy.newProxyInstance(
+            PinnedPaymentChecks.class.getClassLoader(),new Class<?>[]{mage.game.permanent.Permanent.class},(proxy,method,args)->{
+                switch(method.getName()) {
+                    case "getId":return source;
+                    case "getControllerId":return controller[0];
+                    case "canUseActivatedAbilities":return true;
+                    case "getAbilities":return new mage.abilities.AbilitiesImpl<Ability>();
+                    default:throw new AssertionError("UNEXPECTED_SOURCE_CALL_"+method.getName());
+                }
+            });
+        mage.game.GameState state=new mage.game.GameState();
+        mage.game.Game game=(mage.game.Game)java.lang.reflect.Proxy.newProxyInstance(
+            PinnedPaymentChecks.class.getClassLoader(),new Class<?>[]{mage.game.Game.class},(proxy,method,args)->{
+                switch(method.getName()) {
+                    case "getPlayer":return player;
+                    case "getPermanent":return present[0] && source.equals(args[0])?permanent:null;
+                    case "getState":return state;
+                    case "hasEnded":return false;
+                    default:throw new AssertionError("UNEXPECTED_GAME_CALL_"+method.getName());
+                }
+            });
+        java.lang.reflect.Field response=mage.player.human.HumanPlayer.class.getDeclaredField("response");response.setAccessible(true);
+        java.lang.reflect.Field open=mage.player.human.HumanPlayer.class.getDeclaredField("responseOpenedForAnswer");open.setAccessible(true);
+        java.lang.reflect.Field payment=ContextHumanPlayer.class.getDeclaredField("payment");payment.setAccessible(true);
+        Class<?> frame=Class.forName("manaforge.payment.xmage.ContextHumanPlayer$Frame");
+        java.lang.reflect.Constructor<?> constructor=frame.getDeclaredConstructors()[0];constructor.setAccessible(true);
+        payment.set(player,constructor.newInstance(game,new GreenManaAbility(),new ManaCostsImpl<>("{G}"),1L));
+        open.set(player,true);player.setPayManaMode(true);
+        int cycle=state.getApplyEffectsCounter();int[] calls={0};
+        ContextHumanPlayer.SourceInspector<Boolean> inspect=(ability,cost,candidates)->{
+            calls[0]++;check(candidates.isEmpty());
+            boolean immutable=false;try{candidates.put(UUID.randomUUID(),new GreenManaAbility());}catch(UnsupportedOperationException expected){immutable=true;}
+            check(immutable);return true;
+        };
+        check(player.inspectBattlefieldSource(game,player.getId(),cycle,source,inspect)==null);check(calls[0]==0);
+        synchronized(response.get(player)) {
+            check(Boolean.TRUE.equals(player.inspectBattlefieldSource(game,player.getId(),cycle,source,inspect)));
+            check(player.inspectBattlefieldSource(game,UUID.randomUUID(),cycle,source,inspect)==null);
+            check(player.inspectBattlefieldSource(game,player.getId(),cycle+1,source,inspect)==null);
+            controller[0]=UUID.randomUUID();check(player.inspectBattlefieldSource(game,player.getId(),cycle,source,inspect)==null);
+            controller[0]=player.getId();present[0]=false;check(player.inspectBattlefieldSource(game,player.getId(),cycle,source,inspect)==null);
+            present[0]=true;
+            check(player.inspectBattlefieldSource(game,player.getId(),cycle,source,(a,c,candidates)->{present[0]=false;return true;})==null);
+            present[0]=true;
+            check(player.inspectBattlefieldSource(game,player.getId(),cycle,source,(a,c,candidates)->{player.setPayManaMode(false);return true;})==null);
+            check(calls[0]==1);
+        }
+        payment.set(player,null);open.set(player,false);
+    }
     public static void main(String[] args) throws Exception {
         ContextHumanPlayer observed=new ContextHumanPlayer("Public fixture",RangeOfInfluence.ALL,0);
         ContextHumanPlayer copied=observed.copy();
         check(copied.getClass()==ContextHumanPlayer.class);check(copied.getId().equals(observed.getId()));
         check(java.lang.reflect.Modifier.isTransient(ContextHumanPlayer.class.getDeclaredField("payment").getModifiers()));
         check(observed.paymentProbe(null,observed.getId(),0)==null);check(copied.paymentProbe(null,copied.getId(),0)==null);
+        sourceScopeChecks(observed);
         UserData manual=UserData.getDefaultUserDataView(),automatic=UserData.getDefaultUserDataView();
         check(manual!=automatic);
         manual.setManaPoolAutomatic(false);manual.setManaPoolAutomaticRestricted(false);

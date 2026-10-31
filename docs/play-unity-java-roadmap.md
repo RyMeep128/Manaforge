@@ -1021,3 +1021,11 @@ installed engine. Passed 111 focused Python, 65 coordinator, 77 response-guard a
 36 native object checks. Native source safety/planning and live gateway automation
 remain open; this is not automatic-payment or Unity end-to-end acceptance. Next CI
 review is 0.5.114, with no waiting on unfinished runs.
+
+
+Payment research increment 0.5.114 adds guarded, server-only selected battlefield
+source inspection through XMage's native usable-mana-ability query. Focused
+checks and pinned bridge compilation passed; candidate scope tests use synthetic
+game objects. No safe plan, automatic activation or new live-game acceptance is
+claimed. Production automatic payment stays disabled; G0/G1 and later gates
+remain subject to their existing evidence and owner acceptance requirements.

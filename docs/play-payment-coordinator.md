@@ -400,3 +400,33 @@ plan identity and execution revalidation, connection of the native provider to t
 Java session owner/coordinator, and Auto/Manual/Full Control acceptance. The trusted
 read hook alone is not an automatic payment plan, and production automatic source
 selection remains disabled. The default original-player regression path is retained.
+
+
+### Native battlefield-source inspection (0.5.114)
+
+The opt-in ContextHumanPlayer now offers inspectBattlefieldSource inside the
+existing response-monitor/payment-frame guard. It resolves the selected source
+from the current native Game, requires its current controller to be the payer,
+and delegates candidate discovery to the inherited pinned
+getUseableManaAbilities(permanent, Zone.BATTLEFIELD, game). It copies and bounds
+the result (128 entries), validates native ability keys, and supplies an
+unmodifiable map to a trusted server-only callback. Ability objects remain
+borrowed native references; callers must not mutate, retain or serialize them.
+The source identity/controller and payment frame are revalidated after the read.
+Null means unavailable/unsupported; an empty map means no native candidates.
+Neither result authorizes automatic activation. Non-battlefield sources remain
+outside this initial scope.
+
+Pinned bytecode inspection confirmed that the inherited query enumerates native
+activated mana abilities and calls native canActivate; the adapter does not
+reimplement that legality. It does not establish strategic equivalence, safe
+activation costs, complete-cost feasibility, or a payment plan. No production
+call site, client payload or default runtime behavior changed.
+
+Focused validation passed: 65 coordinator checks, 77 response guards and 48
+pinned-object/synthetic-scope checks; all owned bridge sources compiled against
+the hash-verified pinned SDK. The new scope tests use proxy Game/Permanent objects
+with an empty ability list to exercise monitor, payer, revision, controller,
+missing-source and post-read invalidation, plus map immutability. They are not
+live-engine candidate or automatic-payment acceptance. No new live match, full
+application suite, Unity UI or packaged build was run for this increment.

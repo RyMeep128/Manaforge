@@ -3,6 +3,12 @@ package manaforge.payment.xmage;
 import com.google.gson.JsonObject;
 import java.lang.reflect.Field;
 import java.util.UUID;
+import java.util.Map;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import mage.abilities.mana.ActivatedManaAbilityImpl;
+import mage.constants.Zone;
+import mage.game.permanent.Permanent;
 import mage.abilities.Ability;
 import mage.abilities.costs.mana.ManaCost;
 import mage.constants.RangeOfInfluence;
@@ -46,6 +52,28 @@ public final class ContextHumanPlayer extends HumanPlayer {
         return payment==captured && captured.game==game && Boolean.TRUE.equals(OPEN.get(this))
             && isInPayManaMode() && !game.hasEnded() && game.getPlayer(payer)==this
             && game.getState().getApplyEffectsCounter()==cycle?result:null;
+    }
+    /** Borrowed engine candidates, not a safety certificate or a complete payment plan.
+     * Same no-IO/no-mutation/no-retention contract as Inspector. Never expose this to a client. */
+    public interface SourceInspector<T>{T read(Ability ability,ManaCost unpaid,Map<UUID,ActivatedManaAbilityImpl> candidates);}
+    public <T> T inspectBattlefieldSource(Game game,UUID payer,int cycle,UUID source,SourceInspector<T> inspector)
+            throws ReflectiveOperationException {
+        if(source==null || inspector==null)return null;
+        return inspectPayment(game,payer,cycle,(ability,unpaid)->{
+            Permanent permanent=game.getPermanent(source);
+            if(permanent==null || !source.equals(permanent.getId()) || !payer.equals(permanent.getControllerId()))return null;
+            // Delegate legality to the exact pinned method used by HumanPlayer.playManaAbilities.
+            Map<UUID,ActivatedManaAbilityImpl> nativeAbilities=getUseableManaAbilities(permanent,Zone.BATTLEFIELD,game);
+            if(nativeAbilities==null || nativeAbilities.size()>128)return null;
+            Map<UUID,ActivatedManaAbilityImpl> snapshot=new LinkedHashMap<>();
+            for(Map.Entry<UUID,ActivatedManaAbilityImpl> entry:nativeAbilities.entrySet()) {
+                if(entry.getKey()==null || entry.getValue()==null || !entry.getKey().equals(entry.getValue().getId()))return null;
+                snapshot.put(entry.getKey(),entry.getValue());
+            }
+            T result=inspector.read(ability,unpaid,Collections.unmodifiableMap(snapshot));
+            // A native object leaving/reentering under the same ID must not validate this observation.
+            return game.getPermanent(source)==permanent && payer.equals(permanent.getControllerId())?result:null;
+        });
     }
     /** Bounded diagnostic evidence only. Never exports cost text, names, IDs, abilities or Game. */
     public JsonObject paymentProbe(Game game,UUID payer,int cycle) throws ReflectiveOperationException {
