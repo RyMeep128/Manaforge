@@ -11,6 +11,7 @@ public final class ManaforgeLiveOpening {
     private final ManaforgeBridge bridge = new ManaforgeBridge(event -> { if(!events.offer(event))overflow.set(true); });
     private final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(90);
     private JsonObject state, pending;
+    private String engineViewer;
     private String game, stage="initialize", decisionKind="none";
     private JsonObject next() throws Exception {
         while(System.nanoTime()<deadline && !cancelled.get()) {
@@ -19,7 +20,7 @@ public final class ManaforgeLiveOpening {
             if(event==null)continue;
             String kind=event.get("event").getAsString();
             if(kind.equals("error") || kind.equals("disconnected"))throw new IOException("LIVE_OPENING_ENGINE_FAILED");
-            if(kind.equals("game_started"))game=event.get("game_id").getAsString();
+            if(kind.equals("game_started")){game=event.get("game_id").getAsString();engineViewer=event.get("player_id").getAsString();}
             if(kind.equals("game_state"))state=event;
             if(kind.equals("decision"))pending=event;
             return event;
@@ -62,7 +63,19 @@ public final class ManaforgeLiveOpening {
             JsonObject event=pending==null?next():pending;
             if(!event.get("event").getAsString().equals("decision"))continue;
             pending=null;
-            if(state!=null && game!=null && state.getAsJsonArray("hand").size()==7 && state.getAsJsonArray("players").size()==2)return;
+            if(state!=null && game!=null && state.getAsJsonArray("hand").size()==7 && state.getAsJsonArray("players").size()==2) {
+                Map<String,manaforge.protocol.PlayContracts.CardIdentity> bindings=new HashMap<>();
+                for(String[] printing:new String[][]{{"M10/248","selected-forest","forest"},{"SOM/174","selected-memnite","memnite"}}) {
+                    manaforge.protocol.PlayContracts.CardIdentity identity=new manaforge.protocol.PlayContracts.CardIdentity();
+                    identity.printing_id=printing[1];identity.deck_entry_id=printing[2];bindings.put(printing[0],identity);
+                }
+                JsonObject snapshot=new ManaforgeOpeningProjection("live-opening","human",engineViewer,bindings).project(state,event);
+                JsonObject body=new JsonObject();body.addProperty("fixture_only",false);body.add("snapshot",snapshot);
+                JsonObject envelope=new JsonObject();envelope.addProperty("wire_version",1);envelope.addProperty("message_type","snapshot");envelope.addProperty("message_id","live-opening");envelope.add("body",body);
+                manaforge.protocol.ReceiveMessages.parse(envelope.toString(),"live-opening","human",1,false);
+                if(snapshot.getAsJsonArray("objects").size()!=7)throw new IOException("LIVE_OPENING_PROJECTION_FAILED");
+                return;
+            }
             // Explicit public fixture policy ONLY: respond to engine-offered pregame choices.
             if(++pregame>4)throw new IOException("LIVE_OPENING_UNSUPPORTED_PREGAME");
             value=command("respond");value.addProperty("game_id",game);value.add("decision_id",event.get("decision_id"));
@@ -90,7 +103,7 @@ public final class ManaforgeLiveOpening {
         try {
             if(args.length!=1)throw new IOException();int port=Integer.parseInt(args[0]);if(port<1 || port>65535)throw new IOException();
             probe.run(port);
-            report.println("{\"live_engine\":true,\"java_game_commands\":true,\"human_ai_seats\":true,\"opening_hand_count\":7,\"decision_received\":true,\"unity_connected\":false}");result=0;
+            report.println("{\"live_engine\":true,\"java_game_commands\":true,\"human_ai_seats\":true,\"opening_hand_count\":7,\"decision_received\":true,\"unity_connected\":false,\"public_projection_validated\":true}");result=0;
         }catch(Exception failure){JsonObject error=new JsonObject();error.addProperty("failure","LIVE_OPENING_FAILED");error.addProperty("stage",probe.stage);
             if(Arrays.asList("LIVE_OPENING_UNSUPPORTED_PREGAME","LIVE_OPENING_TIMEOUT_OR_CANCELLED","LIVE_OPENING_ENGINE_FAILED","LIVE_OPENING_QUEUE_LIMIT","LIVE_OPENING_PIN").contains(failure.getMessage()))error.addProperty("code",failure.getMessage());
             if(Arrays.asList("GAME_ASK","GAME_CHOOSE_CHOICE","GAME_TARGET","GAME_SELECT").contains(probe.decisionKind))error.addProperty("decision_family",probe.decisionKind);

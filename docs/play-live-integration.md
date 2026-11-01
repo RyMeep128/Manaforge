@@ -66,3 +66,57 @@ this harness as a user-deck exporter or send its raw engine callback JSON to Uni
 Unity is not connected by this first increment. No full match, public protocol
 parity, AI UX, hidden-information boundary or live Unity gameplay is claimed.
 Existing fixture UI reviews remain pending; this increment changes no Unity UI.
+
+
+## Opening public projection (0.5.129)
+
+ManaforgeOpeningProjection now converts the real human opening view and its
+GAME_ASK decision to the generated PlayContracts DTO model. The live Java proof
+validates its resulting envelope with the same ReceiveMessages/schema used by
+the Unity channel, in non-synthetic protocol mode. The diagnostic still reports
+public_fixture_only because its decks are public fixtures; it does not relabel a
+live engine state as a fake engine snapshot.
+
+This read-only opening scope requires the bound engine viewer, matching state/
+decision cycle, a numeric engine decision ID, empty board/stack/exile/combat and
+an engine boolean decision. Unsupported states fail with a fixed error. It does
+not omit a live occupied zone and pretend the rest is complete. Player seats are
+mapped without a fixed maximum. Opponents expose counts/public life only; the
+projection reads only the bound local hand. Concealed/face-down cards have no
+characteristics or printing identities. Engine IDs/names and unknown raw fields
+are not copied. UUIDs inside permitted display text are redacted.
+
+Selected-printing bindings come from trusted host mappings by set/collector pair;
+there is no name fallback or invented printing. Unknown bindings remain null.
+The public fixture supplies its existing selected-forest/selected-memnite IDs.
+Metadata requiring the server's full physical-incarnation information remains
+unfinished. Object/choice IDs are fresh per projection, with incarnation support
+explicitly unavailable; this opening-only helper must not be used for animated
+live board transitions. It returns fresh DTO JSON without retaining caller-mutated
+output or shared binding objects. actions_complete is false, actions are empty,
+and unavailable characteristics and session fields are marked unsupported.
+
+Boolean options reflect the engine's yes/no prompt, with fresh public tokens.
+No Unity command endpoint or token-to-native submission map is connected yet;
+these tokens must not be accepted by an executable gateway until that mapping
+and current revision/decision validation are implemented. No raw engine view
+is sent to Unity or persisted as a snapshot artifact.
+
+Validation passed: 30 isolated Java checks (shared receive shape, concealed/
+face-down cards, opponent canaries, raw IDs, unknown printing, source/output
+isolation, mismatched viewer/cycle, occupied zones, malformed numbers and
+unsupported decisions); the Java protocol preflight; 28 focused process-runtime
+checks; and the actual human/AI opening with its public snapshot schema check
+and normal cleanup. No full application suite or Unity UI ran. CI now includes
+the projection checks and reruns the live proof for protocol-runtime changes.
+
+Scheduled CI check: [.127 protocol](https://github.com/RyMeep128/Manaforge/actions/runs/41257622899),
+[.127 preview](https://github.com/RyMeep128/Manaforge/actions/runs/41257622905) and
+[.126 dependency fix](https://github.com/RyMeep128/Manaforge/actions/runs/41257263652)
+passed. [.128 live opening](https://github.com/RyMeep128/Manaforge/actions/runs/41260532957)
+and [.128 preview](https://github.com/RyMeep128/Manaforge/actions/runs/41260532996)
+were still running and were deferred. Check the next increment at .132 without
+waiting on unfinished work. No G0/G1 gate or full gameplay acceptance is implied.
+
+Next: bind the engine boolean decision to authenticated public choice submission,
+then mount the live source in Unity and request owner UI verification.

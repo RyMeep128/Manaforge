@@ -1,9 +1,9 @@
 name: Play live Java opening
 on:
   push:
-    paths: ['Mtg_Projects/mtg_play/java/*.java', 'Mtg_Projects/mtg_play/connection_proof.py', 'Mtg_Projects/mtg_play/artifacts.json', 'tools/check_play_live_opening.py', '.github/workflows/play-live-opening.yml']
+    paths: ['Mtg_Projects/mtg_play/protocol/java/**', 'Mtg_Projects/mtg_play/java/*.java', 'Mtg_Projects/mtg_play/connection_proof.py', 'Mtg_Projects/mtg_play/artifacts.json', 'tools/check_play_live_opening.py', '.github/workflows/play-live-opening.yml']
   pull_request:
-    paths: ['Mtg_Projects/mtg_play/java/*.java', 'Mtg_Projects/mtg_play/connection_proof.py', 'Mtg_Projects/mtg_play/artifacts.json', 'tools/check_play_live_opening.py', '.github/workflows/play-live-opening.yml']
+    paths: ['Mtg_Projects/mtg_play/protocol/java/**', 'Mtg_Projects/mtg_play/java/*.java', 'Mtg_Projects/mtg_play/connection_proof.py', 'Mtg_Projects/mtg_play/artifacts.json', 'tools/check_play_live_opening.py', '.github/workflows/play-live-opening.yml']
   workflow_dispatch:
 permissions:
   contents: read

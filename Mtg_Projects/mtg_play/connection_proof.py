@@ -399,6 +399,13 @@ def run_proof(
                 "-d",
                 str(classes),
                 *map(str, sorted((HERE / "java").glob("*.java"))),
+                *[
+                    str(HERE / "protocol/java/manaforge/protocol" / name)
+                    for name in (
+                        "PlayContracts.java", "TextFrame.java", "WireEnvelope.java",
+                        "ReceiveContractSchema.java", "ReceiveMessages.java",
+                    )
+                ],
                 str(
                     HERE / "java/payment-xmage/manaforge/payment/xmage/ManaResponseExecutor.java"
                 ),

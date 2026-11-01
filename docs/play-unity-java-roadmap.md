@@ -1124,3 +1124,9 @@ starts with a real Java-owned human/AI match opening through the existing pinned
 bridge. Local opening-hand/decision and cleanup proof passed; Unity public-state
 translation and interactive gameplay are next. This does not certify a completed
 game, parity or any gate. Preserve the Python/Qt reference and keep mana work parked.
+
+
+The .129 opening projection now validates actual XMage human-hand/boolean-decision
+state through the shared public receive schema, with privacy canaries and explicit
+unsupported fields. Authenticated command routing and live Unity mounting remain
+pending; see the [live integration track](play-live-integration.md).

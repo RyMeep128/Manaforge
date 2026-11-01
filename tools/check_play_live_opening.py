@@ -34,6 +34,7 @@ def main():
         opening_hand_count=7,
         decision_received=True,
         unity_connected=False,
+        public_projection_validated=True,
     )
     evidence = None
 

@@ -64,6 +64,8 @@ def main():
         ):
             parser.error("Gson SHA-256 does not match the pinned engine artifact")
         sources = [
+            PLAY / "java/ManaforgeOpeningProjection.java",
+            PROTOCOL / "java-test/OpeningProjectionChecks.java",
             PROTOCOL / "java/manaforge/protocol/PlayContracts.java",
             PROTOCOL / "java/manaforge/protocol/LaunchContracts.java",
             PROTOCOL / "java/manaforge/protocol/LaunchManifestReader.java",
@@ -133,9 +135,15 @@ def main():
         )
 
         subprocess.run(
-            [runtime, "-cp", str(workspace) + os.pathsep + str(jar),
-             "manaforge.protocol.LaunchReaderFixtureConsumer", str(PROTOCOL)],
-            check=True, timeout=60,
+            [
+                runtime,
+                "-cp",
+                str(workspace) + os.pathsep + str(jar),
+                "manaforge.protocol.LaunchReaderFixtureConsumer",
+                str(PROTOCOL),
+            ],
+            check=True,
+            timeout=60,
         )
 
         subprocess.run(
@@ -273,6 +281,17 @@ def main():
             check=True,
             timeout=30,
         )
+        subprocess.run(
+            [
+                runtime,
+                "-cp",
+                str(workspace) + os.pathsep + str(jar),
+                "OpeningProjectionChecks",
+            ],
+            check=True,
+            timeout=60,
+        )
+
         if args.dummy_output:
             output = args.dummy_output.resolve()
             output.mkdir(parents=True, exist_ok=True)
