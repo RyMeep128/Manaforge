@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -36,12 +37,12 @@ namespace Manaforge.Play
             return result;
         }
         // No card/decision references or callbacks are retained across viewer clearing.
-        public static void Present(VisualElement cardsRoot)
+        public static void Present(VisualElement cardsRoot,IReadOnlyList<CardView> originalOrder=null)
         {
             float width=cardsRoot.resolvedStyle.width;if(float.IsNaN(width) || width<=0)return;
-            var cards=cardsRoot.Query<CardView>().ToList();var placements=Arrange(cards.Count,width);
+            var cards=originalOrder??cardsRoot.Query<CardView>().ToList();var placements=Arrange(cards.Count,width);
             for(int i=0;i<cards.Count;i++){
-                var placement=placements[i];var card=cards[i];card.SetPresentation(CardPresentationMode.Full,placement.Width);
+                var placement=placements[i];var card=cards[i];if(card.parent!=cardsRoot)continue;card.SetPresentation(CardPresentationMode.Full,placement.Width);
                 card.style.position=Position.Absolute;card.style.left=placement.Left;card.style.top=placement.Top;
                 card.style.rotate=new Rotate(new Angle(placement.Angle,AngleUnit.Degree));
             }

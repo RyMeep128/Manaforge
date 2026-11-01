@@ -5,6 +5,24 @@ namespace Manaforge.Play.Tests
 {
     public sealed class OpeningCardFocusTests
     {
+        [UnityEngine.TestTools.UnityTest] public System.Collections.IEnumerator ResizePreservesOriginalFanPositionsWhileCardIsRaised()
+        {
+            if(UnityEngine.SystemInfo.graphicsDeviceType==UnityEngine.Rendering.GraphicsDeviceType.Null)Assert.Ignore("Mounted layout requires a graphics device.");
+            var window=UnityEngine.ScriptableObject.CreateInstance<UnityEditor.EditorWindow>();
+            var a=new CardView();var b=new CardView();
+            try{
+                window.Show();var root=window.rootVisualElement;root.style.width=800;root.Add(a);root.Add(b);
+                using(var focus=new OpeningCardFocus(root)){
+                    yield return null;focus.PresentHand();focus.Show(a);
+                    root.style.width=1000;yield return null;focus.PresentHand();
+                    var expected=OpeningHandFan.Arrange(2,root.resolvedStyle.width);
+                    Assert.That(a.style.left.value.value,Is.EqualTo(expected[0].Left).Within(.01f));
+                    Assert.That(b.style.left.value.value,Is.EqualTo(expected[1].Left).Within(.01f));
+                    Assert.That(root[1],Is.SameAs(a));Assert.That(a.style.scale.value.value.x,Is.EqualTo(1.12f));
+                    focus.Show(null);Assert.That(root[0],Is.SameAs(a));
+                }
+            }finally{a.Dispose();b.Dispose();window.Close();}
+        }
         [Test] public void RaisingCardsPreservesTabOrderAndDisposalRestoresOriginalSettings()
         {
             var root=new VisualElement();var a=new CardView{tabIndex=7,focusable=true};var b=new CardView{tabIndex=-1};root.Add(a);root.Add(b);

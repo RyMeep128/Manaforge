@@ -25,7 +25,7 @@ namespace Manaforge.Play
             if(!OpeningLayout)return;float width=surface.CardsRoot.resolvedStyle.width;int count=surface.CardsRoot.childCount;long revision=host.PresentedDecision?.Frame.Context.Revision??-1;
             int images=surface.PresentedArtworkCount;
             if(float.IsNaN(width) || width<=0 || width==fanWidth && count==fanCount && revision==fanRevision && images==fanArtwork)return;
-            OpeningHandFan.Present(surface.CardsRoot);
+            if(cardFocus==null)OpeningHandFan.Present(surface.CardsRoot);else cardFocus.PresentHand();
             if(artwork)foreach(var card in surface.CardsRoot.Query<CardView>().ToList())card.Q<Label>("status").style.display=DisplayStyle.None;
             fanWidth=width;fanCount=count;fanRevision=revision;fanArtwork=images;
         }

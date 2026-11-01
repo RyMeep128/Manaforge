@@ -26,6 +26,7 @@ namespace Manaforge.Play
                 unregister.Add(()=>{card.UnregisterCallback(enter);card.UnregisterCallback(leave);card.UnregisterCallback(focus);card.UnregisterCallback(blur);card.focusable=wasFocusable;card.tabIndex=previousTabIndex;});
             }
         }
+        public void PresentHand(){if(!disposed)OpeningHandFan.Present(root,cards);}
         public void Show(CardView card)
         {
             if(disposed || card!=null && (!cards.Contains(card) || card.parent!=root))return;

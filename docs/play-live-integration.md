@@ -1,5 +1,18 @@
 # Live Unity / Java / XMage integration
 
+## Stable opening-hand resize layout (0.5.160)
+
+Opening-hand relayout now uses the focus controller's original card order.
+Previously, bringing a card to the front also moved it to the last layout slot
+when viewport width or artwork readiness triggered another layout pass. Explicit
+layout order keeps card positions stable without undoing the raised drawing
+order or focus emphasis. Detached cards are not restyled.
+
+Validation: 23 focused opening-focus/fan EditMode checks passed with graphics,
+including a mounted resize while the first card is raised, expected positions,
+retained enlargement and restoration of sibling order. No packaged visual
+acceptance or full-suite run is claimed. Next scheduled CI check: .162.
+
 ## Stable opening-hand Tab order (0.5.159)
 
 Opening cards now receive explicit Tab indices in their original fan order.
