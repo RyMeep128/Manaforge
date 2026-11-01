@@ -65,6 +65,9 @@ def main():
             parser.error("Gson SHA-256 does not match the pinned engine artifact")
         sources = [
             PLAY / "java/ManaforgeOpeningProjection.java",
+            PLAY / "java/ManaforgeOpeningSession.java",
+            PLAY / "java/ManaforgeOpeningLoopback.java",
+            PROTOCOL / "java-test/OpeningSessionChecks.java",
             PROTOCOL / "java-test/OpeningProjectionChecks.java",
             PROTOCOL / "java/manaforge/protocol/PlayContracts.java",
             PROTOCOL / "java/manaforge/protocol/LaunchContracts.java",
@@ -291,6 +294,9 @@ def main():
             check=True,
             timeout=60,
         )
+
+        subprocess.run([runtime, "-cp", str(workspace) + os.pathsep + str(jar),
+                        "OpeningSessionChecks"], check=True, timeout=60)
 
         if args.dummy_output:
             output = args.dummy_output.resolve()

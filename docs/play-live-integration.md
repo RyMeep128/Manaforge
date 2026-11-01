@@ -166,3 +166,53 @@ Next: compose this binding with authenticated Java session admission and receipt
 then connect the live source to Unity's existing session/decision scene and stop
 for owner UI verification. Manual engine actions, board/stack/combat normalization,
 full parity, saved-deck runtime resolution and natural game completion remain open.
+
+
+## Authenticated live opening admission (0.5.131)
+
+ManaforgeOpeningSession composes the verified GatewayHandshake.ViewerContext,
+existing GatewaySessionBoundary/SubmissionLedger, opening projection and a bounded
+one-command native queue. Admission observes the public snapshot, reserves a
+receipt, and claims/enqueues the matching private native response. Socket writes,
+engine IO and waits occur only after admission returns, on the serialized owner
+worker. It never calls back into the session boundary from its enqueue callback.
+Native polling is owner-only; no raw command enters a client channel.
+
+The public diagnostic ManaforgeOpeningLoopback now supplies a real Java client
+on authenticated localhost sockets. Fresh viewer keys and client/server nonces
+stay in memory. Existing challenge/proof verification precedes ViewerContext
+creation, snapshot delivery and choice admission. The client validates the shared
+receive shape, submits an explicit Yes command, gets submitted, retries that same
+command ID and gets the cached receipt. Only one private native command is polled
+and sent to XMage. Engine advancement remains a separate observation.
+
+No confirmed receipt is fabricated. Because exact semantic reconciliation of this
+opening answer is unfinished, disconnect leaves its unresolved receipt uncertain.
+The diagnostic checks that state before final disposal. Disconnect/cancellation
+invalidates choice tokens and clears queued work; socket/worker ownership and key
+clearing are handled even on failure. This is serialized-worker coordination,
+not production thread joining, persistence or XMage descendant containment.
+
+The loopback client is a public fixture tool, not a production listener, launch
+credential API or Unity UI. It does not authenticate an arbitrary external client
+or accept user decks. The live adapter session worker is reusable; the next step
+is replacing the diagnostic client with the existing Unity authenticated channel.
+No public interface or installed Play feature has been enabled.
+
+Local validation passed: the actual XMage authenticated opening choice, duplicate
+receipt/one native submission, subsequent engine advancement and normal cleanup;
+full focused Java protocol preflight including all 63 projection/binding checks;
+and new engine-free real-socket tests for authenticated delivery, cached receipts,
+disconnect uncertainty and cancellation before native submission. Cleanup-only
+changes were recompiled and those socket tests passed again in isolation. No
+full application suite or Unity build/UI ran. CI next check remains .132.
+
+Sanitized live report version 2 adds authenticated_choice, duplicate_receipt_reused
+and disconnect_uncertainty_retained. duplicate_native_submission_prevented replaces
+the earlier choice_replay_rejected label: retrying the same command returns its
+stored receipt rather than a rejection, while still preventing duplicate execution.
+No credentials, native IDs, cards or prompts are included in uploaded evidence.
+
+Next: attach Unity's existing session scene and decision panel to this live
+opening source, then stop for owner visual/interaction review. Broader actions,
+board translation, saved-deck resolution and natural match completion remain open.

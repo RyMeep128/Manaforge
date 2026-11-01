@@ -1,6 +1,7 @@
 """Pinned-engine Java-owned human/AI opening proof; no Python game actions or Unity."""
 
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -37,7 +38,10 @@ def main():
         public_projection_validated=True,
         public_choice_submitted=True,
         engine_advanced=True,
-        choice_replay_rejected=True,
+        duplicate_native_submission_prevented=True,
+        authenticated_choice=True,
+        duplicate_receipt_reused=True,
+        disconnect_uncertainty_retained=True,
     )
     evidence = None
 
@@ -58,6 +62,7 @@ def main():
                 str(classes) + os.pathsep + str(server / "lib/*"),
                 "ManaforgeLiveOpening",
                 str(port),
+                hashlib.sha256((transport.HERE / "artifacts.json").read_bytes()).hexdigest(),
             ],
             cwd=workspace,
             stdin=subprocess.PIPE,
@@ -119,7 +124,7 @@ def main():
             "LIVE_JAVA_OPENING_FAILED; inspect owned runtime compile/server diagnostics"
         )
     evidence.update(
-        probe_version=1,
+        probe_version=2,
         public_fixture_only=True,
         roots_reaped=True,
         source_commit=subprocess.run(
@@ -133,7 +138,7 @@ def main():
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
     print(
-        "Real XMage opening projected; public boolean submitted once, replay rejected and engine advancement observed; cleanup passed. Unity integration remains pending."
+        "Real XMage opening projected; authenticated boolean submitted once, duplicate receipt reused and engine advancement observed; cleanup passed. Unity integration remains pending."
     )
 
 

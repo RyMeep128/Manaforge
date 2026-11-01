@@ -1136,3 +1136,9 @@ The .130 live opening now submits an explicit public boolean choice through a
 one-shot native binding, rejects replay and observes engine advancement.
 Authenticated session/receipt composition and Unity mounting remain next;
 formal acceptance gates and the Python/Qt fallback are unchanged.
+
+
+The .131 live opening now passes a real loopback challenge/proof handshake and
+the existing session admission/receipt ledger before queueing one native boolean
+response. Duplicate commands return cached receipts; disconnect preserves
+uncertainty. Unity mounting and owner review are next; gates remain open.
