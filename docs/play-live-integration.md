@@ -1,5 +1,39 @@
 # Live Unity / Java / XMage integration
 
+## Correlated priority-pass confirmation (0.5.167)
+
+The `--creature-ability --native-metadata --continue-priority --observe-resolution`
+fixture now confirms its exact priority pass after the guarded battlefield
+transition. This is deliberately scoped to the serialized public Memnite slice.
+It is not a general rule that engine advancement or an empty stack confirms a pass.
+
+Private PriorityEvidence requires the original exact stack spell, source counter
+and selected ability; an actual native priority prompt with guarded priority_open;
+the exact boolean-false response for that game/decision; native response_sent
+acceptance with the same request ID; the verified next-incarnation battlefield
+transition; and a later native priority prompt with matching guarded cycle and
+priority_open. Evidence is immutable and bound to the queued native command.
+Only then can the session settle that command's receipt as confirmed. Without
+this evidence, the ordinary continuation still emits uncertainty.
+
+Unity's sanitized evidence now requires two received confirmed receipts, and the
+native report adds unity_followup_priority_confirmed. The third snapshot remains
+read-only: this increment settles the outstanding pass without enabling broader
+actions or claiming full-game acceptance. No raw native IDs or metadata enter
+Unity. The next slice can admit the next action after this settled receipt.
+
+Validation: Windows player build and the real Unity/XMage metadata/transition
+probe passed, including two confirmed receipts, screenshot review and normal
+viewer/process cleanup. 78 focused Unity receipt-tracker/channel tests passed.
+Java protocol preflight passed, including 258 projection/correlation/privacy
+checks and authenticated-session checks for wrong evidence, late uncertainty
+reconciliation, idempotent confirmation, cached duplicate receipts, no duplicate
+enqueue and confirmation retained on disconnect. Negative evidence covers native
+acceptance, request IDs, priority guards, decision/cycle, stack identity and source
+incarnation mismatches. The no-observation Unity continuation and Java-only
+metadata cast/resolution regressions passed. No full application suite ran.
+CI evidence is pending; next scheduled check remains .168.
+
 ## Read-only native battlefield transition in Unity (0.5.166)
 
 The two-choice slice can now observe the exact spell source reaching the battlefield

@@ -10,7 +10,11 @@ import java.util.function.BooleanSupplier;
 public final class ManaforgeUnityOpening {
     public interface VerifiedAbilitySubmit {NativeCastCorrelation.AbilityEvidence submit(JsonObject command) throws Exception;}
     public interface NextPriority {PriorityOffer next() throws Exception;}
-    public interface Observation {JsonObject read() throws Exception;}
+    public interface Observation {ObservedSnapshot read() throws Exception;}
+    public static final class ObservedSnapshot {
+        private final JsonObject snapshot;private final NativeCastCorrelation.PriorityEvidence evidence;
+        public ObservedSnapshot(JsonObject snapshot,NativeCastCorrelation.PriorityEvidence evidence){this.snapshot=snapshot.deepCopy();this.evidence=evidence;}
+    }
     public static final class PriorityOffer {
         private final JsonObject snapshot;private final long decision,cycle;private final ManaforgeOpeningLoopback.NativeSubmit submit;private final Observation observation;
         public PriorityOffer(JsonObject snapshot,long decision,long cycle,ManaforgeOpeningLoopback.NativeSubmit submit){this(snapshot,decision,cycle,submit,null);}
@@ -70,8 +74,12 @@ public final class ManaforgeUnityOpening {
                             JsonObject pass=owner.pollNative();if(pass==null || owner.pollNative()!=null)throw new IOException("LIVE_UNITY_QUEUE_FAILED");
                             if(cancelled.getAsBoolean())throw new IOException("LIVE_UNITY_CANCELLED");
                             next.submit.submit(pass);String passId=WireMessages.parse(follow).get("message_id").getAsString();
-                            frames.write(owner.uncertain(passId).toString(),5000,cancelled);
-                            if(next.observation!=null){JsonObject observed=next.observation.read();owner.observe(observed.toString());frames.write(observed.toString(),5000,cancelled);}
+                            if(next.observation==null)frames.write(owner.uncertain(passId).toString(),5000,cancelled);
+                            else {
+                                ObservedSnapshot observed=next.observation.read();
+                                frames.write(owner.confirmPriority(passId,observed.evidence).toString(),5000,cancelled);
+                                owner.observe(observed.snapshot.toString());frames.write(observed.snapshot.toString(),5000,cancelled);
+                            }
                             sent=true;
                         }
                         if(!sent)throw new IOException("LIVE_UNITY_PRIORITY_RETRY_LIMIT");

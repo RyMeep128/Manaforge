@@ -45,7 +45,23 @@ public final class OpeningSessionChecks {
                 owner.uncertain("followup-pass");
                 JsonObject observation=envelope(projection.projectReadOnlyPriority(after,nextPrompt));observation.addProperty("message_id","post-pass-readonly");owner.observe(observation.toString());
                 if(!"uncertain".equals(owner.receiptFor("followup-pass").getAsJsonObject("body").get("outcome").getAsString()) || owner.pollNative()!=null)throw new AssertionError("OBSERVATION_SETTLED_PASS");
+                JsonObject resolved=after.deepCopy();resolved.add("stack",new JsonArray());
+                JsonObject source=before.getAsJsonArray("hand").get(0).getAsJsonObject();resolved.getAsJsonArray("players").get(0).getAsJsonObject().getAsJsonArray("battlefield").add(source.deepCopy());
+                String sourceId=source.get("id").getAsString(),stackId=after.getAsJsonArray("stack").get(0).getAsJsonObject().get("id").getAsString();
+                JsonObject beforeMeta=metadata.deepCopy(),afterMeta=new JsonObject(),objects=new JsonObject(),entry=new JsonObject(),accepted=new JsonObject(),later=nextPrompt.deepCopy();
+                beforeMeta.addProperty("priority_open",true);afterMeta.addProperty("priority_open",true);afterMeta.addProperty("status","ok");afterMeta.addProperty("cycle",8);
+                entry.addProperty("incarnation",metadata.getAsJsonObject("objects").getAsJsonObject(stackId).get("source_incarnation").getAsLong()+1);entry.addProperty("owner","raw-human");entry.addProperty("controller","raw-human");objects.add(sourceId,entry);afterMeta.add("objects",objects);
+                accepted.addProperty("event","response_sent");accepted.addProperty("accepted",true);accepted.addProperty("request_id","followup-pass");later.addProperty("decision_id",44);
+                NativeCastCorrelation.PriorityEvidence passProof=proof.priorityEvidence(after,nextPrompt,nativePass,beforeMeta,accepted,resolved,later,afterMeta);
+                if(passProof==null)throw new AssertionError("PRIORITY_PROOF_MISSING");
+                for(int mode=0;mode<2;mode++)try{owner.confirmPriority(mode==0?"wrong":"followup-pass",mode==0?passProof:null);throw new AssertionError("WRONG_PRIORITY_PROOF_ACCEPTED");}
+                    catch(IOException expected){if(!"PRIORITY_EVIDENCE_MISMATCH".equals(expected.getMessage()))throw expected;}
+                JsonObject passReceipt=owner.confirmPriority("followup-pass",passProof);
+                if(!"confirmed".equals(passReceipt.getAsJsonObject("body").get("outcome").getAsString()) || !passReceipt.equals(owner.confirmPriority("followup-pass",passProof)))throw new AssertionError("PRIORITY_NOT_CONFIRMED");
+                manaforge.protocol.SubmissionLedger.Prepared passRetry=owner.dispatch(pass.toString(),"raw-game","raw-human",43,8);
+                if(passRetry.shouldSubmit || !passReceipt.equals(passRetry.receipt()) || owner.pollNative()!=null)throw new AssertionError("CONFIRMED_PRIORITY_REPLAYED");
                 owner.disconnected();if(!confirmed.equals(owner.receiptFor(id)))throw new AssertionError("CONFIRMATION_LOST_ON_DISCONNECT");
+                if(!passReceipt.equals(owner.receiptFor("followup-pass")))throw new AssertionError("PRIORITY_CONFIRMATION_LOST");
             }
         }finally{java.util.Arrays.fill(key,(byte)0);}
     }

@@ -328,6 +328,7 @@ def main():
                     if (
                         observed.get("snapshot_count") != 3
                         or observed.get("battlefield_observation_presented") is not True
+                        or observed.get("confirmed_receipt_count") != 2
                     ):
                         raise RuntimeError("LIVE_UNITY_BATTLEFIELD_NOT_PRESENTED")
                 chosen = wait_file("choice", 60)
@@ -363,6 +364,12 @@ def main():
                         raise RuntimeError("LIVE_UNITY_EVIDENCE_FAILED")
                 if args.first_land and native.get("first_land_observed") is not True:
                     raise RuntimeError("LIVE_UNITY_LAND_NOT_OBSERVED")
+                if (
+                    args.native_metadata
+                    and native.get("unity_followup_priority_confirmed")
+                    is not args.observe_resolution
+                ):
+                    raise RuntimeError("LIVE_UNITY_PRIORITY_CONFIRMATION_FAILED")
                 if (
                     args.native_metadata
                     and native.get("unity_battlefield_transition_observed")
@@ -436,6 +443,7 @@ def main():
                         unity_casting_ability_confirmed=True,
                         unity_followup_priority_submitted=args.continue_priority,
                         unity_battlefield_transition_observed=args.observe_resolution,
+                        unity_followup_priority_confirmed=args.observe_resolution,
                     )
                 if args.continue_priority:
                     evidence.update(followup_priority_presented=True, snapshot_count=2)
@@ -476,7 +484,7 @@ def main():
         json.dumps(evidence, indent=2) + "\n", encoding="utf-8"
     )
     print(
-        "Packaged Unity observed the exact spell source on the battlefield in a read-only third snapshot; pass outcome uncertain, viewer cleared and roots reaped."
+        "Packaged Unity confirmed the exact ability and priority pass, observed the spell source on the battlefield, cleared the viewer and reaped owned roots."
         if args.observe_resolution
         else "Packaged Unity casting ability confirmed, then next priority passed on the same session; pass outcome uncertain, viewer cleared and roots reaped."
         if args.continue_priority

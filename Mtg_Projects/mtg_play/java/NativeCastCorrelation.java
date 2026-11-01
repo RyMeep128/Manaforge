@@ -3,10 +3,38 @@ import java.util.*;
 
 /** Private native correlation. Stack evidence proves ability selection, not spell resolution. */
 public final class NativeCastCorrelation {
-    public static final class AbilityEvidence {
-        private final JsonObject command;private final NativeCastCorrelation correlation;private final long stackSourceCounter,stackCycle;
-        private AbilityEvidence(JsonObject command,NativeCastCorrelation correlation,long counter,long cycle){this.command=command.deepCopy();this.correlation=correlation;stackSourceCounter=counter;stackCycle=cycle;}
+    public static final class PriorityEvidence {
+        private final JsonObject command;
+        private PriorityEvidence(JsonObject command){this.command=command.deepCopy();}
         public boolean matchesCommand(JsonObject candidate){return command.equals(candidate);}
+    }
+    public static final class AbilityEvidence {
+        private final JsonObject command;private final NativeCastCorrelation correlation;private final long stackSourceCounter,stackCycle;private final String stackId;
+        private AbilityEvidence(JsonObject command,NativeCastCorrelation correlation,long counter,long cycle,String stackId){this.command=command.deepCopy();this.correlation=correlation;stackSourceCounter=counter;stackCycle=cycle;this.stackId=stackId;}
+        public boolean matchesCommand(JsonObject candidate){return command.equals(candidate);}
+        /** Fixed cast/resolution slice only: not a general priority-advancement certificate. */
+        public PriorityEvidence priorityEvidence(JsonObject before,JsonObject prompt,JsonObject pass,JsonObject beforeMetadata,JsonObject accepted,
+                JsonObject after,JsonObject nextPrompt,JsonObject afterMetadata) {
+            try {
+                if(!"respond".equals(string(pass,"command")) || !"boolean".equals(string(pass,"kind")) || !new JsonPrimitive(false).equals(pass.get("value"))
+                    || !correlation.game.equals(string(pass,"game_id")) || number(pass,"decision_id")!=number(prompt,"decision_id")
+                    || !"GAME_SELECT".equals(string(prompt,"kind")) || !new JsonPrimitive(true).equals(prompt.get("is_priority"))
+                    || number(prompt,"cycle")!=number(before,"cycle") || number(before,"cycle")<stackCycle
+                    || !new JsonPrimitive(true).equals(beforeMetadata.get("priority_open"))
+                    || before.getAsJsonArray("stack").size()!=1 || !stackId.equals(string(before.getAsJsonArray("stack").get(0).getAsJsonObject(),"id"))
+                    || !correlation.matchesStackInstance(before,beforeMetadata,string(command,"value")))return null;
+                for(JsonElement item:before.getAsJsonArray("stack")) {
+                    JsonObject entry=beforeMetadata.getAsJsonObject("objects").getAsJsonObject(string(item.getAsJsonObject(),"id"));
+                    if(entry!=null && correlation.source.equals(string(entry,"source")) && number(entry,"source_incarnation")!=stackSourceCounter)return null;
+                }
+                if(!"response_sent".equals(string(accepted,"event")) || !new JsonPrimitive(true).equals(accepted.get("accepted"))
+                    || !string(pass,"request_id").equals(string(accepted,"request_id")) || !observesBattlefieldTransition(after,afterMetadata)
+                    || number(after,"cycle")<number(before,"cycle") || !"GAME_SELECT".equals(string(nextPrompt,"kind"))
+                    || !new JsonPrimitive(true).equals(nextPrompt.get("is_priority")) || !new JsonPrimitive(true).equals(afterMetadata.get("priority_open"))
+                    || number(nextPrompt,"cycle")!=number(after,"cycle") || number(nextPrompt,"decision_id")<=number(prompt,"decision_id"))return null;
+                return new PriorityEvidence(pass);
+            }catch(RuntimeException unsupported){return null;}
+        }
         /** Observation only. Does not confirm the intervening priority-pass receipt. */
         public boolean observesBattlefieldTransition(JsonObject state,JsonObject metadata) {
             try {
@@ -65,7 +93,7 @@ public final class NativeCastCorrelation {
             if(number(after,"cycle")<number(before,"cycle") || !prompt.getAsJsonObject("key_choices").has(selected) || !matchesStackInstance(after,metadata,selected))return null;
             for(JsonElement item:after.getAsJsonArray("stack")) {
                 JsonObject entry=metadata.getAsJsonObject("objects").getAsJsonObject(string(item.getAsJsonObject(),"id"));
-                if(entry!=null && source.equals(string(entry,"source")))return new AbilityEvidence(command,this,number(entry,"source_incarnation"),number(after,"cycle"));
+                if(entry!=null && source.equals(string(entry,"source")))return new AbilityEvidence(command,this,number(entry,"source_incarnation"),number(after,"cycle"),string(item.getAsJsonObject(),"id"));
             }
             return null;
         }catch(RuntimeException unsupported){return null;}

@@ -34,6 +34,11 @@ public final class ManaforgeOpeningSession implements AutoCloseable {
             || !evidence.matchesCommand(submittedNative))throw new IOException("CAST_EVIDENCE_MISMATCH");
         return boundary.recordOutcome(id,"confirmed",null);
     }
+    public JsonObject confirmPriority(String id,NativeCastCorrelation.PriorityEvidence evidence) throws IOException {
+        if(evidence==null || submittedNative==null || !id.equals(submittedNative.get("request_id").getAsString())
+            || !evidence.matchesCommand(submittedNative))throw new IOException("PRIORITY_EVIDENCE_MISMATCH");
+        return boundary.recordOutcome(id,"confirmed",null);
+    }
     public void disconnected() throws IOException {
         try{boundary.disconnected();}finally{projection.invalidateDecision();nativeQueue.clear();}
     }

@@ -273,6 +273,32 @@ public final class OpeningProjectionChecks {
         JsonObject observation=readOnly.projectReadOnlyPriority(resolved,nextPriority);shape(observation);
         check(observation.get("decision").isJsonNull() && observation.getAsJsonArray("actions").size()==0 && !observation.get("actions_complete").getAsBoolean());
         check(!observation.toString().contains(source) && !observation.toString().contains(ability));
+        JsonObject passCommand=new JsonObject();passCommand.addProperty("command","respond");passCommand.addProperty("game_id","raw-game");passCommand.addProperty("decision_id",43);passCommand.addProperty("kind","boolean");passCommand.addProperty("value",false);passCommand.addProperty("request_id","priority-receipt");
+        JsonObject openMetadata=metadata.deepCopy(),closedMetadata=resolvedMetadata.deepCopy(),accepted=new JsonObject(),laterPriority=nextPriority.deepCopy();
+        openMetadata.addProperty("priority_open",true);closedMetadata.addProperty("priority_open",true);laterPriority.addProperty("decision_id",44);
+        accepted.addProperty("event","response_sent");accepted.addProperty("accepted",true);accepted.addProperty("request_id","priority-receipt");
+        NativeCastCorrelation.PriorityEvidence passEvidence=evidence.priorityEvidence(after,nextPriority,passCommand,openMetadata,accepted,resolved,laterPriority,closedMetadata);
+        check(passEvidence!=null && passEvidence.matchesCommand(passCommand));
+        JsonObject differentPass=passCommand.deepCopy();differentPass.addProperty("request_id","other-priority");check(!passEvidence.matchesCommand(differentPass));
+        for(int mode=0;mode<15;mode++) {
+            JsonObject badPass=passCommand.deepCopy(),badBefore=after.deepCopy(),badPrompt=nextPriority.deepCopy(),badOpen=openMetadata.deepCopy(),badAccepted=accepted.deepCopy(),badNext=laterPriority.deepCopy(),badClosed=closedMetadata.deepCopy();
+            if(mode==0)badPass.addProperty("value",true);
+            if(mode==1)badPass.addProperty("kind","object");
+            if(mode==2)badPass.addProperty("game_id","wrong");
+            if(mode==3)badPass.addProperty("decision_id",42);
+            if(mode==4)badPrompt.addProperty("cycle",9);
+            if(mode==5)badOpen.addProperty("priority_open",false);
+            if(mode==6)badAccepted.addProperty("accepted",false);
+            if(mode==7)badAccepted.addProperty("request_id","wrong");
+            if(mode==8)badNext.addProperty("decision_id",43);
+            if(mode==9)badClosed.addProperty("priority_open",false);
+            if(mode==10)badClosed.getAsJsonObject("objects").getAsJsonObject(source).addProperty("incarnation",3);
+            if(mode==11)badBefore.getAsJsonArray("stack").get(0).getAsJsonObject().addProperty("id",source);
+            if(mode==12)badOpen.getAsJsonObject("objects").getAsJsonObject(ability).addProperty("source_incarnation",4);
+            if(mode==13)badAccepted.addProperty("event","game_state");
+            if(mode==14)badNext.addProperty("is_priority",false);
+            check(evidence.priorityEvidence(badBefore,badPrompt,badPass,badOpen,badAccepted,resolved,badNext,badClosed)==null);
+        }
         fails("STALE_DECISION",()->readOnly.claimAction(priorPass,"session","human","raw-game","raw-human",43,8));
         OpeningSessionChecks.confirmationChecks(raw,choice,instance,after,metadata);
         JsonObject other=abilityCommand.deepCopy();other.addProperty("request_id","other-receipt");check(!evidence.matchesCommand(other));
