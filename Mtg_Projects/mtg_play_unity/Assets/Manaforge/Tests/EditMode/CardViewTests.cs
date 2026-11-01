@@ -40,6 +40,19 @@ namespace Manaforge.Play.Tests
             Assert.That(view.Q<VisualElement>("printed-stats-mask").style.display.value,Is.EqualTo(DisplayStyle.Flex));
             Assert.That(view.Q<Label>("stats").text,Is.Empty);
         }
+        [TestCase("Basic Land",false)]
+        [TestCase("Artifact",false)]
+        [TestCase("Artifact Creature",true)]
+        [TestCase(null,true)]
+        [TestCase("Unknown",true)]
+        public void NormalPrintingMetadataControlsOnlyThePrintedStatMask(string printingType,bool mask)
+        {
+            var profile=CardCompactProfile.FromMetadata("normal",printingType);
+            Assert.That(profile.MayHavePrintedStats,Is.EqualTo(mask));
+            view.SetPresentation(CardPresentationMode.Full,300);
+            view.UpdateValues(new CardDisplayValues("Current",null,"Artifact",null,null,null,profile,hidePrintedStats:profile.MayHavePrintedStats));
+            Assert.That(view.Q<VisualElement>("printed-stats-mask").style.display.value,Is.EqualTo(mask?DisplayStyle.Flex:DisplayStyle.None));
+        }
         [Test] public void DynamicValuesChangeWithoutReplacingArtworkOrElements()
         {
             var stats = view.Q<Label>("stats");

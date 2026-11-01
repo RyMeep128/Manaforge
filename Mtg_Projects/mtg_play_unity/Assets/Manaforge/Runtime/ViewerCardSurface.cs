@@ -193,7 +193,7 @@ namespace Manaforge.Play
             // No printed text, invented mana cost, inferred artwork/face or reconstructed current rules.
             string unavailable=binding==null?"Artwork / rules unavailable":"Current rules unavailable";
             if(card.Tapped==null)unavailable+=" / tap state unavailable";
-            view.UpdateValues(new CardDisplayValues(c?.Name,null,c?.TypeLine,null,pt,unavailable,binding?.Profile,loyalty:c?.Loyalty,defense:c?.Defense,hidePrintedStats:true));
+            view.UpdateValues(new CardDisplayValues(c?.Name,null,c?.TypeLine,null,pt,unavailable,binding?.Profile,loyalty:c?.Loyalty,defense:c?.Defense,hidePrintedStats:binding?.Profile?.MayHavePrintedStats??true));
             if(card.Tapped==true)view.style.rotate=new Rotate(new Angle(90));
         }
         public static string DisplayPowerToughness(string typeLine,string power,string toughness)

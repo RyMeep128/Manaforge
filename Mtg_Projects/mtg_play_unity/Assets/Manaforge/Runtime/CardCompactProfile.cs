@@ -14,8 +14,9 @@ namespace Manaforge.Play
         public Rect? SecondaryCrop {get;}
         public int Rotation {get;}
         public int InspectionRotation {get;}
-        private CardCompactProfile(string kind,Rect crop,int rotation=0,int inspectionRotation=0,Rect? secondary=null)
-        {Kind=kind;Crop=crop;Rotation=rotation;InspectionRotation=inspectionRotation;SecondaryCrop=secondary;}
+        public bool MayHavePrintedStats {get;}
+        private CardCompactProfile(string kind,Rect crop,int rotation=0,int inspectionRotation=0,Rect? secondary=null,bool mayHavePrintedStats=true)
+        {Kind=kind;Crop=crop;Rotation=rotation;InspectionRotation=inspectionRotation;SecondaryCrop=secondary;MayHavePrintedStats=mayHavePrintedStats;}
         // Diagnostic gallery selection only. Live placement must use engine-provided zones.
         public static bool IsFixturePermanent(string typeLine)
         {
@@ -51,7 +52,7 @@ namespace Manaforge.Play
                 case "meld":return new CardCompactProfile("Meld",normal);
                 case "scheme":return new CardCompactProfile("Scheme",normal);
                 case "vanguard":return new CardCompactProfile("Vanguard",normal);
-                case "normal":return new CardCompactProfile("",normal);
+                case "normal":return new CardCompactProfile("",normal,mayHavePrintedStats:Has("Creature") || Has("Planeswalker") || Has("Battle") || !(Has("Land") || Has("Artifact") || Has("Enchantment")));
                 default:return null;
             }
         }

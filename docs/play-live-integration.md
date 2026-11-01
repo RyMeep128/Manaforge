@@ -1,5 +1,26 @@
 # Live Unity / Java / XMage integration
 
+## Clean noncreature printing footer (0.5.153)
+
+Raised lands revealed a dark printed-stat mask that the live surface previously
+requested for every card. Normal-frame printing metadata now records whether a
+stat box may exist. Known noncreature Land/Artifact/Enchantment printings skip
+that unnecessary mask, preserving their supplied frame/footer. Creature,
+planeswalker, battle, unknown, and other layout profiles retain conservative
+masking. The decision uses printing metadata, so a printed creature that becomes
+an artifact still hides stale printed stats. Current engine stats remain separate.
+
+Validation: 50 focused EditMode tests passed (CardView rendering and opening
+focus, including noncreature/creature/unknown printing masks), packaged build
+succeeded, and the artwork opening action/cleanup was checked with focused-card
+capture inspection.
+
+Third-commit CI checkpoint: the previously deferred .149 desktop preview passed;
+its general Tests run was cancelled. .150 and .151 desktop previews passed;
+.150 Tests was cancelled. .151 Tests and .152 Tests/desktop preview were still
+running or pending at the check and remain deferred. No completed failure was
+found. Next scheduled check: .156.
+
 ## Opening card hover and focus (0.5.152)
 
 The Arena-reference opening fan now emphasizes a card on pointer hover or
