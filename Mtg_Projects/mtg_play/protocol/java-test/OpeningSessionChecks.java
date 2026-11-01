@@ -60,8 +60,18 @@ public final class OpeningSessionChecks {
                 if(!"confirmed".equals(passReceipt.getAsJsonObject("body").get("outcome").getAsString()) || !passReceipt.equals(owner.confirmPriority("followup-pass",passProof)))throw new AssertionError("PRIORITY_NOT_CONFIRMED");
                 manaforge.protocol.SubmissionLedger.Prepared passRetry=owner.dispatch(pass.toString(),"raw-game","raw-human",43,8);
                 if(passRetry.shouldSubmit || !passReceipt.equals(passRetry.receipt()) || owner.pollNative()!=null)throw new AssertionError("CONFIRMED_PRIORITY_REPLAYED");
+                JsonObject permanent=resolved.getAsJsonArray("players").get(0).getAsJsonObject().getAsJsonArray("battlefield").get(0).getAsJsonObject();permanent.addProperty("controller_name","raw-name");permanent.addProperty("owner_name","raw-name");
+                JsonObject postSnapshot=projection.project(resolved,later,true),postUpdate=envelope(postSnapshot);postUpdate.addProperty("message_id","post-resolution-priority");owner.observe(postUpdate.toString());
+                JsonObject postCommand=JsonParser.parseString(OpeningProjectionChecks.perform(postSnapshot)).getAsJsonObject();postCommand.addProperty("message_id","post-resolution-pass");
+                if(!owner.dispatch(postCommand.toString(),"raw-game","raw-human",44,8).shouldSubmit)throw new AssertionError("POST_RESOLUTION_PASS_NOT_ADMITTED");
+                JsonObject nativePost=owner.pollNative();if(nativePost==null || nativePost.get("decision_id").getAsLong()!=44 || !new JsonPrimitive(false).equals(nativePost.get("value")))throw new AssertionError("WRONG_POST_RESOLUTION_PASS");
+                if(owner.dispatch(postCommand.toString(),"raw-game","raw-human",44,8).shouldSubmit || owner.pollNative()!=null)throw new AssertionError("POST_RESOLUTION_PASS_REPLAYED");
+                owner.uncertain("post-resolution-pass");postCommand.addProperty("message_id","blocked-fourth-command");
+                manaforge.protocol.SubmissionLedger.Prepared fourth=owner.dispatch(postCommand.toString(),"raw-game","raw-human",44,8);
+                if(fourth.shouldSubmit || !"COMMAND_PENDING".equals(fourth.receipt().getAsJsonObject("body").get("code").getAsString()) || owner.pollNative()!=null)throw new AssertionError("UNCERTAIN_POST_PASS_RELEASED");
                 owner.disconnected();if(!confirmed.equals(owner.receiptFor(id)))throw new AssertionError("CONFIRMATION_LOST_ON_DISCONNECT");
                 if(!passReceipt.equals(owner.receiptFor("followup-pass")))throw new AssertionError("PRIORITY_CONFIRMATION_LOST");
+                if(!"uncertain".equals(owner.receiptFor("post-resolution-pass").getAsJsonObject("body").get("outcome").getAsString()))throw new AssertionError("POST_PASS_UNCERTAINTY_LOST");
             }
         }finally{java.util.Arrays.fill(key,(byte)0);}
     }

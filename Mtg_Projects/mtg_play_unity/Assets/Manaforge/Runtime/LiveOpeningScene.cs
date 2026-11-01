@@ -17,7 +17,7 @@ namespace Manaforge.Play
         private ViewerBootstrapPipe pipe;private Task<ViewerBootstrap> reading;private Task consuming;
         private ViewerCardSurface surface;private ViewerSessionHost host;private ViewerDecisionPanel panel;
         private PanelSettings settings;private UIDocument document;private string output;private Label status;private Label note;private OpeningCardFocus cardFocus;private OpeningButtonGlow buttonGlow;
-        private long snapshotRevision=-1;private int snapshots,acks,confirmedReceipts;private bool capture,choiceReported,land,priority,creature,artwork,backdrop,requestedBackdrop,mulliganControls,buttonSkins,continuePriority,followupPresented,observeResolution,battlefieldPresented;
+        private long snapshotRevision=-1;private int snapshots,acks,confirmedReceipts,uncertainReceipts;private bool capture,choiceReported,land,priority,creature,artwork,backdrop,requestedBackdrop,mulliganControls,buttonSkins,continuePriority,followupPresented,observeResolution,battlefieldPresented,postResolutionPass;
         private bool OpeningLayout=>!land && !creature;
         private float fanWidth=-1;private int fanCount=-1,fanArtwork=-1;private long fanRevision=-1;
         private void PresentOpening()
@@ -37,7 +37,7 @@ namespace Manaforge.Play
         }
         private bool Report(string name,bool cleared=false)
         {
-            try{var value=new JObject{["probe_version"]=1,["live_opening"]=true,["snapshot_count"]=Volatile.Read(ref snapshots),["ack_count"]=Volatile.Read(ref acks),["confirmed_receipt_count"]=Volatile.Read(ref confirmedReceipts),["followup_priority_presented"]=followupPresented,["battlefield_observation_presented"]=battlefieldPresented,["viewer_cleared"]=cleared,["arena_button_glows"]=buttonGlow?.Count??0,["arena_button_skins"]=buttonSkins,["mulligan_controls"]=mulliganControls,["arena_backdrop_resource"]=backdrop?ArenaOpeningBackdrop.ResourceName:null,["arena_backdrop"]=backdrop,["artwork_count"]=surface?.PresentedArtworkCount??0};
+            try{var value=new JObject{["probe_version"]=1,["live_opening"]=true,["snapshot_count"]=Volatile.Read(ref snapshots),["ack_count"]=Volatile.Read(ref acks),["confirmed_receipt_count"]=Volatile.Read(ref confirmedReceipts),["uncertain_receipt_count"]=Volatile.Read(ref uncertainReceipts),["post_resolution_priority_presented"]=postResolutionPass && battlefieldPresented,["followup_priority_presented"]=followupPresented,["battlefield_observation_presented"]=battlefieldPresented,["viewer_cleared"]=cleared,["arena_button_glows"]=buttonGlow?.Count??0,["arena_button_skins"]=buttonSkins,["mulligan_controls"]=mulliganControls,["arena_backdrop_resource"]=backdrop?ArenaOpeningBackdrop.ResourceName:null,["arena_backdrop"]=backdrop,["artwork_count"]=surface?.PresentedArtworkCount??0};
                 string path=Path.Combine(output,name+".json");File.WriteAllText(path+".tmp",value.ToString());File.Move(path+".tmp",path);return true;}catch{return false;}
         }
         private void Fail(){host?.Dispose();Report("failed");Application.Quit(1);}
@@ -50,6 +50,8 @@ namespace Manaforge.Play
             if(continuePriority && !creature){Application.Quit(1);yield break;}
             observeResolution=ArtworkFixtureScene.Argument("-manaforgeLiveObserveResolution")=="1";
             if(observeResolution && !continuePriority){Application.Quit(1);yield break;}
+            postResolutionPass=ArtworkFixtureScene.Argument("-manaforgeLivePostResolutionPass")=="1";
+            if(postResolutionPass && !observeResolution){Application.Quit(1);yield break;}
             land=priority || ArtworkFixtureScene.Argument("-manaforgeLiveLand")=="1";
             try{Directory.CreateDirectory(output);pipe=ViewerBootstrapPipe.FromStandardInput();reading=pipe.ReadBootstrapAsync(5000,cancellation.Token);}catch{Fail();yield break;}
             while(!reading.IsCompleted)yield return null;
@@ -62,7 +64,7 @@ namespace Manaforge.Play
                 document=gameObject.AddComponent<UIDocument>();document.panelSettings=settings;var root=document.rootVisualElement;root.style.flexGrow=1;root.style.paddingLeft=20;root.style.paddingTop=15;root.style.backgroundColor=new Color(.025f,.055f,.075f);
                 var title=new Label(creature?"LIVE XMAGE — CASTING ABILITY":priority?"LIVE XMAGE — PRIORITY PASS":land?"LIVE XMAGE — FIRST LAND":"LIVE XMAGE — HUMAN vs AI OPENING");title.style.fontSize=23;title.style.color=Color.white;root.Add(title);
                 status=new Label("Connecting to the owned Java gateway…");status.style.color=Color.white;root.Add(status);
-                note=new Label(continuePriority?"Public Memnite/Forest decks. Choose the casting ability, then one priority pass. Stack contents unavailable; no full match.":creature?"Public Memnite/Forest decks. Diagnostic card click completed. Choose the casting ability; Java checks the stack entry.":priority?"Public Forest decks. Diagnostic setup completed. One explicit priority pass; no full match.":land?"Public Forest decks. Diagnostic pregame/keep already completed. One land action only; no full match.":artwork?"Public Forest/Ornithopter decks. Verified offline artwork. Current rules / tap state unavailable; one opening decision only.":"Public Forest/Memnite decks. Opening decision only; artwork cache and later gameplay are not connected.");note.style.color=requestedBackdrop?new Color(.9f,.9f,.9f):Color.gray;root.Add(note);
+                note=new Label(postResolutionPass?"Public Memnite/Forest decks. Choose the ability, then two explicit priority passes. Final pass remains uncertain; no full match.":continuePriority?"Public Memnite/Forest decks. Choose the casting ability, then one priority pass. Stack contents unavailable; no full match.":creature?"Public Memnite/Forest decks. Diagnostic card click completed. Choose the casting ability; Java checks the stack entry.":priority?"Public Forest decks. Diagnostic setup completed. One explicit priority pass; no full match.":land?"Public Forest decks. Diagnostic pregame/keep already completed. One land action only; no full match.":artwork?"Public Forest/Ornithopter decks. Verified offline artwork. Current rules / tap state unavailable; one opening decision only.":"Public Forest/Memnite decks. Opening decision only; artwork cache and later gameplay are not connected.");note.style.color=requestedBackdrop?new Color(.9f,.9f,.9f):Color.gray;root.Add(note);
                 var stage=new VisualElement();stage.style.flexDirection=FlexDirection.Row;stage.style.flexGrow=1;stage.style.marginTop=10;root.Add(stage);
                 surface=new ViewerCardSurface(stage);surface.CardsRoot.style.width=720;surface.CardsRoot.style.flexShrink=0;surface.InspectionView.SetPresentation(CardPresentationMode.Full,210);
                 host=new ViewerSessionHost(surface,reading.Result,pipe.WaitForOwnerCloseAsync(cancellation.Token),false);
@@ -78,7 +80,7 @@ namespace Manaforge.Play
                     panel.Root.Q<Label>("decision-status").style.unityTextAlign=TextAnchor.MiddleCenter;
                     var controls=panel.Root.Q<VisualElement>("decision-controls");controls.style.flexDirection=FlexDirection.Row;controls.style.justifyContent=Justify.Center;
                 }
-                var token=cancellation.Token;consuming=Task.Run(()=>{while(!token.IsCancellationRequested && !host.Completion.IsCompleted){if(host.TryTake(out var update))using(update){if(update.Receive.Type=="snapshot"){Interlocked.Exchange(ref snapshotRevision,update.Decision?.Context.Revision??-1);Interlocked.Increment(ref snapshots);}if(update.Receive.Type=="ack"){Interlocked.Increment(ref acks);if(update.Receive.Receipt?.State==CommandState.Confirmed)Interlocked.Increment(ref confirmedReceipts);}}else Thread.Sleep(10);}});
+                var token=cancellation.Token;consuming=Task.Run(()=>{while(!token.IsCancellationRequested && !host.Completion.IsCompleted){if(host.TryTake(out var update))using(update){if(update.Receive.Type=="snapshot"){Interlocked.Exchange(ref snapshotRevision,update.Decision?.Context.Revision??-1);Interlocked.Increment(ref snapshots);}if(update.Receive.Type=="ack"){Interlocked.Increment(ref acks);if(update.Receive.Receipt?.State==CommandState.Confirmed)Interlocked.Increment(ref confirmedReceipts);if(update.Receive.Receipt?.State==CommandState.Uncertain)Interlocked.Increment(ref uncertainReceipts);}}else Thread.Sleep(10);}});
             }catch{Fail();yield break;}
             double deadline=Time.realtimeSinceStartupAsDouble+20;
             string control=land?"decision-action-0":"decision-option-0";
@@ -131,15 +133,17 @@ namespace Manaforge.Play
                     }
                 }
                 if(observeResolution && !battlefieldPresented && Volatile.Read(ref snapshots)==3 && host.HasPresentedRevision(Interlocked.Read(ref snapshotRevision))){
-                    if(host.PresentedDecision!=null || panel.Root.Query<Button>().ToList().Count!=0){Fail();yield break;}
+                    var buttons=panel.Root.Query<Button>().ToList();var postPass=buttons.Find(button=>button.text=="Pass priority");
+                    if(postResolutionPass?(buttons.Count!=1 || postPass==null || !postPass.enabledInHierarchy || host.PresentedDecision?.CanSubmit!=true):(host.PresentedDecision!=null || buttons.Count!=0)){Fail();yield break;}
                     battlefieldPresented=true;inspect.Clear();
                     foreach(var card in surface.CardsRoot.Children())if(card is CardView view)view.SetPresentation(CardPresentationMode.Compact,135);
-                    status.text="The verified spell source is now on the battlefield. Read-only observation; the exact priority pass is confirmed.";
+                    status.text=postResolutionPass?"The prior pass is confirmed and the spell source is on the battlefield. Choose the next Pass priority.":"The verified spell source is now on the battlefield. Read-only observation; the exact priority pass is confirmed.";
                     if(capture)yield return Capture("battlefield.png");if(!Report("battlefield-ready")){Application.Quit(1);yield break;}
+                    if(postResolutionPass && ArtworkFixtureScene.Argument("-manaforgeLiveScript")=="1")using(var input=NavigationSubmitEvent.GetPooled()){input.target=postPass;postPass.SendEvent(input);}
                 }
-                if(!choiceReported && Volatile.Read(ref acks)>=(continuePriority?4:2) && (!observeResolution || battlefieldPresented)){
+                if(!choiceReported && Volatile.Read(ref acks)>=(postResolutionPass?6:continuePriority?4:2) && (!observeResolution || battlefieldPresented)){
                     buttonGlow?.Dispose();buttonGlow=null;cardFocus?.Dispose();cardFocus=null;host.Cancel();host.Tick();panel.Tick();inspect.Clear();
-                    status.text=observeResolution?"Casting ability and exact priority pass confirmed; battlefield observed. Viewer cleared; this test ends here.":continuePriority?"Casting ability confirmed; next priority pass submitted. Pass outcome uncertain. Viewer cleared; this test ends here.":creature?"Casting ability submitted; native Memnite stack entry observed. Viewer cleared; this test ends here.":priority?"Priority pass submitted to XMage; engine advanced. Viewer cleared; this test ends here.":"Choice submitted to XMage. Next-state support ends here; viewer cleared. No confirmed result is claimed.";
+                    status.text=postResolutionPass?"Post-resolution priority pass submitted; its outcome is uncertain. Viewer cleared; this test ends here.":observeResolution?"Casting ability and exact priority pass confirmed; battlefield observed. Viewer cleared; this test ends here.":continuePriority?"Casting ability confirmed; next priority pass submitted. Pass outcome uncertain. Viewer cleared; this test ends here.":creature?"Casting ability submitted; native Memnite stack entry observed. Viewer cleared; this test ends here.":priority?"Priority pass submitted to XMage; engine advanced. Viewer cleared; this test ends here.":"Choice submitted to XMage. Next-state support ends here; viewer cleared. No confirmed result is claimed.";
                     if(capture)yield return Capture("choice.png");if(!Report("choice",true)){Application.Quit(1);yield break;}choiceReported=true;
                 }
                 yield return null;

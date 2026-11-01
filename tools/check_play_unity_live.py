@@ -24,6 +24,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--interactive", action="store_true")
     parser.add_argument(
+        "--post-resolution-pass",
+        action="store_true",
+        help="Submit one more native priority pass after the confirmed transition; requires --observe-resolution",
+    )
+    parser.add_argument(
         "--observe-resolution",
         action="store_true",
         help="After the pass, require the exact source on the battlefield and show a read-only snapshot; requires --continue-priority",
@@ -83,6 +88,8 @@ def main():
         parser.error("--continue-priority requires --native-metadata")
     if args.observe_resolution and not args.continue_priority:
         parser.error("--observe-resolution requires --continue-priority")
+    if args.post_resolution_pass and not args.observe_resolution:
+        parser.error("--post-resolution-pass requires --observe-resolution")
     if args.artwork and (
         args.first_land or args.priority_pass or args.creature_ability
     ):
@@ -177,6 +184,11 @@ def main():
                         "-Dfile.encoding=UTF-8",
                         "-Djava.net.preferIPv4Stack=true",
                         *(
+                            ["-Dmanaforge.postResolutionPass=true"]
+                            if args.post_resolution_pass
+                            else []
+                        ),
+                        *(
                             ["-Dmanaforge.observeResolution=true"]
                             if args.observe_resolution
                             else []
@@ -254,6 +266,8 @@ def main():
                     command += ["-manaforgeLiveContinuePriority", "1"]
                 if args.observe_resolution:
                     command += ["-manaforgeLiveObserveResolution", "1"]
+                if args.post_resolution_pass:
+                    command += ["-manaforgeLivePostResolutionPass", "1"]
                 if not args.interactive:
                     command += [
                         "-batchmode",
@@ -305,7 +319,9 @@ def main():
                     raise RuntimeError("LIVE_UNITY_ARTWORK_NOT_PRESENTED")
                 if args.interactive:
                     print(
-                        "Select the casting ability, then Pass priority when the next decision appears; 60 seconds per choice."
+                        "Select the casting ability, then Pass priority in each of the next two prompts; 60 seconds per choice."
+                        if args.post_resolution_pass
+                        else "Select the casting ability, then Pass priority when the next decision appears; 60 seconds per choice."
                         if args.continue_priority
                         else "Live casting ability ready: select the engine-offered ability within 60 seconds."
                         if args.creature_ability
@@ -333,10 +349,23 @@ def main():
                         raise RuntimeError("LIVE_UNITY_BATTLEFIELD_NOT_PRESENTED")
                 chosen = wait_file("choice", 60)
                 if (
-                    chosen.get("ack_count") != (4 if args.continue_priority else 2)
+                    chosen.get("ack_count")
+                    != (
+                        6
+                        if args.post_resolution_pass
+                        else 4
+                        if args.continue_priority
+                        else 2
+                    )
                     or chosen.get("viewer_cleared") is not True
                 ):
                     raise RuntimeError("LIVE_UNITY_CHOICE_FAILED")
+                if args.post_resolution_pass and (
+                    observed.get("post_resolution_priority_presented") is not True
+                    or chosen.get("confirmed_receipt_count") != 2
+                    or chosen.get("uncertain_receipt_count") != 1
+                ):
+                    raise RuntimeError("LIVE_UNITY_POST_RESOLUTION_RECEIPT_FAILED")
                 # The scene quits after clearing. Observe its owned handle rather than health-checking an expected exit.
                 client = owner._children["client"]
                 client.wait(timeout=15)
@@ -364,6 +393,12 @@ def main():
                         raise RuntimeError("LIVE_UNITY_EVIDENCE_FAILED")
                 if args.first_land and native.get("first_land_observed") is not True:
                     raise RuntimeError("LIVE_UNITY_LAND_NOT_OBSERVED")
+                if (
+                    args.native_metadata
+                    and native.get("unity_post_resolution_priority_submitted")
+                    is not args.post_resolution_pass
+                ):
+                    raise RuntimeError("LIVE_UNITY_POST_RESOLUTION_EVIDENCE_FAILED")
                 if (
                     args.native_metadata
                     and native.get("unity_followup_priority_confirmed")
@@ -444,12 +479,18 @@ def main():
                         unity_followup_priority_submitted=args.continue_priority,
                         unity_battlefield_transition_observed=args.observe_resolution,
                         unity_followup_priority_confirmed=args.observe_resolution,
+                        unity_post_resolution_priority_submitted=args.post_resolution_pass,
                     )
                 if args.continue_priority:
                     evidence.update(followup_priority_presented=True, snapshot_count=2)
                 if args.observe_resolution:
                     evidence.update(
                         battlefield_observation_presented=True, snapshot_count=3
+                    )
+                if args.post_resolution_pass:
+                    evidence.update(
+                        post_resolution_priority_presented=True,
+                        post_resolution_pass_uncertain=True,
                     )
             finally:
                 key[:] = bytes(len(key))
@@ -484,7 +525,9 @@ def main():
         json.dumps(evidence, indent=2) + "\n", encoding="utf-8"
     )
     print(
-        "Packaged Unity confirmed the exact ability and priority pass, observed the spell source on the battlefield, cleared the viewer and reaped owned roots."
+        "Packaged Unity submitted three commands on one session; earlier choices confirmed, final priority pass uncertain, viewer cleared and roots reaped."
+        if args.post_resolution_pass
+        else "Packaged Unity confirmed the exact ability and priority pass, observed the spell source on the battlefield, cleared the viewer and reaped owned roots."
         if args.observe_resolution
         else "Packaged Unity casting ability confirmed, then next priority passed on the same session; pass outcome uncertain, viewer cleared and roots reaped."
         if args.continue_priority

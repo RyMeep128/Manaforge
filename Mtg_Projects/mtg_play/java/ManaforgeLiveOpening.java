@@ -24,7 +24,7 @@ public final class ManaforgeLiveOpening {
     private final BlockingQueue<JsonObject> events = new ArrayBlockingQueue<>(512);
     private final AtomicBoolean overflow = new AtomicBoolean(), cancelled = new AtomicBoolean();
     private final ManaforgeBridge bridge = new ManaforgeBridge(event -> { if(!events.offer(event))overflow.set(true); });
-    private final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(Boolean.getBoolean("manaforge.continuePriority")?180:90);
+    private final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(Boolean.getBoolean("manaforge.postResolutionPass")?240:Boolean.getBoolean("manaforge.continuePriority")?180:90);
     private JsonObject state, pending;
     private String engineViewer, artifactHash;
     private boolean firstLand,landObserved,unityPriorityPass,firstCreature,castAbilityMatched;
@@ -33,6 +33,7 @@ public final class ManaforgeLiveOpening {
     private ManaforgeMetadataChannel.Client metadataClient;private boolean metadataSourceMatched,metadataInstanceMatched,unityAbilityConfirmed,unityFollowupPriority;
     private final boolean continuePriority=Boolean.getBoolean("manaforge.continuePriority");
     private final boolean observeResolution=Boolean.getBoolean("manaforge.observeResolution");
+    private final boolean postResolutionPass=Boolean.getBoolean("manaforge.postResolutionPass");private boolean unityPostResolutionSubmitted;
     private NativeCastCorrelation.AbilityEvidence unityCastEvidence;private String unityCastSource;private boolean unityBattlefieldObserved,unityFollowupConfirmed;
     private JsonObject sourceMetadata(JsonObject view,String source) throws Exception {
         for(int attempt=0;attempt<40 && System.nanoTime()<deadline;attempt++) {
@@ -237,9 +238,16 @@ public final class ManaforgeLiveOpening {
             if(unityCastEvidence==null || !unityCastEvidence.observesBattlefieldTransition(state,metadata))throw new IOException("LIVE_UNITY_BATTLEFIELD_UNPROVEN");
             NativeCastCorrelation.PriorityEvidence evidence=unityCastEvidence.priorityEvidence(before,prompt,pass,beforeMetadata,accepted,state,event,metadata);
             if(evidence==null)throw new IOException("LIVE_UNITY_PRIORITY_OUTCOME_UNPROVEN");
-            JsonObject snapshot=projection.projectReadOnlyPriority(state,event),body=new JsonObject(),envelope=new JsonObject();
+            JsonObject snapshot=postResolutionPass?projection.project(state,event,true):projection.projectReadOnlyPriority(state,event),body=new JsonObject(),envelope=new JsonObject();
+            if(postResolutionPass && (snapshot.getAsJsonArray("actions").size()!=1 || !"pass".equals(snapshot.getAsJsonArray("actions").get(0).getAsJsonObject().get("kind").getAsString())))throw new IOException("LIVE_UNITY_POST_RESOLUTION_UNSUPPORTED");
             body.addProperty("fixture_only",false);body.add("snapshot",snapshot);envelope.addProperty("wire_version",1);envelope.addProperty("message_type","snapshot");envelope.addProperty("message_id","cast-battlefield-observation");envelope.add("body",body);
-            unityBattlefieldObserved=true;unityFollowupConfirmed=true;return new ManaforgeUnityOpening.ObservedSnapshot(envelope,evidence);
+            final long cycle=state.get("cycle").getAsLong(),decision=event.get("decision_id").getAsLong();
+            ManaforgeUnityOpening.PriorityOffer followup=postResolutionPass?new ManaforgeUnityOpening.PriorityOffer(envelope,decision,cycle,nativeCommand->{
+                if(!"boolean".equals(nativeCommand.get("kind").getAsString()) || !new JsonPrimitive(false).equals(nativeCommand.get("value")))throw new IOException("LIVE_UNITY_POST_RESOLUTION_NOT_PASS");
+                JsonObject sent=request(nativeCommand,"response_sent");if(!sent.get("accepted").getAsBoolean())throw new IOException("LIVE_UNITY_POST_RESOLUTION_REJECTED");
+                advancement(cycle,decision);unityPostResolutionSubmitted=true;
+            }):null;
+            unityBattlefieldObserved=true;unityFollowupConfirmed=true;return new ManaforgeUnityOpening.ObservedSnapshot(envelope,evidence,followup);
         }
         throw new IOException("LIVE_UNITY_BATTLEFIELD_UNAVAILABLE");
     }
@@ -354,13 +362,14 @@ public final class ManaforgeLiveOpening {
             }
             if(probe.continuePriority && (probe.unityReady==null || probe.metadataContext==null || !probe.firstCreature))throw new IOException();
             if(probe.observeResolution && !probe.continuePriority)throw new IOException();
+            if(probe.postResolutionPass && !probe.observeResolution)throw new IOException();
         }catch(Exception failure){report.println("{\"failure\":\"LIVE_OPENING_BOOTSTRAP_FAILED\"}");System.exit(2);}
 
         if(probe.metadataContext==null)probe.startLifeline();
         try {
             if((args.length!=2 && args.length!=3 && args.length!=4) || (args.length==4 && !probe.firstLand && !probe.firstCreature) || !args[1].matches("[0-9a-f]{64}"))throw new IOException();probe.artifactHash=args[1];int port=Integer.parseInt(args[0]);if(port<1 || port>65535)throw new IOException();
             probe.run(port);
-            report.println(("{\"live_engine\":true,\"java_game_commands\":true,\"human_ai_seats\":true,\"opening_hand_count\":7,\"decision_received\":true,\"unity_connected\":false,\"public_projection_validated\":true,\"public_choice_submitted\":true,\"engine_advanced\":true,\"duplicate_native_submission_prevented\":true,\"authenticated_choice\":true,\"duplicate_receipt_reused\":true,\"disconnect_uncertainty_retained\":true}").replace("}",probe.firstLand?",\"first_land_observed\":"+probe.landObserved+",\"priority_pass_submitted\":true,\"unity_priority_pass_submitted\":"+probe.unityPriorityPass+"}":"}").replace("}",probe.firstCreature?",\"creature_spell_on_stack\":true,\"native_cast_ability_matched\":"+probe.castAbilityMatched+",\"creature_resolved\":"+(probe.unityReady==null)+",\"unity_casting_ability_submitted\":"+(probe.unityReady!=null)+"}":"}").replace("}",probe.metadataContext!=null?",\"native_stack_source_matched\":"+probe.metadataSourceMatched+",\"native_cast_instance_matched\":"+probe.metadataInstanceMatched+",\"unity_casting_ability_confirmed\":"+probe.unityAbilityConfirmed+",\"unity_followup_priority_submitted\":"+probe.unityFollowupPriority+",\"unity_battlefield_transition_observed\":"+probe.unityBattlefieldObserved+",\"unity_followup_priority_confirmed\":"+probe.unityFollowupConfirmed+"}":"}").replace("\"unity_connected\":false","\"unity_connected\":"+(probe.unityReady!=null)).replace("\"duplicate_receipt_reused\":true","\"duplicate_receipt_reused\":"+(probe.unityReady==null)).replace("\"duplicate_native_submission_prevented\":true","\"duplicate_native_submission_prevented\":"+(probe.unityReady==null)));result=0;
+            report.println(("{\"live_engine\":true,\"java_game_commands\":true,\"human_ai_seats\":true,\"opening_hand_count\":7,\"decision_received\":true,\"unity_connected\":false,\"public_projection_validated\":true,\"public_choice_submitted\":true,\"engine_advanced\":true,\"duplicate_native_submission_prevented\":true,\"authenticated_choice\":true,\"duplicate_receipt_reused\":true,\"disconnect_uncertainty_retained\":true}").replace("}",probe.firstLand?",\"first_land_observed\":"+probe.landObserved+",\"priority_pass_submitted\":true,\"unity_priority_pass_submitted\":"+probe.unityPriorityPass+"}":"}").replace("}",probe.firstCreature?",\"creature_spell_on_stack\":true,\"native_cast_ability_matched\":"+probe.castAbilityMatched+",\"creature_resolved\":"+(probe.unityReady==null)+",\"unity_casting_ability_submitted\":"+(probe.unityReady!=null)+"}":"}").replace("}",probe.metadataContext!=null?",\"native_stack_source_matched\":"+probe.metadataSourceMatched+",\"native_cast_instance_matched\":"+probe.metadataInstanceMatched+",\"unity_casting_ability_confirmed\":"+probe.unityAbilityConfirmed+",\"unity_followup_priority_submitted\":"+probe.unityFollowupPriority+",\"unity_battlefield_transition_observed\":"+probe.unityBattlefieldObserved+",\"unity_followup_priority_confirmed\":"+probe.unityFollowupConfirmed+",\"unity_post_resolution_priority_submitted\":"+probe.unityPostResolutionSubmitted+"}":"}").replace("\"unity_connected\":false","\"unity_connected\":"+(probe.unityReady!=null)).replace("\"duplicate_receipt_reused\":true","\"duplicate_receipt_reused\":"+(probe.unityReady==null)).replace("\"duplicate_native_submission_prevented\":true","\"duplicate_native_submission_prevented\":"+(probe.unityReady==null)));result=0;
         }catch(Exception failure){JsonObject error=new JsonObject();error.addProperty("failure","LIVE_OPENING_FAILED");error.addProperty("stage",probe.stage);
             if(Arrays.asList("LIVE_OPENING_UNSUPPORTED_PREGAME","LIVE_OPENING_TIMEOUT_OR_CANCELLED","LIVE_OPENING_ENGINE_FAILED","LIVE_OPENING_QUEUE_LIMIT","LIVE_OPENING_PIN").contains(failure.getMessage()))error.addProperty("code",failure.getMessage());
             if(Arrays.asList("GAME_ASK","GAME_CHOOSE_CHOICE","GAME_TARGET","GAME_SELECT").contains(probe.decisionKind))error.addProperty("decision_family",probe.decisionKind);

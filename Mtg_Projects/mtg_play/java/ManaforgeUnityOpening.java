@@ -12,8 +12,9 @@ public final class ManaforgeUnityOpening {
     public interface NextPriority {PriorityOffer next() throws Exception;}
     public interface Observation {ObservedSnapshot read() throws Exception;}
     public static final class ObservedSnapshot {
-        private final JsonObject snapshot;private final NativeCastCorrelation.PriorityEvidence evidence;
-        public ObservedSnapshot(JsonObject snapshot,NativeCastCorrelation.PriorityEvidence evidence){this.snapshot=snapshot.deepCopy();this.evidence=evidence;}
+        private final JsonObject snapshot;private final NativeCastCorrelation.PriorityEvidence evidence;private final PriorityOffer followup;
+        public ObservedSnapshot(JsonObject snapshot,NativeCastCorrelation.PriorityEvidence evidence){this(snapshot,evidence,null);}
+        public ObservedSnapshot(JsonObject snapshot,NativeCastCorrelation.PriorityEvidence evidence,PriorityOffer followup){this.snapshot=snapshot.deepCopy();this.evidence=evidence;this.followup=followup;}
     }
     public static final class PriorityOffer {
         private final JsonObject snapshot;private final long decision,cycle;private final ManaforgeOpeningLoopback.NativeSubmit submit;private final Observation observation;
@@ -43,7 +44,7 @@ public final class ManaforgeUnityOpening {
             listener.setSoTimeout(500);
             JsonObject address=new JsonObject();address.addProperty("host","127.0.0.1");address.addProperty("port",listener.getLocalPort());
             Path temporary=Paths.get(ready.toString()+".tmp");Files.write(temporary,address.toString().getBytes(StandardCharsets.UTF_8));Files.move(temporary,ready,StandardCopyOption.ATOMIC_MOVE);
-            long deadline=System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(continuation==null?120:180);Socket socket=null;
+            long deadline=System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(continuation==null?120:240);Socket socket=null;
             while(socket==null && !cancelled.getAsBoolean() && System.nanoTime()<deadline)try{socket=listener.accept();}catch(SocketTimeoutException waiting){}
             if(socket==null)throw new IOException("LIVE_UNITY_ACCEPT_FAILED");
             try(LoopbackFrameReader frames=new LoopbackFrameReader(socket)) {
@@ -63,26 +64,32 @@ public final class ManaforgeUnityOpening {
                     if(continuation!=null) {
                         if(evidence==null)throw new IOException("LIVE_UNITY_CONTINUATION_UNCONFIRMED");
                         PriorityOffer next=continuation.next();owner.observe(next.snapshot.toString());frames.write(next.snapshot.toString(),5000,cancelled);
-                        boolean sent=false;
-                        for(int retries=0;retries<8 && !sent;retries++) {
-                            long remaining=java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(deadline-System.nanoTime());
-                            if(remaining<=0)throw new IOException("LIVE_UNITY_PRIORITY_TIMEOUT");
-                            String follow=frames.read((int)Math.min(60000,remaining),cancelled);
-                            SubmissionLedger.Prepared admitted=owner.dispatch(follow,game,engineViewer,next.decision,next.cycle);
-                            frames.write(admitted.receipt().toString(),5000,cancelled);
-                            if(!admitted.shouldSubmit)continue;
-                            JsonObject pass=owner.pollNative();if(pass==null || owner.pollNative()!=null)throw new IOException("LIVE_UNITY_QUEUE_FAILED");
-                            if(cancelled.getAsBoolean())throw new IOException("LIVE_UNITY_CANCELLED");
-                            next.submit.submit(pass);String passId=WireMessages.parse(follow).get("message_id").getAsString();
-                            if(next.observation==null)frames.write(owner.uncertain(passId).toString(),5000,cancelled);
-                            else {
-                                ObservedSnapshot observed=next.observation.read();
-                                frames.write(owner.confirmPriority(passId,observed.evidence).toString(),5000,cancelled);
-                                owner.observe(observed.snapshot.toString());frames.write(observed.snapshot.toString(),5000,cancelled);
+                        for(int stage=0;stage<2 && next!=null;stage++) {
+                            PriorityOffer following=null;
+                            boolean sent=false;
+                            for(int retries=0;retries<8 && !sent;retries++) {
+                                long remaining=java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(deadline-System.nanoTime());
+                                if(remaining<=0)throw new IOException("LIVE_UNITY_PRIORITY_TIMEOUT");
+                                String follow=frames.read((int)Math.min(60000,remaining),cancelled);
+                                SubmissionLedger.Prepared admitted=owner.dispatch(follow,game,engineViewer,next.decision,next.cycle);
+                                frames.write(admitted.receipt().toString(),5000,cancelled);
+                                if(!admitted.shouldSubmit)continue;
+                                JsonObject pass=owner.pollNative();if(pass==null || owner.pollNative()!=null)throw new IOException("LIVE_UNITY_QUEUE_FAILED");
+                                if(cancelled.getAsBoolean())throw new IOException("LIVE_UNITY_CANCELLED");
+                                next.submit.submit(pass);String passId=WireMessages.parse(follow).get("message_id").getAsString();
+                                if(next.observation==null)frames.write(owner.uncertain(passId).toString(),5000,cancelled);
+                                else {
+                                    ObservedSnapshot observed=next.observation.read();
+                                    frames.write(owner.confirmPriority(passId,observed.evidence).toString(),5000,cancelled);
+                                    owner.observe(observed.snapshot.toString());frames.write(observed.snapshot.toString(),5000,cancelled);
+                                    following=observed.followup;
+                                }
+                                sent=true;
                             }
-                            sent=true;
+                            if(!sent)throw new IOException("LIVE_UNITY_PRIORITY_RETRY_LIMIT");
+                            next=following;
                         }
-                        if(!sent)throw new IOException("LIVE_UNITY_PRIORITY_RETRY_LIMIT");
+                        if(next!=null)throw new IOException("LIVE_UNITY_PRIORITY_STAGE_LIMIT");
                     }
                     while(!cancelled.getAsBoolean() && System.nanoTime()<deadline)Thread.sleep(10);
                     owner.disconnected();

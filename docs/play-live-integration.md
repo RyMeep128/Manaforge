@@ -1,5 +1,47 @@
 # Live Unity / Java / XMage integration
 
+## Admit a post-resolution Unity priority pass (0.5.168)
+
+The opt-in fixture can now admit a third command after the casting choice and
+correlated pass are confirmed:
+
+```powershell
+python tools/check_play_unity_live.py --creature-ability --native-metadata --continue-priority --observe-resolution --post-resolution-pass
+```
+
+The verified battlefield snapshot carries the actual next native priority
+decision with fresh revision/action tokens. This fixed all-Memnite human fixture
+exposes only Pass priority, with actions_complete=false; it does not claim a
+complete legal-action surface. Unity waits for the new frame and enabled engine
+offer, then the scripted diagnostic invokes the actual mounted button. Add
+`--interactive` to choose all three inputs manually. Without the final flag, the
+previous observation snapshot remains read-only.
+
+The same authenticated socket and ledger persist across all three commands.
+The final pass emits submitted then uncertain after native acceptance and
+advancement; no further decision is admitted. The probe requires three snapshots,
+six acknowledgements, two confirmed receipts, one uncertain receipt and native
+unity_post_resolution_priority_submitted evidence. Continuation is capped at two
+priority stages, with bounded input retries and finite overall/action timeouts.
+No mana/combat/general casting or full-game acceptance is claimed.
+
+Validation: Windows player build, 42 focused Unity PlayMode decision-binding and
+dispatch checks, and the real three-command Unity/XMage probe passed. Screenshot
+review showed the new Pass priority offer; viewer/process cleanup passed. Java
+protocol preflight passed, including 258 projection/correlation/privacy checks
+and authenticated-session tests for fresh post-confirmation admission, one native
+enqueue, duplicate suppression and rejection of a fourth command while the final
+pass is uncertain. The prior read-only Unity path and Java-only native-metadata
+cast/resolution regressions passed. Three focused Python provisioning checks,
+lint and formatting passed. No full application suite ran.
+
+Scheduled CI checkpoint: .167 [protocol](https://github.com/RyMeep128/Manaforge/actions/runs/41361255849),
+[live opening](https://github.com/RyMeep128/Manaforge/actions/runs/41361255963),
+[desktop preview](https://github.com/RyMeep128/Manaforge/actions/runs/41361255630)
+and feedback relay passed; Tests was still running and is deferred. .164–.166
+live/protocol/preview passed; their general Tests runs were cancelled. New .168
+CI evidence remains pending. Next scheduled check: .171.
+
 ## Correlated priority-pass confirmation (0.5.167)
 
 The `--creature-ability --native-metadata --continue-priority --observe-resolution`
