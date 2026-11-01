@@ -1,5 +1,26 @@
 # Live Unity / Java / XMage integration
 
+## Uncluttered opening presentation (0.5.150)
+
+The opening keeps the Arena-reference hand fan, centered heading, and bottom
+Mulligan/Keep controls. Connection status, fixture limitations, and all seven
+inspection buttons now live in a collapsed `Connection details / inspect`
+panel at the upper left. Expanding it preserves the original live labels,
+buttons, callbacks, and disabled state. The hand stage reserves space below
+the heading; non-opening gameplay diagnostics retain their existing layout.
+This follows the supplied MulliganBrowser's separation of the hand and primary
+actions from secondary controls, without inventing opponent or turn facts.
+
+Validation: 19 focused EditMode checks passed (details containment, opening
+control mapping/fallback, and fan geometry). Packaged player build succeeded;
+real artwork opening and engine action/cleanup were checked again.
+
+Third-commit CI checkpoint: .146 deferred Tests and desktop preview both passed;
+.147 live Java opening and desktop preview passed; .148 desktop preview passed.
+The .147/.148 general Tests runs were cancelled, not successful. At the check,
+.149 Tests and desktop preview were still running and were deferred to the next
+pass. No completed failure was found. Next scheduled check: .153.
+
 ## Arena-style mulligan labels (0.5.149)
 
 The recognized initial seven-card XMage opening now presents blue Mulligan and
