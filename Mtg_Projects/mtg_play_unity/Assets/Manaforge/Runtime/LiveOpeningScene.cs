@@ -115,6 +115,7 @@ namespace Manaforge.Play
             while(!host.Completion.IsCompleted){
                 host.Tick();panel.Tick();buttonGlow?.Refresh();
                 PresentOpening();
+                cardFocus?.RefreshBounds();
                 if(!choiceReported && Volatile.Read(ref acks)>=2){
                     buttonGlow?.Dispose();buttonGlow=null;cardFocus?.Dispose();cardFocus=null;host.Cancel();host.Tick();panel.Tick();inspect.Clear();
                     status.text=creature?"Casting ability submitted; native Memnite stack entry observed. Viewer cleared; this test ends here.":priority?"Priority pass submitted to XMage; engine advanced. Viewer cleared; this test ends here.":"Choice submitted to XMage. Next-state support ends here; viewer cleared. No confirmed result is claimed.";

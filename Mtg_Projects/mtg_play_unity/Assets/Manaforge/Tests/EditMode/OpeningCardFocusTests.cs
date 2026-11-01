@@ -5,6 +5,26 @@ namespace Manaforge.Play.Tests
 {
     public sealed class OpeningCardFocusTests
     {
+        [UnityEngine.TestTools.UnityTest] public System.Collections.IEnumerator RaisedCardStaysWithinResizedHandBounds()
+        {
+            if(UnityEngine.SystemInfo.graphicsDeviceType==UnityEngine.Rendering.GraphicsDeviceType.Null)Assert.Ignore("Mounted layout requires a graphics device.");
+            var window=UnityEngine.ScriptableObject.CreateInstance<UnityEditor.EditorWindow>();
+            var cards=new System.Collections.Generic.List<CardView>();
+            try{
+                window.Show();var root=window.rootVisualElement;root.style.width=1000;
+                for(int i=0;i<7;i++){var card=new CardView();cards.Add(card);root.Add(card);}
+                using(var focus=new OpeningCardFocus(root)){
+                    yield return null;focus.PresentHand();yield return null;focus.Show(cards[6]);
+                    root.style.width=600;yield return null;focus.PresentHand();yield return null;
+                    focus.RefreshBounds();yield return null;
+                    Assert.That(cards[6].worldBound.xMin,Is.GreaterThanOrEqualTo(root.worldBound.xMin-.1f));
+                    Assert.That(cards[6].worldBound.xMax,Is.LessThanOrEqualTo(root.worldBound.xMax+.1f));
+                    float offset=cards[6].style.translate.value.x.value;
+                    focus.RefreshBounds();Assert.That(cards[6].style.translate.value.x.value,Is.EqualTo(offset).Within(.01f));
+                    focus.Show(null);Assert.That(cards[6].style.translate.value.x.value,Is.Zero);
+                }
+            }finally{foreach(var card in cards)card.Dispose();window.Close();}
+        }
         [UnityEngine.TestTools.UnityTest] public System.Collections.IEnumerator ResizePreservesOriginalFanPositionsWhileCardIsRaised()
         {
             if(UnityEngine.SystemInfo.graphicsDeviceType==UnityEngine.Rendering.GraphicsDeviceType.Null)Assert.Ignore("Mounted layout requires a graphics device.");

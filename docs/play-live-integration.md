@@ -1,5 +1,18 @@
 # Live Unity / Java / XMage integration
 
+## Raised-card bounds after resize (0.5.161)
+
+The opening scene now refreshes the active card's horizontal bounds each frame.
+The correction uses its actual transformed bounds and converts the adjustment
+into hand-local coordinates. A narrowed viewport no longer leaves a raised
+edge card at its old offset; cards wider than the viewport are centered.
+This changes presentation only and does not submit an engine command.
+
+Validation: 24 focused opening-focus/fan EditMode checks passed with graphics,
+including a raised right-edge card during a 1000-to-600-pixel resize, viewport
+containment, a stable repeated correction and offset reset on blur/clear.
+No packaged visual acceptance or full-suite run is claimed. CI next: .162.
+
 ## Stable opening-hand resize layout (0.5.160)
 
 Opening-hand relayout now uses the focus controller's original card order.

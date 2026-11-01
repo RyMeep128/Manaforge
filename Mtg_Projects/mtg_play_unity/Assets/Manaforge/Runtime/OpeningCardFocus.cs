@@ -27,6 +27,18 @@ namespace Manaforge.Play
             }
         }
         public void PresentHand(){if(!disposed)OpeningHandFan.Present(root,cards);}
+        public void RefreshBounds()
+        {
+            if(disposed || active==null || active.parent!=root || root.panel==null)return;
+            var bounds=active.worldBound;var viewport=root.worldBound;
+            if(bounds.width<=0 || viewport.width<=0)return;
+            float shift=bounds.width>viewport.width?viewport.center.x-bounds.center.x:
+                Mathf.Clamp(0,viewport.xMin-bounds.xMin,viewport.xMax-bounds.xMax);
+            if(Mathf.Abs(shift)<.01f)return;
+            float localShift=(root.WorldToLocal(new Vector2(shift,0))-root.WorldToLocal(Vector2.zero)).x;
+            var translation=active.style.translate.value;
+            active.style.translate=new Translate(translation.x.value+localShift,translation.y.value);
+        }
         public void Show(CardView card)
         {
             if(disposed || card!=null && (!cards.Contains(card) || card.parent!=root))return;
