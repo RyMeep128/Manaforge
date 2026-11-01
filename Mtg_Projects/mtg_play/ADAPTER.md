@@ -317,3 +317,8 @@ payment frame, state, incarnation and usable ability, rechecking before/after a
 trusted read. Python receives only bounded aggregate revalidation counts. Native
 tickets never leave the Java server, are not gameplay commands and do not grant
 source safety or single-use plan authority. Default payment remains unchanged.
+
+
+The [live Java integration track](../../docs/play-live-integration.md) now exercises
+a real human/AI opening inside Java using the existing bridge. Python still owns
+this reference API; no runtime replacement or parity acceptance is implied.

@@ -26,6 +26,11 @@ public final class ManaforgeBridge implements MageClient {
     private final SessionImpl session = new SessionImpl(this);
     private final ManaResponseExecutor manaResponses = new ManaResponseExecutor(this::claimManaResponse, session::sendPlayerUUID);
 
+    private final java.util.function.Consumer<JsonObject> eventSink;
+
+    public ManaforgeBridge() { this(null); }
+    ManaforgeBridge(java.util.function.Consumer<JsonObject> eventSink) { this.eventSink = eventSink; }
+
     private volatile UUID gameId;
     private volatile int decisionId = -1;
     private volatile String decisionMethod;
@@ -42,10 +47,11 @@ public final class ManaforgeBridge implements MageClient {
         decisionId=-1;return true;
     }
 
-    private static synchronized void emit(String event, String requestId, JsonObject data) {
+    private synchronized void emit(String event, String requestId, JsonObject data) {
         data.addProperty("protocol", 1);
         data.addProperty("event", event);
         if (requestId != null) data.addProperty("request_id", requestId);
+        if (eventSink != null) { eventSink.accept(data.deepCopy()); return; }
         PROTOCOL.println(JSON.toJson(data));
         PROTOCOL.flush();
     }
@@ -56,7 +62,7 @@ public final class ManaforgeBridge implements MageClient {
         throw new IllegalArgumentException("UNSUPPORTED_CONTROLLER");
     }
 
-    private static void message(String event, String id, String text) {
+    private void message(String event, String id, String text) {
         JsonObject data = new JsonObject();
         data.addProperty("message", text);
         emit(event, id, data);
@@ -378,7 +384,7 @@ public final class ManaforgeBridge implements MageClient {
         return command.get(key).getAsString();
     }
 
-    private boolean execute(JsonObject command) {
+    boolean execute(JsonObject command) {
         String id = null;
         try {
             id = requiredString(command, "request_id");
@@ -543,7 +549,7 @@ public final class ManaforgeBridge implements MageClient {
                     System.exit(0); // SwingWorker/JBoss pools otherwise keep the JVM alive.
                 }
             } catch (RuntimeException error) {
-                message("error", null, "Malformed command: " + error);
+                bridge.message("error", null, "Malformed command: " + error);
             }
         }
         bridge.session.connectStop(false, false);

@@ -1114,3 +1114,13 @@ preflight pass locally. It preserves exact identities and imposes no five-seat
 maximum. Private process delivery and XMage resolution remain pending; this is
 neither a running gateway nor an architecture-gate waiver. Existing UI reviews
 remain pending and automatic mana work stays parked.
+
+
+### Owner-directed live integration (0.5.128)
+
+The owner has prioritized moving into live Unity/XMage integration while formal
+G0/G1 acceptance remains open. The [live integration track](play-live-integration.md)
+starts with a real Java-owned human/AI match opening through the existing pinned
+bridge. Local opening-hand/decision and cleanup proof passed; Unity public-state
+translation and interactive gameplay are next. This does not certify a completed
+game, parity or any gate. Preserve the Python/Qt reference and keep mana work parked.

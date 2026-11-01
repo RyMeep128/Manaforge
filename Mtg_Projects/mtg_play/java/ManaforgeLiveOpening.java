@@ -1,0 +1,101 @@
+import com.google.gson.*;
+import java.io.*;
+import java.util.*;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+/** Diagnostic public fixture only. Java owns all game commands; no Unity/raw-state export. */
+public final class ManaforgeLiveOpening {
+    private final BlockingQueue<JsonObject> events = new ArrayBlockingQueue<>(512);
+    private final AtomicBoolean overflow = new AtomicBoolean(), cancelled = new AtomicBoolean();
+    private final ManaforgeBridge bridge = new ManaforgeBridge(event -> { if(!events.offer(event))overflow.set(true); });
+    private final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(90);
+    private JsonObject state, pending;
+    private String game, stage="initialize", decisionKind="none";
+    private JsonObject next() throws Exception {
+        while(System.nanoTime()<deadline && !cancelled.get()) {
+            if(overflow.get())throw new IOException("LIVE_OPENING_QUEUE_LIMIT");
+            JsonObject event=events.poll(100,TimeUnit.MILLISECONDS);
+            if(event==null)continue;
+            String kind=event.get("event").getAsString();
+            if(kind.equals("error") || kind.equals("disconnected"))throw new IOException("LIVE_OPENING_ENGINE_FAILED");
+            if(kind.equals("game_started"))game=event.get("game_id").getAsString();
+            if(kind.equals("game_state"))state=event;
+            if(kind.equals("decision"))pending=event;
+            return event;
+        }
+        throw new IOException("LIVE_OPENING_TIMEOUT_OR_CANCELLED");
+    }
+    private JsonObject command(String operation) {
+        JsonObject value=new JsonObject();value.addProperty("protocol",1);
+        value.addProperty("request_id",UUID.randomUUID().toString());value.addProperty("command",operation);return value;
+    }
+    private JsonObject request(JsonObject command,String expected) throws Exception {
+        stage=command.get("command").getAsString();
+        bridge.execute(command);
+        while(true) {
+            JsonObject event=next();
+            if(event.get("event").getAsString().equals(expected) && event.has("request_id")
+                && event.get("request_id").equals(command.get("request_id")))return event;
+        }
+    }
+    private void run(int port) throws Exception {
+        JsonObject value=command("connect");value.addProperty("port",port);value.addProperty("username","mf_"+UUID.randomUUID().toString().substring(0,8));request(value,"connected");
+        value=request(command("status"),"status");
+        if(!value.get("engine_version").getAsString().equals("1.4.62-V1"))throw new IOException("LIVE_OPENING_PIN");
+        value=command("create_game");value.addProperty("format","freeform");value.addProperty("seats",2);
+        JsonArray controllers=new JsonArray();controllers.add("local_human");controllers.add("engine_ai");value.add("controllers",controllers);
+        String table=request(value,"table_created").get("table_id").getAsString();
+        for(boolean ai:new boolean[]{true,false}) {
+            value=command("join_table");value.addProperty("table_id",table);
+            if(ai){value.addProperty("controller","engine_ai");value.addProperty("player_name","Public fixture AI");}
+            JsonArray cards=new JsonArray();
+            for(String[] card:new String[][]{{"Forest","M10","248"},{"Memnite","SOM","174"}}) {
+                JsonObject entry=new JsonObject();entry.addProperty("name",card[0]);entry.addProperty("set",card[1]);entry.addProperty("number",card[2]);entry.addProperty("quantity",30);cards.add(entry);
+            }
+            value.add("cards",cards);request(value,"joined");
+        }
+        value=command("start_game");value.addProperty("table_id",table);request(value,"started");
+        stage="opening_decision";
+        int pregame=0;
+        while(true) {
+            JsonObject event=pending==null?next():pending;
+            if(!event.get("event").getAsString().equals("decision"))continue;
+            pending=null;
+            if(state!=null && game!=null && state.getAsJsonArray("hand").size()==7 && state.getAsJsonArray("players").size()==2)return;
+            // Explicit public fixture policy ONLY: respond to engine-offered pregame choices.
+            if(++pregame>4)throw new IOException("LIVE_OPENING_UNSUPPORTED_PREGAME");
+            value=command("respond");value.addProperty("game_id",game);value.add("decision_id",event.get("decision_id"));
+            String kind=event.get("kind").getAsString();decisionKind=kind;
+            if(kind.equals("GAME_ASK")){value.addProperty("kind","boolean");value.addProperty("value",true);}
+            else if(kind.equals("GAME_CHOOSE_CHOICE") && event.has("choices") && event.get("choices").isJsonArray() && event.getAsJsonArray("choices").size()>0) {
+                value.addProperty("kind","string");value.add("value",event.getAsJsonArray("choices").get(0));
+            } else if(kind.equals("GAME_CHOOSE_CHOICE") && event.has("key_choices") && event.get("key_choices").isJsonObject() && event.getAsJsonObject("key_choices").size()>0) {
+                value.addProperty("kind","string");value.addProperty("value",event.getAsJsonObject("key_choices").entrySet().iterator().next().getKey());
+            } else if(kind.equals("GAME_TARGET") && state!=null && state.getAsJsonArray("hand").size()==0 && event.has("targets") && event.get("targets").isJsonArray()) {
+                String selected=null;
+                for(JsonElement target:event.getAsJsonArray("targets"))for(JsonElement player:state.getAsJsonArray("players"))
+                    if(target.equals(player.getAsJsonObject().get("id")))selected=target.getAsString();
+                if(selected==null)throw new IOException("LIVE_OPENING_UNSUPPORTED_PREGAME");
+                value.addProperty("kind","object");value.addProperty("value",selected);
+            } else throw new IOException("LIVE_OPENING_UNSUPPORTED_PREGAME");
+            request(value,"response_sent");
+        }
+    }
+    public static void main(String[] args) {
+        PrintStream report=System.out;System.setOut(System.err);
+        ManaforgeLiveOpening probe=new ManaforgeLiveOpening();
+        Thread lifeline=new Thread(() -> {try{while(System.in.read()!=-1){} }catch(IOException ignored){}probe.cancelled.set(true);},"live-opening-owner");lifeline.setDaemon(true);lifeline.start();
+        int result=2;
+        try {
+            if(args.length!=1)throw new IOException();int port=Integer.parseInt(args[0]);if(port<1 || port>65535)throw new IOException();
+            probe.run(port);
+            report.println("{\"live_engine\":true,\"java_game_commands\":true,\"human_ai_seats\":true,\"opening_hand_count\":7,\"decision_received\":true,\"unity_connected\":false}");result=0;
+        }catch(Exception failure){JsonObject error=new JsonObject();error.addProperty("failure","LIVE_OPENING_FAILED");error.addProperty("stage",probe.stage);
+            if(Arrays.asList("LIVE_OPENING_UNSUPPORTED_PREGAME","LIVE_OPENING_TIMEOUT_OR_CANCELLED","LIVE_OPENING_ENGINE_FAILED","LIVE_OPENING_QUEUE_LIMIT","LIVE_OPENING_PIN").contains(failure.getMessage()))error.addProperty("code",failure.getMessage());
+            if(Arrays.asList("GAME_ASK","GAME_CHOOSE_CHOICE","GAME_TARGET","GAME_SELECT").contains(probe.decisionKind))error.addProperty("decision_family",probe.decisionKind);
+            report.println(error.toString());}
+        finally{probe.bridge.execute(probe.command("shutdown"));}
+        System.exit(result);
+    }
+}
