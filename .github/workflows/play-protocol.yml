@@ -5,6 +5,7 @@ on:
     paths:
       - 'Mtg_Projects/mtg_play/protocol/**'
       - 'Mtg_Projects/mtg_play/java/ManaforgeOpening*.java'
+      - 'Mtg_Projects/mtg_play/java/ManaforgeUnityOpening.java'
       - 'Mtg_Projects/mtg_play/gateway_bootstrap.py'
       - 'Mtg_Projects/mtg_play/launch_lifecycle.py'
       - 'Mtg_Projects/mtg_play/launch_manifest.py'
@@ -25,6 +26,7 @@ on:
     paths:
       - 'Mtg_Projects/mtg_play/protocol/**'
       - 'Mtg_Projects/mtg_play/java/ManaforgeOpening*.java'
+      - 'Mtg_Projects/mtg_play/java/ManaforgeUnityOpening.java'
       - 'Mtg_Projects/mtg_play/gateway_bootstrap.py'
       - 'Mtg_Projects/mtg_play/launch_lifecycle.py'
       - 'Mtg_Projects/mtg_play/launch_manifest.py'

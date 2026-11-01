@@ -45,6 +45,7 @@ namespace Manaforge.Play
             InspectionView.SetPresentation(CardPresentationMode.Full,300);
             parent.Add(CardsRoot);parent.Add(InspectionView);
         }
+        public string[] PresentedObjectIds(){ThreadOnly();var result=new string[views.Count];views.Keys.CopyTo(result,0);return result;}
         private void ThreadOnly(){if(thread!=Thread.CurrentThread.ManagedThreadId)throw new InvalidOperationException("VIEWER_SURFACE_THREAD");}
         private void Open()
         {

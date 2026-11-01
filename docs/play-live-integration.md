@@ -216,3 +216,77 @@ No credentials, native IDs, cards or prompts are included in uploaded evidence.
 Next: attach Unity's existing session scene and decision panel to this live
 opening source, then stop for owner visual/interaction review. Broader actions,
 board translation, saved-deck resolution and natural match completion remain open.
+
+
+## Packaged Unity live opening — owner review required (0.5.132)
+
+The opt-in LiveOpeningScene now uses the existing ViewerSessionHost with
+fixtureMode=false, ViewerCardSurface/CardView inspection and ViewerDecisionPanel.
+A new -manaforgeLiveOpening route leaves default Play/preview/fixture routes intact.
+No new renderer or deck model was introduced. All parsing/networking remains on
+existing workers; scene code ticks presentation and counts sanitized evidence.
+
+Run the packaged public-deck slice from the repository root:
+
+```powershell
+python tools/check_play_unity_live.py --interactive
+```
+
+Allow roughly a minute for pinned-engine validation, compilation and startup.
+The player opens without Unity Editor. Inspect the seven-card human opening with
+the Inspect buttons and read the engine's mulligan question. Choose Yes or No
+within 60 seconds. After submission, the viewer clears and the spike closes.
+Yes is an actual engine response, not a simulated UI response; No can keep the
+opening hand where that is the offered mulligan question. This is not a playable
+full match: land/spell/stack/combat and later decisions remain disconnected.
+
+The headless form `python tools/check_play_unity_live.py` drives the actual mounted
+Yes button for public-fixture acceptance and captures connected.png/choice.png
+under a fresh Unity Artifacts/UnityLive-* directory. The local packaged proof passed:
+real seven-card snapshot, challenge/proof authentication, native response, engine
+advancement, submitted then uncertain receipts, renderer clearing and normal owned
+root cleanup. The existing synthetic packaged decision fixture also passed against
+the same new build. No full application suite ran. The player build succeeded.
+
+Do not interpret uncertain as a confirmed result: advancement is not yet mapped
+to full semantic reconciliation. The new live endpoint does not fabricate confirmed
+or game-result packets. Scene cancellation clears stale opening cards at the end
+of the supported slice. The renderer currently has no artwork bundle for this
+fixture. Known review limitations include fallback art, raw engine font markup in
+the question and default land P/T display; these are not polished UX acceptance.
+The owner must review actual interaction before further UI work proceeds.
+
+The gateway's diagnostic Unity mode receives a fresh viewer key in one private
+bounded stdin frame, before its EOF lifeline starts. Only a nonsecret loopback
+address marker is written to disk. Unity receives its bootstrap privately through
+its separately owned stdin. No viewer keys, manifests or native IDs enter argv,
+public reports or screenshot metadata. Bootstrap rejects malformed versions and
+non-string/invalid keys; focused protocol checks include these cases. Parent owns
+startup deadlines, cancellation and cleanup; blocking initial Java reads rely on
+that owned-process deadline rather than claiming independent read cancellation.
+
+ManaforgeUnityOpening reuses the existing auth/session/projection and hands native
+IO to the serialized worker outside admission. The diagnostic accepts one opening
+choice, emits submitted, waits for native transport acceptance and observed engine
+advancement, emits conservative uncertainty, then waits for the owner lifeline.
+It has finite accept/action/lifetime bounds. Saved-deck launch integration,
+production listener lifecycle/containment and privacy acceptance remain pending.
+The live report accurately leaves duplicate-test booleans false in Unity mode:
+that run submits one choice, while the separate Java peer exercises duplicates.
+
+The .132 scheduled CI check confirmed [.131 protocol](https://github.com/RyMeep128/Manaforge/actions/runs/41261559681)
+and [.131 preview](https://github.com/RyMeep128/Manaforge/actions/runs/41261559702)
+success, plus prior live-opening success. The [.131 live job](https://github.com/RyMeep128/Manaforge/actions/runs/41261559717)
+was still running and was deferred. Older native-helper CI failed because its
+compiler glob pulled in the new gateway/protocol consumers without their classpath.
+Its source list is now explicitly the three original bridge/server/metadata files;
+focused local validation passed 147 native object checks, 11 pinned API inspections
+and bridge compilation. This fixes shared build infrastructure without enabling
+or changing mana policy. New CI evidence remains pending; next check is .135.
+
+Principal files: ManaforgeUnityOpening.java and the diagnostic Java entry point;
+LiveOpeningScene.cs and FoundationTable routing; the additive surface inspection-ID
+accessor; tools/check_play_unity_live.py; bootstrap checks and native compile scope.
+Generated Unity build-setting/scene rewrites are excluded. The Python/Qt fallback
+and the owner's unrelated working-tree edits remain intact. G0/G1 and full-game
+acceptance are still open. Stop here for owner UI review.

@@ -12,6 +12,7 @@ public final class ManaforgeLiveOpening {
     private final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(90);
     private JsonObject state, pending;
     private String engineViewer, artifactHash;
+    private byte[] unityKey;private java.nio.file.Path unityReady;
     private String game, stage="initialize", decisionKind="none";
     private JsonObject next() throws Exception {
         while(System.nanoTime()<deadline && !cancelled.get()) {
@@ -38,6 +39,13 @@ public final class ManaforgeLiveOpening {
             JsonObject event=next();
             if(event.get("event").getAsString().equals(expected) && event.has("request_id")
                 && event.get("request_id").equals(command.get("request_id")))return event;
+        }
+    }
+    private void advancement(long cycle,long decision) throws Exception {
+        if(state!=null && state.get("cycle").getAsLong()>cycle)return;
+        while(true){JsonObject follow=pending==null?next():pending;
+            if(follow.get("event").getAsString().equals("decision")){pending=null;if(follow.get("decision_id").getAsLong()>decision)return;}
+            if(follow.get("event").getAsString().equals("game_state") && follow.get("cycle").getAsLong()>cycle)return;
         }
     }
     private void run(int port) throws Exception {
@@ -76,12 +84,13 @@ public final class ManaforgeLiveOpening {
                 manaforge.protocol.ReceiveMessages.parse(envelope.toString(),"live-opening","human",1,false);
                 if(snapshot.getAsJsonArray("objects").size()!=7)throw new IOException("LIVE_OPENING_PROJECTION_FAILED");
                 long previousCycle=state.get("cycle").getAsLong(),previousDecision=event.get("decision_id").getAsLong();
-                ManaforgeOpeningLoopback.exchange(envelope,projection,game,engineViewer,previousDecision,previousCycle,"1.4.62-V1",artifactHash,
-                    nativeCommand->{JsonObject sent=request(nativeCommand,"response_sent");if(!sent.get("accepted").getAsBoolean())throw new IOException("LIVE_OPENING_RESPONSE_REJECTED");},cancelled::get);
-                while(true) {
-                    JsonObject follow=pending==null?next():pending;
-                    if(follow.get("event").getAsString().equals("decision")){pending=null;if(follow.get("decision_id").getAsLong()>previousDecision)break;}
-                    if(follow.get("event").getAsString().equals("game_state") && follow.get("cycle").getAsLong()>previousCycle)break;
+                if(unityReady!=null) {
+                    ManaforgeUnityOpening.serve(envelope,projection,game,engineViewer,previousDecision,previousCycle,"1.4.62-V1",artifactHash,unityKey,unityReady,
+                        nativeCommand->{JsonObject sent=request(nativeCommand,"response_sent");if(!sent.get("accepted").getAsBoolean())throw new IOException("LIVE_OPENING_RESPONSE_REJECTED");advancement(previousCycle,previousDecision);},cancelled::get);
+                } else {
+                    ManaforgeOpeningLoopback.exchange(envelope,projection,game,engineViewer,previousDecision,previousCycle,"1.4.62-V1",artifactHash,
+                        nativeCommand->{JsonObject sent=request(nativeCommand,"response_sent");if(!sent.get("accepted").getAsBoolean())throw new IOException("LIVE_OPENING_RESPONSE_REJECTED");},cancelled::get);
+                    advancement(previousCycle,previousDecision);
                 }
                 projection.invalidateDecision();return;
             }
@@ -107,17 +116,24 @@ public final class ManaforgeLiveOpening {
     public static void main(String[] args) {
         PrintStream report=System.out;System.setOut(System.err);
         ManaforgeLiveOpening probe=new ManaforgeLiveOpening();
-        Thread lifeline=new Thread(() -> {try{while(System.in.read()!=-1){} }catch(IOException ignored){}probe.cancelled.set(true);},"live-opening-owner");lifeline.setDaemon(true);lifeline.start();
         int result=2;
         try {
-            if(args.length!=2 || !args[1].matches("[0-9a-f]{64}"))throw new IOException();probe.artifactHash=args[1];int port=Integer.parseInt(args[0]);if(port<1 || port>65535)throw new IOException();
+            if(args.length==3){
+                probe.unityKey=ManaforgeUnityOpening.readBootstrap(System.in);
+                probe.unityReady=java.nio.file.Paths.get(args[2]);
+            }
+        }catch(Exception failure){report.println("{\"failure\":\"LIVE_OPENING_BOOTSTRAP_FAILED\"}");System.exit(2);}
+
+        Thread lifeline=new Thread(() -> {try{while(System.in.read()!=-1){} }catch(IOException ignored){}probe.cancelled.set(true);},"live-opening-owner");lifeline.setDaemon(true);lifeline.start();
+        try {
+            if((args.length!=2 && args.length!=3) || !args[1].matches("[0-9a-f]{64}"))throw new IOException();probe.artifactHash=args[1];int port=Integer.parseInt(args[0]);if(port<1 || port>65535)throw new IOException();
             probe.run(port);
-            report.println("{\"live_engine\":true,\"java_game_commands\":true,\"human_ai_seats\":true,\"opening_hand_count\":7,\"decision_received\":true,\"unity_connected\":false,\"public_projection_validated\":true,\"public_choice_submitted\":true,\"engine_advanced\":true,\"duplicate_native_submission_prevented\":true,\"authenticated_choice\":true,\"duplicate_receipt_reused\":true,\"disconnect_uncertainty_retained\":true}");result=0;
+            report.println(("{\"live_engine\":true,\"java_game_commands\":true,\"human_ai_seats\":true,\"opening_hand_count\":7,\"decision_received\":true,\"unity_connected\":false,\"public_projection_validated\":true,\"public_choice_submitted\":true,\"engine_advanced\":true,\"duplicate_native_submission_prevented\":true,\"authenticated_choice\":true,\"duplicate_receipt_reused\":true,\"disconnect_uncertainty_retained\":true}").replace("\"unity_connected\":false","\"unity_connected\":"+(probe.unityReady!=null)).replace("\"duplicate_receipt_reused\":true","\"duplicate_receipt_reused\":"+(probe.unityReady==null)).replace("\"duplicate_native_submission_prevented\":true","\"duplicate_native_submission_prevented\":"+(probe.unityReady==null)));result=0;
         }catch(Exception failure){JsonObject error=new JsonObject();error.addProperty("failure","LIVE_OPENING_FAILED");error.addProperty("stage",probe.stage);
             if(Arrays.asList("LIVE_OPENING_UNSUPPORTED_PREGAME","LIVE_OPENING_TIMEOUT_OR_CANCELLED","LIVE_OPENING_ENGINE_FAILED","LIVE_OPENING_QUEUE_LIMIT","LIVE_OPENING_PIN").contains(failure.getMessage()))error.addProperty("code",failure.getMessage());
             if(Arrays.asList("GAME_ASK","GAME_CHOOSE_CHOICE","GAME_TARGET","GAME_SELECT").contains(probe.decisionKind))error.addProperty("decision_family",probe.decisionKind);
             report.println(error.toString());}
-        finally{probe.bridge.execute(probe.command("shutdown"));}
+        finally{probe.bridge.execute(probe.command("shutdown"));if(probe.unityKey!=null)Arrays.fill(probe.unityKey,(byte)0);}
         System.exit(result);
     }
 }

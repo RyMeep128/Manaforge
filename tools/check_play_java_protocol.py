@@ -66,6 +66,7 @@ def main():
         sources = [
             PLAY / "java/ManaforgeOpeningProjection.java",
             PLAY / "java/ManaforgeOpeningSession.java",
+            PLAY / "java/ManaforgeUnityOpening.java",
             PLAY / "java/ManaforgeOpeningLoopback.java",
             PROTOCOL / "java-test/OpeningSessionChecks.java",
             PROTOCOL / "java-test/OpeningProjectionChecks.java",

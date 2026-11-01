@@ -1142,3 +1142,13 @@ The .131 live opening now passes a real loopback challenge/proof handshake and
 the existing session admission/receipt ledger before queueing one native boolean
 response. Duplicate commands return cached receipts; disconnect preserves
 uncertainty. Unity mounting and owner review are next; gates remain open.
+
+
+### First packaged live opening (0.5.132) — owner UI review required
+
+Unity now renders the real human/AI opening and submits one authenticated engine
+choice through Java, with subsequent engine advancement and viewer clearing.
+The local packaged proof passed. This is a public-deck opening spike with fallback
+art and incomplete later decisions, not full live gameplay or gate acceptance.
+See [review command and limitations](play-live-integration.md). Stop for owner UI
+review before further presentation work.

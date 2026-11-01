@@ -9,6 +9,12 @@ public final class OpeningSessionChecks {
         body.addProperty("fixture_only",false);body.add("snapshot",snapshot);envelope.add("body",body);return envelope;
     }
     public static void main(String[] args) throws Exception {
+        String keyText=String.join("",java.util.Collections.nCopies(64,"a"));
+        for(String bootstrap:new String[]{"{\"live_opening_bootstrap_version\":1,\"viewer_key_hex\":\""+keyText+"\"}","{}","{\"live_opening_bootstrap_version\":true,\"viewer_key_hex\":\""+keyText+"\"}","{\"live_opening_bootstrap_version\":1,\"viewer_key_hex\":[\""+keyText+"\"]}"}) {
+            java.io.ByteArrayOutputStream out=new java.io.ByteArrayOutputStream();manaforge.protocol.TextFrame.write(out,bootstrap);
+            try{byte[] key=ManaforgeUnityOpening.readBootstrap(new java.io.ByteArrayInputStream(out.toByteArray()));if(!bootstrap.startsWith("{\"live_opening_bootstrap_version\":1,\"viewer_key_hex\":\""))throw new AssertionError("BAD_BOOTSTRAP_ACCEPTED");if(key.length!=32 || key[0]!=(byte)0xaa)throw new AssertionError("BAD_KEY");java.util.Arrays.fill(key,(byte)0);}
+            catch(IOException failure){if(bootstrap.startsWith("{\"live_opening_bootstrap_version\":1,\"viewer_key_hex\":\""))throw failure;if(!failure.getMessage().equals("LIVE_OPENING_BOOTSTRAP_FAILED"))throw failure;}
+        }
         AtomicInteger calls=new AtomicInteger();String hash=String.join("",java.util.Collections.nCopies(64,"0"));
         ManaforgeOpeningProjection projection=OpeningProjectionChecks.projection();
         JsonObject snapshot=projection.project(OpeningProjectionChecks.state(),OpeningProjectionChecks.prompt());

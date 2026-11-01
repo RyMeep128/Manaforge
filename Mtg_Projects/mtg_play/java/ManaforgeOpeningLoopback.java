@@ -12,7 +12,7 @@ public final class ManaforgeOpeningLoopback {
     public interface NativeSubmit {void submit(JsonObject command) throws Exception;}
     private static void require(boolean condition) throws IOException {if(!condition)throw new IOException("OPENING_LOOPBACK_FAILED");}
     private static String fresh(){byte[] bytes=new byte[32];new SecureRandom().nextBytes(bytes);StringBuilder out=new StringBuilder();for(byte value:bytes)out.append(String.format(Locale.ROOT,"%02x",value&255));return out.toString();}
-    private static JsonObject hello(String session,String viewer,String engine,String hash,String role) {
+    static JsonObject hello(String session,String viewer,String engine,String hash,String role) {
         JsonObject out=new JsonObject(),body=new JsonObject();out.addProperty("wire_version",1);out.addProperty("message_type","hello");out.addProperty("message_id","auth-"+role);
         body.addProperty("protocol_version",1);body.addProperty("engine_version",engine);body.addProperty("artifact_manifest_sha256",hash);
         body.addProperty("session_id",session);body.addProperty("viewer_id",viewer);body.addProperty("role",role);
