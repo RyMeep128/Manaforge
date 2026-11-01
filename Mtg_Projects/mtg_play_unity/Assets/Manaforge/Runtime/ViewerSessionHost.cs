@@ -85,6 +85,7 @@ namespace Manaforge.Play
         {
             get {ThreadOnly();if(disposed)return null;var offer=CurrentDecision;var frame=offer?.Frame;return frame!=null && surface.HasPresentedFrame(ticket,frame.Context.Revision)?offer:null;}
         }
+        public bool HasPresentedRevision(long revision){ThreadOnly();return !disposed && surface.HasPresentedFrame(ticket,revision);}
         internal CardView ManaSourceView(ViewerDecisionOffer supplied,ProjectedManaSource source)
         {
             ThreadOnly();if(supplied==null || source==null || !ReferenceEquals(PresentedDecision,supplied))return null;

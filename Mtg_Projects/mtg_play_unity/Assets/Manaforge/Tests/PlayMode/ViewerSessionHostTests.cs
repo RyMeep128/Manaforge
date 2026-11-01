@@ -68,9 +68,11 @@ namespace Manaforge.Play.Tests
         {
             using var peer=new Peer(Frame("Mounted fixture"));var owner=Signal();using var host=new ViewerSessionHost(surface,peer.Bootstrap(),owner.Task,true);
             yield return Mount(host,"Mounted fixture");Assert.That(host.Authenticated,Is.True);
+            long revision=(long)source["body"]["snapshot"]["revision"];Assert.That(host.HasPresentedRevision(revision),Is.True);Assert.That(host.HasPresentedRevision(revision+1),Is.False);
             Assert.That(host.Inspect("fixture-0002"),Is.True);Assert.That(surface.InspectionView.Q<Label>("name").text,Is.EqualTo("Mounted fixture"));
             var take=Task.Run(()=>{if(!host.TryTake(out var update))return false;using(update)return update.Receive.Type=="snapshot";});yield return Until(()=>take.IsCompleted);Assert.That(take.Result,Is.True);
             owner.TrySetResult(true);host.Tick();Assert.That(surface.CardsRoot.childCount,Is.Zero);Assert.That(host.Authenticated,Is.False);Assert.That(surface.InspectionView.Q<Label>("name").text,Is.Empty);Assert.That(host.Inspect("fixture-0002"),Is.False);
+            Assert.That(host.HasPresentedRevision(revision),Is.False);
             yield return Until(()=>host.Completion.IsCompleted);Assert.That(host.Completion.Result.Code,Is.EqualTo("VIEWER_OWNER_ENDED"));Assert.That(host.Completion.Result.CleanupConfirmed,Is.True);
         }
         [UnityTest] public IEnumerator OwnerLossDuringAuthenticationClosesTheAttemptAndDisposesBootstrap()

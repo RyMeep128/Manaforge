@@ -10,9 +10,11 @@ import java.util.function.BooleanSupplier;
 public final class ManaforgeUnityOpening {
     public interface VerifiedAbilitySubmit {NativeCastCorrelation.AbilityEvidence submit(JsonObject command) throws Exception;}
     public interface NextPriority {PriorityOffer next() throws Exception;}
+    public interface Observation {JsonObject read() throws Exception;}
     public static final class PriorityOffer {
-        private final JsonObject snapshot;private final long decision,cycle;private final ManaforgeOpeningLoopback.NativeSubmit submit;
-        public PriorityOffer(JsonObject snapshot,long decision,long cycle,ManaforgeOpeningLoopback.NativeSubmit submit){this.snapshot=snapshot.deepCopy();this.decision=decision;this.cycle=cycle;this.submit=submit;}
+        private final JsonObject snapshot;private final long decision,cycle;private final ManaforgeOpeningLoopback.NativeSubmit submit;private final Observation observation;
+        public PriorityOffer(JsonObject snapshot,long decision,long cycle,ManaforgeOpeningLoopback.NativeSubmit submit){this(snapshot,decision,cycle,submit,null);}
+        public PriorityOffer(JsonObject snapshot,long decision,long cycle,ManaforgeOpeningLoopback.NativeSubmit submit,Observation observation){this.snapshot=snapshot.deepCopy();this.decision=decision;this.cycle=cycle;this.submit=submit;this.observation=observation;}
     }
     public static byte[] readBootstrap(InputStream input) throws IOException {
         try {
@@ -68,7 +70,9 @@ public final class ManaforgeUnityOpening {
                             JsonObject pass=owner.pollNative();if(pass==null || owner.pollNative()!=null)throw new IOException("LIVE_UNITY_QUEUE_FAILED");
                             if(cancelled.getAsBoolean())throw new IOException("LIVE_UNITY_CANCELLED");
                             next.submit.submit(pass);String passId=WireMessages.parse(follow).get("message_id").getAsString();
-                            frames.write(owner.uncertain(passId).toString(),5000,cancelled);sent=true;
+                            frames.write(owner.uncertain(passId).toString(),5000,cancelled);
+                            if(next.observation!=null){JsonObject observed=next.observation.read();owner.observe(observed.toString());frames.write(observed.toString(),5000,cancelled);}
+                            sent=true;
                         }
                         if(!sent)throw new IOException("LIVE_UNITY_PRIORITY_RETRY_LIMIT");
                     }

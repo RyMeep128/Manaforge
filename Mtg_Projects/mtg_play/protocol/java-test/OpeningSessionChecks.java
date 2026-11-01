@@ -43,6 +43,8 @@ public final class OpeningSessionChecks {
                 JsonObject nativePass=owner.pollNative();if(nativePass==null || !new JsonPrimitive(false).equals(nativePass.get("value")))throw new AssertionError("FOLLOWUP_NOT_NATIVE_PASS");
                 if(owner.dispatch(pass.toString(),"raw-game","raw-human",43,8).shouldSubmit || owner.pollNative()!=null)throw new AssertionError("FOLLOWUP_REPLAYED");
                 owner.uncertain("followup-pass");
+                JsonObject observation=envelope(projection.projectReadOnlyPriority(after,nextPrompt));observation.addProperty("message_id","post-pass-readonly");owner.observe(observation.toString());
+                if(!"uncertain".equals(owner.receiptFor("followup-pass").getAsJsonObject("body").get("outcome").getAsString()) || owner.pollNative()!=null)throw new AssertionError("OBSERVATION_SETTLED_PASS");
                 owner.disconnected();if(!confirmed.equals(owner.receiptFor(id)))throw new AssertionError("CONFIRMATION_LOST_ON_DISCONNECT");
             }
         }finally{java.util.Arrays.fill(key,(byte)0);}

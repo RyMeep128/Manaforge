@@ -1,5 +1,43 @@
 # Live Unity / Java / XMage integration
 
+## Read-only native battlefield transition in Unity (0.5.166)
+
+The two-choice slice can now observe the exact spell source reaching the battlefield
+after the submitted priority pass, then display a third, read-only snapshot:
+
+```powershell
+python tools/check_play_unity_live.py --creature-ability --native-metadata --continue-priority --observe-resolution
+```
+
+The immutable ability evidence retains the guarded stack-source counter and
+cycle. Observation requires the same native game/viewer, empty stack, source
+absent from hand, exactly one visible source on the human battlefield, matching
+guarded owner/controller and exactly the next source incarnation. Names/counts
+alone cannot satisfy it. Missing or skipped transitions fail closed. Private
+source identifiers and metadata remain Java-only.
+
+The existing projection handles empty-stack priority state, removes every action
+and the decision, and invalidates command tokens. The ledger's pass receipt stays
+uncertain; observing a board does not settle it or permit another command. Unity
+waits for the actual projected revision to be mounted, rather than assuming that
+snapshot counts equal revisions. It captures `battlefield.png` with no action
+buttons, then clears normally. The report requires
+unity_battlefield_transition_observed and battlefield_observation_presented with
+three snapshots. The broader creature_resolved/full-game acceptance flag remains
+unchanged; this is an exact state observation in the public Memnite fixture.
+
+Validation: the Windows player build and 49 focused Unity PlayMode session,
+decision-binding and dispatch checks passed. The packaged real-engine transition
+passed with screenshot inspection, three snapshots, four acknowledgements and
+normal viewer/process cleanup. Focused Java protocol preflight passed, including
+241 projection/correlation/privacy checks and an authenticated-session check that
+the read-only update leaves the pass uncertain. Negative observations cover
+wrong source/game/viewer, hidden cards, stale metadata, skipped incarnations,
+duplicate sources and a nonempty stack. Previous two-choice Unity and Java-only
+metadata cast/resolution regressions passed. Three focused Python provisioning
+checks, lint and formatting passed. No full application suite ran.
+CI evidence is pending; next scheduled check remains .168.
+
 ## Next Unity priority on the same authenticated session (0.5.165)
 
 The opt-in two-choice slice continues from the confirmed casting ability to one

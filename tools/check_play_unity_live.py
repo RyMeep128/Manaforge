@@ -24,6 +24,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--interactive", action="store_true")
     parser.add_argument(
+        "--observe-resolution",
+        action="store_true",
+        help="After the pass, require the exact source on the battlefield and show a read-only snapshot; requires --continue-priority",
+    )
+    parser.add_argument(
         "--continue-priority",
         action="store_true",
         help="After the confirmed ability, submit one real priority pass on the same session; requires --native-metadata",
@@ -76,6 +81,8 @@ def main():
         parser.error("--native-metadata requires --creature-ability")
     if args.continue_priority and not args.native_metadata:
         parser.error("--continue-priority requires --native-metadata")
+    if args.observe_resolution and not args.continue_priority:
+        parser.error("--observe-resolution requires --continue-priority")
     if args.artwork and (
         args.first_land or args.priority_pass or args.creature_ability
     ):
@@ -170,6 +177,11 @@ def main():
                         "-Dfile.encoding=UTF-8",
                         "-Djava.net.preferIPv4Stack=true",
                         *(
+                            ["-Dmanaforge.observeResolution=true"]
+                            if args.observe_resolution
+                            else []
+                        ),
+                        *(
                             ["-Dmanaforge.continuePriority=true"]
                             if args.continue_priority
                             else []
@@ -240,6 +252,8 @@ def main():
                     command += ["-manaforgeLiveCreature", "1"]
                 if args.continue_priority:
                     command += ["-manaforgeLiveContinuePriority", "1"]
+                if args.observe_resolution:
+                    command += ["-manaforgeLiveObserveResolution", "1"]
                 if not args.interactive:
                     command += [
                         "-batchmode",
@@ -309,6 +323,13 @@ def main():
                         or followup.get("followup_priority_presented") is not True
                     ):
                         raise RuntimeError("LIVE_UNITY_FOLLOWUP_NOT_PRESENTED")
+                if args.observe_resolution:
+                    observed = wait_file("battlefield-ready", 60)
+                    if (
+                        observed.get("snapshot_count") != 3
+                        or observed.get("battlefield_observation_presented") is not True
+                    ):
+                        raise RuntimeError("LIVE_UNITY_BATTLEFIELD_NOT_PRESENTED")
                 chosen = wait_file("choice", 60)
                 if (
                     chosen.get("ack_count") != (4 if args.continue_priority else 2)
@@ -342,6 +363,12 @@ def main():
                         raise RuntimeError("LIVE_UNITY_EVIDENCE_FAILED")
                 if args.first_land and native.get("first_land_observed") is not True:
                     raise RuntimeError("LIVE_UNITY_LAND_NOT_OBSERVED")
+                if (
+                    args.native_metadata
+                    and native.get("unity_battlefield_transition_observed")
+                    is not args.observe_resolution
+                ):
+                    raise RuntimeError("LIVE_UNITY_BATTLEFIELD_EVIDENCE_FAILED")
                 if (
                     args.native_metadata
                     and native.get("unity_followup_priority_submitted")
@@ -408,9 +435,14 @@ def main():
                         native_cast_instance_matched=True,
                         unity_casting_ability_confirmed=True,
                         unity_followup_priority_submitted=args.continue_priority,
+                        unity_battlefield_transition_observed=args.observe_resolution,
                     )
                 if args.continue_priority:
                     evidence.update(followup_priority_presented=True, snapshot_count=2)
+                if args.observe_resolution:
+                    evidence.update(
+                        battlefield_observation_presented=True, snapshot_count=3
+                    )
             finally:
                 key[:] = bytes(len(key))
                 cleanup = owner.close()
@@ -444,7 +476,9 @@ def main():
         json.dumps(evidence, indent=2) + "\n", encoding="utf-8"
     )
     print(
-        "Packaged Unity casting ability confirmed, then next priority passed on the same session; pass outcome uncertain, viewer cleared and roots reaped."
+        "Packaged Unity observed the exact spell source on the battlefield in a read-only third snapshot; pass outcome uncertain, viewer cleared and roots reaped."
+        if args.observe_resolution
+        else "Packaged Unity casting ability confirmed, then next priority passed on the same session; pass outcome uncertain, viewer cleared and roots reaped."
         if args.continue_priority
         else "Packaged Unity casting ability submitted to XMage; Memnite stack entry observed, viewer cleared and roots reaped. Resolution remains in the separate Java proof."
         if args.creature_ability

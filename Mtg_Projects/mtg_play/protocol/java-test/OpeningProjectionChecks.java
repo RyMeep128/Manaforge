@@ -243,6 +243,37 @@ public final class OpeningProjectionChecks {
         JsonObject abilityCommand=command.deepCopy();abilityCommand.addProperty("value",ability);abilityCommand.addProperty("decision_id",42);abilityCommand.addProperty("request_id","ability-receipt");
         NativeCastCorrelation.AbilityEvidence evidence=instance.abilityEvidence(raw,choice,abilityCommand,after,metadata);
         check(evidence!=null && evidence.matchesCommand(abilityCommand));
+        JsonObject resolved=after.deepCopy();resolved.add("stack",new JsonArray());
+        JsonObject permanent=raw.getAsJsonArray("hand").get(0).getAsJsonObject().deepCopy();
+        permanent.addProperty("controller_name","raw-name");permanent.addProperty("owner_name","raw-name");
+        resolved.getAsJsonArray("players").get(0).getAsJsonObject().getAsJsonArray("battlefield").add(permanent);
+        JsonObject resolvedMetadata=new JsonObject(),resolvedObjects=new JsonObject(),resolvedEntry=new JsonObject();
+        resolvedMetadata.addProperty("status","ok");resolvedMetadata.addProperty("cycle",8);resolvedEntry.addProperty("incarnation",4);
+        resolvedEntry.addProperty("owner","raw-human");resolvedEntry.addProperty("controller","raw-human");resolvedObjects.add(source,resolvedEntry);resolvedMetadata.add("objects",resolvedObjects);
+        check(evidence.observesBattlefieldTransition(resolved,resolvedMetadata));
+        for(int mode=0;mode<12;mode++) {
+            JsonObject bad=resolved.deepCopy(),badMetadata=resolvedMetadata.deepCopy();
+            JsonObject card=bad.getAsJsonArray("players").get(0).getAsJsonObject().getAsJsonArray("battlefield").get(0).getAsJsonObject();
+            if(mode==0)bad.addProperty("game_id","wrong");
+            if(mode==1)bad.addProperty("viewer","wrong");
+            if(mode==2)card.addProperty("hidden",true);
+            if(mode==3)card.addProperty("face_down",true);
+            if(mode==4)card.addProperty("id",ability);
+            if(mode==5)bad.getAsJsonArray("hand").add(card.deepCopy());
+            if(mode==6)badMetadata.getAsJsonObject("objects").getAsJsonObject(source).addProperty("incarnation",3);
+            if(mode==7)badMetadata.getAsJsonObject("objects").getAsJsonObject(source).addProperty("incarnation",5);
+            if(mode==8)badMetadata.addProperty("cycle",9);
+            if(mode==9)badMetadata.getAsJsonObject("objects").getAsJsonObject(source).addProperty("controller","wrong");
+            if(mode==10)bad.getAsJsonArray("stack").add(stacked.deepCopy());
+            if(mode==11)bad.getAsJsonArray("players").get(0).getAsJsonObject().getAsJsonArray("battlefield").add(card.deepCopy());
+            check(!evidence.observesBattlefieldTransition(bad,badMetadata));
+        }
+        ManaforgeOpeningProjection readOnly=projection();JsonObject nextPriority=priorityPrompt();nextPriority.addProperty("decision_id",43);
+        JsonObject priorOffer=readOnly.project(resolved,nextPriority,true);String priorPass=perform(priorOffer);
+        JsonObject observation=readOnly.projectReadOnlyPriority(resolved,nextPriority);shape(observation);
+        check(observation.get("decision").isJsonNull() && observation.getAsJsonArray("actions").size()==0 && !observation.get("actions_complete").getAsBoolean());
+        check(!observation.toString().contains(source) && !observation.toString().contains(ability));
+        fails("STALE_DECISION",()->readOnly.claimAction(priorPass,"session","human","raw-game","raw-human",43,8));
         OpeningSessionChecks.confirmationChecks(raw,choice,instance,after,metadata);
         JsonObject other=abilityCommand.deepCopy();other.addProperty("request_id","other-receipt");check(!evidence.matchesCommand(other));
         other=abilityCommand.deepCopy();other.addProperty("decision_id",43);check(!evidence.matchesCommand(other));

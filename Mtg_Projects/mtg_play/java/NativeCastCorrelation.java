@@ -4,9 +4,30 @@ import java.util.*;
 /** Private native correlation. Stack evidence proves ability selection, not spell resolution. */
 public final class NativeCastCorrelation {
     public static final class AbilityEvidence {
-        private final JsonObject command;
-        private AbilityEvidence(JsonObject command){this.command=command.deepCopy();}
+        private final JsonObject command;private final NativeCastCorrelation correlation;private final long stackSourceCounter,stackCycle;
+        private AbilityEvidence(JsonObject command,NativeCastCorrelation correlation,long counter,long cycle){this.command=command.deepCopy();this.correlation=correlation;stackSourceCounter=counter;stackCycle=cycle;}
         public boolean matchesCommand(JsonObject candidate){return command.equals(candidate);}
+        /** Observation only. Does not confirm the intervening priority-pass receipt. */
+        public boolean observesBattlefieldTransition(JsonObject state,JsonObject metadata) {
+            try {
+                if(!correlation.game.equals(string(state,"game_id")) || !correlation.viewer.equals(string(state,"viewer"))
+                    || number(state,"cycle")<stackCycle || !"ok".equals(string(metadata,"status")) || number(metadata,"cycle")!=number(state,"cycle")
+                    || state.getAsJsonArray("stack").size()!=0 || stackSourceCounter==Long.MAX_VALUE)return false;
+                for(JsonElement item:state.getAsJsonArray("hand"))if(correlation.source.equals(string(item.getAsJsonObject(),"id")))return false;
+                int found=0;
+                for(JsonElement row:state.getAsJsonArray("players")) {
+                    JsonObject player=row.getAsJsonObject();if(!correlation.viewer.equals(string(player,"id")))continue;
+                    for(JsonElement item:player.getAsJsonArray("battlefield")) {
+                        JsonObject card=item.getAsJsonObject();if(!correlation.source.equals(string(card,"id")))continue;
+                        if(!new JsonPrimitive(false).equals(card.get("hidden")) || !new JsonPrimitive(false).equals(card.get("face_down")))return false;
+                        found++;
+                    }
+                }
+                JsonObject entry=metadata.getAsJsonObject("objects").getAsJsonObject(correlation.source);
+                return found==1 && correlation.viewer.equals(string(entry,"owner")) && correlation.viewer.equals(string(entry,"controller"))
+                    && number(entry,"incarnation")==stackSourceCounter+1;
+            }catch(RuntimeException unsupported){return false;}
+        }
     }
     private final String game,viewer,source;
     private final long cycle,decision;
@@ -42,7 +63,11 @@ public final class NativeCastCorrelation {
                 || !game.equals(string(command,"game_id")) || number(command,"decision_id")!=number(prompt,"decision_id"))return null;
             string(command,"request_id");String selected=uuid(string(command,"value"));
             if(number(after,"cycle")<number(before,"cycle") || !prompt.getAsJsonObject("key_choices").has(selected) || !matchesStackInstance(after,metadata,selected))return null;
-            return new AbilityEvidence(command);
+            for(JsonElement item:after.getAsJsonArray("stack")) {
+                JsonObject entry=metadata.getAsJsonObject("objects").getAsJsonObject(string(item.getAsJsonObject(),"id"));
+                if(entry!=null && source.equals(string(entry,"source")))return new AbilityEvidence(command,this,number(entry,"source_incarnation"),number(after,"cycle"));
+            }
+            return null;
         }catch(RuntimeException unsupported){return null;}
     }
     public static NativeCastCorrelation capture(JsonObject state,JsonObject prompt,JsonObject command) {

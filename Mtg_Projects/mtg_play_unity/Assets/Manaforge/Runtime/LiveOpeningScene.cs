@@ -17,7 +17,7 @@ namespace Manaforge.Play
         private ViewerBootstrapPipe pipe;private Task<ViewerBootstrap> reading;private Task consuming;
         private ViewerCardSurface surface;private ViewerSessionHost host;private ViewerDecisionPanel panel;
         private PanelSettings settings;private UIDocument document;private string output;private Label status;private Label note;private OpeningCardFocus cardFocus;private OpeningButtonGlow buttonGlow;
-        private int snapshots,acks;private bool capture,choiceReported,land,priority,creature,artwork,backdrop,requestedBackdrop,mulliganControls,buttonSkins,continuePriority,followupPresented;
+        private long snapshotRevision=-1;private int snapshots,acks;private bool capture,choiceReported,land,priority,creature,artwork,backdrop,requestedBackdrop,mulliganControls,buttonSkins,continuePriority,followupPresented,observeResolution,battlefieldPresented;
         private bool OpeningLayout=>!land && !creature;
         private float fanWidth=-1;private int fanCount=-1,fanArtwork=-1;private long fanRevision=-1;
         private void PresentOpening()
@@ -37,7 +37,7 @@ namespace Manaforge.Play
         }
         private bool Report(string name,bool cleared=false)
         {
-            try{var value=new JObject{["probe_version"]=1,["live_opening"]=true,["snapshot_count"]=Volatile.Read(ref snapshots),["ack_count"]=Volatile.Read(ref acks),["followup_priority_presented"]=followupPresented,["viewer_cleared"]=cleared,["arena_button_glows"]=buttonGlow?.Count??0,["arena_button_skins"]=buttonSkins,["mulligan_controls"]=mulliganControls,["arena_backdrop_resource"]=backdrop?ArenaOpeningBackdrop.ResourceName:null,["arena_backdrop"]=backdrop,["artwork_count"]=surface?.PresentedArtworkCount??0};
+            try{var value=new JObject{["probe_version"]=1,["live_opening"]=true,["snapshot_count"]=Volatile.Read(ref snapshots),["ack_count"]=Volatile.Read(ref acks),["followup_priority_presented"]=followupPresented,["battlefield_observation_presented"]=battlefieldPresented,["viewer_cleared"]=cleared,["arena_button_glows"]=buttonGlow?.Count??0,["arena_button_skins"]=buttonSkins,["mulligan_controls"]=mulliganControls,["arena_backdrop_resource"]=backdrop?ArenaOpeningBackdrop.ResourceName:null,["arena_backdrop"]=backdrop,["artwork_count"]=surface?.PresentedArtworkCount??0};
                 string path=Path.Combine(output,name+".json");File.WriteAllText(path+".tmp",value.ToString());File.Move(path+".tmp",path);return true;}catch{return false;}
         }
         private void Fail(){host?.Dispose();Report("failed");Application.Quit(1);}
@@ -48,6 +48,8 @@ namespace Manaforge.Play
             creature=ArtworkFixtureScene.Argument("-manaforgeLiveCreature")=="1";
             continuePriority=ArtworkFixtureScene.Argument("-manaforgeLiveContinuePriority")=="1";
             if(continuePriority && !creature){Application.Quit(1);yield break;}
+            observeResolution=ArtworkFixtureScene.Argument("-manaforgeLiveObserveResolution")=="1";
+            if(observeResolution && !continuePriority){Application.Quit(1);yield break;}
             land=priority || ArtworkFixtureScene.Argument("-manaforgeLiveLand")=="1";
             try{Directory.CreateDirectory(output);pipe=ViewerBootstrapPipe.FromStandardInput();reading=pipe.ReadBootstrapAsync(5000,cancellation.Token);}catch{Fail();yield break;}
             while(!reading.IsCompleted)yield return null;
@@ -76,7 +78,7 @@ namespace Manaforge.Play
                     panel.Root.Q<Label>("decision-status").style.unityTextAlign=TextAnchor.MiddleCenter;
                     var controls=panel.Root.Q<VisualElement>("decision-controls");controls.style.flexDirection=FlexDirection.Row;controls.style.justifyContent=Justify.Center;
                 }
-                var token=cancellation.Token;consuming=Task.Run(()=>{while(!token.IsCancellationRequested && !host.Completion.IsCompleted){if(host.TryTake(out var update))using(update){if(update.Receive.Type=="snapshot")Interlocked.Increment(ref snapshots);if(update.Receive.Type=="ack")Interlocked.Increment(ref acks);}else Thread.Sleep(10);}});
+                var token=cancellation.Token;consuming=Task.Run(()=>{while(!token.IsCancellationRequested && !host.Completion.IsCompleted){if(host.TryTake(out var update))using(update){if(update.Receive.Type=="snapshot"){Interlocked.Exchange(ref snapshotRevision,update.Decision?.Context.Revision??-1);Interlocked.Increment(ref snapshots);}if(update.Receive.Type=="ack")Interlocked.Increment(ref acks);}else Thread.Sleep(10);}});
             }catch{Fail();yield break;}
             double deadline=Time.realtimeSinceStartupAsDouble+20;
             string control=land?"decision-action-0":"decision-option-0";
@@ -128,7 +130,14 @@ namespace Manaforge.Play
                         if(ArtworkFixtureScene.Argument("-manaforgeLiveScript")=="1")using(var input=NavigationSubmitEvent.GetPooled()){input.target=pass;pass.SendEvent(input);}
                     }
                 }
-                if(!choiceReported && Volatile.Read(ref acks)>=(continuePriority?4:2)){
+                if(observeResolution && !battlefieldPresented && Volatile.Read(ref snapshots)==3 && host.HasPresentedRevision(Interlocked.Read(ref snapshotRevision))){
+                    if(host.PresentedDecision!=null || panel.Root.Query<Button>().ToList().Count!=0){Fail();yield break;}
+                    battlefieldPresented=true;inspect.Clear();
+                    foreach(var card in surface.CardsRoot.Children())if(card is CardView view)view.SetPresentation(CardPresentationMode.Compact,135);
+                    status.text="The verified spell source is now on the battlefield. Read-only observation; priority-pass outcome remains uncertain.";
+                    if(capture)yield return Capture("battlefield.png");if(!Report("battlefield-ready")){Application.Quit(1);yield break;}
+                }
+                if(!choiceReported && Volatile.Read(ref acks)>=(continuePriority?4:2) && (!observeResolution || battlefieldPresented)){
                     buttonGlow?.Dispose();buttonGlow=null;cardFocus?.Dispose();cardFocus=null;host.Cancel();host.Tick();panel.Tick();inspect.Clear();
                     status.text=continuePriority?"Casting ability confirmed; next priority pass submitted. Pass outcome uncertain. Viewer cleared; this test ends here.":creature?"Casting ability submitted; native Memnite stack entry observed. Viewer cleared; this test ends here.":priority?"Priority pass submitted to XMage; engine advanced. Viewer cleared; this test ends here.":"Choice submitted to XMage. Next-state support ends here; viewer cleared. No confirmed result is claimed.";
                     if(capture)yield return Capture("choice.png");if(!Report("choice",true)){Application.Quit(1);yield break;}choiceReported=true;

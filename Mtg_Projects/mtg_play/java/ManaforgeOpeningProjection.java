@@ -93,6 +93,14 @@ public final class ManaforgeOpeningProjection {
     public synchronized JsonObject projectPriorityWithoutStack(JsonObject raw,JsonObject prompt) throws IOException {
         return project(raw,prompt,true,false,true);
     }
+    /** A real priority-state observation with no command authority; used while a receipt is unresolved. */
+    public synchronized JsonObject projectReadOnlyPriority(JsonObject raw,JsonObject prompt) throws IOException {
+        invalidateDecision();
+        require("GAME_SELECT".equals(text(prompt,"kind")) && Boolean.TRUE.equals(flag(prompt,"is_priority")));
+        require(raw.has("stack") && raw.get("stack").isJsonArray());
+        JsonObject snapshot=project(raw,prompt,true,false,raw.getAsJsonArray("stack").size()>0);
+        snapshot.add("decision",JsonNull.INSTANCE);snapshot.add("actions",new JsonArray());invalidateDecision();return snapshot;
+    }
     private JsonObject project(JsonObject raw,JsonObject prompt,boolean includePriorityPass,boolean includeSpells,boolean omitStack) throws IOException {
         invalidateDecision();
         try {
