@@ -66,6 +66,8 @@ def main():
         sources = [
             PROTOCOL / "java/manaforge/protocol/PlayContracts.java",
             PROTOCOL / "java/manaforge/protocol/LaunchContracts.java",
+            PROTOCOL / "java/manaforge/protocol/LaunchManifestReader.java",
+            PROTOCOL / "java-test/LaunchReaderFixtureConsumer.java",
             PROTOCOL / "java-test/FixtureConsumer.java",
             PROTOCOL / "java/manaforge/protocol/TextFrame.java",
             PROTOCOL / "java-test/FrameFixtureConsumer.java",
@@ -127,6 +129,12 @@ def main():
             ],
             check=True,
             timeout=60,
+        )
+
+        subprocess.run(
+            [runtime, "-cp", str(workspace) + os.pathsep + str(jar),
+             "manaforge.protocol.LaunchReaderFixtureConsumer", str(PROTOCOL)],
+            check=True, timeout=60,
         )
 
         subprocess.run(

@@ -1,7 +1,7 @@
 # Play launch manifest — P1.3 foundation
 
-Status: export and fixture boundary implemented; process delivery and engine
-resolution remain pending. See the [migration roadmap](play-unity-java-roadmap.md).
+Status: export, shared fixtures and Java runtime input validation implemented;
+process delivery and engine resolution remain pending. See the [migration roadmap](play-unity-java-roadmap.md).
 
 `mtg_play.launch_manifest.export_launch_manifest` accepts native `DeckDocument`s
 keyed by seat ID, existing `GameSetup`, application version and optional deck-owner
@@ -65,8 +65,8 @@ python tools/check_play_java_protocol.py
 ```
 
 Local evidence: 29 focused Python launch tests; Java round-trips three positives
-and rejects nine malformed shapes. The Java reader is test-only schema validation,
-not an authenticated production gateway parser. CI checks fixture/model drift;
+and rejects nine malformed shapes. The initial Java fixture consumer is test-only schema validation. The runtime
+reader below adds input checks but does not authenticate a gateway process. CI checks fixture/model drift;
 its status is reviewed every third commit under the owner's cadence.
 
 ## Remaining acceptance
@@ -80,3 +80,51 @@ cancellation and retry blocking. Private delivery, OS containment and orphan rec
 remain pending. P4 must connect saved-deck selection
 and owned processes. This increment writes no temporary manifest, changes no Qt
 launcher, and completes neither G0/G1 nor human-versus-AI acceptance.
+
+
+## Java runtime launch reader (0.5.123)
+
+LaunchManifestReader.parse accepts the existing versioned native projection and
+three expected runtime pins supplied by the trusted host (engine version,
+adapter version and artifact manifest SHA-256). Never derive expected pins from
+the received manifest itself. Mismatches fail before a DTO is returned. This is
+P1.3 launch-boundary work, not bulk P2 engine migration or P4 launch acceptance.
+
+The reader reuses generated Java-only LaunchContracts DTOs. It validates exact
+record fields/types, launch/game/native-deck versions, supported format/controller
+labels, unique seat/entry IDs, positive quantities/nonnegative ownership, native
+commander references and sideboard companion references. Optional printing and
+asset IDs remain nullable/opaque. Entries keep their source ordering, exact
+printing IDs, quantities and commander/companion metadata. No card names are
+resolved, printings substituted, canonical documents saved or engine rules copied.
+The returned mutable DTO belongs only to the Java gateway input owner; it is not
+a public immutable GameSnapshot and must never enter a Unity/viewer channel.
+
+WireEnvelope.parseObject factors out the existing bounded strict JSON parser;
+WireEnvelope.parse still performs the unchanged envelope header checks afterward.
+This avoids wrapping the private manifest in a fake public game message. UTF-8
+size/depth, duplicate keys, malformed Unicode and signed-64-bit integer rules are
+shared. Required text and 4096-code-point bounds mirror the Python exporter;
+blank entry names remain permitted as in the source contract. Six-seat input is
+tested without imposing a five-seat maximum. Schema acceptance does not establish
+engine support for any seat/controller/card combination.
+
+Errors contain fixed codes only, without input text or nested parser exceptions.
+The reader performs no IO, process launch, credential issuance or network writes.
+A manifest ID and deck-owner provenance still do not authenticate seat ownership.
+Inherited private delivery, cancellation/deadlines and process-ready handshake
+must be supplied by the launch owner in a later integration step, followed by
+XMage-specific identity/card resolution. No Java gameplay gateway is claimed.
+
+Local validation passed: 44 runtime reader checks, full focused Java protocol
+preflight, launch-fixture/schema drift check and Java/C# generated-model drift
+check. Coverage includes all three positive/nine negative shared launch fixtures,
+unknown fields, version/pin changes, duplicate/missing references, boolean/fraction/
+overflow numerics, trailing/duplicate JSON, BOM/Unicode limits, full signed-64-bit
+quantities, source isolation and non-leaking errors. No engine, Unity build/UI or
+full application suite ran. The normal protocol CI now compiles/runs this consumer;
+status is checked at 0.5.123 without waiting for unfinished jobs.
+
+Existing deck-preview and packaged decision-fixture visual review remains pending.
+Automatic mana work remains parked and disabled. All G0/G1 and later acceptance
+gates retain their previous requirements.

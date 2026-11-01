@@ -1103,3 +1103,14 @@ read-only scenario also passes. This is G1/P3.4 synthetic integration, not XMage
 or AI play. See [review instructions](play-session-fixture.md#packaged-explicit-decisions-05122).
 Owner UI verification is now required. Licensed CI and all existing architecture
 acceptance gates remain open; automatic-payment work stays parked/disabled.
+
+
+### P1.3 Java launch input validation (0.5.123)
+
+The Java runtime reader now validates the same native launch projection against
+trusted runtime pins, generated DTOs and strict bounded JSON, with semantic ID/
+commander/companion checks. Forty-four new checks plus protocol/schema/model
+preflight pass locally. It preserves exact identities and imposes no five-seat
+maximum. Private process delivery and XMage resolution remain pending; this is
+neither a running gateway nor an architecture-gate waiver. Existing UI reviews
+remain pending and automatic mana work stays parked.

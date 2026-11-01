@@ -43,7 +43,8 @@ public final class WireEnvelope {
             default: throw new EnvelopeException("JSON_INVALID");
         }
     }
-    public static JsonObject parse(String text) throws IOException {
+    /** Shared strict JSON object parser; does not validate an envelope or launch body. */
+    public static JsonObject parseObject(String text) throws IOException {
         if (text == null || text.startsWith("\uFEFF") || text.length() > TextFrame.MAX_BYTES) throw new EnvelopeException("JSON_INVALID");
         try {
             ByteBuffer bytes = StandardCharsets.UTF_8.newEncoder().onMalformedInput(CodingErrorAction.REPORT)
@@ -58,7 +59,10 @@ public final class WireEnvelope {
         } catch (EnvelopeException error) { throw error; }
         catch (IOException | IllegalStateException error) { throw new EnvelopeException("JSON_INVALID"); }
         if (!root.isJsonObject()) throw new EnvelopeException("ENVELOPE_INVALID");
-        JsonObject object = root.getAsJsonObject();
+        return root.getAsJsonObject();
+    }
+    public static JsonObject parse(String text) throws IOException {
+        JsonObject object = parseObject(text);
         if (object.size() != 4 || !object.has("wire_version") || !object.get("wire_version").isJsonPrimitive()
             || !object.get("wire_version").getAsJsonPrimitive().isNumber()
             || !string(object, "message_type") || !string(object, "message_id")
