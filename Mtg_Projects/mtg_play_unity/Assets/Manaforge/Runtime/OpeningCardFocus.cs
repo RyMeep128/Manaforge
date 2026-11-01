@@ -22,8 +22,16 @@ namespace Manaforge.Play
                 EventCallback<PointerLeaveEvent> leave=ev=>{if(hovered==card)hovered=null;Show(hovered??focused);};
                 EventCallback<FocusInEvent> focus=ev=>{focused=card;Show(hovered??focused);};
                 EventCallback<FocusOutEvent> blur=ev=>{if(focused==card)focused=null;Show(hovered??focused);};
-                card.RegisterCallback(enter);card.RegisterCallback(leave);card.RegisterCallback(focus);card.RegisterCallback(blur);
-                unregister.Add(()=>{card.UnregisterCallback(enter);card.UnregisterCallback(leave);card.UnregisterCallback(focus);card.UnregisterCallback(blur);card.focusable=wasFocusable;card.tabIndex=previousTabIndex;});
+                EventCallback<DetachFromPanelEvent> detach=ev=>{
+                    if(ev.target!=card)return;
+                    if(hovered==card)hovered=null;if(focused==card)focused=null;
+                    if(active==card){card.style.scale=new Scale(Vector3.one);card.style.translate=new Translate(0,0);active=null;}
+                    if(hovered!=null && hovered.parent!=root)hovered=null;
+                    if(focused!=null && focused.parent!=root)focused=null;
+                    Show(hovered??focused);
+                };
+                card.RegisterCallback(enter);card.RegisterCallback(leave);card.RegisterCallback(focus);card.RegisterCallback(blur);card.RegisterCallback(detach);
+                unregister.Add(()=>{card.UnregisterCallback(enter);card.UnregisterCallback(leave);card.UnregisterCallback(focus);card.UnregisterCallback(blur);card.UnregisterCallback(detach);card.focusable=wasFocusable;card.tabIndex=previousTabIndex;});
             }
         }
         public void PresentHand(){if(!disposed)OpeningHandFan.Present(root,cards);}

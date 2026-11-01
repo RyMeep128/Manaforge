@@ -5,6 +5,23 @@ namespace Manaforge.Play.Tests
 {
     public sealed class OpeningCardFocusTests
     {
+        [Test] public void RemovingHoveredCardRestoresFocusAndClearingResetsEmphasis()
+        {
+            if(UnityEngine.SystemInfo.graphicsDeviceType==UnityEngine.Rendering.GraphicsDeviceType.Null)Assert.Ignore("Mounted input requires a graphics device.");
+            var window=UnityEngine.ScriptableObject.CreateInstance<UnityEditor.EditorWindow>();var a=new CardView();var b=new CardView();
+            try{
+                window.Show();var root=window.rootVisualElement;root.Add(a);root.Add(b);
+                using(var focus=new OpeningCardFocus(root)){
+                    a.Focus();using(var ev=PointerEnterEvent.GetPooled()){ev.target=b;b.SendEvent(ev);}
+                    b.RemoveFromHierarchy();
+                    Assert.That(b.style.scale.value.value.x,Is.EqualTo(1));
+                    Assert.That(a.style.scale.value.value.x,Is.EqualTo(1.12f));
+                    root.Clear();Assert.That(a.style.scale.value.value.x,Is.EqualTo(1));
+                    Assert.That(a.style.translate.value.y.value,Is.Zero);
+                    focus.RefreshBounds();Assert.That(root.childCount,Is.Zero);
+                }
+            }finally{a.Dispose();b.Dispose();window.Close();}
+        }
         [UnityEngine.TestTools.UnityTest] public System.Collections.IEnumerator RaisedCardStaysWithinResizedHandBounds()
         {
             if(UnityEngine.SystemInfo.graphicsDeviceType==UnityEngine.Rendering.GraphicsDeviceType.Null)Assert.Ignore("Mounted layout requires a graphics device.");

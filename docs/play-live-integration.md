@@ -1,5 +1,21 @@
 # Live Unity / Java / XMage integration
 
+## Clear opening focus when cards detach (0.5.162)
+
+Removing a mounted opening card now clears its hover/focus references and
+resets any raised transform immediately. If a different card still has keyboard
+focus, removing the hovered card restores that emphasis. Clearing the hand does
+not restore removed cards. Disposal unregisters the additional detach callback.
+
+Validation: 25 focused opening-focus/fan EditMode checks passed with graphics,
+including hovered-card removal, keyboard-focus fallback and whole-hand clearing.
+No packaged visual acceptance or full-suite run is claimed.
+
+Scheduled CI checkpoint: latest pushed .157 [Tests](https://github.com/RyMeep128/Manaforge/actions/runs/41325988319),
+[desktop preview](https://github.com/RyMeep128/Manaforge/actions/runs/41325988279)
+and feedback relay still show success. .158–.162 remain local, with no CI runs.
+Next scheduled check: .165.
+
 ## Raised-card bounds after resize (0.5.161)
 
 The opening scene now refreshes the active card's horizontal bounds each frame.
