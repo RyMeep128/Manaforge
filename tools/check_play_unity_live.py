@@ -27,6 +27,11 @@ def main():
         action="store_true",
         help="Require the exact public fixture printings from Core's existing offline image cache",
     )
+    parser.add_argument(
+        "--arena-backdrop",
+        action="store_true",
+        help="Use the locally prepared Arena floor with --artwork",
+    )
     scenario = parser.add_mutually_exclusive_group()
     scenario.add_argument(
         "--creature-ability",
@@ -57,6 +62,8 @@ def main():
         parser.error(
             "--artwork uses the modern Forest/Ornithopter opening-only fixture"
         )
+    if args.arena_backdrop and not args.artwork:
+        parser.error("--arena-backdrop requires --artwork")
     output = args.output.resolve()
     if (
         not output.is_relative_to(artifacts.resolve())
@@ -202,6 +209,8 @@ def main():
                         "-manaforgeLiveCapture",
                         "1",
                     ]
+                if args.arena_backdrop:
+                    command += ["-manaforgeArenaBackdrop", "1"]
                 owner.start_preview(
                     command,
                     preview_bootstrap=export_viewer_bootstrap(
@@ -222,6 +231,8 @@ def main():
                     or ready.get("ack_count") != 0
                 ):
                     raise RuntimeError("LIVE_UNITY_READY_FAILED")
+                if args.arena_backdrop and ready.get("arena_backdrop") is not True:
+                    raise RuntimeError("LIVE_UNITY_BACKDROP_NOT_PRESENTED")
                 owner.client_ready()
                 if args.artwork and ready.get("artwork_count") != 7:
                     raise RuntimeError("LIVE_UNITY_ARTWORK_NOT_PRESENTED")
@@ -306,6 +317,7 @@ def main():
                     native_cast_ability_matched=args.creature_ability,
                     creature_spell_on_stack=args.creature_ability,
                     creature_resolved=False,
+                    arena_backdrop=args.arena_backdrop,
                     artwork_presented=args.artwork,
                     artwork_card_count=ready.get("artwork_count", 0),
                 )

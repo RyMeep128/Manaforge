@@ -17,7 +17,7 @@ namespace Manaforge.Play
         private ViewerBootstrapPipe pipe;private Task<ViewerBootstrap> reading;private Task consuming;
         private ViewerCardSurface surface;private ViewerSessionHost host;private ViewerDecisionPanel panel;
         private PanelSettings settings;private UIDocument document;private string output;private Label status;
-        private int snapshots,acks;private bool capture,choiceReported,land,priority,creature,artwork;
+        private int snapshots,acks;private bool capture,choiceReported,land,priority,creature,artwork,backdrop,requestedBackdrop;
         private bool OpeningLayout=>!land && !creature;
         private float fanWidth=-1;private int fanCount=-1,fanArtwork=-1;private long fanRevision=-1;
         private void PresentOpening()
@@ -37,7 +37,7 @@ namespace Manaforge.Play
         }
         private bool Report(string name,bool cleared=false)
         {
-            try{var value=new JObject{["probe_version"]=1,["live_opening"]=true,["snapshot_count"]=Volatile.Read(ref snapshots),["ack_count"]=Volatile.Read(ref acks),["viewer_cleared"]=cleared,["artwork_count"]=surface?.PresentedArtworkCount??0};
+            try{var value=new JObject{["probe_version"]=1,["live_opening"]=true,["snapshot_count"]=Volatile.Read(ref snapshots),["ack_count"]=Volatile.Read(ref acks),["viewer_cleared"]=cleared,["arena_backdrop"]=backdrop,["artwork_count"]=surface?.PresentedArtworkCount??0};
                 string path=Path.Combine(output,name+".json");File.WriteAllText(path+".tmp",value.ToString());File.Move(path+".tmp",path);return true;}catch{return false;}
         }
         private void Fail(){host?.Dispose();Report("failed");Application.Quit(1);}
@@ -51,19 +51,21 @@ namespace Manaforge.Play
             while(!reading.IsCompleted)yield return null;
             if(reading.Status!=TaskStatus.RanToCompletion || reading.Result.SessionId!="live-opening" || reading.Result.ViewerId!="human"){Fail();yield break;}
             artwork=reading.Result.ArtworkDirectory!=null;
+            requestedBackdrop=ArtworkFixtureScene.Argument("-manaforgeArenaBackdrop")=="1";
+            if(requestedBackdrop && (!artwork || !OpeningLayout)){Fail();yield break;}
             try{
                 settings=ScriptableObject.CreateInstance<PanelSettings>();settings.themeStyleSheet=Resources.Load<ThemeStyleSheet>("CardTheme");settings.scaleMode=PanelScaleMode.ScaleWithScreenSize;settings.referenceResolution=new Vector2Int(1280,720);
                 document=gameObject.AddComponent<UIDocument>();document.panelSettings=settings;var root=document.rootVisualElement;root.style.flexGrow=1;root.style.paddingLeft=20;root.style.paddingTop=15;root.style.backgroundColor=new Color(.025f,.055f,.075f);
                 var title=new Label(creature?"LIVE XMAGE — CASTING ABILITY":priority?"LIVE XMAGE — PRIORITY PASS":land?"LIVE XMAGE — FIRST LAND":"LIVE XMAGE — HUMAN vs AI OPENING");title.style.fontSize=23;title.style.color=Color.white;root.Add(title);
                 status=new Label("Connecting to the owned Java gateway…");status.style.color=Color.white;root.Add(status);
-                var note=new Label(creature?"Public Memnite/Forest decks. Diagnostic card click completed. Choose the casting ability; Java checks the stack entry.":priority?"Public Forest decks. Diagnostic setup completed. One explicit priority pass; no full match.":land?"Public Forest decks. Diagnostic pregame/keep already completed. One land action only; no full match.":artwork?"Public Forest/Ornithopter decks. Verified offline artwork. Current rules / tap state unavailable; one opening decision only.":"Public Forest/Memnite decks. Opening decision only; artwork cache and later gameplay are not connected.");note.style.color=Color.gray;root.Add(note);
+                var note=new Label(creature?"Public Memnite/Forest decks. Diagnostic card click completed. Choose the casting ability; Java checks the stack entry.":priority?"Public Forest decks. Diagnostic setup completed. One explicit priority pass; no full match.":land?"Public Forest decks. Diagnostic pregame/keep already completed. One land action only; no full match.":artwork?"Public Forest/Ornithopter decks. Verified offline artwork. Current rules / tap state unavailable; one opening decision only.":"Public Forest/Memnite decks. Opening decision only; artwork cache and later gameplay are not connected.");note.style.color=requestedBackdrop?new Color(.9f,.9f,.9f):Color.gray;root.Add(note);
                 var stage=new VisualElement();stage.style.flexDirection=FlexDirection.Row;stage.style.flexGrow=1;stage.style.marginTop=10;root.Add(stage);
                 surface=new ViewerCardSurface(stage);surface.CardsRoot.style.width=720;surface.CardsRoot.style.flexShrink=0;surface.InspectionView.SetPresentation(CardPresentationMode.Full,210);
                 host=new ViewerSessionHost(surface,reading.Result,pipe.WaitForOwnerCloseAsync(cancellation.Token),false);
                 var choices=new VisualElement();choices.style.width=290;choices.style.flexShrink=0;stage.Add(choices);panel=new ViewerDecisionPanel(choices,host);
                 if(OpeningLayout){
                     title.text="Opening Hand";title.style.fontSize=38;title.style.unityTextAlign=TextAnchor.MiddleCenter;CardTypography.Apply(title,CardTextRole.Title);
-                    stage.style.position=Position.Relative;stage.style.backgroundColor=new Color(0,0,0,.3f);
+                    stage.style.position=Position.Relative;stage.style.backgroundColor=requestedBackdrop?Color.clear:new Color(0,0,0,.3f);
                     surface.CardsRoot.style.position=Position.Absolute;surface.CardsRoot.style.left=0;surface.CardsRoot.style.top=0;surface.CardsRoot.style.width=Length.Percent(100);surface.CardsRoot.style.height=430;
                     surface.InspectionView.style.position=Position.Absolute;surface.InspectionView.style.right=8;surface.InspectionView.style.top=0;surface.InspectionView.style.display=DisplayStyle.None;
                     choices.style.position=Position.Absolute;choices.style.left=0;choices.style.bottom=0;choices.style.width=Length.Percent(100);
@@ -93,6 +95,7 @@ namespace Manaforge.Play
             var inspect=new VisualElement();inspect.style.flexDirection=FlexDirection.Row;document.rootVisualElement.Insert(3,inspect);int count=0;
             foreach(string objectId in surface.PresentedObjectIds()){string id=objectId;inspect.Add(new Button(()=>{if(OpeningLayout)surface.InspectionView.style.display=DisplayStyle.Flex;host.Inspect(id);}){text="Inspect "+(++count)});}
             status.text=creature?"Connected to real XMage. Select the offered casting ability.":priority?"Connected to real XMage. Select Pass priority to yield this decision.":land?"Connected to real XMage. Select an offered Play land action.":"Connected to real XMage. Inspect your opening hand, then choose Yes or No.";
+            if(requestedBackdrop){backdrop=ArenaOpeningBackdrop.AttachLocal(document.rootVisualElement);if(!backdrop){Fail();yield break;}}
             if(capture)yield return Capture("connected.png");if(!Report("ready")){Application.Quit(1);yield break;}
             if(ArtworkFixtureScene.Argument("-manaforgeLiveScript")=="1"){
                 // Opt-in public-deck acceptance script through the actual mounted UI callback.

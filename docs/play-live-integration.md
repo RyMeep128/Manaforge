@@ -1,5 +1,31 @@
 # Live Unity / Java / XMage integration
 
+## Supplied Arena floor backdrop (0.5.148)
+
+The artwork opening can now show the supplied Strixhaven floor behind the hand.
+Prepare it with `python tools/prepare_play_arena_backdrop.py`, build the player,
+then run `python tools/check_play_unity_live.py --artwork --arena-backdrop`.
+Add `--interactive` for manual input. The default launch remains unchanged.
+
+Preparation uses the existing isolated UnityPy 1.25.4 environment and verifies
+bundle SHA-256 `6b0bb5f72c0e34639946c1d3f294c6431f16c4be50e381da64014efbc44e82f4`
+before decoding `tex_floor_d` (Texture2D path ID -8961145794100977760,
+2048 x 1024) from the supplied STX texture bundle. The suppressed Unity version
+uses the explicit 6000.3.14f1 parsing fallback. Local PNG/provenance/resources
+remain ignored; Downloads is unchanged. Existing differing PNGs are preserved.
+
+Unity displays a dimmed, cropped central floor region behind all controls,
+with pointer picking disabled. This is a flat backdrop preview, not the complete
+Arena battlefield: no environment geometry, shaders, avatars, or invented game
+state. Arena's supplied static layout separates local/opponent regions; those
+regions still need integration with live state.
+
+Validation: 15 focused EditMode tests passed (backdrop layering/input/fallback
+and opening fan), packaged build succeeded, and the real Unity -> Java -> XMage
+opening passed with seven artwork cards, a displayed backdrop, an engine choice,
+zero retained artwork on close, and process cleanup. Capture inspected under
+`Artifacts/UnityLive-35ed247d06/connected.png`. Next scheduled CI check: .150.
+
 ## Real artwork in the Arena-reference opening (0.5.147)
 
 The live fixtures now preserve actual catalog printing/Oracle IDs rather than
