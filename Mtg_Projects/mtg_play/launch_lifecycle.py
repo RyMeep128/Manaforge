@@ -12,6 +12,7 @@ import time
 
 from .connection_proof import stop_process
 from .viewer_bootstrap import ViewerBootstrapError, frame_viewer_bootstrap
+from .gateway_bootstrap import GatewayBootstrapError, frame_gateway_manifest
 
 
 class LaunchState(StrEnum):
@@ -80,6 +81,7 @@ class LaunchOwner:
         self._deadline = None
         self._runtime_cleanup = runtime_cleanup
         self._client_bootstrap_written = False
+        self._gateway_manifest_written = False
 
     def __enter__(self):
         with self._lock:
@@ -109,6 +111,12 @@ class LaunchOwner:
         """Bytes entered the owned pipe; not an acknowledgement or readiness proof."""
         with self._lock:
             return self._client_bootstrap_written
+
+    @property
+    def gateway_manifest_written(self):
+        """Bytes entered our private pipe; not Java validation or engine readiness."""
+        with self._lock:
+            return self._gateway_manifest_written
 
     def request_cancel(self):
         self._cancel.set()
@@ -165,7 +173,10 @@ class LaunchOwner:
                 self.close()
                 raise LaunchLifecycleError("LAUNCH_CANCELLED")
             if bootstrap is not None:
-                self._write_client_bootstrap(process, bootstrap, bootstrap_timeout)
+                if role == "gateway":
+                    self._write_gateway_bootstrap(process, bootstrap, bootstrap_timeout)
+                else:
+                    self._write_client_bootstrap(process, bootstrap, bootstrap_timeout)
 
     def _write_client_bootstrap(self, process, frame, timeout):
         """Launch worker only; exclusive unbuffered writes to our owned stdin.
@@ -174,6 +185,12 @@ class LaunchOwner:
         startup or cancellation hostage. A successfully written pipe stays open
         as the client owner lifeline, with no further payload writes.
         """
+        return self._write_bootstrap(process, frame, timeout, "CLIENT")
+
+    def _write_gateway_bootstrap(self, process, frame, timeout):
+        return self._write_bootstrap(process, frame, timeout, "GATEWAY")
+
+    def _write_bootstrap(self, process, frame, timeout, role):
         deadline = min(self._deadline, self._clock() + timeout)
         try:
             descriptor = process.stdin.fileno()
@@ -182,7 +199,7 @@ class LaunchOwner:
             while offset < len(frame):
                 self.check_health()
                 if self._clock() >= deadline:
-                    raise LaunchLifecycleError("CLIENT_BOOTSTRAP_TIMEOUT")
+                    raise LaunchLifecycleError(role + "_BOOTSTRAP_TIMEOUT")
                 try:
                     written = os.write(
                         descriptor, memoryview(frame)[offset : offset + 1024]
@@ -195,23 +212,46 @@ class LaunchOwner:
                     self._cancel.wait(0.01)
             self.check_health()
             if self._clock() >= deadline:
-                raise LaunchLifecycleError("CLIENT_BOOTSTRAP_TIMEOUT")
-            self._client_bootstrap_written = True
+                raise LaunchLifecycleError(role + "_BOOTSTRAP_TIMEOUT")
+            if role == "GATEWAY":
+                self._gateway_manifest_written = True
+            else:
+                self._client_bootstrap_written = True
         except LaunchLifecycleError:
             self.close()
             raise
         except Exception:
             self.close()
-            raise LaunchLifecycleError("CLIENT_BOOTSTRAP_WRITE_FAILED") from None
+            raise LaunchLifecycleError(role + "_BOOTSTRAP_WRITE_FAILED") from None
 
-    def start_gateway(self, command, *, cwd=None):
-        self._spawn(
-            "gateway",
-            command,
-            cwd=cwd,
-            expected=LaunchState.NEW,
-            starting=LaunchState.STARTING_GATEWAY,
-        )
+    def start_gateway(
+        self, command, *, cwd=None, launch_manifest=None, bootstrap_timeout=5.0
+    ):
+        frame = None
+        if launch_manifest is not None:
+            if (
+                type(bootstrap_timeout) not in (int, float)
+                or not math.isfinite(bootstrap_timeout)
+                or not 0 < bootstrap_timeout <= 60
+            ):
+                raise LaunchLifecycleError("INVALID_BOOTSTRAP_TIMEOUT")
+            try:
+                frame = frame_gateway_manifest(launch_manifest)
+            except GatewayBootstrapError:
+                raise LaunchLifecycleError("INVALID_GATEWAY_BOOTSTRAP") from None
+        try:
+            self._spawn(
+                "gateway",
+                command,
+                cwd=cwd,
+                expected=LaunchState.NEW,
+                starting=LaunchState.STARTING_GATEWAY,
+                bootstrap=frame,
+                bootstrap_timeout=bootstrap_timeout,
+            )
+        finally:
+            if frame is not None:
+                frame[:] = b"\x00" * len(frame)
 
     def gateway_ready(self):
         with self._lock:
@@ -255,8 +295,14 @@ class LaunchOwner:
         except ViewerBootstrapError:
             raise LaunchLifecycleError("INVALID_CLIENT_BOOTSTRAP") from None
         try:
-            self._spawn("client", command, cwd=cwd, expected=LaunchState.NEW,
-                starting=LaunchState.STARTING_CLIENT, bootstrap=frame)
+            self._spawn(
+                "client",
+                command,
+                cwd=cwd,
+                expected=LaunchState.NEW,
+                starting=LaunchState.STARTING_CLIENT,
+                bootstrap=frame,
+            )
         finally:
             frame[:] = b"\x00" * len(frame)
 

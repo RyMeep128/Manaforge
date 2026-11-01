@@ -68,6 +68,7 @@ def main():
             PROTOCOL / "java/manaforge/protocol/LaunchContracts.java",
             PROTOCOL / "java/manaforge/protocol/LaunchManifestReader.java",
             PROTOCOL / "java-test/LaunchReaderFixtureConsumer.java",
+            PROTOCOL / "java-test/LaunchBootstrapProbe.java",
             PROTOCOL / "java-test/FixtureConsumer.java",
             PROTOCOL / "java/manaforge/protocol/TextFrame.java",
             PROTOCOL / "java-test/FrameFixtureConsumer.java",

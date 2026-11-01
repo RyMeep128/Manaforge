@@ -4,6 +4,10 @@ on:
   push:
     paths:
       - 'Mtg_Projects/mtg_play/protocol/**'
+      - 'Mtg_Projects/mtg_play/gateway_bootstrap.py'
+      - 'Mtg_Projects/mtg_play/launch_lifecycle.py'
+      - 'Mtg_Projects/mtg_play/launch_manifest.py'
+      - 'tools/check_play_gateway_launch.py'
       - 'Mtg_Projects/mtg_play/java/payment/**'
       - 'Mtg_Projects/mtg_play/java/payment-gateway/**'
       - 'Mtg_Projects/mtg_play/java/payment-test/**'
@@ -19,6 +23,10 @@ on:
   pull_request:
     paths:
       - 'Mtg_Projects/mtg_play/protocol/**'
+      - 'Mtg_Projects/mtg_play/gateway_bootstrap.py'
+      - 'Mtg_Projects/mtg_play/launch_lifecycle.py'
+      - 'Mtg_Projects/mtg_play/launch_manifest.py'
+      - 'tools/check_play_gateway_launch.py'
       - 'Mtg_Projects/mtg_play/java/payment/**'
       - 'Mtg_Projects/mtg_play/java/payment-gateway/**'
       - 'Mtg_Projects/mtg_play/java/payment-test/**'
@@ -54,7 +62,9 @@ jobs:
       - name: Check generated Java and CSharp models
         run: python tools/generate_play_models.py --check
       - name: Compile and run Java fixture consumer with pinned Gson
-        run: python tools/check_play_java_protocol.py --download-gson
+        run: python tools/check_play_java_protocol.py --download-gson --dummy-output Mtg_Projects/mtg_play_unity/Artifacts/JavaDummy
+      - name: Validate private native-deck launch and owned Java cleanup
+        run: python tools/check_play_gateway_launch.py
 
       - name: Check isolated Java payment coordinator safety
         run: python tools/check_play_payment_coordinator.py

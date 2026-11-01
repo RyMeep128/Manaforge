@@ -231,3 +231,14 @@ remain separate from authenticated gameplay bootstrap/session readiness.
 PreviewLaunch retains temporary assets and the owner if cleanup fails, allowing
 worker-based retry without overlapping launches. See the
 [desktop preview handoff and acceptance](play-desktop-deck-preview.md).
+
+
+### Private gateway manifest input (0.5.124)
+
+The optional start_gateway launch_manifest argument reuses the bounded owned-pipe
+writer, with a separate gateway_manifest_written flag and fixed gateway failure
+codes. The 1 MiB private export limit remains distinct from viewer bootstrap limits.
+Delivery leaves the owner in STARTING_GATEWAY; gateway_ready still requires an
+independent readiness decision. See [private delivery proof](play-launch-boundary.md).
+The diagnostic Java receiver proves direct-child EOF cleanup only, not XMage
+descendant containment or a production ready handshake.

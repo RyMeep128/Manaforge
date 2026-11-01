@@ -12,9 +12,9 @@ from mtg_core.decks import DECK_SCHEMA_VERSION, Deck, DeckDocument, DeckEntry
 
 from .contracts import ADAPTER_VERSION, GAME_PROTOCOL_VERSION, GameSetup, MatchSeat
 from .decks import deck_document_issues
+from .gateway_bootstrap import MAX_GATEWAY_BOOTSTRAP_BYTES as MAX_MANIFEST_BYTES
 
 LAUNCH_MANIFEST_VERSION = 1
-MAX_MANIFEST_BYTES = 1024 * 1024
 MAX_DECK_ENTRIES = 4096  # Transport allocation limit, not a Magic deck-size rule.
 MAX_INTEGER = 2**63 - 1
 ENTRY_FIELDS = (

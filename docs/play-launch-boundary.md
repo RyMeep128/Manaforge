@@ -128,3 +128,37 @@ status is checked at 0.5.123 without waiting for unfinished jobs.
 Existing deck-preview and packaged decision-fixture visual review remains pending.
 Automatic mana work remains parked and disabled. All G0/G1 and later acceptance
 gates retain their previous requirements.
+
+
+### Private native-deck delivery proof (0.5.124)
+
+LaunchOwner.start_gateway now optionally accepts exported launch-manifest bytes.
+It writes one bounded (1 MiB), length-prefixed frame through the owned gateway's
+stdin, with startup/write deadlines, cancellation and the existing child-handle
+cleanup. The mutable writer copy is cleared afterward; the caller still owns the
+original immutable bytes. Legacy launches without a manifest remain supported.
+Gateway delivery and client bootstrap use separate flags. Writing bytes does not
+establish readiness, authenticate seats or authorize starting Unity.
+
+The diagnostic LaunchBootstrapProbe reads this private pipe with the Java runtime
+LaunchManifestReader and trusted engine/adapter/artifact pins. A public native
+DeckDocument export reaches Java without putting deck contents in argv, environment,
+stdout, a temporary manifest file or a viewer channel. Its temporary marker contains
+only a fixed validation result. The parent bounds startup and closes/reaps its owned
+Java process on EOF. This test receiver starts no XMage or Unity and has no engine
+child processes; real runtime descendant cleanup and readiness remain integration
+requirements. Blocking probe reads rely on the parent's deadline and cleanup.
+
+Run `python tools/check_play_gateway_launch.py` after exporting compiled classes
+with `python tools/check_play_java_protocol.py --download-gson --dummy-output
+Mtg_Projects/mtg_play_unity/Artifacts/JavaDummy`. Its sanitized JSON report is under
+Unity Artifacts/GatewayLaunchProof. Protocol CI now runs this proof; preview CI
+includes the new focused gateway-bootstrap tests. CI is next checked at .126.
+
+Local Java preflight and the cross-process proof passed. A focused Python run passed
+91 cases and hit the existing forced-cleanup test's 50 ms deadline once; that test
+passed unchanged when rerun alone. Windows virtualenv launcher wrappers also made
+short child deadlines fail, so the final focused run used the direct interpreter
+with the existing environment's dependencies. No full application suite ran.
+No UI changed; previous owner visual reviews and G0/G1 acceptance remain pending.
+Automatic mana work remains parked.
