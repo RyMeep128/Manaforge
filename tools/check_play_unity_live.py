@@ -30,7 +30,7 @@ def main():
     parser.add_argument(
         "--arena-backdrop",
         action="store_true",
-        help="Use the locally prepared Arena floor with --artwork",
+        help="Use the locally prepared Arena tutorial battlefield with --artwork",
     )
     parser.add_argument(
         "--arena-buttons",
@@ -238,7 +238,11 @@ def main():
                     or ready.get("ack_count") != 0
                 ):
                     raise RuntimeError("LIVE_UNITY_READY_FAILED")
-                if args.arena_backdrop and ready.get("arena_backdrop") is not True:
+                if args.arena_backdrop and (
+                    ready.get("arena_backdrop") is not True
+                    or ready.get("arena_backdrop_resource")
+                    != "LocalCardVisuals/Playmats/ArenaTutorialBattlefield"
+                ):
                     raise RuntimeError("LIVE_UNITY_BACKDROP_NOT_PRESENTED")
                 if (
                     not (args.first_land or args.priority_pass or args.creature_ability)
@@ -333,6 +337,7 @@ def main():
                     creature_resolved=False,
                     mulligan_controls=ready.get("mulligan_controls", False),
                     arena_button_skins=ready.get("arena_button_skins", False),
+                    arena_backdrop_resource=ready.get("arena_backdrop_resource"),
                     arena_backdrop=args.arena_backdrop,
                     artwork_presented=args.artwork,
                     artwork_card_count=ready.get("artwork_count", 0),

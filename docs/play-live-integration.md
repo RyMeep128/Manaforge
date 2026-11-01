@@ -1,5 +1,30 @@
 # Live Unity / Java / XMage integration
 
+## Screenshot-matching Arena battlefield (0.5.154)
+
+A broader inspection of the supplied battlefield bundles located the actual
+backdrop shown in the user's reference: `SOS_BF_NoInteractables`, including the
+green/gold floor, library, and central rail. It replaces the temporary cropped
+Strixhaven floor for `--arena-backdrop`. The complete texture fills the viewport,
+dimmed behind the opening hand; no gameplay objects, avatars, life totals, or
+opponent state are baked into the selected image.
+
+Re-run `python tools/prepare_play_arena_backdrop.py` before building, then launch
+`python tools/check_play_unity_live.py --artwork --arena-backdrop --arena-buttons`.
+The preparation tool pins source bundle
+`Textures_Scene_Battlefield_SOS_227120da-8629b126fc8376c7ceac3a327c604380.mtga`
+with SHA-256 `ae4fd8edfddd3ce813e7d65be80d56cf2389e8c42259a9d74b6b4d269f6b0c97`,
+Texture2D path ID 2994448792846277816, and dimensions 2048 x 1024. Decoder and
+suppressed-version fallback remain pinned. The old local Strixhaven PNG is
+preserved; the new PNG/provenance is also ignored. Downloads remains unchanged.
+The live check now verifies the reported backdrop resource identity as well as
+successful presentation, preventing an old player from silently passing.
+
+Validation: 15 focused EditMode tests passed (full-board viewport, layering,
+input isolation, and fan geometry), packaged build succeeded, and the live
+artwork opening/engine action/cleanup was checked with screenshot inspection.
+Next scheduled CI check remains .156.
+
 ## Clean noncreature printing footer (0.5.153)
 
 Raised lands revealed a dark printed-stat mask that the live surface previously

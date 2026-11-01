@@ -7,9 +7,9 @@ from pathlib import Path
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-BUNDLE = "Downloads/AssetBundle/Textures_Scene_Battlefield_STX_1b295122-29db96c9c8fac1e5be51b458911676a5.mtga"
-PIN = "6b0bb5f72c0e34639946c1d3f294c6431f16c4be50e381da64014efbc44e82f4"
-PATH_ID = -8961145794100977760
+BUNDLE = "Downloads/AssetBundle/Textures_Scene_Battlefield_SOS_227120da-8629b126fc8376c7ceac3a327c604380.mtga"
+PIN = "ae4fd8edfddd3ce813e7d65be80d56cf2389e8c42259a9d74b6b4d269f6b0c97"
+PATH_ID = 2994448792846277816
 
 
 def main():
@@ -43,13 +43,16 @@ def main():
         if obj.type.name == "Texture2D" and obj.path_id == PATH_ID
     ]
     if len(matches) != 1:
-        parser.error("Pinned floor texture is unavailable")
+        parser.error("Pinned battlefield texture is unavailable")
     texture = matches[0].read()
-    if texture.m_Name != "tex_floor_d" or (texture.m_Width, texture.m_Height) != (
+    if texture.m_Name != "SOS_BF_NoInteractables" or (
+        texture.m_Width,
+        texture.m_Height,
+    ) != (
         2048,
         1024,
     ):
-        parser.error("Pinned floor texture metadata changed")
+        parser.error("Pinned battlefield texture metadata changed")
     image = texture.image.convert("RGBA")
     pixels_pin = hashlib.sha256(image.tobytes()).hexdigest()
     assets = ROOT / "Mtg_Projects/mtg_play_unity/Assets"
@@ -57,7 +60,7 @@ def main():
     if not destination.resolve().is_relative_to(assets.resolve()):
         parser.error("Backdrop destination escaped the Unity assets directory")
     destination.mkdir(parents=True, exist_ok=True)
-    target = destination / "StrixhavenFloor.png"
+    target = destination / "ArenaTutorialBattlefield.png"
     if target.exists():
         from PIL import Image
 
@@ -82,11 +85,11 @@ def main():
         decoder="UnityPy 1.25.4",
         suppressed_version_fallback="6000.3.14f1",
     )
-    (destination / "StrixhavenFloor.provenance.json").write_text(
+    (destination / "ArenaTutorialBattlefield.provenance.json").write_text(
         json.dumps(provenance, indent=2) + "\n", encoding="utf-8"
     )
     print(
-        "Prepared the pinned Arena floor texture in ignored local resources; source Downloads unchanged."
+        "Prepared the pinned Arena battlefield texture in ignored local resources; source Downloads unchanged."
     )
 
 

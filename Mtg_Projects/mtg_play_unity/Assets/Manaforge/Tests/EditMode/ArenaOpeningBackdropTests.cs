@@ -15,7 +15,7 @@ namespace Manaforge.Play.Tests
                 Assert.That(ArenaOpeningBackdrop.Attach(root,texture),Is.True);var image=root.Q<Image>("arena-opening-backdrop");
                 Assert.That(root[0],Is.SameAs(image));Assert.That(root[1],Is.SameAs(button));Assert.That(image.pickingMode,Is.EqualTo(PickingMode.Ignore));Assert.That(image.image,Is.SameAs(texture));
                 Assert.That(ArenaOpeningBackdrop.Attach(root,texture),Is.True);Assert.That(root.childCount,Is.EqualTo(2));
-                var crop=ArenaOpeningBackdrop.FloorViewport;Assert.That(crop.xMin,Is.GreaterThan(0));Assert.That(crop.xMax,Is.LessThan(1));Assert.That(crop.yMin,Is.GreaterThan(0));Assert.That(crop.yMax,Is.LessThan(1));
+                Assert.That(image.uv,Is.EqualTo(new Rect(0,0,1,1)));Assert.That(image.scaleMode,Is.EqualTo(ScaleMode.StretchToFill));Assert.That(ArenaOpeningBackdrop.ResourceName,Does.EndWith("ArenaTutorialBattlefield"));
             }finally{Object.DestroyImmediate(texture);}
         }
     }
