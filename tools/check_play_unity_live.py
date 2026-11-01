@@ -195,6 +195,11 @@ def main():
                         raise RuntimeError("LIVE_UNITY_EVIDENCE_FAILED")
                 if args.first_land and native.get("first_land_observed") is not True:
                     raise RuntimeError("LIVE_UNITY_LAND_NOT_OBSERVED")
+                if (
+                    args.first_land
+                    and native.get("priority_pass_submitted") is not True
+                ):
+                    raise RuntimeError("LIVE_UNITY_PRIORITY_NOT_SUBMITTED")
                 evidence = dict(
                     live_engine=True,
                     unity_connected=True,
@@ -203,6 +208,7 @@ def main():
                     viewer_cleared=True,
                     public_fixture_only=True,
                     first_land_observed=args.first_land,
+                    priority_pass_submitted=args.first_land,
                 )
             finally:
                 key[:] = bytes(len(key))

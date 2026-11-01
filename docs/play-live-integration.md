@@ -1,5 +1,33 @@
 # Live Unity / Java / XMage integration
 
+## Authenticated native priority passing (0.5.137)
+
+An opt-in projection now exposes the current human priority window as an opaque
+`pass` action, bound to the same game/viewer/decision/cycle as land actions. Its
+one-shot native response is boolean false, matching the reference adapter and
+bridge. Nonpriority prompts and default projections do not gain pass actions.
+Synthetic checks cover replay, stale offers, mismatched tokens and pass-only
+windows. No rules or strategic passing policy are implemented by Unity.
+
+The public all-Forest first-land diagnostic now submits at least one explicit
+pass through the authenticated session boundary before playing a land; pre-land
+windows use that boundary as well. It checks native transport acceptance and
+subsequent engine advancement, separately from receipt confirmation. The report
+adds `priority_pass_submitted`; neither this nor advancement proves a completed
+turn or match. This is an explicit fixture policy, not product auto-pass.
+
+The single-land Unity fixture retains land-only controls and its existing clear/
+close behavior. It does not expose a pass button whose outcome its single-land
+completion check cannot handle. The owner declined the proposed post-land display
+increment; that work is deferred. Continuous public priority controls remain next.
+Local Java protocol preflight passed, including 110 projection/privacy/token
+checks. The real-engine Java pass-to-land probe passed with duplicate receipt
+reuse, one native submission per command, engine advancement and clean shutdown.
+The packaged first-land regression also passed with explicit native pass evidence,
+authenticated land input, viewer clearing and normal root cleanup. No Unity C#
+changed or new player build was needed; no full application suite ran. Next
+scheduled CI review remains .138.
+
 ## Packaged first-land controls (0.5.136)
 
 The opt-in all-Forest fixture can mount a real land offer in Unity's existing

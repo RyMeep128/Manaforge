@@ -47,7 +47,8 @@ public final class ManaforgeOpeningProjection {
         consumed=true;options.clear();nativeActions.clear();
         JsonObject command=new JsonObject();command.addProperty("protocol",1);command.addProperty("command","respond");
         command.add("request_id",envelope.get("message_id").deepCopy());command.addProperty("game_id",nativeGame);
-        command.addProperty("decision_id",nativeDecision);command.addProperty("kind",action?"object":"boolean");if(action)command.addProperty("value",source);else command.addProperty("value",answer);
+        boolean objectResponse=action && source!=null;
+        command.addProperty("decision_id",nativeDecision);command.addProperty("kind",objectResponse?"object":"boolean");if(objectResponse)command.addProperty("value",source);else command.addProperty("value",action?false:answer);
         return command;
     }
     public synchronized void invalidateDecision(){decision=null;nativeGame=null;nativeDecision=null;nativeCycle=null;options.clear();nativeActions.clear();consumed=true;}
@@ -78,6 +79,10 @@ public final class ManaforgeOpeningProjection {
         require(source.has(key) && source.get(key).isJsonArray() && source.getAsJsonArray(key).size()==0);
     }
     public synchronized JsonObject project(JsonObject raw,JsonObject prompt) throws IOException {
+        return project(raw,prompt,false);
+    }
+    /** Opt-in priority port; single-land Unity fixture still accepts a land only. */
+    public synchronized JsonObject project(JsonObject raw,JsonObject prompt,boolean includePriorityPass) throws IOException {
         invalidateDecision();
         try {
             require(engineViewer.equals(raw.get("viewer").getAsString()));
@@ -143,6 +148,10 @@ public final class ManaforgeOpeningProjection {
                 if(object==null || object.hidden || !viewer.equals(object.controller_id) || !"hand".equals(object.zone))continue;
                 LegalAction action=new LegalAction();action.action_id=opaque();action.object_id=reference;action.kind=kind.getAsString();action.label="Play land";action.priority_class="meaningful";
                 actions.add(action);offeredNative.put(action.action_id,source);
+            }
+            if(priority && includePriorityPass) {
+                LegalAction pass=new LegalAction();pass.action_id=opaque();pass.kind="pass";pass.label="Pass priority";pass.priority_class="unknown";
+                actions.add(pass);offeredNative.put(pass.action_id,null);
             }
             result.actions=actions.toArray(new LegalAction[0]);result.actions_complete=false;
             ChoiceRequest choice=new ChoiceRequest();choice.decision_id=opaque();choice.player_id=viewer;choice.family=priority?"selection":"boolean";

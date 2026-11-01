@@ -15,7 +15,11 @@ from mtg_play import connection_proof as transport
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--first-land", action="store_true", help="All-Forest engine-backed land action probe; no Unity changes")
+    parser.add_argument(
+        "--first-land",
+        action="store_true",
+        help="All-Forest engine-backed land action probe; no Unity changes",
+    )
     parser.add_argument("--xmage-root", type=Path, default=transport.DEFAULT_BUNDLE)
     parser.add_argument("--jdk-path", type=Path, default=transport.DEFAULT_JDK)
     parser.add_argument(
@@ -44,7 +48,9 @@ def main():
         duplicate_receipt_reused=True,
         disconnect_uncertainty_retained=True,
     )
-    if args.first_land: expected["first_land_observed"]=True
+    if args.first_land:
+        expected["first_land_observed"] = True
+        expected["priority_pass_submitted"] = True
     evidence = None
 
     def consume(first, events, launch, port, server_process, server):
@@ -64,7 +70,9 @@ def main():
                 str(classes) + os.pathsep + str(server / "lib/*"),
                 "ManaforgeLiveOpening",
                 str(port),
-                hashlib.sha256((transport.HERE / "artifacts.json").read_bytes()).hexdigest(),
+                hashlib.sha256(
+                    (transport.HERE / "artifacts.json").read_bytes()
+                ).hexdigest(),
                 *(["--first-land"] if args.first_land else []),
             ],
             cwd=workspace,

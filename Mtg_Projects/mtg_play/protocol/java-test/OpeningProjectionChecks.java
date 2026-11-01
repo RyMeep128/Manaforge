@@ -79,6 +79,27 @@ public final class OpeningProjectionChecks {
     static String perform(JsonObject snapshot){JsonObject out=JsonParser.parseString(chooseForAction(snapshot)).getAsJsonObject();return out.toString();}
     static String chooseForAction(JsonObject snapshot){JsonObject body=new JsonObject(),out=new JsonObject();out.addProperty("wire_version",1);out.addProperty("message_type","command");out.addProperty("message_id","land-action");for(String field:new String[]{"session_id","viewer_id","revision"})body.add(field,snapshot.get(field));body.addProperty("operation","perform");body.add("decision_id",snapshot.getAsJsonObject("decision").get("decision_id"));body.add("action_id",snapshot.getAsJsonArray("actions").get(0).getAsJsonObject().get("action_id"));out.add("body",body);return out.toString();}
     static void landChecks() throws Exception {
+        ManaforgeOpeningProjection passOwner=projection();JsonObject passSnapshot=passOwner.project(landState(),priorityPrompt(),true);
+        JsonObject passAction=passSnapshot.getAsJsonArray("actions").get(1).getAsJsonObject();
+        check(passAction.get("kind").getAsString().equals("pass") && passAction.get("object_id").isJsonNull());
+        JsonObject passWire=JsonParser.parseString(perform(passSnapshot)).getAsJsonObject();passWire.getAsJsonObject("body").add("action_id",passAction.get("action_id"));
+        JsonObject nativePass=passOwner.claimAction(passWire.toString(),"session","human","raw-game","raw-human",41,8);
+        check(nativePass.get("kind").getAsString().equals("boolean") && !nativePass.get("value").getAsBoolean());
+        fails("STALE_DECISION",()->passOwner.claimAction(passWire.toString(),"session","human","raw-game","raw-human",41,8));
+        JsonObject empty=landState();empty.add("playable",new JsonArray());
+        JsonObject onlyPass=projection().project(empty,priorityPrompt(),true);shape(onlyPass);
+        check(onlyPass.getAsJsonArray("actions").size()==1 && onlyPass.getAsJsonArray("actions").get(0).getAsJsonObject().get("kind").getAsString().equals("pass"));
+        check(projection().project(state(),prompt(),true).getAsJsonArray("actions").size()==0);
+        for(String field:new String[]{"session_id","viewer_id","revision","decision_id","action_id"}) {
+            ManaforgeOpeningProjection bound=projection();String valid=perform(bound.project(empty,priorityPrompt(),true));
+            JsonObject bad=JsonParser.parseString(valid).getAsJsonObject();
+            if(field.equals("revision"))bad.getAsJsonObject("body").addProperty(field,0);else bad.getAsJsonObject("body").addProperty(field,"wrong");
+            String code=field.equals("session_id")?"SESSION_MISMATCH":field.equals("viewer_id")?"VIEWER_MISMATCH":field.equals("revision")?"STALE_REVISION":field.equals("decision_id")?"STALE_DECISION":"ACTION_UNAVAILABLE";
+            fails(code,()->bound.claimAction(bad.toString(),"session","human","raw-game","raw-human",41,8));
+            check(!bound.claimAction(valid,"session","human","raw-game","raw-human",41,8).get("value").getAsBoolean());
+        }
+        ManaforgeOpeningProjection fresh=projection();String previous=perform(fresh.project(landState(),priorityPrompt()));
+        fresh.project(state(),prompt());fails("STALE_REVISION",()->fresh.claimAction(previous,"session","human","raw-game","raw-human",41,8));
         ManaforgeOpeningProjection p=projection();JsonObject snapshot=p.project(landState(),priorityPrompt());shape(snapshot);
         check(snapshot.getAsJsonArray("actions").size()==1 && snapshot.getAsJsonObject("decision").get("family").getAsString().equals("selection"));
         check(!snapshot.get("actions_complete").getAsBoolean() && snapshot.getAsJsonObject("decision").get("is_priority").getAsBoolean());

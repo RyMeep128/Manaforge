@@ -24,7 +24,7 @@ public final class ManaforgeOpeningLoopback {
         JsonObject envelope=new JsonObject(),body=new JsonObject();envelope.addProperty("wire_version",1);envelope.addProperty("message_type","command");envelope.addProperty("message_id","opening-choice");
         for(String field:new String[]{"session_id","viewer_id","revision"})body.add(field,snapshot.get(field));body.addProperty("operation",snapshot.getAsJsonArray("actions").size()>0?"perform":"choose");
         body.add("decision_id",snapshot.getAsJsonObject("decision").get("decision_id"));
-        if(snapshot.getAsJsonArray("actions").size()>0){JsonObject land=null;for(JsonElement action:snapshot.getAsJsonArray("actions"))if(action.getAsJsonObject().get("kind").getAsString().equals("play_land"))land=action.getAsJsonObject();if(land==null)throw new IllegalArgumentException("FIXTURE_LAND_UNAVAILABLE");body.add("action_id",land.get("action_id"));}
+        if(snapshot.getAsJsonArray("actions").size()>0){JsonObject selected=null;for(JsonElement action:snapshot.getAsJsonArray("actions"))if(action.getAsJsonObject().get("kind").getAsString().equals(yes?"play_land":"pass"))selected=action.getAsJsonObject();if(selected==null)throw new IllegalArgumentException("FIXTURE_ACTION_UNAVAILABLE");body.add("action_id",selected.get("action_id"));}
         else body.add("option_id",snapshot.getAsJsonObject("decision").getAsJsonArray("options").get(yes?0:1).getAsJsonObject().get("option_id"));envelope.add("body",body);return envelope;
     }
     public static void exchange(JsonObject snapshotEnvelope,ManaforgeOpeningProjection projection,String game,String engineViewer,long decision,long cycle,
