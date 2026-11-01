@@ -1,5 +1,28 @@
 # Live Unity / Java / XMage integration
 
+## Supplied Arena button textures (0.5.151)
+
+The recognized opening controls can now use the actual supplied
+`MainButton_Blue_Up` and `MainButton_Orange_Up` textures rather than flat fills.
+Prepare them with `python tools/prepare_play_arena_buttons.py`, rebuild, then run
+`python tools/check_play_unity_live.py --artwork --arena-backdrop --arena-buttons`.
+The last flag requires successful texture presentation. Without local textures,
+the existing blue/orange controls remain usable. Button identities, callbacks,
+labels, and enabled state are preserved; standard UI disabled treatment remains.
+
+Preparation verifies source bundle SHA-256
+`30e808233a4b573403dc44d2ec36b710d56064a4c62e14c3ccbdb39f2052b725`
+for `Textures_Bucket_EventComponents.MainButtonComponentPayload_0_054bf470-5417e6ab9a508e652dbd8e6e7864781c.mtga`.
+The two 440 x 100 Texture2D path IDs are -5175006699134861056 (blue) and
+-8745388354193192827 (orange). UnityPy 1.25.4 uses the explicit suppressed-version
+fallback 6000.3.14f1. Decoded PNGs and provenance stay in ignored local resources;
+Downloads remains unchanged and differing existing images are preserved.
+
+Validation: 20 focused EditMode tests passed (mapping, texture fallback/state,
+and hand geometry), packaged build succeeded, and the artwork opening check
+requires both skins before submitting the existing engine action and checking
+viewer/process cleanup. Next scheduled CI check: .153.
+
 ## Uncluttered opening presentation (0.5.150)
 
 The opening keeps the Arena-reference hand fan, centered heading, and bottom

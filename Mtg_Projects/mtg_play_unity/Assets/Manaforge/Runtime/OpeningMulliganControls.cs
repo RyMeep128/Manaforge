@@ -16,6 +16,22 @@ namespace Manaforge.Play
             Style(no,"Keep 7",new Color(.95f,.36f,.08f),new Color(1,.75f,.35f));
             return true;
         }
+        public static bool ApplyLocalSkins(VisualElement root)=>ApplySkins(root,
+            Resources.Load<Texture2D>("LocalCardVisuals/Buttons/MainButton_Blue_Up"),
+            Resources.Load<Texture2D>("LocalCardVisuals/Buttons/MainButton_Orange_Up"));
+        public static bool ApplySkins(VisualElement root,Texture2D blue,Texture2D orange)
+        {
+            if(root==null || blue==null || orange==null)return false;
+            var mulligan=root.Q<Button>("decision-option-0");var keep=root.Q<Button>("decision-option-1");
+            if(mulligan==null || keep==null || mulligan.text!="Mulligan" || keep.text!="Keep 7")return false;
+            Skin(mulligan,blue);Skin(keep,orange);return true;
+        }
+        private static void Skin(Button button,Texture2D texture)
+        {
+            button.style.backgroundImage=new StyleBackground(texture);button.style.backgroundColor=Color.clear;
+            button.style.unityBackgroundImageTintColor=Color.white;
+            button.style.borderTopWidth=button.style.borderBottomWidth=button.style.borderLeftWidth=button.style.borderRightWidth=0;
+        }
         private static void Style(Button button,string label,Color fill,Color edge)
         {
             button.text=label;CardTypography.Apply(button,CardTextRole.Title);button.style.fontSize=30;
