@@ -403,7 +403,7 @@ def run_proof(
                     str(HERE / "protocol/java/manaforge/protocol" / name)
                     for name in (
                         "PlayContracts.java", "TextFrame.java", "WireEnvelope.java",
-                        "ReceiveContractSchema.java", "ReceiveMessages.java",
+                        "ReceiveContractSchema.java", "ReceiveMessages.java", "WireMessages.java",
                     )
                 ],
                 str(

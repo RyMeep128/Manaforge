@@ -1,5 +1,6 @@
 import com.google.gson.*;
 import manaforge.protocol.PlayContracts.*;
+import manaforge.protocol.WireMessages;
 import java.io.IOException;
 import java.util.*;
 
@@ -9,7 +10,39 @@ public final class ManaforgeOpeningProjection {
     private final String session, viewer, engineViewer;
     private final Map<String,CardIdentity> printings=new HashMap<>();
     private final Map<String,String> players=new HashMap<>();
+    public static final class ChoiceException extends IOException {
+        public final String code;
+        private ChoiceException(String code){super(code);this.code=code;}
+    }
     private long revision;
+    private String decision, nativeGame;
+    private Long nativeDecision, nativeCycle;
+    private final Map<String,Boolean> options=new HashMap<>();
+    private boolean consumed;
+
+    /** Trusted launch/session worker only. Authentication and receipt ledger remain external.
+     * Claim is one-shot BEFORE native IO; an uncertain submission must never be replayed. */
+    public synchronized JsonObject claimBoolean(String wire,String trustedSession,String trustedViewer,
+            String currentGame,String currentEngineViewer,long currentNativeDecision,long currentNativeCycle) throws IOException {
+        if(!session.equals(trustedSession))throw new ChoiceException("SESSION_MISMATCH");
+        if(!viewer.equals(trustedViewer) || !engineViewer.equals(currentEngineViewer))throw new ChoiceException("VIEWER_MISMATCH");
+        if(decision==null || consumed || !Objects.equals(nativeGame,currentGame)
+                || nativeDecision!=currentNativeDecision || nativeCycle!=currentNativeCycle)
+            throw new ChoiceException("STALE_DECISION");
+        String mismatch=WireMessages.checkBinding(wire,session,viewer,revision,decision);
+        if(mismatch!=null)throw new ChoiceException(mismatch);
+        JsonObject envelope=WireMessages.parse(wire),body=envelope.getAsJsonObject("body");
+        if(!body.get("operation").getAsString().equals("choose") || !options.containsKey(body.get("option_id").getAsString()))
+            throw new ChoiceException("ACTION_UNAVAILABLE");
+        boolean answer=options.get(body.get("option_id").getAsString());
+        consumed=true;options.clear();
+        JsonObject command=new JsonObject();command.addProperty("protocol",1);command.addProperty("command","respond");
+        command.add("request_id",envelope.get("message_id").deepCopy());command.addProperty("game_id",nativeGame);
+        command.addProperty("decision_id",nativeDecision);command.addProperty("kind","boolean");command.addProperty("value",answer);
+        return command;
+    }
+    public synchronized void invalidateDecision(){decision=null;nativeGame=null;nativeDecision=null;nativeCycle=null;options.clear();consumed=true;}
+
     public ManaforgeOpeningProjection(String session,String viewer,String engineViewer,Map<String,CardIdentity> bindings) {
         this.session=session;this.viewer=viewer;this.engineViewer=engineViewer;
         for(Map.Entry<String,CardIdentity> entry:bindings.entrySet())
@@ -35,12 +68,14 @@ public final class ManaforgeOpeningProjection {
     private static void empty(JsonObject source,String key) throws IOException {
         require(source.has(key) && source.get(key).isJsonArray() && source.getAsJsonArray(key).size()==0);
     }
-    public JsonObject project(JsonObject raw,JsonObject prompt) throws IOException {
+    public synchronized JsonObject project(JsonObject raw,JsonObject prompt) throws IOException {
+        invalidateDecision();
         try {
             require(engineViewer.equals(raw.get("viewer").getAsString()));
             require("GAME_ASK".equals(prompt.get("kind").getAsString()));
             require(Objects.equals(integer(raw,"cycle"),integer(prompt,"cycle")) && integer(raw,"cycle")!=null);
-            require(integer(prompt,"decision_id")!=null);
+            require(integer(prompt,"decision_id")!=null && integer(prompt,"decision_id")>=0 && integer(prompt,"decision_id")<=Integer.MAX_VALUE);
+            require(raw.has("game_id") && !raw.get("game_id").isJsonNull());
             empty(raw,"stack");empty(raw,"exile");empty(raw,"combat");
             GameSnapshot result=new GameSnapshot();result.session_id=session;result.viewer_id=viewer;
             result.revision=revision+1;result.protocol_version=1L;result.status="active";
@@ -86,7 +121,11 @@ public final class ManaforgeOpeningProjection {
             for(int i=0;i<2;i++){ChoiceOption option=new ChoiceOption();option.option_id=opaque();option.label=i==0?"Yes":"No";option.selected=false;choice.options[i]=option;}
             result.decision=choice;result.combat=new CombatAssignment[0];result.observations=new CardObservation[0];
             result.unsupported_fields=new String[]{"object_incarnations","commander_metadata","live_abilities","actions","mana","counters","eliminated","observations"};
-            JsonObject output=JSON.toJsonTree(result).getAsJsonObject();revision++;return output;
+            JsonObject output=JSON.toJsonTree(result).getAsJsonObject();
+            nativeGame=raw.get("game_id").getAsString();nativeDecision=integer(prompt,"decision_id");nativeCycle=integer(raw,"cycle");
+            decision=choice.decision_id;consumed=false;
+            options.put(choice.options[0].option_id,true);options.put(choice.options[1].option_id,false);
+            revision++;return output;
         }catch(IOException failure){throw failure;}catch(RuntimeException failure){throw new IOException("LIVE_OPENING_PROJECTION_UNSUPPORTED");}
     }
 }

@@ -35,6 +35,9 @@ def main():
         decision_received=True,
         unity_connected=False,
         public_projection_validated=True,
+        public_choice_submitted=True,
+        engine_advanced=True,
+        choice_replay_rejected=True,
     )
     evidence = None
 
@@ -130,7 +133,7 @@ def main():
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
     print(
-        "Real XMage human/AI opening hand and pending decision confirmed by Java; cleanup passed. Unity integration remains pending."
+        "Real XMage opening projected; public boolean submitted once, replay rejected and engine advancement observed; cleanup passed. Unity integration remains pending."
     )
 
 

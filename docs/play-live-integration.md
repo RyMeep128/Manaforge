@@ -120,3 +120,49 @@ waiting on unfinished work. No G0/G1 gate or full gameplay acceptance is implied
 
 Next: bind the engine boolean decision to authenticated public choice submission,
 then mount the live source in Unity and request owner UI verification.
+
+
+## One-shot opening choice binding (0.5.130)
+
+The opening projection now retains a private mapping from its two public option
+IDs to the native boolean decision. claimBoolean parses the existing command
+schema and reuses WireMessages.checkBinding. It checks trusted host session/
+viewer context, public revision/decision/option, engine viewer/game/decision and
+cycle before producing a private respond command for the existing bridge.
+
+The claim is synchronized and consumed before native IO, so two simultaneous
+submissions or a retry after uncertain IO cannot create a second native command.
+Rejected bad bindings do not consume a valid choice. Reprojection invalidates old
+tokens before validation, including when the new state is unsupported; explicit
+invalidation supports disconnect/shutdown. Public DTO/output mutation cannot
+change the retained token/value mapping. Native IDs remain in the trusted adapter
+only, never in the public snapshot.
+
+The host-context arguments are trusted internal inputs, not authentication. This
+helper must be called by the future authenticated session worker using its verified
+viewer context and current engine state, never using caller-supplied identity or
+current-state assertions. The existing GatewaySessionBoundary and submission ledger
+still need wiring around enqueue, receipt/uncertainty handling and this native claim.
+This increment creates no network listener or unauthenticated command endpoint.
+
+The public diagnostic now chooses Yes through a complete public command envelope,
+claims the corresponding native boolean, submits it to XMage, checks accepted
+transport submission, rejects replay, and observes a newer engine decision/state.
+The fixture's explicit answer is not product automation. Engine advancement is
+recorded separately from transport acceptance; it is not a claim that every outcome
+or complete match has been confirmed. The existing bridge checks game/decision
+again immediately before native IO. Python performs no gameplay actions.
+
+Local validation passed: 63 projection/privacy/binding checks, including both
+boolean values, incorrect sessions/viewers/options/revisions/decisions, changed
+native game/viewer/decision/cycle, reprojection, invalidation and simultaneous claims;
+the Java protocol preflight (60 checks before the final concurrent/native-viewer
+cases were added, with all 63 then rerun in isolation); and the real public-choice
+submission/replay rejection/engine-advancement scenario with clean root shutdown.
+No full application suite or Unity UI ran. CI remains scheduled for .132; no new
+CI success is claimed. Owner visual review is not needed for this Java-only change.
+
+Next: compose this binding with authenticated Java session admission and receipts,
+then connect the live source to Unity's existing session/decision scene and stop
+for owner UI verification. Manual engine actions, board/stack/combat normalization,
+full parity, saved-deck runtime resolution and natural game completion remain open.

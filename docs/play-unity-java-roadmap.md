@@ -1130,3 +1130,9 @@ The .129 opening projection now validates actual XMage human-hand/boolean-decisi
 state through the shared public receive schema, with privacy canaries and explicit
 unsupported fields. Authenticated command routing and live Unity mounting remain
 pending; see the [live integration track](play-live-integration.md).
+
+
+The .130 live opening now submits an explicit public boolean choice through a
+one-shot native binding, rejects replay and observes engine advancement.
+Authenticated session/receipt composition and Unity mounting remain next;
+formal acceptance gates and the Python/Qt fallback are unchanged.

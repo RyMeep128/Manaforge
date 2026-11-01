@@ -69,12 +69,28 @@ public final class ManaforgeLiveOpening {
                     manaforge.protocol.PlayContracts.CardIdentity identity=new manaforge.protocol.PlayContracts.CardIdentity();
                     identity.printing_id=printing[1];identity.deck_entry_id=printing[2];bindings.put(printing[0],identity);
                 }
-                JsonObject snapshot=new ManaforgeOpeningProjection("live-opening","human",engineViewer,bindings).project(state,event);
+                ManaforgeOpeningProjection projection=new ManaforgeOpeningProjection("live-opening","human",engineViewer,bindings);
+                JsonObject snapshot=projection.project(state,event);
                 JsonObject body=new JsonObject();body.addProperty("fixture_only",false);body.add("snapshot",snapshot);
                 JsonObject envelope=new JsonObject();envelope.addProperty("wire_version",1);envelope.addProperty("message_type","snapshot");envelope.addProperty("message_id","live-opening");envelope.add("body",body);
                 manaforge.protocol.ReceiveMessages.parse(envelope.toString(),"live-opening","human",1,false);
                 if(snapshot.getAsJsonArray("objects").size()!=7)throw new IOException("LIVE_OPENING_PROJECTION_FAILED");
-                return;
+                // Explicit diagnostic Yes choice through the public command contract, never product automation.
+                JsonObject choice=new JsonObject();choice.addProperty("wire_version",1);choice.addProperty("message_type","command");choice.addProperty("message_id","opening-yes");
+                JsonObject answer=new JsonObject();answer.addProperty("session_id","live-opening");answer.addProperty("viewer_id","human");answer.add("revision",snapshot.get("revision"));answer.addProperty("operation","choose");
+                answer.add("decision_id",snapshot.getAsJsonObject("decision").get("decision_id"));answer.add("option_id",snapshot.getAsJsonObject("decision").getAsJsonArray("options").get(0).getAsJsonObject().get("option_id"));choice.add("body",answer);
+                long previousCycle=state.get("cycle").getAsLong(),previousDecision=event.get("decision_id").getAsLong();
+                JsonObject nativeCommand=projection.claimBoolean(choice.toString(),"live-opening","human",game,engineViewer,previousDecision,previousCycle);
+                JsonObject sent=request(nativeCommand,"response_sent");
+                if(!sent.get("accepted").getAsBoolean())throw new IOException("LIVE_OPENING_RESPONSE_REJECTED");
+                try {projection.claimBoolean(choice.toString(),"live-opening","human",game,engineViewer,previousDecision,previousCycle);throw new IOException("LIVE_OPENING_REPLAY_ACCEPTED");}
+                catch(ManaforgeOpeningProjection.ChoiceException rejected){if(!rejected.code.equals("STALE_DECISION"))throw rejected;}
+                while(true) {
+                    JsonObject follow=pending==null?next():pending;
+                    if(follow.get("event").getAsString().equals("decision")){pending=null;if(follow.get("decision_id").getAsLong()>previousDecision)break;}
+                    if(follow.get("event").getAsString().equals("game_state") && follow.get("cycle").getAsLong()>previousCycle)break;
+                }
+                projection.invalidateDecision();return;
             }
             // Explicit public fixture policy ONLY: respond to engine-offered pregame choices.
             if(++pregame>4)throw new IOException("LIVE_OPENING_UNSUPPORTED_PREGAME");
@@ -103,7 +119,7 @@ public final class ManaforgeLiveOpening {
         try {
             if(args.length!=1)throw new IOException();int port=Integer.parseInt(args[0]);if(port<1 || port>65535)throw new IOException();
             probe.run(port);
-            report.println("{\"live_engine\":true,\"java_game_commands\":true,\"human_ai_seats\":true,\"opening_hand_count\":7,\"decision_received\":true,\"unity_connected\":false,\"public_projection_validated\":true}");result=0;
+            report.println("{\"live_engine\":true,\"java_game_commands\":true,\"human_ai_seats\":true,\"opening_hand_count\":7,\"decision_received\":true,\"unity_connected\":false,\"public_projection_validated\":true,\"public_choice_submitted\":true,\"engine_advanced\":true,\"choice_replay_rejected\":true}");result=0;
         }catch(Exception failure){JsonObject error=new JsonObject();error.addProperty("failure","LIVE_OPENING_FAILED");error.addProperty("stage",probe.stage);
             if(Arrays.asList("LIVE_OPENING_UNSUPPORTED_PREGAME","LIVE_OPENING_TIMEOUT_OR_CANCELLED","LIVE_OPENING_ENGINE_FAILED","LIVE_OPENING_QUEUE_LIMIT","LIVE_OPENING_PIN").contains(failure.getMessage()))error.addProperty("code",failure.getMessage());
             if(Arrays.asList("GAME_ASK","GAME_CHOOSE_CHOICE","GAME_TARGET","GAME_SELECT").contains(probe.decisionKind))error.addProperty("decision_family",probe.decisionKind);
