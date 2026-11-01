@@ -22,7 +22,13 @@ def main():
     artifacts = ROOT / "Mtg_Projects/mtg_play_unity/Artifacts"
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--interactive", action="store_true")
-    parser.add_argument(
+    scenario = parser.add_mutually_exclusive_group()
+    scenario.add_argument(
+        "--priority-pass",
+        action="store_true",
+        help="Submit one explicit engine priority pass from Unity",
+    )
+    scenario.add_argument(
         "--first-land",
         action="store_true",
         help="Show one real land offer after diagnostic pregame/keep; not a full match",
@@ -93,7 +99,11 @@ def main():
                         str(port),
                         hashpin,
                         str(output / "gateway-ready.json"),
-                        *(["--first-land"] if args.first_land else []),
+                        *(
+                            ["--first-land"]
+                            if args.first_land or args.priority_pass
+                            else []
+                        ),
                     ],
                     cwd=workspace,
                     stdin=subprocess.PIPE,
@@ -130,6 +140,8 @@ def main():
                 ]
                 if args.first_land:
                     command += ["-manaforgeLiveLand", "1"]
+                if args.priority_pass:
+                    command += ["-manaforgeLivePriority", "1"]
                 if not args.interactive:
                     command += [
                         "-batchmode",
@@ -159,7 +171,9 @@ def main():
                 owner.client_ready()
                 if args.interactive:
                     print(
-                        "Live land ready: select Play land within 60 seconds."
+                        "Live priority ready: select Pass priority within 60 seconds."
+                        if args.priority_pass
+                        else "Live land ready: select Play land within 60 seconds."
                         if args.first_land
                         else "Live opening ready: inspect cards, then choose Yes or No within 60 seconds. The spike closes after submission.",
                         flush=True,
@@ -195,10 +209,14 @@ def main():
                         raise RuntimeError("LIVE_UNITY_EVIDENCE_FAILED")
                 if args.first_land and native.get("first_land_observed") is not True:
                     raise RuntimeError("LIVE_UNITY_LAND_NOT_OBSERVED")
-                if (
-                    args.first_land
-                    and native.get("priority_pass_submitted") is not True
+                if args.priority_pass and (
+                    native.get("unity_priority_pass_submitted") is not True
+                    or native.get("first_land_observed") is not False
                 ):
+                    raise RuntimeError("LIVE_UNITY_PRIORITY_EVIDENCE_FAILED")
+                if (args.first_land or args.priority_pass) and native.get(
+                    "priority_pass_submitted"
+                ) is not True:
                     raise RuntimeError("LIVE_UNITY_PRIORITY_NOT_SUBMITTED")
                 evidence = dict(
                     live_engine=True,
@@ -208,7 +226,8 @@ def main():
                     viewer_cleared=True,
                     public_fixture_only=True,
                     first_land_observed=args.first_land,
-                    priority_pass_submitted=args.first_land,
+                    priority_pass_submitted=args.first_land or args.priority_pass,
+                    unity_priority_pass_submitted=args.priority_pass,
                 )
             finally:
                 key[:] = bytes(len(key))
@@ -243,7 +262,9 @@ def main():
         json.dumps(evidence, indent=2) + "\n", encoding="utf-8"
     )
     print(
-        "Packaged Unity -> authenticated Java -> XMage first land passed; engine zone change observed, viewer cleared and roots reaped. No full game claimed."
+        "Packaged Unity priority pass submitted to XMage; engine advanced, viewer cleared and roots reaped. No full game claimed."
+        if args.priority_pass
+        else "Packaged Unity -> authenticated Java -> XMage first land passed; engine zone change observed, viewer cleared and roots reaped. No full game claimed."
         if args.first_land
         else "Packaged Unity -> authenticated Java -> XMage opening choice passed; viewer cleared and roots reaped. No full game claimed."
     )

@@ -34,6 +34,13 @@ public final class OpeningSessionChecks {
         if(calls.get()!=1)throw new AssertionError("CANCELLED_NATIVE_IO");
         try{OpeningProjectionChecks.claim(cancelled,OpeningProjectionChecks.choose(offered,0));throw new AssertionError("CANCELLED_CHOICE_RETAINED");}
         catch(IOException expected){if(!expected.getMessage().equals("STALE_DECISION"))throw expected;}
-        System.out.println("Opening session: authenticated snapshot/choice, duplicate receipt, one native enqueue, disconnect uncertainty and cancelled-auth checks passed");
+        ManaforgeOpeningProjection priority=OpeningProjectionChecks.projection();
+        JsonObject prioritySnapshot=priority.project(OpeningProjectionChecks.landState(),OpeningProjectionChecks.priorityPrompt(),true);
+        ManaforgeOpeningLoopback.exchangeChoice(envelope(prioritySnapshot),priority,"raw-game","raw-human",41,8,"synthetic-engine",hash,command->{
+            if(!command.get("kind").getAsString().equals("boolean") || command.get("value").getAsBoolean())throw new AssertionError("BAD_NATIVE_PASS");
+            calls.incrementAndGet();
+        },()->false,false);
+        if(calls.get()!=2)throw new AssertionError("DUPLICATE_PASS_IO");
+        System.out.println("Opening session: authenticated snapshot/choice/pass, duplicate receipt, one native enqueue, disconnect uncertainty and cancelled-auth checks passed");
     }
 }

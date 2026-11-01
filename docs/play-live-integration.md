@@ -1,5 +1,37 @@
 # Live Unity / Java / XMage integration
 
+## Packaged explicit priority pass (0.5.138)
+
+Run `python tools/check_play_unity_live.py --priority-pass --interactive` to
+review one real human priority pass in the packaged Unity client. Diagnostic
+pregame/keep and one Java-peer pass precede this offered window. Click Pass
+priority within 60 seconds. Java submits the exact bound native boolean false,
+observes engine advancement, then sends conservative uncertainty; Unity clears
+the viewer and closes. This is a one-action integration fixture, not continuous
+play, a completed turn, or the requested finished battlefield presentation.
+
+The existing decision panel and authenticated session are reused. This scenario
+shows only the pass control; `--first-land` retains land-only controls. The two
+scenario flags are mutually exclusive. Reports distinguish actual native land
+observation from an explicit Unity priority submission, so a pass cannot satisfy
+the land check. A real-socket regression checks duplicate receipt reuse with only
+one native pass submission. No post-land display work was included.
+
+The .138 scheduled CI check found successful .135 protocol, preview, live-opening
+and native-payment jobs and successful .136 preview/live-opening jobs. The general
+Tests runs for .135/.136 were cancelled, so they provide no full-suite result.
+The .137 Tests/protocol/preview/live-opening jobs were still running and deferred
+to the next pass; prior inventory/lint/format failures were already repaired at
+.135. No new completed failures were found. Next scheduled CI review is .141.
+Local focused Java protocol checks passed, including the new authenticated socket
+pass/duplicate test and 110 projection checks. Both packaged priority-pass and
+first-land scenarios passed with normal root cleanup. The pass report explicitly
+records `unity_priority_pass_submitted=true` and `first_land_observed=false`.
+Screenshot inspection confirmed a single visible Pass priority control. The final
+player refresh corrected a stale land-only descriptive note; its packaged pass
+scenario also passed. The original packaged opening regression passed as well.
+Lint and formatting checks pass. No full application suite ran.
+
 ## Authenticated native priority passing (0.5.137)
 
 An opt-in projection now exposes the current human priority window as an opaque

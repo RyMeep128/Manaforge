@@ -12,7 +12,7 @@ public final class ManaforgeLiveOpening {
     private final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(90);
     private JsonObject state, pending;
     private String engineViewer, artifactHash;
-    private boolean firstLand;
+    private boolean firstLand,landObserved,unityPriorityPass;
     private byte[] unityKey;private java.nio.file.Path unityReady;
     private String game, stage="initialize", decisionKind="none";
     private JsonObject next() throws Exception {
@@ -69,10 +69,11 @@ public final class ManaforgeLiveOpening {
                 advancement(cycle,decision);passed=true;continue;
             }
             if(unityReady!=null) {
-                body.add("snapshot",projection.project(state,event));
                 final int handCount=beforeHand,boardCount=beforeBoard;
                 ManaforgeUnityOpening.serve(envelope,projection,game,engineViewer,decision,cycle,"1.4.62-V1",artifactHash,unityKey,unityReady,
-                    nativeCommand->{JsonObject sent=request(nativeCommand,"response_sent");if(!sent.get("accepted").getAsBoolean())throw new IOException("LIVE_LAND_REJECTED");advancement(cycle,decision);observeLand(handCount,boardCount);},cancelled::get);
+                    nativeCommand->{boolean pass="boolean".equals(nativeCommand.get("kind").getAsString()) && !nativeCommand.get("value").getAsBoolean();
+                        JsonObject sent=request(nativeCommand,"response_sent");if(!sent.get("accepted").getAsBoolean())throw new IOException("LIVE_LAND_REJECTED");advancement(cycle,decision);
+                        if(pass)unityPriorityPass=true;else observeLand(handCount,boardCount);},cancelled::get);
                 return;
             }
             ManaforgeOpeningLoopback.exchange(envelope,projection,game,engineViewer,decision,cycle,"1.4.62-V1",artifactHash,nativeCommand->{JsonObject sent=request(nativeCommand,"response_sent");if(!sent.get("accepted").getAsBoolean())throw new IOException("LIVE_LAND_REJECTED");},cancelled::get);
@@ -84,7 +85,7 @@ public final class ManaforgeLiveOpening {
     private void observeLand(int beforeHand,int beforeBoard) throws Exception {
             for(int observed=0;observed<40;observed++) {
                 int board=0;for(JsonElement player:state.getAsJsonArray("players"))if(player.getAsJsonObject().get("id").getAsString().equals(engineViewer))board=player.getAsJsonObject().getAsJsonArray("battlefield").size();
-                if(board==beforeBoard+1 && state.getAsJsonArray("hand").size()==beforeHand-1)return;
+                if(board==beforeBoard+1 && state.getAsJsonArray("hand").size()==beforeHand-1){landObserved=true;return;}
                 next();
             }
             throw new IOException("LIVE_LAND_NOT_OBSERVED");
@@ -172,7 +173,7 @@ public final class ManaforgeLiveOpening {
         try {
             if((args.length!=2 && args.length!=3 && args.length!=4) || (args.length==4 && !probe.firstLand) || !args[1].matches("[0-9a-f]{64}"))throw new IOException();probe.artifactHash=args[1];int port=Integer.parseInt(args[0]);if(port<1 || port>65535)throw new IOException();
             probe.run(port);
-            report.println(("{\"live_engine\":true,\"java_game_commands\":true,\"human_ai_seats\":true,\"opening_hand_count\":7,\"decision_received\":true,\"unity_connected\":false,\"public_projection_validated\":true,\"public_choice_submitted\":true,\"engine_advanced\":true,\"duplicate_native_submission_prevented\":true,\"authenticated_choice\":true,\"duplicate_receipt_reused\":true,\"disconnect_uncertainty_retained\":true}").replace("}",probe.firstLand?",\"first_land_observed\":true,\"priority_pass_submitted\":true}":"}").replace("\"unity_connected\":false","\"unity_connected\":"+(probe.unityReady!=null)).replace("\"duplicate_receipt_reused\":true","\"duplicate_receipt_reused\":"+(probe.unityReady==null)).replace("\"duplicate_native_submission_prevented\":true","\"duplicate_native_submission_prevented\":"+(probe.unityReady==null)));result=0;
+            report.println(("{\"live_engine\":true,\"java_game_commands\":true,\"human_ai_seats\":true,\"opening_hand_count\":7,\"decision_received\":true,\"unity_connected\":false,\"public_projection_validated\":true,\"public_choice_submitted\":true,\"engine_advanced\":true,\"duplicate_native_submission_prevented\":true,\"authenticated_choice\":true,\"duplicate_receipt_reused\":true,\"disconnect_uncertainty_retained\":true}").replace("}",probe.firstLand?",\"first_land_observed\":"+probe.landObserved+",\"priority_pass_submitted\":true,\"unity_priority_pass_submitted\":"+probe.unityPriorityPass+"}":"}").replace("\"unity_connected\":false","\"unity_connected\":"+(probe.unityReady!=null)).replace("\"duplicate_receipt_reused\":true","\"duplicate_receipt_reused\":"+(probe.unityReady==null)).replace("\"duplicate_native_submission_prevented\":true","\"duplicate_native_submission_prevented\":"+(probe.unityReady==null)));result=0;
         }catch(Exception failure){JsonObject error=new JsonObject();error.addProperty("failure","LIVE_OPENING_FAILED");error.addProperty("stage",probe.stage);
             if(Arrays.asList("LIVE_OPENING_UNSUPPORTED_PREGAME","LIVE_OPENING_TIMEOUT_OR_CANCELLED","LIVE_OPENING_ENGINE_FAILED","LIVE_OPENING_QUEUE_LIMIT","LIVE_OPENING_PIN").contains(failure.getMessage()))error.addProperty("code",failure.getMessage());
             if(Arrays.asList("GAME_ASK","GAME_CHOOSE_CHOICE","GAME_TARGET","GAME_SELECT").contains(probe.decisionKind))error.addProperty("decision_family",probe.decisionKind);

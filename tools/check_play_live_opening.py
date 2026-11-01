@@ -51,6 +51,7 @@ def main():
     if args.first_land:
         expected["first_land_observed"] = True
         expected["priority_pass_submitted"] = True
+        expected["unity_priority_pass_submitted"] = False
     evidence = None
 
     def consume(first, events, launch, port, server_process, server):
