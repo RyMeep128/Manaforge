@@ -1,5 +1,42 @@
 # Live Unity / Java / XMage integration
 
+## Arena-reference opening-hand composition (0.5.146)
+
+The owner reaffirmed MTG Arena as the visual target, with the supplied Downloads
+assets/reference implementation as the source. Read-only inspection of Core.dll's
+MulliganBrowser and CardLayout_Fan confirmed separate header/subheader/consequence
+regions, engine-driven button models, desktop hover support and a centered fan
+with a 4-degree maximum step and 30-degree total-angle cap. Local decompiled
+inspection files remain ignored under Artifacts/ReferenceVisuals; source Downloads
+are unchanged and no supplied implementation or bundle is committed.
+The inspected Core.dll SHA-256 is
+`48347a833961d311da7a3ccdecc6116f3ee75b6db8fa313b1871aecea8b54e85`.
+
+The packaged live opening now uses a Manaforge-owned screen-fitting fan with
+large full cards, a dimmed hand surface and centered blue/orange decision controls
+below the hand. Existing CardView/typography, inspection and authenticated choice
+callbacks are reused. Geometry adapts to width/count, updates only after layout/
+revision changes and retains no private card references or new gameplay callbacks.
+Land, priority and casting-ability fixture layouts remain unchanged.
+Known engine font tags are removed from the opening question for plain display;
+line breaks, wording, unknown tags and symbol tokens are preserved.
+
+This implements the opening composition, not the full Arena presentation. Actual
+battlefield assets, avatars, polished animation and artwork wiring remain open.
+Engine option labels remain authoritative Yes/No until explicit mulligan semantics
+are available; no Keep N, opponent-keep status or return counts are invented.
+The existing single-decision clear/close behavior is preserved.
+
+Thirteen focused Unity EditMode geometry/text checks passed across multiple hand
+counts and widths, including bounds, ordering, symmetry, invalid input and prompt
+formatting. The initial packaged opening and unchanged priority-pass regression
+passed. The final Windows player build and packaged opening proof passed as well;
+capture review confirmed the full fan, readable plain question and visible bottom
+controls. All owned roots exited normally. The owner's five pre-existing Unity
+asset/settings edits were backed up and restored after editor/build checks.
+No full application suite ran; artwork and complete Arena visual acceptance remain
+open. Next CI review remains .147.
+
 ## Native source-incarnation and selected-ability observation (0.5.145)
 
 The guarded metadata reader now returns a stack spell's physical source counter
