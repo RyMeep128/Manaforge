@@ -1,5 +1,36 @@
 # Live Unity / Java / XMage integration
 
+## Native card-to-ability correlation evidence (0.5.142)
+
+The private bridge view now retains XMage's basic casting-ability IDs by native
+source object. An immutable read-only NativeCastCorrelation observation captures
+the actual submitted cast source, offered IDs and native game/viewer/decision/
+cycle, then checks the next single ability choice against those IDs. Invalid,
+duplicate or missing IDs, changed viewers/games, stale decisions, mismatched
+cycles and concealed/missing sources fail closed. The raw IDs never enter the
+Unity snapshot; the sanitized proof adds only `native_cast_ability_matched`.
+
+The real Memnite fixture now requires this match before submitting its ability
+choice, in both Java-only and packaged Unity modes. It remains observation
+evidence, not permission to act, proof of a complete cast, or a confirmed receipt.
+The existing native decision gate remains authoritative. No receipt ledger or
+pending-command behavior changed.
+
+Pinned API inspection found that Spell.getId identifies the stack object while
+Spell.getSourceId identifies its physical card. The client CardView parent-ID
+fallback does not establish that relationship. The existing guarded server
+metadata already exposes stack sources, but Java does not yet own its delivery
+channel. That channel plus incarnation/outcome correlation is still needed before
+settling casting receipts or admitting continuous Unity commands. No unsupported
+identity relationship is inferred from matching names, counts or advancement.
+
+Local Java protocol preflight passed with 185 projection/privacy/observation
+checks. The real Java cast/ability/resolution probe passed with the exact offered
+ability match and normal owned-root cleanup. The packaged casting-ability
+regression also passed, as did all 75 focused Python adapter checks. Lint and
+formatting checks pass. No full application suite or new Unity build ran; no
+Unity C# or payment policy changed. Next CI review remains .144.
+
 ## Packaged native casting-ability choice (0.5.141)
 
 The opt-in `python tools/check_play_unity_live.py --creature-ability --interactive`

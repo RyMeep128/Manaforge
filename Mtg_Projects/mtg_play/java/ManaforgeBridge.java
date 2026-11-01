@@ -338,7 +338,7 @@ public final class ManaforgeBridge implements MageClient {
         JsonArray exile = new JsonArray();
         for (ExileView group : view.getExile()) for (CardView card : group.values()) exile.add(card(card));
         data.add("exile", exile);
-        JsonObject actionKinds = new JsonObject(), priorityClasses = new JsonObject();
+        JsonObject actionKinds = new JsonObject(), priorityClasses = new JsonObject(), castingAbilityIds = new JsonObject();
         if (view.getCanPlayObjects() != null) for (UUID object : view.getCanPlayObjects().getObjects().keySet()) {
             // Pinned engine data, not a Manaforge legality calculation.
             JsonObject stats = JSON.toJsonTree(view.getCanPlayObjects().getStats(object)).getAsJsonObject();
@@ -346,6 +346,9 @@ public final class ManaforgeBridge implements MageClient {
             int cast = stats.getAsJsonArray("basicCastAbilities").size();
             int other = stats.getAsJsonArray("other").size();
             int mana = stats.getAsJsonArray("basicManaAbilities").size();
+            JsonArray castIds=new JsonArray();
+            for(com.google.gson.JsonElement ability:stats.getAsJsonArray("basicCastAbilities"))castIds.add(ability.getAsJsonObject().get("id").getAsString());
+            castingAbilityIds.add(object.toString(),castIds);
             priorityClasses.addProperty(object.toString(), mana > 0 && play == 0 && cast == 0 && other == 0
                 ? "basic_mana" : play + cast + other > 0 ? "meaningful" : "unknown");
             actionKinds.addProperty(object.toString(), other > 0 ? "select_object" :
@@ -353,6 +356,8 @@ public final class ManaforgeBridge implements MageClient {
                 mana > 0 && play == 0 && cast == 0 ? "activate" : "select_object");
         }
         data.add("action_kinds", actionKinds);
+        // Private engine correlation only; never part of the Unity snapshot projection.
+        data.add("casting_ability_ids", castingAbilityIds);
         data.add("priority_classes", priorityClasses);
         // Special-action choices are not yet enumerated by this bridge. Never auto-pass them.
         data.addProperty("playable_information_complete", view.getCanPlayObjects() != null && !view.getSpecial());

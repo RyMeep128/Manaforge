@@ -193,6 +193,47 @@ public final class OpeningProjectionChecks {
             fails("STALE_DECISION",()->bound.claimAction(previous,"session","human","raw-game","raw-human",41,8));
         }
     }
+    static void castCorrelationChecks() throws Exception {
+        String source="12345678-abcd-1234-abcd-123456789abc",ability="87654321-abcd-1234-abcd-123456789abc";
+        JsonObject raw=JsonParser.parseString(landState().toString().replace("raw-card",source)).getAsJsonObject();
+        raw.getAsJsonObject("action_kinds").addProperty(source,"cast_spell");JsonObject ids=new JsonObject();JsonArray offered=new JsonArray();offered.add(ability);ids.add(source,offered);raw.add("casting_ability_ids",ids);
+        JsonObject command=new JsonObject();command.addProperty("command","respond");command.addProperty("game_id","raw-game");command.addProperty("decision_id",41);command.addProperty("kind","object");command.addProperty("value",source);
+        JsonObject prompt=priorityPrompt(),choice=priorityPrompt();choice.addProperty("kind","GAME_CHOOSE_ABILITY");choice.addProperty("decision_id",42);choice.addProperty("is_priority",false);JsonObject options=new JsonObject();options.addProperty(ability,"Cast");choice.add("key_choices",options);
+        NativeCastCorrelation ticket=NativeCastCorrelation.capture(raw,prompt,command);check(ticket!=null && ticket.matches(raw,choice));
+        JsonObject projected=projection().project(raw,prompt,false,true);shape(projected);check(!projected.toString().contains(source) && !projected.toString().contains(ability));
+        for(int mode=0;mode<13;mode++) {
+            JsonObject bad=raw.deepCopy(),request=prompt.deepCopy(),submission=command.deepCopy();
+            if(mode==0)submission.addProperty("game_id","wrong");
+            if(mode==1)submission.addProperty("decision_id",40);
+            if(mode==2)request.addProperty("cycle",9);
+            if(mode==3)submission.addProperty("kind","boolean");
+            if(mode==4)bad.getAsJsonObject("action_kinds").addProperty(source,"play_land");
+            if(mode==5)bad.add("playable",new JsonArray());
+            if(mode==6)bad.getAsJsonArray("hand").get(0).getAsJsonObject().addProperty("hidden",true);
+            if(mode==7)bad.getAsJsonArray("hand").get(0).getAsJsonObject().addProperty("face_down",true);
+            if(mode==8)bad.getAsJsonObject("casting_ability_ids").add(source,new JsonArray());
+            if(mode==9)bad.getAsJsonObject("casting_ability_ids").getAsJsonArray(source).add(ability);
+            if(mode==10)bad.getAsJsonObject("casting_ability_ids").getAsJsonArray(source).add("invalid-id");
+            if(mode==11)bad.add("cycle",JsonParser.parseString("18446744073709551616"));
+            if(mode==12)request.addProperty("is_priority",false);
+            check(NativeCastCorrelation.capture(bad,request,submission)==null);
+        }
+        for(int mode=0;mode<10;mode++) {
+            JsonObject bad=raw.deepCopy(),request=choice.deepCopy();
+            if(mode==0)bad.addProperty("game_id","wrong");
+            if(mode==1)bad.addProperty("viewer","wrong");
+            if(mode==2){bad.addProperty("cycle",7);request.addProperty("cycle",7);}
+            if(mode==3)request.addProperty("cycle",9);
+            if(mode==4)request.addProperty("decision_id",41);
+            if(mode==5)request.addProperty("kind","GAME_SELECT");
+            if(mode==6)request.getAsJsonObject("key_choices").addProperty(source,"Other");
+            if(mode==7){JsonObject wrong=new JsonObject();wrong.addProperty(source,"Other");request.add("key_choices",wrong);}
+            if(mode==8)bad.add("hand",new JsonArray());
+            if(mode==9)request.getAsJsonObject("key_choices").addProperty(ability,42);
+            check(!ticket.matches(bad,request));
+        }
+        raw.getAsJsonObject("casting_ability_ids").getAsJsonArray(source).remove(0);check(ticket.matches(raw,choice));
+    }
     public static void main(String[] args) throws Exception {
         ManaforgeOpeningProjection projection=projection();JsonObject raw=state(),request=prompt();JsonObject snapshot=projection.project(raw,request);shape(snapshot);
         String text=snapshot.toString();for(String secret:new String[]{"raw-human","raw-ai","raw-card","raw-name","raw-opponent-name","OPPONENT_SECRET","MUTATED_BINDING"})check(!text.contains(secret));
@@ -219,7 +260,7 @@ public final class OpeningProjectionChecks {
         raw=state();raw.getAsJsonArray("players").add(raw.getAsJsonArray("players").get(0).deepCopy());rejects(raw,prompt());
         raw=state();raw.getAsJsonArray("players").get(0).getAsJsonObject().addProperty("life",true);rejects(raw,prompt());
         request=prompt();request.addProperty("message","Use 12345678-abcd-1234-abcd-123456789abc");check(!projection().project(state(),request).toString().contains("12345678-abcd-1234-abcd-123456789abc"));
-        choiceChecks();landChecks();abilityChecks();stackPriorityChecks();
+        choiceChecks();landChecks();abilityChecks();stackPriorityChecks();castCorrelationChecks();
         System.out.println("Opening projection: "+checks+" privacy, schema, isolation and fail-closed checks passed");
     }
 }

@@ -224,6 +224,7 @@ def main():
                     for field in (
                         "creature_spell_on_stack",
                         "unity_casting_ability_submitted",
+                        "native_cast_ability_matched",
                     )
                 ):
                     raise RuntimeError("LIVE_UNITY_CREATURE_EVIDENCE_FAILED")
@@ -252,6 +253,7 @@ def main():
                     priority_pass_submitted=args.first_land or args.priority_pass,
                     unity_priority_pass_submitted=args.priority_pass,
                     unity_casting_ability_submitted=args.creature_ability,
+                    native_cast_ability_matched=args.creature_ability,
                     creature_spell_on_stack=args.creature_ability,
                     creature_resolved=False,
                 )

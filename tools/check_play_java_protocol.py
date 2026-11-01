@@ -65,6 +65,7 @@ def main():
             parser.error("Gson SHA-256 does not match the pinned engine artifact")
         sources = [
             PLAY / "java/ManaforgeOpeningProjection.java",
+            PLAY / "java/NativeCastCorrelation.java",
             PLAY / "java/ManaforgeOpeningSession.java",
             PLAY / "java/ManaforgeUnityOpening.java",
             PLAY / "java/ManaforgeOpeningLoopback.java",
