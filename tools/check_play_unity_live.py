@@ -249,7 +249,10 @@ def main():
                     and ready.get("mulligan_controls") is not True
                 ):
                     raise RuntimeError("LIVE_UNITY_MULLIGAN_CONTROLS_NOT_PRESENTED")
-                if args.arena_buttons and ready.get("arena_button_skins") is not True:
+                if args.arena_buttons and (
+                    ready.get("arena_button_skins") is not True
+                    or ready.get("arena_button_glows") != 2
+                ):
                     raise RuntimeError("LIVE_UNITY_BUTTON_SKINS_NOT_PRESENTED")
                 owner.client_ready()
                 if args.artwork and ready.get("artwork_count") != 7:
@@ -336,6 +339,7 @@ def main():
                     creature_spell_on_stack=args.creature_ability,
                     creature_resolved=False,
                     mulligan_controls=ready.get("mulligan_controls", False),
+                    arena_button_glows=ready.get("arena_button_glows", 0),
                     arena_button_skins=ready.get("arena_button_skins", False),
                     arena_backdrop_resource=ready.get("arena_backdrop_resource"),
                     arena_backdrop=args.arena_backdrop,

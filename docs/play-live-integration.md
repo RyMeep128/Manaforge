@@ -1,5 +1,28 @@
 # Live Unity / Java / XMage integration
 
+## Supplied Arena button glow (0.5.156)
+
+The opening controls now layer the supplied `MainButton_Glow` behind the blue
+Mulligan and orange Keep button artwork. The tint follows each primary action.
+The Image ignores pointer picking; original buttons and callbacks remain intact.
+Glow visibility follows enabledInHierarchy each UI tick, so pending submission
+does not retain a ready-state halo. Cleanup removes the decoration and restores
+the buttons to their parent without retaining card/decision data.
+
+Re-run `python tools/prepare_play_arena_buttons.py` before building. The existing
+pinned button bundle also supplies Texture2D path ID 5914490896537385971,
+288 x 79. PNG/provenance stay ignored and Downloads remains unchanged.
+`--arena-buttons` now verifies both artwork skins and both glow layers.
+
+Validation: 22 focused EditMode checks passed (glow input/state/cleanup,
+button mapping, and hand geometry), packaged build succeeded, and the live
+artwork opening/engine action/cleanup was checked with screenshot inspection.
+
+Third-commit CI checkpoint: .151, .152, and .153 desktop previews passed; their
+general Tests runs were cancelled. .154 desktop preview passed and Tests was
+cancelled. .155 Tests/desktop preview were still running at the check and remain
+deferred. No completed failure was found. Next scheduled check: .159.
+
 ## Arena-style opening header hierarchy (0.5.155)
 
 The engine-owned mulligan prompt now sits beneath the centered Opening Hand

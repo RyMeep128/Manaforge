@@ -12,6 +12,7 @@ PIN = "30e808233a4b573403dc44d2ec36b710d56064a4c62e14c3ccbdb39f2052b725"
 TEXTURES = {
     "MainButton_Orange_Up": -8745388354193192827,
     "MainButton_Blue_Up": -5175006699134861056,
+    "MainButton_Glow": 5914490896537385971,
 }
 
 
@@ -54,7 +55,9 @@ def main():
         if len(matches) != 1:
             parser.error("Pinned button texture is unavailable")
         texture = matches[0].read()
-        if texture.m_Name != name or (texture.m_Width, texture.m_Height) != (440, 100):
+        if texture.m_Name != name or (texture.m_Width, texture.m_Height) != (
+            (288, 79) if name == "MainButton_Glow" else (440, 100)
+        ):
             parser.error("Pinned button metadata changed")
         image = texture.image.convert("RGBA")
         pixels_pin = hashlib.sha256(image.tobytes()).hexdigest()
@@ -78,8 +81,8 @@ def main():
             source_sha256=PIN,
             texture_name=name,
             path_id=path_id,
-            width=440,
-            height=100,
+            width=texture.m_Width,
+            height=texture.m_Height,
             rgba_sha256=pixels_pin,
             decoder="UnityPy 1.25.4",
             suppressed_version_fallback="6000.3.14f1",

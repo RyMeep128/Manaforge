@@ -16,7 +16,7 @@ namespace Manaforge.Play
         private readonly CancellationTokenSource cancellation=new CancellationTokenSource();
         private ViewerBootstrapPipe pipe;private Task<ViewerBootstrap> reading;private Task consuming;
         private ViewerCardSurface surface;private ViewerSessionHost host;private ViewerDecisionPanel panel;
-        private PanelSettings settings;private UIDocument document;private string output;private Label status;private Label note;private OpeningCardFocus cardFocus;
+        private PanelSettings settings;private UIDocument document;private string output;private Label status;private Label note;private OpeningCardFocus cardFocus;private OpeningButtonGlow buttonGlow;
         private int snapshots,acks;private bool capture,choiceReported,land,priority,creature,artwork,backdrop,requestedBackdrop,mulliganControls,buttonSkins;
         private bool OpeningLayout=>!land && !creature;
         private float fanWidth=-1;private int fanCount=-1,fanArtwork=-1;private long fanRevision=-1;
@@ -37,7 +37,7 @@ namespace Manaforge.Play
         }
         private bool Report(string name,bool cleared=false)
         {
-            try{var value=new JObject{["probe_version"]=1,["live_opening"]=true,["snapshot_count"]=Volatile.Read(ref snapshots),["ack_count"]=Volatile.Read(ref acks),["viewer_cleared"]=cleared,["arena_button_skins"]=buttonSkins,["mulligan_controls"]=mulliganControls,["arena_backdrop_resource"]=backdrop?ArenaOpeningBackdrop.ResourceName:null,["arena_backdrop"]=backdrop,["artwork_count"]=surface?.PresentedArtworkCount??0};
+            try{var value=new JObject{["probe_version"]=1,["live_opening"]=true,["snapshot_count"]=Volatile.Read(ref snapshots),["ack_count"]=Volatile.Read(ref acks),["viewer_cleared"]=cleared,["arena_button_glows"]=buttonGlow?.Count??0,["arena_button_skins"]=buttonSkins,["mulligan_controls"]=mulliganControls,["arena_backdrop_resource"]=backdrop?ArenaOpeningBackdrop.ResourceName:null,["arena_backdrop"]=backdrop,["artwork_count"]=surface?.PresentedArtworkCount??0};
                 string path=Path.Combine(output,name+".json");File.WriteAllText(path+".tmp",value.ToString());File.Move(path+".tmp",path);return true;}catch{return false;}
         }
         private void Fail(){host?.Dispose();Report("failed");Application.Quit(1);}
@@ -92,6 +92,7 @@ namespace Manaforge.Play
                 }
                 mulliganControls=OpeningMulliganControls.Apply(panel.Root,surface.CardsRoot.childCount);
                 if(mulliganControls)buttonSkins=OpeningMulliganControls.ApplyLocalSkins(panel.Root);
+                if(buttonSkins)buttonGlow=OpeningButtonGlow.AttachLocal(panel.Root);
                 PresentOpening();cardFocus=new OpeningCardFocus(surface.CardsRoot);
             }else foreach(var card in surface.CardsRoot.Children())if(card is CardView view)view.SetPresentation(CardPresentationMode.Compact,135);
             var inspect=new VisualElement();inspect.style.flexDirection=FlexDirection.Row;document.rootVisualElement.Insert(3,inspect);int count=0;
@@ -112,16 +113,16 @@ namespace Manaforge.Play
                 var button=InputButton(control);using(var input=NavigationSubmitEvent.GetPooled()){input.target=button;button.SendEvent(input);}
             }
             while(!host.Completion.IsCompleted){
-                host.Tick();panel.Tick();
+                host.Tick();panel.Tick();buttonGlow?.Refresh();
                 PresentOpening();
                 if(!choiceReported && Volatile.Read(ref acks)>=2){
-                    cardFocus?.Dispose();cardFocus=null;host.Cancel();host.Tick();panel.Tick();inspect.Clear();
+                    buttonGlow?.Dispose();buttonGlow=null;cardFocus?.Dispose();cardFocus=null;host.Cancel();host.Tick();panel.Tick();inspect.Clear();
                     status.text=creature?"Casting ability submitted; native Memnite stack entry observed. Viewer cleared; this test ends here.":priority?"Priority pass submitted to XMage; engine advanced. Viewer cleared; this test ends here.":"Choice submitted to XMage. Next-state support ends here; viewer cleared. No confirmed result is claimed.";
                     if(capture)yield return Capture("choice.png");if(!Report("choice",true)){Application.Quit(1);yield break;}choiceReported=true;
                 }
                 yield return null;
             }
-            cardFocus?.Dispose();cardFocus=null;host.Tick();panel.Dispose();host.Dispose();surface.Dispose();while(!consuming.IsCompleted)yield return null;
+            buttonGlow?.Dispose();buttonGlow=null;cardFocus?.Dispose();cardFocus=null;host.Tick();panel.Dispose();host.Dispose();surface.Dispose();while(!consuming.IsCompleted)yield return null;
             bool cleared=document.rootVisualElement.Query<CardView>().ToList().Count==0;
             Report("closed",cleared);Application.Quit(cleared && host.Completion.Result.CleanupConfirmed?0:1);
         }
@@ -131,6 +132,6 @@ namespace Manaforge.Play
             try{target.Create();settings.targetTexture=target;for(int i=0;i<20;i++)yield return null;yield return new WaitForEndOfFrame();pixels=new Texture2D(1280,720,TextureFormat.RGBA32,false);RenderTexture.active=target;pixels.ReadPixels(new Rect(0,0,1280,720),0,0);pixels.Apply();File.WriteAllBytes(Path.Combine(output,name),pixels.EncodeToPNG());}
             finally{settings.targetTexture=null;RenderTexture.active=previous;if(pixels!=null)Destroy(pixels);target.Release();Destroy(target);}
         }
-        private void OnDestroy(){cardFocus?.Dispose();cancellation.Cancel();panel?.Dispose();host?.Dispose();surface?.Dispose();pipe?.Dispose();reading?.ContinueWith(done=>{if(done.Status==TaskStatus.RanToCompletion)done.Result?.Dispose();else _=done.Exception;},TaskScheduler.Default);consuming?.ContinueWith(done=>{_=done.Exception;},TaskScheduler.Default);if(settings!=null)Destroy(settings);cancellation.Dispose();}
+        private void OnDestroy(){buttonGlow?.Dispose();cardFocus?.Dispose();cancellation.Cancel();panel?.Dispose();host?.Dispose();surface?.Dispose();pipe?.Dispose();reading?.ContinueWith(done=>{if(done.Status==TaskStatus.RanToCompletion)done.Result?.Dispose();else _=done.Exception;},TaskScheduler.Default);consuming?.ContinueWith(done=>{_=done.Exception;},TaskScheduler.Default);if(settings!=null)Destroy(settings);cancellation.Dispose();}
     }
 }
