@@ -131,6 +131,11 @@ public final class OpeningSessionChecks {
             calls.incrementAndGet();
         },()->false,true,"cast_spell");
         if(calls.get()!=3)throw new AssertionError("DUPLICATE_ABILITY_IO");
-        System.out.println("Opening session: authenticated snapshot/choice/pass/ability, duplicate receipt, one native enqueue, disconnect uncertainty and cancelled-auth checks passed");
+        ManaforgeOpeningProjection combat=OpeningProjectionChecks.projection();JsonObject combatSnapshot=combat.projectAttackFinish(OpeningProjectionChecks.attackState(),OpeningProjectionChecks.attackPrompt());
+        ManaforgeOpeningLoopback.exchangeChoice(envelope(combatSnapshot),combat,"raw-game","raw-human",41,8,"synthetic-engine",hash,command->{
+            if(!"boolean".equals(command.get("kind").getAsString()) || !new JsonPrimitive(false).equals(command.get("value")))throw new AssertionError("BAD_NATIVE_ATTACK_FINISH");calls.incrementAndGet();
+        },()->false,false);
+        if(calls.get()!=4)throw new AssertionError("DUPLICATE_ATTACK_FINISH_IO");
+        System.out.println("Opening session: authenticated snapshot/choice/pass/ability/attack finish, duplicate receipt, one native enqueue, disconnect uncertainty and cancelled-auth checks passed");
     }
 }

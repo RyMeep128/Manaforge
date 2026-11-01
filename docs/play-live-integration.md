@@ -1,5 +1,49 @@
 # Live Unity / Java / XMage integration
 
+## Native attacker-selection finish port (0.5.170)
+
+Java can now project the explicit finish response for an actual native attacker
+selection. The opt-in Java-only proof reaches an attack-capable turn with the
+public Memnite/Forest decks:
+
+```powershell
+python tools/check_play_live_opening.py --first-creature --native-metadata --finish-attacks --output Mtg_Projects/mtg_play_unity/Artifacts/CombatFinish/report.json
+```
+
+The projection requires GAME_SELECT, is_priority=false, the native attackers
+array, the human active player, empty current combat/stack, and bounded unique
+candidates already visible and controlled on that player's battlefield. It offers
+only Finish attacks, mapped to the existing native boolean-false response.
+Attacker/defender selection and blocker prompts are not exposed. Missing or hidden
+candidate information, foreign candidates, stale cycles and other prompt families
+fail closed and invalidate the previous tokens. The ordinary projection still
+rejects combat prompts. Actions remain explicitly incomplete.
+
+The diagnostic uses bounded explicit priority passing and empty attack selections
+as fixture policy until the physical source of the earlier cast is actually offered
+as an attacker. It then submits Finish attacks through the authenticated session
+boundary, requires native acceptance, empty combat and a subsequent guarded native
+priority window. No rules or attacker legality are recomputed. The report adds
+native_attack_source_offered, native_empty_attack_submitted and
+native_combat_advanced; no native IDs, candidates or hidden cards are uploaded.
+The existing live Java CI workflow now runs this probe and uploads its sanitized
+report. Its receipts remain conservative; this does not confirm arbitrary combat
+commands or add automatic combat choices to Unity.
+
+Validation: the actual pinned-engine cast/resolution/attacker-finish probe passed
+with duplicate suppression and normal owned-root cleanup. Java protocol preflight
+passed with 310 projection/privacy/binding checks, including foreign/hidden/unknown
+candidates, wrong actor/family, stale cycles, stack/combat rejection and native
+boolean mapping. Authenticated socket tests require one native finish enqueue and
+cached duplicate receipts. The existing packaged Unity three-command phase probe
+also passed. Three focused Python provisioning checks, CLI guards, lint and
+formatting passed. No C# changes, Unity rebuild or full application suite ran.
+
+This advances P2.3 combat decision coverage. Next: mount the real finish offer in
+Unity's existing decision panel with explicit user input; do not carry the Java
+diagnostic's fixture policy into product gameplay. New CI evidence remains pending;
+next scheduled check: .171.
+
 ## Confirm the post-resolution pass and show native phase state (0.5.169)
 
 The existing `--post-resolution-pass` option now verifies that final pass and

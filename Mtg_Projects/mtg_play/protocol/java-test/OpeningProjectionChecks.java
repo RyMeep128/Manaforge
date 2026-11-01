@@ -78,6 +78,42 @@ public final class OpeningProjectionChecks {
     static JsonObject landState(){JsonObject result=state();result.addProperty("priority_player","raw-name");JsonArray playable=new JsonArray();playable.add("raw-card");result.add("playable",playable);JsonObject kinds=new JsonObject();kinds.addProperty("raw-card","play_land");result.add("action_kinds",kinds);return result;}
     static String perform(JsonObject snapshot){JsonObject out=JsonParser.parseString(chooseForAction(snapshot)).getAsJsonObject();return out.toString();}
     static String chooseForAction(JsonObject snapshot){JsonObject body=new JsonObject(),out=new JsonObject();out.addProperty("wire_version",1);out.addProperty("message_type","command");out.addProperty("message_id","land-action");for(String field:new String[]{"session_id","viewer_id","revision"})body.add(field,snapshot.get(field));body.addProperty("operation","perform");body.add("decision_id",snapshot.getAsJsonObject("decision").get("decision_id"));body.add("action_id",snapshot.getAsJsonArray("actions").get(0).getAsJsonObject().get("action_id"));out.add("body",body);return out.toString();}
+    static JsonObject attackState() {
+        JsonObject raw=landState(),card=raw.getAsJsonArray("hand").get(0).getAsJsonObject().deepCopy();card.addProperty("controller_name","raw-name");card.addProperty("owner_name","raw-name");
+        raw.add("hand",new JsonArray());raw.add("priority_player",JsonNull.INSTANCE);raw.getAsJsonArray("players").get(0).getAsJsonObject().addProperty("hand_count",0);raw.getAsJsonArray("players").get(0).getAsJsonObject().getAsJsonArray("battlefield").add(card);return raw;
+    }
+    static JsonObject attackPrompt(){JsonObject request=priorityPrompt();request.addProperty("is_priority",false);JsonArray candidates=new JsonArray();candidates.add("raw-card");request.add("attackers",candidates);return request;}
+    static void attackFinishChecks() throws Exception {
+        JsonObject raw=attackState(),request=attackPrompt();ManaforgeOpeningProjection projection=projection();JsonObject snapshot=projection.projectAttackFinish(raw,request);shape(snapshot);
+        check(snapshot.getAsJsonArray("actions").size()==1 && "Finish attacks".equals(snapshot.getAsJsonArray("actions").get(0).getAsJsonObject().get("label").getAsString()));
+        check(!snapshot.getAsJsonObject("decision").get("is_priority").getAsBoolean() && snapshot.getAsJsonObject("decision").getAsJsonArray("options").size()==0 && !snapshot.get("actions_complete").getAsBoolean());
+        check(!snapshot.toString().contains("raw-card") && !snapshot.toString().contains("OPPONENT_SECRET"));
+        String finish=perform(snapshot);JsonObject nativeFinish=projection.claimAction(finish,"session","human","raw-game","raw-human",41,8);check("boolean".equals(nativeFinish.get("kind").getAsString()) && new JsonPrimitive(false).equals(nativeFinish.get("value")));
+        fails("STALE_DECISION",()->projection.claimAction(finish,"session","human","raw-game","raw-human",41,8));
+        fails("LIVE_OPENING_PROJECTION_UNSUPPORTED",()->projection().project(raw,request,true));
+        for(int mode=0;mode<16;mode++) {
+            JsonObject bad=raw.deepCopy(),prompt=request.deepCopy();JsonObject card=bad.getAsJsonArray("players").get(0).getAsJsonObject().getAsJsonArray("battlefield").get(0).getAsJsonObject();
+            if(mode==0)prompt.addProperty("kind","GAME_ASK");
+            if(mode==1)prompt.addProperty("is_priority",true);
+            if(mode==2)prompt.remove("attackers");
+            if(mode==3)prompt.add("attackers",new JsonObject());
+            if(mode==4)prompt.add("blockers",new JsonArray());
+            if(mode==5)bad.addProperty("active_player","raw-opponent-name");
+            if(mode==6){bad.getAsJsonArray("hand").add(card.deepCopy());bad.getAsJsonArray("players").get(0).getAsJsonObject().add("battlefield",new JsonArray());}
+            if(mode==7)card.addProperty("controller_name","raw-opponent-name");
+            if(mode==8)card.addProperty("hidden",true);
+            if(mode==9)card.addProperty("face_down",true);
+            if(mode==10)card.remove("face_down");
+            if(mode==11)prompt.getAsJsonArray("attackers").add("raw-card");
+            if(mode==12){prompt.add("attackers",new JsonArray());prompt.getAsJsonArray("attackers").add("unknown");}
+            if(mode==13)prompt.addProperty("cycle",9);
+            if(mode==14)bad.getAsJsonArray("combat").add(new JsonObject());
+            if(mode==15)bad.getAsJsonArray("stack").add(new JsonObject());
+            ManaforgeOpeningProjection stale=projection();String previous=perform(stale.projectAttackFinish(raw,request));
+            fails("LIVE_OPENING_PROJECTION_UNSUPPORTED",()->stale.projectAttackFinish(bad,prompt));
+            fails("STALE_DECISION",()->stale.claimAction(previous,"session","human","raw-game","raw-human",41,8));
+        }
+    }
     static void landChecks() throws Exception {
         JsonObject spell=landState();spell.getAsJsonObject("action_kinds").addProperty("raw-card","cast_spell");
         check(projection().project(spell,priorityPrompt()).getAsJsonArray("actions").size()==0);
@@ -394,7 +430,7 @@ public final class OpeningProjectionChecks {
         raw=state();raw.getAsJsonArray("players").add(raw.getAsJsonArray("players").get(0).deepCopy());rejects(raw,prompt());
         raw=state();raw.getAsJsonArray("players").get(0).getAsJsonObject().addProperty("life",true);rejects(raw,prompt());
         request=prompt();request.addProperty("message","Use 12345678-abcd-1234-abcd-123456789abc");check(!projection().project(state(),request).toString().contains("12345678-abcd-1234-abcd-123456789abc"));
-        choiceChecks();landChecks();abilityChecks();stackPriorityChecks();castCorrelationChecks();
+        choiceChecks();landChecks();abilityChecks();stackPriorityChecks();castCorrelationChecks();attackFinishChecks();
         System.out.println("Opening projection: "+checks+" privacy, schema, isolation and fail-closed checks passed");
     }
 }
