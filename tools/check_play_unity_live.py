@@ -41,7 +41,7 @@ def main():
     parser.add_argument(
         "--native-metadata",
         action="store_true",
-        help="Verify the Unity-selected spell instance through private Java metadata; requires --creature-ability",
+        help="Require guarded native source/instance evidence; requires --creature-ability or --finish-attacks",
     )
     parser.add_argument(
         "--artwork",
@@ -59,6 +59,11 @@ def main():
         help="Require the locally prepared Arena opening button textures with --artwork",
     )
     scenario = parser.add_mutually_exclusive_group()
+    scenario.add_argument(
+        "--finish-attacks",
+        action="store_true",
+        help="Show one native attacker-selection finish choice after diagnostic setup; requires --native-metadata",
+    )
     scenario.add_argument(
         "--creature-ability",
         action="store_true",
@@ -82,8 +87,14 @@ def main():
         default=artifacts / ("UnityLive-" + uuid.uuid4().hex[:10]),
     )
     args = parser.parse_args()
-    if args.native_metadata and not args.creature_ability:
-        parser.error("--native-metadata requires --creature-ability")
+    if args.native_metadata and not (args.creature_ability or args.finish_attacks):
+        parser.error(
+            "--native-metadata requires --creature-ability or --finish-attacks"
+        )
+    if args.finish_attacks and not args.native_metadata:
+        parser.error("--finish-attacks requires --native-metadata")
+    if args.finish_attacks and args.continue_priority:
+        parser.error("--finish-attacks is an isolated combat choice")
     if args.continue_priority and not args.native_metadata:
         parser.error("--continue-priority requires --native-metadata")
     if args.observe_resolution and not args.continue_priority:
@@ -91,7 +102,10 @@ def main():
     if args.post_resolution_pass and not args.observe_resolution:
         parser.error("--post-resolution-pass requires --observe-resolution")
     if args.artwork and (
-        args.first_land or args.priority_pass or args.creature_ability
+        args.first_land
+        or args.priority_pass
+        or args.creature_ability
+        or args.finish_attacks
     ):
         parser.error(
             "--artwork uses the modern Forest/Ornithopter opening-only fixture"
@@ -184,6 +198,11 @@ def main():
                         "-Dfile.encoding=UTF-8",
                         "-Djava.net.preferIPv4Stack=true",
                         *(
+                            ["-Dmanaforge.finishAttacks=true"]
+                            if args.finish_attacks
+                            else []
+                        ),
+                        *(
                             ["-Dmanaforge.postResolutionPass=true"]
                             if args.post_resolution_pass
                             else []
@@ -217,7 +236,11 @@ def main():
                             if args.first_land or args.priority_pass
                             else []
                         ),
-                        *(["--first-creature"] if args.creature_ability else []),
+                        *(
+                            ["--first-creature"]
+                            if args.creature_ability or args.finish_attacks
+                            else []
+                        ),
                     ],
                     cwd=workspace,
                     stdin=subprocess.PIPE,
@@ -262,6 +285,8 @@ def main():
                     command += ["-manaforgeLivePriority", "1"]
                 if args.creature_ability:
                     command += ["-manaforgeLiveCreature", "1"]
+                if args.finish_attacks:
+                    command += ["-manaforgeLiveFinishAttacks", "1"]
                 if args.continue_priority:
                     command += ["-manaforgeLiveContinuePriority", "1"]
                 if args.observe_resolution:
@@ -305,7 +330,12 @@ def main():
                 ):
                     raise RuntimeError("LIVE_UNITY_BACKDROP_NOT_PRESENTED")
                 if (
-                    not (args.first_land or args.priority_pass or args.creature_ability)
+                    not (
+                        args.first_land
+                        or args.priority_pass
+                        or args.creature_ability
+                        or args.finish_attacks
+                    )
                     and ready.get("mulligan_controls") is not True
                 ):
                     raise RuntimeError("LIVE_UNITY_MULLIGAN_CONTROLS_NOT_PRESENTED")
@@ -319,7 +349,9 @@ def main():
                     raise RuntimeError("LIVE_UNITY_ARTWORK_NOT_PRESENTED")
                 if args.interactive:
                     print(
-                        "Select the casting ability, then Pass priority in each of the next two prompts; 60 seconds per choice."
+                        "Select Finish attacks within 60 seconds; no attackers have been selected in this public fixture."
+                        if args.finish_attacks
+                        else "Select the casting ability, then Pass priority in each of the next two prompts; 60 seconds per choice."
                         if args.post_resolution_pass
                         else "Select the casting ability, then Pass priority when the next decision appears; 60 seconds per choice."
                         if args.continue_priority
@@ -373,6 +405,12 @@ def main():
                     or chosen.get("uncertain_receipt_count") != 0
                 ):
                     raise RuntimeError("LIVE_UNITY_POST_RESOLUTION_RECEIPT_FAILED")
+                if args.finish_attacks and (
+                    ready.get("attack_finish_presented") is not True
+                    or chosen.get("confirmed_receipt_count") != 0
+                    or chosen.get("uncertain_receipt_count") != 1
+                ):
+                    raise RuntimeError("LIVE_UNITY_ATTACK_FINISH_RECEIPT_FAILED")
                 # The scene quits after clearing. Observe its owned handle rather than health-checking an expected exit.
                 client = owner._children["client"]
                 client.wait(timeout=15)
@@ -435,10 +473,26 @@ def main():
                     for field in (
                         "native_stack_source_matched",
                         "native_cast_instance_matched",
-                        "unity_casting_ability_confirmed",
                     )
                 ):
                     raise RuntimeError("LIVE_UNITY_CAST_INSTANCE_UNPROVEN")
+                if (
+                    args.native_metadata
+                    and native.get("unity_casting_ability_confirmed")
+                    is not args.creature_ability
+                ):
+                    raise RuntimeError("LIVE_UNITY_ABILITY_CONFIRMATION_FAILED")
+                if args.finish_attacks and any(
+                    native.get(field) is not True
+                    for field in (
+                        "native_attack_source_offered",
+                        "native_empty_attack_submitted",
+                        "native_combat_advanced",
+                        "unity_attack_finish_submitted",
+                        "creature_resolved",
+                    )
+                ):
+                    raise RuntimeError("LIVE_UNITY_COMBAT_EVIDENCE_FAILED")
                 if args.creature_ability and any(
                     native.get(field) is not True
                     for field in (
@@ -473,9 +527,11 @@ def main():
                     priority_pass_submitted=args.first_land or args.priority_pass,
                     unity_priority_pass_submitted=args.priority_pass,
                     unity_casting_ability_submitted=args.creature_ability,
-                    native_cast_ability_matched=args.creature_ability,
-                    creature_spell_on_stack=args.creature_ability,
-                    creature_resolved=False,
+                    native_cast_ability_matched=args.creature_ability
+                    or args.finish_attacks,
+                    creature_spell_on_stack=args.creature_ability
+                    or args.finish_attacks,
+                    creature_resolved=args.finish_attacks,
                     mulligan_controls=ready.get("mulligan_controls", False),
                     arena_button_glows=ready.get("arena_button_glows", 0),
                     arena_button_skins=ready.get("arena_button_skins", False),
@@ -488,7 +544,7 @@ def main():
                     evidence.update(
                         native_stack_source_matched=True,
                         native_cast_instance_matched=True,
-                        unity_casting_ability_confirmed=True,
+                        unity_casting_ability_confirmed=args.creature_ability,
                         unity_followup_priority_submitted=args.continue_priority,
                         unity_battlefield_transition_observed=args.observe_resolution,
                         unity_followup_priority_confirmed=args.observe_resolution,
@@ -497,6 +553,16 @@ def main():
                     )
                 if args.continue_priority:
                     evidence.update(followup_priority_presented=True, snapshot_count=2)
+                if args.finish_attacks:
+                    evidence.update(
+                        native_attack_source_offered=True,
+                        native_empty_attack_submitted=True,
+                        native_combat_advanced=True,
+                        unity_attack_finish_submitted=True,
+                        attack_finish_presented=True,
+                        confirmed_receipt_count=0,
+                        uncertain_receipt_count=1,
+                    )
                 if args.observe_resolution:
                     evidence.update(
                         battlefield_observation_presented=True, snapshot_count=3
@@ -542,7 +608,9 @@ def main():
         json.dumps(evidence, indent=2) + "\n", encoding="utf-8"
     )
     print(
-        "Packaged Unity confirmed three commands on one session and displayed the next native phase; viewer cleared and roots reaped."
+        "Packaged Unity submitted explicit Finish attacks; native empty combat advanced, receipt uncertain, viewer cleared and roots reaped."
+        if args.finish_attacks
+        else "Packaged Unity confirmed three commands on one session and displayed the next native phase; viewer cleared and roots reaped."
         if args.post_resolution_pass
         else "Packaged Unity confirmed the exact ability and priority pass, observed the spell source on the battlefield, cleared the viewer and reaped owned roots."
         if args.observe_resolution

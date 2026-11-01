@@ -17,8 +17,8 @@ namespace Manaforge.Play
         private ViewerBootstrapPipe pipe;private Task<ViewerBootstrap> reading;private Task consuming;
         private ViewerCardSurface surface;private ViewerSessionHost host;private ViewerDecisionPanel panel;
         private PanelSettings settings;private UIDocument document;private string output;private Label status;private Label note;private OpeningCardFocus cardFocus;private OpeningButtonGlow buttonGlow;
-        private long snapshotRevision=-1;private int snapshots,acks,confirmedReceipts,uncertainReceipts;private bool capture,choiceReported,land,priority,creature,artwork,backdrop,requestedBackdrop,mulliganControls,buttonSkins,continuePriority,followupPresented,observeResolution,battlefieldPresented,postResolutionPass,phasePresented;
-        private bool OpeningLayout=>!land && !creature;
+        private long snapshotRevision=-1;private int snapshots,acks,confirmedReceipts,uncertainReceipts;private bool capture,choiceReported,land,priority,creature,artwork,backdrop,requestedBackdrop,mulliganControls,buttonSkins,continuePriority,followupPresented,observeResolution,battlefieldPresented,postResolutionPass,phasePresented,combatFinish;
+        private bool OpeningLayout=>!land && !creature && !combatFinish;
         private float fanWidth=-1;private int fanCount=-1,fanArtwork=-1;private long fanRevision=-1;
         private void PresentOpening()
         {
@@ -29,7 +29,7 @@ namespace Manaforge.Play
             if(artwork)foreach(var card in surface.CardsRoot.Query<CardView>().ToList())card.Q<Label>("status").style.display=DisplayStyle.None;
             fanWidth=width;fanCount=count;fanRevision=revision;fanArtwork=images;
         }
-        private Button InputButton(string name)=>priority?panel.Root.Query<Button>().ToList().Find(button=>button.text=="Pass priority"):panel.Root.Q<Button>(name);
+        private Button InputButton(string name)=>combatFinish?panel.Root.Query<Button>().ToList().Find(button=>button.text=="Finish attacks"):priority?panel.Root.Query<Button>().ToList().Find(button=>button.text=="Pass priority"):panel.Root.Q<Button>(name);
         private void LimitActions()
         {
             if(!land)return;
@@ -37,7 +37,7 @@ namespace Manaforge.Play
         }
         private bool Report(string name,bool cleared=false)
         {
-            try{var value=new JObject{["probe_version"]=1,["live_opening"]=true,["snapshot_count"]=Volatile.Read(ref snapshots),["ack_count"]=Volatile.Read(ref acks),["confirmed_receipt_count"]=Volatile.Read(ref confirmedReceipts),["uncertain_receipt_count"]=Volatile.Read(ref uncertainReceipts),["post_resolution_priority_presented"]=postResolutionPass && battlefieldPresented,["phase_transition_presented"]=phasePresented,["followup_priority_presented"]=followupPresented,["battlefield_observation_presented"]=battlefieldPresented,["viewer_cleared"]=cleared,["arena_button_glows"]=buttonGlow?.Count??0,["arena_button_skins"]=buttonSkins,["mulligan_controls"]=mulliganControls,["arena_backdrop_resource"]=backdrop?ArenaOpeningBackdrop.ResourceName:null,["arena_backdrop"]=backdrop,["artwork_count"]=surface?.PresentedArtworkCount??0};
+            try{var value=new JObject{["probe_version"]=1,["live_opening"]=true,["snapshot_count"]=Volatile.Read(ref snapshots),["ack_count"]=Volatile.Read(ref acks),["confirmed_receipt_count"]=Volatile.Read(ref confirmedReceipts),["uncertain_receipt_count"]=Volatile.Read(ref uncertainReceipts),["post_resolution_priority_presented"]=postResolutionPass && battlefieldPresented,["phase_transition_presented"]=phasePresented,["attack_finish_presented"]=combatFinish && InputButton("")!=null,["followup_priority_presented"]=followupPresented,["battlefield_observation_presented"]=battlefieldPresented,["viewer_cleared"]=cleared,["arena_button_glows"]=buttonGlow?.Count??0,["arena_button_skins"]=buttonSkins,["mulligan_controls"]=mulliganControls,["arena_backdrop_resource"]=backdrop?ArenaOpeningBackdrop.ResourceName:null,["arena_backdrop"]=backdrop,["artwork_count"]=surface?.PresentedArtworkCount??0};
                 string path=Path.Combine(output,name+".json");File.WriteAllText(path+".tmp",value.ToString());File.Move(path+".tmp",path);return true;}catch{return false;}
         }
         private void Fail(){host?.Dispose();Report("failed");Application.Quit(1);}
@@ -46,6 +46,8 @@ namespace Manaforge.Play
             output=ArtworkFixtureScene.Argument("-manaforgeLiveOpening");capture=ArtworkFixtureScene.Argument("-manaforgeLiveCapture")=="1";
             priority=ArtworkFixtureScene.Argument("-manaforgeLivePriority")=="1";
             creature=ArtworkFixtureScene.Argument("-manaforgeLiveCreature")=="1";
+            combatFinish=ArtworkFixtureScene.Argument("-manaforgeLiveFinishAttacks")=="1";
+            if(combatFinish && (creature || priority)){Application.Quit(1);yield break;}
             continuePriority=ArtworkFixtureScene.Argument("-manaforgeLiveContinuePriority")=="1";
             if(continuePriority && !creature){Application.Quit(1);yield break;}
             observeResolution=ArtworkFixtureScene.Argument("-manaforgeLiveObserveResolution")=="1";
@@ -63,8 +65,9 @@ namespace Manaforge.Play
                 settings=ScriptableObject.CreateInstance<PanelSettings>();settings.themeStyleSheet=Resources.Load<ThemeStyleSheet>("CardTheme");settings.scaleMode=PanelScaleMode.ScaleWithScreenSize;settings.referenceResolution=new Vector2Int(1280,720);
                 document=gameObject.AddComponent<UIDocument>();document.panelSettings=settings;var root=document.rootVisualElement;root.style.flexGrow=1;root.style.paddingLeft=20;root.style.paddingTop=15;root.style.backgroundColor=new Color(.025f,.055f,.075f);
                 var title=new Label(creature?"LIVE XMAGE — CASTING ABILITY":priority?"LIVE XMAGE — PRIORITY PASS":land?"LIVE XMAGE — FIRST LAND":"LIVE XMAGE — HUMAN vs AI OPENING");title.style.fontSize=23;title.style.color=Color.white;root.Add(title);
+                if(combatFinish)title.text="LIVE XMAGE - FINISH ATTACKS";
                 status=new Label("Connecting to the owned Java gateway…");status.style.color=Color.white;root.Add(status);
-                note=new Label(postResolutionPass?"Public Memnite/Forest decks. Choose the ability, then two explicit priority passes. Observe the next phase; no full match.":continuePriority?"Public Memnite/Forest decks. Choose the casting ability, then one priority pass. Stack contents unavailable; no full match.":creature?"Public Memnite/Forest decks. Diagnostic card click completed. Choose the casting ability; Java checks the stack entry.":priority?"Public Forest decks. Diagnostic setup completed. One explicit priority pass; no full match.":land?"Public Forest decks. Diagnostic pregame/keep already completed. One land action only; no full match.":artwork?"Public Forest/Ornithopter decks. Verified offline artwork. Current rules / tap state unavailable; one opening decision only.":"Public Forest/Memnite decks. Opening decision only; artwork cache and later gameplay are not connected.");note.style.color=requestedBackdrop?new Color(.9f,.9f,.9f):Color.gray;root.Add(note);
+                note=new Label(combatFinish?"Public Memnite/Forest decks. Setup used diagnostic policy before connection. Explicit Finish attacks only; no attackers chosen, no full match.":postResolutionPass?"Public Memnite/Forest decks. Choose the ability, then two explicit priority passes. Observe the next phase; no full match.":continuePriority?"Public Memnite/Forest decks. Choose the casting ability, then one priority pass. Stack contents unavailable; no full match.":creature?"Public Memnite/Forest decks. Diagnostic card click completed. Choose the casting ability; Java checks the stack entry.":priority?"Public Forest decks. Diagnostic setup completed. One explicit priority pass; no full match.":land?"Public Forest decks. Diagnostic pregame/keep already completed. One land action only; no full match.":artwork?"Public Forest/Ornithopter decks. Verified offline artwork. Current rules / tap state unavailable; one opening decision only.":"Public Forest/Memnite decks. Opening decision only; artwork cache and later gameplay are not connected.");note.style.color=requestedBackdrop?new Color(.9f,.9f,.9f):Color.gray;root.Add(note);
                 var stage=new VisualElement();stage.style.flexDirection=FlexDirection.Row;stage.style.flexGrow=1;stage.style.marginTop=10;root.Add(stage);
                 surface=new ViewerCardSurface(stage);surface.CardsRoot.style.width=720;surface.CardsRoot.style.flexShrink=0;surface.InspectionView.SetPresentation(CardPresentationMode.Full,210);
                 host=new ViewerSessionHost(surface,reading.Result,pipe.WaitForOwnerCloseAsync(cancellation.Token),false);
@@ -84,7 +87,7 @@ namespace Manaforge.Play
             }catch{Fail();yield break;}
             double deadline=Time.realtimeSinceStartupAsDouble+20;
             string control=land?"decision-action-0":"decision-option-0";
-            while(!host.Completion.IsCompleted && ((!land && !creature && surface.CardsRoot.childCount!=7) || InputButton(control)==null || artwork && (surface.ExpectedArtworkCount==0 || surface.PresentedArtworkCount<surface.ExpectedArtworkCount))){
+            while(!host.Completion.IsCompleted && ((OpeningLayout && surface.CardsRoot.childCount!=7) || InputButton(control)==null || artwork && (surface.ExpectedArtworkCount==0 || surface.PresentedArtworkCount<surface.ExpectedArtworkCount))){
                 host.Tick();panel.Tick();if(Time.realtimeSinceStartupAsDouble>=deadline){Fail();yield break;}yield return null;
             }
             if(host.Completion.IsCompleted || !host.Authenticated){Fail();yield break;}
@@ -111,7 +114,7 @@ namespace Manaforge.Play
                 headerPrompt.style.marginTop=8;headerPrompt.style.marginBottom=0;
                 document.rootVisualElement.Insert(1,headerPrompt);
             }
-            status.text=creature?"Connected to real XMage. Select the offered casting ability.":priority?"Connected to real XMage. Select Pass priority to yield this decision.":land?"Connected to real XMage. Select an offered Play land action.":"Connected to real XMage. Inspect your opening hand, then choose whether to mulligan.";
+            status.text=combatFinish?"Connected to real XMage. Select the offered Finish attacks response.":creature?"Connected to real XMage. Select the offered casting ability.":priority?"Connected to real XMage. Select Pass priority to yield this decision.":land?"Connected to real XMage. Select an offered Play land action.":"Connected to real XMage. Inspect your opening hand, then choose whether to mulligan.";
             if(requestedBackdrop){backdrop=ArenaOpeningBackdrop.AttachLocal(document.rootVisualElement);if(!backdrop){Fail();yield break;}}
             if(capture){yield return Capture("connected.png");if(cardFocus!=null){cardFocus.Show(surface.CardsRoot.Q<CardView>());yield return Capture("focused.png");cardFocus.Show(null);}}if(!Report("ready")){Application.Quit(1);yield break;}
             if(ArtworkFixtureScene.Argument("-manaforgeLiveScript")=="1"){
@@ -150,7 +153,7 @@ namespace Manaforge.Play
                 }
                 if(!choiceReported && Volatile.Read(ref acks)>=(postResolutionPass?6:continuePriority?4:2) && (!observeResolution || battlefieldPresented) && (!postResolutionPass || phasePresented)){
                     buttonGlow?.Dispose();buttonGlow=null;cardFocus?.Dispose();cardFocus=null;host.Cancel();host.Tick();panel.Tick();inspect.Clear();
-                    status.text=postResolutionPass?"All three choices confirmed; next native phase observed. Viewer cleared; this test ends here.":observeResolution?"Casting ability and exact priority pass confirmed; battlefield observed. Viewer cleared; this test ends here.":continuePriority?"Casting ability confirmed; next priority pass submitted. Pass outcome uncertain. Viewer cleared; this test ends here.":creature?"Casting ability submitted; native Memnite stack entry observed. Viewer cleared; this test ends here.":priority?"Priority pass submitted to XMage; engine advanced. Viewer cleared; this test ends here.":"Choice submitted to XMage. Next-state support ends here; viewer cleared. No confirmed result is claimed.";
+                    status.text=combatFinish?"Finish attacks submitted; native empty combat advanced. Outcome uncertain. Viewer cleared.":postResolutionPass?"All three choices confirmed; next native phase observed. Viewer cleared; this test ends here.":observeResolution?"Casting ability and exact priority pass confirmed; battlefield observed. Viewer cleared; this test ends here.":continuePriority?"Casting ability confirmed; next priority pass submitted. Pass outcome uncertain. Viewer cleared; this test ends here.":creature?"Casting ability submitted; native Memnite stack entry observed. Viewer cleared; this test ends here.":priority?"Priority pass submitted to XMage; engine advanced. Viewer cleared; this test ends here.":"Choice submitted to XMage. Next-state support ends here; viewer cleared. No confirmed result is claimed.";
                     if(capture)yield return Capture("choice.png");if(!Report("choice",true)){Application.Quit(1);yield break;}choiceReported=true;
                 }
                 yield return null;

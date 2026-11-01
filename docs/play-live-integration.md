@@ -1,5 +1,47 @@
 # Live Unity / Java / XMage integration
 
+## Packaged explicit Finish attacks choice (0.5.171)
+
+Unity's existing decision panel can now mount the actual native attacker-selection
+finish offer:
+
+```powershell
+python tools/check_play_unity_live.py --finish-attacks --native-metadata
+```
+
+Add `--interactive` for manual input. Public-deck pregame, casting, resolution and
+priority passing run as explicit diagnostic setup before Unity connects. The
+gateway waits until the earlier cast source is actually offered as an attacker,
+then opens one authenticated Unity session with the existing guarded finish-only
+projection. Unity shows Select attackers / Finish attacks, retains inspection,
+and submits through the existing command dispatcher. The scripted acceptance
+invokes that actual mounted button; the interactive route waits for the user.
+
+Java requires the native boolean-false response, native acceptance, empty combat
+and a subsequent guarded priority window. The finish receipt remains submitted
+then uncertain. Unity requires zero confirmed receipts and one uncertain receipt,
+clears the viewer and exits. Sanitized evidence adds attack_finish_presented and
+unity_attack_finish_submitted, while accurately distinguishing Java diagnostic
+casting/resolution from Unity ability input. No native IDs or candidate lists are
+added to reports. Attacker/defender selection, blocking, combat confirmation and
+continuous Unity combat remain open; no automatic combat policy is enabled in
+product gameplay.
+
+Validation: Windows player build, 42 focused Unity PlayMode decision-binding and
+dispatch checks, and the packaged real-engine combat choice passed. Screenshot
+inspection confirmed the native prompt and Finish attacks button; owned cleanup
+passed. Java protocol/socket preflight passed with 310 projection/privacy/binding
+checks. The existing packaged three-command phase probe and Java-only attacker
+finish regression passed. Three focused Python provisioning checks, CLI guards,
+lint and formatting passed. No full application suite ran.
+
+Scheduled CI checkpoint: .170 [protocol](https://github.com/RyMeep128/Manaforge/actions/runs/41363354451),
+[desktop preview](https://github.com/RyMeep128/Manaforge/actions/runs/41363354580)
+and feedback relay passed. Its live-opening and general Tests jobs were running
+and are deferred. .168/.169 live/protocol/preview passed; their Tests were
+cancelled, as was the deferred .167 Tests run. New .171 CI evidence remains
+pending. Next scheduled check: .174.
+
 ## Native attacker-selection finish port (0.5.170)
 
 Java can now project the explicit finish response for an actual native attacker
