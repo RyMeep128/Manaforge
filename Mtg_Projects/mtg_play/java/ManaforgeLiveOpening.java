@@ -12,7 +12,7 @@ public final class ManaforgeLiveOpening {
     private final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(90);
     private JsonObject state, pending;
     private String engineViewer, artifactHash;
-    private boolean firstLand,landObserved,unityPriorityPass;
+    private boolean firstLand,landObserved,unityPriorityPass,firstCreature;
     private byte[] unityKey;private java.nio.file.Path unityReady;
     private String game, stage="initialize", decisionKind="none";
     private JsonObject next() throws Exception {
@@ -90,6 +90,37 @@ public final class ManaforgeLiveOpening {
             }
             throw new IOException("LIVE_LAND_NOT_OBSERVED");
     }
+    private void firstCreature() throws Exception {
+        for(int count=0;count<80;count++) {
+            JsonObject event=pending==null?next():pending;if(!event.get("event").getAsString().equals("decision"))continue;pending=null;
+            if(!event.get("kind").getAsString().equals("GAME_SELECT") || !event.get("is_priority").getAsBoolean())throw new IOException("LIVE_CAST_UNSUPPORTED_DECISION");
+            manaforge.protocol.PlayContracts.CardIdentity printing=new manaforge.protocol.PlayContracts.CardIdentity();printing.printing_id="selected-memnite";printing.deck_entry_id="memnite";
+            ManaforgeOpeningProjection projection=new ManaforgeOpeningProjection("live-cast","human",engineViewer,Collections.singletonMap("SOM/174",printing));
+            JsonObject snapshot=projection.project(state,event,true,true),body=new JsonObject(),envelope=new JsonObject();
+            body.addProperty("fixture_only",false);body.add("snapshot",snapshot);envelope.addProperty("wire_version",1);envelope.addProperty("message_type","snapshot");envelope.addProperty("message_id","cast");envelope.add("body",body);
+            boolean cast=false;for(JsonElement action:snapshot.getAsJsonArray("actions"))cast|=action.getAsJsonObject().get("kind").getAsString().equals("cast_spell");
+            int hand=state.getAsJsonArray("hand").size();long cycle=state.get("cycle").getAsLong(),decision=event.get("decision_id").getAsLong();
+            ManaforgeOpeningLoopback.exchangeChoice(envelope,projection,game,engineViewer,decision,cycle,"1.4.62-V1",artifactHash,
+                nativeCommand->{JsonObject sent=request(nativeCommand,"response_sent");if(!sent.get("accepted").getAsBoolean())throw new IOException("LIVE_CAST_REJECTED");},cancelled::get,cast,"cast_spell");
+            stage="creature_advancement";advancement(cycle,decision);if(!cast)continue;
+            stage="creature_stack";boolean abilitySubmitted=false;
+            for(int observed=0;observed<40;observed++) {
+                if(state.getAsJsonArray("hand").size()==hand-1 && state.getAsJsonArray("stack").size()==1
+                    && "Memnite".equals(state.getAsJsonArray("stack").get(0).getAsJsonObject().get("name").getAsString()))return;
+                if(pending!=null && "GAME_CHOOSE_ABILITY".equals(pending.get("kind").getAsString())) {
+                    if(abilitySubmitted || pending.getAsJsonObject("key_choices").size()!=1)throw new IOException("LIVE_CAST_UNSUPPORTED_ABILITY");
+                    JsonObject ability=pending;pending=null;body.add("snapshot",projection.project(state,ability,false,true));
+                    long abilityCycle=state.get("cycle").getAsLong(),abilityDecision=ability.get("decision_id").getAsLong();
+                    ManaforgeOpeningLoopback.exchangeChoice(envelope,projection,game,engineViewer,abilityDecision,abilityCycle,"1.4.62-V1",artifactHash,
+                        nativeCommand->{JsonObject sent=request(nativeCommand,"response_sent");if(!sent.get("accepted").getAsBoolean())throw new IOException("LIVE_CAST_ABILITY_REJECTED");},cancelled::get,true,"cast_spell");
+                    advancement(abilityCycle,abilityDecision);abilitySubmitted=true;continue;
+                }
+                next();
+            }
+            throw new IOException("LIVE_CAST_NOT_OBSERVED");
+        }
+        throw new IOException("LIVE_CAST_TIMEOUT");
+    }
     private void run(int port) throws Exception {
         JsonObject value=command("connect");value.addProperty("port",port);value.addProperty("username","mf_"+UUID.randomUUID().toString().substring(0,8));request(value,"connected");
         value=request(command("status"),"status");
@@ -102,8 +133,9 @@ public final class ManaforgeLiveOpening {
             if(ai){value.addProperty("controller","engine_ai");value.addProperty("player_name","Public fixture AI");}
             JsonArray cards=new JsonArray();
             for(String[] card:new String[][]{{"Forest","M10","248"},{"Memnite","SOM","174"}}) {
+                if(firstCreature && !card[0].equals(ai?"Forest":"Memnite"))continue;
                 if(firstLand && card[0].equals("Memnite"))continue;
-                JsonObject entry=new JsonObject();entry.addProperty("name",card[0]);entry.addProperty("set",card[1]);entry.addProperty("number",card[2]);entry.addProperty("quantity",firstLand?60:30);cards.add(entry);
+                JsonObject entry=new JsonObject();entry.addProperty("name",card[0]);entry.addProperty("set",card[1]);entry.addProperty("number",card[2]);entry.addProperty("quantity",firstLand || firstCreature?60:30);cards.add(entry);
             }
             value.add("cards",cards);request(value,"joined");
         }
@@ -132,9 +164,10 @@ public final class ManaforgeLiveOpening {
                         nativeCommand->{JsonObject sent=request(nativeCommand,"response_sent");if(!sent.get("accepted").getAsBoolean())throw new IOException("LIVE_OPENING_RESPONSE_REJECTED");advancement(previousCycle,previousDecision);},cancelled::get);
                 } else {
                     ManaforgeOpeningLoopback.exchangeChoice(envelope,projection,game,engineViewer,previousDecision,previousCycle,"1.4.62-V1",artifactHash,
-                        nativeCommand->{JsonObject sent=request(nativeCommand,"response_sent");if(!sent.get("accepted").getAsBoolean())throw new IOException("LIVE_OPENING_RESPONSE_REJECTED");},cancelled::get,!firstLand);
+                        nativeCommand->{JsonObject sent=request(nativeCommand,"response_sent");if(!sent.get("accepted").getAsBoolean())throw new IOException("LIVE_OPENING_RESPONSE_REJECTED");},cancelled::get,!firstLand && !firstCreature);
                     advancement(previousCycle,previousDecision);
                     if(firstLand)firstLand();
+                    if(firstCreature)firstCreature();
                 }
                 projection.invalidateDecision();return;
             }
@@ -162,8 +195,9 @@ public final class ManaforgeLiveOpening {
         ManaforgeLiveOpening probe=new ManaforgeLiveOpening();
         int result=2;
         try {
+            if(args.length==3 && args[2].equals("--first-creature"))probe.firstCreature=true;
             if((args.length==3 && args[2].equals("--first-land")) || (args.length==4 && args[3].equals("--first-land")))probe.firstLand=true;
-            if((args.length==3 && !probe.firstLand) || args.length==4){
+            if((args.length==3 && !probe.firstLand && !probe.firstCreature) || args.length==4){
                 probe.unityKey=ManaforgeUnityOpening.readBootstrap(System.in);
                 probe.unityReady=java.nio.file.Paths.get(args[2]);
             }
@@ -173,7 +207,7 @@ public final class ManaforgeLiveOpening {
         try {
             if((args.length!=2 && args.length!=3 && args.length!=4) || (args.length==4 && !probe.firstLand) || !args[1].matches("[0-9a-f]{64}"))throw new IOException();probe.artifactHash=args[1];int port=Integer.parseInt(args[0]);if(port<1 || port>65535)throw new IOException();
             probe.run(port);
-            report.println(("{\"live_engine\":true,\"java_game_commands\":true,\"human_ai_seats\":true,\"opening_hand_count\":7,\"decision_received\":true,\"unity_connected\":false,\"public_projection_validated\":true,\"public_choice_submitted\":true,\"engine_advanced\":true,\"duplicate_native_submission_prevented\":true,\"authenticated_choice\":true,\"duplicate_receipt_reused\":true,\"disconnect_uncertainty_retained\":true}").replace("}",probe.firstLand?",\"first_land_observed\":"+probe.landObserved+",\"priority_pass_submitted\":true,\"unity_priority_pass_submitted\":"+probe.unityPriorityPass+"}":"}").replace("\"unity_connected\":false","\"unity_connected\":"+(probe.unityReady!=null)).replace("\"duplicate_receipt_reused\":true","\"duplicate_receipt_reused\":"+(probe.unityReady==null)).replace("\"duplicate_native_submission_prevented\":true","\"duplicate_native_submission_prevented\":"+(probe.unityReady==null)));result=0;
+            report.println(("{\"live_engine\":true,\"java_game_commands\":true,\"human_ai_seats\":true,\"opening_hand_count\":7,\"decision_received\":true,\"unity_connected\":false,\"public_projection_validated\":true,\"public_choice_submitted\":true,\"engine_advanced\":true,\"duplicate_native_submission_prevented\":true,\"authenticated_choice\":true,\"duplicate_receipt_reused\":true,\"disconnect_uncertainty_retained\":true}").replace("}",probe.firstLand?",\"first_land_observed\":"+probe.landObserved+",\"priority_pass_submitted\":true,\"unity_priority_pass_submitted\":"+probe.unityPriorityPass+"}":"}").replace("}",probe.firstCreature?",\"creature_spell_on_stack\":true}":"}").replace("\"unity_connected\":false","\"unity_connected\":"+(probe.unityReady!=null)).replace("\"duplicate_receipt_reused\":true","\"duplicate_receipt_reused\":"+(probe.unityReady==null)).replace("\"duplicate_native_submission_prevented\":true","\"duplicate_native_submission_prevented\":"+(probe.unityReady==null)));result=0;
         }catch(Exception failure){JsonObject error=new JsonObject();error.addProperty("failure","LIVE_OPENING_FAILED");error.addProperty("stage",probe.stage);
             if(Arrays.asList("LIVE_OPENING_UNSUPPORTED_PREGAME","LIVE_OPENING_TIMEOUT_OR_CANCELLED","LIVE_OPENING_ENGINE_FAILED","LIVE_OPENING_QUEUE_LIMIT","LIVE_OPENING_PIN").contains(failure.getMessage()))error.addProperty("code",failure.getMessage());
             if(Arrays.asList("GAME_ASK","GAME_CHOOSE_CHOICE","GAME_TARGET","GAME_SELECT").contains(probe.decisionKind))error.addProperty("decision_family",probe.decisionKind);

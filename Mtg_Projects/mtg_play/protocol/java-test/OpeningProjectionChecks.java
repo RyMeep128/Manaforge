@@ -79,6 +79,18 @@ public final class OpeningProjectionChecks {
     static String perform(JsonObject snapshot){JsonObject out=JsonParser.parseString(chooseForAction(snapshot)).getAsJsonObject();return out.toString();}
     static String chooseForAction(JsonObject snapshot){JsonObject body=new JsonObject(),out=new JsonObject();out.addProperty("wire_version",1);out.addProperty("message_type","command");out.addProperty("message_id","land-action");for(String field:new String[]{"session_id","viewer_id","revision"})body.add(field,snapshot.get(field));body.addProperty("operation","perform");body.add("decision_id",snapshot.getAsJsonObject("decision").get("decision_id"));body.add("action_id",snapshot.getAsJsonArray("actions").get(0).getAsJsonObject().get("action_id"));out.add("body",body);return out.toString();}
     static void landChecks() throws Exception {
+        JsonObject spell=landState();spell.getAsJsonObject("action_kinds").addProperty("raw-card","cast_spell");
+        check(projection().project(spell,priorityPrompt()).getAsJsonArray("actions").size()==0);
+        ManaforgeOpeningProjection caster=projection();JsonObject castSnapshot=caster.project(spell,priorityPrompt(),false,true);shape(castSnapshot);
+        check(castSnapshot.getAsJsonArray("actions").size()==1 && castSnapshot.getAsJsonArray("actions").get(0).getAsJsonObject().get("kind").getAsString().equals("cast_spell"));
+        String castWire=perform(castSnapshot);JsonObject castCommand=caster.claimAction(castWire,"session","human","raw-game","raw-human",41,8);
+        check(castCommand.get("kind").getAsString().equals("object") && castCommand.get("value").getAsString().equals("raw-card"));
+        fails("STALE_DECISION",()->caster.claimAction(castWire,"session","human","raw-game","raw-human",41,8));
+        for(String hidden:new String[]{"hidden","face_down"}) {
+            JsonObject concealedSpell=spell.deepCopy();concealedSpell.getAsJsonArray("hand").get(0).getAsJsonObject().addProperty(hidden,true);
+            check(projection().project(concealedSpell,priorityPrompt(),false,true).getAsJsonArray("actions").size()==0);
+        }
+        JsonObject notPlayable=spell.deepCopy();notPlayable.add("playable",new JsonArray());check(projection().project(notPlayable,priorityPrompt(),false,true).getAsJsonArray("actions").size()==0);
         ManaforgeOpeningProjection passOwner=projection();JsonObject passSnapshot=passOwner.project(landState(),priorityPrompt(),true);
         JsonObject passAction=passSnapshot.getAsJsonArray("actions").get(1).getAsJsonObject();
         check(passAction.get("kind").getAsString().equals("pass") && passAction.get("object_id").isJsonNull());
@@ -132,6 +144,33 @@ public final class OpeningProjectionChecks {
         fails("LIVE_OPENING_PROJECTION_UNSUPPORTED",()->stale.project(wrong,priorityPrompt()));
         fails("STALE_DECISION",()->stale.claimAction(current,"session","human","raw-game","raw-human",41,8));
     }
+    static void abilityChecks() throws Exception {
+        String nativeId="12345678-abcd-1234-abcd-123456789abc";
+        JsonObject prompt=priorityPrompt();prompt.addProperty("kind","GAME_CHOOSE_ABILITY");prompt.addProperty("is_priority",false);
+        JsonObject choices=new JsonObject();choices.addProperty(nativeId,"Cast creature "+nativeId);prompt.add("key_choices",choices);
+        rejects(landState(),prompt);
+        ManaforgeOpeningProjection owner=projection();JsonObject snapshot=owner.project(landState(),prompt,false,true);shape(snapshot);
+        check(!snapshot.toString().contains(nativeId) && snapshot.getAsJsonArray("actions").size()==0);
+        check(snapshot.getAsJsonObject("decision").getAsJsonArray("options").size()==1);
+        String wire=choose(snapshot,0);JsonObject command=claim(owner,wire);
+        check(command.get("kind").getAsString().equals("object") && command.get("value").getAsString().equals(nativeId));
+        fails("STALE_DECISION",()->claim(owner,wire));
+        for(String field:new String[]{"session_id","viewer_id","revision","decision_id","option_id"}) {
+            ManaforgeOpeningProjection bound=projection();String valid=choose(bound.project(landState(),prompt,false,true),0);
+            JsonObject bad=JsonParser.parseString(valid).getAsJsonObject();
+            if(field.equals("revision"))bad.getAsJsonObject("body").addProperty(field,0);else bad.getAsJsonObject("body").addProperty(field,"wrong");
+            String code=field.equals("session_id")?"SESSION_MISMATCH":field.equals("viewer_id")?"VIEWER_MISMATCH":field.equals("revision")?"STALE_REVISION":field.equals("decision_id")?"STALE_DECISION":"ACTION_UNAVAILABLE";
+            fails(code,()->claim(bound,bad.toString()));check(claim(bound,valid).get("value").getAsString().equals(nativeId));
+        }
+        for(int mode=0;mode<4;mode++) {
+            JsonObject bad=prompt.deepCopy();JsonObject invalid=new JsonObject();
+            if(mode==0)invalid.addProperty("not-an-id","Cast");
+            if(mode==1)invalid.addProperty(nativeId,42);
+            if(mode==3)for(int i=0;i<33;i++)invalid.addProperty(UUID.randomUUID().toString(),"Cast");
+            bad.add("key_choices",invalid);ManaforgeOpeningProjection bound=projection();String old=choose(bound.project(landState(),prompt,false,true),0);
+            fails("LIVE_OPENING_PROJECTION_UNSUPPORTED",()->bound.project(landState(),bad,false,true));fails("STALE_DECISION",()->claim(bound,old));
+        }
+    }
     public static void main(String[] args) throws Exception {
         ManaforgeOpeningProjection projection=projection();JsonObject raw=state(),request=prompt();JsonObject snapshot=projection.project(raw,request);shape(snapshot);
         String text=snapshot.toString();for(String secret:new String[]{"raw-human","raw-ai","raw-card","raw-name","raw-opponent-name","OPPONENT_SECRET","MUTATED_BINDING"})check(!text.contains(secret));
@@ -158,7 +197,7 @@ public final class OpeningProjectionChecks {
         raw=state();raw.getAsJsonArray("players").add(raw.getAsJsonArray("players").get(0).deepCopy());rejects(raw,prompt());
         raw=state();raw.getAsJsonArray("players").get(0).getAsJsonObject().addProperty("life",true);rejects(raw,prompt());
         request=prompt();request.addProperty("message","Use 12345678-abcd-1234-abcd-123456789abc");check(!projection().project(state(),request).toString().contains("12345678-abcd-1234-abcd-123456789abc"));
-        choiceChecks();landChecks();
+        choiceChecks();landChecks();abilityChecks();
         System.out.println("Opening projection: "+checks+" privacy, schema, isolation and fail-closed checks passed");
     }
 }

@@ -15,7 +15,13 @@ from mtg_play import connection_proof as transport
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
+    scenario = parser.add_mutually_exclusive_group()
+    scenario.add_argument(
+        "--first-creature",
+        action="store_true",
+        help="Java-owned zero-cost creature cast; observe stack entry only",
+    )
+    scenario.add_argument(
         "--first-land",
         action="store_true",
         help="All-Forest engine-backed land action probe; no Unity changes",
@@ -52,6 +58,8 @@ def main():
         expected["first_land_observed"] = True
         expected["priority_pass_submitted"] = True
         expected["unity_priority_pass_submitted"] = False
+    if args.first_creature:
+        expected["creature_spell_on_stack"] = True
     evidence = None
 
     def consume(first, events, launch, port, server_process, server):
@@ -75,6 +83,7 @@ def main():
                     (transport.HERE / "artifacts.json").read_bytes()
                 ).hexdigest(),
                 *(["--first-land"] if args.first_land else []),
+                *(["--first-creature"] if args.first_creature else []),
             ],
             cwd=workspace,
             stdin=subprocess.PIPE,
@@ -150,7 +159,9 @@ def main():
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
     print(
-        "Real XMage opening projected; authenticated boolean submitted once, duplicate receipt reused and engine advancement observed; cleanup passed. Unity integration remains pending."
+        "Real XMage creature cast submitted once; hand decrease and Memnite stack entry observed, duplicate receipt reused; cleanup passed. Resolution and Unity casting remain pending."
+        if args.first_creature
+        else "Real XMage opening projected; authenticated boolean submitted once, duplicate receipt reused and engine advancement observed; cleanup passed. Unity integration remains pending."
     )
 
 

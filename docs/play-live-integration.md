@@ -1,5 +1,38 @@
 # Live Unity / Java / XMage integration
 
+## Engine-offered creature casting port (0.5.139)
+
+An opt-in live projection now includes `cast_spell` actions from the pinned
+engine's playable hand objects. It preserves selected printing bindings, opaque
+source/action tokens, current human priority and the existing one-shot claim and
+receipt path. It does not calculate costs, card legality or targets. Default
+opening/land/priority projections do not enable spell offers.
+
+The new Java-owned public fixture uses a 60-Memnite human deck and a 60-Forest AI
+deck. Diagnostic pregame/keep and pre-cast priority passing remain explicit
+fixture policies. Run `python tools/check_play_live_opening.py --first-creature
+--output Mtg_Projects/mtg_play_unity/Artifacts/FirstCreature/report.json` on one
+command line. An authenticated client submits an actual engine-offered cast;
+the diagnostic checks hand count decrease and a Memnite stack entry. Duplicate
+commands reuse their receipt rather than executing again. The report's
+`creature_spell_on_stack` does not imply resolution or a confirmed command result.
+
+XMage requests a distinct ability choice after the source click. The opt-in
+projection now maps bounded native ability choices to opaque public option IDs;
+the same claim guard translates the selected option back only at native submission.
+Malformed IDs, labels and oversized/empty offers fail closed. The diagnostic
+answers only a single engine-offered ability; ambiguous/multiple abilities stop
+the fixture. This choice remains separate from the preceding cast submission.
+
+No nonempty stack is projected to Unity yet, and no Unity casting controls,
+mana/payment policy or post-land state display were added. The existing live CI
+workflow now runs this additional native scenario and uploads only its sanitized
+report. Local validation passed: 142 projection/privacy/token checks and the
+focused Java protocol preflight; real-engine cast, native ability selection,
+hand decrease and Memnite stack observation; duplicate receipts and normal owned
+shutdown. The real land/pass regression also passed. Lint and formatting pass.
+No full application suite or Unity build ran. Next scheduled CI review remains .141.
+
 ## Packaged explicit priority pass (0.5.138)
 
 Run `python tools/check_play_unity_live.py --priority-pass --interactive` to
