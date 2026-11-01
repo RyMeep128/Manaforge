@@ -1,5 +1,28 @@
 # Live Unity / Java / XMage integration
 
+## Live land priority binding and CI repair (0.5.135)
+
+Land projection now requires the native priority player to resolve to the human
+viewer. Unknown, absent or opponent priority fails closed and invalidates the old
+offer. Added action-token regressions cover session/viewer/revision/decision/action
+mismatches, retry after rejection, replaced offers and face-down source exclusion.
+All 93 projection checks and the focused Java protocol preflight passed. The real
+XMage first-land probe also passed with the stricter priority requirement, engine
+advancement and clean owned-root shutdown. Unity land controls remain pending.
+
+The scheduled CI review found successful .133 protocol, live-opening and desktop
+preview jobs. The .134 general Tests jobs failed before application tests because
+the Python source inventory omitted existing diagnostic labels, one preview import
+was unused, and eight Play files needed formatting. Regenerated inventory changes
+only diagnostic string candidates, not wire records or commands; removed the import
+and applied the existing formatter without gameplay changes. No unfinished runs
+were present. Local lint, formatting and inventory checks pass; remote verification
+of these repairs remains pending. Formatting also required regenerating two
+fixture provenance hashes; fixture cases and schema are unchanged. All 191 focused
+Python adapter/navigation/preview/connection/artwork/schema checks passed (the
+schema checks were rerun after refreshing those hashes). Next scheduled CI review
+is .138.
+
 ## Owner review and visual direction (0.5.134)
 
 The owner reviewed the packaged opening and found its presentation underwhelming.

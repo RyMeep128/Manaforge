@@ -122,8 +122,12 @@ class LocalGameAdapter:
         self._payment_candidate_counts = []
         self._payment_ordinary_counts = []
         self._payment_ticket_counts = []
-        self._payment_hazard_counts = dict.fromkeys(("REQUIRES_MANUAL", "NO_REGISTERED_HAZARD", "UNKNOWN"), 0)
-        self._payment_coverage_counts = dict.fromkeys(("COVERS", "INSUFFICIENT", "NO_UNPAID_COST", "UNSUPPORTED", "UNKNOWN"), 0)
+        self._payment_hazard_counts = dict.fromkeys(
+            ("REQUIRES_MANUAL", "NO_REGISTERED_HAZARD", "UNKNOWN"), 0
+        )
+        self._payment_coverage_counts = dict.fromkeys(
+            ("COVERS", "INSUFFICIENT", "NO_UNPAID_COST", "UNSUPPORTED", "UNKNOWN"), 0
+        )
         self._bundle, self._jdk = Path(bundle).resolve(), Path(jdk).resolve()
         self._ready, self._release, self._done = (
             threading.Event(),
@@ -156,7 +160,9 @@ class LocalGameAdapter:
         def run():
             try:
                 probe_options = (
-                    {"payment_context_probe": True} if self._payment_context_probe else {}
+                    {"payment_context_probe": True}
+                    if self._payment_context_probe
+                    else {}
                 )
                 self._runtime_result = transport.run_proof(
                     self._bundle,
@@ -412,8 +418,10 @@ class LocalGameAdapter:
         if isinstance(probe, dict) and probe.get("available") is True:
             sequence, count = probe.get("sequence"), probe.get("unpaid_mana_count")
             if (
-                type(sequence) is int and 0 < sequence <= 2**63 - 1
-                and type(count) is int and 0 <= count <= 128
+                type(sequence) is int
+                and 0 < sequence <= 2**63 - 1
+                and type(count) is int
+                and 0 <= count <= 128
             ):
                 if len(self._payment_probe_scopes) < 128:
                     self._payment_probe_scopes.add(
@@ -421,10 +429,17 @@ class LocalGameAdapter:
                     )
                 if len(self._payment_probe_counts) < 128:
                     self._payment_probe_counts.append(count)
-                sources, abilities = probe.get("candidate_sources"), probe.get("candidate_abilities")
-                if (type(sources) is int and 0 <= sources <= 128
-                        and type(abilities) is int and sources <= abilities <= sources * 128
-                        and len(self._payment_candidate_counts) < 128):
+                sources, abilities = (
+                    probe.get("candidate_sources"),
+                    probe.get("candidate_abilities"),
+                )
+                if (
+                    type(sources) is int
+                    and 0 <= sources <= 128
+                    and type(abilities) is int
+                    and sources <= abilities <= sources * 128
+                    and len(self._payment_candidate_counts) < 128
+                ):
                     self._payment_candidate_counts.append((sources, abilities))
                     tickets = probe.get("source_tickets_revalidated")
                     if type(tickets) is int and 0 <= tickets <= sources:
@@ -433,7 +448,10 @@ class LocalGameAdapter:
                     if type(ordinary) is int and 0 <= ordinary <= abilities:
                         self._payment_ordinary_counts.append(ordinary)
                     coverage = probe.get("base_cost_coverage")
-                    if type(coverage) is str and coverage in self._payment_coverage_counts:
+                    if (
+                        type(coverage) is str
+                        and coverage in self._payment_coverage_counts
+                    ):
                         self._payment_coverage_counts[coverage] += 1
                     hazards = probe.get("registered_hazards")
                     if type(hazards) is str and hazards in self._payment_hazard_counts:
@@ -443,20 +461,29 @@ class LocalGameAdapter:
     def payment_ticket_diagnostics(self):
         """Aggregate identity-read evidence only; never exports native tickets or IDs."""
         values = self._payment_ticket_counts
-        return dict(enabled=self._payment_context_probe, observations=len(values),
-                    maximum_revalidated=max(values, default=None))
+        return dict(
+            enabled=self._payment_context_probe,
+            observations=len(values),
+            maximum_revalidated=max(values, default=None),
+        )
 
     def payment_hazard_diagnostics(self):
         """Private research counters only; no registry contents or public failure reasons."""
         counts = self._payment_hazard_counts
-        return dict(enabled=self._payment_context_probe, observations=sum(counts.values()),
-                    **{key.lower(): value for key, value in counts.items()})
+        return dict(
+            enabled=self._payment_context_probe,
+            observations=sum(counts.values()),
+            **{key.lower(): value for key, value in counts.items()},
+        )
 
     def payment_cost_coverage_diagnostics(self):
         """Fixed bounded native base-total evidence, never source safety or payment success."""
         counts = self._payment_coverage_counts
-        return dict(enabled=self._payment_context_probe, observations=sum(counts.values()),
-                    **{key.lower(): value for key, value in counts.items()})
+        return dict(
+            enabled=self._payment_context_probe,
+            observations=sum(counts.values()),
+            **{key.lower(): value for key, value in counts.items()},
+        )
 
     def payment_context_diagnostics(self):
         """Bounded opt-in research evidence; no raw IDs, costs, cards or native references."""
@@ -468,10 +495,16 @@ class LocalGameAdapter:
             minimum=min(counts) if counts else None,
             maximum=max(counts) if counts else None,
             ordinary_shape_observations=len(self._payment_ordinary_counts),
-            maximum_ordinary_shape_abilities=max(self._payment_ordinary_counts, default=None),
+            maximum_ordinary_shape_abilities=max(
+                self._payment_ordinary_counts, default=None
+            ),
             candidate_observations=len(self._payment_candidate_counts),
-            maximum_candidate_sources=max((s for s, _ in self._payment_candidate_counts), default=None),
-            maximum_candidate_abilities=max((a for _, a in self._payment_candidate_counts), default=None),
+            maximum_candidate_sources=max(
+                (s for s, _ in self._payment_candidate_counts), default=None
+            ),
+            maximum_candidate_abilities=max(
+                (a for _, a in self._payment_candidate_counts), default=None
+            ),
         )
 
     def create_game(

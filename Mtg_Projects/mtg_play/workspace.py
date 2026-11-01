@@ -273,7 +273,9 @@ class PlayWorkspace(W.QWidget):
         self.start_button.clicked.connect(self.start_game)
         actions.addWidget(self.start_button)
         self.preview_button = W.QPushButton("Start Play Preview")
-        self.preview_button.setToolTip("View your saved deck in Unity. No live game or AI starts.")
+        self.preview_button.setToolTip(
+            "View your saved deck in Unity. No live game or AI starts."
+        )
         self.preview_button.clicked.connect(self.start_preview)
         actions.addWidget(self.preview_button)
         self.close_preview = W.QPushButton("Close Preview / Cancel")
@@ -628,14 +630,25 @@ class PlayWorkspace(W.QWidget):
         self.selectors[1].setCurrentIndex(self.selectors[1].findData(index))
 
     def _selection_changed(self):
-        previewing = self.preview_jobs.busy or (self._preview_launch is not None and self._preview_launch.root is not None)
-        self.close_preview.setText("Close Preview / Cancel" if self.preview_jobs.busy else "Retry preview cleanup")
+        previewing = self.preview_jobs.busy or (
+            self._preview_launch is not None and self._preview_launch.root is not None
+        )
+        self.close_preview.setText(
+            "Close Preview / Cancel"
+            if self.preview_jobs.busy
+            else "Retry preview cleanup"
+        )
         preparing = self.opponents.busy or self._asset_pending is not None or previewing
         self.close_preview.setVisible(previewing)
-        self.preview_button.setEnabled(not preparing and not self.session.active and not self.session.busy
-            and not self.catalog_jobs.busy and self._format_confirmed
+        self.preview_button.setEnabled(
+            not preparing
+            and not self.session.active
+            and not self.session.busy
+            and not self.catalog_jobs.busy
+            and self._format_confirmed
             and self.format.currentData() in {"freeform", "commander"}
-            and self.selectors[0].currentData() is not None)
+            and self.selectors[0].currentData() is not None
+        )
         self.recover_button.setVisible(self.session.needs_recovery)
         self.recover_button.setEnabled(
             not self.session.busy and not self.session.closing
@@ -1105,10 +1118,12 @@ class PlayWorkspace(W.QWidget):
         format = self.format.currentData()
         source_path = item.path
         self._preview_launch = launch = PreviewLaunch()
+
         def work(cancel, report):
             # Re-read file-backed selections: a deleted/corrupt deck is not silently previewed from stale memory.
             if source_path is not None:
                 from mtg_core.decks import DeckStore
+
                 try:
                     selected = DeckStore().load(source_path)
                 except Exception:
@@ -1117,7 +1132,10 @@ class PlayWorkspace(W.QWidget):
                     raise ValueError("PREVIEW_DECK_CHANGED")
             else:
                 selected = document
-            return run_preview(selected, format, self.service, cancel, report, launch=launch)
+            return run_preview(
+                selected, format, self.service, cancel, report, launch=launch
+            )
+
         self.preview_jobs.submit(work, quiet=True)
         self._selection_changed()
 
@@ -1126,9 +1144,11 @@ class PlayWorkspace(W.QWidget):
             self.preview_jobs.cancel_all()
         elif self._preview_launch is not None and self._preview_launch.root is not None:
             launch = self._preview_launch
+
             def cleanup(cancel, report):
                 launch.close()
                 return "closed"
+
             self.preview_jobs.submit(cleanup, quiet=True)
             self._selection_changed()
 
@@ -1147,12 +1167,19 @@ class PlayWorkspace(W.QWidget):
                 "PREVIEW_CLEANUP_UNCONFIRMED": "Preview cleanup could not be confirmed. Close the owned preview window before continuing.",
                 "PREVIEW_FILES_CLEANUP_FAILED": "Unity closed, but its temporary preview files could not be removed.",
             }
-            self._status(messages.get(result, "Unity preview could not start or exited unexpectedly. Your saved deck is unchanged."))
+            self._status(
+                messages.get(
+                    result,
+                    "Unity preview could not start or exited unexpectedly. Your saved deck is unchanged.",
+                )
+            )
         elif state in {"completed", "cancelled"}:
             self._status("Preview closed. Your deck selections are unchanged.")
 
     def prepare_to_close(self):
-        if self.preview_jobs.busy or (self._preview_launch is not None and self._preview_launch.root is not None):
+        if self.preview_jobs.busy or (
+            self._preview_launch is not None and self._preview_launch.root is not None
+        ):
             self._close_preview()
             return False
         if self._asset_pending is not None:
@@ -1183,7 +1210,10 @@ class PlayWorkspace(W.QWidget):
         return (
             self._asset_pending is not None
             or self.preview_jobs.busy
-            or (self._preview_launch is not None and self._preview_launch.root is not None)
+            or (
+                self._preview_launch is not None
+                and self._preview_launch.root is not None
+            )
             or self.asset_jobs.busy
             or self.session.busy
             or self.opponents.busy

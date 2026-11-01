@@ -897,7 +897,9 @@ def decisions(adapter, family="number"):
     document = deck((land, 20), (spell, 20), ("Memnite", 20))
     report = dict(decision_seen=False, target_selected=False, resolved=False)
     if family == "number":
-        report.update(mana_sources_submitted=0, two_sources_tapped=False, mana_spent=False)
+        report.update(
+            mana_sources_submitted=0, two_sources_tapped=False, mana_spent=False
+        )
     requested, creature_seen = False, False
 
     def inspect(view):
@@ -927,17 +929,21 @@ def decisions(adapter, family="number"):
                 for obj in view.objects
             )
             report["target_selected"] = True  # This numeric fixture needs no target.
-            report["two_sources_tapped"] |= sum(
-                obj.zone == "battlefield"
-                and obj.controller_id == view.viewer_id
-                and obj.characteristics is not None
-                and obj.characteristics.name == land
-                and obj.tapped is True
-                for obj in view.objects
-            ) >= 2
+            report["two_sources_tapped"] |= (
+                sum(
+                    obj.zone == "battlefield"
+                    and obj.controller_id == view.viewer_id
+                    and obj.characteristics is not None
+                    and obj.characteristics.name == land
+                    and obj.tapped is True
+                    for obj in view.objects
+                )
+                >= 2
+            )
             player = next(p for p in view.players if p.player_id == view.viewer_id)
             report["mana_spent"] |= (
-                report["resolved"] and player.mana is not None
+                report["resolved"]
+                and player.mana is not None
                 and all(amount == 0 for _, amount in player.mana)
             )
         else:
@@ -986,15 +992,23 @@ def decisions(adapter, family="number"):
         request = view.decision
         if family == "number" and request.family == "mana":
             # Explicit fixture-only manual selection. This is NOT the auto-payment planner.
-            source = next((
-                obj for obj in view.objects
-                if obj.zone == "battlefield" and obj.controller_id == view.viewer_id
-                and obj.characteristics and obj.characteristics.name == land
-                and obj.tapped is False
-            ), None)
+            source = next(
+                (
+                    obj
+                    for obj in view.objects
+                    if obj.zone == "battlefield"
+                    and obj.controller_id == view.viewer_id
+                    and obj.characteristics
+                    and obj.characteristics.name == land
+                    and obj.tapped is False
+                ),
+                None,
+            )
             if source is None:
                 raise AdapterError("SCENARIO_MANA_SOURCE_MISSING")
-            result = game.select_mana_source(view.viewer_id, request.decision_id, source.object_id)
+            result = game.select_mana_source(
+                view.viewer_id, request.decision_id, source.object_id
+            )
             if result.outcome == "submitted":
                 report["mana_sources_submitted"] += 1
             return result

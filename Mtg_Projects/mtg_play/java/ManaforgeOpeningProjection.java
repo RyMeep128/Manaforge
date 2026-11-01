@@ -107,6 +107,7 @@ public final class ManaforgeOpeningProjection {
             require(found && seats.size()>=2);
             result.players=seats.toArray(new PlayerView[0]);
             result.active_player_id=names.get(text(raw,"active_player"));result.priority_player_id=names.get(text(raw,"priority_player"));
+            require(!priority || viewer.equals(result.priority_player_id));
             List<GameObject> cards=new ArrayList<>();Set<String> cardIds=new HashSet<>();
             List<JsonObject> displayed=new ArrayList<>();Set<JsonObject> handRows=Collections.newSetFromMap(new IdentityHashMap<>());
             for(JsonElement item:raw.getAsJsonArray("hand")){displayed.add(item.getAsJsonObject());handRows.add(item.getAsJsonObject());}displayed.addAll(battlefield);

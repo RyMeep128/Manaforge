@@ -580,7 +580,8 @@ def main():
     parser.add_argument("--xmage-root", type=Path)
     parser.add_argument("--jdk-path", type=Path)
     parser.add_argument(
-        "--payment-context-probe", action="store_true",
+        "--payment-context-probe",
+        action="store_true",
         help="Opt-in owned human-player observer; payment remains manual",
     )
     parser.add_argument(
@@ -692,7 +693,9 @@ def main():
             result["gameplay"] = scenarios[args.scenario](adapter)
             if args.payment_context_probe:
                 result["payment_context_probe"] = adapter.payment_context_diagnostics()
-                result["payment_cost_coverage_probe"] = adapter.payment_cost_coverage_diagnostics()
+                result["payment_cost_coverage_probe"] = (
+                    adapter.payment_cost_coverage_diagnostics()
+                )
                 result["payment_hazard_probe"] = adapter.payment_hazard_diagnostics()
                 result["payment_ticket_probe"] = adapter.payment_ticket_diagnostics()
                 if (result["payment_ticket_probe"]["maximum_revalidated"] or 0) < 2:
@@ -703,9 +706,14 @@ def main():
                     raise AdapterError("NATIVE_COST_COVERAGE_NOT_OBSERVED")
                 if not result["payment_context_probe"]["observations"]:
                     raise AdapterError("NATIVE_PAYMENT_CONTEXT_NOT_OBSERVED")
-                if (result["payment_context_probe"]["maximum_candidate_sources"] or 0) < 2:
+                if (
+                    result["payment_context_probe"]["maximum_candidate_sources"] or 0
+                ) < 2:
                     raise AdapterError("NATIVE_PAYMENT_CANDIDATES_NOT_OBSERVED")
-                if (result["payment_context_probe"]["maximum_ordinary_shape_abilities"] or 0) < 2:
+                if (
+                    result["payment_context_probe"]["maximum_ordinary_shape_abilities"]
+                    or 0
+                ) < 2:
                     raise AdapterError("NATIVE_ORDINARY_SHAPES_NOT_OBSERVED")
         if args.scenario.startswith("ai-"):
             runtime = adapter.result

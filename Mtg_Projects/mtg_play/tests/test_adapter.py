@@ -25,30 +25,77 @@ def test_payment_context_diagnostic_requires_explicit_boolean(value):
         LocalGameAdapter(payment_context_probe=value)
 
 
-def test_payment_context_evidence_is_bounded_and_does_not_export_private_ids(monkeypatch):
+def test_payment_context_evidence_is_bounded_and_does_not_export_private_ids(
+    monkeypatch,
+):
     adapter = LocalGameAdapter(payment_context_probe=True)
-    payload = dict(status="ok", payment_probe=dict(available=True, sequence=1, unpaid_mana_count=2,
-                                                  card_name="private-fixture-card"))
+    payload = dict(
+        status="ok",
+        payment_probe=dict(
+            available=True,
+            sequence=1,
+            unpaid_mana_count=2,
+            card_name="private-fixture-card",
+        ),
+    )
     monkeypatch.setattr(adapter, "_server_request", lambda **fields: payload)
-    view = dict(game_id="private-fixture-game", viewer="private-fixture-viewer", cycle=0, players=[])
+    view = dict(
+        game_id="private-fixture-game",
+        viewer="private-fixture-viewer",
+        cycle=0,
+        players=[],
+    )
     for cycle in range(256):
         view["cycle"] = cycle
         adapter._metadata(view)
     report = adapter.payment_context_diagnostics()
-    assert report == dict(enabled=True, observations=128, scopes=128, minimum=2, maximum=2, candidate_observations=0, maximum_candidate_sources=None, maximum_candidate_abilities=None, ordinary_shape_observations=0, maximum_ordinary_shape_abilities=None)
+    assert report == dict(
+        enabled=True,
+        observations=128,
+        scopes=128,
+        minimum=2,
+        maximum=2,
+        candidate_observations=0,
+        maximum_candidate_sources=None,
+        maximum_candidate_abilities=None,
+        ordinary_shape_observations=0,
+        maximum_ordinary_shape_abilities=None,
+    )
     assert "private-fixture" not in json.dumps(report)
 
 
-def test_payment_context_probe_is_off_by_default_and_ignores_invalid_evidence(monkeypatch):
+def test_payment_context_probe_is_off_by_default_and_ignores_invalid_evidence(
+    monkeypatch,
+):
     view = dict(game_id="fixture", viewer="viewer", cycle=7, players=[])
-    payload = dict(status="ok", payment_probe=dict(available=True, sequence=1, unpaid_mana_count=2))
+    payload = dict(
+        status="ok", payment_probe=dict(available=True, sequence=1, unpaid_mana_count=2)
+    )
     adapter = LocalGameAdapter()
     monkeypatch.setattr(adapter, "_server_request", lambda **fields: payload)
     adapter._metadata(view)
-    assert adapter.payment_context_diagnostics() == dict(enabled=False, observations=0, scopes=0, minimum=None, maximum=None, candidate_observations=0, maximum_candidate_sources=None, maximum_candidate_abilities=None, ordinary_shape_observations=0, maximum_ordinary_shape_abilities=None)
+    assert adapter.payment_context_diagnostics() == dict(
+        enabled=False,
+        observations=0,
+        scopes=0,
+        minimum=None,
+        maximum=None,
+        candidate_observations=0,
+        maximum_candidate_sources=None,
+        maximum_candidate_abilities=None,
+        ordinary_shape_observations=0,
+        maximum_ordinary_shape_abilities=None,
+    )
     probe = LocalGameAdapter(payment_context_probe=True)
     monkeypatch.setattr(probe, "_server_request", lambda **fields: payload)
-    for sequence, count in [(True, 2), (0, 2), (2**64, 2), (1, True), (1, -1), (1, 129)]:
+    for sequence, count in [
+        (True, 2),
+        (0, 2),
+        (2**64, 2),
+        (1, True),
+        (1, -1),
+        (1, 129),
+    ]:
         payload["payment_probe"].update(sequence=sequence, unpaid_mana_count=count)
         probe._metadata(view)
     assert probe.payment_context_diagnostics()["observations"] == 0
@@ -1106,10 +1153,22 @@ def test_real_frames_require_engine_priority_context_not_just_select_callback(
 def test_payment_candidate_evidence_is_bounded_typed_and_private(monkeypatch):
     adapter = LocalGameAdapter(payment_context_probe=True)
     view = dict(game_id="private-game", viewer="private-viewer", cycle=7, players=[])
-    payload = dict(status="ok", payment_probe=dict(available=True, sequence=1, unpaid_mana_count=2))
+    payload = dict(
+        status="ok", payment_probe=dict(available=True, sequence=1, unpaid_mana_count=2)
+    )
     monkeypatch.setattr(adapter, "_server_request", lambda **fields: payload)
-    for sources, abilities in [(True, 1), (-1, 1), (129, 129), (1, True), (2, 1), (1, 129), (0, 1)]:
-        payload["payment_probe"].update(candidate_sources=sources, candidate_abilities=abilities)
+    for sources, abilities in [
+        (True, 1),
+        (-1, 1),
+        (129, 129),
+        (1, True),
+        (2, 1),
+        (1, 129),
+        (0, 1),
+    ]:
+        payload["payment_probe"].update(
+            candidate_sources=sources, candidate_abilities=abilities
+        )
         adapter._metadata(view)
     assert adapter.payment_context_diagnostics()["candidate_observations"] == 0
     payload["payment_probe"].update(candidate_sources=2, candidate_abilities=2)
@@ -1117,15 +1176,29 @@ def test_payment_candidate_evidence_is_bounded_typed_and_private(monkeypatch):
         adapter._metadata(view)
     report = adapter.payment_context_diagnostics()
     assert report["candidate_observations"] == 128
-    assert report["maximum_candidate_sources"] == report["maximum_candidate_abilities"] == 2
+    assert (
+        report["maximum_candidate_sources"]
+        == report["maximum_candidate_abilities"]
+        == 2
+    )
     assert "private-" not in json.dumps(report)
 
 
 def test_ordinary_shape_counts_do_not_certify_safety(monkeypatch):
     adapter = LocalGameAdapter(payment_context_probe=True)
     view = dict(game_id="private-game", viewer="private-viewer", cycle=7, players=[])
-    evidence = dict(available=True, sequence=1, unpaid_mana_count=2, candidate_sources=2, candidate_abilities=2)
-    monkeypatch.setattr(adapter, "_server_request", lambda **fields: dict(status="ok", payment_probe=evidence))
+    evidence = dict(
+        available=True,
+        sequence=1,
+        unpaid_mana_count=2,
+        candidate_sources=2,
+        candidate_abilities=2,
+    )
+    monkeypatch.setattr(
+        adapter,
+        "_server_request",
+        lambda **fields: dict(status="ok", payment_probe=evidence),
+    )
     for invalid in [True, -1, 3, "2", None]:
         evidence["ordinary_shape_abilities"] = invalid
         adapter._metadata(view)
@@ -1134,48 +1207,88 @@ def test_ordinary_shape_counts_do_not_certify_safety(monkeypatch):
     for _ in range(140):
         adapter._metadata(view)
     report = adapter.payment_context_diagnostics()
-    assert report["ordinary_shape_observations"] == 123  # Shared 128-candidate observation bound.
+    assert (
+        report["ordinary_shape_observations"] == 123
+    )  # Shared 128-candidate observation bound.
     assert report["maximum_ordinary_shape_abilities"] == 2
     assert "safe" not in report and "private-" not in json.dumps(report)
 
 
 def test_native_coverage_evidence_is_fixed_bounded_and_default_off(monkeypatch):
     view = dict(game_id="private-game", viewer="private-viewer", cycle=7, players=[])
-    evidence = dict(available=True, sequence=1, unpaid_mana_count=2, candidate_sources=2,
-                    candidate_abilities=2, ordinary_shape_abilities=2, base_cost_coverage="COVERS")
+    evidence = dict(
+        available=True,
+        sequence=1,
+        unpaid_mana_count=2,
+        candidate_sources=2,
+        candidate_abilities=2,
+        ordinary_shape_abilities=2,
+        base_cost_coverage="COVERS",
+    )
     default = LocalGameAdapter()
-    monkeypatch.setattr(default, "_server_request", lambda **fields: dict(payment_probe=evidence))
+    monkeypatch.setattr(
+        default, "_server_request", lambda **fields: dict(payment_probe=evidence)
+    )
     default._metadata(view)
     assert default.payment_cost_coverage_diagnostics()["observations"] == 0
     adapter = LocalGameAdapter(payment_context_probe=True)
-    monkeypatch.setattr(adapter, "_server_request", lambda **fields: dict(payment_probe=evidence))
+    monkeypatch.setattr(
+        adapter, "_server_request", lambda **fields: dict(payment_probe=evidence)
+    )
     for invalid in [True, {}, None, "SAFE", "private-card-name"]:
         evidence["base_cost_coverage"] = invalid
         adapter._metadata(view)
     assert adapter.payment_cost_coverage_diagnostics()["observations"] == 0
-    for status in ["COVERS", "INSUFFICIENT", "NO_UNPAID_COST", "UNSUPPORTED", "UNKNOWN"]:
+    for status in [
+        "COVERS",
+        "INSUFFICIENT",
+        "NO_UNPAID_COST",
+        "UNSUPPORTED",
+        "UNKNOWN",
+    ]:
         evidence["base_cost_coverage"] = status
         adapter._metadata(view)
-    assert all(adapter.payment_cost_coverage_diagnostics()[key] == 1 for key in
-               ("covers", "insufficient", "no_unpaid_cost", "unsupported", "unknown"))
+    assert all(
+        adapter.payment_cost_coverage_diagnostics()[key] == 1
+        for key in (
+            "covers",
+            "insufficient",
+            "no_unpaid_cost",
+            "unsupported",
+            "unknown",
+        )
+    )
     evidence["base_cost_coverage"] = "COVERS"
     for _ in range(140):
         adapter._metadata(view)
     report = adapter.payment_cost_coverage_diagnostics()
-    assert report["observations"] == 123  # The shared 128 candidate-sample budget includes five invalid statuses.
+    assert (
+        report["observations"] == 123
+    )  # The shared 128 candidate-sample budget includes five invalid statuses.
     assert "private-" not in json.dumps(report) and "safe" not in report
 
 
 def test_private_hazard_evidence_never_exports_registries_or_claims_safety(monkeypatch):
     view = dict(game_id="private-game", viewer="private-viewer", cycle=7, players=[])
-    evidence = dict(available=True, sequence=1, unpaid_mana_count=2, candidate_sources=2,
-                    candidate_abilities=2, ordinary_shape_abilities=2, registered_hazards="REQUIRES_MANUAL")
+    evidence = dict(
+        available=True,
+        sequence=1,
+        unpaid_mana_count=2,
+        candidate_sources=2,
+        candidate_abilities=2,
+        ordinary_shape_abilities=2,
+        registered_hazards="REQUIRES_MANUAL",
+    )
     default = LocalGameAdapter()
-    monkeypatch.setattr(default, "_server_request", lambda **fields: dict(payment_probe=evidence))
+    monkeypatch.setattr(
+        default, "_server_request", lambda **fields: dict(payment_probe=evidence)
+    )
     default._metadata(view)
     assert default.payment_hazard_diagnostics()["observations"] == 0
     adapter = LocalGameAdapter(payment_context_probe=True)
-    monkeypatch.setattr(adapter, "_server_request", lambda **fields: dict(payment_probe=evidence))
+    monkeypatch.setattr(
+        adapter, "_server_request", lambda **fields: dict(payment_probe=evidence)
+    )
     for invalid in [True, {}, "SAFE", "private-trigger-name"]:
         evidence["registered_hazards"] = invalid
         adapter._metadata(view)
@@ -1189,20 +1302,34 @@ def test_private_hazard_evidence_never_exports_registries_or_claims_safety(monke
     for _ in range(140):
         adapter._metadata(view)
     report = adapter.payment_hazard_diagnostics()
-    assert report["observations"] == 124  # Shared 128 candidate samples, four invalid labels.
+    assert (
+        report["observations"] == 124
+    )  # Shared 128 candidate samples, four invalid labels.
     assert "private-" not in json.dumps(report) and "safe" not in report
 
 
-def test_native_source_ticket_evidence_is_aggregate_bounded_and_default_off(monkeypatch):
+def test_native_source_ticket_evidence_is_aggregate_bounded_and_default_off(
+    monkeypatch,
+):
     view = dict(game_id="private-game", viewer="private-viewer", cycle=7, players=[])
-    evidence = dict(available=True, sequence=1, unpaid_mana_count=2, candidate_sources=2,
-                    candidate_abilities=2, source_tickets_revalidated=2)
+    evidence = dict(
+        available=True,
+        sequence=1,
+        unpaid_mana_count=2,
+        candidate_sources=2,
+        candidate_abilities=2,
+        source_tickets_revalidated=2,
+    )
     default = LocalGameAdapter()
-    monkeypatch.setattr(default, "_server_request", lambda **fields: dict(payment_probe=evidence))
+    monkeypatch.setattr(
+        default, "_server_request", lambda **fields: dict(payment_probe=evidence)
+    )
     default._metadata(view)
     assert default.payment_ticket_diagnostics()["observations"] == 0
     adapter = LocalGameAdapter(payment_context_probe=True)
-    monkeypatch.setattr(adapter, "_server_request", lambda **fields: dict(payment_probe=evidence))
+    monkeypatch.setattr(
+        adapter, "_server_request", lambda **fields: dict(payment_probe=evidence)
+    )
     for invalid in [True, -1, 3, "private-source-ticket", None]:
         evidence["source_tickets_revalidated"] = invalid
         adapter._metadata(view)

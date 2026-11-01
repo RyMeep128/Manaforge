@@ -5,7 +5,6 @@ import json
 from pathlib import Path
 import shutil
 import tempfile
-import time
 import uuid
 from .artwork_bundle import export_artwork_bundle
 from .launch_lifecycle import LaunchOwner, LaunchLifecycleError

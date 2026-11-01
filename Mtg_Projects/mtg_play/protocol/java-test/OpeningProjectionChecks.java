@@ -75,7 +75,7 @@ public final class OpeningProjectionChecks {
         fails("LIVE_OPENING_PROJECTION_UNSUPPORTED",()->p.project(state(),bad));fails("STALE_DECISION",()->claim(p,beforeFailure));
     }
     static JsonObject priorityPrompt(){JsonObject result=prompt();result.addProperty("kind","GAME_SELECT");result.addProperty("is_priority",true);return result;}
-    static JsonObject landState(){JsonObject result=state();JsonArray playable=new JsonArray();playable.add("raw-card");result.add("playable",playable);JsonObject kinds=new JsonObject();kinds.addProperty("raw-card","play_land");result.add("action_kinds",kinds);return result;}
+    static JsonObject landState(){JsonObject result=state();result.addProperty("priority_player","raw-name");JsonArray playable=new JsonArray();playable.add("raw-card");result.add("playable",playable);JsonObject kinds=new JsonObject();kinds.addProperty("raw-card","play_land");result.add("action_kinds",kinds);return result;}
     static String perform(JsonObject snapshot){JsonObject out=JsonParser.parseString(chooseForAction(snapshot)).getAsJsonObject();return out.toString();}
     static String chooseForAction(JsonObject snapshot){JsonObject body=new JsonObject(),out=new JsonObject();out.addProperty("wire_version",1);out.addProperty("message_type","command");out.addProperty("message_id","land-action");for(String field:new String[]{"session_id","viewer_id","revision"})body.add(field,snapshot.get(field));body.addProperty("operation","perform");body.add("decision_id",snapshot.getAsJsonObject("decision").get("decision_id"));body.add("action_id",snapshot.getAsJsonArray("actions").get(0).getAsJsonObject().get("action_id"));out.add("body",body);return out.toString();}
     static void landChecks() throws Exception {
@@ -92,6 +92,24 @@ public final class OpeningProjectionChecks {
         check(snapshot.getAsJsonArray("objects").get(1).getAsJsonObject().get("tapped").getAsBoolean());
         check(snapshot.getAsJsonArray("objects").get(1).getAsJsonObject().get("card_identity").isJsonNull());
         JsonObject combat=priorityPrompt();combat.add("attackers",new JsonArray());rejects(landState(),combat);
+        for(String priority:new String[]{null,"unknown","raw-opponent-name"}) {
+            JsonObject wrong=landState();wrong.addProperty("priority_player",priority);rejects(wrong,priorityPrompt());
+        }
+        JsonObject concealed=landState();concealed.getAsJsonArray("hand").get(0).getAsJsonObject().addProperty("face_down",true);
+        check(projection().project(concealed,priorityPrompt()).getAsJsonArray("actions").size()==0);
+        for(String field:new String[]{"session_id","viewer_id","revision","decision_id","action_id"}) {
+            ManaforgeOpeningProjection bound=projection();String valid=perform(bound.project(landState(),priorityPrompt()));
+            JsonObject bad=JsonParser.parseString(valid).getAsJsonObject();
+            if(field.equals("revision"))bad.getAsJsonObject("body").addProperty(field,0);else bad.getAsJsonObject("body").addProperty(field,"wrong");
+            String code=field.equals("session_id")?"SESSION_MISMATCH":field.equals("viewer_id")?"VIEWER_MISMATCH":field.equals("revision")?"STALE_REVISION":field.equals("decision_id")?"STALE_DECISION":"ACTION_UNAVAILABLE";
+            fails(code,()->bound.claimAction(bad.toString(),"session","human","raw-game","raw-human",41,8));
+            check(bound.claimAction(valid,"session","human","raw-game","raw-human",41,8).get("value").getAsString().equals("raw-card"));
+        }
+        ManaforgeOpeningProjection stale=projection();String old=perform(stale.project(landState(),priorityPrompt()));
+        stale.project(landState(),priorityPrompt());fails("STALE_REVISION",()->stale.claimAction(old,"session","human","raw-game","raw-human",41,8));
+        String current=perform(stale.project(landState(),priorityPrompt()));JsonObject wrong=landState();wrong.addProperty("priority_player","raw-opponent-name");
+        fails("LIVE_OPENING_PROJECTION_UNSUPPORTED",()->stale.project(wrong,priorityPrompt()));
+        fails("STALE_DECISION",()->stale.claimAction(current,"session","human","raw-game","raw-human",41,8));
     }
     public static void main(String[] args) throws Exception {
         ManaforgeOpeningProjection projection=projection();JsonObject raw=state(),request=prompt();JsonObject snapshot=projection.project(raw,request);shape(snapshot);

@@ -74,8 +74,14 @@ def export_artwork_bundle(
             not selected
             or selected.printing_id != printing
             or selected.oracle_id != payload["oracle_id"]
-            or (not preview_only and (not selected.standard_compatible
-                or payload.get("layout") != "normal" or payload.get("card_faces")))
+            or (
+                not preview_only
+                and (
+                    not selected.standard_compatible
+                    or payload.get("layout") != "normal"
+                    or payload.get("card_faces")
+                )
+            )
             or not payload.get("type_line")
         ):
             unavailable.append(

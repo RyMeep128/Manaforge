@@ -373,18 +373,24 @@ def run_proof(
             classpath = str(server / "lib/*")
             context_sources = []
             if payment_context_probe:
-                classpath += os.pathsep + str(server / "plugins/mage-player-human-1.4.62.jar")
-                context_sources.append(
-                    HERE / "java/payment-xmage/manaforge/payment/xmage/ContextHumanPlayer.java"
+                classpath += os.pathsep + str(
+                    server / "plugins/mage-player-human-1.4.62.jar"
                 )
                 context_sources.append(
-                    HERE / "java/payment-xmage/manaforge/payment/xmage/OrdinaryManaShape.java"
+                    HERE
+                    / "java/payment-xmage/manaforge/payment/xmage/ContextHumanPlayer.java"
                 )
                 context_sources.append(
-                    HERE / "java/payment-xmage/manaforge/payment/xmage/OrdinaryCostCoverage.java"
+                    HERE
+                    / "java/payment-xmage/manaforge/payment/xmage/OrdinaryManaShape.java"
                 )
                 context_sources.append(
-                    HERE / "java/payment-xmage/manaforge/payment/xmage/NativePaymentHazards.java"
+                    HERE
+                    / "java/payment-xmage/manaforge/payment/xmage/OrdinaryCostCoverage.java"
+                )
+                context_sources.append(
+                    HERE
+                    / "java/payment-xmage/manaforge/payment/xmage/NativePaymentHazards.java"
                 )
             compile_log = (workspace / "compile.log").open("w", encoding="utf-8")
             logs.append(compile_log)
@@ -399,9 +405,13 @@ def run_proof(
                 "-d",
                 str(classes),
                 *map(str, sorted((HERE / "java").glob("*.java"))),
-                *map(str, sorted((HERE / "protocol/java/manaforge/protocol").glob("*.java"))),
+                *map(
+                    str,
+                    sorted((HERE / "protocol/java/manaforge/protocol").glob("*.java")),
+                ),
                 str(
-                    HERE / "java/payment-xmage/manaforge/payment/xmage/ManaResponseExecutor.java"
+                    HERE
+                    / "java/payment-xmage/manaforge/payment/xmage/ManaResponseExecutor.java"
                 ),
                 *map(str, context_sources),
             ]
