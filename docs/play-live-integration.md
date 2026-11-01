@@ -1,5 +1,43 @@
 # Live Unity / Java / XMage integration
 
+## Real artwork in the Arena-reference opening (0.5.147)
+
+The live fixtures now preserve actual catalog printing/Oracle IDs rather than
+synthetic printing placeholders. The artwork-only opening uses explicitly chosen
+modern standard-frame M21/272 Forest and M15/223 Ornithopter decks. The original
+M10/SOM Forest/Memnite gameplay probes remain unchanged. Their 2003 frames are
+deliberately outside the existing component-renderer compatibility guard; no guard
+was relaxed and no selected printing is silently replaced.
+Run `python tools/check_play_unity_live.py --artwork --interactive` to prepare a
+viewer-scoped bundle from the existing Core cache and launch the fanned opening.
+Both exact images must already be cached; the launcher explicitly forbids network
+fetching and never substitutes another printing. The two public development
+images were cached once through the existing Core service, not a new downloader.
+
+Unity reuses the existing verified CoreArtworkBundle/ViewerSessionHost pipeline.
+It waits for artwork for permitted, identified cards before reporting ready and
+checks artwork bindings are cleared after the viewer closes. The hand fan refreshes
+when asynchronous artwork arrives, so binding does not leave cards unrotated.
+Source-only/no-artwork launches retain their unavailable-art behavior. No image
+binaries, Downloads assets or card/deck database formats are added to Git.
+
+The supplied Arena reference still defines the visual target. This step fills the
+existing card-renderer artwork slots; it does not complete Arena frame materials,
+battlefield assets, avatars, mulligan semantics or continuous gameplay. Existing
+authoritative text/identity and privacy boundaries remain unchanged.
+
+Local focused validation passed: 12 graphics-enabled artwork host/surface tests
+without skips, 28 Python bundle/bootstrap tests, the final player build and the
+packaged art opening with all seven hand bindings loaded and zero after clearing.
+Screenshot review confirmed real art in the fan; diagnostic notices were moved
+to the header to avoid collector-footer collisions. The no-artwork opening and
+the original native Memnite cast/metadata/resolution regression also passed. All
+owned roots exited normally. Lint and formatting pass; no full application suite
+ran. Existing Unity asset/settings edits were preserved. The .147 CI check found
+.145 live/protocol/preview success; .146
+preview and general Tests were still running and deferred. Prior general Tests
+were cancelled; no new completed failures were found. Next CI review is .150.
+
 ## Arena-reference opening-hand composition (0.5.146)
 
 The owner reaffirmed MTG Arena as the visual target, with the supplied Downloads

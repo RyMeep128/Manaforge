@@ -34,10 +34,12 @@ namespace Manaforge.Play.Tests
         {
             var scope=new ViewerArtworkScope();var ticket=surface.BeginViewer("fixture-0001","one",scope);yield return null;yield return null;yield return null;
             Assert.That(surface.TryPresent(ticket,ViewerCardSurfaceTests.Frame(artwork:true)),Is.True);surface.Inspect(ticket,"fixture-0002");
+            Assert.That(surface.ExpectedArtworkCount,Is.EqualTo(1));Assert.That(surface.PresentedArtworkCount,Is.Zero);
             var request=surface.RequestArtwork(ticket,"fixture-0002");Assert.That(request,Is.Not.Null);
             Assert.That(surface.RequestArtwork(ticket,"fixture-0002"),Is.SameAs(request));
             var prepared=Task.Run(()=>Prepare(request)).GetAwaiter().GetResult();
             Assert.That(surface.TryApplyArtwork(ticket,prepared),Is.True);Assert.That(prepared.IsDisposed,Is.True);
+            Assert.That(surface.PresentedArtworkCount,Is.EqualTo(1));
             var view=surface.CardsRoot.Q<CardView>();var texture=(Texture2D)view.Artwork;
             Assert.That(texture,Is.Not.Null);Assert.That(texture.isReadable,Is.False);Assert.That(scope.Bytes,Is.EqualTo(16));
             Assert.That(surface.InspectionView.Artwork,Is.SameAs(texture));Assert.That(view.Identity.SelectedPrintingId,Is.EqualTo("exact-printing"));
@@ -46,6 +48,7 @@ namespace Manaforge.Play.Tests
             Assert.That(view.Artwork,Is.SameAs(texture));Assert.That(view.Q<Label>("name").text,Is.EqualTo("Copied current name"));
             Assert.That(surface.RequestArtwork(ticket,"fixture-0002"),Is.Null);
             Assert.That(surface.TryPresent(ticket,ViewerCardSurfaceTests.Frame(revision:3,hidden:true)),Is.True);
+            Assert.That(surface.ExpectedArtworkCount,Is.Zero);Assert.That(surface.PresentedArtworkCount,Is.Zero);
             Assert.That(view.Artwork,Is.Null);Assert.That(surface.RequestArtwork(ticket,"fixture-0002"),Is.Null);
             surface.BeginViewer("fixture-0001","two",new ViewerArtworkScope());yield return null;yield return null;
             Assert.That(texture==null,Is.True);Assert.That(scope.Count,Is.Zero);

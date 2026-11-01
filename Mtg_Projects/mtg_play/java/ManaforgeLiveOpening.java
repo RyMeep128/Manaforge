@@ -6,6 +6,21 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 /** Diagnostic public fixture only. Java owns all game commands; no Unity/raw-state export. */
 public final class ManaforgeLiveOpening {
+    private static Map<String,manaforge.protocol.PlayContracts.CardIdentity> fixturePrintings() {
+        Map<String,manaforge.protocol.PlayContracts.CardIdentity> result=new HashMap<>();
+        for(String[] row:new String[][]{{"M10/248","3156ba12-cf21-48a5-aa08-74b447cafc2c","b34bb2dc-c1af-4d77-b0b3-a0fb342a5fc6","forest"},{"SOM/174","469cc4e0-49c0-4009-97ea-28e44addec69","7663ac7c-1de3-4250-b96a-fae9dbd66a27","memnite"}}) {
+            manaforge.protocol.PlayContracts.CardIdentity identity=new manaforge.protocol.PlayContracts.CardIdentity();identity.printing_id=row[1];identity.oracle_id=row[2];identity.deck_entry_id=row[3];result.put(row[0],identity);
+        }
+        return result;
+    }
+    private static Map<String,manaforge.protocol.PlayContracts.CardIdentity> artworkPrintings() {
+        Map<String,manaforge.protocol.PlayContracts.CardIdentity> result=new HashMap<>();
+        for(String[] row:new String[][]{{"M21/272","3279314f-d639-4489-b2ab-3621bb3ca64b","b34bb2dc-c1af-4d77-b0b3-a0fb342a5fc6","forest"},{"M15/223","ee98e86c-ac16-4159-8982-ed14d282811a","a3a98bc9-caa0-49b7-951c-fe4e4f54e4ba","ornithopter"}}) {
+            manaforge.protocol.PlayContracts.CardIdentity identity=new manaforge.protocol.PlayContracts.CardIdentity();identity.printing_id=row[1];identity.oracle_id=row[2];identity.deck_entry_id=row[3];result.put(row[0],identity);
+        }
+        return result;
+    }
+    private final boolean artworkOpening=Boolean.getBoolean("manaforge.artworkOpening");
     private final BlockingQueue<JsonObject> events = new ArrayBlockingQueue<>(512);
     private final AtomicBoolean overflow = new AtomicBoolean(), cancelled = new AtomicBoolean();
     private final ManaforgeBridge bridge = new ManaforgeBridge(event -> { if(!events.offer(event))overflow.set(true); });
@@ -104,7 +119,7 @@ public final class ManaforgeLiveOpening {
             boolean land=false;for(JsonElement action:state.getAsJsonObject("action_kinds").entrySet().stream().map(Map.Entry::getValue).toArray(JsonElement[]::new))land|=action.getAsString().equals("play_land");
             int beforeHand=state.getAsJsonArray("hand").size(),beforeBoard=0;
             for(JsonElement player:state.getAsJsonArray("players"))if(player.getAsJsonObject().get("id").getAsString().equals(engineViewer))beforeBoard=player.getAsJsonObject().getAsJsonArray("battlefield").size();
-            Map<String,manaforge.protocol.PlayContracts.CardIdentity> bindings=new HashMap<>();manaforge.protocol.PlayContracts.CardIdentity identity=new manaforge.protocol.PlayContracts.CardIdentity();identity.printing_id="selected-forest";identity.deck_entry_id="forest";bindings.put("M10/248",identity);
+            Map<String,manaforge.protocol.PlayContracts.CardIdentity> bindings=fixturePrintings();
             ManaforgeOpeningProjection projection=new ManaforgeOpeningProjection(unityReady==null?"live-land":"live-opening","human",engineViewer,bindings);
             JsonObject snapshot=projection.project(state,event,true),body=new JsonObject(),envelope=new JsonObject();body.addProperty("fixture_only",false);body.add("snapshot",snapshot);envelope.addProperty("wire_version",1);envelope.addProperty("message_type","snapshot");envelope.addProperty("message_id","land");envelope.add("body",body);
             long cycle=state.get("cycle").getAsLong(),decision=event.get("decision_id").getAsLong();
@@ -140,8 +155,7 @@ public final class ManaforgeLiveOpening {
         for(int count=0;count<80;count++) {
             JsonObject event=pending==null?next():pending;if(!event.get("event").getAsString().equals("decision"))continue;pending=null;
             if(!event.get("kind").getAsString().equals("GAME_SELECT") || !event.get("is_priority").getAsBoolean())throw new IOException("LIVE_CAST_UNSUPPORTED_DECISION");
-            manaforge.protocol.PlayContracts.CardIdentity printing=new manaforge.protocol.PlayContracts.CardIdentity();printing.printing_id="selected-memnite";printing.deck_entry_id="memnite";
-            ManaforgeOpeningProjection projection=new ManaforgeOpeningProjection(unityReady==null?"live-cast":"live-opening","human",engineViewer,Collections.singletonMap("SOM/174",printing));
+            ManaforgeOpeningProjection projection=new ManaforgeOpeningProjection(unityReady==null?"live-cast":"live-opening","human",engineViewer,fixturePrintings());
             JsonObject snapshot=projection.project(state,event,true,true),body=new JsonObject(),envelope=new JsonObject();
             body.addProperty("fixture_only",false);body.add("snapshot",snapshot);envelope.addProperty("wire_version",1);envelope.addProperty("message_type","snapshot");envelope.addProperty("message_id","cast");envelope.add("body",body);
             boolean cast=false;for(JsonElement action:snapshot.getAsJsonArray("actions"))cast|=action.getAsJsonObject().get("kind").getAsString().equals("cast_spell");
@@ -222,7 +236,7 @@ public final class ManaforgeLiveOpening {
             value=command("join_table");value.addProperty("table_id",table);
             if(ai){value.addProperty("controller","engine_ai");value.addProperty("player_name","Public fixture AI");}
             JsonArray cards=new JsonArray();
-            for(String[] card:new String[][]{{"Forest","M10","248"},{"Memnite","SOM","174"}}) {
+            for(String[] card:artworkOpening?new String[][]{{"Forest","M21","272"},{"Ornithopter","M15","223"}}:new String[][]{{"Forest","M10","248"},{"Memnite","SOM","174"}}) {
                 if(firstCreature && !card[0].equals(ai?"Forest":"Memnite"))continue;
                 if(firstLand && card[0].equals("Memnite"))continue;
                 JsonObject entry=new JsonObject();entry.addProperty("name",card[0]);entry.addProperty("set",card[1]);entry.addProperty("number",card[2]);entry.addProperty("quantity",firstLand || firstCreature?60:30);cards.add(entry);
@@ -238,11 +252,7 @@ public final class ManaforgeLiveOpening {
             pending=null;
             if(state!=null && game!=null && state.getAsJsonArray("hand").size()==7 && state.getAsJsonArray("players").size()==2) {
                 initializeMetadata();
-                Map<String,manaforge.protocol.PlayContracts.CardIdentity> bindings=new HashMap<>();
-                for(String[] printing:new String[][]{{"M10/248","selected-forest","forest"},{"SOM/174","selected-memnite","memnite"}}) {
-                    manaforge.protocol.PlayContracts.CardIdentity identity=new manaforge.protocol.PlayContracts.CardIdentity();
-                    identity.printing_id=printing[1];identity.deck_entry_id=printing[2];bindings.put(printing[0],identity);
-                }
+                Map<String,manaforge.protocol.PlayContracts.CardIdentity> bindings=artworkOpening?artworkPrintings():fixturePrintings();
                 ManaforgeOpeningProjection projection=new ManaforgeOpeningProjection("live-opening","human",engineViewer,bindings);
                 JsonObject snapshot=projection.project(state,event);
                 JsonObject body=new JsonObject();body.addProperty("fixture_only",false);body.add("snapshot",snapshot);
@@ -292,6 +302,7 @@ public final class ManaforgeLiveOpening {
                 probe.unityKey=ManaforgeUnityOpening.readBootstrap(System.in);
                 probe.unityReady=java.nio.file.Paths.get(args[2]);
             }
+            if(probe.artworkOpening && (probe.unityReady==null || probe.firstLand || probe.firstCreature))throw new IOException();
             if(System.getProperty("manaforge.metadataContext")!=null) {
                 if(!probe.firstCreature || probe.unityReady!=null)throw new IOException();
                 probe.metadataContext=java.nio.file.Paths.get(System.getProperty("manaforge.metadataContext"));

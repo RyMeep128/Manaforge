@@ -22,6 +22,11 @@ def main():
     artifacts = ROOT / "Mtg_Projects/mtg_play_unity/Artifacts"
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--interactive", action="store_true")
+    parser.add_argument(
+        "--artwork",
+        action="store_true",
+        help="Require the exact public fixture printings from Core's existing offline image cache",
+    )
     scenario = parser.add_mutually_exclusive_group()
     scenario.add_argument(
         "--creature-ability",
@@ -46,6 +51,12 @@ def main():
         default=artifacts / ("UnityLive-" + uuid.uuid4().hex[:10]),
     )
     args = parser.parse_args()
+    if args.artwork and (
+        args.first_land or args.priority_pass or args.creature_ability
+    ):
+        parser.error(
+            "--artwork uses the modern Forest/Ornithopter opening-only fixture"
+        )
     output = args.output.resolve()
     if (
         not output.is_relative_to(artifacts.resolve())
@@ -57,6 +68,38 @@ def main():
     if not player.is_file():
         parser.error("Build the current Unity player first")
     output.mkdir()
+    artwork_directory = artwork_pin = None
+    if args.artwork:
+        sys.path.insert(0, str(ROOT / "Mtg_Projects/mtg_core"))
+        from mtg_core.services import CardService
+        from mtg_play.artwork_bundle import export_artwork_bundle
+
+        def offline(*unused, **keywords):
+            raise RuntimeError("LIVE_ARTWORK_NETWORK_FORBIDDEN")
+
+        service = CardService(
+            fetch_json_fn=offline, fetch_bytes_fn=offline, fetch_bulk_fn=offline
+        )
+        printings = [
+            service.get_print(set_code=code, collector_number=number)
+            for code, number in (("m21", "272"), ("m15", "223"))
+        ]
+        if any(not card for card in printings):
+            parser.error(
+                "Exact public fixture printings are missing from the installed Core catalog"
+            )
+        artwork_directory = str(output / "artwork")
+        manifest, artwork_pin = export_artwork_bundle(
+            service,
+            [card["id"] for card in printings],
+            artwork_directory,
+            session_id="live-opening",
+            viewer_id="human",
+        )
+        if len(manifest["entries"]) != 2 or manifest["unavailable"]:
+            parser.error(
+                "Cache both exact public fixture images through Core before using --artwork"
+            )
     hashpin = hashlib.sha256(
         (transport.HERE / "artifacts.json").read_bytes()
     ).hexdigest()
@@ -96,6 +139,7 @@ def main():
                         "-Djava.awt.headless=true",
                         "-Dfile.encoding=UTF-8",
                         "-Djava.net.preferIPv4Stack=true",
+                        *(["-Dmanaforge.artworkOpening=true"] if args.artwork else []),
                         "-cp",
                         str(server.parent / "classes")
                         + os.pathsep
@@ -167,6 +211,8 @@ def main():
                         engine_version="1.4.62-V1",
                         artifact_manifest_sha256=hashpin,
                         viewer_key=key,
+                        artwork_directory=artwork_directory,
+                        artwork_manifest_sha256=artwork_pin,
                     ),
                 )
                 ready = wait_file("ready", 30)
@@ -177,6 +223,8 @@ def main():
                 ):
                     raise RuntimeError("LIVE_UNITY_READY_FAILED")
                 owner.client_ready()
+                if args.artwork and ready.get("artwork_count") != 7:
+                    raise RuntimeError("LIVE_UNITY_ARTWORK_NOT_PRESENTED")
                 if args.interactive:
                     print(
                         "Live casting ability ready: select the engine-offered ability within 60 seconds."
@@ -202,6 +250,8 @@ def main():
                 )
                 if client.returncode != 0 or closed.get("viewer_cleared") is not True:
                     raise RuntimeError("LIVE_UNITY_CLEAR_FAILED")
+                if args.artwork and closed.get("artwork_count") != 0:
+                    raise RuntimeError("LIVE_UNITY_ARTWORK_NOT_CLEARED")
                 gateway.stdin.close()
                 gateway.wait(timeout=15)
                 raw = gateway.stdout.read(4097)
@@ -256,6 +306,8 @@ def main():
                     native_cast_ability_matched=args.creature_ability,
                     creature_spell_on_stack=args.creature_ability,
                     creature_resolved=False,
+                    artwork_presented=args.artwork,
+                    artwork_card_count=ready.get("artwork_count", 0),
                 )
             finally:
                 key[:] = bytes(len(key))
