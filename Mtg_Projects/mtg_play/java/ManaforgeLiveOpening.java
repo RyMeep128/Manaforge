@@ -314,7 +314,10 @@ public final class ManaforgeLiveOpening {
                     JsonObject sent=request(nativeCommand,"response_sent");if(!sent.get("accepted").getAsBoolean())throw new IOException("LIVE_COMBAT_FINISH_REJECTED");
                     attackSourceOffered=true;emptyAttackSubmitted=true;advancement(cycle,decision);CombatObservation observed=observeFinishedCombat();
                     NativeCastCorrelation.AttackFinishEvidence proof=NativeCastCorrelation.attackFinishEvidence(beforeFinish,finishPrompt,nativeCommand,finishMetadata,sent,observed.state,observed.prompt,observed.metadata,unityCastSource);
-                    if(proof==null)throw new IOException("LIVE_COMBAT_OUTCOME_UNPROVEN");unityAttackFinishSubmitted=true;unityAttackFinishConfirmed=true;return proof;
+                    if(proof==null)throw new IOException("LIVE_COMBAT_OUTCOME_UNPROVEN");
+                    JsonObject resultSnapshot=projection.projectReadOnlyPriority(observed.state,observed.prompt),resultBody=new JsonObject(),resultEnvelope=new JsonObject();
+                    resultBody.addProperty("fixture_only",false);resultBody.add("snapshot",resultSnapshot);resultEnvelope.addProperty("wire_version",1);resultEnvelope.addProperty("message_type","snapshot");resultEnvelope.addProperty("message_id","post-combat-priority");resultEnvelope.add("body",resultBody);
+                    unityAttackFinishSubmitted=true;unityAttackFinishConfirmed=true;return new ManaforgeUnityOpening.VerifiedAttackResult(proof,resultEnvelope);
                 },cancelled::get);return;
             }
             ManaforgeOpeningLoopback.exchangeChoice(envelope,projection,game,engineViewer,decision,cycle,"1.4.62-V1",artifactHash,nativeCommand->{

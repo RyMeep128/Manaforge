@@ -386,6 +386,14 @@ def main():
                         or phase.get("phase_transition_presented") is not True
                     ):
                         raise RuntimeError("LIVE_UNITY_PHASE_NOT_PRESENTED")
+                if args.finish_attacks:
+                    combat_result = wait_file("combat-result-ready", 60)
+                    if (
+                        combat_result.get("snapshot_count") != 2
+                        or combat_result.get("post_combat_priority_presented")
+                        is not True
+                    ):
+                        raise RuntimeError("LIVE_UNITY_COMBAT_RESULT_NOT_PRESENTED")
                 chosen = wait_file("choice", 60)
                 if (
                     chosen.get("ack_count")
@@ -407,6 +415,7 @@ def main():
                     raise RuntimeError("LIVE_UNITY_POST_RESOLUTION_RECEIPT_FAILED")
                 if args.finish_attacks and (
                     ready.get("attack_finish_presented") is not True
+                    or chosen.get("snapshot_count") != 2
                     or chosen.get("confirmed_receipt_count") != 1
                     or chosen.get("uncertain_receipt_count") != 0
                 ):
@@ -564,6 +573,8 @@ def main():
                         attack_finish_presented=True,
                         confirmed_receipt_count=1,
                         uncertain_receipt_count=0,
+                        post_combat_priority_presented=True,
+                        snapshot_count=2,
                     )
                 if args.observe_resolution:
                     evidence.update(
@@ -610,7 +621,7 @@ def main():
         json.dumps(evidence, indent=2) + "\n", encoding="utf-8"
     )
     print(
-        "Packaged Unity confirmed explicit Finish attacks using native selection/priority evidence; viewer cleared and roots reaped."
+        "Packaged Unity confirmed Finish attacks and displayed the next native priority state read-only; viewer cleared and roots reaped."
         if args.finish_attacks
         else "Packaged Unity confirmed three commands on one session and displayed the next native phase; viewer cleared and roots reaped."
         if args.post_resolution_pass

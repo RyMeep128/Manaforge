@@ -17,7 +17,7 @@ namespace Manaforge.Play
         private ViewerBootstrapPipe pipe;private Task<ViewerBootstrap> reading;private Task consuming;
         private ViewerCardSurface surface;private ViewerSessionHost host;private ViewerDecisionPanel panel;
         private PanelSettings settings;private UIDocument document;private string output;private Label status;private Label note;private OpeningCardFocus cardFocus;private OpeningButtonGlow buttonGlow;
-        private long snapshotRevision=-1;private int snapshots,acks,confirmedReceipts,uncertainReceipts;private bool capture,choiceReported,land,priority,creature,artwork,backdrop,requestedBackdrop,mulliganControls,buttonSkins,continuePriority,followupPresented,observeResolution,battlefieldPresented,postResolutionPass,phasePresented,combatFinish;
+        private long snapshotRevision=-1;private int snapshots,acks,confirmedReceipts,uncertainReceipts;private bool capture,choiceReported,land,priority,creature,artwork,backdrop,requestedBackdrop,mulliganControls,buttonSkins,continuePriority,followupPresented,observeResolution,battlefieldPresented,postResolutionPass,phasePresented,combatFinish,combatResultPresented;
         private bool OpeningLayout=>!land && !creature && !combatFinish;
         private float fanWidth=-1;private int fanCount=-1,fanArtwork=-1;private long fanRevision=-1;
         private void PresentOpening()
@@ -37,7 +37,7 @@ namespace Manaforge.Play
         }
         private bool Report(string name,bool cleared=false)
         {
-            try{var value=new JObject{["probe_version"]=1,["live_opening"]=true,["snapshot_count"]=Volatile.Read(ref snapshots),["ack_count"]=Volatile.Read(ref acks),["confirmed_receipt_count"]=Volatile.Read(ref confirmedReceipts),["uncertain_receipt_count"]=Volatile.Read(ref uncertainReceipts),["post_resolution_priority_presented"]=postResolutionPass && battlefieldPresented,["phase_transition_presented"]=phasePresented,["attack_finish_presented"]=combatFinish && InputButton("")!=null,["followup_priority_presented"]=followupPresented,["battlefield_observation_presented"]=battlefieldPresented,["viewer_cleared"]=cleared,["arena_button_glows"]=buttonGlow?.Count??0,["arena_button_skins"]=buttonSkins,["mulligan_controls"]=mulliganControls,["arena_backdrop_resource"]=backdrop?ArenaOpeningBackdrop.ResourceName:null,["arena_backdrop"]=backdrop,["artwork_count"]=surface?.PresentedArtworkCount??0};
+            try{var value=new JObject{["probe_version"]=1,["live_opening"]=true,["snapshot_count"]=Volatile.Read(ref snapshots),["ack_count"]=Volatile.Read(ref acks),["confirmed_receipt_count"]=Volatile.Read(ref confirmedReceipts),["uncertain_receipt_count"]=Volatile.Read(ref uncertainReceipts),["post_resolution_priority_presented"]=postResolutionPass && battlefieldPresented,["phase_transition_presented"]=phasePresented,["attack_finish_presented"]=combatFinish && InputButton("")!=null,["post_combat_priority_presented"]=combatResultPresented,["followup_priority_presented"]=followupPresented,["battlefield_observation_presented"]=battlefieldPresented,["viewer_cleared"]=cleared,["arena_button_glows"]=buttonGlow?.Count??0,["arena_button_skins"]=buttonSkins,["mulligan_controls"]=mulliganControls,["arena_backdrop_resource"]=backdrop?ArenaOpeningBackdrop.ResourceName:null,["arena_backdrop"]=backdrop,["artwork_count"]=surface?.PresentedArtworkCount??0};
                 string path=Path.Combine(output,name+".json");File.WriteAllText(path+".tmp",value.ToString());File.Move(path+".tmp",path);return true;}catch{return false;}
         }
         private void Fail(){host?.Dispose();Report("failed");Application.Quit(1);}
@@ -151,7 +151,14 @@ namespace Manaforge.Play
                     status.text="The exact pass is confirmed; XMage advanced its phase or step. Read-only state.";
                     if(capture)yield return Capture("phase.png");if(!Report("phase-ready")){Application.Quit(1);yield break;}
                 }
-                if(!choiceReported && Volatile.Read(ref acks)>=(postResolutionPass?6:continuePriority?4:2) && (!observeResolution || battlefieldPresented) && (!postResolutionPass || phasePresented)){
+                if(combatFinish && !combatResultPresented && Volatile.Read(ref snapshots)==2 && host.HasPresentedRevision(Interlocked.Read(ref snapshotRevision))){
+                    if(host.PresentedDecision!=null || panel.Root.Query<Button>().ToList().Count!=0){Fail();yield break;}
+                    combatResultPresented=true;inspect.Clear();
+                    foreach(var card in surface.CardsRoot.Children())if(card is CardView view)view.SetPresentation(CardPresentationMode.Compact,135);
+                    status.text="Finish attacks confirmed. The next native priority state is shown read-only.";
+                    if(capture)yield return Capture("combat-result.png");if(!Report("combat-result-ready")){Application.Quit(1);yield break;}
+                }
+                if(!choiceReported && Volatile.Read(ref acks)>=(postResolutionPass?6:continuePriority?4:2) && (!observeResolution || battlefieldPresented) && (!postResolutionPass || phasePresented) && (!combatFinish || combatResultPresented)){
                     buttonGlow?.Dispose();buttonGlow=null;cardFocus?.Dispose();cardFocus=null;host.Cancel();host.Tick();panel.Tick();inspect.Clear();
                     status.text=combatFinish?"Finish attacks confirmed; native empty combat advanced. Viewer cleared.":postResolutionPass?"All three choices confirmed; next native phase observed. Viewer cleared; this test ends here.":observeResolution?"Casting ability and exact priority pass confirmed; battlefield observed. Viewer cleared; this test ends here.":continuePriority?"Casting ability confirmed; next priority pass submitted. Pass outcome uncertain. Viewer cleared; this test ends here.":creature?"Casting ability submitted; native Memnite stack entry observed. Viewer cleared; this test ends here.":priority?"Priority pass submitted to XMage; engine advanced. Viewer cleared; this test ends here.":"Choice submitted to XMage. Next-state support ends here; viewer cleared. No confirmed result is claimed.";
                     if(capture)yield return Capture("choice.png");if(!Report("choice",true)){Application.Quit(1);yield break;}choiceReported=true;

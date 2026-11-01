@@ -1,5 +1,31 @@
 # Live Unity / Java / XMage integration
 
+## Read-only priority state after confirmed combat finish (0.5.173)
+
+The existing packaged `--finish-attacks --native-metadata` probe now delivers a
+second snapshot after the confirmed finish receipt, on the same authenticated
+connection and receipt ledger. It projects the actual subsequent guarded native
+priority state with no decision or actions and invalidates old command tokens.
+The endpoint accepts only a typed verified attack result; an actionable result
+snapshot is rejected, and normal session schema/binding checks precede delivery.
+
+Unity waits for the snapshot's actual projected revision to mount, removes stale
+inspection buttons, captures `combat-result.png`, then clears normally. Acceptance
+requires two snapshots, one confirmed receipt, no uncertain receipts and
+post_combat_priority_presented evidence. The confirmed receipt survives the new
+frame; new stale attack requests cannot enqueue native work, while a retry of the
+original command still gets its cached confirmed receipt. This displays the next
+state without enabling further combat or priority commands.
+
+Validation: Windows player build, the real two-snapshot Unity/XMage combat probe,
+screenshot inspection and normal owned cleanup passed. 49 focused Unity PlayMode
+host/decision-binding/dispatch tests and Java protocol preflight passed, including
+332 projection/correlation/privacy checks. Authenticated-session tests cover
+read-only result enforcement, stale-command rejection, cached confirmed retries
+without native replay and receipt retention on disconnect. The existing packaged
+three-command phase regression also passed. Lint and formatting passed; no full
+application suite ran. New CI evidence is pending; next scheduled check: .174.
+
 ## Correlated Finish attacks receipt (0.5.172)
 
 The existing packaged `--finish-attacks --native-metadata` probe now emits

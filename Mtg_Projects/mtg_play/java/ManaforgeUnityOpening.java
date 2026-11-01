@@ -9,11 +9,22 @@ import java.util.function.BooleanSupplier;
 /** Opt-in public-fixture live opening endpoint; no product launch or broad gameplay support. */
 public final class ManaforgeUnityOpening {
     public interface VerifiedAbilitySubmit {NativeCastCorrelation.AbilityEvidence submit(JsonObject command) throws Exception;}
-    public interface VerifiedAttackSubmit {NativeCastCorrelation.AttackFinishEvidence submit(JsonObject command) throws Exception;}
+    public interface VerifiedAttackSubmit {VerifiedAttackResult submit(JsonObject command) throws Exception;}
+    public static final class VerifiedAttackResult {
+        private final NativeCastCorrelation.AttackFinishEvidence evidence;private final JsonObject snapshot;
+        public VerifiedAttackResult(NativeCastCorrelation.AttackFinishEvidence evidence,JsonObject snapshot) {
+            if(evidence==null || snapshot==null || !"snapshot".equals(snapshot.get("message_type").getAsString())
+                || !snapshot.getAsJsonObject("body").getAsJsonObject("snapshot").get("decision").isJsonNull()
+                || snapshot.getAsJsonObject("body").getAsJsonObject("snapshot").getAsJsonArray("actions").size()!=0)
+                throw new IllegalArgumentException("COMBAT_RESULT_NOT_READ_ONLY");
+            this.evidence=evidence;this.snapshot=snapshot.deepCopy();
+        }
+    }
     private interface ChoiceSubmit {ChoiceEvidence submit(JsonObject command) throws Exception;}
     private static final class ChoiceEvidence {
-        final NativeCastCorrelation.AbilityEvidence ability;final NativeCastCorrelation.AttackFinishEvidence attack;
-        ChoiceEvidence(NativeCastCorrelation.AbilityEvidence ability,NativeCastCorrelation.AttackFinishEvidence attack){this.ability=ability;this.attack=attack;}
+        final NativeCastCorrelation.AbilityEvidence ability;final NativeCastCorrelation.AttackFinishEvidence attack;final JsonObject snapshot;
+        ChoiceEvidence(NativeCastCorrelation.AbilityEvidence ability,NativeCastCorrelation.AttackFinishEvidence attack){this(ability,attack,null);}
+        ChoiceEvidence(NativeCastCorrelation.AbilityEvidence ability,NativeCastCorrelation.AttackFinishEvidence attack,JsonObject snapshot){this.ability=ability;this.attack=attack;this.snapshot=snapshot;}
         JsonObject confirm(ManaforgeOpeningSession owner,String id) throws IOException{return ability!=null?owner.confirmAbility(id,ability):owner.confirmAttackFinish(id,attack);}
     }
     public interface NextPriority {PriorityOffer next() throws Exception;}
@@ -51,7 +62,7 @@ public final class ManaforgeUnityOpening {
     }
     public static void serveVerifiedAttackFinish(JsonObject snapshot,ManaforgeOpeningProjection projection,String game,String engineViewer,long decision,long cycle,
             String engine,String hash,byte[] key,Path ready,VerifiedAttackSubmit submit,BooleanSupplier cancelled) throws Exception {
-        serveChoice(snapshot,projection,game,engineViewer,decision,cycle,engine,hash,key,ready,command->{NativeCastCorrelation.AttackFinishEvidence proof=submit.submit(command);return proof==null?null:new ChoiceEvidence(null,proof);},cancelled,null);
+        serveChoice(snapshot,projection,game,engineViewer,decision,cycle,engine,hash,key,ready,command->{VerifiedAttackResult result=submit.submit(command);return result==null?null:new ChoiceEvidence(null,result.evidence,result.snapshot);},cancelled,null);
     }
     private static void serveChoice(JsonObject snapshot,ManaforgeOpeningProjection projection,String game,String engineViewer,long decision,long cycle,
             String engine,String hash,byte[] key,Path ready,ChoiceSubmit submit,BooleanSupplier cancelled,NextPriority continuation) throws Exception {
@@ -76,6 +87,7 @@ public final class ManaforgeUnityOpening {
                     // Advancement alone remains uncertain. Only exact typed native evidence may settle.
                     JsonObject request=WireMessages.parse(wire);String id=request.get("message_id").getAsString();
                     frames.write((evidence==null?owner.uncertain(id):evidence.confirm(owner,id)).toString(),5000,cancelled);
+                    if(evidence!=null && evidence.snapshot!=null){owner.observe(evidence.snapshot.toString());frames.write(evidence.snapshot.toString(),5000,cancelled);}
                     if(continuation!=null) {
                         if(evidence==null || evidence.ability==null)throw new IOException("LIVE_UNITY_CONTINUATION_UNCONFIRMED");
                         PriorityOffer next=continuation.next();owner.observe(next.snapshot.toString());frames.write(next.snapshot.toString(),5000,cancelled);

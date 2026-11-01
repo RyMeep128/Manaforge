@@ -99,6 +99,14 @@ public final class OpeningSessionChecks {
             if(!"confirmed".equals(receipt.getAsJsonObject("body").get("outcome").getAsString()) || !receipt.equals(owner.confirmAttackFinish("land-action",proof)))throw new AssertionError("ATTACK_CONFIRMATION_FAILED");
             manaforge.protocol.SubmissionLedger.Prepared duplicate=owner.dispatch(wire,"raw-game","raw-human",41,8);
             if(duplicate.shouldSubmit || !receipt.equals(duplicate.receipt()) || owner.pollNative()!=null)throw new AssertionError("CONFIRMED_ATTACK_REPLAYED");
+            JsonObject observed=envelope(projection.projectReadOnlyPriority(after,next));observed.addProperty("message_id","post-combat-priority");
+            new ManaforgeUnityOpening.VerifiedAttackResult(proof,observed);
+            try{new ManaforgeUnityOpening.VerifiedAttackResult(proof,envelope(snapshot));throw new AssertionError("ACTIONABLE_COMBAT_RESULT_ACCEPTED");}
+            catch(IllegalArgumentException expected){if(!"COMBAT_RESULT_NOT_READ_ONLY".equals(expected.getMessage()))throw expected;}
+            owner.observe(observed.toString());JsonObject stale=JsonParser.parseString(wire).getAsJsonObject();stale.addProperty("message_id","stale-attack-finish");
+            if(owner.dispatch(stale.toString(),"raw-game","raw-human",42,8).shouldSubmit || owner.pollNative()!=null)throw new AssertionError("READ_ONLY_COMBAT_ACCEPTED_ACTION");
+            manaforge.protocol.SubmissionLedger.Prepared replay=owner.dispatch(wire,"raw-game","raw-human",42,8);
+            if(replay.shouldSubmit || !receipt.equals(replay.receipt()) || owner.pollNative()!=null)throw new AssertionError("COMBAT_RESULT_CHANGED_RECEIPT");
             owner.disconnected();if(!receipt.equals(owner.receiptFor("land-action")))throw new AssertionError("ATTACK_CONFIRMATION_LOST");
         }
     }
