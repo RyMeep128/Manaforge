@@ -5,6 +5,25 @@ namespace Manaforge.Play.Tests
 {
     public sealed class OpeningCardFocusTests
     {
+        [Test] public void PointerLeavingRestoresKeyboardFocusedCard()
+        {
+            if(UnityEngine.SystemInfo.graphicsDeviceType==UnityEngine.Rendering.GraphicsDeviceType.Null)Assert.Ignore("Mounted focus events require a graphics device.");
+            var window=UnityEngine.ScriptableObject.CreateInstance<UnityEditor.EditorWindow>();
+            try{
+            window.Show();var root=window.rootVisualElement;var a=new CardView();var b=new CardView();root.Add(a);root.Add(b);
+            using(var focus=new OpeningCardFocus(root)){
+                a.Focus();
+                using(var ev=PointerEnterEvent.GetPooled()){ev.target=b;b.SendEvent(ev);}
+                Assert.That(b.style.scale.value.value.x,Is.EqualTo(1.12f));
+                using(var ev=PointerLeaveEvent.GetPooled()){ev.target=b;b.SendEvent(ev);}
+                Assert.That(a.style.scale.value.value.x,Is.EqualTo(1.12f));
+                Assert.That(b.style.scale.value.value.x,Is.EqualTo(1));
+                a.Blur();
+                Assert.That(a.style.scale.value.value.x,Is.EqualTo(1));
+            }
+            a.Dispose();b.Dispose();
+            }finally{window.Close();}
+        }
         [Test] public void FocusRaisesOnlyTheChosenCardAndRestoresFanOrder()
         {
             var root=new VisualElement();var a=new CardView();var b=new CardView();root.Add(a);root.Add(b);

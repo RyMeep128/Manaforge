@@ -11,16 +11,16 @@ namespace Manaforge.Play
         private readonly VisualElement root;
         private readonly List<CardView> cards;
         private readonly List<Action> unregister=new List<Action>();
-        private CardView active;private bool disposed;
+        private CardView active,hovered,focused;private bool disposed;
         public OpeningCardFocus(VisualElement root)
         {
             this.root=root;cards=root.Query<CardView>().ToList();
             foreach(var card in cards){
                 bool wasFocusable=card.focusable;card.focusable=true;
-                EventCallback<PointerEnterEvent> enter=ev=>Show(card);
-                EventCallback<PointerLeaveEvent> leave=ev=>{if(active==card)Show(null);};
-                EventCallback<FocusInEvent> focus=ev=>Show(card);
-                EventCallback<FocusOutEvent> blur=ev=>{if(active==card)Show(null);};
+                EventCallback<PointerEnterEvent> enter=ev=>{hovered=card;Show(hovered);};
+                EventCallback<PointerLeaveEvent> leave=ev=>{if(hovered==card)hovered=null;Show(hovered??focused);};
+                EventCallback<FocusInEvent> focus=ev=>{focused=card;Show(hovered??focused);};
+                EventCallback<FocusOutEvent> blur=ev=>{if(focused==card)focused=null;Show(hovered??focused);};
                 card.RegisterCallback(enter);card.RegisterCallback(leave);card.RegisterCallback(focus);card.RegisterCallback(blur);
                 unregister.Add(()=>{card.UnregisterCallback(enter);card.UnregisterCallback(leave);card.UnregisterCallback(focus);card.UnregisterCallback(blur);card.focusable=wasFocusable;});
             }
@@ -41,7 +41,7 @@ namespace Manaforge.Play
         }
         public void Dispose()
         {
-            if(disposed)return;Show(null);disposed=true;foreach(var remove in unregister)remove();unregister.Clear();cards.Clear();
+            if(disposed)return;Show(null);hovered=focused=null;disposed=true;foreach(var remove in unregister)remove();unregister.Clear();cards.Clear();
         }
     }
 }

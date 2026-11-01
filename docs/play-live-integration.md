@@ -1,5 +1,16 @@
 # Live Unity / Java / XMage integration
 
+## Opening-hand keyboard focus retention (0.5.158)
+
+Pointer hover now temporarily takes precedence over keyboard focus. Leaving the
+hovered card restores enlargement to the keyboard-focused card; moving the
+pointer off that focused card no longer drops its emphasis. Blur still clears
+emphasis when no card is hovered. Disposal clears both input references.
+
+Validation: 21 focused opening-focus/fan EditMode checks passed with graphics,
+including mounted focus/hover/leave/blur events. No packaged visual acceptance
+or full-suite run is claimed. Next scheduled CI check remains .159.
+
 ## Reference-proportioned opening controls (0.5.157)
 
 The primary controls now follow the supplied screenshot's proportions at the
