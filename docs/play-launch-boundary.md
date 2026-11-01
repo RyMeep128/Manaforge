@@ -162,3 +162,24 @@ short child deadlines fail, so the final focused run used the direct interpreter
 with the existing environment's dependencies. No full application suite ran.
 No UI changed; previous owner visual reviews and G0/G1 acceptance remain pending.
 Automatic mana work remains parked.
+
+
+### Owned Java rejection matrix (0.5.125)
+
+The private-launch proof now runs ten actual Java child processes: the existing
+valid human/AI native-deck export plus nine invalid public fixtures. Rejections
+cover malformed JSON, invalid UTF-8, BOM, duplicate keys, each of the three
+independently trusted runtime pins, duplicate seats and dangling commander
+references. Every rejection must exit with the fixed receiver failure status,
+leave no validation marker (including partial markers), reap its owned root
+without forced termination and refuse subsequent client admission. Unexpected
+errors, timeouts or a mistakenly accepted manifest fail the proof.
+
+Report version 2 records only fixed case labels/counts and public evidence;
+no manifest content is included. An old report is removed before a rerun so failed
+runs cannot retain stale success evidence. Protocol CI runs the matrix and uploads
+this sanitized report under a commit-specific artifact name. The focused local
+matrix passed all ten cases. CI remains scheduled for the .126 check rather than
+waiting on .125. No runtime/UI behavior changed and no engine or client started.
+These rejection checks do not implement the pending authenticated ready handshake,
+engine descendant ownership or actual engine card resolution.

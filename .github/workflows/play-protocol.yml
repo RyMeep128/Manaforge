@@ -66,5 +66,12 @@ jobs:
       - name: Validate private native-deck launch and owned Java cleanup
         run: python tools/check_play_gateway_launch.py
 
+      - name: Upload sanitized private-launch evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: private-launch-${{ github.sha }}
+          path: Mtg_Projects/mtg_play_unity/Artifacts/GatewayLaunchProof/report.json
+          if-no-files-found: error
+
       - name: Check isolated Java payment coordinator safety
         run: python tools/check_play_payment_coordinator.py
