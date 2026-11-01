@@ -189,12 +189,19 @@ namespace Manaforge.Play
             artwork.TryGetValue(card.ObjectId,out var binding);
             if(binding==null)view.BindUnavailable();else view.Bind(binding.Identity,binding.Texture,binding.Profile?.Crop??CardCompactProfile.StandardArtCrop);
             var c=card.Characteristics;
-            string pt=c?.Power!=null && c.Toughness!=null?c.Power+"/"+c.Toughness:null;
+            string pt=DisplayPowerToughness(c?.TypeLine,c?.Power,c?.Toughness);
             // No printed text, invented mana cost, inferred artwork/face or reconstructed current rules.
             string unavailable=binding==null?"Artwork / rules unavailable":"Current rules unavailable";
             if(card.Tapped==null)unavailable+=" / tap state unavailable";
             view.UpdateValues(new CardDisplayValues(c?.Name,null,c?.TypeLine,null,pt,unavailable,binding?.Profile,loyalty:c?.Loyalty,defense:c?.Defense,hidePrintedStats:true));
             if(card.Tapped==true)view.style.rotate=new Rotate(new Angle(90));
+        }
+        public static string DisplayPowerToughness(string typeLine,string power,string toughness)
+        {
+            if(typeLine==null || power==null || toughness==null)return null;
+            string types=typeLine.Split('\u2014')[0];
+            foreach(string type in types.Split(' '))if(type=="Creature")return power+"/"+toughness;
+            return null;
         }
         public bool Inspect(ViewerSurfaceTicket supplied,string objectId)
         {

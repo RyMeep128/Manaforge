@@ -1,5 +1,28 @@
 # Live Unity / Java / XMage integration
 
+## Opening card hover and focus (0.5.152)
+
+The Arena-reference opening fan now emphasizes a card on pointer hover or
+keyboard focus: it rises slightly, enlarges to 112%, and draws above adjacent
+cards. Horizontal correction keeps the enlarged card within the hand viewport.
+Leaving or blurring restores its original scale and fan order. This is
+Manaforge-owned presentation behavior; the scale is not claimed as an extracted
+Arena constant. The supplied fan geometry and button assets remain in use.
+
+No engine inspection/action token is created. Existing diagnostic inspection
+remains available. The focus controller unregisters callbacks and drops card
+references when the viewer closes; cleared/foreign cards cannot be reattached.
+The packaged capture now includes `focused.png` before restoring the ordinary
+hand and submitting the existing opening action.
+
+The raised-card screenshot exposed gateway default 0/0 on lands; the surface
+now shows power/toughness only for creature type lines, preserving values such
+as */*.
+
+Validation: 20 focused EditMode tests passed (focus, stat visibility, and fan),
+packaged build succeeded, and the real artwork opening/cleanup was checked.
+Next scheduled CI check remains .153.
+
 ## Supplied Arena button textures (0.5.151)
 
 The recognized opening controls can now use the actual supplied
