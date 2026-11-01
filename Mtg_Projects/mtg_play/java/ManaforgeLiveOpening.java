@@ -178,8 +178,9 @@ public final class ManaforgeLiveOpening {
                     long abilityCycle=state.get("cycle").getAsLong(),abilityDecision=ability.get("decision_id").getAsLong();
                     if(unityReady!=null) {
                         ManaforgeUnityOpening.serve(envelope,projection,game,engineViewer,abilityDecision,abilityCycle,"1.4.62-V1",artifactHash,unityKey,unityReady,
-                            nativeCommand->{JsonObject sent=request(nativeCommand,"response_sent");if(!sent.get("accepted").getAsBoolean())throw new IOException("LIVE_CAST_ABILITY_REJECTED");
-                                advancement(abilityCycle,abilityDecision);observeCreatureStack(hand-1);},cancelled::get);
+                            nativeCommand->{selectedAbility[0]=nativeCommand.get("value").getAsString();
+                                JsonObject sent=request(nativeCommand,"response_sent");if(!sent.get("accepted").getAsBoolean())throw new IOException("LIVE_CAST_ABILITY_REJECTED");
+                                advancement(abilityCycle,abilityDecision);observeCreatureStack(hand-1);verifyStackSource(correlation[0],selectedAbility[0]);},cancelled::get);
                         return;
                     }
                     ManaforgeOpeningLoopback.exchangeChoice(envelope,projection,game,engineViewer,abilityDecision,abilityCycle,"1.4.62-V1",artifactHash,
@@ -304,7 +305,7 @@ public final class ManaforgeLiveOpening {
             }
             if(probe.artworkOpening && (probe.unityReady==null || probe.firstLand || probe.firstCreature))throw new IOException();
             if(System.getProperty("manaforge.metadataContext")!=null) {
-                if(!probe.firstCreature || probe.unityReady!=null)throw new IOException();
+                if(!probe.firstCreature)throw new IOException();
                 probe.metadataContext=java.nio.file.Paths.get(System.getProperty("manaforge.metadataContext"));
                 JsonObject boot=manaforge.protocol.WireEnvelope.parseObject(manaforge.protocol.TextFrame.read(System.in));
                 if(boot.size()!=2 || !boot.has("metadata_bootstrap_version") || !boot.get("metadata_bootstrap_version").toString().equals("1") || !boot.get("owner_key_hex").isJsonPrimitive()

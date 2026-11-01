@@ -1,5 +1,39 @@
 # Live Unity / Java / XMage integration
 
+## Exact native spell-instance evidence from Unity (0.5.163)
+
+The packaged casting-ability probe can now use the guarded Java metadata channel:
+
+```powershell
+python tools/check_play_unity_live.py --creature-ability --native-metadata
+```
+
+The Java gateway captures the native ability selected through Unity and verifies
+the resulting stack spell against the original source, source incarnation and
+selected ability using the existing NativeCastCorrelation checks. It also checks
+that restricted metadata omits the private incarnation/ability fields. The
+sanitized report requires native_stack_source_matched and
+native_cast_instance_matched; native IDs and metadata do not enter Unity or the
+report. Metadata provisioning is shared with the Java-only proof, remains a
+one-time parent operation, clears its key even on failure and leaves subsequent
+queries entirely Java-to-Java. CI watches the shared helper as a live-proof input.
+
+This advances P2/P4's outcome-correlation prerequisite. It does not yet reconcile
+the submission ledger: receipts remain uncertain, the Unity probe still ends
+after one choice and creature_resolved remains false. Continuous Unity priority,
+stack translation and natural match completion remain open. Next implementation:
+use exact correlated evidence to settle the appropriate receipt before admitting
+a subsequent authenticated Unity decision; preserve rejection/duplicate guards.
+
+Validation: the packaged Unity choice with exact source/instance metadata and
+normal cleanup passed using the existing player (no C# change or rebuild).
+The existing Java-only native-metadata cast/stack/resolution proof also passed.
+Focused Java protocol preflight passed, including 211 projection/privacy checks,
+28 metadata-channel checks and authenticated socket/session tests. Three focused
+Python provisioning failure/cleanup tests, lint and formatting passed; invalid
+CLI flag combinations reject before launch. No full application suite ran.
+CI remains pending for this change; next scheduled check: .165.
+
 ## Clear opening focus when cards detach (0.5.162)
 
 Removing a mounted opening card now clears its hover/focus references and

@@ -13,15 +13,21 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "Mtg_Projects"))
-from mtg_play import connection_proof as transport
-from mtg_play.launch_lifecycle import LaunchOwner
-from mtg_play.viewer_bootstrap import export_viewer_bootstrap
+from mtg_play import connection_proof as transport  # noqa: E402
+from mtg_play.launch_lifecycle import LaunchOwner  # noqa: E402
+from mtg_play.viewer_bootstrap import export_viewer_bootstrap  # noqa: E402
+from play_native_metadata import provision_metadata  # noqa: E402
 
 
 def main():
     artifacts = ROOT / "Mtg_Projects/mtg_play_unity/Artifacts"
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--interactive", action="store_true")
+    parser.add_argument(
+        "--native-metadata",
+        action="store_true",
+        help="Verify the Unity-selected spell instance through private Java metadata; requires --creature-ability",
+    )
     parser.add_argument(
         "--artwork",
         action="store_true",
@@ -61,6 +67,8 @@ def main():
         default=artifacts / ("UnityLive-" + uuid.uuid4().hex[:10]),
     )
     args = parser.parse_args()
+    if args.native_metadata and not args.creature_ability:
+        parser.error("--native-metadata requires --creature-ability")
     if args.artwork and (
         args.first_land or args.priority_pass or args.creature_ability
     ):
@@ -129,6 +137,7 @@ def main():
         java = args.xmage_root.resolve() / "java/jre1.8.0_201/bin/java.exe"
         workspace = server.parent / "unity-live-opening"
         workspace.mkdir()
+        metadata_context = workspace / "metadata-context.json"
 
         def wait_file(name, seconds=90):
             deadline = time.monotonic() + seconds
@@ -153,6 +162,11 @@ def main():
                         "-Djava.awt.headless=true",
                         "-Dfile.encoding=UTF-8",
                         "-Djava.net.preferIPv4Stack=true",
+                        *(
+                            ["-Dmanaforge.metadataContext=" + str(metadata_context)]
+                            if args.native_metadata
+                            else []
+                        ),
                         *(["-Dmanaforge.artworkOpening=true"] if args.artwork else []),
                         "-cp",
                         str(server.parent / "classes")
@@ -181,6 +195,10 @@ def main():
                 ).encode()
                 gateway.stdin.write(len(bootstrap).to_bytes(4, "big") + bootstrap)
                 gateway.stdin.flush()
+                if args.native_metadata:
+                    provision_metadata(
+                        gateway, server_process, server, metadata_context, hashpin
+                    )
                 address = wait_file("gateway-ready")
                 if (
                     set(address) != {"host", "port"}
@@ -301,6 +319,14 @@ def main():
                         raise RuntimeError("LIVE_UNITY_EVIDENCE_FAILED")
                 if args.first_land and native.get("first_land_observed") is not True:
                     raise RuntimeError("LIVE_UNITY_LAND_NOT_OBSERVED")
+                if args.native_metadata and any(
+                    native.get(field) is not True
+                    for field in (
+                        "native_stack_source_matched",
+                        "native_cast_instance_matched",
+                    )
+                ):
+                    raise RuntimeError("LIVE_UNITY_CAST_INSTANCE_UNPROVEN")
                 if args.creature_ability and any(
                     native.get(field) is not True
                     for field in (
@@ -346,6 +372,11 @@ def main():
                     artwork_presented=args.artwork,
                     artwork_card_count=ready.get("artwork_count", 0),
                 )
+                if args.native_metadata:
+                    evidence.update(
+                        native_stack_source_matched=True,
+                        native_cast_instance_matched=True,
+                    )
             finally:
                 key[:] = bytes(len(key))
                 cleanup = owner.close()
