@@ -1,5 +1,32 @@
 # Live Unity / Java / XMage integration
 
+## Native source-incarnation and selected-ability observation (0.5.145)
+
+The guarded metadata reader now returns a stack spell's physical source counter
+and native spell-ability IDs only for requested, identified spell objects. The
+Java proof reads the source's owner/counter in the original hand frame before
+native submission, freezes that observation, and requires a later source-counter
+increase plus the exact single selected ability on the stack. Missing, unchanged,
+stale, malformed or ambiguous observations cannot satisfy this check.
+
+The opt-in metadata proof adds `native_cast_instance_matched`. It also requests
+the stack object without identified-object permission and requires both detailed
+fields to be absent. Detailed IDs/counters remain private Java metadata; the
+public snapshot, Unity and sanitized report gain no native identity fields.
+
+This demonstrates an observed engine incarnation transition and ability match in
+the fixed Memnite scenario. It does not prove arbitrary cast outcomes or choose
+a receipt policy. No confirmed receipts, pending-ledger changes, automatic mana
+or additional Unity commands were added. Continuous outcome reconciliation is
+still open.
+
+Local focused Java protocol checks passed, including 211 projection/privacy/
+observation checks and 28 metadata transport checks. The real-engine instance/
+ability match, unidentified-object redaction and cast/resolution probe passed with
+normal owned-root cleanup. All 75 focused Python adapter checks, lint and
+formatting passed. No full application suite or Unity build ran. Next scheduled
+CI review remains .147.
+
 ## Direct Java guarded stack-source metadata (0.5.144)
 
 `python tools/check_play_live_opening.py --first-creature --native-metadata

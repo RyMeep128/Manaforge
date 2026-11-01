@@ -15,7 +15,17 @@ public final class ManaforgeLiveOpening {
     private boolean firstLand,landObserved,unityPriorityPass,firstCreature,castAbilityMatched;
     private byte[] unityKey;private java.nio.file.Path unityReady;
     private byte[] metadataKey;private java.nio.file.Path metadataContext;
-    private ManaforgeMetadataChannel.Client metadataClient;private boolean metadataSourceMatched;
+    private ManaforgeMetadataChannel.Client metadataClient;private boolean metadataSourceMatched,metadataInstanceMatched;
+    private JsonObject sourceMetadata(JsonObject view,String source) throws Exception {
+        for(int attempt=0;attempt<40 && System.nanoTime()<deadline;attempt++) {
+            JsonObject query=new JsonObject();query.addProperty("command","metadata");query.addProperty("game",game);query.addProperty("player",engineViewer);query.add("cycle",view.get("cycle").deepCopy());
+            JsonArray ids=new JsonArray();ids.add(source);query.add("object_ids",ids);query.add("identified_ids",ids.deepCopy());JsonObject result=metadataClient.read(query);
+            if(new JsonPrimitive("ok").equals(result.get("status")))return result;
+            if(!new JsonPrimitive("retry").equals(result.get("status")))throw new IOException("NATIVE_SOURCE_METADATA_UNAVAILABLE");
+            Thread.sleep(25);
+        }
+        throw new IOException("NATIVE_SOURCE_METADATA_TIMEOUT");
+    }
     private void startLifeline() {
         Thread lifeline=new Thread(() -> {try{while(System.in.read()!=-1){} }catch(IOException ignored){}cancelled.set(true);},"live-opening-owner");lifeline.setDaemon(true);lifeline.start();
     }
@@ -31,13 +41,20 @@ public final class ManaforgeLiveOpening {
         metadataClient=ManaforgeMetadataChannel.connect(Integer.parseInt(address.get("port").getAsString()),address.get("session").getAsString(),metadataKey,game,engineViewer,"1.4.62-V1",artifactHash);
         Arrays.fill(metadataKey,(byte)0);startLifeline();
     }
-    private void verifyStackSource(NativeCastCorrelation correlation) throws Exception {
+    private void verifyStackSource(NativeCastCorrelation correlation,String selectedAbility) throws Exception {
         if(metadataClient==null)return;
         for(int attempt=0;attempt<40 && System.nanoTime()<deadline;attempt++) {
             JsonObject query=new JsonObject();query.addProperty("command","metadata");query.addProperty("game",game);query.addProperty("player",engineViewer);query.add("cycle",state.get("cycle").deepCopy());
             JsonArray objects=new JsonArray();for(JsonElement card:state.getAsJsonArray("stack"))objects.add(card.getAsJsonObject().get("id").deepCopy());query.add("object_ids",objects);query.add("identified_ids",objects.deepCopy());
             JsonObject result=metadataClient.read(query);
-            if(correlation.matchesStack(state,result)){metadataSourceMatched=true;return;}
+            if(correlation.matchesStack(state,result)){
+                metadataSourceMatched=true;if(!correlation.matchesStackInstance(state,result,selectedAbility))throw new IOException("NATIVE_CAST_INSTANCE_MISMATCH");
+                JsonObject limited=query.deepCopy();limited.add("identified_ids",new JsonArray());JsonObject redacted=metadataClient.read(limited);
+                if(!new JsonPrimitive("ok").equals(redacted.get("status")) || !state.get("cycle").equals(redacted.get("cycle")) || redacted.getAsJsonObject("objects").size()!=objects.size())throw new IOException("NATIVE_CAST_REDACTION_UNPROVEN");
+                for(JsonElement object:redacted.getAsJsonObject("objects").entrySet().stream().map(Map.Entry::getValue).toArray(JsonElement[]::new))
+                    if(object.getAsJsonObject().has("source_incarnation") || object.getAsJsonObject().has("spell_ability_ids"))throw new IOException("NATIVE_CAST_REDACTION_FAILED");
+                metadataInstanceMatched=true;return;
+            }
             if(!new JsonPrimitive("retry").equals(result.get("status")))throw new IOException("NATIVE_STACK_SOURCE_MISMATCH");
             if(!events.isEmpty())next();else Thread.sleep(25);
         }
@@ -129,15 +146,16 @@ public final class ManaforgeLiveOpening {
             body.addProperty("fixture_only",false);body.add("snapshot",snapshot);envelope.addProperty("wire_version",1);envelope.addProperty("message_type","snapshot");envelope.addProperty("message_id","cast");envelope.add("body",body);
             boolean cast=false;for(JsonElement action:snapshot.getAsJsonArray("actions"))cast|=action.getAsJsonObject().get("kind").getAsString().equals("cast_spell");
             int hand=state.getAsJsonArray("hand").size();long cycle=state.get("cycle").getAsLong(),decision=event.get("decision_id").getAsLong();
-            final JsonObject beforeCast=state.deepCopy();final NativeCastCorrelation[] correlation=new NativeCastCorrelation[1];
+            final JsonObject beforeCast=state.deepCopy();final NativeCastCorrelation[] correlation=new NativeCastCorrelation[1];final String[] selectedAbility=new String[1];
             ManaforgeOpeningLoopback.exchangeChoice(envelope,projection,game,engineViewer,decision,cycle,"1.4.62-V1",artifactHash,
-                nativeCommand->{if("object".equals(nativeCommand.get("kind").getAsString())){correlation[0]=NativeCastCorrelation.capture(beforeCast,event,nativeCommand);if(correlation[0]==null)throw new IOException("LIVE_CAST_CORRELATION_UNAVAILABLE");}
+                nativeCommand->{if("object".equals(nativeCommand.get("kind").getAsString())){correlation[0]=NativeCastCorrelation.capture(beforeCast,event,nativeCommand);if(correlation[0]==null)throw new IOException("LIVE_CAST_CORRELATION_UNAVAILABLE");
+                        if(metadataClient!=null){correlation[0]=correlation[0].withSourceMetadata(sourceMetadata(beforeCast,nativeCommand.get("value").getAsString()));if(correlation[0]==null)throw new IOException("NATIVE_CAST_SOURCE_UNBOUND");}}
                     JsonObject sent=request(nativeCommand,"response_sent");if(!sent.get("accepted").getAsBoolean())throw new IOException("LIVE_CAST_REJECTED");},cancelled::get,cast,"cast_spell");
             stage="creature_advancement";advancement(cycle,decision);if(!cast)continue;
             stage="creature_stack";boolean abilitySubmitted=false;
             for(int observed=0;observed<40;observed++) {
                 if(state.getAsJsonArray("hand").size()==hand-1 && state.getAsJsonArray("stack").size()==1
-                    && "Memnite".equals(state.getAsJsonArray("stack").get(0).getAsJsonObject().get("name").getAsString())){verifyStackSource(correlation[0]);resolveCreature(projection,body,envelope,hand-1);return;}
+                    && "Memnite".equals(state.getAsJsonArray("stack").get(0).getAsJsonObject().get("name").getAsString())){verifyStackSource(correlation[0],selectedAbility[0]);resolveCreature(projection,body,envelope,hand-1);return;}
                 if(pending!=null && "GAME_CHOOSE_ABILITY".equals(pending.get("kind").getAsString())) {
                     if(abilitySubmitted || pending.getAsJsonObject("key_choices").size()!=1)throw new IOException("LIVE_CAST_UNSUPPORTED_ABILITY");
                     JsonObject ability=pending;pending=null;body.add("snapshot",projection.project(state,ability,false,true));
@@ -151,7 +169,7 @@ public final class ManaforgeLiveOpening {
                         return;
                     }
                     ManaforgeOpeningLoopback.exchangeChoice(envelope,projection,game,engineViewer,abilityDecision,abilityCycle,"1.4.62-V1",artifactHash,
-                        nativeCommand->{JsonObject sent=request(nativeCommand,"response_sent");if(!sent.get("accepted").getAsBoolean())throw new IOException("LIVE_CAST_ABILITY_REJECTED");},cancelled::get,true,"cast_spell");
+                        nativeCommand->{selectedAbility[0]=nativeCommand.get("value").getAsString();JsonObject sent=request(nativeCommand,"response_sent");if(!sent.get("accepted").getAsBoolean())throw new IOException("LIVE_CAST_ABILITY_REJECTED");},cancelled::get,true,"cast_spell");
                     advancement(abilityCycle,abilityDecision);abilitySubmitted=true;continue;
                 }
                 next();
@@ -288,7 +306,7 @@ public final class ManaforgeLiveOpening {
         try {
             if((args.length!=2 && args.length!=3 && args.length!=4) || (args.length==4 && !probe.firstLand && !probe.firstCreature) || !args[1].matches("[0-9a-f]{64}"))throw new IOException();probe.artifactHash=args[1];int port=Integer.parseInt(args[0]);if(port<1 || port>65535)throw new IOException();
             probe.run(port);
-            report.println(("{\"live_engine\":true,\"java_game_commands\":true,\"human_ai_seats\":true,\"opening_hand_count\":7,\"decision_received\":true,\"unity_connected\":false,\"public_projection_validated\":true,\"public_choice_submitted\":true,\"engine_advanced\":true,\"duplicate_native_submission_prevented\":true,\"authenticated_choice\":true,\"duplicate_receipt_reused\":true,\"disconnect_uncertainty_retained\":true}").replace("}",probe.firstLand?",\"first_land_observed\":"+probe.landObserved+",\"priority_pass_submitted\":true,\"unity_priority_pass_submitted\":"+probe.unityPriorityPass+"}":"}").replace("}",probe.firstCreature?",\"creature_spell_on_stack\":true,\"native_cast_ability_matched\":"+probe.castAbilityMatched+",\"creature_resolved\":"+(probe.unityReady==null)+",\"unity_casting_ability_submitted\":"+(probe.unityReady!=null)+"}":"}").replace("}",probe.metadataContext!=null?",\"native_stack_source_matched\":"+probe.metadataSourceMatched+"}":"}").replace("\"unity_connected\":false","\"unity_connected\":"+(probe.unityReady!=null)).replace("\"duplicate_receipt_reused\":true","\"duplicate_receipt_reused\":"+(probe.unityReady==null)).replace("\"duplicate_native_submission_prevented\":true","\"duplicate_native_submission_prevented\":"+(probe.unityReady==null)));result=0;
+            report.println(("{\"live_engine\":true,\"java_game_commands\":true,\"human_ai_seats\":true,\"opening_hand_count\":7,\"decision_received\":true,\"unity_connected\":false,\"public_projection_validated\":true,\"public_choice_submitted\":true,\"engine_advanced\":true,\"duplicate_native_submission_prevented\":true,\"authenticated_choice\":true,\"duplicate_receipt_reused\":true,\"disconnect_uncertainty_retained\":true}").replace("}",probe.firstLand?",\"first_land_observed\":"+probe.landObserved+",\"priority_pass_submitted\":true,\"unity_priority_pass_submitted\":"+probe.unityPriorityPass+"}":"}").replace("}",probe.firstCreature?",\"creature_spell_on_stack\":true,\"native_cast_ability_matched\":"+probe.castAbilityMatched+",\"creature_resolved\":"+(probe.unityReady==null)+",\"unity_casting_ability_submitted\":"+(probe.unityReady!=null)+"}":"}").replace("}",probe.metadataContext!=null?",\"native_stack_source_matched\":"+probe.metadataSourceMatched+",\"native_cast_instance_matched\":"+probe.metadataInstanceMatched+"}":"}").replace("\"unity_connected\":false","\"unity_connected\":"+(probe.unityReady!=null)).replace("\"duplicate_receipt_reused\":true","\"duplicate_receipt_reused\":"+(probe.unityReady==null)).replace("\"duplicate_native_submission_prevented\":true","\"duplicate_native_submission_prevented\":"+(probe.unityReady==null)));result=0;
         }catch(Exception failure){JsonObject error=new JsonObject();error.addProperty("failure","LIVE_OPENING_FAILED");error.addProperty("stage",probe.stage);
             if(Arrays.asList("LIVE_OPENING_UNSUPPORTED_PREGAME","LIVE_OPENING_TIMEOUT_OR_CANCELLED","LIVE_OPENING_ENGINE_FAILED","LIVE_OPENING_QUEUE_LIMIT","LIVE_OPENING_PIN").contains(failure.getMessage()))error.addProperty("code",failure.getMessage());
             if(Arrays.asList("GAME_ASK","GAME_CHOOSE_CHOICE","GAME_TARGET","GAME_SELECT").contains(probe.decisionKind))error.addProperty("decision_family",probe.decisionKind);

@@ -132,6 +132,12 @@ public final class ManaforgeGameMetadata {
                     UUID control = permanent != null ? permanent.getControllerId() : stacked == null ? null : stacked.getControllerId();
                     if (stacked != null && stacked.getSourceId() != null) metadata.addProperty("source", stacked.getSourceId().toString());
                     if (identified.contains(id)) {
+                        if(stacked instanceof mage.game.stack.Spell && source!=null) {
+                            metadata.addProperty("source_incarnation",state.getZoneChangeCounter(stacked.getSourceId()));
+                            JsonArray spellAbilities=new JsonArray();
+                            for(mage.abilities.SpellAbility ability:((mage.game.stack.Spell)stacked).getSpellAbilities())spellAbilities.add(ability.getId().toString());
+                            metadata.add("spell_ability_ids",spellAbilities);
+                        }
                         mage.MageObject live = permanent != null ? permanent : stacked != null ? stacked : source;
                         if (live != null) metadata.addProperty("name", live.getName());
                         if (permanent != null) {

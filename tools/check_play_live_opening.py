@@ -75,6 +75,7 @@ def main():
         expected["native_cast_ability_matched"] = True
     if args.native_metadata:
         expected["native_stack_source_matched"] = True
+        expected["native_cast_instance_matched"] = True
     evidence = None
 
     def consume(first, events, launch, port, server_process, server):

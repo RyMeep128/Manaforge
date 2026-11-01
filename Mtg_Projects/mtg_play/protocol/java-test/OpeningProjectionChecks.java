@@ -236,6 +236,32 @@ public final class OpeningProjectionChecks {
         JsonObject after=raw.deepCopy();after.add("hand",new JsonArray());JsonObject stacked=new JsonObject();stacked.addProperty("id",ability);stacked.addProperty("hidden",false);stacked.addProperty("face_down",false);after.getAsJsonArray("stack").add(stacked);
         JsonObject metadata=new JsonObject(),objects=new JsonObject(),entry=new JsonObject();metadata.addProperty("status","ok");metadata.addProperty("cycle",8);entry.addProperty("source",source);entry.addProperty("owner","raw-human");entry.addProperty("controller","raw-human");entry.addProperty("incarnation",1);objects.add(ability,entry);metadata.add("objects",objects);
         check(ticket.matchesStack(after,metadata));
+        JsonObject before=new JsonObject(),beforeObjects=new JsonObject(),beforeEntry=new JsonObject();before.addProperty("status","ok");before.addProperty("cycle",8);beforeEntry.addProperty("owner","raw-human");beforeEntry.addProperty("incarnation",2);beforeObjects.add(source,beforeEntry);before.add("objects",beforeObjects);
+        NativeCastCorrelation instance=ticket.withSourceMetadata(before);check(instance!=null);
+        entry.addProperty("source_incarnation",3);JsonArray spellIds=new JsonArray();spellIds.add(ability);entry.add("spell_ability_ids",spellIds);
+        check(instance.matchesStackInstance(after,metadata,ability));check(!ticket.matchesStackInstance(after,metadata,ability));
+        beforeEntry.addProperty("incarnation",99);check(instance.matchesStackInstance(after,metadata,ability));
+        check(instance.withSourceMetadata(before)==null);
+        for(int mode=0;mode<7;mode++) {
+            JsonObject bad=metadata.deepCopy();JsonObject badEntry=bad.getAsJsonObject("objects").getAsJsonObject(ability);
+            if(mode==0)badEntry.addProperty("source_incarnation",2);
+            if(mode==1)badEntry.addProperty("source_incarnation",1);
+            if(mode==2)badEntry.remove("source_incarnation");
+            if(mode==3)badEntry.getAsJsonArray("spell_ability_ids").add(ability);
+            if(mode==4)badEntry.add("spell_ability_ids",new JsonArray());
+            if(mode==5){JsonArray wrong=new JsonArray();wrong.add(source);badEntry.add("spell_ability_ids",wrong);}
+            if(mode==6)badEntry.addProperty("source_incarnation",true);
+            check(!instance.matchesStackInstance(after,bad,ability));
+        }
+        check(!instance.matchesStackInstance(after,metadata,source));
+        for(int mode=0;mode<4;mode++) {
+            JsonObject bad=before.deepCopy();JsonObject badEntry=bad.getAsJsonObject("objects").getAsJsonObject(source);
+            if(mode==0)bad.addProperty("cycle",9);
+            if(mode==1)bad.addProperty("status","retry");
+            if(mode==2)badEntry.addProperty("owner","wrong");
+            if(mode==3)badEntry.addProperty("incarnation",-1);
+            check(ticket.withSourceMetadata(bad)==null);
+        }
         for(String field:new String[]{"source","owner","controller","incarnation"}) {
             JsonObject bad=metadata.deepCopy();bad.getAsJsonObject("objects").getAsJsonObject(ability).addProperty(field,"wrong");check(!ticket.matchesStack(after,bad));
         }

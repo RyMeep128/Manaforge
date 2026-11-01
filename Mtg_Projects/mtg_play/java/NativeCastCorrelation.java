@@ -6,8 +6,13 @@ public final class NativeCastCorrelation {
     private final String game,viewer,source;
     private final long cycle,decision;
     private final Set<String> abilities;
+    private final Long sourceIncarnation;
     private NativeCastCorrelation(String game,String viewer,String source,long cycle,long decision,Set<String> abilities) {
+        this(game,viewer,source,cycle,decision,abilities,null);
+    }
+    private NativeCastCorrelation(String game,String viewer,String source,long cycle,long decision,Set<String> abilities,Long sourceIncarnation) {
         this.game=game;this.viewer=viewer;this.source=source;this.cycle=cycle;this.decision=decision;this.abilities=Collections.unmodifiableSet(new HashSet<>(abilities));
+        this.sourceIncarnation=sourceIncarnation;
     }
     private static String string(JsonObject value,String key) {
         JsonElement item=value.get(key);if(item==null || !item.isJsonPrimitive() || !item.getAsJsonPrimitive().isString() || item.getAsString().isEmpty())throw new IllegalArgumentException();return item.getAsString();
@@ -47,6 +52,28 @@ public final class NativeCastCorrelation {
             JsonObject choices=prompt.getAsJsonObject("key_choices");if(choices.size()!=1)return false;
             Map.Entry<String,JsonElement> choice=choices.entrySet().iterator().next();
             return abilities.contains(uuid(choice.getKey())) && choice.getValue().isJsonPrimitive() && choice.getValue().getAsJsonPrimitive().isString();
+        }catch(RuntimeException unsupported){return false;}
+    }
+    public NativeCastCorrelation withSourceMetadata(JsonObject metadata) {
+        try {
+            if(sourceIncarnation!=null || !"ok".equals(string(metadata,"status")) || number(metadata,"cycle")!=cycle)return null;
+            JsonObject entry=metadata.getAsJsonObject("objects").getAsJsonObject(source);
+            if(!viewer.equals(string(entry,"owner")))return null;
+            return new NativeCastCorrelation(game,viewer,source,cycle,decision,abilities,number(entry,"incarnation"));
+        }catch(RuntimeException unsupported){return null;}
+    }
+    /** Exact chosen ability plus an observed source-counter transition; still no receipt permission. */
+    public boolean matchesStackInstance(JsonObject state,JsonObject metadata,String selectedAbility) {
+        try {
+            if(sourceIncarnation==null || !abilities.contains(uuid(selectedAbility)) || !matchesStack(state,metadata))return false;
+            for(JsonElement value:state.getAsJsonArray("stack")) {
+                JsonObject entry=metadata.getAsJsonObject("objects").getAsJsonObject(string(value.getAsJsonObject(),"id"));
+                if(entry==null || !source.equals(string(entry,"source")))continue;
+                JsonArray ids=entry.getAsJsonArray("spell_ability_ids");
+                return number(entry,"source_incarnation")>sourceIncarnation && ids.size()==1 && ids.get(0).isJsonPrimitive()
+                    && ids.get(0).getAsJsonPrimitive().isString() && selectedAbility.equals(uuid(ids.get(0).getAsString()));
+            }
+            return false;
         }catch(RuntimeException unsupported){return false;}
     }
     /** Still observation only: guarded native stack-source metadata, not a receipt settlement. */
