@@ -171,6 +171,28 @@ public final class OpeningProjectionChecks {
             fails("LIVE_OPENING_PROJECTION_UNSUPPORTED",()->bound.project(landState(),bad,false,true));fails("STALE_DECISION",()->claim(bound,old));
         }
     }
+    static void stackPriorityChecks() throws Exception {
+        JsonObject raw=landState(),stack=new JsonObject();stack.addProperty("id","PRIVATE_STACK_ID");stack.addProperty("name","PRIVATE_STACK_NAME");raw.getAsJsonArray("stack").add(stack);
+        rejects(raw,priorityPrompt());
+        ManaforgeOpeningProjection owner=projection();JsonObject snapshot=owner.projectPriorityWithoutStack(raw,priorityPrompt());shape(snapshot);
+        check(!snapshot.toString().contains("PRIVATE_STACK") && raw.getAsJsonArray("stack").size()==1);
+        check(snapshot.getAsJsonArray("unsupported_fields").contains(new JsonPrimitive("stack")));
+        check(!snapshot.get("actions_complete").getAsBoolean() && snapshot.getAsJsonArray("actions").size()==1);
+        check(snapshot.getAsJsonArray("actions").get(0).getAsJsonObject().get("kind").getAsString().equals("pass"));
+        String wire=perform(snapshot);JsonObject command=owner.claimAction(wire,"session","human","raw-game","raw-human",41,8);
+        check(command.get("kind").getAsString().equals("boolean") && !command.get("value").getAsBoolean());
+        fails("STALE_DECISION",()->owner.claimAction(wire,"session","human","raw-game","raw-human",41,8));
+        for(int mode=0;mode<4;mode++) {
+            ManaforgeOpeningProjection bound=projection();String previous=perform(bound.projectPriorityWithoutStack(raw,priorityPrompt()));
+            JsonObject bad=raw.deepCopy(),request=priorityPrompt();
+            if(mode==0)bad.add("stack",new JsonArray());
+            if(mode==1)request.addProperty("is_priority",false);
+            if(mode==2)bad.addProperty("priority_player","raw-opponent-name");
+            if(mode==3)request.addProperty("cycle",9);
+            fails("LIVE_OPENING_PROJECTION_UNSUPPORTED",()->bound.projectPriorityWithoutStack(bad,request));
+            fails("STALE_DECISION",()->bound.claimAction(previous,"session","human","raw-game","raw-human",41,8));
+        }
+    }
     public static void main(String[] args) throws Exception {
         ManaforgeOpeningProjection projection=projection();JsonObject raw=state(),request=prompt();JsonObject snapshot=projection.project(raw,request);shape(snapshot);
         String text=snapshot.toString();for(String secret:new String[]{"raw-human","raw-ai","raw-card","raw-name","raw-opponent-name","OPPONENT_SECRET","MUTATED_BINDING"})check(!text.contains(secret));
@@ -197,7 +219,7 @@ public final class OpeningProjectionChecks {
         raw=state();raw.getAsJsonArray("players").add(raw.getAsJsonArray("players").get(0).deepCopy());rejects(raw,prompt());
         raw=state();raw.getAsJsonArray("players").get(0).getAsJsonObject().addProperty("life",true);rejects(raw,prompt());
         request=prompt();request.addProperty("message","Use 12345678-abcd-1234-abcd-123456789abc");check(!projection().project(state(),request).toString().contains("12345678-abcd-1234-abcd-123456789abc"));
-        choiceChecks();landChecks();abilityChecks();
+        choiceChecks();landChecks();abilityChecks();stackPriorityChecks();
         System.out.println("Opening projection: "+checks+" privacy, schema, isolation and fail-closed checks passed");
     }
 }

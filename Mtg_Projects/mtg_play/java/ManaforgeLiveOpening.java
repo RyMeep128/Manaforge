@@ -106,7 +106,7 @@ public final class ManaforgeLiveOpening {
             stage="creature_stack";boolean abilitySubmitted=false;
             for(int observed=0;observed<40;observed++) {
                 if(state.getAsJsonArray("hand").size()==hand-1 && state.getAsJsonArray("stack").size()==1
-                    && "Memnite".equals(state.getAsJsonArray("stack").get(0).getAsJsonObject().get("name").getAsString()))return;
+                    && "Memnite".equals(state.getAsJsonArray("stack").get(0).getAsJsonObject().get("name").getAsString())){resolveCreature(projection,body,envelope,hand-1);return;}
                 if(pending!=null && "GAME_CHOOSE_ABILITY".equals(pending.get("kind").getAsString())) {
                     if(abilitySubmitted || pending.getAsJsonObject("key_choices").size()!=1)throw new IOException("LIVE_CAST_UNSUPPORTED_ABILITY");
                     JsonObject ability=pending;pending=null;body.add("snapshot",projection.project(state,ability,false,true));
@@ -120,6 +120,29 @@ public final class ManaforgeLiveOpening {
             throw new IOException("LIVE_CAST_NOT_OBSERVED");
         }
         throw new IOException("LIVE_CAST_TIMEOUT");
+    }
+    private void resolveCreature(ManaforgeOpeningProjection projection,JsonObject body,JsonObject envelope,int expectedHand) throws Exception {
+        stage="creature_resolution";
+        for(int count=0;count<80;count++) {
+            if(state.getAsJsonArray("stack").size()==0 && state.getAsJsonArray("hand").size()==expectedHand) {
+                for(JsonElement player:state.getAsJsonArray("players"))if(engineViewer.equals(player.getAsJsonObject().get("id").getAsString())) {
+                    int creatures=0;
+                    for(JsonElement item:player.getAsJsonObject().getAsJsonArray("battlefield")) {
+                        JsonObject card=item.getAsJsonObject();
+                        if(!card.get("hidden").getAsBoolean() && !card.get("face_down").getAsBoolean() && "Memnite".equals(card.get("name").getAsString())
+                            && "1".equals(card.get("power").getAsString()) && "1".equals(card.get("toughness").getAsString()))creatures++;
+                    }
+                    if(creatures==1)return;
+                }
+            }
+            JsonObject event=pending==null?next():pending;if(!event.get("event").getAsString().equals("decision"))continue;pending=null;
+            body.add("snapshot",projection.projectPriorityWithoutStack(state,event));
+            long cycle=state.get("cycle").getAsLong(),decision=event.get("decision_id").getAsLong();
+            ManaforgeOpeningLoopback.exchangeChoice(envelope,projection,game,engineViewer,decision,cycle,"1.4.62-V1",artifactHash,
+                nativeCommand->{JsonObject sent=request(nativeCommand,"response_sent");if(!sent.get("accepted").getAsBoolean())throw new IOException("LIVE_RESOLUTION_PASS_REJECTED");},cancelled::get,false);
+            advancement(cycle,decision);
+        }
+        throw new IOException("LIVE_CREATURE_NOT_RESOLVED");
     }
     private void run(int port) throws Exception {
         JsonObject value=command("connect");value.addProperty("port",port);value.addProperty("username","mf_"+UUID.randomUUID().toString().substring(0,8));request(value,"connected");
@@ -207,7 +230,7 @@ public final class ManaforgeLiveOpening {
         try {
             if((args.length!=2 && args.length!=3 && args.length!=4) || (args.length==4 && !probe.firstLand) || !args[1].matches("[0-9a-f]{64}"))throw new IOException();probe.artifactHash=args[1];int port=Integer.parseInt(args[0]);if(port<1 || port>65535)throw new IOException();
             probe.run(port);
-            report.println(("{\"live_engine\":true,\"java_game_commands\":true,\"human_ai_seats\":true,\"opening_hand_count\":7,\"decision_received\":true,\"unity_connected\":false,\"public_projection_validated\":true,\"public_choice_submitted\":true,\"engine_advanced\":true,\"duplicate_native_submission_prevented\":true,\"authenticated_choice\":true,\"duplicate_receipt_reused\":true,\"disconnect_uncertainty_retained\":true}").replace("}",probe.firstLand?",\"first_land_observed\":"+probe.landObserved+",\"priority_pass_submitted\":true,\"unity_priority_pass_submitted\":"+probe.unityPriorityPass+"}":"}").replace("}",probe.firstCreature?",\"creature_spell_on_stack\":true}":"}").replace("\"unity_connected\":false","\"unity_connected\":"+(probe.unityReady!=null)).replace("\"duplicate_receipt_reused\":true","\"duplicate_receipt_reused\":"+(probe.unityReady==null)).replace("\"duplicate_native_submission_prevented\":true","\"duplicate_native_submission_prevented\":"+(probe.unityReady==null)));result=0;
+            report.println(("{\"live_engine\":true,\"java_game_commands\":true,\"human_ai_seats\":true,\"opening_hand_count\":7,\"decision_received\":true,\"unity_connected\":false,\"public_projection_validated\":true,\"public_choice_submitted\":true,\"engine_advanced\":true,\"duplicate_native_submission_prevented\":true,\"authenticated_choice\":true,\"duplicate_receipt_reused\":true,\"disconnect_uncertainty_retained\":true}").replace("}",probe.firstLand?",\"first_land_observed\":"+probe.landObserved+",\"priority_pass_submitted\":true,\"unity_priority_pass_submitted\":"+probe.unityPriorityPass+"}":"}").replace("}",probe.firstCreature?",\"creature_spell_on_stack\":true,\"creature_resolved\":true}":"}").replace("\"unity_connected\":false","\"unity_connected\":"+(probe.unityReady!=null)).replace("\"duplicate_receipt_reused\":true","\"duplicate_receipt_reused\":"+(probe.unityReady==null)).replace("\"duplicate_native_submission_prevented\":true","\"duplicate_native_submission_prevented\":"+(probe.unityReady==null)));result=0;
         }catch(Exception failure){JsonObject error=new JsonObject();error.addProperty("failure","LIVE_OPENING_FAILED");error.addProperty("stage",probe.stage);
             if(Arrays.asList("LIVE_OPENING_UNSUPPORTED_PREGAME","LIVE_OPENING_TIMEOUT_OR_CANCELLED","LIVE_OPENING_ENGINE_FAILED","LIVE_OPENING_QUEUE_LIMIT","LIVE_OPENING_PIN").contains(failure.getMessage()))error.addProperty("code",failure.getMessage());
             if(Arrays.asList("GAME_ASK","GAME_CHOOSE_CHOICE","GAME_TARGET","GAME_SELECT").contains(probe.decisionKind))error.addProperty("decision_family",probe.decisionKind);

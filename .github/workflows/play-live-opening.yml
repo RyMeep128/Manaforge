@@ -30,7 +30,7 @@ jobs:
         run: python tools/check_play_live_opening.py --xmage-root "$env:RUNNER_TEMP/manaforge-live-engine" --jdk-path "$env:JAVA_HOME"
       - name: Real engine-offered land action
         run: python tools/check_play_live_opening.py --first-land --xmage-root "$env:RUNNER_TEMP/manaforge-live-engine" --jdk-path "$env:JAVA_HOME" --output Mtg_Projects/mtg_play_unity/Artifacts/FirstLand/report.json
-      - name: Real engine-offered zero-cost creature cast
+      - name: Real zero-cost creature cast and resolution
         run: python tools/check_play_live_opening.py --first-creature --xmage-root "$env:RUNNER_TEMP/manaforge-live-engine" --jdk-path "$env:JAVA_HOME" --output Mtg_Projects/mtg_play_unity/Artifacts/FirstCreature/report.json
       - name: Upload sanitized live evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

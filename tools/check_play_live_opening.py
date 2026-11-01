@@ -19,7 +19,7 @@ def main():
     scenario.add_argument(
         "--first-creature",
         action="store_true",
-        help="Java-owned zero-cost creature cast; observe stack entry only",
+        help="Java-owned zero-cost creature cast, stack observation and native resolution",
     )
     scenario.add_argument(
         "--first-land",
@@ -60,6 +60,7 @@ def main():
         expected["unity_priority_pass_submitted"] = False
     if args.first_creature:
         expected["creature_spell_on_stack"] = True
+        expected["creature_resolved"] = True
     evidence = None
 
     def consume(first, events, launch, port, server_process, server):
@@ -159,7 +160,7 @@ def main():
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
     print(
-        "Real XMage creature cast submitted once; hand decrease and Memnite stack entry observed, duplicate receipt reused; cleanup passed. Resolution and Unity casting remain pending."
+        "Real XMage creature cast and resolved; stack cleared and 1/1 Memnite observed, duplicate receipts reused; cleanup passed. Unity casting remains pending."
         if args.first_creature
         else "Real XMage opening projected; authenticated boolean submitted once, duplicate receipt reused and engine advancement observed; cleanup passed. Unity integration remains pending."
     )

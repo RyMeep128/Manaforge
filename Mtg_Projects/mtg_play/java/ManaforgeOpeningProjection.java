@@ -87,17 +87,26 @@ public final class ManaforgeOpeningProjection {
         return project(raw,prompt,includePriorityPass,false);
     }
     public synchronized JsonObject project(JsonObject raw,JsonObject prompt,boolean includePriorityPass,boolean includeSpells) throws IOException {
+        return project(raw,prompt,includePriorityPass,includeSpells,false);
+    }
+    /** Explicit pass-only observation port. Stack contents remain unsupported and never serialized. */
+    public synchronized JsonObject projectPriorityWithoutStack(JsonObject raw,JsonObject prompt) throws IOException {
+        return project(raw,prompt,true,false,true);
+    }
+    private JsonObject project(JsonObject raw,JsonObject prompt,boolean includePriorityPass,boolean includeSpells,boolean omitStack) throws IOException {
         invalidateDecision();
         try {
             require(engineViewer.equals(raw.get("viewer").getAsString()));
             boolean priority="GAME_SELECT".equals(prompt.get("kind").getAsString()) && Boolean.TRUE.equals(flag(prompt,"is_priority"));
             boolean ability=includeSpells && "GAME_CHOOSE_ABILITY".equals(prompt.get("kind").getAsString());
+            require(!omitStack || priority);
             require("GAME_ASK".equals(prompt.get("kind").getAsString()) || priority || ability);
             require(!priority || (!prompt.has("attackers") && !prompt.has("blockers")));
             require(Objects.equals(integer(raw,"cycle"),integer(prompt,"cycle")) && integer(raw,"cycle")!=null);
             require(integer(prompt,"decision_id")!=null && integer(prompt,"decision_id")>=0 && integer(prompt,"decision_id")<=Integer.MAX_VALUE);
             require(raw.has("game_id") && !raw.get("game_id").isJsonNull());
-            empty(raw,"stack");empty(raw,"exile");empty(raw,"combat");
+            if(omitStack)require(raw.has("stack") && raw.get("stack").isJsonArray() && raw.getAsJsonArray("stack").size()>0);else empty(raw,"stack");
+            empty(raw,"exile");empty(raw,"combat");
             GameSnapshot result=new GameSnapshot();result.session_id=session;result.viewer_id=viewer;
             result.revision=revision+1;result.protocol_version=1L;result.status="active";
             result.turn=integer(raw,"turn");result.phase=text(raw,"phase");result.step=text(raw,"step");
@@ -145,7 +154,7 @@ public final class ManaforgeOpeningProjection {
                 cards.add(card);
             }
             result.objects=cards.toArray(new GameObject[0]);List<LegalAction> actions=new ArrayList<>();Map<String,String> offeredNative=new HashMap<>();
-            if(priority)for(JsonElement item:raw.getAsJsonArray("playable")) {
+            if(priority && !omitStack)for(JsonElement item:raw.getAsJsonArray("playable")) {
                 String source=item.getAsString(),reference=visibleReferences.get(source);
                 if(reference==null)continue;
                 JsonElement kind=raw.getAsJsonObject("action_kinds").get(source);if(kind==null || !(kind.getAsString().equals("play_land") || includeSpells && kind.getAsString().equals("cast_spell")))continue;
@@ -177,6 +186,7 @@ public final class ManaforgeOpeningProjection {
             }
             result.decision=choice;result.combat=new CombatAssignment[0];result.observations=new CardObservation[0];
             result.unsupported_fields=new String[]{"object_incarnations","commander_metadata","live_abilities","actions","mana","counters","eliminated","observations","attachments","copy_metadata","physical_printing"};
+            if(omitStack){List<String> unsupported=new ArrayList<>(Arrays.asList(result.unsupported_fields));unsupported.add("stack");result.unsupported_fields=unsupported.toArray(new String[0]);}
             JsonObject output=JSON.toJsonTree(result).getAsJsonObject();
             nativeGame=raw.get("game_id").getAsString();nativeDecision=integer(prompt,"decision_id");nativeCycle=integer(raw,"cycle");
             decision=choice.decision_id;consumed=false;

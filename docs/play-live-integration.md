@@ -1,5 +1,31 @@
 # Live Unity / Java / XMage integration
 
+## Native creature resolution through explicit priority (0.5.140)
+
+The Java-only `--first-creature` fixture now continues after its observed Memnite
+stack entry. An explicit diagnostic pass uses the authenticated session boundary
+and current native priority token. Acceptance additionally requires stack
+clearance, the expected reduced hand count and exactly one visible 1/1 Memnite
+on the human battlefield. The additive `creature_resolved` report field records
+this fixed public scenario, not a general reconciliation or complete-game result.
+
+A dedicated pass-only projection permits a nonempty native stack while explicitly
+listing `stack` as unsupported. It never serializes stack contents or reconstructs
+their identities, owners or abilities. It offers only the current human priority
+pass, with `actions_complete=false`; cast/land offers remain unavailable in this
+mode. Default projections still reject nonempty stacks. Full stack translation,
+continuous Unity interaction and production lifecycle/parity remain open. No new
+state-display or mana-payment work was included.
+
+The native fixture policy is explicit passing, not installed automatic play. Every
+pass retains existing revision/decision/viewer binding, one-shot native claiming,
+duplicate receipt handling and conservative disconnect uncertainty. Local Java
+protocol preflight passed, including 158 projection/privacy/token checks. The real
+cast/ability/priority/resolution scenario passed with normal owned-root cleanup;
+lint and formatting checks pass. No full application suite or Unity build ran.
+Existing live CI includes the strengthened scenario. Next scheduled CI review
+remains .141.
+
 ## Engine-offered creature casting port (0.5.139)
 
 An opt-in live projection now includes `cast_spell` actions from the pinned
