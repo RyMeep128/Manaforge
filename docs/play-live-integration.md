@@ -1,5 +1,38 @@
 # Live Unity / Java / XMage integration
 
+## Correlated Finish attacks receipt (0.5.172)
+
+The existing packaged `--finish-attacks --native-metadata` probe now emits
+submitted then confirmed for its exact empty attack-selection finish response.
+Private immutable AttackFinishEvidence binds the queued native command and
+request ID to a genuine human attacker-selection prompt, the offered source,
+native response acceptance, and a later guarded priority window. Both guarded
+views must retain the same visible controlled source incarnation, with that source
+absent from hand and with empty combat/stack. Wrong actor/game/viewer,
+acceptance, decision/cycle, candidate identity or incarnation fails closed.
+No phase-order rules or success from transport alone are inferred.
+
+The authenticated session checks the evidence against its private queued command
+before settling the receipt. The shared endpoint now uses typed ability or attack
+evidence; only ability evidence can enter the existing ability/priority
+continuation. Ordinary choices without evidence retain uncertainty. Unity requires
+one received confirmed receipt and zero uncertain receipts, then clears. Native
+evidence adds unity_attack_finish_confirmed. The Java-only diagnostic still does
+not claim a confirmed Unity receipt.
+
+Validation: Windows player build, the real packaged native combat probe and
+screenshot inspection passed with normal viewer/process cleanup. 78 focused Unity
+receipt-tracker/channel tests and Java protocol preflight passed, including 332
+projection/correlation/privacy checks. Authenticated-session tests cover wrong or
+missing proof, late uncertainty reconciliation, idempotent confirmation, cached
+confirmed retries without native replay and confirmation retained on disconnect.
+The packaged three-command phase and Java-only attacker-finish regressions passed.
+Lint and formatting passed; no full application suite ran.
+
+This settles only this fixture's empty attacker-selection completion. Attacker
+and defender selection, blocking, continuous combat and natural match completion
+remain open. New CI evidence is pending; next scheduled check remains .174.
+
 ## Packaged explicit Finish attacks choice (0.5.171)
 
 Unity's existing decision panel can now mount the actual native attacker-selection

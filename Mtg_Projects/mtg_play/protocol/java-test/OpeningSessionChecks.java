@@ -82,7 +82,25 @@ public final class OpeningSessionChecks {
                 if(!passReceipt.equals(owner.receiptFor("followup-pass")))throw new AssertionError("PRIORITY_CONFIRMATION_LOST");
                 if(!phaseReceipt.equals(owner.receiptFor("post-resolution-pass")))throw new AssertionError("PHASE_CONFIRMATION_LOST");
             }
+            attackConfirmationChecks(context);
         }finally{java.util.Arrays.fill(key,(byte)0);}
+    }
+    static void attackConfirmationChecks(manaforge.protocol.GatewayHandshake.ViewerContext context) throws Exception {
+        JsonObject before=OpeningProjectionChecks.attackState(),prompt=OpeningProjectionChecks.attackPrompt(),after=before.deepCopy(),next=OpeningProjectionChecks.priorityPrompt();next.addProperty("decision_id",42);after.addProperty("priority_player","raw-name");
+        ManaforgeOpeningProjection projection=OpeningProjectionChecks.projection();JsonObject snapshot=projection.projectAttackFinish(before,prompt);String wire=OpeningProjectionChecks.perform(snapshot);
+        try(ManaforgeOpeningSession owner=new ManaforgeOpeningSession(context,projection,envelope(snapshot).toString())) {
+            if(!owner.dispatch(wire,"raw-game","raw-human",41,8).shouldSubmit)throw new AssertionError("ATTACK_NOT_ADMITTED");JsonObject command=owner.pollNative(),accepted=new JsonObject();
+            accepted.addProperty("event","response_sent");accepted.addProperty("accepted",true);accepted.add("request_id",command.get("request_id").deepCopy());
+            NativeCastCorrelation.AttackFinishEvidence proof=NativeCastCorrelation.attackFinishEvidence(before,prompt,command,OpeningProjectionChecks.attackMetadata(false),accepted,after,next,OpeningProjectionChecks.attackMetadata(true),"raw-card");
+            if(proof==null)throw new AssertionError("ATTACK_PROOF_MISSING");
+            for(int mode=0;mode<2;mode++)try{owner.confirmAttackFinish(mode==0?"wrong-id":"land-action",mode==0?proof:null);throw new AssertionError("BAD_ATTACK_PROOF_ACCEPTED");}
+                catch(IOException expected){if(!"ATTACK_EVIDENCE_MISMATCH".equals(expected.getMessage()))throw expected;}
+            owner.uncertain("land-action");JsonObject receipt=owner.confirmAttackFinish("land-action",proof);
+            if(!"confirmed".equals(receipt.getAsJsonObject("body").get("outcome").getAsString()) || !receipt.equals(owner.confirmAttackFinish("land-action",proof)))throw new AssertionError("ATTACK_CONFIRMATION_FAILED");
+            manaforge.protocol.SubmissionLedger.Prepared duplicate=owner.dispatch(wire,"raw-game","raw-human",41,8);
+            if(duplicate.shouldSubmit || !receipt.equals(duplicate.receipt()) || owner.pollNative()!=null)throw new AssertionError("CONFIRMED_ATTACK_REPLAYED");
+            owner.disconnected();if(!receipt.equals(owner.receiptFor("land-action")))throw new AssertionError("ATTACK_CONFIRMATION_LOST");
+        }
     }
     static JsonObject envelope(JsonObject snapshot) {
         JsonObject envelope=new JsonObject(),body=new JsonObject();envelope.addProperty("wire_version",1);envelope.addProperty("message_type","snapshot");envelope.addProperty("message_id","opening");

@@ -3,6 +3,52 @@ import java.util.*;
 
 /** Private native correlation. Stack evidence proves ability selection, not spell resolution. */
 public final class NativeCastCorrelation {
+    public static final class AttackFinishEvidence {
+        private final JsonObject command;
+        private AttackFinishEvidence(JsonObject command){this.command=command.deepCopy();}
+        public boolean matchesCommand(JsonObject candidate){return command.equals(candidate);}
+    }
+    private static long battlefieldCounter(JsonObject state,JsonObject metadata,String source) {
+        String viewer=string(state,"viewer");
+        if(!"ok".equals(string(metadata,"status")) || number(metadata,"cycle")!=number(state,"cycle"))throw new IllegalArgumentException();
+        for(JsonElement item:state.getAsJsonArray("hand"))if(source.equals(string(item.getAsJsonObject(),"id")))throw new IllegalArgumentException();
+        int found=0;
+        for(JsonElement row:state.getAsJsonArray("players")) {
+            JsonObject player=row.getAsJsonObject();if(!viewer.equals(string(player,"id")))continue;
+            for(JsonElement item:player.getAsJsonArray("battlefield")) {
+                JsonObject card=item.getAsJsonObject();if(!source.equals(string(card,"id")))continue;
+                if(!new JsonPrimitive(false).equals(card.get("hidden")) || !new JsonPrimitive(false).equals(card.get("face_down")))throw new IllegalArgumentException();found++;
+            }
+        }
+        JsonObject entry=metadata.getAsJsonObject("objects").getAsJsonObject(source);
+        if(found!=1 || !viewer.equals(string(entry,"owner")) || !viewer.equals(string(entry,"controller")))throw new IllegalArgumentException();
+        return number(entry,"incarnation");
+    }
+    /** Exact empty attack-selection completion in the owned public fixture, not generic combat success. */
+    public static AttackFinishEvidence attackFinishEvidence(JsonObject before,JsonObject prompt,JsonObject command,JsonObject beforeMetadata,JsonObject accepted,
+            JsonObject after,JsonObject nextPrompt,JsonObject afterMetadata,String source) {
+        try {
+            if(!string(before,"game_id").equals(string(after,"game_id")) || !string(before,"viewer").equals(string(after,"viewer"))
+                || !string(before,"game_id").equals(string(command,"game_id")) || !"respond".equals(string(command,"command"))
+                || !"boolean".equals(string(command,"kind")) || !new JsonPrimitive(false).equals(command.get("value"))
+                || number(command,"decision_id")!=number(prompt,"decision_id") || !"GAME_SELECT".equals(string(prompt,"kind"))
+                || !new JsonPrimitive(false).equals(prompt.get("is_priority")) || prompt.has("blockers")
+                || number(prompt,"cycle")!=number(before,"cycle") || !new JsonPrimitive(false).equals(beforeMetadata.get("priority_open"))
+                || before.getAsJsonArray("combat").size()!=0 || after.getAsJsonArray("combat").size()!=0
+                || before.getAsJsonArray("stack").size()!=0 || after.getAsJsonArray("stack").size()!=0)return null;
+            JsonArray candidates=prompt.getAsJsonArray("attackers");if(candidates.size()>256)return null;Set<String> unique=new HashSet<>();
+            for(JsonElement item:candidates){if(!item.isJsonPrimitive() || !item.getAsJsonPrimitive().isString() || !unique.add(item.getAsString()))return null;}
+            boolean active=false;for(JsonElement item:before.getAsJsonArray("players")){JsonObject row=item.getAsJsonObject();if(string(before,"viewer").equals(string(row,"id")) && string(before,"active_player").equals(string(row,"name")))active=true;}
+            if(!active || !unique.contains(source) || battlefieldCounter(before,beforeMetadata,source)!=battlefieldCounter(after,afterMetadata,source)
+                || !"response_sent".equals(string(accepted,"event")) || !new JsonPrimitive(true).equals(accepted.get("accepted"))
+                || !string(command,"request_id").equals(string(accepted,"request_id")) || !"GAME_SELECT".equals(string(nextPrompt,"kind"))
+                || !new JsonPrimitive(true).equals(nextPrompt.get("is_priority")) || nextPrompt.has("attackers") || nextPrompt.has("blockers")
+                || !new JsonPrimitive(true).equals(afterMetadata.get("priority_open")) || number(nextPrompt,"cycle")!=number(after,"cycle")
+                || number(nextPrompt,"decision_id")<=number(prompt,"decision_id") || number(after,"cycle")<number(before,"cycle")
+                || number(after,"turn")<number(before,"turn"))return null;
+            return new AttackFinishEvidence(command);
+        }catch(RuntimeException unsupported){return null;}
+    }
     public static final class PriorityEvidence {
         private final JsonObject command;
         private PriorityEvidence(JsonObject command){this.command=command.deepCopy();}

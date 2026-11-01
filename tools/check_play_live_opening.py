@@ -94,6 +94,7 @@ def main():
             native_empty_attack_submitted=True,
             native_combat_advanced=True,
             unity_attack_finish_submitted=False,
+            unity_attack_finish_confirmed=False,
         )
 
     def consume(first, events, launch, port, server_process, server):

@@ -407,8 +407,8 @@ def main():
                     raise RuntimeError("LIVE_UNITY_POST_RESOLUTION_RECEIPT_FAILED")
                 if args.finish_attacks and (
                     ready.get("attack_finish_presented") is not True
-                    or chosen.get("confirmed_receipt_count") != 0
-                    or chosen.get("uncertain_receipt_count") != 1
+                    or chosen.get("confirmed_receipt_count") != 1
+                    or chosen.get("uncertain_receipt_count") != 0
                 ):
                     raise RuntimeError("LIVE_UNITY_ATTACK_FINISH_RECEIPT_FAILED")
                 # The scene quits after clearing. Observe its owned handle rather than health-checking an expected exit.
@@ -489,6 +489,7 @@ def main():
                         "native_empty_attack_submitted",
                         "native_combat_advanced",
                         "unity_attack_finish_submitted",
+                        "unity_attack_finish_confirmed",
                         "creature_resolved",
                     )
                 ):
@@ -559,9 +560,10 @@ def main():
                         native_empty_attack_submitted=True,
                         native_combat_advanced=True,
                         unity_attack_finish_submitted=True,
+                        unity_attack_finish_confirmed=True,
                         attack_finish_presented=True,
-                        confirmed_receipt_count=0,
-                        uncertain_receipt_count=1,
+                        confirmed_receipt_count=1,
+                        uncertain_receipt_count=0,
                     )
                 if args.observe_resolution:
                     evidence.update(
@@ -608,7 +610,7 @@ def main():
         json.dumps(evidence, indent=2) + "\n", encoding="utf-8"
     )
     print(
-        "Packaged Unity submitted explicit Finish attacks; native empty combat advanced, receipt uncertain, viewer cleared and roots reaped."
+        "Packaged Unity confirmed explicit Finish attacks using native selection/priority evidence; viewer cleared and roots reaped."
         if args.finish_attacks
         else "Packaged Unity confirmed three commands on one session and displayed the next native phase; viewer cleared and roots reaped."
         if args.post_resolution_pass
