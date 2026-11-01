@@ -1,5 +1,22 @@
 # Live Unity / Java / XMage integration
 
+## Arena-style opening header hierarchy (0.5.155)
+
+The engine-owned mulligan prompt now sits beneath the centered Opening Hand
+heading, matching the supplied Arena reference's heading/subheading/hand/action
+hierarchy. Symmetric side padding and adjusted stage spacing keep the fan below
+the header. The bottom area contains the primary Mulligan and Keep controls.
+
+The existing prompt Label is moved after option mapping; its live updates and
+clearing remain owned by ViewerDecisionPanel. Disposal explicitly removes the
+label even when a layout has reparented it. No turn-order or opponent-keep
+statement is inferred. Rules text remains unavailable under the current live
+contract rather than being filled from printed text as current rules.
+
+Validation: 20 focused EditMode tests and one mounted PlayMode cleanup regression
+passed. Packaged build and the real artwork opening/engine action/cleanup were
+checked with screenshot inspection. Next scheduled CI check remains .156.
+
 ## Screenshot-matching Arena battlefield (0.5.154)
 
 A broader inspection of the supplied battlefield bundles located the actual

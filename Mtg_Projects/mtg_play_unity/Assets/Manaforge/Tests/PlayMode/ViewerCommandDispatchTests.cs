@@ -271,6 +271,15 @@ namespace Manaforge.Play.Tests
             var next=NumericSnapshot("number",0,10);next["message_id"]="new-number";next["body"]["snapshot"]["revision"]=8;var send=Task.Run(()=>peer.ReplyForFixture(next));yield return Until(()=>send.IsCompleted);send.GetAwaiter().GetResult();yield return Until(()=>host.CurrentDecision!=null && !ReferenceEquals(host.CurrentDecision,old));
             var stale=host.ChooseAmountsAsync(old,new long[]{0,0});yield return Until(()=>stale.IsCompleted);Assert.That(Error(stale),Is.EqualTo("STALE_DECISION"));var range=host.ChooseNumberAsync(host.CurrentDecision,11);yield return Until(()=>range.IsCompleted);Assert.That(Error(range),Is.EqualTo("AMOUNT_OUT_OF_RANGE"));Assert.That(peer.PendingCommandBytes,Is.Zero);
         }
+        [UnityTest] public IEnumerator ReparentedPromptClearsWithViewerAndIsRemovedOnDispose()
+        {
+            var host=Start(Snapshot(),out var peer,out var owner);var panel=Panel(host);yield return Show(host,panel);
+            var prompt=panel.Root.Q<Label>("decision-prompt");Assert.That(prompt.text,Is.Not.Empty);
+            var header=new VisualElement();panel.Root.parent.Add(header);header.Add(prompt);
+            Assert.That(header[0],Is.SameAs(prompt));Assert.That(peer.PendingCommandBytes,Is.Zero);
+            host.Cancel();yield return Until(()=>host.Completion.IsCompleted);host.Tick();panel.Tick();
+            Assert.That(prompt.text,Is.Empty);panel.Dispose();Assert.That(prompt.parent,Is.Null);Assert.That(header.childCount,Is.Zero);
+        }
         [UnityTest] public IEnumerator ConcurrentClicksAdmitExactlyOneCommand()
         {
             var host=Start(Snapshot(),out var peer,out var owner);yield return Until(()=>host.CurrentDecision!=null);var offer=host.CurrentDecision;var action=offer.Frame.Actions[0];var attempts=new Task<TrackedCommand>[16];var launch=Task.Run(()=>Parallel.For(0,attempts.Length,i=>attempts[i]=host.PerformAsync(offer,action)));yield return Until(()=>launch.IsCompleted);launch.GetAwaiter().GetResult();yield return Until(()=>attempts.All(task=>task.IsCompleted));

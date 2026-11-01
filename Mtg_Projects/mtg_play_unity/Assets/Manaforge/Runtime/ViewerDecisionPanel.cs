@@ -143,6 +143,6 @@ namespace Manaforge.Play
             if(disposed || !ReferenceEquals(offer,captured) || !ReferenceEquals(host.PresentedDecision,captured))return;
             var frame=captured.Frame;if(frame==null)return;int last=Math.Max(0,(frame.Actions.Count+frame.Decision.Options.Count-1)/PageSize);page=Math.Max(0,Math.Min(last,page+delta));Build();
         }
-        public void Dispose(){ThreadOnly();if(disposed)return;disposed=true;manaInput.Dispose();Clear();Root.RemoveFromHierarchy();}
+        public void Dispose(){ThreadOnly();if(disposed)return;disposed=true;manaInput.Dispose();Clear();prompt.RemoveFromHierarchy();Root.RemoveFromHierarchy();}
     }
 }

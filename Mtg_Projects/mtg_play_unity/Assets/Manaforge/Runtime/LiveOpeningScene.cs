@@ -65,7 +65,7 @@ namespace Manaforge.Play
                 var choices=new VisualElement();choices.style.width=290;choices.style.flexShrink=0;stage.Add(choices);panel=new ViewerDecisionPanel(choices,host);
                 if(OpeningLayout){
                     title.text="Opening Hand";title.style.fontSize=38;title.style.unityTextAlign=TextAnchor.MiddleCenter;CardTypography.Apply(title,CardTextRole.Title);
-                    stage.style.marginTop=90;stage.style.position=Position.Relative;stage.style.backgroundColor=requestedBackdrop?Color.clear:new Color(0,0,0,.3f);
+                    root.style.paddingRight=20;stage.style.marginTop=60;stage.style.position=Position.Relative;stage.style.backgroundColor=requestedBackdrop?Color.clear:new Color(0,0,0,.3f);
                     surface.CardsRoot.style.position=Position.Absolute;surface.CardsRoot.style.left=0;surface.CardsRoot.style.top=0;surface.CardsRoot.style.width=Length.Percent(100);surface.CardsRoot.style.height=430;
                     surface.InspectionView.style.position=Position.Absolute;surface.InspectionView.style.right=8;surface.InspectionView.style.top=0;surface.InspectionView.style.display=DisplayStyle.None;
                     choices.style.position=Position.Absolute;choices.style.left=0;choices.style.bottom=0;choices.style.width=Length.Percent(100);
@@ -96,7 +96,14 @@ namespace Manaforge.Play
             }else foreach(var card in surface.CardsRoot.Children())if(card is CardView view)view.SetPresentation(CardPresentationMode.Compact,135);
             var inspect=new VisualElement();inspect.style.flexDirection=FlexDirection.Row;document.rootVisualElement.Insert(3,inspect);int count=0;
             foreach(string objectId in surface.PresentedObjectIds()){string id=objectId;inspect.Add(new Button(()=>{if(OpeningLayout)surface.InspectionView.style.display=DisplayStyle.Flex;host.Inspect(id);}){text="Inspect "+(++count)});}
-            if(OpeningLayout)OpeningDiagnostics.Attach(document.rootVisualElement,status,note,inspect);
+            if(OpeningLayout){
+                OpeningDiagnostics.Attach(document.rootVisualElement,status,note,inspect);
+                // Move the engine-owned prompt after mapping, retaining its live updates and clearing.
+                var headerPrompt=panel.Root.Q<Label>("decision-prompt");
+                headerPrompt.style.fontSize=21;headerPrompt.style.color=new Color(.88f,.88f,.88f);
+                headerPrompt.style.marginTop=8;headerPrompt.style.marginBottom=0;
+                document.rootVisualElement.Insert(1,headerPrompt);
+            }
             status.text=creature?"Connected to real XMage. Select the offered casting ability.":priority?"Connected to real XMage. Select Pass priority to yield this decision.":land?"Connected to real XMage. Select an offered Play land action.":"Connected to real XMage. Inspect your opening hand, then choose whether to mulligan.";
             if(requestedBackdrop){backdrop=ArenaOpeningBackdrop.AttachLocal(document.rootVisualElement);if(!backdrop){Fail();yield break;}}
             if(capture){yield return Capture("connected.png");if(cardFocus!=null){cardFocus.Show(surface.CardsRoot.Q<CardView>());yield return Capture("focused.png");cardFocus.Show(null);}}if(!Report("ready")){Application.Quit(1);yield break;}
