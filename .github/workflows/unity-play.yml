@@ -52,6 +52,9 @@ jobs:
       - name: Packaged desktop preview with public generated artwork
         shell: pwsh
         run: python tools/check_play_deck_preview.py
+      - name: Packaged authenticated decision UI fixture
+        shell: pwsh
+        run: python tools/check_play_unity_session.py --decisions
       - name: Upload sanitized fixture evidence and player
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -63,4 +66,8 @@ jobs:
             Mtg_Projects/mtg_play_unity/Artifacts/commit.txt
             Mtg_Projects/mtg_play_unity/Artifacts/PlayerSmoke/
             Mtg_Projects/mtg_play_unity/Artifacts/DeckPreviewSmoke/
+            Mtg_Projects/mtg_play_unity/Artifacts/SessionFixture-*/report.json
+            Mtg_Projects/mtg_play_unity/Artifacts/SessionFixture-*/connected.png
+            Mtg_Projects/mtg_play_unity/Artifacts/SessionFixture-*/decision-complete.png
+            Mtg_Projects/mtg_play_unity/Artifacts/SessionFixture-*/cleared.png
             Mtg_Projects/mtg_play_unity/Builds/Windows/

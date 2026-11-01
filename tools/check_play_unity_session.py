@@ -1,4 +1,4 @@
-"""Opt-in public Java/Unity session fixture; no XMage, user decks or gameplay commands."""
+"""Opt-in public Java/Unity session fixture; no XMage or user decks; optional explicit synthetic decision controls."""
 
 import argparse
 import copy
@@ -24,17 +24,24 @@ def wait_file(owner, path, seconds=60):
     return json.loads(path.read_text(encoding="utf-8-sig"))
 
 
-def validate(value, code):
+def validate(value, code, decisions=False):
     if (
         set(value)
-        != {
-            "probe_version",
-            "fixture_only",
-            "code",
-            "snapshot_count",
-            "event_count",
-            "viewer_cleared",
-        }
+        != (
+            {
+                "probe_version",
+                "fixture_only",
+                "code",
+                "snapshot_count",
+                "event_count",
+                "viewer_cleared",
+            }
+            | (
+                {"ack_count", "result_count", "decision_panel_cleared"}
+                if decisions
+                else set()
+            )
+        )
         or value["probe_version"] != 1
         or value["fixture_only"] is not True
         or value["code"] != code
@@ -44,6 +51,16 @@ def validate(value, code):
         or value["event_count"] < 1
     ):
         raise RuntimeError("SESSION_FIXTURE_REPORT_INVALID")
+    if decisions:
+        completed = code != "SESSION_FIXTURE_READY"
+        if (
+            type(value["ack_count"]) is not int
+            or value["ack_count"] != (2 if completed else 0)
+            or type(value["result_count"]) is not int
+            or value["result_count"] != (1 if completed else 0)
+            or value["decision_panel_cleared"] is not completed
+        ):
+            raise RuntimeError("SESSION_FIXTURE_DECISION_REPORT_INVALID")
 
 
 def main():
@@ -61,6 +78,11 @@ def main():
         "--interactive",
         action="store_true",
         help="Open the fixture window for owner UI review; close it or press Ctrl+C to finish",
+    )
+    parser.add_argument(
+        "--decisions",
+        action="store_true",
+        help="Mount explicit public choice controls; no engine or auto-payment",
     )
     args = parser.parse_args()
     allowed = (project / "Artifacts").resolve()
@@ -104,7 +126,8 @@ def main():
                 str(classes) + os.pathsep + str(jar),
                 "manaforge.protocol.DummyGateway",
                 str(source),
-                "scene-fixture:" + str(output / "gateway-ready.json"),
+                ("decision-scene-fixture:" if args.decisions else "scene-fixture:")
+                + str(output / "gateway-ready.json"),
             ]
         )
         key = bytes(
@@ -147,8 +170,12 @@ def main():
             "-manaforgeSessionFixture",
             str(output),
         ]
+        if args.decisions:
+            command += ["-manaforgeSessionDecisions", "1"]
         if not args.interactive:
             command += ["-batchmode", "-manaforgeSessionCapture", "1"]
+            if args.decisions:
+                command += ["-manaforgeSessionDecisionScript", "1"]
         owner.start_client(
             command,
             viewer_bootstrap=export_viewer_bootstrap(
@@ -161,11 +188,17 @@ def main():
             ),
         )
         ready = wait_file(owner, output / "ready.json")
-        validate(ready, "SESSION_FIXTURE_READY")
+        validate(ready, "SESSION_FIXTURE_READY", args.decisions)
         owner.client_ready()  # Test-only artifact observation, not a product readiness handshake.
         if args.interactive:
             print(
-                "Fixture ready. Inspect the public card and concealed back. Close the window or press Ctrl+C when finished.",
+                "Fixture ready. Inspect cards"
+                + (
+                    " and choose a synthetic option within 60 seconds"
+                    if args.decisions
+                    else ""
+                )
+                + ". Close the window or press Ctrl+C when finished.",
                 flush=True,
             )
             try:
@@ -179,6 +212,13 @@ def main():
                 pass
             print("Interactive fixture ended; no visual approval has been recorded.")
             return
+        decision = None
+        if args.decisions:
+            decision = wait_file(owner, output / "decision.json")
+            validate(decision, "SESSION_FIXTURE_DECISION_COMPLETE", True)
+            image = output / "decision-complete.png"
+            if not image.is_file() or image.stat().st_size < 1000:
+                raise RuntimeError("SESSION_FIXTURE_CAPTURE_FAILED")
         cleanup = owner.close()
         if (
             not cleanup.confirmed
@@ -188,7 +228,7 @@ def main():
         ):
             raise RuntimeError("SESSION_FIXTURE_CLEANUP_FAILED")
         closed = json.loads((output / "closed.json").read_text(encoding="utf-8-sig"))
-        validate(closed, "SESSION_FIXTURE_OWNER_EOF")
+        validate(closed, "SESSION_FIXTURE_OWNER_EOF", args.decisions)
         if closed["viewer_cleared"] is not True:
             raise RuntimeError("SESSION_FIXTURE_VIEWER_NOT_CLEARED")
         for image in ("connected.png", "cleared.png"):
@@ -217,6 +257,8 @@ def main():
             forced=False,
             descendant_containment_proven=False,
             human_ui_approved=False,
+            explicit_decision_fixture=args.decisions,
+            decision=decision,
         )
         (output / "report.json").write_text(
             json.dumps(report, indent=2) + "\n", encoding="utf-8"

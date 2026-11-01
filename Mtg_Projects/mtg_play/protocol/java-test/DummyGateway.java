@@ -40,7 +40,8 @@ public final class DummyGateway {
         byte[] key=null;
         try(ServerSocket listener=new ServerSocket()) {
             InputStream owner=new BufferedInputStream(System.in);
-            boolean sceneMode=args.length==2 && args[1].startsWith("scene-fixture:");
+            boolean decisionScene=args.length==2 && args[1].startsWith("decision-scene-fixture:");
+            boolean sceneMode=decisionScene || args.length==2 && args[1].startsWith("scene-fixture:");
             JsonObject boot=object(TextFrame.read(owner));
             require(boot.size()==7 && boot.keySet().containsAll(Arrays.asList("viewer_key_hex","engine_version","artifact_manifest_sha256","session_id","viewer_id","client_nonce","fixture_only")));
             require(boot.get("fixture_only").isJsonPrimitive() && boot.get("fixture_only").getAsJsonPrimitive().isBoolean() && boot.get("fixture_only").getAsBoolean());
@@ -53,7 +54,7 @@ public final class DummyGateway {
             boolean numberMode=args.length==2 && args[1].equals("number");
             boolean amountsMode=args.length==2 && args[1].equals("amounts");
             boolean manaMode=args.length==2 && args[1].equals("mana");
-            boolean choiceMode=args.length==2 && args[1].equals("choice") || numberMode || amountsMode || manaMode;
+            boolean choiceMode=decisionScene || args.length==2 && args[1].equals("choice") || numberMode || amountsMode || manaMode;
             if(choiceMode) {
                 snapshot.add("actions",new JsonArray());JsonObject request=snapshot.getAsJsonObject("decision");
                 request.addProperty("family","selection");request.addProperty("is_priority",false);request.addProperty("can_finish",true);request.addProperty("cancellable",true);
@@ -86,7 +87,7 @@ public final class DummyGateway {
             JsonObject ready=new JsonObject(); ready.addProperty("host","127.0.0.1"); ready.addProperty("port",listener.getLocalPort()); ready.addProperty("server_nonce",serverNonce);
             if(sceneMode) {
                 JsonObject address=new JsonObject();address.addProperty("host","127.0.0.1");address.addProperty("port",listener.getLocalPort());
-                Path path=Paths.get(args[1].substring("scene-fixture:".length())),temporary=Paths.get(path.toString()+".tmp");Files.write(temporary,address.toString().getBytes(StandardCharsets.UTF_8));Files.move(temporary,path,StandardCopyOption.ATOMIC_MOVE);
+                Path path=Paths.get(args[1].substring(args[1].indexOf(':')+1)),temporary=Paths.get(path.toString()+".tmp");Files.write(temporary,address.toString().getBytes(StandardCharsets.UTF_8));Files.move(temporary,path,StandardCopyOption.ATOMIC_MOVE);
             }else send(System.out,ready);
             try(Socket socket=listener.accept();LoopbackFrameReader frames=new LoopbackFrameReader(socket)) {
                 active.set(frames); if(ownerGone.get())throw new IOException("OWNER_GONE");
@@ -126,7 +127,7 @@ public final class DummyGateway {
                 JsonObject eventBody=new JsonObject();eventBody.addProperty("fixture_only",true);eventBody.addProperty("session_id",session);eventBody.addProperty("viewer_id",viewer);eventBody.add("event",event);
                 JsonObject eventMessage=envelope("event","fixture-event",eventBody);
                 boundary.observe(eventMessage.toString());send(frames,eventMessage);
-                if(sceneMode) {
+                if(sceneMode && !decisionScene) {
                     int heartbeat=0;while(!ownerGone.get() && heartbeat<1800){Thread.sleep(1000);if(ownerGone.get())break;
                         JsonObject pulse=eventMessage.deepCopy();pulse.addProperty("message_id","fixture-heartbeat-"+(heartbeat++));pulse.getAsJsonObject("body").getAsJsonObject("event").addProperty("kind","fixture-heartbeat");
                         try{boundary.observe(pulse.toString());send(frames,pulse);}catch(IOException closed){while(!ownerGone.get())Thread.sleep(20);return;}}
@@ -135,7 +136,7 @@ public final class DummyGateway {
                 long revision=snapshot.get("revision").getAsLong();
                 Set<String> fixtureSubmissions=new HashSet<>(); // Explicit synthetic enqueue recorder; no engine.
                 for(int count=0;count<8;count++) {
-                    String text=frames.read(args.length==2 && args[1].equals("client-partial-frame")?500:5000); require(text!=null);
+                    String text=frames.read(decisionScene?60000:args.length==2 && args[1].equals("client-partial-frame")?500:5000); require(text!=null);
                     JsonObject message=WireMessages.parse(text),request=message.getAsJsonObject("body");
                     String type=message.get("message_type").getAsString();
                     if(type.equals("shutdown")) {
@@ -163,6 +164,9 @@ public final class DummyGateway {
                         terminal.addProperty("revision",revision+1);terminal.add("decision",JsonNull.INSTANCE);terminal.add("actions",new JsonArray());
                         result.add("snapshot",terminal);JsonObject resultMessage=envelope("result","fixture-result",result);
                         boundary.observe(resultMessage.toString());send(frames,resultMessage);
+                        if(decisionScene) { // Keep the owned fixture peer alive until its parent's EOF.
+                            while(!ownerGone.get())Thread.sleep(20);return;
+                        }
                     }
                 }
                 throw new IOException("DUMMY_LIMIT");

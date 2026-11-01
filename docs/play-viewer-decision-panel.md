@@ -137,3 +137,12 @@ disposal restoring input state, and an empty source set. The synthetic capture
 was visually inspected; hands-on acceptance is not recorded. No full application
 suite, EditMode rerun or packaged build was needed for this UI-only increment.
 CI is checked at this third-commit checkpoint without waiting for unfinished runs.
+
+
+Packaged mounting follow-up (0.5.122): the existing panel now mounts in the
+explicit authenticated session fixture under `--decisions`. A packaged public
+choice travels through its actual callback/host/dispatcher and Java boundary,
+then distinct submitted/confirmed receipts and a synthetic result clear the
+panel. The default inspection-only mode is unchanged. See
+[launch/review instructions and evidence](play-session-fixture.md#packaged-explicit-decisions-05122).
+Owner UI and licensed CI acceptance remain pending; this is not live gameplay.

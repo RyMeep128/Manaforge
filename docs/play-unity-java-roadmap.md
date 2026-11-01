@@ -1091,3 +1091,15 @@ current runs. Preview-only CI exposed a Windows 8.3 temporary-path spelling
 failure, corrected in 0.5.121 by canonical ownership and directory identity checks
 with added regressions. No assertions or preview acceptance requirements were
 weakened; fix CI and owner UI review remain pending.
+
+
+### Main Unity integration resumed — packaged decision controls (0.5.122)
+
+The existing decision panel is mounted in an opt-in authenticated packaged
+session fixture. An actual UI choice passes through the current offer/dispatcher
+and Java session boundary, receives distinct submitted/confirmed receipts and a
+fixture result, then clears controls. Both roots exit cleanly; the original
+read-only scenario also passes. This is G1/P3.4 synthetic integration, not XMage
+or AI play. See [review instructions](play-session-fixture.md#packaged-explicit-decisions-05122).
+Owner UI verification is now required. Licensed CI and all existing architecture
+acceptance gates remain open; automatic-payment work stays parked/disabled.
