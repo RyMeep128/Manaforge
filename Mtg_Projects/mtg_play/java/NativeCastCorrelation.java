@@ -12,6 +12,25 @@ public final class NativeCastCorrelation {
         private final JsonObject command;private final NativeCastCorrelation correlation;private final long stackSourceCounter,stackCycle;private final String stackId;
         private AbilityEvidence(JsonObject command,NativeCastCorrelation correlation,long counter,long cycle,String stackId){this.command=command.deepCopy();this.correlation=correlation;stackSourceCounter=counter;stackCycle=cycle;this.stackId=stackId;}
         public boolean matchesCommand(JsonObject candidate){return command.equals(candidate);}
+        /** Empty-stack phase transition in the owned fixture; never just a newer cycle. */
+        public PriorityEvidence phasePriorityEvidence(JsonObject before,JsonObject prompt,JsonObject pass,JsonObject beforeMetadata,JsonObject accepted,
+                JsonObject after,JsonObject nextPrompt,JsonObject afterMetadata) {
+            try {
+                if(!observesBattlefieldTransition(before,beforeMetadata) || !observesBattlefieldTransition(after,afterMetadata)
+                    || !"respond".equals(string(pass,"command")) || !"boolean".equals(string(pass,"kind")) || !new JsonPrimitive(false).equals(pass.get("value"))
+                    || !correlation.game.equals(string(pass,"game_id")) || number(pass,"decision_id")!=number(prompt,"decision_id")
+                    || !"GAME_SELECT".equals(string(prompt,"kind")) || !new JsonPrimitive(true).equals(prompt.get("is_priority"))
+                    || number(prompt,"cycle")!=number(before,"cycle") || !new JsonPrimitive(true).equals(beforeMetadata.get("priority_open"))
+                    || !"response_sent".equals(string(accepted,"event")) || !new JsonPrimitive(true).equals(accepted.get("accepted"))
+                    || !string(pass,"request_id").equals(string(accepted,"request_id")) || !new JsonPrimitive(true).equals(afterMetadata.get("priority_open"))
+                    || !"GAME_SELECT".equals(string(nextPrompt,"kind")) || !new JsonPrimitive(true).equals(nextPrompt.get("is_priority"))
+                    || number(nextPrompt,"cycle")!=number(after,"cycle") || number(nextPrompt,"decision_id")<=number(prompt,"decision_id")
+                    || number(after,"cycle")<number(before,"cycle") || number(after,"turn")<number(before,"turn"))return null;
+                String beforePhase=string(before,"phase"),afterPhase=string(after,"phase"),beforeStep=string(before,"step"),afterStep=string(after,"step");
+                boolean changed=number(after,"turn")!=number(before,"turn") || !beforePhase.equals(afterPhase) || !beforeStep.equals(afterStep);
+                return changed?new PriorityEvidence(pass):null;
+            }catch(RuntimeException unsupported){return null;}
+        }
         /** Fixed cast/resolution slice only: not a general priority-advancement certificate. */
         public PriorityEvidence priorityEvidence(JsonObject before,JsonObject prompt,JsonObject pass,JsonObject beforeMetadata,JsonObject accepted,
                 JsonObject after,JsonObject nextPrompt,JsonObject afterMetadata) {

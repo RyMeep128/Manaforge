@@ -26,7 +26,7 @@ def main():
     parser.add_argument(
         "--post-resolution-pass",
         action="store_true",
-        help="Submit one more native priority pass after the confirmed transition; requires --observe-resolution",
+        help="Confirm one more native pass with a guarded phase transition; requires --observe-resolution",
     )
     parser.add_argument(
         "--observe-resolution",
@@ -347,6 +347,13 @@ def main():
                         or observed.get("confirmed_receipt_count") != 2
                     ):
                         raise RuntimeError("LIVE_UNITY_BATTLEFIELD_NOT_PRESENTED")
+                if args.post_resolution_pass:
+                    phase = wait_file("phase-ready", 60)
+                    if (
+                        phase.get("snapshot_count") != 4
+                        or phase.get("phase_transition_presented") is not True
+                    ):
+                        raise RuntimeError("LIVE_UNITY_PHASE_NOT_PRESENTED")
                 chosen = wait_file("choice", 60)
                 if (
                     chosen.get("ack_count")
@@ -362,8 +369,8 @@ def main():
                     raise RuntimeError("LIVE_UNITY_CHOICE_FAILED")
                 if args.post_resolution_pass and (
                     observed.get("post_resolution_priority_presented") is not True
-                    or chosen.get("confirmed_receipt_count") != 2
-                    or chosen.get("uncertain_receipt_count") != 1
+                    or chosen.get("confirmed_receipt_count") != 3
+                    or chosen.get("uncertain_receipt_count") != 0
                 ):
                     raise RuntimeError("LIVE_UNITY_POST_RESOLUTION_RECEIPT_FAILED")
                 # The scene quits after clearing. Observe its owned handle rather than health-checking an expected exit.
@@ -393,6 +400,12 @@ def main():
                         raise RuntimeError("LIVE_UNITY_EVIDENCE_FAILED")
                 if args.first_land and native.get("first_land_observed") is not True:
                     raise RuntimeError("LIVE_UNITY_LAND_NOT_OBSERVED")
+                if (
+                    args.native_metadata
+                    and native.get("unity_post_resolution_priority_confirmed")
+                    is not args.post_resolution_pass
+                ):
+                    raise RuntimeError("LIVE_UNITY_POST_PHASE_CONFIRMATION_FAILED")
                 if (
                     args.native_metadata
                     and native.get("unity_post_resolution_priority_submitted")
@@ -480,6 +493,7 @@ def main():
                         unity_battlefield_transition_observed=args.observe_resolution,
                         unity_followup_priority_confirmed=args.observe_resolution,
                         unity_post_resolution_priority_submitted=args.post_resolution_pass,
+                        unity_post_resolution_priority_confirmed=args.post_resolution_pass,
                     )
                 if args.continue_priority:
                     evidence.update(followup_priority_presented=True, snapshot_count=2)
@@ -490,7 +504,10 @@ def main():
                 if args.post_resolution_pass:
                     evidence.update(
                         post_resolution_priority_presented=True,
-                        post_resolution_pass_uncertain=True,
+                        phase_transition_presented=True,
+                        snapshot_count=4,
+                        confirmed_receipt_count=3,
+                        uncertain_receipt_count=0,
                     )
             finally:
                 key[:] = bytes(len(key))
@@ -525,7 +542,7 @@ def main():
         json.dumps(evidence, indent=2) + "\n", encoding="utf-8"
     )
     print(
-        "Packaged Unity submitted three commands on one session; earlier choices confirmed, final priority pass uncertain, viewer cleared and roots reaped."
+        "Packaged Unity confirmed three commands on one session and displayed the next native phase; viewer cleared and roots reaped."
         if args.post_resolution_pass
         else "Packaged Unity confirmed the exact ability and priority pass, observed the spell source on the battlefield, cleared the viewer and reaped owned roots."
         if args.observe_resolution

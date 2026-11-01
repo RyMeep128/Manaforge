@@ -299,6 +299,28 @@ public final class OpeningProjectionChecks {
             if(mode==14)badNext.addProperty("is_priority",false);
             check(evidence.priorityEvidence(badBefore,badPrompt,badPass,badOpen,badAccepted,resolved,badNext,badClosed)==null);
         }
+        JsonObject phaseBefore=resolved.deepCopy(),phaseAfter=resolved.deepCopy(),phasePass=passCommand.deepCopy(),phaseAccepted=accepted.deepCopy(),phaseNext=laterPriority.deepCopy();
+        phaseBefore.addProperty("turn",1);phaseBefore.addProperty("phase","PRECOMBAT_MAIN");phaseBefore.addProperty("step","PRECOMBAT_MAIN");
+        phaseAfter.addProperty("turn",1);phaseAfter.addProperty("phase","COMBAT");phaseAfter.addProperty("step","BEGIN_COMBAT");
+        phasePass.addProperty("decision_id",44);phasePass.addProperty("request_id","phase-receipt");phaseAccepted.addProperty("request_id","phase-receipt");phaseNext.addProperty("decision_id",45);
+        NativeCastCorrelation.PriorityEvidence phaseProof=evidence.phasePriorityEvidence(phaseBefore,laterPriority,phasePass,closedMetadata,phaseAccepted,phaseAfter,phaseNext,closedMetadata);
+        check(phaseProof!=null && phaseProof.matchesCommand(phasePass));
+        for(int mode=0;mode<12;mode++) {
+            JsonObject badAfter=phaseAfter.deepCopy(),badPass=phasePass.deepCopy(),badAccepted=phaseAccepted.deepCopy(),badNext=phaseNext.deepCopy(),badOpen=closedMetadata.deepCopy(),badClosed=closedMetadata.deepCopy();
+            if(mode==0 || mode==1){badAfter.addProperty("phase","PRECOMBAT_MAIN");badAfter.addProperty("step","PRECOMBAT_MAIN");}
+            if(mode==1){badAfter.addProperty("cycle",9);badNext.addProperty("cycle",9);badClosed.addProperty("cycle",9);}
+            if(mode==2)badOpen.addProperty("priority_open",false);
+            if(mode==3)badClosed.addProperty("priority_open",false);
+            if(mode==4)badAccepted.addProperty("request_id","wrong");
+            if(mode==5)badAccepted.addProperty("accepted",false);
+            if(mode==6)badNext.addProperty("decision_id",44);
+            if(mode==7)badClosed.getAsJsonObject("objects").getAsJsonObject(source).addProperty("incarnation",5);
+            if(mode==8)badAfter.add("phase",JsonNull.INSTANCE);
+            if(mode==9)badAfter.addProperty("turn",0);
+            if(mode==10)badPass.addProperty("value",true);
+            if(mode==11)badNext.addProperty("kind","GAME_TARGET");
+            check(evidence.phasePriorityEvidence(phaseBefore,laterPriority,badPass,badOpen,badAccepted,badAfter,badNext,badClosed)==null);
+        }
         fails("STALE_DECISION",()->readOnly.claimAction(priorPass,"session","human","raw-game","raw-human",43,8));
         OpeningSessionChecks.confirmationChecks(raw,choice,instance,after,metadata);
         JsonObject other=abilityCommand.deepCopy();other.addProperty("request_id","other-receipt");check(!evidence.matchesCommand(other));

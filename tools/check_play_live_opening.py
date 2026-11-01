@@ -79,6 +79,7 @@ def main():
         expected["unity_battlefield_transition_observed"] = False
         expected["unity_followup_priority_confirmed"] = False
         expected["unity_post_resolution_priority_submitted"] = False
+        expected["unity_post_resolution_priority_confirmed"] = False
     evidence = None
 
     def consume(first, events, launch, port, server_process, server):

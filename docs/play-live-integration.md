@@ -1,5 +1,43 @@
 # Live Unity / Java / XMage integration
 
+## Confirm the post-resolution pass and show native phase state (0.5.169)
+
+The existing `--post-resolution-pass` option now verifies that final pass and
+delivers a fourth, read-only snapshot on the same authenticated session:
+
+```powershell
+python tools/check_play_unity_live.py --creature-ability --native-metadata --continue-priority --observe-resolution --post-resolution-pass
+```
+
+In this owned, serialized public fixture, private phase evidence requires the
+exact accepted boolean-false response for the offered native game/decision and
+request ID; native priority open before and after; a later native priority
+decision with matching cycles; empty stacks and the exact existing battlefield
+source incarnation in both guarded views; and a changed native turn, phase or
+step. A newer cycle alone, an unchanged phase/step, rewind, missing phase fields,
+wrong acceptance or changed incarnation cannot confirm the pass. XMage determines
+the transition; no Magic phase-order rules are implemented in the gateway.
+
+After confirmation, Unity mounts the fourth snapshot without decision/actions,
+captures `phase.png` and clears. Acceptance requires four snapshots, six
+acknowledgements, three received confirmed receipts, no uncertain receipts and
+unity_post_resolution_priority_confirmed native evidence. The ordinary
+continuation without this correlated phase proof retains its uncertain outcome.
+This does not enable another action, a complete combat loop or natural-match
+acceptance. The next slice can use the reconciled phase boundary for subsequent
+engine-offered input.
+
+Validation: the Windows player build and real three-command Unity/XMage phase
+probe passed with screenshot inspection and normal viewer/process cleanup.
+78 focused Unity receipt-tracker/channel tests and Java protocol preflight passed,
+including 271 projection/correlation/privacy checks. Authenticated-session tests
+verify pending rejection before phase proof, late uncertainty reconciliation,
+duplicate confirmation/receipt reuse without native replay and confirmed state
+retained on disconnect. The uncertainty-fallback Unity probe and Java-only native
+metadata cast/resolution regression passed. Three focused Python provisioning
+checks, lint and formatting passed. No full application suite ran.
+New CI evidence is pending; next scheduled check remains .171.
+
 ## Admit a post-resolution Unity priority pass (0.5.168)
 
 The opt-in fixture can now admit a third command after the casting choice and

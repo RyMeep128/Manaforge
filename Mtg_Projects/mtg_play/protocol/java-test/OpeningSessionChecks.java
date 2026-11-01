@@ -61,6 +61,7 @@ public final class OpeningSessionChecks {
                 manaforge.protocol.SubmissionLedger.Prepared passRetry=owner.dispatch(pass.toString(),"raw-game","raw-human",43,8);
                 if(passRetry.shouldSubmit || !passReceipt.equals(passRetry.receipt()) || owner.pollNative()!=null)throw new AssertionError("CONFIRMED_PRIORITY_REPLAYED");
                 JsonObject permanent=resolved.getAsJsonArray("players").get(0).getAsJsonObject().getAsJsonArray("battlefield").get(0).getAsJsonObject();permanent.addProperty("controller_name","raw-name");permanent.addProperty("owner_name","raw-name");
+                resolved.addProperty("turn",1);resolved.addProperty("phase","PRECOMBAT_MAIN");resolved.addProperty("step","PRECOMBAT_MAIN");
                 JsonObject postSnapshot=projection.project(resolved,later,true),postUpdate=envelope(postSnapshot);postUpdate.addProperty("message_id","post-resolution-priority");owner.observe(postUpdate.toString());
                 JsonObject postCommand=JsonParser.parseString(OpeningProjectionChecks.perform(postSnapshot)).getAsJsonObject();postCommand.addProperty("message_id","post-resolution-pass");
                 if(!owner.dispatch(postCommand.toString(),"raw-game","raw-human",44,8).shouldSubmit)throw new AssertionError("POST_RESOLUTION_PASS_NOT_ADMITTED");
@@ -69,9 +70,17 @@ public final class OpeningSessionChecks {
                 owner.uncertain("post-resolution-pass");postCommand.addProperty("message_id","blocked-fourth-command");
                 manaforge.protocol.SubmissionLedger.Prepared fourth=owner.dispatch(postCommand.toString(),"raw-game","raw-human",44,8);
                 if(fourth.shouldSubmit || !"COMMAND_PENDING".equals(fourth.receipt().getAsJsonObject("body").get("code").getAsString()) || owner.pollNative()!=null)throw new AssertionError("UNCERTAIN_POST_PASS_RELEASED");
+                JsonObject phaseAfter=resolved.deepCopy(),phasePrompt=later.deepCopy(),phaseAccepted=accepted.deepCopy();phaseAfter.addProperty("phase","COMBAT");phaseAfter.addProperty("step","BEGIN_COMBAT");phasePrompt.addProperty("decision_id",45);phaseAccepted.addProperty("request_id","post-resolution-pass");
+                NativeCastCorrelation.PriorityEvidence phaseProof=proof.phasePriorityEvidence(resolved,later,nativePost,afterMeta,phaseAccepted,phaseAfter,phasePrompt,afterMeta);
+                if(phaseProof==null)throw new AssertionError("PHASE_PROOF_MISSING");
+                JsonObject phaseReceipt=owner.confirmPriority("post-resolution-pass",phaseProof);
+                if(!"confirmed".equals(phaseReceipt.getAsJsonObject("body").get("outcome").getAsString()) || !phaseReceipt.equals(owner.confirmPriority("post-resolution-pass",phaseProof)))throw new AssertionError("PHASE_CONFIRMATION_FAILED");
+                postCommand.addProperty("message_id","post-resolution-pass");
+                if(owner.dispatch(postCommand.toString(),"raw-game","raw-human",44,8).shouldSubmit || owner.pollNative()!=null)throw new AssertionError("CONFIRMED_PHASE_PASS_REPLAYED");
+                JsonObject phaseUpdate=envelope(projection.projectReadOnlyPriority(phaseAfter,phasePrompt));phaseUpdate.addProperty("message_id","phase-observation");owner.observe(phaseUpdate.toString());
                 owner.disconnected();if(!confirmed.equals(owner.receiptFor(id)))throw new AssertionError("CONFIRMATION_LOST_ON_DISCONNECT");
                 if(!passReceipt.equals(owner.receiptFor("followup-pass")))throw new AssertionError("PRIORITY_CONFIRMATION_LOST");
-                if(!"uncertain".equals(owner.receiptFor("post-resolution-pass").getAsJsonObject("body").get("outcome").getAsString()))throw new AssertionError("POST_PASS_UNCERTAINTY_LOST");
+                if(!phaseReceipt.equals(owner.receiptFor("post-resolution-pass")))throw new AssertionError("PHASE_CONFIRMATION_LOST");
             }
         }finally{java.util.Arrays.fill(key,(byte)0);}
     }
