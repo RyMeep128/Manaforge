@@ -17,9 +17,9 @@ namespace Manaforge.Play
             foreach(var button in root.Query<Button>().ToList()){
                 if(button.text!="Mulligan" && button.text!="Keep 7")continue;
                 var parent=button.parent;int index=parent.IndexOf(button);
-                var holder=new VisualElement{name="opening-glow-holder"};holder.style.width=260;holder.style.height=55;holder.style.marginLeft=12;holder.style.marginRight=12;
+                var holder=new VisualElement{name="opening-glow-holder"};holder.style.width=OpeningMulliganControls.ButtonWidth;holder.style.height=OpeningMulliganControls.ButtonHeight;holder.style.marginLeft=OpeningMulliganControls.ButtonMargin;holder.style.marginRight=OpeningMulliganControls.ButtonMargin;
                 var image=new Image{name="opening-button-glow",image=texture,pickingMode=PickingMode.Ignore,scaleMode=ScaleMode.StretchToFill,tintColor=button.text=="Mulligan"?new Color(.4f,.4f,1):new Color(1,.45f,.12f)};
-                image.style.position=Position.Absolute;image.style.left=-18;image.style.top=-13;image.style.width=296;image.style.height=81;
+                image.style.position=Position.Absolute;image.style.left=-13;image.style.top=-10;image.style.width=OpeningMulliganControls.ButtonWidth+26;image.style.height=OpeningMulliganControls.ButtonHeight+20;
                 holder.Add(image);parent.Insert(index,holder);holder.Add(button);
                 button.style.marginLeft=0;button.style.marginRight=0;
                 buttons.Add(button);images.Add(image);holders.Add(holder);
@@ -36,7 +36,7 @@ namespace Manaforge.Play
             for(int i=0;i<buttons.Count;i++){
                 var holder=holders[i];var button=buttons[i];var parent=holder.parent;
                 if(parent!=null){int index=parent.IndexOf(holder);parent.Insert(index,button);holder.RemoveFromHierarchy();}
-                button.style.marginLeft=12;button.style.marginRight=12;images[i].RemoveFromHierarchy();
+                button.style.marginLeft=OpeningMulliganControls.ButtonMargin;button.style.marginRight=OpeningMulliganControls.ButtonMargin;images[i].RemoveFromHierarchy();
             }
             buttons.Clear();images.Clear();holders.Clear();
         }

@@ -68,7 +68,7 @@ namespace Manaforge.Play
                     root.style.paddingRight=20;stage.style.marginTop=60;stage.style.position=Position.Relative;stage.style.backgroundColor=requestedBackdrop?Color.clear:new Color(0,0,0,.3f);
                     surface.CardsRoot.style.position=Position.Absolute;surface.CardsRoot.style.left=0;surface.CardsRoot.style.top=0;surface.CardsRoot.style.width=Length.Percent(100);surface.CardsRoot.style.height=430;
                     surface.InspectionView.style.position=Position.Absolute;surface.InspectionView.style.right=8;surface.InspectionView.style.top=0;surface.InspectionView.style.display=DisplayStyle.None;
-                    choices.style.position=Position.Absolute;choices.style.left=0;choices.style.bottom=0;choices.style.width=Length.Percent(100);
+                    choices.style.position=Position.Absolute;choices.style.left=0;choices.style.bottom=OpeningMulliganControls.BottomInset;choices.style.width=Length.Percent(100);
                     panel.Root.style.backgroundColor=Color.clear;
                     var prompt=panel.Root.Q<Label>("decision-prompt");prompt.style.unityTextAlign=TextAnchor.MiddleCenter;CardTypography.Apply(prompt,CardTextRole.Title);
                     panel.Root.Q<Label>("decision-status").style.unityTextAlign=TextAnchor.MiddleCenter;
@@ -86,8 +86,8 @@ namespace Manaforge.Play
             if(OpeningLayout){
                 var question=panel.Root.Q<Label>("decision-prompt");question.text=OpeningHandFan.PlainPrompt(question.text);
                 foreach(var button in panel.Root.Query<Button>().ToList()){
-                    button.style.width=260;button.style.height=55;button.style.fontSize=24;button.style.marginLeft=12;button.style.marginRight=12;
-                    button.style.borderTopLeftRadius=button.style.borderTopRightRadius=button.style.borderBottomLeftRadius=button.style.borderBottomRightRadius=28;
+                    button.style.width=OpeningMulliganControls.ButtonWidth;button.style.height=OpeningMulliganControls.ButtonHeight;button.style.fontSize=24;button.style.marginLeft=OpeningMulliganControls.ButtonMargin;button.style.marginRight=OpeningMulliganControls.ButtonMargin;button.style.paddingTop=0;button.style.paddingBottom=0;
+                    button.style.borderTopLeftRadius=button.style.borderTopRightRadius=button.style.borderBottomLeftRadius=button.style.borderBottomRightRadius=20;
                     button.style.backgroundColor=button.name=="decision-option-0"?new Color(.22f,.25f,.85f):new Color(.95f,.36f,.08f);
                 }
                 mulliganControls=OpeningMulliganControls.Apply(panel.Root,surface.CardsRoot.childCount);

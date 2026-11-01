@@ -1,5 +1,22 @@
 # Live Unity / Java / XMage integration
 
+## Reference-proportioned opening controls (0.5.157)
+
+The primary controls now follow the supplied screenshot's proportions at the
+1280 x 720 reference viewport: 180 x 40 buttons, a 54-pixel inter-button gap,
+and a higher action row beneath the hand rather than at the bottom edge.
+Typography, rounded corners, and glow bounds scale with the smaller controls.
+This leaves the full glow visible and restores the reference's lower margin.
+The values are presentation measurements, not extracted Arena engine constants.
+
+Shared geometry keeps textured buttons, fallback buttons, and glow holders
+aligned. Text padding is reduced so the supplied title font fits the shorter
+button. Engine callbacks, labels, input guards, and viewer cleanup are unchanged.
+
+Validation: 22 focused EditMode checks passed (opening controls, glows, and
+hand geometry), packaged build succeeded, and the live artwork opening action
+and cleanup were checked with screenshot inspection. Next CI check: .159.
+
 ## Supplied Arena button glow (0.5.156)
 
 The opening controls now layer the supplied `MainButton_Glow` behind the blue

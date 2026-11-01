@@ -6,6 +6,7 @@ namespace Manaforge.Play
     // Presentation only: retain the engine-owned buttons, callbacks, and enabled state.
     public static class OpeningMulliganControls
     {
+        public const float ButtonWidth=180,ButtonHeight=40,ButtonMargin=27,BottomInset=100;
         public static bool Apply(VisualElement root,int handCount)
         {
             if(root==null || handCount!=7)return false;
@@ -34,7 +35,7 @@ namespace Manaforge.Play
         }
         private static void Style(Button button,string label,Color fill,Color edge)
         {
-            button.text=label;CardTypography.Apply(button,CardTextRole.Title);button.style.fontSize=30;
+            button.text=label;CardTypography.Apply(button,CardTextRole.Title);button.style.fontSize=24;
             button.style.backgroundColor=fill;
             button.style.borderTopWidth=button.style.borderBottomWidth=button.style.borderLeftWidth=button.style.borderRightWidth=2;
             button.style.borderTopColor=button.style.borderBottomColor=button.style.borderLeftColor=button.style.borderRightColor=edge;
