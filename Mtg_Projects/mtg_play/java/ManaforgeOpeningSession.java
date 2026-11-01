@@ -27,6 +27,7 @@ public final class ManaforgeOpeningSession implements AutoCloseable {
     /** Trusted engine worker only. Ownership of the fresh private command transfers here. */
     public JsonObject pollNative(){return nativeQueue.poll();}
     public JsonObject receiptFor(String commandId) throws IOException{return boundary.receiptFor(commandId);}
+    public void observe(String snapshot) throws IOException{boundary.observe(snapshot);}
     public JsonObject uncertain(String id) throws IOException{return boundary.recordOutcome(id,"uncertain","COMMAND_UNCERTAIN");}
     public JsonObject confirmAbility(String id,NativeCastCorrelation.AbilityEvidence evidence) throws IOException {
         if(evidence==null || submittedNative==null || !id.equals(submittedNative.get("request_id").getAsString())

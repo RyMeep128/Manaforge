@@ -27,10 +27,22 @@ public final class OpeningSessionChecks {
                     try{owner.confirmAbility(mode==0?"wrong-id":id,mode==1?null:mode==2?correlation.abilityEvidence(before,prompt,other,after,metadata):proof);throw new AssertionError("BAD_PROOF_ACCEPTED");}
                     catch(IOException expected){if(!"CAST_EVIDENCE_MISMATCH".equals(expected.getMessage()))throw expected;}
                 }
+                JsonObject nextPrompt=OpeningProjectionChecks.priorityPrompt();nextPrompt.addProperty("decision_id",43);
+                JsonObject followup=projection.projectPriorityWithoutStack(after,nextPrompt),update=envelope(followup);update.addProperty("message_id","next-priority");owner.observe(update.toString());
+                JsonObject pass=JsonParser.parseString(OpeningProjectionChecks.perform(followup)).getAsJsonObject();pass.addProperty("message_id","early-pass");
+                manaforge.protocol.SubmissionLedger.Prepared blocked=owner.dispatch(pass.toString(),"raw-game","raw-human",43,8);
+                if(blocked.shouldSubmit || !"COMMAND_PENDING".equals(blocked.receipt().getAsJsonObject("body").get("code").getAsString()) || owner.pollNative()!=null)throw new AssertionError("UNRESOLVED_FOLLOWUP_ACCEPTED");
                 JsonObject confirmed=owner.confirmAbility(id,proof);
                 if(!"confirmed".equals(confirmed.getAsJsonObject("body").get("outcome").getAsString()) || !confirmed.equals(owner.confirmAbility(id,proof)))throw new AssertionError("CONFIRMATION_NOT_IDEMPOTENT");
                 manaforge.protocol.SubmissionLedger.Prepared duplicate=owner.dispatch(wire,"raw-game","raw-human",42,8);
                 if(duplicate.shouldSubmit || !confirmed.equals(duplicate.receipt()) || owner.pollNative()!=null)throw new AssertionError("CONFIRMED_COMMAND_REPLAYED");
+                JsonObject stale=JsonParser.parseString(wire).getAsJsonObject();stale.addProperty("message_id","stale-ability");
+                if(owner.dispatch(stale.toString(),"raw-game","raw-human",43,8).shouldSubmit || owner.pollNative()!=null)throw new AssertionError("STALE_ABILITY_ACCEPTED");
+                pass.addProperty("message_id","followup-pass");
+                if(!owner.dispatch(pass.toString(),"raw-game","raw-human",43,8).shouldSubmit)throw new AssertionError("FOLLOWUP_NOT_ADMITTED");
+                JsonObject nativePass=owner.pollNative();if(nativePass==null || !new JsonPrimitive(false).equals(nativePass.get("value")))throw new AssertionError("FOLLOWUP_NOT_NATIVE_PASS");
+                if(owner.dispatch(pass.toString(),"raw-game","raw-human",43,8).shouldSubmit || owner.pollNative()!=null)throw new AssertionError("FOLLOWUP_REPLAYED");
+                owner.uncertain("followup-pass");
                 owner.disconnected();if(!confirmed.equals(owner.receiptFor(id)))throw new AssertionError("CONFIRMATION_LOST_ON_DISCONNECT");
             }
         }finally{java.util.Arrays.fill(key,(byte)0);}

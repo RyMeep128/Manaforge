@@ -17,7 +17,7 @@ namespace Manaforge.Play
         private ViewerBootstrapPipe pipe;private Task<ViewerBootstrap> reading;private Task consuming;
         private ViewerCardSurface surface;private ViewerSessionHost host;private ViewerDecisionPanel panel;
         private PanelSettings settings;private UIDocument document;private string output;private Label status;private Label note;private OpeningCardFocus cardFocus;private OpeningButtonGlow buttonGlow;
-        private int snapshots,acks;private bool capture,choiceReported,land,priority,creature,artwork,backdrop,requestedBackdrop,mulliganControls,buttonSkins;
+        private int snapshots,acks;private bool capture,choiceReported,land,priority,creature,artwork,backdrop,requestedBackdrop,mulliganControls,buttonSkins,continuePriority,followupPresented;
         private bool OpeningLayout=>!land && !creature;
         private float fanWidth=-1;private int fanCount=-1,fanArtwork=-1;private long fanRevision=-1;
         private void PresentOpening()
@@ -37,7 +37,7 @@ namespace Manaforge.Play
         }
         private bool Report(string name,bool cleared=false)
         {
-            try{var value=new JObject{["probe_version"]=1,["live_opening"]=true,["snapshot_count"]=Volatile.Read(ref snapshots),["ack_count"]=Volatile.Read(ref acks),["viewer_cleared"]=cleared,["arena_button_glows"]=buttonGlow?.Count??0,["arena_button_skins"]=buttonSkins,["mulligan_controls"]=mulliganControls,["arena_backdrop_resource"]=backdrop?ArenaOpeningBackdrop.ResourceName:null,["arena_backdrop"]=backdrop,["artwork_count"]=surface?.PresentedArtworkCount??0};
+            try{var value=new JObject{["probe_version"]=1,["live_opening"]=true,["snapshot_count"]=Volatile.Read(ref snapshots),["ack_count"]=Volatile.Read(ref acks),["followup_priority_presented"]=followupPresented,["viewer_cleared"]=cleared,["arena_button_glows"]=buttonGlow?.Count??0,["arena_button_skins"]=buttonSkins,["mulligan_controls"]=mulliganControls,["arena_backdrop_resource"]=backdrop?ArenaOpeningBackdrop.ResourceName:null,["arena_backdrop"]=backdrop,["artwork_count"]=surface?.PresentedArtworkCount??0};
                 string path=Path.Combine(output,name+".json");File.WriteAllText(path+".tmp",value.ToString());File.Move(path+".tmp",path);return true;}catch{return false;}
         }
         private void Fail(){host?.Dispose();Report("failed");Application.Quit(1);}
@@ -46,6 +46,8 @@ namespace Manaforge.Play
             output=ArtworkFixtureScene.Argument("-manaforgeLiveOpening");capture=ArtworkFixtureScene.Argument("-manaforgeLiveCapture")=="1";
             priority=ArtworkFixtureScene.Argument("-manaforgeLivePriority")=="1";
             creature=ArtworkFixtureScene.Argument("-manaforgeLiveCreature")=="1";
+            continuePriority=ArtworkFixtureScene.Argument("-manaforgeLiveContinuePriority")=="1";
+            if(continuePriority && !creature){Application.Quit(1);yield break;}
             land=priority || ArtworkFixtureScene.Argument("-manaforgeLiveLand")=="1";
             try{Directory.CreateDirectory(output);pipe=ViewerBootstrapPipe.FromStandardInput();reading=pipe.ReadBootstrapAsync(5000,cancellation.Token);}catch{Fail();yield break;}
             while(!reading.IsCompleted)yield return null;
@@ -58,7 +60,7 @@ namespace Manaforge.Play
                 document=gameObject.AddComponent<UIDocument>();document.panelSettings=settings;var root=document.rootVisualElement;root.style.flexGrow=1;root.style.paddingLeft=20;root.style.paddingTop=15;root.style.backgroundColor=new Color(.025f,.055f,.075f);
                 var title=new Label(creature?"LIVE XMAGE — CASTING ABILITY":priority?"LIVE XMAGE — PRIORITY PASS":land?"LIVE XMAGE — FIRST LAND":"LIVE XMAGE — HUMAN vs AI OPENING");title.style.fontSize=23;title.style.color=Color.white;root.Add(title);
                 status=new Label("Connecting to the owned Java gateway…");status.style.color=Color.white;root.Add(status);
-                note=new Label(creature?"Public Memnite/Forest decks. Diagnostic card click completed. Choose the casting ability; Java checks the stack entry.":priority?"Public Forest decks. Diagnostic setup completed. One explicit priority pass; no full match.":land?"Public Forest decks. Diagnostic pregame/keep already completed. One land action only; no full match.":artwork?"Public Forest/Ornithopter decks. Verified offline artwork. Current rules / tap state unavailable; one opening decision only.":"Public Forest/Memnite decks. Opening decision only; artwork cache and later gameplay are not connected.");note.style.color=requestedBackdrop?new Color(.9f,.9f,.9f):Color.gray;root.Add(note);
+                note=new Label(continuePriority?"Public Memnite/Forest decks. Choose the casting ability, then one priority pass. Stack contents unavailable; no full match.":creature?"Public Memnite/Forest decks. Diagnostic card click completed. Choose the casting ability; Java checks the stack entry.":priority?"Public Forest decks. Diagnostic setup completed. One explicit priority pass; no full match.":land?"Public Forest decks. Diagnostic pregame/keep already completed. One land action only; no full match.":artwork?"Public Forest/Ornithopter decks. Verified offline artwork. Current rules / tap state unavailable; one opening decision only.":"Public Forest/Memnite decks. Opening decision only; artwork cache and later gameplay are not connected.");note.style.color=requestedBackdrop?new Color(.9f,.9f,.9f):Color.gray;root.Add(note);
                 var stage=new VisualElement();stage.style.flexDirection=FlexDirection.Row;stage.style.flexGrow=1;stage.style.marginTop=10;root.Add(stage);
                 surface=new ViewerCardSurface(stage);surface.CardsRoot.style.width=720;surface.CardsRoot.style.flexShrink=0;surface.InspectionView.SetPresentation(CardPresentationMode.Full,210);
                 host=new ViewerSessionHost(surface,reading.Result,pipe.WaitForOwnerCloseAsync(cancellation.Token),false);
@@ -116,9 +118,19 @@ namespace Manaforge.Play
                 host.Tick();panel.Tick();buttonGlow?.Refresh();
                 PresentOpening();
                 cardFocus?.RefreshBounds();
-                if(!choiceReported && Volatile.Read(ref acks)>=2){
+                if(continuePriority && !followupPresented && Volatile.Read(ref snapshots)>=2){
+                    var pass=panel.Root.Query<Button>().ToList().Find(button=>button.text=="Pass priority");
+                    if(pass!=null && pass.enabledInHierarchy && host.PresentedDecision?.CanSubmit==true){
+                        followupPresented=true;inspect.Clear();
+                        foreach(var card in surface.CardsRoot.Children())if(card is CardView view)view.SetPresentation(CardPresentationMode.Compact,135);
+                        status.text="Casting ability confirmed. Choose Pass priority; the next outcome remains unconfirmed.";
+                        if(capture)yield return Capture("priority.png");if(!Report("priority-ready")){Application.Quit(1);yield break;}
+                        if(ArtworkFixtureScene.Argument("-manaforgeLiveScript")=="1")using(var input=NavigationSubmitEvent.GetPooled()){input.target=pass;pass.SendEvent(input);}
+                    }
+                }
+                if(!choiceReported && Volatile.Read(ref acks)>=(continuePriority?4:2)){
                     buttonGlow?.Dispose();buttonGlow=null;cardFocus?.Dispose();cardFocus=null;host.Cancel();host.Tick();panel.Tick();inspect.Clear();
-                    status.text=creature?"Casting ability submitted; native Memnite stack entry observed. Viewer cleared; this test ends here.":priority?"Priority pass submitted to XMage; engine advanced. Viewer cleared; this test ends here.":"Choice submitted to XMage. Next-state support ends here; viewer cleared. No confirmed result is claimed.";
+                    status.text=continuePriority?"Casting ability confirmed; next priority pass submitted. Pass outcome uncertain. Viewer cleared; this test ends here.":creature?"Casting ability submitted; native Memnite stack entry observed. Viewer cleared; this test ends here.":priority?"Priority pass submitted to XMage; engine advanced. Viewer cleared; this test ends here.":"Choice submitted to XMage. Next-state support ends here; viewer cleared. No confirmed result is claimed.";
                     if(capture)yield return Capture("choice.png");if(!Report("choice",true)){Application.Quit(1);yield break;}choiceReported=true;
                 }
                 yield return null;

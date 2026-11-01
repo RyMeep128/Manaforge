@@ -75,6 +75,7 @@ def main():
         expected["native_stack_source_matched"] = True
         expected["native_cast_instance_matched"] = True
         expected["unity_casting_ability_confirmed"] = False
+        expected["unity_followup_priority_submitted"] = False
     evidence = None
 
     def consume(first, events, launch, port, server_process, server):

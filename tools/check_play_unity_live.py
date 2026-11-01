@@ -24,6 +24,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--interactive", action="store_true")
     parser.add_argument(
+        "--continue-priority",
+        action="store_true",
+        help="After the confirmed ability, submit one real priority pass on the same session; requires --native-metadata",
+    )
+    parser.add_argument(
         "--native-metadata",
         action="store_true",
         help="Verify the Unity-selected spell instance through private Java metadata; requires --creature-ability",
@@ -69,6 +74,8 @@ def main():
     args = parser.parse_args()
     if args.native_metadata and not args.creature_ability:
         parser.error("--native-metadata requires --creature-ability")
+    if args.continue_priority and not args.native_metadata:
+        parser.error("--continue-priority requires --native-metadata")
     if args.artwork and (
         args.first_land or args.priority_pass or args.creature_ability
     ):
@@ -163,6 +170,11 @@ def main():
                         "-Dfile.encoding=UTF-8",
                         "-Djava.net.preferIPv4Stack=true",
                         *(
+                            ["-Dmanaforge.continuePriority=true"]
+                            if args.continue_priority
+                            else []
+                        ),
+                        *(
                             ["-Dmanaforge.metadataContext=" + str(metadata_context)]
                             if args.native_metadata
                             else []
@@ -226,6 +238,8 @@ def main():
                     command += ["-manaforgeLivePriority", "1"]
                 if args.creature_ability:
                     command += ["-manaforgeLiveCreature", "1"]
+                if args.continue_priority:
+                    command += ["-manaforgeLiveContinuePriority", "1"]
                 if not args.interactive:
                     command += [
                         "-batchmode",
@@ -277,7 +291,9 @@ def main():
                     raise RuntimeError("LIVE_UNITY_ARTWORK_NOT_PRESENTED")
                 if args.interactive:
                     print(
-                        "Live casting ability ready: select the engine-offered ability within 60 seconds."
+                        "Select the casting ability, then Pass priority when the next decision appears; 60 seconds per choice."
+                        if args.continue_priority
+                        else "Live casting ability ready: select the engine-offered ability within 60 seconds."
                         if args.creature_ability
                         else "Live priority ready: select Pass priority within 60 seconds."
                         if args.priority_pass
@@ -286,9 +302,16 @@ def main():
                         else "Live opening ready: inspect cards, then choose Yes or No within 60 seconds. The spike closes after submission.",
                         flush=True,
                     )
+                if args.continue_priority:
+                    followup = wait_file("priority-ready", 60)
+                    if (
+                        followup.get("snapshot_count") != 2
+                        or followup.get("followup_priority_presented") is not True
+                    ):
+                        raise RuntimeError("LIVE_UNITY_FOLLOWUP_NOT_PRESENTED")
                 chosen = wait_file("choice", 60)
                 if (
-                    chosen.get("ack_count") != 2
+                    chosen.get("ack_count") != (4 if args.continue_priority else 2)
                     or chosen.get("viewer_cleared") is not True
                 ):
                     raise RuntimeError("LIVE_UNITY_CHOICE_FAILED")
@@ -319,6 +342,12 @@ def main():
                         raise RuntimeError("LIVE_UNITY_EVIDENCE_FAILED")
                 if args.first_land and native.get("first_land_observed") is not True:
                     raise RuntimeError("LIVE_UNITY_LAND_NOT_OBSERVED")
+                if (
+                    args.native_metadata
+                    and native.get("unity_followup_priority_submitted")
+                    is not args.continue_priority
+                ):
+                    raise RuntimeError("LIVE_UNITY_FOLLOWUP_EVIDENCE_FAILED")
                 if args.native_metadata and any(
                     native.get(field) is not True
                     for field in (
@@ -378,7 +407,10 @@ def main():
                         native_stack_source_matched=True,
                         native_cast_instance_matched=True,
                         unity_casting_ability_confirmed=True,
+                        unity_followup_priority_submitted=args.continue_priority,
                     )
+                if args.continue_priority:
+                    evidence.update(followup_priority_presented=True, snapshot_count=2)
             finally:
                 key[:] = bytes(len(key))
                 cleanup = owner.close()
@@ -412,7 +444,9 @@ def main():
         json.dumps(evidence, indent=2) + "\n", encoding="utf-8"
     )
     print(
-        "Packaged Unity casting ability submitted to XMage; Memnite stack entry observed, viewer cleared and roots reaped. Resolution remains in the separate Java proof."
+        "Packaged Unity casting ability confirmed, then next priority passed on the same session; pass outcome uncertain, viewer cleared and roots reaped."
+        if args.continue_priority
+        else "Packaged Unity casting ability submitted to XMage; Memnite stack entry observed, viewer cleared and roots reaped. Resolution remains in the separate Java proof."
         if args.creature_ability
         else "Packaged Unity priority pass submitted to XMage; engine advanced, viewer cleared and roots reaped. No full game claimed."
         if args.priority_pass

@@ -1,5 +1,45 @@
 # Live Unity / Java / XMage integration
 
+## Next Unity priority on the same authenticated session (0.5.165)
+
+The opt-in two-choice slice continues from the confirmed casting ability to one
+real priority pass, using the same authenticated socket, session and receipt ledger:
+
+```powershell
+python tools/check_play_unity_live.py --creature-ability --native-metadata --continue-priority
+```
+
+Add `--interactive` to choose both buttons manually. The second snapshot comes
+from the next native priority prompt through the existing pass-only projection.
+It uses a newer revision and fresh decision/action tokens; stack contents remain
+explicitly unsupported. Unity replaces the old decision, clears stale inspection
+buttons, displays Pass priority and submits through its existing dispatcher.
+The scripted diagnostic invokes the actual mounted buttons and captures
+`priority.png`. Acceptance requires two snapshots, a presented follow-up,
+four acknowledgements, native priority submission and final viewer/process cleanup.
+
+Only the exact casting-ability receipt is confirmed. The subsequent pass is
+submitted then uncertain after native acceptance/advancement, and the probe ends.
+It does not claim resolved priority semantics, creature resolution or a full game.
+Continuation requires metadata and verified ability evidence. Admission retains
+pending-command, stale-token and duplicate-receipt guards. Duplicate/stale input
+is bounded to eight attempts; both choices and the owned session have finite
+timeouts. Cancellation is checked again before either native submission.
+
+Validation: 42 focused Unity PlayMode decision-binding/command-dispatch checks
+passed, the Windows player build passed, and the packaged real-engine two-choice
+slice passed with screenshot inspection. Focused Java protocol checks cover
+pending follow-up rejection, confirmed receipt reuse, stale ability rejection,
+fresh pass admission and no duplicate enqueue. Single-choice Unity metadata and
+Java-only metadata cast/resolution regressions also passed. Three focused Python
+provisioning checks, lint and formatting passed. No full application suite ran.
+
+Scheduled CI checkpoint: .164 [protocol](https://github.com/RyMeep128/Manaforge/actions/runs/41359399966),
+[desktop preview](https://github.com/RyMeep128/Manaforge/actions/runs/41359399940)
+and feedback relay passed. Its Tests and live-opening jobs were still running
+and are deferred. .163 live-opening/desktop preview passed; Tests was cancelled.
+New .165 CI evidence remains pending. Next check: .168.
+
 ## Confirm the exact Unity casting-ability receipt (0.5.164)
 
 The opt-in `--creature-ability --native-metadata` probe now emits submitted then
