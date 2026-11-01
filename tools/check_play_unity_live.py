@@ -233,6 +233,11 @@ def main():
                     raise RuntimeError("LIVE_UNITY_READY_FAILED")
                 if args.arena_backdrop and ready.get("arena_backdrop") is not True:
                     raise RuntimeError("LIVE_UNITY_BACKDROP_NOT_PRESENTED")
+                if (
+                    not (args.first_land or args.priority_pass or args.creature_ability)
+                    and ready.get("mulligan_controls") is not True
+                ):
+                    raise RuntimeError("LIVE_UNITY_MULLIGAN_CONTROLS_NOT_PRESENTED")
                 owner.client_ready()
                 if args.artwork and ready.get("artwork_count") != 7:
                     raise RuntimeError("LIVE_UNITY_ARTWORK_NOT_PRESENTED")
@@ -317,6 +322,7 @@ def main():
                     native_cast_ability_matched=args.creature_ability,
                     creature_spell_on_stack=args.creature_ability,
                     creature_resolved=False,
+                    mulligan_controls=ready.get("mulligan_controls", False),
                     arena_backdrop=args.arena_backdrop,
                     artwork_presented=args.artwork,
                     artwork_card_count=ready.get("artwork_count", 0),

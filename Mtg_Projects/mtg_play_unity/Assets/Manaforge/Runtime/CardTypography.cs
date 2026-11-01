@@ -17,7 +17,7 @@ namespace Manaforge.Play
                 emphasis==FontStyle.Italic?"PlantinItalic":"PlantinRegular":"BelerenBold";
             return "LocalCardVisuals/Fonts/"+name;
         }
-        public static bool Apply(Label label,CardTextRole role,FontStyle emphasis=FontStyle.Normal)
+        public static bool Apply(UnityEngine.UIElements.TextElement label,CardTextRole role,FontStyle emphasis=FontStyle.Normal)
         {
             label.AddToClassList(role==CardTextRole.Title?"CardTitleText":role==CardTextRole.Type?"CardTypeText":
                 role==CardTextRole.Rules?"CardRulesText":role==CardTextRole.PowerToughness?"CardPowerToughness":"CardCollectorText");

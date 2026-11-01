@@ -1,5 +1,24 @@
 # Live Unity / Java / XMage integration
 
+## Arena-style mulligan labels (0.5.149)
+
+The recognized initial seven-card XMage opening now presents blue Mulligan and
+orange Keep 7 controls, using the supplied Beleren title font and brighter
+outlines. The supplied Arena MulliganBrowser separates Keep/Mulligan actions;
+Manaforge retains the actual engine button instances, command callbacks,
+option IDs, and enabled state while applying those presentation labels.
+
+Relabeling requires the exact normalized prompt `Mulligan down to 6 cards?`,
+a seven-card hand, and exactly two options in the expected Yes/No order.
+Other prompts, option orders, hand sizes, or extra actions retain engine text.
+No turn order, opponent keep result, or mulligan rule is invented.
+The typography helper now accepts UI Toolkit TextElement, including buttons.
+
+Validation: 18 focused EditMode checks passed (control mapping/fallback and fan).
+The packaged live opening check also requires successful control mapping and
+submits the existing Mulligan callback before checking viewer/process cleanup.
+Next scheduled CI check remains .150.
+
 ## Supplied Arena floor backdrop (0.5.148)
 
 The artwork opening can now show the supplied Strixhaven floor behind the hand.
