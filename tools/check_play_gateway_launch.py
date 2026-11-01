@@ -163,7 +163,9 @@ def main():
                     hashlib.sha256(raw).hexdigest(),
                 ],
                 launch_manifest=payload,
+                expect_manifest_validation=True,
             )
+            owner.wait_gateway_manifest_validation(timeout=10)
             deadline = time.monotonic() + 10
             while not status.is_file():
                 owner.check_health()
@@ -172,6 +174,7 @@ def main():
                 time.sleep(0.01)
             if (
                 status.read_bytes() != b'{"validated":true}'
+                or not owner.gateway_manifest_validated
                 or not owner.gateway_manifest_written
                 or owner.client_bootstrap_written
                 or owner.state != LaunchState.STARTING_GATEWAY
@@ -214,9 +217,10 @@ def main():
     output.write_text(
         json.dumps(
             dict(
-                probe_version=2,
+                probe_version=3,
                 public_fixture_only=True,
                 private_pipe_validated=True,
+                exact_manifest_receipt_verified=True,
                 rejected_cases=rejected,
                 rejection_count=len(rejected),
                 rejected_client_admission=True,

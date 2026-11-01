@@ -12,7 +12,11 @@ import time
 
 from .connection_proof import stop_process
 from .viewer_bootstrap import ViewerBootstrapError, frame_viewer_bootstrap
-from .gateway_bootstrap import GatewayBootstrapError, frame_gateway_manifest
+from .gateway_bootstrap import (
+    GatewayBootstrapError,
+    frame_gateway_manifest,
+    manifest_validation_receipt,
+)
 
 
 class LaunchState(StrEnum):
@@ -82,6 +86,8 @@ class LaunchOwner:
         self._runtime_cleanup = runtime_cleanup
         self._client_bootstrap_written = False
         self._gateway_manifest_written = False
+        self._expected_manifest_receipt = None
+        self._gateway_manifest_validated = False
 
     def __enter__(self):
         with self._lock:
@@ -118,6 +124,12 @@ class LaunchOwner:
         with self._lock:
             return self._gateway_manifest_written
 
+    @property
+    def gateway_manifest_validated(self):
+        """Owned-child receipt verified; does not imply engine readiness."""
+        with self._lock:
+            return self._gateway_manifest_validated
+
     def request_cancel(self):
         self._cancel.set()
 
@@ -138,6 +150,7 @@ class LaunchOwner:
         starting,
         bootstrap=None,
         bootstrap_timeout=5.0,
+        capture_stdout=False,
     ):
         with self._lock:
             self._require(expected)
@@ -159,7 +172,7 @@ class LaunchOwner:
                     tuple(command),
                     cwd=cwd,
                     stdin=subprocess.PIPE,
-                    stdout=subprocess.DEVNULL,
+                    stdout=subprocess.PIPE if capture_stdout else subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                     shell=False,
                     close_fds=True,
@@ -225,8 +238,18 @@ class LaunchOwner:
             raise LaunchLifecycleError(role + "_BOOTSTRAP_WRITE_FAILED") from None
 
     def start_gateway(
-        self, command, *, cwd=None, launch_manifest=None, bootstrap_timeout=5.0
+        self,
+        command,
+        *,
+        cwd=None,
+        launch_manifest=None,
+        bootstrap_timeout=5.0,
+        expect_manifest_validation=False,
     ):
+        if type(expect_manifest_validation) is not bool or (
+            expect_manifest_validation and launch_manifest is None
+        ):
+            raise LaunchLifecycleError("INVALID_MANIFEST_VALIDATION_REQUEST")
         frame = None
         if launch_manifest is not None:
             if (
@@ -248,10 +271,72 @@ class LaunchOwner:
                 starting=LaunchState.STARTING_GATEWAY,
                 bootstrap=frame,
                 bootstrap_timeout=bootstrap_timeout,
+                capture_stdout=expect_manifest_validation,
             )
+            if expect_manifest_validation:
+                self._expected_manifest_receipt = manifest_validation_receipt(
+                    launch_manifest
+                )
         finally:
             if frame is not None:
                 frame[:] = b"\x00" * len(frame)
+
+    def wait_gateway_manifest_validation(self, *, timeout=5.0):
+        """Launch-worker only: bounded private stdout, exactly one fixed-size framed receipt.
+
+        Stdout is a dedicated one-shot control pipe, never a diagnostic log stream.
+        Engine readiness still requires a separate verified runtime handshake.
+        """
+        if (
+            type(timeout) not in (int, float)
+            or not math.isfinite(timeout)
+            or not 0 < timeout <= 60
+        ):
+            raise LaunchLifecycleError("INVALID_MANIFEST_VALIDATION_TIMEOUT")
+        with self._lock:
+            self._require(LaunchState.STARTING_GATEWAY)
+            expected = self._expected_manifest_receipt
+            if expected is None or self._gateway_manifest_validated:
+                raise LaunchLifecycleError("INVALID_MANIFEST_VALIDATION_REQUEST")
+            deadline = min(self._deadline, self._clock() + timeout)
+            received = bytearray()
+            try:
+                stream = self._children["gateway"].stdout
+                descriptor = stream.fileno()
+                os.set_blocking(descriptor, False)
+                while len(received) < len(expected):
+                    self.check_health()
+                    if self._clock() >= deadline:
+                        raise LaunchLifecycleError("GATEWAY_VALIDATION_TIMEOUT")
+                    try:
+                        chunk = os.read(descriptor, len(expected) - len(received))
+                    except BlockingIOError:
+                        self._cancel.wait(0.01)
+                        continue
+                    if chunk == b"":
+                        raise LaunchLifecycleError("GATEWAY_VALIDATION_INVALID")
+                    received.extend(chunk)
+                    if (
+                        len(received) > len(expected)
+                        or received != expected[: len(received)]
+                    ):
+                        raise LaunchLifecycleError("GATEWAY_VALIDATION_INVALID")
+                if received != expected:
+                    raise LaunchLifecycleError("GATEWAY_VALIDATION_INVALID")
+                self.check_health()
+                if self._clock() >= deadline:
+                    raise LaunchLifecycleError("GATEWAY_VALIDATION_TIMEOUT")
+                stream.close()
+                self._gateway_manifest_validated = True
+                self._expected_manifest_receipt = None
+            except LaunchLifecycleError:
+                self.close()
+                raise
+            except Exception:
+                self.close()
+                raise LaunchLifecycleError("GATEWAY_VALIDATION_READ_FAILED") from None
+            finally:
+                received[:] = bytes(len(received))
 
     def gateway_ready(self):
         with self._lock:

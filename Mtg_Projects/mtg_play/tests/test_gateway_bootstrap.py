@@ -166,3 +166,102 @@ def test_legacy_gateway_without_manifest_retains_its_existing_pipe_contract(owne
     )
     owner.gateway_ready()
     assert owner.close().confirmed
+
+
+# Validation receipt is separate from runtime readiness and client admission.
+def receipt_child(mode):
+    code = """
+import sys, hashlib, time, os
+inp = sys.stdin.buffer
+size = int.from_bytes(inp.read(4), 'big')
+payload = inp.read(size)
+text = b'MANAFORGE_MANIFEST_VALIDATED_V1:' + hashlib.sha256(payload).hexdigest().encode('ascii')
+frame = len(text).to_bytes(4, 'big') + text
+MODE
+inp.read()
+"""
+    actions = {
+        "valid": "sys.stdout.buffer.write(frame); sys.stdout.buffer.flush(); os.close(1)",
+        "wrong": "sys.stdout.buffer.write(frame[:-1] + b'x'); sys.stdout.buffer.flush(); os.close(1)",
+        "truncated": "sys.stdout.buffer.write(frame[:-1]); sys.stdout.buffer.flush(); os.close(1)",
+        "extra": "sys.stdout.buffer.write((len(text)+1).to_bytes(4, 'big') + text + b'x'); sys.stdout.buffer.flush(); os.close(1)",
+        "silent": "pass",
+        "no_eof": "sys.stdout.buffer.write(frame); sys.stdout.buffer.flush()",
+        "partial": "[ (sys.stdout.buffer.write(bytes([b])), sys.stdout.buffer.flush(), time.sleep(.001)) for b in frame ]; os.close(1)",
+    }
+    return child(code.replace("MODE", actions[mode]))
+
+
+@pytest.mark.parametrize("mode", ["valid", "partial", "no_eof"])
+def test_exact_receipt_keeps_client_blocked_until_independent_readiness(owner, mode):
+    owner.start_gateway(
+        receipt_child(mode),
+        launch_manifest=b"public-fixture",
+        expect_manifest_validation=True,
+    )
+    assert not owner.gateway_manifest_validated
+    owner.wait_gateway_manifest_validation(timeout=5)
+    assert owner.gateway_manifest_validated
+    assert owner.state == LaunchState.STARTING_GATEWAY
+    with pytest.raises(LaunchLifecycleError, match="^INVALID_LAUNCH_TRANSITION$"):
+        owner.start_client(child("raise AssertionError()"))
+    with pytest.raises(
+        LaunchLifecycleError, match="^INVALID_MANIFEST_VALIDATION_REQUEST$"
+    ):
+        owner.wait_gateway_manifest_validation()
+    assert owner.close().confirmed
+
+
+@pytest.mark.parametrize("mode", ["wrong", "truncated", "extra", "silent"])
+def test_receipt_failure_closes_owned_child_without_claiming_validation(owner, mode):
+    owner.start_gateway(
+        receipt_child(mode),
+        launch_manifest=b"public-fixture",
+        expect_manifest_validation=True,
+    )
+    expected = (
+        "GATEWAY_VALIDATION_TIMEOUT"
+        if mode == "silent"
+        else "GATEWAY_VALIDATION_INVALID"
+    )
+    with pytest.raises(LaunchLifecycleError, match="^" + expected + "$"):
+        owner.wait_gateway_manifest_validation(timeout=1 if mode == "silent" else 5)
+    assert not owner.gateway_manifest_validated
+    assert owner.report.confirmed and owner.state == LaunchState.CLOSED
+
+
+def test_validation_wait_cancellation_reaps_owned_child(owner):
+    owner.start_gateway(
+        receipt_child("silent"),
+        launch_manifest=b"public-fixture",
+        expect_manifest_validation=True,
+    )
+    timer = threading.Timer(0.05, owner.request_cancel)
+    timer.start()
+    try:
+        with pytest.raises(LaunchLifecycleError, match="^LAUNCH_CANCELLED$"):
+            owner.wait_gateway_manifest_validation()
+    finally:
+        timer.join()
+    assert owner.report.confirmed and not owner.gateway_manifest_validated
+
+
+@pytest.mark.parametrize("timeout", [False, 0, -1, float("nan"), 61])
+def test_invalid_validation_timeout_does_not_consume_pipe(owner, timeout):
+    with pytest.raises(
+        LaunchLifecycleError, match="^INVALID_MANIFEST_VALIDATION_TIMEOUT$"
+    ):
+        owner.wait_gateway_manifest_validation(timeout=timeout)
+    assert owner.state == LaunchState.NEW
+
+
+def test_validation_capture_requires_manifest_and_explicit_boolean(owner):
+    for options in [
+        dict(expect_manifest_validation=True),
+        dict(expect_manifest_validation=1, launch_manifest=b"{}"),
+    ]:
+        with pytest.raises(
+            LaunchLifecycleError, match="^INVALID_MANIFEST_VALIDATION_REQUEST$"
+        ):
+            owner.start_gateway(child("raise AssertionError()"), **options)
+    assert owner.state == LaunchState.NEW and not owner._children

@@ -24,8 +24,9 @@ relay per-action gameplay. Java owns engine processing; Unity owns presentation.
 `mtg_play.launch_lifecycle.LaunchOwner` creates direct child processes without a
 shell, retains their handles and reuses the existing bounded `stop_process` helper.
 It never adopts saved PIDs, scans process names, kills an occupied port or deletes
-a directory. Windows child windows are hidden. This foundation discards stdout/
-stderr rather than storing unfiltered output; bounded redacted diagnostics and
+a directory. Windows child windows are hidden. By default this foundation discards stdout/stderr rather than storing unfiltered
+output. The opt-in manifest receipt below reserves stdout as a private control
+pipe, never a log stream. Bounded redacted diagnostics and
 verified handshake readers must be connected before it runs actual product binaries.
 
 ```text
@@ -242,3 +243,45 @@ Delivery leaves the owner in STARTING_GATEWAY; gateway_ready still requires an
 independent readiness decision. See [private delivery proof](play-launch-boundary.md).
 The diagnostic Java receiver proves direct-child EOF cleanup only, not XMage
 descendant containment or a production ready handshake.
+
+
+### Exact private manifest acknowledgement (0.5.127)
+
+start_gateway(..., launch_manifest=payload, expect_manifest_validation=True)
+reserves the owned gateway's stdout for a one-shot private receipt. The launch
+worker calls wait_gateway_manifest_validation(timeout=...) before interpreting
+validation as confirmed. Default/legacy launches still discard stdout. Invalid
+arguments fail before creating a process.
+
+The receipt is one 100-byte frame: a four-byte big-endian length of 96 followed
+by ASCII `MANAFORGE_MANIFEST_VALIDATED_V1:` and the 64 lowercase hexadecimal
+SHA-256 characters of the exact input payload. It contains no deck fields.
+The Java diagnostic emits it only after runtime reader validation against the
+independent trusted pins. Neither this digest nor raw receipt bytes belong in
+viewer messages, reports or logs. This binds an acknowledgement to exact launch
+bytes through the owned child pipe; it does not authenticate a remote peer or
+establish engine support, seat authorization, endpoint readiness or a result.
+
+The reader is nonblocking, accepts partial reads, compares each prefix, allocates
+at most the fixed receipt size, and checks cancellation, child health, the startup
+deadline and its own bounded timeout. Malformed/version/digest/declared-length
+mismatches, premature EOF and read errors stop owned children with fixed error
+codes. On success it closes its read end and consumes no further output; subsequent
+stdout bytes are not interpreted as messages or commands. EOF after the receipt
+is not required: JVM stdout may remain open while the owner lifeline is active.
+The independently owned stdin pipe remains open until shutdown.
+
+Only gateway_manifest_validated becomes true. The state stays STARTING_GATEWAY,
+Unity admission remains blocked and a separate verified readiness handshake is
+still required before gateway_ready. The Java process probe now requires this
+receipt plus its diagnostic content-free marker and still exercises all nine
+invalid manifest cases. Its sanitized report is version 3 with a receipt-verification
+boolean, without the digest itself. No engine or Unity process starts.
+
+Local validation: 30 focused gateway-bootstrap checks and the actual Java positive/
+nine-negative process matrix passed. Java protocol preflight also passed; the final
+probe was recompiled against the existing Java 8 target after adjusting its stdout
+flush. An additional combined client/gateway test run passed 43 assertions but
+hit three existing 100 ms client-fixture teardown limits; those deadlines were not
+changed. No full application suite ran. CI is next checked at .129, and existing
+owner UI reviews/G0/G1 acceptance gates remain pending. Mana work stays parked.

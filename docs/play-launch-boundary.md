@@ -207,3 +207,8 @@ scheduled check (.129), without waiting.
 and [.123 protocol CI](https://github.com/RyMeep128/Manaforge/actions/runs/41256184773)
 are confirmed successful. Gateway readiness integration remains pending, along
 with the existing owner visual reviews and G0/G1 acceptance requirements.
+
+
+The .127 [private validation receipt](play-launch-lifecycle.md#exact-private-manifest-acknowledgement-05127)
+now confirms the exact Java-validated manifest through the owned stdout pipe.
+This does not replace the pending engine-ready handshake or authorize Unity startup.
