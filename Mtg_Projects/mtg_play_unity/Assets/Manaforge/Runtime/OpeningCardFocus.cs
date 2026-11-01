@@ -16,13 +16,14 @@ namespace Manaforge.Play
         {
             this.root=root;cards=root.Query<CardView>().ToList();
             foreach(var card in cards){
-                bool wasFocusable=card.focusable;card.focusable=true;
+                bool wasFocusable=card.focusable;int previousTabIndex=card.tabIndex;
+                card.focusable=true;card.tabIndex=cards.IndexOf(card)+1;
                 EventCallback<PointerEnterEvent> enter=ev=>{hovered=card;Show(hovered);};
                 EventCallback<PointerLeaveEvent> leave=ev=>{if(hovered==card)hovered=null;Show(hovered??focused);};
                 EventCallback<FocusInEvent> focus=ev=>{focused=card;Show(hovered??focused);};
                 EventCallback<FocusOutEvent> blur=ev=>{if(focused==card)focused=null;Show(hovered??focused);};
                 card.RegisterCallback(enter);card.RegisterCallback(leave);card.RegisterCallback(focus);card.RegisterCallback(blur);
-                unregister.Add(()=>{card.UnregisterCallback(enter);card.UnregisterCallback(leave);card.UnregisterCallback(focus);card.UnregisterCallback(blur);card.focusable=wasFocusable;});
+                unregister.Add(()=>{card.UnregisterCallback(enter);card.UnregisterCallback(leave);card.UnregisterCallback(focus);card.UnregisterCallback(blur);card.focusable=wasFocusable;card.tabIndex=previousTabIndex;});
             }
         }
         public void Show(CardView card)

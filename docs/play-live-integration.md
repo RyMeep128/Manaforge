@@ -1,5 +1,22 @@
 # Live Unity / Java / XMage integration
 
+## Stable opening-hand Tab order (0.5.159)
+
+Opening cards now receive explicit Tab indices in their original fan order.
+Raising a hovered or focused card changes drawing order without changing its
+keyboard traversal index. Disposal restores each card's original focusability
+and Tab index, including previously excluded cards.
+
+Validation: 22 focused opening-focus/fan EditMode checks passed with graphics.
+The regression checks raising, traversal indices and restoration. The mounted
+focus-event test requires graphics and explicitly skips on null-device runners.
+No packaged visual acceptance or full-suite run is claimed.
+
+Scheduled CI checkpoint: latest pushed .157 [Tests](https://github.com/RyMeep128/Manaforge/actions/runs/41325988319),
+[desktop preview](https://github.com/RyMeep128/Manaforge/actions/runs/41325988279)
+and feedback relay passed. .156 Tests was cancelled; its preview passed.
+.158/.159 changes remain local and have no CI evidence. Next check: .162.
+
 ## Opening-hand keyboard focus retention (0.5.158)
 
 Pointer hover now temporarily takes precedence over keyboard focus. Leaving the
