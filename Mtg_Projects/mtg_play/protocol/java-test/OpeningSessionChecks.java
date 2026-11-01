@@ -4,6 +4,37 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /** Engine-free public fixture over real authenticated sockets and production admission. */
 public final class OpeningSessionChecks {
+    static void confirmationChecks(JsonObject before,JsonObject prompt,NativeCastCorrelation correlation,JsonObject after,JsonObject metadata) throws Exception {
+        byte[] key=new byte[32];String hash=String.join("",java.util.Collections.nCopies(64,"0"));
+        JsonObject client=ManaforgeOpeningLoopback.hello("session","human","synthetic-engine",hash,"client");
+        JsonObject gateway=ManaforgeOpeningLoopback.hello("session","human","synthetic-engine",hash,"gateway");
+        try(java.net.ServerSocket listener=new java.net.ServerSocket(0,1,java.net.InetAddress.getByName("127.0.0.1"));
+            java.net.Socket peer=new java.net.Socket("127.0.0.1",listener.getLocalPort());
+            manaforge.protocol.LoopbackFrameReader frames=new manaforge.protocol.LoopbackFrameReader(listener.accept())) {
+            peer.setSoTimeout(5000);JsonObject signed=client.deepCopy();
+            signed.getAsJsonObject("body").addProperty("proof",manaforge.protocol.ViewerAuthentication.computeProof(signed.toString(),key));
+            manaforge.protocol.TextFrame.write(peer.getOutputStream(),signed.toString());peer.getOutputStream().flush();
+            manaforge.protocol.GatewayHandshake.ViewerContext context=manaforge.protocol.GatewayHandshake.accept(frames,client.toString(),gateway.toString(),key,5000);
+            manaforge.protocol.TextFrame.read(peer.getInputStream());
+            ManaforgeOpeningProjection projection=OpeningProjectionChecks.projection();JsonObject snapshot=projection.project(before,prompt,false,true);
+            String wire=OpeningProjectionChecks.choose(snapshot,0),id="public-choice";
+            try(ManaforgeOpeningSession owner=new ManaforgeOpeningSession(context,projection,envelope(snapshot).toString())) {
+                if(!owner.dispatch(wire,"raw-game","raw-human",42,8).shouldSubmit)throw new AssertionError("ABILITY_NOT_SUBMITTED");
+                JsonObject command=owner.pollNative();NativeCastCorrelation.AbilityEvidence proof=correlation.abilityEvidence(before,prompt,command,after,metadata);
+                if(proof==null)throw new AssertionError("ABILITY_PROOF_MISSING");
+                for(int mode=0;mode<3;mode++) {
+                    JsonObject other=command.deepCopy();other.addProperty("request_id","other-command");
+                    try{owner.confirmAbility(mode==0?"wrong-id":id,mode==1?null:mode==2?correlation.abilityEvidence(before,prompt,other,after,metadata):proof);throw new AssertionError("BAD_PROOF_ACCEPTED");}
+                    catch(IOException expected){if(!"CAST_EVIDENCE_MISMATCH".equals(expected.getMessage()))throw expected;}
+                }
+                JsonObject confirmed=owner.confirmAbility(id,proof);
+                if(!"confirmed".equals(confirmed.getAsJsonObject("body").get("outcome").getAsString()) || !confirmed.equals(owner.confirmAbility(id,proof)))throw new AssertionError("CONFIRMATION_NOT_IDEMPOTENT");
+                manaforge.protocol.SubmissionLedger.Prepared duplicate=owner.dispatch(wire,"raw-game","raw-human",42,8);
+                if(duplicate.shouldSubmit || !confirmed.equals(duplicate.receipt()) || owner.pollNative()!=null)throw new AssertionError("CONFIRMED_COMMAND_REPLAYED");
+                owner.disconnected();if(!confirmed.equals(owner.receiptFor(id)))throw new AssertionError("CONFIRMATION_LOST_ON_DISCONNECT");
+            }
+        }finally{java.util.Arrays.fill(key,(byte)0);}
+    }
     static JsonObject envelope(JsonObject snapshot) {
         JsonObject envelope=new JsonObject(),body=new JsonObject();envelope.addProperty("wire_version",1);envelope.addProperty("message_type","snapshot");envelope.addProperty("message_id","opening");
         body.addProperty("fixture_only",false);body.add("snapshot",snapshot);envelope.add("body",body);return envelope;

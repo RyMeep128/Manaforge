@@ -1,5 +1,37 @@
 # Live Unity / Java / XMage integration
 
+## Confirm the exact Unity casting-ability receipt (0.5.164)
+
+The opt-in `--creature-ability --native-metadata` probe now emits submitted then
+confirmed for its one casting-ability choice. An immutable private AbilityEvidence
+can be created only when the pre-choice source/offer, native game/decision,
+selected ability and later guarded stack-instance metadata correlate. The session
+also requires that evidence to match its exact queued native command, including
+the public command's request ID. Native transport acceptance and engine advancement
+alone still cannot confirm anything. No native evidence is sent to Unity.
+
+Confirmation means that ability selection produced the exact observed stack
+spell; it does not mean spell resolution or match completion. The sanitized
+probe adds unity_casting_ability_confirmed. Without metadata, the existing path
+still emits uncertainty. Duplicate commands reuse their confirmed receipt without
+another native enqueue, and disconnect does not downgrade a confirmed receipt.
+The source-card click remains diagnostic setup, outside this Unity receipt.
+
+This advances P2.3/P4.2. The probe still clears after its single choice. The next
+step is projecting and admitting the next real priority decision on the same
+authenticated session after this reconciled outcome. Full stack presentation,
+mana, combat and natural match completion remain open.
+
+Validation: real packaged Unity/XMage probes passed with and without metadata;
+the metadata run required exact-instance confirmation and both cleared normally.
+The Java-only metadata cast/stack/resolution regression passed. Focused Java
+protocol preflight passed, including 224 projection/correlation checks and
+authenticated-session checks for mismatched evidence, duplicate confirmation,
+cached confirmed receipts, no duplicate enqueue and confirmed disconnect state.
+Three focused Python provisioning tests, lint and formatting passed. Existing
+Unity player reused; no C# changes, rebuild or full application suite.
+CI evidence is pending; next scheduled review: .165.
+
 ## Exact native spell-instance evidence from Unity (0.5.163)
 
 The packaged casting-ability probe can now use the guarded Java metadata channel:

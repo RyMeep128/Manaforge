@@ -1,8 +1,13 @@
 import com.google.gson.*;
 import java.util.*;
 
-/** Private read-only evidence. Never authorizes IO, settles a receipt, or proves a cast completed. */
+/** Private native correlation. Stack evidence proves ability selection, not spell resolution. */
 public final class NativeCastCorrelation {
+    public static final class AbilityEvidence {
+        private final JsonObject command;
+        private AbilityEvidence(JsonObject command){this.command=command.deepCopy();}
+        public boolean matchesCommand(JsonObject candidate){return command.equals(candidate);}
+    }
     private final String game,viewer,source;
     private final long cycle,decision;
     private final Set<String> abilities;
@@ -29,6 +34,16 @@ public final class NativeCastCorrelation {
             found++;
         }
         return found==1;
+    }
+    /** Mint only for the exact offered native ability command and its observed stack instance. */
+    public AbilityEvidence abilityEvidence(JsonObject before,JsonObject prompt,JsonObject command,JsonObject after,JsonObject metadata) {
+        try {
+            if(!matches(before,prompt) || !"respond".equals(string(command,"command")) || !"object".equals(string(command,"kind"))
+                || !game.equals(string(command,"game_id")) || number(command,"decision_id")!=number(prompt,"decision_id"))return null;
+            string(command,"request_id");String selected=uuid(string(command,"value"));
+            if(number(after,"cycle")<number(before,"cycle") || !prompt.getAsJsonObject("key_choices").has(selected) || !matchesStackInstance(after,metadata,selected))return null;
+            return new AbilityEvidence(command);
+        }catch(RuntimeException unsupported){return null;}
     }
     public static NativeCastCorrelation capture(JsonObject state,JsonObject prompt,JsonObject command) {
         try {

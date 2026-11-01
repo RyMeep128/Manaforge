@@ -324,6 +324,7 @@ def main():
                     for field in (
                         "native_stack_source_matched",
                         "native_cast_instance_matched",
+                        "unity_casting_ability_confirmed",
                     )
                 ):
                     raise RuntimeError("LIVE_UNITY_CAST_INSTANCE_UNPROVEN")
@@ -376,6 +377,7 @@ def main():
                     evidence.update(
                         native_stack_source_matched=True,
                         native_cast_instance_matched=True,
+                        unity_casting_ability_confirmed=True,
                     )
             finally:
                 key[:] = bytes(len(key))

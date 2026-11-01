@@ -8,6 +8,7 @@ import java.util.function.BooleanSupplier;
 
 /** Opt-in public-fixture live opening endpoint; no product launch or broad gameplay support. */
 public final class ManaforgeUnityOpening {
+    public interface VerifiedAbilitySubmit {NativeCastCorrelation.AbilityEvidence submit(JsonObject command) throws Exception;}
     public static byte[] readBootstrap(InputStream input) throws IOException {
         try {
             JsonObject boot=WireEnvelope.parseObject(TextFrame.read(input));
@@ -19,6 +20,10 @@ public final class ManaforgeUnityOpening {
     }
     public static void serve(JsonObject snapshot,ManaforgeOpeningProjection projection,String game,String engineViewer,long decision,long cycle,
             String engine,String hash,byte[] key,Path ready,ManaforgeOpeningLoopback.NativeSubmit submit,BooleanSupplier cancelled) throws Exception {
+        serveVerifiedAbility(snapshot,projection,game,engineViewer,decision,cycle,engine,hash,key,ready,command->{submit.submit(command);return null;},cancelled);
+    }
+    public static void serveVerifiedAbility(JsonObject snapshot,ManaforgeOpeningProjection projection,String game,String engineViewer,long decision,long cycle,
+            String engine,String hash,byte[] key,Path ready,VerifiedAbilitySubmit submit,BooleanSupplier cancelled) throws Exception {
         try(ServerSocket listener=new ServerSocket(0,1,InetAddress.getByName("127.0.0.1"))) {
             listener.setSoTimeout(500);
             JsonObject address=new JsonObject();address.addProperty("host","127.0.0.1");address.addProperty("port",listener.getLocalPort());
@@ -35,9 +40,10 @@ public final class ManaforgeUnityOpening {
                     frames.write(prepared.receipt().toString(),5000,cancelled);
                     if(!prepared.shouldSubmit)throw new IOException("LIVE_UNITY_CHOICE_REJECTED");
                     JsonObject command=owner.pollNative();if(command==null || owner.pollNative()!=null)throw new IOException("LIVE_UNITY_QUEUE_FAILED");
-                    submit.submit(command);
-                    // Advancement alone is not semantic reconciliation. Never fabricate confirmed.
-                    JsonObject request=WireMessages.parse(wire);frames.write(owner.uncertain(request.get("message_id").getAsString()).toString(),5000,cancelled);
+                    NativeCastCorrelation.AbilityEvidence evidence=submit.submit(command);
+                    // Advancement alone remains uncertain. Only exact native ability evidence may settle.
+                    JsonObject request=WireMessages.parse(wire);String id=request.get("message_id").getAsString();
+                    frames.write((evidence==null?owner.uncertain(id):owner.confirmAbility(id,evidence)).toString(),5000,cancelled);
                     while(!cancelled.getAsBoolean() && System.nanoTime()<deadline)Thread.sleep(10);
                     owner.disconnected();
                 }

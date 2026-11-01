@@ -240,6 +240,26 @@ public final class OpeningProjectionChecks {
         NativeCastCorrelation instance=ticket.withSourceMetadata(before);check(instance!=null);
         entry.addProperty("source_incarnation",3);JsonArray spellIds=new JsonArray();spellIds.add(ability);entry.add("spell_ability_ids",spellIds);
         check(instance.matchesStackInstance(after,metadata,ability));check(!ticket.matchesStackInstance(after,metadata,ability));
+        JsonObject abilityCommand=command.deepCopy();abilityCommand.addProperty("value",ability);abilityCommand.addProperty("decision_id",42);abilityCommand.addProperty("request_id","ability-receipt");
+        NativeCastCorrelation.AbilityEvidence evidence=instance.abilityEvidence(raw,choice,abilityCommand,after,metadata);
+        check(evidence!=null && evidence.matchesCommand(abilityCommand));
+        OpeningSessionChecks.confirmationChecks(raw,choice,instance,after,metadata);
+        JsonObject other=abilityCommand.deepCopy();other.addProperty("request_id","other-receipt");check(!evidence.matchesCommand(other));
+        other=abilityCommand.deepCopy();other.addProperty("decision_id",43);check(!evidence.matchesCommand(other));
+        check(ticket.abilityEvidence(raw,choice,abilityCommand,after,metadata)==null);
+        for(int mode=0;mode<8;mode++) {
+            JsonObject bad=abilityCommand.deepCopy(),badPrompt=choice.deepCopy(),badAfter=after.deepCopy(),badMetadata=metadata.deepCopy();
+            if(mode==0)bad.addProperty("value",source);
+            if(mode==1)bad.addProperty("decision_id",41);
+            if(mode==2)bad.addProperty("game_id","other-game");
+            if(mode==3)bad.addProperty("kind","boolean");
+            if(mode==4)bad.remove("request_id");
+            if(mode==5)badPrompt.addProperty("cycle",9);
+            if(mode==6)badMetadata.getAsJsonObject("objects").getAsJsonObject(ability).addProperty("source_incarnation",2);
+            if(mode==7){badAfter.addProperty("cycle",7);badMetadata.addProperty("cycle",7);}
+            check(instance.abilityEvidence(raw,badPrompt,bad,badAfter,badMetadata)==null);
+        }
+        abilityCommand.addProperty("value",source);check(!evidence.matchesCommand(abilityCommand));
         beforeEntry.addProperty("incarnation",99);check(instance.matchesStackInstance(after,metadata,ability));
         check(instance.withSourceMetadata(before)==null);
         for(int mode=0;mode<7;mode++) {
