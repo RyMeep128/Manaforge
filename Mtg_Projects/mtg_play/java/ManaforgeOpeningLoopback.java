@@ -20,14 +20,19 @@ public final class ManaforgeOpeningLoopback {
         out.add("body",body);return out;
     }
     private static void send(Socket peer,JsonObject value) throws IOException{TextFrame.write(peer.getOutputStream(),value.toString());peer.getOutputStream().flush();}
-    private static JsonObject answer(JsonObject snapshot) {
+    private static JsonObject answer(JsonObject snapshot,boolean yes) {
         JsonObject envelope=new JsonObject(),body=new JsonObject();envelope.addProperty("wire_version",1);envelope.addProperty("message_type","command");envelope.addProperty("message_id","opening-choice");
-        for(String field:new String[]{"session_id","viewer_id","revision"})body.add(field,snapshot.get(field));body.addProperty("operation","choose");
+        for(String field:new String[]{"session_id","viewer_id","revision"})body.add(field,snapshot.get(field));body.addProperty("operation",snapshot.getAsJsonArray("actions").size()>0?"perform":"choose");
         body.add("decision_id",snapshot.getAsJsonObject("decision").get("decision_id"));
-        body.add("option_id",snapshot.getAsJsonObject("decision").getAsJsonArray("options").get(0).getAsJsonObject().get("option_id"));envelope.add("body",body);return envelope;
+        if(snapshot.getAsJsonArray("actions").size()>0){JsonObject land=null;for(JsonElement action:snapshot.getAsJsonArray("actions"))if(action.getAsJsonObject().get("kind").getAsString().equals("play_land"))land=action.getAsJsonObject();if(land==null)throw new IllegalArgumentException("FIXTURE_LAND_UNAVAILABLE");body.add("action_id",land.get("action_id"));}
+        else body.add("option_id",snapshot.getAsJsonObject("decision").getAsJsonArray("options").get(yes?0:1).getAsJsonObject().get("option_id"));envelope.add("body",body);return envelope;
     }
     public static void exchange(JsonObject snapshotEnvelope,ManaforgeOpeningProjection projection,String game,String engineViewer,long decision,long cycle,
             String engine,String hash,NativeSubmit submit,BooleanSupplier cancelled) throws Exception {
+        exchangeChoice(snapshotEnvelope,projection,game,engineViewer,decision,cycle,engine,hash,submit,cancelled,true);
+    }
+    public static void exchangeChoice(JsonObject snapshotEnvelope,ManaforgeOpeningProjection projection,String game,String engineViewer,long decision,long cycle,
+            String engine,String hash,NativeSubmit submit,BooleanSupplier cancelled,boolean yes) throws Exception {
         JsonObject snapshot=snapshotEnvelope.getAsJsonObject("body").getAsJsonObject("snapshot");
         String session=snapshot.get("session_id").getAsString(),viewer=snapshot.get("viewer_id").getAsString();
         JsonObject client=hello(session,viewer,engine,hash,"client"),gateway=hello(session,viewer,engine,hash,"gateway");
@@ -44,7 +49,7 @@ public final class ManaforgeOpeningLoopback {
                     localClient.getAsJsonObject("body").addProperty("proof",ViewerAuthentication.computeProof(localClient.toString(),key));send(peer,localClient);
                     try(ViewerAuthentication.Verifier verifier=new ViewerAuthentication.Verifier(localGateway.toString(),key)){require(verifier.verify(TextFrame.read(peer.getInputStream())));}
                     JsonObject received=ReceiveMessages.parse(TextFrame.read(peer.getInputStream()),session,viewer,1,false);
-                    JsonObject command=answer(received.getAsJsonObject("body").getAsJsonObject("snapshot"));send(peer,command);
+                    JsonObject command=answer(received.getAsJsonObject("body").getAsJsonObject("snapshot"),yes);send(peer,command);
                     JsonObject first=WireMessages.parse(TextFrame.read(peer.getInputStream()));require(first.getAsJsonObject("body").get("outcome").getAsString().equals("submitted"));
                     send(peer,command);JsonObject duplicate=WireMessages.parse(TextFrame.read(peer.getInputStream()));require(first.equals(duplicate));return null;
                 });

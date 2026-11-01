@@ -74,6 +74,25 @@ public final class OpeningProjectionChecks {
         String beforeFailure=choose(p.project(state(),prompt()),0);JsonObject bad=prompt();bad.addProperty("kind","GAME_SELECT");
         fails("LIVE_OPENING_PROJECTION_UNSUPPORTED",()->p.project(state(),bad));fails("STALE_DECISION",()->claim(p,beforeFailure));
     }
+    static JsonObject priorityPrompt(){JsonObject result=prompt();result.addProperty("kind","GAME_SELECT");result.addProperty("is_priority",true);return result;}
+    static JsonObject landState(){JsonObject result=state();JsonArray playable=new JsonArray();playable.add("raw-card");result.add("playable",playable);JsonObject kinds=new JsonObject();kinds.addProperty("raw-card","play_land");result.add("action_kinds",kinds);return result;}
+    static String perform(JsonObject snapshot){JsonObject out=JsonParser.parseString(chooseForAction(snapshot)).getAsJsonObject();return out.toString();}
+    static String chooseForAction(JsonObject snapshot){JsonObject body=new JsonObject(),out=new JsonObject();out.addProperty("wire_version",1);out.addProperty("message_type","command");out.addProperty("message_id","land-action");for(String field:new String[]{"session_id","viewer_id","revision"})body.add(field,snapshot.get(field));body.addProperty("operation","perform");body.add("decision_id",snapshot.getAsJsonObject("decision").get("decision_id"));body.add("action_id",snapshot.getAsJsonArray("actions").get(0).getAsJsonObject().get("action_id"));out.add("body",body);return out.toString();}
+    static void landChecks() throws Exception {
+        ManaforgeOpeningProjection p=projection();JsonObject snapshot=p.project(landState(),priorityPrompt());shape(snapshot);
+        check(snapshot.getAsJsonArray("actions").size()==1 && snapshot.getAsJsonObject("decision").get("family").getAsString().equals("selection"));
+        check(!snapshot.get("actions_complete").getAsBoolean() && snapshot.getAsJsonObject("decision").get("is_priority").getAsBoolean());
+        String wire=perform(snapshot);JsonObject nativeCommand=p.claimAction(wire,"session","human","raw-game","raw-human",41,8);check(nativeCommand.get("kind").getAsString().equals("object") && nativeCommand.get("value").getAsString().equals("raw-card"));
+        fails("STALE_DECISION",()->p.claimAction(wire,"session","human","raw-game","raw-human",41,8));
+        JsonObject hidden=landState();hidden.getAsJsonArray("hand").get(0).getAsJsonObject().addProperty("hidden",true);check(projection().project(hidden,priorityPrompt()).getAsJsonArray("actions").size()==0);
+        JsonObject unknown=landState();unknown.getAsJsonObject("action_kinds").addProperty("raw-card","activate");check(projection().project(unknown,priorityPrompt()).getAsJsonArray("actions").size()==0);
+        JsonObject notOffered=landState();notOffered.add("playable",new JsonArray());check(projection().project(notOffered,priorityPrompt()).getAsJsonArray("actions").size()==0);
+        JsonObject board=landState(),permanent=board.getAsJsonArray("hand").get(0).getAsJsonObject().deepCopy();permanent.addProperty("id","raw-permanent");permanent.addProperty("controller_name","raw-opponent-name");permanent.addProperty("owner_name","");permanent.addProperty("tapped",true);permanent.addProperty("damage",0);board.getAsJsonArray("players").get(1).getAsJsonObject().getAsJsonArray("battlefield").add(permanent);
+        snapshot=projection().project(board,priorityPrompt());shape(snapshot);check(snapshot.getAsJsonArray("objects").size()==2 && !snapshot.toString().contains("raw-permanent"));
+        check(snapshot.getAsJsonArray("objects").get(1).getAsJsonObject().get("tapped").getAsBoolean());
+        check(snapshot.getAsJsonArray("objects").get(1).getAsJsonObject().get("card_identity").isJsonNull());
+        JsonObject combat=priorityPrompt();combat.add("attackers",new JsonArray());rejects(landState(),combat);
+    }
     public static void main(String[] args) throws Exception {
         ManaforgeOpeningProjection projection=projection();JsonObject raw=state(),request=prompt();JsonObject snapshot=projection.project(raw,request);shape(snapshot);
         String text=snapshot.toString();for(String secret:new String[]{"raw-human","raw-ai","raw-card","raw-name","raw-opponent-name","OPPONENT_SECRET","MUTATED_BINDING"})check(!text.contains(secret));
@@ -100,7 +119,7 @@ public final class OpeningProjectionChecks {
         raw=state();raw.getAsJsonArray("players").add(raw.getAsJsonArray("players").get(0).deepCopy());rejects(raw,prompt());
         raw=state();raw.getAsJsonArray("players").get(0).getAsJsonObject().addProperty("life",true);rejects(raw,prompt());
         request=prompt();request.addProperty("message","Use 12345678-abcd-1234-abcd-123456789abc");check(!projection().project(state(),request).toString().contains("12345678-abcd-1234-abcd-123456789abc"));
-        choiceChecks();
+        choiceChecks();landChecks();
         System.out.println("Opening projection: "+checks+" privacy, schema, isolation and fail-closed checks passed");
     }
 }

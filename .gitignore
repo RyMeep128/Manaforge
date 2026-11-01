@@ -229,6 +229,7 @@ Mtg_Projects/mtg_proxy/projects/tmp_images/
 **/library-sessions/
 
 # Local XMage feasibility downloads and generated runtime files.
+/UNITY_ASSETS_AI_HANDOFF.local.md
 /Mtg_Projects/mtg_play/mage-full_*/
 /Mtg_Projects/mtg_play/.runtime/
 
