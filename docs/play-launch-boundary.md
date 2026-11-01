@@ -183,3 +183,27 @@ matrix passed all ten cases. CI remains scheduled for the .126 check rather than
 waiting on .125. No runtime/UI behavior changed and no engine or client started.
 These rejection checks do not implement the pending authenticated ready handshake,
 engine descendant ownership or actual engine card resolution.
+
+
+### Clean-runner dependency correction (0.5.126)
+
+The scheduled CI check found that [.124 protocol CI](https://github.com/RyMeep128/Manaforge/actions/runs/41256998239)
+and [.125 protocol CI](https://github.com/RyMeep128/Manaforge/actions/runs/41257124958)
+passed generated models and Java compilation/fixture consumers, then failed
+before the private-launch probe ran: native mtg_core package initialization
+imports its declared certifi dependency, absent from this previously Java-only
+job. The local environment had masked that requirement. No launch acceptance
+assertion failed or was weakened.
+
+The protocol job now installs certifi==2026.10.23 explicitly before the native
+DeckDocument probe. A fresh isolated Python environment reproduced the missing
+import, then passed the unchanged positive and nine rejection process cases
+after installing only that dependency. No Qt install or full application suite
+was required. Java/Unity contracts and runtime behavior are unchanged. The fix
+still requires its own CI result; an unfinished run is deferred to the next
+scheduled check (.129), without waiting.
+
+[.124 desktop preview CI](https://github.com/RyMeep128/Manaforge/actions/runs/41256998338)
+and [.123 protocol CI](https://github.com/RyMeep128/Manaforge/actions/runs/41256184773)
+are confirmed successful. Gateway readiness integration remains pending, along
+with the existing owner visual reviews and G0/G1 acceptance requirements.
