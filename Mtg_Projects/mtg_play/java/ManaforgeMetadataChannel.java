@@ -18,6 +18,38 @@ public final class ManaforgeMetadataChannel implements AutoCloseable {
     private volatile LoopbackFrameReader frames;
     public int port(){return listener.getLocalPort();}
     public String session(){return session;}
+    private static JsonObject hello(String session,String viewer,String engine,String hash,String role) {
+        JsonObject out=new JsonObject(),body=new JsonObject();out.addProperty("wire_version",1);out.addProperty("message_type","hello");out.addProperty("message_id","auth-"+role);
+        body.addProperty("protocol_version",1);body.addProperty("session_id",session);body.addProperty("viewer_id",viewer);body.addProperty("engine_version",engine);body.addProperty("artifact_manifest_sha256",hash);body.addProperty("role",role);
+        for(String field:new String[]{"server_nonce","client_nonce","proof"})body.addProperty(field,String.join("",Collections.nCopies(64,"0")));out.add("body",body);return out;
+    }
+    public static final class Client implements AutoCloseable {
+        private final LoopbackFrameReader frames;
+        private final String game,viewer;
+        private Client(LoopbackFrameReader frames,String game,String viewer){this.frames=frames;this.game=game;this.viewer=viewer;}
+        public synchronized JsonObject read(JsonObject request) throws IOException {
+            JsonObject checked=validate(request.toString(),game,viewer);
+            try{frames.write(checked.toString(),3000);String response=frames.read(3000);if(response==null)throw new IOException();return WireEnvelope.parseObject(response);}
+            catch(IOException | RuntimeException failure){close();throw new IOException("METADATA_IO_FAILED");}
+        }
+        public void close() throws IOException{frames.close();}
+    }
+    public static Client connect(int port,String session,byte[] ownerKey,String game,String viewer,String engine,String hash) throws IOException {
+        if(port<1 || port>65535 || ownerKey==null || ownerKey.length!=32)throw new IOException("METADATA_CONTEXT");
+        try{uuid(new JsonPrimitive(game));uuid(new JsonPrimitive(viewer));}catch(RuntimeException invalid){throw new IOException("METADATA_CONTEXT");}
+        byte[] privateKey=ownerKey.clone();Socket socket=new Socket();LoopbackFrameReader frames=null;
+        try {
+            socket.connect(new InetSocketAddress("127.0.0.1",port),3000);frames=new LoopbackFrameReader(socket);
+            String serverNonce=ViewerChallengeHandshake.readChallenge(frames.read(3000));byte[] random=new byte[32];new java.security.SecureRandom().nextBytes(random);StringBuilder nonce=new StringBuilder();for(byte value:random)nonce.append(String.format("%02x",value&255));Arrays.fill(random,(byte)0);
+            frames.write(ViewerChallengeHandshake.response(serverNonce,nonce.toString()),3000);
+            JsonObject client=hello(session,viewer,engine,hash,"client"),gateway=hello(session,viewer,engine,hash,"gateway");
+            for(JsonObject value:new JsonObject[]{client,gateway}){value.getAsJsonObject("body").addProperty("server_nonce",serverNonce);value.getAsJsonObject("body").addProperty("client_nonce",nonce.toString());}
+            client.getAsJsonObject("body").addProperty("proof",ViewerAuthentication.computeProof(client.toString(),privateKey));frames.write(client.toString(),3000);
+            try(ViewerAuthentication.Verifier verifier=new ViewerAuthentication.Verifier(gateway.toString(),privateKey)){if(!verifier.verify(frames.read(3000)))throw new IOException();}
+            return new Client(frames,game,viewer);
+        }catch(IOException | RuntimeException failure){if(frames!=null)try{frames.close();}catch(IOException ignored){}try{socket.close();}catch(IOException ignored){}throw new IOException("METADATA_AUTH_FAILED");}
+        finally{Arrays.fill(privateKey,(byte)0);}
+    }
     private static String uuid(JsonElement value) {
         if(value==null || !value.isJsonPrimitive() || !value.getAsJsonPrimitive().isString())throw new IllegalArgumentException();
         String id=value.getAsString();if(!UUID.fromString(id).toString().equals(id))throw new IllegalArgumentException();return id;
@@ -56,7 +88,7 @@ public final class ManaforgeMetadataChannel implements AutoCloseable {
             peer=listener.accept();
             if(cancelled.get())return;
             frames=new LoopbackFrameReader(peer);
-            JsonObject client=ManaforgeOpeningLoopback.hello(session,viewer,engine,hash,"client"),gateway=ManaforgeOpeningLoopback.hello(session,viewer,engine,hash,"gateway");
+            JsonObject client=hello(session,viewer,engine,hash,"client"),gateway=hello(session,viewer,engine,hash,"gateway");
             ViewerChallengeHandshake.accept(frames,client.toString(),gateway.toString(),key,5000,cancelled::get);
             Arrays.fill(key,(byte)0);
             for(int count=0;count<256 && !cancelled.get();count++) {

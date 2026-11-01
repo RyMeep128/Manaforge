@@ -49,4 +49,20 @@ public final class NativeCastCorrelation {
             return abilities.contains(uuid(choice.getKey())) && choice.getValue().isJsonPrimitive() && choice.getValue().getAsJsonPrimitive().isString();
         }catch(RuntimeException unsupported){return false;}
     }
+    /** Still observation only: guarded native stack-source metadata, not a receipt settlement. */
+    public boolean matchesStack(JsonObject state,JsonObject metadata) {
+        try {
+            if(!game.equals(string(state,"game_id")) || !viewer.equals(string(state,"viewer")) || !"ok".equals(string(metadata,"status"))
+                || number(state,"cycle")<cycle || number(metadata,"cycle")!=number(state,"cycle"))return false;
+            for(JsonElement value:state.getAsJsonArray("hand"))if(source.equals(string(value.getAsJsonObject(),"id")))return false;
+            int found=0;
+            for(JsonElement value:state.getAsJsonArray("stack")) {
+                JsonObject card=value.getAsJsonObject(),entry=metadata.getAsJsonObject("objects").getAsJsonObject(uuid(string(card,"id")));
+                if(entry==null)continue;
+                if(source.equals(string(entry,"source")) && viewer.equals(string(entry,"owner")) && viewer.equals(string(entry,"controller"))
+                    && new JsonPrimitive(false).equals(card.get("hidden")) && new JsonPrimitive(false).equals(card.get("face_down"))){number(entry,"incarnation");found++;}
+            }
+            return found==1;
+        }catch(RuntimeException unsupported){return false;}
+    }
 }

@@ -4,9 +4,12 @@ import argparse
 import hashlib
 import json
 import os
+import secrets
 from pathlib import Path
 import subprocess
 import sys
+import time
+import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "Mtg_Projects"))
@@ -33,7 +36,14 @@ def main():
         type=Path,
         default=ROOT / "Mtg_Projects/mtg_play_unity/Artifacts/LiveOpening/report.json",
     )
+    parser.add_argument(
+        "--native-metadata",
+        action="store_true",
+        help="Provision a private Java metadata channel once at startup; requires --first-creature",
+    )
     args = parser.parse_args()
+    if args.native_metadata and not args.first_creature:
+        parser.error("--native-metadata requires --first-creature")
     output = args.output.resolve()
     artifacts = (ROOT / "Mtg_Projects/mtg_play_unity/Artifacts").resolve()
     if not output.is_relative_to(artifacts) or output == artifacts:
@@ -63,6 +73,8 @@ def main():
         expected["creature_resolved"] = True
         expected["unity_casting_ability_submitted"] = False
         expected["native_cast_ability_matched"] = True
+    if args.native_metadata:
+        expected["native_stack_source_matched"] = True
     evidence = None
 
     def consume(first, events, launch, port, server_process, server):
@@ -72,12 +84,22 @@ def main():
         workspace = server.parent / "java-live-opening"
         workspace.mkdir()
         diagnostic = (workspace / "bridge.log").open("wb")
+        metadata_context = workspace / "metadata-context.json"
+        metadata_key = None
+        manifest_hash = hashlib.sha256(
+            (transport.HERE / "artifacts.json").read_bytes()
+        ).hexdigest()
         process = subprocess.Popen(
             [
                 str(java),
                 "-Djava.awt.headless=true",
                 "-Dfile.encoding=UTF-8",
                 "-Djava.net.preferIPv4Stack=true",
+                *(
+                    ["-Dmanaforge.metadataContext=" + str(metadata_context)]
+                    if args.native_metadata
+                    else []
+                ),
                 "-cp",
                 str(classes) + os.pathsep + str(server / "lib/*"),
                 "ManaforgeLiveOpening",
@@ -95,6 +117,71 @@ def main():
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
         try:
+            if args.native_metadata:
+                metadata_key = bytearray(secrets.token_bytes(32))
+
+                def frame(value):
+                    payload = json.dumps(value).encode("utf-8")
+                    process.stdin.write(len(payload).to_bytes(4, "big") + payload)
+                    process.stdin.flush()
+
+                def wait_private(path, seconds):
+                    deadline = time.monotonic() + seconds
+                    while not path.is_file():
+                        if (
+                            process.poll() is not None
+                            or server_process.poll() is not None
+                            or time.monotonic() >= deadline
+                        ):
+                            raise transport.ProofError("METADATA_STARTUP_FAILED")
+                        time.sleep(0.01)
+                    with path.open("rb") as source:
+                        payload = source.read(4097)
+                    if len(payload) > 4096:
+                        raise transport.ProofError("METADATA_STARTUP_INVALID")
+                    result = json.loads(payload)
+                    path.unlink()
+                    return result
+
+                frame(
+                    dict(metadata_bootstrap_version=1, owner_key_hex=metadata_key.hex())
+                )
+                context = wait_private(metadata_context, 60)
+                if set(context) != {"game", "player"} or any(
+                    not isinstance(context[field], str)
+                    or str(uuid.UUID(context[field])) != context[field]
+                    for field in context
+                ):
+                    raise transport.ProofError("METADATA_STARTUP_INVALID")
+                request_id = str(uuid.uuid4())
+                # One-time private provisioning only. All later metadata queries are Java-to-Java.
+                server_process.stdin.write(
+                    json.dumps(
+                        dict(
+                            request_id=request_id,
+                            command="start_metadata_channel",
+                            **context,
+                            owner_key_hex=metadata_key.hex(),
+                            hash=manifest_hash,
+                        )
+                    )
+                    + "\n"
+                )
+                server_process.stdin.flush()
+                address = wait_private(
+                    server / "manaforge-responses" / (request_id + ".json"), 10
+                )
+                if (
+                    set(address) != {"host", "port", "session"}
+                    or address["host"] != "127.0.0.1"
+                    or type(address["port"]) is not int
+                    or not 1 <= address["port"] <= 65535
+                    or not isinstance(address["session"], str)
+                    or not address["session"].startswith("metadata-")
+                ):
+                    raise transport.ProofError("METADATA_STARTUP_INVALID")
+                frame(address)
+                metadata_key[:] = bytes(len(metadata_key))
             # Keep stdin open as the parent lifeline until the diagnostic finishes.
             process.wait(timeout=120)
             raw = process.stdout.read(4097)
@@ -135,6 +222,8 @@ def main():
                 raise transport.ProofError("LIVE_JAVA_OPENING_FAILED")
             evidence = expected.copy()
         finally:
+            if metadata_key is not None:
+                metadata_key[:] = bytes(len(metadata_key))
             cleanup = transport.stop_process(process)
             diagnostic.close()
             if cleanup.get("reaped") is not True or cleanup.get("forced"):

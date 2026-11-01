@@ -1,5 +1,46 @@
 # Live Unity / Java / XMage integration
 
+## Direct Java guarded stack-source metadata (0.5.144)
+
+`python tools/check_play_live_opening.py --first-creature --native-metadata
+--output Mtg_Projects/mtg_play_unity/Artifacts/FirstCreature/report.json` (one
+command line) now proves the exact native stack-to-source link through the
+existing guarded metadata reader. The client validates the same game/viewer/
+cycle, source-card absence from hand, stack visibility and native owner/controller
+mapping. The sanitized report adds `native_stack_source_matched`; no native IDs
+or metadata payloads enter the uploaded report.
+
+Python provisions the channel once during startup: it supplies a fresh key over
+private owned pipes, receives the Java-owned match's game/viewer in a transient
+private workspace marker, starts a game/viewer-bound listener through the server
+control pipe, and privately supplies its loopback address to Java. Startup files
+are consumed and deleted; keys never enter disk or argv. All subsequent metadata
+queries run directly Java-to-Java, not through Python or response files. Initial
+bootstrap reads rely on the owning parent's startup deadline/EOF; normal lifeline
+monitoring starts after that private exchange.
+
+ManaforgeServerHost starts no listener by default, permits only one provisioned
+channel, reuses ManaforgeGameMetadata's native response-monitor/cycle/visibility
+checks and closes the channel during shutdown. The Java client reuses existing
+authentication/framing, validates bound requests, clears its handshake key copy
+and closes on uncertain transport failure without replay. The shared native
+compiler source list now explicitly includes the channel and protocol dependencies;
+no payment policy or installed engine artifacts changed.
+
+This is source-correlation evidence, not receipt confirmation: source-incarnation
+and exact ability/outcome reconciliation still remain. Existing pending ledger
+guards are unchanged. Unity's ability fixture continues using its existing route;
+the metadata channel is currently opt-in for the Java-owned proof only.
+
+The .144 CI check found .142 live/protocol/preview and .143 protocol/preview
+success. .143 live-opening and general Tests were still running and deferred;
+prior general Tests were cancelled. No new completed failures were found. Next
+scheduled CI review is .147. Local validation passed: the real source-metadata/
+cast/resolution proof, 194 projection checks, 28 private transport checks, existing
+Java protocol/socket checks, 147 pinned native object checks and shared bridge
+compilation, plus the packaged Unity ability regression. Lint and formatting
+checks pass. No full application suite or new Unity build ran.
+
 ## Private metadata transport foundation (0.5.143)
 
 ManaforgeMetadataChannel provides an isolated Java listener with the existing

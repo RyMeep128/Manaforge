@@ -233,6 +233,15 @@ public final class OpeningProjectionChecks {
             check(!ticket.matches(bad,request));
         }
         raw.getAsJsonObject("casting_ability_ids").getAsJsonArray(source).remove(0);check(ticket.matches(raw,choice));
+        JsonObject after=raw.deepCopy();after.add("hand",new JsonArray());JsonObject stacked=new JsonObject();stacked.addProperty("id",ability);stacked.addProperty("hidden",false);stacked.addProperty("face_down",false);after.getAsJsonArray("stack").add(stacked);
+        JsonObject metadata=new JsonObject(),objects=new JsonObject(),entry=new JsonObject();metadata.addProperty("status","ok");metadata.addProperty("cycle",8);entry.addProperty("source",source);entry.addProperty("owner","raw-human");entry.addProperty("controller","raw-human");entry.addProperty("incarnation",1);objects.add(ability,entry);metadata.add("objects",objects);
+        check(ticket.matchesStack(after,metadata));
+        for(String field:new String[]{"source","owner","controller","incarnation"}) {
+            JsonObject bad=metadata.deepCopy();bad.getAsJsonObject("objects").getAsJsonObject(ability).addProperty(field,"wrong");check(!ticket.matchesStack(after,bad));
+        }
+        JsonObject stale=metadata.deepCopy();stale.addProperty("cycle",9);check(!ticket.matchesStack(after,stale));
+        JsonObject hidden=after.deepCopy();hidden.getAsJsonArray("stack").get(0).getAsJsonObject().addProperty("hidden",true);check(!ticket.matchesStack(hidden,metadata));
+        check(!ticket.matchesStack(raw,metadata));metadata.addProperty("status","retry");check(!ticket.matchesStack(after,metadata));
     }
     public static void main(String[] args) throws Exception {
         ManaforgeOpeningProjection projection=projection();JsonObject raw=state(),request=prompt();JsonObject snapshot=projection.project(raw,request);shape(snapshot);

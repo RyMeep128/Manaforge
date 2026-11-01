@@ -14,6 +14,35 @@ public final class ManaforgeLiveOpening {
     private String engineViewer, artifactHash;
     private boolean firstLand,landObserved,unityPriorityPass,firstCreature,castAbilityMatched;
     private byte[] unityKey;private java.nio.file.Path unityReady;
+    private byte[] metadataKey;private java.nio.file.Path metadataContext;
+    private ManaforgeMetadataChannel.Client metadataClient;private boolean metadataSourceMatched;
+    private void startLifeline() {
+        Thread lifeline=new Thread(() -> {try{while(System.in.read()!=-1){} }catch(IOException ignored){}cancelled.set(true);},"live-opening-owner");lifeline.setDaemon(true);lifeline.start();
+    }
+    private void initializeMetadata() throws Exception {
+        if(metadataContext==null || metadataClient!=null)return;
+        JsonObject context=new JsonObject();context.addProperty("game",game);context.addProperty("player",engineViewer);
+        java.nio.file.Path temporary=java.nio.file.Paths.get(metadataContext.toString()+".tmp");
+        java.nio.file.Files.write(temporary,context.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8),java.nio.file.StandardOpenOption.CREATE_NEW);
+        java.nio.file.Files.move(temporary,metadataContext,java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+        JsonObject address=manaforge.protocol.WireEnvelope.parseObject(manaforge.protocol.TextFrame.read(System.in));
+        if(address.size()!=3 || !new JsonPrimitive("127.0.0.1").equals(address.get("host")) || !address.get("port").toString().matches("[0-9]+")
+            || !address.get("session").isJsonPrimitive() || !address.getAsJsonPrimitive("session").isString())throw new IOException("METADATA_BOOTSTRAP_INVALID");
+        metadataClient=ManaforgeMetadataChannel.connect(Integer.parseInt(address.get("port").getAsString()),address.get("session").getAsString(),metadataKey,game,engineViewer,"1.4.62-V1",artifactHash);
+        Arrays.fill(metadataKey,(byte)0);startLifeline();
+    }
+    private void verifyStackSource(NativeCastCorrelation correlation) throws Exception {
+        if(metadataClient==null)return;
+        for(int attempt=0;attempt<40 && System.nanoTime()<deadline;attempt++) {
+            JsonObject query=new JsonObject();query.addProperty("command","metadata");query.addProperty("game",game);query.addProperty("player",engineViewer);query.add("cycle",state.get("cycle").deepCopy());
+            JsonArray objects=new JsonArray();for(JsonElement card:state.getAsJsonArray("stack"))objects.add(card.getAsJsonObject().get("id").deepCopy());query.add("object_ids",objects);query.add("identified_ids",objects.deepCopy());
+            JsonObject result=metadataClient.read(query);
+            if(correlation.matchesStack(state,result)){metadataSourceMatched=true;return;}
+            if(!new JsonPrimitive("retry").equals(result.get("status")))throw new IOException("NATIVE_STACK_SOURCE_MISMATCH");
+            if(!events.isEmpty())next();else Thread.sleep(25);
+        }
+        throw new IOException("NATIVE_STACK_METADATA_TIMEOUT");
+    }
     private String game, stage="initialize", decisionKind="none";
     private JsonObject next() throws Exception {
         while(System.nanoTime()<deadline && !cancelled.get()) {
@@ -108,7 +137,7 @@ public final class ManaforgeLiveOpening {
             stage="creature_stack";boolean abilitySubmitted=false;
             for(int observed=0;observed<40;observed++) {
                 if(state.getAsJsonArray("hand").size()==hand-1 && state.getAsJsonArray("stack").size()==1
-                    && "Memnite".equals(state.getAsJsonArray("stack").get(0).getAsJsonObject().get("name").getAsString())){resolveCreature(projection,body,envelope,hand-1);return;}
+                    && "Memnite".equals(state.getAsJsonArray("stack").get(0).getAsJsonObject().get("name").getAsString())){verifyStackSource(correlation[0]);resolveCreature(projection,body,envelope,hand-1);return;}
                 if(pending!=null && "GAME_CHOOSE_ABILITY".equals(pending.get("kind").getAsString())) {
                     if(abilitySubmitted || pending.getAsJsonObject("key_choices").size()!=1)throw new IOException("LIVE_CAST_UNSUPPORTED_ABILITY");
                     JsonObject ability=pending;pending=null;body.add("snapshot",projection.project(state,ability,false,true));
@@ -190,6 +219,7 @@ public final class ManaforgeLiveOpening {
             if(!event.get("event").getAsString().equals("decision"))continue;
             pending=null;
             if(state!=null && game!=null && state.getAsJsonArray("hand").size()==7 && state.getAsJsonArray("players").size()==2) {
+                initializeMetadata();
                 Map<String,manaforge.protocol.PlayContracts.CardIdentity> bindings=new HashMap<>();
                 for(String[] printing:new String[][]{{"M10/248","selected-forest","forest"},{"SOM/174","selected-memnite","memnite"}}) {
                     manaforge.protocol.PlayContracts.CardIdentity identity=new manaforge.protocol.PlayContracts.CardIdentity();
@@ -244,18 +274,26 @@ public final class ManaforgeLiveOpening {
                 probe.unityKey=ManaforgeUnityOpening.readBootstrap(System.in);
                 probe.unityReady=java.nio.file.Paths.get(args[2]);
             }
+            if(System.getProperty("manaforge.metadataContext")!=null) {
+                if(!probe.firstCreature || probe.unityReady!=null)throw new IOException();
+                probe.metadataContext=java.nio.file.Paths.get(System.getProperty("manaforge.metadataContext"));
+                JsonObject boot=manaforge.protocol.WireEnvelope.parseObject(manaforge.protocol.TextFrame.read(System.in));
+                if(boot.size()!=2 || !boot.has("metadata_bootstrap_version") || !boot.get("metadata_bootstrap_version").toString().equals("1") || !boot.get("owner_key_hex").isJsonPrimitive()
+                    || !boot.getAsJsonPrimitive("owner_key_hex").isString() || !boot.get("owner_key_hex").getAsString().matches("[0-9a-f]{64}"))throw new IOException();
+                probe.metadataKey=new byte[32];String hex=boot.get("owner_key_hex").getAsString();for(int i=0;i<32;i++)probe.metadataKey[i]=(byte)Integer.parseInt(hex.substring(i*2,i*2+2),16);
+            }
         }catch(Exception failure){report.println("{\"failure\":\"LIVE_OPENING_BOOTSTRAP_FAILED\"}");System.exit(2);}
 
-        Thread lifeline=new Thread(() -> {try{while(System.in.read()!=-1){} }catch(IOException ignored){}probe.cancelled.set(true);},"live-opening-owner");lifeline.setDaemon(true);lifeline.start();
+        if(probe.metadataContext==null)probe.startLifeline();
         try {
             if((args.length!=2 && args.length!=3 && args.length!=4) || (args.length==4 && !probe.firstLand && !probe.firstCreature) || !args[1].matches("[0-9a-f]{64}"))throw new IOException();probe.artifactHash=args[1];int port=Integer.parseInt(args[0]);if(port<1 || port>65535)throw new IOException();
             probe.run(port);
-            report.println(("{\"live_engine\":true,\"java_game_commands\":true,\"human_ai_seats\":true,\"opening_hand_count\":7,\"decision_received\":true,\"unity_connected\":false,\"public_projection_validated\":true,\"public_choice_submitted\":true,\"engine_advanced\":true,\"duplicate_native_submission_prevented\":true,\"authenticated_choice\":true,\"duplicate_receipt_reused\":true,\"disconnect_uncertainty_retained\":true}").replace("}",probe.firstLand?",\"first_land_observed\":"+probe.landObserved+",\"priority_pass_submitted\":true,\"unity_priority_pass_submitted\":"+probe.unityPriorityPass+"}":"}").replace("}",probe.firstCreature?",\"creature_spell_on_stack\":true,\"native_cast_ability_matched\":"+probe.castAbilityMatched+",\"creature_resolved\":"+(probe.unityReady==null)+",\"unity_casting_ability_submitted\":"+(probe.unityReady!=null)+"}":"}").replace("\"unity_connected\":false","\"unity_connected\":"+(probe.unityReady!=null)).replace("\"duplicate_receipt_reused\":true","\"duplicate_receipt_reused\":"+(probe.unityReady==null)).replace("\"duplicate_native_submission_prevented\":true","\"duplicate_native_submission_prevented\":"+(probe.unityReady==null)));result=0;
+            report.println(("{\"live_engine\":true,\"java_game_commands\":true,\"human_ai_seats\":true,\"opening_hand_count\":7,\"decision_received\":true,\"unity_connected\":false,\"public_projection_validated\":true,\"public_choice_submitted\":true,\"engine_advanced\":true,\"duplicate_native_submission_prevented\":true,\"authenticated_choice\":true,\"duplicate_receipt_reused\":true,\"disconnect_uncertainty_retained\":true}").replace("}",probe.firstLand?",\"first_land_observed\":"+probe.landObserved+",\"priority_pass_submitted\":true,\"unity_priority_pass_submitted\":"+probe.unityPriorityPass+"}":"}").replace("}",probe.firstCreature?",\"creature_spell_on_stack\":true,\"native_cast_ability_matched\":"+probe.castAbilityMatched+",\"creature_resolved\":"+(probe.unityReady==null)+",\"unity_casting_ability_submitted\":"+(probe.unityReady!=null)+"}":"}").replace("}",probe.metadataContext!=null?",\"native_stack_source_matched\":"+probe.metadataSourceMatched+"}":"}").replace("\"unity_connected\":false","\"unity_connected\":"+(probe.unityReady!=null)).replace("\"duplicate_receipt_reused\":true","\"duplicate_receipt_reused\":"+(probe.unityReady==null)).replace("\"duplicate_native_submission_prevented\":true","\"duplicate_native_submission_prevented\":"+(probe.unityReady==null)));result=0;
         }catch(Exception failure){JsonObject error=new JsonObject();error.addProperty("failure","LIVE_OPENING_FAILED");error.addProperty("stage",probe.stage);
             if(Arrays.asList("LIVE_OPENING_UNSUPPORTED_PREGAME","LIVE_OPENING_TIMEOUT_OR_CANCELLED","LIVE_OPENING_ENGINE_FAILED","LIVE_OPENING_QUEUE_LIMIT","LIVE_OPENING_PIN").contains(failure.getMessage()))error.addProperty("code",failure.getMessage());
             if(Arrays.asList("GAME_ASK","GAME_CHOOSE_CHOICE","GAME_TARGET","GAME_SELECT").contains(probe.decisionKind))error.addProperty("decision_family",probe.decisionKind);
             report.println(error.toString());}
-        finally{probe.bridge.execute(probe.command("shutdown"));if(probe.unityKey!=null)Arrays.fill(probe.unityKey,(byte)0);}
+        finally{probe.bridge.execute(probe.command("shutdown"));if(probe.unityKey!=null)Arrays.fill(probe.unityKey,(byte)0);if(probe.metadataKey!=null)Arrays.fill(probe.metadataKey,(byte)0);if(probe.metadataClient!=null)try{probe.metadataClient.close();}catch(IOException failure){result=2;}}
         System.exit(result);
     }
 }

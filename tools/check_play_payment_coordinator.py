@@ -84,6 +84,7 @@ def main():
             response = PLAY / "java/payment-xmage/manaforge/payment/xmage/ManaResponseExecutor.java"
             context_source = PLAY / "java/payment-xmage/manaforge/payment/xmage/ContextHumanPlayer.java"
             bridge_sources = [PLAY / "java" / name for name in ("ManaforgeBridge.java", "ManaforgeServerHost.java", "ManaforgeGameMetadata.java")]
+            bridge_sources += [PLAY / "java/ManaforgeMetadataChannel.java", *sorted((PLAY / "protocol/java/manaforge/protocol").glob("*.java"))]
             subprocess.run([compiler, "--release", "8", "-encoding", "UTF-8", "-cp", native_classpath, "-d", output,
                             str(source), str(adapter), str(response), str(context_source),
                             str(PLAY / "java/payment-xmage/manaforge/payment/xmage/OrdinaryManaShape.java"),

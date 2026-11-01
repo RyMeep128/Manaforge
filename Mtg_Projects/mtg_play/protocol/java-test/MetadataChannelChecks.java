@@ -52,6 +52,10 @@ public final class MetadataChannelChecks {
             try{check(client.read(3000)==null && calls.get()==1);}catch(IOException expected){check(calls.get()==1);}
         }
         check(Arrays.equals(key,original));
+        try(ManaforgeMetadataChannel server=new ManaforgeMetadataChannel(key,GAME,VIEWER,"synthetic-engine",HASH,command->{calls.incrementAndGet();JsonObject result=new JsonObject();result.addProperty("status","ok");return result;});ManaforgeMetadataChannel.Client client=ManaforgeMetadataChannel.connect(server.port(),server.session(),key,GAME,VIEWER,"synthetic-engine",HASH)) {
+            check(client.read(request()).get("status").getAsString().equals("ok"));int count=calls.get();JsonObject invalid=request();invalid.addProperty("player",GAME);
+            try{client.read(invalid);throw new AssertionError("CLIENT_CROSS_VIEWER_ACCEPTED");}catch(IOException expected){check(calls.get()==count);}
+        }
         try(ManaforgeMetadataChannel server=new ManaforgeMetadataChannel(key,GAME,VIEWER,"synthetic-engine",HASH,command->{calls.incrementAndGet();throw new IOException("PRIVATE_NATIVE_FAILURE");});LoopbackFrameReader client=connect(server,key)) {
             client.write(request().toString(),3000);String result=client.read(3000);check(result.contains("METADATA_READ_FAILED") && !result.contains("PRIVATE_NATIVE_FAILURE"));
         }
