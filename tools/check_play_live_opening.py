@@ -61,6 +61,7 @@ def main():
     if args.first_creature:
         expected["creature_spell_on_stack"] = True
         expected["creature_resolved"] = True
+        expected["unity_casting_ability_submitted"] = False
     evidence = None
 
     def consume(first, events, launch, port, server_process, server):

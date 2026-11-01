@@ -24,6 +24,11 @@ def main():
     parser.add_argument("--interactive", action="store_true")
     scenario = parser.add_mutually_exclusive_group()
     scenario.add_argument(
+        "--creature-ability",
+        action="store_true",
+        help="Submit one native casting-ability choice from Unity; diagnostic setup and stack observation",
+    )
+    scenario.add_argument(
         "--priority-pass",
         action="store_true",
         help="Submit one explicit engine priority pass from Unity",
@@ -104,6 +109,7 @@ def main():
                             if args.first_land or args.priority_pass
                             else []
                         ),
+                        *(["--first-creature"] if args.creature_ability else []),
                     ],
                     cwd=workspace,
                     stdin=subprocess.PIPE,
@@ -142,6 +148,8 @@ def main():
                     command += ["-manaforgeLiveLand", "1"]
                 if args.priority_pass:
                     command += ["-manaforgeLivePriority", "1"]
+                if args.creature_ability:
+                    command += ["-manaforgeLiveCreature", "1"]
                 if not args.interactive:
                     command += [
                         "-batchmode",
@@ -171,7 +179,9 @@ def main():
                 owner.client_ready()
                 if args.interactive:
                     print(
-                        "Live priority ready: select Pass priority within 60 seconds."
+                        "Live casting ability ready: select the engine-offered ability within 60 seconds."
+                        if args.creature_ability
+                        else "Live priority ready: select Pass priority within 60 seconds."
                         if args.priority_pass
                         else "Live land ready: select Play land within 60 seconds."
                         if args.first_land
@@ -209,6 +219,19 @@ def main():
                         raise RuntimeError("LIVE_UNITY_EVIDENCE_FAILED")
                 if args.first_land and native.get("first_land_observed") is not True:
                     raise RuntimeError("LIVE_UNITY_LAND_NOT_OBSERVED")
+                if args.creature_ability and any(
+                    native.get(field) is not True
+                    for field in (
+                        "creature_spell_on_stack",
+                        "unity_casting_ability_submitted",
+                    )
+                ):
+                    raise RuntimeError("LIVE_UNITY_CREATURE_EVIDENCE_FAILED")
+                if (
+                    args.creature_ability
+                    and native.get("creature_resolved") is not False
+                ):
+                    raise RuntimeError("LIVE_UNITY_CREATURE_RESOLUTION_UNPROVEN")
                 if args.priority_pass and (
                     native.get("unity_priority_pass_submitted") is not True
                     or native.get("first_land_observed") is not False
@@ -228,6 +251,9 @@ def main():
                     first_land_observed=args.first_land,
                     priority_pass_submitted=args.first_land or args.priority_pass,
                     unity_priority_pass_submitted=args.priority_pass,
+                    unity_casting_ability_submitted=args.creature_ability,
+                    creature_spell_on_stack=args.creature_ability,
+                    creature_resolved=False,
                 )
             finally:
                 key[:] = bytes(len(key))
@@ -262,7 +288,9 @@ def main():
         json.dumps(evidence, indent=2) + "\n", encoding="utf-8"
     )
     print(
-        "Packaged Unity priority pass submitted to XMage; engine advanced, viewer cleared and roots reaped. No full game claimed."
+        "Packaged Unity casting ability submitted to XMage; Memnite stack entry observed, viewer cleared and roots reaped. Resolution remains in the separate Java proof."
+        if args.creature_ability
+        else "Packaged Unity priority pass submitted to XMage; engine advanced, viewer cleared and roots reaped. No full game claimed."
         if args.priority_pass
         else "Packaged Unity -> authenticated Java -> XMage first land passed; engine zone change observed, viewer cleared and roots reaped. No full game claimed."
         if args.first_land

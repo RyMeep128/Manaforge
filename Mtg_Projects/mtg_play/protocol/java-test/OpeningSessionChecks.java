@@ -41,6 +41,16 @@ public final class OpeningSessionChecks {
             calls.incrementAndGet();
         },()->false,false);
         if(calls.get()!=2)throw new AssertionError("DUPLICATE_PASS_IO");
-        System.out.println("Opening session: authenticated snapshot/choice/pass, duplicate receipt, one native enqueue, disconnect uncertainty and cancelled-auth checks passed");
+        String abilityId="12345678-abcd-1234-abcd-123456789abc";
+        JsonObject abilityPrompt=OpeningProjectionChecks.priorityPrompt();abilityPrompt.addProperty("kind","GAME_CHOOSE_ABILITY");abilityPrompt.addProperty("is_priority",false);
+        JsonObject choices=new JsonObject();choices.addProperty(abilityId,"Cast creature");abilityPrompt.add("key_choices",choices);
+        ManaforgeOpeningProjection ability=OpeningProjectionChecks.projection();
+        JsonObject abilitySnapshot=ability.project(OpeningProjectionChecks.landState(),abilityPrompt,false,true);
+        ManaforgeOpeningLoopback.exchangeChoice(envelope(abilitySnapshot),ability,"raw-game","raw-human",41,8,"synthetic-engine",hash,command->{
+            if(!command.get("kind").getAsString().equals("object") || !command.get("value").getAsString().equals(abilityId))throw new AssertionError("BAD_NATIVE_ABILITY");
+            calls.incrementAndGet();
+        },()->false,true,"cast_spell");
+        if(calls.get()!=3)throw new AssertionError("DUPLICATE_ABILITY_IO");
+        System.out.println("Opening session: authenticated snapshot/choice/pass/ability, duplicate receipt, one native enqueue, disconnect uncertainty and cancelled-auth checks passed");
     }
 }

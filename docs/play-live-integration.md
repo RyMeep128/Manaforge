@@ -1,5 +1,42 @@
 # Live Unity / Java / XMage integration
 
+## Packaged native casting-ability choice (0.5.141)
+
+The opt-in `python tools/check_play_unity_live.py --creature-ability --interactive`
+scenario mounts the real XMage casting-ability choice in Unity's existing decision
+panel. Diagnostic pregame/keep, priority passes and the card-source click occur
+before Unity connects. Select the offered ability within 60 seconds; Java checks
+native acceptance, hand decrease and the Memnite stack entry, then Unity clears
+and closes. This is one explicit ability choice, not continuous casting UX.
+
+The original submission remains conservatively uncertain; no next Unity command
+is admitted on the basis of advancement alone. The packaged report explicitly
+leaves `creature_resolved=false` and records `unity_casting_ability_submitted` and
+`creature_spell_on_stack`. Resolution continues to be proven separately by the
+Java-only `--first-creature` scenario. No nested diagnostic priority passes follow
+the Unity submission, and no pending-ledger protection was relaxed. Full receipt
+reconciliation remains necessary for a continuous authenticated client session.
+
+The existing private bootstrap, authenticated session, renderer and decision
+panel are reused. No post-land display, stack UI or mana policy was added. The
+new flag is mutually exclusive with land/pass scenarios; the opening route is
+unchanged. A real-socket ability-choice check requires duplicate receipt reuse
+and exactly one native submission.
+
+The .141 CI review found .138 protocol/preview/live-opening and .139 protocol/
+preview success. .139 live-opening and .140 Tests/protocol/preview/live-opening
+were still running and deferred; general Tests for .137-.139 were cancelled.
+No new completed failures were found. No full-suite success is inferred from
+cancelled runs. Next scheduled CI review is .144.
+
+Local validation passed: current Windows player build, 158 projection checks and
+the focused Java protocol/socket suite, packaged ability submission with native
+stack evidence and clearing, packaged priority-pass regression, and the separate
+real Java creature-resolution proof. All owned roots exited normally. Screenshot
+review confirmed the casting button; fallback artwork and raw engine markup in
+the prompt remain known presentation limitations. Lint/format checks pass. No full
+application suite ran and no continuous-session acceptance is claimed.
+
 ## Native creature resolution through explicit priority (0.5.140)
 
 The Java-only `--first-creature` fixture now continues after its observed Memnite
