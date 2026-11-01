@@ -1,5 +1,33 @@
 # Live Unity / Java / XMage integration
 
+## Owner review and visual direction (0.5.134)
+
+The owner reviewed the packaged opening and found its presentation underwhelming.
+Review has occurred; visual acceptance has not. Continue the live integration
+roadmap with the owner's supplied Arena screenshots as the presentation target.
+
+- Mulligan: dim the battlefield behind a large, readable, centered fanned hand;
+  show who goes first, engine-known opponent keep status, a View Battlefield
+  control, and prominent Mulligan / Keep N buttons below the cards. Show return
+  counts only when supplied by authoritative decision state; do not hardcode the
+  screenshot's seven cards or its mulligan rule.
+- Battlefield: opposing seats at top/bottom, centered avatar/life displays,
+  opponent card backs above, local fanned hand at the bottom, deck piles at the
+  sides, and turn/priority controls at lower right. Preserve room for the play
+  surface and later multiplayer layouts. Highlight only engine-offered actions.
+- Reference material is in the owner's Downloads. The local `Unity Asset Catalog`
+  indexes `Assets from Wizards, given with permission`, including battlefield,
+  avatar, UI prefab and card-component bundles. These are compiled runtime assets,
+  not an editable Unity source project; inspect relevant contents before choosing
+  assets. The screenshots supplied in the review define the intended composition.
+
+The existing .133 backend first-land probe passed locally: authenticated public
+action admission, one native land submission, hand/battlefield count advancement,
+duplicate receipt reuse, uncertainty retention and owned-root cleanup. The focused
+Java protocol checks also passed, including 76 opening-projection checks. This
+does not establish Unity land controls, polished mulligans or full-game acceptance.
+Next scheduled CI review remains .135; leave unfinished runs to the next pass.
+
 Owner priority: move into live integration while retaining the fallback. Formal
 G0/G1 acceptance remains open; this direction does not certify those gates.
 Start with human versus XMage AI, keeping seat count independent of controller
