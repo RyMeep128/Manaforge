@@ -22,6 +22,11 @@ def main():
     artifacts = ROOT / "Mtg_Projects/mtg_play_unity/Artifacts"
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--interactive", action="store_true")
+    parser.add_argument(
+        "--first-land",
+        action="store_true",
+        help="Show one real land offer after diagnostic pregame/keep; not a full match",
+    )
     parser.add_argument("--xmage-root", type=Path, default=transport.DEFAULT_BUNDLE)
     parser.add_argument("--jdk-path", type=Path, default=transport.DEFAULT_JDK)
     parser.add_argument(
@@ -88,6 +93,7 @@ def main():
                         str(port),
                         hashpin,
                         str(output / "gateway-ready.json"),
+                        *(["--first-land"] if args.first_land else []),
                     ],
                     cwd=workspace,
                     stdin=subprocess.PIPE,
@@ -122,6 +128,8 @@ def main():
                     "-manaforgeLiveOpening",
                     str(output),
                 ]
+                if args.first_land:
+                    command += ["-manaforgeLiveLand", "1"]
                 if not args.interactive:
                     command += [
                         "-batchmode",
@@ -151,7 +159,9 @@ def main():
                 owner.client_ready()
                 if args.interactive:
                     print(
-                        "Live opening ready: inspect cards, then choose Yes or No within 60 seconds. The spike closes after submission.",
+                        "Live land ready: select Play land within 60 seconds."
+                        if args.first_land
+                        else "Live opening ready: inspect cards, then choose Yes or No within 60 seconds. The spike closes after submission.",
                         flush=True,
                     )
                 chosen = wait_file("choice", 60)
@@ -183,6 +193,8 @@ def main():
                 ):
                     if native.get(field) is not True:
                         raise RuntimeError("LIVE_UNITY_EVIDENCE_FAILED")
+                if args.first_land and native.get("first_land_observed") is not True:
+                    raise RuntimeError("LIVE_UNITY_LAND_NOT_OBSERVED")
                 evidence = dict(
                     live_engine=True,
                     unity_connected=True,
@@ -190,6 +202,7 @@ def main():
                     engine_advanced=True,
                     viewer_cleared=True,
                     public_fixture_only=True,
+                    first_land_observed=args.first_land,
                 )
             finally:
                 key[:] = bytes(len(key))
@@ -224,7 +237,9 @@ def main():
         json.dumps(evidence, indent=2) + "\n", encoding="utf-8"
     )
     print(
-        "Packaged Unity -> authenticated Java -> XMage opening choice passed; viewer cleared and roots reaped. No full game claimed."
+        "Packaged Unity -> authenticated Java -> XMage first land passed; engine zone change observed, viewer cleared and roots reaped. No full game claimed."
+        if args.first_land
+        else "Packaged Unity -> authenticated Java -> XMage opening choice passed; viewer cleared and roots reaped. No full game claimed."
     )
     print(str(output))
 

@@ -1,5 +1,36 @@
 # Live Unity / Java / XMage integration
 
+## Packaged first-land controls (0.5.136)
+
+The opt-in all-Forest fixture can mount a real land offer in Unity's existing
+ViewerDecisionPanel. Run `python tools/check_play_unity_live.py --first-land
+--interactive` from the repository root (both flags on the same command line).
+Choose an offered Play land action within 60 seconds. This is an integration
+review, not the requested finished battlefield/mulligan presentation. The diagnostic performs
+pregame choices, keeps the opening and passes pre-land priority windows in Java;
+these fixture policies are not installed gameplay automation. The default opening
+review command continues to offer its original boolean decision.
+
+The mounted button submits its opaque engine-bound action through the existing
+authenticated session/receipt path. Java checks native acceptance and observes one
+fewer hand card and one additional human battlefield object before emitting the
+conservative uncertain receipt. No confirmed outcome is fabricated. Unity clears
+the viewer and closes after this single action; it does not yet render the new
+battlefield or provide a continuous mulligan-to-land match. Artwork and the owner's
+requested Arena-style presentation remain pending.
+
+The scripted form, `python tools/check_play_unity_live.py --first-land`, invokes
+the actual mounted action button and requires native first-land evidence in
+addition to existing authentication, viewer clearing and root cleanup checks.
+Local packaged first-land validation passed: current Windows player build, actual
+mounted action input, authenticated Java admission, native land zone change,
+viewer clearing and normal owned-root cleanup. Screenshot inspection confirmed
+visible controls with fallback cards; it does not establish visual acceptance.
+The focused Java protocol preflight also passed, including 93 projection checks.
+The default packaged opening regression also passed with native advancement,
+viewer clearing and normal root cleanup. No full application suite ran. Next
+scheduled CI review remains .138.
+
 ## Live land priority binding and CI repair (0.5.135)
 
 Land projection now requires the native priority player to resolve to the human
