@@ -66,6 +66,8 @@ def main():
         sources = [
             PLAY / "java/ManaforgeOpeningProjection.java",
             PLAY / "java/NativeCastCorrelation.java",
+            PLAY / "java/ManaforgeMetadataChannel.java",
+            PROTOCOL / "java-test/MetadataChannelChecks.java",
             PLAY / "java/ManaforgeOpeningSession.java",
             PLAY / "java/ManaforgeUnityOpening.java",
             PLAY / "java/ManaforgeOpeningLoopback.java",
@@ -297,6 +299,8 @@ def main():
             timeout=60,
         )
 
+        subprocess.run([runtime, "-cp", str(workspace) + os.pathsep + str(jar),
+                        "MetadataChannelChecks"], check=True, timeout=60)
         subprocess.run([runtime, "-cp", str(workspace) + os.pathsep + str(jar),
                         "OpeningSessionChecks"], check=True, timeout=60)
 

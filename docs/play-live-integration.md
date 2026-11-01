@@ -1,5 +1,32 @@
 # Live Unity / Java / XMage integration
 
+## Private metadata transport foundation (0.5.143)
+
+ManaforgeMetadataChannel provides an isolated Java listener with the existing
+loopback framing and fresh challenge/proof authentication. One configured game/
+viewer is bound before listening; only six-field read-only metadata requests are
+accepted. Object lists are bounded, unique canonical UUIDs; identified objects
+must be a subset of requested objects. Cross-game/viewer requests, mutations,
+paths, duplicate JSON keys and malformed cycles fail closed before the reader.
+
+The listener accepts one authenticated owner, limits frame/auth/read/write waits
+and total requests, clears its private key copy and owns its socket/worker cleanup.
+The injected reader receives only a validated copy. Native errors become a fixed
+private error code rather than exception details. Close interrupts the worker and
+reports uncertain cleanup if a reader does not return within the join bound; it
+does not claim to forcibly cancel arbitrary native work.
+
+This foundation is deliberately unmounted: ManaforgeServerHost, Unity and the live
+gateway do not start it, and no real metadata is read yet. It grants no new root/
+all-seat Unity access, confirms no gameplay receipt and adds no Python per-action
+relay. Private runtime bootstrap/client ownership and binding to the existing
+guarded native reader remain next. Local focused validation passed: 26 bounded
+request/authentication/privacy/lifecycle checks, including a deliberately blocked
+reader that must report uncertain cleanup; all 185 projection checks and the
+existing Java protocol/socket suite. Lint and formatting pass. No real-engine
+metadata, full application suite or Unity build ran. No UI or payment policy
+changed. Next scheduled CI review remains .144.
+
 ## Native card-to-ability correlation evidence (0.5.142)
 
 The private bridge view now retains XMage's basic casting-ability IDs by native
