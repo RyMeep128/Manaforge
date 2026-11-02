@@ -41,7 +41,7 @@ public final class ManaforgeLiveOpening {
     private final boolean combatDamage=Boolean.getBoolean("manaforge.combatDamage");private boolean combatDamagePassSubmitted,combatDamageObserved;
     private final boolean declaredPriority=Boolean.getBoolean("manaforge.declaredPriority");private boolean declaredPrioritySubmitted,declaredPriorityObserved,declaredBlockersObserved;
     private final boolean finishSelectedAttack=Boolean.getBoolean("manaforge.finishSelectedAttack");private boolean selectedAttackFinished,declaredAttackObserved;
-    private final boolean selectAttacker=Boolean.getBoolean("manaforge.selectAttacker");private boolean attackerSelected,attackAssignmentObserved;private JsonObject attackerObservationPrompt,declaredAttackPrompt,postDeclaredPriorityPrompt,combatDamagePrompt,combatCleanupPrompt;
+    private final boolean selectAttacker=Boolean.getBoolean("manaforge.selectAttacker");private boolean attackerSelected,attackAssignmentObserved;private JsonObject attackerObservationPrompt,declaredAttackPrompt,postDeclaredPriorityPrompt,combatDamagePrompt,combatCleanupPrompt,blockedDamagePrompt;
     private final boolean combatPriority=Boolean.getBoolean("manaforge.combatPriority");private boolean unityCombatPrioritySubmitted,unityCombatPriorityConfirmed;
     private NativeCastCorrelation.AbilityEvidence unityCastEvidence;private String unityCastSource;private boolean unityBattlefieldObserved,unityFollowupConfirmed;
     private JsonObject sourceMetadata(JsonObject view,String... sources) throws Exception {
@@ -336,7 +336,15 @@ public final class ManaforgeLiveOpening {
                                     if(!"boolean".equals(pass.get("kind").getAsString()) || !new JsonPrimitive(false).equals(pass.get("value")))throw new IOException("LIVE_DECLARED_PRIORITY_NOT_PASS");passCommand[0]=pass.deepCopy();passAccepted[0]=request(pass,"response_sent");if(!new JsonPrimitive(true).equals(passAccepted[0].get("accepted")))throw new IOException("LIVE_DECLARED_PRIORITY_REJECTED");declaredPrioritySubmitted=true;advancement(priorityState.get("cycle").getAsLong(),priorityPrompt.get("decision_id").getAsLong());
                                 },()->{
                                     NativeCastCorrelation.PriorityEvidence passProof=observeDeclaredPriority(priorityState,priorityPrompt,passCommand[0],priorityMetadata,passAccepted[0]);
-                                    JsonObject following=new JsonObject(),followingBody=new JsonObject();following.addProperty("wire_version",1);following.addProperty("message_type","snapshot");following.addProperty("message_id","post-declared-priority");followingBody.addProperty("fixture_only",false);followingBody.add("snapshot",combatDamage?projection.projectDeclaredAttackPriority(state,postDeclaredPriorityPrompt):projection.projectReadOnlyPostDeclaredPriority(state,postDeclaredPriorityPrompt));following.add("body",followingBody);if(blockedCombat)validateBlockedProjection(followingBody.getAsJsonObject("snapshot"));
+                                    JsonObject following=new JsonObject(),followingBody=new JsonObject();following.addProperty("wire_version",1);following.addProperty("message_type","snapshot");following.addProperty("message_id","post-declared-priority");followingBody.addProperty("fixture_only",false);followingBody.add("snapshot",blockedDamage?projection.projectBlockedAttackPriority(state,postDeclaredPriorityPrompt):combatDamage?projection.projectDeclaredAttackPriority(state,postDeclaredPriorityPrompt):projection.projectReadOnlyPostDeclaredPriority(state,postDeclaredPriorityPrompt));following.add("body",followingBody);if(blockedCombat)validateBlockedProjection(followingBody.getAsJsonObject("snapshot"),blockedDamage);
+                                    if(blockedDamage) {
+                                        final JsonObject blockedState=state.deepCopy(),blockedPrompt=postDeclaredPriorityPrompt.deepCopy();final String blocker=blockedState.getAsJsonArray("combat").get(0).getAsJsonObject().getAsJsonArray("blockers").get(0).getAsString();final JsonObject blockedMetadata=sourceMetadata(state,unityCastSource,blocker);final JsonObject[] blockedCommand=new JsonObject[1],blockedAccepted=new JsonObject[1];
+                                        return new ManaforgeUnityOpening.ObservedSnapshot(following,passProof,new ManaforgeUnityOpening.PriorityOffer(following,blockedPrompt.get("decision_id").getAsLong(),blockedState.get("cycle").getAsLong(),blockedPass->{
+                                            if(!"boolean".equals(blockedPass.get("kind").getAsString()) || !new JsonPrimitive(false).equals(blockedPass.get("value")))throw new IOException("LIVE_BLOCKED_DAMAGE_NOT_PASS");blockedCommand[0]=blockedPass.deepCopy();blockedAccepted[0]=request(blockedPass,"response_sent");if(!new JsonPrimitive(true).equals(blockedAccepted[0].get("accepted")))throw new IOException("LIVE_BLOCKED_DAMAGE_REJECTED");blockedDamagePassSubmitted=true;advancement(blockedState.get("cycle").getAsLong(),blockedPrompt.get("decision_id").getAsLong());
+                                        },()->{
+                                            NativeCastCorrelation.PriorityEvidence blockedProof=observeBlockedDamageResult(blockedState,blockedPrompt,blockedCommand[0],blockedMetadata,blockedAccepted[0],blocker);JsonObject resultSnapshot=projection.projectReadOnlyPostDeclaredPriority(state,blockedDamagePrompt);validateBlockedProjection(resultSnapshot,false);JsonObject blockedResult=new JsonObject(),blockedBody=new JsonObject();blockedResult.addProperty("wire_version",1);blockedResult.addProperty("message_type","snapshot");blockedResult.addProperty("message_id","blocked-damage-result");blockedBody.addProperty("fixture_only",false);blockedBody.add("snapshot",resultSnapshot);blockedResult.add("body",blockedBody);return new ManaforgeUnityOpening.ObservedSnapshot(blockedResult,blockedProof);
+                                        }));
+                                    }
                                     if(combatDamage) {
                                         final JsonObject damageState=state.deepCopy(),damagePrompt=postDeclaredPriorityPrompt.deepCopy(),damageMetadata=sourceMetadata(state,unityCastSource);final JsonObject[] damageCommand=new JsonObject[1],damageAccepted=new JsonObject[1];
                                         return new ManaforgeUnityOpening.ObservedSnapshot(following,passProof,new ManaforgeUnityOpening.PriorityOffer(following,damagePrompt.get("decision_id").getAsLong(),damageState.get("cycle").getAsLong(),damagePass->{
@@ -426,7 +434,7 @@ public final class ManaforgeLiveOpening {
         },cancelled::get,false);
         advancement(cycle,decision);
         observeDeclaredPriority(before,prompt,command[0],metadata,accepted[0]);
-        if(blockedCombat){validateBlockedProjection(projection.projectReadOnlyPostDeclaredPriority(state,postDeclaredPriorityPrompt));if(blockedDamage)observeBlockedDamage(projection);}
+        if(blockedCombat){validateBlockedProjection(projection.projectReadOnlyPostDeclaredPriority(state,postDeclaredPriorityPrompt),false);if(blockedDamage)observeBlockedDamage(projection);}
         if(combatDamage)observeCombatDamage(projection);
     }
     private void observeBlockedDamage(ManaforgeOpeningProjection projection) throws Exception {
@@ -437,15 +445,18 @@ public final class ManaforgeLiveOpening {
             if(!"boolean".equals(value.get("kind").getAsString()) || !new JsonPrimitive(false).equals(value.get("value")))throw new IOException("LIVE_BLOCKED_DAMAGE_NOT_PASS");command[0]=value.deepCopy();accepted[0]=request(value,"response_sent");if(!new JsonPrimitive(true).equals(accepted[0].get("accepted")))throw new IOException("LIVE_BLOCKED_DAMAGE_REJECTED");blockedDamagePassSubmitted=true;
         },cancelled::get,false);
         advancement(cycle,decision);
+        observeBlockedDamageResult(before,prompt,command[0],metadata,accepted[0],blocker);
+    }
+    private NativeCastCorrelation.PriorityEvidence observeBlockedDamageResult(JsonObject before,JsonObject prompt,JsonObject command,JsonObject metadata,JsonObject accepted,String blocker) throws Exception {
         for(int count=0;count<80;count++) {
             JsonObject event=pending==null?next():pending;if(!"decision".equals(event.get("event").getAsString()))continue;pending=null;
-            if(NativeCastCorrelation.blockedDamageEvidence(before,prompt,command[0],metadata,accepted[0],state,event,sourceMetadata(state,unityCastSource,blocker),unityCastSource)==null)throw new IOException("LIVE_BLOCKED_DAMAGE_UNPROVEN");blockedDamageObserved=true;return;
+            NativeCastCorrelation.PriorityEvidence proof=NativeCastCorrelation.blockedDamageEvidence(before,prompt,command,metadata,accepted,state,event,sourceMetadata(state,unityCastSource,blocker),unityCastSource);if(proof==null)throw new IOException("LIVE_BLOCKED_DAMAGE_UNPROVEN");blockedDamageObserved=true;blockedDamagePrompt=event.deepCopy();return proof;
         }
         throw new IOException("LIVE_BLOCKED_DAMAGE_TIMEOUT");
     }
-    private void validateBlockedProjection(JsonObject observed) throws Exception {
+    private void validateBlockedProjection(JsonObject observed,boolean passOnly) throws Exception {
         JsonObject group=observed.getAsJsonArray("combat").get(0).getAsJsonObject();
-        if(!declaredBlockersObserved || !observed.get("decision").isJsonNull() || observed.getAsJsonArray("actions").size()!=0 || group.getAsJsonArray("blockers").size()==0 || !new JsonPrimitive(true).equals(group.get("blocked")))throw new IOException("LIVE_BLOCKED_COMBAT_UNPROVEN");
+        if(!declaredBlockersObserved || (passOnly?(observed.get("decision").isJsonNull() || !new JsonPrimitive(true).equals(observed.getAsJsonObject("decision").get("is_priority")) || observed.getAsJsonArray("actions").size()!=1 || !"pass".equals(observed.getAsJsonArray("actions").get(0).getAsJsonObject().get("kind").getAsString())):(!observed.get("decision").isJsonNull() || observed.getAsJsonArray("actions").size()!=0)) || group.getAsJsonArray("blockers").size()==0 || !new JsonPrimitive(true).equals(group.get("blocked")))throw new IOException("LIVE_BLOCKED_COMBAT_UNPROVEN");
         JsonObject body=new JsonObject(),envelope=new JsonObject();body.addProperty("fixture_only",false);body.add("snapshot",observed);envelope.addProperty("wire_version",1);envelope.addProperty("message_type","snapshot");envelope.addProperty("message_id","blocked-combat-observation");envelope.add("body",body);
         manaforge.protocol.ReceiveMessages.parse(envelope.toString(),observed.get("session_id").getAsString(),"human",1,false);blockerProjectionValidated=true;
     }
@@ -617,7 +628,7 @@ public final class ManaforgeLiveOpening {
             if(probe.postResolutionPass && !probe.observeResolution)throw new IOException();
             if(probe.finishAttacks && (!probe.firstCreature || probe.metadataContext==null || probe.continuePriority || probe.postResolutionPass))throw new IOException();
             if(probe.combatPriority && (!probe.finishAttacks || probe.unityReady==null))throw new IOException();
-            if(probe.blockedDamage && (!probe.blockedCombat || probe.unityReady!=null))throw new IOException();
+            if(probe.blockedDamage && !probe.blockedCombat)throw new IOException();
             if(probe.blockedCombat && (!probe.declaredPriority || probe.combatDamage))throw new IOException();
             if(probe.completeCombat && !probe.combatDamage)throw new IOException();
             if(probe.combatDamage && !probe.declaredPriority)throw new IOException();

@@ -1,5 +1,25 @@
 # Live Unity / Java / XMage integration
 
+## Display native marked blocker damage in Unity (0.5.192)
+
+```powershell
+python tools/check_play_unity_live.py --select-attacker --native-metadata --finish-selected-attack --declared-priority --blocked-combat --blocked-damage
+```
+
+The optional fourth input offers one explicit Pass priority after the native
+blocker assignment. Java confirms it with the guarded blocked-damage certificate
+tracking both incarnations, then sends a fifth read-only snapshot. The public
+receive boundary validates both the pass-only offer and the final blocked view.
+
+Unity copies each blocker's marked damage into immutable snapshot values. For the
+single-Ornithopter fixture it displays the actual native `0 -> 1` damage values
+and verifies defender life stayed unchanged. `blocked-damage.png` captures the
+result. Acceptance requires five snapshots, eight acknowledgements, four confirmed
+receipts, zero uncertain receipts, known blocker names, unchanged defender life,
+then viewer clearing and owned-root cleanup. This is a bounded native fixture
+observation; human blocker choices, lethal combat and general combat acceptance
+remain open.
+
 ## Observe native blocked damage in Java (0.5.191)
 
 ```powershell

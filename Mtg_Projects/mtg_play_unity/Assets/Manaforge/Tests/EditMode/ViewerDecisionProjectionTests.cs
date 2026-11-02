@@ -19,10 +19,10 @@ namespace Manaforge.Play.Tests
         [Test] public void BlockerNamesAreCopiedFromPublicObjectsAndRemainReadOnly()
         {
             var source=Priority();var snapshot=source["body"]["snapshot"];snapshot["objects"]=Corpus()["positive"][0]["envelope"]["body"]["snapshot"]["objects"].DeepClone();var attacker=snapshot["objects"][0];attacker["zone"]="battlefield";
-            var blocker=attacker.DeepClone();blocker["object_id"]="fixture-blocker";blocker["controller_id"]="two";blocker["owner_id"]="two";blocker["card_identity"]=null;blocker["characteristics"]["name"]="Ornithopter";((JArray)snapshot["objects"]).Add(blocker);
+            var blocker=attacker.DeepClone();blocker["object_id"]="fixture-blocker";blocker["controller_id"]="two";blocker["owner_id"]="two";blocker["card_identity"]=null;blocker["characteristics"]["name"]="Ornithopter";blocker["damage"]=1;((JArray)snapshot["objects"]).Add(blocker);
             snapshot["combat"]=new JArray(new JObject{["attackers"]=new JArray((string)attacker["object_id"]),["blockers"]=new JArray("fixture-blocker"),["defender_id"]="two",["blocked"]=true});snapshot["decision"]=null;snapshot["actions"]=new JArray();var frame=Project(source);
-            Assert.That(frame.Combat[0].BlockerNames,Is.EqualTo(new[]{"Ornithopter"}));Assert.That(frame.Combat[0].BlockerCount,Is.EqualTo(1));Assert.That(frame.Actions,Is.Empty);Assert.That(frame.Decision,Is.Null);
-            blocker["characteristics"]["name"]="mutated";snapshot["combat"][0]["blockers"]=new JArray();Assert.That(frame.Combat[0].BlockerNames[0],Is.EqualTo("Ornithopter"));Assert.That(frame.Combat[0].BlockerCount,Is.EqualTo(1));Assert.That(((IList<string>)frame.Combat[0].BlockerNames).IsReadOnly,Is.True);
+            Assert.That(frame.Combat[0].BlockerNames,Is.EqualTo(new[]{"Ornithopter"}));Assert.That(frame.Combat[0].BlockerCount,Is.EqualTo(1));Assert.That(frame.Combat[0].BlockerDamage[0],Is.EqualTo(1));Assert.That(frame.Actions,Is.Empty);Assert.That(frame.Decision,Is.Null);
+            blocker["characteristics"]["name"]="mutated";blocker["damage"]=0;Assert.That(frame.Combat[0].BlockerDamage[0],Is.EqualTo(1));Assert.That(((IList<long?>)frame.Combat[0].BlockerDamage).IsReadOnly,Is.True);snapshot["combat"][0]["blockers"]=new JArray();Assert.That(frame.Combat[0].BlockerNames[0],Is.EqualTo("Ornithopter"));Assert.That(frame.Combat[0].BlockerCount,Is.EqualTo(1));Assert.That(((IList<string>)frame.Combat[0].BlockerNames).IsReadOnly,Is.True);
         }
         [Test] public void CombatNamesAreReadOnlySnapshotValuesWithoutCommandAuthority()
         {

@@ -23,6 +23,11 @@ def main():
     artifacts = ROOT / "Mtg_Projects/mtg_play_unity/Artifacts"
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
+        "--blocked-damage",
+        action="store_true",
+        help="One explicit pass and native blocker damage; requires --blocked-combat",
+    )
+    parser.add_argument(
         "--blocked-combat",
         action="store_true",
         help="Public AI blocker observation; requires --declared-priority and excludes --combat-damage",
@@ -122,6 +127,8 @@ def main():
         default=artifacts / ("UnityLive-" + uuid.uuid4().hex[:10]),
     )
     args = parser.parse_args()
+    if args.blocked_damage and not args.blocked_combat:
+        parser.error("--blocked-damage requires --blocked-combat")
     if args.blocked_combat and (not args.declared_priority or args.combat_damage):
         parser.error(
             "--blocked-combat requires --declared-priority and excludes --combat-damage"
@@ -250,6 +257,11 @@ def main():
                         "-Dfile.encoding=UTF-8",
                         "-Djava.net.preferIPv4Stack=true",
                         *(
+                            ["-Dmanaforge.blockedDamage=true"]
+                            if args.blocked_damage
+                            else []
+                        ),
+                        *(
                             ["-Dmanaforge.blockedCombat=true"]
                             if args.blocked_combat
                             else []
@@ -374,6 +386,8 @@ def main():
                     command += ["-manaforgeLivePriority", "1"]
                 if args.creature_ability:
                     command += ["-manaforgeLiveCreature", "1"]
+                if args.blocked_damage:
+                    command += ["-manaforgeLiveBlockedDamage", "1"]
                 if args.blocked_combat:
                     command += ["-manaforgeLiveBlockedCombat", "1"]
                 if args.complete_combat:
@@ -564,6 +578,19 @@ def main():
                         or cleanup_result.get("postcombat_defender_life") != life_after
                     ):
                         raise RuntimeError("LIVE_UNITY_COMBAT_CLEANUP_NOT_PRESENTED")
+                if args.blocked_damage:
+                    blocked_damage = wait_file("blocked-damage-ready", 60)
+                    if (
+                        blocked_damage.get("snapshot_count") != 5
+                        or blocked_damage.get("blocked_damage_presented") is not True
+                        or blocked_damage.get("blocker_damage_before") != 0
+                        or blocked_damage.get("blocker_damage_after") != 1
+                        or type(blocked_damage.get("blocked_defender_life_before"))
+                        is not int
+                        or blocked_damage.get("blocked_defender_life_before")
+                        != blocked_damage.get("blocked_defender_life_after")
+                    ):
+                        raise RuntimeError("LIVE_UNITY_BLOCKED_DAMAGE_NOT_PRESENTED")
                 chosen = wait_file("choice", 60)
                 if (
                     chosen.get("ack_count")
@@ -571,7 +598,7 @@ def main():
                         10
                         if args.complete_combat
                         else 8
-                        if args.combat_damage
+                        if args.combat_damage or args.blocked_damage
                         else 6
                         if args.declared_priority
                         else 4
@@ -685,7 +712,7 @@ def main():
                             6
                             if args.complete_combat
                             else 5
-                            if args.combat_damage
+                            if args.combat_damage or args.blocked_damage
                             else 4
                             if args.declared_priority
                             else 3
@@ -697,7 +724,7 @@ def main():
                             5
                             if args.complete_combat
                             else 4
-                            if args.combat_damage
+                            if args.combat_damage or args.blocked_damage
                             else 3
                             if args.declared_priority
                             else 2
@@ -877,7 +904,7 @@ def main():
                         snapshot_count=6
                         if args.complete_combat
                         else 5
-                        if args.combat_damage
+                        if args.combat_damage or args.blocked_damage
                         else 4
                         if args.declared_priority
                         else 3
@@ -886,13 +913,24 @@ def main():
                         confirmed_receipt_count=5
                         if args.complete_combat
                         else 4
-                        if args.combat_damage
+                        if args.combat_damage or args.blocked_damage
                         else 3
                         if args.declared_priority
                         else 2
                         if args.finish_selected_attack
                         else 1,
                         uncertain_receipt_count=0,
+                    )
+                if args.blocked_damage:
+                    evidence.update(
+                        native_blocked_damage_pass_submitted=True,
+                        native_blocker_damage_observed=True,
+                        blocked_damage_presented=True,
+                        blocker_damage_before=blocked_damage["blocker_damage_before"],
+                        blocker_damage_after=blocked_damage["blocker_damage_after"],
+                        blocked_defender_life=blocked_damage[
+                            "blocked_defender_life_after"
+                        ],
                     )
                 if args.blocked_combat:
                     evidence.update(
@@ -994,7 +1032,9 @@ def main():
         json.dumps(evidence, indent=2) + "\n", encoding="utf-8"
     )
     print(
-        "Packaged Unity displayed engine-declared AI blocker names after three confirmed inputs; viewer cleared and owned roots reaped."
+        "Packaged Unity confirmed four inputs and displayed one native damage marked on Ornithopter with unchanged life totals; viewer cleared and owned roots reaped."
+        if args.blocked_damage
+        else "Packaged Unity displayed engine-declared AI blocker names after three confirmed inputs; viewer cleared and owned roots reaped."
         if args.blocked_combat
         else "Packaged Unity confirmed five combat inputs, observed postcombat main with cleared combat and preserved life totals; viewer cleared and owned roots reaped."
         if args.complete_combat

@@ -1192,3 +1192,11 @@ Unity now displays public blocker names from the separate Ornithopter AI fixture
 after three confirmed inputs. The read-only assignment passes native correlation
 and public receive validation. Human blocker selection, blocked damage, lethal
 results and the broader P4 acceptance work remain open.
+
+
+### Packaged blocked-damage observation (0.5.192)
+
+Unity now confirms the additional pass and displays native marked damage on the
+same Ornithopter blocker, with life totals unchanged. Four typed receipts and
+five snapshots pass the bounded live fixture. Explicit human blocker selection,
+lethal outcomes, full-match results and formal P4 acceptance remain open.
