@@ -1253,3 +1253,12 @@ using the original attacker, through native damage and postcombat cleanup.
 Each offered input has typed native evidence; the final check binds both creatures,
 retained hand/graveyard/library state and the second defender life decrease.
 Full-match results, general choices and visual improvements remain open.
+
+
+### Return after the second combat (0.5.198)
+
+The same Unity session now continues through the second postcombat main, another
+AI turn and the third human main phase. Native evidence verifies the renewed draw
+and untap, retained battlefield cards and exact graveyard identities. The final
+snapshot is read-only with defender life still 18. Full-match results and general
+choices remain open; visual improvements stay deferred.

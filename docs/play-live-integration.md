@@ -1,5 +1,14 @@
 # Live Unity / Java / XMage integration
 
+## Return through another AI turn (0.5.198)
+
+The `--repeat-cycle` command below now continues after the second combat through
+another AI turn to the third human main phase. Every pass/discard keeps its own
+native confirmation and unique snapshot ID. The final read-only state verifies
+another draw, untap, retained battlefield identities and exact graveyard contents;
+defender life remains 18. This remains a bounded fixture, with full-match results
+and general decisions still open. Visual improvements remain deferred.
+
 ## Repeat casting and combat in Unity (0.5.197)
 
 ```powershell

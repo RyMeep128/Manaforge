@@ -662,6 +662,15 @@ def main():
                         != repeated_result.get("repeat_defender_life_before", -10) - 1
                     ):
                         raise RuntimeError("LIVE_UNITY_REPEATED_COMBAT_NOT_PRESENTED")
+                    returned_result = wait_file("repeated-turn-ready", 240)
+                    if (
+                        returned_result.get("repeated_turn_presented") is not True
+                        or returned_result.get("turn_number")
+                        != returned_result.get("turn_loop_start", -10) + 4
+                        or returned_result.get("postcombat_defender_life")
+                        != repeated_result.get("repeat_defender_life_after")
+                    ):
+                        raise RuntimeError("LIVE_UNITY_REPEATED_TURN_NOT_PRESENTED")
                 chosen = wait_file("choice", 60)
                 if (
                     chosen.get("ack_count")
@@ -782,7 +791,7 @@ def main():
                         ready.get("attacker_choice_presented") is not True
                         or chosen.get("snapshot_count")
                         != (
-                            repeated_result["snapshot_count"]
+                            returned_result["snapshot_count"]
                             if args.repeat_cycle
                             else cast_result["snapshot_count"]
                             if args.next_turn_cast
@@ -847,9 +856,9 @@ def main():
                         is not bool
                     ):
                         raise RuntimeError("LIVE_UNITY_TURN_LOOP_EVIDENCE_FAILED")
-                if (
-                    args.repeat_cycle
-                    and native.get("native_repeated_combat_observed") is not True
+                if args.repeat_cycle and (
+                    native.get("native_repeated_combat_observed") is not True
+                    or native.get("native_repeated_turn_observed") is not True
                 ):
                     raise RuntimeError("LIVE_UNITY_REPEATED_COMBAT_EVIDENCE_FAILED")
                 if args.next_turn_cast and any(
@@ -1039,6 +1048,8 @@ def main():
                 if args.repeat_cycle:
                     evidence.update(
                         native_repeated_combat_observed=True,
+                        native_repeated_turn_observed=True,
+                        repeated_turn_presented=True,
                         repeated_combat_presented=True,
                         repeat_defender_life_before=repeated_result[
                             "repeat_defender_life_before"
@@ -1177,7 +1188,7 @@ def main():
         json.dumps(evidence, indent=2) + "\n", encoding="utf-8"
     )
     print(
-        "Packaged Unity repeated casting and combat on one session, confirmed the second life decrease, cleared the viewer and reaped owned roots."
+        "Packaged Unity repeated casting and combat on one session, confirmed the second life decrease and following human turn, cleared the viewer and reaped owned roots."
         if args.repeat_cycle
         else "Packaged Unity continued the turn loop, cast another creature, selected its ability and confirmed resolution on the same session; viewer cleared and roots reaped."
         if args.next_turn_cast
