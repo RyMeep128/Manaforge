@@ -1176,3 +1176,11 @@ and cleared combat at post-combat main. All five receipts require typed native
 evidence; the final view preserves the defender's post-damage life total. This
 closes the bounded public fixture only. P2/P3/P4 and formal gates remain partial;
 blocking, lethal results and broader decision/launch parity are still open.
+
+
+### Native AI blocker observation (0.5.189)
+
+A separate Java Memnite-versus-Ornithopter fixture now observes engine-declared
+AI blockers and validates the viewer-safe read-only assignment. The unblocked
+fixture is retained. Unity blocker display, explicit human blocker choices and
+blocked damage remain open; P4 and formal acceptance gates are not complete.

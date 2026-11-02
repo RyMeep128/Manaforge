@@ -1,5 +1,29 @@
 # Live Unity / Java / XMage integration
 
+## Observe native AI blockers in a separate Java fixture (0.5.189)
+
+```powershell
+python tools/check_play_live_opening.py --first-creature --native-metadata --select-attacker --finish-selected-attack --declared-priority --blocked-combat
+```
+
+This variant gives the AI a public all-Ornithopter deck instead of all Forests,
+while retaining the human's Memnite deck. Diagnostic setup passes engine-offered
+priority over AI spells through the existing stack-omitting projection. It then
+uses the same explicit attacker, declaration-finish and priority commands.
+
+Acceptance requires native blockers present and `blocked` true, with typed
+post-declaration evidence binding the same attacker incarnation and defender.
+Blocker IDs must refer to unique visible opposing battlefield objects. The resulting
+read-only public assignment is validated by the receive boundary. Reports include
+`native_blocking_fixture`, `native_blockers_observed` and
+`native_blocker_projection_validated`, all true. The original unblocked decks and
+stopping points are retained.
+
+This Java-only fixture observes AI-owned blocking. It does not submit a human
+blocker choice, validate blocked damage, or claim general combat acceptance.
+Unity integration and human blocker selection remain subsequent work. CI includes
+both blocked and unblocked fixtures.
+
 ## Display cleared combat in Unity (0.5.188)
 
 ```powershell

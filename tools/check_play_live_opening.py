@@ -17,6 +17,11 @@ from play_native_metadata import provision_metadata  # noqa: E402
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
+        "--blocked-combat",
+        action="store_true",
+        help="Public Ornithopter AI blocker fixture; requires --declared-priority and excludes --combat-damage",
+    )
+    parser.add_argument(
         "--complete-combat",
         action="store_true",
         help="One explicit pass to native postcombat main and cleared combat; requires --combat-damage",
@@ -88,6 +93,10 @@ def main():
         parser.error("--combat-damage requires --declared-priority")
     if args.complete_combat and not args.combat_damage:
         parser.error("--complete-combat requires --combat-damage")
+    if args.blocked_combat and (not args.declared_priority or args.combat_damage):
+        parser.error(
+            "--blocked-combat requires --declared-priority and excludes --combat-damage"
+        )
     output = args.output.resolve()
     artifacts = (ROOT / "Mtg_Projects/mtg_play_unity/Artifacts").resolve()
     if not output.is_relative_to(artifacts) or output == artifacts:
@@ -167,6 +176,13 @@ def main():
             native_combat_cleared=True,
         )
 
+    if args.blocked_combat:
+        expected.update(
+            native_blocking_fixture=True,
+            native_blocker_projection_validated=True,
+            native_blockers_observed=True,
+        )
+
     def consume(first, events, launch, port, server_process, server):
         nonlocal evidence
         java = args.xmage_root.resolve() / "java/jre1.8.0_201/bin/java.exe"
@@ -184,6 +200,7 @@ def main():
                 "-Djava.awt.headless=true",
                 "-Dfile.encoding=UTF-8",
                 "-Djava.net.preferIPv4Stack=true",
+                *(["-Dmanaforge.blockedCombat=true"] if args.blocked_combat else []),
                 *(["-Dmanaforge.completeCombat=true"] if args.complete_combat else []),
                 *(["-Dmanaforge.combatDamage=true"] if args.combat_damage else []),
                 *(
@@ -265,7 +282,11 @@ def main():
                     print("Decision family: " + failed["decision_family"], flush=True)
             if args.declared_priority and process.returncode == 0 and len(raw) <= 4096:
                 blockers = json.loads(raw).get("native_blockers_observed")
-                if type(blockers) is not bool:
+                if (
+                    type(blockers) is not bool
+                    or args.blocked_combat
+                    and blockers is not True
+                ):
                     raise transport.ProofError("LIVE_DECLARED_BLOCKERS_SHAPE")
                 expected["native_blockers_observed"] = blockers
             if (
@@ -303,7 +324,9 @@ def main():
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
     print(
-        "Real XMage observed the explicit pass to postcombat main; combat cleared with source incarnation and life totals unchanged."
+        "Real XMage declared visible AI blockers against the selected Memnite; the read-only public assignment validated. No blocked-damage or human blocker-choice proof."
+        if args.blocked_combat
+        else "Real XMage observed the explicit pass to postcombat main; combat cleared with source incarnation and life totals unchanged."
         if args.complete_combat
         else "Real XMage accepted the explicit damage-window pass; native combat-damage step and one-point defender life decrease observed in the public 1/1 fixture."
         if args.combat_damage
