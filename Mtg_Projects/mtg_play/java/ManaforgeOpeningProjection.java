@@ -15,7 +15,7 @@ public final class ManaforgeOpeningProjection {
         private ChoiceException(String code){super(code);this.code=code;}
     }
     private long revision;
-    private boolean coreCombat;
+    private boolean coreCombat;private JsonObject numericPrompt;private final Set<String> stringOptions=new HashSet<>();
     private String decision, nativeGame;
     private Long nativeDecision, nativeCycle;
     private final Map<String,Boolean> options=new HashMap<>();
@@ -30,6 +30,10 @@ public final class ManaforgeOpeningProjection {
     }
     public synchronized JsonObject claimAction(String wire,String trustedSession,String trustedViewer,String currentGame,String currentEngineViewer,long currentNativeDecision,long currentNativeCycle) throws IOException {
         return claim(wire,trustedSession,trustedViewer,currentGame,currentEngineViewer,currentNativeDecision,currentNativeCycle,true);
+    }
+    public synchronized JsonObject claimOperation(String wire,String trustedSession,String trustedViewer,String currentGame,String currentEngineViewer,long currentNativeDecision,long currentNativeCycle) throws IOException {
+        JsonObject envelope=WireMessages.parse(wire),body=envelope.getAsJsonObject("body");String operation=body.get("operation").getAsString();if(!"choose_number".equals(operation) && !"choose_amounts".equals(operation))return "perform".equals(operation)?claimAction(wire,trustedSession,trustedViewer,currentGame,currentEngineViewer,currentNativeDecision,currentNativeCycle):claimBoolean(wire,trustedSession,trustedViewer,currentGame,currentEngineViewer,currentNativeDecision,currentNativeCycle);
+        if(!session.equals(trustedSession))throw new ChoiceException("SESSION_MISMATCH");if(!viewer.equals(trustedViewer) || !engineViewer.equals(currentEngineViewer))throw new ChoiceException("VIEWER_MISMATCH");if(decision==null || consumed || numericPrompt==null || !Objects.equals(nativeGame,currentGame) || nativeDecision!=currentNativeDecision || nativeCycle!=currentNativeCycle)throw new ChoiceException("STALE_DECISION");String mismatch=WireMessages.checkBinding(wire,session,viewer,revision,decision);if(mismatch!=null)throw new ChoiceException(mismatch);JsonObject response;try{response=NativeCombatChoices.numericResponse(numericPrompt,body);}catch(RuntimeException invalid){throw new ChoiceException("ACTION_UNAVAILABLE");}response.addProperty("protocol",1);response.addProperty("command","respond");response.add("request_id",envelope.get("message_id").deepCopy());response.addProperty("game_id",nativeGame);response.addProperty("decision_id",nativeDecision);invalidateDecision();return response;
     }
     private JsonObject claim(String wire,String trustedSession,String trustedViewer,
             String currentGame,String currentEngineViewer,long currentNativeDecision,long currentNativeCycle,boolean action) throws IOException {
@@ -46,14 +50,14 @@ public final class ManaforgeOpeningProjection {
                   : !operation.equals("choose") || !(options.containsKey(body.get("option_id").getAsString()) || nativeOptions.containsKey(body.get("option_id").getAsString())))throw new ChoiceException("ACTION_UNAVAILABLE");
         Boolean answer=action?null:options.get(body.get("option_id").getAsString());
         String source=action?nativeActions.get(body.get("action_id").getAsString()):nativeOptions.get(body.get("option_id").getAsString());
-        consumed=true;options.clear();nativeActions.clear();nativeOptions.clear();
+        boolean stringResponse=!action && stringOptions.contains(body.get("option_id").getAsString());consumed=true;options.clear();nativeActions.clear();nativeOptions.clear();stringOptions.clear();numericPrompt=null;
         JsonObject command=new JsonObject();command.addProperty("protocol",1);command.addProperty("command","respond");
         command.add("request_id",envelope.get("message_id").deepCopy());command.addProperty("game_id",nativeGame);
         boolean objectResponse=source!=null;
-        command.addProperty("decision_id",nativeDecision);command.addProperty("kind",objectResponse?"object":"boolean");if(objectResponse)command.addProperty("value",source);else command.addProperty("value",action?false:answer);
+        command.addProperty("decision_id",nativeDecision);command.addProperty("kind",objectResponse?(stringResponse?"string":"object"):"boolean");if(objectResponse)command.addProperty("value",source);else command.addProperty("value",action?false:answer);
         return command;
     }
-    public synchronized void invalidateDecision(){decision=null;nativeGame=null;nativeDecision=null;nativeCycle=null;options.clear();nativeActions.clear();nativeOptions.clear();consumed=true;}
+    public synchronized void invalidateDecision(){decision=null;nativeGame=null;nativeDecision=null;nativeCycle=null;options.clear();nativeActions.clear();nativeOptions.clear();stringOptions.clear();numericPrompt=null;consumed=true;}
 
     public ManaforgeOpeningProjection(String session,String viewer,String engineViewer,Map<String,CardIdentity> bindings) {
         this.session=session;this.viewer=viewer;this.engineViewer=engineViewer;
@@ -168,12 +172,13 @@ public final class ManaforgeOpeningProjection {
         JsonObject result=projectCoreCombat(view,prompt);result.addProperty("status","finished");result.addProperty("result",outcome);result.add("priority_player_id",JsonNull.INSTANCE);result.add("decision",JsonNull.INSTANCE);result.add("actions",new JsonArray());invalidateDecision();return result;
     }
     /** Native legal declarations/targets for either 1v1 seat; no client-side rules. */
-    public synchronized JsonObject projectCoreCombat(JsonObject raw,JsonObject prompt) throws IOException {
+    public synchronized JsonObject projectCoreCombat(JsonObject raw,JsonObject prompt) throws IOException {return projectCoreCombat(raw,prompt,false);}
+    public synchronized JsonObject projectCoreCombat(JsonObject raw,JsonObject prompt,boolean spells) throws IOException {
         coreCombat=true;
         try {
             boolean priority="GAME_SELECT".equals(text(prompt,"kind")) && Boolean.TRUE.equals(flag(prompt,"is_priority"));
             boolean declaration="GAME_SELECT".equals(text(prompt,"kind")) && !priority && (prompt.has("attackers") ^ prompt.has("blockers"));
-            return project(raw,prompt,priority,false,raw.getAsJsonArray("stack").size()>0,declaration,true,raw.getAsJsonArray("combat").size()>0,true,true);
+            return project(raw,prompt,priority,spells || "GAME_CHOOSE_ABILITY".equals(text(prompt,"kind")),raw.getAsJsonArray("stack").size()>0,declaration,true,raw.getAsJsonArray("combat").size()>0,true,true);
         } finally {coreCombat=false;}
     }
     public synchronized JsonObject projectTurnCombat(JsonObject raw,JsonObject prompt,boolean includeAttackers,boolean assignment) throws IOException {
@@ -196,11 +201,13 @@ public final class ManaforgeOpeningProjection {
             require(engineViewer.equals(raw.get("viewer").getAsString()));
             boolean priority="GAME_SELECT".equals(prompt.get("kind").getAsString()) && Boolean.TRUE.equals(flag(prompt,"is_priority"));
             boolean discard=turnMode && "GAME_TARGET".equals(text(prompt,"kind")) && "CLEANUP".equals(text(raw,"step")) && "END".equals(text(raw,"phase")) && raw.getAsJsonArray("hand").size()>7;
+            boolean numeric=coreCombat && ("GAME_GET_AMOUNT".equals(text(prompt,"kind")) || "GAME_GET_MULTI_AMOUNT".equals(text(prompt,"kind")));
+            boolean stringChoice=coreCombat && "GAME_CHOOSE_CHOICE".equals(text(prompt,"kind"));
             boolean targeting=coreCombat && "GAME_TARGET".equals(text(prompt,"kind")) && !discard;
             boolean blocking=coreCombat && attackFinish && prompt.has("blockers");
             boolean ability=includeSpells && "GAME_CHOOSE_ABILITY".equals(prompt.get("kind").getAsString());
             require(!omitStack || priority || coreCombat);
-            require("GAME_ASK".equals(prompt.get("kind").getAsString()) || priority || ability || attackFinish || discard || targeting);
+            require("GAME_ASK".equals(prompt.get("kind").getAsString()) || priority || ability || attackFinish || discard || targeting || numeric || stringChoice);
             if(attackFinish)require("GAME_SELECT".equals(text(prompt,"kind")) && Boolean.FALSE.equals(flag(prompt,"is_priority"))
                 && (blocking?prompt.has("blockers") && !prompt.has("attackers"):prompt.has("attackers") && !prompt.has("blockers")) && prompt.get(blocking?"blockers":"attackers").isJsonArray() && prompt.getAsJsonArray(blocking?"blockers":"attackers").size()<=256);
             require(!priority || (!prompt.has("attackers") && !prompt.has("blockers")));
@@ -219,7 +226,7 @@ public final class ManaforgeOpeningProjection {
                 boolean local=engineViewer.equals(id);found|=local;
                 String publicId=local?viewer:players.computeIfAbsent(id,ignored->opaque());
                 names.put(row.get("name").getAsString(),publicId);
-                if(!priority && !ability && !attackFinish && !discard && !targeting)empty(row,"battlefield");else for(JsonElement permanent:row.getAsJsonArray("battlefield"))battlefield.add(permanent.getAsJsonObject());
+                if(!priority && !ability && !attackFinish && !discard && !targeting && !coreCombat)empty(row,"battlefield");else for(JsonElement permanent:row.getAsJsonArray("battlefield"))battlefield.add(permanent.getAsJsonObject());
                 if(turnMode){for(JsonElement graveItem:row.getAsJsonArray("graveyard"))graveOwners.put(graveItem.getAsJsonObject(),publicId);}else empty(row,"graveyard");empty(row,"command");seatNames.put(row.get("name").getAsString(),publicId);
                 PlayerView seat=new PlayerView();seat.player_id=publicId;seat.name=local?"You":"Player "+(seats.size()+1);
                 seat.life=integer(row,"life");seat.hand_count=integer(row,"hand_count");seat.library_count=integer(row,"library_count");
@@ -245,12 +252,13 @@ public final class ManaforgeOpeningProjection {
                 if(!hidden && !Boolean.TRUE.equals(card.face_down)) {
                     CardCharacteristics c=new CardCharacteristics();c.name=text(row,"name");c.power=text(row,"power");c.toughness=text(row,"toughness");
                     c.type_line=text(row,"type");c.color=text(row,"color");
+                    if(coreCombat){c.loyalty=text(row,"loyalty");c.defense=text(row,"defense");}
                     if(row.has("view_rules") && row.get("view_rules").isJsonArray()) {
                         List<String> lines=new ArrayList<>();for(JsonElement line:row.getAsJsonArray("view_rules")) {
                             JsonObject value=new JsonObject();value.add("text",line);lines.add(text(value,"text"));
                         }c.engine_view_text=lines.toArray(new String[0]);
                     }
-                    c.unsupported_fields=new String[]{"current_abilities","counters","loyalty","defense","transformed","is_copy","flipped"};card.characteristics=c;
+                    c.unsupported_fields=coreCombat && row.has("loyalty") && row.has("defense")?new String[]{"current_abilities","counters","transformed","is_copy","flipped"}:new String[]{"current_abilities","counters","loyalty","defense","transformed","is_copy","flipped"};card.characteristics=c;
                     CardIdentity binding=viewer.equals(card.owner_id)?printings.get(text(row,"set")+"/"+text(row,"number")):null;
                     if(binding!=null)card.card_identity=JSON.fromJson(JSON.toJson(binding),CardIdentity.class);
                 } else card.hidden=true;
@@ -290,10 +298,16 @@ public final class ManaforgeOpeningProjection {
                 actions.add(pass);offeredNative.put(pass.action_id,null);
             }
             result.actions=actions.toArray(new LegalAction[0]);result.actions_complete=false;
-            ChoiceRequest choice=new ChoiceRequest();choice.decision_id=opaque();choice.player_id=viewer;choice.family=priority || ability || attackFinish || discard || targeting?"selection":"boolean";
+            ChoiceRequest choice=new ChoiceRequest();choice.decision_id=opaque();choice.player_id=viewer;choice.family=priority || ability || attackFinish || discard || targeting || stringChoice?"selection":"boolean";
             choice.prompt=text(prompt,"message");choice.cancellable=false;choice.can_finish=false;choice.is_priority=priority;choice.amounts=new AmountConstraint[0];
             Map<String,String> offeredOptions=new HashMap<>();
-            if(targeting) {
+            if(numeric) {
+                choice.family="GAME_GET_AMOUNT".equals(text(prompt,"kind"))?"number":"amounts";choice.minimum=integer(prompt,"min");choice.maximum=integer(prompt,"max");require(choice.minimum!=null && choice.maximum!=null && choice.minimum>=Integer.MIN_VALUE && choice.maximum<=Integer.MAX_VALUE && choice.minimum<=choice.maximum);choice.options=new ChoiceOption[0];List<AmountConstraint> ranges=new ArrayList<>();
+                if("amounts".equals(choice.family)){JsonArray amounts=prompt.getAsJsonArray("amounts");require(amounts.size()>0 && amounts.size()<=256);for(JsonElement item:amounts){JsonObject row=item.getAsJsonObject();AmountConstraint range=new AmountConstraint();range.label=text(row,"message");range.minimum=integer(row,"min");range.maximum=integer(row,"max");range.defaultValue=integer(row,"default");require(range.label!=null && range.minimum!=null && range.maximum!=null && range.defaultValue!=null && range.minimum>=Integer.MIN_VALUE && range.maximum<=Integer.MAX_VALUE && range.minimum<=range.maximum && range.defaultValue>=range.minimum && range.defaultValue<=range.maximum);ranges.add(range);}}choice.amounts=ranges.toArray(new AmountConstraint[0]);
+            } else if(stringChoice) {
+                Map<String,String> offered=new LinkedHashMap<>();if(prompt.has("key_choices") && prompt.get("key_choices").isJsonObject())for(Map.Entry<String,JsonElement> entry:prompt.getAsJsonObject("key_choices").entrySet()){JsonObject label=new JsonObject();label.add("value",entry.getValue());offered.put(entry.getKey(),text(label,"value"));}
+                if(offered.isEmpty() && prompt.has("choices") && prompt.get("choices").isJsonArray())for(JsonElement item:prompt.getAsJsonArray("choices")){JsonObject label=new JsonObject();label.add("value",item);String value=text(label,"value");require(!offered.containsKey(value));offered.put(value,value);}require(offered.size()>0 && offered.size()<=256);List<ChoiceOption> entries=new ArrayList<>();for(Map.Entry<String,String> entry:offered.entrySet()){require(entry.getValue()!=null);ChoiceOption option=new ChoiceOption();option.option_id=opaque();option.label=entry.getValue();option.selected=false;entries.add(option);offeredOptions.put(option.option_id,entry.getKey());stringOptions.add(option.option_id);}choice.options=entries.toArray(new ChoiceOption[0]);
+            } else if(targeting) {
                 JsonArray targets=prompt.getAsJsonArray("targets");require(targets.size()>0 && targets.size()<=256);Set<String> unique=new HashSet<>();List<ChoiceOption> entries=new ArrayList<>();
                 for(JsonElement item:targets){require(item.isJsonPrimitive() && item.getAsJsonPrimitive().isString() && unique.add(item.getAsString()));String id=item.getAsString();GameObject card=null;for(GameObject object:cards)if(object.object_id.equals(visibleReferences.get(id)))card=object;String label=null;if(engineViewer.equals(id))label="You";else if(players.containsKey(id)){for(PlayerView seat:seats)if(seat.player_id.equals(players.get(id)))label=seat.name;}else if(card!=null && !card.hidden && Boolean.FALSE.equals(card.face_down) && card.characteristics!=null)label=card.characteristics.name;require(label!=null);ChoiceOption option=new ChoiceOption();option.option_id=opaque();option.label=label;option.selected=false;entries.add(option);offeredOptions.put(option.option_id,id);}
                 choice.options=entries.toArray(new ChoiceOption[0]);
@@ -317,7 +331,7 @@ public final class ManaforgeOpeningProjection {
                 for(JsonElement item:raw.getAsJsonArray("combat")){JsonObject group=item.getAsJsonObject();CombatAssignment assignment=new CombatAssignment();List<String> attackers=new ArrayList<>(),blockers=new ArrayList<>();String attackingSide=null;
                     require(group.getAsJsonArray("attackers").size()>0 && group.getAsJsonArray("attackers").size()<=256 && group.getAsJsonArray("blockers").size()<=256);
                     for(JsonElement source:group.getAsJsonArray("attackers")){String id=source.getAsString();require(assigned.add(id));GameObject card=visibleCard(cards,visibleReferences.get(id));require(card!=null);if(attackingSide==null)attackingSide=card.controller_id;require(attackingSide.equals(card.controller_id));attackers.add(card.object_id);}
-                    require(attackingSide.equals(result.active_player_id));String defender=group.get("defender").getAsString(),defendingSide=engineViewer.equals(defender)?viewer:players.get(defender);if(defendingSide!=null){require(!defendingSide.equals(attackingSide));assignment.defender_id=defendingSide;}else{GameObject card=visibleCard(cards,visibleReferences.get(defender));require(card!=null && card.characteristics!=null && card.characteristics.type_line!=null && (card.characteristics.type_line.contains("Planeswalker") || card.characteristics.type_line.contains("Battle")));assignment.defender_id=card.object_id;}
+                    require(attackingSide.equals(result.active_player_id));String defender=group.get("defender").getAsString(),defendingSide=engineViewer.equals(defender)?viewer:players.get(defender);if(defendingSide!=null){require(!defendingSide.equals(attackingSide));assignment.defender_id=defendingSide;}else{GameObject card=visibleCard(cards,visibleReferences.get(defender));require(card!=null && card.characteristics!=null && card.characteristics.type_line!=null && (card.characteristics.type_line.contains("Planeswalker") || card.characteristics.type_line.contains("Battle")));require(!card.characteristics.type_line.contains("Planeswalker") || !attackingSide.equals(card.controller_id));assignment.defender_id=card.object_id;}
                     Set<String> unique=new HashSet<>();for(JsonElement source:group.getAsJsonArray("blockers")){require(unique.add(source.getAsString()));GameObject card=visibleCard(cards,visibleReferences.get(source.getAsString()));require(card!=null && !attackingSide.equals(card.controller_id) && (defendingSide==null || defendingSide.equals(card.controller_id)));blockers.add(card.object_id);}
                     assignment.attackers=attackers.toArray(new String[0]);assignment.blockers=blockers.toArray(new String[0]);assignment.blocked=flag(group,"blocked");require(assignment.blocked!=null && (blockers.isEmpty() || assignment.blocked));groups.add(assignment);
                 }result.combat=groups.toArray(new CombatAssignment[0]);
@@ -339,7 +353,8 @@ public final class ManaforgeOpeningProjection {
             JsonObject output=JSON.toJsonTree(result).getAsJsonObject();
             nativeGame=raw.get("game_id").getAsString();nativeDecision=integer(prompt,"decision_id");nativeCycle=integer(raw,"cycle");
             decision=choice.decision_id;consumed=false;
-            if(!priority && !ability && !attackFinish && !discard && !targeting){options.put(choice.options[0].option_id,true);options.put(choice.options[1].option_id,false);}
+            if(!priority && !ability && !attackFinish && !discard && !targeting && !numeric && !stringChoice){options.put(choice.options[0].option_id,true);options.put(choice.options[1].option_id,false);}
+            if(numeric)numericPrompt=prompt.deepCopy();
             nativeOptions.putAll(offeredOptions);
             nativeActions.putAll(offeredNative);
             revision++;return output;

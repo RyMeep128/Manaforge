@@ -121,8 +121,15 @@ public final class ManaforgeUnityOpening {
             String engine,String hash,byte[] key,Path ready,VerifiedAttackSubmit submit,BooleanSupplier cancelled) throws Exception {
         serveChoice(snapshot,projection,game,engineViewer,decision,cycle,engine,hash,key,ready,command->{VerifiedAttackResult result=submit.submit(command);return result==null?null:new ChoiceEvidence(null,result.evidence,result.snapshot,result.followup);},cancelled,null);
     }
+    public static void serveTurns(TurnOffer initial,ManaforgeOpeningProjection projection,String game,String engineViewer,String engine,String hash,byte[] key,Path ready,BooleanSupplier cancelled) throws Exception {
+        serveChoice(initial.snapshot(),projection,game,engineViewer,0,0,engine,hash,key,ready,null,cancelled,null,initial);
+    }
     private static void serveChoice(JsonObject snapshot,ManaforgeOpeningProjection projection,String game,String engineViewer,long decision,long cycle,
             String engine,String hash,byte[] key,Path ready,ChoiceSubmit submit,BooleanSupplier cancelled,NextPriority continuation) throws Exception {
+        serveChoice(snapshot,projection,game,engineViewer,decision,cycle,engine,hash,key,ready,submit,cancelled,continuation,null);
+    }
+    private static void serveChoice(JsonObject snapshot,ManaforgeOpeningProjection projection,String game,String engineViewer,long decision,long cycle,
+            String engine,String hash,byte[] key,Path ready,ChoiceSubmit submit,BooleanSupplier cancelled,NextPriority continuation,TurnOffer initialTurn) throws Exception {
         try(ServerSocket listener=new ServerSocket(0,1,InetAddress.getByName("127.0.0.1"))) {
             listener.setSoTimeout(500);
             JsonObject address=new JsonObject();address.addProperty("host","127.0.0.1");address.addProperty("port",listener.getLocalPort());
@@ -136,6 +143,8 @@ public final class ManaforgeUnityOpening {
                 GatewayHandshake.ViewerContext context=ViewerChallengeHandshake.accept(frames,client.toString(),gateway.toString(),key,5000,cancelled);
                 try(ManaforgeOpeningSession owner=new ManaforgeOpeningSession(context,projection,snapshot.toString())) {
                     frames.write(snapshot.toString(),5000,cancelled);
+                    TurnOffer turn=initialTurn;
+                    if(initialTurn==null){
                     String wire=frames.read(60000,cancelled);SubmissionLedger.Prepared prepared=owner.dispatch(wire,game,engineViewer,decision,cycle);
                     frames.write(prepared.receipt().toString(),5000,cancelled);
                     if(!prepared.shouldSubmit)throw new IOException("LIVE_UNITY_CHOICE_REJECTED");
@@ -162,7 +171,6 @@ public final class ManaforgeUnityOpening {
                         if(evidence==null || evidence.ability==null)throw new IOException("LIVE_UNITY_CONTINUATION_UNCONFIRMED");
                         next=continuation.next();owner.observe(next.snapshot.toString());frames.write(next.snapshot.toString(),5000,cancelled);
                     }
-                    TurnOffer turn=null;
                     if(next!=null) {
                         for(int stage=0;stage<3 && next!=null;stage++) {
                             PriorityOffer following=null;
@@ -190,6 +198,7 @@ public final class ManaforgeUnityOpening {
                             next=following;
                         }
                         if(next!=null)throw new IOException("LIVE_UNITY_PRIORITY_STAGE_LIMIT");
+                    }
                     }
                     for(int turnStage=0;turn!=null && turnStage<(Boolean.getBoolean("manaforge.completeGame")?512:128);turnStage++) {
                         TurnOffer offer=turn;turn=null;boolean sent=false;

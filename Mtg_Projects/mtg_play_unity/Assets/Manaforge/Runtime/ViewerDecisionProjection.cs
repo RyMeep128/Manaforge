@@ -50,7 +50,7 @@ namespace Manaforge.Play
     }
     public sealed class ProjectedCombatAssignment
     {
-        public IReadOnlyList<string> AttackerNames {get;} public IReadOnlyList<string> BlockerNames {get;} public IReadOnlyList<long?> BlockerDamage {get;} public string DefenderName {get;} public string DefenderId {get;} public long? DefenderLife {get;} public int BlockerCount {get;}
+        public IReadOnlyList<string> AttackerNames {get;} public IReadOnlyList<string> BlockerNames {get;} public IReadOnlyList<long?> BlockerDamage {get;} public string DefenderName {get;} public string DefenderId {get;} public string DefenderLoyalty {get;} public string DefenderDefense {get;} public long? DefenderLife {get;} public int BlockerCount {get;}
         private static string ObjectName(JObject snapshot,string id,string fallback)
         {
             var card=snapshot["objects"].FirstOrDefault(value=>(string)value["object_id"]==id);
@@ -59,7 +59,7 @@ namespace Manaforge.Play
         internal ProjectedCombatAssignment(JToken assignment,JObject snapshot)
         {
             AttackerNames=Array.AsReadOnly(assignment["attackers"].Select(id=>ObjectName(snapshot,(string)id,"Unknown attacker")).ToArray());
-            DefenderId=(string)assignment["defender_id"];var defender=snapshot["players"].FirstOrDefault(player=>(string)player["player_id"]==(string)assignment["defender_id"]);DefenderName=(string)defender?["name"]??ObjectName(snapshot,DefenderId,"Unknown defender");DefenderLife=(long?)defender?["life"];
+            DefenderId=(string)assignment["defender_id"];var defender=snapshot["players"].FirstOrDefault(player=>(string)player["player_id"]==(string)assignment["defender_id"]);DefenderName=(string)defender?["name"]??ObjectName(snapshot,DefenderId,"Unknown defender");DefenderLife=(long?)defender?["life"];var defended=snapshot["objects"].FirstOrDefault(card=>(string)card["object_id"]==DefenderId);DefenderLoyalty=(string)(defended?["characteristics"] as JObject)?["loyalty"];DefenderDefense=(string)(defended?["characteristics"] as JObject)?["defense"];
             BlockerDamage=Array.AsReadOnly(assignment["blockers"].Select(id=>(long?)snapshot["objects"].FirstOrDefault(card=>(string)card["object_id"]==(string)id)?["damage"]).ToArray());
             BlockerNames=Array.AsReadOnly(assignment["blockers"].Select(id=>ObjectName(snapshot,(string)id,"Unknown blocker")).ToArray());BlockerCount=BlockerNames.Count;
         }

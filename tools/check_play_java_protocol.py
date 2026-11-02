@@ -66,6 +66,7 @@ def main():
         sources = [
             PLAY / "java/ManaforgeOpeningProjection.java",
             PLAY / "java/NativeCastCorrelation.java",
+            PLAY / "java/NativeCombatChoices.java",
             PLAY / "java/ManaforgeMetadataChannel.java",
             PROTOCOL / "java-test/MetadataChannelChecks.java",
             PLAY / "java/ManaforgeOpeningSession.java",
@@ -110,7 +111,8 @@ def main():
             PROTOCOL / "java-test/SessionBoundaryFixtureConsumer.java",
             PROTOCOL / "java-test/DispatchFixtureConsumer.java",
             PLAY / "java/payment/manaforge/payment/PaymentCoordinator.java",
-            PLAY / "java/payment-gateway/manaforge/payment/gateway/GatewayPaymentPort.java",
+            PLAY
+            / "java/payment-gateway/manaforge/payment/gateway/GatewayPaymentPort.java",
             PROTOCOL / "java-test/InternalPaymentFixtureConsumer.java",
         ]
         subprocess.run(
@@ -299,10 +301,26 @@ def main():
             timeout=60,
         )
 
-        subprocess.run([runtime, "-cp", str(workspace) + os.pathsep + str(jar),
-                        "MetadataChannelChecks"], check=True, timeout=60)
-        subprocess.run([runtime, "-cp", str(workspace) + os.pathsep + str(jar),
-                        "OpeningSessionChecks"], check=True, timeout=60)
+        subprocess.run(
+            [
+                runtime,
+                "-cp",
+                str(workspace) + os.pathsep + str(jar),
+                "MetadataChannelChecks",
+            ],
+            check=True,
+            timeout=60,
+        )
+        subprocess.run(
+            [
+                runtime,
+                "-cp",
+                str(workspace) + os.pathsep + str(jar),
+                "OpeningSessionChecks",
+            ],
+            check=True,
+            timeout=60,
+        )
 
         if args.dummy_output:
             output = args.dummy_output.resolve()

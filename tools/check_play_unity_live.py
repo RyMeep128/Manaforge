@@ -23,6 +23,11 @@ def main():
     artifacts = ROOT / "Mtg_Projects/mtg_play_unity/Artifacts"
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
+        "--human-blocking",
+        action="store_true",
+        help="Dedicated public Ornithopter versus Memnite human-blocking/damage scenario; conflicts with other scenarios",
+    )
+    parser.add_argument(
         "--complete-game",
         action="store_true",
         help="Continue core combat through natural native victory; requires --core-combat",
@@ -164,7 +169,19 @@ def main():
         default=artifacts / ("UnityLive-" + uuid.uuid4().hex[:10]),
     )
     args = parser.parse_args()
-    if args.complete_game and not args.core_combat:
+    if args.human_blocking:
+        args.native_metadata = True
+    if args.human_blocking and (
+        args.core_combat
+        or args.select_attacker
+        or args.finish_attacks
+        or args.creature_ability
+        or args.first_land
+        or args.priority_pass
+        or args.play_rounds
+    ):
+        parser.error("--human-blocking is a separate scenario")
+    if args.complete_game and not (args.core_combat or args.human_blocking):
         parser.error("--complete-game requires --core-combat")
     if args.core_combat and (not args.repeat_cycle or args.play_rounds):
         parser.error("--core-combat requires --repeat-cycle and no --play-rounds")
@@ -191,7 +208,10 @@ def main():
     if args.finish_selected_attack and not args.select_attacker:
         parser.error("--finish-selected-attack requires --select-attacker")
     if args.native_metadata and not (
-        args.creature_ability or args.finish_attacks or args.select_attacker
+        args.creature_ability
+        or args.finish_attacks
+        or args.select_attacker
+        or args.human_blocking
     ):
         parser.error(
             "--native-metadata requires --creature-ability, --finish-attacks or --select-attacker"
@@ -306,7 +326,8 @@ def main():
                         "-Dfile.encoding=UTF-8",
                         "-Djava.net.preferIPv4Stack=true",
                         f"-Dmanaforge.playRounds={args.play_rounds}",
-                        f"-Dmanaforge.coreCombat={str(args.core_combat).lower()}",
+                        f"-Dmanaforge.coreCombat={str(args.core_combat or args.human_blocking).lower()}",
+                        f"-Dmanaforge.coreFromOpening={str(args.human_blocking).lower()}",
                         f"-Dmanaforge.completeGame={str(args.complete_game).lower()}",
                         *(
                             ["-Dmanaforge.repeatCycle=true"]
@@ -450,6 +471,10 @@ def main():
                 if args.creature_ability:
                     command += ["-manaforgeLiveCreature", "1"]
                 command += [
+                    "-manaforgeLiveHumanBlocking",
+                    "1" if args.human_blocking else "0",
+                ]
+                command += [
                     "-manaforgeLiveCompleteGame",
                     "1" if args.complete_game else "0",
                 ]
@@ -532,6 +557,7 @@ def main():
                         or args.finish_attacks
                         or args.select_attacker
                     )
+                    and not args.human_blocking
                     and ready.get("mulligan_controls") is not True
                 ):
                     raise RuntimeError("LIVE_UNITY_MULLIGAN_CONTROLS_NOT_PRESENTED")
@@ -728,17 +754,20 @@ def main():
                         raise RuntimeError("LIVE_UNITY_CORE_COMBAT_NOT_PRESENTED")
                 if args.complete_game:
                     game_result = wait_file("game-ready", 240)
-                    if (
-                        game_result.get("game_presented") is not True
-                        or game_result.get("native_game_outcome") != "win"
-                    ):
+                    if game_result.get("game_presented") is not True or game_result.get(
+                        "native_game_outcome"
+                    ) != ("loss" if args.human_blocking else "win"):
                         raise RuntimeError("LIVE_UNITY_GAME_RESULT_NOT_PRESENTED")
+                if args.human_blocking:
+                    block_result = wait_file("human-block-ready", 240)
+                    if block_result.get("human_block_presented") is not True:
+                        raise RuntimeError("LIVE_UNITY_HUMAN_BLOCK_NOT_PRESENTED")
                 chosen = wait_file("choice", 60)
                 if (
                     chosen.get("ack_count")
                     != (
                         2 * (chosen.get("snapshot_count", 0) - 1)
-                        if args.loop_turn
+                        if args.loop_turn or args.human_blocking
                         else 10
                         if args.complete_combat
                         else 8
@@ -834,16 +863,21 @@ def main():
                     is not args.continue_priority
                 ):
                     raise RuntimeError("LIVE_UNITY_FOLLOWUP_EVIDENCE_FAILED")
-                if args.native_metadata and any(
-                    native.get(field) is not True
-                    for field in (
-                        "native_stack_source_matched",
-                        "native_cast_instance_matched",
+                if (
+                    args.native_metadata
+                    and not args.human_blocking
+                    and any(
+                        native.get(field) is not True
+                        for field in (
+                            "native_stack_source_matched",
+                            "native_cast_instance_matched",
+                        )
                     )
                 ):
                     raise RuntimeError("LIVE_UNITY_CAST_INSTANCE_UNPROVEN")
                 if (
                     args.native_metadata
+                    and not args.human_blocking
                     and native.get("unity_casting_ability_confirmed")
                     is not args.creature_ability
                 ):
@@ -939,8 +973,17 @@ def main():
                     or native.get("native_maximum_attackers") != 2
                 ):
                     raise RuntimeError("LIVE_UNITY_CORE_COMBAT_EVIDENCE_FAILED")
-                if args.complete_game and native.get("native_game_outcome") != "win":
+                if args.complete_game and native.get("native_game_outcome") != (
+                    "loss" if args.human_blocking else "win"
+                ):
                     raise RuntimeError("LIVE_UNITY_GAME_RESULT_UNPROVEN")
+                if args.human_blocking and (
+                    native.get("native_human_block_combat_observed") is not True
+                    or chosen.get("confirmed_receipt_count")
+                    != chosen.get("snapshot_count", 0) - 1
+                    or chosen.get("uncertain_receipt_count") != 0
+                ):
+                    raise RuntimeError("LIVE_UNITY_HUMAN_BLOCK_UNPROVEN")
                 if args.next_turn_cast and any(
                     native.get(field) is not True
                     for field in (
@@ -1081,7 +1124,7 @@ def main():
                     artwork_presented=args.artwork,
                     artwork_card_count=ready.get("artwork_count", 0),
                 )
-                if args.native_metadata:
+                if args.native_metadata and not args.human_blocking:
                     evidence.update(
                         native_stack_source_matched=True,
                         native_cast_instance_matched=True,
@@ -1125,8 +1168,19 @@ def main():
                         else 1,
                         uncertain_receipt_count=0,
                     )
+                if args.human_blocking:
+                    evidence.update(
+                        native_human_block_combat_observed=True,
+                        human_block_presented=True,
+                        snapshot_count=chosen["snapshot_count"],
+                        confirmed_receipt_count=chosen["confirmed_receipt_count"],
+                        uncertain_receipt_count=0,
+                    )
                 if args.complete_game:
-                    evidence.update(native_game_outcome="win", game_presented=True)
+                    evidence.update(
+                        native_game_outcome="loss" if args.human_blocking else "win",
+                        game_presented=True,
+                    )
                 if args.core_combat:
                     evidence.update(
                         native_core_combat_observed=True,
@@ -1283,7 +1337,9 @@ def main():
         json.dumps(evidence, indent=2) + "\n", encoding="utf-8"
     )
     print(
-        "Packaged Unity completed a natural combat victory, presented the authoritative native result, confirmed inputs and reaped owned processes."
+        "Packaged Unity cast a blocker, blocked a native AI attack, observed native blocked damage and cleared the viewer."
+        if args.human_blocking
+        else "Packaged Unity completed a natural combat victory, presented the authoritative native result, confirmed inputs and reaped owned processes."
         if args.complete_game
         else "Packaged Unity selected multiple native attackers, completed damage and cleanup, confirmed inputs and cleared the viewer."
         if args.core_combat

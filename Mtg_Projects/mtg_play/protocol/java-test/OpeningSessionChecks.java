@@ -4,6 +4,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /** Engine-free public fixture over real authenticated sockets and production admission. */
 public final class OpeningSessionChecks {
+    static void numericAdmissionChecks(manaforge.protocol.GatewayHandshake.ViewerContext context) throws Exception {
+        ManaforgeOpeningProjection projection=OpeningProjectionChecks.projection();JsonObject prompt=OpeningProjectionChecks.priorityPrompt();prompt.addProperty("kind","GAME_GET_AMOUNT");prompt.addProperty("is_priority",false);prompt.addProperty("min",0);prompt.addProperty("max",3);JsonObject snapshot=projection.projectCoreCombat(OpeningProjectionChecks.attackState(),prompt);JsonObject command=JsonParser.parseString(OpeningProjectionChecks.perform(snapshotForNumericCommand(snapshot))).getAsJsonObject(),body=command.getAsJsonObject("body");body.addProperty("operation","choose_number");body.remove("action_id");body.addProperty("value",2);command.addProperty("message_id","numeric-input");
+        try(ManaforgeOpeningSession owner=new ManaforgeOpeningSession(context,projection,envelope(snapshot).toString())){if(!owner.dispatch(command.toString(),"raw-game","raw-human",41,8).shouldSubmit)throw new AssertionError("NUMERIC_NOT_ADMITTED");JsonObject nativeCommand=owner.pollNative();if(nativeCommand==null || !"integer".equals(nativeCommand.get("kind").getAsString()) || nativeCommand.get("value").getAsInt()!=2)throw new AssertionError("NUMERIC_NOT_NATIVE");if(owner.dispatch(command.toString(),"raw-game","raw-human",41,8).shouldSubmit || owner.pollNative()!=null)throw new AssertionError("NUMERIC_REPLAYED");}
+    }
+    private static JsonObject snapshotForNumericCommand(JsonObject snapshot){JsonObject temporary=snapshot.deepCopy(),action=new JsonObject();action.addProperty("action_id","command-builder-only");temporary.getAsJsonArray("actions").add(action);return temporary;}
     static void confirmationChecks(JsonObject before,JsonObject prompt,NativeCastCorrelation correlation,JsonObject after,JsonObject metadata) throws Exception {
         byte[] key=new byte[32];String hash=String.join("",java.util.Collections.nCopies(64,"0"));
         JsonObject client=ManaforgeOpeningLoopback.hello("session","human","synthetic-engine",hash,"client");
@@ -16,6 +21,7 @@ public final class OpeningSessionChecks {
             manaforge.protocol.TextFrame.write(peer.getOutputStream(),signed.toString());peer.getOutputStream().flush();
             manaforge.protocol.GatewayHandshake.ViewerContext context=manaforge.protocol.GatewayHandshake.accept(frames,client.toString(),gateway.toString(),key,5000);
             manaforge.protocol.TextFrame.read(peer.getInputStream());
+            numericAdmissionChecks(context);
             ManaforgeOpeningProjection projection=OpeningProjectionChecks.projection();JsonObject snapshot=projection.project(before,prompt,false,true);
             String wire=OpeningProjectionChecks.choose(snapshot,0),id="public-choice";
             try(ManaforgeOpeningSession owner=new ManaforgeOpeningSession(context,projection,envelope(snapshot).toString())) {

@@ -1,5 +1,32 @@
 # Live Unity / Java / XMage integration
 
+## Human blocking, native choices and natural defeat (0.5.202)
+
+```powershell
+python tools/check_play_unity_live.py --human-blocking --no-capture
+python tools/check_play_unity_live.py --human-blocking --complete-game --no-capture
+```
+
+A dedicated single-session fixture now starts at pregame, keeps a public
+Ornithopter hand, casts one blocker, selects it against a native Memnite AI attack,
+chooses an engine-offered attacker, finishes blocking and verifies assignment and
+marked damage. The short mode ends read-only after that combat. The complete mode
+continues to a natural native loss: 69 confirmed inputs, 70 snapshots and no
+uncertain receipts. Victory and shorter-blocking regressions also pass.
+
+Native numeric and string choices now project through the existing number,
+amounts and option contracts. Number bounds, per-recipient bounds, array length,
+totals, integer range and one-shot revision binding are validated before native
+encoding; amounts use XMage's space-separated string format. Option keys remain
+private. Focused tests cover native encoding, illegal totals/options, stale and
+duplicate input, and authenticated numeric dispatch. These are response-consumption
+confirmations; they do not claim a particular damage distribution was observed.
+Loyalty/defense strings now come from native CardView and remain immutable in Unity.
+
+Native human blocking and defeat are now exercised, but real multi-block damage
+allocation, permanent-defender scenarios, keyword matrix, representative combat
+spells and natural draw acceptance remain open. Visual work stays deferred.
+
 ## Natural native victory and terminal result (0.5.201)
 
 ```powershell

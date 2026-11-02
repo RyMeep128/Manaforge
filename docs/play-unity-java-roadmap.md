@@ -1299,3 +1299,15 @@ snapshot is required. The finished result contains no actions, and viewer/proces
 cleanup retains the final outcome and receipts. Draw/loss mapping is tested with
 synthetic terminal evidence; real defeat/draw acceptance and remaining declaration,
 keyword, damage-choice and spell-interaction scenarios are still open.
+
+
+### Human blocking, native choices and natural defeat (0.5.202)
+
+A dedicated pregame-to-combat session now casts an Ornithopter, selects a blocker
+and native attacker target, finishes blocks and verifies assignment plus marked
+damage. The longer variant reaches natural defeat with an authoritative loss,
+69 confirmed inputs and zero uncertain receipts. A normal victory regression also
+passes. Native string/number/multi-amount response encoding and authenticated
+numeric admission are covered by focused tests; current loyalty/defense values
+are projected from native views. Multi-block damage, permanent-defender native
+scenarios, keywords, representative spells and natural draw acceptance remain open.
