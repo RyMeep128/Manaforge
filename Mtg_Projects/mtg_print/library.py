@@ -47,7 +47,7 @@ def _snapshot_existing_project(project_id, project_path, limit=5):
     snapshot = os.path.join(recovery_root(), f'{project_id}-{timestamp}.json')
     write_json_atomic(snapshot, current, ensure_ascii=False)
     paths = sorted(Path(recovery_root()).glob(f'{project_id}-*.json'),
-                   key=lambda item: item.stat().st_mtime, reverse=True)
+                   key=lambda item: (item.stat().st_mtime_ns, item.name), reverse=True)
     for obsolete in paths[max(1, int(limit)):]:
         obsolete.unlink(missing_ok=True)
     return snapshot
@@ -55,7 +55,7 @@ def _snapshot_existing_project(project_id, project_path, limit=5):
 
 def recovery_snapshots(project_id):
     paths = sorted(Path(recovery_root()).glob(f'{project_id}-*.json'),
-                   key=lambda item: item.stat().st_mtime, reverse=True)
+                   key=lambda item: (item.stat().st_mtime_ns, item.name), reverse=True)
     return [str(path) for path in paths]
 
 
