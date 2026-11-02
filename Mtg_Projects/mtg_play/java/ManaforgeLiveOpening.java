@@ -35,7 +35,7 @@ public final class ManaforgeLiveOpening {
     private final boolean observeResolution=Boolean.getBoolean("manaforge.observeResolution");
     private final boolean postResolutionPass=Boolean.getBoolean("manaforge.postResolutionPass");private boolean unityPostResolutionSubmitted,unityPostResolutionConfirmed;
     private final boolean finishAttacks=Boolean.getBoolean("manaforge.finishAttacks");private boolean attackSourceOffered,emptyAttackSubmitted,combatAdvanced,unityAttackFinishSubmitted,unityAttackFinishConfirmed;
-    private final boolean selectAttacker=Boolean.getBoolean("manaforge.selectAttacker");private boolean attackerSelected,attackAssignmentObserved;
+    private final boolean selectAttacker=Boolean.getBoolean("manaforge.selectAttacker");private boolean attackerSelected,attackAssignmentObserved;private JsonObject attackerObservationPrompt;
     private final boolean combatPriority=Boolean.getBoolean("manaforge.combatPriority");private boolean unityCombatPrioritySubmitted,unityCombatPriorityConfirmed;
     private NativeCastCorrelation.AbilityEvidence unityCastEvidence;private String unityCastSource;private boolean unityBattlefieldObserved,unityFollowupConfirmed;
     private JsonObject sourceMetadata(JsonObject view,String source) throws Exception {
@@ -315,7 +315,9 @@ public final class ManaforgeLiveOpening {
                 ManaforgeUnityOpening.serveVerifiedAttacker(envelope,projection,game,engineViewer,decision,cycle,"1.4.62-V1",artifactHash,unityKey,unityReady,command->{
                     if(!"object".equals(command.get("kind").getAsString()) || !unityCastSource.equals(command.get("value").getAsString()))throw new IOException("LIVE_COMBAT_BAD_SELECTION");
                     JsonObject accepted=request(command,"response_sent");if(!new JsonPrimitive(true).equals(accepted.get("accepted")))throw new IOException("LIVE_COMBAT_SELECTION_REJECTED");
-                    attackSourceOffered=true;attackerSelected=true;advancement(cycle,decision);return observeAttackerSelection(before,prompt,command,guard,accepted);
+                    attackSourceOffered=true;attackerSelected=true;advancement(cycle,decision);NativeCastCorrelation.AttackerSelectionEvidence proof=observeAttackerSelection(before,prompt,command,guard,accepted);
+                    JsonObject observed=new JsonObject(),observedBody=new JsonObject();observed.addProperty("wire_version",1);observed.addProperty("message_type","snapshot");observed.addProperty("message_id","attack-assignment");observedBody.addProperty("fixture_only",false);observedBody.add("snapshot",projection.projectReadOnlyAttackAssignment(state,attackerObservationPrompt));observed.add("body",observedBody);
+                    return new ManaforgeUnityOpening.VerifiedAttackerResult(proof,observed);
                 },cancelled::get);return;
             }
             if(unityReady!=null && observeFinish) {
@@ -367,7 +369,7 @@ public final class ManaforgeLiveOpening {
             JsonObject observedMetadata=sourceMetadata(state,unityCastSource);
             NativeCastCorrelation.AttackerSelectionEvidence proof=NativeCastCorrelation.attackerSelectionEvidence(before,prompt,command,metadata,accepted,state,event,observedMetadata,unityCastSource);
             if(proof==null)throw new IOException("LIVE_ATTACK_ASSIGNMENT_UNPROVEN");
-            attackAssignmentObserved=true;return proof;
+            attackAssignmentObserved=true;attackerObservationPrompt=event.deepCopy();return proof;
         }
         throw new IOException("LIVE_ATTACK_SELECTION_TIMEOUT");
     }

@@ -107,6 +107,9 @@ public final class OpeningSessionChecks {
             if(!"confirmed".equals(receipt.getAsJsonObject("body").get("outcome").getAsString()) || !receipt.equals(owner.confirmAttackerSelection("land-action",proof)))throw new AssertionError("ATTACKER_CONFIRMATION_FAILED");
             manaforge.protocol.SubmissionLedger.Prepared duplicate=owner.dispatch(wire,"raw-game","raw-human",41,8);
             if(duplicate.shouldSubmit || !receipt.equals(duplicate.receipt()) || owner.pollNative()!=null)throw new AssertionError("CONFIRMED_ATTACKER_REPLAYED");
+            JsonObject observation=envelope(projection.projectReadOnlyAttackAssignment(after,next));observation.addProperty("message_id","attack-assignment");new ManaforgeUnityOpening.VerifiedAttackerResult(proof,observation);owner.observe(observation.toString());
+            try{new ManaforgeUnityOpening.VerifiedAttackerResult(proof,envelope(snapshot));throw new AssertionError("ACTIONABLE_ATTACKER_RESULT_ACCEPTED");}catch(IllegalArgumentException expected){}
+            if(owner.dispatch(wire,"raw-game","raw-human",42,8).shouldSubmit || owner.pollNative()!=null)throw new AssertionError("OBSERVED_ATTACKER_REPLAYED");
             owner.disconnected();if(!receipt.equals(owner.receiptFor("land-action")))throw new AssertionError("ATTACKER_DISCONNECT_LOST_CONFIRMATION");
         }
     }

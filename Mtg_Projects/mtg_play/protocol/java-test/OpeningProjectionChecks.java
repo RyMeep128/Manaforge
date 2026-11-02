@@ -96,6 +96,21 @@ public final class OpeningProjectionChecks {
         after.add("combat",JsonParser.parseString("[{\"attackers\":[\"raw-card\"],\"blockers\":[],\"defender\":\"raw-ai\",\"blocked\":false}]"));
         accepted.addProperty("event","response_sent");accepted.addProperty("accepted",true);accepted.add("request_id",command.get("request_id"));
         check(NativeCastCorrelation.observesAttackerSelection(before,prompt,command,attackMetadata(false),accepted,after,next,attackMetadata(false),"raw-card"));
+        JsonObject observed=projection.projectReadOnlyAttackAssignment(after,next);shape(observed);
+        check(observed.get("decision").isJsonNull() && observed.getAsJsonArray("actions").size()==0 && observed.getAsJsonArray("combat").size()==1);
+        check(!observed.toString().contains("raw-card") && !observed.toString().contains("raw-ai") && !observed.toString().contains("OPPONENT_SECRET"));
+        check(observed.getAsJsonArray("combat").get(0).getAsJsonObject().getAsJsonArray("attackers").get(0).equals(observed.getAsJsonArray("objects").get(0).getAsJsonObject().get("object_id")));
+        fails("STALE_DECISION",()->projection.claimAction(choice,"session","human","raw-game","raw-human",42,8));
+        for(int mode=0;mode<5;mode++) {
+            JsonObject bad=after.deepCopy();JsonObject group=bad.getAsJsonArray("combat").get(0).getAsJsonObject();
+            if(mode==0)group.addProperty("defender","unknown");
+            if(mode==1)group.addProperty("defender","raw-human");
+            if(mode==2)group.getAsJsonArray("blockers").add("unknown");
+            if(mode==3)group.addProperty("blocked",true);
+            if(mode==4)bad.getAsJsonArray("players").get(0).getAsJsonObject().getAsJsonArray("battlefield").get(0).getAsJsonObject().addProperty("hidden",true);
+            fails("LIVE_OPENING_PROJECTION_UNSUPPORTED",()->projection.projectReadOnlyAttackAssignment(bad,next));
+        }
+
         for(int mode=0;mode<9;mode++) {
             JsonObject bad=after.deepCopy(),badNext=next.deepCopy(),badAccepted=accepted.deepCopy(),metadata=attackMetadata(false);JsonObject group=bad.getAsJsonArray("combat").get(0).getAsJsonObject();
             if(mode==0)group.addProperty("defender","raw-human");

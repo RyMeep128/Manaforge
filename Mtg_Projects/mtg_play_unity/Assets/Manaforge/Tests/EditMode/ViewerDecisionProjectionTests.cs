@@ -16,6 +16,14 @@ namespace Manaforge.Play.Tests
         private static JObject Choice()=>(JObject)Corpus()["positive"][2]["envelope"].DeepClone();
         private static JObject Priority()=>(JObject)JObject.Parse(File.ReadAllText(Path.Combine(Application.dataPath,"../../mtg_play/protocol/fixtures/receive-history-v1.json")))["cases"][0]["steps"][0]["envelope"].DeepClone();
         private static ProjectedDecisionFrame Project(JObject source)=>ViewerDecisionProjection.ParseSnapshot(source.ToString(Formatting.None),(string)source["body"]["snapshot"]["session_id"],(string)source["body"]["snapshot"]["viewer_id"],0,true);
+        [Test] public void CombatNamesAreReadOnlySnapshotValuesWithoutCommandAuthority()
+        {
+            var source=Priority();var snapshot=source["body"]["snapshot"];snapshot["objects"]=Corpus()["positive"][0]["envelope"]["body"]["snapshot"]["objects"].DeepClone();var card=snapshot["objects"][0];var defender=snapshot["players"][1];
+            snapshot["combat"]=new JArray(new JObject{["attackers"]=new JArray((string)card["object_id"]),["blockers"]=new JArray(),["defender_id"]=(string)defender["player_id"],["blocked"]=false});
+            snapshot["decision"]=null;snapshot["actions"]=new JArray();var frame=Project(source);
+            Assert.That(frame.Combat.Count,Is.EqualTo(1));Assert.That(frame.Combat[0].AttackerNames[0],Is.EqualTo((string)card["characteristics"]["name"]));Assert.That(frame.Combat[0].DefenderName,Is.EqualTo((string)defender["name"]));Assert.That(frame.Combat[0].BlockerCount,Is.Zero);Assert.That(frame.Decision,Is.Null);Assert.That(frame.Actions,Is.Empty);
+            card["characteristics"]["name"]="mutated";defender["name"]="mutated";Assert.That(frame.Combat[0].AttackerNames[0],Is.Not.EqualTo("mutated"));Assert.That(frame.Combat[0].DefenderName,Is.Not.EqualTo("mutated"));Assert.That(((IList<string>)frame.Combat[0].AttackerNames).IsReadOnly,Is.True);
+        }
         [Test] public void ManaReferencesCarryOnlyViewerRoutingAndDoNotInferEligibility()
         {
             var frame=Priority();var snapshot=frame["body"]["snapshot"];snapshot["decision"]["family"]="mana";var obj=snapshot["objects"][0];obj["hidden"]=true;obj["tapped"]=true;obj["controller_id"]="two";

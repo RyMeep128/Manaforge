@@ -438,6 +438,13 @@ def main():
                         is not True
                     ):
                         raise RuntimeError("LIVE_UNITY_COMBAT_PHASE_NOT_PRESENTED")
+                if args.select_attacker:
+                    assignment = wait_file("attack-assignment-ready", 60)
+                    if (
+                        assignment.get("attack_assignment_presented") is not True
+                        or assignment.get("snapshot_count") != 2
+                    ):
+                        raise RuntimeError("LIVE_UNITY_ATTACK_ASSIGNMENT_NOT_PRESENTED")
                 chosen = wait_file("choice", 60)
                 if (
                     chosen.get("ack_count")
@@ -548,7 +555,7 @@ def main():
                 if args.select_attacker:
                     if (
                         ready.get("attacker_choice_presented") is not True
-                        or chosen.get("snapshot_count") != 1
+                        or chosen.get("snapshot_count") != 2
                         or chosen.get("confirmed_receipt_count") != 1
                         or chosen.get("uncertain_receipt_count") != 0
                     ):
@@ -661,7 +668,8 @@ def main():
                         native_attack_assignment_observed=True,
                         native_attack_selection_open=True,
                         attacker_choice_presented=True,
-                        snapshot_count=1,
+                        attack_assignment_presented=True,
+                        snapshot_count=2,
                         confirmed_receipt_count=1,
                         uncertain_receipt_count=0,
                     )

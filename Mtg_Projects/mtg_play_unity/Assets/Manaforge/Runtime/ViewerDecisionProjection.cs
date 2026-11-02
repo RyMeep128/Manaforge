@@ -48,14 +48,31 @@ namespace Manaforge.Play
             Amounts=Array.AsReadOnly(source["amounts"].Select(value=>new ProjectedAmountConstraint(value)).ToArray());
         }
     }
+    public sealed class ProjectedCombatAssignment
+    {
+        public IReadOnlyList<string> AttackerNames {get;} public string DefenderName {get;} public int BlockerCount {get;}
+        private static string AttackerName(JObject snapshot,string id)
+        {
+            var card=snapshot["objects"].FirstOrDefault(value=>(string)value["object_id"]==id);
+            return (string)(card?["characteristics"] as JObject)?["name"]??"Unknown attacker";
+        }
+        internal ProjectedCombatAssignment(JToken assignment,JObject snapshot)
+        {
+            AttackerNames=Array.AsReadOnly(assignment["attackers"].Select(id=>AttackerName(snapshot,(string)id)).ToArray());
+            DefenderName=(string)snapshot["players"].FirstOrDefault(player=>(string)player["player_id"]==(string)assignment["defender_id"])?["name"]??"Unknown defender";
+            BlockerCount=assignment["blockers"].Count();
+        }
+    }
     public sealed class ProjectedDecisionFrame
     {
         public CardProjectionContext Context {get;} public string Status {get;} public bool ActionsComplete {get;}
+        public IReadOnlyList<ProjectedCombatAssignment> Combat {get;}
         public IReadOnlyList<ProjectedAction> Actions {get;} public ProjectedDecision Decision {get;}
         public IReadOnlyList<ProjectedManaSource> ManaSourceReferences {get;}
         public IReadOnlyList<string> UnsupportedFields {get;}
         internal ProjectedDecisionFrame(JObject source)
         {
+            Combat=Array.AsReadOnly(source["combat"].Select(group=>new ProjectedCombatAssignment(group,source)).ToArray());
             Context=new CardProjectionContext((string)source["session_id"],(string)source["viewer_id"],(long)source["revision"]);Status=(string)source["status"];ActionsComplete=(bool)source["actions_complete"];
             if(source["decision"].Type!=JTokenType.Null)Decision=new ProjectedDecision(Context,source["decision"]);
             ManaSourceReferences=Array.AsReadOnly(Decision?.Family=="mana"

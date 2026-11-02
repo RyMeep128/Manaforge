@@ -1,5 +1,21 @@
 # Live Unity / Java / XMage integration
 
+## Display the selected attack assignment (0.5.179)
+
+The `--select-attacker --native-metadata` Unity probe now sends a second,
+read-only snapshot after confirming the exact attacker choice. The narrow Java
+projection accepts one visible controlled battlefield attacker, no blockers, an
+unblocked native group and a known opposing defender. It maps both references
+to opaque public IDs and strips decision/action authority. Unsupported combat
+shapes fail closed and old action tokens remain invalid.
+
+Unity projects immutable attacker/defender display names from the received public
+snapshot. After the actual revision is mounted, it displays the assignment,
+captures `attack-assignment.png`, and reports `attack_assignment_presented`.
+Acceptance requires two snapshots, one confirmed receipt, zero uncertain receipts
+and a cleared viewer. Declaration remains open; no finish, blocking or damage
+is inferred from the assignment.
+
 ## Confirm the exact attacker choice (0.5.178)
 
 The existing `--select-attacker --native-metadata` Unity probe now receives a

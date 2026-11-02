@@ -114,7 +114,14 @@ public final class ManaforgeOpeningProjection {
     private JsonObject project(JsonObject raw,JsonObject prompt,boolean includePriorityPass,boolean includeSpells,boolean omitStack,boolean attackFinish) throws IOException {
         return project(raw,prompt,includePriorityPass,includeSpells,omitStack,attackFinish,false);
     }
+    public synchronized JsonObject projectReadOnlyAttackAssignment(JsonObject raw,JsonObject prompt) throws IOException {
+        JsonObject snapshot=project(raw,prompt,false,false,false,true,false,true);
+        snapshot.add("decision",JsonNull.INSTANCE);snapshot.add("actions",new JsonArray());invalidateDecision();return snapshot;
+    }
     private JsonObject project(JsonObject raw,JsonObject prompt,boolean includePriorityPass,boolean includeSpells,boolean omitStack,boolean attackFinish,boolean includeAttackers) throws IOException {
+        return project(raw,prompt,includePriorityPass,includeSpells,omitStack,attackFinish,includeAttackers,false);
+    }
+    private JsonObject project(JsonObject raw,JsonObject prompt,boolean includePriorityPass,boolean includeSpells,boolean omitStack,boolean attackFinish,boolean includeAttackers,boolean combatObservation) throws IOException {
         invalidateDecision();
         try {
             require(engineViewer.equals(raw.get("viewer").getAsString()));
@@ -129,7 +136,7 @@ public final class ManaforgeOpeningProjection {
             require(integer(prompt,"decision_id")!=null && integer(prompt,"decision_id")>=0 && integer(prompt,"decision_id")<=Integer.MAX_VALUE);
             require(raw.has("game_id") && !raw.get("game_id").isJsonNull());
             if(omitStack)require(raw.has("stack") && raw.get("stack").isJsonArray() && raw.getAsJsonArray("stack").size()>0);else empty(raw,"stack");
-            empty(raw,"exile");empty(raw,"combat");
+            empty(raw,"exile");if(!combatObservation)empty(raw,"combat");
             GameSnapshot result=new GameSnapshot();result.session_id=session;result.viewer_id=viewer;
             result.revision=revision+1;result.protocol_version=1L;result.status="active";
             result.turn=integer(raw,"turn");result.phase=text(raw,"phase");result.step=text(raw,"step");
@@ -221,7 +228,17 @@ public final class ManaforgeOpeningProjection {
                 choice.options=new ChoiceOption[priority || attackFinish?0:2];
                 for(int i=0;i<choice.options.length;i++){ChoiceOption option=new ChoiceOption();option.option_id=opaque();option.label=i==0?"Yes":"No";option.selected=false;choice.options[i]=option;}
             }
-            result.decision=choice;result.combat=new CombatAssignment[0];result.observations=new CardObservation[0];
+            result.decision=choice;result.combat=new CombatAssignment[0];
+            if(combatObservation) {
+                require(raw.getAsJsonArray("combat").size()==1);JsonObject group=raw.getAsJsonArray("combat").get(0).getAsJsonObject();
+                require(group.getAsJsonArray("attackers").size()==1 && group.getAsJsonArray("blockers").size()==0 && Boolean.FALSE.equals(flag(group,"blocked")));
+                String source=group.getAsJsonArray("attackers").get(0).getAsString(),reference=visibleReferences.get(source);GameObject attacker=null;
+                for(GameObject card:cards)if(card.object_id.equals(reference))attacker=card;
+                require(attacker!=null && "battlefield".equals(attacker.zone) && viewer.equals(attacker.controller_id) && Boolean.FALSE.equals(attacker.hidden) && Boolean.FALSE.equals(attacker.face_down));
+                String nativeDefender=group.get("defender").getAsString(),defender=players.get(nativeDefender);require(defender!=null && seen.contains(nativeDefender) && !engineViewer.equals(nativeDefender));
+                for(PlayerView seat:seats)if(defender.equals(seat.player_id))require(Boolean.FALSE.equals(seat.left_game));
+                CombatAssignment assignment=new CombatAssignment();assignment.attackers=new String[]{reference};assignment.blockers=new String[0];assignment.defender_id=defender;assignment.blocked=false;result.combat=new CombatAssignment[]{assignment};
+            }result.observations=new CardObservation[0];
             result.unsupported_fields=new String[]{"object_incarnations","commander_metadata","live_abilities","actions","mana","counters","eliminated","observations","attachments","copy_metadata","physical_printing"};
             if(omitStack){List<String> unsupported=new ArrayList<>(Arrays.asList(result.unsupported_fields));unsupported.add("stack");result.unsupported_fields=unsupported.toArray(new String[0]);}
             JsonObject output=JSON.toJsonTree(result).getAsJsonObject();
