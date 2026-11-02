@@ -1,5 +1,19 @@
 # Live Unity / Java / XMage integration
 
+## Repeat casting and combat in Unity (0.5.197)
+
+```powershell
+python tools/check_play_unity_live.py --select-attacker --native-metadata --finish-selected-attack --declared-priority --combat-damage --complete-combat --loop-turn --next-turn-cast --repeat-cycle --no-capture
+```
+
+The bounded same-session continuation now offers the original creature for a
+second attack after casting another creature. Separate native evidence confirms
+combat entry, selection, declaration, damage and cleanup; the newly cast creature
+is excluded from the attacker offer. The endpoint checks the second life decrease,
+retained card identities and native source incarnation. Session history remains
+bounded at 64 entries to cover the opening and 32 continuation decisions.
+Full-match results and general choices remain open; visual work stays deferred.
+
 ## Cast again on the next human turn in Unity (0.5.196)
 
 ```powershell

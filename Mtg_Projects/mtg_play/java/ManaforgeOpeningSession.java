@@ -12,7 +12,8 @@ public final class ManaforgeOpeningSession implements AutoCloseable {
     private JsonObject submittedNative;
     public ManaforgeOpeningSession(GatewayHandshake.ViewerContext context,ManaforgeOpeningProjection projection,String snapshot) throws IOException {
         if(context==null || projection==null)throw new IllegalArgumentException("OPENING_SESSION_CONTEXT");
-        this.context=context;this.projection=projection;boundary=new GatewaySessionBoundary(context,false,16);
+        // Bounded history covers the opening plus up to 32 continuation decisions.
+        this.context=context;this.projection=projection;boundary=new GatewaySessionBoundary(context,false,64);
         try{boundary.observe(snapshot);}catch(IOException | RuntimeException failure){close();throw failure;}
     }
     public SubmissionLedger.Prepared dispatch(String wire,String game,String engineViewer,long decision,long cycle) throws IOException {

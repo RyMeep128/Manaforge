@@ -151,6 +151,9 @@ public final class ManaforgeOpeningProjection {
     private JsonObject project(JsonObject raw,JsonObject prompt,boolean includePriorityPass,boolean includeSpells,boolean omitStack,boolean attackFinish,boolean includeAttackers,boolean combatObservation) throws IOException {
         return project(raw,prompt,includePriorityPass,includeSpells,omitStack,attackFinish,includeAttackers,combatObservation,false);
     }
+    public synchronized JsonObject projectSingleTurnAttacker(JsonObject raw,JsonObject prompt,String source) throws IOException {
+        JsonObject snapshot=projectTurnCombat(raw,prompt,true,false);JsonArray selected=new JsonArray();Set<String> retained=new HashSet<>();for(JsonElement item:snapshot.getAsJsonArray("actions")){JsonObject action=item.getAsJsonObject();String id=action.get("action_id").getAsString();if("declare_attacker".equals(action.get("kind").getAsString()) && source.equals(nativeActions.get(id))){selected.add(action);retained.add(id);}}require(selected.size()==1);snapshot.add("actions",selected);nativeActions.keySet().retainAll(retained);return snapshot;
+    }
     public synchronized JsonObject projectNextTurnCast(JsonObject raw,JsonObject prompt) throws IOException {
         invalidateDecision();require("GAME_SELECT".equals(text(prompt,"kind")) && Boolean.TRUE.equals(flag(prompt,"is_priority")));JsonObject snapshot=projectTurnContinuation(raw,prompt,true);JsonArray casts=new JsonArray();Set<String> retained=new HashSet<>();
         for(JsonElement item:snapshot.getAsJsonArray("actions")){JsonObject action=item.getAsJsonObject();if("cast_spell".equals(action.get("kind").getAsString())){casts.add(action);retained.add(action.get("action_id").getAsString());}}require(casts.size()>0);snapshot.add("actions",casts);nativeActions.keySet().retainAll(retained);return snapshot;

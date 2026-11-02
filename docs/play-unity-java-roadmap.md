@@ -1244,3 +1244,12 @@ cast, native ability selection and verified resolution. Separate typed evidence
 confirms each stage; the terminal view must be an actual read-only snapshot,
 not a temporary gap between decisions. The no-capture gameplay track remains the
 priority. Broader repeatable combats and full-match results are still open.
+
+
+### Second Unity combat on the continued session (0.5.197)
+
+The bounded Unity fixture now follows next-turn casting with a second combat
+using the original attacker, through native damage and postcombat cleanup.
+Each offered input has typed native evidence; the final check binds both creatures,
+retained hand/graveyard/library state and the second defender life decrease.
+Full-match results, general choices and visual improvements remain open.
