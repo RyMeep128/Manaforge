@@ -549,8 +549,8 @@ def main():
                     if (
                         ready.get("attacker_choice_presented") is not True
                         or chosen.get("snapshot_count") != 1
-                        or chosen.get("confirmed_receipt_count") != 0
-                        or chosen.get("uncertain_receipt_count") != 1
+                        or chosen.get("confirmed_receipt_count") != 1
+                        or chosen.get("uncertain_receipt_count") != 0
                     ):
                         raise RuntimeError("LIVE_UNITY_ATTACKER_RECEIPT_FAILED")
                     if (
@@ -662,8 +662,8 @@ def main():
                         native_attack_selection_open=True,
                         attacker_choice_presented=True,
                         snapshot_count=1,
-                        confirmed_receipt_count=0,
-                        uncertain_receipt_count=1,
+                        confirmed_receipt_count=1,
+                        uncertain_receipt_count=0,
                     )
                 if args.finish_attacks:
                     evidence.update(
@@ -726,7 +726,7 @@ def main():
         json.dumps(evidence, indent=2) + "\n", encoding="utf-8"
     )
     print(
-        "Packaged Unity submitted an attacker choice; Java verified the native assignment. Receipt uncertain, declaration open; viewer cleared and roots reaped."
+        "Packaged Unity submitted an attacker choice; Java verified the native assignment. Choice confirmed, declaration open; viewer cleared and roots reaped."
         if args.select_attacker
         else "Packaged Unity confirmed Finish attacks and the next priority pass, displayed the next native state read-only, cleared the viewer and reaped owned roots."
         if args.combat_priority

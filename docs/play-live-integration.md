@@ -1,5 +1,20 @@
 # Live Unity / Java / XMage integration
 
+## Confirm the exact attacker choice (0.5.178)
+
+The existing `--select-attacker --native-metadata` Unity probe now receives a
+confirmed receipt after Java verifies the native assignment. An immutable typed
+certificate retains the exact submitted native command. Session confirmation
+requires the same request ID and full command as the queued input; null,
+wrong-command and wrong-request evidence fail closed. Duplicate delivery returns
+the confirmed receipt without another native enqueue, and disconnect retains it.
+
+The certificate is issued only through the guarded attacker-selection validator:
+same source incarnation, accepted object response, later attacker prompt and
+matching native combat assignment. Acceptance requires one confirmed and zero
+uncertain receipts. Declaration remains open. No assignment snapshot is sent to
+Unity yet; blocking, damage and finishing a nonempty attack remain subsequent work.
+
 ## Submit the attacker choice from Unity (0.5.177)
 
 ```powershell

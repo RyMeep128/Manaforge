@@ -108,6 +108,7 @@ public final class OpeningProjectionChecks {
             if(mode==7)badAccepted.addProperty("accepted",false);
             if(mode==8)badAccepted.addProperty("request_id","other");
             check(!NativeCastCorrelation.observesAttackerSelection(before,prompt,command,attackMetadata(false),badAccepted,bad,badNext,metadata,"raw-card"));
+            check(NativeCastCorrelation.attackerSelectionEvidence(before,prompt,command,attackMetadata(false),badAccepted,bad,badNext,metadata,"raw-card")==null);
         }
     }
     static void attackFinishChecks() throws Exception {

@@ -42,6 +42,15 @@ public final class NativeCastCorrelation {
         if(found!=1 || !viewer.equals(string(entry,"owner")) || !viewer.equals(string(entry,"controller")))throw new IllegalArgumentException();
         return number(entry,"incarnation");
     }
+    public static final class AttackerSelectionEvidence {
+        private final JsonObject command;
+        private AttackerSelectionEvidence(JsonObject command){this.command=command.deepCopy();}
+        public boolean matchesCommand(JsonObject candidate){return command.equals(candidate);}
+    }
+    public static AttackerSelectionEvidence attackerSelectionEvidence(JsonObject before,JsonObject prompt,JsonObject command,JsonObject beforeMetadata,JsonObject accepted,
+            JsonObject after,JsonObject nextPrompt,JsonObject afterMetadata,String source) {
+        return observesAttackerSelection(before,prompt,command,beforeMetadata,accepted,after,nextPrompt,afterMetadata,source)?new AttackerSelectionEvidence(command):null;
+    }
     /** Observation of one selected attacker and the engine's assignment; not declaration completion. */
     public static boolean observesAttackerSelection(JsonObject before,JsonObject prompt,JsonObject command,JsonObject beforeMetadata,JsonObject accepted,
             JsonObject after,JsonObject nextPrompt,JsonObject afterMetadata,String source) {

@@ -82,8 +82,33 @@ public final class OpeningSessionChecks {
                 if(!passReceipt.equals(owner.receiptFor("followup-pass")))throw new AssertionError("PRIORITY_CONFIRMATION_LOST");
                 if(!phaseReceipt.equals(owner.receiptFor("post-resolution-pass")))throw new AssertionError("PHASE_CONFIRMATION_LOST");
             }
-            attackConfirmationChecks(context);
+            attackConfirmationChecks(context);attackerConfirmationChecks(context);
         }finally{java.util.Arrays.fill(key,(byte)0);}
+    }
+    static void attackerConfirmationChecks(manaforge.protocol.GatewayHandshake.ViewerContext context) throws Exception {
+        JsonObject before=OpeningProjectionChecks.attackState(),prompt=OpeningProjectionChecks.attackPrompt(),after=before.deepCopy(),next=OpeningProjectionChecks.attackPrompt();next.addProperty("decision_id",42);
+        after.add("combat",JsonParser.parseString("[{\"attackers\":[\"raw-card\"],\"blockers\":[],\"defender\":\"raw-ai\",\"blocked\":false}]"));
+        ManaforgeOpeningProjection projection=OpeningProjectionChecks.projection();JsonObject snapshot=projection.projectAttackSelection(before,prompt);String wire=OpeningProjectionChecks.perform(snapshot);
+        try(ManaforgeOpeningSession owner=new ManaforgeOpeningSession(context,projection,envelope(snapshot).toString())) {
+            if(!owner.dispatch(wire,"raw-game","raw-human",41,8).shouldSubmit)throw new AssertionError("ATTACKER_NOT_ADMITTED");JsonObject command=owner.pollNative(),accepted=new JsonObject();
+            accepted.addProperty("event","response_sent");accepted.addProperty("accepted",true);accepted.add("request_id",command.get("request_id").deepCopy());
+            NativeCastCorrelation.AttackerSelectionEvidence proof=NativeCastCorrelation.attackerSelectionEvidence(before,prompt,command,OpeningProjectionChecks.attackMetadata(false),accepted,after,next,OpeningProjectionChecks.attackMetadata(false),"raw-card");
+            if(proof==null)throw new AssertionError("ATTACKER_PROOF_MISSING");
+            JsonObject other=command.deepCopy(),otherAccepted=accepted.deepCopy();other.addProperty("request_id","other");otherAccepted.addProperty("request_id","other");
+            NativeCastCorrelation.AttackerSelectionEvidence otherProof=NativeCastCorrelation.attackerSelectionEvidence(before,prompt,other,OpeningProjectionChecks.attackMetadata(false),otherAccepted,after,next,OpeningProjectionChecks.attackMetadata(false),"raw-card");
+            JsonObject otherDecision=command.deepCopy(),otherPrompt=prompt.deepCopy();otherDecision.addProperty("decision_id",40);otherPrompt.addProperty("decision_id",40);
+            NativeCastCorrelation.AttackerSelectionEvidence decisionProof=NativeCastCorrelation.attackerSelectionEvidence(before,otherPrompt,otherDecision,OpeningProjectionChecks.attackMetadata(false),accepted,after,next,OpeningProjectionChecks.attackMetadata(false),"raw-card");
+            if(otherProof==null || decisionProof==null)throw new AssertionError("ALTERNATE_ATTACKER_PROOF_MISSING");
+            for(int mode=0;mode<4;mode++)try{owner.confirmAttackerSelection(mode==0?"wrong-id":"land-action",mode==1?null:mode==2?otherProof:mode==3?decisionProof:proof);throw new AssertionError("BAD_ATTACKER_PROOF_ACCEPTED");}
+                catch(IOException expected){if(!"ATTACKER_EVIDENCE_MISMATCH".equals(expected.getMessage()))throw expected;}
+            JsonObject original=command.deepCopy();command.addProperty("value","mutated");
+            if(!proof.matchesCommand(original) || proof.matchesCommand(command))throw new AssertionError("MUTABLE_ATTACKER_EVIDENCE");
+            JsonObject receipt=owner.confirmAttackerSelection("land-action",proof);
+            if(!"confirmed".equals(receipt.getAsJsonObject("body").get("outcome").getAsString()) || !receipt.equals(owner.confirmAttackerSelection("land-action",proof)))throw new AssertionError("ATTACKER_CONFIRMATION_FAILED");
+            manaforge.protocol.SubmissionLedger.Prepared duplicate=owner.dispatch(wire,"raw-game","raw-human",41,8);
+            if(duplicate.shouldSubmit || !receipt.equals(duplicate.receipt()) || owner.pollNative()!=null)throw new AssertionError("CONFIRMED_ATTACKER_REPLAYED");
+            owner.disconnected();if(!receipt.equals(owner.receiptFor("land-action")))throw new AssertionError("ATTACKER_DISCONNECT_LOST_CONFIRMATION");
+        }
     }
     static void attackConfirmationChecks(manaforge.protocol.GatewayHandshake.ViewerContext context) throws Exception {
         JsonObject before=OpeningProjectionChecks.attackState(),prompt=OpeningProjectionChecks.attackPrompt(),after=before.deepCopy(),next=OpeningProjectionChecks.priorityPrompt();next.addProperty("decision_id",42);after.addProperty("priority_player","raw-name");

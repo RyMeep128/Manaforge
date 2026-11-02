@@ -312,10 +312,10 @@ public final class ManaforgeLiveOpening {
             final long cycle=state.get("cycle").getAsLong(),decision=event.get("decision_id").getAsLong();
             if(unityReady!=null && chooseAttacker) {
                 final JsonObject before=state.deepCopy(),prompt=event.deepCopy(),guard=metadata.deepCopy();
-                ManaforgeUnityOpening.serve(envelope,projection,game,engineViewer,decision,cycle,"1.4.62-V1",artifactHash,unityKey,unityReady,command->{
+                ManaforgeUnityOpening.serveVerifiedAttacker(envelope,projection,game,engineViewer,decision,cycle,"1.4.62-V1",artifactHash,unityKey,unityReady,command->{
                     if(!"object".equals(command.get("kind").getAsString()) || !unityCastSource.equals(command.get("value").getAsString()))throw new IOException("LIVE_COMBAT_BAD_SELECTION");
                     JsonObject accepted=request(command,"response_sent");if(!new JsonPrimitive(true).equals(accepted.get("accepted")))throw new IOException("LIVE_COMBAT_SELECTION_REJECTED");
-                    attackSourceOffered=true;attackerSelected=true;advancement(cycle,decision);observeAttackerSelection(before,prompt,command,guard,accepted);
+                    attackSourceOffered=true;attackerSelected=true;advancement(cycle,decision);return observeAttackerSelection(before,prompt,command,guard,accepted);
                 },cancelled::get);return;
             }
             if(unityReady!=null && observeFinish) {
@@ -360,13 +360,14 @@ public final class ManaforgeLiveOpening {
         }
         throw new IOException("LIVE_COMBAT_TIMEOUT");
     }
-    private void observeAttackerSelection(JsonObject before,JsonObject prompt,JsonObject command,JsonObject metadata,JsonObject accepted) throws Exception {
+    private NativeCastCorrelation.AttackerSelectionEvidence observeAttackerSelection(JsonObject before,JsonObject prompt,JsonObject command,JsonObject metadata,JsonObject accepted) throws Exception {
         stage="attacker_selection";
         for(int count=0;count<80;count++) {
             JsonObject event=pending==null?next():pending;if(!"decision".equals(event.get("event").getAsString()))continue;pending=null;
             JsonObject observedMetadata=sourceMetadata(state,unityCastSource);
-            if(!NativeCastCorrelation.observesAttackerSelection(before,prompt,command,metadata,accepted,state,event,observedMetadata,unityCastSource))throw new IOException("LIVE_ATTACK_ASSIGNMENT_UNPROVEN");
-            attackAssignmentObserved=true;return;
+            NativeCastCorrelation.AttackerSelectionEvidence proof=NativeCastCorrelation.attackerSelectionEvidence(before,prompt,command,metadata,accepted,state,event,observedMetadata,unityCastSource);
+            if(proof==null)throw new IOException("LIVE_ATTACK_ASSIGNMENT_UNPROVEN");
+            attackAssignmentObserved=true;return proof;
         }
         throw new IOException("LIVE_ATTACK_SELECTION_TIMEOUT");
     }

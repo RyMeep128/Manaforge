@@ -8,6 +8,7 @@ import java.util.function.BooleanSupplier;
 
 /** Opt-in public-fixture live opening endpoint; no product launch or broad gameplay support. */
 public final class ManaforgeUnityOpening {
+    public interface VerifiedAttackerSubmit {NativeCastCorrelation.AttackerSelectionEvidence submit(JsonObject command) throws Exception;}
     public interface VerifiedAbilitySubmit {NativeCastCorrelation.AbilityEvidence submit(JsonObject command) throws Exception;}
     public interface VerifiedAttackSubmit {VerifiedAttackResult submit(JsonObject command) throws Exception;}
     public static final class VerifiedAttackResult {
@@ -30,10 +31,12 @@ public final class ManaforgeUnityOpening {
     }
     private interface ChoiceSubmit {ChoiceEvidence submit(JsonObject command) throws Exception;}
     private static final class ChoiceEvidence {
+        final NativeCastCorrelation.AttackerSelectionEvidence attacker;
         final NativeCastCorrelation.AbilityEvidence ability;final NativeCastCorrelation.AttackFinishEvidence attack;final JsonObject snapshot;final PriorityOffer followup;
         ChoiceEvidence(NativeCastCorrelation.AbilityEvidence ability,NativeCastCorrelation.AttackFinishEvidence attack){this(ability,attack,null,null);}
-        ChoiceEvidence(NativeCastCorrelation.AbilityEvidence ability,NativeCastCorrelation.AttackFinishEvidence attack,JsonObject snapshot,PriorityOffer followup){this.ability=ability;this.attack=attack;this.snapshot=snapshot;this.followup=followup;}
-        JsonObject confirm(ManaforgeOpeningSession owner,String id) throws IOException{return ability!=null?owner.confirmAbility(id,ability):owner.confirmAttackFinish(id,attack);}
+        ChoiceEvidence(NativeCastCorrelation.AbilityEvidence ability,NativeCastCorrelation.AttackFinishEvidence attack,JsonObject snapshot,PriorityOffer followup){this.attacker=null;this.ability=ability;this.attack=attack;this.snapshot=snapshot;this.followup=followup;}
+        ChoiceEvidence(NativeCastCorrelation.AttackerSelectionEvidence attacker){this.attacker=attacker;this.ability=null;this.attack=null;this.snapshot=null;this.followup=null;}
+        JsonObject confirm(ManaforgeOpeningSession owner,String id) throws IOException{return attacker!=null?owner.confirmAttackerSelection(id,attacker):ability!=null?owner.confirmAbility(id,ability):owner.confirmAttackFinish(id,attack);}
     }
     public interface NextPriority {PriorityOffer next() throws Exception;}
     public interface Observation {ObservedSnapshot read() throws Exception;}
@@ -67,6 +70,10 @@ public final class ManaforgeUnityOpening {
     public static void serveVerifiedAbility(JsonObject snapshot,ManaforgeOpeningProjection projection,String game,String engineViewer,long decision,long cycle,
             String engine,String hash,byte[] key,Path ready,VerifiedAbilitySubmit submit,BooleanSupplier cancelled,NextPriority continuation) throws Exception {
         serveChoice(snapshot,projection,game,engineViewer,decision,cycle,engine,hash,key,ready,command->{NativeCastCorrelation.AbilityEvidence proof=submit.submit(command);return proof==null?null:new ChoiceEvidence(proof,null);},cancelled,continuation);
+    }
+    public static void serveVerifiedAttacker(JsonObject snapshot,ManaforgeOpeningProjection projection,String game,String engineViewer,long decision,long cycle,
+            String engine,String hash,byte[] key,Path ready,VerifiedAttackerSubmit submit,BooleanSupplier cancelled) throws Exception {
+        serveChoice(snapshot,projection,game,engineViewer,decision,cycle,engine,hash,key,ready,command->{NativeCastCorrelation.AttackerSelectionEvidence proof=submit.submit(command);return proof==null?null:new ChoiceEvidence(proof);},cancelled,null);
     }
     public static void serveVerifiedAttackFinish(JsonObject snapshot,ManaforgeOpeningProjection projection,String game,String engineViewer,long decision,long cycle,
             String engine,String hash,byte[] key,Path ready,VerifiedAttackSubmit submit,BooleanSupplier cancelled) throws Exception {
