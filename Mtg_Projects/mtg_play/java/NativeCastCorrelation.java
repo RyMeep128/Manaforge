@@ -42,6 +42,29 @@ public final class NativeCastCorrelation {
         if(found!=1 || !viewer.equals(string(entry,"owner")) || !viewer.equals(string(entry,"controller")))throw new IllegalArgumentException();
         return number(entry,"incarnation");
     }
+    /** Exact post-declaration pass and next guarded native combat observation; no damage claim. */
+    public static PriorityEvidence declaredPriorityEvidence(JsonObject before,JsonObject prompt,JsonObject command,JsonObject beforeMetadata,JsonObject accepted,
+            JsonObject after,JsonObject nextPrompt,JsonObject afterMetadata,String source) {
+        try {
+            if(!string(before,"game_id").equals(string(after,"game_id")) || !string(before,"viewer").equals(string(after,"viewer"))
+                || !string(before,"game_id").equals(string(command,"game_id")) || !"respond".equals(string(command,"command")) || !"boolean".equals(string(command,"kind")) || !new JsonPrimitive(false).equals(command.get("value"))
+                || number(command,"decision_id")!=number(prompt,"decision_id") || !"GAME_SELECT".equals(string(prompt,"kind")) || !new JsonPrimitive(true).equals(prompt.get("is_priority")) || prompt.has("attackers") || prompt.has("blockers")
+                || number(prompt,"cycle")!=number(before,"cycle") || !new JsonPrimitive(true).equals(beforeMetadata.get("priority_open")) || !new JsonPrimitive(true).equals(afterMetadata.get("priority_open"))
+                || before.getAsJsonArray("stack").size()!=0 || after.getAsJsonArray("stack").size()!=0 || battlefieldCounter(before,beforeMetadata,source)!=battlefieldCounter(after,afterMetadata,source)
+                || !"response_sent".equals(string(accepted,"event")) || !new JsonPrimitive(true).equals(accepted.get("accepted")) || !string(command,"request_id").equals(string(accepted,"request_id"))
+                || !"GAME_SELECT".equals(string(nextPrompt,"kind")) || !new JsonPrimitive(true).equals(nextPrompt.get("is_priority")) || nextPrompt.has("attackers") || nextPrompt.has("blockers")
+                || number(nextPrompt,"cycle")!=number(after,"cycle") || number(nextPrompt,"decision_id")<=number(prompt,"decision_id") || number(after,"cycle")<number(before,"cycle") || number(after,"turn")!=number(before,"turn")
+                || before.getAsJsonArray("combat").size()!=1 || after.getAsJsonArray("combat").size()!=1)return null;
+            JsonObject first=before.getAsJsonArray("combat").get(0).getAsJsonObject(),last=after.getAsJsonArray("combat").get(0).getAsJsonObject();
+            if(first.getAsJsonArray("attackers").size()!=1 || !source.equals(first.getAsJsonArray("attackers").get(0).getAsString()) || !first.get("attackers").equals(last.get("attackers")) || !string(first,"defender").equals(string(last,"defender"))
+                || first.getAsJsonArray("blockers").size()!=0 || !new JsonPrimitive(false).equals(first.get("blocked")) || !last.get("blocked").isJsonPrimitive() || !last.getAsJsonPrimitive("blocked").isBoolean())return null;
+            String defender=string(last,"defender"),viewer=string(after,"viewer");Set<String> visible=new HashSet<>();int opponents=0;
+            for(JsonElement row:after.getAsJsonArray("players")){JsonObject player=row.getAsJsonObject();if(defender.equals(string(player,"id")) && !viewer.equals(defender) && new JsonPrimitive(false).equals(player.get("left"))){opponents++;for(JsonElement item:player.getAsJsonArray("battlefield")){JsonObject card=item.getAsJsonObject();if(new JsonPrimitive(false).equals(card.get("hidden")) && new JsonPrimitive(false).equals(card.get("face_down")) && string(player,"name").equals(string(card,"controller_name")))visible.add(string(card,"id"));}}}
+            JsonArray blockers=last.getAsJsonArray("blockers");Set<String> unique=new HashSet<>();if(opponents!=1 || blockers.size()>256)return null;
+            for(JsonElement blocker:blockers)if(!blocker.isJsonPrimitive() || !blocker.getAsJsonPrimitive().isString() || !unique.add(blocker.getAsString()) || !visible.contains(blocker.getAsString()) || source.equals(blocker.getAsString()))return null;
+            return new PriorityEvidence(command);
+        }catch(RuntimeException unsupported){return null;}
+    }
     public static final class DeclaredAttackEvidence {
         private final JsonObject command;
         private DeclaredAttackEvidence(JsonObject command){this.command=command.deepCopy();}

@@ -84,6 +84,34 @@ public final class OpeningProjectionChecks {
     }
     static JsonObject attackPrompt(){JsonObject request=priorityPrompt();request.addProperty("is_priority",false);JsonArray candidates=new JsonArray();candidates.add("raw-card");request.add("attackers",candidates);return request;}
     static JsonObject attackMetadata(boolean priority){return JsonParser.parseString("{\"status\":\"ok\",\"cycle\":8,\"priority_open\":"+priority+",\"objects\":{\"raw-card\":{\"incarnation\":4,\"owner\":\"raw-human\",\"controller\":\"raw-human\"}}}").getAsJsonObject();}
+    static void declaredPriorityChecks() throws Exception {
+        JsonObject before=attackState(),prompt=priorityPrompt();prompt.addProperty("decision_id",43);before.addProperty("priority_player","raw-name");
+        before.add("combat",JsonParser.parseString("[{\"attackers\":[\"raw-card\"],\"blockers\":[],\"defender\":\"raw-ai\",\"blocked\":false}]"));
+        ManaforgeOpeningProjection projection=projection();JsonObject snapshot=projection.projectDeclaredAttackPriority(before,prompt);shape(snapshot);
+        check(snapshot.getAsJsonArray("actions").size()==1 && "pass".equals(snapshot.getAsJsonArray("actions").get(0).getAsJsonObject().get("kind").getAsString()));
+        String wire=perform(snapshot);JsonObject command=projection.claimAction(wire,"session","human","raw-game","raw-human",43,8);fails("STALE_DECISION",()->projection.claimAction(wire,"session","human","raw-game","raw-human",43,8));
+        JsonObject after=before.deepCopy(),next=priorityPrompt(),accepted=new JsonObject();next.addProperty("decision_id",44);accepted.addProperty("event","response_sent");accepted.addProperty("accepted",true);accepted.add("request_id",command.get("request_id"));
+        NativeCastCorrelation.PriorityEvidence proof=NativeCastCorrelation.declaredPriorityEvidence(before,prompt,command,attackMetadata(true),accepted,after,next,attackMetadata(true),"raw-card");check(proof!=null && proof.matchesCommand(command));
+        JsonObject blocker=before.getAsJsonArray("players").get(0).getAsJsonObject().getAsJsonArray("battlefield").get(0).getAsJsonObject().deepCopy();blocker.addProperty("id","raw-blocker");blocker.addProperty("controller_name","raw-opponent-name");
+        after.getAsJsonArray("players").get(1).getAsJsonObject().getAsJsonArray("battlefield").add(blocker);after.getAsJsonArray("combat").get(0).getAsJsonObject().getAsJsonArray("blockers").add("raw-blocker");after.getAsJsonArray("combat").get(0).getAsJsonObject().addProperty("blocked",true);
+        check(NativeCastCorrelation.declaredPriorityEvidence(before,prompt,command,attackMetadata(true),accepted,after,next,attackMetadata(true),"raw-card")!=null);
+        for(int mode=0;mode<12;mode++) {
+            JsonObject bad=after.deepCopy(),badNext=next.deepCopy(),badAccepted=accepted.deepCopy(),badCommand=command.deepCopy(),metadata=attackMetadata(true);JsonObject group=bad.getAsJsonArray("combat").get(0).getAsJsonObject();
+            if(mode==0)group.addProperty("defender","raw-human");
+            if(mode==1)group.getAsJsonArray("blockers").add("raw-blocker");
+            if(mode==2)group.getAsJsonArray("blockers").add("unknown");
+            if(mode==3)bad.getAsJsonArray("players").get(1).getAsJsonObject().getAsJsonArray("battlefield").get(0).getAsJsonObject().addProperty("hidden",true);
+            if(mode==4)metadata.getAsJsonObject("objects").getAsJsonObject("raw-card").addProperty("incarnation",5);
+            if(mode==5)metadata.addProperty("priority_open",false);
+            if(mode==6)badAccepted.addProperty("request_id","other");
+            if(mode==7)badAccepted.addProperty("accepted",false);
+            if(mode==8)badNext.addProperty("decision_id",43);
+            if(mode==9)badCommand.addProperty("value",true);
+            if(mode==10)bad.getAsJsonArray("stack").add(new JsonObject());
+            if(mode==11)bad.add("combat",new JsonArray());
+            check(NativeCastCorrelation.declaredPriorityEvidence(before,prompt,badCommand,attackMetadata(true),badAccepted,bad,badNext,metadata,"raw-card")==null);
+        }
+    }
     static void declaredAttackChecks() throws Exception {
         JsonObject before=attackState(),prompt=attackPrompt();prompt.addProperty("decision_id",42);
         before.add("combat",JsonParser.parseString("[{\"attackers\":[\"raw-card\"],\"blockers\":[],\"defender\":\"raw-ai\",\"blocked\":false}]"));
@@ -552,7 +580,7 @@ public final class OpeningProjectionChecks {
         raw=state();raw.getAsJsonArray("players").add(raw.getAsJsonArray("players").get(0).deepCopy());rejects(raw,prompt());
         raw=state();raw.getAsJsonArray("players").get(0).getAsJsonObject().addProperty("life",true);rejects(raw,prompt());
         request=prompt();request.addProperty("message","Use 12345678-abcd-1234-abcd-123456789abc");check(!projection().project(state(),request).toString().contains("12345678-abcd-1234-abcd-123456789abc"));
-        choiceChecks();landChecks();abilityChecks();stackPriorityChecks();castCorrelationChecks();attackFinishChecks();attackerSelectionChecks();declaredAttackChecks();
+        choiceChecks();landChecks();abilityChecks();stackPriorityChecks();castCorrelationChecks();attackFinishChecks();attackerSelectionChecks();declaredAttackChecks();declaredPriorityChecks();
         System.out.println("Opening projection: "+checks+" privacy, schema, isolation and fail-closed checks passed");
     }
 }

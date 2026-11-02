@@ -17,6 +17,11 @@ from play_native_metadata import provision_metadata  # noqa: E402
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
+        "--declared-priority",
+        action="store_true",
+        help="Submit one priority pass after declaration; requires --finish-selected-attack",
+    )
+    parser.add_argument(
         "--finish-selected-attack",
         action="store_true",
         help="Finish the selected single-attacker declaration; requires --select-attacker",
@@ -67,6 +72,8 @@ def main():
         )
     if args.finish_selected_attack and not args.select_attacker:
         parser.error("--finish-selected-attack requires --select-attacker")
+    if args.declared_priority and not args.finish_selected_attack:
+        parser.error("--declared-priority requires --finish-selected-attack")
     output = args.output.resolve()
     artifacts = (ROOT / "Mtg_Projects/mtg_play_unity/Artifacts").resolve()
     if not output.is_relative_to(artifacts) or output == artifacts:
@@ -128,6 +135,12 @@ def main():
             native_selected_attack_finished=True, native_declared_attack_observed=True
         )
 
+    if args.declared_priority:
+        expected.update(
+            native_declared_priority_submitted=True,
+            native_declared_priority_observed=True,
+        )
+
     def consume(first, events, launch, port, server_process, server):
         nonlocal evidence
         java = args.xmage_root.resolve() / "java/jre1.8.0_201/bin/java.exe"
@@ -145,6 +158,11 @@ def main():
                 "-Djava.awt.headless=true",
                 "-Dfile.encoding=UTF-8",
                 "-Djava.net.preferIPv4Stack=true",
+                *(
+                    ["-Dmanaforge.declaredPriority=true"]
+                    if args.declared_priority
+                    else []
+                ),
                 *(
                     ["-Dmanaforge.finishAttacks=true"]
                     if args.finish_attacks or args.select_attacker
@@ -217,6 +235,11 @@ def main():
                     "GAME_SELECT",
                 }:
                     print("Decision family: " + failed["decision_family"], flush=True)
+            if args.declared_priority and process.returncode == 0 and len(raw) <= 4096:
+                blockers = json.loads(raw).get("native_blockers_observed")
+                if type(blockers) is not bool:
+                    raise transport.ProofError("LIVE_DECLARED_BLOCKERS_SHAPE")
+                expected["native_blockers_observed"] = blockers
             if (
                 process.returncode != 0
                 or len(raw) > 4096
@@ -252,7 +275,9 @@ def main():
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
     print(
-        "Real XMage accepted explicit selection and Finish attacks; the same attacker remained assigned at guarded native priority. No blocking or damage proof."
+        "Real XMage accepted one explicit post-declaration priority pass and exposed the next guarded combat state. No damage proof."
+        if args.declared_priority
+        else "Real XMage accepted explicit selection and Finish attacks; the same attacker remained assigned at guarded native priority. No blocking or damage proof."
         if args.finish_selected_attack
         else "Real XMage accepted an explicit attacker choice and assigned its defender; declaration remains open; duplicate suppression and cleanup passed."
         if args.select_attacker

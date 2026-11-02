@@ -1,5 +1,25 @@
 # Live Unity / Java / XMage integration
 
+## Observe one post-declaration pass in Java (0.5.182)
+
+```powershell
+python tools/check_play_live_opening.py --first-creature --native-metadata --select-attacker --finish-selected-attack --declared-priority
+```
+
+This Java-only continuation offers one explicit Pass priority after the nonempty
+attack declaration. Other playable actions are removed from both the public
+snapshot and native token map. The exact accepted response is correlated with a
+later guarded priority prompt, the unchanged attacker incarnation, the same
+attacker/defender and turn, and empty stack. Any reported blockers must be unique
+visible battlefield objects controlled by the opposing defender. Unsupported or
+mismatched states fail closed; no further responses are sent.
+
+The sanitized report includes `native_declared_priority_submitted`,
+`native_declared_priority_observed` and the observed `native_blockers_observed`
+boolean. A blocker assignment is an engine observation, not proof of damage or
+a reconstructed combat rule. Unity still ends at its read-only post-declaration
+priority snapshot. CI exercises this additional fixture continuation.
+
 ## Finish the selected attack from Unity (0.5.181)
 
 ```powershell
