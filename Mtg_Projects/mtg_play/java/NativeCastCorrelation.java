@@ -81,9 +81,37 @@ public final class NativeCastCorrelation {
             return pass;
         }catch(RuntimeException unsupported){return null;}
     }
+    private static JsonObject controlledPermanent(JsonObject state,String id,String controller) {
+        JsonObject found=null;for(JsonElement row:state.getAsJsonArray("players")){JsonObject player=row.getAsJsonObject();if(!controller.equals(string(player,"id")))continue;
+            for(JsonElement item:player.getAsJsonArray("battlefield")){JsonObject card=item.getAsJsonObject();if(!id.equals(string(card,"id")))continue;
+                if(found!=null || !new JsonPrimitive(false).equals(card.get("hidden")) || !new JsonPrimitive(false).equals(card.get("face_down")) || !string(player,"name").equals(string(card,"controller_name")))throw new IllegalArgumentException();found=card;}}
+        if(found==null)throw new IllegalArgumentException();return found;
+    }
+    /** One Memnite blocked by one Ornithopter; no lethal or general blocked combat support. */
+    public static PriorityEvidence blockedDamageEvidence(JsonObject before,JsonObject prompt,JsonObject command,JsonObject beforeMetadata,JsonObject accepted,
+            JsonObject after,JsonObject nextPrompt,JsonObject afterMetadata,String source) {
+        PriorityEvidence pass=combatPriorityEvidence(before,prompt,command,beforeMetadata,accepted,after,nextPrompt,afterMetadata,source,true);if(pass==null)return null;
+        try {
+            if(!"COMBAT".equals(string(before,"phase")) || !"COMBAT".equals(string(after,"phase")) || !"COMBAT_DAMAGE".equals(string(after,"step")) || string(before,"step").equals(string(after,"step")) || !before.get("combat").equals(after.get("combat")) || before.getAsJsonArray("players").size()!=2 || after.getAsJsonArray("players").size()!=2)return null;
+            JsonObject group=before.getAsJsonArray("combat").get(0).getAsJsonObject();String blocker=group.getAsJsonArray("blockers").get(0).getAsString(),defender=string(group,"defender"),viewer=string(before,"viewer");
+            JsonObject first=controlledPermanent(before,blocker,defender),last=controlledPermanent(after,blocker,defender);
+            for(JsonObject card:Arrays.asList(first,last))if(!"Ornithopter".equals(string(card,"name")) || !"0".equals(string(card,"power")) || !"2".equals(string(card,"toughness")))return null;
+            if(number(first,"damage")!=0 || number(last,"damage")!=1)return null;
+            JsonObject firstEntry=beforeMetadata.getAsJsonObject("objects").getAsJsonObject(blocker),lastEntry=afterMetadata.getAsJsonObject("objects").getAsJsonObject(blocker);
+            if(number(firstEntry,"incarnation")!=number(lastEntry,"incarnation"))return null;for(JsonObject entry:Arrays.asList(firstEntry,lastEntry))if(!defender.equals(string(entry,"owner")) || !defender.equals(string(entry,"controller")))return null;
+            for(JsonObject state:Arrays.asList(before,after)){JsonObject card=controlledPermanent(state,source,viewer);if(!"Memnite".equals(string(card,"name")) || !"1".equals(string(card,"power")) || !"1".equals(string(card,"toughness")) || number(card,"damage")!=0)return null;}
+            Map<String,Long> lives=new HashMap<>();for(JsonElement row:before.getAsJsonArray("players")){JsonObject player=row.getAsJsonObject();if(lives.put(string(player,"id"),number(player,"life"))!=null)return null;}
+            Set<String> seen=new HashSet<>();for(JsonElement row:after.getAsJsonArray("players")){JsonObject player=row.getAsJsonObject();String id=string(player,"id");if(!seen.add(id) || !lives.containsKey(id) || number(player,"life")!=lives.get(id))return null;}
+            return pass;
+        }catch(RuntimeException unsupported){return null;}
+    }
     /** Exact post-declaration pass and next guarded native combat observation; no damage claim. */
     public static PriorityEvidence declaredPriorityEvidence(JsonObject before,JsonObject prompt,JsonObject command,JsonObject beforeMetadata,JsonObject accepted,
             JsonObject after,JsonObject nextPrompt,JsonObject afterMetadata,String source) {
+        return combatPriorityEvidence(before,prompt,command,beforeMetadata,accepted,after,nextPrompt,afterMetadata,source,false);
+    }
+    private static PriorityEvidence combatPriorityEvidence(JsonObject before,JsonObject prompt,JsonObject command,JsonObject beforeMetadata,JsonObject accepted,
+            JsonObject after,JsonObject nextPrompt,JsonObject afterMetadata,String source,boolean blocked) {
         try {
             if(!string(before,"game_id").equals(string(after,"game_id")) || !string(before,"viewer").equals(string(after,"viewer"))
                 || !string(before,"game_id").equals(string(command,"game_id")) || !"respond".equals(string(command,"command")) || !"boolean".equals(string(command,"kind")) || !new JsonPrimitive(false).equals(command.get("value"))
@@ -96,7 +124,7 @@ public final class NativeCastCorrelation {
                 || before.getAsJsonArray("combat").size()!=1 || after.getAsJsonArray("combat").size()!=1)return null;
             JsonObject first=before.getAsJsonArray("combat").get(0).getAsJsonObject(),last=after.getAsJsonArray("combat").get(0).getAsJsonObject();
             if(first.getAsJsonArray("attackers").size()!=1 || !source.equals(first.getAsJsonArray("attackers").get(0).getAsString()) || !first.get("attackers").equals(last.get("attackers")) || !string(first,"defender").equals(string(last,"defender"))
-                || first.getAsJsonArray("blockers").size()!=0 || !new JsonPrimitive(false).equals(first.get("blocked")) || !last.get("blocked").isJsonPrimitive() || !last.getAsJsonPrimitive("blocked").isBoolean())return null;
+                || (blocked?(first.getAsJsonArray("blockers").size()!=1 || !new JsonPrimitive(true).equals(first.get("blocked")) || !first.get("blockers").equals(last.get("blockers"))):(first.getAsJsonArray("blockers").size()!=0 || !new JsonPrimitive(false).equals(first.get("blocked")))) || !last.get("blocked").isJsonPrimitive() || !last.getAsJsonPrimitive("blocked").isBoolean())return null;
             String defender=string(last,"defender"),viewer=string(after,"viewer");Set<String> visible=new HashSet<>();int opponents=0;
             for(JsonElement row:after.getAsJsonArray("players")){JsonObject player=row.getAsJsonObject();if(defender.equals(string(player,"id")) && !viewer.equals(defender) && new JsonPrimitive(false).equals(player.get("left"))){opponents++;for(JsonElement item:player.getAsJsonArray("battlefield")){JsonObject card=item.getAsJsonObject();if(new JsonPrimitive(false).equals(card.get("hidden")) && new JsonPrimitive(false).equals(card.get("face_down")) && string(player,"name").equals(string(card,"controller_name")))visible.add(string(card,"id"));}}}
             JsonArray blockers=last.getAsJsonArray("blockers");Set<String> unique=new HashSet<>();if(opponents!=1 || blockers.size()>256)return null;

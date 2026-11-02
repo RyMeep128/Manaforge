@@ -17,6 +17,11 @@ from play_native_metadata import provision_metadata  # noqa: E402
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
+        "--blocked-damage",
+        action="store_true",
+        help="Native single-Ornithopter blocked damage observation; requires --blocked-combat",
+    )
+    parser.add_argument(
         "--blocked-combat",
         action="store_true",
         help="Public Ornithopter AI blocker fixture; requires --declared-priority and excludes --combat-damage",
@@ -97,6 +102,8 @@ def main():
         parser.error(
             "--blocked-combat requires --declared-priority and excludes --combat-damage"
         )
+    if args.blocked_damage and not args.blocked_combat:
+        parser.error("--blocked-damage requires --blocked-combat")
     output = args.output.resolve()
     artifacts = (ROOT / "Mtg_Projects/mtg_play_unity/Artifacts").resolve()
     if not output.is_relative_to(artifacts) or output == artifacts:
@@ -183,6 +190,12 @@ def main():
             native_blockers_observed=True,
         )
 
+    if args.blocked_damage:
+        expected.update(
+            native_blocked_damage_pass_submitted=True,
+            native_blocker_damage_observed=True,
+        )
+
     def consume(first, events, launch, port, server_process, server):
         nonlocal evidence
         java = args.xmage_root.resolve() / "java/jre1.8.0_201/bin/java.exe"
@@ -200,6 +213,7 @@ def main():
                 "-Djava.awt.headless=true",
                 "-Dfile.encoding=UTF-8",
                 "-Djava.net.preferIPv4Stack=true",
+                *(["-Dmanaforge.blockedDamage=true"] if args.blocked_damage else []),
                 *(["-Dmanaforge.blockedCombat=true"] if args.blocked_combat else []),
                 *(["-Dmanaforge.completeCombat=true"] if args.complete_combat else []),
                 *(["-Dmanaforge.combatDamage=true"] if args.combat_damage else []),
@@ -324,7 +338,9 @@ def main():
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
     print(
-        "Real XMage declared visible AI blockers against the selected Memnite; the read-only public assignment validated. No blocked-damage or human blocker-choice proof."
+        "Real XMage marked one damage on the same native Ornithopter blocker in COMBAT_DAMAGE; both life totals unchanged in the public fixture."
+        if args.blocked_damage
+        else "Real XMage declared visible AI blockers against the selected Memnite; the read-only public assignment validated. No blocked-damage or human blocker-choice proof."
         if args.blocked_combat
         else "Real XMage observed the explicit pass to postcombat main; combat cleared with source incarnation and life totals unchanged."
         if args.complete_combat

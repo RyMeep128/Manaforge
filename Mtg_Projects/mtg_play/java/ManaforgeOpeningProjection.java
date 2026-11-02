@@ -114,9 +114,17 @@ public final class ManaforgeOpeningProjection {
     private JsonObject project(JsonObject raw,JsonObject prompt,boolean includePriorityPass,boolean includeSpells,boolean omitStack,boolean attackFinish) throws IOException {
         return project(raw,prompt,includePriorityPass,includeSpells,omitStack,attackFinish,false);
     }
+    public synchronized JsonObject projectBlockedAttackPriority(JsonObject raw,JsonObject prompt) throws IOException {
+        invalidateDecision();require("GAME_SELECT".equals(text(prompt,"kind")) && Boolean.TRUE.equals(flag(prompt,"is_priority")) && raw.getAsJsonArray("combat").size()==1);
+        JsonObject group=raw.getAsJsonArray("combat").get(0).getAsJsonObject();require(group.getAsJsonArray("blockers").size()==1 && Boolean.TRUE.equals(flag(group,"blocked")));
+        return retainPriorityPass(project(raw,prompt,true,false,false,false,false,true,true));
+    }
     public synchronized JsonObject projectDeclaredAttackPriority(JsonObject raw,JsonObject prompt) throws IOException {
         invalidateDecision();require("GAME_SELECT".equals(text(prompt,"kind")) && Boolean.TRUE.equals(flag(prompt,"is_priority")));
-        JsonObject snapshot=project(raw,prompt,true,false,false,false,false,true);JsonArray passes=new JsonArray();Set<String> retained=new HashSet<>();
+        return retainPriorityPass(project(raw,prompt,true,false,false,false,false,true));
+    }
+    private JsonObject retainPriorityPass(JsonObject snapshot) throws IOException {
+        JsonArray passes=new JsonArray();Set<String> retained=new HashSet<>();
         for(JsonElement item:snapshot.getAsJsonArray("actions")){JsonObject action=item.getAsJsonObject();if("pass".equals(action.get("kind").getAsString())){passes.add(action);retained.add(action.get("action_id").getAsString());}}
         require(passes.size()==1);snapshot.add("actions",passes);nativeActions.keySet().retainAll(retained);return snapshot;
     }

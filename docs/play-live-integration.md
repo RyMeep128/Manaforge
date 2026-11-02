@@ -1,5 +1,27 @@
 # Live Unity / Java / XMage integration
 
+## Observe native blocked damage in Java (0.5.191)
+
+```powershell
+python tools/check_play_live_opening.py --first-creature --native-metadata --select-attacker --finish-selected-attack --declared-priority --blocked-combat --blocked-damage
+```
+
+This Java-only continuation offers one explicit priority pass for a single
+Ornithopter blocking Memnite. The private metadata query tracks both visible
+battlefield objects. Typed evidence requires the same attacker and blocker
+incarnations, owner/controllers and assignment; native transition into
+`COMBAT_DAMAGE`; empty stack and unchanged life totals; Memnite still native 1/1
+with zero damage; and the same native 0/2 Ornithopter changing from zero to one
+marked damage. Unsupported powers, multiple blockers, lethal or missing objects,
+stale decisions and changed metadata fail closed.
+
+The sanitized report records `native_blocked_damage_pass_submitted` and
+`native_blocker_damage_observed`. This is an observed native fixture effect,
+not client-calculated damage or general combat acceptance. Unity still ends at
+its blocker-name view; displaying and confirming this additional observation
+there, human blocker selection and broader combat outcomes remain open. CI runs
+the additional blocked-damage fixture.
+
 ## Display native AI blocker names in Unity (0.5.190)
 
 ```powershell
