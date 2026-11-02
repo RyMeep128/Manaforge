@@ -1276,3 +1276,14 @@ IDs and bounded history cover the longer session, which ends read-only.
 This replaces per-transition fixture extension with a reusable multi-round path.
 Natural game completion, general decks and decisions remain P4 work. Visual
 improvements remain deferred until the full 1v1 loop is complete.
+
+
+### General declarations and multiple native attackers (0.5.200)
+
+The opt-in core combat coordinator now supports repeated native responses across
+multiple-attacker combat, rather than fixed one-source proof stages. The packaged
+fixture selects both creatures and reaches postcombat main with two damage.
+Projection tests additionally cover human blocker/target menus, multiple groups,
+public planeswalker/battle defender references and rejected illegal references.
+Live blocker/permanent-defender acceptance, damage choices, representative combat
+interactions and natural terminal results remain open. Visual work stays deferred.

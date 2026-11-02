@@ -15,6 +15,7 @@ public final class ManaforgeOpeningProjection {
         private ChoiceException(String code){super(code);this.code=code;}
     }
     private long revision;
+    private boolean coreCombat;
     private String decision, nativeGame;
     private Long nativeDecision, nativeCycle;
     private final Map<String,Boolean> options=new HashMap<>();
@@ -58,6 +59,9 @@ public final class ManaforgeOpeningProjection {
         this.session=session;this.viewer=viewer;this.engineViewer=engineViewer;
         for(Map.Entry<String,CardIdentity> entry:bindings.entrySet())
             printings.put(entry.getKey(),JSON.fromJson(JSON.toJson(entry.getValue()),CardIdentity.class));
+    }
+    private static GameObject visibleCard(List<GameObject> cards,String reference) {
+        for(GameObject card:cards)if(card.object_id.equals(reference) && "battlefield".equals(card.zone) && Boolean.FALSE.equals(card.hidden) && Boolean.FALSE.equals(card.face_down))return card;return null;
     }
     private static String opaque(){return "mf-"+UUID.randomUUID().toString().replace("-","");}
     private static void require(boolean value) throws IOException {if(!value)throw new IOException("LIVE_OPENING_PROJECTION_UNSUPPORTED");}
@@ -158,6 +162,15 @@ public final class ManaforgeOpeningProjection {
         invalidateDecision();require("GAME_SELECT".equals(text(prompt,"kind")) && Boolean.TRUE.equals(flag(prompt,"is_priority")));JsonObject snapshot=projectTurnContinuation(raw,prompt,true);JsonArray casts=new JsonArray();Set<String> retained=new HashSet<>();
         for(JsonElement item:snapshot.getAsJsonArray("actions")){JsonObject action=item.getAsJsonObject();if("cast_spell".equals(action.get("kind").getAsString())){casts.add(action);retained.add(action.get("action_id").getAsString());}}require(casts.size()>0);snapshot.add("actions",casts);nativeActions.keySet().retainAll(retained);return snapshot;
     }
+    /** Native legal declarations/targets for either 1v1 seat; no client-side rules. */
+    public synchronized JsonObject projectCoreCombat(JsonObject raw,JsonObject prompt) throws IOException {
+        coreCombat=true;
+        try {
+            boolean priority="GAME_SELECT".equals(text(prompt,"kind")) && Boolean.TRUE.equals(flag(prompt,"is_priority"));
+            boolean declaration="GAME_SELECT".equals(text(prompt,"kind")) && !priority && (prompt.has("attackers") ^ prompt.has("blockers"));
+            return project(raw,prompt,priority,false,raw.getAsJsonArray("stack").size()>0,declaration,true,raw.getAsJsonArray("combat").size()>0,true,true);
+        } finally {coreCombat=false;}
+    }
     public synchronized JsonObject projectTurnCombat(JsonObject raw,JsonObject prompt,boolean includeAttackers,boolean assignment) throws IOException {
         boolean priority="GAME_SELECT".equals(text(prompt,"kind")) && Boolean.TRUE.equals(flag(prompt,"is_priority"));
         return project(raw,prompt,priority,false,false,!priority,includeAttackers,assignment,false,true);
@@ -178,17 +191,19 @@ public final class ManaforgeOpeningProjection {
             require(engineViewer.equals(raw.get("viewer").getAsString()));
             boolean priority="GAME_SELECT".equals(prompt.get("kind").getAsString()) && Boolean.TRUE.equals(flag(prompt,"is_priority"));
             boolean discard=turnMode && "GAME_TARGET".equals(text(prompt,"kind")) && "CLEANUP".equals(text(raw,"step")) && "END".equals(text(raw,"phase")) && raw.getAsJsonArray("hand").size()>7;
+            boolean targeting=coreCombat && "GAME_TARGET".equals(text(prompt,"kind")) && !discard;
+            boolean blocking=coreCombat && attackFinish && prompt.has("blockers");
             boolean ability=includeSpells && "GAME_CHOOSE_ABILITY".equals(prompt.get("kind").getAsString());
-            require(!omitStack || priority);
-            require("GAME_ASK".equals(prompt.get("kind").getAsString()) || priority || ability || attackFinish || discard);
+            require(!omitStack || priority || coreCombat);
+            require("GAME_ASK".equals(prompt.get("kind").getAsString()) || priority || ability || attackFinish || discard || targeting);
             if(attackFinish)require("GAME_SELECT".equals(text(prompt,"kind")) && Boolean.FALSE.equals(flag(prompt,"is_priority"))
-                && prompt.has("attackers") && prompt.get("attackers").isJsonArray() && prompt.getAsJsonArray("attackers").size()<=256 && !prompt.has("blockers"));
+                && (blocking?prompt.has("blockers") && !prompt.has("attackers"):prompt.has("attackers") && !prompt.has("blockers")) && prompt.get(blocking?"blockers":"attackers").isJsonArray() && prompt.getAsJsonArray(blocking?"blockers":"attackers").size()<=256);
             require(!priority || (!prompt.has("attackers") && !prompt.has("blockers")));
             require(Objects.equals(integer(raw,"cycle"),integer(prompt,"cycle")) && integer(raw,"cycle")!=null);
             require(integer(prompt,"decision_id")!=null && integer(prompt,"decision_id")>=0 && integer(prompt,"decision_id")<=Integer.MAX_VALUE);
             require(raw.has("game_id") && !raw.get("game_id").isJsonNull());
             if(omitStack)require(raw.has("stack") && raw.get("stack").isJsonArray() && raw.getAsJsonArray("stack").size()>0);else empty(raw,"stack");
-            empty(raw,"exile");if(!combatObservation)empty(raw,"combat");
+            if(!coreCombat)empty(raw,"exile");if(!combatObservation)empty(raw,"combat");
             GameSnapshot result=new GameSnapshot();result.session_id=session;result.viewer_id=viewer;
             result.revision=revision+1;result.protocol_version=1L;result.status="active";
             result.turn=integer(raw,"turn");result.phase=text(raw,"phase");result.step=text(raw,"step");
@@ -199,7 +214,7 @@ public final class ManaforgeOpeningProjection {
                 boolean local=engineViewer.equals(id);found|=local;
                 String publicId=local?viewer:players.computeIfAbsent(id,ignored->opaque());
                 names.put(row.get("name").getAsString(),publicId);
-                if(!priority && !ability && !attackFinish && !discard)empty(row,"battlefield");else for(JsonElement permanent:row.getAsJsonArray("battlefield"))battlefield.add(permanent.getAsJsonObject());
+                if(!priority && !ability && !attackFinish && !discard && !targeting)empty(row,"battlefield");else for(JsonElement permanent:row.getAsJsonArray("battlefield"))battlefield.add(permanent.getAsJsonObject());
                 if(turnMode){for(JsonElement graveItem:row.getAsJsonArray("graveyard"))graveOwners.put(graveItem.getAsJsonObject(),publicId);}else empty(row,"graveyard");empty(row,"command");seatNames.put(row.get("name").getAsString(),publicId);
                 PlayerView seat=new PlayerView();seat.player_id=publicId;seat.name=local?"You":"Player "+(seats.size()+1);
                 seat.life=integer(row,"life");seat.hand_count=integer(row,"hand_count");seat.library_count=integer(row,"library_count");
@@ -209,7 +224,7 @@ public final class ManaforgeOpeningProjection {
             result.players=seats.toArray(new PlayerView[0]);
             result.active_player_id=names.get(text(raw,"active_player"));result.priority_player_id=names.get(text(raw,"priority_player"));
             require(!(priority || ability) || viewer.equals(result.priority_player_id));
-            require(!(attackFinish || discard) || viewer.equals(result.active_player_id));
+            require(!(attackFinish || discard) || (blocking?!viewer.equals(result.active_player_id):viewer.equals(result.active_player_id)));
             List<GameObject> cards=new ArrayList<>();Set<String> cardIds=new HashSet<>();
             List<JsonObject> displayed=new ArrayList<>();Set<JsonObject> handRows=Collections.newSetFromMap(new IdentityHashMap<>());
             for(JsonElement item:raw.getAsJsonArray("hand")){displayed.add(item.getAsJsonObject());handRows.add(item.getAsJsonObject());}displayed.addAll(battlefield);displayed.addAll(graveOwners.keySet());
@@ -244,13 +259,14 @@ public final class ManaforgeOpeningProjection {
             }
             if(attackFinish) {
                 Set<String> candidates=new HashSet<>();
-                for(JsonElement candidate:prompt.getAsJsonArray("attackers")) {
+                for(JsonElement candidate:prompt.getAsJsonArray(blocking?"blockers":"attackers")) {
                     require(candidate.isJsonPrimitive() && candidate.getAsJsonPrimitive().isString() && candidates.add(candidate.getAsString()));
                     String reference=visibleReferences.get(candidate.getAsString());GameObject object=null;
                     for(GameObject card:cards)if(card.object_id.equals(reference))object=card;
                     require(object!=null && "battlefield".equals(object.zone) && viewer.equals(object.controller_id) && Boolean.FALSE.equals(object.hidden) && Boolean.FALSE.equals(object.face_down));
                     if(includeAttackers) {
-                        LegalAction action=new LegalAction();action.action_id=opaque();action.object_id=reference;action.kind="declare_attacker";action.label="Select attacker";action.priority_class="meaningful";
+                        LegalAction action=new LegalAction();action.action_id=opaque();action.object_id=reference;action.kind=blocking?"declare_blocker":"declare_attacker";action.label=blocking?"Select blocker":"Select attacker";action.priority_class="meaningful";
+                        if(coreCombat){boolean assigned=false;for(JsonElement group:raw.getAsJsonArray("combat"))for(JsonElement selected:group.getAsJsonObject().getAsJsonArray(blocking?"blockers":"attackers"))assigned|=candidate.equals(selected);if(assigned)action.label=blocking?"Remove blocker":"Remove attacker";}
                         actions.add(action);offeredNative.put(action.action_id,candidate.getAsString());
                     }
                 }
@@ -265,14 +281,19 @@ public final class ManaforgeOpeningProjection {
                 actions.add(action);offeredNative.put(action.action_id,source);
             }
             if((priority && includePriorityPass) || attackFinish) {
-                LegalAction pass=new LegalAction();pass.action_id=opaque();pass.kind="pass";pass.label=attackFinish?"Finish attacks":"Pass priority";pass.priority_class="unknown";
+                LegalAction pass=new LegalAction();pass.action_id=opaque();pass.kind="pass";pass.label=attackFinish?(blocking?"Finish blocks":"Finish attacks"):"Pass priority";pass.priority_class="unknown";
                 actions.add(pass);offeredNative.put(pass.action_id,null);
             }
             result.actions=actions.toArray(new LegalAction[0]);result.actions_complete=false;
-            ChoiceRequest choice=new ChoiceRequest();choice.decision_id=opaque();choice.player_id=viewer;choice.family=priority || ability || attackFinish || discard?"selection":"boolean";
+            ChoiceRequest choice=new ChoiceRequest();choice.decision_id=opaque();choice.player_id=viewer;choice.family=priority || ability || attackFinish || discard || targeting?"selection":"boolean";
             choice.prompt=text(prompt,"message");choice.cancellable=false;choice.can_finish=false;choice.is_priority=priority;choice.amounts=new AmountConstraint[0];
             Map<String,String> offeredOptions=new HashMap<>();
-            if(ability) {
+            if(targeting) {
+                JsonArray targets=prompt.getAsJsonArray("targets");require(targets.size()>0 && targets.size()<=256);Set<String> unique=new HashSet<>();List<ChoiceOption> entries=new ArrayList<>();
+                for(JsonElement item:targets){require(item.isJsonPrimitive() && item.getAsJsonPrimitive().isString() && unique.add(item.getAsString()));String id=item.getAsString();GameObject card=null;for(GameObject object:cards)if(object.object_id.equals(visibleReferences.get(id)))card=object;String label=null;if(engineViewer.equals(id))label="You";else if(players.containsKey(id)){for(PlayerView seat:seats)if(seat.player_id.equals(players.get(id)))label=seat.name;}else if(card!=null && !card.hidden && Boolean.FALSE.equals(card.face_down) && card.characteristics!=null)label=card.characteristics.name;require(label!=null);ChoiceOption option=new ChoiceOption();option.option_id=opaque();option.label=label;option.selected=false;entries.add(option);offeredOptions.put(option.option_id,id);}
+                choice.options=entries.toArray(new ChoiceOption[0]);
+                if(Boolean.TRUE.equals(flag(prompt,"can_finish"))){LegalAction finish=new LegalAction();finish.action_id=opaque();finish.kind="pass";finish.label="Finish selection";finish.priority_class="unknown";actions.add(finish);offeredNative.put(finish.action_id,null);result.actions=actions.toArray(new LegalAction[0]);}
+            } else if(ability) {
                 JsonObject choices=prompt.getAsJsonObject("key_choices");require(choices.size()>0 && choices.size()<=32);
                 List<ChoiceOption> entries=new ArrayList<>();
                 for(Map.Entry<String,JsonElement> entry:choices.entrySet()) {
@@ -286,7 +307,16 @@ public final class ManaforgeOpeningProjection {
                 for(int i=0;i<choice.options.length;i++){ChoiceOption option=new ChoiceOption();option.option_id=opaque();option.label=i==0?"Yes":"No";option.selected=false;choice.options[i]=option;}
             }
             result.decision=choice;result.combat=new CombatAssignment[0];
-            if(combatObservation) {
+            if(combatObservation && coreCombat) {
+                require(raw.getAsJsonArray("combat").size()<=256);List<CombatAssignment> groups=new ArrayList<>();Set<String> assigned=new HashSet<>();
+                for(JsonElement item:raw.getAsJsonArray("combat")){JsonObject group=item.getAsJsonObject();CombatAssignment assignment=new CombatAssignment();List<String> attackers=new ArrayList<>(),blockers=new ArrayList<>();String attackingSide=null;
+                    require(group.getAsJsonArray("attackers").size()>0 && group.getAsJsonArray("attackers").size()<=256 && group.getAsJsonArray("blockers").size()<=256);
+                    for(JsonElement source:group.getAsJsonArray("attackers")){String id=source.getAsString();require(assigned.add(id));GameObject card=visibleCard(cards,visibleReferences.get(id));require(card!=null);if(attackingSide==null)attackingSide=card.controller_id;require(attackingSide.equals(card.controller_id));attackers.add(card.object_id);}
+                    require(attackingSide.equals(result.active_player_id));String defender=group.get("defender").getAsString(),defendingSide=engineViewer.equals(defender)?viewer:players.get(defender);if(defendingSide!=null){require(!defendingSide.equals(attackingSide));assignment.defender_id=defendingSide;}else{GameObject card=visibleCard(cards,visibleReferences.get(defender));require(card!=null && card.characteristics!=null && card.characteristics.type_line!=null && (card.characteristics.type_line.contains("Planeswalker") || card.characteristics.type_line.contains("Battle")));assignment.defender_id=card.object_id;}
+                    Set<String> unique=new HashSet<>();for(JsonElement source:group.getAsJsonArray("blockers")){require(unique.add(source.getAsString()));GameObject card=visibleCard(cards,visibleReferences.get(source.getAsString()));require(card!=null && !attackingSide.equals(card.controller_id) && (defendingSide==null || defendingSide.equals(card.controller_id)));blockers.add(card.object_id);}
+                    assignment.attackers=attackers.toArray(new String[0]);assignment.blockers=blockers.toArray(new String[0]);assignment.blocked=flag(group,"blocked");require(assignment.blocked!=null && (blockers.isEmpty() || assignment.blocked));groups.add(assignment);
+                }result.combat=groups.toArray(new CombatAssignment[0]);
+            } else if(combatObservation) {
                 require(raw.getAsJsonArray("combat").size()==1);JsonObject group=raw.getAsJsonArray("combat").get(0).getAsJsonObject();
                 require(group.getAsJsonArray("attackers").size()==1 && (includeBlockers || group.getAsJsonArray("blockers").size()==0 && Boolean.FALSE.equals(flag(group,"blocked"))) && flag(group,"blocked")!=null);
                 String source=group.getAsJsonArray("attackers").get(0).getAsString(),reference=visibleReferences.get(source);GameObject attacker=null;
@@ -299,11 +329,12 @@ public final class ManaforgeOpeningProjection {
                 assignment.blockers=blockerReferences.toArray(new String[0]);assignment.defender_id=defender;assignment.blocked=flag(group,"blocked");result.combat=new CombatAssignment[]{assignment};
             }result.observations=new CardObservation[0];
             result.unsupported_fields=new String[]{"object_incarnations","commander_metadata","live_abilities","actions","mana","counters","eliminated","observations","attachments","copy_metadata","physical_printing"};
+            if(coreCombat){List<String> unsupported=new ArrayList<>(Arrays.asList(result.unsupported_fields));unsupported.add("exile");result.unsupported_fields=unsupported.toArray(new String[0]);}
             if(omitStack){List<String> unsupported=new ArrayList<>(Arrays.asList(result.unsupported_fields));unsupported.add("stack");result.unsupported_fields=unsupported.toArray(new String[0]);}
             JsonObject output=JSON.toJsonTree(result).getAsJsonObject();
             nativeGame=raw.get("game_id").getAsString();nativeDecision=integer(prompt,"decision_id");nativeCycle=integer(raw,"cycle");
             decision=choice.decision_id;consumed=false;
-            if(!priority && !ability && !attackFinish && !discard){options.put(choice.options[0].option_id,true);options.put(choice.options[1].option_id,false);}
+            if(!priority && !ability && !attackFinish && !discard && !targeting){options.put(choice.options[0].option_id,true);options.put(choice.options[1].option_id,false);}
             nativeOptions.putAll(offeredOptions);
             nativeActions.putAll(offeredNative);
             revision++;return output;

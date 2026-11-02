@@ -23,6 +23,11 @@ def main():
     artifacts = ROOT / "Mtg_Projects/mtg_play_unity/Artifacts"
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
+        "--core-combat",
+        action="store_true",
+        help="Native multiple-attacker combat; requires --repeat-cycle, conflicts with --play-rounds",
+    )
+    parser.add_argument(
         "--play-rounds",
         type=int,
         choices=range(0, 7),
@@ -154,6 +159,8 @@ def main():
         default=artifacts / ("UnityLive-" + uuid.uuid4().hex[:10]),
     )
     args = parser.parse_args()
+    if args.core_combat and (not args.repeat_cycle or args.play_rounds):
+        parser.error("--core-combat requires --repeat-cycle and no --play-rounds")
     if args.play_rounds and not args.repeat_cycle:
         parser.error("--play-rounds requires --repeat-cycle")
     if args.repeat_cycle and not args.next_turn_cast:
@@ -292,6 +299,7 @@ def main():
                         "-Dfile.encoding=UTF-8",
                         "-Djava.net.preferIPv4Stack=true",
                         f"-Dmanaforge.playRounds={args.play_rounds}",
+                        f"-Dmanaforge.coreCombat={str(args.core_combat).lower()}",
                         *(
                             ["-Dmanaforge.repeatCycle=true"]
                             if args.repeat_cycle
@@ -433,6 +441,10 @@ def main():
                     command += ["-manaforgeLivePriority", "1"]
                 if args.creature_ability:
                     command += ["-manaforgeLiveCreature", "1"]
+                command += [
+                    "-manaforgeLiveCoreCombat",
+                    "1" if args.core_combat else "0",
+                ]
                 command += ["-manaforgeLivePlayRounds", str(args.play_rounds)]
                 if args.repeat_cycle:
                     command += ["-manaforgeLiveRepeatCycle", "1"]
@@ -694,6 +706,14 @@ def main():
                         - args.play_rounds
                     ):
                         raise RuntimeError("LIVE_UNITY_PLAY_ROUNDS_NOT_PRESENTED")
+                if args.core_combat:
+                    core_result = wait_file("core-combat-ready", 240)
+                    if (
+                        core_result.get("core_combat_presented") is not True
+                        or core_result.get("core_life_after")
+                        != core_result.get("core_life_before", -10) - 2
+                    ):
+                        raise RuntimeError("LIVE_UNITY_CORE_COMBAT_NOT_PRESENTED")
                 chosen = wait_file("choice", 60)
                 if (
                     chosen.get("ack_count")
@@ -814,7 +834,9 @@ def main():
                         ready.get("attacker_choice_presented") is not True
                         or chosen.get("snapshot_count")
                         != (
-                            rounds_result["snapshot_count"]
+                            core_result["snapshot_count"]
+                            if args.core_combat
+                            else rounds_result["snapshot_count"]
                             if args.play_rounds
                             else returned_result["snapshot_count"]
                             if args.repeat_cycle
@@ -891,6 +913,11 @@ def main():
                     and native.get("native_play_rounds_completed") != args.play_rounds
                 ):
                     raise RuntimeError("LIVE_UNITY_PLAY_ROUNDS_EVIDENCE_FAILED")
+                if args.core_combat and (
+                    native.get("native_core_combat_observed") is not True
+                    or native.get("native_maximum_attackers") != 2
+                ):
+                    raise RuntimeError("LIVE_UNITY_CORE_COMBAT_EVIDENCE_FAILED")
                 if args.next_turn_cast and any(
                     native.get(field) is not True
                     for field in (
@@ -1075,6 +1102,12 @@ def main():
                         else 1,
                         uncertain_receipt_count=0,
                     )
+                if args.core_combat:
+                    evidence.update(
+                        native_core_combat_observed=True,
+                        native_maximum_attackers=2,
+                        core_combat_presented=True,
+                    )
                 if args.play_rounds:
                     evidence.update(
                         native_play_rounds_completed=args.play_rounds,
@@ -1225,7 +1258,9 @@ def main():
         json.dumps(evidence, indent=2) + "\n", encoding="utf-8"
     )
     print(
-        f"Packaged Unity completed {args.play_rounds} additional combat/AI-turn rounds using the second creature, confirmed every input, cleared the viewer and reaped owned roots."
+        "Packaged Unity selected multiple native attackers, completed damage and cleanup, confirmed inputs and cleared the viewer."
+        if args.core_combat
+        else f"Packaged Unity completed {args.play_rounds} additional combat/AI-turn rounds using the second creature, confirmed every input, cleared the viewer and reaped owned roots."
         if args.play_rounds
         else "Packaged Unity repeated casting and combat on one session, confirmed the second life decrease and following human turn, cleared the viewer and reaped owned roots."
         if args.repeat_cycle

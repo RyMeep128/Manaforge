@@ -34,6 +34,13 @@ namespace Manaforge.Play.Tests
             long? originalLife=frame.Combat[0].DefenderLife;card["characteristics"]["name"]="mutated";defender["name"]="mutated";defender["life"]=1;Assert.That(frame.Combat[0].DefenderLife,Is.EqualTo(originalLife));Assert.That(frame.PlayerLifeTotals[frame.Combat[0].DefenderId],Is.EqualTo(originalLife));
             snapshot["combat"]=new JArray();var cleared=Project(source);Assert.That(cleared.Combat,Is.Empty);Assert.That(cleared.PlayerLifeTotals[(string)defender["player_id"]],Is.EqualTo(1));Assert.That(((IDictionary<string,long?>)cleared.PlayerLifeTotals).IsReadOnly,Is.True);Assert.That(frame.Combat[0].AttackerNames[0],Is.Not.EqualTo("mutated"));Assert.That(frame.Combat[0].DefenderName,Is.Not.EqualTo("mutated"));Assert.That(((IList<string>)frame.Combat[0].AttackerNames).IsReadOnly,Is.True);
         }
+        [TestCase("Planeswalker")]
+        [TestCase("Battle")]
+        public void PublicPermanentDefendersHaveImmutableNames(string type)
+        {
+            var source=Priority();var snapshot=source["body"]["snapshot"];snapshot["objects"]=Corpus()["positive"][0]["envelope"]["body"]["snapshot"]["objects"].DeepClone();var card=(JObject)snapshot["objects"][0];var defender=(JObject)card.DeepClone();defender["object_id"]="public-defender";defender["zone"]="battlefield";defender["characteristics"]["name"]="Public "+type;defender["characteristics"]["type_line"]=type;((JArray)snapshot["objects"]).Add(defender);
+            snapshot["combat"]=new JArray(new JObject{["attackers"]=new JArray((string)card["object_id"]),["blockers"]=new JArray(),["defender_id"]="public-defender",["blocked"]=false});snapshot["decision"]=null;snapshot["actions"]=new JArray();var frame=Project(source);Assert.That(frame.Combat[0].DefenderName,Is.EqualTo("Public "+type));Assert.That(frame.Combat[0].DefenderLife,Is.Null);defender["characteristics"]["name"]="mutated";Assert.That(frame.Combat[0].DefenderName,Is.EqualTo("Public "+type));
+        }
         [Test] public void ManaReferencesCarryOnlyViewerRoutingAndDoNotInferEligibility()
         {
             var frame=Priority();var snapshot=frame["body"]["snapshot"];snapshot["decision"]["family"]="mana";var obj=snapshot["objects"][0];obj["hidden"]=true;obj["tapped"]=true;obj["controller_id"]="two";

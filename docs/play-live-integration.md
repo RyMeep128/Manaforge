@@ -1,5 +1,24 @@
 # Live Unity / Java / XMage integration
 
+## General combat declarations (0.5.200)
+
+```powershell
+python tools/check_play_unity_live.py --select-attacker --native-metadata --finish-selected-attack --declared-priority --combat-damage --complete-combat --loop-turn --next-turn-cast --repeat-cycle --core-combat --no-capture
+```
+
+The opt-in native coordinator now accepts repeated attacker selections and ends
+at the third turn's postcombat main. The packaged public fixture selects both
+creatures and verifies two attackers and the two-point life change. Every input
+requires a matching accepted native response and a later guarded native decision;
+this receipt confirms response consumption, not a standalone damage or result claim.
+
+The projection also accepts human blocker menus, multiple combat groups and native
+target menus, with viewer-safe public planeswalker/battle defender references.
+Java synthetic tests cover these shapes and reject foreign/duplicate/hidden
+references. Unity preserves immutable names for permanent defenders. Live human
+blocking, permanent-defender scenarios, keyword/interactions and lethal outcomes
+remain acceptance work; those capabilities are not certified by this fixture.
+
 ## Reusable combat and AI-turn rounds (0.5.199)
 
 ```powershell
