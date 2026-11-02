@@ -38,7 +38,7 @@ public final class ManaforgeLiveOpening {
     private final boolean combatDamage=Boolean.getBoolean("manaforge.combatDamage");private boolean combatDamagePassSubmitted,combatDamageObserved;
     private final boolean declaredPriority=Boolean.getBoolean("manaforge.declaredPriority");private boolean declaredPrioritySubmitted,declaredPriorityObserved,declaredBlockersObserved;
     private final boolean finishSelectedAttack=Boolean.getBoolean("manaforge.finishSelectedAttack");private boolean selectedAttackFinished,declaredAttackObserved;
-    private final boolean selectAttacker=Boolean.getBoolean("manaforge.selectAttacker");private boolean attackerSelected,attackAssignmentObserved;private JsonObject attackerObservationPrompt,declaredAttackPrompt,postDeclaredPriorityPrompt;
+    private final boolean selectAttacker=Boolean.getBoolean("manaforge.selectAttacker");private boolean attackerSelected,attackAssignmentObserved;private JsonObject attackerObservationPrompt,declaredAttackPrompt,postDeclaredPriorityPrompt,combatDamagePrompt;
     private final boolean combatPriority=Boolean.getBoolean("manaforge.combatPriority");private boolean unityCombatPrioritySubmitted,unityCombatPriorityConfirmed;
     private NativeCastCorrelation.AbilityEvidence unityCastEvidence;private String unityCastSource;private boolean unityBattlefieldObserved,unityFollowupConfirmed;
     private JsonObject sourceMetadata(JsonObject view,String source) throws Exception {
@@ -333,7 +333,16 @@ public final class ManaforgeLiveOpening {
                                     if(!"boolean".equals(pass.get("kind").getAsString()) || !new JsonPrimitive(false).equals(pass.get("value")))throw new IOException("LIVE_DECLARED_PRIORITY_NOT_PASS");passCommand[0]=pass.deepCopy();passAccepted[0]=request(pass,"response_sent");if(!new JsonPrimitive(true).equals(passAccepted[0].get("accepted")))throw new IOException("LIVE_DECLARED_PRIORITY_REJECTED");declaredPrioritySubmitted=true;advancement(priorityState.get("cycle").getAsLong(),priorityPrompt.get("decision_id").getAsLong());
                                 },()->{
                                     NativeCastCorrelation.PriorityEvidence passProof=observeDeclaredPriority(priorityState,priorityPrompt,passCommand[0],priorityMetadata,passAccepted[0]);
-                                    JsonObject following=new JsonObject(),followingBody=new JsonObject();following.addProperty("wire_version",1);following.addProperty("message_type","snapshot");following.addProperty("message_id","post-declared-priority");followingBody.addProperty("fixture_only",false);followingBody.add("snapshot",projection.projectReadOnlyPostDeclaredPriority(state,postDeclaredPriorityPrompt));following.add("body",followingBody);return new ManaforgeUnityOpening.ObservedSnapshot(following,passProof);
+                                    JsonObject following=new JsonObject(),followingBody=new JsonObject();following.addProperty("wire_version",1);following.addProperty("message_type","snapshot");following.addProperty("message_id","post-declared-priority");followingBody.addProperty("fixture_only",false);followingBody.add("snapshot",combatDamage?projection.projectDeclaredAttackPriority(state,postDeclaredPriorityPrompt):projection.projectReadOnlyPostDeclaredPriority(state,postDeclaredPriorityPrompt));following.add("body",followingBody);
+                                    if(combatDamage) {
+                                        final JsonObject damageState=state.deepCopy(),damagePrompt=postDeclaredPriorityPrompt.deepCopy(),damageMetadata=sourceMetadata(state,unityCastSource);final JsonObject[] damageCommand=new JsonObject[1],damageAccepted=new JsonObject[1];
+                                        return new ManaforgeUnityOpening.ObservedSnapshot(following,passProof,new ManaforgeUnityOpening.PriorityOffer(following,damagePrompt.get("decision_id").getAsLong(),damageState.get("cycle").getAsLong(),damagePass->{
+                                            if(!"boolean".equals(damagePass.get("kind").getAsString()) || !new JsonPrimitive(false).equals(damagePass.get("value")))throw new IOException("LIVE_COMBAT_DAMAGE_NOT_PASS");damageCommand[0]=damagePass.deepCopy();damageAccepted[0]=request(damagePass,"response_sent");if(!new JsonPrimitive(true).equals(damageAccepted[0].get("accepted")))throw new IOException("LIVE_COMBAT_DAMAGE_REJECTED");combatDamagePassSubmitted=true;advancement(damageState.get("cycle").getAsLong(),damagePrompt.get("decision_id").getAsLong());
+                                        },()->{
+                                            NativeCastCorrelation.PriorityEvidence damageProof=observeCombatDamageResult(damageState,damagePrompt,damageCommand[0],damageMetadata,damageAccepted[0]);JsonObject damageResult=new JsonObject(),damageBody=new JsonObject();damageResult.addProperty("wire_version",1);damageResult.addProperty("message_type","snapshot");damageResult.addProperty("message_id","combat-damage-result");damageBody.addProperty("fixture_only",false);damageBody.add("snapshot",projection.projectReadOnlyDeclaredAttack(state,combatDamagePrompt));damageResult.add("body",damageBody);return new ManaforgeUnityOpening.ObservedSnapshot(damageResult,damageProof);
+                                        }));
+                                    }
+                                    return new ManaforgeUnityOpening.ObservedSnapshot(following,passProof);
                                 }));
                             }
                             return new ManaforgeUnityOpening.VerifiedDeclaredAttackResult(declaration,result);
@@ -414,10 +423,13 @@ public final class ManaforgeLiveOpening {
             if(!"boolean".equals(value.get("kind").getAsString()) || !new JsonPrimitive(false).equals(value.get("value")))throw new IOException("LIVE_COMBAT_DAMAGE_NOT_PASS");command[0]=value.deepCopy();accepted[0]=request(value,"response_sent");if(!new JsonPrimitive(true).equals(accepted[0].get("accepted")))throw new IOException("LIVE_COMBAT_DAMAGE_REJECTED");combatDamagePassSubmitted=true;
         },cancelled::get,false);
         advancement(cycle,decision);
+        observeCombatDamageResult(before,prompt,command[0],metadata,accepted[0]);
+    }
+    private NativeCastCorrelation.PriorityEvidence observeCombatDamageResult(JsonObject before,JsonObject prompt,JsonObject command,JsonObject metadata,JsonObject accepted) throws Exception {
         for(int count=0;count<80;count++) {
             JsonObject event=pending==null?next():pending;if(!"decision".equals(event.get("event").getAsString()))continue;pending=null;
-            if(NativeCastCorrelation.combatDamageEvidence(before,prompt,command[0],metadata,accepted[0],state,event,sourceMetadata(state,unityCastSource),unityCastSource)==null)throw new IOException("LIVE_COMBAT_DAMAGE_UNPROVEN");
-            combatDamageObserved=true;return;
+            NativeCastCorrelation.PriorityEvidence proof=NativeCastCorrelation.combatDamageEvidence(before,prompt,command,metadata,accepted,state,event,sourceMetadata(state,unityCastSource),unityCastSource);if(proof==null)throw new IOException("LIVE_COMBAT_DAMAGE_UNPROVEN");
+            combatDamageObserved=true;combatDamagePrompt=event.deepCopy();return proof;
         }
         throw new IOException("LIVE_COMBAT_DAMAGE_TIMEOUT");
     }
@@ -553,7 +565,7 @@ public final class ManaforgeLiveOpening {
             if(probe.postResolutionPass && !probe.observeResolution)throw new IOException();
             if(probe.finishAttacks && (!probe.firstCreature || probe.metadataContext==null || probe.continuePriority || probe.postResolutionPass))throw new IOException();
             if(probe.combatPriority && (!probe.finishAttacks || probe.unityReady==null))throw new IOException();
-            if(probe.combatDamage && (!probe.declaredPriority || probe.unityReady!=null))throw new IOException();
+            if(probe.combatDamage && !probe.declaredPriority)throw new IOException();
             if(probe.declaredPriority && !probe.finishSelectedAttack)throw new IOException();
             if(probe.finishSelectedAttack && !probe.selectAttacker)throw new IOException();
             if(probe.selectAttacker && !probe.finishAttacks)throw new IOException();

@@ -50,7 +50,7 @@ namespace Manaforge.Play
     }
     public sealed class ProjectedCombatAssignment
     {
-        public IReadOnlyList<string> AttackerNames {get;} public string DefenderName {get;} public int BlockerCount {get;}
+        public IReadOnlyList<string> AttackerNames {get;} public string DefenderName {get;} public long? DefenderLife {get;} public int BlockerCount {get;}
         private static string AttackerName(JObject snapshot,string id)
         {
             var card=snapshot["objects"].FirstOrDefault(value=>(string)value["object_id"]==id);
@@ -59,7 +59,7 @@ namespace Manaforge.Play
         internal ProjectedCombatAssignment(JToken assignment,JObject snapshot)
         {
             AttackerNames=Array.AsReadOnly(assignment["attackers"].Select(id=>AttackerName(snapshot,(string)id)).ToArray());
-            DefenderName=(string)snapshot["players"].FirstOrDefault(player=>(string)player["player_id"]==(string)assignment["defender_id"])?["name"]??"Unknown defender";
+            var defender=snapshot["players"].FirstOrDefault(player=>(string)player["player_id"]==(string)assignment["defender_id"]);DefenderName=(string)defender?["name"]??"Unknown defender";DefenderLife=(long?)defender?["life"];
             BlockerCount=assignment["blockers"].Count();
         }
     }

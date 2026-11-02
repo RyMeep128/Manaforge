@@ -1,5 +1,24 @@
 # Live Unity / Java / XMage integration
 
+## Confirm and display the damage-window pass in Unity (0.5.185)
+
+```powershell
+python tools/check_play_unity_live.py --select-attacker --native-metadata --finish-selected-attack --declared-priority --combat-damage
+```
+
+The optional fourth input offers another explicit Pass priority after the prior
+combat observation. Java confirms it only through the bounded native combat-damage
+step/life-change certificate, then sends a fifth read-only snapshot. The existing
+bounded priority continuation handles both passes; no further input is offered.
+
+Unity copies the defender's life total into its immutable public combat view and
+displays the actual before/after values from the mounted snapshots. Acceptance
+requires five snapshots, eight acknowledgements, four confirmed receipts, zero
+uncertain receipts, a one-point displayed life decrease, a cleared viewer and
+reaped owned processes. `combat-damage.png` captures the observation. Blocked,
+lethal and altered-power outcomes remain unsupported; this public 1/1 fixture is
+not general combat acceptance or a complete match.
+
 ## Observe the fixture's native combat-damage life change (0.5.184)
 
 ```powershell
