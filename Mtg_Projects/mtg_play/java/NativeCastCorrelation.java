@@ -42,6 +42,21 @@ public final class NativeCastCorrelation {
         if(found!=1 || !viewer.equals(string(entry,"owner")) || !viewer.equals(string(entry,"controller")))throw new IllegalArgumentException();
         return number(entry,"incarnation");
     }
+    /** Bounded public 1/1 fixture: native combat-damage step plus exact defender life delta. */
+    public static PriorityEvidence combatDamageEvidence(JsonObject before,JsonObject prompt,JsonObject command,JsonObject beforeMetadata,JsonObject accepted,
+            JsonObject after,JsonObject nextPrompt,JsonObject afterMetadata,String source) {
+        PriorityEvidence pass=declaredPriorityEvidence(before,prompt,command,beforeMetadata,accepted,after,nextPrompt,afterMetadata,source);if(pass==null)return null;
+        try {
+            if(!"COMBAT".equals(string(before,"phase")) || !"COMBAT".equals(string(after,"phase")) || !"COMBAT_DAMAGE".equals(string(after,"step")) || string(before,"step").equals(string(after,"step"))
+                || !before.get("combat").equals(after.get("combat")) || before.getAsJsonArray("players").size()!=2 || after.getAsJsonArray("players").size()!=2)return null;
+            String defender=string(after.getAsJsonArray("combat").get(0).getAsJsonObject(),"defender"),viewer=string(before,"viewer");Map<String,Long> lives=new HashMap<>();boolean fixtureSource=false;
+            for(JsonElement row:before.getAsJsonArray("players")){JsonObject player=row.getAsJsonObject();String id=string(player,"id");if(lives.put(id,number(player,"life"))!=null)return null;
+                if(viewer.equals(id))for(JsonElement item:player.getAsJsonArray("battlefield")){JsonObject card=item.getAsJsonObject();if(source.equals(string(card,"id")) && "Memnite".equals(string(card,"name")) && "1".equals(string(card,"power")) && "1".equals(string(card,"toughness")))fixtureSource=true;}}
+            if(!fixtureSource || !lives.containsKey(viewer) || !lives.containsKey(defender) || lives.get(defender)<=1)return null;
+            Set<String> seen=new HashSet<>();for(JsonElement row:after.getAsJsonArray("players")){JsonObject player=row.getAsJsonObject();String id=string(player,"id");if(!seen.add(id) || !lives.containsKey(id) || number(player,"life")!=lives.get(id)-(defender.equals(id)?1:0))return null;}
+            return pass;
+        }catch(RuntimeException unsupported){return null;}
+    }
     /** Exact post-declaration pass and next guarded native combat observation; no damage claim. */
     public static PriorityEvidence declaredPriorityEvidence(JsonObject before,JsonObject prompt,JsonObject command,JsonObject beforeMetadata,JsonObject accepted,
             JsonObject after,JsonObject nextPrompt,JsonObject afterMetadata,String source) {

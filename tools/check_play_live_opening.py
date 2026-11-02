@@ -17,6 +17,11 @@ from play_native_metadata import provision_metadata  # noqa: E402
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
+        "--combat-damage",
+        action="store_true",
+        help="One more explicit pass and native combat-damage life change; requires --declared-priority",
+    )
+    parser.add_argument(
         "--declared-priority",
         action="store_true",
         help="Submit one priority pass after declaration; requires --finish-selected-attack",
@@ -74,6 +79,8 @@ def main():
         parser.error("--finish-selected-attack requires --select-attacker")
     if args.declared_priority and not args.finish_selected_attack:
         parser.error("--declared-priority requires --finish-selected-attack")
+    if args.combat_damage and not args.declared_priority:
+        parser.error("--combat-damage requires --declared-priority")
     output = args.output.resolve()
     artifacts = (ROOT / "Mtg_Projects/mtg_play_unity/Artifacts").resolve()
     if not output.is_relative_to(artifacts) or output == artifacts:
@@ -141,6 +148,12 @@ def main():
             native_declared_priority_observed=True,
         )
 
+    if args.combat_damage:
+        expected.update(
+            native_combat_damage_pass_submitted=True,
+            native_combat_damage_life_change_observed=True,
+        )
+
     def consume(first, events, launch, port, server_process, server):
         nonlocal evidence
         java = args.xmage_root.resolve() / "java/jre1.8.0_201/bin/java.exe"
@@ -158,6 +171,7 @@ def main():
                 "-Djava.awt.headless=true",
                 "-Dfile.encoding=UTF-8",
                 "-Djava.net.preferIPv4Stack=true",
+                *(["-Dmanaforge.combatDamage=true"] if args.combat_damage else []),
                 *(
                     ["-Dmanaforge.declaredPriority=true"]
                     if args.declared_priority
@@ -275,7 +289,9 @@ def main():
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
     print(
-        "Real XMage accepted one explicit post-declaration priority pass and exposed the next guarded combat state. No damage proof."
+        "Real XMage accepted the explicit damage-window pass; native combat-damage step and one-point defender life decrease observed in the public 1/1 fixture."
+        if args.combat_damage
+        else "Real XMage accepted one explicit post-declaration priority pass and exposed the next guarded combat state. No damage proof."
         if args.declared_priority
         else "Real XMage accepted explicit selection and Finish attacks; the same attacker remained assigned at guarded native priority. No blocking or damage proof."
         if args.finish_selected_attack

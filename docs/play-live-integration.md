@@ -1,5 +1,25 @@
 # Live Unity / Java / XMage integration
 
+## Observe the fixture's native combat-damage life change (0.5.184)
+
+```powershell
+python tools/check_play_live_opening.py --first-creature --native-metadata --select-attacker --finish-selected-attack --declared-priority --combat-damage
+```
+
+This Java-only continuation submits one additional explicit priority pass through
+the authenticated fixture. Its typed pass certificate requires the prior guarded
+combat evidence, an unchanged unblocked assignment and source incarnation, empty
+stack, the same turn, a native transition into `COMBAT_DAMAGE`, and exactly one
+life lost by the opposing defender while the viewer's life stays unchanged.
+The visible fixture source must be Memnite with native 1/1 characteristics.
+
+The report records `native_combat_damage_pass_submitted` and
+`native_combat_damage_life_change_observed`. This proves a bounded native step and
+life-total observation in the public two-seat fixture, not a general damage or
+combat implementation. Blocked, lethal, altered-power and unsupported outcomes
+fail closed. Unity still ends after the prior pass; displaying and confirming
+this additional observation there remains subsequent work. CI runs this fixture.
+
 ## Submit post-declaration priority from Unity (0.5.183)
 
 ```powershell
