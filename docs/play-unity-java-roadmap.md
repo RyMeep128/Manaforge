@@ -1,5 +1,9 @@
 # Manaforge Play — Unity + Java Roadmap
 
+Current owner direction (0.5.193): prioritize an entire gameplay loop. Human visual
+review is deferred until that loop is complete; earlier visual-review stops do
+not block continued gameplay implementation.
+
 Status: **Proposed architecture and implementation roadmap. All gates remain unproven.**
 
 Planning baseline: Manaforge main at `fb27c2e` (`0.5.0-alpha.1`, October 29, 2026).
@@ -1200,3 +1204,14 @@ Unity now confirms the additional pass and displays native marked damage on the
 same Ornithopter blocker, with life totals unchanged. Four typed receipts and
 five snapshots pass the bounded live fixture. Explicit human blocker selection,
 lethal outcomes, full-match results and formal P4 acceptance remain open.
+
+
+### Java turn-cycle continuation (0.5.193)
+
+The unblocked Java fixture now advances through cleanup (including a required
+native discard), the opposing turn and back to the human's next main phase.
+Native draw, untap, retained hand identities, graveyard movement and renewed
+engine card offers are checked. Public graveyards and cleanup discard projection
+are supported in the turn continuation. Unity continuous decision delivery and
+full-match results are the next gameplay work; human visual review remains
+deferred as directed. P2/P3/P4 and formal acceptance gates remain partial.

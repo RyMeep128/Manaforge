@@ -17,6 +17,11 @@ from play_native_metadata import provision_metadata  # noqa: E402
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
+        "--loop-turn",
+        action="store_true",
+        help="Advance through cleanup and AI turn to next human main; requires --complete-combat",
+    )
+    parser.add_argument(
         "--blocked-damage",
         action="store_true",
         help="Native single-Ornithopter blocked damage observation; requires --blocked-combat",
@@ -104,6 +109,8 @@ def main():
         )
     if args.blocked_damage and not args.blocked_combat:
         parser.error("--blocked-damage requires --blocked-combat")
+    if args.loop_turn and not args.complete_combat:
+        parser.error("--loop-turn requires --complete-combat")
     output = args.output.resolve()
     artifacts = (ROOT / "Mtg_Projects/mtg_play_unity/Artifacts").resolve()
     if not output.is_relative_to(artifacts) or output == artifacts:
@@ -196,6 +203,14 @@ def main():
             native_blocker_damage_observed=True,
         )
 
+    if args.loop_turn:
+        expected.update(
+            native_next_human_turn_observed=True,
+            native_own_draw_observed=True,
+            native_source_untapped=True,
+            native_next_turn_actions_offered=True,
+        )
+
     def consume(first, events, launch, port, server_process, server):
         nonlocal evidence
         java = args.xmage_root.resolve() / "java/jre1.8.0_201/bin/java.exe"
@@ -213,6 +228,7 @@ def main():
                 "-Djava.awt.headless=true",
                 "-Dfile.encoding=UTF-8",
                 "-Djava.net.preferIPv4Stack=true",
+                *(["-Dmanaforge.loopTurn=true"] if args.loop_turn else []),
                 *(["-Dmanaforge.blockedDamage=true"] if args.blocked_damage else []),
                 *(["-Dmanaforge.blockedCombat=true"] if args.blocked_combat else []),
                 *(["-Dmanaforge.completeCombat=true"] if args.complete_combat else []),
@@ -277,6 +293,7 @@ def main():
                     "opening_decision",
                     "respond",
                     "finish_attacks",
+                    "turn_loop",
                 }:
                     print("Java live opening failed at stage: " + stage, flush=True)
                 if failed.get("code") in {
@@ -285,6 +302,8 @@ def main():
                     "LIVE_OPENING_ENGINE_FAILED",
                     "LIVE_OPENING_QUEUE_LIMIT",
                     "LIVE_OPENING_PIN",
+                    "LIVE_TURN_UNSUPPORTED_DECISION",
+                    "LIVE_TURN_LOOP_UNPROVEN",
                 }:
                     print(failed["code"], flush=True)
                 if failed.get("decision_family") in {
@@ -294,6 +313,11 @@ def main():
                     "GAME_SELECT",
                 }:
                     print("Decision family: " + failed["decision_family"], flush=True)
+            if args.loop_turn and process.returncode == 0 and len(raw) <= 4096:
+                cleanup_discard = json.loads(raw).get("native_cleanup_discard_observed")
+                if type(cleanup_discard) is not bool:
+                    raise transport.ProofError("LIVE_TURN_DISCARD_SHAPE")
+                expected["native_cleanup_discard_observed"] = cleanup_discard
             if args.declared_priority and process.returncode == 0 and len(raw) <= 4096:
                 blockers = json.loads(raw).get("native_blockers_observed")
                 if (
@@ -338,7 +362,9 @@ def main():
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
     print(
-        "Real XMage marked one damage on the same native Ornithopter blocker in COMBAT_DAMAGE; both life totals unchanged in the public fixture."
+        "Real XMage completed the opposing turn and returned to the human main phase with native draw, untap and any cleanup discard observed."
+        if args.loop_turn
+        else "Real XMage marked one damage on the same native Ornithopter blocker in COMBAT_DAMAGE; both life totals unchanged in the public fixture."
         if args.blocked_damage
         else "Real XMage declared visible AI blockers against the selected Memnite; the read-only public assignment validated. No blocked-damage or human blocker-choice proof."
         if args.blocked_combat

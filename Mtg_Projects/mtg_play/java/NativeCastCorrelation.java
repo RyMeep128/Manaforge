@@ -42,6 +42,24 @@ public final class NativeCastCorrelation {
         if(found!=1 || !viewer.equals(string(entry,"owner")) || !viewer.equals(string(entry,"controller")))throw new IllegalArgumentException();
         return number(entry,"incarnation");
     }
+    /** Native return to the same human seat after one opposing turn, including cleanup/draw. */
+    public static boolean observesNextHumanTurn(JsonObject before,JsonObject beforeMetadata,JsonObject after,JsonObject prompt,JsonObject afterMetadata,String source,Set<String> discarded) {
+        try {
+            String viewer=string(before,"viewer");if(!viewer.equals(string(after,"viewer")) || !string(before,"game_id").equals(string(after,"game_id")) || number(after,"turn")!=number(before,"turn")+2
+                || !"POSTCOMBAT_MAIN".equals(string(before,"phase")) || !"PRECOMBAT_MAIN".equals(string(after,"phase")) || !"PRECOMBAT_MAIN".equals(string(after,"step"))
+                || before.getAsJsonArray("combat").size()!=0 || after.getAsJsonArray("combat").size()!=0 || before.getAsJsonArray("stack").size()!=0 || after.getAsJsonArray("stack").size()!=0
+                || battlefieldCounter(before,beforeMetadata,source)!=battlefieldCounter(after,afterMetadata,source) || !new JsonPrimitive(true).equals(beforeMetadata.get("priority_open")) || !new JsonPrimitive(true).equals(afterMetadata.get("priority_open"))
+                || !"GAME_SELECT".equals(string(prompt,"kind")) || !new JsonPrimitive(true).equals(prompt.get("is_priority")) || prompt.has("attackers") || prompt.has("blockers") || number(prompt,"cycle")!=number(after,"cycle") || number(after,"cycle")<=number(before,"cycle") || discarded.size()>16)return false;
+            JsonObject first=null,last=null;Map<String,Long> lives=new HashMap<>();if(before.getAsJsonArray("players").size()!=2 || after.getAsJsonArray("players").size()!=2)return false;
+            for(JsonElement row:before.getAsJsonArray("players")){JsonObject player=row.getAsJsonObject();if(lives.put(string(player,"id"),number(player,"life"))!=null)return false;if(viewer.equals(string(player,"id")))first=player;}
+            Set<String> seen=new HashSet<>();for(JsonElement row:after.getAsJsonArray("players")){JsonObject player=row.getAsJsonObject();String id=string(player,"id");if(!seen.add(id) || !lives.containsKey(id) || number(player,"life")!=lives.get(id))return false;if(viewer.equals(id))last=player;}
+            if(first==null || last==null || !string(first,"name").equals(string(before,"active_player")) || !string(last,"name").equals(string(after,"active_player")) || !string(last,"name").equals(string(after,"priority_player"))
+                || number(last,"library_count")!=number(first,"library_count")-1 || after.getAsJsonArray("hand").size()!=before.getAsJsonArray("hand").size()+1-discarded.size() || last.getAsJsonArray("graveyard").size()!=first.getAsJsonArray("graveyard").size()+discarded.size())return false;
+            Set<String> originalHand=new HashSet<>(),finalHand=new HashSet<>(),grave=new HashSet<>();for(JsonElement item:before.getAsJsonArray("hand"))originalHand.add(string(item.getAsJsonObject(),"id"));for(JsonElement item:after.getAsJsonArray("hand"))finalHand.add(string(item.getAsJsonObject(),"id"));for(JsonElement item:last.getAsJsonArray("graveyard"))grave.add(string(item.getAsJsonObject(),"id"));
+            if(originalHand.size()!=before.getAsJsonArray("hand").size() || finalHand.size()!=after.getAsJsonArray("hand").size() || !originalHand.containsAll(discarded) || !grave.containsAll(discarded))return false;for(String id:discarded)if(finalHand.contains(id))return false;Set<String> kept=new HashSet<>(originalHand);kept.removeAll(discarded);if(!finalHand.containsAll(kept))return false;Set<String> drawn=new HashSet<>(finalHand);drawn.removeAll(originalHand);if(drawn.size()!=1)return false;
+            return new JsonPrimitive(true).equals(controlledPermanent(before,source,viewer).get("tapped")) && new JsonPrimitive(false).equals(controlledPermanent(after,source,viewer).get("tapped"));
+        }catch(RuntimeException unsupported){return false;}
+    }
     /** Exact native tail of the unblocked fixture; no inferred phase ordering. */
     public static PriorityEvidence combatCleanupEvidence(JsonObject before,JsonObject prompt,JsonObject command,JsonObject beforeMetadata,JsonObject accepted,
             JsonObject after,JsonObject nextPrompt,JsonObject afterMetadata,String source) {

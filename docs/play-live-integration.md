@@ -1,5 +1,35 @@
 # Live Unity / Java / XMage integration
 
+## Continue through turn end, cleanup and the next human turn (0.5.193)
+
+```powershell
+python tools/check_play_live_opening.py --first-creature --native-metadata --select-attacker --finish-selected-attack --declared-priority --combat-damage --complete-combat --loop-turn
+```
+
+The Java fixture now continues beyond combat, through the opposing turn and back
+to the human's next pre-combat main phase. A bounded sequence of at most 32
+engine-offered decisions uses authenticated one-shot priority passes and, when
+required, explicit cleanup discard actions. Discard offers require native
+`GAME_TARGET` in phase `END` / step `CLEANUP`, an active human hand above seven,
+and unique native candidates present in that visible hand. No prompt text or
+client rule calculation selects the native decision family.
+
+The turn projection includes public graveyards with ownership from the native
+seat rows. It filters normal continuation actions to Pass priority; after the
+completed cycle, it exposes actual engine-offered card actions again. Native
+endpoint evidence requires the same source incarnation, an observed untap,
+unchanged life totals, one own library decrement and one new hand identity,
+retained undiscarded hand identities, and any accepted discards present in the
+human graveyard. The actual turn counter advances through the opposing seat.
+
+The live proof exercised a required discard and returned with another cast offer.
+Reports include `native_next_human_turn_observed`, `native_own_draw_observed`,
+`native_source_untapped`, `native_next_turn_actions_offered` and the observed
+`native_cleanup_discard_observed` boolean. This is a Java gameplay-cycle proof;
+Unity continuous turn/decision delivery and full-match results remain open.
+Human visual review is deferred at the owner's direction until the gameplay loop
+is complete. The next work is gameplay/session integration, not visual acceptance.
+
 ## Display native marked blocker damage in Unity (0.5.192)
 
 ```powershell
