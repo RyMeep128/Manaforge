@@ -42,6 +42,28 @@ public final class NativeCastCorrelation {
         if(found!=1 || !viewer.equals(string(entry,"owner")) || !viewer.equals(string(entry,"controller")))throw new IllegalArgumentException();
         return number(entry,"incarnation");
     }
+    /** Observation of one selected attacker and the engine's assignment; not declaration completion. */
+    public static boolean observesAttackerSelection(JsonObject before,JsonObject prompt,JsonObject command,JsonObject beforeMetadata,JsonObject accepted,
+            JsonObject after,JsonObject nextPrompt,JsonObject afterMetadata,String source) {
+        try {
+            if(!string(before,"game_id").equals(string(after,"game_id")) || !string(before,"viewer").equals(string(after,"viewer"))
+                || !string(before,"game_id").equals(string(command,"game_id")) || !"respond".equals(string(command,"command")) || !"object".equals(string(command,"kind")) || !source.equals(string(command,"value"))
+                || number(command,"decision_id")!=number(prompt,"decision_id") || !"GAME_SELECT".equals(string(prompt,"kind")) || !new JsonPrimitive(false).equals(prompt.get("is_priority")) || prompt.has("blockers")
+                || number(prompt,"cycle")!=number(before,"cycle") || !new JsonPrimitive(false).equals(beforeMetadata.get("priority_open")) || !new JsonPrimitive(false).equals(afterMetadata.get("priority_open"))
+                || before.getAsJsonArray("combat").size()!=0 || before.getAsJsonArray("stack").size()!=0 || after.getAsJsonArray("stack").size()!=0
+                || battlefieldCounter(before,beforeMetadata,source)!=battlefieldCounter(after,afterMetadata,source) || !"response_sent".equals(string(accepted,"event")) || !new JsonPrimitive(true).equals(accepted.get("accepted"))
+                || !string(command,"request_id").equals(string(accepted,"request_id")) || !"GAME_SELECT".equals(string(nextPrompt,"kind")) || !new JsonPrimitive(false).equals(nextPrompt.get("is_priority")) || !nextPrompt.has("attackers") || nextPrompt.has("blockers")
+                || number(nextPrompt,"cycle")!=number(after,"cycle") || number(nextPrompt,"decision_id")<=number(prompt,"decision_id") || number(after,"cycle")<number(before,"cycle"))return false;
+            Set<String> candidates=new HashSet<>();JsonArray offered=prompt.getAsJsonArray("attackers");if(offered.size()>256)return false;
+            for(JsonElement item:offered)if(!item.isJsonPrimitive() || !item.getAsJsonPrimitive().isString() || !candidates.add(item.getAsString()))return false;
+            if(!candidates.contains(source) || after.getAsJsonArray("combat").size()!=1)return false;
+            JsonObject group=after.getAsJsonArray("combat").get(0).getAsJsonObject();
+            if(group.getAsJsonArray("attackers").size()!=1 || !source.equals(group.getAsJsonArray("attackers").get(0).getAsString()) || group.getAsJsonArray("blockers").size()!=0)return false;
+            String defender=string(group,"defender");int opponents=0;
+            for(JsonElement row:after.getAsJsonArray("players")) {JsonObject player=row.getAsJsonObject();if(defender.equals(string(player,"id")) && !defender.equals(string(after,"viewer")) && new JsonPrimitive(false).equals(player.get("left")))opponents++;}
+            return opponents==1;
+        }catch(RuntimeException unsupported){return false;}
+    }
     /** Exact empty attack-selection completion in the owned public fixture, not generic combat success. */
     public static AttackFinishEvidence attackFinishEvidence(JsonObject before,JsonObject prompt,JsonObject command,JsonObject beforeMetadata,JsonObject accepted,
             JsonObject after,JsonObject nextPrompt,JsonObject afterMetadata,String source) {

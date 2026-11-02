@@ -1,5 +1,23 @@
 # Live Unity / Java / XMage integration
 
+## Explicit attacker choice in the Java fixture (0.5.176)
+
+```powershell
+python tools/check_play_live_opening.py --first-creature --native-metadata --select-attacker
+```
+
+The authenticated Java fixture exposes opaque attacker actions from the native
+candidate list and submits one explicit object choice for the resolved Memnite.
+Guarded evidence requires the same source incarnation, matching accepted request,
+a later non-priority attacker prompt, one native combat group containing that
+source, no blockers, and a known opposing defender. The pinned engine assigns
+the sole defender itself. Duplicate delivery reuses the receipt without another
+native submission. Public reports contain only sanitized booleans.
+
+Declaration remains open. This slice does not finish the attack, integrate attacker
+selection into Unity, or prove blocking or damage. The existing Finish attacks
+probe retains its separate empty-combat behavior. CI runs both fixture paths.
+
 ## Confirm the post-combat pass and display its next state (0.5.175)
 
 The existing `--finish-attacks --native-metadata --combat-priority` probe now

@@ -34,6 +34,8 @@ jobs:
         run: python tools/check_play_live_opening.py --first-creature --native-metadata --xmage-root "$env:RUNNER_TEMP/manaforge-live-engine" --jdk-path "$env:JAVA_HOME" --output Mtg_Projects/mtg_play_unity/Artifacts/FirstCreature/report.json
       - name: Real native attacker-selection finish
         run: python tools/check_play_live_opening.py --first-creature --native-metadata --finish-attacks --xmage-root "$env:RUNNER_TEMP/manaforge-live-engine" --jdk-path "$env:JAVA_HOME" --output Mtg_Projects/mtg_play_unity/Artifacts/CombatFinish/report.json
+      - name: Real explicit attacker choice and native assignment
+        run: python tools/check_play_live_opening.py --first-creature --native-metadata --select-attacker --xmage-root "$env:RUNNER_TEMP/manaforge-live-engine" --jdk-path "$env:JAVA_HOME" --output Mtg_Projects/mtg_play_unity/Artifacts/AttackerSelection/report.json
       - name: Upload sanitized live evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -43,4 +45,5 @@ jobs:
             Mtg_Projects/mtg_play_unity/Artifacts/FirstLand/report.json
             Mtg_Projects/mtg_play_unity/Artifacts/FirstCreature/report.json
             Mtg_Projects/mtg_play_unity/Artifacts/CombatFinish/report.json
+            Mtg_Projects/mtg_play_unity/Artifacts/AttackerSelection/report.json
           if-no-files-found: error

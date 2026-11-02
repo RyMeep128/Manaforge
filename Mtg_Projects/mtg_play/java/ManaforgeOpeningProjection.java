@@ -105,10 +105,16 @@ public final class ManaforgeOpeningProjection {
     public synchronized JsonObject projectAttackFinish(JsonObject raw,JsonObject prompt) throws IOException {
         return project(raw,prompt,false,false,false,true);
     }
+    public synchronized JsonObject projectAttackSelection(JsonObject raw,JsonObject prompt) throws IOException {
+        return project(raw,prompt,false,false,false,true,true);
+    }
     private JsonObject project(JsonObject raw,JsonObject prompt,boolean includePriorityPass,boolean includeSpells,boolean omitStack) throws IOException {
         return project(raw,prompt,includePriorityPass,includeSpells,omitStack,false);
     }
     private JsonObject project(JsonObject raw,JsonObject prompt,boolean includePriorityPass,boolean includeSpells,boolean omitStack,boolean attackFinish) throws IOException {
+        return project(raw,prompt,includePriorityPass,includeSpells,omitStack,attackFinish,false);
+    }
+    private JsonObject project(JsonObject raw,JsonObject prompt,boolean includePriorityPass,boolean includeSpells,boolean omitStack,boolean attackFinish,boolean includeAttackers) throws IOException {
         invalidateDecision();
         try {
             require(engineViewer.equals(raw.get("viewer").getAsString()));
@@ -179,6 +185,10 @@ public final class ManaforgeOpeningProjection {
                     String reference=visibleReferences.get(candidate.getAsString());GameObject object=null;
                     for(GameObject card:cards)if(card.object_id.equals(reference))object=card;
                     require(object!=null && "battlefield".equals(object.zone) && viewer.equals(object.controller_id) && Boolean.FALSE.equals(object.hidden) && Boolean.FALSE.equals(object.face_down));
+                    if(includeAttackers) {
+                        LegalAction action=new LegalAction();action.action_id=opaque();action.object_id=reference;action.kind="declare_attacker";action.label="Select attacker";action.priority_class="meaningful";
+                        actions.add(action);offeredNative.put(action.action_id,candidate.getAsString());
+                    }
                 }
             }
             if(priority && !omitStack)for(JsonElement item:raw.getAsJsonArray("playable")) {

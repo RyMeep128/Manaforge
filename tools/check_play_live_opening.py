@@ -17,6 +17,11 @@ from play_native_metadata import provision_metadata  # noqa: E402
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
+        "--select-attacker",
+        action="store_true",
+        help="Select one native offered attacker and observe its engine assignment; requires --first-creature --native-metadata",
+    )
+    parser.add_argument(
         "--finish-attacks",
         action="store_true",
         help="Explicit public-fixture attack-selection finish proof; requires --first-creature --native-metadata",
@@ -49,6 +54,12 @@ def main():
         parser.error("--native-metadata requires --first-creature")
     if args.finish_attacks and not (args.first_creature and args.native_metadata):
         parser.error("--finish-attacks requires --first-creature --native-metadata")
+    if args.select_attacker and (
+        not (args.first_creature and args.native_metadata) or args.finish_attacks
+    ):
+        parser.error(
+            "--select-attacker requires --first-creature --native-metadata and excludes --finish-attacks"
+        )
     output = args.output.resolve()
     artifacts = (ROOT / "Mtg_Projects/mtg_play_unity/Artifacts").resolve()
     if not output.is_relative_to(artifacts) or output == artifacts:
@@ -88,15 +99,21 @@ def main():
         expected["unity_post_resolution_priority_submitted"] = False
         expected["unity_post_resolution_priority_confirmed"] = False
     evidence = None
-    if args.finish_attacks:
+    if args.finish_attacks or args.select_attacker:
         expected.update(
             native_attack_source_offered=True,
-            native_empty_attack_submitted=True,
-            native_combat_advanced=True,
+            native_empty_attack_submitted=not args.select_attacker,
+            native_combat_advanced=not args.select_attacker,
             unity_attack_finish_submitted=False,
             unity_attack_finish_confirmed=False,
             unity_combat_priority_submitted=False,
             unity_combat_priority_confirmed=False,
+        )
+    if args.select_attacker:
+        expected.update(
+            native_attacker_selected=True,
+            native_attack_assignment_observed=True,
+            native_attack_selection_open=True,
         )
 
     def consume(first, events, launch, port, server_process, server):
@@ -116,7 +133,12 @@ def main():
                 "-Djava.awt.headless=true",
                 "-Dfile.encoding=UTF-8",
                 "-Djava.net.preferIPv4Stack=true",
-                *(["-Dmanaforge.finishAttacks=true"] if args.finish_attacks else []),
+                *(
+                    ["-Dmanaforge.finishAttacks=true"]
+                    if args.finish_attacks or args.select_attacker
+                    else []
+                ),
+                *(["-Dmanaforge.selectAttacker=true"] if args.select_attacker else []),
                 *(
                     ["-Dmanaforge.metadataContext=" + str(metadata_context)]
                     if args.native_metadata
@@ -144,7 +166,9 @@ def main():
                     process, server_process, server, metadata_context, manifest_hash
                 )
             # Keep stdin open as the parent lifeline until the diagnostic finishes.
-            process.wait(timeout=240 if args.finish_attacks else 120)
+            process.wait(
+                timeout=240 if args.finish_attacks or args.select_attacker else 120
+            )
             raw = process.stdout.read(4097)
             if process.returncode != 0 and len(raw) <= 4096:
                 failed = json.loads(raw)
@@ -211,7 +235,9 @@ def main():
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
     print(
-        "Real XMage offered the cast source for attacking, accepted explicit Finish attacks with no attackers, and returned to priority; duplicate suppression and cleanup passed. No Unity combat integration."
+        "Real XMage accepted an explicit attacker choice and assigned its defender; declaration remains open; duplicate suppression and cleanup passed."
+        if args.select_attacker
+        else "Real XMage offered the cast source for attacking, accepted explicit Finish attacks with no attackers, and returned to priority; duplicate suppression and cleanup passed. No Unity combat integration."
         if args.finish_attacks
         else "Real XMage creature cast and resolved; stack cleared and 1/1 Memnite observed, duplicate receipts reused; cleanup passed. Unity casting remains pending."
         if args.first_creature
