@@ -290,7 +290,7 @@ public final class ManaforgeBridge implements MageClient {
                     JsonArray value = new JsonArray(); value.add(colors[index]); value.add(amounts[index]); mana.add(value);
                 }
             }
-            row.add("mana", mana);
+            row.add("mana", pool==null?com.google.gson.JsonNull.INSTANCE:mana);
             JsonArray counters = new JsonArray();
             for (CounterView counter : player.getCounters()) {
                 JsonArray value = new JsonArray(); value.add(counter.getName()); value.add(counter.getCount()); counters.add(value);

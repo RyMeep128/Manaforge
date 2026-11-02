@@ -236,6 +236,7 @@ public final class ManaforgeOpeningProjection {
                 if(turnMode){for(JsonElement graveItem:row.getAsJsonArray("graveyard"))graveOwners.put(graveItem.getAsJsonObject(),publicId);}else empty(row,"graveyard");empty(row,"command");seatNames.put(row.get("name").getAsString(),publicId);
                 PlayerView seat=new PlayerView();seat.player_id=publicId;seat.name=local?"You":"Player "+(seats.size()+1);
                 seat.life=integer(row,"life");seat.hand_count=integer(row,"hand_count");seat.library_count=integer(row,"library_count");
+                if(coreCombat && row.has("mana") && !row.get("mana").isJsonNull()){JsonArray pool=row.getAsJsonArray("mana");require(pool.size()<=6);Set<String> colors=new HashSet<>();for(JsonElement pair:pool){require(pair.isJsonArray() && pair.getAsJsonArray().size()==2);JsonObject value=new JsonObject();value.add("color",pair.getAsJsonArray().get(0));value.add("count",pair.getAsJsonArray().get(1));String color=text(value,"color");Long count=integer(value,"count");require(Arrays.asList("white","blue","black","red","green","colorless").contains(color) && colors.add(color) && count!=null && count>=0 && count<=Integer.MAX_VALUE);}seat.mana=JSON.fromJson(pool,JsonElement[][].class);}
                 seat.left_game=flag(row,"left");seats.add(seat);
             }
             require(found && seats.size()>=2);
@@ -295,10 +296,10 @@ public final class ManaforgeOpeningProjection {
             if(priority && !omitStack && (!turnMode || includeSpells))for(JsonElement item:raw.getAsJsonArray("playable")) {
                 String source=item.getAsString(),reference=visibleReferences.get(source);
                 if(reference==null)continue;
-                JsonElement kind=raw.getAsJsonObject("action_kinds").get(source);if(kind==null || !(kind.getAsString().equals("play_land") || includeSpells && (kind.getAsString().equals("cast_spell") || coreCombat && kind.getAsString().equals("select_object"))))continue;
+                JsonElement kind=raw.getAsJsonObject("action_kinds").get(source);if(kind==null || !(kind.getAsString().equals("play_land") || includeSpells && (kind.getAsString().equals("cast_spell") || coreCombat && (kind.getAsString().equals("select_object") || kind.getAsString().equals("activate")))))continue;
                 GameObject object=null;for(GameObject candidate:cards)if(candidate.object_id.equals(reference))object=candidate;
-                if(object==null || object.hidden || !viewer.equals(object.controller_id) || !"hand".equals(object.zone))continue;
-                LegalAction action=new LegalAction();action.action_id=opaque();action.object_id=reference;action.kind=kind.getAsString();action.label=action.kind.equals("cast_spell")?"Cast spell":action.kind.equals("select_object")?"Select object":"Play land";if(coreCombat)action.label+=": "+object.characteristics.name;action.priority_class="meaningful";
+                if(object==null || object.hidden || !viewer.equals(object.controller_id) || !("hand".equals(object.zone) || coreCombat && "battlefield".equals(object.zone) && (kind.getAsString().equals("activate") || kind.getAsString().equals("select_object"))))continue;
+                LegalAction action=new LegalAction();action.action_id=opaque();action.object_id=reference;action.kind="battlefield".equals(object.zone)?"activate":kind.getAsString();action.label=action.kind.equals("cast_spell")?"Cast spell":action.kind.equals("select_object")?"Select object":action.kind.equals("activate")?"Activate":"Play land";if(coreCombat)action.label+=": "+object.characteristics.name;action.priority_class="meaningful";
                 actions.add(action);offeredNative.put(action.action_id,source);
             }
             if((priority && includePriorityPass) || attackFinish) {
@@ -361,6 +362,7 @@ public final class ManaforgeOpeningProjection {
             }result.observations=new CardObservation[0];
             result.unsupported_fields=new String[]{"object_incarnations","commander_metadata","live_abilities","actions","mana","counters","eliminated","observations","attachments","copy_metadata","physical_printing"};
             if(missingDefender){List<String> unsupported=new ArrayList<>(Arrays.asList(result.unsupported_fields));unsupported.add("combat_defender_lki");result.unsupported_fields=unsupported.toArray(new String[0]);}
+            if(coreCombat && seats.stream().allMatch(seat->seat.mana!=null)){List<String> unsupported=new ArrayList<>(Arrays.asList(result.unsupported_fields));unsupported.remove("mana");result.unsupported_fields=unsupported.toArray(new String[0]);}
             if(coreCombat){List<String> unsupported=new ArrayList<>(Arrays.asList(result.unsupported_fields));unsupported.add("exile");result.unsupported_fields=unsupported.toArray(new String[0]);}
             if(omitStack){List<String> unsupported=new ArrayList<>(Arrays.asList(result.unsupported_fields));unsupported.add("stack");result.unsupported_fields=unsupported.toArray(new String[0]);}
             JsonObject output=JSON.toJsonTree(result).getAsJsonObject();

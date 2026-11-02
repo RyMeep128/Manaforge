@@ -114,6 +114,10 @@ namespace Manaforge.Play.Tests
             if(family=="actions")snapshot["actions"]=values;else snapshot["decision"][family]=values;
             Assert.That(Assert.Throws<WireEnvelope.EnvelopeException>(()=>Project(source)).Code,Is.EqualTo("DECISION_PROJECTION_LIMIT"));
         }
+        [Test] public void ViewerManaIsImmutableAndOtherSeatsAreExcluded()
+        {
+            var source=Priority();var snapshot=source["body"]["snapshot"];string viewer=(string)snapshot["viewer_id"];foreach(var player in snapshot["players"])player["mana"]=JArray.Parse((string)player["player_id"]==viewer?"[[\"green\",2]]":"[[\"green\",99]]");var frame=Project(source);foreach(var player in snapshot["players"])player["mana"][0][1]=77;Assert.That(frame.ViewerMana["green"],Is.EqualTo(2));Assert.That(((IDictionary<string,long>)frame.ViewerMana).IsReadOnly,Is.True);foreach(var player in snapshot["players"])player["mana"]=JValue.CreateNull();Assert.That(Project(source).ViewerMana,Is.Null);
+        }
         [Test] public void DecisionProjectionExcludesCardIdentityAndPrivateRevealPayloads()
         {
             var source=Choice();source["body"]["snapshot"]["observations"]=new JArray(new JObject{["observation_id"]="fixture-reveal",["source"]="fixture",["hidden"]=false,["name"]="Private reveal value",["set_code"]="ABC",["collector_number"]="123"});

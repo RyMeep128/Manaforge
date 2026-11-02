@@ -3,8 +3,9 @@ import java.io.IOException;
 import java.util.*;
 
 /** Explicit deterministic public-card acceptance scenarios; never a rules or autoplay service. */
-public final class NativeCombatCase {
-    public interface Metadata {JsonObject read(JsonObject state,String... ids) throws Exception;}
+public final class NativeCombatCase implements NativeAcceptanceCase {
+    public interface Metadata extends NativeAcceptanceCase.Metadata {}
+    public String key(){return key;}
     public static final Set<String> KEYS=Collections.unmodifiableSet(new LinkedHashSet<>(Arrays.asList("haste","flying","reach","defender","first-strike","double-strike","deathtouch","lifelink","trample","menace","vigilance","indestructible","planeswalker","battle","draw")));
     private static final Map<String,String[]> CARDS=new HashMap<>();
     static {
@@ -56,7 +57,7 @@ public final class NativeCombatCase {
     private static long number(JsonObject row,String key){return row.get(key).getAsLong();}
     private static JsonObject card(JsonObject state,String id,String zone){for(JsonElement row:state.getAsJsonArray("players"))for(JsonElement value:row.getAsJsonObject().getAsJsonArray(zone))if(id.equals(text(value.getAsJsonObject(),"id")))return value.getAsJsonObject();return null;}
     private static long life(JsonObject state,String viewer,boolean mine){for(JsonElement value:state.getAsJsonArray("players")){JsonObject row=value.getAsJsonObject();if(viewer.equals(text(row,"id"))==mine)return number(row,"life");}throw new IllegalArgumentException("COMBAT_CASE_SEATS");}
-    private static JsonObject guard(JsonObject state,String id,Metadata reader) throws Exception {JsonObject metadata=reader.read(state,id);if(!"ok".equals(text(metadata,"status")) || number(metadata,"cycle")!=number(state,"cycle"))throw new IOException("COMBAT_CASE_UNGUARDED");JsonObject entry=metadata.getAsJsonObject("objects").getAsJsonObject(id);if(entry==null || number(entry,"incarnation")<0)throw new IOException("COMBAT_CASE_SOURCE_UNPROVEN");return entry;}
+    private static JsonObject guard(JsonObject state,String id,NativeAcceptanceCase.Metadata reader) throws Exception {JsonObject metadata=reader.read(state,id);if(!"ok".equals(text(metadata,"status")) || number(metadata,"cycle")!=number(state,"cycle"))throw new IOException("COMBAT_CASE_UNGUARDED");JsonObject entry=metadata.getAsJsonObject("objects").getAsJsonObject(id);if(entry==null || number(entry,"incarnation")<0)throw new IOException("COMBAT_CASE_SOURCE_UNPROVEN");return entry;}
     public void before(JsonObject state,JsonObject prompt,JsonObject command) {
         viewer=text(state,"viewer");String kind=text(prompt,"kind");if(kind.equals("GAME_PLAY_MANA"))manaResponses++;if(kind.equals("GAME_GET_AMOUNT") || kind.equals("GAME_GET_MULTI_AMOUNT"))amountResponses++;
         if(!"object".equals(text(command,"kind")))return;String id=text(command,"value");
@@ -64,7 +65,7 @@ public final class NativeCombatCase {
         if(kind.equals("GAME_SELECT") && new JsonPrimitive(true).equals(prompt.get("is_priority"))){for(JsonElement item:state.getAsJsonArray("hand")){JsonObject value=item.getAsJsonObject();if(id.equals(text(value,"id"))){if(actorName.equals(text(value,"name")) && actor==null){actor=id;castTurn=number(state,"turn");}if(key.equals("battle") && "Invasion of Regatha".equals(text(value,"name")))permanent=id;}}}
         if(kind.equals("GAME_TARGET") && "COMBAT".equals(text(state,"phase"))){JsonObject value=card(state,id,"battlefield");if(value!=null && ((key.equals("planeswalker") && "Jace Beleren".equals(text(value,"name"))) || (key.equals("battle") && "Invasion of Regatha".equals(text(value,"name"))))){if(!id.equals(permanent)){permanentIncarnation=-1;permanentMainIncarnation=-1;permanentMain=null;}permanent=id;String field=key.equals("planeswalker")?"loyalty":"defense";defenderBefore=Long.parseLong(text(value,field));}}
     }
-    public boolean observe(JsonObject state,JsonObject prompt,Metadata reader) throws Exception {
+    public boolean observe(JsonObject state,JsonObject prompt,NativeAcceptanceCase.Metadata reader) throws Exception {
         if(++steps>512)throw new IOException("COMBAT_CASE_BUDGET");if(viewer==null)viewer=text(state,"viewer");if(actor==null)return false;
         JsonObject live=card(state,actor,"battlefield"),dead=card(state,actor,"graveyard");
         if(live!=null){JsonObject entry=guard(state,actor,reader);long incarnation=number(entry,"incarnation");if(actorIncarnation<0){actorIncarnation=incarnation;}if(incarnation!=actorIncarnation || !viewer.equals(text(entry,"owner")) || !viewer.equals(text(entry,"controller")))throw new IOException("COMBAT_CASE_ACTOR_CHANGED");

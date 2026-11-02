@@ -16,6 +16,7 @@ namespace Manaforge.Play
         private readonly ViewerSessionHost host;private readonly ViewerManaSourceInput manaInput;
         public VisualElement Root {get;}=new VisualElement{name="viewer-decision-panel"};
         private readonly Label prompt=new Label{name="decision-prompt",enableRichText=false};
+        private readonly Label manaPool=new Label{name="decision-mana-pool",enableRichText=false};
         private readonly Label status=new Label{name="decision-status",enableRichText=false};
         private readonly VisualElement controls=new VisualElement{name="decision-controls"};
         private readonly VisualElement pages=new VisualElement{name="decision-pages"};
@@ -28,12 +29,12 @@ namespace Manaforge.Play
             Root.style.backgroundColor=new Color(.07f,.10f,.13f);Root.style.paddingLeft=16;Root.style.paddingRight=16;Root.style.paddingTop=12;Root.style.paddingBottom=12;
             prompt.style.fontSize=20;prompt.style.color=Color.white;prompt.style.marginBottom=8;prompt.style.whiteSpace=WhiteSpace.Normal;
             status.style.fontSize=14;status.style.color=new Color(.8f,.85f,.9f);status.style.marginBottom=8;status.style.whiteSpace=WhiteSpace.Normal;pages.style.flexDirection=FlexDirection.Row;
-            Root.Add(prompt);Root.Add(status);Root.Add(controls);Root.Add(pages);parent.Add(Root);Root.style.display=DisplayStyle.None;
+            Root.Add(prompt);Root.Add(manaPool);Root.Add(status);Root.Add(controls);Root.Add(pages);parent.Add(Root);Root.style.display=DisplayStyle.None;
         }
         private void ThreadOnly(){if(Thread.CurrentThread.ManagedThreadId!=thread)throw new InvalidOperationException("VIEWER_DECISION_THREAD");}
         private void Clear()
         {
-            manaInput.Refresh(null);offer=null;submitted=null;page=0;numericText=null;numericPage=0;numericSubmit=null;prompt.text="";status.text="";controls.Clear();pages.Clear();Root.style.display=DisplayStyle.None;
+            manaInput.Refresh(null);offer=null;submitted=null;page=0;numericText=null;numericPage=0;numericSubmit=null;prompt.text="";manaPool.text="";status.text="";controls.Clear();pages.Clear();Root.style.display=DisplayStyle.None;
             // Observe a retired task without carrying its result or touching UI from its worker.
             if(pending!=null)pending.ContinueWith(task=>{_=task.Exception;},TaskScheduler.Default);pending=null;
         }
@@ -73,7 +74,7 @@ namespace Manaforge.Play
         private void Build()
         {
             var captured=offer;var frame=captured?.Frame;if(frame==null){Clear();return;}
-            prompt.text=frame.Decision.Prompt??"Engine decision";Root.style.display=DisplayStyle.Flex;controls.Clear();pages.Clear();numericSubmit=null;
+            manaPool.text=frame.ViewerMana==null?"": "Floating mana: "+string.Join(", ",System.Linq.Enumerable.Select(frame.ViewerMana,pair=>pair.Key+" "+pair.Value));prompt.text=frame.Decision.Prompt??"Engine decision";Root.style.display=DisplayStyle.Flex;controls.Clear();pages.Clear();numericSubmit=null;
             int total=frame.Actions.Count+frame.Decision.Options.Count;int start=page*PageSize,end=Math.Min(total,start+PageSize);
             for(int i=start;i<end;i++) {
                 if(i<frame.Actions.Count){var action=frame.Actions[i];controls.Add(Button("decision-action-"+i,action.Label,()=>Send(captured,()=>host.PerformAsync(captured,action))));}

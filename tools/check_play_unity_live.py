@@ -23,6 +23,11 @@ def main():
     artifacts = ROOT / "Mtg_Projects/mtg_play_unity/Artifacts"
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
+        "--casting-case",
+        choices=("repeat", "cancel", "x", "ability"),
+        help="Native manual casting/payment acceptance",
+    )
+    parser.add_argument(
         "--combat-keyword",
         choices=(
             "haste",
@@ -200,6 +205,10 @@ def main():
         default=artifacts / ("UnityLive-" + uuid.uuid4().hex[:10]),
     )
     args = parser.parse_args()
+    if args.casting_case:
+        if args.combat_keyword:
+            parser.error("--casting-case conflicts with --combat-keyword")
+        args.combat_keyword = "casting-" + args.casting_case
     if args.combat_keyword:
         if (
             args.human_blocking
@@ -1146,7 +1155,22 @@ def main():
                     and native.get("native_combat_trigger_observed") is not True
                 ):
                     raise RuntimeError("LIVE_UNITY_COMBAT_TRIGGER_UNPROVEN")
-                if args.combat_keyword:
+                if args.casting_case:
+                    if (
+                        native.get("native_casting_case") != args.combat_keyword
+                        or native.get("native_casting_case_completed") is not True
+                        or native.get("native_casting_case_source_verified") is not True
+                        or chosen.get("confirmed_receipt_count")
+                        != chosen.get("snapshot_count", 0) - 1
+                        or chosen.get("uncertain_receipt_count") != 0
+                    ):
+                        raise RuntimeError("LIVE_UNITY_CASTING_CASE_UNPROVEN")
+                    if (
+                        native.get("native_casting_case_numeric_responses", 0) > 0
+                        and case_result.get("case_numeric_submitted", 0) <= 0
+                    ):
+                        raise RuntimeError("LIVE_UNITY_CASTING_NUMBER_UNPROVEN")
+                elif args.combat_keyword:
                     if (
                         native.get("native_combat_case") != args.combat_keyword
                         or native.get("native_combat_case_completed") is not True
@@ -1359,7 +1383,9 @@ def main():
                         {
                             key: value
                             for key, value in native.items()
-                            if key.startswith("native_combat_case")
+                            if key.startswith(
+                                ("native_combat_case", "native_casting_case")
+                            )
                         }
                     )
                     evidence.update(
@@ -1552,7 +1578,7 @@ def main():
         json.dumps(evidence, indent=2) + "\n", encoding="utf-8"
     )
     print(
-        f"Packaged Unity verified the native {args.combat_keyword} combat scenario, confirmed every input and cleared the viewer."
+        f"Packaged Unity verified the native {args.combat_keyword} scenario, confirmed every input and cleared the viewer."
         if args.combat_keyword
         else "Packaged Unity blocked with Shield Sphere, resolved its native combat trigger and displayed the resulting counter and damage."
         if args.combat_trigger

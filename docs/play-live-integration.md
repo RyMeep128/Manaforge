@@ -1,5 +1,30 @@
 # Live Unity / Java / XMage integration
 
+## Manual casting and payment continuation (0.5.209)
+
+```powershell
+python tools/check_play_unity_live.py --casting-case repeat --no-capture
+python tools/check_play_unity_live.py --casting-case cancel --no-capture
+python tools/check_play_unity_live.py --casting-case x --no-capture
+python tools/check_play_unity_live.py --casting-case ability --no-capture
+```
+
+All four packaged cases passed through the reusable gameplay session. Assertions
+bind selected sources to native stack metadata and later battlefield incarnations.
+Repeat casts two distinct Memnites on different turns. Cancel uses native payment
+cancellation then casts the same Garruk's Companion. X selects one and pays two
+sources for a 1/1 Walking Ballista. Ability removes its counter, observes the
+source in the graveyard and the opponent's native life decrease. Inputs are all
+confirmed with zero uncertainty and owned cleanup.
+
+Native battlefield activations now project alongside hand actions, and floating
+mana uses the existing player-mana contract. Counts/colors are validated; Unity
+keeps an immutable viewer-only pool and displays it beside the native prompt.
+No schema expansion or inferred mana legality is introduced. Focused validation:
+672 Java projection/evidence checks, 21 Unity projection tests and 49 session tests.
+Automatic payment, broad special-cost acceptance and shuffled deck integration
+remain open; these cases do not certify those later batches.
+
 ## Core 1v1 combat acceptance (0.5.207)
 
 The core combat coordinator now covers native declarations, changing selections,

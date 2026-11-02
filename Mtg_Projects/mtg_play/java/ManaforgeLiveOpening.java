@@ -36,7 +36,7 @@ public final class ManaforgeLiveOpening {
     private final boolean postResolutionPass=Boolean.getBoolean("manaforge.postResolutionPass");private boolean unityPostResolutionSubmitted,unityPostResolutionConfirmed;
     private final boolean finishAttacks=Boolean.getBoolean("manaforge.finishAttacks");private boolean attackSourceOffered,emptyAttackSubmitted,combatAdvanced,unityAttackFinishSubmitted,unityAttackFinishConfirmed;
     private final boolean nextTurnCast=Boolean.getBoolean("manaforge.nextTurnCast");private boolean nextCastSelected,nextAbilityConfirmed,nextResolutionConfirmed;
-    private final NativeCombatCase combatCase=System.getProperty("manaforge.combatKeyword","").isEmpty()?null:new NativeCombatCase(System.getProperty("manaforge.combatKeyword"));
+    private final NativeAcceptanceCase combatCase=System.getProperty("manaforge.combatKeyword","").isEmpty()?null:System.getProperty("manaforge.combatKeyword").startsWith("casting-")?new NativeCastingCase(System.getProperty("manaforge.combatKeyword")):new NativeCombatCase(System.getProperty("manaforge.combatKeyword"));
     private final boolean combatTrigger=Boolean.getBoolean("manaforge.combatTrigger");private boolean combatTriggerObserved;
     private final String combatSpell=System.getProperty("manaforge.combatSpell","");private String spellTarget;private long spellTargetIncarnation=-1,spellBuffTurn=-1;private boolean spellEffectObserved,spellCycleObserved;
     private final boolean coreFromOpening=Boolean.getBoolean("manaforge.coreFromOpening");private boolean humanBlockSubmitted,humanBlockCombatObserved,humanBlockAssignmentObserved;
@@ -769,7 +769,7 @@ public final class ManaforgeLiveOpening {
             if(probe.postResolutionPass && !probe.observeResolution)throw new IOException();
             if(probe.finishAttacks && (!probe.firstCreature || probe.metadataContext==null || probe.continuePriority || probe.postResolutionPass))throw new IOException();
             if(probe.combatPriority && (!probe.finishAttacks || probe.unityReady==null))throw new IOException();
-            if(probe.combatCase!=null && (!probe.coreFromOpening || !probe.combatSpell.isEmpty() || probe.combatTrigger || probe.completeGame!=probe.combatCase.key.equals("draw")))throw new IOException();
+            if(probe.combatCase!=null && (!probe.coreFromOpening || !probe.combatSpell.isEmpty() || probe.combatTrigger || probe.completeGame!=probe.combatCase.key().equals("draw")))throw new IOException();
             if(probe.combatTrigger && (!probe.coreFromOpening || !probe.combatSpell.isEmpty() || probe.completeGame))throw new IOException();
             if(!Arrays.asList("","pump","removal").contains(probe.combatSpell) || !probe.combatSpell.isEmpty() && (!probe.coreFromOpening || probe.completeGame))throw new IOException();
             if(probe.coreFromOpening && (probe.metadataContext==null || probe.unityReady==null))throw new IOException();

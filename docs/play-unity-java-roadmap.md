@@ -1368,3 +1368,14 @@ haste scenario passes through the extracted path, including payment, native
 attacker reselection, damage and cleanup. The Java projection/evidence suite now
 passes 662 checks. This is casting-session infrastructure; general mana/casting
 acceptance and safe automatic payment remain unfinished.
+
+
+### Manual mana and casting acceptance (0.5.209)
+
+The reusable session now has native repeated-cast, payment-cancellation/recast,
+X-cost and activated-ability packaged acceptance. Battlefield activations and
+floating mana project through existing contracts; the viewer receives an immutable
+own-seat pool. All four cases confirm every input, bind stack/card incarnations
+and clean up. Focused Java checks (672), Unity projection tests (21) and session
+checks (49) pass. Safe automatic payment, broader cost/response scenarios and
+normal shuffled saved-deck integration remain unfinished.
