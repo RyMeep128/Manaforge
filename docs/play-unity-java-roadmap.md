@@ -1262,3 +1262,17 @@ AI turn and the third human main phase. Native evidence verifies the renewed dra
 and untap, retained battlefield cards and exact graveyard identities. The final
 snapshot is read-only with defender life still 18. Full-match results and general
 choices remain open; visual improvements stay deferred.
+
+
+### Reusable multi-round gameplay (0.5.199)
+
+A configurable bounded session now plays up to six additional complete combat and
+AI-turn rounds. It uses the second cast creature only once native legal-attacker
+selection permits it, then reuses typed combat and turn evidence across rounds.
+Hand/library/graveyard stability, retained battlefield identities, cleanup
+discards, renewed draw/untap and each life decrease are verified. Unique snapshot
+IDs and bounded history cover the longer session, which ends read-only.
+
+This replaces per-transition fixture extension with a reusable multi-round path.
+Natural game completion, general decks and decisions remain P4 work. Visual
+improvements remain deferred until the full 1v1 loop is complete.

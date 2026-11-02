@@ -1,5 +1,27 @@
 # Live Unity / Java / XMage integration
 
+## Reusable combat and AI-turn rounds (0.5.199)
+
+```powershell
+python tools/check_play_unity_live.py --select-attacker --native-metadata --finish-selected-attack --declared-priority --combat-damage --complete-combat --loop-turn --next-turn-cast --repeat-cycle --play-rounds 6 --no-capture
+```
+
+`--play-rounds 0..6` adds complete combat/AI-turn rounds after returning to the
+third human main phase. Zero preserves the previous endpoint. The second cast
+creature becomes the attacker only after the engine includes it in the legal
+attacker menu on its later turn; the public offer contains that exact creature.
+Every round verifies selection, declaration, damage, combat cleanup, the opposing
+turn, cleanup discards, draw and untap. The combat endpoint checks the chosen
+incarnation, unchanged hand/library/graveyard and retained battlefield identities;
+the turn endpoint checks retained cards and exact graveyard identities.
+
+Unique snapshot IDs span all rounds. The session remains bounded at 128
+continuation inputs, 256 history entries and the existing deadlines. Each receipt
+must be confirmed before the following input; uncertain commands are not replayed.
+The terminal state is read-only. This is a repeatable public-deck fixture, not
+full-match acceptance or general deck/choice support. Visual improvements remain
+deferred until full 1v1 gameplay is complete.
+
 ## Return through another AI turn (0.5.198)
 
 The `--repeat-cycle` command below now continues after the second combat through

@@ -23,6 +23,13 @@ def main():
     artifacts = ROOT / "Mtg_Projects/mtg_play_unity/Artifacts"
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
+        "--play-rounds",
+        type=int,
+        choices=range(0, 7),
+        default=0,
+        help="Additional existing-creature combat/AI-turn rounds (0..6); requires --repeat-cycle",
+    )
+    parser.add_argument(
         "--repeat-cycle",
         action="store_true",
         help="Repeat combat after the next cast on the same session; requires --next-turn-cast",
@@ -147,6 +154,8 @@ def main():
         default=artifacts / ("UnityLive-" + uuid.uuid4().hex[:10]),
     )
     args = parser.parse_args()
+    if args.play_rounds and not args.repeat_cycle:
+        parser.error("--play-rounds requires --repeat-cycle")
     if args.repeat_cycle and not args.next_turn_cast:
         parser.error("--repeat-cycle requires --next-turn-cast")
     if args.next_turn_cast and not args.loop_turn:
@@ -282,6 +291,7 @@ def main():
                         "-Djava.awt.headless=true",
                         "-Dfile.encoding=UTF-8",
                         "-Djava.net.preferIPv4Stack=true",
+                        f"-Dmanaforge.playRounds={args.play_rounds}",
                         *(
                             ["-Dmanaforge.repeatCycle=true"]
                             if args.repeat_cycle
@@ -423,6 +433,7 @@ def main():
                     command += ["-manaforgeLivePriority", "1"]
                 if args.creature_ability:
                     command += ["-manaforgeLiveCreature", "1"]
+                command += ["-manaforgeLivePlayRounds", str(args.play_rounds)]
                 if args.repeat_cycle:
                     command += ["-manaforgeLiveRepeatCycle", "1"]
                 if args.next_turn_cast:
@@ -671,6 +682,18 @@ def main():
                         != repeated_result.get("repeat_defender_life_after")
                     ):
                         raise RuntimeError("LIVE_UNITY_REPEATED_TURN_NOT_PRESENTED")
+                if args.play_rounds:
+                    rounds_result = wait_file("play-rounds-ready", 240)
+                    if (
+                        rounds_result.get("play_rounds_presented") is not True
+                        or rounds_result.get("play_rounds") != args.play_rounds
+                        or rounds_result.get("turn_number")
+                        != returned_result["turn_number"] + 2 * args.play_rounds
+                        or rounds_result.get("postcombat_defender_life")
+                        != returned_result["postcombat_defender_life"]
+                        - args.play_rounds
+                    ):
+                        raise RuntimeError("LIVE_UNITY_PLAY_ROUNDS_NOT_PRESENTED")
                 chosen = wait_file("choice", 60)
                 if (
                     chosen.get("ack_count")
@@ -791,7 +814,9 @@ def main():
                         ready.get("attacker_choice_presented") is not True
                         or chosen.get("snapshot_count")
                         != (
-                            returned_result["snapshot_count"]
+                            rounds_result["snapshot_count"]
+                            if args.play_rounds
+                            else returned_result["snapshot_count"]
                             if args.repeat_cycle
                             else cast_result["snapshot_count"]
                             if args.next_turn_cast
@@ -861,6 +886,11 @@ def main():
                     or native.get("native_repeated_turn_observed") is not True
                 ):
                     raise RuntimeError("LIVE_UNITY_REPEATED_COMBAT_EVIDENCE_FAILED")
+                if (
+                    args.play_rounds
+                    and native.get("native_play_rounds_completed") != args.play_rounds
+                ):
+                    raise RuntimeError("LIVE_UNITY_PLAY_ROUNDS_EVIDENCE_FAILED")
                 if args.next_turn_cast and any(
                     native.get(field) is not True
                     for field in (
@@ -1045,6 +1075,13 @@ def main():
                         else 1,
                         uncertain_receipt_count=0,
                     )
+                if args.play_rounds:
+                    evidence.update(
+                        native_play_rounds_completed=args.play_rounds,
+                        play_rounds_presented=True,
+                        final_turn_number=rounds_result["turn_number"],
+                        final_defender_life=rounds_result["postcombat_defender_life"],
+                    )
                 if args.repeat_cycle:
                     evidence.update(
                         native_repeated_combat_observed=True,
@@ -1188,7 +1225,9 @@ def main():
         json.dumps(evidence, indent=2) + "\n", encoding="utf-8"
     )
     print(
-        "Packaged Unity repeated casting and combat on one session, confirmed the second life decrease and following human turn, cleared the viewer and reaped owned roots."
+        f"Packaged Unity completed {args.play_rounds} additional combat/AI-turn rounds using the second creature, confirmed every input, cleared the viewer and reaped owned roots."
+        if args.play_rounds
+        else "Packaged Unity repeated casting and combat on one session, confirmed the second life decrease and following human turn, cleared the viewer and reaped owned roots."
         if args.repeat_cycle
         else "Packaged Unity continued the turn loop, cast another creature, selected its ability and confirmed resolution on the same session; viewer cleared and roots reaped."
         if args.next_turn_cast
