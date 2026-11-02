@@ -1184,3 +1184,11 @@ A separate Java Memnite-versus-Ornithopter fixture now observes engine-declared
 AI blockers and validates the viewer-safe read-only assignment. The unblocked
 fixture is retained. Unity blocker display, explicit human blocker choices and
 blocked damage remain open; P4 and formal acceptance gates are not complete.
+
+
+### Packaged native AI blocker display (0.5.190)
+
+Unity now displays public blocker names from the separate Ornithopter AI fixture
+after three confirmed inputs. The read-only assignment passes native correlation
+and public receive validation. Human blocker selection, blocked damage, lethal
+results and the broader P4 acceptance work remain open.

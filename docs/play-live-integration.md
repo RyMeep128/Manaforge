@@ -1,5 +1,25 @@
 # Live Unity / Java / XMage integration
 
+## Display native AI blocker names in Unity (0.5.190)
+
+```powershell
+python tools/check_play_unity_live.py --select-attacker --native-metadata --finish-selected-attack --declared-priority --blocked-combat
+```
+
+The separate Memnite-versus-Ornithopter fixture now uses the packaged Unity
+session. Three explicit inputs receive typed confirmations, followed by a fourth
+read-only snapshot with the native AI blocker assignment. Java requires blockers
+present and native `blocked` true, validates their opaque public references, and
+checks the receive boundary before transmission.
+
+Unity copies blocker names into immutable public combat values and displays the
+actual native names with the assignment. Acceptance requires four snapshots,
+six acknowledgements, three confirmed receipts, zero uncertain receipts, known
+blocker names and a positive displayed blocker count matching native blocker
+presence. The viewer then clears and owned roots exit. The result is captured in
+`post-declared-priority.png`. This observes AI-owned blocking only; explicit human
+blocker selection, blocked damage and general combat acceptance remain open.
+
 ## Observe native AI blockers in a separate Java fixture (0.5.189)
 
 ```powershell

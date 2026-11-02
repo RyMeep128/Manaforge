@@ -50,17 +50,17 @@ namespace Manaforge.Play
     }
     public sealed class ProjectedCombatAssignment
     {
-        public IReadOnlyList<string> AttackerNames {get;} public string DefenderName {get;} public string DefenderId {get;} public long? DefenderLife {get;} public int BlockerCount {get;}
-        private static string AttackerName(JObject snapshot,string id)
+        public IReadOnlyList<string> AttackerNames {get;} public IReadOnlyList<string> BlockerNames {get;} public string DefenderName {get;} public string DefenderId {get;} public long? DefenderLife {get;} public int BlockerCount {get;}
+        private static string ObjectName(JObject snapshot,string id,string fallback)
         {
             var card=snapshot["objects"].FirstOrDefault(value=>(string)value["object_id"]==id);
-            return (string)(card?["characteristics"] as JObject)?["name"]??"Unknown attacker";
+            return (string)(card?["characteristics"] as JObject)?["name"]??fallback;
         }
         internal ProjectedCombatAssignment(JToken assignment,JObject snapshot)
         {
-            AttackerNames=Array.AsReadOnly(assignment["attackers"].Select(id=>AttackerName(snapshot,(string)id)).ToArray());
+            AttackerNames=Array.AsReadOnly(assignment["attackers"].Select(id=>ObjectName(snapshot,(string)id,"Unknown attacker")).ToArray());
             DefenderId=(string)assignment["defender_id"];var defender=snapshot["players"].FirstOrDefault(player=>(string)player["player_id"]==(string)assignment["defender_id"]);DefenderName=(string)defender?["name"]??"Unknown defender";DefenderLife=(long?)defender?["life"];
-            BlockerCount=assignment["blockers"].Count();
+            BlockerNames=Array.AsReadOnly(assignment["blockers"].Select(id=>ObjectName(snapshot,(string)id,"Unknown blocker")).ToArray());BlockerCount=BlockerNames.Count;
         }
     }
     public sealed class ProjectedDecisionFrame
