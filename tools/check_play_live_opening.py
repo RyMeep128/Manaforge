@@ -17,6 +17,11 @@ from play_native_metadata import provision_metadata  # noqa: E402
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
+        "--finish-selected-attack",
+        action="store_true",
+        help="Finish the selected single-attacker declaration; requires --select-attacker",
+    )
+    parser.add_argument(
         "--select-attacker",
         action="store_true",
         help="Select one native offered attacker and observe its engine assignment; requires --first-creature --native-metadata",
@@ -60,6 +65,8 @@ def main():
         parser.error(
             "--select-attacker requires --first-creature --native-metadata and excludes --finish-attacks"
         )
+    if args.finish_selected_attack and not args.select_attacker:
+        parser.error("--finish-selected-attack requires --select-attacker")
     output = args.output.resolve()
     artifacts = (ROOT / "Mtg_Projects/mtg_play_unity/Artifacts").resolve()
     if not output.is_relative_to(artifacts) or output == artifacts:
@@ -113,7 +120,12 @@ def main():
         expected.update(
             native_attacker_selected=True,
             native_attack_assignment_observed=True,
-            native_attack_selection_open=True,
+            native_attack_selection_open=not args.finish_selected_attack,
+        )
+
+    if args.finish_selected_attack:
+        expected.update(
+            native_selected_attack_finished=True, native_declared_attack_observed=True
         )
 
     def consume(first, events, launch, port, server_process, server):
@@ -136,6 +148,11 @@ def main():
                 *(
                     ["-Dmanaforge.finishAttacks=true"]
                     if args.finish_attacks or args.select_attacker
+                    else []
+                ),
+                *(
+                    ["-Dmanaforge.finishSelectedAttack=true"]
+                    if args.finish_selected_attack
                     else []
                 ),
                 *(["-Dmanaforge.selectAttacker=true"] if args.select_attacker else []),
@@ -235,7 +252,9 @@ def main():
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
     print(
-        "Real XMage accepted an explicit attacker choice and assigned its defender; declaration remains open; duplicate suppression and cleanup passed."
+        "Real XMage accepted explicit selection and Finish attacks; the same attacker remained assigned at guarded native priority. No blocking or damage proof."
+        if args.finish_selected_attack
+        else "Real XMage accepted an explicit attacker choice and assigned its defender; declaration remains open; duplicate suppression and cleanup passed."
         if args.select_attacker
         else "Real XMage offered the cast source for attacking, accepted explicit Finish attacks with no attackers, and returned to priority; duplicate suppression and cleanup passed. No Unity combat integration."
         if args.finish_attacks

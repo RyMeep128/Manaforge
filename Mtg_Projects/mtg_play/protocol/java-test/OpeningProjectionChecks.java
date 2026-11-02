@@ -84,6 +84,36 @@ public final class OpeningProjectionChecks {
     }
     static JsonObject attackPrompt(){JsonObject request=priorityPrompt();request.addProperty("is_priority",false);JsonArray candidates=new JsonArray();candidates.add("raw-card");request.add("attackers",candidates);return request;}
     static JsonObject attackMetadata(boolean priority){return JsonParser.parseString("{\"status\":\"ok\",\"cycle\":8,\"priority_open\":"+priority+",\"objects\":{\"raw-card\":{\"incarnation\":4,\"owner\":\"raw-human\",\"controller\":\"raw-human\"}}}").getAsJsonObject();}
+    static void declaredAttackChecks() throws Exception {
+        JsonObject before=attackState(),prompt=attackPrompt();prompt.addProperty("decision_id",42);
+        before.add("combat",JsonParser.parseString("[{\"attackers\":[\"raw-card\"],\"blockers\":[],\"defender\":\"raw-ai\",\"blocked\":false}]"));
+        ManaforgeOpeningProjection projection=projection();JsonObject snapshot=projection.projectSelectedAttackFinish(before,prompt);shape(snapshot);
+        check(snapshot.getAsJsonArray("actions").size()==1 && "Finish attacks".equals(snapshot.getAsJsonArray("actions").get(0).getAsJsonObject().get("label").getAsString()));
+        check(!snapshot.toString().contains("raw-card") && !snapshot.toString().contains("raw-ai"));
+        String wire=perform(snapshot);final JsonObject command=projection.claimAction(wire,"session","human","raw-game","raw-human",42,8);
+        fails("STALE_DECISION",()->projection.claimAction(wire,"session","human","raw-game","raw-human",42,8));
+        JsonObject after=before.deepCopy(),next=priorityPrompt(),accepted=new JsonObject();next.addProperty("decision_id",43);after.addProperty("priority_player","raw-name");
+        accepted.addProperty("event","response_sent");accepted.addProperty("accepted",true);accepted.add("request_id",command.get("request_id"));
+        NativeCastCorrelation.DeclaredAttackEvidence proof=NativeCastCorrelation.declaredAttackEvidence(before,prompt,command,attackMetadata(false),accepted,after,next,attackMetadata(true),"raw-card");
+        check(proof!=null && proof.matchesCommand(command));JsonObject original=command.deepCopy();command.addProperty("value",true);check(proof.matchesCommand(original) && !proof.matchesCommand(command));command.addProperty("value",false);
+        for(int mode=0;mode<13;mode++) {
+            JsonObject badBefore=before.deepCopy(),badAfter=after.deepCopy(),badNext=next.deepCopy(),badAccepted=accepted.deepCopy(),badCommand=command.deepCopy(),metadata=attackMetadata(true);
+            if(mode==0)badAfter.add("combat",new JsonArray());
+            if(mode==1)badAfter.getAsJsonArray("combat").get(0).getAsJsonObject().addProperty("defender","raw-human");
+            if(mode==2){badBefore.getAsJsonArray("combat").get(0).getAsJsonObject().addProperty("defender","unknown");badAfter.add("combat",badBefore.get("combat").deepCopy());}
+            if(mode==3)metadata.getAsJsonObject("objects").getAsJsonObject("raw-card").addProperty("incarnation",5);
+            if(mode==4)metadata.addProperty("priority_open",false);
+            if(mode==5)badAccepted.addProperty("accepted",false);
+            if(mode==6)badAccepted.addProperty("request_id","other");
+            if(mode==7)badNext.addProperty("decision_id",42);
+            if(mode==8)badNext.addProperty("is_priority",false);
+            if(mode==9)badCommand.addProperty("value",true);
+            if(mode==10)badBefore.addProperty("active_player","raw-opponent-name");
+            if(mode==11)badAfter.addProperty("turn",1);
+            if(mode==12)badAfter.getAsJsonArray("stack").add(new JsonObject());
+            check(NativeCastCorrelation.declaredAttackEvidence(badBefore,prompt,badCommand,attackMetadata(false),badAccepted,badAfter,badNext,metadata,"raw-card")==null);
+        }
+    }
     static void attackerSelectionChecks() throws Exception {
         JsonObject before=attackState(),prompt=attackPrompt();ManaforgeOpeningProjection projection=projection();
         JsonObject snapshot=projection.projectAttackSelection(before,prompt);shape(snapshot);
@@ -520,7 +550,7 @@ public final class OpeningProjectionChecks {
         raw=state();raw.getAsJsonArray("players").add(raw.getAsJsonArray("players").get(0).deepCopy());rejects(raw,prompt());
         raw=state();raw.getAsJsonArray("players").get(0).getAsJsonObject().addProperty("life",true);rejects(raw,prompt());
         request=prompt();request.addProperty("message","Use 12345678-abcd-1234-abcd-123456789abc");check(!projection().project(state(),request).toString().contains("12345678-abcd-1234-abcd-123456789abc"));
-        choiceChecks();landChecks();abilityChecks();stackPriorityChecks();castCorrelationChecks();attackFinishChecks();attackerSelectionChecks();
+        choiceChecks();landChecks();abilityChecks();stackPriorityChecks();castCorrelationChecks();attackFinishChecks();attackerSelectionChecks();declaredAttackChecks();
         System.out.println("Opening projection: "+checks+" privacy, schema, isolation and fail-closed checks passed");
     }
 }

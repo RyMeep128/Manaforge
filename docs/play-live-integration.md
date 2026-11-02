@@ -1,5 +1,25 @@
 # Live Unity / Java / XMage integration
 
+## Finish the selected attack in the Java fixture (0.5.180)
+
+```powershell
+python tools/check_play_live_opening.py --first-creature --native-metadata --select-attacker --finish-selected-attack
+```
+
+After selecting the resolved Memnite, the authenticated Java fixture exposes only
+Finish attacks for the nonempty declaration and sends that explicit response once.
+A separate immutable declared-attack certificate requires the exact accepted
+boolean-false command and request ID, a later guarded priority prompt, unchanged
+source incarnation and turn, and the same single-attacker combat group and opposing
+defender. Empty combat, altered assignment, stack contents, stale decisions and
+mismatched guards fail closed. This does not reuse the empty-combat finish proof.
+
+The sanitized report distinguishes `native_selected_attack_finished` and
+`native_declared_attack_observed`, with `native_attack_selection_open` false.
+The native priority window is observed without further inputs. Unity still ends
+after its read-only selected assignment; nonempty Finish attacks integration,
+blocking and damage remain subsequent work. CI runs this additional Java fixture.
+
 ## Display the selected attack assignment (0.5.179)
 
 The `--select-attacker --native-metadata` Unity probe now sends a second,
