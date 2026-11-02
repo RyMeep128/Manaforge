@@ -4,9 +4,27 @@ import java.util.*;
 /** Private native correlation. Stack evidence proves ability selection, not spell resolution. */
 public final class NativeCastCorrelation {
     public static final class AttackFinishEvidence {
-        private final JsonObject command;
-        private AttackFinishEvidence(JsonObject command){this.command=command.deepCopy();}
+        private final JsonObject command;private final String game,viewer,source;private final long incarnation;
+        private AttackFinishEvidence(JsonObject command,String viewer,String source,long incarnation){this.command=command.deepCopy();game=string(command,"game_id");this.viewer=viewer;this.source=source;this.incarnation=incarnation;}
         public boolean matchesCommand(JsonObject candidate){return command.equals(candidate);}
+        public PriorityEvidence phasePriorityEvidence(JsonObject before,JsonObject prompt,JsonObject pass,JsonObject beforeMetadata,JsonObject accepted,
+                JsonObject after,JsonObject nextPrompt,JsonObject afterMetadata) {
+            try {
+                if(!game.equals(string(before,"game_id")) || !game.equals(string(after,"game_id")) || !viewer.equals(string(before,"viewer")) || !viewer.equals(string(after,"viewer"))
+                    || battlefieldCounter(before,beforeMetadata,source)!=incarnation || battlefieldCounter(after,afterMetadata,source)!=incarnation
+                    || before.getAsJsonArray("stack").size()!=0 || after.getAsJsonArray("stack").size()!=0 || before.getAsJsonArray("combat").size()!=0 || after.getAsJsonArray("combat").size()!=0
+                    || !"respond".equals(string(pass,"command")) || !"boolean".equals(string(pass,"kind")) || !new JsonPrimitive(false).equals(pass.get("value"))
+                    || !game.equals(string(pass,"game_id")) || number(pass,"decision_id")!=number(prompt,"decision_id")
+                    || !"GAME_SELECT".equals(string(prompt,"kind")) || !new JsonPrimitive(true).equals(prompt.get("is_priority")) || prompt.has("attackers") || prompt.has("blockers")
+                    || number(prompt,"cycle")!=number(before,"cycle") || !new JsonPrimitive(true).equals(beforeMetadata.get("priority_open"))
+                    || !"response_sent".equals(string(accepted,"event")) || !new JsonPrimitive(true).equals(accepted.get("accepted")) || !string(pass,"request_id").equals(string(accepted,"request_id"))
+                    || !"GAME_SELECT".equals(string(nextPrompt,"kind")) || !new JsonPrimitive(true).equals(nextPrompt.get("is_priority")) || nextPrompt.has("attackers") || nextPrompt.has("blockers")
+                    || !new JsonPrimitive(true).equals(afterMetadata.get("priority_open")) || number(nextPrompt,"cycle")!=number(after,"cycle") || number(nextPrompt,"decision_id")<=number(prompt,"decision_id")
+                    || number(after,"cycle")<number(before,"cycle") || number(after,"turn")<number(before,"turn"))return null;
+                String beforePhase=string(before,"phase"),afterPhase=string(after,"phase"),beforeStep=string(before,"step"),afterStep=string(after,"step");
+                return number(after,"turn")!=number(before,"turn") || !beforePhase.equals(afterPhase) || !beforeStep.equals(afterStep)?new PriorityEvidence(pass):null;
+            }catch(RuntimeException unsupported){return null;}
+        }
     }
     private static long battlefieldCounter(JsonObject state,JsonObject metadata,String source) {
         String viewer=string(state,"viewer");
@@ -46,7 +64,7 @@ public final class NativeCastCorrelation {
                 || !new JsonPrimitive(true).equals(afterMetadata.get("priority_open")) || number(nextPrompt,"cycle")!=number(after,"cycle")
                 || number(nextPrompt,"decision_id")<=number(prompt,"decision_id") || number(after,"cycle")<number(before,"cycle")
                 || number(after,"turn")<number(before,"turn"))return null;
-            return new AttackFinishEvidence(command);
+            return new AttackFinishEvidence(command,string(before,"viewer"),source,battlefieldCounter(after,afterMetadata,source));
         }catch(RuntimeException unsupported){return null;}
     }
     public static final class PriorityEvidence {

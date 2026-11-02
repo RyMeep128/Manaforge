@@ -96,6 +96,7 @@ def main():
             unity_attack_finish_submitted=False,
             unity_attack_finish_confirmed=False,
             unity_combat_priority_submitted=False,
+            unity_combat_priority_confirmed=False,
         )
 
     def consume(first, events, launch, port, server_process, server):

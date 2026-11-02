@@ -26,7 +26,7 @@ def main():
     parser.add_argument(
         "--combat-priority",
         action="store_true",
-        help="Submit one explicit priority pass after confirmed Finish attacks; requires --finish-attacks",
+        help="Confirm the next priority pass through a guarded phase transition; requires --finish-attacks",
     )
     parser.add_argument(
         "--post-resolution-pass",
@@ -410,6 +410,14 @@ def main():
                         is not True
                     ):
                         raise RuntimeError("LIVE_UNITY_COMBAT_RESULT_NOT_PRESENTED")
+                if args.combat_priority:
+                    combat_phase = wait_file("combat-priority-ready", 60)
+                    if (
+                        combat_phase.get("snapshot_count") != 3
+                        or combat_phase.get("combat_priority_result_presented")
+                        is not True
+                    ):
+                        raise RuntimeError("LIVE_UNITY_COMBAT_PHASE_NOT_PRESENTED")
                 chosen = wait_file("choice", 60)
                 if (
                     chosen.get("ack_count")
@@ -433,10 +441,11 @@ def main():
                     raise RuntimeError("LIVE_UNITY_POST_RESOLUTION_RECEIPT_FAILED")
                 if args.finish_attacks and (
                     ready.get("attack_finish_presented") is not True
-                    or chosen.get("snapshot_count") != 2
-                    or chosen.get("confirmed_receipt_count") != 1
-                    or chosen.get("uncertain_receipt_count")
-                    != (1 if args.combat_priority else 0)
+                    or chosen.get("snapshot_count")
+                    != (3 if args.combat_priority else 2)
+                    or chosen.get("confirmed_receipt_count")
+                    != (2 if args.combat_priority else 1)
+                    or chosen.get("uncertain_receipt_count") != 0
                 ):
                     raise RuntimeError("LIVE_UNITY_ATTACK_FINISH_RECEIPT_FAILED")
                 if (
@@ -534,6 +543,12 @@ def main():
                     is not args.combat_priority
                 ):
                     raise RuntimeError("LIVE_UNITY_COMBAT_PRIORITY_EVIDENCE_FAILED")
+                if (
+                    args.finish_attacks
+                    and native.get("unity_combat_priority_confirmed")
+                    is not args.combat_priority
+                ):
+                    raise RuntimeError("LIVE_UNITY_COMBAT_PRIORITY_CONFIRMATION_FAILED")
                 if args.creature_ability and any(
                     native.get(field) is not True
                     for field in (
@@ -602,11 +617,13 @@ def main():
                         unity_attack_finish_submitted=True,
                         unity_attack_finish_confirmed=True,
                         attack_finish_presented=True,
-                        confirmed_receipt_count=1,
-                        uncertain_receipt_count=1 if args.combat_priority else 0,
+                        confirmed_receipt_count=2 if args.combat_priority else 1,
+                        uncertain_receipt_count=0,
                         post_combat_priority_presented=True,
-                        snapshot_count=2,
+                        snapshot_count=3 if args.combat_priority else 2,
                         unity_combat_priority_submitted=args.combat_priority,
+                        unity_combat_priority_confirmed=args.combat_priority,
+                        combat_priority_result_presented=args.combat_priority,
                     )
                 if args.observe_resolution:
                     evidence.update(
@@ -653,7 +670,7 @@ def main():
         json.dumps(evidence, indent=2) + "\n", encoding="utf-8"
     )
     print(
-        "Packaged Unity confirmed Finish attacks then submitted the next priority pass; pass outcome uncertain, viewer cleared and roots reaped."
+        "Packaged Unity confirmed Finish attacks and the next priority pass, displayed the next native state read-only, cleared the viewer and reaped owned roots."
         if args.combat_priority
         else "Packaged Unity confirmed Finish attacks and displayed the next native priority state read-only; viewer cleared and roots reaped."
         if args.finish_attacks

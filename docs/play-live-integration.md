@@ -1,5 +1,39 @@
 # Live Unity / Java / XMage integration
 
+## Confirm the post-combat pass and display its next state (0.5.175)
+
+The existing `--finish-attacks --native-metadata --combat-priority` probe now
+confirms its second input through guarded native phase-transition evidence:
+
+```powershell
+python tools/check_play_unity_live.py --finish-attacks --native-metadata --combat-priority
+```
+
+The finish evidence retains the native game/viewer/source incarnation. A pass
+certificate requires that source unchanged in both guarded battlefield views,
+empty combat/stack, real priority windows before/after, the exact accepted
+boolean-false response and request ID, matching native cycles and a later native
+decision. Native turn/phase/step must change; a newer cycle alone is insufficient.
+Wrong acceptance, priority guards, incarnation, viewer or unsupported prompts
+fail closed. No phase-order rules are reconstructed.
+
+After confirmation, the same session sends a third snapshot with no decision or
+actions. Unity mounts the actual revision, captures `combat-priority-result.png`,
+then clears normally. Acceptance now requires three snapshots, four acknowledgements,
+two confirmed receipts, no uncertain receipts, native unity_combat_priority_confirmed
+and combat_priority_result_presented evidence. The default combat probe remains
+the two-snapshot read-only path. No further action or full combat loop is enabled.
+
+Validation: Windows player build, the real two-input combat/phase probe, screenshot
+inspection and normal viewer/process cleanup passed. 78 focused Unity receipt/
+channel tests and Java protocol preflight passed, including 345 projection/
+correlation/privacy checks. Session tests cover pending rejection before proof,
+late uncertainty reconciliation, idempotent confirmation, cached confirmed retries
+without native replay and receipt retention after the new frame/disconnect.
+Default packaged combat and Java-only attacker-finish regressions passed. Lint
+and formatting passed; no full application suite ran. New CI evidence remains
+pending; next scheduled check: .177.
+
 ## Explicit priority input after confirmed combat finish (0.5.174)
 
 An opt-in continuation admits one native priority pass after confirmed Finish attacks:

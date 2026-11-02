@@ -119,8 +119,16 @@ public final class OpeningSessionChecks {
             owner.dispatch(wire,"raw-game","raw-human",42,8);pass.addProperty("message_id","blocked-next");
             manaforge.protocol.SubmissionLedger.Prepared blocked=owner.dispatch(pass.toString(),"raw-game","raw-human",42,8);
             if(blocked.shouldSubmit || !"COMMAND_PENDING".equals(blocked.receipt().getAsJsonObject("body").get("code").getAsString()) || owner.pollNative()!=null)throw new AssertionError("OLD_ATTACK_RECEIPT_RELEASED_PASS");
+            JsonObject phaseBefore=after.deepCopy(),phaseAfter=after.deepCopy(),phaseNext=next.deepCopy(),passAccepted=accepted.deepCopy();
+            phaseBefore.addProperty("phase","COMBAT");phaseBefore.addProperty("step","END_COMBAT");phaseAfter.addProperty("phase","POSTCOMBAT_MAIN");phaseAfter.addProperty("step","POSTCOMBAT_MAIN");phaseNext.addProperty("decision_id",43);passAccepted.addProperty("request_id","after-combat-pass");
+            NativeCastCorrelation.PriorityEvidence phaseProof=proof.phasePriorityEvidence(phaseBefore,next,nativePass,OpeningProjectionChecks.attackMetadata(true),passAccepted,phaseAfter,phaseNext,OpeningProjectionChecks.attackMetadata(true));
+            if(phaseProof==null)throw new AssertionError("COMBAT_PASS_PROOF_MISSING");
+            JsonObject passReceipt=owner.confirmPriority("after-combat-pass",phaseProof);if(!"confirmed".equals(passReceipt.getAsJsonObject("body").get("outcome").getAsString()) || !passReceipt.equals(owner.confirmPriority("after-combat-pass",phaseProof)))throw new AssertionError("COMBAT_PASS_CONFIRMATION_FAILED");
+            JsonObject phaseUpdate=envelope(projection.projectReadOnlyPriority(phaseAfter,phaseNext));phaseUpdate.addProperty("message_id","combat-priority-result");owner.observe(phaseUpdate.toString());pass.addProperty("message_id","after-combat-pass");
+            manaforge.protocol.SubmissionLedger.Prepared passRetry=owner.dispatch(pass.toString(),"raw-game","raw-human",43,8);
+            if(passRetry.shouldSubmit || !passReceipt.equals(passRetry.receipt()) || owner.pollNative()!=null)throw new AssertionError("CONFIRMED_COMBAT_PASS_REPLAYED");
             owner.disconnected();if(!receipt.equals(owner.receiptFor("land-action")))throw new AssertionError("ATTACK_CONFIRMATION_LOST");
-            if(!"uncertain".equals(owner.receiptFor("after-combat-pass").getAsJsonObject("body").get("outcome").getAsString()))throw new AssertionError("COMBAT_PRIORITY_UNCERTAINTY_LOST");
+            if(!passReceipt.equals(owner.receiptFor("after-combat-pass")))throw new AssertionError("COMBAT_PRIORITY_CONFIRMATION_LOST");
         }
     }
     static JsonObject envelope(JsonObject snapshot) {

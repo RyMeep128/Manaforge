@@ -93,6 +93,26 @@ public final class OpeningProjectionChecks {
         JsonObject after=raw.deepCopy(),next=priorityPrompt(),accepted=new JsonObject();after.addProperty("priority_player","raw-name");next.addProperty("decision_id",42);accepted.addProperty("event","response_sent");accepted.addProperty("accepted",true);accepted.add("request_id",nativeFinish.get("request_id").deepCopy());
         NativeCastCorrelation.AttackFinishEvidence proof=NativeCastCorrelation.attackFinishEvidence(raw,request,nativeFinish,attackMetadata(false),accepted,after,next,attackMetadata(true),"raw-card");
         check(proof!=null && proof.matchesCommand(nativeFinish));JsonObject different=nativeFinish.deepCopy();different.addProperty("request_id","other");check(!proof.matchesCommand(different));
+        JsonObject phaseBefore=after.deepCopy(),phaseAfter=after.deepCopy(),pass=nativeFinish.deepCopy(),passAccepted=accepted.deepCopy(),phaseNext=next.deepCopy();
+        phaseBefore.addProperty("phase","COMBAT");phaseBefore.addProperty("step","END_COMBAT");phaseAfter.addProperty("phase","POSTCOMBAT_MAIN");phaseAfter.addProperty("step","POSTCOMBAT_MAIN");
+        pass.addProperty("decision_id",42);pass.addProperty("request_id","combat-pass");passAccepted.addProperty("request_id","combat-pass");phaseNext.addProperty("decision_id",43);
+        NativeCastCorrelation.PriorityEvidence phaseProof=proof.phasePriorityEvidence(phaseBefore,next,pass,attackMetadata(true),passAccepted,phaseAfter,phaseNext,attackMetadata(true));check(phaseProof!=null && phaseProof.matchesCommand(pass));
+        for(int mode=0;mode<12;mode++) {
+            JsonObject badAfter=phaseAfter.deepCopy(),badPass=pass.deepCopy(),badAccepted=passAccepted.deepCopy(),badNext=phaseNext.deepCopy(),beforeMeta=attackMetadata(true),afterMeta=attackMetadata(true);
+            if(mode==0 || mode==1){badAfter.addProperty("phase","COMBAT");badAfter.addProperty("step","END_COMBAT");}
+            if(mode==1){badAfter.addProperty("cycle",9);badNext.addProperty("cycle",9);afterMeta.addProperty("cycle",9);}
+            if(mode==2)beforeMeta.addProperty("priority_open",false);
+            if(mode==3)afterMeta.addProperty("priority_open",false);
+            if(mode==4)badAccepted.addProperty("request_id","wrong");
+            if(mode==5)badAccepted.addProperty("accepted",false);
+            if(mode==6)badNext.addProperty("decision_id",42);
+            if(mode==7)afterMeta.getAsJsonObject("objects").getAsJsonObject("raw-card").addProperty("incarnation",5);
+            if(mode==8)badAfter.add("phase",JsonNull.INSTANCE);
+            if(mode==9)badAfter.addProperty("viewer","wrong");
+            if(mode==10)badPass.addProperty("value",true);
+            if(mode==11)badNext.addProperty("kind","GAME_TARGET");
+            check(proof.phasePriorityEvidence(phaseBefore,next,badPass,beforeMeta,badAccepted,badAfter,badNext,afterMeta)==null);
+        }
         for(int mode=0;mode<20;mode++) {
             JsonObject badBefore=raw.deepCopy(),badAfter=after.deepCopy(),badPrompt=request.deepCopy(),badNext=next.deepCopy(),badCommand=nativeFinish.deepCopy(),badAccepted=accepted.deepCopy(),beforeMeta=attackMetadata(false),afterMeta=attackMetadata(true);
             if(mode==0)badCommand.addProperty("value",true);
