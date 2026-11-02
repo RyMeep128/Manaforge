@@ -222,6 +222,8 @@ def main():
         expected.update(
             native_next_turn_creature_resolved=True,
             native_repeated_combat_observed=True,
+            # The Java-only diagnostic ends after combat; Unity also returns through another turn.
+            native_repeated_turn_observed=False,
         )
 
     def consume(first, events, launch, port, server_process, server):
