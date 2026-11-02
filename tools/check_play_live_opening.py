@@ -17,6 +17,11 @@ from play_native_metadata import provision_metadata  # noqa: E402
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
+        "--repeat-cycle",
+        action="store_true",
+        help="Cast another creature and repeat combat on the next turn; requires --loop-turn",
+    )
+    parser.add_argument(
         "--loop-turn",
         action="store_true",
         help="Advance through cleanup and AI turn to next human main; requires --complete-combat",
@@ -111,6 +116,8 @@ def main():
         parser.error("--blocked-damage requires --blocked-combat")
     if args.loop_turn and not args.complete_combat:
         parser.error("--loop-turn requires --complete-combat")
+    if args.repeat_cycle and not args.loop_turn:
+        parser.error("--repeat-cycle requires --loop-turn")
     output = args.output.resolve()
     artifacts = (ROOT / "Mtg_Projects/mtg_play_unity/Artifacts").resolve()
     if not output.is_relative_to(artifacts) or output == artifacts:
@@ -211,6 +218,12 @@ def main():
             native_next_turn_actions_offered=True,
         )
 
+    if args.repeat_cycle:
+        expected.update(
+            native_next_turn_creature_resolved=True,
+            native_repeated_combat_observed=True,
+        )
+
     def consume(first, events, launch, port, server_process, server):
         nonlocal evidence
         java = args.xmage_root.resolve() / "java/jre1.8.0_201/bin/java.exe"
@@ -228,6 +241,7 @@ def main():
                 "-Djava.awt.headless=true",
                 "-Dfile.encoding=UTF-8",
                 "-Djava.net.preferIPv4Stack=true",
+                *(["-Dmanaforge.repeatCycle=true"] if args.repeat_cycle else []),
                 *(["-Dmanaforge.loopTurn=true"] if args.loop_turn else []),
                 *(["-Dmanaforge.blockedDamage=true"] if args.blocked_damage else []),
                 *(["-Dmanaforge.blockedCombat=true"] if args.blocked_combat else []),
@@ -362,7 +376,9 @@ def main():
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
     print(
-        "Real XMage completed the opposing turn and returned to the human main phase with native draw, untap and any cleanup discard observed."
+        "Real XMage cast and resolved another creature on the next human turn and completed a second combat with the original attacker."
+        if args.repeat_cycle
+        else "Real XMage completed the opposing turn and returned to the human main phase with native draw, untap and any cleanup discard observed."
         if args.loop_turn
         else "Real XMage marked one damage on the same native Ornithopter blocker in COMBAT_DAMAGE; both life totals unchanged in the public fixture."
         if args.blocked_damage

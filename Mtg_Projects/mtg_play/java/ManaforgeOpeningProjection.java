@@ -151,11 +151,16 @@ public final class ManaforgeOpeningProjection {
     private JsonObject project(JsonObject raw,JsonObject prompt,boolean includePriorityPass,boolean includeSpells,boolean omitStack,boolean attackFinish,boolean includeAttackers,boolean combatObservation) throws IOException {
         return project(raw,prompt,includePriorityPass,includeSpells,omitStack,attackFinish,includeAttackers,combatObservation,false);
     }
+    public synchronized JsonObject projectTurnCombat(JsonObject raw,JsonObject prompt,boolean includeAttackers,boolean assignment) throws IOException {
+        boolean priority="GAME_SELECT".equals(text(prompt,"kind")) && Boolean.TRUE.equals(flag(prompt,"is_priority"));
+        return project(raw,prompt,priority,false,false,!priority,includeAttackers,assignment,false,true);
+    }
     public synchronized JsonObject projectTurnContinuation(JsonObject raw,JsonObject prompt) throws IOException {
         return projectTurnContinuation(raw,prompt,false);
     }
     public synchronized JsonObject projectTurnContinuation(JsonObject raw,JsonObject prompt,boolean includeSpells) throws IOException {
-        return project(raw,prompt,true,includeSpells,false,false,false,false,false,true);
+        boolean omitStack="GAME_SELECT".equals(text(prompt,"kind")) && Boolean.TRUE.equals(flag(prompt,"is_priority")) && raw.getAsJsonArray("stack").size()>0;
+        return project(raw,prompt,true,includeSpells,omitStack,false,false,false,false,true);
     }
     private JsonObject project(JsonObject raw,JsonObject prompt,boolean includePriorityPass,boolean includeSpells,boolean omitStack,boolean attackFinish,boolean includeAttackers,boolean combatObservation,boolean includeBlockers) throws IOException {
         return project(raw,prompt,includePriorityPass,includeSpells,omitStack,attackFinish,includeAttackers,combatObservation,includeBlockers,false);

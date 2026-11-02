@@ -1,5 +1,30 @@
 # Live Unity / Java / XMage integration
 
+## Repeat play and combat after the turn cycle (0.5.195)
+
+```powershell
+python tools/check_play_live_opening.py --first-creature --native-metadata --select-attacker --finish-selected-attack --declared-priority --combat-damage --complete-combat --loop-turn --repeat-cycle
+```
+
+The Java fixture now uses a renewed native card offer to cast and resolve another
+Memnite on the next human turn, then explicitly attacks with the original,
+now-untapped creature and completes a second combat. The newly cast creature is
+not substituted as the attacker. Resolution checks account for the existing
+battlefield and require the selected source to be present. Turn-compatible
+projection preserves public graveyards across casting, ability selection, stack
+passes and combat.
+
+The repeated endpoint requires a distinct new hand source on the battlefield,
+retained remaining hand identities, stable original attacker incarnation, the
+same turn, no extra draw or graveyard change, cleared stack/combat, original
+attacker tapped again, unchanged human life and another one-point opposing life
+decrease. Reports add `native_next_turn_creature_resolved` and
+`native_repeated_combat_observed`. The repeat is bounded to one additional cycle.
+
+This proves repeated native fixture play; Unity currently ends read-only after
+its first turn cycle. Repeated interactive Unity casts, full-match results and
+broader gameplay remain open. Human visual review remains deferred.
+
 ## Continue the Unity session through the next human turn (0.5.194)
 
 ```powershell

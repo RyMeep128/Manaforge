@@ -50,6 +50,8 @@ jobs:
         run: python tools/check_play_live_opening.py --first-creature --native-metadata --select-attacker --finish-selected-attack --declared-priority --blocked-combat --blocked-damage --xmage-root "$env:RUNNER_TEMP/manaforge-live-engine" --jdk-path "$env:JAVA_HOME" --output Mtg_Projects/mtg_play_unity/Artifacts/BlockedDamage/report.json
       - name: Real cleanup and next human turn cycle
         run: python tools/check_play_live_opening.py --first-creature --native-metadata --select-attacker --finish-selected-attack --declared-priority --combat-damage --complete-combat --loop-turn --xmage-root "$env:RUNNER_TEMP/manaforge-live-engine" --jdk-path "$env:JAVA_HOME" --output Mtg_Projects/mtg_play_unity/Artifacts/TurnLoop/report.json
+      - name: Real repeated cast and combat cycle
+        run: python tools/check_play_live_opening.py --first-creature --native-metadata --select-attacker --finish-selected-attack --declared-priority --combat-damage --complete-combat --loop-turn --repeat-cycle --xmage-root "$env:RUNNER_TEMP/manaforge-live-engine" --jdk-path "$env:JAVA_HOME" --output Mtg_Projects/mtg_play_unity/Artifacts/RepeatCycle/report.json
       - name: Upload sanitized live evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -67,4 +69,5 @@ jobs:
             Mtg_Projects/mtg_play_unity/Artifacts/BlockedCombat/report.json
             Mtg_Projects/mtg_play_unity/Artifacts/BlockedDamage/report.json
             Mtg_Projects/mtg_play_unity/Artifacts/TurnLoop/report.json
+            Mtg_Projects/mtg_play_unity/Artifacts/RepeatCycle/report.json
           if-no-files-found: error

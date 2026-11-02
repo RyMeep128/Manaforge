@@ -1226,3 +1226,12 @@ typed evidence releases each next decision safely; a live no-capture run passed
 draw/untap and renewed card offers, then ends read-only. Repeated playable cycles,
 full-match results and broader choices remain open. Human visual review stays
 deferred while gameplay work continues.
+
+
+### Repeated native play/combat cycle (0.5.195)
+
+The Java fixture now casts another creature from the renewed human-turn offer
+and completes a second combat using the original attacker. Source identity,
+retained hand cards, graveyard/library stability and the second life decrease
+are checked. Repeated interactive Unity casting and full-match results remain
+open; human visual review stays deferred.
