@@ -64,6 +64,9 @@ public final class ManaforgeOpeningProjection {
         for(Map.Entry<String,CardIdentity> entry:bindings.entrySet())
             printings.put(entry.getKey(),JSON.fromJson(JSON.toJson(entry.getValue()),CardIdentity.class));
     }
+    private static JsonElement[][] counters(JsonObject row) throws IOException {
+        require(row.get("counters").isJsonArray() && row.getAsJsonArray("counters").size()<=256);Set<String> names=new HashSet<>();for(JsonElement value:row.getAsJsonArray("counters")){require(value.isJsonArray() && value.getAsJsonArray().size()==2);JsonObject pair=new JsonObject();pair.add("name",value.getAsJsonArray().get(0));pair.add("count",value.getAsJsonArray().get(1));String name=text(pair,"name");Long count=integer(pair,"count");require(name!=null && names.add(name) && count!=null && count>=0 && count<=Integer.MAX_VALUE);}return JSON.fromJson(row.get("counters"),JsonElement[][].class);
+    }
     private static GameObject visibleCard(List<GameObject> cards,String reference) {
         for(GameObject card:cards)if(card.object_id.equals(reference) && "battlefield".equals(card.zone) && Boolean.FALSE.equals(card.hidden) && Boolean.FALSE.equals(card.face_down))return card;return null;
     }
@@ -252,13 +255,13 @@ public final class ManaforgeOpeningProjection {
                 if(!hidden && !Boolean.TRUE.equals(card.face_down)) {
                     CardCharacteristics c=new CardCharacteristics();c.name=text(row,"name");c.power=text(row,"power");c.toughness=text(row,"toughness");
                     c.type_line=text(row,"type");c.color=text(row,"color");
-                    if(coreCombat){c.loyalty=text(row,"loyalty");c.defense=text(row,"defense");}
+                    if(coreCombat){c.loyalty=text(row,"loyalty");c.defense=text(row,"defense");if(row.has("counters"))c.counters=counters(row);}
                     if(row.has("view_rules") && row.get("view_rules").isJsonArray()) {
                         List<String> lines=new ArrayList<>();for(JsonElement line:row.getAsJsonArray("view_rules")) {
                             JsonObject value=new JsonObject();value.add("text",line);lines.add(text(value,"text"));
                         }c.engine_view_text=lines.toArray(new String[0]);
                     }
-                    c.unsupported_fields=coreCombat && row.has("loyalty") && row.has("defense")?new String[]{"current_abilities","counters","transformed","is_copy","flipped"}:new String[]{"current_abilities","counters","loyalty","defense","transformed","is_copy","flipped"};card.characteristics=c;
+                    c.unsupported_fields=coreCombat && row.has("loyalty") && row.has("defense")?row.has("counters")?new String[]{"current_abilities","transformed","is_copy","flipped"}:new String[]{"current_abilities","counters","transformed","is_copy","flipped"}:new String[]{"current_abilities","counters","loyalty","defense","transformed","is_copy","flipped"};card.characteristics=c;
                     CardIdentity binding=viewer.equals(card.owner_id)?printings.get(text(row,"set")+"/"+text(row,"number")):null;
                     if(binding!=null)card.card_identity=JSON.fromJson(JSON.toJson(binding),CardIdentity.class);
                 } else card.hidden=true;

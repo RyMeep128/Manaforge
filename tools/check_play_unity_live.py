@@ -23,6 +23,11 @@ def main():
     artifacts = ROOT / "Mtg_Projects/mtg_play_unity/Artifacts"
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
+        "--combat-trigger",
+        action="store_true",
+        help="Shield Sphere native block trigger, counter and damage scenario",
+    )
+    parser.add_argument(
         "--combat-spell",
         choices=("pump", "removal"),
         help="Dedicated Phyrexian combat spell/target/effect scenario",
@@ -174,6 +179,10 @@ def main():
         default=artifacts / ("UnityLive-" + uuid.uuid4().hex[:10]),
     )
     args = parser.parse_args()
+    if args.combat_trigger:
+        args.human_blocking = True
+        if args.combat_spell or args.complete_game:
+            parser.error("--combat-trigger is a separate blocking scenario")
     if args.human_blocking or args.combat_spell:
         args.native_metadata = True
     if args.combat_spell and (
@@ -347,6 +356,7 @@ def main():
                         f"-Dmanaforge.coreCombat={str(args.core_combat or args.human_blocking or bool(args.combat_spell)).lower()}",
                         f"-Dmanaforge.coreFromOpening={str(args.human_blocking or bool(args.combat_spell)).lower()}",
                         f"-Dmanaforge.combatSpell={args.combat_spell or ''}",
+                        f"-Dmanaforge.combatTrigger={str(args.combat_trigger).lower()}",
                         f"-Dmanaforge.completeGame={str(args.complete_game).lower()}",
                         *(
                             ["-Dmanaforge.repeatCycle=true"]
@@ -489,7 +499,12 @@ def main():
                     command += ["-manaforgeLivePriority", "1"]
                 if args.creature_ability:
                     command += ["-manaforgeLiveCreature", "1"]
-                command += ["-manaforgeLiveCombatSpell", args.combat_spell or ""]
+                command += [
+                    "-manaforgeLiveCombatTrigger",
+                    "1" if args.combat_trigger else "0",
+                ]
+                if args.combat_spell:
+                    command += ["-manaforgeLiveCombatSpell", args.combat_spell]
                 command += [
                     "-manaforgeLiveHumanBlocking",
                     "1" if args.human_blocking else "0",
@@ -795,6 +810,11 @@ def main():
                         is not True
                     ):
                         raise RuntimeError("LIVE_UNITY_COMBAT_SPELL_NOT_PRESENTED")
+                if (
+                    args.combat_trigger
+                    and block_result.get("combat_trigger_presented") is not True
+                ):
+                    raise RuntimeError("LIVE_UNITY_COMBAT_TRIGGER_NOT_PRESENTED")
                 chosen = wait_file("choice", 60)
                 if (
                     chosen.get("ack_count")
@@ -1027,6 +1047,11 @@ def main():
                     or chosen.get("uncertain_receipt_count") != 0
                 ):
                     raise RuntimeError("LIVE_UNITY_COMBAT_SPELL_UNPROVEN")
+                if (
+                    args.combat_trigger
+                    and native.get("native_combat_trigger_observed") is not True
+                ):
+                    raise RuntimeError("LIVE_UNITY_COMBAT_TRIGGER_UNPROVEN")
                 if args.next_turn_cast and any(
                     native.get(field) is not True
                     for field in (
@@ -1215,6 +1240,11 @@ def main():
                         else 1,
                         uncertain_receipt_count=0,
                     )
+                if args.combat_trigger:
+                    evidence.update(
+                        native_combat_trigger_observed=True,
+                        combat_trigger_presented=True,
+                    )
                 if args.combat_spell:
                     evidence.update(
                         native_combat_spell_effect_observed=True,
@@ -1394,7 +1424,9 @@ def main():
         json.dumps(evidence, indent=2) + "\n", encoding="utf-8"
     )
     print(
-        f"Packaged Unity resolved the native combat {args.combat_spell} spell, confirmed the target effect and cleared the viewer."
+        "Packaged Unity blocked with Shield Sphere, resolved its native combat trigger and displayed the resulting counter and damage."
+        if args.combat_trigger
+        else f"Packaged Unity resolved the native combat {args.combat_spell} spell, confirmed the target effect and cleared the viewer."
         if args.combat_spell
         else "Packaged Unity cast a blocker, blocked a native AI attack, observed native blocked damage and cleared the viewer."
         if args.human_blocking

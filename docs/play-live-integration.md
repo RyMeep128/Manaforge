@@ -1,5 +1,24 @@
 # Live Unity / Java / XMage integration
 
+## Native combat trigger and counters (0.5.206)
+
+```powershell
+python tools/check_play_unity_live.py --combat-trigger --no-capture
+```
+
+The Shield Sphere fixture now blocks an AI Memnite, resolves the native block
+trigger and verifies the resulting -0/-1 counter, toughness 5 and marked damage.
+Counter names/counts project from the existing native CardView data, with bounded
+unique names and nonnegative integer validation. Hidden characteristics remain
+omitted. The acceptance path uses the same native combat coordinator and mounted
+controls as ordinary blocking; the response script is explicit fixture-only.
+
+Opening hands are checked against expected native fixture card names before UI
+admission. Shield Sphere resolves to ALL/129 in the pinned engine. Optional spell
+arguments are omitted when absent, preserving the launch owner's prohibition on
+empty child arguments. General keyword and permanent-defender native acceptance,
+multi-block allocation and natural draw remain open.
+
 ## Native combat pump, expiry and removal (0.5.204)
 
 ```powershell

@@ -1322,3 +1322,13 @@ removal verifies the exact target's graveyard entry and next zone-change counter
 Both end read-only with confirmed receipts (13 and 11 inputs), zero uncertainty,
 and clean shutdown. Multi-block allocation, permanent-defender live scenarios,
 keyword coverage, combat triggers and natural draw acceptance remain open.
+
+
+### Combat trigger and counter propagation (0.5.206)
+
+A packaged native Shield Sphere block now verifies its block trigger, -0/-1
+counter, changed toughness and marked damage. Counter projection validates shape,
+integer bounds and duplicate names without exposing hidden characteristics.
+Opening fixture identities are checked before admission; optional launch arguments
+are omitted when absent. The broader keyword/permanent-defender and multi-block
+acceptance matrix and natural draw still remain open.
