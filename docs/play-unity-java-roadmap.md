@@ -1355,3 +1355,16 @@ P2/P3/P4 remain partial: general saved-deck gameplay, broader casting/mana and
 identity parity, exotic mechanics and multiplayer are separate work. Native seat
 rotation, priority and human/AI controllers remain XMage-owned; five-seat Unity
 acceptance is not claimed. Visual gates remain unchecked as directed.
+
+
+### Shared native gameplay continuation (0.5.208)
+
+Native response submission, advancement, guarded evidence, terminal results and
+viewer snapshot continuation now belong to ManaforgeGameplaySession. Combat
+acceptance observers use its before/after/result hooks; fixture card names and
+stop conditions stay outside the reusable session. Ownership, stale offer replay,
+rejection, close and failed native evidence have focused checks. The packaged
+haste scenario passes through the extracted path, including payment, native
+attacker reselection, damage and cleanup. The Java projection/evidence suite now
+passes 662 checks. This is casting-session infrastructure; general mana/casting
+acceptance and safe automatic payment remain unfinished.

@@ -72,6 +72,7 @@ def main():
             PROTOCOL / "java-test/MetadataChannelChecks.java",
             PLAY / "java/ManaforgeOpeningSession.java",
             PLAY / "java/ManaforgeUnityOpening.java",
+            PLAY / "java/ManaforgeGameplaySession.java",
             PLAY / "java/ManaforgeOpeningLoopback.java",
             PROTOCOL / "java-test/OpeningSessionChecks.java",
             PROTOCOL / "java-test/OpeningProjectionChecks.java",

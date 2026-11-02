@@ -723,8 +723,25 @@ public final class OpeningProjectionChecks {
         NativeCombatCase.Metadata changed=(state,ids)->{JsonObject result=metadata.read(state,ids);result.getAsJsonObject("objects").getAsJsonObject("raw-card").addProperty("incarnation",3);return result;};fails("COMBAT_CASE_ACTOR_CHANGED",()->scenario.observe(raw,prompt,changed));
         NativeCombatCase draw=new NativeCombatCase("draw");fails("COMBAT_CASE_RESULT_UNPROVEN",()->{draw.terminal("draw");return;});
     }
+    static final class SessionEngine implements ManaforgeGameplaySession.Engine {
+        JsonObject state=OpeningProjectionChecks.state(),next=prompt();int submissions;boolean accepted=true,badCycle;
+        SessionEngine(){next.addProperty("decision_id",42);}
+        public JsonObject metadata(JsonObject state){JsonObject result=attackMetadata(false);if(badCycle)result.addProperty("cycle",9);return result;}
+        public JsonObject submit(JsonObject command){submissions++;JsonObject result=new JsonObject();result.addProperty("event","response_sent");result.addProperty("accepted",accepted);result.add("request_id",command.get("request_id"));return result;}
+        public ManaforgeGameplaySession.Advance advance(long previous){return new ManaforgeGameplaySession.Advance(state,next,null);}
+        public JsonObject terminalMetadata(JsonObject state){throw new AssertionError("UNEXPECTED_TERMINAL_READ");}
+    }
+    static ManaforgeUnityOpening.TurnSubmit nativeSubmit(ManaforgeUnityOpening.TurnOffer offer) throws Exception {java.lang.reflect.Field field=offer.getClass().getDeclaredField("submit");field.setAccessible(true);return (ManaforgeUnityOpening.TurnSubmit)field.get(offer);}
+    static JsonObject sessionCommand(ManaforgeOpeningProjection projection,ManaforgeUnityOpening.TurnOffer offer) throws Exception {JsonObject view=offer.snapshot().getAsJsonObject("body").getAsJsonObject("snapshot");return projection.claimBoolean(choose(view,0),"session","human","raw-game","raw-human",41,8);}
+    static void gameplaySessionChecks() throws Exception {
+        SessionEngine engine=new SessionEngine();ManaforgeOpeningProjection projection=projection();ManaforgeGameplaySession session=new ManaforgeGameplaySession(projection,engine,new ManaforgeGameplaySession.Observer(){public boolean after(JsonObject state,JsonObject prompt){state.addProperty("viewer","MUTATED");return true;}},true);
+        ManaforgeUnityOpening.TurnOffer offer=session.offer(engine.state,prompt());shape(offer.snapshot().getAsJsonObject("body").getAsJsonObject("snapshot"));JsonObject command=sessionCommand(projection,offer);nativeSubmit(offer).submit(command);check(engine.submissions==1 && "raw-human".equals(engine.state.get("viewer").getAsString()));try{nativeSubmit(offer).submit(command);throw new AssertionError("REPLAY");}catch(IllegalStateException expected){check(engine.submissions==1);}session.close();
+        engine=new SessionEngine();engine.accepted=false;projection=projection();session=new ManaforgeGameplaySession(projection,engine,null,true);offer=session.offer(engine.state,prompt());command=sessionCommand(projection,offer);final ManaforgeUnityOpening.TurnSubmit rejected=nativeSubmit(offer);final JsonObject rejectedCommand=command;fails("GAMEPLAY_RESPONSE_REJECTED",()->rejected.submit(rejectedCommand));check(engine.submissions==1);fails("STALE_DECISION",()->rejected.submit(rejectedCommand));session.close();
+        engine=new SessionEngine();projection=projection();session=new ManaforgeGameplaySession(projection,engine,null,true);offer=session.offer(engine.state,prompt());command=sessionCommand(projection,offer);engine.badCycle=true;final ManaforgeUnityOpening.TurnSubmit stale=nativeSubmit(offer);final JsonObject staleCommand=command;fails("GAMEPLAY_RESPONSE_UNPROVEN",()->stale.submit(staleCommand));session.close();
+        engine=new SessionEngine();projection=projection();session=new ManaforgeGameplaySession(projection,engine,null,true);offer=session.offer(engine.state,prompt());command=sessionCommand(projection,offer);session.close();try{nativeSubmit(offer).submit(command);throw new AssertionError("CLOSED");}catch(IllegalStateException expected){check(engine.submissions==0);}
+    }
     public static void main(String[] args) throws Exception {
-        combatCaseEvidenceChecks();coreCombatChecks();coreResponseChecks();terminalCombatChecks();coreChoiceChecks();combatCounterChecks();
+        gameplaySessionChecks();combatCaseEvidenceChecks();coreCombatChecks();coreResponseChecks();terminalCombatChecks();coreChoiceChecks();combatCounterChecks();
         ManaforgeOpeningProjection projection=projection();JsonObject raw=state(),request=prompt();JsonObject snapshot=projection.project(raw,request);shape(snapshot);
         String text=snapshot.toString();for(String secret:new String[]{"raw-human","raw-ai","raw-card","raw-name","raw-opponent-name","OPPONENT_SECRET","MUTATED_BINDING"})check(!text.contains(secret));
         check(snapshot.get("revision").getAsLong()==1);check(!snapshot.get("actions_complete").getAsBoolean());
