@@ -23,6 +23,11 @@ def main():
     artifacts = ROOT / "Mtg_Projects/mtg_play_unity/Artifacts"
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
+        "--next-turn-cast",
+        action="store_true",
+        help="Cast and resolve another creature on the same session; requires --loop-turn",
+    )
+    parser.add_argument(
         "--loop-turn",
         action="store_true",
         help="Continue to next human main phase; requires --complete-combat",
@@ -137,6 +142,8 @@ def main():
         default=artifacts / ("UnityLive-" + uuid.uuid4().hex[:10]),
     )
     args = parser.parse_args()
+    if args.next_turn_cast and not args.loop_turn:
+        parser.error("--next-turn-cast requires --loop-turn")
     if args.loop_turn and not args.complete_combat:
         parser.error("--loop-turn requires --complete-combat")
     if args.blocked_damage and not args.blocked_combat:
@@ -268,6 +275,11 @@ def main():
                         "-Djava.awt.headless=true",
                         "-Dfile.encoding=UTF-8",
                         "-Djava.net.preferIPv4Stack=true",
+                        *(
+                            ["-Dmanaforge.nextTurnCast=true"]
+                            if args.next_turn_cast
+                            else []
+                        ),
                         *(["-Dmanaforge.loopTurn=true"] if args.loop_turn else []),
                         *(
                             ["-Dmanaforge.blockedDamage=true"]
@@ -399,6 +411,8 @@ def main():
                     command += ["-manaforgeLivePriority", "1"]
                 if args.creature_ability:
                     command += ["-manaforgeLiveCreature", "1"]
+                if args.next_turn_cast:
+                    command += ["-manaforgeLiveNextTurnCast", "1"]
                 if args.loop_turn:
                     command += ["-manaforgeLiveLoopTurn", "1"]
                 if args.blocked_damage:
@@ -616,6 +630,16 @@ def main():
                         != turn_result.get("turn_loop_start", -10) + 2
                     ):
                         raise RuntimeError("LIVE_UNITY_NEXT_HUMAN_TURN_NOT_PRESENTED")
+                if args.next_turn_cast:
+                    cast_result = wait_file("next-turn-creature-ready", 180)
+                    if (
+                        cast_result.get("next_turn_creature_presented") is not True
+                        or cast_result.get("snapshot_count")
+                        != turn_result["snapshot_count"] + 3
+                    ):
+                        raise RuntimeError(
+                            "LIVE_UNITY_NEXT_TURN_CREATURE_NOT_PRESENTED"
+                        )
                 chosen = wait_file("choice", 60)
                 if (
                     chosen.get("ack_count")
@@ -736,7 +760,9 @@ def main():
                         ready.get("attacker_choice_presented") is not True
                         or chosen.get("snapshot_count")
                         != (
-                            turn_result["snapshot_count"]
+                            cast_result["snapshot_count"]
+                            if args.next_turn_cast
+                            else turn_result["snapshot_count"]
                             if args.loop_turn
                             else 6
                             if args.complete_combat
@@ -782,6 +808,31 @@ def main():
                         or native.get("native_empty_attack_submitted") is not False
                     ):
                         raise RuntimeError("LIVE_UNITY_ATTACKER_EVIDENCE_FAILED")
+                if args.loop_turn:
+                    if (
+                        any(
+                            native.get(field) is not True
+                            for field in (
+                                "native_next_human_turn_observed",
+                                "native_own_draw_observed",
+                                "native_source_untapped",
+                                "native_next_turn_actions_offered",
+                            )
+                        )
+                        or type(native.get("native_cleanup_discard_observed"))
+                        is not bool
+                    ):
+                        raise RuntimeError("LIVE_UNITY_TURN_LOOP_EVIDENCE_FAILED")
+                if args.next_turn_cast and any(
+                    native.get(field) is not True
+                    for field in (
+                        "unity_next_turn_cast_confirmed",
+                        "unity_next_turn_ability_confirmed",
+                        "unity_next_turn_resolution_confirmed",
+                        "native_next_turn_creature_resolved",
+                    )
+                ):
+                    raise RuntimeError("LIVE_UNITY_NEXT_CAST_EVIDENCE_FAILED")
                 if args.declared_priority:
                     if (
                         any(
@@ -956,6 +1007,14 @@ def main():
                         else 1,
                         uncertain_receipt_count=0,
                     )
+                if args.next_turn_cast:
+                    evidence.update(
+                        unity_next_turn_cast_confirmed=True,
+                        unity_next_turn_ability_confirmed=True,
+                        unity_next_turn_resolution_confirmed=True,
+                        native_next_turn_creature_resolved=True,
+                        next_turn_creature_presented=True,
+                    )
                 if args.loop_turn:
                     evidence.update(
                         native_next_human_turn_observed=True,
@@ -1078,7 +1137,9 @@ def main():
         json.dumps(evidence, indent=2) + "\n", encoding="utf-8"
     )
     print(
-        "Packaged Unity continued cleanup, the AI turn and the next human main phase on one session; turn inputs confirmed, viewer cleared and owned roots reaped."
+        "Packaged Unity continued the turn loop, cast another creature, selected its ability and confirmed resolution on the same session; viewer cleared and roots reaped."
+        if args.next_turn_cast
+        else "Packaged Unity continued cleanup, the AI turn and the next human main phase on one session; turn inputs confirmed, viewer cleared and owned roots reaped."
         if args.loop_turn
         else "Packaged Unity confirmed four inputs and displayed one native damage marked on Ornithopter with unchanged life totals; viewer cleared and owned roots reaped."
         if args.blocked_damage

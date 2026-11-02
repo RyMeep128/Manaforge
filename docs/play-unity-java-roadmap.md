@@ -1235,3 +1235,12 @@ and completes a second combat using the original attacker. Source identity,
 retained hand cards, graveyard/library stability and the second life decrease
 are checked. Repeated interactive Unity casting and full-match results remain
 open; human visual review stays deferred.
+
+
+### Next-turn Unity casting on the same session (0.5.196)
+
+Unity now continues from the returned human-turn offer into another explicit card
+cast, native ability selection and verified resolution. Separate typed evidence
+confirms each stage; the terminal view must be an actual read-only snapshot,
+not a temporary gap between decisions. The no-capture gameplay track remains the
+priority. Broader repeatable combats and full-match results are still open.

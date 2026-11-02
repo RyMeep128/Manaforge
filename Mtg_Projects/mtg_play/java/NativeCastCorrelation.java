@@ -384,6 +384,16 @@ public final class NativeCastCorrelation {
             return null;
         }catch(RuntimeException unsupported){return null;}
     }
+    public TurnDecisionEvidence selectionEvidence(JsonObject before,JsonObject beforeMetadata,JsonObject command,JsonObject accepted,JsonObject after,JsonObject prompt,JsonObject metadata) {
+        try {
+            if(sourceIncarnation==null || !"ok".equals(string(beforeMetadata,"status")) || number(beforeMetadata,"cycle")!=cycle || !new JsonPrimitive(true).equals(beforeMetadata.get("priority_open")) || (!viewer.equals(string(beforeMetadata.getAsJsonObject("objects").getAsJsonObject(source),"owner")) || number(beforeMetadata.getAsJsonObject("objects").getAsJsonObject(source),"incarnation")!=sourceIncarnation) || number(before,"cycle")!=cycle || !game.equals(string(before,"game_id")) || !viewer.equals(string(before,"viewer")) || !"respond".equals(string(command,"command")) || !"object".equals(string(command,"kind")) || !source.equals(string(command,"value")) || !game.equals(string(command,"game_id")) || number(command,"decision_id")!=decision
+                || !"response_sent".equals(string(accepted,"event")) || !new JsonPrimitive(true).equals(accepted.get("accepted")) || !string(command,"request_id").equals(string(accepted,"request_id")) || !matches(after,prompt)
+                || before.getAsJsonArray("stack").size()!=0 || after.getAsJsonArray("stack").size()!=0 || before.getAsJsonArray("hand").size()!=after.getAsJsonArray("hand").size() || !"ok".equals(string(metadata,"status")) || number(metadata,"cycle")!=number(after,"cycle") || !new JsonPrimitive(false).equals(metadata.get("priority_open")))return null;
+            JsonObject entry=metadata.getAsJsonObject("objects").getAsJsonObject(source);if(number(entry,"incarnation")!=sourceIncarnation || !viewer.equals(string(entry,"owner")))return null;return new TurnDecisionEvidence(command);
+        }catch(RuntimeException unsupported){return null;}
+    }
+    public static TurnDecisionEvidence turnAbilityEvidence(AbilityEvidence proof,JsonObject command){return proof!=null && proof.matchesCommand(command)?new TurnDecisionEvidence(command):null;}
+    public static TurnDecisionEvidence turnPriorityEvidence(PriorityEvidence proof,JsonObject command){return proof!=null && proof.matchesCommand(command)?new TurnDecisionEvidence(command):null;}
     public static NativeCastCorrelation capture(JsonObject state,JsonObject prompt,JsonObject command) {
         try {
             String game=string(state,"game_id"),viewer=string(state,"viewer"),source=uuid(string(command,"value"));

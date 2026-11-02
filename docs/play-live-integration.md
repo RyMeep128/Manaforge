@@ -1,5 +1,29 @@
 # Live Unity / Java / XMage integration
 
+## Cast again on the next human turn in Unity (0.5.196)
+
+```powershell
+python tools/check_play_unity_live.py --select-attacker --native-metadata --finish-selected-attack --declared-priority --combat-damage --complete-combat --loop-turn --next-turn-cast --no-capture
+```
+
+The next human-turn snapshot now offers native Cast spell actions on the same
+session. The card selection receives a separate typed confirmation: its captured
+native ability IDs must match the later ability menu, the source stays visible
+in hand with unchanged guarded incarnation, and the exact accepted request must
+match the queued command. This confirms entry into native casting, not resolution.
+
+The following ability selection is confirmed through its exact native stack
+instance, then an explicit priority pass is confirmed by the source's native
+battlefield transition. Public graveyards remain available throughout the cast.
+The final snapshot is read-only and the probe requires all three new snapshots;
+a consumed decision disappearing between offers cannot be mistaken for completion.
+
+The no-capture run checks repeated card choice, ability choice and resolution
+without opening another session. The validated run delivered 14 snapshots, 26
+acknowledgements, 13 confirmed receipts and zero uncertain receipts. Longer repeated Unity combats, arbitrary spell
+costs/choices and full-match results remain open. Human visual review remains
+deferred while gameplay work continues.
+
 ## Repeat play and combat after the turn cycle (0.5.195)
 
 ```powershell
