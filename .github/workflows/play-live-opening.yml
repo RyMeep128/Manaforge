@@ -10,7 +10,7 @@ permissions:
 jobs:
   pinned-human-ai-opening:
     runs-on: windows-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     env:
       PYTHONPATH: '${{ github.workspace }}/Mtg_Projects'
     steps:
@@ -42,6 +42,8 @@ jobs:
         run: python tools/check_play_live_opening.py --first-creature --native-metadata --select-attacker --finish-selected-attack --declared-priority --xmage-root "$env:RUNNER_TEMP/manaforge-live-engine" --jdk-path "$env:JAVA_HOME" --output Mtg_Projects/mtg_play_unity/Artifacts/DeclaredPriority/report.json
       - name: Real combat-damage step and life change
         run: python tools/check_play_live_opening.py --first-creature --native-metadata --select-attacker --finish-selected-attack --declared-priority --combat-damage --xmage-root "$env:RUNNER_TEMP/manaforge-live-engine" --jdk-path "$env:JAVA_HOME" --output Mtg_Projects/mtg_play_unity/Artifacts/CombatDamage/report.json
+      - name: Real combat cleanup to postcombat main
+        run: python tools/check_play_live_opening.py --first-creature --native-metadata --select-attacker --finish-selected-attack --declared-priority --combat-damage --complete-combat --xmage-root "$env:RUNNER_TEMP/manaforge-live-engine" --jdk-path "$env:JAVA_HOME" --output Mtg_Projects/mtg_play_unity/Artifacts/CompleteCombat/report.json
       - name: Upload sanitized live evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -55,4 +57,5 @@ jobs:
             Mtg_Projects/mtg_play_unity/Artifacts/DeclaredAttack/report.json
             Mtg_Projects/mtg_play_unity/Artifacts/DeclaredPriority/report.json
             Mtg_Projects/mtg_play_unity/Artifacts/CombatDamage/report.json
+            Mtg_Projects/mtg_play_unity/Artifacts/CompleteCombat/report.json
           if-no-files-found: error

@@ -42,6 +42,30 @@ public final class NativeCastCorrelation {
         if(found!=1 || !viewer.equals(string(entry,"owner")) || !viewer.equals(string(entry,"controller")))throw new IllegalArgumentException();
         return number(entry,"incarnation");
     }
+    /** Exact native tail of the unblocked fixture; no inferred phase ordering. */
+    public static PriorityEvidence combatCleanupEvidence(JsonObject before,JsonObject prompt,JsonObject command,JsonObject beforeMetadata,JsonObject accepted,
+            JsonObject after,JsonObject nextPrompt,JsonObject afterMetadata,String source) {
+        try {
+            if(!string(before,"game_id").equals(string(after,"game_id")) || !string(before,"viewer").equals(string(after,"viewer")) || !string(before,"game_id").equals(string(command,"game_id"))
+                || !"respond".equals(string(command,"command")) || !"boolean".equals(string(command,"kind")) || !new JsonPrimitive(false).equals(command.get("value")) || number(command,"decision_id")!=number(prompt,"decision_id")
+                || !"GAME_SELECT".equals(string(prompt,"kind")) || !new JsonPrimitive(true).equals(prompt.get("is_priority")) || prompt.has("attackers") || prompt.has("blockers") || number(prompt,"cycle")!=number(before,"cycle")
+                || !new JsonPrimitive(true).equals(beforeMetadata.get("priority_open")) || !new JsonPrimitive(true).equals(afterMetadata.get("priority_open")) || battlefieldCounter(before,beforeMetadata,source)!=battlefieldCounter(after,afterMetadata,source)
+                || before.getAsJsonArray("stack").size()!=0 || after.getAsJsonArray("stack").size()!=0 || number(before,"turn")!=number(after,"turn")
+                || !"response_sent".equals(string(accepted,"event")) || !new JsonPrimitive(true).equals(accepted.get("accepted")) || !string(command,"request_id").equals(string(accepted,"request_id"))
+                || !"GAME_SELECT".equals(string(nextPrompt,"kind")) || !new JsonPrimitive(true).equals(nextPrompt.get("is_priority")) || nextPrompt.has("attackers") || nextPrompt.has("blockers")
+                || number(nextPrompt,"decision_id")<=number(prompt,"decision_id") || number(nextPrompt,"cycle")!=number(after,"cycle") || number(after,"cycle")<number(before,"cycle")
+                || !"COMBAT".equals(string(before,"phase")) || !"COMBAT_DAMAGE".equals(string(before,"step"))
+                || !"POSTCOMBAT_MAIN".equals(string(after,"phase")) || !"POSTCOMBAT_MAIN".equals(string(after,"step")))return null;
+            JsonArray first=before.getAsJsonArray("combat"),last=after.getAsJsonArray("combat");if(first.size()!=1 || last.size()!=0)return null;
+            for(JsonArray groups:Arrays.asList(first,last))for(JsonElement item:groups){JsonObject group=item.getAsJsonObject();if(group.getAsJsonArray("attackers").size()!=1 || !source.equals(group.getAsJsonArray("attackers").get(0).getAsString()) || group.getAsJsonArray("blockers").size()!=0 || !new JsonPrimitive(false).equals(group.get("blocked")))return null;}
+            if(first.size()==1 && last.size()==1 && !first.equals(last))return null;
+            Map<String,Long> lives=new HashMap<>();if(before.getAsJsonArray("players").size()!=2 || after.getAsJsonArray("players").size()!=2)return null;
+            for(JsonElement row:before.getAsJsonArray("players")){JsonObject player=row.getAsJsonObject();if(lives.put(string(player,"id"),number(player,"life"))!=null)return null;}
+            Set<String> seen=new HashSet<>();for(JsonElement row:after.getAsJsonArray("players")){JsonObject player=row.getAsJsonObject();String id=string(player,"id");if(!seen.add(id) || !lives.containsKey(id) || number(player,"life")!=lives.get(id))return null;}
+            for(JsonArray groups:Arrays.asList(first,last))for(JsonElement item:groups){String defender=string(item.getAsJsonObject(),"defender");if(!lives.containsKey(defender) || defender.equals(string(before,"viewer")))return null;}
+            return new PriorityEvidence(command);
+        }catch(RuntimeException unsupported){return null;}
+    }
     /** Bounded public 1/1 fixture: native combat-damage step plus exact defender life delta. */
     public static PriorityEvidence combatDamageEvidence(JsonObject before,JsonObject prompt,JsonObject command,JsonObject beforeMetadata,JsonObject accepted,
             JsonObject after,JsonObject nextPrompt,JsonObject afterMetadata,String source) {

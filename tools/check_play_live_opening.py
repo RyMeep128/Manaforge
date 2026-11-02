@@ -17,6 +17,11 @@ from play_native_metadata import provision_metadata  # noqa: E402
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
+        "--complete-combat",
+        action="store_true",
+        help="One explicit pass to native postcombat main and cleared combat; requires --combat-damage",
+    )
+    parser.add_argument(
         "--combat-damage",
         action="store_true",
         help="One more explicit pass and native combat-damage life change; requires --declared-priority",
@@ -81,6 +86,8 @@ def main():
         parser.error("--declared-priority requires --finish-selected-attack")
     if args.combat_damage and not args.declared_priority:
         parser.error("--combat-damage requires --declared-priority")
+    if args.complete_combat and not args.combat_damage:
+        parser.error("--complete-combat requires --combat-damage")
     output = args.output.resolve()
     artifacts = (ROOT / "Mtg_Projects/mtg_play_unity/Artifacts").resolve()
     if not output.is_relative_to(artifacts) or output == artifacts:
@@ -154,6 +161,12 @@ def main():
             native_combat_damage_life_change_observed=True,
         )
 
+    if args.complete_combat:
+        expected.update(
+            native_postcombat_main_observed=True,
+            native_combat_cleared=True,
+        )
+
     def consume(first, events, launch, port, server_process, server):
         nonlocal evidence
         java = args.xmage_root.resolve() / "java/jre1.8.0_201/bin/java.exe"
@@ -171,6 +184,7 @@ def main():
                 "-Djava.awt.headless=true",
                 "-Dfile.encoding=UTF-8",
                 "-Djava.net.preferIPv4Stack=true",
+                *(["-Dmanaforge.completeCombat=true"] if args.complete_combat else []),
                 *(["-Dmanaforge.combatDamage=true"] if args.combat_damage else []),
                 *(
                     ["-Dmanaforge.declaredPriority=true"]
@@ -289,7 +303,9 @@ def main():
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
     print(
-        "Real XMage accepted the explicit damage-window pass; native combat-damage step and one-point defender life decrease observed in the public 1/1 fixture."
+        "Real XMage observed the explicit pass to postcombat main; combat cleared with source incarnation and life totals unchanged."
+        if args.complete_combat
+        else "Real XMage accepted the explicit damage-window pass; native combat-damage step and one-point defender life decrease observed in the public 1/1 fixture."
         if args.combat_damage
         else "Real XMage accepted one explicit post-declaration priority pass and exposed the next guarded combat state. No damage proof."
         if args.declared_priority

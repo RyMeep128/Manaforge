@@ -1,5 +1,25 @@
 # Live Unity / Java / XMage integration
 
+## Observe combat cleanup in the Java fixture (0.5.187)
+
+```powershell
+python tools/check_play_live_opening.py --first-creature --native-metadata --select-attacker --finish-selected-attack --declared-priority --combat-damage --complete-combat
+```
+
+After the native combat-damage observation, this Java-only continuation submits
+one explicit priority pass. The pinned engine resumes human priority directly in
+`POSTCOMBAT_MAIN`; no intervening end-combat priority prompt is fabricated.
+Typed evidence requires the exact accepted response and later guarded priority,
+a transition from native `COMBAT_DAMAGE` to post-combat main on the same turn,
+cleared combat, unchanged source incarnation and unchanged two-seat life totals.
+Unsupported, stale, blocked or altered-life states fail closed.
+
+The sanitized report records `native_postcombat_main_observed` and
+`native_combat_cleared`. This closes the bounded unblocked Java combat fixture,
+not a complete game or general combat acceptance. Unity still ends at its damage
+observation; cleanup integration there, blocking, lethal outcomes, complex choices
+and authoritative results remain open. CI includes the cleanup continuation.
+
 ## Confirm and display the damage-window pass in Unity (0.5.185)
 
 ```powershell

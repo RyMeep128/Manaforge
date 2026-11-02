@@ -1152,3 +1152,18 @@ The local packaged proof passed. This is a public-deck opening spike with fallba
 art and incomplete later decisions, not full live gameplay or gate acceptance.
 See [review command and limitations](play-live-integration.md). Stop for owner UI
 review before further presentation work.
+
+
+### Bounded unblocked combat fixture (0.5.187)
+
+The live track now covers an explicit attacker choice, declaration finish,
+post-declaration priority and a native 1/1 combat-damage life change in packaged
+Unity, with typed receipts and read-only result snapshots. Java additionally
+verifies the next explicit pass reaches native post-combat main with cleared
+combat, stable source incarnation and unchanged post-damage life totals. See the
+[live integration commands and limits](play-live-integration.md).
+
+P2/P3/P4 remain partial: this public Memnite/Forest fixture does not certify
+blocking, lethal combat, general choices/mana, a full match, result parity, product
+launch or any architecture gate. Unity cleanup integration is the immediate next
+slice; owner review and existing formal acceptance gates remain open.
