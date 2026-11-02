@@ -1311,3 +1311,14 @@ passes. Native string/number/multi-amount response encoding and authenticated
 numeric admission are covered by focused tests; current loyalty/defense values
 are projected from native views. Multi-block damage, permanent-defender native
 scenarios, keywords, representative spells and natural draw acceptance remain open.
+
+
+### Representative native combat spells (0.5.204)
+
+Two packaged public fixtures now cast Mutagenic Growth or Gut Shot during native
+AI combat, using the mounted casting/payment/target controls. The pump fixture
+verifies 3/3 followed by 1/1 on a later turn without an incarnation change;
+removal verifies the exact target's graveyard entry and next zone-change counter.
+Both end read-only with confirmed receipts (13 and 11 inputs), zero uncertainty,
+and clean shutdown. Multi-block allocation, permanent-defender live scenarios,
+keyword coverage, combat triggers and natural draw acceptance remain open.

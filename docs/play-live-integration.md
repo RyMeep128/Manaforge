@@ -1,5 +1,27 @@
 # Live Unity / Java / XMage integration
 
+## Native combat pump, expiry and removal (0.5.204)
+
+```powershell
+python tools/check_play_unity_live.py --combat-spell pump --no-capture
+python tools/check_play_unity_live.py --combat-spell removal --no-capture
+```
+
+The dedicated public fixtures cast Mutagenic Growth or Gut Shot during the AI's
+combat. Actual mounted controls select casting, native payment options and a
+native Memnite target. The pump run observes 3/3, then 1/1 on a later turn with
+the same guarded target incarnation. Removal observes the exact target in the
+graveyard with one additional native zone change. The snapshots expose the pump
+or death before the fixture ends read-only; ordinary gameplay never receives a
+scripted response unless the explicit acceptance flag is present.
+
+Packaged runs passed 13 confirmed pump inputs and 11 removal inputs with no
+uncertain receipts and clean viewer/process cleanup. This covers representative
+combat spell selection, targeting, native life-payment choices, resolution,
+temporary-effect expiry and removal. Broad mana/casting support is still outside
+this fixture. Multi-block allocation, permanent-defender native scenarios, the
+keyword matrix, combat triggers and natural draw acceptance remain open.
+
 ## Human blocking, native choices and natural defeat (0.5.202)
 
 ```powershell

@@ -23,6 +23,11 @@ def main():
     artifacts = ROOT / "Mtg_Projects/mtg_play_unity/Artifacts"
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
+        "--combat-spell",
+        choices=("pump", "removal"),
+        help="Dedicated Phyrexian combat spell/target/effect scenario",
+    )
+    parser.add_argument(
         "--human-blocking",
         action="store_true",
         help="Dedicated public Ornithopter versus Memnite human-blocking/damage scenario; conflicts with other scenarios",
@@ -169,8 +174,20 @@ def main():
         default=artifacts / ("UnityLive-" + uuid.uuid4().hex[:10]),
     )
     args = parser.parse_args()
-    if args.human_blocking:
+    if args.human_blocking or args.combat_spell:
         args.native_metadata = True
+    if args.combat_spell and (
+        args.human_blocking
+        or args.core_combat
+        or args.complete_game
+        or args.select_attacker
+        or args.finish_attacks
+        or args.creature_ability
+        or args.first_land
+        or args.priority_pass
+        or args.play_rounds
+    ):
+        parser.error("--combat-spell is a separate scenario")
     if args.human_blocking and (
         args.core_combat
         or args.select_attacker
@@ -212,6 +229,7 @@ def main():
         or args.finish_attacks
         or args.select_attacker
         or args.human_blocking
+        or args.combat_spell
     ):
         parser.error(
             "--native-metadata requires --creature-ability, --finish-attacks or --select-attacker"
@@ -326,8 +344,9 @@ def main():
                         "-Dfile.encoding=UTF-8",
                         "-Djava.net.preferIPv4Stack=true",
                         f"-Dmanaforge.playRounds={args.play_rounds}",
-                        f"-Dmanaforge.coreCombat={str(args.core_combat or args.human_blocking).lower()}",
-                        f"-Dmanaforge.coreFromOpening={str(args.human_blocking).lower()}",
+                        f"-Dmanaforge.coreCombat={str(args.core_combat or args.human_blocking or bool(args.combat_spell)).lower()}",
+                        f"-Dmanaforge.coreFromOpening={str(args.human_blocking or bool(args.combat_spell)).lower()}",
+                        f"-Dmanaforge.combatSpell={args.combat_spell or ''}",
                         f"-Dmanaforge.completeGame={str(args.complete_game).lower()}",
                         *(
                             ["-Dmanaforge.repeatCycle=true"]
@@ -470,6 +489,7 @@ def main():
                     command += ["-manaforgeLivePriority", "1"]
                 if args.creature_ability:
                     command += ["-manaforgeLiveCreature", "1"]
+                command += ["-manaforgeLiveCombatSpell", args.combat_spell or ""]
                 command += [
                     "-manaforgeLiveHumanBlocking",
                     "1" if args.human_blocking else "0",
@@ -558,6 +578,7 @@ def main():
                         or args.select_attacker
                     )
                     and not args.human_blocking
+                    and not args.combat_spell
                     and ready.get("mulligan_controls") is not True
                 ):
                     raise RuntimeError("LIVE_UNITY_MULLIGAN_CONTROLS_NOT_PRESENTED")
@@ -762,12 +783,24 @@ def main():
                     block_result = wait_file("human-block-ready", 240)
                     if block_result.get("human_block_presented") is not True:
                         raise RuntimeError("LIVE_UNITY_HUMAN_BLOCK_NOT_PRESENTED")
+                if args.combat_spell:
+                    spell_result = wait_file("combat-spell-ready", 240)
+                    if (
+                        spell_result.get("combat_spell_presented") is not True
+                        or spell_result.get(
+                            "spell_buff_seen"
+                            if args.combat_spell == "pump"
+                            else "spell_death_seen"
+                        )
+                        is not True
+                    ):
+                        raise RuntimeError("LIVE_UNITY_COMBAT_SPELL_NOT_PRESENTED")
                 chosen = wait_file("choice", 60)
                 if (
                     chosen.get("ack_count")
                     != (
                         2 * (chosen.get("snapshot_count", 0) - 1)
-                        if args.loop_turn or args.human_blocking
+                        if args.loop_turn or args.human_blocking or args.combat_spell
                         else 10
                         if args.complete_combat
                         else 8
@@ -866,6 +899,7 @@ def main():
                 if (
                     args.native_metadata
                     and not args.human_blocking
+                    and not args.combat_spell
                     and any(
                         native.get(field) is not True
                         for field in (
@@ -878,6 +912,7 @@ def main():
                 if (
                     args.native_metadata
                     and not args.human_blocking
+                    and not args.combat_spell
                     and native.get("unity_casting_ability_confirmed")
                     is not args.creature_ability
                 ):
@@ -984,6 +1019,14 @@ def main():
                     or chosen.get("uncertain_receipt_count") != 0
                 ):
                     raise RuntimeError("LIVE_UNITY_HUMAN_BLOCK_UNPROVEN")
+                if args.combat_spell and (
+                    native.get("native_combat_spell_effect_observed") is not True
+                    or native.get("native_combat_spell_cycle_observed") is not True
+                    or chosen.get("confirmed_receipt_count")
+                    != chosen.get("snapshot_count", 0) - 1
+                    or chosen.get("uncertain_receipt_count") != 0
+                ):
+                    raise RuntimeError("LIVE_UNITY_COMBAT_SPELL_UNPROVEN")
                 if args.next_turn_cast and any(
                     native.get(field) is not True
                     for field in (
@@ -1124,7 +1167,11 @@ def main():
                     artwork_presented=args.artwork,
                     artwork_card_count=ready.get("artwork_count", 0),
                 )
-                if args.native_metadata and not args.human_blocking:
+                if (
+                    args.native_metadata
+                    and not args.human_blocking
+                    and not args.combat_spell
+                ):
                     evidence.update(
                         native_stack_source_matched=True,
                         native_cast_instance_matched=True,
@@ -1166,6 +1213,16 @@ def main():
                         else 2
                         if args.finish_selected_attack
                         else 1,
+                        uncertain_receipt_count=0,
+                    )
+                if args.combat_spell:
+                    evidence.update(
+                        native_combat_spell_effect_observed=True,
+                        native_combat_spell_cycle_observed=True,
+                        combat_spell_presented=True,
+                        combat_spell=args.combat_spell,
+                        snapshot_count=chosen["snapshot_count"],
+                        confirmed_receipt_count=chosen["confirmed_receipt_count"],
                         uncertain_receipt_count=0,
                     )
                 if args.human_blocking:
@@ -1337,7 +1394,9 @@ def main():
         json.dumps(evidence, indent=2) + "\n", encoding="utf-8"
     )
     print(
-        "Packaged Unity cast a blocker, blocked a native AI attack, observed native blocked damage and cleared the viewer."
+        f"Packaged Unity resolved the native combat {args.combat_spell} spell, confirmed the target effect and cleared the viewer."
+        if args.combat_spell
+        else "Packaged Unity cast a blocker, blocked a native AI attack, observed native blocked damage and cleared the viewer."
         if args.human_blocking
         else "Packaged Unity completed a natural combat victory, presented the authoritative native result, confirmed inputs and reaped owned processes."
         if args.complete_game
