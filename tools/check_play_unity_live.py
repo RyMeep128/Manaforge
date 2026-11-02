@@ -24,6 +24,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--interactive", action="store_true")
     parser.add_argument(
+        "--combat-priority",
+        action="store_true",
+        help="Submit one explicit priority pass after confirmed Finish attacks; requires --finish-attacks",
+    )
+    parser.add_argument(
         "--post-resolution-pass",
         action="store_true",
         help="Confirm one more native pass with a guarded phase transition; requires --observe-resolution",
@@ -93,6 +98,8 @@ def main():
         )
     if args.finish_attacks and not args.native_metadata:
         parser.error("--finish-attacks requires --native-metadata")
+    if args.combat_priority and not args.finish_attacks:
+        parser.error("--combat-priority requires --finish-attacks")
     if args.finish_attacks and args.continue_priority:
         parser.error("--finish-attacks is an isolated combat choice")
     if args.continue_priority and not args.native_metadata:
@@ -198,6 +205,11 @@ def main():
                         "-Dfile.encoding=UTF-8",
                         "-Djava.net.preferIPv4Stack=true",
                         *(
+                            ["-Dmanaforge.combatPriority=true"]
+                            if args.combat_priority
+                            else []
+                        ),
+                        *(
                             ["-Dmanaforge.finishAttacks=true"]
                             if args.finish_attacks
                             else []
@@ -287,6 +299,8 @@ def main():
                     command += ["-manaforgeLiveCreature", "1"]
                 if args.finish_attacks:
                     command += ["-manaforgeLiveFinishAttacks", "1"]
+                if args.combat_priority:
+                    command += ["-manaforgeLiveCombatPriority", "1"]
                 if args.continue_priority:
                     command += ["-manaforgeLiveContinuePriority", "1"]
                 if args.observe_resolution:
@@ -349,7 +363,9 @@ def main():
                     raise RuntimeError("LIVE_UNITY_ARTWORK_NOT_PRESENTED")
                 if args.interactive:
                     print(
-                        "Select Finish attacks within 60 seconds; no attackers have been selected in this public fixture."
+                        "Select Finish attacks, then the offered Pass priority; 60 seconds per choice."
+                        if args.combat_priority
+                        else "Select Finish attacks within 60 seconds; no attackers have been selected in this public fixture."
                         if args.finish_attacks
                         else "Select the casting ability, then Pass priority in each of the next two prompts; 60 seconds per choice."
                         if args.post_resolution_pass
@@ -398,7 +414,9 @@ def main():
                 if (
                     chosen.get("ack_count")
                     != (
-                        6
+                        4
+                        if args.combat_priority
+                        else 6
                         if args.post_resolution_pass
                         else 4
                         if args.continue_priority
@@ -417,9 +435,16 @@ def main():
                     ready.get("attack_finish_presented") is not True
                     or chosen.get("snapshot_count") != 2
                     or chosen.get("confirmed_receipt_count") != 1
-                    or chosen.get("uncertain_receipt_count") != 0
+                    or chosen.get("uncertain_receipt_count")
+                    != (1 if args.combat_priority else 0)
                 ):
                     raise RuntimeError("LIVE_UNITY_ATTACK_FINISH_RECEIPT_FAILED")
+                if (
+                    args.combat_priority
+                    and combat_result.get("combat_priority_action_presented")
+                    is not True
+                ):
+                    raise RuntimeError("LIVE_UNITY_COMBAT_PRIORITY_NOT_PRESENTED")
                 # The scene quits after clearing. Observe its owned handle rather than health-checking an expected exit.
                 client = owner._children["client"]
                 client.wait(timeout=15)
@@ -503,6 +528,12 @@ def main():
                     )
                 ):
                     raise RuntimeError("LIVE_UNITY_COMBAT_EVIDENCE_FAILED")
+                if (
+                    args.finish_attacks
+                    and native.get("unity_combat_priority_submitted")
+                    is not args.combat_priority
+                ):
+                    raise RuntimeError("LIVE_UNITY_COMBAT_PRIORITY_EVIDENCE_FAILED")
                 if args.creature_ability and any(
                     native.get(field) is not True
                     for field in (
@@ -572,9 +603,10 @@ def main():
                         unity_attack_finish_confirmed=True,
                         attack_finish_presented=True,
                         confirmed_receipt_count=1,
-                        uncertain_receipt_count=0,
+                        uncertain_receipt_count=1 if args.combat_priority else 0,
                         post_combat_priority_presented=True,
                         snapshot_count=2,
+                        unity_combat_priority_submitted=args.combat_priority,
                     )
                 if args.observe_resolution:
                     evidence.update(
@@ -621,7 +653,9 @@ def main():
         json.dumps(evidence, indent=2) + "\n", encoding="utf-8"
     )
     print(
-        "Packaged Unity confirmed Finish attacks and displayed the next native priority state read-only; viewer cleared and roots reaped."
+        "Packaged Unity confirmed Finish attacks then submitted the next priority pass; pass outcome uncertain, viewer cleared and roots reaped."
+        if args.combat_priority
+        else "Packaged Unity confirmed Finish attacks and displayed the next native priority state read-only; viewer cleared and roots reaped."
         if args.finish_attacks
         else "Packaged Unity confirmed three commands on one session and displayed the next native phase; viewer cleared and roots reaped."
         if args.post_resolution_pass

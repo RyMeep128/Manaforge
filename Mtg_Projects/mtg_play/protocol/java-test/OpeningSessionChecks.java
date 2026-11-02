@@ -107,7 +107,20 @@ public final class OpeningSessionChecks {
             if(owner.dispatch(stale.toString(),"raw-game","raw-human",42,8).shouldSubmit || owner.pollNative()!=null)throw new AssertionError("READ_ONLY_COMBAT_ACCEPTED_ACTION");
             manaforge.protocol.SubmissionLedger.Prepared replay=owner.dispatch(wire,"raw-game","raw-human",42,8);
             if(replay.shouldSubmit || !receipt.equals(replay.receipt()) || owner.pollNative()!=null)throw new AssertionError("COMBAT_RESULT_CHANGED_RECEIPT");
+            JsonObject priority=projection.project(after,next,true),priorityUpdate=envelope(priority);priorityUpdate.addProperty("message_id","combat-priority");
+            new ManaforgeUnityOpening.VerifiedAttackResult(proof,new ManaforgeUnityOpening.PriorityOffer(priorityUpdate,42,8,commandValue->{}));
+            try{new ManaforgeUnityOpening.VerifiedAttackResult(proof,new ManaforgeUnityOpening.PriorityOffer(envelope(snapshot),41,8,commandValue->{}));throw new AssertionError("NON_PRIORITY_COMBAT_FOLLOWUP_ACCEPTED");}
+            catch(IllegalArgumentException expected){if(!"COMBAT_RESULT_NOT_PASS_ONLY".equals(expected.getMessage()))throw expected;}
+            owner.observe(priorityUpdate.toString());JsonObject pass=JsonParser.parseString(OpeningProjectionChecks.perform(priority)).getAsJsonObject();pass.addProperty("message_id","after-combat-pass");
+            if(!owner.dispatch(pass.toString(),"raw-game","raw-human",42,8).shouldSubmit)throw new AssertionError("COMBAT_PRIORITY_NOT_ADMITTED");
+            JsonObject nativePass=owner.pollNative();if(nativePass==null || nativePass.get("decision_id").getAsLong()!=42 || !new JsonPrimitive(false).equals(nativePass.get("value")))throw new AssertionError("BAD_COMBAT_PRIORITY");
+            owner.uncertain("after-combat-pass");
+            if(owner.dispatch(pass.toString(),"raw-game","raw-human",42,8).shouldSubmit || owner.pollNative()!=null)throw new AssertionError("COMBAT_PRIORITY_REPLAYED");
+            owner.dispatch(wire,"raw-game","raw-human",42,8);pass.addProperty("message_id","blocked-next");
+            manaforge.protocol.SubmissionLedger.Prepared blocked=owner.dispatch(pass.toString(),"raw-game","raw-human",42,8);
+            if(blocked.shouldSubmit || !"COMMAND_PENDING".equals(blocked.receipt().getAsJsonObject("body").get("code").getAsString()) || owner.pollNative()!=null)throw new AssertionError("OLD_ATTACK_RECEIPT_RELEASED_PASS");
             owner.disconnected();if(!receipt.equals(owner.receiptFor("land-action")))throw new AssertionError("ATTACK_CONFIRMATION_LOST");
+            if(!"uncertain".equals(owner.receiptFor("after-combat-pass").getAsJsonObject("body").get("outcome").getAsString()))throw new AssertionError("COMBAT_PRIORITY_UNCERTAINTY_LOST");
         }
     }
     static JsonObject envelope(JsonObject snapshot) {

@@ -1,5 +1,47 @@
 # Live Unity / Java / XMage integration
 
+## Explicit priority input after confirmed combat finish (0.5.174)
+
+An opt-in continuation admits one native priority pass after confirmed Finish attacks:
+
+```powershell
+python tools/check_play_unity_live.py --finish-attacks --native-metadata --combat-priority
+```
+
+The verified finish result carries a fresh native priority offer on the same
+authenticated socket and ledger. A separate typed constructor permits only a
+priority decision with one pass action; the default constructor still requires
+a read-only snapshot. Unity waits for the exact new revision and enabled offer,
+then the acceptance script invokes the mounted Pass priority button. Interactive
+mode requires both choices explicitly. Attacker, defender and blocking selection
+remain unsupported.
+
+The finish receipt stays confirmed. The subsequent pass is submitted once, then
+uncertain after native acceptance/advancement; the probe stops there. Acceptance
+requires two snapshots, four acknowledgements, one confirmed and one uncertain
+receipt, combat_priority_action_presented and native
+unity_combat_priority_submitted evidence. Without --combat-priority, the existing
+second snapshot remains read-only. Overall/action deadlines and bounded input
+retries remain in force; this does not establish continuous combat/full-game
+acceptance.
+
+Validation: Windows player build, 49 focused Unity PlayMode host/decision/dispatch
+checks and the real two-input combat probe passed with screenshot inspection and
+normal viewer/process cleanup. Java protocol preflight passed with 332 projection/
+correlation/privacy checks. Authenticated-session tests cover fresh post-finish
+admission, exact native pass binding, duplicate suppression, retention of both
+receipts, and rejection of new work while the pass remains uncertain even after
+looking up the old confirmed finish receipt. Default read-only combat and existing
+three-command phase regressions passed. Three focused Python provisioning checks,
+CLI guards, lint and formatting passed. No full application suite ran.
+
+Scheduled CI checkpoint: .173 [protocol](https://github.com/RyMeep128/Manaforge/actions/runs/41364737466),
+[desktop preview](https://github.com/RyMeep128/Manaforge/actions/runs/41364737445)
+and feedback relay passed. Its live-opening and Tests jobs were still running
+and are deferred. .171/.172 live/preview and .172 protocol passed; their Tests
+were cancelled. The deferred .170 live job passed and Tests was cancelled.
+New .174 CI evidence remains pending. Next scheduled check: .177.
+
 ## Read-only priority state after confirmed combat finish (0.5.173)
 
 The existing packaged `--finish-attacks --native-metadata` probe now delivers a
