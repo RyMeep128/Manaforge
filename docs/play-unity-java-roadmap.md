@@ -1379,3 +1379,19 @@ own-seat pool. All four cases confirm every input, bind stack/card incarnations
 and clean up. Focused Java checks (672), Unity projection tests (21) and session
 checks (49) pass. Safe automatic payment, broader cost/response scenarios and
 normal shuffled saved-deck integration remain unfinished.
+
+
+### Conservative automatic payment and broader manual costs (0.5.210)
+
+The owned gameplay continuation now mounts the existing coordinator through a
+shared native response authority. Native {G}, {1}{U} and {2}{G} payments activate
+one/two/three equivalent basic sources, confirm each incarnation/tap and establish
+payment completion from guarded stack entry. Mixed sources fall back manually;
+Full Control and Manual submit no automatic source activations. Native floating
+mana input, Evolution Charm's mode/target/effect and Fling's additional sacrifice
+cost pass through mounted controls. Registry exceptions cover only reviewed pinned
+counter rules and exact first-main event gates; other hazards remain manual.
+Focused Java (696), coordinator (65), response (77), pinned object (155) and
+connection-owner (28) checks pass. Shuffled saved-deck launch, countering/changed
+target acceptance and the final integrated match remain open; visual gates stay
+unchecked. No claim of arbitrary source/cost automation is made.

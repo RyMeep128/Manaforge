@@ -152,6 +152,14 @@ public final class PinnedPaymentChecks {
         check(NativePaymentHazards.inspect(null,paying)==NativePaymentHazards.Result.UNKNOWN);
         check(NativePaymentHazards.inspect(game,null)==NativePaymentHazards.Result.UNKNOWN);
         check(NativePaymentHazards.inspect(game,paying)==NativePaymentHazards.Result.NO_REGISTERED_HAZARD);
+        for(mage.abilities.effects.ReplacementEffect effect:new mage.abilities.effects.ReplacementEffect[]{new mage.abilities.effects.keyword.ShieldCounterEffect(),new mage.abilities.effects.keyword.StunCounterEffect(),new mage.abilities.effects.keyword.FinalityCounterEffect()}){
+            check(!effect.checksEventType(mage.game.events.GameEvent.getEvent(mage.game.events.GameEvent.EventType.TAP,card.getId(),paying,payer.getId()),game));state[0].getContinuousEffects().addEffect(effect,paying);
+        }
+        check(NativePaymentHazards.inspect(game,paying)==NativePaymentHazards.Result.REQUIRES_MANUAL);check(NativePaymentHazards.inspectOrdinaryTap(game,paying)==NativePaymentHazards.Result.NO_REGISTERED_HAZARD);
+        mage.abilities.triggers.BeginningOfFirstMainTriggeredAbility firstMain=new mage.abilities.triggers.BeginningOfFirstMainTriggeredAbility(new mage.abilities.effects.mana.BasicManaEffect(Mana.GreenMana(1)));
+        check(!firstMain.checkEventType(mage.game.events.GameEvent.getEvent(mage.game.events.GameEvent.EventType.TAP,card.getId(),paying,payer.getId()),game));state[0].getTriggers().put("first-main",firstMain);check(NativePaymentHazards.inspectOrdinaryTap(game,paying)==NativePaymentHazards.Result.NO_REGISTERED_HAZARD);state[0].getTriggers().clear();
+        state[0].getContinuousEffects().addEffect(new mage.abilities.effects.common.continuous.GainAbilityAllEffect(new GreenManaAbility(),mage.constants.Duration.WhileOnBattlefield,new mage.filter.FilterPermanent()),paying);check(NativePaymentHazards.inspectOrdinaryTap(game,paying)==NativePaymentHazards.Result.REQUIRES_MANUAL);
+        state[0]=new mage.game.GameState();state[0].getPlayers().put(payer.getId(),payer);
         for(int i=0;i<5;i++){ContextHumanPlayer extra=new ContextHumanPlayer("Public fixture",RangeOfInfluence.ALL,0);state[0].getPlayers().put(extra.getId(),extra);}
         check(NativePaymentHazards.inspect(game,paying)==NativePaymentHazards.Result.NO_REGISTERED_HAZARD); // Six is not a protocol limit.
         ended[0]=true;check(NativePaymentHazards.inspect(game,paying)==NativePaymentHazards.Result.UNKNOWN);ended[0]=false;

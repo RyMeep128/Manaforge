@@ -6,7 +6,7 @@ import java.util.Objects;
  * The engine/transport is borrowed. All calls belong to the serialized session owner. */
 public final class ManaforgeGameplaySession implements AutoCloseable {
     public interface Engine {
-        JsonObject metadata(JsonObject state) throws Exception;
+        JsonObject metadata(JsonObject state,String... ids) throws Exception;
         JsonObject submit(JsonObject command) throws Exception;
         Advance advance(long previousDecision) throws Exception;
         JsonObject terminalMetadata(JsonObject before) throws Exception;

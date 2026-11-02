@@ -1,6 +1,6 @@
 package manaforge.payment.xmage;
 
-import com.google.gson.JsonObject;
+import com.google.gson.*;
 import java.lang.reflect.Field;
 import java.lang.ref.WeakReference;
 import mage.game.GameState;
@@ -142,6 +142,44 @@ public final class ContextHumanPlayer extends HumanPlayer {
         return paymentProbe(game,payer,cycle,new UUID[0]);
     }
     /** Source IDs must already be visible to this payer; diagnostics export aggregate counts only. */
+    /** Conservative private assessment. Caller supplies all counter-free visible own permanents
+     * from the same guarded native view. No activation, IO or client serialization here. */
+    public JsonObject ordinaryPayment(Game game,UUID payer,int cycle,UUID[] sources) throws ReflectiveOperationException {
+        if(sources==null || sources.length>128)return null;
+        return inspectPayment(game,payer,cycle,(paying,unpaid)->{
+            JsonObject result=new JsonObject();result.addProperty("safety","UNKNOWN");
+            NativePaymentHazards.Result hazard=NativePaymentHazards.inspectOrdinaryTap(game,paying);result.addProperty("reason",hazard.name());if(hazard!=NativePaymentHazards.Result.NO_REGISTERED_HAZARD)return result;if(!paying.getCosts().isEmpty()){result.addProperty("reason","ADDITIONAL_COST");return result;}if(getManaPool().count()!=0 || !getManaPool().getConditionalMana().isEmpty()){result.addProperty("reason","FLOATING_MANA");return result;}result.addProperty("reason","SOURCE_OR_COVERAGE");
+            JsonArray steps=new JsonArray();Mana total=new Mana();Class<?>[] sourceClass={null};boolean[] mixed={false};
+            for(UUID id:sources) {
+                Permanent permanent=game.getPermanent(id);mage.cards.Card card=game.getCard(id);
+                Integer usable;try{usable=inspectBattlefieldSource(game,payer,cycle,id,(a,c,options)->options.size());}catch(ReflectiveOperationException unavailable){return result;}if(usable==null)return result;if(usable==0)continue;
+                if(permanent==null || card==null || permanent.isCopy() || permanent.isToken() || permanent.isFlipped() || permanent.isTransformed()
+                        || !permanent.getAttachments().isEmpty() || permanent.getAttachedTo()!=null || !payer.equals(card.getOwnerId()))return result;
+                Class<?> kind=card.getClass();
+                if(kind!=mage.cards.basiclands.Forest.class && kind!=mage.cards.basiclands.Island.class && kind!=mage.cards.basiclands.Plains.class
+                        && kind!=mage.cards.basiclands.Swamp.class && kind!=mage.cards.basiclands.Mountain.class)return result;
+                SourceEvidence evidence;
+                try{evidence=inspectBattlefieldSource(game,payer,cycle,id,(ability,cost,candidates)->{
+                    if(candidates.size()!=1)return null;ActivatedManaAbilityImpl mana=candidates.values().iterator().next();
+                    if(OrdinaryManaShape.inspect(mana)!=OrdinaryManaShape.Result.ORDINARY_TAP_SHAPE)return null;
+                    SourceEvidence value=new SourceEvidence();value.base=((BasicManaEffect)mana.getEffects().get(0)).getManaTemplate().copy();return value;
+                });}catch(ReflectiveOperationException unavailable){return result;}
+                if(evidence==null)return result;
+                if(sourceClass[0]==null)sourceClass[0]=kind;else if(sourceClass[0]!=kind)mixed[0]=true;
+                total.add(evidence.base);JsonObject step=new JsonObject();step.addProperty("source",id.toString());step.addProperty("incarnation",game.getState().getZoneChangeCounter(id));steps.add(step);
+            }
+            if(mixed[0] || steps.size()==0 || OrdinaryCostCoverage.inspect(unpaid,total)!=OrdinaryCostCoverage.Result.COVERS)return result;
+            // Revalidate every borrowed ability/source identity before issuing the assessment.
+            for(JsonElement value:steps){UUID id=UUID.fromString(value.getAsJsonObject().get("source").getAsString());
+                try{UUID ability=inspectBattlefieldSource(game,payer,cycle,id,(a,c,options)->options.size()==1?options.keySet().iterator().next():null);
+                    SourceTicket ticket=captureSourceTicket(game,payer,cycle,id,ability);
+                    if(ticket==null || !Boolean.TRUE.equals(inspectSourceTicket(game,payer,cycle,ticket,(a,c,options)->true)))return result;
+                }catch(ReflectiveOperationException unavailable){return result;}
+            }
+            result.addProperty("safety","VERIFIED_ORDINARY_EQUIVALENT");result.addProperty("reason","VERIFIED_ORDINARY_EQUIVALENT");result.addProperty("sequence",payment.sequence);result.addProperty("paying_source",paying.getSourceId().toString());result.addProperty("unpaid_count",unpaid.getUnpaid().getMana().count());result.add("steps",steps);return result;
+        });
+    }
+
     public JsonObject paymentProbe(Game game,UUID payer,int cycle,UUID[] visibleSources) throws ReflectiveOperationException {
         if(visibleSources==null || visibleSources.length>128)return null;
         final int[] counts={0,0,0};

@@ -54,7 +54,8 @@ public final class ManaforgeOpeningProjection {
         boolean stringResponse=!action && stringOptions.contains(body.get("option_id").getAsString());consumed=true;options.clear();nativeActions.clear();nativeOptions.clear();stringOptions.clear();numericPrompt=null;
         JsonObject command=new JsonObject();command.addProperty("protocol",1);command.addProperty("command","respond");
         command.add("request_id",envelope.get("message_id").deepCopy());command.addProperty("game_id",nativeGame);
-        boolean objectResponse=source!=null;
+        boolean poolResponse=action && source!=null && source.startsWith("pool:");boolean objectResponse=source!=null;
+        if(poolResponse){command.addProperty("decision_id",nativeDecision);command.addProperty("kind","mana_type");command.addProperty("value",source.substring(5).toUpperCase(Locale.ROOT));command.addProperty("player_id",engineViewer);return command;}
         command.addProperty("decision_id",nativeDecision);command.addProperty("kind",objectResponse?(stringResponse?"string":"object"):"boolean");if(objectResponse)command.addProperty("value",source);else command.addProperty("value",action?false:answer);
         return command;
     }
@@ -293,6 +294,7 @@ public final class ManaforgeOpeningProjection {
                 }
             }
             if(mana){Set<String> unique=new HashSet<>();for(JsonElement source:raw.getAsJsonArray("playable")){require(source.isJsonPrimitive() && source.getAsJsonPrimitive().isString() && unique.add(source.getAsString()));GameObject card=visibleCard(cards,visibleReferences.get(source.getAsString()));if(card==null || !viewer.equals(card.controller_id))continue;LegalAction action=new LegalAction();action.action_id=opaque();action.object_id=card.object_id;action.kind="pay_mana";action.label="Select mana source: "+card.characteristics.name;action.priority_class="meaningful";actions.add(action);offeredNative.put(action.action_id,source.getAsString());}}
+            if(mana)for(PlayerView seat:seats)if(viewer.equals(seat.player_id) && seat.mana!=null)for(JsonElement[] value:seat.mana)if(value[1].getAsLong()>0){LegalAction action=new LegalAction();action.action_id=opaque();action.kind="pay_mana";action.label="Use floating mana: "+value[0].getAsString();action.priority_class="meaningful";actions.add(action);offeredNative.put(action.action_id,"pool:"+value[0].getAsString());}
             if(priority && !omitStack && (!turnMode || includeSpells))for(JsonElement item:raw.getAsJsonArray("playable")) {
                 String source=item.getAsString(),reference=visibleReferences.get(source);
                 if(reference==null)continue;

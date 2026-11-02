@@ -1,5 +1,53 @@
 # Live Unity / Java / XMage integration
 
+## Conservative native automatic payment (0.5.210)
+
+```powershell
+python tools/check_play_unity_live.py --casting-case green --payment-mode auto --no-capture
+python tools/check_play_unity_live.py --casting-case blue --payment-mode auto --no-capture
+python tools/check_play_unity_live.py --casting-case generic --payment-mode auto --no-capture
+python tools/check_play_unity_live.py --casting-case mixed --payment-mode auto --no-capture
+python tools/check_play_unity_live.py --casting-case floating --payment-mode full-control --no-capture
+python tools/check_play_unity_live.py --casting-case modes --payment-mode manual --no-capture
+python tools/check_play_unity_live.py --casting-case additional --payment-mode manual --no-capture
+```
+
+Packaged native {G}, {1}{U} and {2}{G} payments passed with one, two and three
+internal source activations and a guarded stack entry establishing payment completion.
+Mixed Forest/Island sources require manual selection and perform zero automatic
+steps. Full Control pays floating mana and a two-source blue spell with zero
+automatic activations. Manual floating-pool spending is a native mana-type response
+bound to the viewer; arbitrary colors/opponents cannot be selected by wire input.
+Evolution Charm selects its flying mode/target and native effect; Fling proves the
+sacrificed Memnite incarnation, spell graveyard entry and opponent life decrease.
+All successful cases confirm every viewer input and clear/reap normally.
+
+Automation runs between viewer decision windows while the initiating dispatch is
+reserved. NativeAutomaticPayment uses the existing coordinator and the same native
+response actor as manual input. Enqueue only claims a local job; IO follows after
+consider returns, with a fresh private assessment. Each step requires typed response
+consumption plus the same native source incarnation, ownership/controller and tap
+state. A fresh native payment frame is assessed before another activation. An
+uncertain/interrupted step cannot replay. Modes are per-human-session settings;
+explicit bridge connection preferences override diagnostic process defaults.
+
+The current safe class is homogeneous, native ordinary basic-land sources, with
+native cost coverage, empty unrestricted pool, no extra activation/casting costs,
+no counters/concealment/attachments/copies and revalidated source tickets. Mixed,
+nonstandard, restricted and unknown choices remain manual. Pinned shield/stun/finality
+counter replacement classes and exact first-main-phase trigger classes are the
+only reviewed baseline registry exceptions: their native event predicates cannot
+fire during the admitted ordinary taps. Unknown effects/triggers, delayed/pending
+triggers and color-sensitive cards still exclude automation. The older general
+hazard probe remains strict; its diagnostic meaning is unchanged.
+
+Focused checks pass: 696 Java projection/evidence cases, 65 coordinator checks,
+77 response guards, 155 pinned object checks and 28 connection-owner tests. Prior
+Unity projection/session checks and the rebuilt packaged player remain passing.
+No binary patch, runtime download, new public schema or visual review is involved.
+General shuffled saved-deck launch and remaining response/countering cases are
+still separate acceptance work; this does not mark the full casting plan complete.
+
 ## Manual casting and payment continuation (0.5.209)
 
 ```powershell

@@ -23,8 +23,23 @@ def main():
     artifacts = ROOT / "Mtg_Projects/mtg_play_unity/Artifacts"
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
+        "--payment-mode", choices=("auto", "manual", "full-control"), default=None
+    )
+    parser.add_argument(
         "--casting-case",
-        choices=("repeat", "cancel", "x", "ability"),
+        choices=(
+            "repeat",
+            "cancel",
+            "x",
+            "ability",
+            "green",
+            "blue",
+            "generic",
+            "floating",
+            "modes",
+            "additional",
+            "mixed",
+        ),
         help="Native manual casting/payment acceptance",
     )
     parser.add_argument(
@@ -436,6 +451,14 @@ def main():
                         f"-Dmanaforge.combatSpell={args.combat_spell or ''}",
                         f"-Dmanaforge.combatTrigger={str(args.combat_trigger).lower()}",
                         f"-Dmanaforge.combatKeyword={args.combat_keyword or ''}",
+                        *(
+                            [
+                                "-Dmanaforge.paymentMode="
+                                + args.payment_mode.upper().replace("-", "_")
+                            ]
+                            if args.payment_mode
+                            else []
+                        ),
                         f"-Dmanaforge.completeGame={str(args.complete_game).lower()}",
                         *(
                             ["-Dmanaforge.repeatCycle=true"]
@@ -975,6 +998,10 @@ def main():
                 if gateway.returncode != 0 or len(raw) > 4096:
                     raise RuntimeError("LIVE_UNITY_GATEWAY_FAILED")
                 native = json.loads(raw)
+                if args.casting_case:
+                    (output / "native-report.json").write_text(
+                        json.dumps(native, indent=2) + "\n", encoding="utf-8"
+                    )
                 for field in (
                     "unity_connected",
                     "authenticated_choice",
@@ -1170,6 +1197,22 @@ def main():
                         and case_result.get("case_numeric_submitted", 0) <= 0
                     ):
                         raise RuntimeError("LIVE_UNITY_CASTING_NUMBER_UNPROVEN")
+                    if args.payment_mode and native.get(
+                        "native_auto_payment_mode"
+                    ) != args.payment_mode.upper().replace("-", "_"):
+                        raise RuntimeError("LIVE_UNITY_PAYMENT_MODE_UNPROVEN")
+                    if (
+                        args.payment_mode == "auto"
+                        and args.casting_case in ("green", "blue", "generic")
+                        and native.get("native_auto_payment_steps", 0)
+                        < {"green": 1, "blue": 2, "generic": 3}[args.casting_case]
+                    ):
+                        raise RuntimeError("LIVE_UNITY_AUTO_PAYMENT_UNPROVEN")
+                    if (
+                        args.payment_mode in ("manual", "full-control")
+                        and native.get("native_auto_payment_steps") != 0
+                    ):
+                        raise RuntimeError("LIVE_UNITY_MANUAL_PAYMENT_VIOLATED")
                 elif args.combat_keyword:
                     if (
                         native.get("native_combat_case") != args.combat_keyword
@@ -1560,7 +1603,10 @@ def main():
                     raise RuntimeError("LIVE_UNITY_CLEANUP_FAILED")
 
     result = transport.run_proof(
-        args.xmage_root.resolve(), args.jdk_path.resolve(), runtime_consumer=consume
+        args.xmage_root.resolve(),
+        args.jdk_path.resolve(),
+        runtime_consumer=consume,
+        payment_context_probe=bool(args.payment_mode),
     )
     if not result["success"] or evidence is None:
         raise SystemExit("LIVE_UNITY_FAILED; inspect owned runtime/player diagnostics")

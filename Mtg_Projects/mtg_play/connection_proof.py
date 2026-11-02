@@ -413,6 +413,7 @@ def run_proof(
                     HERE
                     / "java/payment-xmage/manaforge/payment/xmage/ManaResponseExecutor.java"
                 ),
+                str(HERE / "java/payment/manaforge/payment/PaymentCoordinator.java"),
                 *map(str, context_sources),
             ]
             if cancel is None:

@@ -31,7 +31,7 @@ public final class ManaforgeBridge implements MageClient {
     public ManaforgeBridge() { this(null); }
     ManaforgeBridge(java.util.function.Consumer<JsonObject> eventSink) { this.eventSink = eventSink; }
 
-    private volatile UUID gameId;
+    private volatile UUID gameId,viewerId;
     private volatile int decisionId = -1;
     private volatile String decisionMethod;
     private volatile int amountMin;
@@ -265,6 +265,7 @@ public final class ManaforgeBridge implements MageClient {
     }
 
     private JsonObject state(GameView view) {
+        viewerId=view.getMyPlayer()==null?null:view.getMyPlayer().getPlayerId();
         JsonObject data = new JsonObject();
         data.addProperty("game_id", gameId == null ? null : gameId.toString());
         data.addProperty("turn", view.getTurn());
@@ -411,6 +412,7 @@ public final class ManaforgeBridge implements MageClient {
                 connection.setProxyType(Connection.ProxyType.NONE);
                 connection.setUserIdStr(UUID.randomUUID().toString());
                 UserData preferences = UserData.getDefaultUserDataView();
+                String paymentMode=command.has("payment_mode")?requiredString(command,"payment_mode"):System.getProperty("manaforge.paymentMode");if(paymentMode!=null){if(!java.util.Arrays.asList("AUTO","MANUAL","FULL_CONTROL").contains(paymentMode))throw new IllegalArgumentException("PAYMENT_MODE_INVALID");preferences.setManaPoolAutomatic(paymentMode.equals("AUTO"));preferences.setManaPoolAutomaticRestricted(paymentMode.equals("AUTO"));}
                 preferences.setPassPriorityCast(false);
                 preferences.setPassPriorityActivation(false);
                 preferences.setAutoOrderTrigger(false);
@@ -491,6 +493,7 @@ public final class ManaforgeBridge implements MageClient {
                     pendingMethod = decisionMethod;
                     boolean valid = (kind.equals("boolean") && (pendingMethod.equals("GAME_ASK") || pendingMethod.equals("GAME_SELECT") || pendingMethod.equals("GAME_PLAY_MANA") || pendingMethod.equals("GAME_CHOOSE_PILE") || ((decisionFinishable && pendingMethod.equals("GAME_TARGET")) || (decisionCancellable && (pendingMethod.equals("GAME_GET_MULTI_AMOUNT") || pendingMethod.equals("GAME_CHOOSE_CHOICE"))))))
                         || (kind.equals("object") && (pendingMethod.equals("GAME_SELECT") || pendingMethod.equals("GAME_TARGET") || pendingMethod.equals("GAME_CHOOSE_ABILITY") || pendingMethod.equals("GAME_PLAY_MANA")))
+                        || (kind.equals("mana_type") && pendingMethod.equals("GAME_PLAY_MANA"))
                         || (kind.equals("integer") && pendingMethod.equals("GAME_GET_AMOUNT"))
                         || (kind.equals("string") && (pendingMethod.equals("GAME_CHOOSE_CHOICE") || pendingMethod.equals("GAME_GET_MULTI_AMOUNT")));
                     if (!valid) throw new IllegalArgumentException("UNSUPPORTED_RESPONSE");
@@ -503,6 +506,7 @@ public final class ManaforgeBridge implements MageClient {
                         int amount = command.get("value").getAsInt();
                         if (amount < amountMin || amount > amountMax) throw new IllegalArgumentException("AMOUNT_OUT_OF_RANGE");
                     }
+                    if(kind.equals("mana_type")){String mana=requiredString(command,"value");if(!java.util.Arrays.asList("WHITE","BLUE","BLACK","RED","GREEN","COLORLESS").contains(mana) || viewerId==null || !viewerId.toString().equals(requiredString(command,"player_id")))throw new IllegalArgumentException("MANA_POOL_UNAVAILABLE");}
                     if (kind.equals("string")) requiredString(command, "value");
                     // The shared executor claims mana-source responses immediately before native IO.
                     if(!(kind.equals("object") && pendingMethod.equals("GAME_PLAY_MANA")))decisionId = -1;
@@ -515,6 +519,7 @@ public final class ManaforgeBridge implements MageClient {
                     if(outcome==ManaResponseExecutor.Outcome.STALE)throw new IllegalArgumentException("STALE_DECISION");
                     accepted=outcome==ManaResponseExecutor.Outcome.SUBMITTED;
                 }
+                else if(kind.equals("mana_type")) accepted=session.sendPlayerManaType(gameId,UUID.fromString(requiredString(command,"player_id")),mage.constants.ManaType.valueOf(requiredString(command,"value")));
                 else if (kind.equals("object")) accepted = session.sendPlayerUUID(gameId, UUID.fromString(requiredString(command, "value")));
                 else if (kind.equals("integer")) accepted = session.sendPlayerInteger(gameId, command.get("value").getAsInt());
                 else if (kind.equals("string")) accepted = session.sendPlayerString(gameId, requiredString(command, "value"));

@@ -75,6 +75,8 @@ def main():
             PLAY / "java/ManaforgeOpeningSession.java",
             PLAY / "java/ManaforgeUnityOpening.java",
             PLAY / "java/ManaforgeGameplaySession.java",
+            PLAY / "java/NativeAutomaticPayment.java",
+            PLAY / "java/ManaforgeAutomaticEngine.java",
             PLAY / "java/ManaforgeOpeningLoopback.java",
             PROTOCOL / "java-test/OpeningSessionChecks.java",
             PROTOCOL / "java-test/OpeningProjectionChecks.java",
