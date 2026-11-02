@@ -37,7 +37,9 @@ public final class ManaforgeServerHost {
                     JsonObject command = JsonParser.parseString(line).getAsJsonObject();
                     String id = java.util.UUID.fromString(command.get("request_id").getAsString()).toString();
                     JsonElement results;
-                    if(command.has("command") && command.get("command").getAsString().equals("start_metadata_channel")) {
+                    if(command.has("command") && command.get("command").getAsString().equals("prepare_combat_fixture")) {
+                        if(command.size()!=3 || !new JsonPrimitive(true).equals(command.get("skip_shuffling")))throw new IllegalArgumentException("COMBAT_FIXTURE_INVALID");mage.game.GameOptions.getDefault().skipInitShuffling=true;JsonObject prepared=new JsonObject();prepared.addProperty("ordered_decks",true);results=prepared;
+                    } else if(command.has("command") && command.get("command").getAsString().equals("start_metadata_channel")) {
                         results=startMetadata(command);
                     } else if (command.has("command") && command.get("command").getAsString().equals("validate_deck")) {
                         results = validateDeck(command);

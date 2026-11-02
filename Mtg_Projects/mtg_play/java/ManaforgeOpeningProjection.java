@@ -15,6 +15,7 @@ public final class ManaforgeOpeningProjection {
         private ChoiceException(String code){super(code);this.code=code;}
     }
     private long revision;
+    private final Set<String> knownCombatDefenders=new HashSet<>();
     private boolean coreCombat;private JsonObject numericPrompt;private final Set<String> stringOptions=new HashSet<>();
     private String decision, nativeGame;
     private Long nativeDecision, nativeCycle;
@@ -204,13 +205,15 @@ public final class ManaforgeOpeningProjection {
             require(engineViewer.equals(raw.get("viewer").getAsString()));
             boolean priority="GAME_SELECT".equals(prompt.get("kind").getAsString()) && Boolean.TRUE.equals(flag(prompt,"is_priority"));
             boolean discard=turnMode && "GAME_TARGET".equals(text(prompt,"kind")) && "CLEANUP".equals(text(raw,"step")) && "END".equals(text(raw,"phase")) && raw.getAsJsonArray("hand").size()>7;
+            boolean missingDefender=false;
+            boolean mana=coreCombat && "GAME_PLAY_MANA".equals(text(prompt,"kind"));
             boolean numeric=coreCombat && ("GAME_GET_AMOUNT".equals(text(prompt,"kind")) || "GAME_GET_MULTI_AMOUNT".equals(text(prompt,"kind")));
             boolean stringChoice=coreCombat && "GAME_CHOOSE_CHOICE".equals(text(prompt,"kind"));
             boolean targeting=coreCombat && "GAME_TARGET".equals(text(prompt,"kind")) && !discard;
             boolean blocking=coreCombat && attackFinish && prompt.has("blockers");
             boolean ability=includeSpells && "GAME_CHOOSE_ABILITY".equals(prompt.get("kind").getAsString());
             require(!omitStack || priority || coreCombat);
-            require("GAME_ASK".equals(prompt.get("kind").getAsString()) || priority || ability || attackFinish || discard || targeting || numeric || stringChoice);
+            require("GAME_ASK".equals(prompt.get("kind").getAsString()) || priority || ability || attackFinish || discard || targeting || numeric || stringChoice || mana);
             if(attackFinish)require("GAME_SELECT".equals(text(prompt,"kind")) && Boolean.FALSE.equals(flag(prompt,"is_priority"))
                 && (blocking?prompt.has("blockers") && !prompt.has("attackers"):prompt.has("attackers") && !prompt.has("blockers")) && prompt.get(blocking?"blockers":"attackers").isJsonArray() && prompt.getAsJsonArray(blocking?"blockers":"attackers").size()<=256);
             require(!priority || (!prompt.has("attackers") && !prompt.has("blockers")));
@@ -265,6 +268,7 @@ public final class ManaforgeOpeningProjection {
                     CardIdentity binding=viewer.equals(card.owner_id)?printings.get(text(row,"set")+"/"+text(row,"number")):null;
                     if(binding!=null)card.card_identity=JSON.fromJson(JSON.toJson(binding),CardIdentity.class);
                 } else card.hidden=true;
+                if(coreCombat && "battlefield".equals(card.zone) && !card.hidden && Boolean.FALSE.equals(card.face_down) && card.characteristics!=null && card.characteristics.type_line!=null && (card.characteristics.type_line.contains("Planeswalker") || card.characteristics.type_line.contains("Battle"))){require(knownCombatDefenders.contains(row.get("id").getAsString()) || knownCombatDefenders.size()<256);knownCombatDefenders.add(row.get("id").getAsString());}
                 cards.add(card);
             }
             result.objects=cards.toArray(new GameObject[0]);List<LegalAction> actions=new ArrayList<>();Map<String,String> offeredNative=new HashMap<>();
@@ -287,26 +291,28 @@ public final class ManaforgeOpeningProjection {
                     }
                 }
             }
+            if(mana){Set<String> unique=new HashSet<>();for(JsonElement source:raw.getAsJsonArray("playable")){require(source.isJsonPrimitive() && source.getAsJsonPrimitive().isString() && unique.add(source.getAsString()));GameObject card=visibleCard(cards,visibleReferences.get(source.getAsString()));if(card==null || !viewer.equals(card.controller_id))continue;LegalAction action=new LegalAction();action.action_id=opaque();action.object_id=card.object_id;action.kind="pay_mana";action.label="Select mana source: "+card.characteristics.name;action.priority_class="meaningful";actions.add(action);offeredNative.put(action.action_id,source.getAsString());}}
             if(priority && !omitStack && (!turnMode || includeSpells))for(JsonElement item:raw.getAsJsonArray("playable")) {
                 String source=item.getAsString(),reference=visibleReferences.get(source);
                 if(reference==null)continue;
-                JsonElement kind=raw.getAsJsonObject("action_kinds").get(source);if(kind==null || !(kind.getAsString().equals("play_land") || includeSpells && kind.getAsString().equals("cast_spell")))continue;
+                JsonElement kind=raw.getAsJsonObject("action_kinds").get(source);if(kind==null || !(kind.getAsString().equals("play_land") || includeSpells && (kind.getAsString().equals("cast_spell") || coreCombat && kind.getAsString().equals("select_object"))))continue;
                 GameObject object=null;for(GameObject candidate:cards)if(candidate.object_id.equals(reference))object=candidate;
                 if(object==null || object.hidden || !viewer.equals(object.controller_id) || !"hand".equals(object.zone))continue;
-                LegalAction action=new LegalAction();action.action_id=opaque();action.object_id=reference;action.kind=kind.getAsString();action.label=action.kind.equals("cast_spell")?"Cast spell":"Play land";action.priority_class="meaningful";
+                LegalAction action=new LegalAction();action.action_id=opaque();action.object_id=reference;action.kind=kind.getAsString();action.label=action.kind.equals("cast_spell")?"Cast spell":action.kind.equals("select_object")?"Select object":"Play land";if(coreCombat)action.label+=": "+object.characteristics.name;action.priority_class="meaningful";
                 actions.add(action);offeredNative.put(action.action_id,source);
             }
             if((priority && includePriorityPass) || attackFinish) {
                 LegalAction pass=new LegalAction();pass.action_id=opaque();pass.kind="pass";pass.label=attackFinish?(blocking?"Finish blocks":"Finish attacks"):"Pass priority";pass.priority_class="unknown";
                 actions.add(pass);offeredNative.put(pass.action_id,null);
             }
+            if(coreCombat && Boolean.TRUE.equals(flag(prompt,"cancellable")) && Arrays.asList("GAME_PLAY_MANA","GAME_CHOOSE_CHOICE","GAME_GET_MULTI_AMOUNT").contains(text(prompt,"kind"))){LegalAction cancel=new LegalAction();cancel.action_id=opaque();cancel.kind="pass";cancel.label="Cancel choice";cancel.priority_class="meaningful";actions.add(cancel);offeredNative.put(cancel.action_id,null);}
             result.actions=actions.toArray(new LegalAction[0]);result.actions_complete=false;
-            ChoiceRequest choice=new ChoiceRequest();choice.decision_id=opaque();choice.player_id=viewer;choice.family=priority || ability || attackFinish || discard || targeting || stringChoice?"selection":"boolean";
-            choice.prompt=text(prompt,"message");choice.cancellable=false;choice.can_finish=false;choice.is_priority=priority;choice.amounts=new AmountConstraint[0];
+            ChoiceRequest choice=new ChoiceRequest();choice.decision_id=opaque();choice.player_id=viewer;choice.family=priority || ability || attackFinish || discard || targeting || stringChoice || mana?"selection":"boolean";
+            choice.prompt=text(prompt,"message");if(coreCombat && choice.prompt==null)choice.prompt=numeric?("GAME_GET_AMOUNT".equals(text(prompt,"kind"))?"Choose a number":"Choose amounts"):"Choose a response";choice.cancellable=false;choice.can_finish=false;choice.is_priority=priority;choice.amounts=new AmountConstraint[0];
             Map<String,String> offeredOptions=new HashMap<>();
             if(numeric) {
                 choice.family="GAME_GET_AMOUNT".equals(text(prompt,"kind"))?"number":"amounts";choice.minimum=integer(prompt,"min");choice.maximum=integer(prompt,"max");require(choice.minimum!=null && choice.maximum!=null && choice.minimum>=Integer.MIN_VALUE && choice.maximum<=Integer.MAX_VALUE && choice.minimum<=choice.maximum);choice.options=new ChoiceOption[0];List<AmountConstraint> ranges=new ArrayList<>();
-                if("amounts".equals(choice.family)){JsonArray amounts=prompt.getAsJsonArray("amounts");require(amounts.size()>0 && amounts.size()<=256);for(JsonElement item:amounts){JsonObject row=item.getAsJsonObject();AmountConstraint range=new AmountConstraint();range.label=text(row,"message");range.minimum=integer(row,"min");range.maximum=integer(row,"max");range.defaultValue=integer(row,"default");require(range.label!=null && range.minimum!=null && range.maximum!=null && range.defaultValue!=null && range.minimum>=Integer.MIN_VALUE && range.maximum<=Integer.MAX_VALUE && range.minimum<=range.maximum && range.defaultValue>=range.minimum && range.defaultValue<=range.maximum);ranges.add(range);}}choice.amounts=ranges.toArray(new AmountConstraint[0]);
+                if("amounts".equals(choice.family)){JsonArray amounts=prompt.getAsJsonArray("amounts");require(amounts.size()>0 && amounts.size()<=256);for(JsonElement item:amounts){JsonObject row=item.getAsJsonObject();AmountConstraint range=new AmountConstraint();range.label=text(row,"message");if(range.label!=null)range.label=range.label.replaceAll("<[^>]*>","").replaceAll("\\s*\\[[0-9a-fA-F]{3}\\]","");range.minimum=integer(row,"min");range.maximum=integer(row,"max");range.defaultValue=integer(row,"default");require(range.label!=null && range.minimum!=null && range.maximum!=null && range.defaultValue!=null && range.minimum>=Integer.MIN_VALUE && range.maximum<=Integer.MAX_VALUE && range.minimum<=range.maximum && range.defaultValue>=range.minimum && range.defaultValue<=range.maximum);ranges.add(range);}}choice.amounts=ranges.toArray(new AmountConstraint[0]);
             } else if(stringChoice) {
                 Map<String,String> offered=new LinkedHashMap<>();if(prompt.has("key_choices") && prompt.get("key_choices").isJsonObject())for(Map.Entry<String,JsonElement> entry:prompt.getAsJsonObject("key_choices").entrySet()){JsonObject label=new JsonObject();label.add("value",entry.getValue());offered.put(entry.getKey(),text(label,"value"));}
                 if(offered.isEmpty() && prompt.has("choices") && prompt.get("choices").isJsonArray())for(JsonElement item:prompt.getAsJsonArray("choices")){JsonObject label=new JsonObject();label.add("value",item);String value=text(label,"value");require(!offered.containsKey(value));offered.put(value,value);}require(offered.size()>0 && offered.size()<=256);List<ChoiceOption> entries=new ArrayList<>();for(Map.Entry<String,String> entry:offered.entrySet()){require(entry.getValue()!=null);ChoiceOption option=new ChoiceOption();option.option_id=opaque();option.label=entry.getValue();option.selected=false;entries.add(option);offeredOptions.put(option.option_id,entry.getKey());stringOptions.add(option.option_id);}choice.options=entries.toArray(new ChoiceOption[0]);
@@ -325,7 +331,7 @@ public final class ManaforgeOpeningProjection {
                 }
                 choice.options=entries.toArray(new ChoiceOption[0]);
             } else {
-                choice.options=new ChoiceOption[priority || attackFinish || discard?0:2];
+                choice.options=new ChoiceOption[priority || attackFinish || discard || mana?0:2];
                 for(int i=0;i<choice.options.length;i++){ChoiceOption option=new ChoiceOption();option.option_id=opaque();option.label=i==0?"Yes":"No";option.selected=false;choice.options[i]=option;}
             }
             result.decision=choice;result.combat=new CombatAssignment[0];
@@ -334,7 +340,10 @@ public final class ManaforgeOpeningProjection {
                 for(JsonElement item:raw.getAsJsonArray("combat")){JsonObject group=item.getAsJsonObject();CombatAssignment assignment=new CombatAssignment();List<String> attackers=new ArrayList<>(),blockers=new ArrayList<>();String attackingSide=null;
                     require(group.getAsJsonArray("attackers").size()>0 && group.getAsJsonArray("attackers").size()<=256 && group.getAsJsonArray("blockers").size()<=256);
                     for(JsonElement source:group.getAsJsonArray("attackers")){String id=source.getAsString();require(assigned.add(id));GameObject card=visibleCard(cards,visibleReferences.get(id));require(card!=null);if(attackingSide==null)attackingSide=card.controller_id;require(attackingSide.equals(card.controller_id));attackers.add(card.object_id);}
-                    require(attackingSide.equals(result.active_player_id));String defender=group.get("defender").getAsString(),defendingSide=engineViewer.equals(defender)?viewer:players.get(defender);if(defendingSide!=null){require(!defendingSide.equals(attackingSide));assignment.defender_id=defendingSide;}else{GameObject card=visibleCard(cards,visibleReferences.get(defender));require(card!=null && card.characteristics!=null && card.characteristics.type_line!=null && (card.characteristics.type_line.contains("Planeswalker") || card.characteristics.type_line.contains("Battle")));require(!card.characteristics.type_line.contains("Planeswalker") || !attackingSide.equals(card.controller_id));assignment.defender_id=card.object_id;}
+                    require(attackingSide.equals(result.active_player_id));
+                    String defender=group.get("defender")==null || group.get("defender").isJsonNull()?null:group.get("defender").getAsString(),defendingSide=engineViewer.equals(defender)?viewer:players.get(defender);if(defendingSide!=null){require(!defendingSide.equals(attackingSide));assignment.defender_id=defendingSide;}else{
+                        GameObject card=visibleCard(cards,visibleReferences.get(defender));if(card!=null && card.characteristics!=null && card.characteristics.type_line!=null && (card.characteristics.type_line.contains("Planeswalker") || card.characteristics.type_line.contains("Battle"))){require(!card.characteristics.type_line.contains("Planeswalker") || !attackingSide.equals(card.controller_id));assignment.defender_id=card.object_id;}else{
+                    require(defender==null || knownCombatDefenders.contains(defender));assignment.defender_id=null;missingDefender=true;}}
                     Set<String> unique=new HashSet<>();for(JsonElement source:group.getAsJsonArray("blockers")){require(unique.add(source.getAsString()));GameObject card=visibleCard(cards,visibleReferences.get(source.getAsString()));require(card!=null && !attackingSide.equals(card.controller_id) && (defendingSide==null || defendingSide.equals(card.controller_id)));blockers.add(card.object_id);}
                     assignment.attackers=attackers.toArray(new String[0]);assignment.blockers=blockers.toArray(new String[0]);assignment.blocked=flag(group,"blocked");require(assignment.blocked!=null && (blockers.isEmpty() || assignment.blocked));groups.add(assignment);
                 }result.combat=groups.toArray(new CombatAssignment[0]);
@@ -351,12 +360,13 @@ public final class ManaforgeOpeningProjection {
                 assignment.blockers=blockerReferences.toArray(new String[0]);assignment.defender_id=defender;assignment.blocked=flag(group,"blocked");result.combat=new CombatAssignment[]{assignment};
             }result.observations=new CardObservation[0];
             result.unsupported_fields=new String[]{"object_incarnations","commander_metadata","live_abilities","actions","mana","counters","eliminated","observations","attachments","copy_metadata","physical_printing"};
+            if(missingDefender){List<String> unsupported=new ArrayList<>(Arrays.asList(result.unsupported_fields));unsupported.add("combat_defender_lki");result.unsupported_fields=unsupported.toArray(new String[0]);}
             if(coreCombat){List<String> unsupported=new ArrayList<>(Arrays.asList(result.unsupported_fields));unsupported.add("exile");result.unsupported_fields=unsupported.toArray(new String[0]);}
             if(omitStack){List<String> unsupported=new ArrayList<>(Arrays.asList(result.unsupported_fields));unsupported.add("stack");result.unsupported_fields=unsupported.toArray(new String[0]);}
             JsonObject output=JSON.toJsonTree(result).getAsJsonObject();
             nativeGame=raw.get("game_id").getAsString();nativeDecision=integer(prompt,"decision_id");nativeCycle=integer(raw,"cycle");
             decision=choice.decision_id;consumed=false;
-            if(!priority && !ability && !attackFinish && !discard && !targeting && !numeric && !stringChoice){options.put(choice.options[0].option_id,true);options.put(choice.options[1].option_id,false);}
+            if(!priority && !ability && !attackFinish && !discard && !targeting && !numeric && !stringChoice && !mana){options.put(choice.options[0].option_id,true);options.put(choice.options[1].option_id,false);}
             if(numeric)numericPrompt=prompt.deepCopy();
             nativeOptions.putAll(offeredOptions);
             nativeActions.putAll(offeredNative);

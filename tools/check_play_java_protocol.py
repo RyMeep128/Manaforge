@@ -67,6 +67,7 @@ def main():
             PLAY / "java/ManaforgeOpeningProjection.java",
             PLAY / "java/NativeCastCorrelation.java",
             PLAY / "java/NativeCombatChoices.java",
+            PLAY / "java/NativeCombatCase.java",
             PLAY / "java/ManaforgeMetadataChannel.java",
             PROTOCOL / "java-test/MetadataChannelChecks.java",
             PLAY / "java/ManaforgeOpeningSession.java",

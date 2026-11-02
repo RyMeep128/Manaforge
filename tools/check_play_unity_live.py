@@ -23,6 +23,27 @@ def main():
     artifacts = ROOT / "Mtg_Projects/mtg_play_unity/Artifacts"
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
+        "--combat-keyword",
+        choices=(
+            "haste",
+            "flying",
+            "reach",
+            "defender",
+            "first-strike",
+            "double-strike",
+            "deathtouch",
+            "lifelink",
+            "trample",
+            "menace",
+            "vigilance",
+            "indestructible",
+            "planeswalker",
+            "battle",
+            "draw",
+        ),
+        help="Deterministic native core-combat scenario",
+    )
+    parser.add_argument(
         "--combat-trigger",
         action="store_true",
         help="Shield Sphere native block trigger, counter and damage scenario",
@@ -179,6 +200,30 @@ def main():
         default=artifacts / ("UnityLive-" + uuid.uuid4().hex[:10]),
     )
     args = parser.parse_args()
+    if args.combat_keyword:
+        if (
+            args.human_blocking
+            or args.combat_trigger
+            or args.combat_spell
+            or args.core_combat
+            or args.complete_game
+            or args.select_attacker
+            or args.finish_attacks
+            or args.creature_ability
+            or args.first_land
+            or args.priority_pass
+            or args.play_rounds
+        ):
+            parser.error("--combat-keyword is a separate scenario")
+        args.native_metadata = True
+        args.complete_game = args.combat_keyword == "draw"
+    expected_outcome = (
+        "draw"
+        if args.combat_keyword == "draw"
+        else "loss"
+        if args.human_blocking
+        else "win"
+    )
     if args.combat_trigger:
         args.human_blocking = True
         if args.combat_spell or args.complete_game:
@@ -207,7 +252,9 @@ def main():
         or args.play_rounds
     ):
         parser.error("--human-blocking is a separate scenario")
-    if args.complete_game and not (args.core_combat or args.human_blocking):
+    if args.complete_game and not (
+        args.core_combat or args.human_blocking or args.combat_keyword == "draw"
+    ):
         parser.error("--complete-game requires --core-combat")
     if args.core_combat and (not args.repeat_cycle or args.play_rounds):
         parser.error("--core-combat requires --repeat-cycle and no --play-rounds")
@@ -239,6 +286,7 @@ def main():
         or args.select_attacker
         or args.human_blocking
         or args.combat_spell
+        or args.combat_keyword
     ):
         parser.error(
             "--native-metadata requires --creature-ability, --finish-attacks or --select-attacker"
@@ -344,6 +392,27 @@ def main():
                 time.sleep(0.02)
             return json.loads(path.read_text(encoding="utf-8-sig"))
 
+        if args.combat_keyword:
+            request_id = str(uuid.uuid4())
+            server_process.stdin.write(
+                json.dumps(
+                    dict(
+                        request_id=request_id,
+                        command="prepare_combat_fixture",
+                        skip_shuffling=True,
+                    )
+                )
+                + "\n"
+            )
+            server_process.stdin.flush()
+            prepared = server / "manaforge-responses" / (request_id + ".json")
+            deadline = time.monotonic() + 10
+            while not prepared.is_file():
+                if server_process.poll() is not None or time.monotonic() > deadline:
+                    raise RuntimeError("COMBAT_FIXTURE_SETUP_FAILED")
+                time.sleep(0.02)
+            if json.loads(prepared.read_text()) != {"ordered_decks": True}:
+                raise RuntimeError("COMBAT_FIXTURE_SETUP_FAILED")
         with (workspace / "bridge.log").open("wb") as diagnostic:
             try:
                 gateway = subprocess.Popen(
@@ -353,10 +422,11 @@ def main():
                         "-Dfile.encoding=UTF-8",
                         "-Djava.net.preferIPv4Stack=true",
                         f"-Dmanaforge.playRounds={args.play_rounds}",
-                        f"-Dmanaforge.coreCombat={str(args.core_combat or args.human_blocking or bool(args.combat_spell)).lower()}",
-                        f"-Dmanaforge.coreFromOpening={str(args.human_blocking or bool(args.combat_spell)).lower()}",
+                        f"-Dmanaforge.coreCombat={str(args.core_combat or args.human_blocking or bool(args.combat_spell) or bool(args.combat_keyword)).lower()}",
+                        f"-Dmanaforge.coreFromOpening={str(args.human_blocking or bool(args.combat_spell) or bool(args.combat_keyword)).lower()}",
                         f"-Dmanaforge.combatSpell={args.combat_spell or ''}",
                         f"-Dmanaforge.combatTrigger={str(args.combat_trigger).lower()}",
+                        f"-Dmanaforge.combatKeyword={args.combat_keyword or ''}",
                         f"-Dmanaforge.completeGame={str(args.complete_game).lower()}",
                         *(
                             ["-Dmanaforge.repeatCycle=true"]
@@ -499,6 +569,8 @@ def main():
                     command += ["-manaforgeLivePriority", "1"]
                 if args.creature_ability:
                     command += ["-manaforgeLiveCreature", "1"]
+                if args.combat_keyword:
+                    command += ["-manaforgeLiveCombatKeyword", args.combat_keyword]
                 command += [
                     "-manaforgeLiveCombatTrigger",
                     "1" if args.combat_trigger else "0",
@@ -594,6 +666,7 @@ def main():
                     )
                     and not args.human_blocking
                     and not args.combat_spell
+                    and not args.combat_keyword
                     and ready.get("mulligan_controls") is not True
                 ):
                     raise RuntimeError("LIVE_UNITY_MULLIGAN_CONTROLS_NOT_PRESENTED")
@@ -790,9 +863,10 @@ def main():
                         raise RuntimeError("LIVE_UNITY_CORE_COMBAT_NOT_PRESENTED")
                 if args.complete_game:
                     game_result = wait_file("game-ready", 240)
-                    if game_result.get("game_presented") is not True or game_result.get(
-                        "native_game_outcome"
-                    ) != ("loss" if args.human_blocking else "win"):
+                    if (
+                        game_result.get("game_presented") is not True
+                        or game_result.get("native_game_outcome") != expected_outcome
+                    ):
                         raise RuntimeError("LIVE_UNITY_GAME_RESULT_NOT_PRESENTED")
                 if args.human_blocking:
                     block_result = wait_file("human-block-ready", 240)
@@ -815,12 +889,29 @@ def main():
                     and block_result.get("combat_trigger_presented") is not True
                 ):
                     raise RuntimeError("LIVE_UNITY_COMBAT_TRIGGER_NOT_PRESENTED")
+                if args.combat_keyword:
+                    case_result = wait_file("combat-case-ready", 240)
+                    if (
+                        case_result.get("combat_case_presented") is not True
+                        or case_result.get("combat_case") != args.combat_keyword
+                    ):
+                        raise RuntimeError("LIVE_UNITY_COMBAT_CASE_NOT_PRESENTED")
+                    if (
+                        args.combat_keyword in ("planeswalker", "battle")
+                        and case_result.get("permanent_defender_presented") is not True
+                    ):
+                        raise RuntimeError(
+                            "LIVE_UNITY_PERMANENT_DEFENDER_NOT_PRESENTED"
+                        )
                 chosen = wait_file("choice", 60)
                 if (
                     chosen.get("ack_count")
                     != (
                         2 * (chosen.get("snapshot_count", 0) - 1)
-                        if args.loop_turn or args.human_blocking or args.combat_spell
+                        if args.loop_turn
+                        or args.human_blocking
+                        or args.combat_spell
+                        or args.combat_keyword
                         else 10
                         if args.complete_combat
                         else 8
@@ -920,6 +1011,7 @@ def main():
                     args.native_metadata
                     and not args.human_blocking
                     and not args.combat_spell
+                    and not args.combat_keyword
                     and any(
                         native.get(field) is not True
                         for field in (
@@ -933,6 +1025,7 @@ def main():
                     args.native_metadata
                     and not args.human_blocking
                     and not args.combat_spell
+                    and not args.combat_keyword
                     and native.get("unity_casting_ability_confirmed")
                     is not args.creature_ability
                 ):
@@ -1028,8 +1121,9 @@ def main():
                     or native.get("native_maximum_attackers") != 2
                 ):
                     raise RuntimeError("LIVE_UNITY_CORE_COMBAT_EVIDENCE_FAILED")
-                if args.complete_game and native.get("native_game_outcome") != (
-                    "loss" if args.human_blocking else "win"
+                if (
+                    args.complete_game
+                    and native.get("native_game_outcome") != expected_outcome
                 ):
                     raise RuntimeError("LIVE_UNITY_GAME_RESULT_UNPROVEN")
                 if args.human_blocking and (
@@ -1052,6 +1146,26 @@ def main():
                     and native.get("native_combat_trigger_observed") is not True
                 ):
                     raise RuntimeError("LIVE_UNITY_COMBAT_TRIGGER_UNPROVEN")
+                if args.combat_keyword:
+                    if (
+                        native.get("native_combat_case") != args.combat_keyword
+                        or native.get("native_combat_case_completed") is not True
+                        or native.get("native_combat_case_source_verified") is not True
+                        or chosen.get("confirmed_receipt_count")
+                        != chosen.get("snapshot_count", 0) - 1
+                        or chosen.get("uncertain_receipt_count") != 0
+                    ):
+                        raise RuntimeError("LIVE_UNITY_COMBAT_CASE_UNPROVEN")
+                    if (
+                        args.combat_keyword != "draw"
+                        and native.get("native_combat_case_damage_verified") is not True
+                    ):
+                        raise RuntimeError("LIVE_UNITY_COMBAT_DAMAGE_UNPROVEN")
+                    if (
+                        native.get("native_combat_case_amount_responses", 0) > 0
+                        and case_result.get("case_numeric_submitted", 0) <= 0
+                    ):
+                        raise RuntimeError("LIVE_UNITY_COMBAT_ALLOCATION_NOT_SUBMITTED")
                 if args.next_turn_cast and any(
                     native.get(field) is not True
                     for field in (
@@ -1240,6 +1354,20 @@ def main():
                         else 1,
                         uncertain_receipt_count=0,
                     )
+                if args.combat_keyword:
+                    evidence.update(
+                        {
+                            key: value
+                            for key, value in native.items()
+                            if key.startswith("native_combat_case")
+                        }
+                    )
+                    evidence.update(
+                        combat_case_presented=True,
+                        snapshot_count=chosen["snapshot_count"],
+                        confirmed_receipt_count=chosen["confirmed_receipt_count"],
+                        uncertain_receipt_count=0,
+                    )
                 if args.combat_trigger:
                     evidence.update(
                         native_combat_trigger_observed=True,
@@ -1265,7 +1393,7 @@ def main():
                     )
                 if args.complete_game:
                     evidence.update(
-                        native_game_outcome="loss" if args.human_blocking else "win",
+                        native_game_outcome=expected_outcome,
                         game_presented=True,
                     )
                 if args.core_combat:
@@ -1424,7 +1552,9 @@ def main():
         json.dumps(evidence, indent=2) + "\n", encoding="utf-8"
     )
     print(
-        "Packaged Unity blocked with Shield Sphere, resolved its native combat trigger and displayed the resulting counter and damage."
+        f"Packaged Unity verified the native {args.combat_keyword} combat scenario, confirmed every input and cleared the viewer."
+        if args.combat_keyword
+        else "Packaged Unity blocked with Shield Sphere, resolved its native combat trigger and displayed the resulting counter and damage."
         if args.combat_trigger
         else f"Packaged Unity resolved the native combat {args.combat_spell} spell, confirmed the target effect and cleared the viewer."
         if args.combat_spell

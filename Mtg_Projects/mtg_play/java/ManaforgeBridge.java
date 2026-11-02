@@ -326,7 +326,7 @@ public final class ManaforgeBridge implements MageClient {
             JsonObject entry = new JsonObject();
             entry.add("attackers", JSON.toJsonTree(group.getAttackers().keySet()));
             entry.add("blockers", JSON.toJsonTree(group.getBlockers().keySet()));
-            entry.addProperty("defender", group.getDefenderId().toString());
+            entry.addProperty("defender", group.getDefenderId()==null?null:group.getDefenderId().toString());
             entry.addProperty("blocked", group.isBlocked());
             combat.add(entry);
         }
@@ -489,7 +489,7 @@ public final class ManaforgeBridge implements MageClient {
                             || expected != decisionId || decisionId < 0)
                         throw new IllegalArgumentException("STALE_DECISION");
                     pendingMethod = decisionMethod;
-                    boolean valid = (kind.equals("boolean") && (pendingMethod.equals("GAME_ASK") || pendingMethod.equals("GAME_SELECT") || pendingMethod.equals("GAME_PLAY_MANA") || pendingMethod.equals("GAME_CHOOSE_PILE") || ((decisionFinishable && pendingMethod.equals("GAME_TARGET")) || (decisionCancellable && pendingMethod.equals("GAME_GET_MULTI_AMOUNT")))))
+                    boolean valid = (kind.equals("boolean") && (pendingMethod.equals("GAME_ASK") || pendingMethod.equals("GAME_SELECT") || pendingMethod.equals("GAME_PLAY_MANA") || pendingMethod.equals("GAME_CHOOSE_PILE") || ((decisionFinishable && pendingMethod.equals("GAME_TARGET")) || (decisionCancellable && (pendingMethod.equals("GAME_GET_MULTI_AMOUNT") || pendingMethod.equals("GAME_CHOOSE_CHOICE"))))))
                         || (kind.equals("object") && (pendingMethod.equals("GAME_SELECT") || pendingMethod.equals("GAME_TARGET") || pendingMethod.equals("GAME_CHOOSE_ABILITY") || pendingMethod.equals("GAME_PLAY_MANA")))
                         || (kind.equals("integer") && pendingMethod.equals("GAME_GET_AMOUNT"))
                         || (kind.equals("string") && (pendingMethod.equals("GAME_CHOOSE_CHOICE") || pendingMethod.equals("GAME_GET_MULTI_AMOUNT")));

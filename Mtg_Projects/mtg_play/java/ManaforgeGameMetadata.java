@@ -164,6 +164,8 @@ public final class ManaforgeGameMetadata {
                     }
                     if (source != null && identified.contains(id)) {
                         mage.cards.Card original = source.getMainCard();
+                        // Private physical-card correlation across a native double-face zone transition.
+                        metadata.addProperty("main_card",original.getId().toString());metadata.addProperty("main_card_incarnation",state.getZoneChangeCounter(original.getId()));
                         metadata.addProperty("physical_set", original.getExpansionSetCode());
                         metadata.addProperty("physical_number", original.getCardNumber());
                     }
@@ -214,6 +216,19 @@ public final class ManaforgeGameMetadata {
                         && ((String) activeAction).startsWith("priority - HumanPlayer.java:");
                 JsonObject result = status("ok"); result.addProperty("cycle", cycle);
                 result.addProperty("priority_open", priorityOpen);
+                // Match the pinned HumanPlayer selection branches under the same response monitor.
+                // Native requirement effects still decide whether an attacker click can remove it.
+                String declaration=activeAction instanceof String && ((String)activeAction).startsWith("selectAttackers - HumanPlayer.java:")?"attackers":activeAction instanceof String && ((String)activeAction).startsWith("selectBlockers - HumanPlayer.java:")?"blockers":null;
+                if(declaration!=null && player.getId().equals(playerId) && game.getStack().isEmpty()) {
+                    JsonArray reselect=new JsonArray();
+                    for(UUID id:permitted.getMyPlayer().getBattlefield().keySet()) {
+                        mage.game.permanent.Permanent permanent=game.getPermanent(id);
+                        if(permanent!=null && (declaration.equals("attackers")?new mage.filter.common.FilterAttackingCreature().match(permanent,playerId,null,game):new mage.filter.common.FilterBlockingCreature().match(permanent,playerId,null,game)))reselect.add(id.toString());
+                    }
+                    if(reselect.size()>256)return status("retry");
+                    result.addProperty("combat_reselect_kind",declaration);result.add("combat_reselect",reselect);
+                }
+
                 if(paymentProbe && player.getId().equals(playerId)) {
                     Object probe=type.getMethod("paymentProbe",Game.class,UUID.class,int.class,UUID[].class)
                         .invoke(human,game,playerId,cycle,visible.toArray(new UUID[0]));

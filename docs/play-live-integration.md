@@ -1,5 +1,53 @@
 # Live Unity / Java / XMage integration
 
+## Core 1v1 combat acceptance (0.5.207)
+
+The core combat coordinator now covers native declarations, changing selections,
+human and AI blocks, damage choices, common keywords and natural match results.
+The focused packaged matrix uses public cards and actual mounted controls:
+
+```powershell
+python tools/check_play_unity_live.py --combat-keyword trample --no-capture
+```
+
+`--combat-keyword` accepts `haste`, `flying`, `reach`, `defender`, `first-strike`,
+`double-strike`, `deathtouch`, `lifelink`, `trample`, `menace`, `vigilance`,
+`indestructible`, `planeswalker`, `battle` and `draw`. Every scenario requires
+native effect evidence, all input receipts confirmed, zero uncertainty and
+viewer/process cleanup. Haste and reach additionally remove and reselect the
+attacker/blocker before finishing declarations. Menace verifies two blockers and
+mounted damage allocation; trample verifies actual damage spilling to the player.
+Planeswalker/battle scenarios verify native loyalty/defense damage and defeat.
+Battle transformation binds the new face to the original physical card through
+private native metadata and a newer zone-change counter. Draw uses Divine
+Intervention and the same authoritative terminal proof as win/loss.
+
+The owned fixture server can skip initial shuffling only through an explicit
+private setup command. Starting hand identities are checked before UI admission;
+the fixture script waits for sufficient observed untapped lands. Actual mana
+sources, casting/ability options, targets, numeric ranges and optional cancellation
+remain native decisions. Ambiguous hand objects expose native object selection
+rather than pretending they have only a casting action. Native response monitors
+and filters guard declaration reselection; requirement effects remain authoritative.
+No rules, damage calculation or automated gameplay is added to ordinary controls.
+
+UUID defender IDs stay internal until mapped to opaque viewer IDs. Removed or
+native-null combat defenders project as unknown with `combat_defender_lki` listed
+as unsupported, preserving remaining combat groups without linking a graveyard or
+back face as the current defender. Null native numeric prompts receive a neutral
+label while keeping their original bounds. Hidden information is still omitted.
+
+All fifteen packaged cases passed, including native attacker/blocker reselection.
+The focused Java suite passed 654 projection/evidence checks; Unity passed 20
+projection tests and 49 session/binding/dispatch tests. Natural win/loss and the
+original Java repeated-combat regression also passed.
+
+This closes the scoped core 1v1 combat plan alongside the existing multi-attacker,
+natural win/loss, pump/expiry/removal and block-trigger checks. Broader P2/P3/P4
+parity, arbitrary decks/casting/mana, exotic mechanics and multiplayer remain open.
+XMage owns seat rotation, priority and AI decisions; this matrix certifies 1v1.
+Visual review and polish remain deferred and no visual gate is marked complete.
+
 ## Native combat trigger and counters (0.5.206)
 
 ```powershell

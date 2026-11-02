@@ -1332,3 +1332,26 @@ integer bounds and duplicate names without exposing hidden characteristics.
 Opening fixture identities are checked before admission; optional launch arguments
 are omitted when absent. The broader keyword/permanent-defender and multi-block
 acceptance matrix and natural draw still remain open.
+
+
+### Core 1v1 combat plan (0.5.207)
+
+The focused native acceptance matrix now covers the twelve common combat keywords,
+player/planeswalker/battle defenders, native two-blocker damage allocation, trample
+spillover and natural draw. Haste and reach also prove removal and reselection of
+an attacker/blocker before declarations finish. Native filters under the paused
+response monitor supply reselection candidates; native requirement effects decide
+whether a selection can change. Battle defeat correlates its transformed face to
+the original physical card and newer native incarnation through private metadata.
+
+Together with the existing two-attacker, human blocking, natural victory/defeat,
+pump/expiry/removal and block-trigger acceptance, this completes the scoped core
+1v1 combat plan. Focused Java projection/evidence checks include real UUID defender
+mapping, null/vanished defenders, numeric choices and rejecting unproven damage.
+Packaged inputs require confirmed receipts, no uncertainty and cleanup; no visual
+capture/review was performed. The integration guide lists runnable matrix cases.
+
+P2/P3/P4 remain partial: general saved-deck gameplay, broader casting/mana and
+identity parity, exotic mechanics and multiplayer are separate work. Native seat
+rotation, priority and human/AI controllers remain XMage-owned; five-seat Unity
+acceptance is not claimed. Visual gates remain unchecked as directed.
