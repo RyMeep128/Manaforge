@@ -23,6 +23,11 @@ def main():
     artifacts = ROOT / "Mtg_Projects/mtg_play_unity/Artifacts"
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
+        "--complete-game",
+        action="store_true",
+        help="Continue core combat through natural native victory; requires --core-combat",
+    )
+    parser.add_argument(
         "--core-combat",
         action="store_true",
         help="Native multiple-attacker combat; requires --repeat-cycle, conflicts with --play-rounds",
@@ -159,6 +164,8 @@ def main():
         default=artifacts / ("UnityLive-" + uuid.uuid4().hex[:10]),
     )
     args = parser.parse_args()
+    if args.complete_game and not args.core_combat:
+        parser.error("--complete-game requires --core-combat")
     if args.core_combat and (not args.repeat_cycle or args.play_rounds):
         parser.error("--core-combat requires --repeat-cycle and no --play-rounds")
     if args.play_rounds and not args.repeat_cycle:
@@ -300,6 +307,7 @@ def main():
                         "-Djava.net.preferIPv4Stack=true",
                         f"-Dmanaforge.playRounds={args.play_rounds}",
                         f"-Dmanaforge.coreCombat={str(args.core_combat).lower()}",
+                        f"-Dmanaforge.completeGame={str(args.complete_game).lower()}",
                         *(
                             ["-Dmanaforge.repeatCycle=true"]
                             if args.repeat_cycle
@@ -441,6 +449,10 @@ def main():
                     command += ["-manaforgeLivePriority", "1"]
                 if args.creature_ability:
                     command += ["-manaforgeLiveCreature", "1"]
+                command += [
+                    "-manaforgeLiveCompleteGame",
+                    "1" if args.complete_game else "0",
+                ]
                 command += [
                     "-manaforgeLiveCoreCombat",
                     "1" if args.core_combat else "0",
@@ -714,6 +726,13 @@ def main():
                         != core_result.get("core_life_before", -10) - 2
                     ):
                         raise RuntimeError("LIVE_UNITY_CORE_COMBAT_NOT_PRESENTED")
+                if args.complete_game:
+                    game_result = wait_file("game-ready", 240)
+                    if (
+                        game_result.get("game_presented") is not True
+                        or game_result.get("native_game_outcome") != "win"
+                    ):
+                        raise RuntimeError("LIVE_UNITY_GAME_RESULT_NOT_PRESENTED")
                 chosen = wait_file("choice", 60)
                 if (
                     chosen.get("ack_count")
@@ -834,7 +853,9 @@ def main():
                         ready.get("attacker_choice_presented") is not True
                         or chosen.get("snapshot_count")
                         != (
-                            core_result["snapshot_count"]
+                            game_result["snapshot_count"]
+                            if args.complete_game
+                            else core_result["snapshot_count"]
                             if args.core_combat
                             else rounds_result["snapshot_count"]
                             if args.play_rounds
@@ -918,6 +939,8 @@ def main():
                     or native.get("native_maximum_attackers") != 2
                 ):
                     raise RuntimeError("LIVE_UNITY_CORE_COMBAT_EVIDENCE_FAILED")
+                if args.complete_game and native.get("native_game_outcome") != "win":
+                    raise RuntimeError("LIVE_UNITY_GAME_RESULT_UNPROVEN")
                 if args.next_turn_cast and any(
                     native.get(field) is not True
                     for field in (
@@ -1102,6 +1125,8 @@ def main():
                         else 1,
                         uncertain_receipt_count=0,
                     )
+                if args.complete_game:
+                    evidence.update(native_game_outcome="win", game_presented=True)
                 if args.core_combat:
                     evidence.update(
                         native_core_combat_observed=True,
@@ -1258,7 +1283,9 @@ def main():
         json.dumps(evidence, indent=2) + "\n", encoding="utf-8"
     )
     print(
-        "Packaged Unity selected multiple native attackers, completed damage and cleanup, confirmed inputs and cleared the viewer."
+        "Packaged Unity completed a natural combat victory, presented the authoritative native result, confirmed inputs and reaped owned processes."
+        if args.complete_game
+        else "Packaged Unity selected multiple native attackers, completed damage and cleanup, confirmed inputs and cleared the viewer."
         if args.core_combat
         else f"Packaged Unity completed {args.play_rounds} additional combat/AI-turn rounds using the second creature, confirmed every input, cleared the viewer and reaped owned roots."
         if args.play_rounds

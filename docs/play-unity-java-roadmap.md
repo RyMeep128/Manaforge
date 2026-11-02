@@ -1287,3 +1287,15 @@ Projection tests additionally cover human blocker/target menus, multiple groups,
 public planeswalker/battle defender references and rejected illegal references.
 Live blocker/permanent-defender acceptance, damage choices, representative combat
 interactions and natural terminal results remain open. Visual work stays deferred.
+
+
+### Natural victory and authoritative result (0.5.201)
+
+The opt-in core loop now reaches natural lethal combat in the packaged player:
+125 confirmed inputs, 126 snapshots, opponent life zero, a native win, and no
+uncertain receipts. Terminal evidence binds the accepted response to both native
+callback and server-side finished/outcome flags; no next priority or combat-cleanup
+snapshot is required. The finished result contains no actions, and viewer/process
+cleanup retains the final outcome and receipts. Draw/loss mapping is tested with
+synthetic terminal evidence; real defeat/draw acceptance and remaining declaration,
+keyword, damage-choice and spell-interaction scenarios are still open.

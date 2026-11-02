@@ -1,5 +1,31 @@
 # Live Unity / Java / XMage integration
 
+## Natural native victory and terminal result (0.5.201)
+
+```powershell
+python tools/check_play_unity_live.py --select-attacker --native-metadata --finish-selected-attack --declared-priority --combat-damage --complete-combat --loop-turn --next-turn-cast --repeat-cycle --core-combat --complete-game --no-capture
+```
+
+The two-creature public fixture now runs to natural lethal combat. The packaged
+run confirmed 125 inputs across 126 snapshots, reached opponent life zero and
+presented a native win with zero uncertain receipts. Combat need not clear or
+reach postcombat main after lethal damage.
+
+Terminal confirmation binds the exact accepted priority response, native game and
+viewer, END_GAME_INFO callback and server-side finished/outcome flags. GAME_OVER,
+life totals, EOF and timeouts cannot establish a result. Bounded server references
+retain monotonic terminal flags after controller removal (at most 32 games).
+Only win/loss/draw values cross the viewer boundary. The terminal result revokes
+all actions, retains the outcome and confirmed receipts, and clears/reaps normally.
+The longer mode permits 512 continuation inputs, 1024 history entries and 2048
+private metadata requests under the existing deadlines. The ordinary mode still
+permits 128 continuation inputs.
+
+Win/loss/draw mapping and invalid terminal evidence have focused synthetic tests;
+only natural victory has packaged native acceptance here. Native defeat/draw,
+human blocking/permanent defenders, damage allocation, keywords and representative
+spell interactions remain open. This does not complete core combat or P4.
+
 ## General combat declarations (0.5.200)
 
 ```powershell

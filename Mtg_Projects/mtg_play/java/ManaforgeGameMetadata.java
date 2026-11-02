@@ -16,6 +16,16 @@ import org.jboss.remoting.transport.Connector;
  * The human response monitor keeps the engine game thread paused during the read.
  */
 public final class ManaforgeGameMetadata {
+    // Retain only bounded authorized game references so monotonic terminal flags survive controller removal.
+    private static final Map<UUID,Game> recentGames=Collections.synchronizedMap(new LinkedHashMap<UUID,Game>() {
+        protected boolean removeEldestEntry(Map.Entry<UUID,Game> eldest){return size()>32;}
+    });
+    private static JsonObject terminal(Game game,UUID gameId,UUID viewerId) {
+        JsonObject result=status("finished");Player viewer=game.getPlayer(viewerId);
+        if(game.hasEnded() && viewer!=null){String outcome=game.isADraw()?"draw":viewer.hasWon()?"win":viewer.hasLost()?"loss":null;
+            if(outcome!=null){result.addProperty("game_id",gameId.toString());result.addProperty("viewer",viewerId.toString());result.addProperty("outcome",outcome);}}
+        return result;
+    }
     private static Object field(Object target, Class<?> owner, String name) throws Exception {
         Field member = owner.getDeclaredField(name);
         member.setAccessible(true);
@@ -50,13 +60,13 @@ public final class ManaforgeGameMetadata {
         UUID playerId = UUID.fromString(command.get("player").getAsString());
         int cycle = command.get("cycle").getAsInt();
         GameController controller = managers().gameManager().getGameController().get(gameId);
-        if (controller == null) return status("finished");
-        Game game = (Game) field(controller, GameController.class, "game");
-        Player viewer = game.getPlayer(playerId);
+        Game game=controller==null?recentGames.get(gameId):(Game)field(controller,GameController.class,"game");
+        if(game==null)return status("finished");
+        Player viewer=game.getPlayer(playerId);if(viewer==null)return status("unauthorized");recentGames.put(gameId,game);if(controller==null && !game.hasEnded())return status("finished");
         // Terminal flags are monotonic. A departed viewer has no fresh cycle,
         // even when there is no remaining human response monitor to acquire.
         if (game.hasEnded() || (viewer != null && (viewer.hasLost() || viewer.hasLeft())))
-            return status("finished");
+            return terminal(game,gameId,playerId);
         // HumanPlayer.waitForResponse holds no game work while its response monitor
         // is acquired with responseOpenedForAnswer=true. No game-state mutation or
         // feedback is performed here. Reject mismatched cycles instead of guessing.
@@ -75,7 +85,7 @@ public final class ManaforgeGameMetadata {
                 // Eliminated seats stop receiving fresh views while other seats
                 // continue playing. Their last cycle cannot become current again.
                 if (game.hasEnded() || (viewer != null && (viewer.hasLost() || viewer.hasLeft())))
-                    return status("finished");
+                    return terminal(game,gameId,playerId);
                 GameView permitted = controller.getGameView(playerId);
                 GameState state = game.getState();
                 if (permitted == null || permitted.getGameCycle() != cycle) return status("retry");
@@ -213,6 +223,6 @@ public final class ManaforgeGameMetadata {
                 return result;
             }
         }
-        return game.hasEnded() ? status("finished") : status("retry");
+        return game.hasEnded() ? terminal(game,gameId,playerId) : status("retry");
     }
 }

@@ -69,6 +69,13 @@ public final class NativeCastCorrelation {
         }catch(RuntimeException unsupported){return null;}
     }
     /** One native unblocked combat with an existing creature, preserving the other public zones. */
+    public static TurnDecisionEvidence terminalCombatEvidence(JsonObject before,JsonObject prompt,JsonObject command,JsonObject guard,JsonObject accepted,JsonObject terminal,JsonObject callback) {
+        try {
+            String outcome=string(terminal,"outcome");if(!Arrays.asList("win","loss","draw").contains(outcome) || !"finished".equals(string(terminal,"status")) || !string(before,"game_id").equals(string(terminal,"game_id")) || !string(before,"viewer").equals(string(terminal,"viewer")) || !string(terminal,"game_id").equals(string(callback,"game_id")) || !string(terminal,"viewer").equals(string(callback,"viewer")) || !"game_result".equals(string(callback,"event")) || !new JsonPrimitive("win".equals(outcome)).equals(callback.get("won")))return null;
+            if(!"respond".equals(string(command,"command")) || !"boolean".equals(string(command,"kind")) || !new JsonPrimitive(false).equals(command.get("value")) || !string(before,"game_id").equals(string(command,"game_id")) || number(command,"decision_id")!=number(prompt,"decision_id") || number(prompt,"cycle")!=number(before,"cycle") || !"GAME_SELECT".equals(string(prompt,"kind")) || !new JsonPrimitive(true).equals(prompt.get("is_priority")) || !new JsonPrimitive(true).equals(guard.get("priority_open")) || number(guard,"cycle")!=number(before,"cycle") || !"ok".equals(string(guard,"status")) || !"response_sent".equals(string(accepted,"event")) || !new JsonPrimitive(true).equals(accepted.get("accepted")) || !string(command,"request_id").equals(string(accepted,"request_id")))return null;
+            return new TurnDecisionEvidence(command);
+        }catch(RuntimeException unsupported){return null;}
+    }
     /** Native response consumed at a later guarded combat/turn decision; not a damage/outcome claim. */
     public static TurnDecisionEvidence coreCombatResponseEvidence(JsonObject before,JsonObject prompt,JsonObject command,JsonObject guard,JsonObject accepted,JsonObject after,JsonObject nextPrompt,JsonObject nextGuard) {
         try {

@@ -190,6 +190,8 @@ public final class ManaforgeBridge implements MageClient {
             if (method.equals("END_GAME_INFO") && payload instanceof GameEndView) {
                 JsonObject result = new JsonObject();
                 result.addProperty("won", ((GameEndView) payload).hasWon());
+                result.addProperty("game_id",gameId.toString());
+                result.addProperty("viewer",((GameEndView)payload).getClientPlayer().getPlayerId().toString());
                 emit("game_result", null, result);
             }
             if (method.equals("GAME_OVER")) {

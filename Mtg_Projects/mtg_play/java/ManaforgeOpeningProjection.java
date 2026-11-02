@@ -162,6 +162,11 @@ public final class ManaforgeOpeningProjection {
         invalidateDecision();require("GAME_SELECT".equals(text(prompt,"kind")) && Boolean.TRUE.equals(flag(prompt,"is_priority")));JsonObject snapshot=projectTurnContinuation(raw,prompt,true);JsonArray casts=new JsonArray();Set<String> retained=new HashSet<>();
         for(JsonElement item:snapshot.getAsJsonArray("actions")){JsonObject action=item.getAsJsonObject();if("cast_spell".equals(action.get("kind").getAsString())){casts.add(action);retained.add(action.get("action_id").getAsString());}}require(casts.size()>0);snapshot.add("actions",casts);nativeActions.keySet().retainAll(retained);return snapshot;
     }
+    /** Terminal view has no decision authority; outcome comes exclusively from native terminal evidence. */
+    public synchronized JsonObject projectCombatResult(JsonObject raw,String outcome) throws IOException {
+        invalidateDecision();require(Arrays.asList("win","loss","draw").contains(outcome));JsonObject view=raw.deepCopy();String name=null;for(JsonElement item:view.getAsJsonArray("players"))if(engineViewer.equals(item.getAsJsonObject().get("id").getAsString()))name=item.getAsJsonObject().get("name").getAsString();require(name!=null);view.addProperty("priority_player",name);JsonObject prompt=new JsonObject();prompt.addProperty("kind","GAME_SELECT");prompt.addProperty("is_priority",true);prompt.add("cycle",view.get("cycle").deepCopy());prompt.addProperty("decision_id",0);prompt.addProperty("message","Game finished");
+        JsonObject result=projectCoreCombat(view,prompt);result.addProperty("status","finished");result.addProperty("result",outcome);result.add("priority_player_id",JsonNull.INSTANCE);result.add("decision",JsonNull.INSTANCE);result.add("actions",new JsonArray());invalidateDecision();return result;
+    }
     /** Native legal declarations/targets for either 1v1 seat; no client-side rules. */
     public synchronized JsonObject projectCoreCombat(JsonObject raw,JsonObject prompt) throws IOException {
         coreCombat=true;

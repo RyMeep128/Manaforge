@@ -34,6 +34,13 @@ namespace Manaforge.Play.Tests
             long? originalLife=frame.Combat[0].DefenderLife;card["characteristics"]["name"]="mutated";defender["name"]="mutated";defender["life"]=1;Assert.That(frame.Combat[0].DefenderLife,Is.EqualTo(originalLife));Assert.That(frame.PlayerLifeTotals[frame.Combat[0].DefenderId],Is.EqualTo(originalLife));
             snapshot["combat"]=new JArray();var cleared=Project(source);Assert.That(cleared.Combat,Is.Empty);Assert.That(cleared.PlayerLifeTotals[(string)defender["player_id"]],Is.EqualTo(1));Assert.That(((IDictionary<string,long?>)cleared.PlayerLifeTotals).IsReadOnly,Is.True);Assert.That(frame.Combat[0].AttackerNames[0],Is.Not.EqualTo("mutated"));Assert.That(frame.Combat[0].DefenderName,Is.Not.EqualTo("mutated"));Assert.That(((IList<string>)frame.Combat[0].AttackerNames).IsReadOnly,Is.True);
         }
+        [TestCase("win")]
+        [TestCase("loss")]
+        [TestCase("draw")]
+        public void TerminalOutcomeIsImmutableAndHasNoActions(string outcome)
+        {
+            var source=Priority();var snapshot=source["body"]["snapshot"];snapshot["status"]="finished";snapshot["result"]=outcome;snapshot["decision"]=null;snapshot["actions"]=new JArray();var frame=Project(source);snapshot["result"]="mutated";Assert.That(frame.Result,Is.EqualTo(outcome));Assert.That(frame.Status,Is.EqualTo("finished"));Assert.That(frame.Decision,Is.Null);Assert.That(frame.Actions,Is.Empty);
+        }
         [TestCase("Planeswalker")]
         [TestCase("Battle")]
         public void PublicPermanentDefendersHaveImmutableNames(string type)

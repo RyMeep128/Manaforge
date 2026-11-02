@@ -191,7 +191,7 @@ public final class ManaforgeUnityOpening {
                         }
                         if(next!=null)throw new IOException("LIVE_UNITY_PRIORITY_STAGE_LIMIT");
                     }
-                    for(int turnStage=0;turn!=null && turnStage<128;turnStage++) {
+                    for(int turnStage=0;turn!=null && turnStage<(Boolean.getBoolean("manaforge.completeGame")?512:128);turnStage++) {
                         TurnOffer offer=turn;turn=null;boolean sent=false;
                         for(int retries=0;retries<8 && !sent;retries++) {
                             long remaining=java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(deadline-System.nanoTime());if(remaining<=0)throw new IOException("LIVE_UNITY_TURN_TIMEOUT");
