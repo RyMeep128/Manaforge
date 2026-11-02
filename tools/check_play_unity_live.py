@@ -23,6 +23,11 @@ def main():
     artifacts = ROOT / "Mtg_Projects/mtg_play_unity/Artifacts"
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
+        "--complete-combat",
+        action="store_true",
+        help="One cleanup pass to postcombat main; requires --combat-damage",
+    )
+    parser.add_argument(
         "--combat-damage",
         action="store_true",
         help="One more explicit pass and native life change; requires --declared-priority",
@@ -112,6 +117,8 @@ def main():
         default=artifacts / ("UnityLive-" + uuid.uuid4().hex[:10]),
     )
     args = parser.parse_args()
+    if args.complete_combat and not args.combat_damage:
+        parser.error("--complete-combat requires --combat-damage")
     if args.combat_damage and not args.declared_priority:
         parser.error("--combat-damage requires --declared-priority")
     if args.declared_priority and not args.finish_selected_attack:
@@ -234,6 +241,11 @@ def main():
                         "-Dfile.encoding=UTF-8",
                         "-Djava.net.preferIPv4Stack=true",
                         *(
+                            ["-Dmanaforge.completeCombat=true"]
+                            if args.complete_combat
+                            else []
+                        ),
+                        *(
                             ["-Dmanaforge.combatDamage=true"]
                             if args.combat_damage
                             else []
@@ -348,6 +360,8 @@ def main():
                     command += ["-manaforgeLivePriority", "1"]
                 if args.creature_ability:
                     command += ["-manaforgeLiveCreature", "1"]
+                if args.complete_combat:
+                    command += ["-manaforgeLiveCompleteCombat", "1"]
                 if args.combat_damage:
                     command += ["-manaforgeLiveCombatDamage", "1"]
                 if args.declared_priority:
@@ -423,7 +437,9 @@ def main():
                     raise RuntimeError("LIVE_UNITY_ARTWORK_NOT_PRESENTED")
                 if args.interactive:
                     print(
-                        "Select the attacker, Finish attacks, then Pass priority twice; 60 seconds per choice."
+                        "Select the attacker, Finish attacks, then Pass priority three times; 60 seconds per choice."
+                        if args.complete_combat
+                        else "Select the attacker, Finish attacks, then Pass priority twice; 60 seconds per choice."
                         if args.combat_damage
                         else "Select the attacker, Finish attacks, then Pass priority; 60 seconds per choice."
                         if args.declared_priority
@@ -523,11 +539,22 @@ def main():
                         or life_after != life_before - 1
                     ):
                         raise RuntimeError("LIVE_UNITY_COMBAT_DAMAGE_NOT_PRESENTED")
+                if args.complete_combat:
+                    cleanup_result = wait_file("combat-cleanup-ready", 60)
+                    if (
+                        cleanup_result.get("snapshot_count") != 6
+                        or cleanup_result.get("combat_cleanup_presented") is not True
+                        or cleanup_result.get("combat_group_count") != 0
+                        or cleanup_result.get("postcombat_defender_life") != life_after
+                    ):
+                        raise RuntimeError("LIVE_UNITY_COMBAT_CLEANUP_NOT_PRESENTED")
                 chosen = wait_file("choice", 60)
                 if (
                     chosen.get("ack_count")
                     != (
-                        8
+                        10
+                        if args.complete_combat
+                        else 8
                         if args.combat_damage
                         else 6
                         if args.declared_priority
@@ -639,7 +666,9 @@ def main():
                         ready.get("attacker_choice_presented") is not True
                         or chosen.get("snapshot_count")
                         != (
-                            5
+                            6
+                            if args.complete_combat
+                            else 5
                             if args.combat_damage
                             else 4
                             if args.declared_priority
@@ -649,7 +678,9 @@ def main():
                         )
                         or chosen.get("confirmed_receipt_count")
                         != (
-                            4
+                            5
+                            if args.complete_combat
+                            else 4
                             if args.combat_damage
                             else 3
                             if args.declared_priority
@@ -693,6 +724,14 @@ def main():
                         raise RuntimeError(
                             "LIVE_UNITY_DECLARED_PRIORITY_EVIDENCE_FAILED"
                         )
+                if args.complete_combat and any(
+                    native.get(field) is not True
+                    for field in (
+                        "native_postcombat_main_observed",
+                        "native_combat_cleared",
+                    )
+                ):
+                    raise RuntimeError("LIVE_UNITY_COMBAT_CLEANUP_EVIDENCE_FAILED")
                 if args.combat_damage and any(
                     native.get(field) is not True
                     for field in (
@@ -802,14 +841,18 @@ def main():
                         native_attack_selection_open=not args.finish_selected_attack,
                         attacker_choice_presented=True,
                         attack_assignment_presented=True,
-                        snapshot_count=5
+                        snapshot_count=6
+                        if args.complete_combat
+                        else 5
                         if args.combat_damage
                         else 4
                         if args.declared_priority
                         else 3
                         if args.finish_selected_attack
                         else 2,
-                        confirmed_receipt_count=4
+                        confirmed_receipt_count=5
+                        if args.complete_combat
+                        else 4
                         if args.combat_damage
                         else 3
                         if args.declared_priority
@@ -817,6 +860,15 @@ def main():
                         if args.finish_selected_attack
                         else 1,
                         uncertain_receipt_count=0,
+                    )
+                if args.complete_combat:
+                    evidence.update(
+                        native_postcombat_main_observed=True,
+                        native_combat_cleared=True,
+                        combat_cleanup_presented=True,
+                        postcombat_defender_life=cleanup_result[
+                            "postcombat_defender_life"
+                        ],
                     )
                 if args.combat_damage:
                     evidence.update(
@@ -900,7 +952,9 @@ def main():
         json.dumps(evidence, indent=2) + "\n", encoding="utf-8"
     )
     print(
-        "Packaged Unity confirmed four combat inputs and displayed the native combat-damage life change; viewer cleared and owned roots reaped."
+        "Packaged Unity confirmed five combat inputs, observed postcombat main with cleared combat and preserved life totals; viewer cleared and owned roots reaped."
+        if args.complete_combat
+        else "Packaged Unity confirmed four combat inputs and displayed the native combat-damage life change; viewer cleared and owned roots reaped."
         if args.combat_damage
         else "Packaged Unity confirmed attacker selection, Finish attacks and one priority pass; displayed the next native combat state, cleared the viewer and reaped owned roots."
         if args.declared_priority

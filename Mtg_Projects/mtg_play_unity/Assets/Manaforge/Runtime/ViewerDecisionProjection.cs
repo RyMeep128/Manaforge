@@ -50,7 +50,7 @@ namespace Manaforge.Play
     }
     public sealed class ProjectedCombatAssignment
     {
-        public IReadOnlyList<string> AttackerNames {get;} public string DefenderName {get;} public long? DefenderLife {get;} public int BlockerCount {get;}
+        public IReadOnlyList<string> AttackerNames {get;} public string DefenderName {get;} public string DefenderId {get;} public long? DefenderLife {get;} public int BlockerCount {get;}
         private static string AttackerName(JObject snapshot,string id)
         {
             var card=snapshot["objects"].FirstOrDefault(value=>(string)value["object_id"]==id);
@@ -59,19 +59,21 @@ namespace Manaforge.Play
         internal ProjectedCombatAssignment(JToken assignment,JObject snapshot)
         {
             AttackerNames=Array.AsReadOnly(assignment["attackers"].Select(id=>AttackerName(snapshot,(string)id)).ToArray());
-            var defender=snapshot["players"].FirstOrDefault(player=>(string)player["player_id"]==(string)assignment["defender_id"]);DefenderName=(string)defender?["name"]??"Unknown defender";DefenderLife=(long?)defender?["life"];
+            DefenderId=(string)assignment["defender_id"];var defender=snapshot["players"].FirstOrDefault(player=>(string)player["player_id"]==(string)assignment["defender_id"]);DefenderName=(string)defender?["name"]??"Unknown defender";DefenderLife=(long?)defender?["life"];
             BlockerCount=assignment["blockers"].Count();
         }
     }
     public sealed class ProjectedDecisionFrame
     {
         public CardProjectionContext Context {get;} public string Status {get;} public bool ActionsComplete {get;}
+        public IReadOnlyDictionary<string,long?> PlayerLifeTotals {get;}
         public IReadOnlyList<ProjectedCombatAssignment> Combat {get;}
         public IReadOnlyList<ProjectedAction> Actions {get;} public ProjectedDecision Decision {get;}
         public IReadOnlyList<ProjectedManaSource> ManaSourceReferences {get;}
         public IReadOnlyList<string> UnsupportedFields {get;}
         internal ProjectedDecisionFrame(JObject source)
         {
+            PlayerLifeTotals=new System.Collections.ObjectModel.ReadOnlyDictionary<string,long?>(source["players"].ToDictionary(player=>(string)player["player_id"],player=>(long?)player["life"]));
             Combat=Array.AsReadOnly(source["combat"].Select(group=>new ProjectedCombatAssignment(group,source)).ToArray());
             Context=new CardProjectionContext((string)source["session_id"],(string)source["viewer_id"],(long)source["revision"]);Status=(string)source["status"];ActionsComplete=(bool)source["actions_complete"];
             if(source["decision"].Type!=JTokenType.Null)Decision=new ProjectedDecision(Context,source["decision"]);

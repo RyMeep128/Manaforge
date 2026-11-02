@@ -1,5 +1,26 @@
 # Live Unity / Java / XMage integration
 
+## Display cleared combat in Unity (0.5.188)
+
+```powershell
+python tools/check_play_unity_live.py --select-attacker --native-metadata --finish-selected-attack --declared-priority --combat-damage --complete-combat
+```
+
+The optional fifth input is an explicit priority pass after the damage observation.
+Java confirms it through the cleanup certificate and sends a sixth read-only
+snapshot at native post-combat main, with no combat assignment. The priority chain
+is capped at three explicit follow-ups and the attacker session has a bounded
+six-minute deadline to accommodate five interactive choices.
+
+Unity retains the defender's opaque public ID and copies per-player life totals
+into immutable snapshot values. The cleared-combat view must preserve the actual
+post-damage defender life. Acceptance requires six snapshots, ten acknowledgements,
+five confirmed receipts, zero uncertain receipts, empty combat and unchanged life,
+then viewer clearing and owned-root cleanup. `combat-cleanup.png` captures this
+observation. This completes the bounded unblocked fixture in Unity; full games,
+blocking, lethal outcomes, complex choices, product launch and formal gates remain
+open. Shorter probes retain their existing stopping points.
+
 ## Observe combat cleanup in the Java fixture (0.5.187)
 
 ```powershell

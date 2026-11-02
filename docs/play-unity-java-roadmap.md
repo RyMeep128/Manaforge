@@ -1167,3 +1167,12 @@ P2/P3/P4 remain partial: this public Memnite/Forest fixture does not certify
 blocking, lethal combat, general choices/mana, a full match, result parity, product
 launch or any architecture gate. Unity cleanup integration is the immediate next
 slice; owner review and existing formal acceptance gates remain open.
+
+
+### Packaged unblocked combat cleanup (0.5.188)
+
+Unity now follows the same five explicit inputs through a native 1/1 life change
+and cleared combat at post-combat main. All five receipts require typed native
+evidence; the final view preserves the defender's post-damage life total. This
+closes the bounded public fixture only. P2/P3/P4 and formal gates remain partial;
+blocking, lethal results and broader decision/launch parity are still open.

@@ -116,7 +116,8 @@ public final class ManaforgeUnityOpening {
             listener.setSoTimeout(500);
             JsonObject address=new JsonObject();address.addProperty("host","127.0.0.1");address.addProperty("port",listener.getLocalPort());
             Path temporary=Paths.get(ready.toString()+".tmp");Files.write(temporary,address.toString().getBytes(StandardCharsets.UTF_8));Files.move(temporary,ready,StandardCopyOption.ATOMIC_MOVE);
-            long deadline=System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(continuation==null?180:240);Socket socket=null;
+            long seconds=continuation==null?180:240;for(JsonElement action:snapshot.getAsJsonObject("body").getAsJsonObject("snapshot").getAsJsonArray("actions"))if("declare_attacker".equals(action.getAsJsonObject().get("kind").getAsString()))seconds=360;
+            long deadline=System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(seconds);Socket socket=null;
             while(socket==null && !cancelled.getAsBoolean() && System.nanoTime()<deadline)try{socket=listener.accept();}catch(SocketTimeoutException waiting){}
             if(socket==null)throw new IOException("LIVE_UNITY_ACCEPT_FAILED");
             try(LoopbackFrameReader frames=new LoopbackFrameReader(socket)) {
@@ -151,7 +152,7 @@ public final class ManaforgeUnityOpening {
                         next=continuation.next();owner.observe(next.snapshot.toString());frames.write(next.snapshot.toString(),5000,cancelled);
                     }
                     if(next!=null) {
-                        for(int stage=0;stage<2 && next!=null;stage++) {
+                        for(int stage=0;stage<3 && next!=null;stage++) {
                             PriorityOffer following=null;
                             boolean sent=false;
                             for(int retries=0;retries<8 && !sent;retries++) {
