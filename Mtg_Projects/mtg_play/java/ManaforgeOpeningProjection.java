@@ -114,6 +114,11 @@ public final class ManaforgeOpeningProjection {
     private JsonObject project(JsonObject raw,JsonObject prompt,boolean includePriorityPass,boolean includeSpells,boolean omitStack,boolean attackFinish) throws IOException {
         return project(raw,prompt,includePriorityPass,includeSpells,omitStack,attackFinish,false);
     }
+    public synchronized JsonObject projectReadOnlyDeclaredAttack(JsonObject raw,JsonObject prompt) throws IOException {
+        invalidateDecision();require("GAME_SELECT".equals(text(prompt,"kind")) && Boolean.TRUE.equals(flag(prompt,"is_priority")));
+        JsonObject snapshot=project(raw,prompt,false,false,false,false,false,true);
+        snapshot.add("decision",JsonNull.INSTANCE);snapshot.add("actions",new JsonArray());invalidateDecision();return snapshot;
+    }
     public synchronized JsonObject projectSelectedAttackFinish(JsonObject raw,JsonObject prompt) throws IOException {
         return project(raw,prompt,false,false,false,true,false,true);
     }

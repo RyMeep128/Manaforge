@@ -82,8 +82,26 @@ public final class OpeningSessionChecks {
                 if(!passReceipt.equals(owner.receiptFor("followup-pass")))throw new AssertionError("PRIORITY_CONFIRMATION_LOST");
                 if(!phaseReceipt.equals(owner.receiptFor("post-resolution-pass")))throw new AssertionError("PHASE_CONFIRMATION_LOST");
             }
-            attackConfirmationChecks(context);attackerConfirmationChecks(context);
+            attackConfirmationChecks(context);attackerConfirmationChecks(context);declaredAttackConfirmationChecks(context);
         }finally{java.util.Arrays.fill(key,(byte)0);}
+    }
+    static void declaredAttackConfirmationChecks(manaforge.protocol.GatewayHandshake.ViewerContext context) throws Exception {
+        JsonObject before=OpeningProjectionChecks.attackState(),prompt=OpeningProjectionChecks.attackPrompt(),next=OpeningProjectionChecks.priorityPrompt();prompt.addProperty("decision_id",42);next.addProperty("decision_id",43);
+        before.add("combat",JsonParser.parseString("[{\"attackers\":[\"raw-card\"],\"blockers\":[],\"defender\":\"raw-ai\",\"blocked\":false}]"));JsonObject after=before.deepCopy();after.addProperty("priority_player","raw-name");
+        ManaforgeOpeningProjection projection=OpeningProjectionChecks.projection();JsonObject snapshot=projection.projectSelectedAttackFinish(before,prompt);String wire=OpeningProjectionChecks.perform(snapshot);
+        try(ManaforgeOpeningSession owner=new ManaforgeOpeningSession(context,projection,envelope(snapshot).toString())) {
+            if(!owner.dispatch(wire,"raw-game","raw-human",42,8).shouldSubmit)throw new AssertionError("DECLARATION_NOT_ADMITTED");JsonObject command=owner.pollNative(),accepted=new JsonObject();accepted.addProperty("event","response_sent");accepted.addProperty("accepted",true);accepted.add("request_id",command.get("request_id"));
+            NativeCastCorrelation.DeclaredAttackEvidence proof=NativeCastCorrelation.declaredAttackEvidence(before,prompt,command,OpeningProjectionChecks.attackMetadata(false),accepted,after,next,OpeningProjectionChecks.attackMetadata(true),"raw-card");
+            JsonObject other=command.deepCopy(),otherPrompt=prompt.deepCopy();other.addProperty("decision_id",41);otherPrompt.addProperty("decision_id",41);
+            NativeCastCorrelation.DeclaredAttackEvidence different=NativeCastCorrelation.declaredAttackEvidence(before,otherPrompt,other,OpeningProjectionChecks.attackMetadata(false),accepted,after,next,OpeningProjectionChecks.attackMetadata(true),"raw-card");
+            if(proof==null || different==null)throw new AssertionError("DECLARATION_PROOF_MISSING");
+            for(int mode=0;mode<3;mode++)try{owner.confirmDeclaredAttack(mode==0?"wrong":"land-action",mode==1?null:mode==2?different:proof);throw new AssertionError("BAD_DECLARATION_PROOF_ACCEPTED");}catch(IOException expected){if(!"DECLARED_ATTACK_EVIDENCE_MISMATCH".equals(expected.getMessage()))throw expected;}
+            JsonObject receipt=owner.confirmDeclaredAttack("land-action",proof);if(!"confirmed".equals(receipt.getAsJsonObject("body").get("outcome").getAsString()) || !receipt.equals(owner.confirmDeclaredAttack("land-action",proof)))throw new AssertionError("DECLARATION_NOT_CONFIRMED");
+            if(owner.dispatch(wire,"raw-game","raw-human",42,8).shouldSubmit || owner.pollNative()!=null)throw new AssertionError("DECLARATION_REPLAYED");
+            JsonObject update=envelope(projection.projectReadOnlyDeclaredAttack(after,next));update.addProperty("message_id","declared-attack-result");new ManaforgeUnityOpening.VerifiedDeclaredAttackResult(proof,update);owner.observe(update.toString());
+            try{new ManaforgeUnityOpening.VerifiedDeclaredAttackResult(proof,envelope(snapshot));throw new AssertionError("ACTIONABLE_DECLARATION_ACCEPTED");}catch(IllegalArgumentException expected){}
+            owner.disconnected();if(!receipt.equals(owner.receiptFor("land-action")))throw new AssertionError("DECLARATION_CONFIRMATION_LOST");
+        }
     }
     static void attackerConfirmationChecks(manaforge.protocol.GatewayHandshake.ViewerContext context) throws Exception {
         JsonObject before=OpeningProjectionChecks.attackState(),prompt=OpeningProjectionChecks.attackPrompt(),after=before.deepCopy(),next=OpeningProjectionChecks.attackPrompt();next.addProperty("decision_id",42);
@@ -111,6 +129,10 @@ public final class OpeningSessionChecks {
             try{new ManaforgeUnityOpening.VerifiedAttackerResult(proof,envelope(snapshot));throw new AssertionError("ACTIONABLE_ATTACKER_RESULT_ACCEPTED");}catch(IllegalArgumentException expected){}
             if(owner.dispatch(wire,"raw-game","raw-human",42,8).shouldSubmit || owner.pollNative()!=null)throw new AssertionError("OBSERVED_ATTACKER_REPLAYED");
             owner.disconnected();if(!receipt.equals(owner.receiptFor("land-action")))throw new AssertionError("ATTACKER_DISCONNECT_LOST_CONFIRMATION");
+            JsonObject finishSnapshot=envelope(projection.projectSelectedAttackFinish(after,next));
+            new ManaforgeUnityOpening.VerifiedAttackerResult(proof,new ManaforgeUnityOpening.DeclaredAttackOffer(finishSnapshot,42,8,value->null));
+            try{new ManaforgeUnityOpening.VerifiedAttackerResult(proof,new ManaforgeUnityOpening.DeclaredAttackOffer(envelope(snapshot),41,8,value->null));throw new AssertionError("NON_FINISH_ATTACKER_FOLLOWUP_ACCEPTED");}catch(IllegalArgumentException expected){}
+
         }
     }
     static void attackConfirmationChecks(manaforge.protocol.GatewayHandshake.ViewerContext context) throws Exception {

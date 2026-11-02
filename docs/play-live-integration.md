@@ -1,5 +1,25 @@
 # Live Unity / Java / XMage integration
 
+## Finish the selected attack from Unity (0.5.181)
+
+```powershell
+python tools/check_play_unity_live.py --select-attacker --native-metadata --finish-selected-attack
+```
+
+The optional continuation presents the verified attacker assignment with one
+explicit Finish attacks button. The same authenticated session submits that
+native response once. A separate typed declaration certificate must match the
+queued command and request ID before its receipt is confirmed. Null, mismatched,
+replayed and stale submissions remain rejected or reuse their existing receipt.
+
+After guarded native priority resumes with the same source incarnation and combat
+group, Java sends a third read-only snapshot. Unity waits for its actual revision,
+displays the retained assignment with declaration finished, and captures
+`declared-attack.png`. Acceptance requires three snapshots, four acknowledgements,
+two confirmed receipts, zero uncertain receipts, both assignment observations,
+a cleared viewer and reaped owned processes. No priority input, blocking or damage
+is performed. The default attacker-selection probe still ends with declaration open.
+
 ## Finish the selected attack in the Java fixture (0.5.180)
 
 ```powershell

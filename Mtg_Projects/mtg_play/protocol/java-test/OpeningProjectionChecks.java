@@ -95,7 +95,9 @@ public final class OpeningProjectionChecks {
         JsonObject after=before.deepCopy(),next=priorityPrompt(),accepted=new JsonObject();next.addProperty("decision_id",43);after.addProperty("priority_player","raw-name");
         accepted.addProperty("event","response_sent");accepted.addProperty("accepted",true);accepted.add("request_id",command.get("request_id"));
         NativeCastCorrelation.DeclaredAttackEvidence proof=NativeCastCorrelation.declaredAttackEvidence(before,prompt,command,attackMetadata(false),accepted,after,next,attackMetadata(true),"raw-card");
-        check(proof!=null && proof.matchesCommand(command));JsonObject original=command.deepCopy();command.addProperty("value",true);check(proof.matchesCommand(original) && !proof.matchesCommand(command));command.addProperty("value",false);
+        check(proof!=null && proof.matchesCommand(command));
+        JsonObject declared=projection.projectReadOnlyDeclaredAttack(after,next);shape(declared);check(declared.get("decision").isJsonNull() && declared.getAsJsonArray("actions").size()==0 && declared.getAsJsonArray("combat").size()==1 && !declared.toString().contains("raw-card"));
+        JsonObject original=command.deepCopy();command.addProperty("value",true);check(proof.matchesCommand(original) && !proof.matchesCommand(command));command.addProperty("value",false);
         for(int mode=0;mode<13;mode++) {
             JsonObject badBefore=before.deepCopy(),badAfter=after.deepCopy(),badNext=next.deepCopy(),badAccepted=accepted.deepCopy(),badCommand=command.deepCopy(),metadata=attackMetadata(true);
             if(mode==0)badAfter.add("combat",new JsonArray());

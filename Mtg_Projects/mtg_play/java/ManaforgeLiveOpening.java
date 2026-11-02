@@ -36,7 +36,7 @@ public final class ManaforgeLiveOpening {
     private final boolean postResolutionPass=Boolean.getBoolean("manaforge.postResolutionPass");private boolean unityPostResolutionSubmitted,unityPostResolutionConfirmed;
     private final boolean finishAttacks=Boolean.getBoolean("manaforge.finishAttacks");private boolean attackSourceOffered,emptyAttackSubmitted,combatAdvanced,unityAttackFinishSubmitted,unityAttackFinishConfirmed;
     private final boolean finishSelectedAttack=Boolean.getBoolean("manaforge.finishSelectedAttack");private boolean selectedAttackFinished,declaredAttackObserved;
-    private final boolean selectAttacker=Boolean.getBoolean("manaforge.selectAttacker");private boolean attackerSelected,attackAssignmentObserved;private JsonObject attackerObservationPrompt;
+    private final boolean selectAttacker=Boolean.getBoolean("manaforge.selectAttacker");private boolean attackerSelected,attackAssignmentObserved;private JsonObject attackerObservationPrompt,declaredAttackPrompt;
     private final boolean combatPriority=Boolean.getBoolean("manaforge.combatPriority");private boolean unityCombatPrioritySubmitted,unityCombatPriorityConfirmed;
     private NativeCastCorrelation.AbilityEvidence unityCastEvidence;private String unityCastSource;private boolean unityBattlefieldObserved,unityFollowupConfirmed;
     private JsonObject sourceMetadata(JsonObject view,String source) throws Exception {
@@ -317,7 +317,17 @@ public final class ManaforgeLiveOpening {
                     if(!"object".equals(command.get("kind").getAsString()) || !unityCastSource.equals(command.get("value").getAsString()))throw new IOException("LIVE_COMBAT_BAD_SELECTION");
                     JsonObject accepted=request(command,"response_sent");if(!new JsonPrimitive(true).equals(accepted.get("accepted")))throw new IOException("LIVE_COMBAT_SELECTION_REJECTED");
                     attackSourceOffered=true;attackerSelected=true;advancement(cycle,decision);NativeCastCorrelation.AttackerSelectionEvidence proof=observeAttackerSelection(before,prompt,command,guard,accepted);
-                    JsonObject observed=new JsonObject(),observedBody=new JsonObject();observed.addProperty("wire_version",1);observed.addProperty("message_type","snapshot");observed.addProperty("message_id","attack-assignment");observedBody.addProperty("fixture_only",false);observedBody.add("snapshot",projection.projectReadOnlyAttackAssignment(state,attackerObservationPrompt));observed.add("body",observedBody);
+                    JsonObject observed=new JsonObject(),observedBody=new JsonObject();observed.addProperty("wire_version",1);observed.addProperty("message_type","snapshot");observed.addProperty("message_id","attack-assignment");observedBody.addProperty("fixture_only",false);observedBody.add("snapshot",(finishSelectedAttack?projection.projectSelectedAttackFinish(state,attackerObservationPrompt):projection.projectReadOnlyAttackAssignment(state,attackerObservationPrompt)));observed.add("body",observedBody);
+                    if(finishSelectedAttack) {
+                        final JsonObject selectedState=state.deepCopy(),selectedPrompt=attackerObservationPrompt.deepCopy(),selectedMetadata=sourceMetadata(state,unityCastSource);
+                        return new ManaforgeUnityOpening.VerifiedAttackerResult(proof,new ManaforgeUnityOpening.DeclaredAttackOffer(observed,selectedPrompt.get("decision_id").getAsLong(),selectedState.get("cycle").getAsLong(),finish->{
+                            if(!"boolean".equals(finish.get("kind").getAsString()) || !new JsonPrimitive(false).equals(finish.get("value")))throw new IOException("LIVE_SELECTED_ATTACK_NOT_FINISH");
+                            JsonObject sent=request(finish,"response_sent");if(!new JsonPrimitive(true).equals(sent.get("accepted")))throw new IOException("LIVE_SELECTED_ATTACK_REJECTED");selectedAttackFinished=true;
+                            advancement(selectedState.get("cycle").getAsLong(),selectedPrompt.get("decision_id").getAsLong());NativeCastCorrelation.DeclaredAttackEvidence declaration=observeDeclaredAttack(selectedState,selectedPrompt,finish,selectedMetadata,sent);
+                            JsonObject result=new JsonObject(),resultBody=new JsonObject();result.addProperty("wire_version",1);result.addProperty("message_type","snapshot");result.addProperty("message_id","declared-attack-result");resultBody.addProperty("fixture_only",false);resultBody.add("snapshot",projection.projectReadOnlyDeclaredAttack(state,declaredAttackPrompt));result.add("body",resultBody);
+                            return new ManaforgeUnityOpening.VerifiedDeclaredAttackResult(declaration,result);
+                        }));
+                    }
                     return new ManaforgeUnityOpening.VerifiedAttackerResult(proof,observed);
                 },cancelled::get);return;
             }
@@ -373,10 +383,13 @@ public final class ManaforgeLiveOpening {
             command[0]=value.deepCopy();accepted[0]=request(value,"response_sent");if(!new JsonPrimitive(true).equals(accepted[0].get("accepted")))throw new IOException("LIVE_SELECTED_ATTACK_REJECTED");selectedAttackFinished=true;
         },cancelled::get,false);
         advancement(cycle,decision);
+        observeDeclaredAttack(before,prompt,command[0],metadata,accepted[0]);
+    }
+    private NativeCastCorrelation.DeclaredAttackEvidence observeDeclaredAttack(JsonObject before,JsonObject prompt,JsonObject command,JsonObject metadata,JsonObject accepted) throws Exception {
         for(int count=0;count<80;count++) {
             JsonObject event=pending==null?next():pending;if(!"decision".equals(event.get("event").getAsString()))continue;pending=null;
-            NativeCastCorrelation.DeclaredAttackEvidence proof=NativeCastCorrelation.declaredAttackEvidence(before,prompt,command[0],metadata,accepted[0],state,event,sourceMetadata(state,unityCastSource),unityCastSource);
-            if(proof==null)throw new IOException("LIVE_DECLARED_ATTACK_UNPROVEN");declaredAttackObserved=true;return;
+            NativeCastCorrelation.DeclaredAttackEvidence proof=NativeCastCorrelation.declaredAttackEvidence(before,prompt,command,metadata,accepted,state,event,sourceMetadata(state,unityCastSource),unityCastSource);
+            if(proof==null)throw new IOException("LIVE_DECLARED_ATTACK_UNPROVEN");declaredAttackObserved=true;declaredAttackPrompt=event.deepCopy();return proof;
         }
         throw new IOException("LIVE_DECLARED_ATTACK_TIMEOUT");
     }
@@ -496,7 +509,7 @@ public final class ManaforgeLiveOpening {
             if(probe.postResolutionPass && !probe.observeResolution)throw new IOException();
             if(probe.finishAttacks && (!probe.firstCreature || probe.metadataContext==null || probe.continuePriority || probe.postResolutionPass))throw new IOException();
             if(probe.combatPriority && (!probe.finishAttacks || probe.unityReady==null))throw new IOException();
-            if(probe.finishSelectedAttack && (!probe.selectAttacker || probe.unityReady!=null))throw new IOException();
+            if(probe.finishSelectedAttack && !probe.selectAttacker)throw new IOException();
             if(probe.selectAttacker && !probe.finishAttacks)throw new IOException();
         }catch(Exception failure){report.println("{\"failure\":\"LIVE_OPENING_BOOTSTRAP_FAILED\"}");System.exit(2);}
 

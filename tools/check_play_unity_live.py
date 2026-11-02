@@ -22,6 +22,11 @@ from play_native_metadata import provision_metadata  # noqa: E402
 def main():
     artifacts = ROOT / "Mtg_Projects/mtg_play_unity/Artifacts"
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--finish-selected-attack",
+        action="store_true",
+        help="Finish the selected attack and observe native priority; requires --select-attacker",
+    )
     parser.add_argument("--interactive", action="store_true")
     parser.add_argument(
         "--combat-priority",
@@ -97,6 +102,8 @@ def main():
         default=artifacts / ("UnityLive-" + uuid.uuid4().hex[:10]),
     )
     args = parser.parse_args()
+    if args.finish_selected_attack and not args.select_attacker:
+        parser.error("--finish-selected-attack requires --select-attacker")
     if args.native_metadata and not (
         args.creature_ability or args.finish_attacks or args.select_attacker
     ):
@@ -213,6 +220,11 @@ def main():
                         "-Dfile.encoding=UTF-8",
                         "-Djava.net.preferIPv4Stack=true",
                         *(
+                            ["-Dmanaforge.finishSelectedAttack=true"]
+                            if args.finish_selected_attack
+                            else []
+                        ),
+                        *(
                             ["-Dmanaforge.selectAttacker=true"]
                             if args.select_attacker
                             else []
@@ -312,6 +324,8 @@ def main():
                     command += ["-manaforgeLivePriority", "1"]
                 if args.creature_ability:
                     command += ["-manaforgeLiveCreature", "1"]
+                if args.finish_selected_attack:
+                    command += ["-manaforgeLiveFinishSelectedAttack", "1"]
                 if args.select_attacker:
                     command += ["-manaforgeLiveSelectAttacker", "1"]
                 if args.finish_attacks:
@@ -381,7 +395,9 @@ def main():
                     raise RuntimeError("LIVE_UNITY_ARTWORK_NOT_PRESENTED")
                 if args.interactive:
                     print(
-                        "Select the offered attacker within 60 seconds; declaration remains open."
+                        "Select the attacker, then Finish attacks; 60 seconds per choice."
+                        if args.finish_selected_attack
+                        else "Select the offered attacker within 60 seconds; declaration remains open."
                         if args.select_attacker
                         else "Select Finish attacks, then the offered Pass priority; 60 seconds per choice."
                         if args.combat_priority
@@ -445,12 +461,19 @@ def main():
                         or assignment.get("snapshot_count") != 2
                     ):
                         raise RuntimeError("LIVE_UNITY_ATTACK_ASSIGNMENT_NOT_PRESENTED")
+                if args.finish_selected_attack:
+                    declaration = wait_file("declared-attack-ready", 60)
+                    if (
+                        declaration.get("declared_attack_presented") is not True
+                        or declaration.get("snapshot_count") != 3
+                    ):
+                        raise RuntimeError("LIVE_UNITY_DECLARATION_NOT_PRESENTED")
                 chosen = wait_file("choice", 60)
                 if (
                     chosen.get("ack_count")
                     != (
                         4
-                        if args.combat_priority
+                        if args.combat_priority or args.finish_selected_attack
                         else 6
                         if args.post_resolution_pass
                         else 4
@@ -555,8 +578,10 @@ def main():
                 if args.select_attacker:
                     if (
                         ready.get("attacker_choice_presented") is not True
-                        or chosen.get("snapshot_count") != 2
-                        or chosen.get("confirmed_receipt_count") != 1
+                        or chosen.get("snapshot_count")
+                        != (3 if args.finish_selected_attack else 2)
+                        or chosen.get("confirmed_receipt_count")
+                        != (2 if args.finish_selected_attack else 1)
                         or chosen.get("uncertain_receipt_count") != 0
                     ):
                         raise RuntimeError("LIVE_UNITY_ATTACKER_RECEIPT_FAILED")
@@ -567,15 +592,24 @@ def main():
                                 "native_attack_source_offered",
                                 "native_attacker_selected",
                                 "native_attack_assignment_observed",
-                                "native_attack_selection_open",
                                 "creature_resolved",
                                 "native_cast_ability_matched",
                                 "creature_spell_on_stack",
                             )
                         )
+                        or native.get("native_attack_selection_open")
+                        is not (not args.finish_selected_attack)
                         or native.get("native_empty_attack_submitted") is not False
                     ):
                         raise RuntimeError("LIVE_UNITY_ATTACKER_EVIDENCE_FAILED")
+                if args.finish_selected_attack and any(
+                    native.get(field) is not True
+                    for field in (
+                        "native_selected_attack_finished",
+                        "native_declared_attack_observed",
+                    )
+                ):
+                    raise RuntimeError("LIVE_UNITY_DECLARATION_EVIDENCE_FAILED")
                 if args.finish_attacks and any(
                     native.get(field) is not True
                     for field in (
@@ -666,12 +700,18 @@ def main():
                     evidence.update(
                         native_attacker_selected=True,
                         native_attack_assignment_observed=True,
-                        native_attack_selection_open=True,
+                        native_attack_selection_open=not args.finish_selected_attack,
                         attacker_choice_presented=True,
                         attack_assignment_presented=True,
-                        snapshot_count=2,
-                        confirmed_receipt_count=1,
+                        snapshot_count=3 if args.finish_selected_attack else 2,
+                        confirmed_receipt_count=2 if args.finish_selected_attack else 1,
                         uncertain_receipt_count=0,
+                    )
+                if args.finish_selected_attack:
+                    evidence.update(
+                        native_selected_attack_finished=True,
+                        native_declared_attack_observed=True,
+                        declared_attack_presented=True,
                     )
                 if args.finish_attacks:
                     evidence.update(
@@ -734,7 +774,9 @@ def main():
         json.dumps(evidence, indent=2) + "\n", encoding="utf-8"
     )
     print(
-        "Packaged Unity submitted an attacker choice; Java verified the native assignment. Choice confirmed, declaration open; viewer cleared and roots reaped."
+        "Packaged Unity confirmed attacker selection and Finish attacks, displayed native priority with the same assignment, cleared the viewer and reaped owned roots."
+        if args.finish_selected_attack
+        else "Packaged Unity submitted an attacker choice; Java verified the native assignment. Choice confirmed, declaration open; viewer cleared and roots reaped."
         if args.select_attacker
         else "Packaged Unity confirmed Finish attacks and the next priority pass, displayed the next native state read-only, cleared the viewer and reaped owned roots."
         if args.combat_priority
