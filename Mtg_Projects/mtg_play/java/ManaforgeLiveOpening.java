@@ -310,6 +310,14 @@ public final class ManaforgeLiveOpening {
             JsonObject snapshot=attackers?(chooseAttacker?projection.projectAttackSelection(state,event):projection.projectAttackFinish(state,event)):projection.project(state,event,true);
             JsonObject body=new JsonObject(),envelope=new JsonObject();body.addProperty("fixture_only",false);body.add("snapshot",snapshot);envelope.addProperty("wire_version",1);envelope.addProperty("message_type","snapshot");envelope.addProperty("message_id","combat-fixture-"+count);envelope.add("body",body);
             final long cycle=state.get("cycle").getAsLong(),decision=event.get("decision_id").getAsLong();
+            if(unityReady!=null && chooseAttacker) {
+                final JsonObject before=state.deepCopy(),prompt=event.deepCopy(),guard=metadata.deepCopy();
+                ManaforgeUnityOpening.serve(envelope,projection,game,engineViewer,decision,cycle,"1.4.62-V1",artifactHash,unityKey,unityReady,command->{
+                    if(!"object".equals(command.get("kind").getAsString()) || !unityCastSource.equals(command.get("value").getAsString()))throw new IOException("LIVE_COMBAT_BAD_SELECTION");
+                    JsonObject accepted=request(command,"response_sent");if(!new JsonPrimitive(true).equals(accepted.get("accepted")))throw new IOException("LIVE_COMBAT_SELECTION_REJECTED");
+                    attackSourceOffered=true;attackerSelected=true;advancement(cycle,decision);observeAttackerSelection(before,prompt,command,guard,accepted);
+                },cancelled::get);return;
+            }
             if(unityReady!=null && observeFinish) {
                 final JsonObject beforeFinish=state.deepCopy(),finishPrompt=event.deepCopy(),finishMetadata=metadata.deepCopy();
                 ManaforgeUnityOpening.serveVerifiedAttackFinish(envelope,projection,game,engineViewer,decision,cycle,"1.4.62-V1",artifactHash,unityKey,unityReady,nativeCommand->{
@@ -467,7 +475,7 @@ public final class ManaforgeLiveOpening {
             if(probe.postResolutionPass && !probe.observeResolution)throw new IOException();
             if(probe.finishAttacks && (!probe.firstCreature || probe.metadataContext==null || probe.continuePriority || probe.postResolutionPass))throw new IOException();
             if(probe.combatPriority && (!probe.finishAttacks || probe.unityReady==null))throw new IOException();
-            if(probe.selectAttacker && (!probe.finishAttacks || probe.unityReady!=null))throw new IOException();
+            if(probe.selectAttacker && !probe.finishAttacks)throw new IOException();
         }catch(Exception failure){report.println("{\"failure\":\"LIVE_OPENING_BOOTSTRAP_FAILED\"}");System.exit(2);}
 
         if(probe.metadataContext==null)probe.startLifeline();

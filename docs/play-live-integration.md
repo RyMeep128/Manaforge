@@ -1,5 +1,23 @@
 # Live Unity / Java / XMage integration
 
+## Submit the attacker choice from Unity (0.5.177)
+
+```powershell
+python tools/check_play_unity_live.py --select-attacker --native-metadata
+```
+
+After diagnostic setup, the packaged player presents the native candidate through
+its existing decision action panel. The acceptance script invokes the mounted
+Select attacker button. Java submits the opaque action once and requires the
+same guarded native assignment evidence as the Java fixture. The probe accepts
+one snapshot, two acknowledgements, zero confirmed receipts and one uncertain
+receipt, then clears the viewer and reaps its owned processes.
+
+The gateway intentionally retains an uncertain receipt: attacker-selection evidence
+has not yet been added as a typed session confirmation. No assignment snapshot
+is sent back to Unity. Declaration remains open; finishing a nonempty attack,
+blocking and damage are subsequent work. Finish attacks remains a separate probe.
+
 ## Explicit attacker choice in the Java fixture (0.5.176)
 
 ```powershell

@@ -65,6 +65,11 @@ def main():
     )
     scenario = parser.add_mutually_exclusive_group()
     scenario.add_argument(
+        "--select-attacker",
+        action="store_true",
+        help="Submit one explicit attacker choice; requires --native-metadata",
+    )
+    scenario.add_argument(
         "--finish-attacks",
         action="store_true",
         help="Show one native attacker-selection finish choice after diagnostic setup; requires --native-metadata",
@@ -92,16 +97,18 @@ def main():
         default=artifacts / ("UnityLive-" + uuid.uuid4().hex[:10]),
     )
     args = parser.parse_args()
-    if args.native_metadata and not (args.creature_ability or args.finish_attacks):
+    if args.native_metadata and not (
+        args.creature_ability or args.finish_attacks or args.select_attacker
+    ):
         parser.error(
-            "--native-metadata requires --creature-ability or --finish-attacks"
+            "--native-metadata requires --creature-ability, --finish-attacks or --select-attacker"
         )
-    if args.finish_attacks and not args.native_metadata:
-        parser.error("--finish-attacks requires --native-metadata")
+    if (args.finish_attacks or args.select_attacker) and not args.native_metadata:
+        parser.error("combat choices require --native-metadata")
     if args.combat_priority and not args.finish_attacks:
         parser.error("--combat-priority requires --finish-attacks")
-    if args.finish_attacks and args.continue_priority:
-        parser.error("--finish-attacks is an isolated combat choice")
+    if (args.finish_attacks or args.select_attacker) and args.continue_priority:
+        parser.error("combat choices cannot use --continue-priority")
     if args.continue_priority and not args.native_metadata:
         parser.error("--continue-priority requires --native-metadata")
     if args.observe_resolution and not args.continue_priority:
@@ -113,6 +120,7 @@ def main():
         or args.priority_pass
         or args.creature_ability
         or args.finish_attacks
+        or args.select_attacker
     ):
         parser.error(
             "--artwork uses the modern Forest/Ornithopter opening-only fixture"
@@ -205,13 +213,18 @@ def main():
                         "-Dfile.encoding=UTF-8",
                         "-Djava.net.preferIPv4Stack=true",
                         *(
+                            ["-Dmanaforge.selectAttacker=true"]
+                            if args.select_attacker
+                            else []
+                        ),
+                        *(
                             ["-Dmanaforge.combatPriority=true"]
                             if args.combat_priority
                             else []
                         ),
                         *(
                             ["-Dmanaforge.finishAttacks=true"]
-                            if args.finish_attacks
+                            if args.finish_attacks or args.select_attacker
                             else []
                         ),
                         *(
@@ -250,7 +263,9 @@ def main():
                         ),
                         *(
                             ["--first-creature"]
-                            if args.creature_ability or args.finish_attacks
+                            if args.creature_ability
+                            or args.finish_attacks
+                            or args.select_attacker
                             else []
                         ),
                     ],
@@ -297,6 +312,8 @@ def main():
                     command += ["-manaforgeLivePriority", "1"]
                 if args.creature_ability:
                     command += ["-manaforgeLiveCreature", "1"]
+                if args.select_attacker:
+                    command += ["-manaforgeLiveSelectAttacker", "1"]
                 if args.finish_attacks:
                     command += ["-manaforgeLiveFinishAttacks", "1"]
                 if args.combat_priority:
@@ -349,6 +366,7 @@ def main():
                         or args.priority_pass
                         or args.creature_ability
                         or args.finish_attacks
+                        or args.select_attacker
                     )
                     and ready.get("mulligan_controls") is not True
                 ):
@@ -363,7 +381,9 @@ def main():
                     raise RuntimeError("LIVE_UNITY_ARTWORK_NOT_PRESENTED")
                 if args.interactive:
                     print(
-                        "Select Finish attacks, then the offered Pass priority; 60 seconds per choice."
+                        "Select the offered attacker within 60 seconds; declaration remains open."
+                        if args.select_attacker
+                        else "Select Finish attacks, then the offered Pass priority; 60 seconds per choice."
                         if args.combat_priority
                         else "Select Finish attacks within 60 seconds; no attackers have been selected in this public fixture."
                         if args.finish_attacks
@@ -525,6 +545,30 @@ def main():
                     is not args.creature_ability
                 ):
                     raise RuntimeError("LIVE_UNITY_ABILITY_CONFIRMATION_FAILED")
+                if args.select_attacker:
+                    if (
+                        ready.get("attacker_choice_presented") is not True
+                        or chosen.get("snapshot_count") != 1
+                        or chosen.get("confirmed_receipt_count") != 0
+                        or chosen.get("uncertain_receipt_count") != 1
+                    ):
+                        raise RuntimeError("LIVE_UNITY_ATTACKER_RECEIPT_FAILED")
+                    if (
+                        any(
+                            native.get(field) is not True
+                            for field in (
+                                "native_attack_source_offered",
+                                "native_attacker_selected",
+                                "native_attack_assignment_observed",
+                                "native_attack_selection_open",
+                                "creature_resolved",
+                                "native_cast_ability_matched",
+                                "creature_spell_on_stack",
+                            )
+                        )
+                        or native.get("native_empty_attack_submitted") is not False
+                    ):
+                        raise RuntimeError("LIVE_UNITY_ATTACKER_EVIDENCE_FAILED")
                 if args.finish_attacks and any(
                     native.get(field) is not True
                     for field in (
@@ -584,10 +628,12 @@ def main():
                     unity_priority_pass_submitted=args.priority_pass,
                     unity_casting_ability_submitted=args.creature_ability,
                     native_cast_ability_matched=args.creature_ability
-                    or args.finish_attacks,
+                    or args.finish_attacks
+                    or args.select_attacker,
                     creature_spell_on_stack=args.creature_ability
-                    or args.finish_attacks,
-                    creature_resolved=args.finish_attacks,
+                    or args.finish_attacks
+                    or args.select_attacker,
+                    creature_resolved=args.finish_attacks or args.select_attacker,
                     mulligan_controls=ready.get("mulligan_controls", False),
                     arena_button_glows=ready.get("arena_button_glows", 0),
                     arena_button_skins=ready.get("arena_button_skins", False),
@@ -609,6 +655,16 @@ def main():
                     )
                 if args.continue_priority:
                     evidence.update(followup_priority_presented=True, snapshot_count=2)
+                if args.select_attacker:
+                    evidence.update(
+                        native_attacker_selected=True,
+                        native_attack_assignment_observed=True,
+                        native_attack_selection_open=True,
+                        attacker_choice_presented=True,
+                        snapshot_count=1,
+                        confirmed_receipt_count=0,
+                        uncertain_receipt_count=1,
+                    )
                 if args.finish_attacks:
                     evidence.update(
                         native_attack_source_offered=True,
@@ -670,7 +726,9 @@ def main():
         json.dumps(evidence, indent=2) + "\n", encoding="utf-8"
     )
     print(
-        "Packaged Unity confirmed Finish attacks and the next priority pass, displayed the next native state read-only, cleared the viewer and reaped owned roots."
+        "Packaged Unity submitted an attacker choice; Java verified the native assignment. Receipt uncertain, declaration open; viewer cleared and roots reaped."
+        if args.select_attacker
+        else "Packaged Unity confirmed Finish attacks and the next priority pass, displayed the next native state read-only, cleared the viewer and reaped owned roots."
         if args.combat_priority
         else "Packaged Unity confirmed Finish attacks and displayed the next native priority state read-only; viewer cleared and roots reaped."
         if args.finish_attacks
