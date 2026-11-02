@@ -95,6 +95,9 @@ public final class OpeningProjectionChecks {
         JsonObject blocker=before.getAsJsonArray("players").get(0).getAsJsonObject().getAsJsonArray("battlefield").get(0).getAsJsonObject().deepCopy();blocker.addProperty("id","raw-blocker");blocker.addProperty("controller_name","raw-opponent-name");
         after.getAsJsonArray("players").get(1).getAsJsonObject().getAsJsonArray("battlefield").add(blocker);after.getAsJsonArray("combat").get(0).getAsJsonObject().getAsJsonArray("blockers").add("raw-blocker");after.getAsJsonArray("combat").get(0).getAsJsonObject().addProperty("blocked",true);
         check(NativeCastCorrelation.declaredPriorityEvidence(before,prompt,command,attackMetadata(true),accepted,after,next,attackMetadata(true),"raw-card")!=null);
+        JsonObject observed=projection.projectReadOnlyPostDeclaredPriority(after,next);shape(observed);check(observed.get("decision").isJsonNull() && observed.getAsJsonArray("actions").size()==0 && observed.getAsJsonArray("combat").get(0).getAsJsonObject().getAsJsonArray("blockers").size()==1 && !observed.toString().contains("raw-blocker"));
+        fails("LIVE_OPENING_PROJECTION_UNSUPPORTED",()->projection.projectReadOnlyDeclaredAttack(after,next));
+
         for(int mode=0;mode<12;mode++) {
             JsonObject bad=after.deepCopy(),badNext=next.deepCopy(),badAccepted=accepted.deepCopy(),badCommand=command.deepCopy(),metadata=attackMetadata(true);JsonObject group=bad.getAsJsonArray("combat").get(0).getAsJsonObject();
             if(mode==0)group.addProperty("defender","raw-human");

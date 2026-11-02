@@ -100,7 +100,15 @@ public final class OpeningSessionChecks {
             if(owner.dispatch(wire,"raw-game","raw-human",42,8).shouldSubmit || owner.pollNative()!=null)throw new AssertionError("DECLARATION_REPLAYED");
             JsonObject update=envelope(projection.projectReadOnlyDeclaredAttack(after,next));update.addProperty("message_id","declared-attack-result");new ManaforgeUnityOpening.VerifiedDeclaredAttackResult(proof,update);owner.observe(update.toString());
             try{new ManaforgeUnityOpening.VerifiedDeclaredAttackResult(proof,envelope(snapshot));throw new AssertionError("ACTIONABLE_DECLARATION_ACCEPTED");}catch(IllegalArgumentException expected){}
-            owner.disconnected();if(!receipt.equals(owner.receiptFor("land-action")))throw new AssertionError("DECLARATION_CONFIRMATION_LOST");
+            JsonObject passSnapshot=projection.projectDeclaredAttackPriority(after,next),passOffer=envelope(passSnapshot);passOffer.addProperty("message_id","declared-pass-offer");
+            new ManaforgeUnityOpening.VerifiedDeclaredAttackResult(proof,new ManaforgeUnityOpening.PriorityOffer(passOffer,43,8,value->{}));
+            try{new ManaforgeUnityOpening.VerifiedDeclaredAttackResult(proof,new ManaforgeUnityOpening.PriorityOffer(envelope(snapshot),42,8,value->{}));throw new AssertionError("NON_PRIORITY_DECLARATION_FOLLOWUP_ACCEPTED");}catch(IllegalArgumentException expected){}
+            owner.observe(passOffer.toString());JsonObject passWire=JsonParser.parseString(OpeningProjectionChecks.perform(passSnapshot)).getAsJsonObject();passWire.addProperty("message_id","declared-priority-pass");
+            if(!owner.dispatch(passWire.toString(),"raw-game","raw-human",43,8).shouldSubmit)throw new AssertionError("DECLARED_PASS_NOT_ADMITTED");JsonObject nativePass=owner.pollNative(),passAccepted=accepted.deepCopy(),passNext=next.deepCopy();passAccepted.add("request_id",nativePass.get("request_id"));passNext.addProperty("decision_id",44);
+            NativeCastCorrelation.PriorityEvidence passProof=NativeCastCorrelation.declaredPriorityEvidence(after,next,nativePass,OpeningProjectionChecks.attackMetadata(true),passAccepted,after,passNext,OpeningProjectionChecks.attackMetadata(true),"raw-card");
+            if(passProof==null)throw new AssertionError("DECLARED_PASS_PROOF_MISSING");JsonObject passReceipt=owner.confirmPriority("declared-priority-pass",passProof);
+            if(!"confirmed".equals(passReceipt.getAsJsonObject("body").get("outcome").getAsString()) || owner.dispatch(passWire.toString(),"raw-game","raw-human",43,8).shouldSubmit || owner.pollNative()!=null)throw new AssertionError("DECLARED_PASS_REPLAYED");
+            owner.disconnected();if(!receipt.equals(owner.receiptFor("land-action")) || !passReceipt.equals(owner.receiptFor("declared-priority-pass")))throw new AssertionError("DECLARATION_CONFIRMATION_LOST");
         }
     }
     static void attackerConfirmationChecks(manaforge.protocol.GatewayHandshake.ViewerContext context) throws Exception {

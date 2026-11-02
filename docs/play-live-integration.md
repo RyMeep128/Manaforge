@@ -1,5 +1,26 @@
 # Live Unity / Java / XMage integration
 
+## Submit post-declaration priority from Unity (0.5.183)
+
+```powershell
+python tools/check_play_unity_live.py --select-attacker --native-metadata --finish-selected-attack --declared-priority
+```
+
+After confirming the attacker choice and Finish attacks, Unity offers one native
+Pass priority on the same authenticated session. The existing typed priority
+confirmation requires exact queued-command evidence from the guarded Java
+post-declaration validator. Java then sends a fourth read-only combat snapshot.
+
+The narrow result projection preserves the single selected attacker and opposing
+defender, and maps any unique visible opposing battlefield blockers to opaque
+IDs. Earlier selection/declaration projections still reject blockers. Unity
+refreshes its assignment summary for each revision, displays native blocker
+counts when present, and captures `post-declared-priority.png` after mounting the
+actual result revision. Acceptance requires four snapshots, six acknowledgements,
+three confirmed receipts, zero uncertain receipts, matching native/UI blocker
+presence, a cleared viewer and reaped owned processes. No damage is inferred and
+no fourth input is sent. Existing shorter combat probes remain available.
+
 ## Observe one post-declaration pass in Java (0.5.182)
 
 ```powershell

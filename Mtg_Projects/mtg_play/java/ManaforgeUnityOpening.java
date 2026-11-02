@@ -28,11 +28,16 @@ public final class ManaforgeUnityOpening {
         public DeclaredAttackOffer(JsonObject snapshot,long decision,long cycle,DeclaredAttackSubmit submit){this.snapshot=snapshot.deepCopy();this.decision=decision;this.cycle=cycle;this.submit=submit;}
     }
     public static final class VerifiedDeclaredAttackResult {
-        private final NativeCastCorrelation.DeclaredAttackEvidence evidence;private final JsonObject snapshot;
+        private final NativeCastCorrelation.DeclaredAttackEvidence evidence;private final JsonObject snapshot;private final PriorityOffer followup;
         public VerifiedDeclaredAttackResult(NativeCastCorrelation.DeclaredAttackEvidence evidence,JsonObject snapshot) {
             JsonObject view=snapshot.getAsJsonObject("body").getAsJsonObject("snapshot");
             if(evidence==null || !"snapshot".equals(snapshot.get("message_type").getAsString()) || !view.get("decision").isJsonNull() || view.getAsJsonArray("actions").size()!=0 || view.getAsJsonArray("combat").size()!=1)throw new IllegalArgumentException("DECLARED_ATTACK_RESULT_NOT_READ_ONLY");
-            this.evidence=evidence;this.snapshot=snapshot.deepCopy();
+            this.evidence=evidence;this.snapshot=snapshot.deepCopy();this.followup=null;
+        }
+        public VerifiedDeclaredAttackResult(NativeCastCorrelation.DeclaredAttackEvidence evidence,PriorityOffer followup) {
+            JsonObject view=followup.snapshot.getAsJsonObject("body").getAsJsonObject("snapshot");
+            if(evidence==null || view.get("decision").isJsonNull() || !new JsonPrimitive(true).equals(view.getAsJsonObject("decision").get("is_priority")) || view.getAsJsonArray("combat").size()!=1 || view.getAsJsonArray("actions").size()!=1 || !"pass".equals(view.getAsJsonArray("actions").get(0).getAsJsonObject().get("kind").getAsString()))throw new IllegalArgumentException("DECLARED_ATTACK_RESULT_NOT_PASS_ONLY");
+            this.evidence=evidence;this.snapshot=followup.snapshot.deepCopy();this.followup=followup;
         }
     }
     public interface VerifiedAbilitySubmit {NativeCastCorrelation.AbilityEvidence submit(JsonObject command) throws Exception;}
@@ -129,6 +134,7 @@ public final class ManaforgeUnityOpening {
                     JsonObject request=WireMessages.parse(wire);String id=request.get("message_id").getAsString();
                     frames.write((evidence==null?owner.uncertain(id):evidence.confirm(owner,id)).toString(),5000,cancelled);
                     if(evidence!=null && evidence.snapshot!=null){owner.observe(evidence.snapshot.toString());frames.write(evidence.snapshot.toString(),5000,cancelled);}
+                    PriorityOffer next=evidence==null?null:evidence.followup;
                     if(evidence!=null && evidence.declared!=null) {
                         DeclaredAttackOffer offer=evidence.declared;boolean sent=false;
                         for(int retries=0;retries<8 && !sent;retries++) {
@@ -136,11 +142,10 @@ public final class ManaforgeUnityOpening {
                             String follow=frames.read((int)Math.min(60000,remaining),cancelled);SubmissionLedger.Prepared admitted=owner.dispatch(follow,game,engineViewer,offer.decision,offer.cycle);frames.write(admitted.receipt().toString(),5000,cancelled);if(!admitted.shouldSubmit)continue;
                             JsonObject finish=owner.pollNative();if(finish==null || owner.pollNative()!=null || cancelled.getAsBoolean())throw new IOException("LIVE_UNITY_DECLARED_ATTACK_QUEUE_FAILED");
                             VerifiedDeclaredAttackResult result=offer.submit.submit(finish);if(result==null)throw new IOException("LIVE_UNITY_DECLARED_ATTACK_UNPROVEN");
-                            String finishId=WireMessages.parse(follow).get("message_id").getAsString();frames.write(owner.confirmDeclaredAttack(finishId,result.evidence).toString(),5000,cancelled);owner.observe(result.snapshot.toString());frames.write(result.snapshot.toString(),5000,cancelled);sent=true;
+                            String finishId=WireMessages.parse(follow).get("message_id").getAsString();frames.write(owner.confirmDeclaredAttack(finishId,result.evidence).toString(),5000,cancelled);owner.observe(result.snapshot.toString());frames.write(result.snapshot.toString(),5000,cancelled);next=result.followup;sent=true;
                         }
                         if(!sent)throw new IOException("LIVE_UNITY_DECLARED_ATTACK_RETRY_LIMIT");
                     }
-                    PriorityOffer next=evidence==null?null:evidence.followup;
                     if(continuation!=null) {
                         if(evidence==null || evidence.ability==null)throw new IOException("LIVE_UNITY_CONTINUATION_UNCONFIRMED");
                         next=continuation.next();owner.observe(next.snapshot.toString());frames.write(next.snapshot.toString(),5000,cancelled);
