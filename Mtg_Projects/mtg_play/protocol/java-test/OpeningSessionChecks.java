@@ -82,8 +82,21 @@ public final class OpeningSessionChecks {
                 if(!passReceipt.equals(owner.receiptFor("followup-pass")))throw new AssertionError("PRIORITY_CONFIRMATION_LOST");
                 if(!phaseReceipt.equals(owner.receiptFor("post-resolution-pass")))throw new AssertionError("PHASE_CONFIRMATION_LOST");
             }
-            attackConfirmationChecks(context);attackerConfirmationChecks(context);declaredAttackConfirmationChecks(context);
+            attackConfirmationChecks(context);attackerConfirmationChecks(context);declaredAttackConfirmationChecks(context);turnDecisionConfirmationChecks(context);
         }finally{java.util.Arrays.fill(key,(byte)0);}
+    }
+    static void turnDecisionConfirmationChecks(manaforge.protocol.GatewayHandshake.ViewerContext context) throws Exception {
+        JsonObject before=OpeningProjectionChecks.attackState(),prompt=OpeningProjectionChecks.priorityPrompt();before.addProperty("priority_player","raw-name");before.addProperty("phase","POSTCOMBAT_MAIN");before.addProperty("step","POSTCOMBAT_MAIN");ManaforgeOpeningProjection projection=OpeningProjectionChecks.projection();JsonObject snapshot=projection.projectTurnContinuation(before,prompt);String wire=OpeningProjectionChecks.perform(snapshot);
+        try(ManaforgeOpeningSession owner=new ManaforgeOpeningSession(context,projection,envelope(snapshot).toString())){
+            if(!owner.dispatch(wire,"raw-game","raw-human",41,8).shouldSubmit)throw new AssertionError("TURN_NOT_ADMITTED");JsonObject command=owner.pollNative(),accepted=new JsonObject(),after=before.deepCopy(),next=OpeningProjectionChecks.priorityPrompt();next.addProperty("decision_id",42);after.addProperty("phase","END");after.addProperty("step","END_TURN");accepted.addProperty("event","response_sent");accepted.addProperty("accepted",true);accepted.add("request_id",command.get("request_id"));
+            NativeCastCorrelation.TurnDecisionEvidence proof=NativeCastCorrelation.turnDecisionEvidence(before,prompt,command,OpeningProjectionChecks.attackMetadata(true),accepted,after,next,OpeningProjectionChecks.attackMetadata(true),"raw-card");if(proof==null)throw new AssertionError("TURN_PROOF_MISSING");
+            for(int badCase=0;badCase<5;badCase++){JsonObject badAfter=after.deepCopy(),badNext=next.deepCopy(),badMetadata=OpeningProjectionChecks.attackMetadata(true);if(badCase==0)badAfter.getAsJsonArray("stack").add(new JsonObject());if(badCase==1)badAfter.getAsJsonArray("players").get(1).getAsJsonObject().addProperty("life",19);if(badCase==2)badMetadata.getAsJsonObject("objects").getAsJsonObject("raw-card").addProperty("incarnation",5);if(badCase==3)badNext.addProperty("decision_id",41);if(badCase==4)badMetadata.addProperty("priority_open",false);if(NativeCastCorrelation.turnDecisionEvidence(before,prompt,command,OpeningProjectionChecks.attackMetadata(true),accepted,badAfter,badNext,badMetadata,"raw-card")!=null)throw new AssertionError("INVALID_TURN_EFFECT_ACCEPTED");}
+
+            for(int mode=0;mode<2;mode++)try{owner.confirmTurnDecision(mode==0?"wrong":"land-action",mode==1?null:proof);throw new AssertionError("BAD_TURN_PROOF_ACCEPTED");}catch(IOException expected){if(!"TURN_EVIDENCE_MISMATCH".equals(expected.getMessage()))throw expected;}
+            JsonObject receipt=owner.confirmTurnDecision("land-action",proof);if(!"confirmed".equals(receipt.getAsJsonObject("body").get("outcome").getAsString()) || owner.dispatch(wire,"raw-game","raw-human",41,8).shouldSubmit || owner.pollNative()!=null)throw new AssertionError("TURN_REPLAYED");
+            JsonObject finalSnapshot=projection.projectTurnContinuation(after,next);finalSnapshot.add("decision",JsonNull.INSTANCE);finalSnapshot.add("actions",new JsonArray());projection.invalidateDecision();new ManaforgeUnityOpening.TurnResult(envelope(finalSnapshot),proof,null);try{new ManaforgeUnityOpening.TurnResult(envelope(snapshot),proof,null);throw new AssertionError("FINAL_TURN_AUTHORITY_ACCEPTED");}catch(IllegalArgumentException expected){}
+            owner.disconnected();if(!receipt.equals(owner.receiptFor("land-action")))throw new AssertionError("TURN_CONFIRMATION_LOST");
+        }
     }
     static void declaredAttackConfirmationChecks(manaforge.protocol.GatewayHandshake.ViewerContext context) throws Exception {
         JsonObject before=OpeningProjectionChecks.attackState(),prompt=OpeningProjectionChecks.attackPrompt(),next=OpeningProjectionChecks.priorityPrompt();prompt.addProperty("decision_id",42);next.addProperty("decision_id",43);

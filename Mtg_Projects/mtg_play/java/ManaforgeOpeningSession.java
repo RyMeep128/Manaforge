@@ -53,6 +53,9 @@ public final class ManaforgeOpeningSession implements AutoCloseable {
         if(evidence==null || submittedNative==null || !id.equals(submittedNative.get("request_id").getAsString()) || !evidence.matchesCommand(submittedNative))throw new IOException("DECLARED_ATTACK_EVIDENCE_MISMATCH");
         return boundary.recordOutcome(id,"confirmed",null);
     }
+    public JsonObject confirmTurnDecision(String id,NativeCastCorrelation.TurnDecisionEvidence evidence) throws IOException {
+        if(evidence==null || submittedNative==null || !id.equals(submittedNative.get("request_id").getAsString()) || !evidence.matchesCommand(submittedNative))throw new IOException("TURN_EVIDENCE_MISMATCH");return boundary.recordOutcome(id,"confirmed",null);
+    }
     public void disconnected() throws IOException {
         try{boundary.disconnected();}finally{projection.invalidateDecision();nativeQueue.clear();}
     }

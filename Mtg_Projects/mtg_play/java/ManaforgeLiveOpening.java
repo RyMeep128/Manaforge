@@ -24,7 +24,7 @@ public final class ManaforgeLiveOpening {
     private final BlockingQueue<JsonObject> events = new ArrayBlockingQueue<>(512);
     private final AtomicBoolean overflow = new AtomicBoolean(), cancelled = new AtomicBoolean();
     private final ManaforgeBridge bridge = new ManaforgeBridge(event -> { if(!events.offer(event))overflow.set(true); });
-    private final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(Boolean.getBoolean("manaforge.finishAttacks")?240:Boolean.getBoolean("manaforge.postResolutionPass")?240:Boolean.getBoolean("manaforge.continuePriority")?180:90);
+    private final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(Boolean.getBoolean("manaforge.loopTurn")?420:Boolean.getBoolean("manaforge.finishAttacks")?240:Boolean.getBoolean("manaforge.postResolutionPass")?240:Boolean.getBoolean("manaforge.continuePriority")?180:90);
     private JsonObject state, pending;
     private String engineViewer, artifactHash;
     private boolean firstLand,landObserved,unityPriorityPass,firstCreature,castAbilityMatched;
@@ -357,7 +357,9 @@ public final class ManaforgeLiveOpening {
                                                 return new ManaforgeUnityOpening.ObservedSnapshot(damageResult,damageProof,new ManaforgeUnityOpening.PriorityOffer(damageResult,cleanupPrompt.get("decision_id").getAsLong(),cleanupState.get("cycle").getAsLong(),cleanupPass->{
                                                     if(!"boolean".equals(cleanupPass.get("kind").getAsString()) || !new JsonPrimitive(false).equals(cleanupPass.get("value")))throw new IOException("LIVE_COMBAT_CLEANUP_NOT_PASS");cleanupCommand[0]=cleanupPass.deepCopy();cleanupAccepted[0]=request(cleanupPass,"response_sent");if(!new JsonPrimitive(true).equals(cleanupAccepted[0].get("accepted")))throw new IOException("LIVE_COMBAT_CLEANUP_REJECTED");advancement(cleanupState.get("cycle").getAsLong(),cleanupPrompt.get("decision_id").getAsLong());
                                                 },()->{
-                                                    NativeCastCorrelation.PriorityEvidence cleanupProof=observeCombatCleanup(cleanupState,cleanupPrompt,cleanupCommand[0],cleanupMetadata,cleanupAccepted[0]);JsonObject cleanupResult=new JsonObject(),cleanupBody=new JsonObject();cleanupResult.addProperty("wire_version",1);cleanupResult.addProperty("message_type","snapshot");cleanupResult.addProperty("message_id","combat-cleanup-result");cleanupBody.addProperty("fixture_only",false);cleanupBody.add("snapshot",projection.projectReadOnlyPriority(state,combatCleanupPrompt));cleanupResult.add("body",cleanupBody);return new ManaforgeUnityOpening.ObservedSnapshot(cleanupResult,cleanupProof);
+                                                    NativeCastCorrelation.PriorityEvidence cleanupProof=observeCombatCleanup(cleanupState,cleanupPrompt,cleanupCommand[0],cleanupMetadata,cleanupAccepted[0]);
+                                                    if(loopTurn){UnityTurnCycle turnCycle=new UnityTurnCycle(projection);ManaforgeUnityOpening.TurnOffer turn=turnCycle.offer(combatCleanupPrompt);return ManaforgeUnityOpening.withTurn(new ManaforgeUnityOpening.ObservedSnapshot(turn.snapshot(),cleanupProof),turn);}
+                                                    JsonObject cleanupResult=new JsonObject(),cleanupBody=new JsonObject();cleanupResult.addProperty("wire_version",1);cleanupResult.addProperty("message_type","snapshot");cleanupResult.addProperty("message_id","combat-cleanup-result");cleanupBody.addProperty("fixture_only",false);cleanupBody.add("snapshot",projection.projectReadOnlyPriority(state,combatCleanupPrompt));cleanupResult.add("body",cleanupBody);return new ManaforgeUnityOpening.ObservedSnapshot(cleanupResult,cleanupProof);
                                                 }));
                                             }
                                             return new ManaforgeUnityOpening.ObservedSnapshot(damageResult,damageProof);
@@ -480,6 +482,26 @@ public final class ManaforgeLiveOpening {
         },cancelled::get,false);
         advancement(cycle,decision);
         observeCombatCleanup(before,prompt,command[0],metadata,accepted[0]);if(loopTurn)loopTurn(projection);
+    }
+    private final class UnityTurnCycle {
+        private final ManaforgeOpeningProjection projection;private final JsonObject start,startMetadata;private final Set<String> discarded=new HashSet<>();private int serial;
+        UnityTurnCycle(ManaforgeOpeningProjection projection) throws Exception {this.projection=projection;start=state.deepCopy();startMetadata=sourceMetadata(state,unityCastSource);}
+        private JsonObject envelope(JsonObject snapshot){JsonObject result=new JsonObject(),body=new JsonObject();result.addProperty("wire_version",1);result.addProperty("message_type","snapshot");result.addProperty("message_id","turn-live-"+(serial++));body.addProperty("fixture_only",false);body.add("snapshot",snapshot);result.add("body",body);return result;}
+        ManaforgeUnityOpening.TurnOffer offer(JsonObject nativePrompt) throws Exception {
+            final JsonObject before=state.deepCopy(),prompt=nativePrompt.deepCopy(),metadata=sourceMetadata(state,unityCastSource);final boolean discard="GAME_TARGET".equals(prompt.get("kind").getAsString());
+            JsonObject snapshot=envelope(projection.projectTurnContinuation(state,prompt));
+            return new ManaforgeUnityOpening.TurnOffer(snapshot,prompt.get("decision_id").getAsLong(),before.get("cycle").getAsLong(),command->{
+                if(discard?(!"object".equals(command.get("kind").getAsString())):(!"boolean".equals(command.get("kind").getAsString()) || !new JsonPrimitive(false).equals(command.get("value"))))throw new IOException("LIVE_TURN_BAD_RESPONSE");
+                JsonObject accepted=request(command,"response_sent");if(!new JsonPrimitive(true).equals(accepted.get("accepted")))throw new IOException("LIVE_TURN_REJECTED");advancement(before.get("cycle").getAsLong(),prompt.get("decision_id").getAsLong());JsonObject nextPrompt=null;
+                for(int count=0;count<80;count++){JsonObject event=pending==null?next():pending;if(!"decision".equals(event.get("event").getAsString()))continue;pending=null;nextPrompt=event.deepCopy();break;}
+                if(nextPrompt==null)throw new IOException("LIVE_TURN_NEXT_DECISION_TIMEOUT");JsonObject afterMetadata=sourceMetadata(state,unityCastSource);NativeCastCorrelation.TurnDecisionEvidence proof=NativeCastCorrelation.turnDecisionEvidence(before,prompt,command,metadata,accepted,state,nextPrompt,afterMetadata,unityCastSource);if(proof==null)throw new IOException("LIVE_TURN_EFFECT_UNPROVEN");
+                if(discard && !discarded.add(command.get("value").getAsString()))throw new IOException("LIVE_TURN_DUPLICATE_DISCARD");
+                if(NativeCastCorrelation.observesNextHumanTurn(start,startMetadata,state,nextPrompt,afterMetadata,unityCastSource,discarded)){
+                    JsonObject finalSnapshot=projection.projectTurnContinuation(state,nextPrompt,true);for(JsonElement action:finalSnapshot.getAsJsonArray("actions"))nextTurnActionsOffered|="cast_spell".equals(action.getAsJsonObject().get("kind").getAsString());if(!nextTurnActionsOffered)throw new IOException("LIVE_TURN_ACTIONS_UNAVAILABLE");finalSnapshot.add("decision",JsonNull.INSTANCE);finalSnapshot.add("actions",new JsonArray());projection.invalidateDecision();nextHumanTurnObserved=true;cleanupDiscardObserved=!discarded.isEmpty();return new ManaforgeUnityOpening.TurnResult(envelope(finalSnapshot),proof,null);
+                }
+                ManaforgeUnityOpening.TurnOffer next=offer(nextPrompt);return new ManaforgeUnityOpening.TurnResult(next.snapshot(),proof,next);
+            });
+        }
     }
     private void loopTurn(ManaforgeOpeningProjection projection) throws Exception {
         final JsonObject before=state.deepCopy(),metadata=sourceMetadata(state,unityCastSource);JsonObject prompt=combatCleanupPrompt.deepCopy();final Set<String> discarded=new HashSet<>();
@@ -647,7 +669,7 @@ public final class ManaforgeLiveOpening {
             if(probe.postResolutionPass && !probe.observeResolution)throw new IOException();
             if(probe.finishAttacks && (!probe.firstCreature || probe.metadataContext==null || probe.continuePriority || probe.postResolutionPass))throw new IOException();
             if(probe.combatPriority && (!probe.finishAttacks || probe.unityReady==null))throw new IOException();
-            if(probe.loopTurn && (!probe.completeCombat || probe.unityReady!=null))throw new IOException();
+            if(probe.loopTurn && !probe.completeCombat)throw new IOException();
             if(probe.blockedDamage && !probe.blockedCombat)throw new IOException();
             if(probe.blockedCombat && (!probe.declaredPriority || probe.combatDamage))throw new IOException();
             if(probe.completeCombat && !probe.combatDamage)throw new IOException();

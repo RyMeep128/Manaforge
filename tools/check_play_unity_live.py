@@ -23,6 +23,16 @@ def main():
     artifacts = ROOT / "Mtg_Projects/mtg_play_unity/Artifacts"
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
+        "--loop-turn",
+        action="store_true",
+        help="Continue to next human main phase; requires --complete-combat",
+    )
+    parser.add_argument(
+        "--no-capture",
+        action="store_true",
+        help="Skip image capture; gameplay checks still run",
+    )
+    parser.add_argument(
         "--blocked-damage",
         action="store_true",
         help="One explicit pass and native blocker damage; requires --blocked-combat",
@@ -127,6 +137,8 @@ def main():
         default=artifacts / ("UnityLive-" + uuid.uuid4().hex[:10]),
     )
     args = parser.parse_args()
+    if args.loop_turn and not args.complete_combat:
+        parser.error("--loop-turn requires --complete-combat")
     if args.blocked_damage and not args.blocked_combat:
         parser.error("--blocked-damage requires --blocked-combat")
     if args.blocked_combat and (not args.declared_priority or args.combat_damage):
@@ -256,6 +268,7 @@ def main():
                         "-Djava.awt.headless=true",
                         "-Dfile.encoding=UTF-8",
                         "-Djava.net.preferIPv4Stack=true",
+                        *(["-Dmanaforge.loopTurn=true"] if args.loop_turn else []),
                         *(
                             ["-Dmanaforge.blockedDamage=true"]
                             if args.blocked_damage
@@ -386,6 +399,8 @@ def main():
                     command += ["-manaforgeLivePriority", "1"]
                 if args.creature_ability:
                     command += ["-manaforgeLiveCreature", "1"]
+                if args.loop_turn:
+                    command += ["-manaforgeLiveLoopTurn", "1"]
                 if args.blocked_damage:
                     command += ["-manaforgeLiveBlockedDamage", "1"]
                 if args.blocked_combat:
@@ -416,7 +431,7 @@ def main():
                         "-manaforgeLiveScript",
                         "1",
                         "-manaforgeLiveCapture",
-                        "1",
+                        "0" if args.no_capture else "1",
                     ]
                 if args.arena_backdrop:
                     command += ["-manaforgeArenaBackdrop", "1"]
@@ -467,7 +482,9 @@ def main():
                     raise RuntimeError("LIVE_UNITY_ARTWORK_NOT_PRESENTED")
                 if args.interactive:
                     print(
-                        "Select the attacker, Finish attacks, then Pass priority three times; 60 seconds per choice."
+                        "Follow the offered attacker, finish, priority and cleanup-discard responses through the next human main phase; the session is bounded to six minutes."
+                        if args.loop_turn
+                        else "Select the attacker, Finish attacks, then Pass priority three times; 60 seconds per choice."
                         if args.complete_combat
                         else "Select the attacker, Finish attacks, then Pass priority twice; 60 seconds per choice."
                         if args.combat_damage
@@ -591,11 +608,21 @@ def main():
                         != blocked_damage.get("blocked_defender_life_after")
                     ):
                         raise RuntimeError("LIVE_UNITY_BLOCKED_DAMAGE_NOT_PRESENTED")
+                if args.loop_turn:
+                    turn_result = wait_file("next-human-turn-ready", 300)
+                    if (
+                        turn_result.get("next_human_turn_presented") is not True
+                        or turn_result.get("turn_number")
+                        != turn_result.get("turn_loop_start", -10) + 2
+                    ):
+                        raise RuntimeError("LIVE_UNITY_NEXT_HUMAN_TURN_NOT_PRESENTED")
                 chosen = wait_file("choice", 60)
                 if (
                     chosen.get("ack_count")
                     != (
-                        10
+                        2 * (chosen.get("snapshot_count", 0) - 1)
+                        if args.loop_turn
+                        else 10
                         if args.complete_combat
                         else 8
                         if args.combat_damage or args.blocked_damage
@@ -709,7 +736,9 @@ def main():
                         ready.get("attacker_choice_presented") is not True
                         or chosen.get("snapshot_count")
                         != (
-                            6
+                            turn_result["snapshot_count"]
+                            if args.loop_turn
+                            else 6
                             if args.complete_combat
                             else 5
                             if args.combat_damage or args.blocked_damage
@@ -721,7 +750,9 @@ def main():
                         )
                         or chosen.get("confirmed_receipt_count")
                         != (
-                            5
+                            chosen["snapshot_count"] - 1
+                            if args.loop_turn
+                            else 5
                             if args.complete_combat
                             else 4
                             if args.combat_damage or args.blocked_damage
@@ -901,7 +932,9 @@ def main():
                         native_attack_selection_open=not args.finish_selected_attack,
                         attacker_choice_presented=True,
                         attack_assignment_presented=True,
-                        snapshot_count=6
+                        snapshot_count=chosen["snapshot_count"]
+                        if args.loop_turn
+                        else 6
                         if args.complete_combat
                         else 5
                         if args.combat_damage or args.blocked_damage
@@ -910,7 +943,9 @@ def main():
                         else 3
                         if args.finish_selected_attack
                         else 2,
-                        confirmed_receipt_count=5
+                        confirmed_receipt_count=chosen["confirmed_receipt_count"]
+                        if args.loop_turn
+                        else 5
                         if args.complete_combat
                         else 4
                         if args.combat_damage or args.blocked_damage
@@ -920,6 +955,17 @@ def main():
                         if args.finish_selected_attack
                         else 1,
                         uncertain_receipt_count=0,
+                    )
+                if args.loop_turn:
+                    evidence.update(
+                        native_next_human_turn_observed=True,
+                        native_own_draw_observed=True,
+                        native_source_untapped=True,
+                        native_next_turn_actions_offered=True,
+                        native_cleanup_discard_observed=native[
+                            "native_cleanup_discard_observed"
+                        ],
+                        next_human_turn_presented=True,
                     )
                 if args.blocked_damage:
                     evidence.update(
@@ -1032,7 +1078,9 @@ def main():
         json.dumps(evidence, indent=2) + "\n", encoding="utf-8"
     )
     print(
-        "Packaged Unity confirmed four inputs and displayed one native damage marked on Ornithopter with unchanged life totals; viewer cleared and owned roots reaped."
+        "Packaged Unity continued cleanup, the AI turn and the next human main phase on one session; turn inputs confirmed, viewer cleared and owned roots reaped."
+        if args.loop_turn
+        else "Packaged Unity confirmed four inputs and displayed one native damage marked on Ornithopter with unchanged life totals; viewer cleared and owned roots reaped."
         if args.blocked_damage
         else "Packaged Unity displayed engine-declared AI blocker names after three confirmed inputs; viewer cleared and owned roots reaped."
         if args.blocked_combat

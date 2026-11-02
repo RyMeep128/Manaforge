@@ -66,7 +66,7 @@ namespace Manaforge.Play
     }
     public sealed class ProjectedDecisionFrame
     {
-        public CardProjectionContext Context {get;} public string Status {get;} public bool ActionsComplete {get;}
+        public CardProjectionContext Context {get;} public string Status {get;} public long? Turn {get;} public string Phase {get;} public string ActivePlayerId {get;} public bool ActionsComplete {get;}
         public IReadOnlyDictionary<string,long?> PlayerLifeTotals {get;}
         public IReadOnlyList<ProjectedCombatAssignment> Combat {get;}
         public IReadOnlyList<ProjectedAction> Actions {get;} public ProjectedDecision Decision {get;}
@@ -74,6 +74,7 @@ namespace Manaforge.Play
         public IReadOnlyList<string> UnsupportedFields {get;}
         internal ProjectedDecisionFrame(JObject source)
         {
+            Turn=(long?)source["turn"];Phase=(string)source["phase"];ActivePlayerId=(string)source["active_player_id"];
             PlayerLifeTotals=new System.Collections.ObjectModel.ReadOnlyDictionary<string,long?>(source["players"].ToDictionary(player=>(string)player["player_id"],player=>(long?)player["life"]));
             Combat=Array.AsReadOnly(source["combat"].Select(group=>new ProjectedCombatAssignment(group,source)).ToArray());
             Context=new CardProjectionContext((string)source["session_id"],(string)source["viewer_id"],(long)source["revision"]);Status=(string)source["status"];ActionsComplete=(bool)source["actions_complete"];

@@ -72,10 +72,21 @@ public final class ManaforgeUnityOpening {
     public interface NextPriority {PriorityOffer next() throws Exception;}
     public interface Observation {ObservedSnapshot read() throws Exception;}
     public static final class ObservedSnapshot {
-        private final JsonObject snapshot;private final NativeCastCorrelation.PriorityEvidence evidence;private final PriorityOffer followup;
+        private final JsonObject snapshot;private final NativeCastCorrelation.PriorityEvidence evidence;private final PriorityOffer followup;private TurnOffer turn;
         public ObservedSnapshot(JsonObject snapshot,NativeCastCorrelation.PriorityEvidence evidence){this(snapshot,evidence,null);}
         public ObservedSnapshot(JsonObject snapshot,NativeCastCorrelation.PriorityEvidence evidence,PriorityOffer followup){this.snapshot=snapshot.deepCopy();this.evidence=evidence;this.followup=followup;}
     }
+    public interface TurnSubmit {TurnResult submit(JsonObject command) throws Exception;}
+    public static final class TurnOffer {
+        private final JsonObject snapshot;private final long decision,cycle;private final TurnSubmit submit;
+        public TurnOffer(JsonObject snapshot,long decision,long cycle,TurnSubmit submit){this.snapshot=snapshot.deepCopy();this.decision=decision;this.cycle=cycle;this.submit=submit;}
+        public JsonObject snapshot(){return snapshot.deepCopy();}
+    }
+    public static final class TurnResult {
+        private final JsonObject snapshot;private final NativeCastCorrelation.TurnDecisionEvidence evidence;private final TurnOffer next;
+        public TurnResult(JsonObject snapshot,NativeCastCorrelation.TurnDecisionEvidence evidence,TurnOffer next){if(evidence==null || snapshot==null)throw new IllegalArgumentException("TURN_RESULT_UNPROVEN");JsonObject view=snapshot.getAsJsonObject("body").getAsJsonObject("snapshot");if(next==null?(!view.get("decision").isJsonNull() || view.getAsJsonArray("actions").size()!=0):!snapshot.equals(next.snapshot))throw new IllegalArgumentException("TURN_RESULT_AUTHORITY");this.snapshot=snapshot.deepCopy();this.evidence=evidence;this.next=next;}
+    }
+    public static ObservedSnapshot withTurn(ObservedSnapshot observed,TurnOffer turn){if(turn==null || observed==null || observed.evidence==null || !observed.snapshot.equals(turn.snapshot))throw new IllegalArgumentException("TURN_OFFER_MISMATCH");observed.turn=turn;return observed;}
     public static final class PriorityOffer {
         private final JsonObject snapshot;private final long decision,cycle;private final ManaforgeOpeningLoopback.NativeSubmit submit;private final Observation observation;
         public PriorityOffer(JsonObject snapshot,long decision,long cycle,ManaforgeOpeningLoopback.NativeSubmit submit){this(snapshot,decision,cycle,submit,null);}
@@ -151,6 +162,7 @@ public final class ManaforgeUnityOpening {
                         if(evidence==null || evidence.ability==null)throw new IOException("LIVE_UNITY_CONTINUATION_UNCONFIRMED");
                         next=continuation.next();owner.observe(next.snapshot.toString());frames.write(next.snapshot.toString(),5000,cancelled);
                     }
+                    TurnOffer turn=null;
                     if(next!=null) {
                         for(int stage=0;stage<3 && next!=null;stage++) {
                             PriorityOffer following=null;
@@ -170,7 +182,7 @@ public final class ManaforgeUnityOpening {
                                     ObservedSnapshot observed=next.observation.read();
                                     frames.write(owner.confirmPriority(passId,observed.evidence).toString(),5000,cancelled);
                                     owner.observe(observed.snapshot.toString());frames.write(observed.snapshot.toString(),5000,cancelled);
-                                    following=observed.followup;
+                                    following=observed.followup;turn=observed.turn;
                                 }
                                 sent=true;
                             }
@@ -179,6 +191,16 @@ public final class ManaforgeUnityOpening {
                         }
                         if(next!=null)throw new IOException("LIVE_UNITY_PRIORITY_STAGE_LIMIT");
                     }
+                    for(int turnStage=0;turn!=null && turnStage<32;turnStage++) {
+                        TurnOffer offer=turn;turn=null;boolean sent=false;
+                        for(int retries=0;retries<8 && !sent;retries++) {
+                            long remaining=java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(deadline-System.nanoTime());if(remaining<=0)throw new IOException("LIVE_UNITY_TURN_TIMEOUT");
+                            String wireTurn=frames.read((int)Math.min(60000,remaining),cancelled);SubmissionLedger.Prepared admitted=owner.dispatch(wireTurn,game,engineViewer,offer.decision,offer.cycle);frames.write(admitted.receipt().toString(),5000,cancelled);if(!admitted.shouldSubmit)continue;
+                            JsonObject commandTurn=owner.pollNative();if(commandTurn==null || owner.pollNative()!=null || cancelled.getAsBoolean())throw new IOException("LIVE_UNITY_TURN_QUEUE_FAILED");TurnResult result=offer.submit.submit(commandTurn);String turnId=WireMessages.parse(wireTurn).get("message_id").getAsString();frames.write(owner.confirmTurnDecision(turnId,result.evidence).toString(),5000,cancelled);owner.observe(result.snapshot.toString());frames.write(result.snapshot.toString(),5000,cancelled);turn=result.next;sent=true;
+                        }
+                        if(!sent)throw new IOException("LIVE_UNITY_TURN_RETRY_LIMIT");
+                    }
+                    if(turn!=null)throw new IOException("LIVE_UNITY_TURN_STAGE_LIMIT");
                     while(!cancelled.getAsBoolean() && System.nanoTime()<deadline)Thread.sleep(10);
                     owner.disconnected();
                 }

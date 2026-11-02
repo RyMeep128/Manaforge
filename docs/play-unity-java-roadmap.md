@@ -1215,3 +1215,14 @@ engine card offers are checked. Public graveyards and cleanup discard projection
 are supported in the turn continuation. Unity continuous decision delivery and
 full-match results are the next gameplay work; human visual review remains
 deferred as directed. P2/P3/P4 and formal acceptance gates remain partial.
+
+
+### Continuous Unity turn delivery (0.5.194)
+
+A single packaged authenticated session now carries the bounded combat fixture
+through cleanup discard, the AI turn and the next human main phase. Per-input
+typed evidence releases each next decision safely; a live no-capture run passed
+10 confirmed inputs with no uncertain receipts. The endpoint verifies native
+draw/untap and renewed card offers, then ends read-only. Repeated playable cycles,
+full-match results and broader choices remain open. Human visual review stays
+deferred while gameplay work continues.

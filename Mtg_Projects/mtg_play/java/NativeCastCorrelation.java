@@ -42,6 +42,32 @@ public final class NativeCastCorrelation {
         if(found!=1 || !viewer.equals(string(entry,"owner")) || !viewer.equals(string(entry,"controller")))throw new IllegalArgumentException();
         return number(entry,"incarnation");
     }
+    public static final class TurnDecisionEvidence {
+        private final JsonObject command;private TurnDecisionEvidence(JsonObject command){this.command=command.deepCopy();}
+        public boolean matchesCommand(JsonObject candidate){return command.equals(candidate);}
+    }
+    public static TurnDecisionEvidence turnDecisionEvidence(JsonObject before,JsonObject prompt,JsonObject command,JsonObject beforeMetadata,JsonObject accepted,JsonObject after,JsonObject nextPrompt,JsonObject afterMetadata,String source) {
+        try {
+            boolean discard="GAME_TARGET".equals(string(prompt,"kind"));boolean nextDiscard="GAME_TARGET".equals(string(nextPrompt,"kind"));
+            if(!string(before,"game_id").equals(string(after,"game_id")) || !string(before,"viewer").equals(string(after,"viewer")) || !string(before,"game_id").equals(string(command,"game_id")) || !"respond".equals(string(command,"command")) || number(command,"decision_id")!=number(prompt,"decision_id")
+                || number(prompt,"cycle")!=number(before,"cycle") || number(nextPrompt,"cycle")!=number(after,"cycle") || number(nextPrompt,"decision_id")<=number(prompt,"decision_id") || number(after,"cycle")<number(before,"cycle") || number(after,"turn")<number(before,"turn") || number(after,"turn")>number(before,"turn")+1
+                || !new JsonPrimitive(!discard).equals(beforeMetadata.get("priority_open")) || !new JsonPrimitive(!nextDiscard).equals(afterMetadata.get("priority_open")) || battlefieldCounter(before,beforeMetadata,source)!=battlefieldCounter(after,afterMetadata,source)
+                || before.getAsJsonArray("stack").size()!=0 || after.getAsJsonArray("stack").size()!=0 || before.getAsJsonArray("combat").size()!=0 || after.getAsJsonArray("combat").size()!=0
+                || !"response_sent".equals(string(accepted,"event")) || !new JsonPrimitive(true).equals(accepted.get("accepted")) || !string(command,"request_id").equals(string(accepted,"request_id")))return null;
+            if(discard){
+                if(!new JsonPrimitive(false).equals(prompt.get("is_priority")) || !"END".equals(string(before,"phase")) || !"CLEANUP".equals(string(before,"step")) || before.getAsJsonArray("hand").size()!=8 || !"object".equals(string(command,"kind")))return null;boolean active=false;for(JsonElement row:before.getAsJsonArray("players")){JsonObject player=row.getAsJsonObject();if(string(before,"viewer").equals(string(player,"id")) && string(player,"name").equals(string(before,"active_player")))active=true;}if(!active)return null;
+                String chosen=string(command,"value");boolean offered=false,inHand=false,inGrave=false;for(JsonElement id:prompt.getAsJsonArray("targets"))offered|=chosen.equals(id.getAsString());for(JsonElement item:before.getAsJsonArray("hand"))inHand|=chosen.equals(string(item.getAsJsonObject(),"id"));
+                for(JsonElement item:after.getAsJsonArray("hand"))if(chosen.equals(string(item.getAsJsonObject(),"id")))return null;
+                for(JsonElement row:after.getAsJsonArray("players")){JsonObject player=row.getAsJsonObject();if(string(after,"viewer").equals(string(player,"id")))for(JsonElement item:player.getAsJsonArray("graveyard"))inGrave|=chosen.equals(string(item.getAsJsonObject(),"id"));}
+                if(!offered || !inHand || !inGrave || after.getAsJsonArray("hand").size()!=7)return null;
+            }else if(!"GAME_SELECT".equals(string(prompt,"kind")) || !new JsonPrimitive(true).equals(prompt.get("is_priority")) || prompt.has("attackers") || prompt.has("blockers") || !"boolean".equals(string(command,"kind")) || !new JsonPrimitive(false).equals(command.get("value")))return null;
+            if(nextDiscard){if(!new JsonPrimitive(false).equals(nextPrompt.get("is_priority")) || !"END".equals(string(after,"phase")) || !"CLEANUP".equals(string(after,"step")) || after.getAsJsonArray("hand").size()!=8)return null;}
+            else if(!"GAME_SELECT".equals(string(nextPrompt,"kind")) || !new JsonPrimitive(true).equals(nextPrompt.get("is_priority")) || nextPrompt.has("attackers") || nextPrompt.has("blockers"))return null;
+            Map<String,Long> lives=new HashMap<>();if(before.getAsJsonArray("players").size()!=2 || after.getAsJsonArray("players").size()!=2)return null;for(JsonElement row:before.getAsJsonArray("players")){JsonObject player=row.getAsJsonObject();if(lives.put(string(player,"id"),number(player,"life"))!=null)return null;}
+            Set<String> seen=new HashSet<>();for(JsonElement row:after.getAsJsonArray("players")){JsonObject player=row.getAsJsonObject();String id=string(player,"id");if(!seen.add(id) || !lives.containsKey(id) || number(player,"life")!=lives.get(id))return null;}
+            return new TurnDecisionEvidence(command);
+        }catch(RuntimeException unsupported){return null;}
+    }
     /** Native return to the same human seat after one opposing turn, including cleanup/draw. */
     public static boolean observesNextHumanTurn(JsonObject before,JsonObject beforeMetadata,JsonObject after,JsonObject prompt,JsonObject afterMetadata,String source,Set<String> discarded) {
         try {

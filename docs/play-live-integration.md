@@ -1,5 +1,31 @@
 # Live Unity / Java / XMage integration
 
+## Continue the Unity session through the next human turn (0.5.194)
+
+```powershell
+python tools/check_play_unity_live.py --select-attacker --native-metadata --finish-selected-attack --declared-priority --combat-damage --complete-combat --loop-turn --no-capture
+```
+
+The same authenticated packaged session now continues after combat cleanup,
+serving engine-offered Pass priority and cleanup Discard actions until the human's
+next pre-combat main phase. Each input receives typed exact-command evidence
+before its receipt is confirmed and the next snapshot is sent. A discard must
+move the offered card from the active human's eight-card hand into that seat's
+graveyard. Invalid guards, changed source incarnation, unsupported decisions,
+life changes and mismatched outcomes fail closed. The turn chain is capped at
+32 inputs, with existing per-read deadlines and bounded replay retries.
+
+The endpoint proof checks native draw, untap, retained hand identities, any cleanup
+discard, stable life totals and renewed native card offers. The final Unity
+snapshot is read-only: continuing another cast beyond this bounded cycle is
+subsequent gameplay work. The live run completed a required discard, the AI turn
+and the next human main phase with 11 snapshots, 20 acknowledgements, 10 confirmed
+receipts and zero uncertain receipts, then cleared the viewer and owned roots.
+
+`--no-capture` skips image generation while preserving gameplay checks. Human
+visual review remains deferred. Full-match results, repeated interactive cycles,
+human blocker selection and broader rule/choice coverage remain open.
+
 ## Continue through turn end, cleanup and the next human turn (0.5.193)
 
 ```powershell
