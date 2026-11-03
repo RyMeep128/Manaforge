@@ -37,7 +37,7 @@ def validate_close_report(closed):
 
 def project_launch(setup, documents, version, deck_owners=None):
     if (
-        setup.format != "freeform"
+        setup.format not in ("freeform", "commander")
         or len(setup.seats) != 2
         or sorted(s.controller for s in setup.seats) != ["engine_ai", "local_human"]
     ):
@@ -48,8 +48,15 @@ def project_launch(setup, documents, version, deck_owners=None):
     launch = json.loads(payload)
     for seat in launch["seats"]:
         if (
+            setup.format == "freeform"
+            and seat["document"]["deck"]["commander_entry_ids"]
+        ) or seat["document"]["deck"]["companion_entry_id"] is not None:
+            raise LiveGameError("UNITY_GAME_SETUP_UNSUPPORTED")
+        if setup.format == "commander" and not (
             seat["document"]["deck"]["commander_entry_ids"]
-            or seat["document"]["deck"]["companion_entry_id"] is not None
+            or any(
+                e["section"] == "commander" for e in seat["document"]["deck"]["entries"]
+            )
         ):
             raise LiveGameError("UNITY_GAME_SETUP_UNSUPPORTED")
         for entry in seat["document"]["deck"]["entries"]:
@@ -209,6 +216,7 @@ def run_live_game(
                 )
                 for e in entries
                 if e["section"] == "mainboard"
+                and e["entry_id"] not in seat["document"]["deck"]["commander_entry_ids"]
             ]
             sideboard = [
                 dict(
@@ -218,7 +226,8 @@ def run_live_game(
                     quantity=e["quantity"],
                 )
                 for e in entries
-                if e["section"] == "sideboard"
+                if e["section"] in ("sideboard", "commander")
+                or e["entry_id"] in seat["document"]["deck"]["commander_entry_ids"]
             ]
             queries = [
                 dict(key=str(i), set=e["set"], number=e["number"])
@@ -234,7 +243,7 @@ def run_live_game(
                 server_request(
                     dict(
                         command="validate_deck",
-                        format="freeform",
+                        format=setup.format,
                         cards=cards,
                         sideboard=sideboard,
                     )

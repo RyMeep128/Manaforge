@@ -85,6 +85,7 @@ def test_unconfirmed_process_cleanup_retains_files_for_retry():
         assert root.exists()
         launch.owner = None
         launch.close()
+
         assert not root.exists()
     finally:
         launch.owner = None
@@ -126,3 +127,49 @@ def test_invalid_diagnostics_do_not_block_cleanup(diagnostic):
     launch.close()
     assert not root.exists()
     assert launch.last_error is None
+
+
+def test_commander_launch_preserves_paired_designations_and_rejects_companions():
+    from mtg_core.decks import DeckEntry
+
+    setup = GameSetup(
+        (MatchSeat("human", "Human"), MatchSeat("ai", "AI", "engine_ai")), "commander"
+    )
+    document = native_deck(False)
+    document.deck.entries[0].name = "Forest"
+    for name in ("One", "Two"):
+        document.deck.entries.append(
+            DeckEntry(
+                name,
+                name,
+                1,
+                section="commander",
+                set_code="SYN",
+                collector_number=name,
+                card_id=name,
+            )
+        )
+    document.deck.commander_entry_ids = ["One", "Two"]
+    before = json.dumps(document.to_dict(), sort_keys=True)
+    value = json.loads(
+        project_launch(setup, {"human": document, "ai": document}, "test-alpha.1")
+    )
+    assert value["seats"][0]["document"]["deck"]["commander_entry_ids"] == [
+        "One",
+        "Two",
+    ]
+    assert json.dumps(document.to_dict(), sort_keys=True) == before
+    document.deck.entries.append(
+        DeckEntry(
+            "companion",
+            "Companion",
+            1,
+            section="sideboard",
+            set_code="SYN",
+            collector_number="C",
+            card_id="C",
+        )
+    )
+    document.deck.extras["companion_entry_id"] = "companion"
+    with pytest.raises(LiveGameError, match="SETUP_UNSUPPORTED"):
+        project_launch(setup, {"human": document, "ai": document}, "test-alpha.1")

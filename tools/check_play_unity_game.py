@@ -54,9 +54,45 @@ def public_deck(ai):
     )
 
 
+def public_commander_deck(ai):
+    rows = (
+        [("Forest", "TRK", "325", 99), ("Progenitus", "CON", "121", 1)]
+        if ai
+        else [
+            ("Swamp", "TRK", "321", 99),
+            ("Yargle, Glutton of Urborg", "DOM", "113", 1),
+        ]
+    )
+    entries = [
+        DeckEntry(
+            "land" if i == 0 else "commander",
+            name,
+            count,
+            section="mainboard" if i == 0 else "commander",
+            card_id="public-" + code + "-" + number,
+            oracle_id="public-oracle-" + str(i),
+            set_code=code,
+            collector_number=number,
+        )
+        for i, (name, code, number, count) in enumerate(rows)
+    ]
+    return DeckDocument(
+        deck=Deck(
+            deck_id="public-ai" if ai else "public-human",
+            name="Public Commander acceptance",
+            format="Commander",
+            entries=entries,
+            commander_entry_ids=["commander"],
+        )
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--public-decks", action="store_true")
+    parser.add_argument(
+        "--format", choices=("freeform", "commander"), default="freeform"
+    )
     parser.add_argument("--human-deck", type=Path)
     parser.add_argument("--ai-deck", type=Path)
     parser.add_argument(
@@ -78,16 +114,24 @@ def main():
         parser.error("Choose --public-decks or both saved-deck paths")
     args.output.mkdir(parents=True, exist_ok=False)
     documents = {
-        "local-player": public_deck(False)
+        "local-player": (
+            public_commander_deck(False)
+            if args.format == "commander"
+            else public_deck(False)
+        )
         if args.public_decks
         else DeckStore().load(args.human_deck),
-        "native-ai": public_deck(True)
+        "native-ai": (
+            public_commander_deck(True)
+            if args.format == "commander"
+            else public_deck(True)
+        )
         if args.public_decks
         else DeckStore().load(args.ai_deck),
     }
     setup = GameSetup(
         (MatchSeat("local-player", "Human"), MatchSeat("native-ai", "AI", "engine_ai")),
-        "freeform",
+        args.format,
     )
     if args.public_decks:
         for seat, document in tuple(documents.items()):

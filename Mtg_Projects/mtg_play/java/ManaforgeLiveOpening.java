@@ -554,7 +554,7 @@ public final class ManaforgeLiveOpening {
         CoreCombatCycle(ManaforgeOpeningProjection projection) {
             if(automaticPayment==null && System.getProperty("manaforge.paymentMode")!=null)automaticPayment=new NativeAutomaticPayment(liveLaunch==null?"live-opening":liveLaunch.session(),engineViewer,manaforge.payment.PaymentCoordinator.Mode.valueOf(System.getProperty("manaforge.paymentMode")));
             ManaforgeGameplaySession.Engine nativeEngine=new ManaforgeGameplaySession.Engine(){
-                public JsonObject metadata(JsonObject view,String... ids) throws Exception{return sourceMetadata(view,ids);}
+                public JsonObject metadata(JsonObject view,String... ids) throws Exception{JsonObject result=sourceMetadata(view,ids);if(liveLaunch!=null)liveLaunch.verifyCommanders(view,result);return result;}
                 public JsonObject submit(JsonObject command) throws Exception{return request(command,"response_sent");}
                 public ManaforgeGameplaySession.Advance advance(long previous) throws Exception {
                     JsonObject nextPrompt=null;
@@ -688,7 +688,7 @@ public final class ManaforgeLiveOpening {
         JsonObject value=command("connect");value.addProperty("port",port);value.addProperty("username","mf_"+UUID.randomUUID().toString().substring(0,8));request(value,"connected");
         value=request(command("status"),"status");
         if(!value.get("engine_version").getAsString().equals("1.4.62-V1"))throw new IOException("LIVE_OPENING_PIN");
-        value=command("create_game");value.addProperty("format","freeform");value.addProperty("seats",2);
+        value=command("create_game");value.addProperty("format",liveLaunch==null?"freeform":liveLaunch.format());value.addProperty("seats",2);
         JsonArray controllers=new JsonArray();controllers.add("local_human");controllers.add("engine_ai");value.add("controllers",liveLaunch==null?controllers:liveLaunch.controllers());
         String table=request(value,"table_created").get("table_id").getAsString();
         for(boolean ai:new boolean[]{true,false}) {

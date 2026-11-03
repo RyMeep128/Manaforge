@@ -1,5 +1,25 @@
 # Manaforge Play — Unity + Java Roadmap
 
+### Shared-view Commander integration (0.5.215)
+
+The saved-deck Unity path now accepts Commander, uses the native Commander
+validator/game type and translates canonical commander designations without
+duplicating them in the library. At native priority, authenticated roster checks
+require the exact saved commanders and printings. Companions remain unsupported.
+The projection includes public command zones, native casting offers and stable
+commander identities with native tax/cast-count/damage data. Concealed objects
+receive no commander identity links. Immutable commander data uses existing wire
+contracts.
+
+Freeform and Commander share the table presentation. `IGameplayPresentation` and
+the scene's presentation factory allow alternative views over the same session
+host and immutable frames; format rules do not select a separate Commander view.
+A shuffled legal single-commander human/AI match reached a native win with 79
+confirmed inputs, no uncertainty and full cleanup. Java checks (748), Unity
+projection tests (22), focused Python launch tests (9) and lobby regression pass.
+Paired/background matches, explicit tax/return choices and terminal commander
+damage evidence remain pending. Visual gates remain unchecked.
+
 ### Metadata bootstrap CI correction (0.5.214)
 
 The .213 checkpoint found protocol/desktop success for .212 and three failures

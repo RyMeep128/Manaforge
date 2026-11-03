@@ -16,6 +16,14 @@ namespace Manaforge.Play.Tests
         private static JObject Choice()=>(JObject)Corpus()["positive"][2]["envelope"].DeepClone();
         private static JObject Priority()=>(JObject)JObject.Parse(File.ReadAllText(Path.Combine(Application.dataPath,"../../mtg_play/protocol/fixtures/receive-history-v1.json")))["cases"][0]["steps"][0]["envelope"].DeepClone();
         private static ProjectedDecisionFrame Project(JObject source)=>ViewerDecisionProjection.ParseSnapshot(source.ToString(Formatting.None),(string)source["body"]["snapshot"]["session_id"],(string)source["body"]["snapshot"]["viewer_id"],0,true);
+        [Test] public void CommanderRosterIsImmutableAndContainsNoDecisionAuthority()
+        {
+            var source=Priority();var snapshot=source["body"]["snapshot"];
+            snapshot["commanders"]=new JArray(new JObject{["commander_id"]="public-commander",["owner_id"]=(string)snapshot["players"][0]["player_id"],["name"]="Public commander",["card_identity"]=null,["command_zone_plays"]=1,["additional_cast_cost"]="{2}",["damage_dealt"]=new JArray{new JArray((string)snapshot["players"][1]["player_id"],9)}});
+            var frame=Project(source);Assert.That(frame.Commanders.Count,Is.EqualTo(1));Assert.That(frame.Commanders[0].AdditionalCastCost,Is.EqualTo("{2}"));Assert.That(frame.Commanders[0].CommandZonePlays,Is.EqualTo(1));
+            snapshot["commanders"][0]["name"]="changed";snapshot["commanders"][0]["damage_dealt"][0][1]=0;
+            Assert.That(frame.Commanders[0].Name,Is.EqualTo("Public commander"));Assert.That(frame.Commanders[0].DamageDealt.Values.Single(),Is.EqualTo(9));Assert.That(((IList<ProjectedCommander>)frame.Commanders).IsReadOnly,Is.True);
+        }
         [Test] public void BlockerNamesAreCopiedFromPublicObjectsAndRemainReadOnly()
         {
             var source=Priority();var snapshot=source["body"]["snapshot"];snapshot["objects"]=Corpus()["positive"][0]["envelope"]["body"]["snapshot"]["objects"].DeepClone();var attacker=snapshot["objects"][0];attacker["zone"]="battlefield";

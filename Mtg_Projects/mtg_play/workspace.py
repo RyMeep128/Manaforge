@@ -286,7 +286,7 @@ class PlayWorkspace(W.QWidget):
         actions.addWidget(self.preview_button)
         self.unity_game_button = W.QPushButton("Play in Unity")
         self.unity_game_button.setToolTip(
-            "Play Freeform 1v1 against XMage AI using the selected saved decks."
+            "Play Freeform or Commander 1v1 against XMage AI using the selected saved decks."
         )
         self.unity_game_button.setEnabled(False)
         self.unity_game_button.clicked.connect(self.start_unity_game)
@@ -824,7 +824,8 @@ class PlayWorkspace(W.QWidget):
             and all(check is not None and check.can_start for check in selected_checks)
         )
         self.unity_game_button.setEnabled(
-            self.start_button.isEnabled() and self.format.currentData() == "freeform"
+            self.start_button.isEnabled()
+            and self.format.currentData() in ("freeform", "commander")
         )
 
     def start_game(self):

@@ -10,6 +10,7 @@ public final class ManaforgeOpeningProjection {
     private final String session, viewer, engineViewer;
     private final Map<String,CardIdentity> printings=new HashMap<>();
     private final Map<String,String> players=new HashMap<>();
+    private final Map<String,String> commanderReferences=new HashMap<>();
     public static final class ChoiceException extends IOException {
         public final String code;
         private ChoiceException(String code){super(code);this.code=code;}
@@ -66,6 +67,15 @@ public final class ManaforgeOpeningProjection {
         this.session=session;this.viewer=viewer;this.engineViewer=engineViewer;
         for(Map.Entry<String,CardIdentity> entry:bindings.entrySet())
             printings.put(entry.getKey(),JSON.fromJson(JSON.toJson(entry.getValue()),CardIdentity.class));
+    }
+    /** Private authenticated metadata in; public stable commander references out. */
+    private Set<String> projectCommanders(JsonObject raw,GameSnapshot result) throws IOException {
+        Set<String> seen=new HashSet<>();if(!coreCombat || !raw.has("commander_metadata") || !Boolean.TRUE.equals(flag(raw,"commander_metadata_complete")))return seen;
+        JsonArray roster=raw.getAsJsonArray("commander_metadata");require(roster.size()<=10);List<CommanderState> projected=new ArrayList<>();
+        for(JsonElement item:roster){JsonObject row=item.getAsJsonObject();String id=row.get("id").getAsString(),owner=row.get("owner").getAsString();require(seen.add(id));CommanderState commander=new CommanderState();commander.owner_id=engineViewer.equals(owner)?viewer:players.get(owner);require(commander.owner_id!=null);commander.commander_id=commanderReferences.computeIfAbsent(id,key->opaque());commander.name=text(row,"name");commander.command_zone_plays=integer(row,"plays");require(commander.command_zone_plays==null || commander.command_zone_plays>=0);commander.additional_cast_cost=text(row,"tax");
+            CardIdentity binding=viewer.equals(commander.owner_id)?printings.get(text(row,"set")+"/"+text(row,"number")):null;if(binding!=null)commander.card_identity=JSON.fromJson(JSON.toJson(binding),CardIdentity.class);
+            if(row.has("damage")){List<JsonElement[]> damage=new ArrayList<>();for(Map.Entry<String,JsonElement> entry:row.getAsJsonObject("damage").entrySet()){String seat=engineViewer.equals(entry.getKey())?viewer:players.get(entry.getKey());require(seat!=null);JsonObject value=new JsonObject();value.add("count",entry.getValue());Long count=integer(value,"count");require(count!=null && count>=0);damage.add(new JsonElement[]{new JsonPrimitive(seat),new JsonPrimitive(count)});}commander.damage_dealt=damage.toArray(new JsonElement[0][]);}projected.add(commander);
+        }result.commanders=projected.toArray(new CommanderState[0]);return seen;
     }
     private static JsonElement[][] counters(JsonObject row) throws IOException {
         require(row.get("counters").isJsonArray() && row.getAsJsonArray("counters").size()<=256);Set<String> names=new HashSet<>();for(JsonElement value:row.getAsJsonArray("counters")){require(value.isJsonArray() && value.getAsJsonArray().size()==2);JsonObject pair=new JsonObject();pair.add("name",value.getAsJsonArray().get(0));pair.add("count",value.getAsJsonArray().get(1));String name=text(pair,"name");Long count=integer(pair,"count");require(name!=null && names.add(name) && count!=null && count>=0 && count<=Integer.MAX_VALUE);}return JSON.fromJson(row.get("counters"),JsonElement[][].class);
@@ -228,14 +238,14 @@ public final class ManaforgeOpeningProjection {
             result.revision=revision+1;result.protocol_version=1L;result.status="active";
             result.turn=integer(raw,"turn");result.phase=text(raw,"phase");result.step=text(raw,"step");
             List<PlayerView> seats=new ArrayList<>();Map<String,String> names=new HashMap<>();Set<String> seen=new HashSet<>();
-            boolean found=false;Map<String,String> seatNames=new HashMap<>();List<JsonObject> battlefield=new ArrayList<>();Map<JsonObject,String> graveOwners=new IdentityHashMap<>();
+            boolean found=false;Map<String,String> seatNames=new HashMap<>();List<JsonObject> battlefield=new ArrayList<>();Map<JsonObject,String> commandOwners=new IdentityHashMap<>();Map<JsonObject,String> graveOwners=new IdentityHashMap<>();
             for(JsonElement item:raw.getAsJsonArray("players")) {
                 JsonObject row=item.getAsJsonObject();String id=row.get("id").getAsString();require(seen.add(id));
                 boolean local=engineViewer.equals(id);found|=local;
                 String publicId=local?viewer:players.computeIfAbsent(id,ignored->opaque());
                 names.put(row.get("name").getAsString(),publicId);
                 if(!priority && !ability && !attackFinish && !discard && !targeting && !coreCombat)empty(row,"battlefield");else for(JsonElement permanent:row.getAsJsonArray("battlefield"))battlefield.add(permanent.getAsJsonObject());
-                if(turnMode){for(JsonElement graveItem:row.getAsJsonArray("graveyard"))graveOwners.put(graveItem.getAsJsonObject(),publicId);}else empty(row,"graveyard");empty(row,"command");seatNames.put(row.get("name").getAsString(),publicId);
+                if(turnMode){for(JsonElement graveItem:row.getAsJsonArray("graveyard"))graveOwners.put(graveItem.getAsJsonObject(),publicId);}else empty(row,"graveyard");if(coreCombat){for(JsonElement command:row.getAsJsonArray("command"))commandOwners.put(command.getAsJsonObject(),publicId);}else empty(row,"command");seatNames.put(row.get("name").getAsString(),publicId);
                 PlayerView seat=new PlayerView();seat.player_id=publicId;seat.name=local?"You":"Player "+(seats.size()+1);
                 seat.life=integer(row,"life");seat.hand_count=integer(row,"hand_count");seat.library_count=integer(row,"library_count");
                 if(coreCombat && row.has("mana") && !row.get("mana").isJsonNull()){JsonArray pool=row.getAsJsonArray("mana");require(pool.size()<=6);Set<String> colors=new HashSet<>();for(JsonElement pair:pool){require(pair.isJsonArray() && pair.getAsJsonArray().size()==2);JsonObject value=new JsonObject();value.add("color",pair.getAsJsonArray().get(0));value.add("count",pair.getAsJsonArray().get(1));String color=text(value,"color");Long count=integer(value,"count");require(Arrays.asList("white","blue","black","red","green","colorless").contains(color) && colors.add(color) && count!=null && count>=0 && count<=Integer.MAX_VALUE);}seat.mana=JSON.fromJson(pool,JsonElement[][].class);}
@@ -248,17 +258,19 @@ public final class ManaforgeOpeningProjection {
             require(!(attackFinish || discard) || (blocking?!viewer.equals(result.active_player_id):viewer.equals(result.active_player_id)));
             List<GameObject> cards=new ArrayList<>();Set<String> cardIds=new HashSet<>();
             List<JsonObject> displayed=new ArrayList<>();Set<JsonObject> stackRows=Collections.newSetFromMap(new IdentityHashMap<>());if(coreCombat)for(JsonElement item:raw.getAsJsonArray("stack")){displayed.add(item.getAsJsonObject());stackRows.add(item.getAsJsonObject());}Set<JsonObject> handRows=Collections.newSetFromMap(new IdentityHashMap<>());
-            for(JsonElement item:raw.getAsJsonArray("hand")){displayed.add(item.getAsJsonObject());handRows.add(item.getAsJsonObject());}displayed.addAll(battlefield);displayed.addAll(graveOwners.keySet());
+            for(JsonElement item:raw.getAsJsonArray("hand")){displayed.add(item.getAsJsonObject());handRows.add(item.getAsJsonObject());}displayed.addAll(battlefield);displayed.addAll(graveOwners.keySet());displayed.addAll(commandOwners.keySet());
+            Set<String> commanderNativeIds=projectCommanders(raw,result);
             Map<String,String> visibleReferences=new HashMap<>();
             for(JsonObject row:displayed) {require(cardIds.add(row.get("id").getAsString()));
-                GameObject card=new GameObject();card.object_id=opaque();card.zone=stackRows.contains(row)?"stack":handRows.contains(row)?"hand":graveOwners.containsKey(row)?"graveyard":"battlefield";
-                card.controller_id=stackRows.contains(row)?row.has("stack_controller") && engineViewer.equals(row.get("stack_controller").getAsString())?viewer:players.get(row.has("stack_controller")?row.get("stack_controller").getAsString():null):handRows.contains(row)?viewer:graveOwners.containsKey(row)?graveOwners.get(row):seatNames.get(text(row,"controller_name"));
-                String ownerName=text(row,"owner_name");card.owner_id=stackRows.contains(row)?row.has("stack_owner") && engineViewer.equals(row.get("stack_owner").getAsString())?viewer:players.get(row.has("stack_owner")?row.get("stack_owner").getAsString():null):handRows.contains(row)?viewer:graveOwners.containsKey(row)?graveOwners.get(row):ownerName==null || ownerName.isEmpty()?card.controller_id:seatNames.get(ownerName);
-                require(stackRows.contains(row) || card.controller_id!=null && card.owner_id!=null);
+                GameObject card=new GameObject();card.object_id=opaque();card.zone=commandOwners.containsKey(row)?"command":stackRows.contains(row)?"stack":handRows.contains(row)?"hand":graveOwners.containsKey(row)?"graveyard":"battlefield";
+                card.controller_id=commandOwners.containsKey(row)?null:stackRows.contains(row)?row.has("stack_controller") && engineViewer.equals(row.get("stack_controller").getAsString())?viewer:players.get(row.has("stack_controller")?row.get("stack_controller").getAsString():null):handRows.contains(row)?viewer:graveOwners.containsKey(row)?graveOwners.get(row):seatNames.get(text(row,"controller_name"));
+                String ownerName=text(row,"owner_name");card.owner_id=commandOwners.containsKey(row)?commandOwners.get(row):stackRows.contains(row)?row.has("stack_owner") && engineViewer.equals(row.get("stack_owner").getAsString())?viewer:players.get(row.has("stack_owner")?row.get("stack_owner").getAsString():null):handRows.contains(row)?viewer:graveOwners.containsKey(row)?graveOwners.get(row):ownerName==null || ownerName.isEmpty()?card.controller_id:seatNames.get(ownerName);
+                require(stackRows.contains(row) || commandOwners.containsKey(row) && card.owner_id!=null || card.controller_id!=null && card.owner_id!=null);
                 if("battlefield".equals(card.zone)){card.tapped=flag(row,"tapped");card.damage=integer(row,"damage");}
                 visibleReferences.put(row.get("id").getAsString(),card.object_id);
                 Boolean hidden=flag(row,"hidden");require(hidden!=null);card.hidden=hidden;card.face_down=flag(row,"face_down");
                 if(!hidden && !Boolean.TRUE.equals(card.face_down)) {
+                    String commanderSource=stackRows.contains(row) && row.has("commander_source")?row.get("commander_source").getAsString():row.get("id").getAsString();if(commanderNativeIds.contains(commanderSource))card.commander_id=commanderReferences.get(commanderSource);
                     CardCharacteristics c=new CardCharacteristics();c.name=text(row,"name");c.power=text(row,"power");c.toughness=text(row,"toughness");
                     c.type_line=text(row,"type");c.color=text(row,"color");
                     if(coreCombat){c.loyalty=text(row,"loyalty");c.defense=text(row,"defense");if(row.has("counters"))c.counters=counters(row);}
@@ -302,7 +314,7 @@ public final class ManaforgeOpeningProjection {
                 if(reference==null)continue;
                 JsonElement kind=raw.getAsJsonObject("action_kinds").get(source);if(kind==null || !(kind.getAsString().equals("play_land") || includeSpells && (kind.getAsString().equals("cast_spell") || coreCombat && (kind.getAsString().equals("select_object") || kind.getAsString().equals("activate")))))continue;
                 GameObject object=null;for(GameObject candidate:cards)if(candidate.object_id.equals(reference))object=candidate;
-                if(object==null || object.hidden || !viewer.equals(object.controller_id) || !("hand".equals(object.zone) || coreCombat && "battlefield".equals(object.zone) && (kind.getAsString().equals("activate") || kind.getAsString().equals("select_object"))))continue;
+                if(object==null || object.hidden || !("command".equals(object.zone)?viewer.equals(object.owner_id):viewer.equals(object.controller_id)) || !("command".equals(object.zone) || "hand".equals(object.zone) || coreCombat && "battlefield".equals(object.zone) && (kind.getAsString().equals("activate") || kind.getAsString().equals("select_object"))))continue;
                 LegalAction action=new LegalAction();action.action_id=opaque();action.object_id=reference;action.kind="battlefield".equals(object.zone)?"activate":kind.getAsString();action.label=action.kind.equals("cast_spell")?"Cast spell":action.kind.equals("select_object")?"Select object":action.kind.equals("activate")?"Activate":"Play land";if(coreCombat)action.label+=": "+object.characteristics.name;action.priority_class="meaningful";
                 actions.add(action);offeredNative.put(action.action_id,source);
             }
@@ -373,6 +385,7 @@ public final class ManaforgeOpeningProjection {
             if(coreCombat && cards.stream().anyMatch(card->"stack".equals(card.zone) && (card.controller_id==null || card.owner_id==null))){List<String> unsupported=new ArrayList<>(Arrays.asList(result.unsupported_fields));unsupported.add("stack_ownership");result.unsupported_fields=unsupported.toArray(new String[0]);}
             if(missingCombatant){List<String> unsupported=new ArrayList<>(Arrays.asList(result.unsupported_fields));unsupported.add("combat_lki");result.unsupported_fields=unsupported.toArray(new String[0]);}
             if(missingDefender){List<String> unsupported=new ArrayList<>(Arrays.asList(result.unsupported_fields));unsupported.add("combat_defender_lki");result.unsupported_fields=unsupported.toArray(new String[0]);}
+            if(result.commanders!=null){List<String> unsupported=new ArrayList<>(Arrays.asList(result.unsupported_fields));unsupported.remove("commander_metadata");result.unsupported_fields=unsupported.toArray(new String[0]);}
             if(coreCombat && seats.stream().allMatch(seat->seat.mana!=null)){List<String> unsupported=new ArrayList<>(Arrays.asList(result.unsupported_fields));unsupported.remove("mana");result.unsupported_fields=unsupported.toArray(new String[0]);}
             if(coreCombat){List<String> unsupported=new ArrayList<>(Arrays.asList(result.unsupported_fields));unsupported.add("exile");result.unsupported_fields=unsupported.toArray(new String[0]);}
             if(omitStack && !coreCombat){List<String> unsupported=new ArrayList<>(Arrays.asList(result.unsupported_fields));unsupported.add("stack");result.unsupported_fields=unsupported.toArray(new String[0]);}

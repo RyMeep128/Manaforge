@@ -27,7 +27,7 @@ namespace Manaforge.Play
             // The public acceptance deck is mono-green. Native availability still supplies every action.
             long mana=frame.ViewerMana?.Values.Sum()??0;
             foreach(var action in frame.Actions)if(action.Label.StartsWith("Cast spell:",StringComparison.Ordinal) || action.Label.StartsWith("Select object:",StringComparison.Ordinal)){
-                string name=action.Label.Substring(action.Label.IndexOf(':')+1).Trim();int needed=name=="Memnite"?0:name=="Scryb Sprites"?1:name=="Centaur Courser"?3:2;
+                string name=action.Label.Substring(action.Label.IndexOf(':')+1).Trim();int needed=name=="Yargle, Glutton of Urborg"?5:name=="Memnite"?0:name=="Scryb Sprites"?1:name=="Centaur Courser"?3:2;
                 // Ordinary land count is read from mounted action availability below; costly premature
                 // casts can be cancelled natively, so never choose a spell without known capacity.
                 if(needed>availableLands+mana || name=="Evolution Charm" && availableCreatures==0)continue;button??=controls.Find(value=>value.text==action.Label);

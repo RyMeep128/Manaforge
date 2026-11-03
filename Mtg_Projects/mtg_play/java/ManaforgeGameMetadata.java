@@ -174,7 +174,7 @@ public final class ManaforgeGameMetadata {
                     if (control != null) metadata.addProperty("controller", control.toString());
                     objects.add(id.toString(), metadata);
                 }
-                JsonArray players = new JsonArray(), commanders = new JsonArray();
+                JsonArray players = new JsonArray(), commanders = new JsonArray();int commanderCount=0;
                 CommanderPlaysCountWatcher plays = state.getWatcher(CommanderPlaysCountWatcher.class);
                 for (PlayerView view : permitted.getPlayers()) {
                     Player current = game.getPlayer(view.getPlayerId());
@@ -182,6 +182,7 @@ public final class ManaforgeGameMetadata {
                     row.addProperty("lost", current.hasLost()); row.addProperty("left", current.hasLeft());
                     players.add(row);
                     for (UUID commander : current.getCommandersIds()) {
+                        commanderCount++;
                         CommanderInfoWatcher damage = state.getWatcher(CommanderInfoWatcher.class, commander);
                         if (damage == null) continue; // signature spells and unsupported designations are not guessed.
                         JsonObject info = new JsonObject(); info.addProperty("id", commander.toString());
@@ -239,7 +240,7 @@ public final class ManaforgeGameMetadata {
                     if(assessment instanceof JsonObject)result.add("ordinary_payment",(JsonObject)assessment);
 
                 }
-                result.add("objects", objects); result.add("players", players); result.add("commanders", commanders);
+                result.add("objects", objects); result.add("players", players); result.add("commanders", commanders);result.addProperty("commander_metadata_complete",commanders.size()==commanderCount);
                 return result;
             }
         }

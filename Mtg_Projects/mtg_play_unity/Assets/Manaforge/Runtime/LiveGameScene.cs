@@ -19,7 +19,8 @@ namespace Manaforge.Play
         private PanelSettings settings;private UIDocument document;private Task<ViewerBootstrap> reading;private Task consuming;
         private string[] untappedLandIds=new string[0],counterBallistaIds=new string[0];
         private ProjectedDecisionFrame latest;private string output;private bool quit,ready,userRequested;private int snapshots,confirmed,uncertain,availableLands,availableCreatures;
-        private Label status;private LiveGameAcceptanceDriver acceptance;
+        private IGameplayPresentation presentation;private Func<VisualElement,IGameplayPresentation> presentationFactory=root=>new TableGameplayPresentation(root);private LiveGameAcceptanceDriver acceptance;
+        public void SetPresentationFactory(Func<VisualElement,IGameplayPresentation> factory){if(document!=null)throw new InvalidOperationException("PRESENTATION_ALREADY_STARTED");presentationFactory=factory??throw new ArgumentNullException(nameof(factory));}
         private void Write(string name,JObject value){string temporary=Path.Combine(output,name+".tmp");File.WriteAllText(temporary,value.ToString());File.Move(temporary,Path.Combine(output,name+".json"));}
         private IEnumerator Start()
         {
@@ -30,10 +31,9 @@ namespace Manaforge.Play
             try{
                 settings=ScriptableObject.CreateInstance<PanelSettings>();settings.themeStyleSheet=Resources.Load<ThemeStyleSheet>("CardTheme");settings.scaleMode=PanelScaleMode.ScaleWithScreenSize;settings.referenceResolution=new Vector2Int(1280,720);
                 document=gameObject.AddComponent<UIDocument>();document.panelSettings=settings;var root=document.rootVisualElement;root.style.flexGrow=1;root.style.paddingLeft=20;root.style.paddingTop=15;root.style.backgroundColor=new Color(.025f,.055f,.075f);
-                status=new Label("Connecting to game…"){enableRichText=false};status.style.color=Color.white;status.style.fontSize=20;root.Add(status);
                 var leave=new Button(()=>{userRequested=true;quit=true;}){text="Return to Manaforge"};root.Add(leave);
-                var stage=new VisualElement();stage.style.flexDirection=FlexDirection.Row;stage.style.flexGrow=1;root.Add(stage);surface=new ViewerCardSurface(stage);surface.CardsRoot.style.width=720;surface.CardsRoot.style.flexShrink=0;surface.InspectionView.SetPresentation(CardPresentationMode.Full,210);
-                host=new ViewerSessionHost(surface,reading.Result,pipe.WaitForOwnerCloseAsync(cancellation.Token),false);var choices=new VisualElement();choices.style.width=300;stage.Add(choices);panel=new ViewerDecisionPanel(choices,host);
+                presentation=presentationFactory(root);surface=presentation.Surface;
+                host=new ViewerSessionHost(surface,reading.Result,pipe.WaitForOwnerCloseAsync(cancellation.Token),false);presentation.Bind(host);panel=presentation.Decisions;
                 if(ArtworkFixtureScene.Argument("-manaforgeGameAcceptance")=="1")acceptance=new LiveGameAcceptanceDriver();
                 var token=cancellation.Token;consuming=Task.Run(()=>{
                     while(!token.IsCancellationRequested && !host.Completion.IsCompleted){if(host.TryTake(out var update))using(update){
@@ -47,17 +47,15 @@ namespace Manaforge.Play
                 host.Tick();panel.Tick();var frame=Volatile.Read(ref latest);
                 if(frame!=null && host.HasPresentedRevision(frame.Context.Revision)){
                     if(!ready){ready=true;Write("game-ready",new JObject{["live_game_version"]=1,["authenticated"]=host.Authenticated});}
-                    string life="";foreach(var seat in frame.PlayerLifeTotals)life+=(seat.Key==frame.Context.ViewerId?"You":"Opponent")+": "+seat.Value+"  ";
-                    status.text=frame.UnsupportedFields.Contains("decision")?"This choice is not supported yet. Return to Manaforge to end the session.":frame.Result!=null?"Result: "+frame.Result:life+"Turn "+frame.Turn+" — "+frame.Phase;
-                    foreach(var child in surface.CardsRoot.Children())if(child is CardView card)card.SetPresentation(CardPresentationMode.Compact,130);
+                    presentation.Present(frame);
                     if(acceptance!=null){acceptance.SetAvailableLands(Volatile.Read(ref availableLands),Volatile.Read(ref availableCreatures),Volatile.Read(ref untappedLandIds),Volatile.Read(ref counterBallistaIds));quit=frame.UnsupportedFields.Contains("decision") || acceptance.Tick(host,panel,frame);}
                 }
                 yield return null;
             }
-            Write("game-closing",new JObject{["live_game_version"]=1,["requested"]=quit});var final=Volatile.Read(ref latest);host.Cancel();host.Tick();panel.Dispose();host.Dispose();surface.Dispose();while(!consuming.IsCompleted)yield return null;
+            Write("game-closing",new JObject{["live_game_version"]=1,["requested"]=quit});var final=Volatile.Read(ref latest);host.Cancel();host.Tick();host.Dispose();presentation.Dispose();while(!consuming.IsCompleted)yield return null;
             bool cleared=document.rootVisualElement.Query<CardView>().ToList().Count==0;Write("game-closed",new JObject{["live_game_version"]=1,["outcome"]=final?.Result,["user_requested"]=userRequested,["snapshots"]=Volatile.Read(ref snapshots),["confirmed"]=Volatile.Read(ref confirmed),["uncertain"]=Volatile.Read(ref uncertain),["viewer_cleared"]=cleared,["cleanup_confirmed"]=host.Completion.Result.CleanupConfirmed});
             Application.Quit(cleared && host.Completion.Result.CleanupConfirmed?0:1);
         }
-        private void OnDestroy(){cancellation.Cancel();panel?.Dispose();host?.Dispose();surface?.Dispose();pipe?.Dispose();reading?.ContinueWith(done=>{if(done.Status==TaskStatus.RanToCompletion)done.Result?.Dispose();else _=done.Exception;},TaskScheduler.Default);consuming?.ContinueWith(done=>{_=done.Exception;},TaskScheduler.Default);if(settings!=null)Destroy(settings);cancellation.Dispose();}
+        private void OnDestroy(){cancellation.Cancel();host?.Dispose();presentation?.Dispose();pipe?.Dispose();reading?.ContinueWith(done=>{if(done.Status==TaskStatus.RanToCompletion)done.Result?.Dispose();else _=done.Exception;},TaskScheduler.Default);consuming?.ContinueWith(done=>{_=done.Exception;},TaskScheduler.Default);if(settings!=null)Destroy(settings);cancellation.Dispose();}
     }
 }
