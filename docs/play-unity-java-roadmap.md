@@ -1,5 +1,36 @@
 # Manaforge Play — Unity + Java Roadmap
 
+### Mana/casting acceptance matrix (0.5.213)
+
+Packaged manual casting now also verifies Slitherhead's hybrid cost, Vault Skirge's
+one mana plus two life, Matter Reshaper's native colorless requirement, kicked
+Kavu Titan's five-source payment and 5/5 result, and Frogmite's affinity reduction
+with a retained Memnite and exactly three mana sources. Each case binds the
+native stack source and resulting permanent, confirms every viewer input and
+cleans up. These cases extend manual coverage, not automatic-payment eligibility.
+The explicit fixture driver selects current public untapped sources.
+
+Normal session closure now distinguishes the user's Return action from an
+unexpected disconnect without a native result. Focused lifetime/result tests
+(42), the saved-deck lobby test, Java checks (734) and the packaged build pass.
+One combined Qt/Python run crashed during teardown after its assertions; isolated
+focused reruns passed. No full application suite or visual checks were run.
+
+The approved bounded mana/casting implementation is covered across repeated
+casts, cancellation, modes, targets, additional/optional costs, X, hybrid,
+Phyrexian, colorless, reductions, floating mana, activated abilities, countering,
+departed targets, conservative automation and saved-deck native 1v1 results.
+Arbitrary cards, exotic automation, multiplayer/Commander, mid-game preference
+controls and visual/product polish are not acceptance claims. CI remains a
+separate gate; visual review stays unchecked.
+Normal gateway history now permits 4,096 snapshots, matching the bounded gameplay
+session with one final-result slot. The public acceptance driver only selects
+currently untapped lands and Ballistas with counters; opaque per-snapshot IDs
+are never treated as persistent card identity.
+Ready/result files now use atomic writes to prevent partial-file startup reads.
+Two final shuffled saved-deck regressions pass with native results, every input
+confirmed and complete cleanup after these changes.
+
 ### Final-input results and changed targets (0.5.212)
 
 The shared gameplay continuation now accepts guarded native terminal results

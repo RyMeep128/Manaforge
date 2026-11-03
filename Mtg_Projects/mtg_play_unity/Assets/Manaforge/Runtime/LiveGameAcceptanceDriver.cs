@@ -9,7 +9,7 @@ namespace Manaforge.Play
     // Uses the actual viewer controls; never submits private/native commands.
     internal sealed class LiveGameAcceptanceDriver
     {
-        private long submitted=-1;private readonly HashSet<string> activated=new HashSet<string>();
+        private long submitted=-1;
         public bool Tick(ViewerSessionHost host,ViewerDecisionPanel panel,ProjectedDecisionFrame frame)
         {
             if(frame.Result!=null)return true;var offer=host.PresentedDecision;if(offer?.CanSubmit!=true || submitted==frame.Context.Revision)return false;
@@ -22,7 +22,7 @@ namespace Manaforge.Play
             }
             button??=controls.Find(value=>value.text.IndexOf("gains flying",StringComparison.OrdinalIgnoreCase)>=0);
             button??=controls.Find(value=>value.text.StartsWith("Use floating mana:",StringComparison.Ordinal));
-            button??=controls.Find(value=>value.text.StartsWith("Select mana source:",StringComparison.Ordinal));
+            if(button==null)for(int i=0;i<frame.Actions.Count;i++)if(frame.Actions[i].Label.StartsWith("Select mana source:",StringComparison.Ordinal) && Array.IndexOf(untappedLandIds,frame.Actions[i].ObjectId)>=0){button=controls.Find(value=>value.name=="decision-action-"+i);break;}
             button??=controls.Find(value=>value.text.StartsWith("Play land:",StringComparison.Ordinal));
             // The public acceptance deck is mono-green. Native availability still supplies every action.
             long mana=frame.ViewerMana?.Values.Sum()??0;
@@ -32,7 +32,7 @@ namespace Manaforge.Play
                 // casts can be cancelled natively, so never choose a spell without known capacity.
                 if(needed>availableLands+mana || name=="Evolution Charm" && availableCreatures==0)continue;button??=controls.Find(value=>value.text==action.Label);
             }
-            foreach(var action in frame.Actions)if(action.Label=="Activate: Walking Ballista" && !activated.Contains(action.ObjectId)){var ability=controls.Find(value=>value.text==action.Label);if(button==null && ability!=null){button=ability;activated.Add(action.ObjectId);}}
+            foreach(var action in frame.Actions)if(action.Label=="Activate: Walking Ballista" && Array.IndexOf(counterBallistaIds,action.ObjectId)>=0){var ability=controls.Find(value=>value.text==action.Label);if(button==null && ability!=null){button=ability;}}
             button??=controls.Find(value=>value.text.IndexOf("Remove a +1/+1 counter",StringComparison.OrdinalIgnoreCase)>=0);
             button??=controls.Find(value=>value.text.StartsWith("Select attacker:",StringComparison.Ordinal) || value.text.StartsWith("Select blocker:",StringComparison.Ordinal));
             button??=controls.Find(value=>value.text.StartsWith("Memnite",StringComparison.Ordinal) || value.text.StartsWith("Centaur Courser",StringComparison.Ordinal));
@@ -44,6 +44,7 @@ namespace Manaforge.Play
             if(button==null || !button.enabledInHierarchy)return false;submitted=frame.Context.Revision;using(var input=NavigationSubmitEvent.GetPooled()){input.target=button;button.SendEvent(input);}return false;
         }
         private int availableLands,availableCreatures;
-        public void SetAvailableLands(int value,int creatures){availableLands=value;availableCreatures=creatures;}
+        private string[] untappedLandIds=new string[0],counterBallistaIds=new string[0];
+        public void SetAvailableLands(int value,int creatures,string[] lands,string[] ballistas){availableLands=value;availableCreatures=creatures;untappedLandIds=lands;counterBallistaIds=ballistas;}
     }
 }

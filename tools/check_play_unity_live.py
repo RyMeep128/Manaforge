@@ -42,6 +42,11 @@ def main():
             "countered",
             "search",
             "changed-target",
+            "hybrid",
+            "phyrexian",
+            "colorless",
+            "kicker",
+            "discount",
         ),
         help="Native manual casting/payment acceptance",
     )

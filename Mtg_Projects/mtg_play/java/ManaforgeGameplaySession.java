@@ -39,7 +39,7 @@ public final class ManaforgeGameplaySession implements AutoCloseable {
         body.addProperty("fixture_only",false);body.add("snapshot",snapshot);result.add("body",body);return result;
     }
     public ManaforgeUnityOpening.TurnOffer offer(JsonObject state,JsonObject nativePrompt) throws Exception {
-        current();if(serial>=4096)throw new IOException("GAMEPLAY_LIMIT");
+        current();if(serial>=4095)throw new IOException("GAMEPLAY_LIMIT");
         final long offered=++generation;
         final JsonObject before=state.deepCopy(),prompt=nativePrompt.deepCopy();java.util.List<String> stackedIds=new java.util.ArrayList<>();for(JsonElement card:before.getAsJsonArray("stack"))stackedIds.add(card.getAsJsonObject().get("id").getAsString());final JsonObject guard=engine.metadata(before,stackedIds.toArray(new String[0]));
         if(!new JsonPrimitive("ok").equals(guard.get("status")) || !before.get("cycle").equals(guard.get("cycle")))throw new IOException("GAMEPLAY_CONTEXT_UNPROVEN");

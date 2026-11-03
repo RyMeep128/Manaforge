@@ -24,6 +24,17 @@ class LiveGameError(ValueError):
     pass
 
 
+def validate_close_report(closed):
+    if (
+        closed.get("viewer_cleared") is not True
+        or closed.get("cleanup_confirmed") is not True
+        or closed.get("uncertain") != 0
+    ):
+        raise LiveGameError("UNITY_GAME_RESULT_UNCERTAIN")
+    if closed.get("outcome") is None and closed.get("user_requested") is not True:
+        raise LiveGameError("UNITY_GAME_ENDED_WITHOUT_RESULT")
+
+
 def project_launch(setup, documents, version, deck_owners=None):
     if (
         setup.format != "freeform"
@@ -361,12 +372,7 @@ def run_live_game(
             if owner.client_exit_code != 0:
                 raise LiveGameError("UNITY_GAME_PLAYER_FAILED")
             closed = wait_json("game-closed", 1)
-            if (
-                closed.get("viewer_cleared") is not True
-                or closed.get("cleanup_confirmed") is not True
-                or closed.get("uncertain") != 0
-            ):
-                raise LiveGameError("UNITY_GAME_RESULT_UNCERTAIN")
+            validate_close_report(closed)
             if closed.get("outcome") is not None:
                 native = wait_json("game-result", 1)
                 if native.get("outcome") != closed["outcome"] or native[

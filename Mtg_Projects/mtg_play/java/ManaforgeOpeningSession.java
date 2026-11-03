@@ -13,7 +13,7 @@ public final class ManaforgeOpeningSession implements AutoCloseable {
     public ManaforgeOpeningSession(GatewayHandshake.ViewerContext context,ManaforgeOpeningProjection projection,String snapshot) throws IOException {
         if(context==null || projection==null)throw new IllegalArgumentException("OPENING_SESSION_CONTEXT");
         // Bounded history covers the opening plus up to 512 continuation decisions.
-        this.context=context;this.projection=projection;boundary=new GatewaySessionBoundary(context,false,1024);
+        this.context=context;this.projection=projection;boundary=new GatewaySessionBoundary(context,false,Boolean.getBoolean("manaforge.liveGame")?4096:1024);
         try{boundary.observe(snapshot);}catch(IOException | RuntimeException failure){close();throw failure;}
     }
     public SubmissionLedger.Prepared dispatch(String wire,String game,String engineViewer,long decision,long cycle) throws IOException {

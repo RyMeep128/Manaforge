@@ -696,3 +696,12 @@ their protocol checks. The current
 was queued and was not awaited. A separate preview CI failure was inspected and
 corrected in 0.5.121 (canonical Windows temporary-path ownership); it does not
 change payment behavior. Next routine CI checkpoint remains 0.5.123.
+
+## Manual cost acceptance (0.5.213)
+
+The packaged manual suite now proves native hybrid (Slitherhead), Phyrexian life
+payment (Vault Skirge), true colorless (Matter Reshaper/Wastes), optional kicker
+(Kavu Titan), and affinity-adjusted payment (Frogmite/Memnite). It checks source
+counts and guarded stack-to-permanent transitions, plus native life, pool or
+characteristics where applicable. All viewer inputs confirm and cleanup completes.
+These fixtures do not expand the conservative automatic source/cost allowlist.

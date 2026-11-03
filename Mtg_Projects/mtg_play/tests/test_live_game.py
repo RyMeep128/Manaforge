@@ -9,7 +9,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from mtg_play.live_game import LiveGameError, LiveGameLaunch
-from mtg_play.live_game import project_launch
+from mtg_play.live_game import project_launch, validate_close_report
 from mtg_play.contracts import GameSetup, MatchSeat
 from generate_launch_fixtures import native_deck
 
@@ -103,6 +103,18 @@ def test_changed_root_identity_is_never_deleted():
     finally:
         launch._identity = original
         launch.close()
+
+
+def test_unexpected_disconnect_cannot_be_reported_as_a_clean_return():
+    closed = dict(
+        viewer_cleared=True, cleanup_confirmed=True, uncertain=0, outcome=None
+    )
+    with pytest.raises(LiveGameError, match="ENDED_WITHOUT_RESULT"):
+        validate_close_report(closed)
+    validate_close_report(dict(closed, user_requested=True))
+    validate_close_report(dict(closed, outcome="win"))
+    with pytest.raises(LiveGameError, match="RESULT_UNCERTAIN"):
+        validate_close_report(dict(closed, user_requested=True, uncertain=1))
 
 
 @pytest.mark.parametrize("diagnostic", ["{broken", '{"code":"raw secret value"}'])
