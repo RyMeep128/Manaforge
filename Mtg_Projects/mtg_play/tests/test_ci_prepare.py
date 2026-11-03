@@ -19,6 +19,12 @@ def test_existing_destination_is_never_modified(tmp_path):
     assert sentinel.read_text() == "unchanged"
 
 
+def test_fork_cannot_mix_one_custom_assembly_with_stock_engine(tmp_path):
+    with pytest.raises(ProofError, match="BOTH_FORK_ASSEMBLIES_REQUIRED"):
+        prepare(tmp_path / "new", tmp_path, fork_server=tmp_path / "server.zip")
+    assert not (tmp_path / "new").exists()
+
+
 def test_corrupt_cached_archive_is_rejected_without_network(tmp_path):
     (tmp_path / "engine.zip").write_bytes(b"corrupt")
     with pytest.raises(ProofError, match="CI_ARCHIVE_HASH_MISMATCH"):

@@ -1221,7 +1221,9 @@ class PlayWorkspace(W.QWidget):
             self._status(
                 {
                     "UNITY_GAME_BUILD_MISSING": "Build the Windows Play player before starting a Unity game.",
-                    "UNITY_GAME_PRINTING_UNSUPPORTED": "A selected printing is unsupported by this Unity session.",
+                    "UNITY_GAME_PRINTING_UNSUPPORTED": "A card could not be resolved by XMage.",
+                    "UNITY_GAME_CARD_UNSUPPORTED": "XMage does not support a card in the selected decks.",
+                    "UNITY_GAME_CARD_RESOLUTION_FAILED": "XMage could not resolve the selected cards. Please try again.",
                     "UNITY_GAME_SETUP_UNSUPPORTED": "Unity gameplay currently supports Freeform 1v1 with one human and one AI.",
                 }.get(
                     value,

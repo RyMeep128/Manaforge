@@ -25,7 +25,7 @@ namespace Manaforge.Play
         public ViewerDecisionOffer CurrentDecision
         {get{if(ownerEnded.IsCompleted)Stop("VIEWER_OWNER_ENDED");lock(gate)return !stopped && receiver!=null?receiver.Decisions.Current:null;}}
         // Bootstrap ownership transfers only after BeginViewer succeeds. Parent owns its pipe/lifeline task.
-        public ViewerSessionHost(ViewerCardSurface surface,ViewerBootstrap ownedBootstrap,Task ownerEnded,bool fixtureMode=false,int connectionMilliseconds=5000,int readMilliseconds=60000)
+        public ViewerSessionHost(ViewerCardSurface surface,ViewerBootstrap ownedBootstrap,Task ownerEnded,bool fixtureMode=false,int connectionMilliseconds=5000,int readMilliseconds=60000,bool allowIdleWait=false)
         {
             if(surface==null || ownedBootstrap==null || ownerEnded==null || connectionMilliseconds<1 || connectionMilliseconds>60000 || readMilliseconds<1 || readMilliseconds>60000)throw new ArgumentException("VIEWER_HOST_CONTEXT");
             var assets=new ViewerArtworkScope();
@@ -33,9 +33,9 @@ namespace Manaforge.Play
             this.surface=surface;bootstrap=ownedBootstrap;this.ownerEnded=ownerEnded;token=cancellation.Token;
             ownerEnded.ContinueWith(task=>{_=task.Exception;Stop("VIEWER_OWNER_ENDED");},TaskScheduler.Default);
             if(ownerEnded.IsCompleted)Stop("VIEWER_OWNER_ENDED");
-            Task.Run(()=>Run(fixtureMode,connectionMilliseconds,readMilliseconds));
+            Task.Run(()=>Run(fixtureMode,connectionMilliseconds,readMilliseconds,allowIdleWait));
         }
-        private async Task Run(bool fixtureMode,int connectionMilliseconds,int readMilliseconds)
+        private async Task Run(bool fixtureMode,int connectionMilliseconds,int readMilliseconds,bool allowIdleWait)
         {
             ClientSessionChannel opened=null;CoreArtworkBundle loaded=null;ViewerSessionStop summary=null;bool cleanup=true;
             try {
@@ -46,7 +46,7 @@ namespace Manaforge.Play
                     catch{Stop("VIEWER_ARTWORK_FAILED");return;}
                 }
                 lock(gate){if(stopped)return;artwork=loaded;receiver=new ViewerSessionReceiver(channel,ticket,fixtureMode);commands=new ViewerCommandDispatcher(channel,receiver.Decisions,5000);}
-                while(receiver.ReceiveOnce(readMilliseconds,token)){}
+                while(receiver.ReceiveOnce(readMilliseconds,token,allowIdleWait)){}
                 Stop("VIEWER_RECEIVE_ENDED");
             }
             catch{Stop("VIEWER_CONNECT_FAILED");}

@@ -196,3 +196,59 @@ def test_commander_launch_preserves_paired_designations_and_rejects_companions()
     document.deck.extras["companion_entry_id"] = "companion"
     with pytest.raises(LiveGameError, match="SETUP_UNSUPPORTED"):
         project_launch(setup, {"human": document, "ai": document}, "test-alpha.1")
+
+
+def test_rules_resolution_ignores_printing_and_preserves_artwork_identity():
+    from mtg_play.live_game import resolve_rules_manifest
+
+    source = {"seats": [{"document": {"deck": {"entries": [dict(
+        name="Front // Back", set_code="custom", collector_number="999",
+        card_id="deck-artwork", oracle_id="oracle", entry_id="entry", quantity=2,
+    )]}}}]}
+    before = json.dumps(source)
+    def request(command):
+        assert command == dict(command="resolve_rules", cards=[dict(key="0", name="Front // Back", set="", number="")])
+        return [dict(key="0", name="Front", set="ENGINE", number="1")]
+    result = resolve_rules_manifest(source, request)
+    entry = result["seats"][0]["document"]["deck"]["entries"][0]
+    assert (entry["name"], entry["set_code"], entry["collector_number"]) == ("Front", "ENGINE", "1")
+    assert (entry["card_id"], entry["oracle_id"], entry["entry_id"], entry["quantity"]) == ("deck-artwork", "oracle", "entry", 2)
+    assert json.dumps(source) == before
+
+
+@pytest.mark.parametrize("response", [[], {}, [dict(key="0", error="CARD_NOT_SUPPORTED")], [dict(key="wrong", name="Forest", set="M21", number="1")]])
+def test_rules_resolution_rejects_missing_or_malformed_engine_results(response):
+    from mtg_play.live_game import resolve_rules_manifest
+
+    manifest = {"seats": [{"document": {"deck": {"entries": [dict(name="Forest")]}}}]}
+    with pytest.raises(LiveGameError, match="CARD_"):
+        resolve_rules_manifest(manifest, lambda command: response)
+
+
+def test_audited_rules_alias_preserves_saved_name_and_artwork():
+    from mtg_play.live_game import resolve_rules_manifest
+    source = {"seats": [{"document": {"deck": {"entries": [dict(name="Mj\u00f6lnir, Hammer of Thor", oracle_id="7f9a8845-d760-44a7-a4c9-8a20dba4e14a", card_id="selected-art")]}}}]}
+    def request(command):
+        assert command["cards"][0]["name"] == "Mjolnir, Hammer of Thor"
+        return [dict(key="0", name="Mjolnir, Hammer of Thor", set="MSH", number="146")]
+    result = resolve_rules_manifest(source, request)
+    assert result["seats"][0]["document"]["deck"]["entries"][0]["card_id"] == "selected-art"
+    assert source["seats"][0]["document"]["deck"]["entries"][0]["name"] == "Mj\u00f6lnir, Hammer of Thor"
+
+
+def test_rules_alias_never_guesses_other_names_or_oracle_identities():
+    from mtg_play.rules_identity import engine_rule_name
+    assert engine_rule_name("Mj\u00f6lnir, Hammer of Thor", "wrong-oracle") == "Mj\u00f6lnir, Hammer of Thor"
+    assert engine_rule_name("Other \u00f6 card") == "Other \u00f6 card"
+
+
+def test_canonical_rules_name_uses_stored_oracle_identity_without_rewriting_deck():
+    from mtg_play.live_game import resolve_rules_manifest
+    source = {"seats": [{"document": {"deck": {"entries": [dict(name="Jeskas Will", oracle_id="oracle", card_id="selected-art")]}}}]}
+    before = json.dumps(source)
+    def request(command):
+        assert command["cards"][0]["name"] == "Jeska's Will"
+        return [dict(key="0", name="Jeska's Will", set="CMR", number="187")]
+    resolved = resolve_rules_manifest(source, request, {"oracle": dict(name="Jeska's Will", layout="normal")})
+    assert resolved["seats"][0]["document"]["deck"]["entries"][0]["card_id"] == "selected-art"
+    assert json.dumps(source) == before

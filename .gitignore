@@ -232,6 +232,7 @@ Mtg_Projects/mtg_proxy/projects/tmp_images/
 /UNITY_ASSETS_AI_HANDOFF.local.md
 /Mtg_Projects/mtg_play/mage-full_*/
 /Mtg_Projects/mtg_play/.runtime/
+/Mtg_Projects/mtg_play/.engines/
 
 # Unity Play generated state and build evidence.
 /Mtg_Projects/mtg_play_unity/[Ll]ibrary/

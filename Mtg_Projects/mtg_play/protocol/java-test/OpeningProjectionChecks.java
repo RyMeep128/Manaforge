@@ -2,6 +2,7 @@ import com.google.gson.*;
 import java.util.*;
 import java.io.IOException;
 import manaforge.protocol.PlayContracts.CardIdentity;
+import manaforge.protocol.LaunchContracts.NativeLaunchEntry;
 import manaforge.protocol.ReceiveMessages;
 
 /** Synthetic privacy/shape checks; no engine installation or private deck fixture. */
@@ -790,6 +791,15 @@ public final class OpeningProjectionChecks {
         for(manaforge.protocol.LaunchContracts.LaunchSeat seat:commander.seats){manaforge.protocol.LaunchContracts.NativeLaunchEntry land=seat.document.deck.entries[0],designated=new Gson().fromJson(new Gson().toJson(land),manaforge.protocol.LaunchContracts.NativeLaunchEntry.class);land.quantity=99L;designated.entry_id="designated";designated.name="Public commander";designated.set_code="SYN";designated.collector_number="1";designated.quantity=1L;seat.document.deck.commander_entry_ids=new String[]{"designated"};seat.document.deck.entries=new manaforge.protocol.LaunchContracts.NativeLaunchEntry[]{land,designated};}
         NativeGameLaunch nativeCommander=new NativeGameLaunch(commander);check(nativeCommander.cards(false,false).size()==1 && nativeCommander.cards(false,true).size()==1);check(nativeCommander.cards(false,false).get(0).getAsJsonObject().get("quantity").getAsLong()==99);check(nativeCommander.bindings().containsKey("SYN/1"));
         JsonObject roster=JsonParser.parseString("{\"priority_open\":true,\"commander_metadata_complete\":true,\"commanders\":[{\"owner\":\"raw-human\",\"name\":\"Public commander\",\"set\":\"SYN\",\"number\":\"1\"},{\"owner\":\"raw-ai\",\"name\":\"Public commander\",\"set\":\"SYN\",\"number\":\"1\"}]}").getAsJsonObject();nativeCommander.verifyCommanders(attackState(),roster);check(true);roster.getAsJsonArray("commanders").get(0).getAsJsonObject().addProperty("number","2");fails("UNITY_GAME_COMMANDERS_MISMATCH",()->nativeCommander.verifyCommanders(attackState(),roster));
+        NativeLaunchEntry original = manifest.seats[0].document.deck.entries[0];
+        NativeLaunchEntry duplicate = new Gson().fromJson(new Gson().toJson(original), NativeLaunchEntry.class);
+        duplicate.entry_id = "same-rules-different-art"; duplicate.card_id = "another-print";
+        manifest.seats[0].document.deck.entries = new NativeLaunchEntry[]{original, duplicate};
+        check(!new NativeGameLaunch(manifest).bindings().containsKey("TRK/325"));
+        duplicate.card_id = original.card_id;
+        check(new NativeGameLaunch(manifest).bindings().get("TRK/325").printing_id.equals(original.card_id));
+        check(new NativeGameLaunch(manifest).bindings().get("TRK/325").deck_entry_id == null);
+        manifest.seats[0].document.deck.entries = new NativeLaunchEntry[]{original};
         manifest.seats[1].controller="local_human";fails("UNITY_GAME_SETUP_UNSUPPORTED",()->new NativeGameLaunch(manifest));manifest.seats[1].controller="engine_ai";manifest.format="commander";fails("UNITY_GAME_SETUP_UNSUPPORTED",()->new NativeGameLaunch(manifest));manifest.format="freeform";
         manifest.seats[0].document.deck.entries[0].set_code=null;fails("UNITY_GAME_PRINTING_UNSUPPORTED",()->new NativeGameLaunch(manifest));manifest.seats[0].document.deck.entries[0].set_code="TRK";manifest.seats[0].document.deck.companion_entry_id="extra";fails("UNITY_GAME_SETUP_UNSUPPORTED",()->new NativeGameLaunch(manifest));manifest.seats[0].document.deck.companion_entry_id=null;
         SessionEngine engine=new SessionEngine();JsonObject unknown=prompt();unknown.addProperty("kind","GAME_CHOOSE_PILE");ManaforgeGameplaySession session=new ManaforgeGameplaySession(projection(),engine,null,true);ManaforgeUnityOpening.TurnOffer offered=session.offer(engine.state,unknown);JsonObject view=offered.snapshot().getAsJsonObject("body").getAsJsonObject("snapshot");shape(view);check(view.get("decision").isJsonNull() && view.getAsJsonArray("actions").size()==0 && view.getAsJsonArray("unsupported_fields").contains(new JsonPrimitive("decision")));fails("GAMEPLAY_DECISION_UNSUPPORTED",()->nativeSubmit(offered).submit(new JsonObject()));check(engine.submissions==0);session.close();

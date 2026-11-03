@@ -67,7 +67,7 @@ namespace Manaforge.Play
         {lock(gate){update=null;if(stopped || updates.Count==0)return false;update=updates.Dequeue();bytes-=update.ByteCount;return true;}}
         // Blocking transport entry point: host schedules on its connection worker, with explicit read budget.
         // Invalid budget precedes any mutation. Stop/cancel revoke only the captured viewer epoch.
-        public bool ReceiveOnce(int milliseconds=5000,CancellationToken cancellation=default)
+        public bool ReceiveOnce(int milliseconds=5000,CancellationToken cancellation=default,bool allowIdleWait=false)
         {
             if(milliseconds<1 || milliseconds>60000)throw new ArgumentOutOfRangeException(nameof(milliseconds));
             if(Interlocked.CompareExchange(ref receiving,1,0)!=0){Stop("VIEWER_RECEIVE_CONCURRENT");return false;}
@@ -75,7 +75,7 @@ namespace Manaforge.Play
             try {
                 if(IsStopped)return false;
                 if(ticket.Mailbox.IsStopped){Stop("VIEWER_REVOKED");return false;}
-                var received=channel.ReceiveNext(milliseconds,cancellation);
+                var received=channel.ReceiveNext(milliseconds,cancellation,allowIdleWait);
                 if(channel.State!=ClientChannelState.Active){Stop("VIEWER_CHANNEL_STOPPED",channel.Completion.Result.Graceful);return false;}
                 ProjectedCardFrame frame=null;ProjectedDecisionFrame decisions=null;long? minimum=null;
                 if(received.Applied && (received.Type=="snapshot" || received.Type=="event" || received.Type=="result")) {

@@ -35,5 +35,26 @@ public final class NativeGameLaunch {
             count+=entry.quantity;if(count>10000)throw new IOException("UNITY_GAME_DECK_LIMIT");JsonObject row=new JsonObject();row.addProperty("name",entry.name);row.addProperty("set",entry.set_code);row.addProperty("number",entry.collector_number);row.addProperty("quantity",entry.quantity);result.add(row);
         }if(!sideboard && count==0)throw new IOException("UNITY_GAME_DECK_EMPTY");return result;
     }
-    public Map<String,CardIdentity> bindings(){Map<String,CardIdentity> result=new HashMap<>();Set<String> ambiguous=new HashSet<>();for(NativeLaunchEntry entry:human.document.deck.entries){if(!(entry.section.equals("mainboard") || entry.section.equals("commander") || Arrays.asList(human.document.deck.commander_entry_ids).contains(entry.entry_id)) || entry.card_id==null)continue;String key=entry.set_code.toUpperCase(Locale.ROOT)+"/"+entry.collector_number;CardIdentity identity=new CardIdentity();identity.printing_id=entry.card_id;identity.oracle_id=entry.oracle_id;identity.deck_entry_id=entry.entry_id;if(result.containsKey(key))ambiguous.add(key);result.put(key,identity);}for(String key:ambiguous)result.get(key).deck_entry_id=null;return result;}
+    public Map<String,CardIdentity> bindings() {
+        Map<String,CardIdentity> result = new HashMap<>();
+        Set<String> ambiguousEntries = new HashSet<>(), ambiguousArtwork = new HashSet<>();
+        for (NativeLaunchEntry entry : human.document.deck.entries) {
+            if (!(entry.section.equals("mainboard") || entry.section.equals("commander")
+                    || Arrays.asList(human.document.deck.commander_entry_ids).contains(entry.entry_id)) || entry.card_id == null) continue;
+            String key = entry.set_code.toUpperCase(Locale.ROOT) + "/" + entry.collector_number;
+            CardIdentity identity = new CardIdentity();
+            identity.printing_id = entry.card_id; identity.oracle_id = entry.oracle_id; identity.deck_entry_id = entry.entry_id;
+            CardIdentity previous = result.get(key);
+            if (previous != null) {
+                ambiguousEntries.add(key);
+                if (!Objects.equals(previous.printing_id, identity.printing_id) || !Objects.equals(previous.oracle_id, identity.oracle_id)) ambiguousArtwork.add(key);
+            }
+            result.put(key, identity);
+        }
+        for (String key : ambiguousEntries) result.get(key).deck_entry_id = null;
+        // Rules resolution can collapse several selected artworks to one engine
+        // printing. Without instance provenance, use the existing visual fallback.
+        for (String key : ambiguousArtwork) result.remove(key);
+        return result;
+    }
 }

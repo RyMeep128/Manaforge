@@ -29,10 +29,20 @@ public final class LoopbackFrameReader implements AutoCloseable {
     public String read(int milliseconds) throws IOException{return read(milliseconds,()->false);}
     public String read(int milliseconds,BooleanSupplier cancellation) throws IOException {
         if(milliseconds<1 || milliseconds>60000 || cancellation==null)throw new IllegalArgumentException("FRAME_READ_CONTEXT");
+        return readBounded(milliseconds, milliseconds, cancellation);
+    }
+    /** Authenticated decision wait only. The session budget includes idle time;
+     * after the first byte a separate absolute frame deadline prevents slow trickles. */
+    public String readWithIdleWait(int milliseconds,int frameMilliseconds,BooleanSupplier cancellation) throws IOException {
+        if(milliseconds<1 || milliseconds>21600000 || frameMilliseconds<1 || frameMilliseconds>60000 || cancellation==null)
+            throw new IllegalArgumentException("FRAME_READ_CONTEXT");
+        return readBounded(milliseconds, frameMilliseconds, cancellation);
+    }
+    private String readBounded(int milliseconds,int frameMilliseconds,BooleanSupplier cancellation) throws IOException {
         if(closed.get())throw new TextFrame.FrameException("FRAME_CLOSED");
         if(!reading.compareAndSet(false,true)){abort();throw new TextFrame.FrameException("FRAME_CONCURRENT");}
         try {
-            DeadlineInput input=new DeadlineInput(milliseconds,cancellation);input.check();
+            DeadlineInput input=new DeadlineInput(milliseconds,frameMilliseconds,cancellation);input.check();
             String text=TextFrame.read(input);input.check();return text;
         } catch(TextFrame.FrameException error){abort();throw error;}
         catch(IOException error){String code=closed.get()?"FRAME_CLOSED":"FRAME_IO";abort();throw new TextFrame.FrameException(code);}
@@ -96,16 +106,18 @@ public final class LoopbackFrameReader implements AutoCloseable {
     private void abort(){try{close();}catch(IOException ignored){/* Preserve the safe primary failure. Owner still owns lifecycle cleanup. */}}
     public void close() throws IOException{if(closed.compareAndSet(false,true))try{socket.close();}finally{watchdog.shutdownNow();}}
     private final class DeadlineInput extends InputStream {
-        private final long started=System.nanoTime(),budget;
+        private final long started=System.nanoTime(),budget,frameBudget;
+        private long frameStarted;
         private final BooleanSupplier cancellation;
         private final InputStream input;
-        DeadlineInput(int milliseconds,BooleanSupplier cancellation) throws IOException {
-            budget=TimeUnit.MILLISECONDS.toNanos(milliseconds);this.cancellation=cancellation;input=socket.getInputStream();
+        DeadlineInput(int milliseconds,int frameMilliseconds,BooleanSupplier cancellation) throws IOException {
+            budget=TimeUnit.MILLISECONDS.toNanos(milliseconds);frameBudget=TimeUnit.MILLISECONDS.toNanos(frameMilliseconds);this.cancellation=cancellation;input=socket.getInputStream();
         }
         void check() throws IOException {
             if(cancellation.getAsBoolean() || Thread.currentThread().isInterrupted())throw new TextFrame.FrameException("FRAME_CANCELLED");
             if(closed.get())throw new TextFrame.FrameException("FRAME_CLOSED");
             if(System.nanoTime()-started>=budget)throw new TextFrame.FrameException("FRAME_TIMEOUT");
+            if(frameStarted!=0 && System.nanoTime()-frameStarted>=frameBudget)throw new TextFrame.FrameException("FRAME_TIMEOUT");
         }
         public int read() throws IOException{byte[] value=new byte[1];return read(value,0,1)<0?-1:value[0]&255;}
         public int read(byte[] bytes,int offset,int count) throws IOException {
@@ -114,9 +126,10 @@ public final class LoopbackFrameReader implements AutoCloseable {
             if(count==0)return 0;
             while(true) {
                 check();long remaining=budget-(System.nanoTime()-started);
+                if(frameStarted!=0)remaining=Math.min(remaining,frameBudget-(System.nanoTime()-frameStarted));
                 int wait=(int)Math.max(1,Math.min(25,(remaining+999999)/1000000));
                 socket.setSoTimeout(wait);
-                try{return input.read(bytes,offset,count);}catch(SocketTimeoutException timeout){/* Recheck total budget/cancellation. */}
+                try{int received=input.read(bytes,offset,count);if(received>0 && frameStarted==0)frameStarted=System.nanoTime();return received;}catch(SocketTimeoutException timeout){/* Recheck total budget/cancellation. */}
             }
         }
     }

@@ -107,3 +107,19 @@ Artifacts/ArenaVisualReview-31c790d6, rendered actual 1366x768, 1920x1080 and
 2560x1440 framebuffers in addition to the 1280x720 baseline; resolution-proof.json
 records requested and actual sizes. These are actual packaged screenshots,
 not resized copies. The final spacing/primary-action package is recorded below.
+
+## Final packaged evidence
+
+Windows player rebuild succeeded; Artifacts/arena-sweep-build.log records it.
+Artifacts/ArenaVisualReview-f50107b6 contains the final opening, battlefield,
+hover, inspection, priority, combat, draw and result PNGs. The match ended in a
+native win with 161 snapshots, 160 confirmed commands, zero uncertainty, viewer
+cleared and cleanup confirmed. Its board-input-proof.json records
+57 card keyboard inputs through the real spatial controls.
+
+The same package contains actual 1366x768, 1920x1080 and 2560x1440 framebuffer
+captures alongside the 1280x720 captures. Requested and actual sizes match in
+resolution-proof.json. Opening and large-resolution captures were visually
+inspected after the last hand/mulligan refinement. The final focused PlayMode
+report has 44 passing checks. Owner visual acceptance and new CI validation remain
+pending; no automatic Arena-parity approval is claimed.

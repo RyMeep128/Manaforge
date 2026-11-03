@@ -188,7 +188,12 @@ def main():
         / "Mtg_Projects/mtg_play_unity/Artifacts"
         / ("LiveGame-" + uuid.uuid4().hex[:10]),
     )
+    parser.add_argument("--xmage-root", type=Path, help="Explicit pinned engine candidate bundle")
+    parser.add_argument("--startup-only", action="store_true", help="Check normal authenticated startup, then cancel without submitting gameplay choices")
+    parser.add_argument("--startup-seconds", type=int, default=10, help="Startup-only idle observation duration (1–120 seconds)")
     args = parser.parse_args()
+    if not 1 <= args.startup_seconds <= 120:
+        parser.error("--startup-seconds must be between 1 and 120")
     if (
         args.public_decks == bool(args.human_deck or args.ai_deck)
         or not args.public_decks
@@ -222,20 +227,37 @@ def main():
             DeckStore().save(path, document)
             documents[seat] = DeckStore().load(path)
     launch = LiveGameLaunch()
+    cancel = threading.Event()
+    startup_timer = None
+    started = False
+
+    def progress(value):
+        nonlocal startup_timer, started
+        print(value["phase"], flush=True)
+        if args.startup_only and value["phase"] == "Unity game running":
+            started = True
+            startup_timer = threading.Timer(args.startup_seconds, cancel.set)
+            startup_timer.start()
+
     try:
         result = run_live_game(
             setup,
             documents,
-            threading.Event(),
-            lambda value: print(value["phase"], flush=True),
+            cancel,
+            progress,
             version=APP_VERSION,
             launch=launch,
             payment_mode=args.payment_mode,
-            acceptance=True,
+            acceptance=not args.startup_only,
             commander_scenario=args.commander_scenario,
             no_capture=args.no_capture,
             presentation=args.presentation,
+            **({"xmage_root": args.xmage_root} if args.xmage_root else {}),
         )
+        if args.startup_only:
+            if not started or result.get("cancelled") is not True:
+                raise RuntimeError("UNITY_GAME_STARTUP_NOT_PROVEN")
+            result.update(authenticated_startup=True, gameplay_choices_submitted=False, full_match_verified=False)
         (args.output / "report.json").write_text(
             json.dumps(result, indent=2) + "\n", encoding="utf-8"
         )
@@ -255,6 +277,13 @@ def main():
         )
         print("UNITY_GAME_ACCEPTANCE_FAILED: " + str(error), file=sys.stderr)
         return 1
+    finally:
+        if startup_timer is not None:
+            startup_timer.cancel()
+    if args.startup_only:
+        print("Normal authenticated startup verified; cancelled without gameplay choices. Full-match acceptance remains pending.")
+        print(args.output)
+        return 0
     print(
         "Native Commander scenario completed with confirmed inputs and cleanup."
         if args.commander_scenario not in ("single", "tax")
