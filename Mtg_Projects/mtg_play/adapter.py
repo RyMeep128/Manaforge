@@ -231,7 +231,9 @@ class LocalGameAdapter:
             encoding="utf-8"
         )
         match = re.search(r'^APP_VERSION = "([^"\n]+)"', constants, re.MULTILINE)
-        manifest_bytes = (transport.HERE / "artifacts.json").read_bytes()
+        from .engine_fork import installation_manifest
+
+        manifest_bytes = installation_manifest(self._bundle).read_bytes()
         return Compatibility(
             match.group(1) if match else "unknown",
             GAME_PROTOCOL_VERSION,
@@ -247,7 +249,7 @@ class LocalGameAdapter:
             Capability(
                 "commander",
                 "verified",
-                "2–5 seats; partner designations; casting, damage and engine-calculated tax",
+                "2â€“5 seats; partner designations; casting, damage and engine-calculated tax",
             ),
             Capability(
                 "continuous_power_toughness", "verified", "Giant Growth and expiration"

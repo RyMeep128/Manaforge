@@ -35,7 +35,7 @@ namespace Manaforge.Play
                 document=gameObject.AddComponent<UIDocument>();document.panelSettings=settings;var root=document.rootVisualElement;root.style.flexGrow=1;root.style.backgroundColor=new Color(.025f,.055f,.075f);
                 var leave=new Button(()=>{userRequested=true;quit=true;}){text="Return to Manaforge"};leave.name="game-leave";leave.style.position=Position.Absolute;leave.style.left=12;leave.style.top=10;leave.style.backgroundColor=new Color(.08f,.09f,.11f,.9f);leave.style.color=new Color(.94f,.88f,.76f);root.Add(leave);
                 presentation=presentationFactory(root);leave.BringToFront();surface=presentation.Surface;
-                host=new ViewerSessionHost(surface,reading.Result,pipe.WaitForOwnerCloseAsync(cancellation.Token),false);presentation.Bind(host);panel=presentation.Decisions;
+                host=new ViewerSessionHost(surface,reading.Result,pipe.WaitForOwnerCloseAsync(cancellation.Token),false,allowIdleWait:true);presentation.Bind(host);panel=presentation.Decisions;
                 if(ArtworkFixtureScene.Argument("-manaforgeGameAcceptance")=="1"){acceptance=new LiveGameAcceptanceDriver();if(presentation is ArenaGameplayPresentation)spatialAcceptance=new SpatialInputAcceptance(panel,surface,host);}
                 var token=cancellation.Token;consuming=Task.Run(()=>{
                     while(!token.IsCancellationRequested && !host.Completion.IsCompleted){if(host.TryTake(out var update))using(update){

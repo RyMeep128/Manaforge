@@ -83,7 +83,33 @@ public final class DeadlineFixtureConsumer {
                 Future<String> read=POOL.submit(()->{Thread.currentThread().interrupt();try{return failure(()->p.reader.read(1000));}finally{Thread.interrupted();}});
                 require("FRAME_CANCELLED".equals(read.get(2,TimeUnit.SECONDS)) && p.reader.isClosed());passed++;
             }
-            require(passed==16);System.out.println("Java owned frame deadlines: 16 real loopback checks passed");
+            try(Pair p=new Pair()) {
+                Future<?> sender=POOL.submit(()->{try{Thread.sleep(250);TextFrame.write(p.sender.getOutputStream(),"after-thinking");}catch(Exception e){throw new RuntimeException(e);}});
+                require("after-thinking".equals(p.reader.readWithIdleWait(2000,100,()->false)) && !p.reader.isClosed());sender.get(2,TimeUnit.SECONDS);passed++;
+            }
+            try(Pair p=new Pair()) {
+                p.send(new byte[]{0,0});long start=System.nanoTime();
+                require("FRAME_TIMEOUT".equals(failure(()->p.reader.readWithIdleWait(3000,120,()->false))));
+                require(TimeUnit.NANOSECONDS.toMillis(System.nanoTime()-start)<1500 && p.reader.isClosed());passed++;
+            }
+            try(Pair p=new Pair()) {
+                Future<?> sender=POOL.submit(()->{try{for(byte value:new byte[]{0,0,0,4,97,98,99,100}){p.send(new byte[]{value});Thread.sleep(50);}}catch(Exception expected){}});
+                require("FRAME_TIMEOUT".equals(failure(()->p.reader.readWithIdleWait(3000,120,()->false))));sender.get(2,TimeUnit.SECONDS);passed++;
+            }
+            try(Pair p=new Pair()) {
+                AtomicBoolean cancel=new AtomicBoolean();Future<String> read=POOL.submit(()->failure(()->p.reader.readWithIdleWait(5000,120,cancel::get)));
+                started(p.reader);cancel.set(true);require("FRAME_CANCELLED".equals(read.get(2,TimeUnit.SECONDS)) && p.reader.isClosed());passed++;
+            }
+            try(Pair p=new Pair()) {
+                Future<?> sender=POOL.submit(()->{try{Thread.sleep(180);p.send(new byte[]{0,0});}catch(Exception e){throw new RuntimeException(e);}});
+                long start=System.nanoTime();require("FRAME_TIMEOUT".equals(failure(()->p.reader.readWithIdleWait(300,2000,()->false))));
+                require(TimeUnit.NANOSECONDS.toMillis(System.nanoTime()-start)<1500);sender.get(2,TimeUnit.SECONDS);passed++;
+            }
+            try(Pair p=new Pair()) {
+                long start=System.nanoTime();require("FRAME_TIMEOUT".equals(failure(()->p.reader.readWithIdleWait(200,50,()->false))));
+                require(TimeUnit.NANOSECONDS.toMillis(System.nanoTime()-start)>=150);passed++;
+            }
+            require(passed==22);System.out.println("Java owned frame deadlines: 22 real loopback checks passed");
         } finally{POOL.shutdownNow();require(POOL.awaitTermination(3,TimeUnit.SECONDS));}
     }
 }

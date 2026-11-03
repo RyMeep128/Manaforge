@@ -11,6 +11,7 @@ param(
     [switch]$AbilityPreview,
     [switch]$FlipPreview,
     [switch]$Graphics,
+    [string]$TestFilter = 'Manaforge.Play.Tests',
     [switch]$DownloadGson
 )
 $ErrorActionPreference = 'Stop'
@@ -137,7 +138,7 @@ if (-not $Graphics) { $arguments += '-nographics' }
 if ($Mode -in @('EditMode', 'PlayMode')) {
     $results = Join-Path $artifacts "$($Mode.ToLowerInvariant()).xml"
     if (Test-Path -LiteralPath $results) { Remove-Item -LiteralPath $results }
-    $arguments += @('-runTests', '-testPlatform', $Mode, '-testResults', $results, '-testFilter', 'Manaforge.Play.Tests')
+    $arguments += @('-runTests', '-testPlatform', $Mode, '-testResults', $results, '-testFilter', $TestFilter)
 } else {
     $method = if ($Mode -eq 'Build') { 'WindowsPlayer' } else { 'Prepare' }
     $arguments += @('-quit', '-executeMethod', "Manaforge.Play.Editor.FoundationBuild.$method")
@@ -146,7 +147,7 @@ Invoke-OwnedProcess $EditorPath $arguments
 if ($Mode -in @('EditMode', 'PlayMode')) {
     [xml]$report = Get-Content -LiteralPath $results
     # Counts include printing policy/card components and attached-panel handoff checks.
-    $minimum = if ($Mode -eq 'EditMode') { 366 } else { 98 }
+    $minimum = if ($TestFilter -ne 'Manaforge.Play.Tests') { 1 } elseif ($Mode -eq 'EditMode') { 366 } else { 98 }
     if ($report.'test-run'.result -ne 'Passed' -or [int]$report.'test-run'.total -lt $minimum) {
         throw "Missing or failed $Mode acceptance"
     }

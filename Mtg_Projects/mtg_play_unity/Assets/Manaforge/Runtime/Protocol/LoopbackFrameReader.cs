@@ -34,12 +34,21 @@ namespace Manaforge.Play.Protocol
         public string Read(int timeoutMilliseconds = 5000, CancellationToken cancellation = default)
         {
             if (timeoutMilliseconds < 1 || timeoutMilliseconds > 60000) throw new ArgumentOutOfRangeException(nameof(timeoutMilliseconds));
+            return ReadBounded(timeoutMilliseconds, timeoutMilliseconds, cancellation);
+        }
+        public string ReadWithIdleWait(int waitMilliseconds, int frameMilliseconds, CancellationToken cancellation = default)
+        {
+            if (waitMilliseconds < 1 || waitMilliseconds > 21600000 || frameMilliseconds < 1 || frameMilliseconds > 60000) throw new ArgumentOutOfRangeException();
+            return ReadBounded(waitMilliseconds, frameMilliseconds, cancellation);
+        }
+        private string ReadBounded(int timeoutMilliseconds, int frameMilliseconds, CancellationToken cancellation)
+        {
             if (IsClosed) throw new TextFrame.FrameException("FRAME_CLOSED");
             if (Interlocked.Exchange(ref reading, 1) != 0)
             { Dispose(); throw new TextFrame.FrameException("FRAME_CONCURRENT"); }
             try
             {
-                using var input = new DeadlineStream(this, timeoutMilliseconds, cancellation);
+                using var input = new DeadlineStream(this, timeoutMilliseconds, frameMilliseconds, cancellation);
                 input.Check();
                 string text = TextFrame.Read(input);
                 input.Check(); // no completed frame is returned after observed cancellation/deadline
@@ -112,16 +121,18 @@ namespace Manaforge.Play.Protocol
         private sealed class DeadlineStream : Stream
         {
             private readonly LoopbackFrameReader owner;
-            private readonly int budget;
+            private readonly int budget, frameBudget;
+            private Stopwatch frameTimer;
             private readonly CancellationToken cancellation;
             private readonly Stopwatch timer = Stopwatch.StartNew();
-            public DeadlineStream(LoopbackFrameReader owner, int budget, CancellationToken cancellation)
-            { this.owner = owner; this.budget = budget; this.cancellation = cancellation; }
+            public DeadlineStream(LoopbackFrameReader owner, int budget, int frameBudget, CancellationToken cancellation)
+            { this.owner = owner; this.budget = budget; this.frameBudget = frameBudget; this.cancellation = cancellation; }
             public void Check()
             {
                 cancellation.ThrowIfCancellationRequested();
                 if (owner.IsClosed) throw new TextFrame.FrameException("FRAME_CLOSED");
                 if (timer.Elapsed.TotalMilliseconds >= budget) throw new TextFrame.FrameException("FRAME_TIMEOUT");
+                if (frameTimer != null && frameTimer.Elapsed.TotalMilliseconds >= frameBudget) throw new TextFrame.FrameException("FRAME_TIMEOUT");
             }
             public override int Read(byte[] buffer, int offset, int count)
             {
@@ -131,10 +142,12 @@ namespace Manaforge.Play.Protocol
                 while (true)
                 {
                     Check();
-                    int microseconds = Math.Max(1, (int)Math.Ceiling(Math.Min(25, budget - timer.Elapsed.TotalMilliseconds) * 1000));
+                    double remaining = budget - timer.Elapsed.TotalMilliseconds;
+                    if (frameTimer != null) remaining = Math.Min(remaining, frameBudget - frameTimer.Elapsed.TotalMilliseconds);
+                    int microseconds = Math.Max(1, (int)Math.Ceiling(Math.Min(25, remaining) * 1000));
                     if (!owner.socket.Poll(microseconds, SelectMode.SelectRead)) continue;
                     Check();
-                    try { return owner.socket.Receive(buffer, offset, count, SocketFlags.None); }
+                    try { int received = owner.socket.Receive(buffer, offset, count, SocketFlags.None); if (received > 0 && frameTimer == null) frameTimer = Stopwatch.StartNew(); return received; }
                     catch (SocketException error) when (error.SocketErrorCode == SocketError.TimedOut || error.SocketErrorCode == SocketError.WouldBlock) { }
                 }
             }

@@ -54,17 +54,18 @@ public final class ManaforgeServerHost {
                         }
                         results = names;
                     } else {
+                    boolean rulesOnly = command.has("command") && command.get("command").getAsString().equals("resolve_rules");
                     JsonArray resolved = new JsonArray();
                     for (JsonElement element : command.getAsJsonArray("cards")) {
                         JsonObject query = element.getAsJsonObject();
                         String name = query.get("name").getAsString();
                         CardInfo card = CardRepository.instance.findCardWithPreferredSetAndNumber(
-                            name, query.get("set").getAsString(), query.get("number").getAsString());
+                            name, rulesOnly ? "" : query.get("set").getAsString(), rulesOnly ? "" : query.get("number").getAsString());
                         boolean alias = false;
                         if ((card == null || !card.getName().equals(name)) && name.contains(" // ")) {
                             String[] faces = name.split(" // ", 2);
                             CardInfo front = CardRepository.instance.findCardWithPreferredSetAndNumber(
-                                faces[0], query.get("set").getAsString(), query.get("number").getAsString());
+                                faces[0], rulesOnly ? "" : query.get("set").getAsString(), rulesOnly ? "" : query.get("number").getAsString());
                             if (front != null && front.getName().equals(faces[0])
                                     && java.util.Arrays.asList(front.getSecondSideName(), front.getDoubleFacedSecondSideName(),
                                         front.getFlipCardName(), front.getSpellOptionCardName()).contains(faces[1])) {
@@ -78,8 +79,8 @@ public final class ManaforgeServerHost {
                         } else {
                             String selectedSet = query.get("set").getAsString();
                             String selectedNumber = query.get("number").getAsString();
-                            if ((!selectedSet.isEmpty() && !selectedSet.equalsIgnoreCase(card.getSetCode()))
-                                    || (!selectedNumber.isEmpty() && !selectedNumber.equals(card.getCardNumber()))) {
+                            if (!rulesOnly && ((!selectedSet.isEmpty() && !selectedSet.equalsIgnoreCase(card.getSetCode()))
+                                    || (!selectedNumber.isEmpty() && !selectedNumber.equals(card.getCardNumber())))) {
                                 result.addProperty("error", "PRINTING_NOT_RESOLVED");
                                 resolved.add(result);
                                 continue;

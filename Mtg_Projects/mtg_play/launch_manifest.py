@@ -133,7 +133,7 @@ def _project_deck(document, *, commander):
 
 
 def export_launch_manifest(
-    setup: GameSetup, documents, *, manaforge_version: str, deck_owners=None
+    setup: GameSetup, documents, *, manaforge_version: str, deck_owners=None, engine_bundle=None
 ) -> bytes:
     """Return immutable UTF-8 bytes for the trusted gateway owner only.
 
@@ -193,7 +193,10 @@ def export_launch_manifest(
                 "document": document,
             }
         )
-    raw_pin = Path(__file__).with_name("artifacts.json").read_bytes()
+    from .engine_fork import installation_manifest
+
+    pin_path = Path(__file__).with_name("artifacts.json") if engine_bundle is None else installation_manifest(engine_bundle)
+    raw_pin = pin_path.read_bytes()
     engine = json.loads(raw_pin)
     result = {
         "launch_manifest_version": LAUNCH_MANIFEST_VERSION,

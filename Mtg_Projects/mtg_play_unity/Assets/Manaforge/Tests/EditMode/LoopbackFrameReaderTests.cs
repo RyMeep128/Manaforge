@@ -104,5 +104,31 @@ namespace Manaforge.Play.Tests
             using var pair=new Pair();using var stop=new CancellationTokenSource();stop.Cancel();
             Assert.That(Failure(()=>pair.Reader.Read(1000,stop.Token)),Is.EqualTo("FRAME_CANCELLED"));Assert.That(pair.Reader.IsClosed,Is.True);
         }
+        [Test] public void DecisionIdleDoesNotConsumePartialFrameBudget()
+        {
+            using var pair=new Pair();
+            var sender=Task.Run(()=>{Thread.Sleep(250);TextFrame.Write(pair.Sender.GetStream(),"after-thinking");});
+            Assert.That(pair.Reader.ReadWithIdleWait(2000,100),Is.EqualTo("after-thinking"));
+            Assert.That(sender.Wait(2000),Is.True);Assert.That(pair.Reader.IsClosed,Is.False);
+        }
+        [Test] public void DecisionPartialFrameStillTimesOut()
+        {
+            using var pair=new Pair();pair.Send(new byte[]{0,0});var timer=Stopwatch.StartNew();
+            Assert.That(Failure(()=>pair.Reader.ReadWithIdleWait(3000,120)),Is.EqualTo("FRAME_TIMEOUT"));
+            Assert.That(timer.ElapsedMilliseconds,Is.LessThan(1500));Assert.That(pair.Reader.IsClosed,Is.True);
+        }
+        [Test] public void DecisionIdleIsCancellable()
+        {
+            using var pair=new Pair();using var stop=new CancellationTokenSource();
+            var read=Task.Run(()=>Failure(()=>pair.Reader.ReadWithIdleWait(5000,120,stop.Token)));
+            Assert.That(SpinWait.SpinUntil(()=>pair.Reader.ReadInProgress,1000),Is.True);stop.Cancel();
+            Assert.That(read.Wait(2000),Is.True);Assert.That(read.Result,Is.EqualTo("FRAME_CANCELLED"));
+        }
+        [Test] public void SessionBudgetRemainsAnAbsoluteLimit()
+        {
+            using var pair=new Pair();var sender=Task.Run(()=>{Thread.Sleep(180);pair.Send(new byte[]{0,0});});
+            var timer=Stopwatch.StartNew();Assert.That(Failure(()=>pair.Reader.ReadWithIdleWait(300,2000)),Is.EqualTo("FRAME_TIMEOUT"));
+            Assert.That(timer.ElapsedMilliseconds,Is.LessThan(1500));Assert.That(sender.Wait(2000),Is.True);
+        }
     }
 }

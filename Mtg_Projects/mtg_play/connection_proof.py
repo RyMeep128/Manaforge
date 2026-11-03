@@ -18,7 +18,14 @@ import uuid
 import xml.etree.ElementTree as ET
 
 HERE = Path(__file__).resolve().parent
-DEFAULT_BUNDLE = HERE / "mage-full_1.4.62-dev_2026-10-03_20-47"
+if __package__:
+    from .engine_fork import selected_bundle
+else:
+    try:
+        from mtg_play.engine_fork import selected_bundle
+    except ModuleNotFoundError:
+        from engine_fork import selected_bundle
+DEFAULT_BUNDLE = selected_bundle(HERE / "mage-full_1.4.62-dev_2026-10-03_20-47")
 DEFAULT_JDK = Path(r"C:\Program Files\Java\jdk-23")
 START_TIMEOUT = 120
 CONNECT_TIMEOUT = 30
@@ -232,7 +239,19 @@ def validate_installation(bundle: Path, jdk: Path):
     for tool in (java, javac):
         if not tool.is_file():
             raise ProofError(f"Missing Java tool: {tool}; set --xmage-root/--jdk-path")
-    manifest = json.loads((HERE / "artifacts.json").read_text(encoding="utf-8"))
+    if __package__:
+        from .engine_fork import installation_manifest
+    else:
+        try:
+            from mtg_play.engine_fork import installation_manifest
+        except ModuleNotFoundError:
+            from engine_fork import installation_manifest
+
+    try:
+        manifest_path = installation_manifest(bundle, HERE / "artifacts.json")
+    except ValueError as error:
+        raise ProofError(str(error)) from error
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     for relative, expected in manifest["artifacts"].items():
         artifact = bundle / relative
         if not artifact.is_file():

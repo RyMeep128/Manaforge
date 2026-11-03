@@ -128,12 +128,12 @@ namespace Manaforge.Play.Protocol
             catch{Failed("SESSION_WRITE_FAILED");throw new WireEnvelope.EnvelopeException("SESSION_WRITE_FAILED");}
             finally{prepared.Dispose();}
         }
-        public ClientReceive ReceiveNext(int milliseconds,CancellationToken cancellation=default)
+        public ClientReceive ReceiveNext(int milliseconds,CancellationToken cancellation=default,bool allowIdleWait=false)
         {
             lock(gate)Open();
             try
             {
-                string text=transport.Read(milliseconds,cancellation);
+                string text=allowIdleWait?transport.ReadWithIdleWait(21600000,milliseconds,cancellation):transport.Read(milliseconds,cancellation);
                 lock(gate)
                 {
                     Open();if(text==null){Stop("SESSION_EOF");return new ClientReceive("eof");}
