@@ -1,5 +1,14 @@
 # Manaforge Play — Unity + Java Roadmap
 
+### Metadata bootstrap CI correction (0.5.214)
+
+The .213 checkpoint found protocol/desktop success for .212 and three failures
+in each Windows test job: bootstrap tests still patched globals on the retired
+tool wrapper. They now target the extracted shared metadata module, retaining
+the key-clearing, malformed-context and exited-gateway assertions. All 11 focused
+bootstrap/lifetime tests pass. Latest CI was queued and was not awaited; the next
+routine checkpoint is .216. Visual gates remain unchecked.
+
 ### Mana/casting acceptance matrix (0.5.213)
 
 Packaged manual casting now also verifies Slitherhead's hybrid cost, Vault Skirge's

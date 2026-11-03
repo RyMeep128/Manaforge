@@ -1,19 +1,12 @@
 """Private bootstrap validation and cleanup for the live-engine probe tools."""
 
-import importlib.util
 import io
 import json
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
-spec = importlib.util.spec_from_file_location(
-    "native_metadata_tool",
-    Path(__file__).resolve().parents[3] / "tools/play_native_metadata.py",
-)
-tool = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(tool)
+from mtg_play import native_metadata as tool
 
 
 @pytest.mark.parametrize("oversized", [False, True])
