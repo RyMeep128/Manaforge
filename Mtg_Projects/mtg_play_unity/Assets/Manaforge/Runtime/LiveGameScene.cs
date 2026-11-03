@@ -19,7 +19,9 @@ namespace Manaforge.Play
         private PanelSettings settings;private UIDocument document;private Task<ViewerBootstrap> reading;private Task consuming;
         private string[] untappedLandIds=new string[0],counterBallistaIds=new string[0];
         private ProjectedDecisionFrame latest;private string output;private bool quit,ready,userRequested;private int snapshots,confirmed,uncertain,availableLands,availableCreatures;
-        private IGameplayPresentation presentation;private Func<VisualElement,IGameplayPresentation> presentationFactory=root=>new TableGameplayPresentation(root);private LiveGameAcceptanceDriver acceptance;
+        private int reviewResolution;private bool resolutionPending,resolutionRestored;private Vector2Int reviewOriginalSize;private readonly JArray resolutionEvidence=new JArray();
+        private long captureRevision=-1;private float captureReady;private readonly System.Collections.Generic.HashSet<string> captures=new System.Collections.Generic.HashSet<string>();
+        private IGameplayPresentation presentation;private Func<VisualElement,IGameplayPresentation> presentationFactory=root=>new ArenaGameplayPresentation(root);private LiveGameAcceptanceDriver acceptance;private SpatialInputAcceptance spatialAcceptance;
         public void SetPresentationFactory(Func<VisualElement,IGameplayPresentation> factory){if(document!=null)throw new InvalidOperationException("PRESENTATION_ALREADY_STARTED");presentationFactory=factory??throw new ArgumentNullException(nameof(factory));}
         private void Write(string name,JObject value){string temporary=Path.Combine(output,name+".tmp");File.WriteAllText(temporary,value.ToString());File.Move(temporary,Path.Combine(output,name+".json"));}
         private IEnumerator Start()
@@ -30,11 +32,11 @@ namespace Manaforge.Play
             if(reading.Status!=TaskStatus.RanToCompletion){Application.Quit(1);yield break;}
             try{
                 settings=ScriptableObject.CreateInstance<PanelSettings>();settings.themeStyleSheet=Resources.Load<ThemeStyleSheet>("CardTheme");settings.scaleMode=PanelScaleMode.ScaleWithScreenSize;settings.referenceResolution=new Vector2Int(1280,720);
-                document=gameObject.AddComponent<UIDocument>();document.panelSettings=settings;var root=document.rootVisualElement;root.style.flexGrow=1;root.style.paddingLeft=20;root.style.paddingTop=15;root.style.backgroundColor=new Color(.025f,.055f,.075f);
-                var leave=new Button(()=>{userRequested=true;quit=true;}){text="Return to Manaforge"};root.Add(leave);
-                presentation=presentationFactory(root);surface=presentation.Surface;
+                document=gameObject.AddComponent<UIDocument>();document.panelSettings=settings;var root=document.rootVisualElement;root.style.flexGrow=1;root.style.backgroundColor=new Color(.025f,.055f,.075f);
+                var leave=new Button(()=>{userRequested=true;quit=true;}){text="Return to Manaforge"};leave.name="game-leave";leave.style.position=Position.Absolute;leave.style.left=12;leave.style.top=10;leave.style.backgroundColor=new Color(.08f,.09f,.11f,.9f);leave.style.color=new Color(.94f,.88f,.76f);root.Add(leave);
+                presentation=presentationFactory(root);leave.BringToFront();surface=presentation.Surface;
                 host=new ViewerSessionHost(surface,reading.Result,pipe.WaitForOwnerCloseAsync(cancellation.Token),false);presentation.Bind(host);panel=presentation.Decisions;
-                if(ArtworkFixtureScene.Argument("-manaforgeGameAcceptance")=="1")acceptance=new LiveGameAcceptanceDriver();
+                if(ArtworkFixtureScene.Argument("-manaforgeGameAcceptance")=="1"){acceptance=new LiveGameAcceptanceDriver();if(presentation is ArenaGameplayPresentation)spatialAcceptance=new SpatialInputAcceptance(panel,surface,host);}
                 var token=cancellation.Token;consuming=Task.Run(()=>{
                     while(!token.IsCancellationRequested && !host.Completion.IsCompleted){if(host.TryTake(out var update))using(update){
                         if(update.Receive.Type=="snapshot" || update.Receive.Type=="result"){if(acceptance!=null){var snapshot=JObject.Parse(update.Packet.ReadJson())["body"]["snapshot"];int lands=0,creatures=0;var landIds=new System.Collections.Generic.List<string>();var ballistaIds=new System.Collections.Generic.List<string>();foreach(var card in snapshot["objects"]){if((string)card["controller_id"]==update.Decision.Context.ViewerId && (string)card["zone"]=="battlefield"){if((bool?)card["tapped"]==false && ((string)card["characteristics"]?["type_line"]??"").Contains("Land")){lands++;landIds.Add((string)card["object_id"]);}if((string)card["characteristics"]?["name"]=="Walking Ballista" && card["counters"] is JArray counters)foreach(var counter in counters)if((string)counter[0]=="+1/+1" && (long)counter[1]>0)ballistaIds.Add((string)card["object_id"]);if(((string)card["characteristics"]?["type_line"]??"").Contains("Creature"))creatures++;}}Volatile.Write(ref untappedLandIds,landIds.ToArray());Volatile.Write(ref counterBallistaIds,ballistaIds.ToArray());Volatile.Write(ref availableLands,lands);Volatile.Write(ref availableCreatures,creatures);}Volatile.Write(ref latest,update.Decision);Interlocked.Increment(ref snapshots);}
@@ -48,14 +50,51 @@ namespace Manaforge.Play
                 if(frame!=null && host.HasPresentedRevision(frame.Context.Revision)){
                     if(!ready){ready=true;Write("game-ready",new JObject{["live_game_version"]=1,["authenticated"]=host.Authenticated});}
                     presentation.Present(frame);
-                    if(acceptance!=null){acceptance.SetAvailableLands(Volatile.Read(ref availableLands),Volatile.Read(ref availableCreatures),Volatile.Read(ref untappedLandIds),Volatile.Read(ref counterBallistaIds));quit=frame.UnsupportedFields.Contains("decision") || acceptance.Tick(host,panel,frame);}
+                    if(acceptance!=null && CaptureReady(frame)){acceptance.SetAvailableLands(Volatile.Read(ref availableLands),Volatile.Read(ref availableCreatures),Volatile.Read(ref untappedLandIds),Volatile.Read(ref counterBallistaIds));quit=frame.UnsupportedFields.Contains("decision") || acceptance.Tick(host,panel,frame);}
                 }
                 yield return null;
             }
-            Write("game-closing",new JObject{["live_game_version"]=1,["requested"]=quit});var final=Volatile.Read(ref latest);host.Cancel();host.Tick();host.Dispose();presentation.Dispose();while(!consuming.IsCompleted)yield return null;
+            Write("game-closing",new JObject{["live_game_version"]=1,["requested"]=quit});var final=Volatile.Read(ref latest);
+            if(final?.Result!=null){presentation.Present(final);yield return new WaitForEndOfFrame();if(acceptance!=null && ArtworkFixtureScene.Argument("-manaforgeNoCapture")!="1")ScreenCapture.CaptureScreenshot(Path.Combine(output,"result.png"));yield return new WaitForSecondsRealtime(acceptance!=null?.3f:3f);}
+            if(spatialAcceptance!=null){Write("board-input-proof",new JObject{["card_keyboard_inputs"]=spatialAcceptance.Inputs});spatialAcceptance.Dispose();}
+            host.Cancel();host.Tick();host.Dispose();presentation.Dispose();while(!consuming.IsCompleted)yield return null;
             bool cleared=document.rootVisualElement.Query<CardView>().ToList().Count==0;Write("game-closed",new JObject{["live_game_version"]=1,["outcome"]=final?.Result,["user_requested"]=userRequested,["snapshots"]=Volatile.Read(ref snapshots),["confirmed"]=Volatile.Read(ref confirmed),["uncertain"]=Volatile.Read(ref uncertain),["viewer_cleared"]=cleared,["cleanup_confirmed"]=host.Completion.Result.CleanupConfirmed});
             Application.Quit(cleared && host.Completion.Result.CleanupConfirmed?0:1);
         }
-        private void OnDestroy(){cancellation.Cancel();host?.Dispose();presentation?.Dispose();pipe?.Dispose();reading?.ContinueWith(done=>{if(done.Status==TaskStatus.RanToCompletion)done.Result?.Dispose();else _=done.Exception;},TaskScheduler.Default);consuming?.ContinueWith(done=>{_=done.Exception;},TaskScheduler.Default);if(settings!=null)Destroy(settings);cancellation.Dispose();}
+        // Public-deck acceptance evidence only; no capture or pacing changes in normal play.
+        private bool CaptureReady(ProjectedDecisionFrame frame)
+        {
+            if(ArtworkFixtureScene.Argument("-manaforgeNoCapture")=="1")return true;
+            if(captureRevision!=frame.Context.Revision){captureRevision=frame.Context.Revision;captureReady=Time.unscaledTime+.35f;return false;}
+            if(Time.unscaledTime<captureReady)return false;
+            if(!(frame.Decision?.Prompt??"").StartsWith("Mulligan",StringComparison.OrdinalIgnoreCase) && document.rootVisualElement.Query<VisualElement>(className:"library-flight").ToList().Count>0 && captures.Add("draw")){ScreenCapture.CaptureScreenshot(Path.Combine(output,"draw.png"));captureReady=Time.unscaledTime+.15f;return false;}
+            string state=frame.Result!=null?"result":frame.Combat.Count>0?"combat":(frame.Decision?.Prompt??"").StartsWith("Mulligan",StringComparison.OrdinalIgnoreCase)?"opening":frame.Actions.Any(a=>a.Kind=="cast")?"casting":"priority";
+            int permanents=0;surface.VisitPresented((card,view)=>{if(card.Zone=="battlefield")permanents++;});
+            if(state=="priority" && permanents>=3)state="battlefield";
+            if(captures.Add(state)){ScreenCapture.CaptureScreenshot(Path.Combine(output,state+".png"));captureReady=Time.unscaledTime+.15f;return false;}
+            if(captures.Contains("battlefield") && !CaptureDesktopSizes())return false;
+            if(captures.Contains("battlefield") && presentation is ArenaGameplayPresentation arena){
+                CardView review=null;string id=null;surface.VisitPresented((card,view)=>{if(review==null && !card.Hidden && card.Zone=="battlefield"){review=view;id=card.ObjectId;}});
+                if(review!=null && captures.Add("hover")){review.Focus();ScreenCapture.CaptureScreenshot(Path.Combine(output,"hover.png"));captureReady=Time.unscaledTime+.2f;return false;}
+                if(id!=null && captures.Add("inspection")){arena.InspectCard(id);ScreenCapture.CaptureScreenshot(Path.Combine(output,"inspection.png"));captureReady=Time.unscaledTime+.2f;return false;}
+                arena.CloseInspection();
+            }
+            return true;
+        }
+        // Real player framebuffer captures at desktop sizes; normal play never enters this path.
+        private bool CaptureDesktopSizes()
+        {
+            var sizes=new[]{new Vector2Int(1366,768),new Vector2Int(1920,1080),new Vector2Int(2560,1440)};
+            if(reviewResolution<sizes.Length){
+                var target=sizes[reviewResolution];
+                if(!resolutionPending){if(reviewResolution==0)reviewOriginalSize=new Vector2Int(Screen.width,Screen.height);Screen.SetResolution(target.x,target.y,FullScreenMode.Windowed);resolutionPending=true;captureReady=Time.unscaledTime+.5f;return false;}
+                string filename="battlefield-"+Screen.width+"x"+Screen.height+".png";
+                ScreenCapture.CaptureScreenshot(Path.Combine(output,filename));resolutionEvidence.Add(new JObject{["requested_width"]=target.x,["requested_height"]=target.y,["actual_width"]=Screen.width,["actual_height"]=Screen.height,["file"]=filename});
+                reviewResolution++;resolutionPending=false;captureReady=Time.unscaledTime+.2f;return false;
+            }
+            if(!resolutionRestored){Screen.SetResolution(reviewOriginalSize.x,reviewOriginalSize.y,FullScreenMode.Windowed);resolutionRestored=true;Write("resolution-proof",new JObject{["captures"]=resolutionEvidence});captureReady=Time.unscaledTime+.4f;return false;}
+            return true;
+        }
+        private void OnDestroy(){spatialAcceptance?.Dispose();cancellation.Cancel();host?.Dispose();presentation?.Dispose();pipe?.Dispose();reading?.ContinueWith(done=>{if(done.Status==TaskStatus.RanToCompletion)done.Result?.Dispose();else _=done.Exception;},TaskScheduler.Default);consuming?.ContinueWith(done=>{_=done.Exception;},TaskScheduler.Default);if(settings!=null)Destroy(settings);cancellation.Dispose();}
     }
 }

@@ -16,6 +16,13 @@ namespace Manaforge.Play.Tests
         private static JObject Choice()=>(JObject)Corpus()["positive"][2]["envelope"].DeepClone();
         private static JObject Priority()=>(JObject)JObject.Parse(File.ReadAllText(Path.Combine(Application.dataPath,"../../mtg_play/protocol/fixtures/receive-history-v1.json")))["cases"][0]["steps"][0]["envelope"].DeepClone();
         private static ProjectedDecisionFrame Project(JObject source)=>ViewerDecisionProjection.ParseSnapshot(source.ToString(Formatting.None),(string)source["body"]["snapshot"]["session_id"],(string)source["body"]["snapshot"]["viewer_id"],0,true);
+        [Test] public void PublicLibraryAndHandCountsAreImmutableAndDoNotExposeContents()
+        {
+            var source=Priority();var snapshot=source["body"]["snapshot"];var player=snapshot["players"][0];string id=(string)player["player_id"];
+            player["library_count"]=50;player["hand_count"]=6;var frame=Project(source);player["library_count"]=49;player["hand_count"]=7;
+            Assert.That(frame.PlayerLibraryCounts[id],Is.EqualTo(50));Assert.That(frame.PlayerHandCounts[id],Is.EqualTo(6));
+            Assert.That(((IDictionary<string,long?>)frame.PlayerLibraryCounts).IsReadOnly,Is.True);
+        }
         [Test] public void CommanderRosterIsImmutableAndContainsNoDecisionAuthority()
         {
             var source=Priority();var snapshot=source["body"]["snapshot"];
@@ -29,7 +36,7 @@ namespace Manaforge.Play.Tests
             var source=Priority();var snapshot=source["body"]["snapshot"];snapshot["objects"]=Corpus()["positive"][0]["envelope"]["body"]["snapshot"]["objects"].DeepClone();var attacker=snapshot["objects"][0];attacker["zone"]="battlefield";
             var blocker=attacker.DeepClone();blocker["object_id"]="fixture-blocker";blocker["controller_id"]="two";blocker["owner_id"]="two";blocker["card_identity"]=null;blocker["characteristics"]["name"]="Ornithopter";blocker["damage"]=1;((JArray)snapshot["objects"]).Add(blocker);
             snapshot["combat"]=new JArray(new JObject{["attackers"]=new JArray((string)attacker["object_id"]),["blockers"]=new JArray("fixture-blocker"),["defender_id"]="two",["blocked"]=true});snapshot["decision"]=null;snapshot["actions"]=new JArray();var frame=Project(source);
-            Assert.That(frame.Combat[0].BlockerNames,Is.EqualTo(new[]{"Ornithopter"}));Assert.That(frame.Combat[0].BlockerCount,Is.EqualTo(1));Assert.That(frame.Combat[0].BlockerDamage[0],Is.EqualTo(1));Assert.That(frame.Actions,Is.Empty);Assert.That(frame.Decision,Is.Null);
+            Assert.That(frame.Combat[0].BlockerIds,Is.EqualTo(new[]{"fixture-blocker"}));Assert.That(((IList<string>)frame.Combat[0].BlockerIds).IsReadOnly,Is.True);Assert.That(frame.Combat[0].AttackerIds,Is.EqualTo(new[]{(string)attacker["object_id"]}));Assert.That(frame.Combat[0].BlockerNames,Is.EqualTo(new[]{"Ornithopter"}));Assert.That(frame.Combat[0].BlockerCount,Is.EqualTo(1));Assert.That(frame.Combat[0].BlockerDamage[0],Is.EqualTo(1));Assert.That(frame.Actions,Is.Empty);Assert.That(frame.Decision,Is.Null);
             blocker["characteristics"]["name"]="mutated";blocker["damage"]=0;Assert.That(frame.Combat[0].BlockerDamage[0],Is.EqualTo(1));Assert.That(((IList<long?>)frame.Combat[0].BlockerDamage).IsReadOnly,Is.True);snapshot["combat"][0]["blockers"]=new JArray();Assert.That(frame.Combat[0].BlockerNames[0],Is.EqualTo("Ornithopter"));Assert.That(frame.Combat[0].BlockerCount,Is.EqualTo(1));Assert.That(((IList<string>)frame.Combat[0].BlockerNames).IsReadOnly,Is.True);
         }
         [Test] public void CombatNamesAreReadOnlySnapshotValuesWithoutCommandAuthority()

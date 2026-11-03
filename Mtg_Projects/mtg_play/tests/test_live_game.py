@@ -9,7 +9,11 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from mtg_play.live_game import LiveGameError, LiveGameLaunch
-from mtg_play.live_game import project_launch, validate_close_report
+from mtg_play.live_game import (
+    project_launch,
+    validate_close_report,
+    validate_scenario_close_report,
+)
 from mtg_play.contracts import GameSetup, MatchSeat
 from generate_launch_fixtures import native_deck
 
@@ -54,6 +58,25 @@ def test_saved_launch_preserves_printings_quantities_and_owner():
         value["seats"][0]["document"]["deck"]["entries"][0]["quantity"]
         == document.deck.entries[0].quantity
     )
+
+
+def test_focused_scenario_requires_matching_native_certificate_and_clean_shutdown():
+    closed = dict(
+        outcome=None, viewer_cleared=True, cleanup_confirmed=True, uncertain=0
+    )
+    certificate = dict(
+        scenario="grave-decline", native_commander_scenario_verified=True
+    )
+    validate_scenario_close_report(closed, certificate, "grave-decline")
+    with pytest.raises(LiveGameError, match="ENDED_WITHOUT_RESULT"):
+        validate_close_report(closed)
+    for proof, report in (
+        (dict(certificate, scenario="other"), closed),
+        (dict(certificate, native_commander_scenario_verified=False), closed),
+        (certificate, dict(closed, uncertain=1)),
+    ):
+        with pytest.raises(LiveGameError, match="SCENARIO_UNPROVEN"):
+            validate_scenario_close_report(report, proof, "grave-decline")
 
 
 def test_unsupported_setup_and_unresolved_printing_fail_before_launch():

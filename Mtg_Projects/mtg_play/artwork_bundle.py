@@ -21,6 +21,7 @@ def export_artwork_bundle(
     viewer_id,
     max_edge=896,
     preview_only=False,
+    allow_single_face=False,
     max_asset_bytes=256 * 1024 * 1024,
 ):
     """Caller supplies only viewer-permitted IDs and owns temporary-folder cleanup.
@@ -28,7 +29,7 @@ def export_artwork_bundle(
     No decks are read or persisted. No downloads, fallback printings or per-action
     calls are introduced. Publish a new directory; originals/preferences stay intact.
     """
-    if type(preview_only) is not bool:
+    if type(preview_only) is not bool or type(allow_single_face) is not bool:
         raise ArtworkBundleError("CORE_ARTWORK_CONTEXT")
     ids = tuple(printing_ids)
     if (
@@ -77,7 +78,7 @@ def export_artwork_bundle(
             or (
                 not preview_only
                 and (
-                    not selected.standard_compatible
+                    (not selected.standard_compatible and not allow_single_face)
                     or payload.get("layout") != "normal"
                     or payload.get("card_faces")
                 )

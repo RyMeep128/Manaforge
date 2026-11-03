@@ -53,6 +53,19 @@ namespace Manaforge.Play.Tests
                 jobs.Dispose();yield return Until(jobs.Completion);
             }
         }
+        [UnityTest] public IEnumerator PinnedOlderFramePixelsReachLiveInspection()
+        {
+            manifest["entries"][0]["standard_compatible"]=false;Publish();
+            var open=CoreArtworkBundle.OpenAsync(root,pin,"fixture-0001","one");yield return Until(open);
+            using(var bundle=open.GetAwaiter().GetResult()){
+                var ticket=surface.BeginViewer("fixture-0001","one",new ViewerArtworkScope());yield return null;yield return null;yield return null;
+                surface.TryPresent(ticket,ViewerCardSurfaceTests.Frame(artwork:true));
+                var load=bundle.LoadAsync(surface.RequestArtwork(ticket,"fixture-0002"),CancellationToken.None);yield return Until(load);
+                Assert.That(surface.TryApplyArtwork(ticket,load.GetAwaiter().GetResult()),Is.True);
+                Assert.That(surface.Inspect(ticket,"fixture-0002"),Is.True);Assert.That(surface.InspectionView.Artwork,Is.Not.Null);
+                Assert.That(surface.InspectionView.Identity.LayoutProfileId,Is.EqualTo("authentic-image-v1"));
+            }
+        }
         [UnityTest] public IEnumerator PinContextAndUnsafeMetadataFailWithSanitizedErrors()
         {
             var wrongPin=CoreArtworkBundle.OpenAsync(root,new string('0',64),"fixture-0001","one");yield return Until(wrongPin);AssertInvalid(wrongPin);

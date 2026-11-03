@@ -16,7 +16,7 @@ namespace Manaforge.Play
         private void Awake()
         {
             Application.targetFrameRate = 60;
-            if(ArtworkFixtureScene.Argument("-manaforgeLiveGame")!=null){enabled=false;gameObject.AddComponent<LiveGameScene>();return;}
+            if(ArtworkFixtureScene.Argument("-manaforgeLiveGame")!=null){enabled=false;var session=gameObject.AddComponent<LiveGameScene>();if(ArtworkFixtureScene.Argument("-manaforgePresentation")=="table")session.SetPresentationFactory(root=>new TableGameplayPresentation(root));return;}
             if(ArtworkFixtureScene.Argument("-manaforgeLiveOpening")!=null){enabled=false;gameObject.AddComponent<LiveOpeningScene>();return;}
             if(ArtworkFixtureScene.Argument("-manaforgeDeckPreview")=="1") {
                 enabled=false;gameObject.AddComponent<DeckPreviewScene>();return;

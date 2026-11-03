@@ -57,6 +57,7 @@ namespace Manaforge.Play
         private readonly VisualElement printedStatsMask = new VisualElement { name = "printed-stats-mask", pickingMode = PickingMode.Ignore };
         private readonly VisualElement edge = new VisualElement { name = "card-edge", pickingMode = PickingMode.Ignore };
         private bool selected;
+        private readonly Label liveMarkers=new Label{name="live-markers",enableRichText=false,pickingMode=PickingMode.Ignore};
         private readonly Label type = Text("type");
         private readonly Label rules = Text("rules");
         private readonly CardRuleSections sections=new CardRuleSections();
@@ -180,6 +181,11 @@ namespace Manaforge.Play
         }
 
         // Selection draws over the card; it must not change the clipped content box when rotated.
+        public void SetLiveMarkers(string text)
+        {
+            if(liveMarkers.parent==null)Add(liveMarkers);
+            liveMarkers.text=concealed?"":text??"";liveMarkers.style.display=string.IsNullOrEmpty(liveMarkers.text)?DisplayStyle.None:DisplayStyle.Flex;
+        }
         public void SetSelected(bool value){selected=!concealed && value;Layout();}
 
         private void Layout()
@@ -327,7 +333,7 @@ namespace Manaforge.Play
         public void Conceal()
         {
             ViewRevision++;concealed = true;
-            selected = false;
+            selected = false;liveMarkers.text="";liveMarkers.style.display=DisplayStyle.None;RemoveFromClassList("selected");RemoveFromClassList("attacking");RemoveFromClassList("blocking");
             Identity = null;
             artwork.image = null;secondArt.image=null; frame.image = null;printingFooter.image=null;compactProfile=null;miniKind.text="";loyaltyCounter.SetValue(null); mana.Conceal(); rulesSymbols.Conceal();
             rulesEmphasis=FontStyle.Normal;rulesScroll.scrollOffset=Vector2.zero;sections.Conceal();doorTabs.Clear();displayValues=null;doorIndex=0;

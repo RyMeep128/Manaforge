@@ -54,7 +54,7 @@ def public_deck(ai):
     )
 
 
-def public_commander_deck(ai, variant="single"):
+def public_commander_deck(ai, variant="single", scenario="single"):
     rows = (
         [("Forest", "TRK", "325", 99), ("Progenitus", "CON", "121", 1)]
         if ai
@@ -75,12 +75,52 @@ def public_commander_deck(ai, variant="single"):
             ("Wilson, Refined Grizzly", "CLB", "261", 1),
             ("Raised by Giants", "CLB", "250", 1),
         ]
+    if ai and variant == "partners":
+        rows = [
+            ("Forest", "TRK", "325", 98),
+            ("Thrasios, Triton Hero", "FCA", "58", 1),
+            ("Kydele, Chosen of Kruphix", "CMR", "524", 1),
+        ]
+    if ai and variant == "background":
+        rows = [
+            ("Swamp", "TRK", "321", 98),
+            ("Wilson, Refined Grizzly", "CLB", "261", 1),
+            ("Agent of the Iron Throne", "CLB", "107", 1),
+        ]
+    if not ai and scenario != "single":
+        spell = (
+            ("Baleful Mastery", "STX", "64", 1)
+            if scenario.startswith("exile-")
+            else ("Phyrexian Reclamation", "ULG", "63", 1)
+            if scenario.startswith("hand-")
+            else ("Forever Young", "ELD", "89", 1)
+            if scenario.startswith("library-")
+            else None
+        )
+        rows = [
+            ("Swamp", "TRK", "321", 98 if spell else 99),
+            ("Sidisi, Undead Vizier", "DTK", "120", 1),
+        ] + ([spell] if spell else [])
+    commanders = {
+        "Progenitus",
+        "Yargle, Glutton of Urborg",
+        "Rograkh, Son of Rohgahh",
+        "Kediss, Emberclaw Familiar",
+        "Wilson, Refined Grizzly",
+        "Raised by Giants",
+        "Sidisi, Undead Vizier",
+        "Agent of the Iron Throne",
+        "Thrasios, Triton Hero",
+        "Kydele, Chosen of Kruphix",
+    }
     entries = [
         DeckEntry(
-            "land" if i == 0 else "commander-" + str(i),
+            "land"
+            if i == 0
+            else ("commander-" if name in commanders else "spell-") + str(i),
             name,
             count,
-            section="mainboard" if i == 0 else "commander",
+            section="commander" if name in commanders else "mainboard",
             card_id="public-" + code + "-" + number,
             oracle_id="public-oracle-" + str(i),
             set_code=code,
@@ -104,6 +144,30 @@ def public_commander_deck(ai, variant="single"):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--public-decks", action="store_true")
+    parser.add_argument(
+        "--ai-commander-setup",
+        choices=("single", "partners", "background"),
+        default="single",
+    )
+    parser.add_argument("--no-capture", action="store_true")
+    parser.add_argument(
+        "--commander-scenario",
+        choices=(
+            "single",
+            "tax",
+            "grave-decline",
+            "hand-accept",
+            "hand-decline",
+            "exile-accept",
+            "exile-decline",
+            "library-accept",
+            "library-decline",
+        ),
+        default="single",
+    )
+    parser.add_argument(
+        "--presentation", choices=("current", "table"), default="current"
+    )
     parser.add_argument(
         "--commander-setup",
         choices=("single", "partners", "background"),
@@ -134,14 +198,14 @@ def main():
     args.output.mkdir(parents=True, exist_ok=False)
     documents = {
         "local-player": (
-            public_commander_deck(False, args.commander_setup)
+            public_commander_deck(False, args.commander_setup, args.commander_scenario)
             if args.format == "commander"
             else public_deck(False)
         )
         if args.public_decks
         else DeckStore().load(args.human_deck),
         "native-ai": (
-            public_commander_deck(True)
+            public_commander_deck(True, args.ai_commander_setup)
             if args.format == "commander"
             else public_deck(True)
         )
@@ -168,6 +232,9 @@ def main():
             launch=launch,
             payment_mode=args.payment_mode,
             acceptance=True,
+            commander_scenario=args.commander_scenario,
+            no_capture=args.no_capture,
+            presentation=args.presentation,
         )
         (args.output / "report.json").write_text(
             json.dumps(result, indent=2) + "\n", encoding="utf-8"
@@ -179,6 +246,7 @@ def main():
                     code=str(error),
                     summary=launch.summary,
                     native_code=launch.last_error,
+                    client_errors=launch.client_errors,
                 ),
                 indent=2,
             )
@@ -188,7 +256,9 @@ def main():
         print("UNITY_GAME_ACCEPTANCE_FAILED: " + str(error), file=sys.stderr)
         return 1
     print(
-        "Shuffled saved-deck match completed with native result, confirmed viewer inputs and cleanup."
+        "Native Commander scenario completed with confirmed inputs and cleanup."
+        if args.commander_scenario not in ("single", "tax")
+        else "Shuffled saved-deck match completed with native result, confirmed viewer inputs and cleanup."
     )
     print(args.output)
     return 0

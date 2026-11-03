@@ -45,6 +45,12 @@ namespace Manaforge.Play
             InspectionView.SetPresentation(CardPresentationMode.Full,300);
             parent.Add(CardsRoot);parent.Add(InspectionView);
         }
+        // UI-thread visitor exposes only the already authenticated, currently displayed slice.
+        public void VisitPresented(Action<ProjectedCard,CardView> visitor)
+        {
+            ThreadOnly();if(disposed || transitioning || faulted || ticket==null || !ticket.Mailbox.AllowsFrame(revision))return;
+            foreach(var pair in cards)if(views.TryGetValue(pair.Key,out var view))visitor(pair.Value,view);
+        }
         public string[] PresentedObjectIds(){ThreadOnly();var result=new string[views.Count];views.Keys.CopyTo(result,0);return result;}
         public int PresentedArtworkCount {get{ThreadOnly();return artwork.Count;}}
         public int ExpectedArtworkCount {get{ThreadOnly();int count=0;foreach(var card in cards.Values)if(ArtworkPermitted(card))count++;return count;}}

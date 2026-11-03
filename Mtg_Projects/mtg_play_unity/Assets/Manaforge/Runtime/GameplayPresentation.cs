@@ -36,7 +36,7 @@ namespace Manaforge.Play
         {
             string life=string.Join("  ",frame.PlayerLifeTotals.Select(seat=>(seat.Key==frame.Context.ViewerId?"You":"Opponent")+": "+seat.Value));
             status.text=frame.UnsupportedFields.Contains("decision")?"This choice is not supported yet. Return to Manaforge to end the session.":frame.Result!=null?"Result: "+frame.Result:life+"  Turn "+frame.Turn+" — "+frame.Phase;
-            commanders.text=frame.Commanders==null?"":string.Join("\n",frame.Commanders.Select(commander=>(commander.OwnerId==frame.Context.ViewerId?"Your ":"Opponent’s ")+commander.Name+" — command casts: "+(commander.CommandZonePlays?.ToString()??"unknown")+"; additional cost: "+(commander.AdditionalCastCost??"unknown")+"; damage: "+(commander.DamageDealt==null?"unknown":string.Join(", ",commander.DamageDealt.Where(pair=>pair.Key!=commander.OwnerId).Select(pair=>(pair.Key==frame.Context.ViewerId?"you":"opponent")+" "+pair.Value)))));
+            commanders.text=CommanderPresentationText.Format(frame);
             commanders.style.display=frame.Commanders?.Count>0?DisplayStyle.Flex:DisplayStyle.None;
             foreach(var child in Surface.CardsRoot.Children())if(child is CardView card)card.SetPresentation(CardPresentationMode.Compact,130);
         }

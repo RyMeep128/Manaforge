@@ -89,6 +89,17 @@ namespace Manaforge.Play.Tests
             Assert.That(views[1].Artwork,Is.SameAs(views[0].Artwork));Assert.That(scope.Count,Is.EqualTo(1));Assert.That(scope.Bytes,Is.EqualTo(16));
             Assert.That(surface.Inspect(ticket,"fixture-extra-1"),Is.True);
         }
+        [UnityTest] public IEnumerator ExactOlderFrameArtworkRetainsIdentityAndSharedCompactCrop()
+        {
+            var ticket=surface.BeginViewer("fixture-0001","one",new ViewerArtworkScope());yield return null;yield return null;yield return null;
+            surface.TryPresent(ticket,ViewerCardSurfaceTests.Frame(artwork:true));var request=surface.RequestArtwork(ticket,"fixture-0002");
+            var prepared=PreparedCardArtwork.Prepare(request,Catalog(standard:false),2,2,new byte[16]);
+            Assert.That(prepared.Identity.SelectedPrintingId,Is.EqualTo("exact-printing"));Assert.That(prepared.Identity.RenderedPrintingId,Is.EqualTo("exact-printing"));
+            Assert.That(prepared.Identity.LayoutProfileId,Is.EqualTo("authentic-image-v1"));Assert.That(prepared.Profile,Is.Not.Null);
+            Assert.That(surface.TryApplyArtwork(ticket,prepared),Is.True);Assert.That(surface.CardsRoot.Q<CardView>().Artwork,Is.Not.Null);
+            Assert.That(surface.Inspect(ticket,"fixture-0002"),Is.True);Assert.That(surface.InspectionView.Artwork,Is.Not.Null);
+            surface.TryPresent(ticket,ViewerCardSurfaceTests.Frame(revision:2,hidden:true));Assert.That(surface.CardsRoot.Q<CardView>().Artwork,Is.Null);
+        }
         [UnityTest] public IEnumerator UnsupportedMetadataConcealedFacesAndMissingIdentitiesCannotRequestOrPrepareArt()
         {
             var ticket=surface.BeginViewer("fixture-0001","one",new ViewerArtworkScope());yield return null;yield return null;yield return null;
@@ -96,7 +107,7 @@ namespace Manaforge.Play.Tests
             surface.TryPresent(ticket,ViewerCardSurfaceTests.Frame(revision:2,artwork:true,faceDownState:null));Assert.That(surface.RequestArtwork(ticket,"fixture-0002"),Is.Null);
             surface.TryPresent(ticket,ViewerCardSurfaceTests.Frame(revision:3,artwork:true,faceDownState:true));Assert.That(surface.RequestArtwork(ticket,"fixture-0002"),Is.Null);
             surface.TryPresent(ticket,ViewerCardSurfaceTests.Frame(revision:4,artwork:true));var request=surface.RequestArtwork(ticket,"fixture-0002");
-            foreach(var catalog in new[]{Catalog("other"),Catalog(layout:"transform",faces:2),Catalog(faces:2),Catalog(standard:false),Catalog(type:"Planeswalker")}) {
+            foreach(var catalog in new[]{Catalog("other"),Catalog(layout:"transform",faces:2),Catalog(faces:2)}) {
                 var error=Assert.Throws<ArgumentException>(()=>PreparedCardArtwork.Prepare(request,catalog,2,2,new byte[16]));
                 Assert.That(error.Message,Does.StartWith("ARTWORK_"));Assert.That(error.InnerException,Is.Null);
             }

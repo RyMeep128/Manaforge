@@ -76,6 +76,7 @@ namespace Manaforge.Play
     {
         public CardProjectionContext Context {get;} public string Status {get;} public string Result {get;} public long? Turn {get;} public string Phase {get;} public string ActivePlayerId {get;} public bool ActionsComplete {get;}
         public IReadOnlyDictionary<string,long?> PlayerLifeTotals {get;}
+        public IReadOnlyDictionary<string,long?> PlayerLibraryCounts {get;} public IReadOnlyDictionary<string,long?> PlayerHandCounts {get;}
         public IReadOnlyList<ProjectedCommander> Commanders {get;}
         public IReadOnlyDictionary<string,long> ViewerMana {get;}
         public IReadOnlyList<ProjectedCombatAssignment> Combat {get;}
@@ -87,6 +88,8 @@ namespace Manaforge.Play
             if(source["commanders"] is JArray commanders)Commanders=Array.AsReadOnly(commanders.Select(value=>new ProjectedCommander(value,source)).ToArray());
             Result=(string)source["result"];Turn=(long?)source["turn"];Phase=(string)source["phase"];ActivePlayerId=(string)source["active_player_id"];
             PlayerLifeTotals=new System.Collections.ObjectModel.ReadOnlyDictionary<string,long?>(source["players"].ToDictionary(player=>(string)player["player_id"],player=>(long?)player["life"]));
+            PlayerLibraryCounts=new System.Collections.ObjectModel.ReadOnlyDictionary<string,long?>(source["players"].ToDictionary(player=>(string)player["player_id"],player=>(long?)player["library_count"]));
+            PlayerHandCounts=new System.Collections.ObjectModel.ReadOnlyDictionary<string,long?>(source["players"].ToDictionary(player=>(string)player["player_id"],player=>(long?)player["hand_count"]));
             Combat=Array.AsReadOnly(source["combat"].Select(group=>new ProjectedCombatAssignment(group,source)).ToArray());
             Context=new CardProjectionContext((string)source["session_id"],(string)source["viewer_id"],(long)source["revision"]);Status=(string)source["status"];var pool=source["players"].FirstOrDefault(player=>(string)player["player_id"]==Context.ViewerId)?["mana"];if(pool is JArray amounts)ViewerMana=new System.Collections.ObjectModel.ReadOnlyDictionary<string,long>(amounts.ToDictionary(pair=>(string)pair[0],pair=>(long)pair[1]));ActionsComplete=(bool)source["actions_complete"];
             if(source["decision"].Type!=JTokenType.Null)Decision=new ProjectedDecision(Context,source["decision"]);

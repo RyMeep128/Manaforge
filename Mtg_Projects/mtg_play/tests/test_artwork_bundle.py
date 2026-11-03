@@ -32,7 +32,10 @@ def test_exact_cached_pixels_pin_context_and_source_are_preserved(tmp_path):
     assert source.read_bytes() == before and str(source) not in json.dumps(manifest)
 
 
-def test_available_alternative_never_substitutes_for_missing_selected_art(tmp_path):
+@pytest.mark.parametrize("allow_single_face", [False, True])
+def test_available_alternative_never_substitutes_for_missing_selected_art(
+    tmp_path, allow_single_face
+):
     source = tmp_path / "alternate.png"
     image = QImage(2, 2, QImage.Format.Format_RGBA8888)
     image.fill(0)
@@ -43,7 +46,12 @@ def test_available_alternative_never_substitutes_for_missing_selected_art(tmp_pa
         {("alternate", "default"): source},
     )
     manifest, _ = export_artwork_bundle(
-        service, ["selected"], tmp_path / "assets", session_id="s", viewer_id="v"
+        service,
+        ["selected"],
+        tmp_path / "assets",
+        session_id="s",
+        viewer_id="v",
+        allow_single_face=allow_single_face,
     )
     assert manifest["entries"] == []
     assert manifest["unavailable"] == [
@@ -96,3 +104,32 @@ def test_budget_failure_never_publishes_a_partial_manifest(tmp_path):
             max_asset_bytes=1,
         )
     assert not (output / "manifest.json").exists()
+
+
+def test_live_single_face_opt_in_exports_cached_older_frame_without_changing_identity(
+    tmp_path,
+):
+    source = tmp_path / "older.png"
+    image = QImage(2, 3, QImage.Format.Format_RGBA8888)
+    image.fill(QColor("green"))
+    assert image.save(str(source))
+    payload = card("older", type_line="Artifact Creature")
+    payload["frame"] = "2003"
+    service = Service(payload, paths={("older", "default"): source})
+    strict, _ = export_artwork_bundle(
+        service, ["older"], tmp_path / "strict", session_id="s", viewer_id="v"
+    )
+    assert strict["entries"] == []
+    live, _ = export_artwork_bundle(
+        service,
+        ["older"],
+        tmp_path / "live",
+        session_id="s",
+        viewer_id="v",
+        allow_single_face=True,
+    )
+    assert live["unavailable"] == []
+    entry = live["entries"][0]
+    assert entry["printing_id"] == "older" and entry["oracle_id"] == "oracle"
+    assert entry["standard_compatible"] is False
+    assert source.is_file()

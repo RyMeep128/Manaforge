@@ -74,7 +74,7 @@ namespace Manaforge.Play
                     int width=Number(record["width"],1024),height=Number(record["height"],1024),length=Number(record["byte_length"],4*1024*1024);
                     if(!seen.Add(printing) || !Hash.IsMatch(digest) || file!=digest+".rgba" || length!=width*height*4
                         || record["standard_compatible"]?.Type!=JTokenType.Boolean
-                        || (!previewOnly && (Text(record["layout"])!="normal" || Number(record["face_count"],1)!=1 || !(bool)record["standard_compatible"]))
+                        || (!previewOnly && (Text(record["layout"])!="normal" || Number(record["face_count"],1)!=1))
                         || Text(record["pixel_format"])!="RGBA8" || Text(record["row_origin"])!="bottom_left")throw Invalid();
                     if(files.TryGetValue(file,out var previous)){if(previous!=length)throw Invalid();}
                     else{files.Add(file,length);if((total+=length)>256*1024*1024)throw Invalid();}

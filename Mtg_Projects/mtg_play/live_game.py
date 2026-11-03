@@ -35,6 +35,17 @@ def validate_close_report(closed):
         raise LiveGameError("UNITY_GAME_ENDED_WITHOUT_RESULT")
 
 
+def validate_scenario_close_report(closed, certificate, expected):
+    if (
+        closed.get("viewer_cleared") is not True
+        or closed.get("cleanup_confirmed") is not True
+        or closed.get("uncertain") != 0
+        or certificate.get("scenario") != expected
+        or certificate.get("native_commander_scenario_verified") is not True
+    ):
+        raise LiveGameError("UNITY_COMMANDER_SCENARIO_UNPROVEN")
+
+
 def project_launch(setup, documents, version, deck_owners=None):
     if (
         setup.format not in ("freeform", "commander")
@@ -77,6 +88,7 @@ class LiveGameLaunch:
         self._identity = None
         self.summary = None
         self.last_error = None
+        self.client_errors = []
 
     def allocate(self):
         self.root = Path(tempfile.mkdtemp(prefix="manaforge-live-game-"))
@@ -100,6 +112,28 @@ class LiveGameLaunch:
                 stat = resolved.stat()
                 if (stat.st_dev, stat.st_ino) != self._identity:
                     raise LiveGameError("UNITY_GAME_FILES_CLEANUP_FAILED")
+                try:
+                    log = resolved / "player.log"
+                    if (
+                        log.is_file()
+                        and not log.is_symlink()
+                        and log.stat().st_size <= 2 * 1024 * 1024
+                    ):
+                        diagnostic = log.read_text(encoding="utf-8", errors="replace")
+                        self.client_errors = list(
+                            dict.fromkeys(
+                                re.findall(
+                                    r"(?m)^([A-Za-z][A-Za-z0-9.]*Exception)(?=:|\r?$)|^\s*(?:at )?(Manaforge\.Play\.[A-Za-z0-9_.+<>]+)\s*\(",
+                                    diagnostic,
+                                )
+                            )
+                        )
+                        self.client_errors = [
+                            next(value for value in match if value)
+                            for match in self.client_errors
+                        ][-12:]
+                except OSError:
+                    pass
                 try:
                     summary = resolved / "game-closed.json"
                     if (
@@ -160,13 +194,35 @@ def run_live_game(
     payment_mode="auto",
     deck_owners=None,
     acceptance=False,
+    commander_scenario="single",
+    no_capture=False,
+    presentation="current",
     xmage_root=transport.DEFAULT_BUNDLE,
     jdk_path=transport.DEFAULT_JDK,
 ):
     """Blocking worker with one private manifest and one viewer bootstrap; no per-action Python."""
     if (
+        commander_scenario
+        not in (
+            "single",
+            "tax",
+            "grave-decline",
+            "hand-accept",
+            "hand-decline",
+            "exile-accept",
+            "exile-decline",
+            "library-accept",
+            "library-decline",
+        )
+        or commander_scenario != "single"
+        and (not acceptance or setup.format != "commander")
+    ):
+        raise LiveGameError("COMMANDER_SCENARIO_INVALID")
+    if (
         payment_mode not in ("auto", "manual", "full-control")
         or type(acceptance) is not bool
+        or type(no_capture) is not bool
+        or presentation not in ("current", "table")
     ):
         raise LiveGameError("PAYMENT_MODE_INVALID")
     payload = project_launch(setup, documents, version, deck_owners)
@@ -297,6 +353,7 @@ def run_live_game(
                     "-Dfile.encoding=UTF-8",
                     "-Djava.net.preferIPv4Stack=true",
                     "-Dmanaforge.adapterVersion=" + ADAPTER_VERSION,
+                    "-Dmanaforge.commanderScenario=" + commander_scenario,
                     "-Dmanaforge.commanderAcceptance="
                     + str(acceptance and setup.format == "commander").lower(),
                     "-Dmanaforge.paymentMode=" + payment_mode.upper().replace("-", "_"),
@@ -340,12 +397,20 @@ def run_live_game(
                 "-screen-height",
                 "720",
                 "-logFile",
-                "NUL",
+                str(root / "player.log"),
                 "-manaforgeLiveGame",
                 str(root),
             ]
+            command += ["-manaforgePresentation", presentation]
+            if no_capture:
+                command += ["-manaforgeNoCapture", "1"]
             if acceptance:
-                command += ["-manaforgeGameAcceptance", "1"]
+                command += [
+                    "-manaforgeGameAcceptance",
+                    "1",
+                    "-manaforgeCommanderScenario",
+                    commander_scenario,
+                ]
             artwork_directory, artwork_pin = prepare_local_artwork(
                 human["document"], root, manifest["manifest_id"], human["seat_id"]
             )
@@ -388,14 +453,23 @@ def run_live_game(
             if owner.client_exit_code != 0:
                 raise LiveGameError("UNITY_GAME_PLAYER_FAILED")
             closed = wait_json("game-closed", 1)
-            validate_close_report(closed)
+            focused_scenario = acceptance and commander_scenario not in (
+                "single",
+                "tax",
+            )
+            if focused_scenario:
+                certificate = wait_json("game-scenario", 1)
+                validate_scenario_close_report(closed, certificate, commander_scenario)
+                closed.update(certificate)
+            else:
+                validate_close_report(closed)
             if closed.get("outcome") is not None:
                 native = wait_json("game-result", 1)
                 if native.get("outcome") != closed["outcome"] or native[
                     "outcome"
                 ] not in ("win", "loss", "draw"):
                     raise LiveGameError("UNITY_GAME_RESULT_UNPROVEN")
-            if acceptance and setup.format == "commander":
+            if acceptance and setup.format == "commander" and not focused_scenario:
                 proof = wait_json("game-result", 1)
                 if (
                     proof.get("native_commander_damage_lethal_verified") is not True
@@ -412,8 +486,12 @@ def run_live_game(
                         )
                     }
                 )
+                if commander_scenario == "tax":
+                    if proof.get("native_commander_tax_verified") is not True:
+                        raise LiveGameError("UNITY_COMMANDER_TAX_UNPROVEN")
+                    closed["native_commander_tax_verified"] = True
             if acceptance and (
-                closed.get("outcome") is None
+                (closed.get("outcome") is None and not focused_scenario)
                 or closed.get("confirmed") != closed.get("snapshots", 0) - 1
             ):
                 raise LiveGameError("UNITY_GAME_ACCEPTANCE_UNPROVEN")
@@ -451,10 +529,13 @@ def prepare_local_artwork(document, root, session_id, viewer_id, service=None):
     """
     from .artwork_bundle import export_artwork_bundle
 
-    ids = tuple(dict.fromkeys(
-        entry["card_id"] for entry in document["deck"]["entries"]
-        if entry.get("card_id")
-    ))
+    ids = tuple(
+        dict.fromkeys(
+            entry["card_id"]
+            for entry in document["deck"]["entries"]
+            if entry.get("card_id")
+        )
+    )
     if not ids or len(ids) > 256:
         return None, None
     if service is None:
@@ -471,7 +552,13 @@ def prepare_local_artwork(document, root, session_id, viewer_id, service=None):
         )
     directory = Path(root) / "artwork"
     _, pin = export_artwork_bundle(
-        service, ids, directory, session_id=session_id, viewer_id=viewer_id,
+        service,
+        ids,
+        directory,
+        session_id=session_id,
+        viewer_id=viewer_id,
+        max_edge=min(896, int((64 * 1024 * 1024 / (len(ids) * 4)) ** 0.5)),
         max_asset_bytes=64 * 1024 * 1024,
+        allow_single_face=True,
     )
     return str(directory.resolve()), pin

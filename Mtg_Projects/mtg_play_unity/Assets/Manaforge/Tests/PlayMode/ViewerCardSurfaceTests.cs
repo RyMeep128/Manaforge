@@ -107,6 +107,7 @@ namespace Manaforge.Play.Tests
             Assert.That(surface.TryPresent(ticket,Frame(revision:2,name:"Changed")),Is.True);
             Assert.That(surface.CardsRoot.Q<CardView>(),Is.SameAs(view));Assert.That(view.Q<Label>("name").text,Is.EqualTo("Changed"));
             Assert.That(surface.InspectionView.Q<Label>("name").text,Is.Empty);
+            view.SetLiveMarkers("Private counter 2");
             Assert.That(surface.TryPresent(ticket,Frame(revision:3,hidden:true)),Is.True);
             foreach(var label in view.Query<Label>().ToList())Assert.That(label.text,Is.Empty);
             Assert.That(surface.Inspect(ticket,"fixture-0002"),Is.False);

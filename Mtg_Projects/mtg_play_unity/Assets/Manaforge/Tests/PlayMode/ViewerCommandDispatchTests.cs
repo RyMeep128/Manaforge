@@ -139,6 +139,105 @@ namespace Manaforge.Play.Tests
             var host=Start(Snapshot(),out var peer,out var owner);var panel=Panel(host);yield return Show(host,panel);var button=panel.Root.Q<Button>("decision-action-0");var old=host.CurrentDecision;var next=Snapshot("new-panel");next["body"]["snapshot"]["revision"]=8;var send=Task.Run(()=>peer.ReplyForFixture(next));yield return Until(()=>send.IsCompleted);send.GetAwaiter().GetResult();yield return Until(()=>host.CurrentDecision!=null && !ReferenceEquals(host.CurrentDecision,old));Click(button);Assert.That(peer.PendingCommandBytes,Is.Zero);panel.Tick();Assert.That(panel.Root.style.display.value,Is.EqualTo(DisplayStyle.None));
             yield return Show(host,panel);var cached=panel.Root.Q<Button>("decision-action-0");var replacement=Start(next,out var nextPeer,out var nextOwner);panel.Tick();Assert.That(panel.Root.style.display.value,Is.EqualTo(DisplayStyle.None));Click(cached);Assert.That(peer.PendingCommandBytes,Is.Zero);Assert.That(nextPeer.PendingCommandBytes,Is.Zero);yield return Until(()=>replacement.CurrentDecision!=null);
         }
+        private JObject BoardSnapshot(bool multiple=false)
+        {
+            var frame=Snapshot();var snapshot=frame["body"]["snapshot"];
+            var corpus=JObject.Parse(File.ReadAllText(Path.Combine(Application.dataPath,"../../mtg_play/protocol/fixtures/wire-receive-v1.json")));
+            snapshot["objects"]=corpus["positive"][0]["envelope"]["body"]["snapshot"]["objects"].DeepClone();snapshot["objects"][0]["zone"]="battlefield";snapshot["objects"][0]["tapped"]=false;
+            snapshot["actions"][0]["object_id"]="fixture-0002";snapshot["actions"][0]["kind"]="declare_attacker";
+            if(multiple){var extra=snapshot["actions"][0].DeepClone();extra["action_id"]="another-action";extra["kind"]="activate";extra["label"]="Second offered action";((JArray)snapshot["actions"]).Add(extra);}
+            return frame;
+        }
+        [UnityTest] public IEnumerator BoardKeyboardSelectionUsesExactOfferAndBlocksPendingDuplicates()
+        {
+            var host=Start(BoardSnapshot(),out var peer,out var owner);var panel=Panel(host);yield return Show(host,panel);
+            var root=node.GetComponent<UIDocument>().rootVisualElement;using(var input=new ViewerBoardInput(root,surface,host,panel)){
+                input.Refresh();var view=surface.CardsRoot.Q<CardView>();Assert.That(view.ClassListContains("actionable"),Is.True);
+                SubmitCard(view);SubmitCard(view);input.Refresh();Assert.That(view.ClassListContains("actionable"),Is.False);
+                var read=Task.Run(()=>WireMessages.Parse(peer.ReadCommandForFixture()));yield return Until(()=>read.IsCompleted);
+                Assert.That((string)read.Result["body"]["action_id"],Is.EqualTo("fixture-action"));Assert.That(peer.PendingCommandBytes,Is.Zero);
+            }
+        }
+        [UnityTest] public IEnumerator AmbiguousBoardObjectRequiresExplicitMenuChoice()
+        {
+            var host=Start(BoardSnapshot(multiple:true),out var peer,out var owner);var panel=Panel(host);yield return Show(host,panel);var offer=host.PresentedDecision;
+            Assert.That(panel.ObjectChoiceCount(offer,"fixture-0002"),Is.EqualTo(2));Assert.That(panel.TryActivateObject(offer,"fixture-0002"),Is.False);Assert.That(peer.PendingCommandBytes,Is.Zero);
+            var menu=panel.ObjectChoices(offer,"fixture-0002");node.GetComponent<UIDocument>().rootVisualElement.Add(menu);
+            Click(menu.Query<Button>().ToList()[1]);var read=Task.Run(()=>WireMessages.Parse(peer.ReadCommandForFixture()));yield return Until(()=>read.IsCompleted);
+            Assert.That((string)read.Result["body"]["action_id"],Is.EqualTo("another-action"));menu.RemoveFromHierarchy();
+        }
+        [UnityTest] public IEnumerator NewSnapshotCancelsCapturedDragWithoutSubmittingEitherDecision()
+        {
+            var host=Start(BoardSnapshot(),out var peer,out var owner);var panel=Panel(host);yield return Show(host,panel);var root=node.GetComponent<UIDocument>().rootVisualElement;
+            using(var input=new ViewerBoardInput(root,surface,host,panel)){
+                input.Refresh();var view=surface.CardsRoot.Q<CardView>();yield return null;
+                using(var down=PointerDownEvent.GetPooled(new Event{type=EventType.MouseDown,button=0,mousePosition=view.worldBound.center})){down.target=view;view.SendEvent(down);}
+                using(var move=PointerMoveEvent.GetPooled(new Event{type=EventType.MouseDrag,button=0,mousePosition=new Vector2(400,300)})){move.target=view;view.SendEvent(move);}
+                Assert.That(root.Q<Label>("board-drag-ghost").style.display.value,Is.EqualTo(DisplayStyle.Flex));Assert.That(peer.PendingCommandBytes,Is.Zero);
+                var next=BoardSnapshot();next["message_id"]="next-board";next["body"]["snapshot"]["revision"]=8;var old=host.PresentedDecision;
+                var send=Task.Run(()=>peer.ReplyForFixture(next));yield return Until(()=>send.IsCompleted);send.GetAwaiter().GetResult();yield return Until(()=>host.CurrentDecision!=null && !ReferenceEquals(host.CurrentDecision,old));yield return Show(host,panel);input.Refresh();
+                using(var up=PointerUpEvent.GetPooled(new Event{type=EventType.MouseUp,button=0,mousePosition=new Vector2(400,300)})){up.target=view;view.SendEvent(up);}
+                Assert.That(root.Q<Label>("board-drag-ghost").style.display.value,Is.EqualTo(DisplayStyle.None));Assert.That(peer.PendingCommandBytes,Is.Zero);
+            }
+        }
+        [UnityTest] public IEnumerator BattlefieldDropWritesOnlyOnReleaseAndOutsideDropDoesNothing()
+        {
+            var host=Start(BoardSnapshot(),out var peer,out var owner);var panel=Panel(host);yield return Show(host,panel);var root=node.GetComponent<UIDocument>().rootVisualElement;
+            root.style.width=1280;root.style.height=720;yield return null;
+            using(var input=new ViewerBoardInput(root,surface,host,panel)){
+                input.Refresh();var view=surface.CardsRoot.Q<CardView>();
+                for(int pass=0;pass<2;pass++){
+                    using(var down=PointerDownEvent.GetPooled(new Event{type=EventType.MouseDown,button=0,mousePosition=view.worldBound.center})){down.target=view;view.SendEvent(down);}
+                    var point=pass==0?new Vector2(1200,700):new Vector2(400,300);
+                    using(var move=PointerMoveEvent.GetPooled(new Event{type=EventType.MouseDrag,button=0,mousePosition=point})){move.target=view;view.SendEvent(move);}
+                    Assert.That(peer.PendingCommandBytes,Is.Zero);
+                    using(var up=PointerUpEvent.GetPooled(new Event{type=EventType.MouseUp,button=0,mousePosition=point})){up.target=view;view.SendEvent(up);}
+                    if(pass==0)Assert.That(peer.PendingCommandBytes,Is.Zero);
+                }
+                var read=Task.Run(()=>WireMessages.Parse(peer.ReadCommandForFixture()));yield return Until(()=>read.IsCompleted);Assert.That((string)read.Result["body"]["action_id"],Is.EqualTo("fixture-action"));
+            }
+        }
+        [UnityTest] public IEnumerator SpatialCardAndPlayerTargetsRetainExactOfferedOptionTokens()
+        {
+            foreach(bool player in new[]{false,true}){
+                var frame=BoardSnapshot();frame["body"]["snapshot"]["actions"]=new JArray();frame["body"]["snapshot"]["decision"]["options"]=new JArray(new JObject{["option_id"]="exact-target",["label"]="Engine target",["object_id"]=player?JValue.CreateNull():new JValue("fixture-0002"),["player_id"]=player?new JValue("two"):JValue.CreateNull(),["selected"]=false});
+                var host=Start(frame,out var peer,out var owner);var panel=Panel(host);yield return Show(host,panel);var offer=host.PresentedDecision;
+                Assert.That(player?panel.TryActivatePlayer(offer,"one"):panel.TryActivateObject(offer,"unknown"),Is.False);Assert.That(peer.PendingCommandBytes,Is.Zero);
+                Assert.That(player?panel.TryActivatePlayer(offer,"two"):panel.TryActivateObject(offer,"fixture-0002"),Is.True);
+                var read=Task.Run(()=>WireMessages.Parse(peer.ReadCommandForFixture()));yield return Until(()=>read.IsCompleted);Assert.That((string)read.Result["body"]["option_id"],Is.EqualTo("exact-target"));
+                host.Cancel();yield return Until(()=>host.Completion.IsCompleted);
+            }
+        }
+        [UnityTest] public IEnumerator DragPreviewBorrowsCurrentTextureAndClearsItWhenOwnerEnds()
+        {
+            var host=Start(BoardSnapshot(),out var peer,out var owner);var panel=Panel(host);yield return Show(host,panel);var root=node.GetComponent<UIDocument>().rootVisualElement;
+            var texture=new Texture2D(2,2);try{
+                using(var input=new ViewerBoardInput(root,surface,host,panel)){
+                    input.Refresh();var view=surface.CardsRoot.Q<CardView>();var identity=VisualPrintingPolicy.Resolve(false,new VisualPrintingCandidate("public-oracle","public-printing","front",true,true),System.Array.Empty<VisualPrintingCandidate>());
+                    view.Bind(identity,texture,CardCompactProfile.StandardArtCrop);yield return null;
+                    using(var down=PointerDownEvent.GetPooled(new Event{type=EventType.MouseDown,button=0,mousePosition=view.worldBound.center})){down.target=view;view.SendEvent(down);}
+                    using(var move=PointerMoveEvent.GetPooled(new Event{type=EventType.MouseDrag,button=0,mousePosition=new Vector2(400,300)})){move.target=view;view.SendEvent(move);}
+                    Assert.That(root.Q<Image>("board-drag-art").image,Is.SameAs(texture));owner.TrySetResult(true);input.Refresh();
+                    Assert.That(root.Q<Image>("board-drag-art").image,Is.Null);Assert.That(peer.PendingCommandBytes,Is.Zero);
+                }
+            }finally{UnityEngine.Object.Destroy(texture);}
+        }
+        [UnityTest] public IEnumerator SpatialFallbackCollapsesCardButtonsButRetainsExactCommands()
+        {
+            var host=Start(BoardSnapshot(),out var peer,out var owner);var panel=Panel(host);panel.SetSpatialPresentation(true);yield return Show(host,panel);
+            var fallback=panel.Root.Q<Foldout>("board-choice-alternatives");Assert.That(fallback,Is.Not.Null);Assert.That(fallback.value,Is.False);Assert.That(fallback.Q<Button>("decision-action-0"),Is.Not.Null);
+            Assert.That(peer.PendingCommandBytes,Is.Zero);fallback.value=true;Click(fallback.Q<Button>("decision-action-0"));var read=Task.Run(()=>WireMessages.Parse(peer.ReadCommandForFixture()));yield return Until(()=>read.IsCompleted);
+            Assert.That((string)read.Result["body"]["action_id"],Is.EqualTo("fixture-action"));
+        }
+        [UnityTest] public IEnumerator SpatialPrimaryActionRemainsVisibleBeyondTheCardChoicePage()
+        {
+            var frame=BoardSnapshot();var actions=(JArray)frame["body"]["snapshot"]["actions"];var template=actions[0].DeepClone();actions.Clear();
+            for(int i=0;i<17;i++){var action=template.DeepClone();action["action_id"]="card-action-"+i;actions.Add(action);}
+            var pass=template.DeepClone();pass["action_id"]="exact-pass";pass["object_id"]=null;pass["kind"]="pass";pass["label"]="Pass priority";actions.Add(pass);
+            var host=Start(frame,out var peer,out var owner);var panel=Panel(host);panel.SetSpatialPresentation(true);yield return Show(host,panel);
+            var button=panel.Root.Q<Button>("decision-action-17");Assert.That(button,Is.Not.Null);Assert.That(button.parent,Is.SameAs(panel.Root.Q<VisualElement>("decision-controls")));
+            Click(button);var read=Task.Run(()=>WireMessages.Parse(peer.ReadCommandForFixture()));yield return Until(()=>read.IsCompleted);Assert.That((string)read.Result["body"]["action_id"],Is.EqualTo("exact-pass"));
+        }
         private JObject ManaSnapshot()
         {var frame=Snapshot(selection:true);var decision=frame["body"]["snapshot"]["decision"];decision["family"]="mana";decision["options"]=new JArray();decision["can_finish"]=false;decision["cancellable"]=false;return frame;}
         private static void SubmitCard(CardView card)

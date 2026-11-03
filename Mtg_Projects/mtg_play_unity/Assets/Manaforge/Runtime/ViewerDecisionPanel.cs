@@ -22,6 +22,7 @@ namespace Manaforge.Play
         private readonly VisualElement pages=new VisualElement{name="decision-pages"};
         private string[] numericText;private int numericPage;private Button numericSubmit;
         private TrackedCommand submitted;
+        private bool spatialPresentation;private Foldout cardChoices;
         private ViewerDecisionOffer offer;private int page;private bool disposed;private Task<TrackedCommand> pending;
         public ViewerDecisionPanel(VisualElement parent,ViewerSessionHost host)
         {
@@ -34,7 +35,7 @@ namespace Manaforge.Play
         private void ThreadOnly(){if(Thread.CurrentThread.ManagedThreadId!=thread)throw new InvalidOperationException("VIEWER_DECISION_THREAD");}
         private void Clear()
         {
-            manaInput.Refresh(null);offer=null;submitted=null;page=0;numericText=null;numericPage=0;numericSubmit=null;prompt.text="";manaPool.text="";status.text="";controls.Clear();pages.Clear();Root.style.display=DisplayStyle.None;
+            manaInput.Refresh(null);offer=null;submitted=null;page=0;numericText=null;numericPage=0;numericSubmit=null;prompt.text="";manaPool.text="";status.text="";controls.Clear();pages.Clear();cardChoices=null;Root.style.display=DisplayStyle.None;
             // Observe a retired task without carrying its result or touching UI from its worker.
             if(pending!=null)pending.ContinueWith(task=>{_=task.Exception;},TaskScheduler.Default);pending=null;
         }
@@ -54,10 +55,46 @@ namespace Manaforge.Play
             numericSubmit?.SetEnabled(TryNumbers(out _,false));
             if(!offer.CanSubmit && pending==null && string.IsNullOrEmpty(status.text))status.text="Waiting for gateway state.";
         }
-        private void Send(ViewerDecisionOffer captured,Func<Task<TrackedCommand>> submit)
+        private bool Send(ViewerDecisionOffer captured,Func<Task<TrackedCommand>> submit)
         {
-            ThreadOnly();if(disposed || pending!=null || !ReferenceEquals(offer,captured) || !ReferenceEquals(host.PresentedDecision,captured) || !captured.CanSubmit)return;
-            submitted=null;pending=submit();status.text="Sending command...";controls.SetEnabled(false);manaInput.SetEnabled(false);
+            ThreadOnly();if(disposed || pending!=null || !ReferenceEquals(offer,captured) || !ReferenceEquals(host.PresentedDecision,captured) || !captured.CanSubmit)return false;
+            submitted=null;pending=submit();status.text="Sending command...";controls.SetEnabled(false);manaInput.SetEnabled(false);return true;
+        }
+        // Spatial input uses the same current offer, pending task and command feedback as buttons.
+        public int ObjectChoiceCount(ViewerDecisionOffer captured,string objectId)
+        {
+            ThreadOnly();var frame=captured?.Frame;if(disposed || objectId==null || frame==null || !ReferenceEquals(captured,offer) || !ReferenceEquals(host.PresentedDecision,captured))return 0;
+            return System.Linq.Enumerable.Count(frame.Actions,a=>a.ObjectId==objectId)+System.Linq.Enumerable.Count(frame.Decision.Options,o=>o.ObjectId==objectId);
+        }
+        public bool TryActivateObject(ViewerDecisionOffer captured,string objectId)
+        {
+            if(ObjectChoiceCount(captured,objectId)!=1)return false;var frame=captured.Frame;
+            foreach(var action in frame.Actions)if(action.ObjectId==objectId)return Send(captured,()=>host.PerformAsync(captured,action));
+            foreach(var option in frame.Decision.Options)if(option.ObjectId==objectId)return Send(captured,()=>host.ChooseAsync(captured,option));
+            return false;
+        }
+        public bool TryActivatePlayer(ViewerDecisionOffer captured,string playerId)
+        {
+            ThreadOnly();var frame=captured?.Frame;if(disposed || frame==null || playerId==null)return false;
+            var matches=System.Linq.Enumerable.Where(frame.Decision.Options,o=>o.PlayerId==playerId).GetEnumerator();
+            using(matches){if(!matches.MoveNext())return false;var option=matches.Current;if(matches.MoveNext())return false;return Send(captured,()=>host.ChooseAsync(captured,option));}
+        }
+        public VisualElement ObjectChoices(ViewerDecisionOffer captured,string objectId)
+        {
+            ThreadOnly();var result=new VisualElement();if(ObjectChoiceCount(captured,objectId)==0)return result;var frame=captured.Frame;
+            foreach(var action in frame.Actions)if(action.ObjectId==objectId)result.Add(Button("board-action",action.Label,()=>Send(captured,()=>host.PerformAsync(captured,action))));
+            foreach(var option in frame.Decision.Options)if(option.ObjectId==objectId)result.Add(Button("board-option",option.Label,()=>Send(captured,()=>host.ChooseAsync(captured,option))));
+            return result;
+        }
+        public void SetSpatialPresentation(bool value)
+        {
+            ThreadOnly();if(spatialPresentation==value)return;spatialPresentation=value;if(offer!=null)Build();
+        }
+        private void AddChoice(Button button,bool boundToBoard)
+        {
+            if(!spatialPresentation || !boundToBoard){controls.Add(button);return;}
+            if(cardChoices==null){cardChoices=new Foldout{text="Card and player choices",value=false,name="board-choice-alternatives"};cardChoices.style.width=Length.Percent(100);controls.Add(cardChoices);}
+            cardChoices.Add(button);
         }
         private static string FeedbackText(CommandState state)
         {
@@ -74,11 +111,16 @@ namespace Manaforge.Play
         private void Build()
         {
             var captured=offer;var frame=captured?.Frame;if(frame==null){Clear();return;}
-            manaPool.text=frame.ViewerMana==null?"": "Floating mana: "+string.Join(", ",System.Linq.Enumerable.Select(frame.ViewerMana,pair=>pair.Key+" "+pair.Value));prompt.text=frame.Decision.Prompt??"Engine decision";Root.style.display=DisplayStyle.Flex;controls.Clear();pages.Clear();numericSubmit=null;
+            var floating=frame.ViewerMana==null?"":string.Join(", ",System.Linq.Enumerable.Select(System.Linq.Enumerable.Where(frame.ViewerMana,pair=>pair.Value>0),pair=>pair.Key+" "+pair.Value));manaPool.text=string.IsNullOrEmpty(floating)?"":"Floating mana: "+floating;manaPool.style.display=string.IsNullOrEmpty(floating)?DisplayStyle.None:DisplayStyle.Flex;prompt.text=OpeningHandFan.PlainPrompt(frame.Decision.Prompt??"Choose an action");Root.style.display=DisplayStyle.Flex;controls.Clear();pages.Clear();numericSubmit=null;cardChoices=null;
             int total=frame.Actions.Count+frame.Decision.Options.Count;int start=page*PageSize,end=Math.Min(total,start+PageSize);
             for(int i=start;i<end;i++) {
-                if(i<frame.Actions.Count){var action=frame.Actions[i];controls.Add(Button("decision-action-"+i,action.Label,()=>Send(captured,()=>host.PerformAsync(captured,action))));}
-                else {var option=frame.Decision.Options[i-frame.Actions.Count];controls.Add(Button("decision-option-"+(i-frame.Actions.Count),option.Label,()=>Send(captured,()=>host.ChooseAsync(captured,option))));}
+                if(i<frame.Actions.Count){var action=frame.Actions[i];AddChoice(Button("decision-action-"+i,action.Label,()=>Send(captured,()=>host.PerformAsync(captured,action))),action.ObjectId!=null);}
+                else {var option=frame.Decision.Options[i-frame.Actions.Count];AddChoice(Button("decision-option-"+(i-frame.Actions.Count),(option.Selected?"Selected: ":"")+option.Label,()=>Send(captured,()=>host.ChooseAsync(captured,option))),option.ObjectId!=null || option.PlayerId!=null);}
+            }
+            // In the spatial view, pass/finish/cancel actions remain available even when
+            // card alternatives occupy a different page. Keep the engine's exact index/token.
+            if(spatialPresentation)for(int i=0;i<frame.Actions.Count;i++)if((i<start || i>=end) && frame.Actions[i].Kind=="pass"){
+                int index=i;var action=frame.Actions[i];controls.Add(Button("decision-action-"+index,action.Label,()=>Send(captured,()=>host.PerformAsync(captured,action))));
             }
             if(frame.Decision.CanFinish)controls.Add(Button("decision-finish","Finish selection",()=>Send(captured,()=>host.FinishSelectionAsync(captured))));
             if(frame.Decision.Cancellable)controls.Add(Button("decision-cancel","Cancel choice",()=>Send(captured,()=>host.CancelChoiceAsync(captured))));

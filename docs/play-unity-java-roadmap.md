@@ -1,5 +1,39 @@
 # Manaforge Play — Unity + Java Roadmap
 
+### Commander returns and Arena integration (0.5.217)
+
+Commander and Freeform use the current Arena presentation over the same session
+host, immutable frames and authenticated controls. The table presentation remains
+available through the presentation factory/explicit launch selection. The owner
+authorized including the new Arena UI integration in this gameplay batch. Both
+public command zones remain inspectable, with shared native cast-count, additional
+command-zone cost, location and per-player damage text. Local artwork preparation,
+board input, library movement and supplied resource tooling retain their existing
+ownership/privacy boundaries; missing artwork uses the existing fallback.
+
+Sidisi public fixtures verify native command-zone return/recast with increasing
+tax through a commander-damage win, graveyard decline, hand/exile/library accept
+and decline, and casting from hand without increasing command-zone cast count.
+Focused return probes end with a native verified-scenario certificate and clean
+shutdown, never a fabricated game result. Full matches separately verify native
+results for human single/partner/background and AI partner/background setups.
+Freeform also completes in Arena. All submitted inputs confirm with no uncertainty.
+
+Arena acceptance exposed a race where a board highlight reread a retired offer's
+frame. UI refresh/gestures now capture an immutable frame once; submission still
+revalidates the current offer. Face-up exile objects use authenticated native
+ownership; concealed exile objects remain omitted and cannot gain commander links.
+Gameplay probes use `--no-capture`. Java privacy/protocol checks (768), focused
+Python checks (25), projection/motion checks (30) and targeted UI tests pass;
+human visual review and CI confirmation remain separate gates. The .216 CI check
+found .215 protocol/desktop/live success; newer jobs were running and not awaited.
+
+Reproduce with `tools/check_play_unity_game.py --public-decks --format commander
+--no-capture`, optionally `--commander-setup partners|background`,
+`--ai-commander-setup partners|background`, or `--commander-scenario tax|
+grave-decline|hand-accept|hand-decline|exile-accept|exile-decline|library-accept|
+library-decline`. Companions and multiplayer pods remain outside this increment.
+
 ### Native Commander terminal and paired acceptance (0.5.216)
 
 Authenticated terminal metadata now includes a coherent public commander/damage

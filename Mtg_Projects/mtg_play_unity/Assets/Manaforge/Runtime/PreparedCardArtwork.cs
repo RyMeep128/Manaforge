@@ -35,7 +35,7 @@ namespace Manaforge.Play
         {
             Request=request;Width=width;Height=height;pixels=(byte[])bytes.Clone();
             using(var hash=SHA256.Create())Digest=BitConverter.ToString(hash.ComputeHash(pixels)).Replace("-","");
-            Identity=VisualPrintingPolicy.Resolve(false,new VisualPrintingCandidate(catalog.OracleId,catalog.PrintingId,catalog.FaceKey,true,true),Array.Empty<VisualPrintingCandidate>());
+            Identity=VisualPrintingPolicy.Resolve(false,new VisualPrintingCandidate(catalog.OracleId,catalog.PrintingId,catalog.FaceKey,catalog.StandardCompatible,true),Array.Empty<VisualPrintingCandidate>());
             Profile=CardCompactProfile.FromMetadata("normal",catalog.PrintedTypeLine);
         }
         // Worker-side: caller already used Core's decoder. RGBA8 rows must be bottom-left origin.
@@ -45,11 +45,9 @@ namespace Manaforge.Play
             if(request==null || catalog==null)throw new ArgumentException("ARTWORK_CONTEXT");
             if(catalog.OracleId!=request.OracleId || catalog.PrintingId!=request.PrintingId)
                 throw new ArgumentException("ARTWORK_IDENTITY");
-            if(catalog.Layout!="normal" || catalog.FaceCount!=1 || !catalog.StandardCompatible || string.IsNullOrWhiteSpace(catalog.FaceKey)
+            if(catalog.Layout!="normal" || catalog.FaceCount!=1 || string.IsNullOrWhiteSpace(catalog.FaceKey)
                 || catalog.FaceKey.Length>1024 || string.IsNullOrWhiteSpace(catalog.PrintedTypeLine))
                 throw new ArgumentException("ARTWORK_FACE_UNSUPPORTED");
-            var profile=CardCompactProfile.FromMetadata("normal",catalog.PrintedTypeLine);
-            if(profile!=null && !string.IsNullOrEmpty(profile.Kind))throw new ArgumentException("ARTWORK_FACE_UNSUPPORTED");
             if(width<1 || height<1 || width>1024 || height>1024 || rgba==null || rgba.Length!=(long)width*height*4)
                 throw new ArgumentException("ARTWORK_PIXELS");
             return new PreparedCardArtwork(request,catalog,width,height,rgba);
