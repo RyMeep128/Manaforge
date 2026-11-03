@@ -36,19 +36,25 @@ namespace Manaforge.Play.Protocol
             if (timeoutMilliseconds < 1 || timeoutMilliseconds > 60000) throw new ArgumentOutOfRangeException(nameof(timeoutMilliseconds));
             return ReadBounded(timeoutMilliseconds, timeoutMilliseconds, cancellation);
         }
+        // Authenticated owner-lifetime wait; partial frames retain their deadline.
+        public string ReadWhenAvailable(int timeoutMilliseconds, CancellationToken cancellation = default)
+        {
+            if (timeoutMilliseconds < 1 || timeoutMilliseconds > 60000) throw new ArgumentOutOfRangeException(nameof(timeoutMilliseconds));
+            return ReadBounded(timeoutMilliseconds, timeoutMilliseconds, cancellation, true);
+        }
         public string ReadWithIdleWait(int waitMilliseconds, int frameMilliseconds, CancellationToken cancellation = default)
         {
             if (waitMilliseconds < 1 || waitMilliseconds > 21600000 || frameMilliseconds < 1 || frameMilliseconds > 60000) throw new ArgumentOutOfRangeException();
             return ReadBounded(waitMilliseconds, frameMilliseconds, cancellation);
         }
-        private string ReadBounded(int timeoutMilliseconds, int frameMilliseconds, CancellationToken cancellation)
+        private string ReadBounded(int timeoutMilliseconds, int frameMilliseconds, CancellationToken cancellation, bool idle = false)
         {
             if (IsClosed) throw new TextFrame.FrameException("FRAME_CLOSED");
             if (Interlocked.Exchange(ref reading, 1) != 0)
             { Dispose(); throw new TextFrame.FrameException("FRAME_CONCURRENT"); }
             try
             {
-                using var input = new DeadlineStream(this, timeoutMilliseconds, frameMilliseconds, cancellation);
+                using var input = new DeadlineStream(this, timeoutMilliseconds, frameMilliseconds, cancellation, idle);
                 input.Check();
                 string text = TextFrame.Read(input);
                 input.Check(); // no completed frame is returned after observed cancellation/deadline
@@ -123,15 +129,16 @@ namespace Manaforge.Play.Protocol
             private readonly LoopbackFrameReader owner;
             private readonly int budget, frameBudget;
             private Stopwatch frameTimer;
+            private readonly bool idle;
             private readonly CancellationToken cancellation;
             private readonly Stopwatch timer = Stopwatch.StartNew();
-            public DeadlineStream(LoopbackFrameReader owner, int budget, int frameBudget, CancellationToken cancellation)
-            { this.owner = owner; this.budget = budget; this.frameBudget = frameBudget; this.cancellation = cancellation; }
+            public DeadlineStream(LoopbackFrameReader owner, int budget, int frameBudget, CancellationToken cancellation, bool idle)
+            { this.owner = owner; this.budget = budget; this.frameBudget = frameBudget; this.cancellation = cancellation; this.idle = idle; }
             public void Check()
             {
                 cancellation.ThrowIfCancellationRequested();
                 if (owner.IsClosed) throw new TextFrame.FrameException("FRAME_CLOSED");
-                if (timer.Elapsed.TotalMilliseconds >= budget) throw new TextFrame.FrameException("FRAME_TIMEOUT");
+                if (!idle && timer.Elapsed.TotalMilliseconds >= budget) throw new TextFrame.FrameException("FRAME_TIMEOUT");
                 if (frameTimer != null && frameTimer.Elapsed.TotalMilliseconds >= frameBudget) throw new TextFrame.FrameException("FRAME_TIMEOUT");
             }
             public override int Read(byte[] buffer, int offset, int count)
@@ -142,7 +149,7 @@ namespace Manaforge.Play.Protocol
                 while (true)
                 {
                     Check();
-                    double remaining = budget - timer.Elapsed.TotalMilliseconds;
+                    double remaining = idle ? 25 : budget - timer.Elapsed.TotalMilliseconds;
                     if (frameTimer != null) remaining = Math.Min(remaining, frameBudget - frameTimer.Elapsed.TotalMilliseconds);
                     int microseconds = Math.Max(1, (int)Math.Ceiling(Math.Min(25, remaining) * 1000));
                     if (!owner.socket.Poll(microseconds, SelectMode.SelectRead)) continue;

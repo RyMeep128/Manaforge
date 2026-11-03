@@ -4,7 +4,7 @@
     "kind": "Synthetic existing-adapter test inputs; not real-engine captures. Outcome examples are DTO-only.",
     "source_sha256_utf8_lf": {
       "contracts.py": "ef57a07726824d4f06e974b42300498b810bc44e99021e01e9b1f79dad0bb6b2",
-      "adapter.py": "8d24637d2eae4dad6bbaf7411bc75848f1e6f4944b2559634ef2fbe175db3275",
+      "adapter.py": "5c06a1574792311d32b5cd60e4fa593a341a9b434629128ce64470229723e42e",
       "test_adapter.py": "6923211e09096a30a9da6b05e7b005c81e51fa75a10f1d27dc8c1fa4e67989a1"
     }
   },

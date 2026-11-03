@@ -84,6 +84,7 @@ def main():
             PLAY / "java/ManaforgeOpeningLoopback.java",
             PROTOCOL / "java-test/OpeningSessionChecks.java",
             PROTOCOL / "java-test/OpeningProjectionChecks.java",
+            PROTOCOL / "java-test/UnityPriorityProjectionChecks.java",
             PROTOCOL / "java/manaforge/protocol/PlayContracts.java",
             PROTOCOL / "java/manaforge/protocol/LaunchContracts.java",
             PROTOCOL / "java/manaforge/protocol/LaunchManifestReader.java",

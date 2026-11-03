@@ -92,6 +92,14 @@ namespace Manaforge.Play
             var frame=supplied.Frame;return frame!=null && frame.Decision.Family=="mana" && frame.ManaSourceReferences.Any(value=>ReferenceEquals(value,source))
                 ?surface.PresentedCardView(ticket,frame.Context.Revision,source.ObjectId):null;
         }
+        // Monitor a submission after its displayed offer has been retired. The
+        // channel tracker owns the authenticated viewer/session and exact token.
+        internal TrackedCommand CommandOutcome(TrackedCommand submission)
+        {
+            ThreadOnly();if(submission==null)return null;
+            TrackedCommand result;lock(gate)result=!stopped?channel?.FindCommand(submission.CommandId):null;
+            return result!=null && result.RequestRevision==submission.RequestRevision && result.DecisionId==submission.DecisionId?result:null;
+        }
         internal TrackedCommand CommandFeedback(ViewerDecisionOffer supplied,TrackedCommand submission)
         {
             ThreadOnly();if(supplied==null || submission==null || !ReferenceEquals(PresentedDecision,supplied))return null;

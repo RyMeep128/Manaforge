@@ -201,22 +201,61 @@ def test_commander_launch_preserves_paired_designations_and_rejects_companions()
 def test_rules_resolution_ignores_printing_and_preserves_artwork_identity():
     from mtg_play.live_game import resolve_rules_manifest
 
-    source = {"seats": [{"document": {"deck": {"entries": [dict(
-        name="Front // Back", set_code="custom", collector_number="999",
-        card_id="deck-artwork", oracle_id="oracle", entry_id="entry", quantity=2,
-    )]}}}]}
+    source = {
+        "seats": [
+            {
+                "document": {
+                    "deck": {
+                        "entries": [
+                            dict(
+                                name="Front // Back",
+                                set_code="custom",
+                                collector_number="999",
+                                card_id="deck-artwork",
+                                oracle_id="oracle",
+                                entry_id="entry",
+                                quantity=2,
+                            )
+                        ]
+                    }
+                }
+            }
+        ]
+    }
     before = json.dumps(source)
+
     def request(command):
-        assert command == dict(command="resolve_rules", cards=[dict(key="0", name="Front // Back", set="", number="")])
+        assert command == dict(
+            command="resolve_rules",
+            cards=[dict(key="0", name="Front // Back", set="", number="")],
+        )
         return [dict(key="0", name="Front", set="ENGINE", number="1")]
+
     result = resolve_rules_manifest(source, request)
     entry = result["seats"][0]["document"]["deck"]["entries"][0]
-    assert (entry["name"], entry["set_code"], entry["collector_number"]) == ("Front", "ENGINE", "1")
-    assert (entry["card_id"], entry["oracle_id"], entry["entry_id"], entry["quantity"]) == ("deck-artwork", "oracle", "entry", 2)
+    assert (entry["name"], entry["set_code"], entry["collector_number"]) == (
+        "Front",
+        "ENGINE",
+        "1",
+    )
+    assert (
+        entry["card_id"],
+        entry["oracle_id"],
+        entry["entry_id"],
+        entry["quantity"],
+    ) == ("deck-artwork", "oracle", "entry", 2)
     assert json.dumps(source) == before
 
 
-@pytest.mark.parametrize("response", [[], {}, [dict(key="0", error="CARD_NOT_SUPPORTED")], [dict(key="wrong", name="Forest", set="M21", number="1")]])
+@pytest.mark.parametrize(
+    "response",
+    [
+        [],
+        {},
+        [dict(key="0", error="CARD_NOT_SUPPORTED")],
+        [dict(key="wrong", name="Forest", set="M21", number="1")],
+    ],
+)
 def test_rules_resolution_rejects_missing_or_malformed_engine_results(response):
     from mtg_play.live_game import resolve_rules_manifest
 
@@ -227,28 +266,126 @@ def test_rules_resolution_rejects_missing_or_malformed_engine_results(response):
 
 def test_audited_rules_alias_preserves_saved_name_and_artwork():
     from mtg_play.live_game import resolve_rules_manifest
-    source = {"seats": [{"document": {"deck": {"entries": [dict(name="Mj\u00f6lnir, Hammer of Thor", oracle_id="7f9a8845-d760-44a7-a4c9-8a20dba4e14a", card_id="selected-art")]}}}]}
+
+    source = {
+        "seats": [
+            {
+                "document": {
+                    "deck": {
+                        "entries": [
+                            dict(
+                                name="Mj\u00f6lnir, Hammer of Thor",
+                                oracle_id="7f9a8845-d760-44a7-a4c9-8a20dba4e14a",
+                                card_id="selected-art",
+                            )
+                        ]
+                    }
+                }
+            }
+        ]
+    }
+
     def request(command):
         assert command["cards"][0]["name"] == "Mjolnir, Hammer of Thor"
         return [dict(key="0", name="Mjolnir, Hammer of Thor", set="MSH", number="146")]
+
     result = resolve_rules_manifest(source, request)
-    assert result["seats"][0]["document"]["deck"]["entries"][0]["card_id"] == "selected-art"
-    assert source["seats"][0]["document"]["deck"]["entries"][0]["name"] == "Mj\u00f6lnir, Hammer of Thor"
+    assert (
+        result["seats"][0]["document"]["deck"]["entries"][0]["card_id"]
+        == "selected-art"
+    )
+    assert (
+        source["seats"][0]["document"]["deck"]["entries"][0]["name"]
+        == "Mj\u00f6lnir, Hammer of Thor"
+    )
 
 
 def test_rules_alias_never_guesses_other_names_or_oracle_identities():
     from mtg_play.rules_identity import engine_rule_name
-    assert engine_rule_name("Mj\u00f6lnir, Hammer of Thor", "wrong-oracle") == "Mj\u00f6lnir, Hammer of Thor"
+
+    assert (
+        engine_rule_name("Mj\u00f6lnir, Hammer of Thor", "wrong-oracle")
+        == "Mj\u00f6lnir, Hammer of Thor"
+    )
     assert engine_rule_name("Other \u00f6 card") == "Other \u00f6 card"
 
 
 def test_canonical_rules_name_uses_stored_oracle_identity_without_rewriting_deck():
     from mtg_play.live_game import resolve_rules_manifest
-    source = {"seats": [{"document": {"deck": {"entries": [dict(name="Jeskas Will", oracle_id="oracle", card_id="selected-art")]}}}]}
+
+    source = {
+        "seats": [
+            {
+                "document": {
+                    "deck": {
+                        "entries": [
+                            dict(
+                                name="Jeskas Will",
+                                oracle_id="oracle",
+                                card_id="selected-art",
+                            )
+                        ]
+                    }
+                }
+            }
+        ]
+    }
     before = json.dumps(source)
+
     def request(command):
         assert command["cards"][0]["name"] == "Jeska's Will"
         return [dict(key="0", name="Jeska's Will", set="CMR", number="187")]
-    resolved = resolve_rules_manifest(source, request, {"oracle": dict(name="Jeska's Will", layout="normal")})
-    assert resolved["seats"][0]["document"]["deck"]["entries"][0]["card_id"] == "selected-art"
+
+    resolved = resolve_rules_manifest(
+        source, request, {"oracle": dict(name="Jeska's Will", layout="normal")}
+    )
+    assert (
+        resolved["seats"][0]["document"]["deck"]["entries"][0]["card_id"]
+        == "selected-art"
+    )
     assert json.dumps(source) == before
+
+
+def test_freeform_commander_projection_preserves_saved_deck_and_includes_ordinary_cards():
+    from mtg_play.decks import document_for_format, prepare_deck
+    from mtg_play.readiness import local_readiness
+
+    setup = GameSetup(
+        (MatchSeat("human", "Human"), MatchSeat("ai", "AI", "engine_ai")), "freeform"
+    )
+    document = native_deck(True)
+    document.deck.extras.pop("companion_entry_id", None)
+    document.deck.entries = [
+        entry for entry in document.deck.entries if entry.entry_id != "companion"
+    ]
+    for entry in document.deck.entries:
+        if entry.section not in ("considering", "excluded"):
+            entry.name = entry.entry_id.title()
+            entry.oracle_id = None
+            entry.set_code = "TST"
+            entry.collector_number = entry.entry_id
+    before = document.to_dict()
+    projected = document_for_format(document, commander=False)
+    assert projected.deck.commander_entry_ids == []
+    assert all(entry.section != "commander" for entry in projected.deck.entries)
+    assert local_readiness(document, "freeform").can_start
+    value = json.loads(
+        project_launch(setup, {"human": document, "ai": document}, "0.5.217-alpha.1")
+    )
+    assert value["seats"][0]["document"]["deck"]["commander_entry_ids"] == []
+    assert any(
+        entry["entry_id"] == "commander" and entry["section"] == "mainboard"
+        for entry in value["seats"][0]["document"]["deck"]["entries"]
+    )
+
+    def resolve(queries):
+        return [
+            dict(
+                query, set=query["set"] or "TST", number=query["number"] or query["key"]
+            )
+            for query in queries
+        ]
+
+    prepared = prepare_deck(document, resolve)
+    assert not prepared.sideboard
+    assert document.to_dict() == before

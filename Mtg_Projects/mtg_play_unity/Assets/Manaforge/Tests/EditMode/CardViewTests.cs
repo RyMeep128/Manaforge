@@ -14,6 +14,18 @@ namespace Manaforge.Play.Tests
                 Array.Empty<VisualPrintingCandidate>());
         private static CardDisplayValues Values(string pt = "2/2", string rules = "Explicit mock text") =>
             new CardDisplayValues("Mock creature", "{X}{G}", "Creature — Example", rules, pt, "1 counter");
+        [Test] public void EngineRulesAreDisplayedAndCurrentAbilitiesTakePrecedence()
+        {
+            Assert.That(ViewerCardSurface.DisplayRules(null,new[]{"<i>Exile target nonland permanent.</i>"}),Is.EqualTo("Exile target nonland permanent."));
+            Assert.That(ViewerCardSurface.DisplayRules(new[]{"Granted ability"},new[]{"Printed view"}),Is.EqualTo("Granted ability"));
+            Assert.That(ViewerCardSurface.DisplayRules(null,null),Is.Null);
+            Assert.That(ViewerCardSurface.DisplayRules(Array.Empty<string>(),new[]{"Stale text"}),Is.Empty);
+        }
+        [TestCase("Select a card ORDER to put on TOP of your library",true)]
+        [TestCase("Select a target",false)]
+        [TestCase("Order triggered abilities",false)]
+        public void LibraryOrderingUsesDedicatedPresentationOnly(string prompt,bool expected)
+        {Assert.That(ViewerDecisionPanel.LibraryOrdering(prompt),Is.EqualTo(expected));}
         [SetUp] public void Setup()
         {
             texture = new Texture2D(4, 4);

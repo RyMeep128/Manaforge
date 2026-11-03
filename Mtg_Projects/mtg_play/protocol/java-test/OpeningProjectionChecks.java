@@ -836,6 +836,7 @@ public final class OpeningProjectionChecks {
         metadata.getAsJsonArray("commanders").get(0).getAsJsonObject().addProperty("tax","{4}");trace.observe(state,metadata);check(new JsonPrimitive(true).equals(trace.proof().get("native_commander_tax_verified")));check(!trace.stop());
     }
     public static void main(String[] args) throws Exception {
+        UnityPriorityProjectionChecks.run();
         nativeLaunchChecks();publicStackAndOfferedCardChecks();automaticPaymentChecks();manualManaChecks();gameplaySessionChecks();combatCaseEvidenceChecks();coreCombatChecks();coreResponseChecks();terminalCombatChecks();coreChoiceChecks();combatCounterChecks();
         ManaforgeOpeningProjection projection=projection();JsonObject raw=state(),request=prompt();JsonObject snapshot=projection.project(raw,request);shape(snapshot);
         String text=snapshot.toString();for(String secret:new String[]{"raw-human","raw-ai","raw-card","raw-name","raw-opponent-name","OPPONENT_SECRET","MUTATED_BINDING"})check(!text.contains(secret));

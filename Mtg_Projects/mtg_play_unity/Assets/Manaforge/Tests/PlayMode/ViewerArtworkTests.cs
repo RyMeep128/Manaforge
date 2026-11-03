@@ -43,7 +43,7 @@ namespace Manaforge.Play.Tests
             var view=surface.CardsRoot.Q<CardView>();var texture=(Texture2D)view.Artwork;
             Assert.That(texture,Is.Not.Null);Assert.That(texture.isReadable,Is.False);Assert.That(scope.Bytes,Is.EqualTo(16));
             Assert.That(surface.InspectionView.Artwork,Is.SameAs(texture));Assert.That(view.Identity.SelectedPrintingId,Is.EqualTo("exact-printing"));
-            Assert.That(view.Q<Label>("name").text,Is.EqualTo("Viewer text"));Assert.That(surface.InspectionView.Q<Label>("rules").text,Is.Empty);
+            Assert.That(view.Q<Label>("name").text,Is.EqualTo("Viewer text"));Assert.That(surface.InspectionView.Q<Label>("rules").text,Is.EqualTo("Not complete Oracle text"));
             Assert.That(surface.TryPresent(ticket,ViewerCardSurfaceTests.Frame(revision:2,name:"Copied current name",artwork:true)),Is.True);
             Assert.That(view.Artwork,Is.SameAs(texture));Assert.That(view.Q<Label>("name").text,Is.EqualTo("Copied current name"));
             Assert.That(surface.RequestArtwork(ticket,"fixture-0002"),Is.Null);

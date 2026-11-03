@@ -32,7 +32,8 @@ def child(code):
 def owner(monkeypatch):
     # These dummy roots create no descendants. Never use this proof for XMage.
     value = LaunchOwner(runtime_cleanup=lambda: True)
-    monkeypatch.setattr(connection_proof, "STOP_TIMEOUT", 0.1)
+    # Allow Windows process exit/reaping latency; bootstrap deadlines stay short.
+    monkeypatch.setattr(connection_proof, "STOP_TIMEOUT", 0.5)
     value.start_gateway(child("import sys; sys.stdin.buffer.read()"))
     value.gateway_ready()
     try:

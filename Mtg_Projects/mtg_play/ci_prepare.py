@@ -62,7 +62,14 @@ def extract(archive: Path, artifact: dict, destination: Path):
                     shutil.copyfileobj(input_file, output_file)
 
 
-def prepare(destination: Path, jdk: Path, cache: Path | None = None, *, fork_server=None, fork_client=None) -> Path:
+def prepare(
+    destination: Path,
+    jdk: Path,
+    cache: Path | None = None,
+    *,
+    fork_server=None,
+    fork_client=None,
+) -> Path:
     destination = destination.resolve()
     if destination.exists():
         raise ProofError("CI_DESTINATION_ALREADY_EXISTS: use a new isolated directory")
@@ -77,7 +84,7 @@ def prepare(destination: Path, jdk: Path, cache: Path | None = None, *, fork_ser
         destination.name + "-" + uuid.uuid4().hex + ".tmp"
     )
     temporary.mkdir(parents=True)
-    for name in (("runtime",) if fork_server else ("engine", "runtime")):
+    for name in ("runtime",) if fork_server else ("engine", "runtime"):
         artifact = manifest[name]
         extract(fetch(artifact, cache, name), artifact, temporary)
     if fork_server:
@@ -85,14 +92,25 @@ def prepare(destination: Path, jdk: Path, cache: Path | None = None, *, fork_ser
 
         lock_path = HERE / "engine-lock.json"
         lock = read_lock(lock_path)
-        for name, archive in (("mage-server", fork_server), ("mage-client", fork_client)):
+        for name, archive in (
+            ("mage-server", fork_server),
+            ("mage-client", fork_client),
+        ):
             archive = Path(archive)
             if digest(archive) != lock["assemblies"][name]:
                 raise ProofError("FORK_ASSEMBLY_HASH_MISMATCH: " + name)
             extract(archive, dict(prefix="", destination="xmage/" + name), temporary)
         extras = {
-            "SOURCE.txt": ("XMage source: " + lock["fork_commit"] + "\nUpstream: " + lock["upstream_commit"] + "\n").encode(),
-            "XMAGE-LICENSE.txt": (temporary / "xmage/mage-server/LICENSE.txt").read_bytes(),
+            "SOURCE.txt": (
+                "XMage source: "
+                + lock["fork_commit"]
+                + "\nUpstream: "
+                + lock["upstream_commit"]
+                + "\n"
+            ).encode(),
+            "XMAGE-LICENSE.txt": (
+                temporary / "xmage/mage-server/LICENSE.txt"
+            ).read_bytes(),
         }
         for name, raw in extras.items():
             expected = lock["artifacts"].get(name)
@@ -100,7 +118,14 @@ def prepare(destination: Path, jdk: Path, cache: Path | None = None, *, fork_ser
                 continue
             normalized = raw.replace(b"\r\n", b"\n")
             candidates = (raw, normalized, normalized.replace(b"\n", b"\r\n"))
-            matching = next((value for value in candidates if hashlib.sha256(value).hexdigest() == expected), None)
+            matching = next(
+                (
+                    value
+                    for value in candidates
+                    if hashlib.sha256(value).hexdigest() == expected
+                ),
+                None,
+            )
             if matching is None:
                 raise ProofError("FORK_PROVENANCE_HASH_MISMATCH: " + name)
             (temporary / name).write_bytes(matching)
@@ -124,10 +149,26 @@ def main():
     parser.add_argument("--destination", type=Path, required=True)
     parser.add_argument("--jdk-path", type=Path, default=DEFAULT_JDK)
     parser.add_argument("--archive-cache", type=Path)
-    parser.add_argument("--fork-server", type=Path, help="Server assembly matching the app-owned engine lock")
-    parser.add_argument("--fork-client", type=Path, help="Matching client assembly; never mix fork and stock modules")
+    parser.add_argument(
+        "--fork-server",
+        type=Path,
+        help="Server assembly matching the app-owned engine lock",
+    )
+    parser.add_argument(
+        "--fork-client",
+        type=Path,
+        help="Matching client assembly; never mix fork and stock modules",
+    )
     args = parser.parse_args()
-    print(prepare(args.destination, args.jdk_path, args.archive_cache, fork_server=args.fork_server, fork_client=args.fork_client))
+    print(
+        prepare(
+            args.destination,
+            args.jdk_path,
+            args.archive_cache,
+            fork_server=args.fork_server,
+            fork_client=args.fork_client,
+        )
+    )
 
 
 if __name__ == "__main__":

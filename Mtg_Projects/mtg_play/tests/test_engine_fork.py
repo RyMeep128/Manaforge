@@ -7,7 +7,9 @@ from mtg_play import engine_fork
 
 
 def test_build_toolchain_drift_is_rejected():
-    engine_fork.validate_toolchain('openjdk version "23.0.2"', "Apache Maven 3.9.9 (hash)")
+    engine_fork.validate_toolchain(
+        'openjdk version "23.0.2"', "Apache Maven 3.9.9 (hash)"
+    )
     with pytest.raises(ValueError, match="JDK"):
         engine_fork.validate_toolchain('java version "24.0.1"', "Apache Maven 3.9.9")
     with pytest.raises(ValueError, match="Maven"):
@@ -53,11 +55,20 @@ def test_lock_requires_source_and_artifacts(tmp_path):
         engine_fork.read_lock(path)
 
 
-def test_build_variants_are_distinct_and_old_app_owned_pins_remain_usable(tmp_path, monkeypatch):
+def test_build_variants_are_distinct_and_old_app_owned_pins_remain_usable(
+    tmp_path, monkeypatch
+):
     monkeypatch.setattr(engine_fork, "HERE", tmp_path)
     revision = "b" * 40
     identity = revision + "-" + "c" * 12
-    raw = json.dumps(dict(lock_version=1, fork_commit=revision, bundle_id=identity, artifacts={"jar": "hash"})).encode()
+    raw = json.dumps(
+        dict(
+            lock_version=1,
+            fork_commit=revision,
+            bundle_id=identity,
+            artifacts={"jar": "hash"},
+        )
+    ).encode()
     approved = tmp_path / "engine-lock.json"
     approved.write_bytes(raw)
     candidate = tmp_path / ".engines" / identity
@@ -72,7 +83,16 @@ def test_build_variants_are_distinct_and_old_app_owned_pins_remain_usable(tmp_pa
     history.write_text("tampered")
     with pytest.raises(ValueError, match="not pinned"):
         engine_fork.installation_manifest(candidate)
-    approved.write_text(json.dumps(dict(lock_version=1, fork_commit=revision, bundle_id="../escape", artifacts={"jar": "hash"})))
+    approved.write_text(
+        json.dumps(
+            dict(
+                lock_version=1,
+                fork_commit=revision,
+                bundle_id="../escape",
+                artifacts={"jar": "hash"},
+            )
+        )
+    )
     with pytest.raises(ValueError, match="build variant"):
         engine_fork.read_lock(approved)
 
@@ -81,7 +101,9 @@ def test_only_installed_approved_fork_is_selected(tmp_path, monkeypatch):
     monkeypatch.setattr(engine_fork, "HERE", tmp_path)
     legacy = tmp_path / "stock"
     assert engine_fork.selected_bundle(legacy) == legacy
-    raw = json.dumps(dict(lock_version=1, fork_commit="a" * 40, artifacts={"jar": "hash"})).encode()
+    raw = json.dumps(
+        dict(lock_version=1, fork_commit="a" * 40, artifacts={"jar": "hash"})
+    ).encode()
     (tmp_path / "engine-lock.json").write_bytes(raw)
     assert engine_fork.selected_bundle(legacy) == legacy
     candidate = tmp_path / ".engines" / ("a" * 40)
@@ -102,11 +124,23 @@ def test_private_launch_uses_selected_engine_pin(tmp_path, monkeypatch):
     bundle.mkdir()
     app.mkdir()
     monkeypatch.setattr(engine_fork, "HERE", app)
-    raw = json.dumps({"engine": "1.4.62-V1", "fork_commit": "test", "artifacts": {}}).encode()
+    raw = json.dumps(
+        {"engine": "1.4.62-V1", "fork_commit": "test", "artifacts": {}}
+    ).encode()
     (bundle / "manaforge-engine-lock.json").write_bytes(raw)
     (app / "engine-lock.json").write_bytes(raw)
-    setup = GameSetup((MatchSeat("human", "Human"), MatchSeat("ai", "AI", "engine_ai")), "freeform")
+    setup = GameSetup(
+        (MatchSeat("human", "Human"), MatchSeat("ai", "AI", "engine_ai")), "freeform"
+    )
     document = native_deck(False)
-    payload = export_launch_manifest(setup, {"human": document, "ai": document}, manaforge_version="test-alpha.1", engine_bundle=bundle)
-    assert json.loads(payload)["engine"]["artifact_manifest_sha256"] == hashlib.sha256(raw).hexdigest()
+    payload = export_launch_manifest(
+        setup,
+        {"human": document, "ai": document},
+        manaforge_version="test-alpha.1",
+        engine_bundle=bundle,
+    )
+    assert (
+        json.loads(payload)["engine"]["artifact_manifest_sha256"]
+        == hashlib.sha256(raw).hexdigest()
+    )
     assert frame_gateway_manifest(payload)

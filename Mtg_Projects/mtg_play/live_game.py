@@ -53,7 +53,11 @@ def project_launch(setup, documents, version, deck_owners=None, *, engine_bundle
     ):
         raise LiveGameError("UNITY_GAME_SETUP_UNSUPPORTED")
     payload = export_launch_manifest(
-        setup, documents, manaforge_version=version, deck_owners=deck_owners, engine_bundle=engine_bundle
+        setup,
+        documents,
+        manaforge_version=version,
+        deck_owners=deck_owners,
+        engine_bundle=engine_bundle,
     )
     launch = json.loads(payload)
     for seat in launch["seats"]:
@@ -87,7 +91,18 @@ def resolve_rules_manifest(manifest, server_request, canonical=None):
     for seat in resolved["seats"]:
         entries = seat["document"]["deck"]["entries"]
         canonical = canonical or {}
-        queries = [dict(key=str(i), name=engine_rule_name(canonical.get(e.get("oracle_id"), {}).get("name", e["name"]), e.get("oracle_id")), set="", number="") for i, e in enumerate(entries)]
+        queries = [
+            dict(
+                key=str(i),
+                name=engine_rule_name(
+                    canonical.get(e.get("oracle_id"), {}).get("name", e["name"]),
+                    e.get("oracle_id"),
+                ),
+                set="",
+                number="",
+            )
+            for i, e in enumerate(entries)
+        ]
         response = server_request(dict(command="resolve_rules", cards=queries))
         if not isinstance(response, list) or len(response) != len(entries):
             raise LiveGameError("UNITY_GAME_CARD_RESOLUTION_FAILED")
@@ -100,11 +115,16 @@ def resolve_rules_manifest(manifest, server_request, canonical=None):
             row = by_key.get(str(i), {})
             if row.get("error"):
                 raise LiveGameError("UNITY_GAME_CARD_UNSUPPORTED")
-            if not all(isinstance(row.get(k), str) and row[k] for k in ("name", "set", "number")):
+            if not all(
+                isinstance(row.get(k), str) and row[k]
+                for k in ("name", "set", "number")
+            ):
                 raise LiveGameError("UNITY_GAME_CARD_RESOLUTION_FAILED")
             # Only the private engine projection changes. card_id/oracle_id still
             # identify the deck's artwork; authenticated visibility is unchanged.
-            entry.update(name=row["name"], set_code=row["set"], collector_number=row["number"])
+            entry.update(
+                name=row["name"], set_code=row["set"], collector_number=row["number"]
+            )
     return resolved
 
 
@@ -252,7 +272,9 @@ def run_live_game(
         or presentation not in ("current", "table")
     ):
         raise LiveGameError("PAYMENT_MODE_INVALID")
-    payload = project_launch(setup, documents, version, deck_owners, engine_bundle=xmage_root)
+    payload = project_launch(
+        setup, documents, version, deck_owners, engine_bundle=xmage_root
+    )
     manifest = json.loads(payload)
     human = next(s for s in manifest["seats"] if s["controller"] == "local_human")
     player = Path(player).resolve()
@@ -292,7 +314,11 @@ def run_live_game(
 
         from .rules_identity import canonical_cards
 
-        names = canonical_cards(e.get("oracle_id") for seat in manifest["seats"] for e in seat["document"]["deck"]["entries"])
+        names = canonical_cards(
+            e.get("oracle_id")
+            for seat in manifest["seats"]
+            for e in seat["document"]["deck"]["entries"]
+        )
         engine_manifest = resolve_rules_manifest(manifest, server_request, names)
         for seat in engine_manifest["seats"]:
             entries = seat["document"]["deck"]["entries"]
@@ -389,7 +415,12 @@ def run_live_game(
                     str(root / "metadata-context.json"),
                 ],
                 cwd=str(root),
-                launch_manifest=json.dumps(engine_manifest, ensure_ascii=False, allow_nan=False, separators=(",", ":")).encode("utf-8"),
+                launch_manifest=json.dumps(
+                    engine_manifest,
+                    ensure_ascii=False,
+                    allow_nan=False,
+                    separators=(",", ":"),
+                ).encode("utf-8"),
                 expect_manifest_validation=True,
             )
             owner.wait_gateway_manifest_validation(timeout=20)

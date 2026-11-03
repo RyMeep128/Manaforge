@@ -148,7 +148,10 @@ if ($Mode -in @('EditMode', 'PlayMode')) {
     [xml]$report = Get-Content -LiteralPath $results
     # Counts include printing policy/card components and attached-panel handoff checks.
     $minimum = if ($TestFilter -ne 'Manaforge.Play.Tests') { 1 } elseif ($Mode -eq 'EditMode') { 366 } else { 98 }
-    if ($report.'test-run'.result -ne 'Passed' -or [int]$report.'test-run'.total -lt $minimum) {
+    # Optional local asset packs can mark a successful run Skipped:Ignored.
+    # Require enough executed passes and reject failures or other result states.
+    if ($report.'test-run'.result -notin @('Passed', 'Skipped:Ignored') -or
+        [int]$report.'test-run'.failed -ne 0 -or [int]$report.'test-run'.passed -lt $minimum) {
         throw "Missing or failed $Mode acceptance"
     }
     if ($Graphics -and $Mode -eq 'PlayMode' -and [int]$report.'test-run'.skipped -ne 0) {

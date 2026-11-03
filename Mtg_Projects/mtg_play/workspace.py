@@ -300,7 +300,7 @@ class PlayWorkspace(W.QWidget):
         ):
             self.unity_payment_mode.addItem(label, mode)
         self.unity_payment_mode.setToolTip(
-            "Mana payment preference for your next Unity match. Priority remains manual."
+            "Mana payment preference for your next Unity match. Priority controls are inside the Unity game."
         )
         actions.addWidget(self.unity_payment_mode)
         self.close_unity_game = W.QPushButton("Close Unity Game / Cancel")

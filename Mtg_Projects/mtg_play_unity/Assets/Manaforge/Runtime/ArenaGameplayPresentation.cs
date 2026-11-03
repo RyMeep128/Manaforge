@@ -10,7 +10,7 @@ namespace Manaforge.Play
         private readonly VisualElement root,choices,navigation,opponentHand;
         private readonly System.Collections.Generic.Dictionary<string,int> rowPages=new System.Collections.Generic.Dictionary<string,int>();
         private readonly Label status,localPlayer,opponent,result,zones,commanders,localLibrary,opponentLibrary;
-        private readonly BattlefieldLinks links;private readonly ArenaLibraryMotion libraryMotion;private ViewerBoardInput boardInput;private ArenaPriorityGlow priorityGlow;private bool disposed;
+        private readonly BattlefieldLinks links;private readonly ArenaLibraryMotion libraryMotion;private ViewerBoardInput boardInput;private ArenaPriorityGlow priorityGlow;private UnityPriorityControls priorityControls;private bool disposed;
         private readonly System.Collections.Generic.HashSet<CardView> wired=new System.Collections.Generic.HashSet<CardView>();
         private ViewerSessionHost host;private ProjectedDecisionFrame frame;private bool inspecting;private int artworkCount=-1;
         public ViewerCardSurface Surface {get;}
@@ -41,9 +41,10 @@ namespace Manaforge.Play
         private Label Label(string name,string text){var label=new Label(text){name=name,enableRichText=false};root.Add(label);return label;}
         public void CloseInspection(){inspecting=false;Surface.InspectionView.style.display=DisplayStyle.None;root.Q<Button>("close-inspection").style.display=DisplayStyle.None;}
         public void Bind(ViewerSessionHost value)
-        {if(Decisions!=null)throw new InvalidOperationException("PRESENTATION_ALREADY_BOUND");host=value;Decisions=new ViewerDecisionPanel(choices,host);Decisions.SetSpatialPresentation(true);priorityGlow=new ArenaPriorityGlow(Decisions.Root);boardInput=new ViewerBoardInput(root,Surface,host,Decisions,ArenaTableArt.Menu);}
+        {if(Decisions!=null)throw new InvalidOperationException("PRESENTATION_ALREADY_BOUND");host=value;Decisions=new ViewerDecisionPanel(choices,host);Decisions.SetSpatialPresentation(true);Decisions.SetChoicePreview(Surface.ChoicePreview);priorityControls=new UnityPriorityControls(root,Decisions);priorityGlow=new ArenaPriorityGlow(Decisions.Root);boardInput=new ViewerBoardInput(root,Surface,host,Decisions,ArenaTableArt.Menu);}
         public void Present(ProjectedDecisionFrame value)
         {
+            priorityControls?.Refresh();
             if(frame!=null && frame.Context.Revision==value.Context.Revision){boardInput?.Refresh();priorityGlow?.Refresh();RefreshPlayers();if(artworkCount!=Surface.PresentedArtworkCount){artworkCount=Surface.PresentedArtworkCount;Layout();}return;}
             artworkCount=Surface.PresentedArtworkCount;
             frame=value;CloseInspection();
@@ -178,11 +179,12 @@ namespace Manaforge.Play
             Row(items.Where(i=>i.card.Zone=="command" && i.card.OwnerId==viewer).ToList(),height*.50f,15,130,65,key:"local-command");
             zones.text=string.Join("\n",items.Where(i=>i.card.Zone!="hand" && i.card.Zone!="battlefield" && i.card.Zone!="stack").GroupBy(i=>i.card.Zone).Select(g=>g.Key+"  "+g.Count()));
             choices.EnableInClassList("opening-choices",opening);
+            choices.EnableInClassList("library-ordering",Decisions!=null && Decisions.IsLibraryOrdering);
             if(opening && Decisions!=null){OpeningMulliganControls.Apply(Decisions.Root,hand.Count);OpeningMulliganControls.ApplyLocalSkins(Decisions.Root);}
             if(!inspecting)Surface.InspectionView.style.display=DisplayStyle.None;
             foreach(var item in items){var availability=item.view.Q<Label>("status");if(availability!=null)availability.style.display=DisplayStyle.None;}
             boardInput?.Refresh();RefreshPlayers();links.schedule.Execute(UpdateLinks);
         }
-        public void Dispose(){disposed=true;priorityGlow?.Dispose();boardInput?.Dispose();libraryMotion.Dispose();Decisions?.Dispose();Surface.Dispose();wired.Clear();root.RemoveFromHierarchy();}
+        public void Dispose(){disposed=true;priorityGlow?.Dispose();boardInput?.Dispose();libraryMotion.Dispose();priorityControls?.Dispose();Decisions?.Dispose();Surface.Dispose();wired.Clear();root.RemoveFromHierarchy();}
     }
 }

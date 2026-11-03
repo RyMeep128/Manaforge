@@ -196,11 +196,25 @@ namespace Manaforge.Play
             if(binding==null)view.BindUnavailable();else view.Bind(binding.Identity,binding.Texture,binding.Profile?.Crop??CardCompactProfile.StandardArtCrop);
             var c=card.Characteristics;
             string pt=DisplayPowerToughness(c?.TypeLine,c?.Power,c?.Toughness);
-            // No printed text, invented mana cost, inferred artwork/face or reconstructed current rules.
-            string unavailable=binding==null?"Artwork / rules unavailable":"Current rules unavailable";
+            // Display engine-supplied text without inferring rules from artwork.
+            string rules=DisplayRules(c?.CurrentAbilities,c?.EngineViewText);
+            string unavailable=rules==null?"Rules text unavailable":c?.CurrentAbilities==null?"Engine view text":"";
+            if(binding==null)unavailable="Artwork unavailable"+(string.IsNullOrEmpty(unavailable)?"":" / "+unavailable);
             if(card.Tapped==null)unavailable+=" / tap state unavailable";
-            view.UpdateValues(new CardDisplayValues(c?.Name,null,c?.TypeLine,null,pt,unavailable,binding?.Profile,loyalty:c?.Loyalty,defense:c?.Defense,hidePrintedStats:binding?.Profile?.MayHavePrintedStats??true));
+            view.UpdateValues(new CardDisplayValues(c?.Name,null,c?.TypeLine,rules,pt,unavailable,binding?.Profile,loyalty:c?.Loyalty,defense:c?.Defense,hidePrintedStats:binding?.Profile?.MayHavePrintedStats??true));
             if(card.Tapped==true)view.style.rotate=new Rotate(new Angle(90));
+        }
+        public static string DisplayRules(IReadOnlyList<string> current,IReadOnlyList<string> engineView)
+        {
+            var lines=current??engineView;if(lines==null)return null;
+            return string.Join("\n",System.Linq.Enumerable.Select(lines,line=>System.Net.WebUtility.HtmlDecode(
+                System.Text.RegularExpressions.Regex.Replace(OpeningHandFan.PlainPrompt(line??""),"<[^>]*>","",System.Text.RegularExpressions.RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(50)))));
+        }
+        // A choice preview shares only artwork already admitted for the current viewer.
+        public CardView ChoicePreview(string objectId)
+        {
+            ThreadOnly();if(objectId==null || !cards.TryGetValue(objectId,out var card) || card.Hidden)return null;
+            var preview=new CardView();Bind(preview,card);preview.SetPresentation(CardPresentationMode.Full,150);return preview;
         }
         public static string DisplayPowerToughness(string typeLine,string power,string toughness)
         {

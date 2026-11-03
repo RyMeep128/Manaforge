@@ -1,4 +1,5 @@
 """Audited engine spelling aliases; never artwork or printing substitutions."""
+
 import unicodedata
 import json
 from pathlib import Path
@@ -11,7 +12,11 @@ def name_key(name):
 
 def identity_hint_key(name):
     """Triage suggestions only. Never use this lossy key to resolve a game card."""
-    return "".join(c for c in unicodedata.normalize("NFKD", name).casefold() if not unicodedata.combining(c) and c.isalnum())
+    return "".join(
+        c
+        for c in unicodedata.normalize("NFKD", name).casefold()
+        if not unicodedata.combining(c) and c.isalnum()
+    )
 
 
 ALIASES = {
@@ -33,8 +38,12 @@ def engine_rule_name(name, oracle_id=None):
 def configured_catalog(data_root):
     state = Path(data_root) / "mtg_core/installation.sqlite3"
     if state.is_file():
-        with sqlite3.connect(state.resolve().as_uri() + "?mode=ro", uri=True) as connection:
-            row = connection.execute("SELECT value FROM settings WHERE key='catalog_path'").fetchone()
+        with sqlite3.connect(
+            state.resolve().as_uri() + "?mode=ro", uri=True
+        ) as connection:
+            row = connection.execute(
+                "SELECT value FROM settings WHERE key='catalog_path'"
+            ).fetchone()
             if row and json.loads(row[0]):
                 return Path(json.loads(row[0]))
     return Path(data_root) / "mtg_core/card_data.sqlite3"
@@ -46,6 +55,7 @@ def canonical_cards(oracle_ids, catalog=None):
         return {}
     if catalog is None:
         from mtg_core.paths import data_root
+
         catalog = configured_catalog(data_root())
     path = Path(catalog).resolve()
     if not path.is_file():
@@ -54,8 +64,12 @@ def canonical_cards(oracle_ids, catalog=None):
     with sqlite3.connect(path.as_uri() + "?mode=ro", uri=True) as connection:
         connection.execute("BEGIN")
         for offset in range(0, len(ids), 900):
-            batch = ids[offset:offset + 900]
-            query = "SELECT oracle_id,name,layout FROM cards_oracle WHERE oracle_id IN (" + ",".join("?" for _ in batch) + ")"
+            batch = ids[offset : offset + 900]
+            query = (
+                "SELECT oracle_id,name,layout FROM cards_oracle WHERE oracle_id IN ("
+                + ",".join("?" for _ in batch)
+                + ")"
+            )
             for identity, name, layout in connection.execute(query, batch):
                 result[identity] = dict(name=name, layout=layout)
     return result

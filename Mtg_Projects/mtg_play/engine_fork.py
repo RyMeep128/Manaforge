@@ -1,4 +1,5 @@
 """Pinned source-build provenance for the optional Manaforge XMage fork."""
+
 from __future__ import annotations
 
 import hashlib
@@ -18,7 +19,9 @@ def validate_toolchain(java_version, maven_version):
 
 
 def git(source, *args):
-    return subprocess.check_output(["git", "-C", str(source), *args], encoding="utf-8").strip()
+    return subprocess.check_output(
+        ["git", "-C", str(source), *args], encoding="utf-8"
+    ).strip()
 
 
 def source_revision(source, expected=None):
@@ -63,13 +66,23 @@ def verify_artifacts(bundle, manifest):
 
 def read_lock(path):
     lock = json.loads(Path(path).read_text(encoding="utf-8"))
-    if lock.get("lock_version") != 1 or not lock.get("fork_commit") or not lock.get("artifacts"):
+    if (
+        lock.get("lock_version") != 1
+        or not lock.get("fork_commit")
+        or not lock.get("artifacts")
+    ):
         raise ValueError("Invalid engine lock")
     revision = lock["fork_commit"]
-    if not isinstance(revision, str) or len(revision) != 40 or any(c not in "0123456789abcdef" for c in revision):
+    if (
+        not isinstance(revision, str)
+        or len(revision) != 40
+        or any(c not in "0123456789abcdef" for c in revision)
+    ):
         raise ValueError("Invalid pinned fork revision")
     identity = lock.get("bundle_id", revision)
-    if not isinstance(identity, str) or not re.fullmatch(re.escape(revision) + r"(?:-[0-9a-f]{12})?", identity):
+    if not isinstance(identity, str) or not re.fullmatch(
+        re.escape(revision) + r"(?:-[0-9a-f]{12})?", identity
+    ):
         raise ValueError("Invalid engine build variant")
     return lock
 
@@ -80,7 +93,11 @@ def selected_bundle(legacy):
     if not approved.is_file():
         return Path(legacy)
     revision = read_lock(approved)["fork_commit"]
-    if not isinstance(revision, str) or len(revision) != 40 or any(c not in "0123456789abcdef" for c in revision):
+    if (
+        not isinstance(revision, str)
+        or len(revision) != 40
+        or any(c not in "0123456789abcdef" for c in revision)
+    ):
         raise ValueError("Invalid pinned fork revision")
     candidate = HERE / ".engines" / read_lock(approved).get("bundle_id", revision)
     if not candidate.is_dir():

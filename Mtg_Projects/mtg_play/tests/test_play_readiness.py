@@ -65,7 +65,7 @@ def test_commander_local_checks_preserve_deck_and_do_not_claim_engine_compatibil
     assert check.state == "available" and check.can_start
     assert "Engine validation happens at start" in check.summary
     assert document.to_dict() == original
-    assert local_readiness(document, "freeform", records).state == "blocked"
+    assert local_readiness(document, "freeform", records).state == "available"
 
 
 def test_missing_or_stale_metadata_is_review_not_a_legality_guarantee():

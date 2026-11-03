@@ -136,7 +136,8 @@ def test_forced_cleanup_when_child_ignores_stdin(children, monkeypatch):
     child = children("import time;print('ready', flush=True);time.sleep(60)")
     # Exercise an already running child, not Windows interpreter startup latency.
     assert child.stdout.readline().strip() == "ready"
-    monkeypatch.setattr(proof, "STOP_TIMEOUT", 0.2)
+    # The 60-second child must be forced; allow Windows time to reap it.
+    monkeypatch.setattr(proof, "STOP_TIMEOUT", 2.0)
     result = proof.stop_process(child, "shutdown")
     assert result["reaped"] and result["forced"]
 

@@ -10,7 +10,14 @@ public final class ManaforgeOpeningProjection {
     private final String session, viewer, engineViewer;
     private final Map<String,CardIdentity> printings=new HashMap<>();
     private final Map<String,String> players=new HashMap<>();
+    private final Map<String,String> stackReferences=new HashMap<>();
     private final Map<String,String> commanderReferences=new HashMap<>();
+    static boolean completePriorityActions(JsonArray offered,Collection<String> projected) {
+        Set<String> expected=new HashSet<>(),actual=new HashSet<>();
+        for(JsonElement value:offered){if(!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isString() || !expected.add(value.getAsString()))return false;}
+        for(String value:projected)if(value!=null)actual.add(value);
+        return expected.equals(actual);
+    }
     public static final class ChoiceException extends IOException {
         public final String code;
         private ChoiceException(String code){super(code);this.code=code;}
@@ -262,8 +269,14 @@ public final class ManaforgeOpeningProjection {
             if(coreCombat)for(JsonElement item:raw.getAsJsonArray("exile")){JsonObject row=item.getAsJsonObject();if(Boolean.FALSE.equals(flag(row,"hidden")) && Boolean.FALSE.equals(flag(row,"face_down")) && row.has("exile_owner")){String owner=row.get("exile_owner").getAsString(),seat=engineViewer.equals(owner)?viewer:players.get(owner);if(seat!=null){exileOwners.put(row,seat);displayed.add(row);}}}
             Set<String> commanderNativeIds=projectCommanders(raw,result);
             Map<String,String> visibleReferences=new HashMap<>();
+            Set<String> currentStackIds=new HashSet<>();
             for(JsonObject row:displayed) {require(cardIds.add(row.get("id").getAsString()));
-                GameObject card=new GameObject();card.object_id=opaque();card.zone=exileOwners.containsKey(row)?"exile":commandOwners.containsKey(row)?"command":stackRows.contains(row)?"stack":handRows.contains(row)?"hand":graveOwners.containsKey(row)?"graveyard":"battlefield";
+                GameObject card=new GameObject();
+                boolean visibleStack=stackRows.contains(row) && Boolean.FALSE.equals(flag(row,"hidden")) && Boolean.FALSE.equals(flag(row,"face_down"));
+                String stackId=row.get("id").getAsString();
+                if(visibleStack){currentStackIds.add(stackId);card.object_id=stackReferences.computeIfAbsent(stackId,ignored->opaque());}
+                else card.object_id=opaque();
+                card.zone=exileOwners.containsKey(row)?"exile":commandOwners.containsKey(row)?"command":stackRows.contains(row)?"stack":handRows.contains(row)?"hand":graveOwners.containsKey(row)?"graveyard":"battlefield";
                 card.controller_id=exileOwners.containsKey(row)?null:commandOwners.containsKey(row)?null:stackRows.contains(row)?row.has("stack_controller") && engineViewer.equals(row.get("stack_controller").getAsString())?viewer:players.get(row.has("stack_controller")?row.get("stack_controller").getAsString():null):handRows.contains(row)?viewer:graveOwners.containsKey(row)?graveOwners.get(row):seatNames.get(text(row,"controller_name"));
                 String ownerName=text(row,"owner_name");card.owner_id=exileOwners.containsKey(row)?exileOwners.get(row):commandOwners.containsKey(row)?commandOwners.get(row):stackRows.contains(row)?row.has("stack_owner") && engineViewer.equals(row.get("stack_owner").getAsString())?viewer:players.get(row.has("stack_owner")?row.get("stack_owner").getAsString():null):handRows.contains(row)?viewer:graveOwners.containsKey(row)?graveOwners.get(row):ownerName==null || ownerName.isEmpty()?card.controller_id:seatNames.get(ownerName);
                 require(exileOwners.containsKey(row) && card.owner_id!=null || stackRows.contains(row) || commandOwners.containsKey(row) && card.owner_id!=null || card.controller_id!=null && card.owner_id!=null);
@@ -287,6 +300,7 @@ public final class ManaforgeOpeningProjection {
                 if(coreCombat && "battlefield".equals(card.zone) && !card.hidden && Boolean.FALSE.equals(card.face_down) && card.characteristics!=null && card.characteristics.type_line!=null && (card.characteristics.type_line.contains("Planeswalker") || card.characteristics.type_line.contains("Battle"))){require(knownCombatDefenders.contains(row.get("id").getAsString()) || knownCombatDefenders.size()<256);knownCombatDefenders.add(row.get("id").getAsString());}
                 cards.add(card);
             }
+            stackReferences.keySet().retainAll(currentStackIds);
             result.objects=cards.toArray(new GameObject[0]);List<LegalAction> actions=new ArrayList<>();Map<String,String> offeredNative=new HashMap<>();
             if(discard) {
                 JsonArray targets=prompt.getAsJsonArray("targets");require(targets.size()>0 && targets.size()<=256);Set<String> unique=new HashSet<>();
@@ -324,7 +338,13 @@ public final class ManaforgeOpeningProjection {
                 actions.add(pass);offeredNative.put(pass.action_id,null);
             }
             if(coreCombat && Boolean.TRUE.equals(flag(prompt,"cancellable")) && Arrays.asList("GAME_PLAY_MANA","GAME_CHOOSE_CHOICE","GAME_GET_MULTI_AMOUNT").contains(text(prompt,"kind"))){LegalAction cancel=new LegalAction();cancel.action_id=opaque();cancel.kind="pass";cancel.label="Cancel choice";cancel.priority_class="meaningful";actions.add(cancel);offeredNative.put(cancel.action_id,null);}
-            result.actions=actions.toArray(new LegalAction[0]);result.actions_complete=false;
+            result.actions=actions.toArray(new LegalAction[0]);
+            // An empty rendered list alone never proves absence of responses.
+            // Certify only the complete engine list, with every entry projected.
+            result.actions_complete=priority && includePriorityPass && !omitStack
+                && Boolean.TRUE.equals(flag(raw,"playable_information_complete"))
+                && raw.has("playable") && raw.get("playable").isJsonArray()
+                && completePriorityActions(raw.getAsJsonArray("playable"),offeredNative.values());
             ChoiceRequest choice=new ChoiceRequest();choice.decision_id=opaque();choice.player_id=viewer;choice.family=priority || ability || attackFinish || discard || targeting || stringChoice || mana?"selection":"boolean";
             choice.prompt=text(prompt,"message");if(coreCombat && choice.prompt==null)choice.prompt=numeric?("GAME_GET_AMOUNT".equals(text(prompt,"kind"))?"Choose a number":"Choose amounts"):"Choose a response";choice.cancellable=false;choice.can_finish=false;choice.is_priority=priority;choice.amounts=new AmountConstraint[0];
             Map<String,String> offeredOptions=new HashMap<>();
@@ -333,7 +353,7 @@ public final class ManaforgeOpeningProjection {
                 if("amounts".equals(choice.family)){JsonArray amounts=prompt.getAsJsonArray("amounts");require(amounts.size()>0 && amounts.size()<=256);for(JsonElement item:amounts){JsonObject row=item.getAsJsonObject();AmountConstraint range=new AmountConstraint();range.label=text(row,"message");if(range.label!=null)range.label=range.label.replaceAll("<[^>]*>","").replaceAll("\\s*\\[[0-9a-fA-F]{3}\\]","");range.minimum=integer(row,"min");range.maximum=integer(row,"max");range.defaultValue=integer(row,"default");require(range.label!=null && range.minimum!=null && range.maximum!=null && range.defaultValue!=null && range.minimum>=Integer.MIN_VALUE && range.maximum<=Integer.MAX_VALUE && range.minimum<=range.maximum && range.defaultValue>=range.minimum && range.defaultValue<=range.maximum);ranges.add(range);}}choice.amounts=ranges.toArray(new AmountConstraint[0]);
             } else if(stringChoice) {
                 Map<String,String> offered=new LinkedHashMap<>();if(prompt.has("key_choices") && prompt.get("key_choices").isJsonObject())for(Map.Entry<String,JsonElement> entry:prompt.getAsJsonObject("key_choices").entrySet()){JsonObject label=new JsonObject();label.add("value",entry.getValue());offered.put(entry.getKey(),text(label,"value"));}
-                if(offered.isEmpty() && prompt.has("choices") && prompt.get("choices").isJsonArray())for(JsonElement item:prompt.getAsJsonArray("choices")){JsonObject label=new JsonObject();label.add("value",item);String value=text(label,"value");require(!offered.containsKey(value));offered.put(value,value);}require(offered.size()>0 && offered.size()<=256);List<ChoiceOption> entries=new ArrayList<>();for(Map.Entry<String,String> entry:offered.entrySet()){require(entry.getValue()!=null);ChoiceOption option=new ChoiceOption();option.option_id=opaque();option.label=entry.getValue();option.selected=false;entries.add(option);offeredOptions.put(option.option_id,entry.getKey());stringOptions.add(option.option_id);}choice.options=entries.toArray(new ChoiceOption[0]);
+                if(offered.isEmpty() && prompt.has("choices") && prompt.get("choices").isJsonArray())for(JsonElement item:prompt.getAsJsonArray("choices")){JsonObject label=new JsonObject();label.add("value",item);String value=text(label,"value");require(!offered.containsKey(value));offered.put(value,value);}require(offered.size()>0 && offered.size()<=256);List<ChoiceOption> entries=new ArrayList<>();for(Map.Entry<String,String> entry:offered.entrySet()){require(entry.getValue()!=null);ChoiceOption option=new ChoiceOption();option.option_id=opaque();option.label=entry.getValue();option.object_id=visibleReferences.get(entry.getKey());option.selected=false;entries.add(option);offeredOptions.put(option.option_id,entry.getKey());stringOptions.add(option.option_id);}choice.options=entries.toArray(new ChoiceOption[0]);
             } else if(targeting) {
                 JsonArray targets=prompt.getAsJsonArray("targets");require(targets.size()>0 && targets.size()<=256);Set<String> unique=new HashSet<>();List<ChoiceOption> entries=new ArrayList<>();
                 for(JsonElement item:targets){require(item.isJsonPrimitive() && item.getAsJsonPrimitive().isString() && unique.add(item.getAsString()));String id=item.getAsString();GameObject card=null;for(GameObject object:cards)if(object.object_id.equals(visibleReferences.get(id)))card=object;String label=null;if(engineViewer.equals(id))label="You";else if(players.containsKey(id)){for(PlayerView seat:seats)if(seat.player_id.equals(players.get(id)))label=seat.name;}else if(card!=null && !card.hidden && Boolean.FALSE.equals(card.face_down) && card.characteristics!=null)label=card.characteristics.name;if(label==null && prompt.has("cards") && prompt.get("cards").isJsonArray()){require(prompt.getAsJsonArray("cards").size()<=256);for(JsonElement offered:prompt.getAsJsonArray("cards")){JsonObject value=offered.getAsJsonObject();if(id.equals(value.get("id").getAsString()) && Boolean.FALSE.equals(flag(value,"hidden")) && Boolean.FALSE.equals(flag(value,"face_down"))){require(label==null);label=text(value,"name");}}}require(label!=null);ChoiceOption option=new ChoiceOption();option.option_id=opaque();option.label=label;if(card!=null){option.object_id=card.object_id;if(Boolean.getBoolean("manaforge.liveGame") && card.controller_id!=null)option.label+=" ("+(viewer.equals(card.controller_id)?"you":"opponent")+")";}else if(engineViewer.equals(id) || players.containsKey(id))option.player_id=engineViewer.equals(id)?viewer:players.get(id);option.selected=false;entries.add(option);offeredOptions.put(option.option_id,id);}
@@ -386,6 +406,7 @@ public final class ManaforgeOpeningProjection {
             if(coreCombat && cards.stream().anyMatch(card->"stack".equals(card.zone) && (card.controller_id==null || card.owner_id==null))){List<String> unsupported=new ArrayList<>(Arrays.asList(result.unsupported_fields));unsupported.add("stack_ownership");result.unsupported_fields=unsupported.toArray(new String[0]);}
             if(missingCombatant){List<String> unsupported=new ArrayList<>(Arrays.asList(result.unsupported_fields));unsupported.add("combat_lki");result.unsupported_fields=unsupported.toArray(new String[0]);}
             if(missingDefender){List<String> unsupported=new ArrayList<>(Arrays.asList(result.unsupported_fields));unsupported.add("combat_defender_lki");result.unsupported_fields=unsupported.toArray(new String[0]);}
+            if(result.actions_complete){List<String> unsupported=new ArrayList<>(Arrays.asList(result.unsupported_fields));unsupported.remove("actions");result.unsupported_fields=unsupported.toArray(new String[0]);}
             if(result.commanders!=null){List<String> unsupported=new ArrayList<>(Arrays.asList(result.unsupported_fields));unsupported.remove("commander_metadata");result.unsupported_fields=unsupported.toArray(new String[0]);}
             if(coreCombat && seats.stream().allMatch(seat->seat.mana!=null)){List<String> unsupported=new ArrayList<>(Arrays.asList(result.unsupported_fields));unsupported.remove("mana");result.unsupported_fields=unsupported.toArray(new String[0]);}
             if(coreCombat && exileOwners.size()!=raw.getAsJsonArray("exile").size()){List<String> unsupported=new ArrayList<>(Arrays.asList(result.unsupported_fields));unsupported.add("exile");result.unsupported_fields=unsupported.toArray(new String[0]);}
