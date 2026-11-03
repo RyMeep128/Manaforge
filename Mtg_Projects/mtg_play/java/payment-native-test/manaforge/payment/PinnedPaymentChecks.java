@@ -20,6 +20,33 @@ import mage.constants.RangeOfInfluence;
 public final class PinnedPaymentChecks {
     private static int checks;
     private static void check(boolean value){checks++;if(!value)throw new AssertionError("PINNED_PAYMENT_CHECK_"+checks);}
+    private static boolean[] priorityStops(UserData preferences) {
+        java.util.List<Boolean> values=new java.util.ArrayList<>();
+        for (mage.players.net.SkipPrioritySteps steps : new mage.players.net.SkipPrioritySteps[] {
+                preferences.getUserSkipPrioritySteps().getYourTurn(),
+                preferences.getUserSkipPrioritySteps().getOpponentTurn()}) {
+            for(boolean value:new boolean[]{steps.isUpkeep(),steps.isDraw(),steps.isMain1(),
+                    steps.isBeforeCombat(),steps.isEndOfCombat(),steps.isMain2(),steps.isEndOfTurn()})values.add(value);
+        }
+        boolean[] result=new boolean[values.size()];for(int i=0;i<result.length;i++)result[i]=values.get(i);return result;
+    }
+    private static void priorityScopeChecks() throws Exception {
+        String original=System.getProperty("manaforge.liveGame");
+        java.lang.reflect.Method configure=Class.forName("ManaforgeBridge").getDeclaredMethod("configurePriorityStops",UserData.class);
+        configure.setAccessible(true);
+        try {
+            UserData preferences=UserData.getDefaultUserDataView();boolean[] expected=priorityStops(preferences);
+            for(String mode:new String[]{null,"false"}) {
+                if(mode==null)System.clearProperty("manaforge.liveGame");else System.setProperty("manaforge.liveGame",mode);
+                configure.invoke(null,preferences);boolean[] actual=priorityStops(preferences);
+                for(int i=0;i<expected.length;i++)check(actual[i]==expected[i]);
+            }
+            System.setProperty("manaforge.liveGame","true");configure.invoke(null,preferences);
+            for(boolean value:priorityStops(preferences))check(value);
+        } finally {
+            if(original==null)System.clearProperty("manaforge.liveGame");else System.setProperty("manaforge.liveGame",original);
+        }
+    }
     private static void sourceScopeChecks(ContextHumanPlayer player) throws Exception {
         UUID source=UUID.randomUUID();UUID[] controller={player.getId()};boolean[] present={true};
         mage.game.permanent.Permanent permanent=(mage.game.permanent.Permanent)java.lang.reflect.Proxy.newProxyInstance(
@@ -246,6 +273,7 @@ public final class PinnedPaymentChecks {
         payment.set(player,null);open.set(player,false);player.setPayManaMode(false);
     }
     public static void main(String[] args) throws Exception {
+        priorityScopeChecks();
         ContextHumanPlayer observed=new ContextHumanPlayer("Public fixture",RangeOfInfluence.ALL,0);
         ContextHumanPlayer copied=observed.copy();
         check(copied.getClass()==ContextHumanPlayer.class);check(copied.getId().equals(observed.getId()));

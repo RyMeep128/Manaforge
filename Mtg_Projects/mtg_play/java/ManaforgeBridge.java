@@ -31,6 +31,19 @@ public final class ManaforgeBridge implements MageClient {
     public ManaforgeBridge() { this(null); }
     ManaforgeBridge(java.util.function.Consumer<JsonObject> eventSink) { this.eventSink = eventSink; }
 
+    // Saved-deck Unity games own phase stops. Adapter and diagnostic games keep
+    // their existing defaults so exact transition proofs do not gain extra stops.
+    static void configurePriorityStops(UserData preferences) {
+        if (!Boolean.getBoolean("manaforge.liveGame")) return;
+        for (mage.players.net.SkipPrioritySteps steps : new mage.players.net.SkipPrioritySteps[] {
+                preferences.getUserSkipPrioritySteps().getYourTurn(),
+                preferences.getUserSkipPrioritySteps().getOpponentTurn()}) {
+            steps.setUpkeep(true);steps.setDraw(true);steps.setMain1(true);
+            steps.setBeforeCombat(true);steps.setEndOfCombat(true);
+            steps.setMain2(true);steps.setEndOfTurn(true);
+        }
+    }
+
     private volatile UUID gameId,viewerId;
     private volatile int decisionId = -1;
     private volatile String decisionMethod;
@@ -421,15 +434,7 @@ public final class ManaforgeBridge implements MageClient {
                 String paymentMode=command.has("payment_mode")?requiredString(command,"payment_mode"):System.getProperty("manaforge.paymentMode");if(paymentMode!=null){if(!java.util.Arrays.asList("AUTO","MANUAL","FULL_CONTROL").contains(paymentMode))throw new IllegalArgumentException("PAYMENT_MODE_INVALID");preferences.setManaPoolAutomatic(paymentMode.equals("AUTO"));preferences.setManaPoolAutomaticRestricted(paymentMode.equals("AUTO"));}
                 preferences.setPassPriorityCast(false);
                 preferences.setPassPriorityActivation(false);
-                // Unity owns phase stops and manual control; do not let the
-                // engine's desktop defaults skip a step before Unity sees it.
-                for (mage.players.net.SkipPrioritySteps steps : new mage.players.net.SkipPrioritySteps[] {
-                        preferences.getUserSkipPrioritySteps().getYourTurn(),
-                        preferences.getUserSkipPrioritySteps().getOpponentTurn()}) {
-                    steps.setUpkeep(true);steps.setDraw(true);steps.setMain1(true);
-                    steps.setBeforeCombat(true);steps.setEndOfCombat(true);
-                    steps.setMain2(true);steps.setEndOfTurn(true);
-                }
+                configurePriorityStops(preferences);
                 preferences.setAutoOrderTrigger(false);
                 preferences.setAutoTargetLevel(0);
                 connection.setUserData(preferences);

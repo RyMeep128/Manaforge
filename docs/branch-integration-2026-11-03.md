@@ -45,7 +45,7 @@ cleanup and bootstrap deadlines are unchanged.
   Java/Unity decision fixture: passed.
 - Real stock-XMage first-land probe: passed with authenticated input and cleanup.
 
-## Known unfinished acceptance
+## Unfinished acceptance at the merge checkpoint
 
 The real-engine combat probe with `--first-creature --native-metadata
 --select-attacker --finish-selected-attack --declared-priority --combat-damage
@@ -58,5 +58,20 @@ The native trace reaches the combat-cleanup check. The interaction with the newl
 enabled priority stops needs investigation; this cause is not yet established.
 Complete saved-deck/fork matches and owner visual acceptance remain unfinished.
 
-This integration is local only. No push, tag, release, installation or publication
-is part of this checkpoint.
+The merge was prepared locally without a tag, release or installation. It was
+later pushed at the owner's request.
+
+## CI follow-up — 0.6.1-alpha.1
+
+Required live-opening CI reproduced `LIVE_COMBAT_CLEANUP_UNPROVEN`. Unity's new
+priority preferences had also been applied to adapter/diagnostic games, adding
+an end-of-combat priority stop to the existing one-pass cleanup proof.
+`ManaforgeBridge` now applies the all-steps preference only when
+`manaforge.liveGame=true`, as set by the saved-deck Unity entrypoint. Adapter and
+diagnostic preferences retain their native defaults; the cleanup evidence
+requirements remain unchanged.
+
+The real cleanup/next-turn/repeated-combat probe now passes. Pinned native tests
+verify all 14 stop settings with the live-game flag absent, false and true;
+197 native object checks pass. Complete saved-deck/fork matches and owner review
+remain separate acceptance work.
