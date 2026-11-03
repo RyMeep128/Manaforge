@@ -8,7 +8,7 @@ using UnityEngine;
 
 namespace Manaforge.Play
 {
-    // Main-thread presentation of explicit engine choices. No receive-queue ownership or automatic play.
+    // Main-thread presentation and priority scheduling. All commands use the current authenticated offer.
     public sealed class ViewerDecisionPanel : IDisposable
     {
         public const int PageSize=16;
@@ -22,7 +22,22 @@ namespace Manaforge.Play
         private readonly VisualElement pages=new VisualElement{name="decision-pages"};
         private string[] numericText;private int numericPage;private Button numericSubmit;
         private TrackedCommand submitted;
+        private float autoAfter=-1;
+        private bool priorityEnabled;
+        private readonly System.Collections.Generic.List<Task<TrackedCommand>> priorityTasks=new System.Collections.Generic.List<Task<TrackedCommand>>();
+        private readonly System.Collections.Generic.List<TrackedCommand> priorityReceipts=new System.Collections.Generic.List<TrackedCommand>();
+        public void EnablePriority(){ThreadOnly();priorityEnabled=true;}
+        public UnityPriorityPolicy Priority {get;}=new UnityPriorityPolicy();
+        public bool PriorityControlsOpen {get;set;}
+        public ProjectedDecisionFrame PriorityFrame=>offer?.Frame;
+        public void PrioritySettingsChanged(){ThreadOnly();autoAfter=-1;}
         private bool spatialPresentation;private Foldout cardChoices;
+        private Func<string,CardView> choicePreview;
+        public bool IsLibraryOrdering {get;private set;}
+        public void SetChoicePreview(Func<string,CardView> preview){ThreadOnly();choicePreview=preview;}
+        public static bool LibraryOrdering(string prompt)
+            =>!string.IsNullOrEmpty(prompt) && prompt.IndexOf("order",StringComparison.OrdinalIgnoreCase)>=0
+                && prompt.IndexOf("library",StringComparison.OrdinalIgnoreCase)>=0;
         private ViewerDecisionOffer offer;private int page;private bool disposed;private Task<TrackedCommand> pending;
         public ViewerDecisionPanel(VisualElement parent,ViewerSessionHost host)
         {
@@ -35,30 +50,60 @@ namespace Manaforge.Play
         private void ThreadOnly(){if(Thread.CurrentThread.ManagedThreadId!=thread)throw new InvalidOperationException("VIEWER_DECISION_THREAD");}
         private void Clear()
         {
-            manaInput.Refresh(null);offer=null;submitted=null;page=0;numericText=null;numericPage=0;numericSubmit=null;prompt.text="";manaPool.text="";status.text="";controls.Clear();pages.Clear();cardChoices=null;Root.style.display=DisplayStyle.None;
+            autoAfter=-1;IsLibraryOrdering=false;manaInput.Refresh(null);offer=null;submitted=null;page=0;numericText=null;numericPage=0;numericSubmit=null;prompt.text="";manaPool.text="";status.text="";controls.Clear();pages.Clear();cardChoices=null;Root.style.display=DisplayStyle.None;
             // Observe a retired task without carrying its result or touching UI from its worker.
             if(pending!=null)pending.ContinueWith(task=>{_=task.Exception;},TaskScheduler.Default);pending=null;
         }
+        private void MonitorPriorityCommands()
+        {
+            for(int i=priorityTasks.Count-1;i>=0;i--){
+                var task=priorityTasks[i];if(!task.IsCompleted)continue;
+                if(task.Status==TaskStatus.RanToCompletion && task.Result!=null)priorityReceipts.Add(task.Result);
+                else{_=task.Exception;Priority.Failed();}
+                priorityTasks.RemoveAt(i);
+            }
+            for(int i=priorityReceipts.Count-1;i>=0;i--){
+                var receipt=host.CommandOutcome(priorityReceipts[i]);
+                if(receipt==null || receipt.State==CommandState.AwaitingAck || receipt.State==CommandState.Submitted)continue;
+                if(receipt.State==CommandState.Rejected || receipt.State==CommandState.Uncertain)Priority.Failed();
+                priorityReceipts.RemoveAt(i);
+            }
+        }
         public void Tick()
         {
-            ThreadOnly();if(disposed)return;var current=host.PresentedDecision;
+            ThreadOnly();if(disposed)return;if(priorityEnabled)MonitorPriorityCommands();var current=host.PresentedDecision;
             if(!ReferenceEquals(current,offer)){Clear();offer=current;if(offer!=null)Build();}
+            if(host.Completion.IsCompleted){Priority.Suspend();autoAfter=-1;}
+            Priority.Observe(offer?.Frame);
             manaInput.Refresh(offer);if(offer==null)return;
             if(pending!=null && pending.IsCompleted){
                 if(pending.Status==TaskStatus.RanToCompletion)submitted=pending.Result;
+                else Priority.Failed();
                 var error=pending.Exception?.GetBaseException() as WireEnvelope.EnvelopeException;
                 status.text=error?.Code=="AMOUNT_OUT_OF_RANGE"?"Enter values within the displayed limits.":error?.Code=="SESSION_NUMERIC_UNAVAILABLE"?"Numeric limits are unavailable. Wait for gateway state.":pending.IsCanceled || pending.IsFaulted?"Command was not confirmed. Check the current decision.":"Command sent. Waiting for gateway state.";pending=null;
             }
             var feedback=host.CommandFeedback(offer,submitted);
-            if(feedback!=null)status.text=FeedbackText(feedback.State);
+            if(feedback!=null){
+                status.text=FeedbackText(feedback.State);
+                if(feedback.State==CommandState.Rejected || feedback.State==CommandState.Uncertain)Priority.Failed();
+            }
             controls.SetEnabled(offer.CanSubmit && pending==null);manaInput.SetEnabled(offer.CanSubmit && pending==null);
             numericSubmit?.SetEnabled(TryNumbers(out _,false));
             if(!offer.CanSubmit && pending==null && string.IsNullOrEmpty(status.text))status.text="Waiting for gateway state.";
+            var automatic=priorityEnabled?Priority.Evaluate(offer.Frame):null;
+            if(automatic==null || pending!=null || !offer.CanSubmit || PriorityControlsOpen){autoAfter=-1;return;}
+            if(autoAfter<0){autoAfter=Time.unscaledTime+.35f;return;}
+            if(Time.unscaledTime>=autoAfter){
+                var captured=offer;autoAfter=-1;
+                if(ReferenceEquals(host.PresentedDecision,captured) && Priority.Claim(captured.Frame))
+                    Send(captured,()=>host.PerformAsync(captured,automatic),true);
+            }
         }
-        private bool Send(ViewerDecisionOffer captured,Func<Task<TrackedCommand>> submit)
+        private bool Send(ViewerDecisionOffer captured,Func<Task<TrackedCommand>> submit,bool automatic=false)
         {
             ThreadOnly();if(disposed || pending!=null || !ReferenceEquals(offer,captured) || !ReferenceEquals(host.PresentedDecision,captured) || !captured.CanSubmit)return false;
-            submitted=null;pending=submit();status.text="Sending command...";controls.SetEnabled(false);manaInput.SetEnabled(false);return true;
+            autoAfter=-1;if(!automatic)Priority.CancelYield();
+            submitted=null;pending=submit();if(priorityEnabled)priorityTasks.Add(pending);status.text="Sending command...";controls.SetEnabled(false);manaInput.SetEnabled(false);return true;
         }
         // Spatial input uses the same current offer, pending task and command feedback as buttons.
         public int ObjectChoiceCount(ViewerDecisionOffer captured,string objectId)
@@ -92,7 +137,7 @@ namespace Manaforge.Play
         }
         private void AddChoice(Button button,bool boundToBoard)
         {
-            if(!spatialPresentation || !boundToBoard){controls.Add(button);return;}
+            if(IsLibraryOrdering || !spatialPresentation || !boundToBoard){controls.Add(button);return;}
             if(cardChoices==null){cardChoices=new Foldout{text="Card and player choices",value=false,name="board-choice-alternatives"};cardChoices.style.width=Length.Percent(100);controls.Add(cardChoices);}
             cardChoices.Add(button);
         }
@@ -112,10 +157,25 @@ namespace Manaforge.Play
         {
             var captured=offer;var frame=captured?.Frame;if(frame==null){Clear();return;}
             var floating=frame.ViewerMana==null?"":string.Join(", ",System.Linq.Enumerable.Select(System.Linq.Enumerable.Where(frame.ViewerMana,pair=>pair.Value>0),pair=>pair.Key+" "+pair.Value));manaPool.text=string.IsNullOrEmpty(floating)?"":"Floating mana: "+floating;manaPool.style.display=string.IsNullOrEmpty(floating)?DisplayStyle.None:DisplayStyle.Flex;prompt.text=OpeningHandFan.PlainPrompt(frame.Decision.Prompt??"Choose an action");Root.style.display=DisplayStyle.Flex;controls.Clear();pages.Clear();numericSubmit=null;cardChoices=null;
+            IsLibraryOrdering=LibraryOrdering(prompt.text);
+            Root.EnableInClassList("library-ordering",IsLibraryOrdering);
+            if(IsLibraryOrdering){
+                var instructions=NumericLabel("Choose cards one at a time in the requested order. Follow the engine prompt for which end will be topmost.");
+                instructions.name="library-order-help";controls.Add(instructions);
+            }
             int total=frame.Actions.Count+frame.Decision.Options.Count;int start=page*PageSize,end=Math.Min(total,start+PageSize);
             for(int i=start;i<end;i++) {
                 if(i<frame.Actions.Count){var action=frame.Actions[i];AddChoice(Button("decision-action-"+i,action.Label,()=>Send(captured,()=>host.PerformAsync(captured,action))),action.ObjectId!=null);}
-                else {var option=frame.Decision.Options[i-frame.Actions.Count];AddChoice(Button("decision-option-"+(i-frame.Actions.Count),(option.Selected?"Selected: ":"")+option.Label,()=>Send(captured,()=>host.ChooseAsync(captured,option))),option.ObjectId!=null || option.PlayerId!=null);}
+                else {
+                    var option=frame.Decision.Options[i-frame.Actions.Count];
+                    var button=Button("decision-option-"+(i-frame.Actions.Count),(option.Selected?"Selected: ":"")+OpeningHandFan.PlainPrompt(option.Label??"Choose card"),()=>Send(captured,()=>host.ChooseAsync(captured,option)));
+                    if(IsLibraryOrdering){
+                        var tile=new VisualElement{name="library-choice"};
+                        var preview=option.ObjectId==null?null:choicePreview?.Invoke(option.ObjectId);
+                        if(preview!=null){preview.pickingMode=PickingMode.Ignore;tile.Add(preview);}
+                        tile.Add(button);controls.Add(tile);
+                    }else AddChoice(button,option.ObjectId!=null || option.PlayerId!=null);
+                }
             }
             // In the spatial view, pass/finish/cancel actions remain available even when
             // card alternatives occupy a different page. Keep the engine's exact index/token.
@@ -186,6 +246,6 @@ namespace Manaforge.Play
             if(disposed || !ReferenceEquals(offer,captured) || !ReferenceEquals(host.PresentedDecision,captured))return;
             var frame=captured.Frame;if(frame==null)return;int last=Math.Max(0,(frame.Actions.Count+frame.Decision.Options.Count-1)/PageSize);page=Math.Max(0,Math.Min(last,page+delta));Build();
         }
-        public void Dispose(){ThreadOnly();if(disposed)return;disposed=true;manaInput.Dispose();Clear();prompt.RemoveFromHierarchy();Root.RemoveFromHierarchy();}
+        public void Dispose(){ThreadOnly();if(disposed)return;disposed=true;Priority.Suspend();priorityTasks.Clear();priorityReceipts.Clear();manaInput.Dispose();Clear();prompt.RemoveFromHierarchy();Root.RemoveFromHierarchy();}
     }
 }

@@ -37,7 +37,22 @@ class PreparedDeck:
     bindings: dict[tuple[str, str], CardIdentity]
 
 
+def document_for_format(document, *, commander):
+    """Match-only projection: commanders become ordinary cards outside Commander."""
+    if commander:
+        return document
+    from copy import deepcopy
+
+    projected = deepcopy(document)
+    projected.deck.commander_entry_ids = []
+    for entry in projected.deck.entries:
+        if entry.section == "commander":
+            entry.section = "mainboard"
+    return projected
+
+
 def _deck_queries(document, oracle_lookup=None, *, commander=False, resolve_names=True):
+    document = document_for_format(document, commander=commander)
     issues = []
     queries = []
     entries = []
@@ -97,7 +112,7 @@ def deck_document_issues(document, *, commander=False):
     entries, _, issues = _deck_queries(
         document, commander=commander, resolve_names=False
     )
-    commander_ids = set(document.deck.commander_entry_ids)
+    commander_ids = set(document.deck.commander_entry_ids) if commander else set()
     if not issues and not any(
         entry.section == "mainboard" and entry.entry_id not in commander_ids
         for entry in entries
@@ -113,6 +128,7 @@ def prepare_deck(
     *,
     commander: bool = False,
 ) -> PreparedDeck:
+    document = document_for_format(document, commander=commander)
     entries, queries, issues = _deck_queries(
         document, oracle_lookup, commander=commander
     )

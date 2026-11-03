@@ -196,3 +196,32 @@ def test_commander_launch_preserves_paired_designations_and_rejects_companions()
     document.deck.extras["companion_entry_id"] = "companion"
     with pytest.raises(LiveGameError, match="SETUP_UNSUPPORTED"):
         project_launch(setup, {"human": document, "ai": document}, "test-alpha.1")
+
+
+def test_freeform_commander_projection_preserves_saved_deck_and_includes_ordinary_cards():
+    from mtg_play.decks import document_for_format, prepare_deck
+    from mtg_play.readiness import local_readiness
+    setup = GameSetup((MatchSeat('human', 'Human'), MatchSeat('ai', 'AI', 'engine_ai')), 'freeform')
+    document = native_deck(True)
+    document.deck.extras.pop('companion_entry_id', None)
+    document.deck.entries = [entry for entry in document.deck.entries if entry.entry_id != 'companion']
+    for entry in document.deck.entries:
+        if entry.section not in ('considering', 'excluded'):
+            entry.name = entry.entry_id.title()
+            entry.oracle_id = None
+            entry.set_code = 'TST'
+            entry.collector_number = entry.entry_id
+    before = document.to_dict()
+    projected = document_for_format(document, commander=False)
+    assert projected.deck.commander_entry_ids == []
+    assert all(entry.section != 'commander' for entry in projected.deck.entries)
+    assert local_readiness(document, 'freeform').can_start
+    value = json.loads(project_launch(setup, {'human': document, 'ai': document}, '0.5.217-alpha.1'))
+    assert value['seats'][0]['document']['deck']['commander_entry_ids'] == []
+    assert any(entry['entry_id'] == 'commander' and entry['section'] == 'mainboard'
+               for entry in value['seats'][0]['document']['deck']['entries'])
+    def resolve(queries):
+        return [dict(query, set=query['set'] or 'TST', number=query['number'] or query['key']) for query in queries]
+    prepared = prepare_deck(document, resolve)
+    assert not prepared.sideboard
+    assert document.to_dict() == before

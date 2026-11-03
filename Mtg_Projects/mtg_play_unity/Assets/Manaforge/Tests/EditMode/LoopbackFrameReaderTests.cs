@@ -35,6 +35,25 @@ namespace Manaforge.Play.Tests
             var error=Assert.Throws<TextFrame.FrameException>(()=>read());
             Assert.That(error.Message,Is.EqualTo(error.Code));return error.Code;
         }
+        [Test] public void AuthenticatedIdleWaitDoesNotSpendFrameBudget()
+        {
+            using var pair=new Pair();var read=Task.Run(()=>pair.Reader.ReadWhenAvailable(100));
+            Thread.Sleep(240);Assert.That(read.IsCompleted,Is.False);Assert.That(pair.Reader.IsClosed,Is.False);
+            TextFrame.Write(pair.Sender.GetStream(),"after-thinking");
+            Assert.That(read.Wait(2000),Is.True);Assert.That(read.Result,Is.EqualTo("after-thinking"));
+        }
+        [Test] public void AuthenticatedPartialFrameStillTimesOut()
+        {
+            using var pair=new Pair();var read=Task.Run(()=>Failure(()=>pair.Reader.ReadWhenAvailable(100)));
+            Thread.Sleep(180);pair.Send(new byte[]{0,0});Assert.That(read.Wait(2000),Is.True);
+            Assert.That(read.Result,Is.EqualTo("FRAME_TIMEOUT"));Assert.That(pair.Reader.IsClosed,Is.True);
+        }
+        [Test] public void AuthenticatedIdleWaitRemainsCancellable()
+        {
+            using var pair=new Pair();using var stop=new CancellationTokenSource();
+            var read=Task.Run(()=>Failure(()=>pair.Reader.ReadWhenAvailable(100,stop.Token)));
+            Thread.Sleep(180);stop.Cancel();Assert.That(read.Wait(2000),Is.True);Assert.That(read.Result,Is.EqualTo("FRAME_CANCELLED"));
+        }
         [Test] public void CompleteFramesAndBetweenFrameEofRemainDistinct()
         {
             using var pair=new Pair();TextFrame.Write(pair.Sender.GetStream(),"one");TextFrame.Write(pair.Sender.GetStream(),"two");

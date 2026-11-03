@@ -103,7 +103,7 @@ namespace Manaforge.Play.Tests
             var ticket=surface.BeginViewer("fixture-0001","one");yield return null;yield return null;yield return null;
             Assert.That(surface.TryPresent(ticket,Frame(name:"First")),Is.True);var view=surface.CardsRoot.Q<CardView>();
             Assert.That(view.Q<Label>("stats").text,Is.EqualTo("4/5"));Assert.That(view.Identity,Is.Null);Assert.That(view.Artwork,Is.Null);
-            Assert.That(surface.Inspect(ticket,"fixture-0002"),Is.True);Assert.That(surface.InspectionView.Q<Label>("rules").text,Is.Empty);
+            Assert.That(surface.Inspect(ticket,"fixture-0002"),Is.True);Assert.That(surface.InspectionView.Q<Label>("rules").text,Is.EqualTo("Not complete Oracle text"));
             Assert.That(surface.TryPresent(ticket,Frame(revision:2,name:"Changed")),Is.True);
             Assert.That(surface.CardsRoot.Q<CardView>(),Is.SameAs(view));Assert.That(view.Q<Label>("name").text,Is.EqualTo("Changed"));
             Assert.That(surface.InspectionView.Q<Label>("name").text,Is.Empty);

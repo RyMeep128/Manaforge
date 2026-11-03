@@ -133,7 +133,7 @@ namespace Manaforge.Play.Protocol
             lock(gate)Open();
             try
             {
-                string text=transport.Read(milliseconds,cancellation);
+                string text=transport.ReadWhenAvailable(milliseconds,cancellation);
                 lock(gate)
                 {
                     Open();if(text==null){Stop("SESSION_EOF");return new ClientReceive("eof");}

@@ -110,7 +110,8 @@ class MatchLobby:
         if any(seat.deck is None for seat in self.seats):
             raise ValueError("Choose a deck for each seat before starting.")
         # SessionController copies these on its worker before engine submission.
-        return tuple(seat.deck.document for seat in self.seats)
+        from .decks import document_for_format
+        return tuple(document_for_format(seat.deck.document, commander=self.format == "commander") for seat in self.seats)
 
 
 def offline_lobby(*, format="freeform", seat_ids=("one", "two")):

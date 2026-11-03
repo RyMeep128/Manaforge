@@ -11,7 +11,7 @@ import uuid
 from mtg_core.decks import DECK_SCHEMA_VERSION, Deck, DeckDocument, DeckEntry
 
 from .contracts import ADAPTER_VERSION, GAME_PROTOCOL_VERSION, GameSetup, MatchSeat
-from .decks import deck_document_issues
+from .decks import deck_document_issues, document_for_format
 from .gateway_bootstrap import MAX_GATEWAY_BOOTSTRAP_BYTES as MAX_MANIFEST_BYTES
 
 LAUNCH_MANIFEST_VERSION = 1
@@ -55,6 +55,7 @@ def _project_deck(document, *, commander):
         or document.schema_version != DECK_SCHEMA_VERSION
     ):
         raise LaunchManifestError("INCOMPATIBLE_DECK_SCHEMA")
+    document = document_for_format(document, commander=commander)
     deck = document.deck
     if not isinstance(deck, Deck) or not isinstance(deck.entries, (list, tuple)):
         raise LaunchManifestError("NATIVE_DECK_REQUIRED")

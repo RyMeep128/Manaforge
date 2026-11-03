@@ -93,7 +93,7 @@ class TextRows(W.QAbstractScrollArea):
             hovered = entry.entry_id == self.hovered
             if selected or hovered:
                 painter.fillRect(rect, G.QColor('#24493f' if selected else '#222c35'))
-            painter.setPen(G.QColor('#e4e8ed'))
+            painter.setPen(G.QColor('#ff6666' if entry.entry_id in self.editor.model.violations else '#e4e8ed'))
             painter.drawText(C.QRect(rect.x()+17, rect.y(), 27, rect.height()),
                              C.Qt.AlignmentFlag.AlignCenter, str(entry.quantity))
             tokens = re.findall(r'\{([^}]+)\}', self.host.mana_cost(entry))

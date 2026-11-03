@@ -32,6 +32,12 @@ namespace Manaforge.Play.Protocol
         internal bool BeginViewerHandshake()=>!IsClosed && Interlocked.CompareExchange(ref handshakeAttempted,1,0)==0;
         internal bool BeginViewerChallenge()=>!IsClosed && Volatile.Read(ref handshakeAttempted)==0 && Interlocked.CompareExchange(ref challengeAttempted,1,0)==0;
         public string Read(int timeoutMilliseconds = 5000, CancellationToken cancellation = default)
+            => ReadFrame(timeoutMilliseconds,cancellation,false);
+        // Authenticated gameplay may be idle while the player thinks. The frame
+        // budget begins with its first byte, not with the idle wait.
+        public string ReadWhenAvailable(int timeoutMilliseconds, CancellationToken cancellation = default)
+            => ReadFrame(timeoutMilliseconds,cancellation,true);
+        private string ReadFrame(int timeoutMilliseconds,CancellationToken cancellation,bool idle)
         {
             if (timeoutMilliseconds < 1 || timeoutMilliseconds > 60000) throw new ArgumentOutOfRangeException(nameof(timeoutMilliseconds));
             if (IsClosed) throw new TextFrame.FrameException("FRAME_CLOSED");
@@ -39,7 +45,7 @@ namespace Manaforge.Play.Protocol
             { Dispose(); throw new TextFrame.FrameException("FRAME_CONCURRENT"); }
             try
             {
-                using var input = new DeadlineStream(this, timeoutMilliseconds, cancellation);
+                using var input = new DeadlineStream(this, timeoutMilliseconds, cancellation, idle);
                 input.Check();
                 string text = TextFrame.Read(input);
                 input.Check(); // no completed frame is returned after observed cancellation/deadline
@@ -104,7 +110,7 @@ namespace Manaforge.Play.Protocol
         {
             cancellation.ThrowIfCancellationRequested();
             if (IsClosed) throw new TextFrame.FrameException("FRAME_CLOSED");
-            if (timer.Elapsed.TotalMilliseconds >= budget) throw new TextFrame.FrameException("FRAME_WRITE_TIMEOUT");
+            if (timer.IsRunning && timer.Elapsed.TotalMilliseconds >= budget) throw new TextFrame.FrameException("FRAME_WRITE_TIMEOUT");
         }
         public void Dispose()
         { if (Interlocked.Exchange(ref closed, 1) == 0) socket.Dispose(); }
@@ -114,14 +120,14 @@ namespace Manaforge.Play.Protocol
             private readonly LoopbackFrameReader owner;
             private readonly int budget;
             private readonly CancellationToken cancellation;
-            private readonly Stopwatch timer = Stopwatch.StartNew();
-            public DeadlineStream(LoopbackFrameReader owner, int budget, CancellationToken cancellation)
-            { this.owner = owner; this.budget = budget; this.cancellation = cancellation; }
+            private readonly Stopwatch timer = new Stopwatch();
+            public DeadlineStream(LoopbackFrameReader owner, int budget, CancellationToken cancellation,bool idle)
+            { this.owner = owner; this.budget = budget; this.cancellation = cancellation;if(!idle)timer.Start(); }
             public void Check()
             {
                 cancellation.ThrowIfCancellationRequested();
                 if (owner.IsClosed) throw new TextFrame.FrameException("FRAME_CLOSED");
-                if (timer.Elapsed.TotalMilliseconds >= budget) throw new TextFrame.FrameException("FRAME_TIMEOUT");
+                if (timer.IsRunning && timer.Elapsed.TotalMilliseconds >= budget) throw new TextFrame.FrameException("FRAME_TIMEOUT");
             }
             public override int Read(byte[] buffer, int offset, int count)
             {
@@ -134,7 +140,7 @@ namespace Manaforge.Play.Protocol
                     int microseconds = Math.Max(1, (int)Math.Ceiling(Math.Min(25, budget - timer.Elapsed.TotalMilliseconds) * 1000));
                     if (!owner.socket.Poll(microseconds, SelectMode.SelectRead)) continue;
                     Check();
-                    try { return owner.socket.Receive(buffer, offset, count, SocketFlags.None); }
+                    try { int received=owner.socket.Receive(buffer, offset, count, SocketFlags.None);if(received>0 && !timer.IsRunning)timer.Start();return received; }
                     catch (SocketException error) when (error.SocketErrorCode == SocketError.TimedOut || error.SocketErrorCode == SocketError.WouldBlock) { }
                 }
             }

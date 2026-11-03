@@ -39,6 +39,23 @@ public final class DeadlineFixtureConsumer {
                 TextFrame.write(p.sender.getOutputStream(),"one");TextFrame.write(p.sender.getOutputStream(),"two");p.sender.shutdownOutput();
                 require("one".equals(p.reader.read(1000)) && "two".equals(p.reader.read(1000)) && p.reader.read(1000)==null && !p.reader.isClosed());passed++;
             }
+            try(Pair p=new Pair()) {
+                Future<String> idle=POOL.submit(()->p.reader.readWhenAvailable(100,()->false));started(p.reader);
+                Thread.sleep(240);require(!idle.isDone() && !p.reader.isClosed());
+                TextFrame.write(p.sender.getOutputStream(),"after-player-thought");
+                require("after-player-thought".equals(idle.get(2,TimeUnit.SECONDS)));passed++;
+            }
+            try(Pair p=new Pair()) {
+                Future<String> partialFrame=POOL.submit(()->failure(()->p.reader.readWhenAvailable(100,()->false)));started(p.reader);
+                Thread.sleep(180);p.send(new byte[]{0,0});
+                require("FRAME_TIMEOUT".equals(partialFrame.get(2,TimeUnit.SECONDS)) && p.reader.isClosed());passed++;
+            }
+            try(Pair p=new Pair()) {
+                AtomicBoolean cancel=new AtomicBoolean();
+                Future<String> idle=POOL.submit(()->failure(()->p.reader.readWhenAvailable(100,cancel::get)));started(p.reader);
+                Thread.sleep(180);cancel.set(true);
+                require("FRAME_CANCELLED".equals(idle.get(2,TimeUnit.SECONDS)));passed++;
+            }
             byte[] partial=new byte[]{0,0,0,4,97};
             for(int size:new int[]{0,2,5})try(Pair p=new Pair()) {
                 byte[] bytes=new byte[size];System.arraycopy(partial,0,bytes,0,size);if(size>0)p.send(bytes);
@@ -83,7 +100,7 @@ public final class DeadlineFixtureConsumer {
                 Future<String> read=POOL.submit(()->{Thread.currentThread().interrupt();try{return failure(()->p.reader.read(1000));}finally{Thread.interrupted();}});
                 require("FRAME_CANCELLED".equals(read.get(2,TimeUnit.SECONDS)) && p.reader.isClosed());passed++;
             }
-            require(passed==16);System.out.println("Java owned frame deadlines: 16 real loopback checks passed");
+            require(passed==19);System.out.println("Java owned frame deadlines: 19 real loopback checks passed");
         } finally{POOL.shutdownNow();require(POOL.awaitTermination(3,TimeUnit.SECONDS));}
     }
 }
