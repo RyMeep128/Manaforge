@@ -297,6 +297,8 @@ def run_live_game(
                     "-Dfile.encoding=UTF-8",
                     "-Djava.net.preferIPv4Stack=true",
                     "-Dmanaforge.adapterVersion=" + ADAPTER_VERSION,
+                    "-Dmanaforge.commanderAcceptance="
+                    + str(acceptance and setup.format == "commander").lower(),
                     "-Dmanaforge.paymentMode=" + payment_mode.upper().replace("-", "_"),
                     "-cp",
                     str(server.parent / "classes") + os.pathsep + str(server / "lib/*"),
@@ -344,6 +346,9 @@ def run_live_game(
             ]
             if acceptance:
                 command += ["-manaforgeGameAcceptance", "1"]
+            artwork_directory, artwork_pin = prepare_local_artwork(
+                human["document"], root, manifest["manifest_id"], human["seat_id"]
+            )
             owner.start_client(
                 command,
                 cwd=str(player.parent),
@@ -354,6 +359,8 @@ def run_live_game(
                     engine_version="1.4.62-V1",
                     artifact_manifest_sha256=pin,
                     viewer_key=key,
+                    artwork_directory=artwork_directory,
+                    artwork_manifest_sha256=artwork_pin,
                 ),
             )
             ready = wait_json("game-ready")
@@ -388,6 +395,23 @@ def run_live_game(
                     "outcome"
                 ] not in ("win", "loss", "draw"):
                     raise LiveGameError("UNITY_GAME_RESULT_UNPROVEN")
+            if acceptance and setup.format == "commander":
+                proof = wait_json("game-result", 1)
+                if (
+                    proof.get("native_commander_damage_lethal_verified") is not True
+                    or proof.get("native_commander_roster_cast_verified") is not True
+                ):
+                    raise LiveGameError("UNITY_COMMANDER_ACCEPTANCE_UNPROVEN")
+                closed.update(
+                    {
+                        key: proof[key]
+                        for key in (
+                            "native_commanders_cast",
+                            "native_commander_damage_lethal_verified",
+                            "native_commander_roster_cast_verified",
+                        )
+                    }
+                )
             if acceptance and (
                 closed.get("outcome") is None
                 or closed.get("confirmed") != closed.get("snapshots", 0) - 1
@@ -417,3 +441,37 @@ def run_live_game(
         return result
     finally:
         launch.close()
+
+
+def prepare_local_artwork(document, root, session_id, viewer_id, service=None):
+    """Reuse Core's offline cache for the viewer's own deck; never read AI entries.
+
+    The surface still requires a current authenticated visible printing before binding.
+    Missing metadata/images retain the existing unavailable-art presentation.
+    """
+    from .artwork_bundle import export_artwork_bundle
+
+    ids = tuple(dict.fromkeys(
+        entry["card_id"] for entry in document["deck"]["entries"]
+        if entry.get("card_id")
+    ))
+    if not ids or len(ids) > 256:
+        return None, None
+    if service is None:
+        try:
+            from mtg_core.services import CardService
+        except ImportError:
+            return None, None
+
+        def offline(*args, **kwargs):
+            raise RuntimeError("LIVE_ARTWORK_NETWORK_FORBIDDEN")
+
+        service = CardService(
+            fetch_json_fn=offline, fetch_bytes_fn=offline, fetch_bulk_fn=offline
+        )
+    directory = Path(root) / "artwork"
+    _, pin = export_artwork_bundle(
+        service, ids, directory, session_id=session_id, viewer_id=viewer_id,
+        max_asset_bytes=64 * 1024 * 1024,
+    )
+    return str(directory.resolve()), pin

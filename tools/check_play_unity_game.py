@@ -54,7 +54,7 @@ def public_deck(ai):
     )
 
 
-def public_commander_deck(ai):
+def public_commander_deck(ai, variant="single"):
     rows = (
         [("Forest", "TRK", "325", 99), ("Progenitus", "CON", "121", 1)]
         if ai
@@ -63,9 +63,21 @@ def public_commander_deck(ai):
             ("Yargle, Glutton of Urborg", "DOM", "113", 1),
         ]
     )
+    if not ai and variant == "partners":
+        rows = [
+            ("Mountain", "TRK", "323", 98),
+            ("Rograkh, Son of Rohgahh", "CMR", "197", 1),
+            ("Kediss, Emberclaw Familiar", "CMR", "188", 1),
+        ]
+    if not ai and variant == "background":
+        rows = [
+            ("Forest", "TRK", "325", 98),
+            ("Wilson, Refined Grizzly", "CLB", "261", 1),
+            ("Raised by Giants", "CLB", "250", 1),
+        ]
     entries = [
         DeckEntry(
-            "land" if i == 0 else "commander",
+            "land" if i == 0 else "commander-" + str(i),
             name,
             count,
             section="mainboard" if i == 0 else "commander",
@@ -82,7 +94,9 @@ def public_commander_deck(ai):
             name="Public Commander acceptance",
             format="Commander",
             entries=entries,
-            commander_entry_ids=["commander"],
+            commander_entry_ids=[
+                entry.entry_id for entry in entries if entry.section == "commander"
+            ],
         )
     )
 
@@ -90,6 +104,11 @@ def public_commander_deck(ai):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--public-decks", action="store_true")
+    parser.add_argument(
+        "--commander-setup",
+        choices=("single", "partners", "background"),
+        default="single",
+    )
     parser.add_argument(
         "--format", choices=("freeform", "commander"), default="freeform"
     )
@@ -115,7 +134,7 @@ def main():
     args.output.mkdir(parents=True, exist_ok=False)
     documents = {
         "local-player": (
-            public_commander_deck(False)
+            public_commander_deck(False, args.commander_setup)
             if args.format == "commander"
             else public_deck(False)
         )

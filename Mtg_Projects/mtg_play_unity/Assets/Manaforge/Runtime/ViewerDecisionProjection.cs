@@ -50,7 +50,7 @@ namespace Manaforge.Play
     }
     public sealed class ProjectedCombatAssignment
     {
-        public IReadOnlyList<string> AttackerNames {get;} public IReadOnlyList<string> BlockerNames {get;} public IReadOnlyList<long?> BlockerDamage {get;} public string DefenderName {get;} public string DefenderId {get;} public string DefenderLoyalty {get;} public string DefenderDefense {get;} public long? DefenderLife {get;} public int BlockerCount {get;}
+        public IReadOnlyList<string> AttackerIds {get;} public IReadOnlyList<string> BlockerIds {get;} public IReadOnlyList<string> AttackerNames {get;} public IReadOnlyList<string> BlockerNames {get;} public IReadOnlyList<long?> BlockerDamage {get;} public string DefenderName {get;} public string DefenderId {get;} public string DefenderLoyalty {get;} public string DefenderDefense {get;} public long? DefenderLife {get;} public int BlockerCount {get;}
         private static string ObjectName(JObject snapshot,string id,string fallback)
         {
             var card=snapshot["objects"].FirstOrDefault(value=>(string)value["object_id"]==id);
@@ -58,6 +58,8 @@ namespace Manaforge.Play
         }
         internal ProjectedCombatAssignment(JToken assignment,JObject snapshot)
         {
+            AttackerIds=Array.AsReadOnly(assignment["attackers"].Select(id=>(string)id).ToArray());
+            BlockerIds=Array.AsReadOnly(assignment["blockers"].Select(id=>(string)id).ToArray());
             AttackerNames=Array.AsReadOnly(assignment["attackers"].Select(id=>ObjectName(snapshot,(string)id,"Unknown attacker")).ToArray());
             DefenderId=(string)assignment["defender_id"];var defender=snapshot["players"].FirstOrDefault(player=>(string)player["player_id"]==(string)assignment["defender_id"]);DefenderName=(string)defender?["name"]??ObjectName(snapshot,DefenderId,"Unknown defender");DefenderLife=(long?)defender?["life"];var defended=snapshot["objects"].FirstOrDefault(card=>(string)card["object_id"]==DefenderId);DefenderLoyalty=(string)(defended?["characteristics"] as JObject)?["loyalty"];DefenderDefense=(string)(defended?["characteristics"] as JObject)?["defense"];
             BlockerDamage=Array.AsReadOnly(assignment["blockers"].Select(id=>(long?)snapshot["objects"].FirstOrDefault(card=>(string)card["object_id"]==(string)id)?["damage"]).ToArray());
@@ -66,9 +68,9 @@ namespace Manaforge.Play
     }
     public sealed class ProjectedCommander
     {
-        public string CommanderId {get;} public string OwnerId {get;} public string Name {get;} public long? CommandZonePlays {get;} public string AdditionalCastCost {get;}
+        public string CommanderId {get;} public string Zone {get;} public string ObjectId {get;} public string OwnerId {get;} public string Name {get;} public long? CommandZonePlays {get;} public string AdditionalCastCost {get;}
         public IReadOnlyDictionary<string,long> DamageDealt {get;}
-        internal ProjectedCommander(JToken source){CommanderId=(string)source["commander_id"];OwnerId=(string)source["owner_id"];Name=(string)source["name"];CommandZonePlays=(long?)source["command_zone_plays"];AdditionalCastCost=(string)source["additional_cast_cost"];if(source["damage_dealt"] is JArray damage)DamageDealt=new System.Collections.ObjectModel.ReadOnlyDictionary<string,long>(damage.ToDictionary(pair=>(string)pair[0],pair=>(long)pair[1]));}
+        internal ProjectedCommander(JToken source,JObject snapshot){CommanderId=(string)source["commander_id"];var visible=snapshot["objects"].FirstOrDefault(card=>(string)card["commander_id"]==CommanderId);Zone=(string)visible?["zone"];ObjectId=(string)visible?["object_id"];OwnerId=(string)source["owner_id"];Name=(string)source["name"];CommandZonePlays=(long?)source["command_zone_plays"];AdditionalCastCost=(string)source["additional_cast_cost"];if(source["damage_dealt"] is JArray damage)DamageDealt=new System.Collections.ObjectModel.ReadOnlyDictionary<string,long>(damage.ToDictionary(pair=>(string)pair[0],pair=>(long)pair[1]));}
     }
     public sealed class ProjectedDecisionFrame
     {
@@ -82,7 +84,7 @@ namespace Manaforge.Play
         public IReadOnlyList<string> UnsupportedFields {get;}
         internal ProjectedDecisionFrame(JObject source)
         {
-            if(source["commanders"] is JArray commanders)Commanders=Array.AsReadOnly(commanders.Select(value=>new ProjectedCommander(value)).ToArray());
+            if(source["commanders"] is JArray commanders)Commanders=Array.AsReadOnly(commanders.Select(value=>new ProjectedCommander(value,source)).ToArray());
             Result=(string)source["result"];Turn=(long?)source["turn"];Phase=(string)source["phase"];ActivePlayerId=(string)source["active_player_id"];
             PlayerLifeTotals=new System.Collections.ObjectModel.ReadOnlyDictionary<string,long?>(source["players"].ToDictionary(player=>(string)player["player_id"],player=>(long?)player["life"]));
             Combat=Array.AsReadOnly(source["combat"].Select(group=>new ProjectedCombatAssignment(group,source)).ToArray());

@@ -71,6 +71,7 @@ def main():
             PLAY / "java/NativeAcceptanceCase.java",
             PLAY / "java/NativeCastingCase.java",
             PLAY / "java/NativeChangedTargetCase.java",
+            PLAY / "java/NativeCommanderProof.java",
             PLAY / "java/NativeGameLaunch.java",
             PLAY / "java/ManaforgeMetadataChannel.java",
             PROTOCOL / "java-test/MetadataChannelChecks.java",

@@ -9,7 +9,7 @@ namespace Manaforge.Play
     // Uses the actual viewer controls; never submits private/native commands.
     internal sealed class LiveGameAcceptanceDriver
     {
-        private long submitted=-1;
+        private long submitted=-1;private readonly HashSet<string> pregameCommanders=new HashSet<string>();
         public bool Tick(ViewerSessionHost host,ViewerDecisionPanel panel,ProjectedDecisionFrame frame)
         {
             if(frame.Result!=null)return true;var offer=host.PresentedDecision;if(offer?.CanSubmit!=true || submitted==frame.Context.Revision)return false;
@@ -20,6 +20,7 @@ namespace Manaforge.Play
                 else{for(int i=0;i<values.Length;i++){values[i]=decision.Amounts[i].Minimum;remaining-=values[i];}for(int i=0;i<values.Length;i++){long take=Math.Min(remaining,decision.Amounts[i].Maximum-values[i]);values[i]+=take;remaining-=take;}}
                 for(int i=0;i<values.Length;i++){var field=panel.Root.Q<TextField>("decision-number-"+i);if(field==null)return false;field.value=values[i].ToString(System.Globalization.CultureInfo.InvariantCulture);}button=controls.Find(value=>value.name=="decision-number-submit");
             }
+            foreach(string name in new[]{"Rograkh, Son of Rohgahh","Kediss, Emberclaw Familiar","Wilson, Refined Grizzly","Raised by Giants"})if(button==null && !pregameCommanders.Contains(name)){button=controls.Find(value=>value.name!=null && value.name.StartsWith("decision-option-",StringComparison.Ordinal) && value.text.StartsWith(name,StringComparison.Ordinal));if(button!=null)pregameCommanders.Add(name);}
             button??=controls.Find(value=>value.text.IndexOf("gains flying",StringComparison.OrdinalIgnoreCase)>=0);
             button??=controls.Find(value=>value.text.StartsWith("Use floating mana:",StringComparison.Ordinal));
             if(button==null)for(int i=0;i<frame.Actions.Count;i++)if(frame.Actions[i].Label.StartsWith("Select mana source:",StringComparison.Ordinal) && Array.IndexOf(untappedLandIds,frame.Actions[i].ObjectId)>=0){button=controls.Find(value=>value.name=="decision-action-"+i);break;}
@@ -27,7 +28,7 @@ namespace Manaforge.Play
             // The public acceptance deck is mono-green. Native availability still supplies every action.
             long mana=frame.ViewerMana?.Values.Sum()??0;
             foreach(var action in frame.Actions)if(action.Label.StartsWith("Cast spell:",StringComparison.Ordinal) || action.Label.StartsWith("Select object:",StringComparison.Ordinal)){
-                string name=action.Label.Substring(action.Label.IndexOf(':')+1).Trim();int needed=name=="Yargle, Glutton of Urborg"?5:name=="Memnite"?0:name=="Scryb Sprites"?1:name=="Centaur Courser"?3:2;
+                string name=action.Label.Substring(action.Label.IndexOf(':')+1).Trim();int needed=name=="Rograkh, Son of Rohgahh"?0:name=="Raised by Giants"?6:name=="Wilson, Refined Grizzly" || name=="Kediss, Emberclaw Familiar"?2:name=="Yargle, Glutton of Urborg"?5:name=="Memnite"?0:name=="Scryb Sprites"?1:name=="Centaur Courser"?3:2;
                 // Ordinary land count is read from mounted action availability below; costly premature
                 // casts can be cancelled natively, so never choose a spell without known capacity.
                 if(needed>availableLands+mana || name=="Evolution Charm" && availableCreatures==0)continue;button??=controls.Find(value=>value.text==action.Label);
@@ -41,7 +42,7 @@ namespace Manaforge.Play
             button??=controls.Find(value=>value.text=="No");
             button??=controls.Find(value=>value.text.StartsWith("Finish",StringComparison.Ordinal) || value.text=="Pass priority" || value.text.StartsWith("Discard",StringComparison.Ordinal));
             button??=controls.Find(value=>value.name!=null && value.name.StartsWith("decision-option-",StringComparison.Ordinal));
-            if(button==null || !button.enabledInHierarchy)return false;submitted=frame.Context.Revision;using(var input=NavigationSubmitEvent.GetPooled()){input.target=button;button.SendEvent(input);}return false;
+            if(button==null){var next=controls.Find(value=>value.name=="decision-next" && value.enabledInHierarchy);if(next!=null)using(var navigation=NavigationSubmitEvent.GetPooled()){navigation.target=next;next.SendEvent(navigation);}return false;}if(!button.enabledInHierarchy)return false;submitted=frame.Context.Revision;using(var input=NavigationSubmitEvent.GetPooled()){input.target=button;button.SendEvent(input);}return false;
         }
         private int availableLands,availableCreatures;
         private string[] untappedLandIds=new string[0],counterBallistaIds=new string[0];

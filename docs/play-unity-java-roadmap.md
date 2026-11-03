@@ -1,5 +1,22 @@
 # Manaforge Play — Unity + Java Roadmap
 
+### Native Commander terminal and paired acceptance (0.5.216)
+
+Authenticated terminal metadata now includes a coherent public commander/damage
+record and public life/loss flags. Result snapshots attach it only when the native
+view cycle matches. Explicit acceptance asserts commander-damage lethal while
+the opponent retains positive life and confirms every designated own commander
+was cast; Python receives only bounded proof flags, not native identities/state.
+
+Shuffled single, partner and commander/background matches pass through the same
+gameplay session and presentation controls, with every input confirmed and owned
+cleanup complete. Partner acceptance now navigates real paginated controls.
+Immutable commander locations refer only to currently visible objects and remain
+available to alternative presentations. Java checks (758), native helper checks
+(155) and focused Python checks (12) pass. Explicit tax/zone-return acceptance
+remains pending; visual gates stay unchecked. Concurrent presentation edits are
+preserved separately from this gameplay batch.
+
 ### Shared-view Commander integration (0.5.215)
 
 The saved-deck Unity path now accepts Commander, uses the native Commander

@@ -24,7 +24,40 @@ public final class ManaforgeGameMetadata {
         JsonObject result=status("finished");Player viewer=game.getPlayer(viewerId);
         if(game.hasEnded() && viewer!=null){String outcome=game.isADraw()?"draw":viewer.hasWon()?"win":viewer.hasLost()?"loss":null;
             if(outcome!=null){result.addProperty("game_id",gameId.toString());result.addProperty("viewer",viewerId.toString());result.addProperty("outcome",outcome);}}
+        if(result.has("outcome")){GameState state=game.getState();int cycle=state.getApplyEffectsCounter();List<UUID> seats=new ArrayList<>(game.getPlayers().keySet());JsonObject commanderData=publicCommanders(game,state,seats);JsonArray players=new JsonArray();for(UUID seat:seats){Player player=game.getPlayer(seat);JsonObject row=new JsonObject();row.addProperty("id",seat.toString());row.addProperty("life",player.getLife());row.addProperty("lost",player.hasLost());players.add(row);}if(game.getState()==state && state.getApplyEffectsCounter()==cycle){result.add("commanders",commanderData.get("commanders"));result.add("commander_metadata_complete",commanderData.get("commander_metadata_complete"));result.add("public_players",players);result.addProperty("cycle",cycle);}}
         return result;
+    }
+    private static JsonObject publicCommanders(Game game,GameState state,Collection<UUID> seats) {
+        JsonArray commanders=new JsonArray();int commanderCount=0;CommanderPlaysCountWatcher plays=state.getWatcher(CommanderPlaysCountWatcher.class);
+        for(UUID seat:seats){Player current=game.getPlayer(seat);if(current==null)continue;
+                    for (UUID commander : current.getCommandersIds()) {
+                        commanderCount++;
+                        CommanderInfoWatcher damage = state.getWatcher(CommanderInfoWatcher.class, commander);
+                        if (damage == null) continue; // signature spells and unsupported designations are not guessed.
+                        JsonObject info = new JsonObject(); info.addProperty("id", commander.toString());
+                        info.addProperty("owner", current.getId().toString());
+                        mage.cards.Card source = game.getCard(commander);
+                        if (source != null) {
+                            info.addProperty("name", source.getName());
+                            info.addProperty("set", source.getExpansionSetCode());
+                            info.addProperty("number", source.getCardNumber());
+                            if (source.getSpellAbility() != null && plays != null) {
+                                // Ask XMage to calculate its commander-only increase on an
+                                // isolated ability copy. Never duplicate the tax formula.
+                                mage.abilities.SpellAbility probe = source.getSpellAbility().copy();
+                                probe.clearManaCostsToPay();
+                                source.commanderCost(game, null, probe);
+                                info.addProperty("tax", probe.getManaCostsToPay().getText());
+                            }
+                        }
+                        if (plays != null) info.addProperty("plays", plays.getPlaysCount(commander));
+                        JsonObject dealt = new JsonObject();
+                        for (UUID target : seats)
+                            dealt.addProperty(target.toString(), damage.getDamageToPlayer().getOrDefault(target, 0));
+                        info.add("damage", dealt); commanders.add(info);
+                    }
+        }
+        JsonObject result=new JsonObject();result.add("commanders",commanders);result.addProperty("commander_metadata_complete",commanders.size()==commanderCount);return result;
     }
     private static Object field(Object target, Class<?> owner, String name) throws Exception {
         Field member = owner.getDeclaredField(name);
@@ -174,40 +207,9 @@ public final class ManaforgeGameMetadata {
                     if (control != null) metadata.addProperty("controller", control.toString());
                     objects.add(id.toString(), metadata);
                 }
-                JsonArray players = new JsonArray(), commanders = new JsonArray();int commanderCount=0;
-                CommanderPlaysCountWatcher plays = state.getWatcher(CommanderPlaysCountWatcher.class);
-                for (PlayerView view : permitted.getPlayers()) {
-                    Player current = game.getPlayer(view.getPlayerId());
-                    JsonObject row = new JsonObject(); row.addProperty("id", current.getId().toString());
-                    row.addProperty("lost", current.hasLost()); row.addProperty("left", current.hasLeft());
-                    players.add(row);
-                    for (UUID commander : current.getCommandersIds()) {
-                        commanderCount++;
-                        CommanderInfoWatcher damage = state.getWatcher(CommanderInfoWatcher.class, commander);
-                        if (damage == null) continue; // signature spells and unsupported designations are not guessed.
-                        JsonObject info = new JsonObject(); info.addProperty("id", commander.toString());
-                        info.addProperty("owner", current.getId().toString());
-                        mage.cards.Card source = game.getCard(commander);
-                        if (source != null) {
-                            info.addProperty("name", source.getName());
-                            info.addProperty("set", source.getExpansionSetCode());
-                            info.addProperty("number", source.getCardNumber());
-                            if (source.getSpellAbility() != null && plays != null) {
-                                // Ask XMage to calculate its commander-only increase on an
-                                // isolated ability copy. Never duplicate the tax formula.
-                                mage.abilities.SpellAbility probe = source.getSpellAbility().copy();
-                                probe.clearManaCostsToPay();
-                                source.commanderCost(game, null, probe);
-                                info.addProperty("tax", probe.getManaCostsToPay().getText());
-                            }
-                        }
-                        if (plays != null) info.addProperty("plays", plays.getPlaysCount(commander));
-                        JsonObject dealt = new JsonObject();
-                        for (PlayerView target : permitted.getPlayers())
-                            dealt.addProperty(target.getPlayerId().toString(), damage.getDamageToPlayer().getOrDefault(target.getPlayerId(), 0));
-                        info.add("damage", dealt); commanders.add(info);
-                    }
-                }
+                JsonArray players=new JsonArray();List<UUID> publicSeats=new ArrayList<>();
+                for(PlayerView view:permitted.getPlayers()){Player current=game.getPlayer(view.getPlayerId());JsonObject row=new JsonObject();row.addProperty("id",current.getId().toString());row.addProperty("lost",current.hasLost());row.addProperty("left",current.hasLeft());players.add(row);publicSeats.add(current.getId());}
+                JsonObject commanderData=publicCommanders(game,state,publicSeats);
                 if (game.getState() != state || state.getApplyEffectsCounter() != cycle) return status("retry");
                 // Confirm the engine is waiting in HumanPlayer.priority(), not a
                 // generic GAME_SELECT choice. Never export the diagnostic string.
@@ -240,7 +242,7 @@ public final class ManaforgeGameMetadata {
                     if(assessment instanceof JsonObject)result.add("ordinary_payment",(JsonObject)assessment);
 
                 }
-                result.add("objects", objects); result.add("players", players); result.add("commanders", commanders);result.addProperty("commander_metadata_complete",commanders.size()==commanderCount);
+                result.add("objects", objects); result.add("players", players); result.add("commanders", commanderData.get("commanders"));result.add("commander_metadata_complete",commanderData.get("commander_metadata_complete"));
                 return result;
             }
         }

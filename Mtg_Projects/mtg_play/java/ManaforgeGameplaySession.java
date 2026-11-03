@@ -15,6 +15,7 @@ public final class ManaforgeGameplaySession implements AutoCloseable {
         default void before(JsonObject state,JsonObject prompt,JsonObject command) throws Exception {}
         default boolean after(JsonObject state,JsonObject prompt) throws Exception {return false;}
         default void terminal(String outcome) throws Exception {}
+        default void terminal(String outcome,JsonObject state,JsonObject metadata) throws Exception {terminal(outcome);}
         default void unsupported(String code) throws Exception {}
     }
     public static final class Advance {
@@ -69,8 +70,8 @@ public final class ManaforgeGameplaySession implements AutoCloseable {
                 JsonObject terminal=engine.terminalMetadata(before);
                 NativeCastCorrelation.TurnDecisionEvidence proof=NativeCastCorrelation.terminalGameplayEvidence(before,prompt,command,guard,accepted,terminal,next.terminal);
                 if(proof==null)throw new IOException("GAMEPLAY_TERMINAL_UNPROVEN");
-                String outcome=terminal.get("outcome").getAsString();observer.terminal(outcome);
-                JsonObject result=envelope(projection.projectCombatResult(next.state,outcome));result.addProperty("message_type","result");stopped=true;
+                String outcome=terminal.get("outcome").getAsString();observer.terminal(outcome,next.state.deepCopy(),terminal.deepCopy());
+                JsonObject finalState=next.state.deepCopy();if(terminal.has("commanders") && finalState.get("cycle").equals(terminal.get("cycle"))){finalState.add("commander_metadata",terminal.get("commanders").deepCopy());finalState.add("commander_metadata_complete",terminal.get("commander_metadata_complete"));}JsonObject result=envelope(projection.projectCombatResult(finalState,outcome));result.addProperty("message_type","result");stopped=true;
                 return new ManaforgeUnityOpening.TurnResult(result,proof,null);
             }
             if(next.prompt==null)throw new IOException("GAMEPLAY_NEXT_DECISION_MISSING");
