@@ -16,6 +16,49 @@ import org.jboss.remoting.transport.Connector;
  * The human response monitor keeps the engine game thread paused during the read.
  */
 public final class ManaforgeGameMetadata {
+    // Retain only bounded authorized game references so monotonic terminal flags survive controller removal.
+    private static final Map<UUID,Game> recentGames=Collections.synchronizedMap(new LinkedHashMap<UUID,Game>() {
+        protected boolean removeEldestEntry(Map.Entry<UUID,Game> eldest){return size()>32;}
+    });
+    private static JsonObject terminal(Game game,UUID gameId,UUID viewerId) {
+        JsonObject result=status("finished");Player viewer=game.getPlayer(viewerId);
+        if(game.hasEnded() && viewer!=null){String outcome=game.isADraw()?"draw":viewer.hasWon()?"win":viewer.hasLost()?"loss":null;
+            if(outcome!=null){result.addProperty("game_id",gameId.toString());result.addProperty("viewer",viewerId.toString());result.addProperty("outcome",outcome);}}
+        if(result.has("outcome")){GameState state=game.getState();int cycle=state.getApplyEffectsCounter();List<UUID> seats=new ArrayList<>(game.getPlayers().keySet());JsonObject commanderData=publicCommanders(game,state,seats);JsonArray players=new JsonArray();for(UUID seat:seats){Player player=game.getPlayer(seat);JsonObject row=new JsonObject();row.addProperty("id",seat.toString());row.addProperty("life",player.getLife());row.addProperty("lost",player.hasLost());players.add(row);}if(game.getState()==state && state.getApplyEffectsCounter()==cycle){result.add("commanders",commanderData.get("commanders"));result.add("commander_metadata_complete",commanderData.get("commander_metadata_complete"));result.add("public_players",players);result.addProperty("cycle",cycle);}}
+        return result;
+    }
+    private static JsonObject publicCommanders(Game game,GameState state,Collection<UUID> seats) {
+        JsonArray commanders=new JsonArray();int commanderCount=0;CommanderPlaysCountWatcher plays=state.getWatcher(CommanderPlaysCountWatcher.class);
+        for(UUID seat:seats){Player current=game.getPlayer(seat);if(current==null)continue;
+                    for (UUID commander : current.getCommandersIds()) {
+                        commanderCount++;
+                        CommanderInfoWatcher damage = state.getWatcher(CommanderInfoWatcher.class, commander);
+                        if (damage == null) continue; // signature spells and unsupported designations are not guessed.
+                        JsonObject info = new JsonObject(); info.addProperty("id", commander.toString());
+                        info.addProperty("owner", current.getId().toString());
+                        mage.cards.Card source = game.getCard(commander);
+                        if (source != null) {
+                            info.addProperty("name", source.getName());
+                            info.addProperty("set", source.getExpansionSetCode());
+                            info.addProperty("number", source.getCardNumber());
+                            if (source.getSpellAbility() != null && plays != null) {
+                                // Ask XMage to calculate its commander-only increase on an
+                                // isolated ability copy. Never duplicate the tax formula.
+                                mage.abilities.SpellAbility probe = source.getSpellAbility().copy();
+                                probe.clearManaCostsToPay();
+                                source.commanderCost(game, null, probe);
+                                info.addProperty("tax", probe.getManaCostsToPay().getText());
+                            }
+                        }
+                        if (plays != null) info.addProperty("plays", plays.getPlaysCount(commander));
+                        JsonObject dealt = new JsonObject();
+                        for (UUID target : seats)
+                            dealt.addProperty(target.toString(), damage.getDamageToPlayer().getOrDefault(target, 0));
+                        info.add("damage", dealt); commanders.add(info);
+                    }
+        }
+        JsonObject result=new JsonObject();result.add("commanders",commanders);result.addProperty("commander_metadata_complete",commanders.size()==commanderCount);return result;
+    }
     private static Object field(Object target, Class<?> owner, String name) throws Exception {
         Field member = owner.getDeclaredField(name);
         member.setAccessible(true);
@@ -50,13 +93,13 @@ public final class ManaforgeGameMetadata {
         UUID playerId = UUID.fromString(command.get("player").getAsString());
         int cycle = command.get("cycle").getAsInt();
         GameController controller = managers().gameManager().getGameController().get(gameId);
-        if (controller == null) return status("finished");
-        Game game = (Game) field(controller, GameController.class, "game");
-        Player viewer = game.getPlayer(playerId);
+        Game game=controller==null?recentGames.get(gameId):(Game)field(controller,GameController.class,"game");
+        if(game==null)return status("finished");
+        Player viewer=game.getPlayer(playerId);if(viewer==null)return status("unauthorized");recentGames.put(gameId,game);if(controller==null && !game.hasEnded())return status("finished");
         // Terminal flags are monotonic. A departed viewer has no fresh cycle,
         // even when there is no remaining human response monitor to acquire.
         if (game.hasEnded() || (viewer != null && (viewer.hasLost() || viewer.hasLeft())))
-            return status("finished");
+            return terminal(game,gameId,playerId);
         // HumanPlayer.waitForResponse holds no game work while its response monitor
         // is acquired with responseOpenedForAnswer=true. No game-state mutation or
         // feedback is performed here. Reject mismatched cycles instead of guessing.
@@ -66,14 +109,16 @@ public final class ManaforgeGameMetadata {
             if (player.hasLost() || player.hasLeft()) continue;
             Object human = player.getRealPlayer();
             Class<?> type = human.getClass();
-            if (!type.getName().equals("mage.player.human.HumanPlayer")) continue;
-            Object response = field(human, type, "response");
+            boolean paymentProbe=type.getName().equals("manaforge.payment.xmage.ContextHumanPlayer");
+            Class<?> humanType=paymentProbe?type.getSuperclass():type;
+            if (!humanType.getName().equals("mage.player.human.HumanPlayer")) continue;
+            Object response = field(human, humanType, "response");
             synchronized (response) {
-                if (!Boolean.TRUE.equals(field(human, type, "responseOpenedForAnswer"))) continue;
+                if (!Boolean.TRUE.equals(field(human, humanType, "responseOpenedForAnswer"))) continue;
                 // Eliminated seats stop receiving fresh views while other seats
                 // continue playing. Their last cycle cannot become current again.
                 if (game.hasEnded() || (viewer != null && (viewer.hasLost() || viewer.hasLeft())))
-                    return status("finished");
+                    return terminal(game,gameId,playerId);
                 GameView permitted = controller.getGameView(playerId);
                 GameState state = game.getState();
                 if (permitted == null || permitted.getGameCycle() != cycle) return status("retry");
@@ -115,18 +160,28 @@ public final class ManaforgeGameMetadata {
                 for (JsonElement value : command.getAsJsonArray("object_ids")) requested.add(UUID.fromString(value.getAsString()));
                 for (JsonElement value : command.getAsJsonArray("identified_ids")) requestedIdentified.add(UUID.fromString(value.getAsString()));
                 if (!visible.containsAll(requested)) return status("retry");
-                visible.retainAll(requested); identified.retainAll(requestedIdentified);
+                Set<UUID> permittedTargets=new HashSet<>(visible);visible.retainAll(requested); identified.retainAll(requestedIdentified);
                 JsonObject objects = new JsonObject();
                 for (UUID id : visible) {
                     JsonObject metadata = new JsonObject();
                     metadata.addProperty("incarnation", state.getZoneChangeCounter(id));
                     mage.cards.Card source = game.getCard(id);
                     mage.game.permanent.Permanent permanent = game.getPermanent(id);
-                    UUID owner = source == null ? null : source.getOwnerId();
                     mage.game.stack.StackObject stacked = game.getStack().getStackObject(id);
+                    // A spell has its own stack ID; its physical card retains the source ID.
+                    if (source == null && stacked instanceof mage.game.stack.Spell)
+                        source = game.getCard(stacked.getSourceId());
+                    UUID owner = source == null ? null : source.getOwnerId();
                     UUID control = permanent != null ? permanent.getControllerId() : stacked == null ? null : stacked.getControllerId();
                     if (stacked != null && stacked.getSourceId() != null) metadata.addProperty("source", stacked.getSourceId().toString());
                     if (identified.contains(id)) {
+                        if(stacked instanceof mage.game.stack.Spell && source!=null) {
+                            metadata.addProperty("source_incarnation",state.getZoneChangeCounter(stacked.getSourceId()));
+                            JsonArray spellAbilities=new JsonArray();
+                            for(mage.abilities.SpellAbility ability:((mage.game.stack.Spell)stacked).getSpellAbilities())spellAbilities.add(ability.getId().toString());
+                            metadata.add("spell_ability_ids",spellAbilities);
+                        }
+                        if(stacked!=null && stacked.getStackAbility()!=null){JsonArray targets=new JsonArray();boolean complete=true;Set<UUID> selectedTargets=new LinkedHashSet<>();for(mage.target.Target target:stacked.getStackAbility().getTargets())selectedTargets.addAll(target.getTargets());if(selectedTargets.size()>256)complete=false;else for(UUID target:selectedTargets)if(target!=null && permittedTargets.contains(target))targets.add(target.toString());else complete=false;metadata.add("stack_targets",targets);metadata.addProperty("stack_targets_complete",complete);}
                         mage.MageObject live = permanent != null ? permanent : stacked != null ? stacked : source;
                         if (live != null) metadata.addProperty("name", live.getName());
                         if (permanent != null) {
@@ -143,6 +198,8 @@ public final class ManaforgeGameMetadata {
                     }
                     if (source != null && identified.contains(id)) {
                         mage.cards.Card original = source.getMainCard();
+                        // Private physical-card correlation across a native double-face zone transition.
+                        metadata.addProperty("main_card",original.getId().toString());metadata.addProperty("main_card_incarnation",state.getZoneChangeCounter(original.getId()));
                         metadata.addProperty("physical_set", original.getExpansionSetCode());
                         metadata.addProperty("physical_number", original.getCardNumber());
                     }
@@ -150,45 +207,45 @@ public final class ManaforgeGameMetadata {
                     if (control != null) metadata.addProperty("controller", control.toString());
                     objects.add(id.toString(), metadata);
                 }
-                JsonArray players = new JsonArray(), commanders = new JsonArray();
-                CommanderPlaysCountWatcher plays = state.getWatcher(CommanderPlaysCountWatcher.class);
-                for (PlayerView view : permitted.getPlayers()) {
-                    Player current = game.getPlayer(view.getPlayerId());
-                    JsonObject row = new JsonObject(); row.addProperty("id", current.getId().toString());
-                    row.addProperty("lost", current.hasLost()); row.addProperty("left", current.hasLeft());
-                    players.add(row);
-                    for (UUID commander : current.getCommandersIds()) {
-                        CommanderInfoWatcher damage = state.getWatcher(CommanderInfoWatcher.class, commander);
-                        if (damage == null) continue; // signature spells and unsupported designations are not guessed.
-                        JsonObject info = new JsonObject(); info.addProperty("id", commander.toString());
-                        info.addProperty("owner", current.getId().toString());
-                        mage.cards.Card source = game.getCard(commander);
-                        if (source != null) {
-                            info.addProperty("name", source.getName());
-                            info.addProperty("set", source.getExpansionSetCode());
-                            info.addProperty("number", source.getCardNumber());
-                            if (source.getSpellAbility() != null && plays != null) {
-                                // Ask XMage to calculate its commander-only increase on an
-                                // isolated ability copy. Never duplicate the tax formula.
-                                mage.abilities.SpellAbility probe = source.getSpellAbility().copy();
-                                probe.clearManaCostsToPay();
-                                source.commanderCost(game, null, probe);
-                                info.addProperty("tax", probe.getManaCostsToPay().getText());
-                            }
-                        }
-                        if (plays != null) info.addProperty("plays", plays.getPlaysCount(commander));
-                        JsonObject dealt = new JsonObject();
-                        for (PlayerView target : permitted.getPlayers())
-                            dealt.addProperty(target.getPlayerId().toString(), damage.getDamageToPlayer().getOrDefault(target.getPlayerId(), 0));
-                        info.add("damage", dealt); commanders.add(info);
-                    }
-                }
+                JsonArray players=new JsonArray();List<UUID> publicSeats=new ArrayList<>();
+                for(PlayerView view:permitted.getPlayers()){Player current=game.getPlayer(view.getPlayerId());JsonObject row=new JsonObject();row.addProperty("id",current.getId().toString());row.addProperty("lost",current.hasLost());row.addProperty("left",current.hasLeft());players.add(row);publicSeats.add(current.getId());}
+                JsonObject commanderData=publicCommanders(game,state,publicSeats);
                 if (game.getState() != state || state.getApplyEffectsCounter() != cycle) return status("retry");
+                // Confirm the engine is waiting in HumanPlayer.priority(), not a
+                // generic GAME_SELECT choice. Never export the diagnostic string.
+                Object activeAction = response.getClass().getMethod("getActiveAction").invoke(response);
+                boolean priorityOpen = player.getId().equals(playerId)
+                        && playerId.equals(game.getPriorityPlayerId())
+                        && activeAction instanceof String
+                        && ((String) activeAction).startsWith("priority - HumanPlayer.java:");
                 JsonObject result = status("ok"); result.addProperty("cycle", cycle);
-                result.add("objects", objects); result.add("players", players); result.add("commanders", commanders);
+                result.addProperty("priority_open", priorityOpen);
+                // Match the pinned HumanPlayer selection branches under the same response monitor.
+                // Native requirement effects still decide whether an attacker click can remove it.
+                String declaration=activeAction instanceof String && ((String)activeAction).startsWith("selectAttackers - HumanPlayer.java:")?"attackers":activeAction instanceof String && ((String)activeAction).startsWith("selectBlockers - HumanPlayer.java:")?"blockers":null;
+                if(declaration!=null && player.getId().equals(playerId) && game.getStack().isEmpty()) {
+                    JsonArray reselect=new JsonArray();
+                    for(UUID id:permitted.getMyPlayer().getBattlefield().keySet()) {
+                        mage.game.permanent.Permanent permanent=game.getPermanent(id);
+                        if(permanent!=null && (declaration.equals("attackers")?new mage.filter.common.FilterAttackingCreature().match(permanent,playerId,null,game):new mage.filter.common.FilterBlockingCreature().match(permanent,playerId,null,game)))reselect.add(id.toString());
+                    }
+                    if(reselect.size()>256)return status("retry");
+                    result.addProperty("combat_reselect_kind",declaration);result.add("combat_reselect",reselect);
+                }
+
+                if(paymentProbe && player.getId().equals(playerId)) {
+                    Object probe=type.getMethod("paymentProbe",Game.class,UUID.class,int.class,UUID[].class)
+                        .invoke(human,game,playerId,cycle,visible.toArray(new UUID[0]));
+                    if(probe instanceof JsonObject)result.add("payment_probe",(JsonObject)probe);
+                    List<UUID> ordinarySources=new ArrayList<>();boolean ordinaryVisible=true;for(CardView source:permitted.getMyPlayer().getBattlefield().values()){ordinaryVisible&=!source.isFaceDown() && !source.hideInfo() && (source.getCounters()==null || source.getCounters().isEmpty());ordinarySources.add(source.getId());}
+                    Object assessment=ordinaryVisible?type.getMethod("ordinaryPayment",Game.class,UUID.class,int.class,UUID[].class).invoke(human,game,playerId,cycle,ordinarySources.toArray(new UUID[0])):null;
+                    if(assessment instanceof JsonObject)result.add("ordinary_payment",(JsonObject)assessment);
+
+                }
+                result.add("objects", objects); result.add("players", players); result.add("commanders", commanderData.get("commanders"));result.add("commander_metadata_complete",commanderData.get("commander_metadata_complete"));
                 return result;
             }
         }
-        return game.hasEnded() ? status("finished") : status("retry");
+        return game.hasEnded() ? terminal(game,gameId,playerId) : status("retry");
     }
 }

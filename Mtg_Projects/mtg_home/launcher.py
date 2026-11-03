@@ -94,7 +94,8 @@ class ModuleController(C.QObject):
                         f'{name}: {count} followed deck update(s) available. Open Browse Online to review.', 15000))
                 elif module.action == 'play':
                     from mtg_play.workspace import PlayWorkspace
-                    window = PlayWorkspace(self.service, self.show_home)
+                    window = PlayWorkspace(self.service, self.show_home,
+                        browse_library=lambda: self.open_module('library'))
                 else:
                     return
                 self.home.add_workspace(key, window)

@@ -1,6 +1,7 @@
-"""Reusable engine decision controls; every submission is an explicit click."""
+"""Reusable engine decision controls for explicit player choices."""
 
 from PyQt6 import QtCore as C, QtWidgets as W
+from .priority import opportunity, turn_boundary
 
 
 FAMILIES = {
@@ -14,6 +15,45 @@ FAMILIES = {
     "amounts",
     "piles",
 }
+
+
+def opening_hand_request(view):
+    request = view.decision
+    if request is None or request.player_id != view.viewer_id:
+        return False
+    prompt = request.prompt.lower()
+    if request.family == "boolean":
+        return "mulligan" in prompt or "keep your hand" in prompt
+    if request.family != "target" or "bottom" not in prompt:
+        return False
+    hand = {
+        obj.object_id
+        for obj in view.objects
+        if obj.zone == "hand"
+        and obj.owner_id == view.viewer_id
+        and not obj.hidden
+        and not obj.face_down
+    }
+    return bool(request.options) and all(
+        option.object_id in hand for option in request.options
+    )
+
+
+def pass_label(view):
+    kinds = {action.kind for action in view.actions}
+    if not opportunity(view) and (
+        view.step == "DECLARE_ATTACKERS" or "declare_attacker" in kinds
+    ):
+        return "Finish attackers"
+    if not opportunity(view) and (
+        view.step == "DECLARE_BLOCKERS" or "declare_blocker" in kinds
+    ):
+        return "Finish blockers"
+    if view.decision is not None and view.decision.family == "mana":
+        return "Finish payment"
+    if opportunity(view) and turn_boundary(view) and view.step == "POSTCOMBAT_MAIN":
+        return "End Turn"
+    return "Pass priority"
 
 
 class DecisionPanel(W.QWidget):
@@ -51,7 +91,7 @@ class DecisionPanel(W.QWidget):
         self.rows.addWidget(button)
         return button
 
-    def present(self, view):
+    def present(self, view, *, card_choices=()):
         self.clear()
         self.view = view
         request = view.decision
@@ -81,28 +121,39 @@ class DecisionPanel(W.QWidget):
         }
         names.update({player.player_id: player.name for player in view.players})
         for option in request.options:
+            if option.object_id in card_choices:
+                continue
             text = (
                 names.get(option.object_id)
                 or names.get(option.player_id)
                 or option.label
             )
+            if opening_hand_request(view) and request.family == "boolean":
+                affirmative = option.label.lower() in {"yes", "true"}
+                negative = option.label.lower() in {"no", "false"}
+                prompt = request.prompt.lower()
+                unambiguous = ("mulligan" in prompt) != ("keep your hand" in prompt)
+                if (affirmative or negative) and unambiguous:
+                    mulligan_question = "mulligan" in request.prompt.lower()
+                    text = "Mulligan" if affirmative == mulligan_question else "Keep"
             text = ("Selected · " if option.selected else "") + (text or "Choose")
-            self.button(text, "choose", (option.option_id,))
+            button = self.button(text, "choose", (option.option_id,))
+            if opening_hand_request(view) and request.family == "boolean":
+                button.setMinimumHeight(44)
+                if text == "Keep":
+                    button.setProperty("buttonRole", "primary")
         for action in view.actions:
             if action.object_id is None:
                 label = action.label
                 if action.kind == "pass":
-                    kinds = {item.kind for item in view.actions}
-                    label = (
-                        "Finish attackers"
-                        if "declare_attacker" in kinds
-                        else "Finish blockers"
-                        if "declare_blocker" in kinds
-                        else "Finish payment"
-                        if request.family == "mana"
-                        else "Pass priority"
+                    label = pass_label(view)
+                button = self.button(label, "perform", (action.action_id,))
+                if action.kind == "pass":
+                    button.setMinimumHeight(44)
+                    button.setProperty("buttonRole", "primary")
+                    button.setAccessibleDescription(
+                        "Submit this engine-offered action once. The game determines what happens next."
                     )
-                self.button(label, "perform", (action.action_id,))
         if request.family == "target":
             selected = sum(option.selected for option in request.options)
             self.rows.addWidget(

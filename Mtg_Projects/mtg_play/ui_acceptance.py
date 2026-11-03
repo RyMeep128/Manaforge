@@ -16,13 +16,15 @@ import time
 from types import SimpleNamespace
 from uuid import uuid4
 
-from PyQt6 import QtCore as C, QtWidgets as W
+from PyQt6 import QtCore as C, QtGui as G, QtWidgets as W
 from mtg_core.decks import DeckStore
 from mtg_home.home import HomeWindow
 from mtg_home.launcher import ModuleController
 from .adapter import AdapterError, LocalGameAdapter
 from .contracts import CommandResult
+from .decisions import opening_hand_request
 from .setup import saved_decks
+from .lobby import offline_lobby
 from .workspace import PlayWorkspace
 
 
@@ -35,40 +37,91 @@ def wait(app, predicate, timeout=30):
         raise AdapterError("UI_WAIT_TIMEOUT")
 
 
+def configure_visual_review(app):
+    """Make offscreen artifacts readable using installed fonts, never downloads."""
+    if not G.QFontDatabase.families():
+        candidates = [
+            Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts" / name
+            for name in ("segoeui.ttf", "arial.ttf", "DejaVuSans.ttf")
+        ]
+        candidates.append(Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"))
+        for path in candidates:
+            if path.is_file() and G.QFontDatabase.addApplicationFont(str(path)) >= 0:
+                break
+    families = G.QFontDatabase.families()
+    if not families:
+        raise AdapterError("UI_REVIEW_FONT_UNAVAILABLE")
+    family = next(
+        (name for name in ("Segoe UI", "Arial", "DejaVu Sans") if name in families),
+        families[0],
+    )
+    app.setFont(G.QFont(family, 10))
+    if not G.QFontMetrics(app.font()).inFont("A"):
+        raise AdapterError("UI_REVIEW_FONT_UNAVAILABLE")
+    from mtg_ui.theme import application_stylesheet
+
+    app.setStyle("Fusion")
+    app.setStyleSheet(application_stylesheet())
+
+
 class UIAdapter:
     def __init__(self, app, runtime, root, *, screenshot_root=None):
         self.app, self.runtime, self.root = app, runtime, root
         self.home = self.workspace = None
         self.receipts = []
-        self.handoffs = 0
+        self.viewer_id = None
         self.closed = False
         self.screenshot_root = screenshot_root
+        if screenshot_root is not None:
+            configure_visual_review(app)
         self.captured = set()
+        self.remote_artwork_attempts = 0
+        self.returned_to_lobby = False
+        self.selected_keys = None
 
-    def capture(self, name):
+    def capture(self, name, widget=None):
         if self.screenshot_root is None or name in self.captured:
             return
         self.screenshot_root.mkdir(parents=True, exist_ok=True)
-        if not self.home.grab().save(str(self.screenshot_root / (name + ".png"))):
+        self.app.processEvents()
+        if (
+            not (widget if widget is not None else self.home)
+            .grab()
+            .save(str(self.screenshot_root / (name + ".png")))
+        ):
             raise AdapterError("UI_SCREENSHOT_FAILED")
         self.captured.add(name)
 
     def create_game(self, setup, documents):
-        if len(setup.seats) != 2 or tuple(seat.seat_id for seat in setup.seats) != (
-            "one",
-            "two",
+        if (
+            len(setup.seats) != 2
+            or len(documents) != 2
+            or setup.seats[0].controller != "local_human"
+            or setup.seats[1].controller != "engine_ai"
         ):
-            raise AdapterError("UI_FIXTURE_REQUIRES_TWO_LOCAL_SEATS")
+            raise AdapterError("UI_FIXTURE_REQUIRES_OFFLINE_AI")
+        self.viewer_id = setup.seats[0].seat_id
         for seat, document in zip(setup.seats, documents):
             DeckStore().save(
                 self.root / "decks" / (seat.seat_id + ".manaforge.json"), document
             )
-        # Synthetic fixture printing IDs deliberately exercise the artwork fallback.
-        service = SimpleNamespace(
+
+        # Synthetic IDs intentionally exercise missing local artwork. Remote
+        # fallbacks are forbidden while this match is active, including startup.
+        def image_fallback(*args, **kwargs):
+            if self.workspace is not None and self.workspace.session.active:
+                self.remote_artwork_attempts += 1
+                raise AssertionError("Gameplay attempted remote artwork or metadata")
+            return None
+
+        service = self.fixture_service = SimpleNamespace(
             database=SimpleNamespace(get_oracle_card=lambda oracle_id: None),
             get_image_path=lambda *args: None,
-            ensure_image=lambda *args, **kwargs: None,
-            ensure_face_image=lambda *args, **kwargs: None,
+            ensure_image=image_fallback,
+            ensure_face_image=image_fallback,
+            fetch_bytes_fn=image_fallback,
+            fetch_json_fn=image_fallback,
+            fetch_missing_card=image_fallback,
             get_card=lambda **kwargs: {},
         )
         self.home = HomeWindow()
@@ -80,7 +133,18 @@ class UIAdapter:
                 lambda: controller.show_home(),
                 adapter_factory=lambda: self.runtime,
                 deck_provider=lambda: saved_decks(self.root),
+                lobby=offline_lobby(
+                    seat_ids=tuple(seat.seat_id for seat in setup.seats)
+                ),
             )
+            # This explicit UI fixture pilot owns every click. Priority automation
+            # has a separate real-engine scenario; never race these fixture clicks.
+            self.workspace.priority.policy.seat(
+                setup.seats[0].seat_id
+            ).full_control = True
+            self.workspace.priority.full.blockSignals(True)
+            self.workspace.priority.full.setChecked(True)
+            self.workspace.priority.full.blockSignals(False)
             return self.workspace
 
         controller = ModuleController(
@@ -92,23 +156,53 @@ class UIAdapter:
         if self.workspace is None:
             raise AdapterError("UI_PLAY_NAVIGATION_FAILED")
         wait(self.app, lambda: not self.workspace.catalog_jobs.busy)
-        for seat, name, selector in zip(
-            setup.seats, self.workspace.names, self.workspace.selectors
-        ):
-            name.setText(seat.name)
-            index = next(
-                index
-                for index, item in enumerate(self.workspace._decks)
-                if item.path.name == seat.seat_id + ".manaforge.json"
-            )
-            selector.setCurrentIndex(index + 1)
+        self.capture("landing")
+        self.workspace.landing_page.offline_button.click()
+        if self.workspace.pages.currentWidget() is not self.workspace.format_page:
+            raise AdapterError("UI_OFFLINE_NAVIGATION_FAILED")
         self.workspace.format.setCurrentIndex(
             self.workspace.format.findData(setup.format)
         )
+        self.capture("format")
+        self.workspace.format_continue.click()
+        if self.workspace.pages.currentWidget() is not self.workspace.setup_page:
+            raise AdapterError("UI_LOBBY_NAVIGATION_FAILED")
+        for seat, selector in zip(setup.seats, self.workspace.selectors):
+            index = next(
+                index
+                for index, item in enumerate(self.workspace._decks)
+                if item.path is not None
+                and item.path.name == seat.seat_id + ".manaforge.json"
+            )
+            selector.setCurrentIndex(index + 1)
+        self.selected_keys = tuple(
+            self.workspace._decks[selector.currentData()].key
+            for selector in self.workspace.selectors
+        )
         self.workspace.session.commandFinished.connect(self.receipts.append)
+        self.workspace.session.startupProgress.connect(
+            lambda progress: (
+                self.capture("loading") if progress["state"] == "started" else None
+            )
+        )
         self.capture("setup")
         self.workspace.start_button.click()
-        wait(self.app, lambda: not self.workspace.session.busy, timeout=300)
+        wait(
+            self.app,
+            lambda: (
+                self.workspace.asset_continue.isVisible()
+                or self.workspace.session.active
+            ),
+            timeout=300,
+        )
+        if self.workspace.asset_continue.isVisible():
+            self.capture("missing-artwork")
+            self.workspace.asset_continue.click()
+        wait(
+            self.app,
+            lambda: self.workspace.session.active and not self.workspace.session.busy,
+            timeout=300,
+        )
         self.workspace.session.timer.stop()
         if not self.workspace.session.active:
             raise AdapterError("UI_GAME_START_FAILED")
@@ -118,19 +212,8 @@ class UIAdapter:
         if self.closed:
             raise AdapterError("SESSION_CLOSED")
         workspace = self.workspace
-        if workspace._seat_id != player:
-            workspace.handoff_button.click()
-            if (
-                workspace._view is not None
-                or workspace.table.view is not None
-                or workspace.table.artwork.cache
-            ):
-                raise AdapterError("UI_HANDOFF_PRIVATE_STATE_RETAINED")
-            if workspace.pages.currentWidget() is not workspace.handoff_page:
-                raise AdapterError("UI_HANDOFF_SCREEN_MISSING")
-            self.capture("handoff")
-            workspace.reveal_button.click()
-            self.handoffs += 1
+        if player != self.viewer_id:
+            raise AdapterError("UNAUTHORIZED_SEAT")
         workspace.session.timer.stop()
         wait(self.app, lambda: not workspace.session.busy)
         if workspace.session._blocked:
@@ -159,7 +242,16 @@ class UIAdapter:
         }
         if set(self.workspace.table.hand.cards) != expected_hand:
             raise AdapterError("UI_HAND_PRESENTATION_MISMATCH")
-        self.capture("table-" + player)
+        self.capture("table-local")
+        if self.screenshot_root is not None and "hover-preview" not in self.captured:
+            self._capture_hover(view)
+        if (
+            view.decision is not None
+            and not self.workspace.table.opening_overlay.isVisible()
+        ):
+            self.capture("choice-panel", self.workspace.table.decision_dock)
+        if opening_hand_request(view) and view.decision.family == "boolean":
+            self.capture("opening-hand")
         if any(obj.zone == "stack" for obj in view.objects):
             self.capture("stack")
         if view.combat:
@@ -167,6 +259,46 @@ class UIAdapter:
         if view.result:
             self.capture("result-" + player)
         return view
+
+    def _capture_hover(self, view):
+        table = self.workspace.table
+        candidate = next(
+            (
+                card
+                for lane in (
+                    table.opening_hand,
+                    table.hand,
+                    table.player,
+                    table.opponent,
+                )
+                for card in lane.cards.values()
+                if card.isVisible()
+                and card.obj is not None
+                and not card.obj.hidden
+                and not card.obj.face_down
+                and (card.obj.zone != "hand" or card.obj.owner_id == self.viewer_id)
+            ),
+            None,
+        )
+        if candidate is None:
+            return
+        before = len(self.receipts)
+        local = C.QPointF(candidate.rect().center())
+        global_position = C.QPointF(candidate.mapToGlobal(candidate.rect().center()))
+        C.QCoreApplication.sendEvent(
+            candidate, G.QEnterEvent(local, local, global_position)
+        )
+        wait(self.app, table.hover_preview.isVisible, timeout=3)
+        wait(
+            self.app,
+            lambda: table.hover_image.text() != "Loading local artwork...",
+            timeout=10,
+        )
+        self.capture("hover-context")
+        self.capture("hover-preview", table.hover_preview)
+        C.QCoreApplication.sendEvent(candidate, C.QEvent(C.QEvent.Type.Leave))
+        if len(self.receipts) != before:
+            raise AdapterError("UI_HOVER_SUBMITTED_COMMAND")
 
     def _send(self, player, decision, method, args):
         self._activate(player)
@@ -263,10 +395,32 @@ class UIAdapter:
     def close(self):
         if self.workspace is not None:
             self.workspace._approved_close = True
-            self.workspace.close_button.click()
+            if (
+                self.workspace._view is not None
+                and self.workspace._view.result is not None
+            ):
+                self.workspace.table.result_return.click()
+            else:
+                self.workspace.close_button.click()
+            self.capture("cleanup")
             wait(self.app, lambda: not self.workspace.session.busy, timeout=90)
             if self.workspace.session.active:
                 raise AdapterError("UI_ENGINE_CLEANUP_FAILED")
+            self.returned_to_lobby = (
+                self.workspace.pages.currentWidget() is self.workspace.setup_page
+            )
+            if not self.returned_to_lobby:
+                raise AdapterError("UI_LOBBY_RETURN_FAILED")
+            if (
+                self.selected_keys is not None
+                and tuple(
+                    self.workspace._decks[selector.currentData()].key
+                    for selector in self.workspace.selectors
+                )
+                != self.selected_keys
+            ):
+                raise AdapterError("UI_LOBBY_SELECTION_CHANGED")
+            self.capture("lobby-return")
             wait(self.app, self.workspace.prepare_to_close, timeout=90)
         if self.home is not None:
             self.home.close()
@@ -274,13 +428,12 @@ class UIAdapter:
 
 
 def main():
-    from .adapter_acceptance import acceptance, combat_acceptance
-    from .acceptance_scenarios import blockers, commander_play
+    from . import ai_acceptance
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--scenario",
-        choices=("basic", "combat", "blockers", "commander-play"),
+        choices=("ai-freeform", "ai-commander", "ai-blockers"),
         required=True,
     )
     parser.add_argument("--xmage-root", type=Path, required=True)
@@ -306,28 +459,53 @@ def main():
         )
         try:
             result["gameplay"] = {
-                "basic": acceptance,
-                "combat": combat_acceptance,
-                "blockers": blockers,
-                "commander-play": commander_play,
+                "ai-freeform": ai_acceptance.freeform,
+                "ai-commander": ai_acceptance.commander,
+                "ai-blockers": ai_acceptance.blockers,
             }[args.scenario](pilot)
-            if not pilot.handoffs:
-                raise AdapterError("UI_HANDOFF_EVIDENCE_MISSING")
-            result["handoffs"] = pilot.handoffs
+            result["authorized_viewer"] = pilot.viewer_id
             result["success"] = True
         except Exception as exc:
-            result["error"] = getattr(exc, "code", "UI_ACCEPTANCE_FAILED").split(
-                ":", 1
-            )[0]
+            result["error"] = (
+                getattr(exc, "code", None) or "UI_ACCEPTANCE_FAILED"
+            ).split(":", 1)[0]
+            if isinstance(exc, ai_acceptance.AIAcceptanceError):
+                result["failure_context"] = exc.context
         finally:
             try:
                 pilot.close()
             except Exception:
                 result["success"] = False
                 result["cleanup_error"] = "UI_CLEANUP_NOT_CONFIRMED"
+            result["returned_to_lobby"] = pilot.returned_to_lobby
+            result["remote_artwork_attempts"] = pilot.remote_artwork_attempts
+            result["screenshots"] = sorted(pilot.captured)
+            if pilot.remote_artwork_attempts:
+                result["success"] = False
+                result["error"] = "UI_GAMEPLAY_NETWORK_ATTEMPT"
+            required = {
+                "landing",
+                "format",
+                "setup",
+                "loading",
+                "opening-hand",
+                "hover-preview",
+                "lobby-return",
+            }
+            if result["success"] and not required.issubset(pilot.captured):
+                result["success"] = False
+                result["error"] = "UI_VISUAL_EVIDENCE_MISSING"
+            result["lifecycle"] = runtime.lifecycle.records
             if runtime.result is not None:
                 result["runtime"] = runtime.result.to_dict()
-                if not runtime.result.success:
+                if (
+                    not runtime.result.success
+                    or runtime.result.forced_cleanup
+                    or any(
+                        name.startswith("peer_")
+                        for name, _ in runtime.result.process_exit_codes
+                    )
+                ):
                     result["success"] = False
             # This standalone pilot owns the process logging lifecycle. Windows
             # cannot remove its temporary data directory while handlers are open.

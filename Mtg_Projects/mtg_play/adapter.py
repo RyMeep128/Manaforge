@@ -20,6 +20,7 @@ from .contracts import (
     GAME_PROTOCOL_VERSION,
     Capability,
     CardCharacteristics,
+    CardIdentity,
     CardObservation,
     ChoiceOption,
     ChoiceRequest,
@@ -36,6 +37,7 @@ from .contracts import (
     RuntimeReport,
 )
 from .decks import prepare_deck
+from .diagnostics import LifecycleDiagnostics
 
 if TYPE_CHECKING:
     from mtg_core.decks import DeckDocument
@@ -110,7 +112,22 @@ class LocalGameAdapter:
         *,
         bundle: Path = transport.DEFAULT_BUNDLE,
         jdk: Path = transport.DEFAULT_JDK,
+        payment_context_probe: bool = False,
     ):
+        if type(payment_context_probe) is not bool:
+            raise ValueError("PAYMENT_CONTEXT_PROBE")
+        self._payment_context_probe = payment_context_probe
+        self._payment_probe_scopes = set()
+        self._payment_probe_counts = []
+        self._payment_candidate_counts = []
+        self._payment_ordinary_counts = []
+        self._payment_ticket_counts = []
+        self._payment_hazard_counts = dict.fromkeys(
+            ("REQUIRES_MANUAL", "NO_REGISTERED_HAZARD", "UNKNOWN"), 0
+        )
+        self._payment_coverage_counts = dict.fromkeys(
+            ("COVERS", "INSUFFICIENT", "NO_UNPAID_COST", "UNSUPPORTED", "UNKNOWN"), 0
+        )
         self._bundle, self._jdk = Path(bundle).resolve(), Path(jdk).resolve()
         self._ready, self._release, self._done = (
             threading.Event(),
@@ -121,6 +138,15 @@ class LocalGameAdapter:
         self._runtime = None
         self._session = None
         self._runtime_result = None
+        self._cancel = threading.Event()
+        self.lifecycle = LifecycleDiagnostics()
+
+    def set_progress_callback(self, callback):
+        self.lifecycle.set_callback(callback)
+
+    def set_cancel_event(self, event):
+        """Bind the caller's thread-safe startup cancellation token before entry."""
+        self._cancel = event
 
     def __enter__(self):
         if self._thread is not None:
@@ -133,8 +159,18 @@ class LocalGameAdapter:
 
         def run():
             try:
+                probe_options = (
+                    {"payment_context_probe": True}
+                    if self._payment_context_probe
+                    else {}
+                )
                 self._runtime_result = transport.run_proof(
-                    self._bundle, self._jdk, runtime_consumer=consume
+                    self._bundle,
+                    self._jdk,
+                    runtime_consumer=consume,
+                    diagnostics=self.lifecycle,
+                    cancel=self._cancel,
+                    **probe_options,
                 )
             except Exception:
                 self._runtime_result = {
@@ -150,8 +186,24 @@ class LocalGameAdapter:
         )
         self._thread.start()
         if not self._ready.wait(240) or self._runtime is None or self._done.is_set():
-            self.close()
-            raise AdapterError("ENGINE_STARTUP_FAILED")
+            try:
+                self.close()
+            except AdapterError as error:
+                report = self.result
+                if (
+                    error.code != "ENGINE_RUNTIME_FAILED"
+                    or report is None
+                    or any(code is None for _, code in report.process_exit_codes)
+                ):
+                    raise
+            failure = self.lifecycle.failure
+            raise AdapterError(
+                "RUNTIME_CANCELLED"
+                if self._cancel.is_set()
+                else failure["code"]
+                if failure
+                else "ENGINE_STARTUP_FAILED"
+            )
         return self
 
     @property
@@ -161,7 +213,8 @@ class LocalGameAdapter:
         processes = {
             key: value
             for key, value in self._runtime_result.items()
-            if key in ("server", "bridge") or key.startswith("peer_")
+            if (key in ("compiler", "server", "bridge") or key.startswith("peer_"))
+            and value.get("started", True)
         }
         return RuntimeReport(
             bool(self._runtime_result.get("success")),
@@ -178,7 +231,9 @@ class LocalGameAdapter:
             encoding="utf-8"
         )
         match = re.search(r'^APP_VERSION = "([^"\n]+)"', constants, re.MULTILINE)
-        manifest_bytes = (transport.HERE / "artifacts.json").read_bytes()
+        from .engine_fork import installation_manifest
+
+        manifest_bytes = installation_manifest(self._bundle).read_bytes()
         return Compatibility(
             match.group(1) if match else "unknown",
             GAME_PROTOCOL_VERSION,
@@ -194,7 +249,7 @@ class LocalGameAdapter:
             Capability(
                 "commander",
                 "verified",
-                "2–5 seats; partner designations; casting, damage and engine-calculated tax",
+                "2â€“5 seats; partner designations; casting, damage and engine-calculated tax",
             ),
             Capability(
                 "continuous_power_toughness", "verified", "Giant Growth and expiration"
@@ -250,6 +305,9 @@ class LocalGameAdapter:
             Capability("complete_dynamic_rules_text", "unsupported"),
             Capability("reconnection", "unsupported"),
             Capability("remote_multiplayer", "unsupported"),
+            Capability(
+                "engine_ai", "unverified", "Pinned-engine AI acceptance pending CI"
+            ),
         )
 
     def _server_request(self, **fields):
@@ -294,7 +352,45 @@ class LocalGameAdapter:
         )
 
     def _resolve(self, queries):
+        if getattr(self, "_cancel", None) is not None and self._cancel.is_set():
+            raise AdapterError("RUNTIME_CANCELLED")
         return self._server_request(cards=queries)
+
+    def validate_deck(self, document: DeckDocument, format: str, *, oracle_lookup=None):
+        """Check one deck using the owned pinned engine; never cache eligibility.
+
+        Call on the runtime worker before creating a match. False is an explicit
+        format rejection; translation, transport and protocol failures raise.
+        """
+        if self._runtime is None or self._done.is_set():
+            raise AdapterError("ENGINE_UNAVAILABLE")
+        if self._session is not None:
+            raise AdapterError("SESSION_ALREADY_CREATED")
+        if format not in ("freeform", "commander"):
+            raise AdapterError("UNSUPPORTED_GAME_SETUP")
+        with self.lifecycle.stage("deck_resolution"):
+            prepared = prepare_deck(
+                document, self._resolve, oracle_lookup, commander=format == "commander"
+            )
+            result = self._server_request(
+                command="validate_deck",
+                format=format,
+                cards=prepared.cards,
+                sideboard=prepared.sideboard,
+            )
+        if not isinstance(result, dict) or type(result.get("eligible")) is not bool:
+            code = result.get("code") if isinstance(result, dict) else None
+            raise AdapterError(
+                code
+                if code
+                in (
+                    "ENGINE_VALIDATOR_UNAVAILABLE",
+                    "ENGINE_DECK_LOAD_FAILED",
+                    "UNSUPPORTED_GAME_SETUP",
+                )
+                else "INVALID_DECK_VALIDATION_RESPONSE"
+            )
+        return result["eligible"]
 
     def _metadata(self, view):
         cards = [
@@ -306,7 +402,7 @@ class LocalGameAdapter:
             for zone in ("battlefield", "graveyard", "command")
             for card in row.get(zone, ())
         ]
-        return self._server_request(
+        result = self._server_request(
             command="metadata",
             game=view["game_id"],
             player=view["viewer"],
@@ -315,6 +411,102 @@ class LocalGameAdapter:
             identified_ids=[
                 card["id"] for card in cards if not card.get("hidden", True)
             ],
+        )
+        probe = (
+            result.get("payment_probe")
+            if self._payment_context_probe and isinstance(result, dict)
+            else None
+        )
+        if isinstance(probe, dict) and probe.get("available") is True:
+            sequence, count = probe.get("sequence"), probe.get("unpaid_mana_count")
+            if (
+                type(sequence) is int
+                and 0 < sequence <= 2**63 - 1
+                and type(count) is int
+                and 0 <= count <= 128
+            ):
+                if len(self._payment_probe_scopes) < 128:
+                    self._payment_probe_scopes.add(
+                        (view["game_id"], view["viewer"], view["cycle"], sequence)
+                    )
+                if len(self._payment_probe_counts) < 128:
+                    self._payment_probe_counts.append(count)
+                sources, abilities = (
+                    probe.get("candidate_sources"),
+                    probe.get("candidate_abilities"),
+                )
+                if (
+                    type(sources) is int
+                    and 0 <= sources <= 128
+                    and type(abilities) is int
+                    and sources <= abilities <= sources * 128
+                    and len(self._payment_candidate_counts) < 128
+                ):
+                    self._payment_candidate_counts.append((sources, abilities))
+                    tickets = probe.get("source_tickets_revalidated")
+                    if type(tickets) is int and 0 <= tickets <= sources:
+                        self._payment_ticket_counts.append(tickets)
+                    ordinary = probe.get("ordinary_shape_abilities")
+                    if type(ordinary) is int and 0 <= ordinary <= abilities:
+                        self._payment_ordinary_counts.append(ordinary)
+                    coverage = probe.get("base_cost_coverage")
+                    if (
+                        type(coverage) is str
+                        and coverage in self._payment_coverage_counts
+                    ):
+                        self._payment_coverage_counts[coverage] += 1
+                    hazards = probe.get("registered_hazards")
+                    if type(hazards) is str and hazards in self._payment_hazard_counts:
+                        self._payment_hazard_counts[hazards] += 1
+        return result
+
+    def payment_ticket_diagnostics(self):
+        """Aggregate identity-read evidence only; never exports native tickets or IDs."""
+        values = self._payment_ticket_counts
+        return dict(
+            enabled=self._payment_context_probe,
+            observations=len(values),
+            maximum_revalidated=max(values, default=None),
+        )
+
+    def payment_hazard_diagnostics(self):
+        """Private research counters only; no registry contents or public failure reasons."""
+        counts = self._payment_hazard_counts
+        return dict(
+            enabled=self._payment_context_probe,
+            observations=sum(counts.values()),
+            **{key.lower(): value for key, value in counts.items()},
+        )
+
+    def payment_cost_coverage_diagnostics(self):
+        """Fixed bounded native base-total evidence, never source safety or payment success."""
+        counts = self._payment_coverage_counts
+        return dict(
+            enabled=self._payment_context_probe,
+            observations=sum(counts.values()),
+            **{key.lower(): value for key, value in counts.items()},
+        )
+
+    def payment_context_diagnostics(self):
+        """Bounded opt-in research evidence; no raw IDs, costs, cards or native references."""
+        counts = self._payment_probe_counts
+        return dict(
+            enabled=self._payment_context_probe,
+            observations=len(counts),
+            scopes=len(self._payment_probe_scopes),
+            minimum=min(counts) if counts else None,
+            maximum=max(counts) if counts else None,
+            ordinary_shape_observations=len(self._payment_ordinary_counts),
+            maximum_ordinary_shape_abilities=max(
+                self._payment_ordinary_counts, default=None
+            ),
+            candidate_observations=len(self._payment_candidate_counts),
+            maximum_candidate_sources=max(
+                (s for s, _ in self._payment_candidate_counts), default=None
+            ),
+            maximum_candidate_abilities=max(
+                (a for _, a in self._payment_candidate_counts), default=None
+            ),
         )
 
     def create_game(
@@ -339,15 +531,26 @@ class LocalGameAdapter:
             setup.format == "freeform" and len(setup.seats) != 2
         ):
             raise AdapterError("UNSUPPORTED_GAME_SETUP")
-        prepared = tuple(
-            prepare_deck(
-                deck,
-                self._resolve,
-                oracle_lookup,
-                commander=setup.format == "commander",
+        if any(
+            seat.controller not in ("local_human", "engine_ai") for seat in setup.seats
+        ):
+            raise AdapterError("UNSUPPORTED_CONTROLLER")
+        if any(seat.controller == "engine_ai" for seat in setup.seats) and (
+            len(setup.seats) != 2
+            or setup.seats[0].controller != "local_human"
+            or setup.seats[1].controller != "engine_ai"
+        ):
+            raise AdapterError("UNSUPPORTED_AI_SETUP")
+        with self.lifecycle.stage("deck_resolution"):
+            prepared = tuple(
+                prepare_deck(
+                    deck,
+                    self._resolve,
+                    oracle_lookup,
+                    commander=setup.format == "commander",
+                )
+                for deck in decks
             )
-            for deck in decks
-        )
         self._session = XmageGameSession(self, setup, prepared)
         self._session._start()
         return self._session
@@ -376,6 +579,7 @@ class XmageGameSession:
         self._timings = {}
         self.session_id = _id()
         self._owner, self._setup, self._decks = owner, setup, decks
+        self._lifecycle = getattr(owner, "lifecycle", None) or LifecycleDiagnostics()
         self._clients, self._views, self._pending, self._replies = {}, {}, {}, {}
         self._player_ids, self._names, self._game_ids = {}, {}, {}
         self._objects, self._wire_objects, self._choices, self._actions = {}, {}, {}, {}
@@ -395,43 +599,67 @@ class XmageGameSession:
 
     def _start(self):
         first, events, launch, port, _, _ = self._owner._runtime
-        for index, seat in enumerate(self._setup.seats):
-            if index == 0:
-                process, stream = first, events
-            else:
-                process, stream = launch()
-            self._clients[seat.seat_id] = process, stream
-            if index > 0:
-                request = _id()
-                username = "mf_" + _id()[:10]
-                self._names[username] = seat.seat_id
-                transport.send(
-                    process, "connect", request, port=port, username=username
-                )
-                stream.wait("connected", time.monotonic() + 30, request)
-        # The initial proof client already connected; discover its generated username.
-        first_seat = self._setup.seats[0].seat_id
-        self._request(first_seat, "status", "status")
-        created = self._request(
-            first_seat,
-            "create_game",
-            "table_created",
-            format=self._setup.format,
-            seats=len(self._setup.seats),
-        )
-        table = created["table_id"]
-        for seat, deck in zip(self._setup.seats, self._decks):
-            self._request(
-                seat.seat_id,
-                "join_table",
-                "joined",
-                table_id=table,
-                cards=deck.cards,
-                sideboard=deck.sideboard,
+        humans = [
+            seat for seat in self._setup.seats if seat.controller == "local_human"
+        ]
+        with self._lifecycle.stage("player_connections"):
+            for index, seat in enumerate(humans):
+                if index == 0:
+                    process, stream = first, events
+                else:
+                    process, stream = launch()
+                self._clients[seat.seat_id] = process, stream
+                if index > 0:
+                    request = _id()
+                    username = "mf_" + _id()[:10]
+                    self._names[username] = seat.seat_id
+                    transport.send(
+                        process, "connect", request, port=port, username=username
+                    )
+                    stream.wait("connected", time.monotonic() + 30, request)
+            # The initial proof client already connected; discover its generated username.
+            first_seat = self._setup.seats[0].seat_id
+            self._request(first_seat, "status", "status")
+        with self._lifecycle.stage("table_creation"):
+            created = self._request(
+                first_seat,
+                "create_game",
+                "table_created",
+                format=self._setup.format,
+                seats=len(self._setup.seats),
+                controllers=[seat.controller for seat in self._setup.seats],
             )
-        self._request(first_seat, "start_game", "started", table_id=table)
+        with self._lifecycle.stage("deck_submission"):
+            table = created["table_id"]
+            # XMage's own lobby joins AI through the table owner's session before
+            # joining the human. AI has no client, private view, or response channel.
+            entries = tuple(zip(self._setup.seats, self._decks))
+            for seat, deck in sorted(
+                entries, key=lambda item: item[0].controller != "engine_ai"
+            ):
+                fields = {}
+                if seat.controller == "engine_ai":
+                    username = "ai_" + _id()[:10]
+                    self._names[username] = seat.seat_id
+                    fields = dict(controller="engine_ai", player_name=username)
+                self._request(
+                    first_seat if seat.controller == "engine_ai" else seat.seat_id,
+                    "join_table",
+                    "joined",
+                    table_id=table,
+                    cards=deck.cards,
+                    sideboard=deck.sideboard,
+                    **fields,
+                )
+        with self._lifecycle.stage("match_start"):
+            self._request(first_seat, "start_game", "started", table_id=table)
 
     def _check(self, player):
+        if any(
+            seat.seat_id == player and seat.controller == "engine_ai"
+            for seat in self._setup.seats
+        ):
+            raise AdapterError("UNAUTHORIZED_SEAT")
         if player not in self._clients:
             raise AdapterError("UNKNOWN_PLAYER")
         if self._closed:
@@ -643,6 +871,7 @@ class XmageGameSession:
             return False
         for card in cards:
             card.update(metadata["objects"][card["id"]])
+        view["_priority_open"] = metadata.get("priority_open", False)
         players = {row["id"]: row for row in metadata["players"]}
         for row in view["players"]:
             row["eliminated"] = players[row["id"]]["lost"] or players[row["id"]]["left"]
@@ -866,6 +1095,29 @@ class XmageGameSession:
                         card.get("physical_number", card.get("number")),
                     )
                 )
+            # Prompt CardViews authorize these visible printings but omit owner IDs.
+            # Match exact set/collector pairs only; ambiguous bindings stay unavailable.
+            if (
+                identity is None
+                and zone in ("decision", "decision_pile_2")
+                and not hidden
+                and not card.get("face_down")
+                and not card.get("token")
+                and not card.get("copy")
+                and not view.get("_metadata_unavailable")
+            ):
+                matches = {
+                    (binding.oracle_id, binding.printing_id)
+                    for deck in self._decks
+                    if (
+                        binding := deck.bindings.get(
+                            (card.get("set"), card.get("number"))
+                        )
+                    )
+                }
+                if len(matches) == 1:
+                    oracle, printing = matches.pop()
+                    identity = CardIdentity(oracle, printing, None)
             characteristics = (
                 None
                 if hidden
@@ -992,6 +1244,7 @@ class XmageGameSession:
                             obj.characteristics.name
                             if obj.characteristics and obj.characteristics.name
                             else "Select object",
+                            view.get("priority_classes", {}).get(raw, "unknown"),
                         )
                     )
                 action = token + "-pass"
@@ -1060,6 +1313,13 @@ class XmageGameSession:
                     for row in request.get("amounts", ())
                 ),
                 request.get("can_finish", False),
+                is_priority=bool(
+                    request.get("is_priority")
+                    and method == "GAME_SELECT"
+                    and ("cycle" not in view or view.get("_priority_open") is True)
+                    and "attackers" not in request
+                    and "blockers" not in request
+                ),
             )
         combat = tuple(
             CombatAssignment(
@@ -1088,6 +1348,13 @@ class XmageGameSession:
             result=self._results.get(player_id),
             commanders=tuple(commanders) if "commanders" in view else None,
             observations=view.get("_observations", ()),
+            actions_complete=bool(
+                decision
+                and decision.is_priority
+                and view.get("playable_information_complete")
+                and not view.get("_metadata_unavailable")
+                and all(raw in reverse for raw in view.get("playable", ()))
+            ),
             unsupported_fields=(
                 (
                     "object_incarnations",

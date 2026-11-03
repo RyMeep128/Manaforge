@@ -316,6 +316,11 @@ Print-layout preview and future match surfaces still need reference entry points
 
 ## Phase 7 - Versioned game protocol and rules-engine feasibility
 
+Play architecture and migration gates now follow the proposed [Unity + Java roadmap](play-unity-java-roadmap.md),
+especially P0/P1 (G0/G1). The checklist below retains prior product requirements
+and history; it does not claim those gates are complete. Product phase numbers
+stay unchanged; P0–P9 in the linked roadmap are Play-specific.
+
 - [ ] Evaluate XMage as the preferred initial authoritative engine, with Forge as an investigation alternative; verify feasibility and license compatibility before incorporating code. Keep engine-specific classes out of application models and UI.
 - [ ] Compare embedding, subprocess, and API integration while preserving Manaforge's UI; document supported cards/formats and limitations.
 - [ ] Establish serializable game state, unique card-instance identifiers, and explicit actions/events through engine integration, separate from Qt widgets and the persistent deck model. Do not build a temporary manual-play system or duplicate engine rules.
@@ -328,9 +333,34 @@ Print-layout preview and future match surfaces still need reference entry points
 
 ## Phase 8 - Rules-enforced local play
 
-The [local two-player delivery plan](play-local-game.md) tracks the staged first
-playable experience and its adapter/CI acceptance gates. Source-only preview
-work does not enable Play in installed releases.
+The proposed [Unity + Java roadmap](play-unity-java-roadmap.md) governs replacement
+delivery: P2/P3 converge at P4, followed by dedicated P5/P6 UX and alpha acceptance.
+Retain Qt/Python until replacement acceptance. The following records historic
+[AI and Focused View work](play-ai-focused-view-epic.md); [local delivery status](play-local-game.md) records
+the historic repository baseline and adapter/CI acceptance gaps. Its first gate
+was a real pinned-engine human-versus-AI scenario in CI, before dependent Qt UI work.
+The first Freeform bridge/adapter increment compiled and initialized in CI, but
+`ai-freeform` failed on an unhandled target decision in run `40977624067`; the
+leading diagnosis and local discard-policy fix are recorded in the delivery doc.
+The natural-completion gate remains unmet. Follow-on Commander AI and blocking scenarios are
+prepared locally for a later CI run; all Story 1 acceptance evidence remains
+pending. Measured startup stages, a bounded first-state wait, and cleanup-report
+fixes are also prepared locally; their tests and real-engine recovery acceptance
+remain unverified. The active source setup now uses a fixed local human plus AI
+opponent, with separate seat/player/pilot/deck/owner identities and updated AI UI
+acceptance scenarios; this local increment is also unverified. The new landing
+page now offers Play/mode selection and direct Play Offline, converging on explicit
+format confirmation before shared deck selection. Network controls stay disabled;
+navigation tests, desktop layouts, and screenshot evidence await CI/manual review.
+The shared lobby now has asynchronous adapter/Core readiness checks, per-commander
+printing previews, and borrowing from accepted local followed-deck caches through
+the existing Browse Online workflow. These are unverified local increments;
+local checks do not certify pinned-engine eligibility for Randomize.
+The subsequent lobby and permanent two-player Focused View preserve future mixed
+controllers and 2-5-player views without implementing networking or larger layouts.
+Source-only preview work does not enable Play in installed releases. The existing
+pass-and-play UI has been removed from the active source workspace; its relevant
+headless rules and privacy regressions are retained.
 
 - [ ] Keep a deterministic, authoritative engine behind presentation/client and game API layers. The engine owns rules enforcement, legal actions, triggers, priority, and game-state transitions; Manaforge owns presentation, navigation, interactions, and user experience. See the [Play architecture](manaforge-play-epic.md#1-stable-game-protocol).
 - [ ] Support legal actions/targets, costs/mana payment, stack/priority, phases/steps, triggers, replacement effects, combat/damage, state-based actions, tokens/counters, and zone movement.
@@ -346,14 +376,22 @@ work does not enable Play in installed releases.
 
 ## Phase 9 - Mixed human/AI seats and local deck testing
 
+The owner confirmed human-versus-XMage-AI as the first playable Unity target;
+preserve controller/seat independence and existing AI regression evidence.
+Design for up to five players without implementing the full multiplayer UI now.
+Enhanced AI and broader mixed tables remain later expansions under the
+[Unity + Java roadmap](play-unity-java-roadmap.md).
+
 - [ ] Separate match seat, player, deck, pilot, and controller; support LocalHuman, RemoteHuman, and EngineAI through the same legal-action protocol. Remote connections follow in Phase 10.
-- [ ] Expose usable XMage AI first and an **Add Computer** seat action; support mixed human/AI tables as multiplayer capacity arrives in Phase 11.
+- [ ] Expose usable XMage AI and an **Add Computer** seat action; support mixed human/AI tables as multiplayer capacity arrives in Phase 11.
 - [ ] Improve adapted AI with heuristics, state evaluation/search, and deck-aware strategy only as needed; keep all decisions within engine-provided legal actions.
 - [ ] Cover sensible spell/target choices, interaction, and combat decisions to expose deck weaknesses.
 
 **Exit gate:** Repeatable matches provide useful testing; competitive strength and LLM integration are not prerequisites.
 
 ## Phase 10 - Private 1v1 multiplayer
+
+Follow P7/G5 in the [Unity + Java roadmap](play-unity-java-roadmap.md), after accepted local 1v1.
 
 - [ ] Support host, invite/code, and join; prefer peer-to-peer where practical and evaluate lightweight rendezvous only if needed.
 - [ ] Keep the host authoritative, validate client commands, and transmit only visibility-filtered state/events; never send hidden opponent data merely to conceal it in the UI. Support reconnect.
@@ -363,6 +401,9 @@ work does not enable Play in installed releases.
 **Exit gate:** Friends can complete and reconnect to private games using existing decks without state divergence or hidden-information leaks.
 
 ## Phase 11 - Adaptive 2-5-player Commander
+
+Follow P8/G6 in the [Unity + Java roadmap](play-unity-java-roadmap.md), after private networked 1v1.
+Spectators and persistence remain optional later expansions, not initial Commander prerequisites.
 
 - [ ] Support 2, 3, 4, and 5 seats with any supported mixture of humans and AI, multiplayer priority/combat, and Commander state; avoid a protocol-level five-seat maximum.
 - [ ] Provide Overview, Compare, Focus, and Inspect contexts with stable player positions and readable adaptive boards.
@@ -428,3 +469,8 @@ work does not enable Play in installed releases.
 5. Add mixed human/AI seats (Phase 9), private host-authoritative 1v1 (Phase 10), then adaptive 2-5-player Commander (Phase 11).
 6. Add local playgroups, borrowing, precons, brackets, and history (Phase 12), with optional external sync.
 7. Invest in complete-loop polish (Phase 13); essential onboarding, usability, accessibility, and responsiveness belong in earlier milestones.
+
+
+Development Play preview: [Desktop-to-Unity saved-deck preview](play-desktop-deck-preview.md)
+implements the P3.5 visual handoff for owner review; CI/UI acceptance is pending.
+It does not activate installed Play or implement authoritative P4 gameplay.

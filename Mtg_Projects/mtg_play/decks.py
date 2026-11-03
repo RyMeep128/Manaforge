@@ -37,13 +37,22 @@ class PreparedDeck:
     bindings: dict[tuple[str, str], CardIdentity]
 
 
-def prepare_deck(
-    document: DeckDocument,
-    resolve: Callable,
-    oracle_lookup: Callable | None = None,
-    *,
-    commander: bool = False,
-) -> PreparedDeck:
+def document_for_format(document, *, commander):
+    """Match-only projection: commanders become ordinary cards outside Commander."""
+    if commander:
+        return document
+    from copy import deepcopy
+
+    projected = deepcopy(document)
+    projected.deck.commander_entry_ids = []
+    for entry in projected.deck.entries:
+        if entry.section == "commander":
+            entry.section = "mainboard"
+    return projected
+
+
+def _deck_queries(document, oracle_lookup=None, *, commander=False, resolve_names=True):
+    document = document_for_format(document, commander=commander)
     issues = []
     queries = []
     entries = []
@@ -52,7 +61,7 @@ def prepare_deck(
     for missing in commander_ids - {entry.entry_id for entry in document.deck.entries}:
         issues.append(DeckIssue(missing, "MISSING_COMMANDER_ENTRY"))
     for entry in document.deck.entries:
-        if entry.section in ("considering", "excluded"):
+        if entry.section in ("considering", "excluded", "display_commander"):
             continue
         if type(entry.quantity) is not int or entry.quantity < 0:
             issues.append(DeckIssue(entry.entry_id, "INVALID_QUANTITY"))
@@ -75,7 +84,7 @@ def prepare_deck(
             issues.append(DeckIssue(entry.entry_id, "COMMANDER_FORMAT_REQUIRED"))
             continue
         name = entry.name
-        if entry.oracle_id:
+        if entry.oracle_id and resolve_names:
             canonical = (
                 oracle_lookup(entry.oracle_id) if oracle_lookup is not None else None
             )
@@ -83,7 +92,7 @@ def prepare_deck(
                 issues.append(DeckIssue(entry.entry_id, "ORACLE_ID_NOT_RESOLVED"))
                 continue
             name = canonical.name
-        if not name:
+        if not name and (resolve_names or not entry.oracle_id):
             issues.append(DeckIssue(entry.entry_id, "MISSING_CARD_NAME"))
             continue
         entries.append(entry)
@@ -95,8 +104,37 @@ def prepare_deck(
                 number=entry.collector_number or "",
             )
         )
+    return entries, queries, issues
+
+
+def deck_document_issues(document, *, commander=False):
+    """Adapter structural checks only; never fabricate printing resolution."""
+    entries, _, issues = _deck_queries(
+        document, commander=commander, resolve_names=False
+    )
+    commander_ids = set(document.deck.commander_entry_ids) if commander else set()
+    if not issues and not any(
+        entry.section == "mainboard" and entry.entry_id not in commander_ids
+        for entry in entries
+    ):
+        issues.append(DeckIssue("", "EMPTY_MAINBOARD"))
+    return tuple(issues)
+
+
+def prepare_deck(
+    document: DeckDocument,
+    resolve: Callable,
+    oracle_lookup: Callable | None = None,
+    *,
+    commander: bool = False,
+) -> PreparedDeck:
+    document = document_for_format(document, commander=commander)
+    entries, queries, issues = _deck_queries(
+        document, oracle_lookup, commander=commander
+    )
     resolved = {row["key"]: row for row in resolve(queries)} if queries else {}
     cards, sideboard, bindings = [], [], {}
+    commander_ids = set(document.deck.commander_entry_ids)
     for entry in entries:
         row = resolved.get(entry.entry_id)
         if row is None or row.get("error"):

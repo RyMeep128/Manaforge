@@ -1,0 +1,80 @@
+{
+  "framing_version": 1,
+  "max_bytes": 1048576,
+  "positive": [
+    {
+      "name": "case-0",
+      "hex": "",
+      "messages": []
+    },
+    {
+      "name": "case-1",
+      "hex": "000000027b7d",
+      "messages": [
+        "{}"
+      ]
+    },
+    {
+      "name": "case-2",
+      "hex": "000000107b2274797065223a2268656c6c6f227d000000137b2274797065223a2273687574646f776e227d",
+      "messages": [
+        "{\"type\":\"hello\"}",
+        "{\"type\":\"shutdown\"}"
+      ]
+    },
+    {
+      "name": "case-3",
+      "hex": "000000197b226e616d65223a22c3867468657220e2809420e781ab227d",
+      "messages": [
+        "{\"name\":\"Æther — 火\"}"
+      ]
+    }
+  ],
+  "negative": [
+    {
+      "name": "short-header",
+      "hex": "0000",
+      "code": "FRAME_TRUNCATED"
+    },
+    {
+      "name": "short-body",
+      "hex": "000000037b7d",
+      "code": "FRAME_TRUNCATED"
+    },
+    {
+      "name": "zero",
+      "hex": "00000000",
+      "code": "FRAME_SIZE"
+    },
+    {
+      "name": "over-cap",
+      "hex": "00100001",
+      "code": "FRAME_SIZE"
+    },
+    {
+      "name": "unsigned-max",
+      "hex": "ffffffff",
+      "code": "FRAME_SIZE"
+    },
+    {
+      "name": "overlong-utf8",
+      "hex": "00000002c0af",
+      "code": "FRAME_UTF8"
+    },
+    {
+      "name": "truncated-utf8",
+      "hex": "00000001c3",
+      "code": "FRAME_UTF8"
+    },
+    {
+      "name": "bom",
+      "hex": "00000005efbbbf7b7d",
+      "code": "FRAME_BOM"
+    },
+    {
+      "name": "surrogate-utf8",
+      "hex": "00000003eda080",
+      "code": "FRAME_UTF8"
+    }
+  ]
+}

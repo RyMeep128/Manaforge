@@ -1,0 +1,135 @@
+using System;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Manaforge.Play.Protocol;
+
+namespace Manaforge.Play
+{
+    public sealed class ViewerHostStop
+    {
+        public string Code {get;} public ViewerSessionStop Session {get;} public bool CleanupConfirmed {get;}
+        internal ViewerHostStop(string code,ViewerSessionStop session,bool cleanup){Code=code;Session=session;CleanupConfirmed=cleanup;}
+    }
+    // Create/tick/dispose on the surface's UI thread. No network reads, parsing or waits occur there.
+    public sealed class ViewerSessionHost : IDisposable
+    {
+        private readonly object gate=new object();private readonly int thread=Thread.CurrentThread.ManagedThreadId;
+        private readonly ViewerCardSurface surface;private readonly ViewerSurfaceTicket ticket;private readonly ViewerBootstrap bootstrap;
+        private readonly Task ownerEnded;private readonly CancellationTokenSource cancellation=new CancellationTokenSource();
+        private readonly CancellationToken token;private readonly TaskCompletionSource<ViewerHostStop> completion=new TaskCompletionSource<ViewerHostStop>(TaskCreationOptions.RunContinuationsAsynchronously);
+        private ViewerSessionReceiver receiver;private ClientSessionChannel channel;private CoreArtworkBundle artwork;private ViewerArtworkJobs artworkJobs;private ViewerCommandDispatcher commands;
+        private bool stopped,disposed;private string stopCode;
+        public Task<ViewerHostStop> Completion=>completion.Task;
+        public bool Authenticated {get{lock(gate)return !stopped && channel!=null;}}
+        public ViewerDecisionOffer CurrentDecision
+        {get{if(ownerEnded.IsCompleted)Stop("VIEWER_OWNER_ENDED");lock(gate)return !stopped && receiver!=null?receiver.Decisions.Current:null;}}
+        // Bootstrap ownership transfers only after BeginViewer succeeds. Parent owns its pipe/lifeline task.
+        public ViewerSessionHost(ViewerCardSurface surface,ViewerBootstrap ownedBootstrap,Task ownerEnded,bool fixtureMode=false,int connectionMilliseconds=5000,int readMilliseconds=60000,bool allowIdleWait=false)
+        {
+            if(surface==null || ownedBootstrap==null || ownerEnded==null || connectionMilliseconds<1 || connectionMilliseconds>60000 || readMilliseconds<1 || readMilliseconds>60000)throw new ArgumentException("VIEWER_HOST_CONTEXT");
+            var assets=new ViewerArtworkScope();
+            try{ticket=surface.BeginViewer(ownedBootstrap.SessionId,ownedBootstrap.ViewerId,assets);}catch{assets.Dispose();throw;}
+            this.surface=surface;bootstrap=ownedBootstrap;this.ownerEnded=ownerEnded;token=cancellation.Token;
+            ownerEnded.ContinueWith(task=>{_=task.Exception;Stop("VIEWER_OWNER_ENDED");},TaskScheduler.Default);
+            if(ownerEnded.IsCompleted)Stop("VIEWER_OWNER_ENDED");
+            Task.Run(()=>Run(fixtureMode,connectionMilliseconds,readMilliseconds,allowIdleWait));
+        }
+        private async Task Run(bool fixtureMode,int connectionMilliseconds,int readMilliseconds,bool allowIdleWait)
+        {
+            ClientSessionChannel opened=null;CoreArtworkBundle loaded=null;ViewerSessionStop summary=null;bool cleanup=true;
+            try {
+                opened=await ViewerSessionConnection.OpenAsync(bootstrap,connectionMilliseconds,token,fixtureMode).ConfigureAwait(false);
+                lock(gate){if(stopped)return;channel=opened;}
+                if(bootstrap.ArtworkDirectory!=null) {
+                    try{loaded=await CoreArtworkBundle.OpenAsync(bootstrap.ArtworkDirectory,bootstrap.ArtworkManifestSha256,bootstrap.SessionId,bootstrap.ViewerId,token).ConfigureAwait(false);}
+                    catch{Stop("VIEWER_ARTWORK_FAILED");return;}
+                }
+                lock(gate){if(stopped)return;artwork=loaded;receiver=new ViewerSessionReceiver(channel,ticket,fixtureMode);commands=new ViewerCommandDispatcher(channel,receiver.Decisions,5000);}
+                while(receiver.ReceiveOnce(readMilliseconds,token,allowIdleWait)){}
+                Stop("VIEWER_RECEIVE_ENDED");
+            }
+            catch{Stop("VIEWER_CONNECT_FAILED");}
+            finally {
+                Stop("VIEWER_HOST_ENDED");
+                if(receiver!=null)summary=await receiver.Completion.ConfigureAwait(false);
+                if(commands!=null)await commands.Completion.ConfigureAwait(false);
+                ViewerArtworkJobs jobs;lock(gate)jobs=artworkJobs;
+                if(jobs!=null)await jobs.Completion.ConfigureAwait(false);
+                try{loaded?.Dispose();}catch{cleanup=false;}
+                try{opened?.Dispose();}catch{cleanup=false;}
+                try{bootstrap.Dispose();cancellation.Dispose();}catch{cleanup=false;}
+                completion.TrySetResult(new ViewerHostStop(stopCode,summary,cleanup));
+            }
+        }
+        private void Stop(string code)
+        {
+            ViewerSessionReceiver active;ClientSessionChannel connected;ViewerArtworkJobs jobs;ViewerCommandDispatcher dispatch;
+            lock(gate){if(stopped)return;stopped=true;stopCode=code;ticket.Mailbox.Dispose();active=receiver;connected=channel;jobs=artworkJobs;dispatch=commands;}
+            active?.Cancel();connected?.Cancel();dispatch?.Dispose();jobs?.Dispose();try{cancellation.Cancel();}catch(ObjectDisposedException){}
+        }
+        private Task<TrackedCommand> Dispatch(Func<ViewerCommandDispatcher,Task<TrackedCommand>> send)
+        {
+            if(ownerEnded.IsCompleted)Stop("VIEWER_OWNER_ENDED");ViewerCommandDispatcher target;lock(gate)target=stopped?null:commands;
+            return target==null?Task.FromException<TrackedCommand>(new WireEnvelope.EnvelopeException("SESSION_STOPPED")):send(target);
+        }
+        public Task<TrackedCommand> PerformAsync(ViewerDecisionOffer offer,ProjectedAction action,CancellationToken cancellation=default)=>Dispatch(target=>target.PerformAsync(offer,action,cancellation));
+        public Task<TrackedCommand> ChooseAsync(ViewerDecisionOffer offer,ProjectedChoiceOption option,CancellationToken cancellation=default)=>Dispatch(target=>target.ChooseAsync(offer,option,cancellation));
+        public Task<TrackedCommand> FinishSelectionAsync(ViewerDecisionOffer offer,CancellationToken cancellation=default)=>Dispatch(target=>target.FinishSelectionAsync(offer,cancellation));
+        public Task<TrackedCommand> CancelChoiceAsync(ViewerDecisionOffer offer,CancellationToken cancellation=default)=>Dispatch(target=>target.CancelChoiceAsync(offer,cancellation));
+        public Task<TrackedCommand> ChooseNumberAsync(ViewerDecisionOffer offer,long value,CancellationToken cancellation=default)=>Dispatch(target=>target.ChooseNumberAsync(offer,value,cancellation));
+        public Task<TrackedCommand> ChooseAmountsAsync(ViewerDecisionOffer offer,long[] values,CancellationToken cancellation=default)=>Dispatch(target=>target.ChooseAmountsAsync(offer,values,cancellation));
+        public Task<TrackedCommand> SelectManaSourceAsync(ViewerDecisionOffer offer,ProjectedManaSource source,CancellationToken cancellation=default)=>Dispatch(target=>target.SelectManaSourceAsync(offer,source,cancellation));
+        // UI-only: decisions may appear only alongside their already presented card snapshot.
+        public ViewerDecisionOffer PresentedDecision
+        {
+            get {ThreadOnly();if(disposed)return null;var offer=CurrentDecision;var frame=offer?.Frame;return frame!=null && surface.HasPresentedFrame(ticket,frame.Context.Revision)?offer:null;}
+        }
+        public bool HasPresentedRevision(long revision){ThreadOnly();return !disposed && surface.HasPresentedFrame(ticket,revision);}
+        internal CardView ManaSourceView(ViewerDecisionOffer supplied,ProjectedManaSource source)
+        {
+            ThreadOnly();if(supplied==null || source==null || !ReferenceEquals(PresentedDecision,supplied))return null;
+            var frame=supplied.Frame;return frame!=null && frame.Decision.Family=="mana" && frame.ManaSourceReferences.Any(value=>ReferenceEquals(value,source))
+                ?surface.PresentedCardView(ticket,frame.Context.Revision,source.ObjectId):null;
+        }
+        // Monitor a submission after its displayed offer has been retired. The
+        // channel tracker owns the authenticated viewer/session and exact token.
+        internal TrackedCommand CommandOutcome(TrackedCommand submission)
+        {
+            ThreadOnly();if(submission==null)return null;
+            TrackedCommand result;lock(gate)result=!stopped?channel?.FindCommand(submission.CommandId):null;
+            return result!=null && result.RequestRevision==submission.RequestRevision && result.DecisionId==submission.DecisionId?result:null;
+        }
+        internal TrackedCommand CommandFeedback(ViewerDecisionOffer supplied,TrackedCommand submission)
+        {
+            ThreadOnly();if(supplied==null || submission==null || !ReferenceEquals(PresentedDecision,supplied))return null;
+            var frame=supplied.Frame;if(frame==null || submission.RequestRevision!=frame.Context.Revision || submission.DecisionId!=frame.Decision.DecisionId)return null;
+            TrackedCommand feedback;lock(gate)feedback=!stopped?channel?.FindCommand(submission.CommandId):null;
+            return feedback!=null && feedback.RequestRevision==submission.RequestRevision && feedback.DecisionId==submission.DecisionId && ReferenceEquals(PresentedDecision,supplied)?feedback:null;
+        }
+        public bool TryTake(out ViewerSessionUpdate update)
+        {lock(gate){update=null;return !stopped && receiver!=null && receiver.TryTake(out update);}}
+        private void ThreadOnly(){if(Thread.CurrentThread.ManagedThreadId!=thread)throw new InvalidOperationException("VIEWER_HOST_THREAD");}
+        public int Tick(int maximumArtworkUploads=2,int maximumArtworkRequests=4)
+        {
+            ThreadOnly();if(disposed)return 0;
+            if(maximumArtworkUploads<0 || maximumArtworkUploads>16)throw new ArgumentOutOfRangeException(nameof(maximumArtworkUploads));
+            if(maximumArtworkRequests<0 || maximumArtworkRequests>16)throw new ArgumentOutOfRangeException(nameof(maximumArtworkRequests));
+            if(ownerEnded.IsCompleted)Stop("VIEWER_OWNER_ENDED");
+            if(ticket.Mailbox.IsStopped)Stop("VIEWER_EPOCH_REVOKED");
+            try{lock(gate){if(!stopped && artwork!=null && artworkJobs==null)artworkJobs=surface.CreateArtworkJobs(ticket,artwork.LoadAsync);}}
+            catch{Stop("VIEWER_ARTWORK_MOUNT_FAILED");}
+            return surface.Pump(ticket,maximumArtworkUploads,maximumArtworkRequests);
+        }
+        // Inspection is presentation-only; no action/decision token is fabricated or submitted.
+        public bool Inspect(string objectId)
+        {
+            ThreadOnly();if(disposed)return false;
+            if(ownerEnded.IsCompleted)Stop("VIEWER_OWNER_ENDED");
+            bool revoked;lock(gate)revoked=stopped;
+            if(revoked){surface.Pump(ticket);return false;}return surface.Inspect(ticket,objectId);
+        }
+        public void Cancel(){Stop("VIEWER_HOST_CANCELLED");}
+        public void Dispose(){ThreadOnly();if(disposed)return;disposed=true;Stop("VIEWER_HOST_DISPOSED");surface.ClearViewer(ticket);}
+    }
+}

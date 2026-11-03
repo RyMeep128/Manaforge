@@ -1,0 +1,73 @@
+#arena-table { background-color: rgb(17,26,30); color: rgb(238,225,200); }
+.table-cards, #board-navigation, #battlefield-links { position: absolute; left: 0; right: 0; top: 0; bottom: 0; }
+#table-phase { position: absolute; top: 16px; left: 205px; width: 300px; color: rgb(230,221,202); font-size: 15px; white-space: normal; padding: 3px 10px; }
+#opponent-seat, #local-seat { position: absolute; left: 50%; margin-left: -42px; width: 84px; height: 84px; background-color: rgba(13,17,22,.96); border-radius: 42px; border-width: 2px; border-color: rgb(161,133,84); align-items: center; justify-content: center; }
+#opponent-seat { top: 54px; } #local-seat { bottom: 145px; }
+#seat-life { font-size: 36px; color: rgb(247,231,192); -unity-text-align: middle-center; margin: 0; padding: 0; transition-property: scale, color; transition-duration: .16s; }
+#seat-life.life-changed { scale: 1.14 1.14; color: white; }
+#seat-caption { position: absolute; top: 71px; left: -34px; width: 150px; height: 28px; -unity-text-align: middle-center; font-size: 13px; color: rgb(233,215,176); }
+#opponent-seat.has-priority, #local-seat.has-priority { border-color: rgb(255,178,64); border-width: 3px; background-color: rgba(37,27,18,.98); }
+#opponent-seat.targetable, #local-seat.targetable, #local-seat:focus, #opponent-seat:focus { border-color: rgb(255,226,145); border-width: 3px; }
+#opponent-hand { position: absolute; top: -68px; left: 50%; margin-left: -235px; width: 470px; height: 115px; }
+.opponent-hand-back { position: absolute; width: 70px; height: 100px; }
+.neutral-card-back { background-color: rgb(39,30,24); border-color: rgb(140,108,57); border-width: 2px; border-radius: 6px; }
+.card-back-mark { position: absolute; top: 16%; left: 10%; width: 80%; height: 22%; }
+#table-choices { position: absolute; right: 20px; bottom: 35px; width: 275px; max-height: 285px; }
+#table-choices #viewer-decision-panel { background-color: rgba(10,15,22,.72); border-radius: 10px; }
+#table-choices #decision-controls { flex-direction: column; }
+#table-choices #decision-mana-pool { white-space: normal; font-size: 13px; }
+#table-choices Button { flex-grow: 0; min-width: 110px; white-space: normal; background-color: rgb(51,45,39); }
+#table-choices .arena-primary { margin-top: 8px; margin-bottom: 4px; }
+#table-choices Button:hover, #table-choices Button:focus { -unity-background-image-tint-color: rgb(255,234,192); border-width: 2px; border-color: rgb(255,202,112); }
+#table-choices Button:disabled { opacity: .45; }
+#board-choice-alternatives { margin-top: 3px; margin-bottom: 4px; }
+#board-choice-alternatives .unity-foldout__text { color: rgb(184,182,175); font-size: 13px; }
+#table-choices.opening-choices { width: 520px; right: 50%; margin-right: -260px; bottom: 35px; max-height: 170px; }
+#table-choices.opening-choices #viewer-decision-panel { background-color: rgba(8,13,21,.7); }
+#table-choices.opening-choices #decision-controls { flex-direction: row; justify-content: center; }
+#table-choices.opening-choices .arena-action { width: 190px; margin-left: 20px; margin-right: 20px; flex-shrink: 0; }
+#table-choices.opening-choices #decision-prompt { -unity-text-align: middle-center; }
+#table-zones { position: absolute; left: 24px; bottom: 205px; width: 110px; font-size: 13px; color: rgb(221,206,174); white-space: normal; }
+#game-commanders { position: absolute; left: 24px; top: 160px; max-width: 130px; white-space: normal; font-size: 13px; }
+.table-card { border-width: 2px; border-color: rgba(0,0,0,0); }
+#arena-table .table-card { transition-property: scale, translate, rotate; transition-duration: .12s, .12s, .18s; }
+.table-card:focus, .table-card:hover { border-color: rgb(245,207,135); }
+#arena-table .table-card.actionable { border-color: rgb(97,211,231); }
+#arena-table .table-card.targetable { border-color: rgb(255,208,96); border-width: 3px; }
+#arena-table .table-card.attacking { border-color: rgb(244,107,54); }
+#arena-table .table-card.blocking { border-color: rgb(97,175,242); }
+#arena-table .table-card.selected { border-color: rgb(255,224,91); border-width: 4px; }
+#arena-table .table-card.gesture-source { opacity: .6; }
+#live-markers { position: absolute; bottom: 20px; left: 3px; right: 3px; background-color: rgba(20,12,8,.96); color: rgb(255,220,160); font-size: 12px; white-space: normal; -unity-text-align: middle-center; }
+.table-inspection { position: absolute; left: 25px; top: 95px; }
+#close-inspection { position: absolute; left: 25px; top: 60px; width: 290px; height: 30px; }
+#table-result { position: absolute; top: 35%; left: 25%; right: 25%; background-color: rgba(12,16,23,.92); border-top-width: 1px; border-bottom-width: 1px; border-color: rgb(210,165,86); padding: 30px; font-size: 42px; -unity-text-align: middle-center; white-space: normal; }
+#table-motion { position: absolute; right: 20px; top: 16px; color: rgb(217,210,193); font-size: 12px; }
+#arena-table.reduced-motion .table-card, #arena-table.reduced-motion #seat-life { transition-duration: 0s; }
+.row-navigation { position: absolute; flex-direction: row; align-items: center; background-color: rgba(10,14,19,.7); border-radius: 5px; }
+.row-navigation Button { min-width: 26px; height: 28px; color: rgb(255,218,153); background-color: rgb(49,38,25); }
+.row-navigation Button:focus { border-color: rgb(255,218,153); border-width: 2px; }
+#board-input-hint { position: absolute; top: 45%; left: 200px; right: 315px; -unity-text-align: middle-center; color: rgb(247,221,169); font-size: 14px; padding: 4px; }
+#board-drag-ghost { position: absolute; padding: 8px; background-color: rgba(20,17,13,.9); border-width: 2px; border-color: rgb(255,208,96); color: rgb(255,232,184); font-size: 18px; border-radius: 6px; }
+#board-object-menu { position: absolute; width: 300px; max-height: 260px; background-color: rgb(20,25,32); border-width: 1px; border-color: rgb(211,173,107); padding: 12px; }
+#board-object-menu Button { white-space: normal; }
+#local-library, #opponent-library { position: absolute; right: 32px; width: 76px; height: 104px; background-color: rgb(29,24,22); color: rgb(214,187,132); border-width: 2px; border-color: rgb(125,101,66); border-radius: 7px; -unity-text-align: middle-center; font-size: 14px; }
+#local-library { bottom: 235px; } #opponent-library { top: 140px; }
+.library-flight { position: absolute; width: 80px; height: 112px; color: rgb(208,168,89); font-size: 38px; -unity-text-align: middle-center; }
+
+#arena-table.opening-state #local-seat { left: 14%; bottom: 70px; }
+
+/* Library ordering is a readable choice surface rather than the narrow action rail. */
+#table-choices.library-ordering { left: 15%; right: 15%; top: 18%; bottom: auto; width: auto; max-height: 65%; }
+#table-choices.library-ordering #viewer-decision-panel { background-color: rgba(10,15,22,.98); padding: 18px; }
+#table-choices.library-ordering #decision-prompt { font-size: 18px; white-space: normal; flex-shrink: 0; }
+#table-choices.library-ordering #decision-controls { flex-direction: row; flex-wrap: wrap; align-items: flex-start; }
+#library-order-help { width: 100%; margin-bottom: 12px; white-space: normal; }
+#library-choice { width: 170px; margin: 6px; padding: 6px; border-width: 1px; border-color: rgb(161,133,84); }
+#library-choice Button { width: 100%; min-height: 52px; white-space: normal; }
+
+#unity-priority-controls { position: absolute; right: 16px; top: 16px; width: 285px; padding: 10px; background-color: rgba(10,15,22,.94); border-radius: 8px; }
+#unity-priority-controls .unity-toggle__label, #unity-priority-controls .unity-foldout__text { color: rgb(238,225,200); white-space: normal; }
+#unity-priority-status { white-space: normal; font-size: 12px; color: rgb(210,202,181); margin-top: 4px; margin-bottom: 4px; }
+#unity-priority-controls Button { white-space: normal; min-height: 28px; margin-top: 4px; }
+#unity-priority-stops { max-height: 230px; margin-top: 8px; }

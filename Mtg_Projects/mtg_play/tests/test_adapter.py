@@ -19,6 +19,88 @@ from mtg_play.decks import DeckTranslationError, PreparedDeck, prepare_deck
 from mtg_play.fake import ScriptedGameSession
 
 
+@pytest.mark.parametrize("value", [None, 1, "auto", []])
+def test_payment_context_diagnostic_requires_explicit_boolean(value):
+    with pytest.raises(ValueError, match="PAYMENT_CONTEXT_PROBE"):
+        LocalGameAdapter(payment_context_probe=value)
+
+
+def test_payment_context_evidence_is_bounded_and_does_not_export_private_ids(
+    monkeypatch,
+):
+    adapter = LocalGameAdapter(payment_context_probe=True)
+    payload = dict(
+        status="ok",
+        payment_probe=dict(
+            available=True,
+            sequence=1,
+            unpaid_mana_count=2,
+            card_name="private-fixture-card",
+        ),
+    )
+    monkeypatch.setattr(adapter, "_server_request", lambda **fields: payload)
+    view = dict(
+        game_id="private-fixture-game",
+        viewer="private-fixture-viewer",
+        cycle=0,
+        players=[],
+    )
+    for cycle in range(256):
+        view["cycle"] = cycle
+        adapter._metadata(view)
+    report = adapter.payment_context_diagnostics()
+    assert report == dict(
+        enabled=True,
+        observations=128,
+        scopes=128,
+        minimum=2,
+        maximum=2,
+        candidate_observations=0,
+        maximum_candidate_sources=None,
+        maximum_candidate_abilities=None,
+        ordinary_shape_observations=0,
+        maximum_ordinary_shape_abilities=None,
+    )
+    assert "private-fixture" not in json.dumps(report)
+
+
+def test_payment_context_probe_is_off_by_default_and_ignores_invalid_evidence(
+    monkeypatch,
+):
+    view = dict(game_id="fixture", viewer="viewer", cycle=7, players=[])
+    payload = dict(
+        status="ok", payment_probe=dict(available=True, sequence=1, unpaid_mana_count=2)
+    )
+    adapter = LocalGameAdapter()
+    monkeypatch.setattr(adapter, "_server_request", lambda **fields: payload)
+    adapter._metadata(view)
+    assert adapter.payment_context_diagnostics() == dict(
+        enabled=False,
+        observations=0,
+        scopes=0,
+        minimum=None,
+        maximum=None,
+        candidate_observations=0,
+        maximum_candidate_sources=None,
+        maximum_candidate_abilities=None,
+        ordinary_shape_observations=0,
+        maximum_ordinary_shape_abilities=None,
+    )
+    probe = LocalGameAdapter(payment_context_probe=True)
+    monkeypatch.setattr(probe, "_server_request", lambda **fields: payload)
+    for sequence, count in [
+        (True, 2),
+        (0, 2),
+        (2**64, 2),
+        (1, True),
+        (1, -1),
+        (1, 129),
+    ]:
+        payload["payment_probe"].update(sequence=sequence, unpaid_mana_count=count)
+        probe._metadata(view)
+    assert probe.payment_context_diagnostics()["observations"] == 0
+
+
 def resolve(queries):
     return [dict(query, name="Forest", set="M10", number="248") for query in queries]
 
@@ -75,8 +157,7 @@ def test_ambiguous_printing_binding_fails_instead_of_assigning_art_arbitrarily()
     assert failure.value.issues[0].code == "AMBIGUOUS_INSTANCE_PRINTING"
 
 
-@pytest.fixture
-def session():
+def make_session():
     setup = GameSetup((MatchSeat("one", "One"), MatchSeat("two", "Two")))
     owner = SimpleNamespace()
     decks = (PreparedDeck((), (), {}), PreparedDeck((), (), {}))
@@ -89,6 +170,11 @@ def session():
     session._names = {"internal-one": "one", "internal-two": "two"}
     session._game_ids = {"one": "engine-game", "two": "engine-game"}
     return session
+
+
+@pytest.fixture
+def session():
+    return make_session()
 
 
 def state(sequence, *, zone="hand", hidden=False):
@@ -611,3 +697,646 @@ def test_terminal_view_does_not_guess_printing_after_metadata_controller_is_remo
     assert "object_incarnations" in view.unsupported_fields
     assert "physical_printing" in view.unsupported_fields
     assert view.objects[0].card_identity is None
+
+
+@pytest.mark.parametrize(
+    "operation", ["snapshot", "poll", "concede", "perform", "choose"]
+)
+def test_engine_ai_seat_cannot_be_viewed_or_commanded(session, operation):
+    session._setup = GameSetup(
+        (MatchSeat("one", "You"), MatchSeat("two", "AI", "engine_ai"))
+    )
+    arguments = (
+        ("two", "decision", "action")
+        if operation in ("perform", "choose")
+        else ("two",)
+    )
+    with pytest.raises(AdapterError, match="UNAUTHORIZED_SEAT"):
+        getattr(session, operation)(*arguments)
+
+
+def test_ai_start_uses_only_owner_client_and_selected_ai_deck(monkeypatch):
+    from mtg_play import adapter as module
+
+    first, stream = object(), object()
+
+    def forbidden_launch():
+        raise AssertionError("AI must not launch a second client")
+
+    owner = SimpleNamespace(
+        _runtime=(first, stream, forbidden_launch, 1234, None, None)
+    )
+    setup = GameSetup((MatchSeat("one", "You"), MatchSeat("two", "AI", "engine_ai")))
+    decks = (
+        PreparedDeck((dict(name="Forest", quantity=60),), (), {}),
+        PreparedDeck((dict(name="Memnite", quantity=60),), (), {}),
+    )
+    game = XmageGameSession(owner, setup, decks)
+    requests = []
+
+    def request(player, operation, expected, **fields):
+        requests.append((player, operation, fields))
+        return dict(table_id="table")
+
+    game._request = request
+    monkeypatch.setattr(module.transport, "send", forbidden_launch)
+    game._start()
+    assert game._clients == {"one": (first, stream)}
+    create = next(
+        fields for _, operation, fields in requests if operation == "create_game"
+    )
+    assert create["controllers"] == ["local_human", "engine_ai"]
+    joins = [
+        (player, fields)
+        for player, operation, fields in requests
+        if operation == "join_table"
+    ]
+    assert [player for player, _ in joins] == ["one", "one"]
+    ai_join, human_join = [fields for _, fields in joins]
+    assert ai_join["controller"] == "engine_ai"
+    assert ai_join["cards"] == decks[1].cards
+    assert human_join["cards"] == decks[0].cards
+    assert game._names[ai_join["player_name"]] == "two"
+
+
+@pytest.mark.parametrize(
+    "seats, code",
+    [
+        (
+            (MatchSeat("one", "You"), MatchSeat("two", "Remote", "remote_human")),
+            "UNSUPPORTED_CONTROLLER",
+        ),
+        (
+            (MatchSeat("one", "AI", "engine_ai"), MatchSeat("two", "You")),
+            "UNSUPPORTED_AI_SETUP",
+        ),
+        (
+            (
+                MatchSeat("one", "You"),
+                MatchSeat("two", "AI", "engine_ai"),
+                MatchSeat("three", "Other"),
+            ),
+            "UNSUPPORTED_AI_SETUP",
+        ),
+    ],
+)
+def test_unsupported_controllers_rejected_before_deck_resolution(seats, code):
+    adapter = LocalGameAdapter()
+    adapter._runtime = object()
+    with pytest.raises(AdapterError, match=code):
+        adapter.create_game(GameSetup(seats, format="commander"), (None,) * len(seats))
+
+
+def test_ai_identity_maps_from_public_name_without_an_ai_client(session):
+    session._setup = GameSetup(
+        (MatchSeat("one", "You"), MatchSeat("two", "AI", "engine_ai"))
+    )
+    del session._clients["two"]
+    del session._player_ids["engine-player-two"]
+    inject(session, state(1))
+    view = session.snapshot("one")
+    assert {player.player_id for player in view.players} == {"one", "two"}
+    assert all(obj.owner_id == "one" for obj in view.objects if obj.zone == "hand")
+
+
+@pytest.mark.parametrize("eligible", [True, False])
+def test_engine_deck_validation_preserves_document_and_uses_prepared_printings(
+    eligible,
+):
+    from threading import Event
+    from mtg_play.diagnostics import LifecycleDiagnostics
+
+    document = DeckDocument(deck=Deck(entries=[DeckEntry("forest", "Forest", 30)]))
+    before = deepcopy(document.to_dict())
+    owner = LocalGameAdapter.__new__(LocalGameAdapter)
+    owner._runtime = object()
+    owner._done = Event()
+    owner._session = None
+    owner.lifecycle = LifecycleDiagnostics()
+    calls = []
+
+    def request(**fields):
+        calls.append(fields)
+        if fields.get("command") == "validate_deck":
+            return {"eligible": eligible}
+        return resolve(fields["cards"])
+
+    owner._server_request = request
+    assert owner.validate_deck(document, "freeform") is eligible
+    assert calls[-1] == dict(
+        command="validate_deck",
+        format="freeform",
+        cards=({"name": "Forest", "set": "M10", "number": "248", "quantity": 30},),
+        sideboard=(),
+    )
+    assert document.to_dict() == before
+    assert owner._session is None
+
+
+@pytest.mark.parametrize(
+    "response",
+    [None, {}, {"eligible": 1}, {"eligible": "true"}, {"code": "private card name"}],
+)
+def test_engine_deck_validation_does_not_treat_unknown_response_as_rejection(
+    response, monkeypatch
+):
+    from threading import Event
+    from mtg_play.diagnostics import LifecycleDiagnostics
+
+    owner = LocalGameAdapter.__new__(LocalGameAdapter)
+    owner._runtime = object()
+    owner._done = Event()
+    owner._session = None
+    owner.lifecycle = LifecycleDiagnostics()
+    monkeypatch.setattr(
+        "mtg_play.adapter.prepare_deck", lambda *a, **k: PreparedDeck((), (), {})
+    )
+    owner._server_request = lambda **fields: response
+    with pytest.raises(AdapterError, match="INVALID_DECK_VALIDATION_RESPONSE"):
+        owner.validate_deck(object(), "commander")
+
+
+@pytest.mark.parametrize(
+    "runtime,done,session,format,code",
+    [
+        (None, False, None, "freeform", "ENGINE_UNAVAILABLE"),
+        (True, True, None, "freeform", "ENGINE_UNAVAILABLE"),
+        (True, False, True, "freeform", "SESSION_ALREADY_CREATED"),
+        (True, False, None, "standard", "UNSUPPORTED_GAME_SETUP"),
+    ],
+)
+def test_engine_deck_validation_rejects_unavailable_or_active_runtime(
+    runtime, done, session, format, code
+):
+    from threading import Event
+
+    owner = LocalGameAdapter.__new__(LocalGameAdapter)
+    owner._runtime = runtime
+    owner._done = Event()
+    if done:
+        owner._done.set()
+    owner._session = session
+    with pytest.raises(AdapterError, match=code):
+        owner.validate_deck(object(), format)
+
+
+@pytest.mark.parametrize("commander", [False, True])
+def test_precon_display_commander_is_not_submitted_or_resolved_as_a_playable_card(
+    commander,
+):
+    from mtg_play.decks import deck_document_issues
+
+    document = DeckDocument(
+        deck=Deck(
+            entries=[
+                DeckEntry("land", "Forest", 60),
+                DeckEntry(
+                    "oversized",
+                    "Display card",
+                    section="display_commander",
+                    do_not_print=True,
+                ),
+            ]
+        )
+    )
+    document.deck.entries.extend(
+        [
+            DeckEntry(
+                "display-other", "Another commander", section="display_commander"
+            ),
+            DeckEntry(
+                "display-future",
+                "Unresolved future card",
+                section="display_commander",
+                oracle_id="unavailable",
+                card_id="unknown-print",
+            ),
+        ]
+    )
+    before = deepcopy(document.to_dict())
+    queries_seen = []
+
+    def resolver(queries):
+        queries_seen.extend(queries)
+        return resolve(queries)
+
+    assert not deck_document_issues(document, commander=commander)
+    prepared = prepare_deck(document, resolver, commander=commander)
+    assert [query["key"] for query in queries_seen] == ["land"]
+    assert len(prepared.cards) == 1 and not prepared.sideboard
+    assert document.to_dict() == before
+
+
+def test_preparation_routes_mainboard_and_legacy_commander_ids_without_undefined_state():
+    document = DeckDocument(
+        deck=Deck(
+            entries=[
+                DeckEntry("land", "Forest", 99),
+                DeckEntry("leader", "Isamaru, Hound of Konda", section="mainboard"),
+                DeckEntry(
+                    "display", "Oversized commander", section="display_commander"
+                ),
+            ],
+            commander_entry_ids=["leader"],
+        )
+    )
+    before = deepcopy(document.to_dict())
+    prepared = prepare_deck(
+        document,
+        lambda queries: [
+            dict(q, set="FIX", number=str(i)) for i, q in enumerate(queries)
+        ],
+        commander=True,
+    )
+    assert [row["name"] for row in prepared.cards] == ["Forest"]
+    assert [row["name"] for row in prepared.sideboard] == ["Isamaru, Hound of Konda"]
+    assert document.to_dict() == before
+
+
+@pytest.mark.parametrize("zone", ["cards", "second_pile"])
+@pytest.mark.parametrize("concealed", [False, True])
+def test_revealed_choice_artwork_matches_exact_printing_without_owner(
+    session, zone, concealed
+):
+    identity = CardIdentity("oracle", "selected-print", "entry")
+    session._decks = (
+        PreparedDeck((), (), {("SOM", "174"): identity}),
+        PreparedDeck((), (), {}),
+    )
+    update = state(1)
+    candidate = dict(update["hand"][0], id="revealed-card", hidden=concealed)
+    update["hand"] = []
+    inject(session, update)
+    inject(
+        session,
+        dict(
+            event="decision",
+            decision_id=2,
+            kind="GAME_TARGET",
+            message="Choose",
+            targets=["revealed-card"],
+            **{zone: [candidate]},
+        ),
+    )
+    obj = next(
+        obj
+        for obj in session.snapshot("one").objects
+        if obj.zone.startswith("decision")
+    )
+    assert obj.owner_id is None
+    assert obj.card_identity == (
+        None if concealed else CardIdentity("oracle", "selected-print", None)
+    )
+
+
+def test_revealed_choice_artwork_does_not_guess_ambiguous_printing(session):
+    session._decks = tuple(
+        PreparedDeck((), (), {("SOM", "174"): CardIdentity("oracle", printing, None)})
+        for printing in ("one", "two")
+    )
+    update = state(1)
+    candidate = dict(update["hand"][0], id="revealed-card")
+    inject(session, update)
+    inject(
+        session,
+        dict(
+            event="decision",
+            decision_id=2,
+            kind="GAME_TARGET",
+            message="Choose",
+            targets=["revealed-card"],
+            cards=[candidate],
+        ),
+    )
+    obj = next(obj for obj in session.snapshot("one").objects if obj.zone == "decision")
+    assert obj.card_identity is None
+
+
+def test_stack_metadata_keeps_physical_printing_with_distinct_spell_id(session):
+    from mtg_play.artwork import PlayArtwork
+
+    identity = CardIdentity("oracle", "selected-print", "entry")
+    session._decks = (
+        PreparedDeck((), (), {("SOM", "174"): identity}),
+        PreparedDeck((), (), {}),
+    )
+    update = state(1)
+    spell = dict(update["hand"][0], id="spell-id")
+    update["hand"] = []
+    update["stack"] = [spell]
+    update["cycle"] = 8
+    session._owner._metadata = lambda view: dict(
+        status="ok",
+        cycle=8,
+        objects={
+            "spell-id": dict(
+                owner="engine-player-one",
+                controller="engine-player-one",
+                source="physical-card-id",
+                physical_set="SOM",
+                physical_number="174",
+                incarnation=1,
+            )
+        },
+        commanders=[],
+        players=[
+            dict(id="engine-player-one", lost=False, left=False),
+            dict(id="engine-player-two", lost=False, left=False),
+        ],
+    )
+    inject(session, update)
+    obj = session.snapshot("one").objects[0]
+    assert obj.zone == "stack" and obj.owner_id == "one"
+    assert obj.card_identity == identity
+    assert PlayArtwork.key(obj) == ("selected-print", None, 600, 0)
+    assert PlayArtwork.key(obj, detailed=True) == ("selected-print", None, 1200, 0)
+
+
+@pytest.mark.parametrize("attackers", [None, []])
+def test_explicit_priority_classification_is_distinct_from_empty_combat_selection(
+    session, attackers
+):
+    from mtg_play.priority import PriorityController
+
+    update = state(1)
+    update.update(
+        step="UPKEEP",
+        priority_classes={"engine-card": "basic_mana"},
+        playable_information_complete=True,
+    )
+    inject(session, update)
+    request = dict(
+        event="decision",
+        decision_id=2,
+        kind="GAME_SELECT",
+        message="Never parse me",
+        is_priority=True,
+    )
+    if attackers is not None:
+        request["attackers"] = attackers
+    inject(session, request)
+    view = session.snapshot("one")
+    assert view.decision.is_priority is (attackers is None)
+    assert (
+        next(action for action in view.actions if action.object_id).priority_class
+        == "basic_mana"
+    )
+    assert bool(PriorityController().observe(view)) is (attackers is None)
+
+
+def test_missing_playable_object_prevents_priority_automation(session):
+    from mtg_play.priority import PriorityController
+
+    update = state(1)
+    update.update(
+        step="UPKEEP",
+        playable=["unrepresented-object"],
+        playable_information_complete=True,
+    )
+    inject(session, update)
+    inject(
+        session,
+        dict(
+            event="decision",
+            decision_id=2,
+            kind="GAME_SELECT",
+            message="",
+            is_priority=True,
+        ),
+    )
+    view = session.snapshot("one")
+    assert not view.actions_complete
+    assert PriorityController().observe(view) is None
+
+
+@pytest.mark.parametrize("priority_open", [False, True])
+def test_real_frames_require_engine_priority_context_not_just_select_callback(
+    session, priority_open
+):
+    from mtg_play.priority import PriorityController
+
+    update = state(1)
+    update.update(
+        cycle=8,
+        step="UPKEEP",
+        priority_classes={"engine-card": "basic_mana"},
+        playable_information_complete=True,
+    )
+    session._owner._metadata = lambda view: dict(
+        status="ok",
+        cycle=8,
+        priority_open=priority_open,
+        objects={"engine-card": {"incarnation": 1}},
+        commanders=[],
+        players=[
+            dict(id="engine-player-one", lost=False, left=False),
+            dict(id="engine-player-two", lost=False, left=False),
+        ],
+    )
+    inject(session, update)
+    inject(
+        session,
+        dict(
+            event="decision",
+            decision_id=2,
+            kind="GAME_SELECT",
+            message="",
+            is_priority=True,
+        ),
+    )
+    view = session.snapshot("one")
+    assert view.decision.is_priority is priority_open
+    assert view.actions_complete is priority_open
+    assert bool(PriorityController().observe(view)) is priority_open
+
+
+def test_payment_candidate_evidence_is_bounded_typed_and_private(monkeypatch):
+    adapter = LocalGameAdapter(payment_context_probe=True)
+    view = dict(game_id="private-game", viewer="private-viewer", cycle=7, players=[])
+    payload = dict(
+        status="ok", payment_probe=dict(available=True, sequence=1, unpaid_mana_count=2)
+    )
+    monkeypatch.setattr(adapter, "_server_request", lambda **fields: payload)
+    for sources, abilities in [
+        (True, 1),
+        (-1, 1),
+        (129, 129),
+        (1, True),
+        (2, 1),
+        (1, 129),
+        (0, 1),
+    ]:
+        payload["payment_probe"].update(
+            candidate_sources=sources, candidate_abilities=abilities
+        )
+        adapter._metadata(view)
+    assert adapter.payment_context_diagnostics()["candidate_observations"] == 0
+    payload["payment_probe"].update(candidate_sources=2, candidate_abilities=2)
+    for _ in range(140):
+        adapter._metadata(view)
+    report = adapter.payment_context_diagnostics()
+    assert report["candidate_observations"] == 128
+    assert (
+        report["maximum_candidate_sources"]
+        == report["maximum_candidate_abilities"]
+        == 2
+    )
+    assert "private-" not in json.dumps(report)
+
+
+def test_ordinary_shape_counts_do_not_certify_safety(monkeypatch):
+    adapter = LocalGameAdapter(payment_context_probe=True)
+    view = dict(game_id="private-game", viewer="private-viewer", cycle=7, players=[])
+    evidence = dict(
+        available=True,
+        sequence=1,
+        unpaid_mana_count=2,
+        candidate_sources=2,
+        candidate_abilities=2,
+    )
+    monkeypatch.setattr(
+        adapter,
+        "_server_request",
+        lambda **fields: dict(status="ok", payment_probe=evidence),
+    )
+    for invalid in [True, -1, 3, "2", None]:
+        evidence["ordinary_shape_abilities"] = invalid
+        adapter._metadata(view)
+    assert adapter.payment_context_diagnostics()["ordinary_shape_observations"] == 0
+    evidence["ordinary_shape_abilities"] = 2
+    for _ in range(140):
+        adapter._metadata(view)
+    report = adapter.payment_context_diagnostics()
+    assert (
+        report["ordinary_shape_observations"] == 123
+    )  # Shared 128-candidate observation bound.
+    assert report["maximum_ordinary_shape_abilities"] == 2
+    assert "safe" not in report and "private-" not in json.dumps(report)
+
+
+def test_native_coverage_evidence_is_fixed_bounded_and_default_off(monkeypatch):
+    view = dict(game_id="private-game", viewer="private-viewer", cycle=7, players=[])
+    evidence = dict(
+        available=True,
+        sequence=1,
+        unpaid_mana_count=2,
+        candidate_sources=2,
+        candidate_abilities=2,
+        ordinary_shape_abilities=2,
+        base_cost_coverage="COVERS",
+    )
+    default = LocalGameAdapter()
+    monkeypatch.setattr(
+        default, "_server_request", lambda **fields: dict(payment_probe=evidence)
+    )
+    default._metadata(view)
+    assert default.payment_cost_coverage_diagnostics()["observations"] == 0
+    adapter = LocalGameAdapter(payment_context_probe=True)
+    monkeypatch.setattr(
+        adapter, "_server_request", lambda **fields: dict(payment_probe=evidence)
+    )
+    for invalid in [True, {}, None, "SAFE", "private-card-name"]:
+        evidence["base_cost_coverage"] = invalid
+        adapter._metadata(view)
+    assert adapter.payment_cost_coverage_diagnostics()["observations"] == 0
+    for status in [
+        "COVERS",
+        "INSUFFICIENT",
+        "NO_UNPAID_COST",
+        "UNSUPPORTED",
+        "UNKNOWN",
+    ]:
+        evidence["base_cost_coverage"] = status
+        adapter._metadata(view)
+    assert all(
+        adapter.payment_cost_coverage_diagnostics()[key] == 1
+        for key in (
+            "covers",
+            "insufficient",
+            "no_unpaid_cost",
+            "unsupported",
+            "unknown",
+        )
+    )
+    evidence["base_cost_coverage"] = "COVERS"
+    for _ in range(140):
+        adapter._metadata(view)
+    report = adapter.payment_cost_coverage_diagnostics()
+    assert (
+        report["observations"] == 123
+    )  # The shared 128 candidate-sample budget includes five invalid statuses.
+    assert "private-" not in json.dumps(report) and "safe" not in report
+
+
+def test_private_hazard_evidence_never_exports_registries_or_claims_safety(monkeypatch):
+    view = dict(game_id="private-game", viewer="private-viewer", cycle=7, players=[])
+    evidence = dict(
+        available=True,
+        sequence=1,
+        unpaid_mana_count=2,
+        candidate_sources=2,
+        candidate_abilities=2,
+        ordinary_shape_abilities=2,
+        registered_hazards="REQUIRES_MANUAL",
+    )
+    default = LocalGameAdapter()
+    monkeypatch.setattr(
+        default, "_server_request", lambda **fields: dict(payment_probe=evidence)
+    )
+    default._metadata(view)
+    assert default.payment_hazard_diagnostics()["observations"] == 0
+    adapter = LocalGameAdapter(payment_context_probe=True)
+    monkeypatch.setattr(
+        adapter, "_server_request", lambda **fields: dict(payment_probe=evidence)
+    )
+    for invalid in [True, {}, "SAFE", "private-trigger-name"]:
+        evidence["registered_hazards"] = invalid
+        adapter._metadata(view)
+    assert adapter.payment_hazard_diagnostics()["observations"] == 0
+    for value in ["REQUIRES_MANUAL", "NO_REGISTERED_HAZARD", "UNKNOWN"]:
+        evidence["registered_hazards"] = value
+        adapter._metadata(view)
+    assert adapter.payment_hazard_diagnostics()["requires_manual"] == 1
+    assert adapter.payment_hazard_diagnostics()["no_registered_hazard"] == 1
+    evidence["registered_hazards"] = "REQUIRES_MANUAL"
+    for _ in range(140):
+        adapter._metadata(view)
+    report = adapter.payment_hazard_diagnostics()
+    assert (
+        report["observations"] == 124
+    )  # Shared 128 candidate samples, four invalid labels.
+    assert "private-" not in json.dumps(report) and "safe" not in report
+
+
+def test_native_source_ticket_evidence_is_aggregate_bounded_and_default_off(
+    monkeypatch,
+):
+    view = dict(game_id="private-game", viewer="private-viewer", cycle=7, players=[])
+    evidence = dict(
+        available=True,
+        sequence=1,
+        unpaid_mana_count=2,
+        candidate_sources=2,
+        candidate_abilities=2,
+        source_tickets_revalidated=2,
+    )
+    default = LocalGameAdapter()
+    monkeypatch.setattr(
+        default, "_server_request", lambda **fields: dict(payment_probe=evidence)
+    )
+    default._metadata(view)
+    assert default.payment_ticket_diagnostics()["observations"] == 0
+    adapter = LocalGameAdapter(payment_context_probe=True)
+    monkeypatch.setattr(
+        adapter, "_server_request", lambda **fields: dict(payment_probe=evidence)
+    )
+    for invalid in [True, -1, 3, "private-source-ticket", None]:
+        evidence["source_tickets_revalidated"] = invalid
+        adapter._metadata(view)
+    assert adapter.payment_ticket_diagnostics()["observations"] == 0
+    evidence["source_tickets_revalidated"] = 2
+    for _ in range(140):
+        adapter._metadata(view)
+    report = adapter.payment_ticket_diagnostics()
+    assert report == dict(enabled=True, observations=123, maximum_revalidated=2)
+    assert "private-" not in json.dumps(report)

@@ -1,0 +1,181 @@
+{
+  "provenance": "Public synthetic nonce vectors only; no runtime challenges or keys.",
+  "positive": [
+    {
+      "response": false,
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "hello",
+        "message_id": "auth-challenge",
+        "body": {
+          "auth_exchange_version": 1,
+          "stage": "gateway_challenge",
+          "server_nonce": "1111111111111111111111111111111111111111111111111111111111111111"
+        }
+      }
+    },
+    {
+      "response": true,
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "hello",
+        "message_id": "auth-nonce",
+        "body": {
+          "auth_exchange_version": 1,
+          "stage": "client_nonce",
+          "server_nonce": "1111111111111111111111111111111111111111111111111111111111111111",
+          "client_nonce": "2222222222222222222222222222222222222222222222222222222222222222"
+        }
+      }
+    }
+  ],
+  "negative": [
+    {
+      "name": "version",
+      "response": false,
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "hello",
+        "message_id": "auth-challenge",
+        "body": {
+          "auth_exchange_version": 2,
+          "stage": "gateway_challenge",
+          "server_nonce": "1111111111111111111111111111111111111111111111111111111111111111"
+        }
+      }
+    },
+    {
+      "name": "bool-version",
+      "response": false,
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "hello",
+        "message_id": "auth-challenge",
+        "body": {
+          "auth_exchange_version": true,
+          "stage": "gateway_challenge",
+          "server_nonce": "1111111111111111111111111111111111111111111111111111111111111111"
+        }
+      }
+    },
+    {
+      "name": "nonce",
+      "response": false,
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "hello",
+        "message_id": "auth-challenge",
+        "body": {
+          "auth_exchange_version": 1,
+          "stage": "gateway_challenge",
+          "server_nonce": "short"
+        }
+      }
+    },
+    {
+      "name": "owner",
+      "response": false,
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "hello",
+        "message_id": "auth-challenge",
+        "body": {
+          "auth_exchange_version": 1,
+          "stage": "gateway_challenge",
+          "server_nonce": "1111111111111111111111111111111111111111111111111111111111111111",
+          "owner_key": "public-fake"
+        }
+      }
+    },
+    {
+      "name": "stage",
+      "response": false,
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "hello",
+        "message_id": "auth-challenge",
+        "body": {
+          "auth_exchange_version": 1,
+          "stage": "wrong",
+          "server_nonce": "1111111111111111111111111111111111111111111111111111111111111111"
+        }
+      }
+    },
+    {
+      "name": "version",
+      "response": true,
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "hello",
+        "message_id": "auth-nonce",
+        "body": {
+          "auth_exchange_version": 2,
+          "stage": "client_nonce",
+          "server_nonce": "1111111111111111111111111111111111111111111111111111111111111111",
+          "client_nonce": "2222222222222222222222222222222222222222222222222222222222222222"
+        }
+      }
+    },
+    {
+      "name": "bool-version",
+      "response": true,
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "hello",
+        "message_id": "auth-nonce",
+        "body": {
+          "auth_exchange_version": true,
+          "stage": "client_nonce",
+          "server_nonce": "1111111111111111111111111111111111111111111111111111111111111111",
+          "client_nonce": "2222222222222222222222222222222222222222222222222222222222222222"
+        }
+      }
+    },
+    {
+      "name": "nonce",
+      "response": true,
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "hello",
+        "message_id": "auth-nonce",
+        "body": {
+          "auth_exchange_version": 1,
+          "stage": "client_nonce",
+          "server_nonce": "short",
+          "client_nonce": "2222222222222222222222222222222222222222222222222222222222222222"
+        }
+      }
+    },
+    {
+      "name": "owner",
+      "response": true,
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "hello",
+        "message_id": "auth-nonce",
+        "body": {
+          "auth_exchange_version": 1,
+          "stage": "client_nonce",
+          "server_nonce": "1111111111111111111111111111111111111111111111111111111111111111",
+          "client_nonce": "2222222222222222222222222222222222222222222222222222222222222222",
+          "owner_key": "public-fake"
+        }
+      }
+    },
+    {
+      "name": "stage",
+      "response": true,
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "hello",
+        "message_id": "auth-nonce",
+        "body": {
+          "auth_exchange_version": 1,
+          "stage": "wrong",
+          "server_nonce": "1111111111111111111111111111111111111111111111111111111111111111",
+          "client_nonce": "2222222222222222222222222222222222222222222222222222222222222222"
+        }
+      }
+    }
+  ]
+}

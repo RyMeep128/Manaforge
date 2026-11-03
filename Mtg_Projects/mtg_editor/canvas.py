@@ -37,6 +37,7 @@ class CardCanvas(W.QAbstractScrollArea):
         self.card_aspect_ratio = 1.4
         self.selected = set()
         self.in_deck_ids = set()
+        self.violations = {}
         self.filtered_ids = None
         self.collapsed = set()
         self.items, self.headers = [], []
@@ -256,6 +257,15 @@ class CardCanvas(W.QAbstractScrollArea):
                                 entry.entry_id == self.hovered, state['progress'])
             else:
                 rounded_card(p, rect, pixmap, entry.entry_id in self.selected or in_deck, entry.entry_id == self.hovered)
+            if entry.entry_id in self.violations:
+                p.save()
+                p.setPen(G.QPen(G.QColor('#ff6666'), 4))
+                p.setBrush(C.Qt.BrushStyle.NoBrush)
+                p.drawRoundedRect(rect.adjusted(2, 2, -2, -2), 8, 8)
+                p.fillRect(C.QRect(rect.x()+4, rect.y()+4, rect.width()-8, 23), G.QColor('#8f2020'))
+                p.setPen(G.QColor('white'))
+                p.drawText(C.QRect(rect.x()+4, rect.y()+4, rect.width()-8, 23), C.Qt.AlignmentFlag.AlignCenter, 'Deck violation')
+                p.restore()
             primary, tags = corner_colors(entry, category_colors)
             draw_quantity_corner(p, rect, entry.quantity, primary, tags)
             if self.face_count(entry) > 1:
@@ -266,7 +276,7 @@ class CardCanvas(W.QAbstractScrollArea):
                 draw_quantity_controls(p, control, self.quantity_buttons(rect), can_decrease=entry.quantity > 0)
             if self.mode not in ('Stacks', 'Expanded Stacks') or not any(r.y() > rect.y() and r.x() == rect.x() and k == key for _, r, k in self.items):
                 label = ('Oversized · ' if entry.oversized else '') + ('Owned · ' if entry.do_not_print else '') + self.shown_facts(entry).get('name', entry.name)
-                p.setPen(G.QColor(COLORS['text_secondary']))
+                p.setPen(G.QColor('#ff6666' if entry.entry_id in self.violations else COLORS['text_secondary']))
                 p.drawText(C.QRect(rect.x(), rect.bottom()+4, rect.width(), 28), C.Qt.AlignmentFlag.AlignCenter,
                            p.fontMetrics().elidedText(label, C.Qt.TextElideMode.ElideRight, rect.width()))
         if self.drop_target:

@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:manaforge:play:viewer-auth:1",
+  "title": "Viewer hello proof; never owner bootstrap",
+  "type": "object",
+  "required": [
+    "wire_version",
+    "message_type",
+    "message_id",
+    "body"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "wire_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "message_type": {
+      "const": "hello"
+    },
+    "message_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,128}(?![\\s\\S])"
+    },
+    "body": {
+      "type": "object",
+      "required": [
+        "protocol_version",
+        "engine_version",
+        "artifact_manifest_sha256",
+        "session_id",
+        "viewer_id",
+        "server_nonce",
+        "client_nonce",
+        "role",
+        "proof"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "protocol_version": {
+          "type": "integer",
+          "const": 1
+        },
+        "engine_version": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+        },
+        "artifact_manifest_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+        },
+        "viewer_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+        },
+        "server_nonce": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+        },
+        "client_nonce": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+        },
+        "role": {
+          "enum": [
+            "client",
+            "gateway"
+          ]
+        },
+        "proof": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "value": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "type": "integer",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/value"
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/value"
+          }
+        }
+      ]
+    }
+  }
+}

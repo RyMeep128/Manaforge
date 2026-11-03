@@ -1,3 +1,4 @@
 -r Mtg_Projects/mtg_proxy/requirements.txt
 pytest>=8,<10
 ruff==0.16.9
+jsonschema==4.23.0

@@ -18,7 +18,14 @@ import uuid
 import xml.etree.ElementTree as ET
 
 HERE = Path(__file__).resolve().parent
-DEFAULT_BUNDLE = HERE / "mage-full_1.4.62-dev_2026-10-03_20-47"
+if __package__:
+    from .engine_fork import selected_bundle
+else:
+    try:
+        from mtg_play.engine_fork import selected_bundle
+    except ModuleNotFoundError:
+        from engine_fork import selected_bundle
+DEFAULT_BUNDLE = selected_bundle(HERE / "mage-full_1.4.62-dev_2026-10-03_20-47")
 DEFAULT_JDK = Path(r"C:\Program Files\Java\jdk-23")
 START_TIMEOUT = 120
 CONNECT_TIMEOUT = 30
@@ -47,7 +54,11 @@ EVENTS = {
 
 
 class ProofError(RuntimeError):
-    """An actionable feasibility failure."""
+    """An actionable feasibility failure with an optional stable timeout code."""
+
+    def __init__(self, message, *, code=None):
+        self.code = code
+        super().__init__(message)
 
 
 def decode_event(line: str) -> dict:
@@ -109,16 +120,32 @@ class BridgeEvents:
         finally:
             self.events.put(None)
 
-    def wait(self, event_name: str, deadline: float, request_id: str | None = None):
+    def wait(
+        self,
+        event_name: str,
+        deadline: float,
+        request_id: str | None = None,
+        *,
+        cancel=None,
+    ):
         while True:
+            check_cancel(cancel)
             remaining = deadline - time.monotonic()
             if remaining <= 0:
-                raise ProofError(f"Timed out waiting for bridge {event_name}")
-            try:
-                event = self.events.get(timeout=remaining)
-            except queue.Empty as error:
                 raise ProofError(
-                    f"Timed out waiting for bridge {event_name}"
+                    f"Timed out waiting for bridge {event_name}",
+                    code="ENGINE_OPERATION_TIMEOUT",
+                )
+            try:
+                event = self.events.get(
+                    timeout=min(remaining, 0.1) if cancel is not None else remaining
+                )
+            except queue.Empty as error:
+                if cancel is not None:
+                    continue
+                raise ProofError(
+                    f"Timed out waiting for bridge {event_name}",
+                    code="ENGINE_OPERATION_TIMEOUT",
                 ) from error
             if event is None:
                 raise ProofError(
@@ -155,14 +182,22 @@ def send(process: subprocess.Popen, command: str, request_id: str, **fields):
         raise ProofError(f"Cannot send {command} to bridge: {error}") from error
 
 
-def stop_process(process: subprocess.Popen | None, shutdown_line: str | None = None):
+def stop_process(
+    process: subprocess.Popen | None,
+    shutdown_line: str | None = None,
+    *,
+    immediate=False,
+):
     """Reap only a process created by this runner; never kill by name or port."""
     if process is None:
         return {"started": False}
     forced = False
     if process.poll() is None:
         try:
-            if shutdown_line is not None:
+            if immediate:
+                forced = True
+                process.terminate()
+            elif shutdown_line is not None:
                 process.stdin.write(shutdown_line + "\n")
                 process.stdin.flush()
             else:
@@ -204,7 +239,19 @@ def validate_installation(bundle: Path, jdk: Path):
     for tool in (java, javac):
         if not tool.is_file():
             raise ProofError(f"Missing Java tool: {tool}; set --xmage-root/--jdk-path")
-    manifest = json.loads((HERE / "artifacts.json").read_text(encoding="utf-8"))
+    if __package__:
+        from .engine_fork import installation_manifest
+    else:
+        try:
+            from mtg_play.engine_fork import installation_manifest
+        except ModuleNotFoundError:
+            from engine_fork import installation_manifest
+
+    try:
+        manifest_path = installation_manifest(bundle, HERE / "artifacts.json")
+    except ValueError as error:
+        raise ProofError(str(error)) from error
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     for relative, expected in manifest["artifacts"].items():
         artifact = bundle / relative
         if not artifact.is_file():
@@ -247,8 +294,31 @@ def prepare_workspace(bundle: Path, workspace: Path, port: int, secondary: int):
     return server
 
 
-def wait_for_server(process: subprocess.Popen, log: Path, deadline: float):
+def check_cancel(cancel):
+    if cancel is not None and cancel.is_set():
+        raise ProofError("Runtime preparation cancelled", code="RUNTIME_CANCELLED")
+
+
+def wait_for_compiler(process, deadline, *, cancel=None):
+    """Wait only for this owned compiler; cancellation is reaped by the runner."""
+    while process.poll() is None:
+        check_cancel(cancel)
+        if time.monotonic() >= deadline:
+            raise ProofError(
+                "Java bridge compilation timed out", code="ENGINE_OPERATION_TIMEOUT"
+            )
+        if cancel is not None:
+            cancel.wait(0.1)
+        else:
+            time.sleep(0.1)
+    return process.returncode
+
+
+def wait_for_server(
+    process: subprocess.Popen, log: Path, deadline: float, *, cancel=None
+):
     while time.monotonic() < deadline:
+        check_cancel(cancel)
         if process.poll() is not None:
             raise ProofError(
                 f"XMage server exited ({process.returncode}); inspect {log}"
@@ -259,13 +329,33 @@ def wait_for_server(process: subprocess.Popen, log: Path, deadline: float):
         if "Failed to start server" in text or "Unable to start MAGE server" in text:
             raise ProofError(f"XMage server startup failed; inspect {log}")
         time.sleep(0.1)
-    raise ProofError(f"XMage server startup timed out; inspect {log}")
+    raise ProofError(
+        f"XMage server startup timed out; inspect {log}",
+        code="ENGINE_OPERATION_TIMEOUT",
+    )
 
 
 def run_proof(
-    bundle: Path, jdk: Path, port: int = 0, scenario=None, runtime_consumer=None
+    bundle: Path,
+    jdk: Path,
+    port: int = 0,
+    scenario=None,
+    runtime_consumer=None,
+    *,
+    diagnostics=None,
+    cancel=None,
+    payment_context_probe=False,
 ) -> dict:
-    java, javac, manifest = validate_installation(bundle, jdk)
+    if type(payment_context_probe) is not bool:
+        raise ValueError("PAYMENT_CONTEXT_PROBE")
+    if diagnostics is None:
+        if __package__:
+            from .diagnostics import LifecycleDiagnostics
+        else:
+            from diagnostics import LifecycleDiagnostics
+        diagnostics = LifecycleDiagnostics()
+    with diagnostics.stage("runtime_validation"):
+        java, javac, manifest = validate_installation(bundle, jdk)
     workspace = (
         HERE / ".runtime" / (time.strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:8])
     )
@@ -275,23 +365,55 @@ def run_proof(
         "workspace": str(workspace),
         "engine": manifest["engine"],
     }
-    server_process = bridge_process = events = None
+    compiler_process = server_process = bridge_process = events = None
     logs = []
     peers = []
     reservations = []
     failure = None
     try:
-        reservations.append(reserve_port(port))
-        reservations.append(reserve_port())
-        port, secondary = [item.getsockname()[1] for item in reservations]
-        server = prepare_workspace(bundle, workspace, port, secondary)
-        classes = workspace / "classes"
-        classes.mkdir()
-        classpath = str(server / "lib/*")
-        compile_log = (workspace / "compile.log").open("w", encoding="utf-8")
-        logs.append(compile_log)
-        compiled = subprocess.run(
-            [
+        check_cancel(cancel)
+        with diagnostics.stage("workspace_preparation"):
+            reservations.append(reserve_port(port))
+            reservations.append(reserve_port())
+            port, secondary = [item.getsockname()[1] for item in reservations]
+            server = prepare_workspace(bundle, workspace, port, secondary)
+            if payment_context_probe:
+                config = server / "config/config.xml"
+                tree = ET.parse(config)
+                human = tree.getroot().find(".//playerType[@name='Human']")
+                if human is None:
+                    raise ProofError("PINNED_PAYMENT_CONTEXT_CHANGED")
+                human.set("className", "manaforge.payment.xmage.ContextHumanPlayer")
+                tree.write(config, encoding="utf-8", xml_declaration=True)
+        check_cancel(cancel)
+        with diagnostics.stage("bridge_compilation"):
+            classes = workspace / "classes"
+            classes.mkdir()
+            classpath = str(server / "lib/*")
+            context_sources = []
+            if payment_context_probe:
+                classpath += os.pathsep + str(
+                    server / "plugins/mage-player-human-1.4.62.jar"
+                )
+                context_sources.append(
+                    HERE
+                    / "java/payment-xmage/manaforge/payment/xmage/ContextHumanPlayer.java"
+                )
+                context_sources.append(
+                    HERE
+                    / "java/payment-xmage/manaforge/payment/xmage/OrdinaryManaShape.java"
+                )
+                context_sources.append(
+                    HERE
+                    / "java/payment-xmage/manaforge/payment/xmage/OrdinaryCostCoverage.java"
+                )
+                context_sources.append(
+                    HERE
+                    / "java/payment-xmage/manaforge/payment/xmage/NativePaymentHazards.java"
+                )
+            compile_log = (workspace / "compile.log").open("w", encoding="utf-8")
+            logs.append(compile_log)
+            command = [
                 str(javac),
                 "--release",
                 "8",
@@ -302,16 +424,40 @@ def run_proof(
                 "-d",
                 str(classes),
                 *map(str, sorted((HERE / "java").glob("*.java"))),
-            ],
-            stdout=compile_log,
-            stderr=subprocess.STDOUT,
-            timeout=60,
-            check=False,
-        )
-        if compiled.returncode:
-            raise ProofError(
-                f"Java bridge compilation failed; inspect {compile_log.name}"
-            )
+                *map(
+                    str,
+                    sorted((HERE / "protocol/java/manaforge/protocol").glob("*.java")),
+                ),
+                str(
+                    HERE
+                    / "java/payment-xmage/manaforge/payment/xmage/ManaResponseExecutor.java"
+                ),
+                str(HERE / "java/payment/manaforge/payment/PaymentCoordinator.java"),
+                *map(str, context_sources),
+            ]
+            if cancel is None:
+                compiled_returncode = subprocess.run(
+                    command,
+                    stdout=compile_log,
+                    stderr=subprocess.STDOUT,
+                    timeout=60,
+                    check=False,
+                ).returncode
+            else:
+                compiler_process = subprocess.Popen(
+                    command,
+                    stdin=subprocess.PIPE,
+                    stdout=compile_log,
+                    stderr=subprocess.STDOUT,
+                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                )
+                compiled_returncode = wait_for_compiler(
+                    compiler_process, time.monotonic() + 60, cancel=cancel
+                )
+            if compiled_returncode:
+                raise ProofError(
+                    f"Java bridge compilation failed; inspect {compile_log.name}"
+                )
         result.update({"primary_port": port, "secondary_port": secondary})
         classpath = os.pathsep.join((str(classes), classpath))
         server_log_path = workspace / "server.log"
@@ -330,52 +476,59 @@ def run_proof(
             "-Djava.net.preferIPv4Stack=true",
             "-Dh2.bindAddress=127.0.0.1",
         ]
-        server_process = subprocess.Popen(
-            [*base, "-Xmx1024m", "-cp", classpath, "ManaforgeServerHost"],
-            cwd=server,
-            stdin=subprocess.PIPE,
-            stdout=server_log,
-            stderr=subprocess.STDOUT,
-            text=True,
-            encoding="utf-8",
-            creationflags=flags,
-        )
-        print(f"Waiting for local XMage server; logs: {workspace}", flush=True)
-        wait_for_server(
-            server_process, server_log_path, time.monotonic() + START_TIMEOUT
-        )
-        bridge_dir = workspace / "bridge"
-        bridge_dir.mkdir()
-        bridge_process = subprocess.Popen(
-            [*base, "-Xmx256m", "-cp", classpath, "ManaforgeBridge"],
-            cwd=bridge_dir,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=bridge_log,
-            text=True,
-            encoding="utf-8",
-            creationflags=flags,
-        )
-        events = BridgeEvents(bridge_process, transcript)
-        deadline = time.monotonic() + CONNECT_TIMEOUT
-        send(
-            bridge_process,
-            "connect",
-            "connect-1",
-            port=port,
-            username="mf_" + uuid.uuid4().hex[:10],
-        )
-        events.wait("connected", deadline, "connect-1")
-        send(bridge_process, "status", "status-1")
-        status = events.wait("status", deadline, "status-1")
-        if (
-            not status.get("connected")
-            or status.get("engine_version") != manifest["engine"]
-        ):
-            raise ProofError(f"Unexpected engine status: {status}")
-        if not events.callbacks:
-            events.wait("callback", deadline)
-        result.update({"status": status, "callbacks": list(events.callbacks)})
+        check_cancel(cancel)
+        with diagnostics.stage("server_startup"):
+            server_process = subprocess.Popen(
+                [*base, "-Xmx1024m", "-cp", classpath, "ManaforgeServerHost"],
+                cwd=server,
+                stdin=subprocess.PIPE,
+                stdout=server_log,
+                stderr=subprocess.STDOUT,
+                text=True,
+                encoding="utf-8",
+                creationflags=flags,
+            )
+            print(f"Waiting for local XMage server; logs: {workspace}", flush=True)
+            wait_for_server(
+                server_process,
+                server_log_path,
+                time.monotonic() + START_TIMEOUT,
+                cancel=cancel,
+            )
+        with diagnostics.stage("client_connection"):
+            bridge_dir = workspace / "bridge"
+            bridge_dir.mkdir()
+            bridge_process = subprocess.Popen(
+                [*base, "-Xmx256m", "-cp", classpath, "ManaforgeBridge"],
+                cwd=bridge_dir,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=bridge_log,
+                text=True,
+                encoding="utf-8",
+                creationflags=flags,
+            )
+            events = BridgeEvents(bridge_process, transcript)
+            deadline = time.monotonic() + CONNECT_TIMEOUT
+            send(
+                bridge_process,
+                "connect",
+                "connect-1",
+                port=port,
+                username="mf_" + uuid.uuid4().hex[:10],
+            )
+            events.wait("connected", deadline, "connect-1", cancel=cancel)
+        with diagnostics.stage("engine_handshake"):
+            send(bridge_process, "status", "status-1")
+            status = events.wait("status", deadline, "status-1", cancel=cancel)
+            if (
+                not status.get("connected")
+                or status.get("engine_version") != manifest["engine"]
+            ):
+                raise ProofError(f"Unexpected engine status: {status}")
+            if not events.callbacks:
+                events.wait("callback", deadline, cancel=cancel)
+            result.update({"status": status, "callbacks": list(events.callbacks)})
         if scenario is not None or runtime_consumer is not None:
 
             def launch_peer():
@@ -406,20 +559,25 @@ def run_proof(
                 )
             if scenario is not None:
                 result["gameplay"] = scenario(bridge_process, events, launch_peer, port)
-        send(bridge_process, "shutdown", "shutdown-1")
-        shutdown = events.wait(
-            "shutdown", time.monotonic() + STOP_TIMEOUT, "shutdown-1"
-        )
-        if shutdown.get("connected") is not False:
-            raise ProofError("Bridge did not confirm disconnection")
-        result["disconnected"] = True
+        with diagnostics.stage("runtime_shutdown"):
+            send(bridge_process, "shutdown", "shutdown-1")
+            shutdown = events.wait(
+                "shutdown", time.monotonic() + STOP_TIMEOUT, "shutdown-1"
+            )
+            if shutdown.get("connected") is not False:
+                raise ProofError("Bridge did not confirm disconnection")
+            result["disconnected"] = True
     except (Exception, KeyboardInterrupt) as error:
         failure = str(error) or type(error).__name__
     finally:
-        for reservation in reservations:
-            reservation.close()
-        # Continue cleanup even if one process cannot be reaped.
+        cleanup_stage = diagnostics.begin("process_cleanup")
         cleanup_errors = []
+        for reservation in reservations:
+            try:
+                reservation.close()
+            except OSError:
+                cleanup_errors.append("Port reservation cleanup failed")
+        # Continue cleanup even if one process cannot be reaped.
         for index, (peer, peer_events) in enumerate(peers):
             try:
                 if peer.poll() is None:
@@ -430,24 +588,42 @@ def run_proof(
                 result["peer_" + str(index)] = stop_process(peer)
             except (ProofError, OSError, subprocess.SubprocessError) as error:
                 cleanup_errors.append(f"peer {index}: {error}")
-                result["peer_" + str(index)] = stop_process(peer)
+                try:
+                    result["peer_" + str(index)] = stop_process(peer)
+                except (OSError, subprocess.SubprocessError):
+                    result["peer_" + str(index)] = {
+                        "started": True,
+                        "exit_code": None,
+                        "reaped": False,
+                    }
             peer_events.thread.join(timeout=2)
         for name, process, line in (
+            ("compiler", compiler_process, None),
             ("bridge", bridge_process, None),
             ("server", server_process, "shutdown"),
         ):
             try:
-                result[name] = stop_process(process, line)
+                result[name] = stop_process(process, line, immediate=name == "compiler")
             except (OSError, subprocess.SubprocessError) as error:
                 cleanup_errors.append(f"{name}: {error}")
+                # Missing cleanup data is not evidence that a started child exited.
+                result[name] = {
+                    "started": process is not None,
+                    "exit_code": None,
+                    "reaped": False,
+                }
         if events is not None:
             events.thread.join(timeout=2)
         for log in logs:
-            log.close()
+            try:
+                log.close()
+            except OSError:
+                cleanup_errors.append("Diagnostic stream cleanup failed")
         if cleanup_errors:
             failure = f"{failure or ''} Cleanup failed: {cleanup_errors}"
         if failure is None:
             for name in (
+                *(("compiler",) if result.get("compiler", {}).get("started") else ()),
                 "bridge",
                 "server",
                 *("peer_" + str(i) for i in range(len(peers))),
@@ -455,13 +631,33 @@ def run_proof(
                 state = result[name]
                 if state.get("forced") or state.get("exit_code") != 0:
                     failure = f"{name} did not shut down normally: {state}"
+        cleanup_failed = bool(cleanup_errors) or any(
+            state.get("started")
+            and (
+                not state.get("reaped")
+                or (
+                    state.get("forced")
+                    and not (
+                        name == "compiler" and cancel is not None and cancel.is_set()
+                    )
+                )
+            )
+            for name, state in result.items()
+            if name in ("compiler", "bridge", "server") or name.startswith("peer_")
+        )
+        diagnostics.end(cleanup_stage, failure="FAILED" if cleanup_failed else None)
+        result["lifecycle"] = diagnostics.records
         result["success"] = failure is None
         if failure:
             result["error"] = failure
-        (workspace / "result.json").write_text(
-            json.dumps(result, indent=2) + "\n",
-            encoding="utf-8",
-        )
+        try:
+            (workspace / "result.json").write_text(
+                json.dumps(result, indent=2) + "\n",
+                encoding="utf-8",
+            )
+        except OSError:
+            # Do not discard process-exit evidence if diagnostic storage fails.
+            result["diagnostics_write_failed"] = True
     return result
 
 

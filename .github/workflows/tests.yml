@@ -63,9 +63,19 @@ jobs:
             Mtg_Projects/mtg_proxy/requirements.txt
       - name: Install test and application dependencies
         run: python -m pip install -r requirements-dev.txt
+
+      - name: Check Play Python protocol inventory
+        run: python tools/export_play_protocol_inventory.py --check
+      - name: Check Play baseline schemas and sanitized fixtures
+        run: python Mtg_Projects/mtg_play/tests/generate_protocol_fixtures.py --check
+      - name: Check private Play launch fixtures
+        run: python Mtg_Projects/mtg_play/tests/generate_launch_fixtures.py --check
+      - name: Check generated Play Java and CSharp fixture models
+        run: python tools/generate_play_models.py --check
       - name: Install optional library server dependency for CI
         run: python -m pip install -r requirements-library.txt
       - name: Test Proxy, Core, Deck Editor, and their integration
+        id: application-tests
         working-directory: Mtg_Projects
         env:
           PRINT_PROXY_PREP_DATA_DIR: ${{ runner.temp }}/mtg-suite-test-data
@@ -74,7 +84,7 @@ jobs:
         run: python -m pytest -vv --tb=short --durations=10 -o faulthandler_timeout=120 mtg_editor/tests integration_tests mtg_proxy/tests mtg_core/tests mtg_play/tests
       - name: Determine XMage acceptance scope
         id: xmage-scope
-        if: ${{ !cancelled() && matrix.python == '3.12' }}
+        if: ${{ !cancelled() && matrix.python == '3.12' && steps.application-tests.outcome == 'success' }}
         env:
           XMAGE_FORCE: ${{ github.event_name == 'workflow_dispatch' && (inputs.verify_xmage || inputs.stress_xmage) }}
         run: |
@@ -102,7 +112,7 @@ jobs:
           $reports = Join-Path $env:RUNNER_TEMP 'manaforge-xmage-reports'
           New-Item -ItemType Directory -Path $reports -Force | Out-Null
           $failures = @()
-          foreach ($scenario in @('optional-payment', 'real-decks', 'basic', 'combat', 'identity', 'commander-play', 'visibility', 'number', 'modes', 'sacrifice', 'distribution', 'triggers', 'copy', 'transform', 'partners', 'background', 'companion', 'blockers', 'cancellation', 'string-choice', 'piles', 'interruption')) {
+          foreach ($scenario in @('priority', 'ai-freeform', 'ai-commander', 'ai-blockers', 'optional-payment', 'real-decks', 'basic', 'combat', 'identity', 'commander-play', 'visibility', 'number', 'modes', 'sacrifice', 'distribution', 'triggers', 'copy', 'transform', 'partners', 'background', 'companion', 'blockers', 'cancellation', 'string-choice', 'piles', 'interruption')) {
             python -m mtg_play.adapter_acceptance --scenario $scenario --xmage-root "$env:RUNNER_TEMP/manaforge-xmage" --jdk-path "$env:JAVA_HOME" --output "$reports/$scenario.json"
             if ($LASTEXITCODE -ne 0) { $failures += $scenario }
           }
@@ -119,7 +129,7 @@ jobs:
           $reports = Join-Path $env:RUNNER_TEMP 'manaforge-xmage-reports'
           New-Item -ItemType Directory -Path $reports -Force | Out-Null
           $failures = @()
-          foreach ($scenario in @('basic', 'combat', 'blockers', 'commander-play')) {
+          foreach ($scenario in @('ai-freeform', 'ai-commander', 'ai-blockers')) {
             python -m mtg_play.ui_acceptance --scenario $scenario --xmage-root "$env:RUNNER_TEMP/manaforge-xmage" --jdk-path "$env:JAVA_HOME" --output "$reports/ui-$scenario.json"
             if ($LASTEXITCODE -ne 0) { $failures += $scenario }
           }

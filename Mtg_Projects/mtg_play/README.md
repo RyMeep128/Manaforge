@@ -1,5 +1,9 @@
 # XMage integration and connection proof
 
+For the proposed replacement architecture and gates, see the
+[Unity + Java roadmap](../../docs/play-unity-java-roadmap.md). Keep the existing
+Python/Qt and Java bridge implementation as the regression baseline until acceptance.
+
 For the current public gameplay API, acceptance scenarios, capabilities, and
 remaining verification gate, read [ADAPTER.md](ADAPTER.md). The connection and
 Milestone A sections below document the historical experiment; current gameplay

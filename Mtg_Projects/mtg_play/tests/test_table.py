@@ -61,6 +61,35 @@ def button(panel, text):
     )
 
 
+@pytest.mark.parametrize(
+    "kind,expected", [("Land", None), ("Enchantment", None), ("Creature", "0/0")]
+)
+def test_only_creatures_display_power_toughness(kind, expected):
+    from mtg_play.table import permanent_badge
+
+    obj = replace(
+        card("permanent"),
+        characteristics=CardCharacteristics(type_line=kind, power="0", toughness="0"),
+    )
+    assert permanent_badge(obj) == expected
+    assert permanent_badge(replace(obj, hidden=True)) is None
+    assert permanent_badge(replace(obj, zone="hand")) is None
+
+
+def test_card_frame_tracks_artwork_and_tapped_orientation(app):
+    from mtg_play.table import GameCard
+
+    artwork = SilentArtwork(None, None)
+    obj = card("permanent")
+    widget = GameCard(artwork)
+    widget.present(obj)
+    assert widget.base_size() == C.QSize(112, 88)
+    widget.obj = replace(obj, tapped=True)
+    assert widget.base_size() == C.QSize(88, 112)
+    widget.obj = replace(obj, zone="hand")
+    assert widget.base_size() == C.QSize(112, 158)
+
+
 def test_distinct_objects_live_stats_and_replacement_invalidate_controls(app):
     table = GameTable(object(), artwork_factory=SilentArtwork)
     one, two = card("one-card"), card("two-card")
@@ -244,3 +273,406 @@ def test_unknown_decision_is_explicit_and_stack_objects_remain_distinct(app):
         for label in table.decisions.findChildren(W.QLabel)
     )
     table.clear()
+
+
+@pytest.mark.parametrize("width,height", [(1000, 610), (1200, 730)])
+@pytest.mark.parametrize("stack", [False, True])
+def test_focused_board_keeps_battlefields_hand_and_decisions_in_view(
+    app, width, height, stack
+):
+    table = GameTable(object(), artwork_factory=SilentArtwork)
+    objects = (
+        (card("mine"), card("theirs", owner="two"))
+        + tuple(card(f"hand-{index}", "hand") for index in range(7))
+        + ((card("spell", "stack"),) if stack else ())
+    )
+    table.resize(width, height)
+    table.show()
+    try:
+        table.present(
+            replace(
+                snapshot(),
+                objects=objects,
+                decision=ChoiceRequest(
+                    "priority", "one", "selection", "Select an action", ()
+                ),
+            )
+        )
+        app.processEvents()
+        assert table.view_mode == "focused"
+        assert table.board.parentWidget() is table
+        assert table.inspection_dialog.isHidden() and table.zones_dialog.isHidden()
+        positions = [
+            lane.mapTo(table, C.QPoint(0, 0)).y()
+            for lane in (table.opponent, table.player, table.hand)
+        ]
+        assert positions[0] < positions[1] < positions[2]
+        assert positions[-1] + table.hand.height() <= table.height()
+        assert table.decision_dock.isVisible()
+        assert (
+            table.decision_dock.mapTo(table, C.QPoint(0, 0)).x()
+            > table.player.mapTo(table, C.QPoint(0, 0)).x()
+        )
+        assert table.zone_lanes["stack"].isVisible() == stack
+        with pytest.raises(ValueError):
+            table.set_view_mode("overview")
+    finally:
+        table.clear()
+        table.close()
+
+
+def test_contextual_zones_and_inspection_do_not_submit_or_reopen_after_dismissal(app):
+    table = GameTable(object(), artwork_factory=SilentArtwork)
+    obj = card("mine")
+    view = replace(snapshot(), objects=(obj,))
+    calls = []
+    table.command.connect(lambda *args: calls.append(args))
+    table.show()
+    try:
+        table.present(view)
+        table.zone_button.click()
+        assert table.zones_dialog.isVisible()
+        table.select_object(obj.object_id, interact=False)
+        assert table.inspection_dialog.isVisible() and not calls
+        table.inspection_dialog.close()
+        table.present(replace(view, revision=2))
+        assert not table.inspection_dialog.isVisible() and not calls
+        table.clear()
+        assert table.zones_dialog.isHidden() and table.inspection_dialog.isHidden()
+        assert not table.inspection.toPlainText()
+    finally:
+        table.close()
+
+
+def test_hover_is_delayed_transient_and_uses_current_snapshot_without_actions(app):
+    table = GameTable(object(), artwork_factory=SilentArtwork)
+    obj = card("hovered")
+    view = replace(snapshot(), objects=(obj,))
+    calls = []
+    table.command.connect(lambda *args: calls.append(args))
+    table.present(view)
+    try:
+        table._schedule_hover(obj.object_id)
+        assert table.hover_timer.isActive() and table.hover_preview.isHidden()
+        assert table.hover_timer.interval() == 300
+        table._show_hover()
+        assert "3/3" in table.hover_text.toPlainText()
+        assert table.hover_image.text() == "Local artwork unavailable"
+        assert "original printing" in table.hover_text.toPlainText()
+        assert (
+            table.inspected is None and table.inspection_dialog.isHidden() and not calls
+        )
+        changed = replace(
+            obj,
+            characteristics=replace(
+                obj.characteristics,
+                power="8",
+                toughness="9",
+                current_abilities=("Engine-reported ability",),
+            ),
+        )
+        table.present(replace(view, revision=2, objects=(changed,)))
+        assert "8/9" in table.hover_text.toPlainText()
+        assert "Engine-reported ability" in table.hover_text.toPlainText()
+        table.pending()
+        assert table.hover_preview.isHidden() and not table.hover_text.toPlainText()
+        table._schedule_hover(obj.object_id)
+        assert not table.hover_timer.isActive() and not calls
+    finally:
+        table.clear()
+        table.close()
+
+
+@pytest.mark.parametrize("kind", ["hidden", "face_down", "foreign_hand", "removed"])
+def test_hover_cannot_expose_concealed_or_removed_card_details(app, kind):
+    table = GameTable(object(), artwork_factory=SilentArtwork)
+    obj = card("private", name="PRIVATE NAME")
+    if kind == "hidden":
+        obj = replace(obj, hidden=True)
+    elif kind == "face_down":
+        obj = replace(obj, face_down=True)
+    elif kind == "foreign_hand":
+        obj = replace(obj, zone="hand", owner_id="two")
+    table.present(replace(snapshot(), objects=() if kind == "removed" else (obj,)))
+    table._schedule_hover(obj.object_id)
+    table._show_hover()
+    assert table.hover_preview.isHidden() and not table.hover_text.toPlainText()
+    assert table.inspected is None
+    table.clear()
+
+
+def test_multiple_actions_use_explicit_menu_and_are_invalidated_by_next_view(app):
+    table = GameTable(object(), artwork_factory=SilentArtwork)
+    obj = card("choice")
+    view = replace(
+        snapshot(),
+        objects=(obj,),
+        actions=(
+            LegalAction("first", "activate_ability", obj.object_id, "First ability"),
+            LegalAction("second", "activate_ability", obj.object_id, "Second ability"),
+        ),
+    )
+    calls = []
+    table.command.connect(lambda *args: calls.append(args))
+    table.present(view)
+    try:
+        table.select_object(obj.object_id)
+        assert table.inspection_dialog.isHidden() and not calls
+        assert len(table.action_menu.actions()) == 2
+        table.action_menu.actions()[1].trigger()
+        assert calls == [(view, "perform", ("second",))]
+        table.present(replace(view, revision=2, actions=()))
+        assert not table.action_menu.actions() and table.action_menu.isHidden()
+        table.select_object(obj.object_id, interact=False)
+        assert len(calls) == 1 and not table.inspection_dialog.isHidden()
+    finally:
+        table.clear()
+        table.close()
+
+
+@pytest.mark.parametrize(
+    "prompt,keep_token,mulligan_token",
+    [
+        ("Mulligan?", "no", "yes"),
+        ("Keep your hand?", "yes", "no"),
+    ],
+)
+def test_opening_overlay_has_readable_own_hand_and_explicit_engine_choices(
+    app, prompt, keep_token, mulligan_token
+):
+    table = GameTable(object(), artwork_factory=SilentArtwork)
+    own = tuple(card(f"hand-{i}", "hand") for i in range(7))
+    foreign = card("private-opponent", "hand", owner="two", name="PRIVATE")
+    request = ChoiceRequest(
+        "opening-current",
+        "one",
+        "boolean",
+        prompt,
+        (ChoiceOption("yes", "Yes"), ChoiceOption("no", "No")),
+    )
+    view = replace(snapshot(), objects=own + (foreign,), decision=request)
+    calls = []
+    table.command.connect(lambda *args: calls.append(args))
+    table.resize(1000, 610)
+    table.show()
+    try:
+        table.present(view)
+        app.processEvents()
+        assert table.opening_overlay.isVisible() and table.decision_dock.isHidden()
+        assert (
+            len(table.opening_hand.cards) == 7
+            and "private-opponent" not in table.opening_hand.cards
+        )
+        assert "7 cards" in table.opening_status.text()
+        assert table.opening_controls.widget() is table.decisions and not calls
+        assert all(
+            widget.height() >= 185 for widget in table.opening_hand.cards.values()
+        )
+        assert button(table.decisions, "Mulligan").play_args == (mulligan_token,)
+        button(table.decisions, "Keep").click()
+        assert calls == [(view, "choose", (keep_token,))]
+        table.pending()
+        assert not table.opening_hand.isEnabled() and not table.decisions.isEnabled()
+        table.clear()
+        assert table.opening_overlay.isHidden() and not table.opening_hand.cards
+    finally:
+        table.close()
+
+
+def test_bottom_selection_is_engine_authorized_and_overlay_returns_controls_to_board(
+    app,
+):
+    table = GameTable(object(), artwork_factory=SilentArtwork)
+    obj = card("bottom-card", "hand")
+    request = ChoiceRequest(
+        "bottom-current",
+        "one",
+        "target",
+        "Put a card on the bottom of your library",
+        (ChoiceOption("select-card", "Card", object_id=obj.object_id),),
+        minimum=1,
+        maximum=1,
+    )
+    view = replace(snapshot(), objects=(obj,), decision=request)
+    calls = []
+    table.command.connect(lambda *args: calls.append(args))
+    table.present(view)
+    try:
+        assert not table.opening_overlay.isHidden()
+        assert "Required selection: 1 to 1" in table.opening_status.text()
+        assert not any(
+            item.text() == "Finish selection"
+            for item in table.decisions.findChildren(W.QPushButton)
+        )
+        table.opening_hand.cards[obj.object_id].click()
+        assert calls == [(view, "choose", ("select-card",))]
+        old = table.opening_hand.cards[obj.object_id]
+        table.present(
+            replace(
+                view,
+                revision=2,
+                decision=ChoiceRequest(
+                    "priority", "one", "selection", "Select an action", ()
+                ),
+            )
+        )
+        assert (
+            table.opening_overlay.isHidden()
+            and table.decision_dock.widget() is table.decisions
+        )
+        old.click()
+        assert len(calls) == 1 and old.obj is None
+    finally:
+        table.clear()
+        table.close()
+
+
+def test_ai_or_non_hand_bottom_choices_do_not_open_human_opening_overlay(app):
+    from mtg_play.decisions import opening_hand_request
+
+    view = replace(
+        snapshot(),
+        decision=ChoiceRequest(
+            "ai", "two", "boolean", "Mulligan?", (ChoiceOption("yes", "Yes"),)
+        ),
+    )
+    assert not opening_hand_request(view)
+    view = replace(
+        view,
+        decision=ChoiceRequest(
+            "foreign",
+            "one",
+            "target",
+            "Bottom of library",
+            (ChoiceOption("foreign-option", "PRIVATE", object_id="not-your-hand"),),
+        ),
+    )
+    assert not opening_hand_request(view)
+
+
+@pytest.mark.parametrize(
+    "step,family,label",
+    [
+        ("DECLARE_ATTACKERS", "selection", "Finish attackers"),
+        ("DECLARE_BLOCKERS", "selection", "Finish blockers"),
+        ("PRECOMBAT_MAIN", "mana", "Finish payment"),
+        ("END", "selection", "Pass priority"),
+    ],
+)
+def test_pass_control_uses_actual_step_when_no_creature_actions_exist(
+    app, step, family, label
+):
+    panel = DecisionPanel()
+    view = replace(
+        snapshot(),
+        step=step,
+        decision=ChoiceRequest("current", "one", family, "Choose", ()),
+        actions=(LegalAction("pass-current", "pass", None, "Pass"),),
+    )
+    calls = []
+    panel.command.connect(lambda *args: calls.append(args))
+    panel.present(view)
+    control = button(panel, label)
+    assert control.property("buttonRole") == "primary" and not calls
+    control.click()
+    assert calls == [(view, "perform", ("pass-current",))]
+    panel.clear()
+
+
+@pytest.mark.parametrize(
+    "result,label",
+    [("won", "You won"), ("did_not_win", "Game complete - you did not win")],
+)
+def test_result_panel_only_reports_engine_outcome_and_requests_cleanup(
+    app, result, label
+):
+    table = GameTable(object(), artwork_factory=SilentArtwork)
+    view = replace(
+        snapshot(), status="finished", result=result, decision=None, actions=()
+    )
+    commands, returns = [], []
+    table.command.connect(lambda *args: commands.append(args))
+    table.returnRequested.connect(lambda: returns.append(True))
+    table.present(view)
+    assert not table.result_panel.isHidden() and table.result_label.text() == label
+    table.result_return.click()
+    assert returns == [True] and not commands
+    table.clear()
+    assert table.result_panel.isHidden() and not table.result_label.text()
+
+
+def test_revealed_choices_show_only_cards_and_close_when_request_finishes(app):
+    table = GameTable(object(), artwork_factory=SilentArtwork)
+    objects = tuple(card(str(i), "decision") for i in range(3))
+    request = ChoiceRequest(
+        "order",
+        "one",
+        "target",
+        "Choose the next card",
+        tuple(
+            ChoiceOption("option-" + obj.object_id, "Choose", object_id=obj.object_id)
+            for obj in objects
+        ),
+    )
+    request = replace(request, can_finish=True)
+    view = replace(snapshot(), objects=objects, decision=request)
+    calls = []
+    table.command.connect(lambda *args: calls.append(args))
+    table.resize(1280, 720)
+    table.show()
+    try:
+        table.present(view)
+        app.processEvents()
+        assert table.choice_overlay.isVisible()
+        assert table.zones_dialog.isHidden()
+        assert len(table.choice_cards.cards) == 3 and not calls
+        assert button(table.decisions, "Finish selection").isEnabled()
+        assert not any(
+            getattr(item, "play_method", None) == "choose"
+            for item in table.decisions.findChildren(W.QPushButton)
+        )
+        table.choice_cards.cards["0"].click()
+        assert calls == [(view, "choose", ("option-0",))]
+        table.pending()
+        assert not table.choice_cards.isEnabled()
+        table.present(
+            replace(
+                view,
+                revision=2,
+                objects=objects[1:],
+                decision=replace(
+                    request, decision_id="next", options=request.options[1:]
+                ),
+            )
+        )
+        assert len(table.choice_cards.cards) == 2
+        table.present(replace(view, revision=3, objects=(), decision=None))
+        assert table.choice_overlay.isHidden() and not table.choice_cards.cards
+        assert table.zones_dialog.isHidden()
+    finally:
+        table.clear()
+        table.close()
+
+
+def test_stack_is_on_right_without_consuming_battlefield_height(app):
+    table = GameTable(object(), artwork_factory=SilentArtwork)
+    table.resize(1280, 720)
+    table.show()
+    try:
+        view = replace(snapshot(), objects=(card("mine"),))
+        table.present(view)
+        app.processEvents()
+        height = table.player.height()
+        table.present(
+            replace(view, revision=2, objects=view.objects + (card("spell", "stack"),))
+        )
+        app.processEvents()
+        assert table.stack_panel.isVisible()
+        assert table.stack_panel.x() > table.width() / 2
+        assert table.stack_panel.geometry().right() < table.width()
+        assert table.player.height() == height
+        table.present(replace(view, revision=3))
+        assert table.stack_panel.isHidden()
+    finally:
+        table.clear()
+        table.close()

@@ -580,8 +580,17 @@ def main():
     parser.add_argument("--xmage-root", type=Path)
     parser.add_argument("--jdk-path", type=Path)
     parser.add_argument(
+        "--payment-context-probe",
+        action="store_true",
+        help="Opt-in owned human-player observer; payment remains manual",
+    )
+    parser.add_argument(
         "--scenario",
         choices=(
+            "priority",
+            "ai-freeform",
+            "ai-commander",
+            "ai-blockers",
             "basic",
             "combat",
             "commander",
@@ -612,16 +621,27 @@ def main():
     parser.add_argument("--seats", type=int, default=2)
     args = parser.parse_args()
     from . import acceptance_scenarios
+    from . import ai_acceptance
     from . import real_deck_acceptance
     from .decks import DeckTranslationError
     from .diagnostics import diagnostic_category
 
     options = {}
+    if args.payment_context_probe:
+        if args.scenario != "number":
+            parser.error("Payment context probe is limited to the number fixture")
+        options["payment_context_probe"] = True
     if args.xmage_root is not None:
         options["bundle"] = args.xmage_root
     if args.jdk_path is not None:
         options["jdk"] = args.jdk_path
+    from . import priority_acceptance
+
     scenarios = {
+        "priority": priority_acceptance.run,
+        "ai-freeform": ai_acceptance.freeform,
+        "ai-commander": ai_acceptance.commander,
+        "ai-blockers": ai_acceptance.blockers,
         "basic": acceptance,
         "combat": combat_acceptance,
         "commander": lambda adapter: commander_acceptance(adapter, args.seats),
@@ -656,7 +676,57 @@ def main():
     try:
         with adapter:
             result["compatibility"] = adapter.compatibility.to_dict()
+            if args.scenario == "ai-freeform":
+                document = ai_acceptance.fixture_deck()
+                original = document.to_dict()
+                if not adapter.validate_deck(document, "freeform"):
+                    raise AdapterError("FREEFORM_VALIDATION_ACCEPTANCE_FAILED")
+                if adapter.validate_deck(document, "commander"):
+                    raise AdapterError("COMMANDER_VALIDATION_ACCEPTANCE_FAILED")
+                if not adapter.validate_deck(
+                    ai_acceptance.commander_deck(), "commander"
+                ):
+                    raise AdapterError("COMMANDER_VALIDATION_ACCEPTANCE_FAILED")
+                if document.to_dict() != original:
+                    raise AdapterError("SOURCE_DECK_CHANGED")
+                result["engine_deck_validation"] = True
             result["gameplay"] = scenarios[args.scenario](adapter)
+            if args.payment_context_probe:
+                result["payment_context_probe"] = adapter.payment_context_diagnostics()
+                result["payment_cost_coverage_probe"] = (
+                    adapter.payment_cost_coverage_diagnostics()
+                )
+                result["payment_hazard_probe"] = adapter.payment_hazard_diagnostics()
+                result["payment_ticket_probe"] = adapter.payment_ticket_diagnostics()
+                if (result["payment_ticket_probe"]["maximum_revalidated"] or 0) < 2:
+                    raise AdapterError("NATIVE_SOURCE_TICKETS_NOT_REVALIDATED")
+                if not result["payment_hazard_probe"]["observations"]:
+                    raise AdapterError("NATIVE_PAYMENT_HAZARDS_NOT_OBSERVED")
+                if not result["payment_cost_coverage_probe"]["observations"]:
+                    raise AdapterError("NATIVE_COST_COVERAGE_NOT_OBSERVED")
+                if not result["payment_context_probe"]["observations"]:
+                    raise AdapterError("NATIVE_PAYMENT_CONTEXT_NOT_OBSERVED")
+                if (
+                    result["payment_context_probe"]["maximum_candidate_sources"] or 0
+                ) < 2:
+                    raise AdapterError("NATIVE_PAYMENT_CANDIDATES_NOT_OBSERVED")
+                if (
+                    result["payment_context_probe"]["maximum_ordinary_shape_abilities"]
+                    or 0
+                ) < 2:
+                    raise AdapterError("NATIVE_ORDINARY_SHAPES_NOT_OBSERVED")
+        if args.scenario.startswith("ai-"):
+            runtime = adapter.result
+            if (
+                runtime is None
+                or not runtime.success
+                or runtime.forced_cleanup
+                or any(code is None for _, code in runtime.process_exit_codes)
+                or any(
+                    name.startswith("peer_") for name, _ in runtime.process_exit_codes
+                )
+            ):
+                raise AdapterError("AI_RUNTIME_CLEANUP_OR_CLIENT_COUNT_FAILED")
         result["success"] = True
     except DeckTranslationError as error:
         # Fixture entry IDs only; never export a source deck or raw JVM log.
@@ -667,7 +737,10 @@ def main():
     except AdapterError as error:
         code = error.code.split(":", 1)[0]
         result["error"] = dict(code=code, category=diagnostic_category(code))
+        if isinstance(error, ai_acceptance.AIAcceptanceError):
+            result["failure_context"] = error.context
     finally:
+        result["lifecycle"] = adapter.lifecycle.records
         if adapter.result is not None:
             result["runtime"] = adapter.result.to_dict()
     payload = json.dumps(result, indent=2)

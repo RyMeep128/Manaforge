@@ -229,5 +229,20 @@ Mtg_Projects/mtg_proxy/projects/tmp_images/
 **/library-sessions/
 
 # Local XMage feasibility downloads and generated runtime files.
+/UNITY_ASSETS_AI_HANDOFF.local.md
 /Mtg_Projects/mtg_play/mage-full_*/
 /Mtg_Projects/mtg_play/.runtime/
+/Mtg_Projects/mtg_play/.engines/
+
+# Unity Play generated state and build evidence.
+/Mtg_Projects/mtg_play_unity/[Ll]ibrary/
+/Mtg_Projects/mtg_play_unity/[Tt]emp/
+/Mtg_Projects/mtg_play_unity/[Oo]bj/
+/Mtg_Projects/mtg_play_unity/[Ll]ogs/
+/Mtg_Projects/mtg_play_unity/[Uu]ser[Ss]ettings/
+/Mtg_Projects/mtg_play_unity/[Bb]uilds/
+/Mtg_Projects/mtg_play_unity/Artifacts/
+/Mtg_Projects/mtg_play_unity/*.csproj
+/Mtg_Projects/mtg_play_unity/*.sln*
+/Mtg_Projects/mtg_play_unity/Assets/Manaforge/Runtime/Resources/LocalCardVisuals/
+/Mtg_Projects/mtg_play_unity/Assets/Manaforge/Runtime/Resources/LocalCardVisuals.meta

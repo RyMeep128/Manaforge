@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:manaforge:play:wire-errors:1",
+  "title": "Authenticated terminal viewer-channel errors, never command outcomes",
+  "type": "object",
+  "required": [
+    "wire_version",
+    "message_type",
+    "message_id",
+    "body"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "wire_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "message_type": {
+      "const": "error"
+    },
+    "message_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,128}(?![\\s\\S])"
+    },
+    "body": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "session_id",
+        "viewer_id",
+        "terminal",
+        "code"
+      ],
+      "properties": {
+        "session_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+        },
+        "viewer_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+        },
+        "terminal": {
+          "type": "boolean",
+          "const": true
+        },
+        "code": {
+          "enum": [
+            "PROTOCOL_INCOMPATIBLE",
+            "SESSION_CLOSED",
+            "SESSION_FAILED",
+            "ENGINE_UNAVAILABLE",
+            "RECEIVE_OVERFLOW",
+            "INTERNAL_ERROR"
+          ]
+        }
+      }
+    }
+  },
+  "$defs": {
+    "value": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "type": "integer",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/value"
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/value"
+          }
+        }
+      ]
+    }
+  }
+}

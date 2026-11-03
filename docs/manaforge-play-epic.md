@@ -2,6 +2,36 @@
 
 Status: **Planned long-term scope.** Delivery order and prerequisites live in the [roadmap](roadmap.md); the [long-term product epic](long-term-product-epic.md) remains the broader product vision. This epic does not authorize immediate gameplay implementation. XMage integration and optional external synchronization remain subject to feasibility, licensing, and supported capabilities.
 
+## Proposed delivery: Unity + Java
+
+The [Unity + Java roadmap](play-unity-java-roadmap.md) supersedes Play’s rendering
+and adapter delivery approach. This epic retains long-term requirements for
+2–5 seats, complex boards, private information and playgroups. G0/G1 must be
+proved before the bulk Java migration; retain Python/Qt until replacement acceptance.
+The clarified sequence is local human-versus-XMage-AI 1v1, private networked 1v1,
+then 3–5-player Commander. Design for up to five players from the start. Installed Play remains gated.
+
+## Historic delivery: offline AI and Focused View
+
+The [AI and Arena-style experience rebuild](play-ai-focused-view-epic.md) is the
+previous incremental Play delivery plan. The evidence requirements below describe
+that historic Qt work rather than prerequisites for fixture-only Unity work. See [local delivery status](play-local-game.md)
+for the inspected implementation baseline and remaining evidence gates. The prior
+plan required one human versus pinned XMage AI in CI before dependent Qt gameplay UI. The
+initial permanent Focused View displays two players; future view modes and mixed
+controllers retain the long-term 2-5-player scope below. Networking and larger
+battlefield layouts are not part of this rebuild. Installed Play remains gated
+on real-engine acceptance and manual UX review.
+
+Local implementation now separates seat/player/pilot/deck/owner identities and
+fixes the source workspace to one human view versus an AI opponent. This is
+unverified source work, not acceptance of this epic or its future mixed tables.
+The larger-table model and existing headless 2-5-seat regression paths remain;
+networking and adaptive multiplayer UI are still planned. Local lobby preparation
+also reuses Core readiness checks and existing accepted followed-deck snapshots,
+retaining source ownership independently from the pilot. This does not establish
+pinned-engine eligibility, networked borrowing, or acceptance of shared gameplay.
+
 ## Vision
 
 **Manaforge Play** turns the same decks built, analyzed, and printed in Manaforge into rules-enforced digital Magic games for private playgroups.

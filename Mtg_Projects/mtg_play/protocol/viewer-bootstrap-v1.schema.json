@@ -1,0 +1,93 @@
+{
+  "type": "object",
+  "properties": {
+    "viewer_bootstrap_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "protocol_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "endpoint": {
+      "type": "object",
+      "properties": {
+        "host": {
+          "const": "127.0.0.1"
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        }
+      },
+      "required": [
+        "host",
+        "port"
+      ],
+      "additionalProperties": false
+    },
+    "session_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "viewer_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "engine_version": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "artifact_manifest_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "viewer_key_hex": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "artwork": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "directory": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096,
+              "pattern": "^[^\\x00-\\x1f]+$"
+            },
+            "manifest_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "required": [
+            "directory",
+            "manifest_sha256"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    }
+  },
+  "required": [
+    "viewer_bootstrap_version",
+    "protocol_version",
+    "endpoint",
+    "session_id",
+    "viewer_id",
+    "engine_version",
+    "artifact_manifest_sha256",
+    "viewer_key_hex",
+    "artwork"
+  ],
+  "additionalProperties": false,
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:manaforge:play:viewer-bootstrap:1",
+  "title": "PRIVATE one-time viewer bootstrap; never a public wire message"
+}

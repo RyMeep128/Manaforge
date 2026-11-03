@@ -153,7 +153,7 @@ class HomeWindow(W.QMainWindow):
         self.workspaces = {}
         self.current_workspace = 'home'
         self.shutdown_guard = None
-        navigation = self.addToolBar('Manaforge')
+        navigation = self.navigation_toolbar = self.addToolBar('Manaforge')
         navigation.setMovable(False)
         self.navigation = {}
         group = G.QActionGroup(self)

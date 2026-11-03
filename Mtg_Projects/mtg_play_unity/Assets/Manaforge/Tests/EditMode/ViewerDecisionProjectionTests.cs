@@ -1,0 +1,142 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using Manaforge.Play.Protocol;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using NUnit.Framework;
+using UnityEngine;
+
+namespace Manaforge.Play.Tests
+{
+    public sealed class ViewerDecisionProjectionTests
+    {
+        private static JObject Corpus()=>JObject.Parse(File.ReadAllText(Path.Combine(Application.dataPath,"../../mtg_play/protocol/fixtures/wire-receive-v1.json")));
+        private static JObject Choice()=>(JObject)Corpus()["positive"][2]["envelope"].DeepClone();
+        private static JObject Priority()=>(JObject)JObject.Parse(File.ReadAllText(Path.Combine(Application.dataPath,"../../mtg_play/protocol/fixtures/receive-history-v1.json")))["cases"][0]["steps"][0]["envelope"].DeepClone();
+        private static ProjectedDecisionFrame Project(JObject source)=>ViewerDecisionProjection.ParseSnapshot(source.ToString(Formatting.None),(string)source["body"]["snapshot"]["session_id"],(string)source["body"]["snapshot"]["viewer_id"],0,true);
+        [Test] public void PublicLibraryAndHandCountsAreImmutableAndDoNotExposeContents()
+        {
+            var source=Priority();var snapshot=source["body"]["snapshot"];var player=snapshot["players"][0];string id=(string)player["player_id"];
+            player["library_count"]=50;player["hand_count"]=6;var frame=Project(source);player["library_count"]=49;player["hand_count"]=7;
+            Assert.That(frame.PlayerLibraryCounts[id],Is.EqualTo(50));Assert.That(frame.PlayerHandCounts[id],Is.EqualTo(6));
+            Assert.That(((IDictionary<string,long?>)frame.PlayerLibraryCounts).IsReadOnly,Is.True);
+        }
+        [Test] public void CommanderRosterIsImmutableAndContainsNoDecisionAuthority()
+        {
+            var source=Priority();var snapshot=source["body"]["snapshot"];
+            snapshot["commanders"]=new JArray(new JObject{["commander_id"]="public-commander",["owner_id"]=(string)snapshot["players"][0]["player_id"],["name"]="Public commander",["card_identity"]=null,["command_zone_plays"]=1,["additional_cast_cost"]="{2}",["damage_dealt"]=new JArray{new JArray((string)snapshot["players"][1]["player_id"],9)}});
+            var frame=Project(source);Assert.That(frame.Commanders.Count,Is.EqualTo(1));Assert.That(frame.Commanders[0].AdditionalCastCost,Is.EqualTo("{2}"));Assert.That(frame.Commanders[0].CommandZonePlays,Is.EqualTo(1));
+            snapshot["commanders"][0]["name"]="changed";snapshot["commanders"][0]["damage_dealt"][0][1]=0;
+            Assert.That(frame.Commanders[0].Name,Is.EqualTo("Public commander"));Assert.That(frame.Commanders[0].DamageDealt.Values.Single(),Is.EqualTo(9));Assert.That(((IList<ProjectedCommander>)frame.Commanders).IsReadOnly,Is.True);
+        }
+        [Test] public void BlockerNamesAreCopiedFromPublicObjectsAndRemainReadOnly()
+        {
+            var source=Priority();var snapshot=source["body"]["snapshot"];snapshot["objects"]=Corpus()["positive"][0]["envelope"]["body"]["snapshot"]["objects"].DeepClone();var attacker=snapshot["objects"][0];attacker["zone"]="battlefield";
+            var blocker=attacker.DeepClone();blocker["object_id"]="fixture-blocker";blocker["controller_id"]="two";blocker["owner_id"]="two";blocker["card_identity"]=null;blocker["characteristics"]["name"]="Ornithopter";blocker["damage"]=1;((JArray)snapshot["objects"]).Add(blocker);
+            snapshot["combat"]=new JArray(new JObject{["attackers"]=new JArray((string)attacker["object_id"]),["blockers"]=new JArray("fixture-blocker"),["defender_id"]="two",["blocked"]=true});snapshot["decision"]=null;snapshot["actions"]=new JArray();var frame=Project(source);
+            Assert.That(frame.Combat[0].BlockerIds,Is.EqualTo(new[]{"fixture-blocker"}));Assert.That(((IList<string>)frame.Combat[0].BlockerIds).IsReadOnly,Is.True);Assert.That(frame.Combat[0].AttackerIds,Is.EqualTo(new[]{(string)attacker["object_id"]}));Assert.That(frame.Combat[0].BlockerNames,Is.EqualTo(new[]{"Ornithopter"}));Assert.That(frame.Combat[0].BlockerCount,Is.EqualTo(1));Assert.That(frame.Combat[0].BlockerDamage[0],Is.EqualTo(1));Assert.That(frame.Actions,Is.Empty);Assert.That(frame.Decision,Is.Null);
+            blocker["characteristics"]["name"]="mutated";blocker["damage"]=0;Assert.That(frame.Combat[0].BlockerDamage[0],Is.EqualTo(1));Assert.That(((IList<long?>)frame.Combat[0].BlockerDamage).IsReadOnly,Is.True);snapshot["combat"][0]["blockers"]=new JArray();Assert.That(frame.Combat[0].BlockerNames[0],Is.EqualTo("Ornithopter"));Assert.That(frame.Combat[0].BlockerCount,Is.EqualTo(1));Assert.That(((IList<string>)frame.Combat[0].BlockerNames).IsReadOnly,Is.True);
+        }
+        [Test] public void CombatNamesAreReadOnlySnapshotValuesWithoutCommandAuthority()
+        {
+            var source=Priority();var snapshot=source["body"]["snapshot"];snapshot["objects"]=Corpus()["positive"][0]["envelope"]["body"]["snapshot"]["objects"].DeepClone();var card=snapshot["objects"][0];var defender=snapshot["players"][1];
+            snapshot["combat"]=new JArray(new JObject{["attackers"]=new JArray((string)card["object_id"]),["blockers"]=new JArray(),["defender_id"]=(string)defender["player_id"],["blocked"]=false});
+            snapshot["decision"]=null;snapshot["actions"]=new JArray();var frame=Project(source);
+            Assert.That(frame.Combat.Count,Is.EqualTo(1));Assert.That(frame.Combat[0].AttackerNames[0],Is.EqualTo((string)card["characteristics"]["name"]));Assert.That(frame.Combat[0].DefenderName,Is.EqualTo((string)defender["name"]));Assert.That(frame.Combat[0].DefenderLife,Is.EqualTo((long?)defender["life"]));Assert.That(frame.Combat[0].BlockerCount,Is.Zero);Assert.That(frame.Decision,Is.Null);Assert.That(frame.Actions,Is.Empty);
+            Assert.That(frame.Combat[0].DefenderId,Is.EqualTo((string)defender["player_id"]));Assert.That(frame.PlayerLifeTotals[frame.Combat[0].DefenderId],Is.EqualTo((long?)defender["life"]));
+            long? originalLife=frame.Combat[0].DefenderLife;card["characteristics"]["name"]="mutated";defender["name"]="mutated";defender["life"]=1;Assert.That(frame.Combat[0].DefenderLife,Is.EqualTo(originalLife));Assert.That(frame.PlayerLifeTotals[frame.Combat[0].DefenderId],Is.EqualTo(originalLife));
+            snapshot["combat"]=new JArray();var cleared=Project(source);Assert.That(cleared.Combat,Is.Empty);Assert.That(cleared.PlayerLifeTotals[(string)defender["player_id"]],Is.EqualTo(1));Assert.That(((IDictionary<string,long?>)cleared.PlayerLifeTotals).IsReadOnly,Is.True);Assert.That(frame.Combat[0].AttackerNames[0],Is.Not.EqualTo("mutated"));Assert.That(frame.Combat[0].DefenderName,Is.Not.EqualTo("mutated"));Assert.That(((IList<string>)frame.Combat[0].AttackerNames).IsReadOnly,Is.True);
+        }
+        [TestCase("win")]
+        [TestCase("loss")]
+        [TestCase("draw")]
+        public void TerminalOutcomeIsImmutableAndHasNoActions(string outcome)
+        {
+            var source=Priority();var snapshot=source["body"]["snapshot"];snapshot["status"]="finished";snapshot["result"]=outcome;snapshot["decision"]=null;snapshot["actions"]=new JArray();var frame=Project(source);snapshot["result"]="mutated";Assert.That(frame.Result,Is.EqualTo(outcome));Assert.That(frame.Status,Is.EqualTo("finished"));Assert.That(frame.Decision,Is.Null);Assert.That(frame.Actions,Is.Empty);
+        }
+        [TestCase("Planeswalker")]
+        [TestCase("Battle")]
+        public void PublicPermanentDefendersHaveImmutableNames(string type)
+        {
+            var source=Priority();var snapshot=source["body"]["snapshot"];snapshot["objects"]=Corpus()["positive"][0]["envelope"]["body"]["snapshot"]["objects"].DeepClone();var card=(JObject)snapshot["objects"][0];var defender=(JObject)card.DeepClone();defender["object_id"]="public-defender";defender["zone"]="battlefield";defender["characteristics"]["name"]="Public "+type;defender["characteristics"]["type_line"]=type;defender["characteristics"]["loyalty"]="4";defender["characteristics"]["defense"]="5";((JArray)snapshot["objects"]).Add(defender);
+            snapshot["combat"]=new JArray(new JObject{["attackers"]=new JArray((string)card["object_id"]),["blockers"]=new JArray(),["defender_id"]="public-defender",["blocked"]=false});snapshot["decision"]=null;snapshot["actions"]=new JArray();var frame=Project(source);Assert.That(frame.Combat[0].DefenderName,Is.EqualTo("Public "+type));Assert.That(frame.Combat[0].DefenderLife,Is.Null);Assert.That(frame.Combat[0].DefenderLoyalty,Is.EqualTo("4"));Assert.That(frame.Combat[0].DefenderDefense,Is.EqualTo("5"));defender["characteristics"]["name"]="mutated";Assert.That(frame.Combat[0].DefenderName,Is.EqualTo("Public "+type));
+        }
+        [Test] public void ManaReferencesCarryOnlyViewerRoutingAndDoNotInferEligibility()
+        {
+            var frame=Priority();var snapshot=frame["body"]["snapshot"];snapshot["decision"]["family"]="mana";var obj=snapshot["objects"][0];obj["hidden"]=true;obj["tapped"]=true;obj["controller_id"]="two";
+            var projected=Project(frame);Assert.That(projected.ManaSourceReferences.Count,Is.EqualTo(((JArray)snapshot["objects"]).Count));var reference=projected.ManaSourceReferences[0];Assert.That(reference.ObjectId,Is.EqualTo((string)obj["object_id"]));Assert.That(reference.Context.ViewerId,Is.EqualTo("one"));Assert.That(reference.DecisionId,Is.EqualTo(projected.Decision.DecisionId));
+            CollectionAssert.AreEquivalent(new[]{"Context","DecisionId","ObjectId"},typeof(ProjectedManaSource).GetProperties().Select(property=>property.Name));Assert.That(((System.Collections.Generic.IList<ProjectedManaSource>)projected.ManaSourceReferences).IsReadOnly,Is.True);
+        }
+        [Test] public void ManaReferencesAreEmptyOutsideManaAndIndependentAcrossSnapshots()
+        {
+            var source=Priority();Assert.That(Project(source).ManaSourceReferences,Is.Empty);source["body"]["snapshot"]["decision"]["family"]="mana";var first=Project(source);var second=Project(source);Assert.That(ReferenceEquals(first.ManaSourceReferences[0],second.ManaSourceReferences[0]),Is.False);source["body"]["snapshot"]["objects"]=new JArray();Assert.That(Project(source).ManaSourceReferences,Is.Empty);Assert.That(first.ManaSourceReferences,Is.Not.Empty);
+        }
+        [Test] public void SharedPositiveSnapshotsPreserveExactDecisionAndCompletenessFields()
+        {
+            foreach(var test in Corpus()["positive"]) {
+                if((string)test["envelope"]["message_type"]=="event")continue;var value=test["envelope"];var snapshot=value["body"]["snapshot"];
+                var frame=ViewerDecisionProjection.ParseSnapshot(value.ToString(),(string)test["session"],(string)test["viewer"],(long)test["minimum_revision"],(bool)test["fixture_mode"]);
+                Assert.That(frame.Context.Revision,Is.EqualTo((long)snapshot["revision"]));Assert.That(frame.Status,Is.EqualTo((string)snapshot["status"]));Assert.That(frame.ActionsComplete,Is.EqualTo((bool)snapshot["actions_complete"]));Assert.That(frame.Actions.Count,Is.EqualTo(((JArray)snapshot["actions"]).Count));
+                if(snapshot["decision"].Type==JTokenType.Null)Assert.That(frame.Decision,Is.Null);else{Assert.That(frame.Decision.DecisionId,Is.EqualTo((string)snapshot["decision"]["decision_id"]));Assert.That(frame.Decision.Family,Is.EqualTo((string)snapshot["decision"]["family"]));Assert.That(frame.Decision.Prompt,Is.EqualTo((string)snapshot["decision"]["prompt"]));}
+            }
+        }
+        [Test] public void SharedInvalidPrivateStaleAndMisroutedMessagesRemainRejected()
+        {
+            foreach(var test in Corpus()["negative"]) {
+                var error=Assert.Throws<WireEnvelope.EnvelopeException>(()=>ViewerDecisionProjection.ParseSnapshot(test["envelope"].ToString(),(string)test["session"],(string)test["viewer"],(long)test["minimum_revision"],(bool)test["fixture_mode"]));Assert.That(error.Code,Is.EqualTo((string)test["code"]));Assert.That(error.Message,Is.EqualTo(error.Code));
+            }
+        }
+        [Test] public void NestedDecisionViewsAreReadOnlyAndEarlierSnapshotsDoNotRebind()
+        {
+            var source=Choice();var first=Project(source);string label=first.Decision.Options[0].Label;
+            source["body"]["snapshot"]["decision"]["options"][0]["label"]="Later label";var later=Project(source);Assert.That(first.Decision.Options[0].Label,Is.EqualTo(label));Assert.That(later.Decision.Options[0].Label,Is.EqualTo("Later label"));
+            Assert.Throws<NotSupportedException>(()=>((IList<ProjectedChoiceOption>)first.Decision.Options)[0]=null);
+            foreach(var type in new[]{typeof(ProjectedDecisionFrame),typeof(ProjectedDecision),typeof(ProjectedAction),typeof(ProjectedChoiceOption),typeof(ProjectedAmountConstraint)}) {
+                Assert.That(type.GetFields().Length,Is.Zero);foreach(var property in type.GetProperties()){Assert.That(property.CanWrite,Is.False);Assert.That(property.PropertyType.IsArray,Is.False);Assert.That(typeof(JToken).IsAssignableFrom(property.PropertyType),Is.False);}
+            }
+        }
+        [Test] public void UnknownZeroFalseDefaultsAndAmountOrderRemainDistinctWithoutNormalization()
+        {
+            var source=Choice();var request=source["body"]["snapshot"]["decision"];var unknown=Project(source).Decision;Assert.That(unknown.Minimum,Is.Null);Assert.That(unknown.Maximum,Is.Null);Assert.That(unknown.Options[0].Selected,Is.False);
+            request["family"]="future-family";request["minimum"]=0;request["maximum"]=0;request["cancellable"]=true;request["can_finish"]=true;request["is_priority"]=true;request["options"][0]["selected"]=true;
+            request["amounts"]=new JArray(new JObject{["label"]="First",["minimum"]=long.MinValue,["maximum"]=long.MaxValue,["default"]=JValue.CreateNull()},new JObject{["label"]="Second",["minimum"]=0,["maximum"]=0,["default"]=0});
+            var projected=Project(source).Decision;Assert.That(projected.Family,Is.EqualTo("future-family"));Assert.That(projected.Minimum,Is.Zero);Assert.That(projected.Maximum,Is.Zero);Assert.That(projected.Cancellable && projected.CanFinish && projected.IsPriority,Is.True);Assert.That(projected.Options[0].Selected,Is.True);
+            Assert.That(projected.Amounts.Select(value=>value.Label),Is.EqualTo(new[]{"First","Second"}));Assert.That(projected.Amounts[0].Minimum,Is.EqualTo(long.MinValue));Assert.That(projected.Amounts[0].Maximum,Is.EqualTo(long.MaxValue));Assert.That(projected.Amounts[0].Default,Is.Null);Assert.That(projected.Amounts[1].Default,Is.Zero);
+            Assert.Throws<NotSupportedException>(()=>((IList<ProjectedAmountConstraint>)projected.Amounts).Clear());
+        }
+        [Test] public void EngineTokensShareExactContextWithoutAssumingTwoSeats()
+        {
+            var source=Priority();var snapshot=source["body"]["snapshot"];snapshot["viewer_id"]="five";snapshot["priority_player_id"]="five";snapshot["decision"]["player_id"]="five";
+            var player=snapshot["players"][0].DeepClone();player["player_id"]="five";player["name"]="Five";((JArray)snapshot["players"]).Add(player);
+            var frame=Project(source);Assert.That(frame.Context.ViewerId,Is.EqualTo("five"));Assert.That(frame.Decision.Context,Is.SameAs(frame.Context));Assert.That(frame.Actions[0].Context,Is.SameAs(frame.Context));Assert.That(frame.Actions[0].DecisionId,Is.EqualTo(frame.Decision.DecisionId));Assert.That(frame.Actions[0].ActionId,Is.EqualTo("fixture-action"));
+            var choice=Project(Choice());foreach(var option in choice.Decision.Options){Assert.That(option.Context,Is.SameAs(choice.Context));Assert.That(option.DecisionId,Is.EqualTo(choice.Decision.DecisionId));}
+        }
+        [Test] public void MissingDecisionDoesNotInventAnActionBinding()
+        {var source=Priority();source["body"]["snapshot"]["decision"]=JValue.CreateNull();var frame=Project(source);Assert.That(frame.Actions.Count,Is.EqualTo(1));Assert.That(frame.Decision,Is.Null);Assert.That(frame.Actions[0].DecisionId,Is.Null);}
+        [Test] public void EventsCannotMasqueradeAsDecisionSnapshots()
+        {var source=Corpus()["positive"][6];Assert.That(Assert.Throws<WireEnvelope.EnvelopeException>(()=>ViewerDecisionProjection.ParseSnapshot(source["envelope"].ToString(),(string)source["session"],(string)source["viewer"],0,true)).Code,Is.EqualTo("PROJECTION_SNAPSHOT_REQUIRED"));}
+        [TestCase("actions")] [TestCase("options")] [TestCase("amounts")]
+        public void OversizedUiCollectionsFailWithFixedTransportIndependentCode(string family)
+        {
+            var source=Priority();var snapshot=source["body"]["snapshot"];var values=new JArray();
+            for(int i=0;i<=ViewerDecisionProjection.MaximumItems;i++) {
+                if(family=="actions")values.Add(new JObject{["action_id"]="fixture-a"+i,["kind"]="fixture",["object_id"]=JValue.CreateNull(),["label"]="Action",["priority_class"]="manual"});
+                else if(family=="options")values.Add(new JObject{["option_id"]="fixture-o"+i,["label"]="Option",["object_id"]=JValue.CreateNull(),["player_id"]=JValue.CreateNull(),["selected"]=false});
+                else values.Add(new JObject{["label"]="Amount",["minimum"]=0,["maximum"]=1,["default"]=JValue.CreateNull()});
+            }
+            if(family=="actions")snapshot["actions"]=values;else snapshot["decision"][family]=values;
+            Assert.That(Assert.Throws<WireEnvelope.EnvelopeException>(()=>Project(source)).Code,Is.EqualTo("DECISION_PROJECTION_LIMIT"));
+        }
+        [Test] public void ViewerManaIsImmutableAndOtherSeatsAreExcluded()
+        {
+            var source=Priority();var snapshot=source["body"]["snapshot"];string viewer=(string)snapshot["viewer_id"];foreach(var player in snapshot["players"])player["mana"]=JArray.Parse((string)player["player_id"]==viewer?"[[\"green\",2]]":"[[\"green\",99]]");var frame=Project(source);foreach(var player in snapshot["players"])player["mana"][0][1]=77;Assert.That(frame.ViewerMana["green"],Is.EqualTo(2));Assert.That(((IDictionary<string,long>)frame.ViewerMana).IsReadOnly,Is.True);foreach(var player in snapshot["players"])player["mana"]=JValue.CreateNull();Assert.That(Project(source).ViewerMana,Is.Null);
+        }
+        [Test] public void DecisionProjectionExcludesCardIdentityAndPrivateRevealPayloads()
+        {
+            var source=Choice();source["body"]["snapshot"]["observations"]=new JArray(new JObject{["observation_id"]="fixture-reveal",["source"]="fixture",["hidden"]=false,["name"]="Private reveal value",["set_code"]="ABC",["collector_number"]="123"});
+            string encoded=JsonConvert.SerializeObject(Project(source));Assert.That(encoded,Does.Not.Contain("Private reveal value"));Assert.That(encoded,Does.Not.Contain("printing_id"));Assert.That(encoded,Does.Not.Contain("deck_entry_id"));Assert.That(encoded,Does.Not.Contain("observations"));
+        }
+    }
+}

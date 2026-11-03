@@ -1,0 +1,176 @@
+{
+  "provenance": "Public synthetic test key and fake pins only. NEVER store runtime bootstrap here.",
+  "positive": [
+    {
+      "viewer_bootstrap_version": 1,
+      "protocol_version": 1,
+      "endpoint": {
+        "host": "127.0.0.1",
+        "port": 43210
+      },
+      "session_id": "fixture-session",
+      "viewer_id": "seat-one",
+      "engine_version": "fixture-engine",
+      "artifact_manifest_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "viewer_key_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "artwork": null
+    }
+  ],
+  "negative": [
+    {
+      "name": "version",
+      "value": {
+        "viewer_bootstrap_version": 2,
+        "protocol_version": 1,
+        "endpoint": {
+          "host": "127.0.0.1",
+          "port": 43210
+        },
+        "session_id": "fixture-session",
+        "viewer_id": "seat-one",
+        "engine_version": "fixture-engine",
+        "artifact_manifest_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "viewer_key_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+        "artwork": null
+      }
+    },
+    {
+      "name": "protocol",
+      "value": {
+        "viewer_bootstrap_version": 1,
+        "protocol_version": true,
+        "endpoint": {
+          "host": "127.0.0.1",
+          "port": 43210
+        },
+        "session_id": "fixture-session",
+        "viewer_id": "seat-one",
+        "engine_version": "fixture-engine",
+        "artifact_manifest_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "viewer_key_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+        "artwork": null
+      }
+    },
+    {
+      "name": "owner-key",
+      "value": {
+        "viewer_bootstrap_version": 1,
+        "protocol_version": 1,
+        "endpoint": {
+          "host": "127.0.0.1",
+          "port": 43210
+        },
+        "session_id": "fixture-session",
+        "viewer_id": "seat-one",
+        "engine_version": "fixture-engine",
+        "artifact_manifest_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "viewer_key_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+        "artwork": null,
+        "owner_key_hex": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      }
+    },
+    {
+      "name": "all-decks",
+      "value": {
+        "viewer_bootstrap_version": 1,
+        "protocol_version": 1,
+        "endpoint": {
+          "host": "127.0.0.1",
+          "port": 43210
+        },
+        "session_id": "fixture-session",
+        "viewer_id": "seat-one",
+        "engine_version": "fixture-engine",
+        "artifact_manifest_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "viewer_key_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+        "artwork": null,
+        "decks": []
+      }
+    },
+    {
+      "name": "short-key",
+      "value": {
+        "viewer_bootstrap_version": 1,
+        "protocol_version": 1,
+        "endpoint": {
+          "host": "127.0.0.1",
+          "port": 43210
+        },
+        "session_id": "fixture-session",
+        "viewer_id": "seat-one",
+        "engine_version": "fixture-engine",
+        "artifact_manifest_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "viewer_key_hex": "00",
+        "artwork": null
+      }
+    },
+    {
+      "name": "viewer",
+      "value": {
+        "viewer_bootstrap_version": 1,
+        "protocol_version": 1,
+        "endpoint": {
+          "host": "127.0.0.1",
+          "port": 43210
+        },
+        "session_id": "fixture-session",
+        "viewer_id": "private name",
+        "engine_version": "fixture-engine",
+        "artifact_manifest_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "viewer_key_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+        "artwork": null
+      }
+    },
+    {
+      "name": "public-host",
+      "value": {
+        "viewer_bootstrap_version": 1,
+        "protocol_version": 1,
+        "endpoint": {
+          "host": "0.0.0.0",
+          "port": 43210
+        },
+        "session_id": "fixture-session",
+        "viewer_id": "seat-one",
+        "engine_version": "fixture-engine",
+        "artifact_manifest_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "viewer_key_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+        "artwork": null
+      }
+    },
+    {
+      "name": "dns-host",
+      "value": {
+        "viewer_bootstrap_version": 1,
+        "protocol_version": 1,
+        "endpoint": {
+          "host": "localhost",
+          "port": 43210
+        },
+        "session_id": "fixture-session",
+        "viewer_id": "seat-one",
+        "engine_version": "fixture-engine",
+        "artifact_manifest_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "viewer_key_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+        "artwork": null
+      }
+    },
+    {
+      "name": "port",
+      "value": {
+        "viewer_bootstrap_version": 1,
+        "protocol_version": 1,
+        "endpoint": {
+          "host": "127.0.0.1",
+          "port": 0
+        },
+        "session_id": "fixture-session",
+        "viewer_id": "seat-one",
+        "engine_version": "fixture-engine",
+        "artifact_manifest_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "viewer_key_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+        "artwork": null
+      }
+    }
+  ]
+}

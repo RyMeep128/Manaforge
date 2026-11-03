@@ -1,0 +1,153 @@
+{
+  "envelope_version": 1,
+  "max_depth": 32,
+  "positive": [
+    {
+      "name": "0",
+      "text": "{\"wire_version\": 1, \"message_type\": \"hello\", \"message_id\": \"m1\", \"body\": {}}"
+    },
+    {
+      "name": "1",
+      "text": "{\"wire_version\": 1, \"message_type\": \"snapshot\", \"message_id\": \"m1\", \"body\": {\"text\": \"Æther 火\", \"integer\": 9223372036854775807, \"array\": [true, null, -9223372036854775808]}}"
+    },
+    {
+      "name": "2",
+      "text": "{\"wire_version\": 1, \"message_type\": \"shutdown\", \"message_id\": \"m1\", \"body\": {\"one\": {\"same\": 1}, \"two\": {\"same\": 2}}}"
+    },
+    {
+      "name": "depth-32",
+      "text": "{\"wire_version\": 1, \"message_type\": \"hello\", \"message_id\": \"m1\", \"body\": {\"x\":[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[0]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]}}"
+    },
+    {
+      "name": "unicode-and-date",
+      "text": "{\"wire_version\": 1, \"message_type\": \"hello\", \"message_id\": \"m1\", \"body\": {\"x\":\"\\ud83d\\udd25\", \"date\":\"2026-10-30T00:00:00Z\"}}"
+    }
+  ],
+  "negative": [
+    {
+      "name": "array",
+      "text": "[]",
+      "code": "ENVELOPE_INVALID"
+    },
+    {
+      "name": "empty",
+      "text": "",
+      "code": "JSON_INVALID"
+    },
+    {
+      "name": "duplicate-header",
+      "text": "{\"wire_version\":1,\"wire_version\":1}",
+      "code": "JSON_DUPLICATE"
+    },
+    {
+      "name": "duplicate-body",
+      "text": "{\"wire_version\":1,\"message_type\":\"snapshot\",\"message_id\":\"m1\",\"body\":{\"x\":1,\"x\":2}}",
+      "code": "JSON_DUPLICATE"
+    },
+    {
+      "name": "escaped-duplicate",
+      "text": "{\"wire_version\":1,\"message_type\":\"snapshot\",\"message_id\":\"m1\",\"body\":{\"x\":1,\"\\u0078\":2}}",
+      "code": "JSON_DUPLICATE"
+    },
+    {
+      "name": "trailing-comma",
+      "text": "{\"wire_version\":1,\"message_type\":\"snapshot\",\"message_id\":\"m1\",\"body\":{\"x\":1,}}",
+      "code": "JSON_INVALID"
+    },
+    {
+      "name": "single-quotes",
+      "text": "{\"wire_version\":1,\"message_type\":\"snapshot\",\"message_id\":\"m1\",\"body\":{'x':1}}",
+      "code": "JSON_INVALID"
+    },
+    {
+      "name": "comment",
+      "text": "{\"wire_version\":1,\"message_type\":\"snapshot\",\"message_id\":\"m1\",\"body\":{/*private*/\"x\":1}}",
+      "code": "JSON_INVALID"
+    },
+    {
+      "name": "trailing-data",
+      "text": "{\"wire_version\": 1, \"message_type\": \"hello\", \"message_id\": \"m1\", \"body\": {}} {}",
+      "code": "JSON_INVALID"
+    },
+    {
+      "name": "leading-zero",
+      "text": "{\"wire_version\":1,\"message_type\":\"snapshot\",\"message_id\":\"m1\",\"body\":{\"x\":01}}",
+      "code": "JSON_INVALID"
+    },
+    {
+      "name": "exponent",
+      "text": "{\"wire_version\":1,\"message_type\":\"snapshot\",\"message_id\":\"m1\",\"body\":{\"x\":1e2}}",
+      "code": "JSON_INVALID"
+    },
+    {
+      "name": "fraction",
+      "text": "{\"wire_version\":1,\"message_type\":\"snapshot\",\"message_id\":\"m1\",\"body\":{\"x\":1.5}}",
+      "code": "JSON_INVALID"
+    },
+    {
+      "name": "overflow",
+      "text": "{\"wire_version\":1,\"message_type\":\"snapshot\",\"message_id\":\"m1\",\"body\":{\"x\":9223372036854775808}}",
+      "code": "JSON_INVALID"
+    },
+    {
+      "name": "nan",
+      "text": "{\"wire_version\":1,\"message_type\":\"snapshot\",\"message_id\":\"m1\",\"body\":{\"x\":NaN}}",
+      "code": "JSON_INVALID"
+    },
+    {
+      "name": "too-deep",
+      "text": "{\"wire_version\":1,\"message_type\":\"snapshot\",\"message_id\":\"m1\",\"body\":{\"x\":[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[0]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]}}",
+      "code": "JSON_DEPTH"
+    },
+    {
+      "name": "version",
+      "text": "{\"wire_version\": 2, \"message_type\": \"hello\", \"message_id\": \"m1\", \"body\": {}}",
+      "code": "ENVELOPE_VERSION"
+    },
+    {
+      "name": "bool-version",
+      "text": "{\"wire_version\": true, \"message_type\": \"hello\", \"message_id\": \"m1\", \"body\": {}}",
+      "code": "ENVELOPE_INVALID"
+    },
+    {
+      "name": "unknown-field",
+      "text": "{\"wire_version\": 1, \"message_type\": \"hello\", \"message_id\": \"m1\", \"body\": {}, \"extra\": true}",
+      "code": "ENVELOPE_INVALID"
+    },
+    {
+      "name": "bad-id",
+      "text": "{\"wire_version\": 1, \"message_type\": \"hello\", \"message_id\": \"unsafe id\", \"body\": {}}",
+      "code": "ENVELOPE_INVALID"
+    },
+    {
+      "name": "unknown-type",
+      "text": "{\"wire_version\": 1, \"message_type\": \"performAnything\", \"message_id\": \"m1\", \"body\": {}}",
+      "code": "ENVELOPE_INVALID"
+    },
+    {
+      "name": "body-array",
+      "text": "{\"wire_version\": 1, \"message_type\": \"hello\", \"message_id\": \"m1\", \"body\": []}",
+      "code": "ENVELOPE_INVALID"
+    },
+    {
+      "name": "bom",
+      "text": "﻿{\"wire_version\": 1, \"message_type\": \"hello\", \"message_id\": \"m1\", \"body\": {}}",
+      "code": "JSON_INVALID"
+    },
+    {
+      "name": "escaped-high",
+      "text": "{\"wire_version\": 1, \"message_type\": \"hello\", \"message_id\": \"m1\", \"body\": {\"x\":\"\\ud800\"}}",
+      "code": "JSON_INVALID"
+    },
+    {
+      "name": "escaped-low",
+      "text": "{\"wire_version\": 1, \"message_type\": \"hello\", \"message_id\": \"m1\", \"body\": {\"x\":\"\\udc00\"}}",
+      "code": "JSON_INVALID"
+    },
+    {
+      "name": "id-final-newline",
+      "text": "{\"wire_version\": 1, \"message_type\": \"hello\", \"message_id\": \"m1\\n\", \"body\": {}}",
+      "code": "ENVELOPE_INVALID"
+    }
+  ]
+}

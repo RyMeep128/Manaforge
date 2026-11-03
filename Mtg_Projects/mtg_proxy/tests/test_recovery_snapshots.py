@@ -1,11 +1,14 @@
 import json
 import os
 
+import pytest
+
 import project_library
 from models import ProjectState
 
 
-def test_save_keeps_bounded_recovery_snapshots(tmp_path, monkeypatch):
+@pytest.mark.parametrize("tied_times", [False, True])
+def test_save_keeps_bounded_recovery_snapshots(tmp_path, monkeypatch, tied_times):
     project_path = tmp_path / 'deck.json'
     project_path.write_text(json.dumps({'project_version': 2, 'card_entries': []}))
     library = {'projects': [{'id': 'deck-id', 'path': str(project_path),
@@ -18,6 +21,9 @@ def test_save_keeps_bounded_recovery_snapshots(tmp_path, monkeypatch):
     for count in range(1, 8):
         project_library.save_project(
             'deck-id', ProjectState.from_dict({'cards': {'card.png': count}}))
+        if tied_times:
+            for snapshot in project_library.recovery_snapshots('deck-id'):
+                os.utime(snapshot, ns=(1_000_000_000, 1_000_000_000))
 
     snapshots = project_library.recovery_snapshots('deck-id')
     assert len(snapshots) == 5

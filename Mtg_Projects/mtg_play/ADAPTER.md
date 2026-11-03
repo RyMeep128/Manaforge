@@ -1,15 +1,23 @@
 # Manaforge local gameplay adapter
 
+Migration note: the proposed [Unity + Java roadmap](../../docs/play-unity-java-roadmap.md)
+retains this Python API and its acceptance fixtures as the initial behavior-parity
+reference. Java replaces the runtime boundary only after demonstrated parity and
+integration. This document describes the existing adapter, not a completed migration.
+
 The alpha adapter implements engine-backed local games without Qt, rendering,
 AI, or remote multiplayer. Integration acceptance is implemented and has passed
 locally against the pinned engine. **Consult the Tests workflow for CI acceptance
 of a particular commit.** This does not certify every card or engine mechanic.
 
+The migration [source inventory](protocol/README.md) records exact Python fields,
+commands and gaps before defining the Java/C# wire contract.
+
 ## Public API
 
 `contracts.py` imports only the standard library. Frozen contracts serialize with
 `to_dict()` and JSON. Game protocol 1 is separate from private bridge protocol 1.
-Compatibility records the application version, adapter `0.2.0-alpha.1`, engine
+Compatibility records the application version, adapter `0.2.2-alpha.1`, engine
 `1.4.62-V1`, and the SHA-256 of `artifacts.json`.
 
 ```python
@@ -39,6 +47,10 @@ The fake `ScriptedGameSession` implements the same interface with supplied
 snapshots and no rules implementation.
 
 ## Decks and object identity
+
+The migration's [launch boundary](../../docs/play-launch-boundary.md) exports a
+minimal native projection once, without changing this adapter's deck resolution
+or per-action runtime. Engine eligibility remains a separate check.
 
 Existing Core `DeckDocument`s are consumed without modification. Oracle entries
 require Core's existing lookup; legacy entries use their stored names. The engine
@@ -215,3 +227,98 @@ original installation or weaken integrity checks. XMage is MIT licensed; preserv
 its license and bundled dependency notices. Engine/JRE/dependency redistribution
 requires a separate license review. This work does not package binaries, create
 releases/tags, or authorize pushing/merging.
+
+
+## Priority automation metadata (adapter 0.2.2-alpha.1)
+
+Protocol 1 gains conservative additive fields: `LegalAction.priority_class`
+(default `unknown`), `ChoiceRequest.is_priority` (default false), and
+`GameSnapshot.actions_complete` (default false). Older or incomplete producers
+therefore do not enable automatic passes. No new command or implicit acknowledgement
+is introduced: current `perform(player, decision, pass_action)` remains the only
+pass submission, followed by engine-confirmed new state.
+
+The pinned bridge maps PlayableObjectStats' basicManaAbilities to `basic_mana`
+only when no play, cast or other abilities are offered on that object. Any other
+known operation is `meaningful`; mixed or unknown operations hold. These are
+engine categories, not interpretations of labels, types or rules text.
+
+A noncombat GAME_SELECT is only a candidate priority prompt. XMage normalizes
+absent options to an empty map, so the bridge checks for combat-option keys
+rather than requiring a null options map. The synchronized
+server reader additionally confirms the authorized HumanPlayer response monitor
+is open, the priority player matches, and PlayerResponse.getActiveAction() records
+`priority - HumanPlayer.java:`. This is a pinned internal method/source marker
+from HumanPlayer.waitForResponse and DebugUtil.TraceHelper, not a game prompt or
+card-text heuristic. The marker itself never crosses the adapter boundary.
+Missing confirmation holds priority. Combat declarations and payment/optional
+choices cannot become priority passes merely because a pass/finish action exists.
+
+Completeness requires all offered object IDs to be represented in the seat view
+and playable metadata to be available. GameView.getSpecial() currently prevents
+completeness: special-action enumeration remains unsupported, so it holds rather
+than silently losing an available special action. Native pass-after-cast and
+pass-after-activation preferences are explicitly disabled to preserve Full Control.
+
+Pinned source anchors: [PlayableObjectStats](https://github.com/magefree/mage/blob/xmage_1.4.62V1/Mage/src/main/java/mage/players/PlayableObjectStats.java),
+[HumanPlayer](https://github.com/magefree/mage/blob/xmage_1.4.62V1/Mage.Server.Plugins/Mage.Player.Human/src/mage/player/human/HumanPlayer.java),
+and [PlayerResponse](https://github.com/magefree/mage/blob/xmage_1.4.62V1/Mage.Server.Plugins/Mage.Player.Human/src/mage/player/human/PlayerResponse.java).
+Review these internal anchors on every engine upgrade.
+
+## Shared native mana-response executor
+
+At 0.5.112-alpha.1, object responses to the private bridge's GAME_PLAY_MANA prompt
+use the shared Java ManaResponseExecutor. It atomically claims the current native
+decision under the existing bridge callback monitor before calling the unchanged
+SessionImpl.sendPlayerUUID API. SDK acceptance remains only Submitted; false or
+transport exception is Uncertain and never replayed. Other decision families and
+the public adapter/game protocol are unchanged. No automatic source planner is
+enabled by this extraction. See [native executor and evidence](../../docs/play-payment-coordinator.md).
+The owned runtime compiler includes its additional Java source; original XMage
+binaries and artifact hashes remain unchanged.
+
+The explicit `payment_context_probe=True` diagnostic (default false) uses an owned
+human-player observer only in its copied runtime workspace. It delegates payment
+to XMage and records bounded native cost evidence through the existing private
+metadata reader. It is not an automatic-payment preference or public snapshot
+field. The normal runtime continues using the original native human class. See
+[probe isolation and real-engine evidence](../../docs/play-payment-coordinator.md).
+
+At 0.5.115-alpha.1, the opt-in diagnostic also reads XMage usable mana abilities
+for up to 128 requested, viewer-visible objects, filtered to current payer-owned
+battlefield permanents. Only bounded aggregate counts enter the diagnostic
+report; no source or ability identifiers are exported. Python validates and
+records counts only; source selection and payment rules remain native/Java
+responsibilities. The number acceptance fixture requires at least two candidate
+sources to have been observed. This diagnostic never submits an action.
+
+The 0.5.116 opt-in probe adds only an aggregate count of native abilities passing
+the OrdinaryManaShape structural exclusion screen. This is not a safe-payment
+assessment or permission to activate a source. Nonstandard ability types, costs,
+effects and choices fail the screen; game-wide safety/planning remains required.
+
+At 0.5.118 the opt-in diagnostic adds fixed base-cost coverage counters from the
+Java OrdinaryCostCoverage helper. It uses pinned native arithmetic on a proposed
+plain base-production total, not a source-safety certificate or executable plan.
+Python records those bounded enum counts only; no cost/source solver or new
+public game model is introduced. Native helper and single-game probe validation
+now have a dedicated Play native payment CI workflow; automatic selection stays
+disabled and the original human runtime remains the default.
+
+At 0.5.119 the opt-in server observer also screens registered native effects,
+triggers, mana burn and spell spent-color sensitivity conservatively. Python
+records only bounded fixed private research labels. No registry contents or
+hazard reasons enter the public snapshot/client path. The real diagnostic fixture
+requires manual review despite sufficient base mana; no automatic source
+submission is enabled. See the payment coordinator evidence for precise limits.
+
+At 0.5.120 the opt-in native observer binds source-read tickets to the exact
+payment frame, state, incarnation and usable ability, rechecking before/after a
+trusted read. Python receives only bounded aggregate revalidation counts. Native
+tickets never leave the Java server, are not gameplay commands and do not grant
+source safety or single-use plan authority. Default payment remains unchanged.
+
+
+The [live Java integration track](../../docs/play-live-integration.md) now exercises
+a real human/AI opening inside Java using the existing bridge. Python still owns
+this reference API; no runtime replacement or parity acceptance is implied.

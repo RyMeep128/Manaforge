@@ -19,6 +19,7 @@ from mtg_play.contracts import (
     PlayerView,
 )
 from mtg_play.fake import ScriptedGameSession
+from mtg_play.adapter import AdapterError
 from mtg_play.presentation import SessionController
 from mtg_play.setup import SavedDeck, saved_decks
 from mtg_play.workspace import PlayWorkspace
@@ -118,12 +119,19 @@ def test_start_is_lazy_and_all_engine_calls_are_off_ui_thread(app):
     controller.snapshotChanged.connect(views.append)
     assert not owner.calls
     documents = (DeckDocument(), DeckDocument())
-    assert controller.start(setup(), documents)
-    drain(app, lambda: bool(views) and not controller.busy)
-    assert owner.decks is documents
-    assert owner.setup == setup()
-    assert all(view.viewer_id == "one" for view in views)
-    close(app, controller)
+    originals = tuple(document.to_dict() for document in documents)
+    try:
+        assert controller.start(setup(), documents)
+        drain(app, lambda: bool(views) and not controller.busy)
+        # Match submission deliberately receives copies, never saved documents.
+        assert owner.decks is not documents
+        assert all(match is not source for match, source in zip(owner.decks, documents))
+        assert tuple(document.to_dict() for document in owner.decks) == originals
+        assert tuple(document.to_dict() for document in documents) == originals
+        assert owner.setup == setup()
+        assert all(view.viewer_id == "one" for view in views)
+    finally:
+        close(app, controller)
     assert owner.closed
     assert all(thread != app.thread() for _, thread in owner.calls)
 
@@ -263,7 +271,8 @@ def test_workspace_selects_existing_documents_without_starting_runtime_on_open(
     documents = (DeckDocument(), DeckDocument())
     for document in documents:
         document.deck.entries = [
-            DeckEntry("commander", "Isamaru, Hound of Konda", section="commander")
+            DeckEntry("commander", "Isamaru, Hound of Konda", section="commander"),
+            DeckEntry("plains", "Plains", 99, card_id="selected-plains"),
         ]
         document.deck.commander_entry_ids = ["commander"]
     documents[0].deck.extras["preserve"] = ["selected printing"]
@@ -280,12 +289,22 @@ def test_workspace_selects_existing_documents_without_starting_runtime_on_open(
     )
     drain(app, lambda: not workspace.catalog_jobs.busy)
     assert not owner.calls and not workspace.start_button.isEnabled()
+    assert workspace.pages.currentWidget() is workspace.landing_page
+    workspace.landing_page.offline_button.click()
+    workspace.format.setCurrentIndex(workspace.format.findData("commander"))
+    workspace.format_continue.click()
     for index, selector in enumerate(workspace.selectors):
         selector.setCurrentIndex(index + 1)
-    workspace.format.setCurrentIndex(1)
     assert workspace.start_button.isEnabled()
     workspace.start_game()
-    drain(app, lambda: not workspace.session.busy)
+    drain(
+        app,
+        lambda: (
+            not workspace.asset_jobs.busy and not workspace.asset_continue.isHidden()
+        ),
+    )
+    workspace.asset_continue.click()
+    drain(app, lambda: workspace.session.active and not workspace.session.busy)
     assert owner.setup.format == "commander"
     assert tuple(doc.to_dict() for doc in owner.decks) == tuple(
         doc.to_dict() for doc in documents
@@ -450,3 +469,285 @@ def test_cleanup_failure_preserves_owner_until_explicit_retry(app):
     assert not owner.closed
     close(app, controller)
     assert owner.closed and owner.attempts == 2
+
+
+def test_startup_progress_is_queued_to_gui_thread_and_contains_only_stage_data(app):
+    from mtg_play.diagnostics import LifecycleDiagnostics
+
+    class ReportingOwner(Owner):
+        def __init__(self, session):
+            super().__init__(session)
+            self.lifecycle = LifecycleDiagnostics()
+
+        def set_progress_callback(self, callback):
+            self.lifecycle.set_callback(callback)
+
+        def __enter__(self):
+            with self.lifecycle.stage("runtime_validation"):
+                super().__enter__()
+            with self.lifecycle.stage("server_startup"):
+                pass
+            return self
+
+    owner = ReportingOwner(ScriptedGameSession((snapshot(),)))
+    controller = SessionController(adapter_factory=lambda: owner)
+    delivered, messages = [], []
+    controller.startupProgress.connect(
+        lambda row: delivered.append((row, C.QThread.currentThread()))
+    )
+    controller.statusChanged.connect(messages.append)
+    controller.start(setup(), (DeckDocument(), DeckDocument()))
+    drain(app, lambda: not controller.busy)
+    assert [
+        row["stage"] for row, _ in delivered if row["stage"] != "opening_state"
+    ] == [
+        "runtime_validation",
+        "runtime_validation",
+        "server_startup",
+        "server_startup",
+    ]
+    controller.timer.stop()
+    controller.refresh()
+    drain(app, lambda: not controller.busy)
+    assert [
+        row["state"] for row, _ in delivered if row["stage"] == "opening_state"
+    ] == ["started", "completed"]
+    assert all(thread is app.thread() for _, thread in delivered)
+    assert any("Starting the local rules engine" in message for message in messages)
+    assert all(
+        set(row) == {"stage", "state", "elapsed_ms", "code"} for row, _ in delivered
+    )
+    close(app, controller)
+
+
+def test_late_startup_progress_cannot_overwrite_closing_or_newer_session(app):
+    controller = SessionController()
+    controller.active = True
+    controller._epoch = 2
+    received, messages = [], []
+    controller.startupProgress.connect(received.append)
+    controller.statusChanged.connect(messages.append)
+    row = dict(stage="server_startup", state="started", elapsed_ms=0.0, code=None)
+    controller._lifecycleProgress.emit(1, row)
+    app.processEvents()
+    assert not received and not messages
+    controller.closing = True
+    controller._lifecycleProgress.emit(2, row)
+    app.processEvents()
+    assert not received and not messages
+    controller.active = controller.closing = False
+
+
+def test_staged_startup_failure_is_specific_and_cleanup_allows_retry(app, caplog):
+    from mtg_play.diagnostics import LifecycleDiagnostics
+
+    class FailingOwner(Owner):
+        def __init__(self):
+            super().__init__(None)
+            self.lifecycle = LifecycleDiagnostics()
+
+        def set_progress_callback(self, callback):
+            self.lifecycle.set_callback(callback)
+
+        def __enter__(self):
+            with self.lifecycle.stage("server_startup"):
+                raise TimeoutError("PRIVATE_CARD_AND_ENGINE_PAYLOAD")
+
+    owner = FailingOwner()
+    controller = SessionController(adapter_factory=lambda: owner)
+    messages = []
+    controller.statusChanged.connect(messages.append)
+    controller.start(setup(), (DeckDocument(), DeckDocument()))
+    drain(app, lambda: not controller.busy)
+    assert owner.closed and not controller.active
+    assert "starting the local rules engine" in messages[-1]
+    assert "PRIVATE" not in " ".join(messages) + caplog.text
+    controller.adapter_factory = lambda: Owner(ScriptedGameSession((snapshot(),)))
+    assert controller.start(setup(), (DeckDocument(), DeckDocument()))
+    drain(app, lambda: not controller.busy)
+    close(app, controller)
+
+
+def test_opening_state_timeout_cleans_up_before_retry(app, monkeypatch):
+    from mtg_play import presentation
+    from mtg_play.adapter import AdapterError
+
+    class NeverReady(ScriptedGameSession):
+        def snapshot(self, player_id):
+            raise AdapterError("SNAPSHOT_NOT_READY")
+
+    monkeypatch.setattr(presentation, "OPENING_STATE_TIMEOUT", 0)
+    owner = Owner(NeverReady((snapshot(),)))
+    controller = SessionController(adapter_factory=lambda: owner)
+    progress, messages = [], []
+    controller.startupProgress.connect(progress.append)
+    controller.statusChanged.connect(messages.append)
+    controller.start(setup(), (DeckDocument(), DeckDocument()))
+    drain(app, lambda: not controller.busy)
+    controller.refresh()
+    drain(app, lambda: not controller.busy)
+    assert owner.closed and not controller.active and controller._owner is None
+    assert any(row["code"] == "PLAY_OPENING_STATE_TIMEOUT" for row in progress)
+    assert "waiting for the opening game state" in messages[-1]
+    controller.adapter_factory = lambda: Owner(ScriptedGameSession((snapshot(),)))
+    assert controller.start(setup(), (DeckDocument(), DeckDocument()))
+    drain(app, lambda: not controller.busy)
+    close(app, controller)
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [("elapsed_ms", "PRIVATE"), ("code", "PRIVATE"), ("stage", "PRIVATE")],
+)
+def test_startup_progress_rejects_private_or_invalid_payload_fields(app, field, value):
+    controller = SessionController()
+    controller.active = True
+    received = []
+    controller.startupProgress.connect(received.append)
+    progress = dict(stage="server_startup", state="started", elapsed_ms=0.0, code=None)
+    progress[field] = value
+    controller._lifecycleProgress.emit(controller._epoch, progress)
+    app.processEvents()
+    assert not received
+    controller.active = False
+
+
+def test_offline_controller_keeps_fixed_authorized_human_view(app):
+    owner = Owner(ScriptedGameSession((snapshot(), snapshot("two"))))
+    controller = SessionController(
+        adapter_factory=lambda: owner, authorized_viewer_id="one"
+    )
+    views = []
+    controller.snapshotChanged.connect(views.append)
+    ai_setup = GameSetup(
+        (MatchSeat("one", "You"), MatchSeat("two", "Opponent", "engine_ai"))
+    )
+    assert controller.start(ai_setup, (DeckDocument(), DeckDocument()))
+    drain(app, lambda: bool(views) and not controller.busy)
+    controller.timer.stop()
+    original = controller._snapshot
+    controller.reveal("two")
+    assert controller._viewer == "one" and controller._snapshot is original
+    assert all(view.viewer_id == "one" for view in views)
+    assert not controller.submit(snapshot("two"), "choose", "keep")
+    assert not controller.concede(snapshot("two"))
+    close(app, controller)
+
+
+def test_offline_controller_rejects_second_human_before_runtime_start(app):
+    owner = Owner(ScriptedGameSession((snapshot(),)))
+    controller = SessionController(
+        adapter_factory=lambda: owner, authorized_viewer_id="one"
+    )
+    with pytest.raises(ValueError, match="one AI opponent"):
+        controller.start(setup(), (DeckDocument(), DeckDocument()))
+    assert not owner.calls and not controller.active
+
+
+def test_match_deck_copies_are_isolated_per_seat_on_worker(app):
+    source = DeckDocument()
+    source.deck.entries = [DeckEntry("entry", "Forest", card_id="selected-print")]
+    source.editor_preferences["preserve"] = ["selected face"]
+    owner = Owner(ScriptedGameSession((snapshot(),)))
+    controller = SessionController(adapter_factory=lambda: owner)
+    assert controller.start(setup(), (source, source))
+    drain(app, lambda: not controller.busy)
+    assert owner.decks[0] is not source and owner.decks[1] is not source
+    assert owner.decks[0] is not owner.decks[1]
+    assert all(document.to_dict() == source.to_dict() for document in owner.decks)
+    owner.decks[1].deck.entries[0].card_id = "changed-only-in-match"
+    assert source.deck.entries[0].card_id == "selected-print"
+    assert owner.decks[0].deck.entries[0].card_id == "selected-print"
+    assert all(thread is not app.thread() for _, thread in owner.calls)
+    close(app, controller)
+
+
+def test_deck_resolution_failure_retains_safe_cause_after_cleanup(app):
+    from mtg_play.diagnostics import LifecycleDiagnostics
+
+    class BrokenPreparation(Owner):
+        def __init__(self):
+            super().__init__(None)
+            self.lifecycle = LifecycleDiagnostics()
+
+        def create_game(self, *args, **kwargs):
+            with self.lifecycle.stage("deck_resolution"):
+                raise TypeError("PRIVATE deck name and payload must not appear")
+
+    owner = BrokenPreparation()
+    controller = SessionController(adapter_factory=lambda: owner)
+    messages = []
+    controller.statusChanged.connect(messages.append)
+    controller.start(setup(), (DeckDocument(), DeckDocument()))
+    drain(app, lambda: not controller.busy)
+    assert owner.closed and not controller.active
+    assert "PLAY_DECK_RESOLUTION_FAILED / PYTHON_TYPE_ERROR" in messages[-1]
+    assert "PRIVATE" not in str(messages)
+    close(app, controller)
+
+
+@pytest.mark.parametrize(
+    "error,expected",
+    [
+        (AdapterError("SERVER_RESPONSE_INVALID"), "SERVER_RESPONSE_INVALID"),
+        (KeyError("PRIVATE"), "PYTHON_KEY_ERROR"),
+        (RuntimeError("PRIVATE"), "UNCLASSIFIED_SETUP_ERROR"),
+        (AdapterError("PRIVATE"), "UNCLASSIFIED_SETUP_ERROR"),
+    ],
+)
+def test_startup_cause_codes_never_include_arbitrary_exception_text(error, expected):
+    from mtg_play.presentation import _setup_cause
+
+    assert _setup_cause(error) == expected
+
+
+def test_stop_interrupts_startup_with_shared_token_before_queueing_cleanup(app):
+    class StartingOwner(Owner):
+        def __init__(self):
+            super().__init__(None)
+            self.entered = threading.Event()
+
+        def set_cancel_event(self, event):
+            self.cancel_event = event
+
+        def __enter__(self):
+            self.entered.set()
+            assert self.cancel_event.wait(5)
+            raise AdapterError("RUNTIME_CANCELLED")
+
+    owner = StartingOwner()
+    controller = SessionController(adapter_factory=lambda: owner)
+    controller.start(setup(), (DeckDocument(), DeckDocument()))
+    drain(app, owner.entered.is_set)
+    controller.stop()
+    drain(app, lambda: not controller.busy)
+    assert owner.closed and owner.cancel_event.is_set() and not controller.active
+
+
+def test_safe_diagnostics_survive_failure_and_confirmed_cleanup(app):
+    from mtg_play.diagnostics import LifecycleDiagnostics
+
+    class ReportingOwner(Owner):
+        def __init__(self):
+            super().__init__(None)
+            self.lifecycle = LifecycleDiagnostics()
+
+        def create_game(self, *args, **kwargs):
+            with self.lifecycle.stage("deck_resolution"):
+                raise NameError("PRIVATE deck name")
+
+        def close(self):
+            with self.lifecycle.stage("process_cleanup"):
+                super().close()
+
+    owner = ReportingOwner()
+    controller = SessionController(adapter_factory=lambda: owner)
+    controller.start(setup(), (DeckDocument(), DeckDocument()))
+    drain(app, lambda: not controller.busy)
+    report = controller.diagnostic_report()
+    assert report["failure"]["cause"] == "PYTHON_NAME_ERROR"
+    assert report["failure"]["code"] == "PLAY_DECK_RESOLUTION_FAILED"
+    assert any(row["stage"] == "process_cleanup" for row in report["lifecycle"])
+    assert not report["session"]["active"] and owner.closed
+    assert "PRIVATE" not in str(report)
+    close(app, controller)

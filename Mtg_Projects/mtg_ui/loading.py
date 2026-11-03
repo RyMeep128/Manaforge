@@ -72,7 +72,9 @@ class _Activity(C.QObject):
         self.indicator.update()
 
     def _indicator_destroyed(self, obj):
-        if self.indicator is obj:
+        # QApplication teardown may clear Python attributes before a window's
+        # native children emit destroyed. This callback must remain harmless.
+        if getattr(self, 'indicator', None) is obj:
             self.indicator = None
 
 

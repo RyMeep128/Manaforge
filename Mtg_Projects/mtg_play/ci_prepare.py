@@ -62,10 +62,19 @@ def extract(archive: Path, artifact: dict, destination: Path):
                     shutil.copyfileobj(input_file, output_file)
 
 
-def prepare(destination: Path, jdk: Path, cache: Path | None = None) -> Path:
+def prepare(
+    destination: Path,
+    jdk: Path,
+    cache: Path | None = None,
+    *,
+    fork_server=None,
+    fork_client=None,
+) -> Path:
     destination = destination.resolve()
     if destination.exists():
         raise ProofError("CI_DESTINATION_ALREADY_EXISTS: use a new isolated directory")
+    if bool(fork_server) != bool(fork_client):
+        raise ProofError("BOTH_FORK_ASSEMBLIES_REQUIRED")
     manifest = json.loads((HERE / "ci-artifacts.json").read_text(encoding="utf-8"))
     if manifest.get("schema") != 1:
         raise ProofError("UNSUPPORTED_CI_ARCHIVE_MANIFEST")
@@ -75,9 +84,52 @@ def prepare(destination: Path, jdk: Path, cache: Path | None = None) -> Path:
         destination.name + "-" + uuid.uuid4().hex + ".tmp"
     )
     temporary.mkdir(parents=True)
-    for name in ("engine", "runtime"):
+    for name in ("runtime",) if fork_server else ("engine", "runtime"):
         artifact = manifest[name]
         extract(fetch(artifact, cache, name), artifact, temporary)
+    if fork_server:
+        from .engine_fork import read_lock
+
+        lock_path = HERE / "engine-lock.json"
+        lock = read_lock(lock_path)
+        for name, archive in (
+            ("mage-server", fork_server),
+            ("mage-client", fork_client),
+        ):
+            archive = Path(archive)
+            if digest(archive) != lock["assemblies"][name]:
+                raise ProofError("FORK_ASSEMBLY_HASH_MISMATCH: " + name)
+            extract(archive, dict(prefix="", destination="xmage/" + name), temporary)
+        extras = {
+            "SOURCE.txt": (
+                "XMage source: "
+                + lock["fork_commit"]
+                + "\nUpstream: "
+                + lock["upstream_commit"]
+                + "\n"
+            ).encode(),
+            "XMAGE-LICENSE.txt": (
+                temporary / "xmage/mage-server/LICENSE.txt"
+            ).read_bytes(),
+        }
+        for name, raw in extras.items():
+            expected = lock["artifacts"].get(name)
+            if expected is None:
+                continue
+            normalized = raw.replace(b"\r\n", b"\n")
+            candidates = (raw, normalized, normalized.replace(b"\n", b"\r\n"))
+            matching = next(
+                (
+                    value
+                    for value in candidates
+                    if hashlib.sha256(value).hexdigest() == expected
+                ),
+                None,
+            )
+            if matching is None:
+                raise ProofError("FORK_PROVENANCE_HASH_MISMATCH: " + name)
+            (temporary / name).write_bytes(matching)
+        shutil.copy2(lock_path, temporary / "manaforge-engine-lock.json")
     validate_installation(temporary, jdk.resolve())
     # Both resolved endpoints must remain under the explicitly requested parent.
     # No deletion, overwrite, or change to an existing bundle is permitted.
@@ -97,8 +149,26 @@ def main():
     parser.add_argument("--destination", type=Path, required=True)
     parser.add_argument("--jdk-path", type=Path, default=DEFAULT_JDK)
     parser.add_argument("--archive-cache", type=Path)
+    parser.add_argument(
+        "--fork-server",
+        type=Path,
+        help="Server assembly matching the app-owned engine lock",
+    )
+    parser.add_argument(
+        "--fork-client",
+        type=Path,
+        help="Matching client assembly; never mix fork and stock modules",
+    )
     args = parser.parse_args()
-    print(prepare(args.destination, args.jdk_path, args.archive_cache))
+    print(
+        prepare(
+            args.destination,
+            args.jdk_path,
+            args.archive_cache,
+            fork_server=args.fork_server,
+            fork_client=args.fork_client,
+        )
+    )
 
 
 if __name__ == "__main__":

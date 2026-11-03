@@ -17,14 +17,21 @@ import mage.players.net.UserData;
 import mage.remote.Connection;
 import mage.remote.SessionImpl;
 import mage.utils.MageVersion;
+import manaforge.payment.xmage.ManaResponseExecutor;
 
 /** Minimal headless client: no MageFrame or desktop-client dependency. */
 public final class ManaforgeBridge implements MageClient {
     private static final PrintStream PROTOCOL = System.out;
     private static final Gson JSON = new Gson();
     private final SessionImpl session = new SessionImpl(this);
+    private final ManaResponseExecutor manaResponses = new ManaResponseExecutor(this::claimManaResponse, session::sendPlayerUUID);
 
-    private volatile UUID gameId;
+    private final java.util.function.Consumer<JsonObject> eventSink;
+
+    public ManaforgeBridge() { this(null); }
+    ManaforgeBridge(java.util.function.Consumer<JsonObject> eventSink) { this.eventSink = eventSink; }
+
+    private volatile UUID gameId,viewerId;
     private volatile int decisionId = -1;
     private volatile String decisionMethod;
     private volatile int amountMin;
@@ -34,15 +41,28 @@ public final class ManaforgeBridge implements MageClient {
     private int lastDecisionMessageId = -1;
     private int lastStateMessageId = -1;
 
-    private static synchronized void emit(String event, String requestId, JsonObject data) {
+    private synchronized boolean claimManaResponse(UUID expectedGame,int expectedDecision,UUID source) {
+        if(gameId==null || !gameId.equals(expectedGame) || expectedDecision!=decisionId || decisionId<0
+                || !"GAME_PLAY_MANA".equals(decisionMethod))return false;
+        decisionId=-1;return true;
+    }
+
+    private synchronized void emit(String event, String requestId, JsonObject data) {
         data.addProperty("protocol", 1);
         data.addProperty("event", event);
         if (requestId != null) data.addProperty("request_id", requestId);
+        if (eventSink != null) { eventSink.accept(data.deepCopy()); return; }
         PROTOCOL.println(JSON.toJson(data));
         PROTOCOL.flush();
     }
 
-    private static void message(String event, String id, String text) {
+    private static PlayerType controllerType(String controller) {
+        if (controller.equals("local_human")) return PlayerType.HUMAN;
+        if (controller.equals("engine_ai")) return PlayerType.COMPUTER_MAD;
+        throw new IllegalArgumentException("UNSUPPORTED_CONTROLLER");
+    }
+
+    private void message(String event, String id, String text) {
         JsonObject data = new JsonObject();
         data.addProperty("message", text);
         emit(event, id, data);
@@ -100,6 +120,14 @@ public final class ManaforgeBridge implements MageClient {
                 choice.addProperty("decision_id", decisionId);
                 choice.addProperty("cycle", view == null ? -1 : view.getGameCycle());
                 choice.addProperty("kind", method);
+                // Pinned PlayerQueryEvent normalizes absent options to an empty map.
+                // Confirm actual priority on the server, never by prompt text.
+                boolean combatDeclaration = prompt.getOptions() != null
+                    && (prompt.getOptions().containsKey(mage.constants.Constants.Option.POSSIBLE_ATTACKERS)
+                        || prompt.getOptions().containsKey(mage.constants.Constants.Option.POSSIBLE_BLOCKERS));
+                choice.addProperty("is_priority", method.equals("GAME_SELECT") && !combatDeclaration
+                    && prompt.getCardsView1() == null && prompt.getCardsView2() == null
+                    && prompt.getChoice() == null);
                 choice.addProperty("message", prompt.getMessage());
                 choice.addProperty("min", prompt.getMin());
                 choice.addProperty("max", prompt.getMax());
@@ -127,10 +155,18 @@ public final class ManaforgeBridge implements MageClient {
                 choice.addProperty("can_finish", decisionFinishable);
                 if (prompt.getOptions() != null) {
                     choice.add("selected_targets", JSON.toJsonTree(prompt.getOptions().get("chosenTargets")));
-                    choice.add("attackers", JSON.toJsonTree(prompt.getOptions().get(mage.constants.Constants.Option.POSSIBLE_ATTACKERS)));
-                    choice.add("blockers", JSON.toJsonTree(prompt.getOptions().get(mage.constants.Constants.Option.POSSIBLE_BLOCKERS)));
+                    if (prompt.getOptions().containsKey(mage.constants.Constants.Option.POSSIBLE_ATTACKERS))
+                        choice.add("attackers", JSON.toJsonTree(prompt.getOptions().get(mage.constants.Constants.Option.POSSIBLE_ATTACKERS)));
+                    if (prompt.getOptions().containsKey(mage.constants.Constants.Option.POSSIBLE_BLOCKERS))
+                        choice.add("blockers", JSON.toJsonTree(prompt.getOptions().get(mage.constants.Constants.Option.POSSIBLE_BLOCKERS)));
                 }
-                choice.add("targets", JSON.toJsonTree(prompt.getTargets()));
+                // Native library target prompts carry legal IDs in possibleTargets and
+                // reveal labels in CardsView. CardsView alone does not establish legality.
+                java.util.Set<UUID> offeredTargets=new java.util.LinkedHashSet<>();
+                if(prompt.getTargets()!=null)offeredTargets.addAll(prompt.getTargets());
+                if(method.equals("GAME_TARGET") && offeredTargets.isEmpty() && prompt.getOptions()!=null && prompt.getOptions().get("possibleTargets") instanceof java.util.Set)
+                    for(Object candidate:(java.util.Set<?>)prompt.getOptions().get("possibleTargets"))if(candidate instanceof UUID)offeredTargets.add((UUID)candidate);
+                choice.add("targets", JSON.toJsonTree(offeredTargets));
                 if (prompt.getChoice() != null) {
                     choice.addProperty("message", prompt.getChoice().getMessage());
                     choice.addProperty("required", prompt.getChoice().isRequired());
@@ -160,6 +196,8 @@ public final class ManaforgeBridge implements MageClient {
             if (method.equals("END_GAME_INFO") && payload instanceof GameEndView) {
                 JsonObject result = new JsonObject();
                 result.addProperty("won", ((GameEndView) payload).hasWon());
+                result.addProperty("game_id",gameId.toString());
+                result.addProperty("viewer",((GameEndView)payload).getClientPlayer().getPlayerId().toString());
                 emit("game_result", null, result);
             }
             if (method.equals("GAME_OVER")) {
@@ -233,6 +271,7 @@ public final class ManaforgeBridge implements MageClient {
     }
 
     private JsonObject state(GameView view) {
+        viewerId=view.getMyPlayer()==null?null:view.getMyPlayer().getPlayerId();
         JsonObject data = new JsonObject();
         data.addProperty("game_id", gameId == null ? null : gameId.toString());
         data.addProperty("turn", view.getTurn());
@@ -258,7 +297,7 @@ public final class ManaforgeBridge implements MageClient {
                     JsonArray value = new JsonArray(); value.add(colors[index]); value.add(amounts[index]); mana.add(value);
                 }
             }
-            row.add("mana", mana);
+            row.add("mana", pool==null?com.google.gson.JsonNull.INSTANCE:mana);
             JsonArray counters = new JsonArray();
             for (CounterView counter : player.getCounters()) {
                 JsonArray value = new JsonArray(); value.add(counter.getName()); value.add(counter.getCount()); counters.add(value);
@@ -294,7 +333,7 @@ public final class ManaforgeBridge implements MageClient {
             JsonObject entry = new JsonObject();
             entry.add("attackers", JSON.toJsonTree(group.getAttackers().keySet()));
             entry.add("blockers", JSON.toJsonTree(group.getBlockers().keySet()));
-            entry.addProperty("defender", group.getDefenderId().toString());
+            entry.addProperty("defender", group.getDefenderId()==null?null:group.getDefenderId().toString());
             entry.addProperty("blocked", group.isBlocked());
             combat.add(entry);
         }
@@ -308,7 +347,7 @@ public final class ManaforgeBridge implements MageClient {
         JsonArray exile = new JsonArray();
         for (ExileView group : view.getExile()) for (CardView card : group.values()) exile.add(card(card));
         data.add("exile", exile);
-        JsonObject actionKinds = new JsonObject();
+        JsonObject actionKinds = new JsonObject(), priorityClasses = new JsonObject(), castingAbilityIds = new JsonObject();
         if (view.getCanPlayObjects() != null) for (UUID object : view.getCanPlayObjects().getObjects().keySet()) {
             // Pinned engine data, not a Manaforge legality calculation.
             JsonObject stats = JSON.toJsonTree(view.getCanPlayObjects().getStats(object)).getAsJsonObject();
@@ -316,17 +355,27 @@ public final class ManaforgeBridge implements MageClient {
             int cast = stats.getAsJsonArray("basicCastAbilities").size();
             int other = stats.getAsJsonArray("other").size();
             int mana = stats.getAsJsonArray("basicManaAbilities").size();
+            JsonArray castIds=new JsonArray();
+            for(com.google.gson.JsonElement ability:stats.getAsJsonArray("basicCastAbilities"))castIds.add(ability.getAsJsonObject().get("id").getAsString());
+            castingAbilityIds.add(object.toString(),castIds);
+            priorityClasses.addProperty(object.toString(), mana > 0 && play == 0 && cast == 0 && other == 0
+                ? "basic_mana" : play + cast + other > 0 ? "meaningful" : "unknown");
             actionKinds.addProperty(object.toString(), other > 0 ? "select_object" :
                 play > 0 && cast == 0 ? "play_land" : cast > 0 && play == 0 ? "cast_spell" :
                 mana > 0 && play == 0 && cast == 0 ? "activate" : "select_object");
         }
         data.add("action_kinds", actionKinds);
+        // Private engine correlation only; never part of the Unity snapshot projection.
+        data.add("casting_ability_ids", castingAbilityIds);
+        data.add("priority_classes", priorityClasses);
+        // Special-action choices are not yet enumerated by this bridge. Never auto-pass them.
+        data.addProperty("playable_information_complete", view.getCanPlayObjects() != null && !view.getSpecial());
         data.add("playable", JSON.toJsonTree(view.getCanPlayObjects() == null
             ? java.util.Collections.emptySet() : view.getCanPlayObjects().getObjects().keySet()));
         return data;
     }
 
-    private static DeckCardLists deck(JsonObject command) {
+    static DeckCardLists deck(JsonObject command) {
         DeckCardLists deck = new DeckCardLists();
         for (com.google.gson.JsonElement element : command.getAsJsonArray("cards")) {
             JsonObject card = element.getAsJsonObject();
@@ -349,7 +398,7 @@ public final class ManaforgeBridge implements MageClient {
         return command.get(key).getAsString();
     }
 
-    private boolean execute(JsonObject command) {
+    boolean execute(JsonObject command) {
         String id = null;
         try {
             id = requiredString(command, "request_id");
@@ -369,6 +418,18 @@ public final class ManaforgeBridge implements MageClient {
                 connection.setProxyType(Connection.ProxyType.NONE);
                 connection.setUserIdStr(UUID.randomUUID().toString());
                 UserData preferences = UserData.getDefaultUserDataView();
+                String paymentMode=command.has("payment_mode")?requiredString(command,"payment_mode"):System.getProperty("manaforge.paymentMode");if(paymentMode!=null){if(!java.util.Arrays.asList("AUTO","MANUAL","FULL_CONTROL").contains(paymentMode))throw new IllegalArgumentException("PAYMENT_MODE_INVALID");preferences.setManaPoolAutomatic(paymentMode.equals("AUTO"));preferences.setManaPoolAutomaticRestricted(paymentMode.equals("AUTO"));}
+                preferences.setPassPriorityCast(false);
+                preferences.setPassPriorityActivation(false);
+                // Unity owns phase stops and manual control; do not let the
+                // engine's desktop defaults skip a step before Unity sees it.
+                for (mage.players.net.SkipPrioritySteps steps : new mage.players.net.SkipPrioritySteps[] {
+                        preferences.getUserSkipPrioritySteps().getYourTurn(),
+                        preferences.getUserSkipPrioritySteps().getOpponentTurn()}) {
+                    steps.setUpkeep(true);steps.setDraw(true);steps.setMain1(true);
+                    steps.setBeforeCombat(true);steps.setEndOfCombat(true);
+                    steps.setMain2(true);steps.setEndOfTurn(true);
+                }
                 preferences.setAutoOrderTrigger(false);
                 preferences.setAutoTargetLevel(0);
                 connection.setUserData(preferences);
@@ -410,16 +471,25 @@ public final class ManaforgeBridge implements MageClient {
                 options.setWinsNeeded(1);
                 options.setAttackOption(mage.constants.MultiplayerAttackOption.MULTIPLE);
                 options.setSpectatorsAllowed(false);
-                for (int index = 0; index < seats; index++) options.getPlayerTypes().add(PlayerType.HUMAN);
+                JsonArray controllers = command.has("controllers") ? command.getAsJsonArray("controllers") : null;
+                if (controllers != null && controllers.size() != seats)
+                    throw new IllegalArgumentException("INVALID_SEATS");
+                for (int index = 0; index < seats; index++) {
+                    options.getPlayerTypes().add(controllers == null ? PlayerType.HUMAN
+                        : controllerType(controllers.get(index).getAsString()));
+                }
                 TableView table = session.createTable(session.getMainRoomId(), options);
                 if (table == null) throw new IllegalStateException("Table creation rejected");
                 JsonObject data = new JsonObject();
                 data.addProperty("table_id", table.getTableId().toString());
                 emit("table_created", id, data);
             } else if (operation.equals("join_table")) {
+                PlayerType playerType = controllerType(command.has("controller")
+                    ? requiredString(command, "controller") : "local_human");
+                String playerName = playerType.isAI() ? requiredString(command, "player_name") : session.getUserName();
                 boolean accepted = session.joinTable(session.getMainRoomId(),
-                    UUID.fromString(requiredString(command, "table_id")), session.getUserName(),
-                    PlayerType.HUMAN, 1, deck(command), "");
+                    UUID.fromString(requiredString(command, "table_id")), playerName,
+                    playerType, 1, deck(command), "");
                 if (!accepted) throw new IllegalStateException("Join table rejected");
                 message("joined", id, "Joined table");
             } else if (operation.equals("start_game")) {
@@ -436,8 +506,9 @@ public final class ManaforgeBridge implements MageClient {
                             || expected != decisionId || decisionId < 0)
                         throw new IllegalArgumentException("STALE_DECISION");
                     pendingMethod = decisionMethod;
-                    boolean valid = (kind.equals("boolean") && (pendingMethod.equals("GAME_ASK") || pendingMethod.equals("GAME_SELECT") || pendingMethod.equals("GAME_PLAY_MANA") || pendingMethod.equals("GAME_CHOOSE_PILE") || ((decisionFinishable && pendingMethod.equals("GAME_TARGET")) || (decisionCancellable && pendingMethod.equals("GAME_GET_MULTI_AMOUNT")))))
+                    boolean valid = (kind.equals("boolean") && (pendingMethod.equals("GAME_ASK") || pendingMethod.equals("GAME_SELECT") || pendingMethod.equals("GAME_PLAY_MANA") || pendingMethod.equals("GAME_CHOOSE_PILE") || ((decisionFinishable && pendingMethod.equals("GAME_TARGET")) || (decisionCancellable && (pendingMethod.equals("GAME_GET_MULTI_AMOUNT") || pendingMethod.equals("GAME_CHOOSE_CHOICE"))))))
                         || (kind.equals("object") && (pendingMethod.equals("GAME_SELECT") || pendingMethod.equals("GAME_TARGET") || pendingMethod.equals("GAME_CHOOSE_ABILITY") || pendingMethod.equals("GAME_PLAY_MANA")))
+                        || (kind.equals("mana_type") && pendingMethod.equals("GAME_PLAY_MANA"))
                         || (kind.equals("integer") && pendingMethod.equals("GAME_GET_AMOUNT"))
                         || (kind.equals("string") && (pendingMethod.equals("GAME_CHOOSE_CHOICE") || pendingMethod.equals("GAME_GET_MULTI_AMOUNT")));
                     if (!valid) throw new IllegalArgumentException("UNSUPPORTED_RESPONSE");
@@ -450,11 +521,20 @@ public final class ManaforgeBridge implements MageClient {
                         int amount = command.get("value").getAsInt();
                         if (amount < amountMin || amount > amountMax) throw new IllegalArgumentException("AMOUNT_OUT_OF_RANGE");
                     }
+                    if(kind.equals("mana_type")){String mana=requiredString(command,"value");if(!java.util.Arrays.asList("WHITE","BLUE","BLACK","RED","GREEN","COLORLESS").contains(mana) || viewerId==null || !viewerId.toString().equals(requiredString(command,"player_id")))throw new IllegalArgumentException("MANA_POOL_UNAVAILABLE");}
                     if (kind.equals("string")) requiredString(command, "value");
-                    decisionId = -1;
+                    // The shared executor claims mana-source responses immediately before native IO.
+                    if(!(kind.equals("object") && pendingMethod.equals("GAME_PLAY_MANA")))decisionId = -1;
                 }
                 boolean accepted;
                 if (kind.equals("boolean")) accepted = session.sendPlayerBoolean(gameId, command.get("value").getAsBoolean());
+                else if (kind.equals("object") && pendingMethod.equals("GAME_PLAY_MANA")) {
+                    ManaResponseExecutor.Outcome outcome=manaResponses.submit(UUID.fromString(requiredString(command,"game_id")),
+                        command.get("decision_id").getAsInt(),UUID.fromString(requiredString(command,"value")));
+                    if(outcome==ManaResponseExecutor.Outcome.STALE)throw new IllegalArgumentException("STALE_DECISION");
+                    accepted=outcome==ManaResponseExecutor.Outcome.SUBMITTED;
+                }
+                else if(kind.equals("mana_type")) accepted=session.sendPlayerManaType(gameId,UUID.fromString(requiredString(command,"player_id")),mage.constants.ManaType.valueOf(requiredString(command,"value")));
                 else if (kind.equals("object")) accepted = session.sendPlayerUUID(gameId, UUID.fromString(requiredString(command, "value")));
                 else if (kind.equals("integer")) accepted = session.sendPlayerInteger(gameId, command.get("value").getAsInt());
                 else if (kind.equals("string")) accepted = session.sendPlayerString(gameId, requiredString(command, "value"));
@@ -496,7 +576,7 @@ public final class ManaforgeBridge implements MageClient {
                     System.exit(0); // SwingWorker/JBoss pools otherwise keep the JVM alive.
                 }
             } catch (RuntimeException error) {
-                message("error", null, "Malformed command: " + error);
+                bridge.message("error", null, "Malformed command: " + error);
             }
         }
         bridge.session.connectStop(false, false);

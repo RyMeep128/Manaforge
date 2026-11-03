@@ -29,6 +29,7 @@ class DeckTable(QtCore.QAbstractTableModel):
     def __init__(self, document, parent=None):
         super().__init__(parent)
         self.document = document
+        self.violations = {}
 
     def rowCount(self, parent=QtCore.QModelIndex()):
         return 0 if parent.isValid() else len(self.document.deck.entries)
@@ -37,6 +38,10 @@ class DeckTable(QtCore.QAbstractTableModel):
         return 0 if parent.isValid() else 4
 
     def data(self, index, role=QtCore.Qt.ItemDataRole.DisplayRole):
+        if index.isValid() and role in (QtCore.Qt.ItemDataRole.ForegroundRole, QtCore.Qt.ItemDataRole.ToolTipRole):
+            reason = self.violations.get(self.document.deck.entries[index.row()].entry_id)
+            if reason:
+                return QtGui.QBrush(QtGui.QColor('#ff6666')) if role == QtCore.Qt.ItemDataRole.ForegroundRole else reason
         if index.isValid() and role == QtCore.Qt.ItemDataRole.UserRole:
             return self.document.deck.entries[index.row()]
         if index.isValid() and role == QtCore.Qt.ItemDataRole.DisplayRole:
@@ -82,6 +87,11 @@ class EditorWindow(W.QMainWindow):
         self.autosave.setSingleShot(True)
         self.autosave.setInterval(2000)
         self.autosave.timeout.connect(self.save)
+        self.legality_timer = QtCore.QTimer(self)
+        self.legality_timer.setSingleShot(True)
+        self.legality_timer.setInterval(250)
+        self.legality_timer.timeout.connect(self._check_card_legality)
+        self._legality_snapshot = None
         body = W.QWidget()
         layout = W.QVBoxLayout(body)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -877,10 +887,51 @@ class EditorWindow(W.QMainWindow):
                 document = self.document
                 QtCore.QTimer.singleShot(0, lambda: prompt_commander_themes(self, document, after_commanders))
 
+    def _show_card_violations(self, messages):
+        self.model.violations = messages
+        self.grid.violations = messages
+        if self.model.rowCount():
+            self.model.dataChanged.emit(self.model.index(0, 0), self.model.index(self.model.rowCount()-1, 3),
+                                        [QtCore.Qt.ItemDataRole.ForegroundRole, QtCore.Qt.ItemDataRole.ToolTipRole])
+        self.grid.viewport().update()
+        self.text_view.rows.viewport().update()
+
+    def _check_card_legality(self):
+        if self.closing:
+            return
+        if self.task is not None:
+            self.legality_timer.start()
+            return
+        from .legality_highlights import card_violations
+        snapshot = self.document.to_dict()
+        if snapshot == self._legality_snapshot:
+            return
+        document = DeckDocument.from_dict(snapshot)
+        loader = getattr(self.service, 'get_deck_legality_data', None)
+        def load():
+            import sqlite3
+            try:
+                records = loader(document.deck.entries) if callable(loader) else {}
+            except (OSError, sqlite3.Error, ValueError):
+                records = {}
+            return card_violations(document, records or {})
+        def show(messages):
+            if self.closing or self.document.to_dict() != snapshot:
+                return
+            self._legality_snapshot = snapshot
+            self._show_card_violations(messages)
+        if callable(loader) and document.deck.entries:
+            self.run_task(load, show)
+        else:
+            show(card_violations(document, {}))
+
     def changed(self):
         if not self._has_active_deck and (self.document.deck.entries or self.document.deck.categories):
             self._has_active_deck = True
             self.project_stack.setCurrentWidget(self.editor_body)
+        if self.document.to_dict() != self._legality_snapshot:
+            self._show_card_violations({})
+            self.legality_timer.start()
         self.basic_lands.changed()
         from mtg_core.basic_lands import AUTOMATION
         lands_active = self.document.deck.extras.get(AUTOMATION, False) is True
@@ -1826,6 +1877,7 @@ class EditorWindow(W.QMainWindow):
             self.project_stack.setCurrentWidget(self.editor_body)
 
     def closeEvent(self, event):
+        self.legality_timer.stop()
         self.closing = True
         self.basic_lands.stop()
         discovery = getattr(self, 'card_discovery_dialog', None)

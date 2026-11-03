@@ -1,0 +1,161 @@
+using System;
+using System.IO;
+using System.Linq;
+using Manaforge.Play.Protocol;
+using Newtonsoft.Json.Linq;
+using NUnit.Framework;
+using UnityEngine;
+
+namespace Manaforge.Play.Tests
+{
+    public sealed class UnityPriorityPolicyTests
+    {
+        private static string Fixtures=>Environment.GetEnvironmentVariable("MANAFORGE_TEST_FIXTURES")
+            ??Path.Combine(Application.dataPath,"../../mtg_play/protocol/fixtures");
+        private static JObject Source(string viewer="one",long revision=1,string decision="fixture-priority")
+        {
+            var wire=(JObject)JObject.Parse(File.ReadAllText(Path.Combine(Fixtures,"receive-history-v1.json")))["cases"][0]["steps"][0]["envelope"].DeepClone();
+            var snapshot=wire["body"]["snapshot"];
+            snapshot["viewer_id"]=viewer;snapshot["revision"]=revision;snapshot["turn"]=1;
+            snapshot["active_player_id"]="one";snapshot["priority_player_id"]=viewer;
+            snapshot["phase"]="BEGINNING";snapshot["step"]="UPKEEP";snapshot["actions_complete"]=true;
+            snapshot["objects"]=new JArray();snapshot["unsupported_fields"]=new JArray();
+            snapshot["decision"]["decision_id"]=decision;snapshot["decision"]["player_id"]=viewer;
+            snapshot["decision"]["family"]="selection";snapshot["decision"]["is_priority"]=true;
+            snapshot["actions"]=new JArray(new JObject{["action_id"]="fixture-pass",["kind"]="pass",["object_id"]=null,["label"]="Pass priority",["priority_class"]="unknown"});
+            return wire;
+        }
+        private static ProjectedDecisionFrame Frame(JObject wire)=>ViewerDecisionProjection.ParseSnapshot(wire.ToString(),
+            (string)wire["body"]["snapshot"]["session_id"],(string)wire["body"]["snapshot"]["viewer_id"],0,true);
+        private static void Response(JObject wire)
+        {
+            ((JArray)wire["body"]["snapshot"]["actions"]).Add(new JObject{["action_id"]="fixture-response",["kind"]="fixture-only",["object_id"]=null,["label"]="Response",["priority_class"]="meaningful"});
+        }
+        private static void Stack(JObject wire,params string[] ids)
+        {
+            var sample=JObject.Parse(File.ReadAllText(Path.Combine(Fixtures,"wire-receive-v1.json")))["positive"][0]["envelope"]["body"]["snapshot"]["objects"][0];
+            var objects=new JArray();foreach(string id in ids){var card=sample.DeepClone();card["object_id"]=id;card["zone"]="stack";objects.Add(card);}
+            wire["body"]["snapshot"]["objects"]=objects;
+        }
+        [Test] public void DefaultIsAutomaticWithNoStopsOrYield()
+        {
+            var policy=new UnityPriorityPolicy();Assert.That(policy.Evaluate(Frame(Source())),Is.Not.Null);
+            Assert.That(policy.Current.Automatic,Is.True);Assert.That(policy.Current.Manual,Is.False);
+            Assert.That(policy.Current.Stops,Is.Empty);Assert.That(policy.Current.Yield,Is.Null);
+        }
+        [Test] public void EmptyRenderedListDoesNotProveNoResponses()
+        {
+            var wire=Source();wire["body"]["snapshot"]["actions_complete"]=false;
+            var frame=Frame(wire);Assert.That(UnityPriorityPolicy.Responses(frame),Is.EqualTo(PriorityResponse.Unknown));
+            Assert.That(new UnityPriorityPolicy().Evaluate(frame),Is.Null);
+        }
+        [Test] public void AvailableResponsesHoldPriority()
+        {
+            var wire=Source();Response(wire);var frame=Frame(wire);
+            Assert.That(UnityPriorityPolicy.Responses(frame),Is.EqualTo(PriorityResponse.Yes));
+            Assert.That(new UnityPriorityPolicy().Evaluate(frame),Is.Null);
+        }
+        [TestCase("mana")][TestCase("target")][TestCase("boolean")][TestCase("ability")][TestCase("number")][TestCase("amounts")]
+        public void ExplicitYieldNeverAnswersOtherDecisionFamilies(string family)
+        {
+            var policy=new UnityPriorityPolicy();policy.BeginYield("turn",Frame(Source()));
+            var wire=Source();wire["body"]["snapshot"]["decision"]["family"]=family;
+            Assert.That(policy.Evaluate(Frame(wire)),Is.Null);
+        }
+        [Test] public void CombatFinishWithPassActionIsNotPriority()
+        {
+            var wire=Source();wire["body"]["snapshot"]["decision"]["is_priority"]=false;
+            var policy=new UnityPriorityPolicy();policy.BeginYield("stack",Frame(Source()));
+            Assert.That(policy.Evaluate(Frame(wire)),Is.Null);
+        }
+        [Test] public void ExplicitYieldCanSkipResponsesAndCancelRestoresPrompt()
+        {
+            var wire=Source();Response(wire);var frame=Frame(wire);var policy=new UnityPriorityPolicy();
+            policy.BeginYield("turn",frame);Assert.That(policy.Evaluate(frame),Is.Not.Null);
+            policy.CancelYield();Assert.That(policy.Evaluate(frame),Is.Null);
+        }
+        [Test] public void ManualControlOverridesBothAutomaticModes()
+        {
+            var frame=Frame(Source());var policy=new UnityPriorityPolicy();policy.BeginYield("turn",frame);
+            policy.Current.Manual=true;Assert.That(policy.Evaluate(frame),Is.Null);
+            policy.CancelYield();policy.Current.Manual=false;Assert.That(policy.Evaluate(frame),Is.Not.Null);
+        }
+        [TestCase("phase","BEGINNING")][TestCase("step","UPKEEP")]
+        public void StopsOverrideAutomaticAndExplicitYield(string kind,string value)
+        {
+            var frame=Frame(Source());var policy=new UnityPriorityPolicy();policy.Observe(frame);
+            Assert.That(policy.SetStop(kind,value,true),Is.True);Assert.That(policy.Evaluate(frame),Is.Null);
+            policy.BeginYield("turn",frame);Assert.That(policy.Evaluate(frame),Is.Null);
+            policy.SetStop(kind,value,false);Assert.That(policy.Evaluate(frame),Is.Not.Null);
+        }
+        [Test] public void NextTurnYieldExpiresAtTheViewersNextTurn()
+        {
+            var wire=Source();Response(wire);var policy=new UnityPriorityPolicy();policy.BeginYield("turn",Frame(wire));
+            wire["body"]["snapshot"]["turn"]=2;wire["body"]["snapshot"]["active_player_id"]="two";
+            Assert.That(policy.Evaluate(Frame(wire)),Is.Not.Null);
+            wire["body"]["snapshot"]["turn"]=3;wire["body"]["snapshot"]["active_player_id"]="one";
+            Assert.That(policy.Evaluate(Frame(wire)),Is.Null);Assert.That(policy.Current.Yield,Is.Null);
+        }
+        [TestCase("add")][TestCase("remove")][TestCase("reorder")]
+        public void StackYieldExpiresOnMembershipOrOrderChange(string change)
+        {
+            var wire=Source();Response(wire);Stack(wire,"fixture-stack-a","fixture-stack-b");
+            var policy=new UnityPriorityPolicy();policy.BeginYield("stack",Frame(wire));
+            Assert.That(policy.Evaluate(Frame(wire)),Is.Not.Null);
+            Stack(wire,change=="add"?new[]{"fixture-stack-a","fixture-stack-b","fixture-stack-c"}
+                :change=="remove"?new[]{"fixture-stack-a"}:new[]{"fixture-stack-b","fixture-stack-a"});
+            Assert.That(policy.Evaluate(Frame(wire)),Is.Null);Assert.That(policy.Current.Yield,Is.Null);
+        }
+        [Test] public void ClaimPreventsDuplicateOrRetriedAutomaticSubmission()
+        {
+            var frame=Frame(Source());var policy=new UnityPriorityPolicy();
+            Assert.That(policy.Claim(frame),Is.True);Assert.That(policy.Claim(frame),Is.False);Assert.That(policy.Evaluate(frame),Is.Null);
+            policy.Failed();policy.Resume();Assert.That(policy.Claim(frame),Is.False);
+        }
+        [Test] public void StaleSnapshotCannotSubmit()
+        {
+            var policy=new UnityPriorityPolicy();policy.Observe(Frame(Source(revision:2)));
+            Assert.That(policy.Claim(Frame(Source(revision:1))),Is.False);
+        }
+        [Test] public void SeatSwitchCancelsYieldAndKeepsSettingsIsolated()
+        {
+            var policy=new UnityPriorityPolicy();var one=Frame(Source());policy.BeginYield("turn",one);policy.Current.Automatic=false;
+            Assert.That(policy.Evaluate(Frame(Source("two"))),Is.Not.Null);Assert.That(policy.Current.Automatic,Is.True);
+            policy.Observe(one);Assert.That(policy.Current.Automatic,Is.False);Assert.That(policy.Current.Yield,Is.Null);
+        }
+        [Test] public void FailureCancelsYieldAndPausesAutomaticPassing()
+        {
+            var frame=Frame(Source());var policy=new UnityPriorityPolicy();policy.BeginYield("turn",frame);policy.Failed();
+            Assert.That(policy.Current.Yield,Is.Null);Assert.That(policy.Evaluate(frame),Is.Null);
+            policy.Resume();Assert.That(policy.Evaluate(frame),Is.Not.Null);
+        }
+        [Test] public void GameEndAndNewSessionResetTemporaryState()
+        {
+            var policy=new UnityPriorityPolicy();var wire=Source();policy.BeginYield("turn",Frame(wire));
+            wire["message_type"]="result";wire["body"]["snapshot"]["result"]="win";wire["body"]["snapshot"]["status"]="finished";
+            wire["body"]["snapshot"]["decision"]=null;wire["body"]["snapshot"]["actions"]=new JArray();
+            Assert.That(policy.Evaluate(Frame(wire)),Is.Null);Assert.That(policy.Current.Yield,Is.Null);
+            wire=Source();wire["body"]["snapshot"]["session_id"]="fixture-new-session";
+            Assert.That(policy.Evaluate(Frame(wire)),Is.Not.Null);Assert.That(policy.Current.Stops,Is.Empty);
+        }
+        [Test] public void DisconnectSuspensionCancelsYieldAndRejectsOldFrame()
+        {
+            var policy=new UnityPriorityPolicy();var frame=Frame(Source());policy.BeginYield("turn",frame);policy.Suspend();
+            Assert.That(policy.Current.Yield,Is.Null);Assert.That(policy.Claim(frame),Is.False);
+        }
+        [Test] public void MissingTurnContextAndWrongPrioritySeatHold()
+        {
+            var wire=Source();wire["body"]["snapshot"]["turn"]=null;
+            Assert.That(new UnityPriorityPolicy().Evaluate(Frame(wire)),Is.Null);
+            wire=Source();wire["body"]["snapshot"]["priority_player_id"]="two";
+            Assert.That(new UnityPriorityPolicy().Evaluate(Frame(wire)),Is.Null);
+        }
+        [Test] public void ProjectedPriorityContextIncludesStepAndImmutableStackOrder()
+        {
+            var wire=Source();Stack(wire,"fixture-stack-a","fixture-stack-b");var frame=Frame(wire);
+            Assert.That(frame.Step,Is.EqualTo("UPKEEP"));Assert.That(frame.PriorityPlayerId,Is.EqualTo("one"));
+            CollectionAssert.AreEqual(new[]{"fixture-stack-a","fixture-stack-b"},frame.StackIds);
+            Assert.That(((System.Collections.Generic.IList<string>)frame.StackIds).IsReadOnly,Is.True);
+        }
+    }
+}
