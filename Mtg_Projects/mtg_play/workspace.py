@@ -9,6 +9,7 @@ import time
 import json
 from .assets import prepare_assets
 from .deck_preview import run_preview, PreviewLaunch
+from .live_game import run_live_game, LiveGameLaunch
 from .lobby import DeckSelection, offline_lobby
 from .navigation import ModeSelection, PlayLanding, PlayPages
 from .opponents import OpponentRandomizer
@@ -67,6 +68,11 @@ class PlayWorkspace(W.QWidget):
         self.asset_jobs.status.connect(self._assets_completed)
         self.asset_jobs.progress.connect(self._assets_progress)
         self.asset_jobs.idle.connect(self._assets_idle)
+        self._native_launch = None
+        self.native_jobs = JobQueue(self)
+        self.native_jobs.progress.connect(self._native_progress)
+        self.native_jobs.status.connect(self._native_status)
+        self.native_jobs.idle.connect(self._selection_changed)
         self._preview_launch = None
         self.preview_jobs = JobQueue(self)
         self.preview_jobs.progress.connect(self._preview_progress)
@@ -278,6 +284,30 @@ class PlayWorkspace(W.QWidget):
         )
         self.preview_button.clicked.connect(self.start_preview)
         actions.addWidget(self.preview_button)
+        self.unity_game_button = W.QPushButton("Play in Unity")
+        self.unity_game_button.setToolTip(
+            "Play Freeform 1v1 against XMage AI using the selected saved decks."
+        )
+        self.unity_game_button.setEnabled(False)
+        self.unity_game_button.clicked.connect(self.start_unity_game)
+        actions.addWidget(self.unity_game_button)
+        self.unity_payment_mode = W.QComboBox()
+        self.unity_payment_mode.setAccessibleName("Unity mana payment")
+        for label, mode in (
+            ("Auto mana", "auto"),
+            ("Manual mana", "manual"),
+            ("Full Control", "full-control"),
+        ):
+            self.unity_payment_mode.addItem(label, mode)
+        self.unity_payment_mode.setToolTip(
+            "Mana payment preference for your next Unity match. Priority remains manual."
+        )
+        actions.addWidget(self.unity_payment_mode)
+        self.close_unity_game = W.QPushButton("Close Unity Game / Cancel")
+        self.close_unity_game.clicked.connect(self._close_unity_game)
+        self.close_unity_game.hide()
+        actions.addWidget(self.close_unity_game)
+
         self.close_preview = W.QPushButton("Close Preview / Cancel")
         self.close_preview.clicked.connect(self._close_preview)
         self.close_preview.hide()
@@ -638,7 +668,23 @@ class PlayWorkspace(W.QWidget):
             if self.preview_jobs.busy
             else "Retry preview cleanup"
         )
-        preparing = self.opponents.busy or self._asset_pending is not None or previewing
+        native_playing = self.native_jobs.busy or (
+            self._native_launch is not None and self._native_launch.root is not None
+        )
+        self.unity_payment_mode.setEnabled(not native_playing)
+        self.close_unity_game.setVisible(native_playing)
+        self.close_unity_game.setText(
+            "Close Unity Game / Cancel"
+            if self.native_jobs.busy
+            else "Retry game cleanup"
+        )
+        self.unity_game_button.setEnabled(False)
+        preparing = (
+            self.opponents.busy
+            or self._asset_pending is not None
+            or previewing
+            or native_playing
+        )
         self.close_preview.setVisible(previewing)
         self.preview_button.setEnabled(
             not preparing
@@ -776,6 +822,9 @@ class PlayWorkspace(W.QWidget):
             and not preparing
             and all(selector.currentData() is not None for selector in self.selectors)
             and all(check is not None and check.can_start for check in selected_checks)
+        )
+        self.unity_game_button.setEnabled(
+            self.start_button.isEnabled() and self.format.currentData() == "freeform"
         )
 
     def start_game(self):
@@ -1109,6 +1158,83 @@ class PlayWorkspace(W.QWidget):
         self.pages.setCurrentWidget(self.setup_page)
         self._selection_changed()
 
+    def start_unity_game(self):
+        if not self.unity_game_button.isEnabled():
+            return
+        from mtg_proxy.constants import APP_VERSION
+
+        setup = self.lobby.offline_setup()
+        payment_mode = self.unity_payment_mode.currentData()
+        deck_owners = {seat.seat_id: seat.deck.owner_id for seat in self.lobby.seats}
+        documents = {
+            seat.seat_id: deepcopy(seat.deck.document) for seat in self.lobby.seats
+        }
+        sources = {
+            seat.seat_id: self._decks[selector.currentData()].path
+            for seat, selector in zip(self.lobby.seats, self.selectors)
+        }
+        self._native_launch = launch = LiveGameLaunch()
+
+        def work(cancel, report):
+            from mtg_core.decks import DeckStore
+
+            for seat, path in sources.items():
+                if path is not None:
+                    try:
+                        selected = DeckStore().load(path)
+                    except Exception:
+                        raise ValueError("UNITY_GAME_DECK_UNREADABLE") from None
+                    if selected.deck.deck_id != documents[seat].deck.deck_id:
+                        raise ValueError("UNITY_GAME_DECK_CHANGED")
+                    documents[seat] = selected
+            return run_live_game(
+                setup,
+                documents,
+                cancel,
+                report,
+                version=APP_VERSION,
+                launch=launch,
+                payment_mode=payment_mode,
+                deck_owners=deck_owners,
+            )
+
+        self.native_jobs.submit(work, quiet=True)
+        self._selection_changed()
+
+    def _close_unity_game(self):
+        if self.native_jobs.busy:
+            self.native_jobs.cancel_all()
+        elif self._native_launch is not None and self._native_launch.root is not None:
+            launch = self._native_launch
+            self.native_jobs.submit(lambda cancel, report: launch.close(), quiet=True)
+        self._selection_changed()
+
+    @C.pyqtSlot(str, object)
+    def _native_progress(self, job, value):
+        if isinstance(value, dict) and isinstance(value.get("phase"), str):
+            self._status(value["phase"])
+
+    @C.pyqtSlot(str, str, object)
+    def _native_status(self, job, state, value):
+        if state == "failed":
+            self._status(
+                {
+                    "UNITY_GAME_BUILD_MISSING": "Build the Windows Play player before starting a Unity game.",
+                    "UNITY_GAME_PRINTING_UNSUPPORTED": "A selected printing is unsupported by this Unity session.",
+                    "UNITY_GAME_SETUP_UNSUPPORTED": "Unity gameplay currently supports Freeform 1v1 with one human and one AI.",
+                }.get(
+                    value,
+                    "Unity game stopped or could not start. Saved decks are unchanged.",
+                )
+            )
+        elif state in {"completed", "cancelled"}:
+            outcome = value.get("outcome") if isinstance(value, dict) else None
+            self._status(
+                "Unity game result: " + outcome
+                if outcome in ("win", "loss", "draw")
+                else "Unity game closed. Deck selections are unchanged."
+            )
+
     def start_preview(self):
         if not self.preview_button.isEnabled():
             return
@@ -1177,6 +1303,11 @@ class PlayWorkspace(W.QWidget):
             self._status("Preview closed. Your deck selections are unchanged.")
 
     def prepare_to_close(self):
+        if self.native_jobs.busy or (
+            self._native_launch is not None and self._native_launch.root is not None
+        ):
+            self._close_unity_game()
+            return False
         if self.preview_jobs.busy or (
             self._preview_launch is not None and self._preview_launch.root is not None
         ):

@@ -134,12 +134,12 @@ public final class ManaforgeUnityOpening {
             listener.setSoTimeout(500);
             JsonObject address=new JsonObject();address.addProperty("host","127.0.0.1");address.addProperty("port",listener.getLocalPort());
             Path temporary=Paths.get(ready.toString()+".tmp");Files.write(temporary,address.toString().getBytes(StandardCharsets.UTF_8));Files.move(temporary,ready,StandardCopyOption.ATOMIC_MOVE);
-            long seconds=continuation==null?180:240;for(JsonElement action:snapshot.getAsJsonObject("body").getAsJsonObject("snapshot").getAsJsonArray("actions"))if("declare_attacker".equals(action.getAsJsonObject().get("kind").getAsString()))seconds=360;
+            long seconds=Boolean.getBoolean("manaforge.liveGame")?21600:continuation==null?180:240;for(JsonElement action:snapshot.getAsJsonObject("body").getAsJsonObject("snapshot").getAsJsonArray("actions"))if("declare_attacker".equals(action.getAsJsonObject().get("kind").getAsString()))seconds=360;
             long deadline=System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(seconds);Socket socket=null;
             while(socket==null && !cancelled.getAsBoolean() && System.nanoTime()<deadline)try{socket=listener.accept();}catch(SocketTimeoutException waiting){}
             if(socket==null)throw new IOException("LIVE_UNITY_ACCEPT_FAILED");
             try(LoopbackFrameReader frames=new LoopbackFrameReader(socket)) {
-                JsonObject client=ManaforgeOpeningLoopback.hello("live-opening","human",engine,hash,"client"),gateway=ManaforgeOpeningLoopback.hello("live-opening","human",engine,hash,"gateway");
+                JsonObject client=ManaforgeOpeningLoopback.hello(snapshot.getAsJsonObject("body").getAsJsonObject("snapshot").get("session_id").getAsString(),snapshot.getAsJsonObject("body").getAsJsonObject("snapshot").get("viewer_id").getAsString(),engine,hash,"client"),gateway=ManaforgeOpeningLoopback.hello(snapshot.getAsJsonObject("body").getAsJsonObject("snapshot").get("session_id").getAsString(),snapshot.getAsJsonObject("body").getAsJsonObject("snapshot").get("viewer_id").getAsString(),engine,hash,"gateway");
                 GatewayHandshake.ViewerContext context=ViewerChallengeHandshake.accept(frames,client.toString(),gateway.toString(),key,5000,cancelled);
                 try(ManaforgeOpeningSession owner=new ManaforgeOpeningSession(context,projection,snapshot.toString())) {
                     frames.write(snapshot.toString(),5000,cancelled);
@@ -200,7 +200,7 @@ public final class ManaforgeUnityOpening {
                         if(next!=null)throw new IOException("LIVE_UNITY_PRIORITY_STAGE_LIMIT");
                     }
                     }
-                    for(int turnStage=0;turn!=null && turnStage<(Boolean.getBoolean("manaforge.completeGame") || !System.getProperty("manaforge.combatKeyword","").isEmpty()?512:128);turnStage++) {
+                    for(int turnStage=0;turn!=null && turnStage<(Boolean.getBoolean("manaforge.liveGame")?4096:Boolean.getBoolean("manaforge.completeGame") || !System.getProperty("manaforge.combatKeyword","").isEmpty()?512:128);turnStage++) {
                         TurnOffer offer=turn;turn=null;boolean sent=false;
                         for(int retries=0;retries<8 && !sent;retries++) {
                             long remaining=java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(deadline-System.nanoTime());if(remaining<=0)throw new IOException("LIVE_UNITY_TURN_TIMEOUT");

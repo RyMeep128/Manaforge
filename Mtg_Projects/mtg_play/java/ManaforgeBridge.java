@@ -160,7 +160,13 @@ public final class ManaforgeBridge implements MageClient {
                     if (prompt.getOptions().containsKey(mage.constants.Constants.Option.POSSIBLE_BLOCKERS))
                         choice.add("blockers", JSON.toJsonTree(prompt.getOptions().get(mage.constants.Constants.Option.POSSIBLE_BLOCKERS)));
                 }
-                choice.add("targets", JSON.toJsonTree(prompt.getTargets()));
+                // Native library target prompts carry legal IDs in possibleTargets and
+                // reveal labels in CardsView. CardsView alone does not establish legality.
+                java.util.Set<UUID> offeredTargets=new java.util.LinkedHashSet<>();
+                if(prompt.getTargets()!=null)offeredTargets.addAll(prompt.getTargets());
+                if(method.equals("GAME_TARGET") && offeredTargets.isEmpty() && prompt.getOptions()!=null && prompt.getOptions().get("possibleTargets") instanceof java.util.Set)
+                    for(Object candidate:(java.util.Set<?>)prompt.getOptions().get("possibleTargets"))if(candidate instanceof UUID)offeredTargets.add((UUID)candidate);
+                choice.add("targets", JSON.toJsonTree(offeredTargets));
                 if (prompt.getChoice() != null) {
                     choice.addProperty("message", prompt.getChoice().getMessage());
                     choice.addProperty("required", prompt.getChoice().isRequired());

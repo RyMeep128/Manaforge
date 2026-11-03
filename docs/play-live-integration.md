@@ -2191,3 +2191,23 @@ accessor; tools/check_play_unity_live.py; bootstrap checks and native compile sc
 Generated Unity build-setting/scene rewrites are excluded. The Python/Qt fallback
 and the owner's unrelated working-tree edits remain intact. G0/G1 and full-game
 acceptance are still open. Stop here for owner UI review.
+
+## Saved-deck gameplay addition (0.5.211)
+
+`live_game.py` owns the normal Freeform human/AI launch using the existing private
+manifest, viewer bootstrap and authenticated native metadata channel. The lobby's
+Play in Unity button starts `ManaforgeLiveGame` and `LiveGameScene`; neither uses
+fixture setup or response scripts. Payment preference is selected before launch.
+Native turns, priority and AI remain XMage-owned.
+
+Run `python tools/check_play_unity_game.py --public-decks` for an explicit shuffled
+saved-deck acceptance with no captures. Two runs reached native wins with every
+input confirmed and cleanup proven. The test driver is enabled only by its explicit
+acceptance argument. `--casting-case countered --payment-mode manual --no-capture`
+also proves the exact native Counterspell target and both graveyard transitions.
+The `search` casting case verifies Evolution Charm's library-to-hand effect using
+native `possibleTargets`, revealed card labels and guarded object transitions.
+Unsupported decisions invalidate response authority and display a read-only return
+message. Public combat may omit departed combatants with `combat_lki`; those IDs
+never become current target authority. Broader casting/cost acceptance and visual
+review remain separate pending work.

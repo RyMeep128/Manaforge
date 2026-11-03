@@ -1,5 +1,29 @@
 # Manaforge Play — Unity + Java Roadmap
 
+### Saved-deck 1v1 integration (0.5.211)
+
+The Freeform lobby now offers Play in Unity with the selected human and native-AI
+decks and a per-match Auto/Manual/Full Control preference. Exact saved printings
+are validated before launch; canonical documents and lender provenance remain
+unchanged. Private manifest/bootstrap/metadata delivery and owned cancellation
+reuse the existing lifecycle. Python handles startup and cleanup only.
+
+Two shuffled 60-card saved-deck acceptance matches reached native wins, confirmed
+every viewer input and cleared the viewer and owned processes. The public fixture
+includes paid creatures, Evolution Charm and Walking Ballista; its explicit test
+driver is absent from normal play. Public stack objects and native offered card
+lists now project through existing contracts. Departed combatants are omitted
+with a `combat_lki` unsupported marker, never represented as live battlefield
+objects. Counterspell acceptance proves the exact native spell target and graveyard
+transitions. Focused Java projection/privacy checks (723), lobby/lifetime tests
+(62), and packaged compilation pass. CI for this increment remains pending.
+Evolution Charm library-search acceptance also confirms the native offered legal
+card, library-count reduction, new hand object and spell graveyard transition.
+
+This establishes the bounded local Freeform path, not arbitrary-card or Commander
+coverage. Changed-target, broader payment-cost acceptance and terminal responses
+outside priority passes remain open. Visual review remains unchecked.
+
 Current owner direction (0.5.193): prioritize an entire gameplay loop. Human visual
 review is deferred until that loop is complete; earlier visual-review stops do
 not block continued gameplay implementation.

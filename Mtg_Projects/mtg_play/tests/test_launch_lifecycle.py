@@ -313,7 +313,9 @@ def test_real_eof_cleanup_leaves_unrelated_process_running():
 def test_real_forced_stop_is_reported_and_does_not_claim_descendant_cleanup(
     monkeypatch,
 ):
-    monkeypatch.setattr(connection_proof, "STOP_TIMEOUT", 0.05)
+    # Allow Windows to reap a killed child under concurrent native-test load.
+    # This child never handles EOF, so the graceful deadline still forces a kill.
+    monkeypatch.setattr(connection_proof, "STOP_TIMEOUT", 1)
     owner = LaunchOwner()
     try:
         owner.start_gateway([sys.executable, "-c", "import time; time.sleep(60)"])

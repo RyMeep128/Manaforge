@@ -392,6 +392,12 @@ class LaunchOwner:
             frame[:] = b"\x00" * len(frame)
 
     @property
+    def gateway_process(self):
+        """Borrowed owned handle for launch-worker-only private bootstrap/control IO."""
+        with self._lock:
+            return self._children.get("gateway")
+
+    @property
     def client_exit_code(self):
         with self._lock:
             process = self._children.get("client")

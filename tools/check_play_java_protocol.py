@@ -70,6 +70,7 @@ def main():
             PLAY / "java/NativeCombatCase.java",
             PLAY / "java/NativeAcceptanceCase.java",
             PLAY / "java/NativeCastingCase.java",
+            PLAY / "java/NativeGameLaunch.java",
             PLAY / "java/ManaforgeMetadataChannel.java",
             PROTOCOL / "java-test/MetadataChannelChecks.java",
             PLAY / "java/ManaforgeOpeningSession.java",

@@ -39,6 +39,8 @@ def main():
             "modes",
             "additional",
             "mixed",
+            "countered",
+            "search",
         ),
         help="Native manual casting/payment acceptance",
     )

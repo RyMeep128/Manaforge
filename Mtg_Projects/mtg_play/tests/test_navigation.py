@@ -693,3 +693,39 @@ def test_unity_preview_uses_only_local_deck_and_preserves_lobby(
     ]
     assert [selector.currentData() for selector in workspace.selectors] == before
     assert not calls
+
+
+def test_unity_game_passes_both_saved_decks_and_payment_mode(
+    app, tmp_path, monkeypatch
+):
+    workspace, calls = workspace_fixture(app, tmp_path)
+    workspace.landing_page.offline_button.click()
+    workspace.format.setCurrentIndex(workspace.format.findData("freeform"))
+    workspace.format_continue.click()
+    workspace.selectors[0].setCurrentIndex(1)
+    workspace.selectors[1].setCurrentIndex(2)
+    before = [selector.currentData() for selector in workspace.selectors]
+    by_path = {deck.path: deck.document for deck in workspace._decks}
+    monkeypatch.setattr(
+        "mtg_core.decks.DeckStore.load", lambda self, path: by_path[path]
+    )
+    captured = []
+    monkeypatch.setattr(
+        "mtg_play.workspace.run_live_game",
+        lambda setup, documents, cancel, report, **kwargs: captured.append(
+            (setup, documents, kwargs)
+        ),
+    )
+    workspace.unity_payment_mode.setCurrentIndex(
+        workspace.unity_payment_mode.findData("full-control")
+    )
+    assert workspace.unity_game_button.isEnabled()
+    workspace.unity_game_button.click()
+    drain(app, lambda: not workspace.native_jobs.busy)
+    assert len(captured) == 1
+    setup, documents, kwargs = captured[0]
+    assert [seat.controller for seat in setup.seats] == ["local_human", "engine_ai"]
+    assert len(documents) == 2
+    assert kwargs["payment_mode"] == "full-control"
+    assert [selector.currentData() for selector in workspace.selectors] == before
+    assert not calls

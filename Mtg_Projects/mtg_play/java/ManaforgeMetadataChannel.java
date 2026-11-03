@@ -91,7 +91,7 @@ public final class ManaforgeMetadataChannel implements AutoCloseable {
             JsonObject client=hello(session,viewer,engine,hash,"client"),gateway=hello(session,viewer,engine,hash,"gateway");
             ViewerChallengeHandshake.accept(frames,client.toString(),gateway.toString(),key,5000,cancelled::get);
             Arrays.fill(key,(byte)0);
-            for(int count=0;count<2048 && !cancelled.get();count++) {
+            for(int count=0;count<16384 && !cancelled.get();count++) {
                 JsonObject request=validate(frames.read(60000,cancelled::get),game,viewer);
                 if(cancelled.get())return;
                 JsonObject response;

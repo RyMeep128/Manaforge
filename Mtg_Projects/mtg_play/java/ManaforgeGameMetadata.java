@@ -127,7 +127,7 @@ public final class ManaforgeGameMetadata {
                 for (JsonElement value : command.getAsJsonArray("object_ids")) requested.add(UUID.fromString(value.getAsString()));
                 for (JsonElement value : command.getAsJsonArray("identified_ids")) requestedIdentified.add(UUID.fromString(value.getAsString()));
                 if (!visible.containsAll(requested)) return status("retry");
-                visible.retainAll(requested); identified.retainAll(requestedIdentified);
+                Set<UUID> permittedTargets=new HashSet<>(visible);visible.retainAll(requested); identified.retainAll(requestedIdentified);
                 JsonObject objects = new JsonObject();
                 for (UUID id : visible) {
                     JsonObject metadata = new JsonObject();
@@ -148,6 +148,7 @@ public final class ManaforgeGameMetadata {
                             for(mage.abilities.SpellAbility ability:((mage.game.stack.Spell)stacked).getSpellAbilities())spellAbilities.add(ability.getId().toString());
                             metadata.add("spell_ability_ids",spellAbilities);
                         }
+                        if(stacked!=null && stacked.getStackAbility()!=null){JsonArray targets=new JsonArray();boolean complete=true;Set<UUID> selectedTargets=new LinkedHashSet<>();for(mage.target.Target target:stacked.getStackAbility().getTargets())selectedTargets.addAll(target.getTargets());if(selectedTargets.size()>256)complete=false;else for(UUID target:selectedTargets)if(target!=null && permittedTargets.contains(target))targets.add(target.toString());else complete=false;metadata.add("stack_targets",targets);metadata.addProperty("stack_targets_complete",complete);}
                         mage.MageObject live = permanent != null ? permanent : stacked != null ? stacked : source;
                         if (live != null) metadata.addProperty("name", live.getName());
                         if (permanent != null) {

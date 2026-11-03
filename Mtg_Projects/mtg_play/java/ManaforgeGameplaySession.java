@@ -15,6 +15,7 @@ public final class ManaforgeGameplaySession implements AutoCloseable {
         default void before(JsonObject state,JsonObject prompt,JsonObject command) throws Exception {}
         default boolean after(JsonObject state,JsonObject prompt) throws Exception {return false;}
         default void terminal(String outcome) throws Exception {}
+        default void unsupported(String code) throws Exception {}
     }
     public static final class Advance {
         final JsonObject state,prompt,terminal;
@@ -40,13 +41,23 @@ public final class ManaforgeGameplaySession implements AutoCloseable {
     public ManaforgeUnityOpening.TurnOffer offer(JsonObject state,JsonObject nativePrompt) throws Exception {
         current();if(serial>=4096)throw new IOException("GAMEPLAY_LIMIT");
         final long offered=++generation;
-        final JsonObject before=state.deepCopy(),prompt=nativePrompt.deepCopy(),guard=engine.metadata(before);
+        final JsonObject before=state.deepCopy(),prompt=nativePrompt.deepCopy();java.util.List<String> stackedIds=new java.util.ArrayList<>();for(JsonElement card:before.getAsJsonArray("stack"))stackedIds.add(card.getAsJsonObject().get("id").getAsString());final JsonObject guard=engine.metadata(before,stackedIds.toArray(new String[0]));
+        if(!new JsonPrimitive("ok").equals(guard.get("status")) || !before.get("cycle").equals(guard.get("cycle")))throw new IOException("GAMEPLAY_CONTEXT_UNPROVEN");
+        JsonObject publicView=before.deepCopy();for(JsonElement card:publicView.getAsJsonArray("stack")){JsonObject row=card.getAsJsonObject(),entry=guard.getAsJsonObject("objects").getAsJsonObject(row.get("id").getAsString());if(entry!=null){if(entry.has("controller"))row.add("stack_controller",entry.get("controller"));if(entry.has("owner"))row.add("stack_owner",entry.get("owner"));}}
         if(guard.has("combat_reselect_kind") && "GAME_SELECT".equals(prompt.get("kind").getAsString()) && new JsonPrimitive(false).equals(prompt.get("is_priority"))) {
             String key=guard.get("combat_reselect_kind").getAsString();
             if(!prompt.has(key) || !(key.equals("attackers") ^ key.equals("blockers")))throw new IOException("GAMEPLAY_RESELECT_UNPROVEN");
             for(JsonElement id:guard.getAsJsonArray("combat_reselect"))if(!prompt.getAsJsonArray(key).contains(id))prompt.getAsJsonArray(key).add(id);
         }
-        JsonObject view=envelope(projection.projectCoreCombat(before,prompt,casting));
+        JsonObject projected;
+        try{projected=projection.projectCoreCombat(publicView,prompt,casting);}catch(IOException unsupported){
+            if(!"LIVE_OPENING_PROJECTION_UNSUPPORTED".equals(unsupported.getMessage()))throw unsupported;String family=prompt.get("kind").getAsString();int line=0;for(StackTraceElement location:(unsupported.getCause()==null?unsupported:unsupported.getCause()).getStackTrace())if(location.getClassName().equals("ManaforgeOpeningProjection") && !location.getMethodName().equals("require")){line=location.getLineNumber();break;}observer.unsupported("UNSUPPORTED_"+(family.matches("[A-Z_]{1,60}")?family:"CHOICE")+"_"+line);
+            if(!Boolean.getBoolean("manaforge.liveGame"))System.err.println("Unsupported native choice: "+family+":"+line);
+            JsonObject unknown=prompt.deepCopy();unknown.addProperty("kind","GAME_ASK");unknown.addProperty("is_priority",false);unknown.remove("attackers");unknown.remove("blockers");unknown.addProperty("message","This choice is not supported yet. Return to Manaforge to end the session.");
+            projected=projection.projectCoreCombat(publicView,unknown,false);projected.add("decision",JsonNull.INSTANCE);projected.add("actions",new JsonArray());projected.getAsJsonArray("unsupported_fields").add("decision");projection.invalidateDecision();final JsonObject readonly=envelope(projected);
+            return new ManaforgeUnityOpening.TurnOffer(readonly,prompt.get("decision_id").getAsLong(),before.get("cycle").getAsLong(),command->{throw new IOException("GAMEPLAY_DECISION_UNSUPPORTED");});
+        }
+        JsonObject view=envelope(projected);
         return new ManaforgeUnityOpening.TurnOffer(view,prompt.get("decision_id").getAsLong(),before.get("cycle").getAsLong(),command->{
             current();if(offered!=generation)throw new IOException("STALE_DECISION");generation++;
             observer.before(before.deepCopy(),prompt.deepCopy(),command.deepCopy());
