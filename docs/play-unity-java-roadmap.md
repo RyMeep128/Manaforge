@@ -1,5 +1,21 @@
 # Manaforge Play — Unity + Java Roadmap
 
+### Final-input results and changed targets (0.5.212)
+
+The shared gameplay continuation now accepts guarded native terminal results
+after supported cost, numeric, choice and target inputs, using the same exact
+input validation as ordinary continuation. It does not invent a next decision.
+The earlier strict combat-only evidence API remains unchanged. Numeric/target
+terminal checks reject out-of-range, stale, wrong-seat and mismatched receipts.
+
+Packaged `--casting-case changed-target --payment-mode manual --no-capture`
+passes: a native Giant Growth target is bound, Fling sacrifices that exact Memnite
+while Growth remains stacked, both instants reach the graveyard and the opponent
+takes one damage. Every viewer input confirms and cleanup completes. The fixture
+uses current public untapped land references when choosing colored sources.
+Focused Java projection checks (734), Unity projection tests (21) and the packaged
+build pass. Broader cost acceptance remains pending; visual review is unchecked.
+
 ### Saved-deck 1v1 integration (0.5.211)
 
 The Freeform lobby now offers Play in Unity with the selected human and native-AI

@@ -41,6 +41,7 @@ def main():
             "mixed",
             "countered",
             "search",
+            "changed-target",
         ),
         help="Native manual casting/payment acceptance",
     )

@@ -10,7 +10,7 @@ public final class NativeGameLaunch {
     public NativeGameLaunch(LaunchManifest manifest) throws IOException {
         if(manifest==null || !"freeform".equals(manifest.format) || manifest.seats.length!=2)throw new IOException("UNITY_GAME_SETUP_UNSUPPORTED");
         this.manifest=manifest;LaunchSeat h=null,a=null;
-        for(LaunchSeat seat:manifest.seats){if(seat.document.deck.commander_entry_ids.length!=0 || seat.document.deck.companion_entry_id!=null)throw new IOException("UNITY_GAME_SETUP_UNSUPPORTED");if(!seat.seat_id.matches("[A-Za-z0-9_.:-]{1,128}"))throw new IOException("UNITY_GAME_SEAT_INVALID");if(seat.controller.equals("local_human")){if(h!=null)throw new IOException("UNITY_GAME_SETUP_UNSUPPORTED");h=seat;}else{if(a!=null)throw new IOException("UNITY_GAME_SETUP_UNSUPPORTED");a=seat;}}
+        for(LaunchSeat seat:manifest.seats){if(seat.document.deck.commander_entry_ids.length!=0 || seat.document.deck.companion_entry_id!=null)throw new IOException("UNITY_GAME_SETUP_UNSUPPORTED");if(!seat.seat_id.matches("[A-Za-z0-9_.:-]{1,128}"))throw new IOException("UNITY_GAME_SEAT_INVALID");if(seat.controller.equals("local_human")){if(h!=null)throw new IOException("UNITY_GAME_SETUP_UNSUPPORTED");h=seat;}else if(seat.controller.equals("engine_ai")){if(a!=null)throw new IOException("UNITY_GAME_SETUP_UNSUPPORTED");a=seat;}else throw new IOException("UNITY_GAME_SETUP_UNSUPPORTED");}
         if(h==null || a==null || !manifest.manifest_id.matches("[A-Za-z0-9_.:-]{1,128}"))throw new IOException("UNITY_GAME_SETUP_UNSUPPORTED");human=h;ai=a;
         cards(false,false);cards(true,false);cards(false,true);cards(true,true);
     }

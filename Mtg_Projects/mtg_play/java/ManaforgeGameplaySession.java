@@ -66,7 +66,7 @@ public final class ManaforgeGameplaySession implements AutoCloseable {
             Advance next=engine.advance(prompt.get("decision_id").getAsLong());
             if(next.terminal!=null) {
                 JsonObject terminal=engine.terminalMetadata(before);
-                NativeCastCorrelation.TurnDecisionEvidence proof=NativeCastCorrelation.terminalCombatEvidence(before,prompt,command,guard,accepted,terminal,next.terminal);
+                NativeCastCorrelation.TurnDecisionEvidence proof=NativeCastCorrelation.terminalGameplayEvidence(before,prompt,command,guard,accepted,terminal,next.terminal);
                 if(proof==null)throw new IOException("GAMEPLAY_TERMINAL_UNPROVEN");
                 String outcome=terminal.get("outcome").getAsString();observer.terminal(outcome);
                 JsonObject result=envelope(projection.projectCombatResult(next.state,outcome));result.addProperty("message_type","result");stopped=true;
