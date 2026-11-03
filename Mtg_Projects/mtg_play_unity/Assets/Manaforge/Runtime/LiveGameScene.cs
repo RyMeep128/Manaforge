@@ -54,8 +54,9 @@ namespace Manaforge.Play
                 }
                 yield return null;
             }
-            Write("game-closing",new JObject{["live_game_version"]=1,["requested"]=quit});var final=Volatile.Read(ref latest);
-            if(final?.Result!=null){presentation.Present(final);yield return new WaitForEndOfFrame();if(acceptance!=null && ArtworkFixtureScene.Argument("-manaforgeNoCapture")!="1")ScreenCapture.CaptureScreenshot(Path.Combine(output,"result.png"));yield return new WaitForSecondsRealtime(acceptance!=null?.3f:3f);}
+            var final=Volatile.Read(ref latest);
+            if(final?.Result!=null){presentation.Present(final);yield return new WaitForEndOfFrame();if(acceptance!=null && ArtworkFixtureScene.Argument("-manaforgeNoCapture")!="1")ScreenCapture.CaptureScreenshot(Path.Combine(output,"result.png"));if(acceptance!=null)yield return new WaitForSecondsRealtime(.3f);else while(!quit){host.Tick();yield return null;}}
+            Write("game-closing",new JObject{["live_game_version"]=1,["requested"]=quit});
             if(spatialAcceptance!=null){Write("board-input-proof",new JObject{["card_keyboard_inputs"]=spatialAcceptance.Inputs});spatialAcceptance.Dispose();}
             host.Cancel();host.Tick();host.Dispose();presentation.Dispose();while(!consuming.IsCompleted)yield return null;
             bool cleared=document.rootVisualElement.Query<CardView>().ToList().Count==0;Write("game-closed",new JObject{["live_game_version"]=1,["outcome"]=final?.Result,["user_requested"]=userRequested,["snapshots"]=Volatile.Read(ref snapshots),["confirmed"]=Volatile.Read(ref confirmed),["uncertain"]=Volatile.Read(ref uncertain),["viewer_cleared"]=cleared,["cleanup_confirmed"]=host.Completion.Result.CleanupConfirmed});

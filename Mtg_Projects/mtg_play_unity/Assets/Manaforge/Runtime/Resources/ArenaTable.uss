@@ -56,3 +56,21 @@
 .library-flight { position: absolute; width: 80px; height: 112px; color: rgb(208,168,89); font-size: 38px; -unity-text-align: middle-center; }
 
 #arena-table.opening-state #local-seat { left: 14%; bottom: 70px; }
+
+/* Public zones and hover inspection share the live surface; no duplicate card renderer. */
+#public-zone-choices { position: absolute; left: 18px; bottom: 92px; width: 160px; }
+#public-zone-choices Button { color: rgb(231,215,184); background-color: rgba(12,18,24,.88); border-width: 1px; border-color: rgb(120,102,73); border-radius: 5px; min-height: 30px; margin-top: 4px; white-space: normal; font-size: 13px; }
+#public-zone-choices Button:hover, #public-zone-choices Button:focus, #public-zone-choices .zone-open { border-color: rgb(255,213,128); background-color: rgb(54,43,29); }
+#public-zone-drawer { position: absolute; left: 150px; right: 150px; top: 24%; bottom: 29%; background-color: rgba(7,13,20,.97); border-width: 1px; border-color: rgb(172,139,83); border-radius: 12px; padding: 18px; }
+#public-zone-title { font-size: 22px; color: rgb(242,219,173); }
+#close-public-zone { position: absolute; right: 16px; top: 14px; height: 30px; color: rgb(242,219,173); background-color: rgb(41,36,29); }
+#close-public-zone:focus, #close-inspection:focus { border-width: 2px; border-color: rgb(255,220,147); }
+#stack-title { position: absolute; right: 20px; top: 31%; width: 130px; font-size: 13px; color: rgb(231,207,160); -unity-text-align: middle-center; }
+#hand-navigation { height: 26px; }
+#arena-table #game-leave { color: rgb(239,222,186); }
+#arena-table .table-inspection { border-width: 2px; border-color: rgb(218,177,103); }
+#arena-table #table-result { padding-top: 44px; padding-bottom: 44px; }
+#arena-table #decision-status { color: rgb(208,202,190); }
+#arena-table #viewer-decision-panel.command-pending { border-left-width: 3px; border-left-color: rgb(101,185,222); }
+#arena-table #viewer-decision-panel.command-uncertain { border-left-width: 3px; border-left-color: rgb(245,175,78); }
+#arena-table #viewer-decision-panel.command-confirmed { border-left-width: 3px; border-left-color: rgb(146,201,148); }

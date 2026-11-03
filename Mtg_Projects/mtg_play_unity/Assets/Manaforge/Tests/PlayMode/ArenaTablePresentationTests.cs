@@ -54,6 +54,22 @@ namespace Manaforge.Play.Tests
                 Assert.That(table.Surface.TryPresent(ticket,ViewerCardProjection.ParseSnapshot(envelope.ToString(),session,viewer,0,true)),Is.True);
                 table.Present(ViewerDecisionProjection.ParseSnapshot(envelope.ToString(),session,viewer,0,true));yield return null;
                 table.Surface.VisitPresented((card,view)=>{if(card.Zone=="command")Assert.That(view.resolvedStyle.display,Is.EqualTo(DisplayStyle.Flex),"Both public command zones remain available for inspection and native offers");});
+                // Large hands stay selectable through keyboard paging; public-zone browsing
+                // preserves authenticated ownership even when every card has the same name.
+                for(int i=0;i<30;i++){var extra=cards[0].DeepClone();extra["object_id"]="hand-"+i;cards.Add(extra);}
+                for(int i=0;i<2;i++){var extra=original.DeepClone();extra["object_id"]="grave-"+i;extra["zone"]="graveyard";extra["owner_id"]=i==0?viewer:other;extra["controller_id"]=null;cards.Add(extra);}
+                snapshot["revision"]=(long)snapshot["revision"]+1;
+                Assert.That(table.Surface.TryPresent(ticket,ViewerCardProjection.ParseSnapshot(envelope.ToString(),session,viewer,0,true)),Is.True);
+                table.Present(ViewerDecisionProjection.ParseSnapshot(envelope.ToString(),session,viewer,0,true));yield return null;
+                var handNext=doc.rootVisualElement.Q<Button>("hand-next");Assert.That(handNext,Is.Not.Null);
+                using(var submit=NavigationSubmitEvent.GetPooled()){submit.target=handNext;handNext.SendEvent(submit);}yield return null;
+                Assert.That(views["table-0"].resolvedStyle.display,Is.EqualTo(DisplayStyle.None));
+                var graveButton=doc.rootVisualElement.Q<Button>("opponent-graveyard");Assert.That(graveButton,Is.Not.Null);
+                using(var submit=NavigationSubmitEvent.GetPooled()){submit.target=graveButton;graveButton.SendEvent(submit);}yield return null;
+                table.Surface.VisitPresented((card,view)=>{if(card.ObjectId=="grave-1")Assert.That(view.resolvedStyle.display,Is.EqualTo(DisplayStyle.Flex));if(card.ObjectId=="grave-0")Assert.That(view.resolvedStyle.display,Is.EqualTo(DisplayStyle.None));});
+                var closeZone=doc.rootVisualElement.Q<Button>("close-public-zone");
+                using(var submit=NavigationSubmitEvent.GetPooled()){submit.target=closeZone;closeZone.SendEvent(submit);}yield return null;
+                table.Surface.VisitPresented((card,view)=>{if(card.Zone=="graveyard")Assert.That(view.resolvedStyle.display,Is.EqualTo(DisplayStyle.None));});
                 Assert.That(table.Surface.ClearViewer(ticket),Is.True);int visited=0;table.Surface.VisitPresented((c,v)=>visited++);Assert.That(visited,Is.Zero);Assert.That(table.Surface.CardsRoot.childCount,Is.Zero);
             }finally{table.Dispose();Object.Destroy(gameObject);Object.Destroy(settings);}
             yield return null;
