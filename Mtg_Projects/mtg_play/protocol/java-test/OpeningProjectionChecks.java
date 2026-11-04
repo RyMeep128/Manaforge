@@ -795,7 +795,11 @@ public final class OpeningProjectionChecks {
         NativeLaunchEntry duplicate = new Gson().fromJson(new Gson().toJson(original), NativeLaunchEntry.class);
         duplicate.entry_id = "same-rules-different-art"; duplicate.card_id = "another-print";
         manifest.seats[0].document.deck.entries = new NativeLaunchEntry[]{original, duplicate};
-        check(!new NativeGameLaunch(manifest).bindings().containsKey("TRK/325"));
+        check(new NativeGameLaunch(manifest).bindings().get("TRK/325").printing_id.equals("another-print"));
+        check(new NativeGameLaunch(manifest).bindings().get("TRK/325").deck_entry_id==null);
+        check(new NativeGameLaunch(manifest).bindings().containsKey("opponent/TRK/325"));
+        check(new NativeGameLaunch(manifest).bindings().get("opponent/TRK/325").deck_entry_id==null);
+        duplicate.oracle_id="different-oracle";check(!new NativeGameLaunch(manifest).bindings().containsKey("TRK/325"));duplicate.oracle_id=original.oracle_id;
         duplicate.card_id = original.card_id;
         check(new NativeGameLaunch(manifest).bindings().get("TRK/325").printing_id.equals(original.card_id));
         check(new NativeGameLaunch(manifest).bindings().get("TRK/325").deck_entry_id == null);

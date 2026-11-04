@@ -15,6 +15,9 @@ namespace Manaforge.Play
         private ProjectedCardFrame latest;
         private long newestRevision=-1,minimumRevision,bytes;
         private bool stopped;
+        private System.Threading.Tasks.TaskCompletionSource<bool> space=NewSpace();
+        private static System.Threading.Tasks.TaskCompletionSource<bool> NewSpace()=>new System.Threading.Tasks.TaskCompletionSource<bool>(System.Threading.Tasks.TaskCreationOptions.RunContinuationsAsynchronously);
+        private void SignalSpace(){var previous=space;space=NewSpace();previous.TrySetResult(true);}
         internal ViewerRenderMailbox(ViewerSurfaceTicket ticket,int maximumArtwork,long maximumBytes)
         {ValidateLimits(maximumArtwork,maximumBytes);this.ticket=ticket;this.maximumArtwork=maximumArtwork;this.maximumBytes=maximumBytes;}
         internal static void ValidateLimits(int count,long bytes)
@@ -25,7 +28,7 @@ namespace Manaforge.Play
         public long ArtworkBytes {get{lock(gate)return bytes;}}
         public bool HasPendingFrame {get{lock(gate)return latest!=null;}}
         private void ClearArtwork()
-        {while(artwork.Count>0)artwork.Dequeue().Dispose();requests.Clear();bytes=0;}
+        {while(artwork.Count>0)artwork.Dequeue().Dispose();requests.Clear();bytes=0;SignalSpace();}
         // Coalesces immutable snapshots, not game events, command receipts or wire history.
         public bool TryPostFrame(ProjectedCardFrame frame)
         {
@@ -59,15 +62,25 @@ namespace Manaforge.Play
         // Consumes the completion on every non-null call, including rejection after shutdown.
         public bool TryPostArtwork(PreparedCardArtwork prepared)
         {
+            int result=PostArtworkDeferred(prepared,out _);
+            if(result==0)prepared.Dispose();
+            return result==1;
+        }
+        // 1 transfers ownership, -1 rejects/consumes, 0 retains producer ownership
+        // until the bounded queue drains. A stale epoch wakes and rejects promptly.
+        internal int PostArtworkDeferred(PreparedCardArtwork prepared,out System.Threading.Tasks.Task available)
+        {
             if(prepared==null)throw new ArgumentNullException(nameof(prepared));
             lock(gate) {
-                if(artwork.Contains(prepared))return false; // Already owned: do not clear its queued buffer.
+                available=null;
+                if(artwork.Contains(prepared))return -1; // Already owned: do not clear its queued buffer.
                 long size=(long)prepared.Width*prepared.Height*4;var request=prepared.Request;
                 if(stopped || prepared.IsDisposed || !ReferenceEquals(request.Ticket,ticket) || request.Revision!=newestRevision
-                    || request.Revision<minimumRevision || requests.Contains(request) || artwork.Count>=maximumArtwork || size>maximumBytes-bytes) {
-                    prepared.Dispose();return false;
+                    || request.Revision<minimumRevision || requests.Contains(request) || size>maximumBytes) {
+                    prepared.Dispose();return -1;
                 }
-                artwork.Enqueue(prepared);requests.Add(request);bytes+=size;return true;
+                if(artwork.Count>=maximumArtwork || size>maximumBytes-bytes){available=space.Task;return 0;}
+                artwork.Enqueue(prepared);requests.Add(request);bytes+=size;return 1;
             }
         }
         public bool TryPeekFrame(out ProjectedCardFrame frame){lock(gate){frame=stopped?null:latest;return frame!=null;}}
@@ -76,7 +89,7 @@ namespace Manaforge.Play
         {
             lock(gate) {
                 prepared=null;if(stopped || latest!=null || artwork.Count==0)return false;
-                prepared=artwork.Dequeue();requests.Remove(prepared.Request);bytes-=(long)prepared.Width*prepared.Height*4;return true;
+                prepared=artwork.Dequeue();requests.Remove(prepared.Request);bytes-=(long)prepared.Width*prepared.Height*4;SignalSpace();return true;
             }
         }
         public void Dispose(){lock(gate){if(stopped)return;stopped=true;latest=null;ClearArtwork();}}

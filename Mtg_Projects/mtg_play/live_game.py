@@ -244,6 +244,7 @@ def run_live_game(
     commander_scenario="single",
     no_capture=False,
     rules_text_proof=None,
+    artwork_proof=None,
     presentation="current",
     xmage_root=transport.DEFAULT_BUNDLE,
     jdk_path=transport.DEFAULT_JDK,
@@ -394,7 +395,13 @@ def run_live_game(
                 raise LiveGameError("UNITY_GAME_READY_INVALID")
             return json.loads(path.read_text(encoding="utf-8"))
 
+        public_artwork = None
         try:
+            from .public_artwork import PublicArtworkServer
+
+            public_artwork = PublicArtworkServer(
+                root, manifest["manifest_id"], human["seat_id"]
+            )
             report(dict(phase="Starting native Unity game"))
             owner.start_gateway(
                 [
@@ -407,6 +414,7 @@ def run_live_game(
                     "-Dmanaforge.commanderAcceptance="
                     + str(acceptance and setup.format == "commander").lower(),
                     "-Dmanaforge.paymentMode=" + payment_mode.upper().replace("-", "_"),
+                    "-Dmanaforge.publicArtwork=" + str(root / "artwork/manifest.json"),
                     "-cp",
                     str(server.parent / "classes") + os.pathsep + str(server / "lib/*"),
                     "ManaforgeLiveGame",
@@ -459,6 +467,13 @@ def run_live_game(
             command += ["-manaforgePresentation", presentation]
             if rules_text_proof is not None:
                 command += ["-manaforgeRulesTextProof", "1"]
+            if artwork_proof is not None:
+                command += [
+                    "-manaforgeArtworkProof",
+                    "1",
+                    "-manaforgeGameAcceptance",
+                    "1",
+                ]
             if no_capture:
                 command += ["-manaforgeNoCapture", "1"]
             if acceptance:
@@ -468,8 +483,9 @@ def run_live_game(
                     "-manaforgeCommanderScenario",
                     commander_scenario,
                 ]
-            artwork_directory, artwork_pin = prepare_local_artwork(
-                human["document"], root, manifest["manifest_id"], human["seat_id"]
+            artwork_directory, artwork_pin = (
+                public_artwork.directory,
+                public_artwork.pin,
             )
             owner.start_client(
                 command,
@@ -510,6 +526,22 @@ def run_live_game(
             if owner.client_exit_code != 0:
                 raise LiveGameError("UNITY_GAME_PLAYER_FAILED")
             closed = wait_json("game-closed", 1)
+            if artwork_proof is not None:
+                certificate = wait_json("artwork-proof", 1)
+                if not all(
+                    certificate.get(key) is True
+                    for key in ("mountain", "opponent", "token")
+                ):
+                    raise LiveGameError("UNITY_ARTWORK_UNPROVEN")
+                destination = Path(artwork_proof)
+                destination.mkdir(parents=True, exist_ok=False)
+                for name in (
+                    "artwork-proof.json",
+                    "artwork-mountain.png",
+                    "artwork-opponent.png",
+                    "artwork-token.png",
+                ):
+                    shutil.copyfile(root / name, destination / name)
             if rules_text_proof is not None:
                 certificate = wait_json("rules-text-proof", 1)
                 if (
@@ -566,11 +598,28 @@ def run_live_game(
             result = closed
         finally:
             key[:] = bytes(len(key))
-            if rules_text_proof is not None and (root / "player.log").is_file():
-                destination = Path(rules_text_proof)
+            if rules_text_proof is not None or artwork_proof is not None:
+                destination = Path(rules_text_proof or artwork_proof)
                 destination.mkdir(parents=True, exist_ok=True)
-                shutil.copyfile(root / "player.log", destination / "player.log")
-            launch.close()
+                for name in (
+                    "player.log",
+                    "mageserver.log",
+                    "game-error.json",
+                    "game-unsupported.json",
+                    "game-closed.json",
+                    "artwork-progress.json",
+                    "artwork-progress.png",
+                    "artwork-mountain.png",
+                    "artwork-opponent.png",
+                    "artwork-token.png",
+                ):
+                    if (root / name).is_file():
+                        shutil.copyfile(root / name, destination / name)
+            try:
+                launch.close()
+            finally:
+                if public_artwork is not None:
+                    public_artwork.close()
 
     try:
         report(dict(phase="Preparing pinned native engine"))

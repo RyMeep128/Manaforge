@@ -21,6 +21,9 @@ namespace Manaforge.Play
         private ProjectedDecisionFrame latest;private string output;private bool quit,ready,userRequested;private int snapshots,confirmed,uncertain,availableLands,availableCreatures;
         private int reviewResolution;private bool resolutionPending,resolutionRestored;private Vector2Int reviewOriginalSize;private readonly JArray resolutionEvidence=new JArray();
         private long captureRevision=-1;private float captureReady;private readonly System.Collections.Generic.HashSet<string> captures=new System.Collections.Generic.HashSet<string>();
+        private readonly System.Collections.Generic.HashSet<string> artworkProof=new System.Collections.Generic.HashSet<string>();
+        private readonly JArray artworkEvidence=new JArray();
+        private long artworkProgressRevision=-1;
         private IGameplayPresentation presentation;private Func<VisualElement,IGameplayPresentation> presentationFactory=root=>new ArenaGameplayPresentation(root);private LiveGameAcceptanceDriver acceptance;private SpatialInputAcceptance spatialAcceptance;
         public void SetPresentationFactory(Func<VisualElement,IGameplayPresentation> factory){if(document!=null)throw new InvalidOperationException("PRESENTATION_ALREADY_STARTED");presentationFactory=factory??throw new ArgumentNullException(nameof(factory));}
         private void Write(string name,JObject value){string temporary=Path.Combine(output,name+".tmp");File.WriteAllText(temporary,value.ToString());File.Move(temporary,Path.Combine(output,name+".json"));}
@@ -51,6 +54,7 @@ namespace Manaforge.Play
                 if(frame!=null && host.HasPresentedRevision(frame.Context.Revision)){
                     if(!ready){ready=true;Write("game-ready",new JObject{["live_game_version"]=1,["authenticated"]=host.Authenticated});}
                     presentation.Present(frame);
+                    if(ArtworkFixtureScene.Argument("-manaforgeArtworkProof")=="1" && frame.Result==null && frame.Decision==null && frame.Actions.Count==0) {yield return null;continue;}
                     if(ArtworkFixtureScene.Argument("-manaforgeRulesTextProof")=="1") {
                         ProjectedCard proofCard=null;
                         surface.VisitPresented((card,view)=>{if(proofCard==null && !card.Hidden && card.Zone=="hand")proofCard=card;});
@@ -86,6 +90,26 @@ namespace Manaforge.Play
             if(ArtworkFixtureScene.Argument("-manaforgeNoCapture")=="1")return true;
             if(captureRevision!=frame.Context.Revision){captureRevision=frame.Context.Revision;captureReady=Time.unscaledTime+.35f;return false;}
             if(Time.unscaledTime<captureReady)return false;
+            if(ArtworkFixtureScene.Argument("-manaforgeArtworkProof")=="1") {
+                if(artworkProgressRevision!=frame.Context.Revision) {
+                    artworkProgressRevision=frame.Context.Revision;
+                    File.WriteAllText(Path.Combine(output,"artwork-progress.json"),new JObject{["revision"]=frame.Context.Revision,["prompt"]=frame.Decision?.Prompt,["family"]=frame.Decision?.Family,["actions"]=new JArray(frame.Actions.Select(a=>a.Label)),["completed"]=new JArray(artworkProof),["expected"]=surface.ExpectedArtworkCount,["presented"]=surface.PresentedArtworkCount}.ToString());
+                    ScreenCapture.CaptureScreenshot(Path.Combine(output,"artwork-progress.png"));
+                }
+                if(surface.ExpectedArtworkCount>surface.PresentedArtworkCount && Time.unscaledTime<captureReady+15)return false;
+                bool recorded=false;
+                surface.VisitPresented((card,view)=>{
+                    if(card.Hidden || card.Zone!="battlefield" || view.Artwork==null)return;
+                    string category=card.Characteristics?.Name=="Goblin" || card.Characteristics?.Name=="Goblin Token"?"token":card.OwnerId!=frame.Context.ViewerId?"opponent":card.Characteristics?.Name=="Mountain"?"mountain":null;
+                    if(category!=null && artworkProof.Add(category)) {
+                        artworkEvidence.Add(new JObject{["category"]=category,["name"]=card.Characteristics.Name,["printing_id"]=card.Printing?.PrintingId,["oracle_id"]=card.Printing?.OracleId});
+                        ScreenCapture.CaptureScreenshot(Path.Combine(output,"artwork-"+category+".png"));recorded=true;
+                    }
+                });
+                if(recorded){captureReady=Time.unscaledTime+.3f;return false;}
+                if(artworkProof.Count==3){Write("artwork-proof",new JObject{["mountain"]=true,["opponent"]=true,["token"]=true,["authenticated"]=host.Authenticated,["cards"]=artworkEvidence});userRequested=true;quit=true;return false;}
+                return true;
+            }
             if(!(frame.Decision?.Prompt??"").StartsWith("Mulligan",StringComparison.OrdinalIgnoreCase) && document.rootVisualElement.Query<VisualElement>(className:"library-flight").ToList().Count>0 && captures.Add("draw")){ScreenCapture.CaptureScreenshot(Path.Combine(output,"draw.png"));captureReady=Time.unscaledTime+.15f;return false;}
             string state=frame.Result!=null?"result":frame.Combat.Count>0?"combat":(frame.Decision?.Prompt??"").StartsWith("Mulligan",StringComparison.OrdinalIgnoreCase)?"opening":frame.Actions.Any(a=>a.Kind=="cast")?"casting":"priority";
             int permanents=0;surface.VisitPresented((card,view)=>{if(card.Zone=="battlefield")permanents++;});

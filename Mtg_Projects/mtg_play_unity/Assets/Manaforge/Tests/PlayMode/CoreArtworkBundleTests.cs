@@ -54,6 +54,31 @@ namespace Manaforge.Play.Tests
             entry["printed_rules"]=new string('x',16385);Publish();
             var oversized=CoreArtworkBundle.OpenAsync(root,pin,"fixture-0001","one");yield return Until(oversized);AssertInvalid(oversized);
         }
+        [UnityTest] public IEnumerator PublicTokenPixelsLoadOnlyThroughThePinnedLoopbackResolver()
+        {
+            var listener=new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback,0);listener.Start();
+            int port=((System.Net.IPEndPoint)listener.LocalEndpoint).Port;string secret=new string('a',64);
+            manifest["artwork_bundle_version"]=3;manifest["entries"]=new JArray();manifest["resolver"]=new JObject{["host"]="127.0.0.1",["port"]=port,["key"]=secret};Publish();
+            var serving=Task.Run(()=>{
+                using(var client=listener.AcceptTcpClient())using(var stream=client.GetStream()){
+                    var query=JObject.Parse(Manaforge.Play.Protocol.TextFrame.Read(stream));
+                    Assert.That((string)query["key"],Is.EqualTo(secret));Assert.That((string)query["viewer_id"],Is.EqualTo("one"));
+                    var pixels=new byte[16];var response=new JObject{["oracle_id"]="oracle",["printing_id"]="exact-printing",["face_key"]="front",["layout"]="token",["standard_compatible"]=false,["printed_type_line"]="Token Creature — Goblin",["printed_name"]="Goblin",["printed_rules"]="",["printed_mana_cost"]=JValue.CreateNull(),["width"]=2,["height"]=2,["byte_length"]=16,["sha256"]=Digest(pixels)};
+                    Manaforge.Play.Protocol.TextFrame.Write(stream,response.ToString(Newtonsoft.Json.Formatting.None));stream.Write(pixels,0,pixels.Length);
+                }
+            });
+            try{
+                var open=CoreArtworkBundle.OpenAsync(root,pin,"fixture-0001","one");yield return Until(open);
+                using(var bundle=open.GetAwaiter().GetResult()){
+                    var ticket=surface.BeginViewer("fixture-0001","one",new ViewerArtworkScope());yield return null;yield return null;yield return null;
+                    surface.TryPresent(ticket,ViewerCardSurfaceTests.Frame(artwork:true));
+                    var load=bundle.LoadAsync(surface.RequestArtwork(ticket,"fixture-0002"),CancellationToken.None);yield return Until(load);
+                    var prepared=load.GetAwaiter().GetResult();Assert.That(prepared.Catalog.Layout,Is.EqualTo("token"));
+                    Assert.That(surface.TryApplyArtwork(ticket,prepared),Is.True);Assert.That(surface.PresentedArtworkCount,Is.EqualTo(1));
+                    yield return Until(serving);serving.GetAwaiter().GetResult();
+                }
+            }finally{listener.Stop();}
+        }
         [UnityTest] public IEnumerator PinnedPixelsReachTheOwnedRendererThroughJobs()
         {
             // Optional local cross-language evidence; synthetic checks always run without it.

@@ -19,6 +19,7 @@ namespace Manaforge.Play
         private readonly string root,session,viewer;
         private readonly Dictionary<string,Entry> entries=new Dictionary<string,Entry>(StringComparer.Ordinal);
         private bool disposed;private bool previewOnly;
+        private int resolverPort;private string resolverKey;
         internal sealed class Entry
         {public CatalogArtworkFace Catalog;public string File,Digest;public int Width,Height,Bytes;}
         private static readonly Regex Hash=new Regex("^[0-9a-f]{64}$",RegexOptions.CultureInvariant);
@@ -63,13 +64,20 @@ namespace Manaforge.Play
                 string root=Path.GetFullPath(directory);bytes=Read(root,"manifest.json",1024*1024,cancellation);
                 if(Digest(bytes)!=pin)throw Invalid();
                 var manifest=WireEnvelope.ParseObject(new UTF8Encoding(false,true).GetString(bytes));
-                Fields(manifest,"artwork_bundle_version","source","session_id","viewer_id","entries","unavailable");
-                int version=Number(manifest["artwork_bundle_version"],2);
+                int version=Number(manifest["artwork_bundle_version"],3);
+                if(version==3)Fields(manifest,"artwork_bundle_version","source","session_id","viewer_id","entries","unavailable","resolver");
+                else Fields(manifest,"artwork_bundle_version","source","session_id","viewer_id","entries","unavailable");
                 if(Text(manifest["source"])!="manaforge_core_cache"
                     || Text(manifest["session_id"])!=session || Text(manifest["viewer_id"])!=viewer)throw Invalid();
                 if(!(manifest["entries"] is JArray records) || !(manifest["unavailable"] is JArray missing)
-                    || records.Count+missing.Count<(previewOnly?0:1) || records.Count+missing.Count>256)throw Invalid();
+                    || records.Count+missing.Count<(previewOnly || version==3?0:1) || records.Count+missing.Count>256)throw Invalid();
                 bundle=new CoreArtworkBundle(root,session,viewer){previewOnly=previewOnly};var seen=new HashSet<string>(StringComparer.Ordinal);var files=new Dictionary<string,int>();long total=0;
+                if(version==3) {
+                    if(previewOnly || records.Count!=0 || missing.Count!=0)throw Invalid();
+                    var resolver=manifest["resolver"];Fields(resolver,"host","port","key");
+                    if(Text(resolver["host"])!="127.0.0.1" || !Hash.IsMatch(Text(resolver["key"])))throw Invalid();
+                    bundle.resolverPort=Number(resolver["port"],65535);bundle.resolverKey=Text(resolver["key"]);
+                }
                 foreach(var record in records) {
                     cancellation.ThrowIfCancellationRequested();
                     var fields=new List<string>{"oracle_id","printing_id","face_key","layout","face_count","standard_compatible","printed_type_line","file","width","height","byte_length","sha256","pixel_format","row_origin"};
@@ -105,9 +113,13 @@ namespace Manaforge.Play
                 lock(gate) {
                     if(disposed)throw Invalid();
                     if(request==null || request.Ticket.SessionId!=session || request.Ticket.ViewerId!=viewer)throw Invalid();
-                    if(!entries.TryGetValue(request.PrintingId,out entry))return null;
-                    if(entry.Catalog.OracleId!=request.OracleId)throw Invalid();
+                    if(!entries.TryGetValue(request.PrintingId,out entry)) {
+                        if(resolverPort==0)return null;
+                        entry=null;
+                    }
+                    if(entry!=null && entry.Catalog.OracleId!=request.OracleId)throw Invalid();
                 }
+                if(entry==null)return LoadPublic(request,cancellation);
                 bytes=Read(root,entry.File,entry.Bytes,cancellation);
                 if(bytes.Length!=entry.Bytes || Digest(bytes)!=entry.Digest)throw Invalid();
                 prepared=PreparedCardArtwork.Prepare(request,entry.Catalog,entry.Width,entry.Height,bytes);
@@ -116,6 +128,36 @@ namespace Manaforge.Play
             catch(OperationCanceledException){prepared?.Dispose();throw;}
             catch{prepared?.Dispose();throw Invalid();}
             finally{if(bytes!=null)Array.Clear(bytes,0,bytes.Length);}
+        }
+        // Public catalog requests happen only on artwork workers, after the surface
+        // has admitted a visible printing. No hidden deck inventory reaches Unity.
+        private PreparedCardArtwork LoadPublic(ViewerArtworkRequest request,CancellationToken cancellation)
+        {
+            byte[] pixels=null;
+            try {
+                int port;string key;lock(gate){if(disposed)throw Invalid();port=resolverPort;key=resolverKey;}
+                using(var client=new System.Net.Sockets.TcpClient())
+                using(cancellation.Register(()=>client.Dispose())) {
+                    client.ReceiveTimeout=30000;client.SendTimeout=5000;
+                    client.Connect("127.0.0.1",port);cancellation.ThrowIfCancellationRequested();
+                    using(var stream=client.GetStream()) {
+                        var query=new JObject{["action"]="artwork",["session_id"]=session,["viewer_id"]=viewer,["key"]=key,["oracle_id"]=request.OracleId,["printing_id"]=request.PrintingId};
+                        TextFrame.Write(stream,query.ToString(Newtonsoft.Json.Formatting.None));
+                        var record=WireEnvelope.ParseObject(TextFrame.Read(stream));
+                        if((bool?)record["unavailable"]==true)return null;
+                        Fields(record,"oracle_id","printing_id","face_key","layout","standard_compatible","printed_type_line","printed_name","printed_rules","printed_mana_cost","width","height","byte_length","sha256");
+                        if(Text(record["oracle_id"])!=request.OracleId || Text(record["printing_id"])!=request.PrintingId || record["standard_compatible"]?.Type!=JTokenType.Boolean)throw Invalid();
+                        int width=Number(record["width"],1024),height=Number(record["height"],1024),length=Number(record["byte_length"],4*1024*1024);
+                        string digest=Text(record["sha256"]);if(length!=width*height*4 || !Hash.IsMatch(digest))throw Invalid();
+                        pixels=new byte[length];int offset=0;
+                        while(offset<length){cancellation.ThrowIfCancellationRequested();int count=stream.Read(pixels,offset,Math.Min(65536,length-offset));if(count==0)throw Invalid();offset+=count;}
+                        if(Digest(pixels)!=digest)throw Invalid();
+                        var catalog=new CatalogArtworkFace(request.OracleId,request.PrintingId,Text(record["face_key"]),Text(record["layout"]),1,(bool)record["standard_compatible"],Text(record["printed_type_line"]),PrintedText(record["printed_name"],1024),PrintedText(record["printed_rules"],16384),PrintedText(record["printed_mana_cost"],1024));
+                        return PreparedCardArtwork.Prepare(request,catalog,width,height,pixels);
+                    }
+                }
+            }
+            finally{if(pixels!=null)Array.Clear(pixels,0,pixels.Length);}
         }
         public sealed class PreviewPixels : IDisposable
         {
@@ -131,6 +173,6 @@ namespace Manaforge.Play
                 if(bytes.Length!=entry.Bytes || Digest(bytes)!=entry.Digest){Array.Clear(bytes,0,bytes.Length);throw Invalid();}
                 return new PreviewPixels(entry,bytes);
             },cancellation);
-        public void Dispose(){lock(gate){disposed=true;entries.Clear();}}
+        public void Dispose(){lock(gate){disposed=true;entries.Clear();resolverKey=null;}}
     }
 }

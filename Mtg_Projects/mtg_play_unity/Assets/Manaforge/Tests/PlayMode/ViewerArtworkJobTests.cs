@@ -60,6 +60,29 @@ namespace Manaforge.Play.Tests
             Assert.That(surface.CardsRoot.Q<Label>("name").text,Is.EqualTo("New state"));
             jobs.Dispose();yield return Until(()=>jobs.Completion.IsCompleted);
         }
+        [UnityTest] public IEnumerator FullMailboxRetainsCompletedImagesUntilTheUiDrains()
+        {
+            var ticket=surface.BeginViewer("fixture-0001","one",new ViewerArtworkScope(),maximumArtworkCompletions:1,maximumArtworkBytes:16);yield return null;yield return null;yield return null;
+            surface.TryPresent(ticket,ViewerCardSurfaceTests.Frame(artwork:true,objectCount:3));
+            var jobs=surface.CreateArtworkJobs(ticket,(request,token)=>Task.FromResult(Prepare(request)),2);
+            jobs.TryQueue(surface.RequestArtwork(ticket,"fixture-0002"));jobs.TryQueue(surface.RequestArtwork(ticket,"fixture-extra-1"));jobs.TryQueue(surface.RequestArtwork(ticket,"fixture-extra-2"));
+            yield return Until(()=>ticket.Mailbox.ArtworkCount==1 && jobs.RunningCount>0);
+            Assert.That(ticket.Mailbox.ArtworkBytes,Is.EqualTo(16));
+            double deadline=Time.realtimeSinceStartupAsDouble+5;
+            while(surface.PresentedArtworkCount<3 && Time.realtimeSinceStartupAsDouble<deadline){surface.DrainMailbox(ticket,1);yield return null;}
+            Assert.That(surface.PresentedArtworkCount,Is.EqualTo(3),"A full queue must delay images, not leave cards blank");
+            jobs.Dispose();yield return Until(()=>jobs.Completion.IsCompleted);
+        }
+        [UnityTest] public IEnumerator CancellingAProducerWaitingForMailboxSpaceDoesNotNeedUiDraining()
+        {
+            var ticket=surface.BeginViewer("fixture-0001","one",new ViewerArtworkScope(),maximumArtworkCompletions:1,maximumArtworkBytes:16);yield return null;yield return null;yield return null;
+            surface.TryPresent(ticket,ViewerCardSurfaceTests.Frame(artwork:true,objectCount:2));
+            var jobs=surface.CreateArtworkJobs(ticket,(request,token)=>Task.FromResult(Prepare(request)),2);
+            jobs.TryQueue(surface.RequestArtwork(ticket,"fixture-0002"));jobs.TryQueue(surface.RequestArtwork(ticket,"fixture-extra-1"));
+            yield return Until(()=>ticket.Mailbox.ArtworkCount==1 && jobs.RunningCount==1);
+            jobs.Dispose();yield return Until(()=>jobs.Completion.IsCompleted);
+            Assert.That(ticket.Mailbox.ArtworkCount,Is.EqualTo(1));Assert.That(jobs.RunningCount,Is.Zero);
+        }
         [UnityTest] public IEnumerator ViewerSwitchNeverWaitsForAnIgnoringProviderAndDisposesItsLateResult()
         {
             var ticket=surface.BeginViewer("fixture-0001","one",new ViewerArtworkScope());yield return null;yield return null;yield return null;
@@ -111,7 +134,8 @@ namespace Manaforge.Play.Tests
             var jobs=surface.CreateArtworkJobs(ticket,(request,token)=>{Interlocked.Increment(ref calls);return Task.FromResult(Prepare(request));},2,128);
             var requests=Enumerable.Range(0,64).Select(i=>surface.RequestArtwork(ticket,i==0?"fixture-0002":"fixture-extra-"+i)).ToArray();
             Task.Run(()=>Parallel.ForEach(requests,request=>{if(jobs.TryQueue(request))Interlocked.Increment(ref accepted);})).GetAwaiter().GetResult();
-            Assert.That(accepted,Is.EqualTo(64));yield return Until(()=>Volatile.Read(ref calls)==64 && jobs.RunningCount==0 && jobs.QueuedCount==0);
+            Assert.That(accepted,Is.EqualTo(64));yield return Until(()=>{surface.DrainMailbox(ticket,16);return Volatile.Read(ref calls)==64 && jobs.RunningCount==0 && jobs.QueuedCount==0;});
+            surface.DrainMailbox(ticket,16);Assert.That(surface.PresentedArtworkCount,Is.EqualTo(64));
             jobs.Dispose();yield return Until(()=>jobs.Completion.IsCompleted);Assert.That(jobs.RunningCount,Is.Zero);
         }
     }

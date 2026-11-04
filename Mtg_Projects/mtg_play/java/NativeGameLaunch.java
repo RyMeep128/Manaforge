@@ -38,23 +38,44 @@ public final class NativeGameLaunch {
     public Map<String,CardIdentity> bindings() {
         Map<String,CardIdentity> result = new HashMap<>();
         Set<String> ambiguousEntries = new HashSet<>(), ambiguousArtwork = new HashSet<>();
-        for (NativeLaunchEntry entry : human.document.deck.entries) {
+        for (LaunchSeat owner : new LaunchSeat[]{human,ai}) for (NativeLaunchEntry entry : owner.document.deck.entries) {
             if (!(entry.section.equals("mainboard") || entry.section.equals("commander")
-                    || Arrays.asList(human.document.deck.commander_entry_ids).contains(entry.entry_id)) || entry.card_id == null) continue;
-            String key = entry.set_code.toUpperCase(Locale.ROOT) + "/" + entry.collector_number;
+                    || Arrays.asList(owner.document.deck.commander_entry_ids).contains(entry.entry_id)) || entry.card_id == null) continue;
+            String key = (owner==human?"":"opponent/")+entry.set_code.toUpperCase(Locale.ROOT) + "/" + entry.collector_number;
             CardIdentity identity = new CardIdentity();
-            identity.printing_id = entry.card_id; identity.oracle_id = entry.oracle_id; identity.deck_entry_id = entry.entry_id;
+            identity.printing_id = entry.card_id; identity.oracle_id = entry.oracle_id; identity.deck_entry_id = owner==human?entry.entry_id:null;
             CardIdentity previous = result.get(key);
             if (previous != null) {
                 ambiguousEntries.add(key);
-                if (!Objects.equals(previous.printing_id, identity.printing_id) || !Objects.equals(previous.oracle_id, identity.oracle_id)) ambiguousArtwork.add(key);
+                if (!Objects.equals(previous.oracle_id, identity.oracle_id)) ambiguousArtwork.add(key);
+                // Engine printings can collapse several selected arts. Keep a stable
+                // representative of the SAME Oracle card instead of dropping all art.
+                else if(previous.printing_id.compareTo(identity.printing_id)<0)identity=previous;
             }
             result.put(key, identity);
         }
         for (String key : ambiguousEntries) result.get(key).deck_entry_id = null;
-        // Rules resolution can collapse several selected artworks to one engine
-        // printing. Without instance provenance, use the existing visual fallback.
+        // Different Oracle identities remain ambiguous and must never be guessed.
         for (String key : ambiguousArtwork) result.remove(key);
         return result;
+    }
+    private static final Map<String,CardIdentity> tokenArtwork=new HashMap<>();
+    public static synchronized CardIdentity tokenArtwork(JsonObject row) {
+        String path=System.getProperty("manaforge.publicArtwork");if(path==null)return null;
+        String object=row.get("id").getAsString();if(tokenArtwork.containsKey(object))return tokenArtwork.get(object);
+        if(tokenArtwork.size()>=4096)return null;
+        try {
+            JsonObject manifest=JsonParser.parseString(new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(path)),java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject();
+            JsonObject resolver=manifest.getAsJsonObject("resolver");if(resolver==null || !"127.0.0.1".equals(resolver.get("host").getAsString()))return null;
+            JsonObject request=new JsonObject();request.addProperty("action","resolve_token");request.add("key",resolver.get("key"));request.add("session_id",manifest.get("session_id"));request.add("viewer_id",manifest.get("viewer_id"));
+            for(String field:new String[]{"name","type","power","toughness","color"})request.add(field,row.has("token_"+field)?row.get("token_"+field):row.get(field));
+            try(java.net.Socket socket=new java.net.Socket()) {
+                socket.connect(new java.net.InetSocketAddress("127.0.0.1",resolver.get("port").getAsInt()),3000);socket.setSoTimeout(15000);
+                manaforge.protocol.TextFrame.write(socket.getOutputStream(),request.toString());
+                JsonObject response=manaforge.protocol.WireEnvelope.parseObject(manaforge.protocol.TextFrame.read(socket.getInputStream()));
+                if(response.has("unavailable"))return null;
+                CardIdentity identity=new CardIdentity();identity.printing_id=response.get("printing_id").getAsString();identity.oracle_id=response.get("oracle_id").getAsString();tokenArtwork.put(object,identity);return identity;
+            }
+        }catch(Exception unavailable){return null;}
     }
 }

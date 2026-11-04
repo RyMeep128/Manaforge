@@ -71,9 +71,16 @@ namespace Manaforge.Play
                         if(prepared==null)Code("ARTWORK_JOB_UNAVAILABLE");
                         else if(!ReferenceEquals(prepared.Request,request))Code("ARTWORK_JOB_RESULT");
                         else {
-                            lock(gate) {
-                                if(stopped || token.IsCancellationRequested || ticket.Mailbox.IsStopped)lastCode="ARTWORK_JOB_CANCELLED";
-                                else {bool posted=ticket.Mailbox.TryPostArtwork(prepared);prepared=null;if(!posted)lastCode="ARTWORK_JOB_DROPPED";}
+                            while(prepared!=null) {
+                                Task available;
+                                lock(gate) {
+                                    if(stopped || token.IsCancellationRequested || ticket.Mailbox.IsStopped){lastCode="ARTWORK_JOB_CANCELLED";break;}
+                                    int posted=ticket.Mailbox.PostArtworkDeferred(prepared,out available);
+                                    if(posted!=0){prepared=null;if(posted<0)lastCode="ARTWORK_JOB_DROPPED";break;}
+                                }
+                                var cancelled=new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                                using(token.Register(()=>cancelled.TrySetResult(true)))await Task.WhenAny(available,cancelled.Task).ConfigureAwait(false);
+                                token.ThrowIfCancellationRequested();
                             }
                         }
                     }

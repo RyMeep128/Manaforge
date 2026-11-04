@@ -80,7 +80,7 @@ public final class ManaforgeOpeningProjection {
         Set<String> seen=new HashSet<>();if(!coreCombat || !raw.has("commander_metadata") || !Boolean.TRUE.equals(flag(raw,"commander_metadata_complete")))return seen;
         JsonArray roster=raw.getAsJsonArray("commander_metadata");require(roster.size()<=10);List<CommanderState> projected=new ArrayList<>();
         for(JsonElement item:roster){JsonObject row=item.getAsJsonObject();String id=row.get("id").getAsString(),owner=row.get("owner").getAsString();require(seen.add(id));CommanderState commander=new CommanderState();commander.owner_id=engineViewer.equals(owner)?viewer:players.get(owner);require(commander.owner_id!=null);commander.commander_id=commanderReferences.computeIfAbsent(id,key->opaque());commander.name=text(row,"name");commander.command_zone_plays=integer(row,"plays");require(commander.command_zone_plays==null || commander.command_zone_plays>=0);commander.additional_cast_cost=text(row,"tax");
-            CardIdentity binding=viewer.equals(commander.owner_id)?printings.get(text(row,"set")+"/"+text(row,"number")):null;if(binding!=null)commander.card_identity=JSON.fromJson(JSON.toJson(binding),CardIdentity.class);
+            CardIdentity binding=printings.get((viewer.equals(commander.owner_id)?"":"opponent/")+text(row,"set")+"/"+text(row,"number"));if(binding!=null){commander.card_identity=JSON.fromJson(JSON.toJson(binding),CardIdentity.class);if(!viewer.equals(commander.owner_id))commander.card_identity.deck_entry_id=null;}
             if(row.has("damage")){List<JsonElement[]> damage=new ArrayList<>();for(Map.Entry<String,JsonElement> entry:row.getAsJsonObject("damage").entrySet()){String seat=engineViewer.equals(entry.getKey())?viewer:players.get(entry.getKey());require(seat!=null);JsonObject value=new JsonObject();value.add("count",entry.getValue());Long count=integer(value,"count");require(count!=null && count>=0);damage.add(new JsonElement[]{new JsonPrimitive(seat),new JsonPrimitive(count)});}commander.damage_dealt=damage.toArray(new JsonElement[0][]);}projected.add(commander);
         }result.commanders=projected.toArray(new CommanderState[0]);return seen;
     }
@@ -294,8 +294,10 @@ public final class ManaforgeOpeningProjection {
                         }c.engine_view_text=lines.toArray(new String[0]);
                     }
                     c.unsupported_fields=coreCombat && row.has("loyalty") && row.has("defense")?row.has("counters")?new String[]{"current_abilities","transformed","is_copy","flipped"}:new String[]{"current_abilities","counters","transformed","is_copy","flipped"}:new String[]{"current_abilities","counters","loyalty","defense","transformed","is_copy","flipped"};card.characteristics=c;
-                    CardIdentity binding=viewer.equals(card.owner_id)?printings.get(text(row,"set")+"/"+text(row,"number")):null;
-                    if(binding!=null)card.card_identity=JSON.fromJson(JSON.toJson(binding),CardIdentity.class);
+                    // Only this already-visible row may acquire a public artwork identity.
+                    CardIdentity binding=printings.get((viewer.equals(card.owner_id)?"":"opponent/")+text(row,"set")+"/"+text(row,"number"));
+                    if(Boolean.TRUE.equals(flag(row,"token")))binding=NativeGameLaunch.tokenArtwork(row);
+                    if(binding!=null){card.card_identity=JSON.fromJson(JSON.toJson(binding),CardIdentity.class);if(!viewer.equals(card.owner_id))card.card_identity.deck_entry_id=null;}
                 } else card.hidden=true;
                 if(coreCombat && "battlefield".equals(card.zone) && !card.hidden && Boolean.FALSE.equals(card.face_down) && card.characteristics!=null && card.characteristics.type_line!=null && (card.characteristics.type_line.contains("Planeswalker") || card.characteristics.type_line.contains("Battle"))){require(knownCombatDefenders.contains(row.get("id").getAsString()) || knownCombatDefenders.size()<256);knownCombatDefenders.add(row.get("id").getAsString());}
                 cards.add(card);

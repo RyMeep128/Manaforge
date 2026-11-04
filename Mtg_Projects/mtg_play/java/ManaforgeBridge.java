@@ -234,6 +234,12 @@ public final class ManaforgeBridge implements MageClient {
             item.addProperty("set", card.getExpansionSetCode());
             item.addProperty("number", card.getCardNumber());
             item.addProperty("token", card.isToken());
+            if(card.isToken()) {
+                item.addProperty("token_power",card.getOriginalPower()==null?card.getPower():card.getOriginalPower().toString());
+                item.addProperty("token_toughness",card.getOriginalToughness()==null?card.getToughness():card.getOriginalToughness().toString());
+                String originalColor=card.getOriginalColorIdentity();
+                item.addProperty("token_color",originalColor.isEmpty()?card.getColorText():originalColor);
+            }
             item.addProperty("loyalty", card.getLoyalty());
             item.addProperty("defense", card.getDefense());
             item.addProperty("transformed", card.isTransformed());

@@ -47,7 +47,7 @@ namespace Manaforge.Play
             if(request==null || catalog==null)throw new ArgumentException("ARTWORK_CONTEXT");
             if(catalog.OracleId!=request.OracleId || catalog.PrintingId!=request.PrintingId)
                 throw new ArgumentException("ARTWORK_IDENTITY");
-            if(catalog.Layout!="normal" || catalog.FaceCount!=1 || string.IsNullOrWhiteSpace(catalog.FaceKey)
+            if((catalog.Layout!="normal" && catalog.Layout!="token") || catalog.FaceCount!=1 || string.IsNullOrWhiteSpace(catalog.FaceKey)
                 || catalog.FaceKey.Length>1024 || string.IsNullOrWhiteSpace(catalog.PrintedTypeLine))
                 throw new ArgumentException("ARTWORK_FACE_UNSUPPORTED");
             if(width<1 || height<1 || width>1024 || height>1024 || rgba==null || rgba.Length!=(long)width*height*4)
