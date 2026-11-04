@@ -50,11 +50,17 @@ def category(card):
     kind = card.get("type_line", "")
     if "Token" in kind or layout in {"token", "double_faced_token", "emblem"}:
         return "token_dependency"
-    if layout in {"art_series", "reversible_card"} or not kind or "Card" == kind or "Card //" in kind:
+    if layout in {"art_series", "reversible_card", "front_card"} or not kind or "Card" == kind or "Card //" in kind:
         return "non_game_or_unresolved"
+    if layout in {"planar", "scheme", "vanguard", "sticker"} or any(t in kind for t in ("Conspiracy", "Plane ", "Phenomenon", "Scheme", "Vanguard")):
+        return "nonstandard_rules"
+    if card.get("set_type") == "memorabilia":
+        return "nonstandard_rules"
     if card.get("digital") or "paper" not in card.get("games", []):
         return "digital_or_nonpaper"
-    if card.get("border_color") == "silver" or card.get("security_stamp") == "acorn" or card.get("set_type") == "funny":
+    if card.get("border_color") == "silver" or card.get("security_stamp") == "acorn":
+        return "novelty"
+    if "playtest" in card.get("promo_types", []) or (card.get("set_type") == "funny" and card.get("legalities") and not any(v in {"legal", "restricted", "banned"} for v in card["legalities"].values())):
         return "novelty"
     return "paper_rules"
 
@@ -104,6 +110,9 @@ def verified_references(lock_path, junit_directory, coverage_engine):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    if "--audit" in sys.argv:
+        from mtg_play.xmage_audit import main as audit_main
+        return audit_main(category, upstream_index)
     parser.add_argument("--coverage", type=Path, required=True)
     parser.add_argument("--source", type=Path, required=True)
     parser.add_argument("--upstream", default="upstream/master")

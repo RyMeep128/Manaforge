@@ -127,3 +127,15 @@ Oracle identities and ignores display copies. Owner acceptance remains separate.
 - [ ] Capture unobstructed representative gameplay and result screenshots; the current opening capture is partially covered by a Windows Firewall prompt, which automation did not operate.
 - [ ] Investigate the `FRAME_TIMEOUT` seen in the first unattended 60-second startup check; the shorter startup check passes, but idle/full-match behavior is not certified.
 - [ ] Owner review and final acceptance.
+
+## Complete coverage audit
+
+For current inventory and prioritization use the existing backlog command's
+`--audit` mode documented in [card support](play-xmage-card-support.md#repeatable-complete-inventory).
+The provisional counts above used an arbitrary representative printing and the old
+funny-set classifier; they are historical evidence, not current paper-card totals.
+The audit records the actual installed sets JAR hash and requires it to match the
+app-owned engine lock. It records the lock revision and artifact identity, local
+catalog SHA256, upstream commit, Manaforge commit/diff hash, deck hashes and UTC
+generation date. Update candidates still require the existing engine promotion
+gates. This audit authorizes no card implementation or engine upgrade.

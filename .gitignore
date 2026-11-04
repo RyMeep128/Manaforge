@@ -249,3 +249,6 @@ Mtg_Projects/mtg_proxy/projects/tmp_images/
 
 # Bundled shared gameplay card-back artwork (not a runtime image cache).
 !/Mtg_Projects/mtg_play_unity/Assets/Manaforge/Runtime/Resources/CardBackClassic.jpg
+
+# Generated read-only coverage inventories.
+/Artifacts/
