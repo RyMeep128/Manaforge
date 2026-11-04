@@ -25,6 +25,9 @@ class Service:
     def get_card(self, *, card_id):
         return self.card if card_id == self.card["id"] else None
 
+    def get_print(self, *, set_code, collector_number):
+        return self.card if (set_code, collector_number) == ("tst", "1") else None
+
     def get_image_path(self, printing):
         return self.path
 
@@ -111,3 +114,21 @@ def test_public_token_artwork_is_lazy_pinned_and_session_scoped(tmp_path):
     finally:
         server.close()
     assert not server.thread.is_alive() and not server.pixels
+
+
+def test_revealed_printing_resolution_requires_matching_public_name(tmp_path):
+    server = PublicArtworkServer(
+        tmp_path, "session", "viewer", Service(tmp_path / "unused.png")
+    )
+    try:
+        header, pixels = exchange(
+            server, action="resolve_printing", name="Goblin", set="TST", number="1"
+        )
+        assert header == dict(oracle_id="public-oracle", printing_id="public-print")
+        assert pixels == b""
+        wrong, _ = exchange(
+            server, action="resolve_printing", name="Forest", set="TST", number="1"
+        )
+        assert wrong == dict(unavailable=True)
+    finally:
+        server.close()

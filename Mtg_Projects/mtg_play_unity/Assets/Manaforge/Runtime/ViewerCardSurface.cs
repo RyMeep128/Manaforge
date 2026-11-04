@@ -52,13 +52,18 @@ namespace Manaforge.Play
             ThreadOnly();if(disposed || transitioning || faulted || ticket==null || !ticket.Mailbox.AllowsFrame(revision))return;
             foreach(var pair in cards)if(views.TryGetValue(pair.Key,out var view))visitor(pair.Value,view);
         }
+        public string CurrentObjectId(CardView view)
+        {
+            ThreadOnly();if(view==null || !CanAnimate || !ticket.Mailbox.AllowsFrame(revision))return null;
+            foreach(var pair in views)if(ReferenceEquals(pair.Value,view))return pair.Key;return null;
+        }
         public string[] PresentedObjectIds(){ThreadOnly();var result=new string[views.Count];views.Keys.CopyTo(result,0);return result;}
         public bool CanAnimate {get{ThreadOnly();return !disposed && !transitioning && !faulted && ticket!=null && !ticket.Mailbox.IsStopped;}}
         internal ProjectedCard AnimationCard(string id)
         {
             ThreadOnly();if(!CanAnimate || id==null)return null;var pending=ticket.Mailbox.AnimationFrame;
-            if(pending!=null)return System.Linq.Enumerable.FirstOrDefault(pending.Cards,card=>card.ObjectId==id);
-            return cards.TryGetValue(id,out var card)?card:null;
+            if(pending!=null)return System.Linq.Enumerable.FirstOrDefault(pending.Cards,card=>card.RenderId==id);
+            return System.Linq.Enumerable.FirstOrDefault(cards.Values,card=>card.RenderId==id);
         }
         internal void VisitAnimationBindings(Action<ProjectedCard,CardView> visitor)
         {ThreadOnly();if(!CanAnimate)return;foreach(var pair in cards)if(views.TryGetValue(pair.Key,out var view))visitor(pair.Value,view);}
@@ -80,7 +85,7 @@ namespace Manaforge.Play
         {
             Clearing?.Invoke();
             ticket?.Mailbox.Dispose();artworkJobs?.Dispose();artworkJobs=null;ticket=null;revision=-1;cards.Clear();requests.Clear();pendingArtwork.Clear();artwork.Clear();inspectedObject=null;InspectionView.Conceal();
-            foreach(var view in views.Values)view.Dispose();views.Clear();CardsRoot.Clear();
+            foreach(var element in new List<VisualElement>(CardsRoot.Children()))if(element is CardView view)view.Dispose();views.Clear();CardsRoot.Clear();
             var assets=privateAssets;privateAssets=null;
             try{assets?.Dispose();}catch{privateAssets=assets;throw;}
         }
@@ -137,25 +142,33 @@ namespace Manaforge.Play
             // No wire decision/action IDs are stored here. Inspection never submits a game command.
             transitioning=true;
             try {
-                cards.Clear();requests.Clear();pendingArtwork.Clear();
-                var present=new HashSet<string>(StringComparer.Ordinal);
+                var retainedViews=new Dictionary<string,CardView>(StringComparer.Ordinal);
+                var retainedArt=new Dictionary<string,ArtworkBinding>(StringComparer.Ordinal);
+                string inspectedKey=inspectedObject!=null && cards.TryGetValue(inspectedObject,out var priorInspection)?priorInspection.RenderId:null;
+                foreach(var prior in cards.Values){
+                    if(views.TryGetValue(prior.ObjectId,out var oldView))retainedViews.Add(prior.RenderId,oldView);
+                    if(artwork.TryGetValue(prior.ObjectId,out var oldArt))retainedArt.Add(prior.RenderId,oldArt);
+                }
+                cards.Clear();views.Clear();artwork.Clear();requests.Clear();pendingArtwork.Clear();inspectedObject=null;
                 foreach(var card in frame.Cards) {
-                    present.Add(card.ObjectId);cards.Add(card.ObjectId,card);
-                    if(!views.TryGetValue(card.ObjectId,out var view)) {
+                    cards.Add(card.ObjectId,card);
+                    if(!retainedViews.TryGetValue(card.RenderId,out var view)) {
                         view=new CardView();view.SetPresentation(CardPresentationMode.Compact,160);
-                        views.Add(card.ObjectId,view);CardsRoot.Add(view);
+                        CardsRoot.Add(view);
                     }
-                    if(artwork.TryGetValue(card.ObjectId,out var binding) && (!ArtworkPermitted(card)
-                        || binding.Oracle!=card.Printing.OracleId || binding.Printing!=card.Printing.PrintingId))artwork.Remove(card.ObjectId);
+                    retainedViews.Remove(card.RenderId);views.Add(card.ObjectId,view);
+                    if(inspectedKey==card.RenderId)inspectedObject=card.ObjectId;
+                    if(retainedArt.TryGetValue(card.RenderId,out var binding) && ArtworkPermitted(card)
+                        && binding.Oracle==card.Printing.OracleId && binding.Printing==card.Printing.PrintingId)artwork.Add(card.ObjectId,binding);
                     view.SetPresentation(card.Zone=="battlefield"?CardPresentationMode.Compact:CardPresentationMode.Full,card.Zone=="battlefield"?160:220);
                     Bind(view,card);
                     if(ArtworkPermitted(card) && !artwork.ContainsKey(card.ObjectId))pendingArtwork.Enqueue(card.ObjectId);
                 }
-                foreach(var id in new List<string>(views.Keys))if(!present.Contains(id)){views[id].Dispose();views.Remove(id);artwork.Remove(id);}
+                foreach(var oldView in retainedViews.Values)oldView.Dispose();
                 if(inspectedObject!=null){
                     if(cards.TryGetValue(inspectedObject,out var inspected) && !inspected.Hidden && inspected.FaceDown==false){Bind(InspectionView,inspected);InspectionView.style.rotate=new Rotate(new Angle(0));}
                     else{InspectionView.Conceal();inspectedObject=null;}
-                }
+                }else if(inspectedKey!=null)InspectionView.Conceal();
                 revision=frame.Context.Revision;ticket.Mailbox.ObserveAppliedFrame(revision);return true;
             }
             catch {
@@ -209,6 +222,12 @@ namespace Manaforge.Play
                 finally{transitioning=false;}
             }
             finally{prepared.Dispose();}
+        }
+        internal bool TryApplyRevealArtwork(ProjectedObservation card,PreparedCardArtwork prepared,out Texture2D texture)
+        {
+            ThreadOnly();texture=null;
+            return CanAnimate && privateAssets is ViewerArtworkScope scope && ReferenceEquals(prepared.Request.Ticket,ticket)
+                && prepared.Request.ObjectId==card.Id && ticket.Mailbox.AuthorizesObservation(card) && scope.TryUpload(prepared,out texture);
         }
         private void Bind(CardView view,ProjectedCard card)
         {

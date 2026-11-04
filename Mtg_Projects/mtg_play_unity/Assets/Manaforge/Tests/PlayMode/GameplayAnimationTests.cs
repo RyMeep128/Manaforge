@@ -50,6 +50,16 @@ namespace Manaforge.Play.Tests
             Assert.That(button.enabledInHierarchy,Is.True);Assert.That(root.Q("gameplay-animation-layer").pickingMode,Is.EqualTo(PickingMode.Ignore));
             now=1.01f;animation.Advance();Assert.That(animation.ActiveCount,Is.Zero);Assert.That(animation.HoldAutomaticPassing,Is.False);yield return null;
         }
+        [UnityTest] public IEnumerator ConsumedBatchCannotReplayAndNewSameTypeEventDoesNotReviveOldEffect()
+        {
+            var frame=Decision();var first=new GameplayMotionBatch(frame.Context,new[]{new GameplayMotionCue(GameplayMotionKind.Damage,id,text:"-1")});
+            animation.Observe(frame,new[]{first});animation.Advance();now=.9f;animation.Advance();Assert.That(animation.ActiveCount,Is.Zero);
+            animation.Observe(frame,new[]{first});animation.Advance();Assert.That(animation.ActiveCount,Is.Zero);
+            var next=Decision(2);var second=new GameplayMotionBatch(next.Context,new[]{new GameplayMotionCue(GameplayMotionKind.Damage,id,text:"-2")});
+            animation.Observe(next,new[]{second});animation.Advance();Assert.That(animation.ActiveCount,Is.EqualTo(1));
+            Assert.That(root.Query<Label>("motion-caption").ToList().Select(label=>label.text),Is.EqualTo(new[]{"-2"}));
+            yield return null;
+        }
         [UnityTest] public IEnumerator SameCardEffectsSerializeAndAutomationHoldIsCapped()
         {
             Enqueue(new GameplayMotionCue(GameplayMotionKind.Cast,id),new GameplayMotionCue(GameplayMotionKind.Damage,id,text:"-2"),new GameplayMotionCue(GameplayMotionKind.Arrive,id));

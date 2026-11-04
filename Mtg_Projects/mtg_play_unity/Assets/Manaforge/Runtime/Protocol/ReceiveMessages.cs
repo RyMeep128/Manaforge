@@ -64,6 +64,15 @@ namespace Manaforge.Play.Protocol
         }
 
 
+        private static bool PresentationIds(JObject snapshot)
+        {
+            var ids=new System.Collections.Generic.HashSet<string>(snapshot["players"].Select(player=>(string)player["player_id"]),StringComparer.Ordinal);
+            foreach(var card in snapshot["objects"]){
+                string id=(string)card["presentation_id"];
+                if(id!=null && (string.IsNullOrWhiteSpace(id) || (bool)card["hidden"] || (bool?)card["face_down"]!=false))return false;
+                if(!ids.Add(id??(string)card["object_id"]))return false;
+            }return true;
+        }
         private static void Fail(string code) => throw new WireEnvelope.EnvelopeException(code);
         private static bool Unique(JArray items,string key) => items.All(item => !string.IsNullOrEmpty((string)item[key]))
             && items.Select(item=>(string)item[key]).Distinct(StringComparer.Ordinal).Count()==items.Count;
@@ -88,7 +97,7 @@ namespace Manaforge.Play.Protocol
                 receivedSession=(string)snapshot["session_id"];receivedViewer=(string)snapshot["viewer_id"];revision=(long)snapshot["revision"];
                 if(type=="result" && ((string)snapshot["status"]!="finished" || snapshot["result"].Type!=JTokenType.String
                     || string.IsNullOrEmpty((string)snapshot["result"])))Fail("RECEIVE_SHAPE");
-                if(!Unique((JArray)snapshot["players"],"player_id") || !Unique((JArray)snapshot["objects"],"object_id")
+                if(!PresentationIds(snapshot) || !Unique((JArray)snapshot["players"],"player_id") || !Unique((JArray)snapshot["objects"],"object_id")
                     || !Unique((JArray)snapshot["actions"],"action_id"))Fail("RECEIVE_CONTEXT");
                 if(snapshot["decision"].Type!=JTokenType.Null && (string)snapshot["decision"]["player_id"]!=viewer)Fail("RECEIVE_VIEWER");
                 if(snapshot["decision"].Type!=JTokenType.Null && !Unique((JArray)snapshot["decision"]["options"],"option_id"))Fail("RECEIVE_CONTEXT");

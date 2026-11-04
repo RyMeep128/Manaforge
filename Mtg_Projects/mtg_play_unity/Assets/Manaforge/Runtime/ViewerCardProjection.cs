@@ -48,6 +48,9 @@ namespace Manaforge.Play
         public CardProjectionContext Context {get;}
         public string ObjectId {get;} public string Zone {get;} public string OwnerId {get;} public string ControllerId {get;}
         public bool Hidden {get;}
+        // Presentation continuity only. ObjectId remains the current command reference.
+        public string PresentationId {get;}
+        public string RenderId=>PresentationId??ObjectId;
         public ProjectedPrinting Printing {get;}
         public ProjectedCharacteristics Characteristics {get;}
         public bool? Tapped {get;} public bool? FaceDown {get;} public long? Damage {get;}
@@ -62,6 +65,7 @@ namespace Manaforge.Play
             Printing=value["card_identity"].Type==JTokenType.Null?null:new ProjectedPrinting(value["card_identity"]);
             Characteristics=value["characteristics"].Type==JTokenType.Null?null:new ProjectedCharacteristics(value["characteristics"]);
             Tapped=(bool?)value["tapped"];FaceDown=(bool?)value["face_down"];Damage=(long?)value["damage"];
+            PresentationId=FaceDown==false?(string)value["presentation_id"]:null;
             Attachments=ViewerCardProjection.Strings(value["attachments"]);AttachedTo=(string)value["attached_to"];
             CommanderId=(string)value["commander_id"];CopySourceId=(string)value["copy_source_id"];
         }
@@ -72,11 +76,14 @@ namespace Manaforge.Play
         public CardProjectionContext Context {get;}
         public string Status {get;} public string Result {get;}
         public IReadOnlyList<ProjectedCard> Cards {get;}
+        public IReadOnlyList<ProjectedObservation> Observations {get;}
         public IReadOnlyList<string> UnsupportedFields {get;}
         internal ProjectedCardFrame(JToken snapshot)
         {
             Context=new CardProjectionContext((string)snapshot["session_id"],(string)snapshot["viewer_id"],(long)snapshot["revision"]);
             Status=(string)snapshot["status"];Result=(string)snapshot["result"];
+            Observations=Array.AsReadOnly(snapshot["observations"].Where(value=>(bool?)value["hidden"]==false && (string)value["source"]=="revealed" && !string.IsNullOrWhiteSpace((string)value["group_id"]))
+                .Select(value=>new ProjectedObservation(Context,value)).ToArray());
             Cards=Array.AsReadOnly(snapshot["objects"].Select(obj=>new ProjectedCard(Context,obj)).ToArray());
             UnsupportedFields=ViewerCardProjection.Strings(snapshot["unsupported_fields"]);
         }

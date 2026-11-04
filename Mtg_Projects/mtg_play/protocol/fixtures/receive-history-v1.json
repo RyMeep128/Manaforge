@@ -63,7 +63,8 @@
                     "attachments": null,
                     "attached_to": null,
                     "commander_id": null,
-                    "copy_source_id": null
+                    "copy_source_id": null,
+                    "presentation_id": null
                   }
                 ],
                 "actions": [
@@ -94,7 +95,8 @@
                 "commanders": null,
                 "observations": [],
                 "unsupported_fields": [],
-                "actions_complete": false
+                "actions_complete": false,
+                "payment_reason": null
               }
             }
           },
@@ -150,7 +152,8 @@
                     "controller_id": "one",
                     "owner_id": "one",
                     "zone": "hand",
-                    "object_id": "fixture-0002"
+                    "object_id": "fixture-0002",
+                    "presentation_id": null
                   }
                 ],
                 "players": [
@@ -185,7 +188,8 @@
                 "status": "active",
                 "revision": 7,
                 "viewer_id": "one",
-                "session_id": "fixture-session"
+                "session_id": "fixture-session",
+                "payment_reason": null
               },
               "fixture_only": true
             },
@@ -280,7 +284,8 @@
                     "attachments": null,
                     "attached_to": null,
                     "commander_id": null,
-                    "copy_source_id": null
+                    "copy_source_id": null,
+                    "presentation_id": null
                   }
                 ],
                 "actions": [
@@ -311,7 +316,8 @@
                 "commanders": null,
                 "observations": [],
                 "unsupported_fields": [],
-                "actions_complete": false
+                "actions_complete": false,
+                "payment_reason": null
               }
             }
           },
@@ -375,7 +381,8 @@
                     "attachments": null,
                     "attached_to": null,
                     "commander_id": null,
-                    "copy_source_id": null
+                    "copy_source_id": null,
+                    "presentation_id": null
                   }
                 ],
                 "actions": [
@@ -406,7 +413,8 @@
                 "commanders": null,
                 "observations": [],
                 "unsupported_fields": [],
-                "actions_complete": false
+                "actions_complete": false,
+                "payment_reason": null
               }
             }
           },
@@ -497,7 +505,8 @@
                     "attachments": null,
                     "attached_to": null,
                     "commander_id": null,
-                    "copy_source_id": null
+                    "copy_source_id": null,
+                    "presentation_id": null
                   }
                 ],
                 "actions": [
@@ -528,7 +537,8 @@
                 "commanders": null,
                 "observations": [],
                 "unsupported_fields": [],
-                "actions_complete": false
+                "actions_complete": false,
+                "payment_reason": null
               }
             }
           },
@@ -639,7 +649,8 @@
                     "attachments": null,
                     "attached_to": null,
                     "commander_id": null,
-                    "copy_source_id": null
+                    "copy_source_id": null,
+                    "presentation_id": null
                   }
                 ],
                 "actions": [
@@ -670,7 +681,8 @@
                 "commanders": null,
                 "observations": [],
                 "unsupported_fields": [],
-                "actions_complete": false
+                "actions_complete": false,
+                "payment_reason": null
               }
             }
           },
@@ -781,7 +793,8 @@
                     "attachments": null,
                     "attached_to": null,
                     "commander_id": null,
-                    "copy_source_id": null
+                    "copy_source_id": null,
+                    "presentation_id": null
                   }
                 ],
                 "actions": [
@@ -812,7 +825,8 @@
                 "commanders": null,
                 "observations": [],
                 "unsupported_fields": [],
-                "actions_complete": false
+                "actions_complete": false,
+                "payment_reason": null
               }
             }
           },
@@ -896,7 +910,8 @@
                     "attachments": null,
                     "attached_to": null,
                     "commander_id": null,
-                    "copy_source_id": null
+                    "copy_source_id": null,
+                    "presentation_id": null
                   }
                 ],
                 "actions": [
@@ -927,7 +942,8 @@
                 "commanders": null,
                 "observations": [],
                 "unsupported_fields": [],
-                "actions_complete": false
+                "actions_complete": false,
+                "payment_reason": null
               }
             }
           },
@@ -998,7 +1014,8 @@
                     "attachments": null,
                     "attached_to": null,
                     "commander_id": null,
-                    "copy_source_id": null
+                    "copy_source_id": null,
+                    "presentation_id": null
                   }
                 ],
                 "actions": [
@@ -1029,7 +1046,8 @@
                 "commanders": null,
                 "observations": [],
                 "unsupported_fields": [],
-                "actions_complete": false
+                "actions_complete": false,
+                "payment_reason": null
               }
             }
           },
@@ -1093,7 +1111,8 @@
                     "attachments": null,
                     "attached_to": null,
                     "commander_id": null,
-                    "copy_source_id": null
+                    "copy_source_id": null,
+                    "presentation_id": null
                   }
                 ],
                 "actions": [
@@ -1124,7 +1143,8 @@
                 "commanders": null,
                 "observations": [],
                 "unsupported_fields": [],
-                "actions_complete": false
+                "actions_complete": false,
+                "payment_reason": null
               }
             }
           },
@@ -1208,7 +1228,8 @@
                     "attachments": null,
                     "attached_to": null,
                     "commander_id": null,
-                    "copy_source_id": null
+                    "copy_source_id": null,
+                    "presentation_id": null
                   }
                 ],
                 "actions": [
@@ -1239,7 +1260,8 @@
                 "commanders": null,
                 "observations": [],
                 "unsupported_fields": [],
-                "actions_complete": false
+                "actions_complete": false,
+                "payment_reason": null
               }
             }
           },
@@ -1310,7 +1332,8 @@
                     "attachments": null,
                     "attached_to": null,
                     "commander_id": null,
-                    "copy_source_id": null
+                    "copy_source_id": null,
+                    "presentation_id": null
                   }
                 ],
                 "actions": [
@@ -1341,7 +1364,8 @@
                 "commanders": null,
                 "observations": [],
                 "unsupported_fields": [],
-                "actions_complete": false
+                "actions_complete": false,
+                "payment_reason": null
               }
             }
           },
@@ -1405,7 +1429,8 @@
                     "attachments": null,
                     "attached_to": null,
                     "commander_id": null,
-                    "copy_source_id": null
+                    "copy_source_id": null,
+                    "presentation_id": null
                   }
                 ],
                 "actions": [],
@@ -1416,7 +1441,8 @@
                 "commanders": null,
                 "observations": [],
                 "unsupported_fields": [],
-                "actions_complete": false
+                "actions_complete": false,
+                "payment_reason": null
               }
             }
           },
@@ -1480,7 +1506,8 @@
                     "attachments": null,
                     "attached_to": null,
                     "commander_id": null,
-                    "copy_source_id": null
+                    "copy_source_id": null,
+                    "presentation_id": null
                   }
                 ],
                 "actions": [],
@@ -1491,7 +1518,8 @@
                 "commanders": null,
                 "observations": [],
                 "unsupported_fields": [],
-                "actions_complete": false
+                "actions_complete": false,
+                "payment_reason": null
               }
             }
           },
@@ -1555,7 +1583,8 @@
                     "attachments": null,
                     "attached_to": null,
                     "commander_id": null,
-                    "copy_source_id": null
+                    "copy_source_id": null,
+                    "presentation_id": null
                   }
                 ],
                 "actions": [
@@ -1586,7 +1615,8 @@
                 "commanders": null,
                 "observations": [],
                 "unsupported_fields": [],
-                "actions_complete": false
+                "actions_complete": false,
+                "payment_reason": null
               }
             }
           },
@@ -1677,7 +1707,8 @@
                     "attachments": null,
                     "attached_to": null,
                     "commander_id": null,
-                    "copy_source_id": null
+                    "copy_source_id": null,
+                    "presentation_id": null
                   }
                 ],
                 "actions": [
@@ -1708,7 +1739,8 @@
                 "commanders": null,
                 "observations": [],
                 "unsupported_fields": [],
-                "actions_complete": false
+                "actions_complete": false,
+                "payment_reason": null
               }
             }
           },
@@ -1776,7 +1808,8 @@
                     "attachments": null,
                     "attached_to": null,
                     "commander_id": null,
-                    "copy_source_id": null
+                    "copy_source_id": null,
+                    "presentation_id": null
                   }
                 ],
                 "actions": [
@@ -1807,7 +1840,8 @@
                 "commanders": null,
                 "observations": [],
                 "unsupported_fields": [],
-                "actions_complete": false
+                "actions_complete": false,
+                "payment_reason": null
               }
             }
           },
@@ -1871,7 +1905,8 @@
                     "attachments": null,
                     "attached_to": null,
                     "commander_id": null,
-                    "copy_source_id": null
+                    "copy_source_id": null,
+                    "presentation_id": null
                   }
                 ],
                 "actions": [
@@ -1902,7 +1937,8 @@
                 "commanders": null,
                 "observations": [],
                 "unsupported_fields": [],
-                "actions_complete": false
+                "actions_complete": false,
+                "payment_reason": null
               }
             }
           },
@@ -1973,7 +2009,8 @@
                     "attachments": null,
                     "attached_to": null,
                     "commander_id": null,
-                    "copy_source_id": null
+                    "copy_source_id": null,
+                    "presentation_id": null
                   }
                 ],
                 "actions": [
@@ -2004,7 +2041,8 @@
                 "commanders": null,
                 "observations": [],
                 "unsupported_fields": [],
-                "actions_complete": false
+                "actions_complete": false,
+                "payment_reason": null
               }
             }
           },
@@ -2068,7 +2106,8 @@
                     "attachments": null,
                     "attached_to": null,
                     "commander_id": null,
-                    "copy_source_id": null
+                    "copy_source_id": null,
+                    "presentation_id": null
                   }
                 ],
                 "actions": [
@@ -2099,7 +2138,8 @@
                 "commanders": null,
                 "observations": [],
                 "unsupported_fields": [],
-                "actions_complete": false
+                "actions_complete": false,
+                "payment_reason": null
               }
             }
           },
@@ -2163,7 +2203,8 @@
                     "attachments": null,
                     "attached_to": null,
                     "commander_id": null,
-                    "copy_source_id": null
+                    "copy_source_id": null,
+                    "presentation_id": null
                   }
                 ],
                 "actions": [
@@ -2194,7 +2235,8 @@
                 "commanders": null,
                 "observations": [],
                 "unsupported_fields": [],
-                "actions_complete": false
+                "actions_complete": false,
+                "payment_reason": null
               }
             }
           },
@@ -2265,7 +2307,8 @@
                     "attachments": null,
                     "attached_to": null,
                     "commander_id": null,
-                    "copy_source_id": null
+                    "copy_source_id": null,
+                    "presentation_id": null
                   }
                 ],
                 "actions": [
@@ -2296,7 +2339,8 @@
                 "commanders": null,
                 "observations": [],
                 "unsupported_fields": [],
-                "actions_complete": false
+                "actions_complete": false,
+                "payment_reason": null
               }
             }
           },

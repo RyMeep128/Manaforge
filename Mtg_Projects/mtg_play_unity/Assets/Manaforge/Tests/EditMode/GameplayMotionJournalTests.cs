@@ -21,6 +21,26 @@ namespace Manaforge.Play.Tests
         private static ProjectedCardFrame Cards(JObject wire)=>ViewerCardProjection.ParseSnapshot(wire.ToString(),"fixture-0001","one",0,true);
         private static ProjectedDecisionFrame Decision(JObject wire)=>ViewerDecisionProjection.ParseSnapshot(wire.ToString(),"fixture-0001","one",0,true);
         private static void Observe(ViewerAnimationJournal journal,JObject wire)=>journal.Observe(Cards(wire),Decision(wire));
+        [Test] public void RevealGroupsSurviveSnapshotsAndRequireOrderedAcknowledgement()
+        {
+            var wire=Source();var snapshot=wire["body"]["snapshot"];
+            Func<string,string,JObject> observation=(id,group)=>new JObject{
+                ["observation_id"]=id,["group_id"]=group,["group_label"]="Revealed cards",["source"]="revealed",
+                ["hidden"]=false,["name"]="Forest",["oracle_id"]=null,["printing_id"]=null,
+                ["set_code"]=null,["collector_number"]=null};
+            snapshot["observations"]=new JArray(observation("a","first"),observation("b","first"));
+            var queue=new ViewerRevealQueue();queue.Observe(Cards(wire));
+            Assert.That(queue.Current.Cards.Count,Is.EqualTo(2));var authorized=queue.Current.Cards[0];
+            queue.Observe(Cards(wire));Assert.That(queue.Authorizes(authorized),Is.True);
+            ((JArray)snapshot["observations"]).Add(observation("c","second"));queue.Observe(Cards(wire));
+            Assert.That(queue.Acknowledge("second"),Is.False);Assert.That(queue.Acknowledge("first"),Is.True);
+            Assert.That(queue.Authorizes(authorized),Is.False);Assert.That(queue.Current.Id,Is.EqualTo("second"));
+            Assert.That(queue.Acknowledge("second"),Is.True);queue.Observe(Cards(wire));Assert.That(queue.Pending,Is.False);
+            ((JArray)snapshot["observations"]).Add(observation("d","third"));queue.Observe(Cards(wire));
+            Assert.That(queue.Current.Cards.Single().Id,Is.EqualTo("d"));snapshot["session_id"]="another-session";queue.Observe(new ProjectedCardFrame(snapshot));
+            Assert.That(queue.Current.Id,Is.EqualTo("first"));Assert.That(queue.Current.Cards.Count,Is.EqualTo(2));snapshot["status"]="complete";queue.Observe(new ProjectedCardFrame(snapshot));Assert.That(queue.Pending,Is.False);
+            queue.Clear();Assert.That(queue.Pending,Is.False);
+        }
         [Test] public void CoalescingKeepsIntermediateCastsAndDamageWithoutReplayingInitialState()
         {
             var wire=Source();wire["body"]["snapshot"]["objects"][0]["zone"]="hand";
@@ -37,6 +57,31 @@ namespace Manaforge.Play.Tests
                 Assert.That(ticket.Mailbox.TryPostFrame(Cards(wire),Decision(wire)),Is.False);
                 Assert.That(ticket.Mailbox.TakeAnimations(3),Is.Empty);
             }finally{surface.Dispose();}
+        }
+        [Test] public void RotatingCommandReferencesDoNotReplayArrivalsTappingOrCombat()
+        {
+            var wire=Source();var snapshot=wire["body"]["snapshot"];var card=snapshot["objects"][0];card["presentation_id"]="visual-one";
+            var journal=new ViewerAnimationJournal();Observe(journal,wire);
+            for(int i=2;i<=4;i++){snapshot["revision"]=i;card["object_id"]="route-"+i;Observe(journal,wire);Assert.That(journal.TakeThrough(i),Is.Empty);}
+            snapshot["revision"]=5;var arrival=card.DeepClone();arrival["object_id"]="route-new";arrival["presentation_id"]="visual-two";((JArray)snapshot["objects"]).Add(arrival);Observe(journal,wire);
+            var cue=journal.TakeThrough(5).Single().Cues.Single();Assert.That(cue.Kind,Is.EqualTo(GameplayMotionKind.Arrive));Assert.That(cue.SubjectId,Is.EqualTo("visual-two"));
+            snapshot["revision"]=6;card["object_id"]="route-6";arrival["object_id"]="route-next";card["tapped"]=true;
+            snapshot["combat"]=new JArray(new JObject{["attackers"]=new JArray("route-6"),["blockers"]=new JArray("route-next"),["defender_id"]="two",["blocked"]=true});
+            Observe(journal,wire);var effects=journal.TakeThrough(6).Single().Cues;Assert.That(effects.Count,Is.EqualTo(3));
+            Assert.That(effects.Single(c=>c.Kind==GameplayMotionKind.Attack).SubjectId,Is.EqualTo("visual-one"));
+            Assert.That(effects.Single(c=>c.Kind==GameplayMotionKind.Block).RelatedId,Is.EqualTo("visual-one"));
+            snapshot["revision"]=7;card["object_id"]="route-7";arrival["object_id"]="route-last";
+            snapshot["combat"][0]["attackers"]=new JArray("route-7");snapshot["combat"][0]["blockers"]=new JArray("route-last");
+            Observe(journal,wire);Assert.That(journal.TakeThrough(7),Is.Empty);
+        }
+        [Test] public void PresentationIdentityAliasesAndConcealedTokensAreRejected()
+        {
+            var wire=Source();var card=wire["body"]["snapshot"]["objects"][0];card["presentation_id"]="same";
+            var copy=card.DeepClone();copy["object_id"]="other-route";((JArray)wire["body"]["snapshot"]["objects"]).Add(copy);
+            Assert.Throws<Manaforge.Play.Protocol.WireEnvelope.EnvelopeException>(()=>Cards(wire));
+            wire["body"]["snapshot"]["objects"]=new JArray(card.DeepClone());card=wire["body"]["snapshot"]["objects"][0];
+            card["hidden"]=true;card["characteristics"]=null;card["card_identity"]=null;
+            Assert.Throws<Manaforge.Play.Protocol.WireEnvelope.EnvelopeException>(()=>Cards(wire));
         }
         [Test] public void StatDamageTapAndLifeCuesAreIndependentAndDuplicatesAreIgnored()
         {
@@ -56,7 +101,7 @@ namespace Manaforge.Play.Tests
             card["hidden"]=true;card["characteristics"]=null;card["card_identity"]=null;
             snapshot["players"][1]["library_count"]=51;snapshot["players"][1]["hand_count"]=9;Observe(journal,wire);
             var cues=journal.TakeThrough(2).SelectMany(batch=>batch.Cues).ToArray();
-            Assert.That(cues.Length,Is.EqualTo(2));Assert.That(cues.All(cue=>cue.Kind==GameplayMotionKind.Draw && cue.ObjectId==null && cue.OwnerId=="two"),Is.True);
+            Assert.That(cues.Length,Is.EqualTo(2));Assert.That(cues.All(cue=>cue.Kind==GameplayMotionKind.Draw && cue.SubjectId==null && cue.OwnerId=="two"),Is.True);
         }
         [Test] public void CombatEffectsUseOnlyNewConfirmedAssignments()
         {
@@ -73,7 +118,7 @@ namespace Manaforge.Play.Tests
             var wire=Source();var snapshot=wire["body"]["snapshot"];snapshot["objects"][0]["zone"]="stack";
             var journal=new ViewerAnimationJournal();Observe(journal,wire);snapshot["revision"]=2;snapshot["objects"]=new JArray();Observe(journal,wire);
             var cue=journal.TakeThrough(2).Single().Cues.Single();Assert.That(cue.Kind,Is.EqualTo(GameplayMotionKind.StackChange));
-            Assert.That(cue.ObjectId,Is.Null);Assert.That(cue.RelatedId,Is.Null);Assert.That(cue.ToZone,Is.Null);
+            Assert.That(cue.SubjectId,Is.Null);Assert.That(cue.RelatedId,Is.Null);Assert.That(cue.ToZone,Is.Null);
         }
         [Test] public void OverflowStaysBoundedAndCompletionReplacesPendingEffects()
         {

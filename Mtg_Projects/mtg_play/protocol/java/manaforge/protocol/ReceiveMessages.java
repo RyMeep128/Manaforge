@@ -77,6 +77,15 @@ public final class ReceiveMessages {
         for(JsonElement item:items) { String id=item.getAsJsonObject().get(key).getAsString();if(id.isEmpty() || !seen.add(id))return false; }
         return true;
     }
+    private static boolean presentationIds(JsonObject snapshot) {
+        Set<String> ids=new HashSet<>();for(JsonElement player:snapshot.getAsJsonArray("players"))ids.add(player.getAsJsonObject().get("player_id").getAsString());
+        for(JsonElement value:snapshot.getAsJsonArray("objects")){
+            JsonObject card=value.getAsJsonObject();JsonElement presentation=card.get("presentation_id");
+            String id=presentation==null || presentation.isJsonNull()?null:presentation.getAsString();
+            if(id!=null && (id.trim().isEmpty() || card.get("hidden").getAsBoolean() || card.get("face_down").isJsonNull() || !card.get("face_down").isJsonPrimitive() || card.get("face_down").getAsBoolean()))return false;
+            if(!ids.add(id==null?card.get("object_id").getAsString():id))return false;
+        }return true;
+    }
     private static boolean string(JsonElement value) { return value!=null && value.isJsonPrimitive() && value.getAsJsonPrimitive().isString(); }
     public static JsonObject parse(String text,String session,String viewer,long minimumRevision,boolean fixtureMode) throws IOException {
         JsonObject envelope=WireEnvelope.parse(text),body=envelope.getAsJsonObject("body");
@@ -94,7 +103,7 @@ public final class ReceiveMessages {
             JsonObject snapshot=body.getAsJsonObject("snapshot");
             receivedSession=snapshot.get("session_id").getAsString();receivedViewer=snapshot.get("viewer_id").getAsString();revision=snapshot.get("revision").getAsLong();
             if(type.equals("result") && (!snapshot.get("status").getAsString().equals("finished") || !string(snapshot.get("result")) || snapshot.get("result").getAsString().isEmpty()))fail("RECEIVE_SHAPE");
-            if(!unique(snapshot.getAsJsonArray("players"),"player_id") || !unique(snapshot.getAsJsonArray("objects"),"object_id") || !unique(snapshot.getAsJsonArray("actions"),"action_id"))fail("RECEIVE_CONTEXT");
+            if(!presentationIds(snapshot) || !unique(snapshot.getAsJsonArray("players"),"player_id") || !unique(snapshot.getAsJsonArray("objects"),"object_id") || !unique(snapshot.getAsJsonArray("actions"),"action_id"))fail("RECEIVE_CONTEXT");
             if(!snapshot.get("decision").isJsonNull() && !snapshot.getAsJsonObject("decision").get("player_id").getAsString().equals(viewer))fail("RECEIVE_VIEWER");
             if(!snapshot.get("decision").isJsonNull() && !unique(snapshot.getAsJsonObject("decision").getAsJsonArray("options"),"option_id"))fail("RECEIVE_CONTEXT");
         }

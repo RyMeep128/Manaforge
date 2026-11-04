@@ -610,6 +610,16 @@
               "type": "null"
             }
           ]
+        },
+        "presentation_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -628,7 +638,8 @@
         "attachments",
         "attached_to",
         "commander_id",
-        "copy_source_id"
+        "copy_source_id",
+        "presentation_id"
       ],
       "additionalProperties": false,
       "allOf": [
@@ -655,6 +666,9 @@
                 "type": "null"
               },
               "copy_source_id": {
+                "type": "null"
+              },
+              "presentation_id": {
                 "type": "null"
               }
             }
@@ -1098,6 +1112,46 @@
               "type": "null"
             }
           ]
+        },
+        "group_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "group_label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "oracle_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "printing_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -1106,7 +1160,11 @@
         "hidden",
         "name",
         "set_code",
-        "collector_number"
+        "collector_number",
+        "group_id",
+        "group_label",
+        "oracle_id",
+        "printing_id"
       ],
       "additionalProperties": false,
       "allOf": [
@@ -1130,6 +1188,18 @@
                 "type": "null"
               },
               "collector_number": {
+                "type": "null"
+              },
+              "group_id": {
+                "type": "null"
+              },
+              "group_label": {
+                "type": "null"
+              },
+              "oracle_id": {
+                "type": "null"
+              },
+              "printing_id": {
                 "type": "null"
               }
             }
@@ -1277,6 +1347,16 @@
         },
         "actions_complete": {
           "type": "boolean"
+        },
+        "payment_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -1299,7 +1379,8 @@
         "commanders",
         "observations",
         "unsupported_fields",
-        "actions_complete"
+        "actions_complete",
+        "payment_reason"
       ],
       "additionalProperties": false
     },

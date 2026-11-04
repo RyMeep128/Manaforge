@@ -272,7 +272,24 @@ public final class PinnedPaymentChecks {
         }
         payment.set(player,null);open.set(player,false);player.setPayManaMode(false);
     }
+    private static void nativePlanChecks(){
+        UUID forest=UUID.randomUUID(),island=UUID.randomUUID();
+        manaforge.payment.xmage.NativePaymentPlan.Source green=new manaforge.payment.xmage.NativePaymentPlan.Source();
+        green.alternatives.add(new manaforge.payment.xmage.NativePaymentPlan.Step(forest,UUID.randomUUID(),1,Mana.GreenMana(1),null));
+        manaforge.payment.xmage.NativePaymentPlan.Source blue=new manaforge.payment.xmage.NativePaymentPlan.Source();
+        blue.alternatives.add(new manaforge.payment.xmage.NativePaymentPlan.Step(island,UUID.randomUUID(),1,Mana.BlueMana(1),null));
+        ManaCostsImpl<?> cost=new ManaCostsImpl<>("{G}{U}");
+        java.util.List<manaforge.payment.xmage.NativePaymentPlan.Step> plan=manaforge.payment.xmage.NativePaymentPlan.select(cost,new Mana(),Arrays.asList(green,blue));
+        check(plan!=null && plan.size()==2);check(!cost.isPaid());
+        plan=manaforge.payment.xmage.NativePaymentPlan.select(cost,Mana.GreenMana(1),Arrays.asList(green,blue));check(plan!=null && plan.size()==1 && plan.get(0).source.equals(island));
+        manaforge.payment.xmage.NativePaymentPlan.Source flexible=new manaforge.payment.xmage.NativePaymentPlan.Source();
+        flexible.alternatives.addAll(green.alternatives);flexible.alternatives.add(new manaforge.payment.xmage.NativePaymentPlan.Step(forest,UUID.randomUUID(),1,Mana.BlueMana(1),null));
+        plan=manaforge.payment.xmage.NativePaymentPlan.select(new ManaCostsImpl<>("{U}"),new Mana(),Collections.singletonList(flexible));check(plan!=null && plan.size()==1 && plan.get(0).production.getBlue()==1);
+        check(manaforge.payment.xmage.NativePaymentPlan.select(cost,new Mana(),Collections.singletonList(flexible))==null);
+        Mana both=Mana.GreenMana(1);both.add(Mana.BlueMana(1));check(manaforge.payment.xmage.NativePaymentPlan.select(cost,both,Collections.emptyList()).isEmpty());
+    }
     public static void main(String[] args) throws Exception {
+        nativePlanChecks();
         priorityScopeChecks();
         ContextHumanPlayer observed=new ContextHumanPlayer("Public fixture",RangeOfInfluence.ALL,0);
         ContextHumanPlayer copied=observed.copy();

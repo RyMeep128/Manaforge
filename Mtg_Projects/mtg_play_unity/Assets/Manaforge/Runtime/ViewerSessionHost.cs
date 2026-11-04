@@ -71,6 +71,7 @@ namespace Manaforge.Play
         private Task<TrackedCommand> Dispatch(Func<ViewerCommandDispatcher,Task<TrackedCommand>> send)
         {
             if(ownerEnded.IsCompleted)Stop("VIEWER_OWNER_ENDED");ViewerCommandDispatcher target;lock(gate)target=stopped?null:commands;
+            if(ticket.Mailbox.HasPendingReveals)return Task.FromException<TrackedCommand>(new WireEnvelope.EnvelopeException("REVEAL_ACK_REQUIRED"));
             return target==null?Task.FromException<TrackedCommand>(new WireEnvelope.EnvelopeException("SESSION_STOPPED")):send(target);
         }
         public Task<TrackedCommand> PerformAsync(ViewerDecisionOffer offer,ProjectedAction action,CancellationToken cancellation=default)=>Dispatch(target=>target.PerformAsync(offer,action,cancellation));
@@ -91,6 +92,15 @@ namespace Manaforge.Play
             ThreadOnly();if(supplied==null || source==null || !ReferenceEquals(PresentedDecision,supplied))return null;
             var frame=supplied.Frame;return frame!=null && frame.Decision.Family=="mana" && frame.ManaSourceReferences.Any(value=>ReferenceEquals(value,source))
                 ?surface.PresentedCardView(ticket,frame.Context.Revision,source.ObjectId):null;
+        }
+        public ViewerRevealGroup PendingReveal {get{ThreadOnly();return disposed?null:ticket.Mailbox.PendingReveal;}}
+        public bool AcknowledgeReveal(string id){ThreadOnly();return !disposed && ticket.Mailbox.AcknowledgeReveal(id);}
+        public Task<PreparedCardArtwork> LoadRevealArtworkAsync(ProjectedObservation card,CancellationToken cancellation)
+        {
+            ThreadOnly();lock(gate){
+                if(stopped || artwork==null || !ticket.Mailbox.AuthorizesObservation(card) || card.PrintingId==null || card.OracleId==null)return Task.FromResult<PreparedCardArtwork>(null);
+                return artwork.LoadAsync(new ViewerArtworkRequest(ticket,card),cancellation);
+            }
         }
         // Monitor a submission after its displayed offer has been retired. The
         // channel tracker owns the authenticated viewer/session and exact token.

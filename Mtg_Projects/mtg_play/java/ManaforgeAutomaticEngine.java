@@ -15,13 +15,16 @@ public final class ManaforgeAutomaticEngine implements ManaforgeGameplaySession.
         for(int step=0;next.prompt!=null && next.terminal==null && step<128;step++) {
             if(cancelled.getAsBoolean() || Thread.currentThread().isInterrupted()){payment.uncertain();throw new IOException("AUTO_PAYMENT_CANCELLED");}
             JsonObject before=next.state.deepCopy(),prompt=next.prompt.deepCopy(),guard=metadata(before);
-            JsonObject command=payment.prepare(before,prompt,guard);if(command==null)break;
+            JsonObject command=payment.prepare(before,prompt,guard);if(command==null){
+                if("GAME_PLAY_MANA".equals(prompt.get("kind").getAsString()))next.state.addProperty("payment_reason",payment.reason());break;
+            }
             if(!payment.revalidate(metadata(before))){payment.uncertain();throw new IOException("AUTO_PAYMENT_CHANGED");}
             JsonObject accepted;
             try{accepted=submit(command);next=nativeEngine.advance(prompt.get("decision_id").getAsLong());}
             catch(Exception failure){payment.uncertain();throw failure;}
-            if(next.prompt==null || next.terminal!=null){payment.uncertain();throw new IOException("AUTO_PAYMENT_INTERRUPTED");}
-            List<String> ids=new ArrayList<>();ids.add(command.get("value").getAsString());
+            if(next.terminal!=null){payment.uncertain();return next;}
+            if(next.prompt==null){payment.uncertain();throw new IOException("AUTO_PAYMENT_INTERRUPTED");}
+            List<String> ids=new ArrayList<>();if("object".equals(command.get("kind").getAsString()))ids.add(command.get("value").getAsString());
             for(JsonElement stacked:next.state.getAsJsonArray("stack"))ids.add(stacked.getAsJsonObject().get("id").getAsString());
             payment.observed(before,prompt,command,guard,accepted,next.state,next.prompt,metadata(next.state,ids.toArray(new String[0])));
         }

@@ -13,6 +13,7 @@ namespace Manaforge.Play
         private readonly Queue<PreparedCardArtwork> artwork=new Queue<PreparedCardArtwork>();
         private readonly HashSet<ViewerArtworkRequest> requests=new HashSet<ViewerArtworkRequest>();
         private ProjectedCardFrame latest;
+        private readonly ViewerRevealQueue reveals=new ViewerRevealQueue();
         private readonly ViewerAnimationJournal animations=new ViewerAnimationJournal();
         private long newestRevision=-1,minimumRevision,bytes;
         private bool stopped;
@@ -39,7 +40,7 @@ namespace Manaforge.Play
             lock(gate) {
                 if(stopped || frame.Context.SessionId!=ticket.SessionId || frame.Context.ViewerId!=ticket.ViewerId
                     || frame.Context.Revision<minimumRevision || frame.Context.Revision<=newestRevision)return false;
-                animations.Observe(frame,decision);
+                reveals.Observe(frame);animations.Observe(frame,decision);
                 newestRevision=frame.Context.Revision;latest=frame;ClearArtwork();return true;
             }
         }
@@ -96,9 +97,13 @@ namespace Manaforge.Play
                 prepared=artwork.Dequeue();requests.Remove(prepared.Request);bytes-=(long)prepared.Width*prepared.Height*4;SignalSpace();return true;
             }
         }
+        internal bool HasPendingReveals {get{lock(gate)return !stopped && reveals.Pending;}}
+        internal ViewerRevealGroup PendingReveal {get{lock(gate)return stopped?null:reveals.Current;}}
+        internal bool AcknowledgeReveal(string id){lock(gate)return !stopped && reveals.Acknowledge(id);}
+        internal bool AuthorizesObservation(ProjectedObservation card){lock(gate)return !stopped && reveals.Authorizes(card);}
         internal bool HasMajorAnimation {get{lock(gate)return !stopped && animations.HasMajor;}}
         internal GameplayMotionBatch[] TakeAnimations(long revision)
         {lock(gate)return stopped?Array.Empty<GameplayMotionBatch>():animations.TakeThrough(revision);}
-        public void Dispose(){lock(gate){if(stopped)return;stopped=true;latest=null;animations.Clear();ClearArtwork();}}
+        public void Dispose(){lock(gate){if(stopped)return;stopped=true;latest=null;reveals.Clear();animations.Clear();ClearArtwork();}}
     }
 }

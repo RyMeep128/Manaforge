@@ -57,8 +57,9 @@ def contract_schema():
                 "card_identity",
                 "commander_id",
                 "copy_source_id",
+                "presentation_id",
             ),
-            "CardObservation": ("name", "set_code", "collector_number"),
+            "CardObservation": ("name", "set_code", "collector_number", "group_id", "group_label", "oracle_id", "printing_id"),
         }.get(name)
         if private_fields:
             definition["allOf"] = [

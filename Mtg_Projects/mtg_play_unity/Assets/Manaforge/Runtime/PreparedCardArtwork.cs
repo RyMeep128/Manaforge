@@ -9,6 +9,8 @@ namespace Manaforge.Play
         internal ViewerSurfaceTicket Ticket {get;}
         public string ObjectId {get;} public long Revision {get;}
         public string OracleId {get;} public string PrintingId {get;}
+        internal ViewerArtworkRequest(ViewerSurfaceTicket ticket,ProjectedObservation card)
+        {Ticket=ticket;ObjectId=card.Id;Revision=card.Context.Revision;OracleId=card.OracleId;PrintingId=card.PrintingId;}
         internal ViewerArtworkRequest(ViewerSurfaceTicket ticket,ProjectedCard card)
         {Ticket=ticket;ObjectId=card.ObjectId;Revision=card.Context.Revision;OracleId=card.Printing.OracleId;PrintingId=card.Printing.PrintingId;}
     }

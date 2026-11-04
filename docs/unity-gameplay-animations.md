@@ -26,6 +26,11 @@ wait for animation completion.
 
 The receive mailbox records compact transition cues before snapshots coalesce.
 Cues describe confirmed visible changes, never actions or a reconstructed game.
+Visible cards carry a separate viewer-scoped `presentation_id`, retained only
+while continuously visible. Artwork, inspection, and animation transitions follow
+that identity; authenticated command references still rotate and are resolved from
+the latest offer at interaction time. Concealment or disappearance retires the
+presentation identity. Consumed animation batch revisions cannot be replayed.
 An uncorrelated stack disappearance is labeled **Stack updated**, rather than
 claiming a resolution or inventing a spell target. A battlefield disappearance
 with no confirmed destination fades locally rather than claiming a death.
@@ -62,3 +67,16 @@ The existing `tools/capture_play_style.ps1` capture step now requires 80 animati
 images: ten scenarios in full/reduced motion at four resolutions, with an
 `animation-proof.json` manifest. The Unity workflow uploads these alongside the
 existing style evidence. These synthetic captures do not replace live acceptance.
+
+## Retained session logs
+
+Unity sessions keep `player.log` and a small `diagnostic.json` report under the
+application data directory at `mtg_core/logs/unity-sessions/session-*`. On a
+default Windows installation this is
+`%LOCALAPPDATA%/PrintProxyPrep/mtg_core/logs/unity-sessions`.
+The newest 20 sessions are retained; each player log keeps at most its final
+4 MiB. This includes failed sessions with no close report. Private launch
+manifests, authentication bootstraps, artwork, and decks remain temporary and are
+removed during normal cleanup. Failed-session archive paths appear in the shared
+diagnostic log. Restart the desktop launcher after a source update to load this
+Python logging behavior, and rebuild the Unity player after runtime/protocol changes.

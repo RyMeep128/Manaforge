@@ -86,7 +86,8 @@
             "attachments": null,
             "attached_to": null,
             "commander_id": null,
-            "copy_source_id": null
+            "copy_source_id": null,
+            "presentation_id": null
           }
         ],
         "actions": [],
@@ -97,7 +98,8 @@
         "commanders": null,
         "observations": [],
         "unsupported_fields": [],
-        "actions_complete": false
+        "actions_complete": false,
+        "payment_reason": null
       }
     },
     {
@@ -154,7 +156,8 @@
             "attachments": null,
             "attached_to": null,
             "commander_id": null,
-            "copy_source_id": null
+            "copy_source_id": null,
+            "presentation_id": null
           }
         ],
         "actions": [],
@@ -165,7 +168,8 @@
         "commanders": null,
         "observations": [],
         "unsupported_fields": [],
-        "actions_complete": false
+        "actions_complete": false,
+        "payment_reason": null
       }
     },
     {
@@ -245,7 +249,8 @@
             "attachments": null,
             "attached_to": null,
             "commander_id": null,
-            "copy_source_id": null
+            "copy_source_id": null,
+            "presentation_id": null
           }
         ],
         "actions": [],
@@ -283,7 +288,8 @@
         "commanders": null,
         "observations": [],
         "unsupported_fields": [],
-        "actions_complete": false
+        "actions_complete": false,
+        "payment_reason": null
       }
     },
     {
@@ -363,7 +369,8 @@
             "attachments": null,
             "attached_to": null,
             "commander_id": null,
-            "copy_source_id": null
+            "copy_source_id": null,
+            "presentation_id": null
           }
         ],
         "actions": [],
@@ -386,7 +393,8 @@
         "commanders": null,
         "observations": [],
         "unsupported_fields": [],
-        "actions_complete": false
+        "actions_complete": false,
+        "payment_reason": null
       }
     },
     {
@@ -414,7 +422,8 @@
         "unsupported_fields": [
           "state_unavailable"
         ],
-        "actions_complete": false
+        "actions_complete": false,
+        "payment_reason": null
       }
     },
     {

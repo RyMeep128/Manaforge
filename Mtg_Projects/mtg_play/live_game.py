@@ -16,6 +16,7 @@ from .deck_preview import DEFAULT_PLAYER
 from .launch_lifecycle import LaunchOwner
 from .launch_manifest import export_launch_manifest
 from .native_metadata import provision_metadata
+from .session_logs import retain_session_logs
 from .viewer_bootstrap import export_viewer_bootstrap
 
 
@@ -136,6 +137,10 @@ class LiveGameLaunch:
         self.summary = None
         self.last_error = None
         self.client_errors = []
+        self.log_directory = None
+        self.payment_diagnostics = None
+        self.version = None
+        self.player = None
 
     def allocate(self):
         self.root = Path(tempfile.mkdtemp(prefix="manaforge-live-game-"))
@@ -208,7 +213,26 @@ class LiveGameLaunch:
                         and not error.is_symlink()
                         and error.stat().st_size <= 1024
                     ):
-                        code = json.loads(error.read_text(encoding="utf-8")).get("code")
+                        error_report = json.loads(error.read_text(encoding="utf-8"))
+                        code = error_report.get("code")
+                        self.payment_diagnostics = {
+                            key: value
+                            for key, value in error_report.items()
+                            if key
+                            in {
+                                "native_auto_payment_last_reason",
+                                "native_auto_payment_steps",
+                                "native_auto_payment_completed",
+                                "native_auto_payment_manual_windows",
+                                "native_auto_payment_mode",
+                            }
+                            and (
+                                type(value) is int
+                                and 0 <= value <= 1000000
+                                or isinstance(value, str)
+                                and re.fullmatch(r"[A-Z_]{1,100}", value)
+                            )
+                        } or None
                         unsupported = resolved / "game-unsupported.json"
                         if (
                             code == "LIVE_OPENING_PROJECTION_UNSUPPORTED"
@@ -225,6 +249,32 @@ class LiveGameLaunch:
                             self.last_error = code
                 except (OSError, ValueError):
                     pass
+                try:
+                    self.log_directory = retain_session_logs(
+                        resolved,
+                        summary=self.summary,
+                        error=self.last_error,
+                        client_errors=self.client_errors,
+                        version=self.version,
+                        player=self.player,
+                        payment=self.payment_diagnostics,
+                    )
+                    if self.log_directory is not None and (
+                        self.last_error or self.client_errors or self.summary is None
+                    ):
+                        from mtg_core.diagnostics import get_logger
+
+                        get_logger(__name__).warning(
+                            "Unity session logs retained directory=%s code=%s",
+                            self.log_directory,
+                            self.last_error or "NO_CONFIRMED_RESULT",
+                        )
+                except (OSError, ValueError):
+                    # Diagnostic storage must not leave child processes or private
+                    # manifests behind, nor replace the original game error.
+                    from mtg_core.diagnostics import get_logger
+
+                    get_logger(__name__).warning("UNITY_LOG_RETENTION_FAILED")
                 shutil.rmtree(resolved)
             self.root = None
 
@@ -284,6 +334,8 @@ def run_live_game(
         raise LiveGameError("UNITY_GAME_BUILD_MISSING")
     launch = launch or LiveGameLaunch()
     launch.allocate()
+    launch.version = version
+    launch.player = player
     result = None
     from .engine_fork import manifest_digest
 

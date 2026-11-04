@@ -237,7 +237,7 @@ public final class ManaforgeGameMetadata {
                     Object probe=type.getMethod("paymentProbe",Game.class,UUID.class,int.class,UUID[].class)
                         .invoke(human,game,playerId,cycle,visible.toArray(new UUID[0]));
                     if(probe instanceof JsonObject)result.add("payment_probe",(JsonObject)probe);
-                    List<UUID> ordinarySources=new ArrayList<>();boolean ordinaryVisible=true;for(CardView source:permitted.getMyPlayer().getBattlefield().values()){ordinaryVisible&=!source.isFaceDown() && !source.hideInfo() && (source.getCounters()==null || source.getCounters().isEmpty());ordinarySources.add(source.getId());}
+                    List<UUID> ordinarySources=new ArrayList<>();boolean ordinaryVisible=true;for(CardView source:permitted.getMyPlayer().getBattlefield().values()){if(!source.isFaceDown() && !source.hideInfo())ordinarySources.add(source.getId());}
                     Object assessment=ordinaryVisible?type.getMethod("ordinaryPayment",Game.class,UUID.class,int.class,UUID[].class).invoke(human,game,playerId,cycle,ordinarySources.toArray(new UUID[0])):null;
                     if(assessment instanceof JsonObject)result.add("ordinary_payment",(JsonObject)assessment);
 

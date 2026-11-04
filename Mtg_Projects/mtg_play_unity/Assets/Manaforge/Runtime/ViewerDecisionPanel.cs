@@ -177,6 +177,7 @@ namespace Manaforge.Play
         {
             var captured=offer;var frame=captured?.Frame;if(frame==null){Clear();return;}
             var floating=frame.ViewerMana==null?"":string.Join(", ",System.Linq.Enumerable.Select(System.Linq.Enumerable.Where(frame.ViewerMana,pair=>pair.Value>0),pair=>pair.Key+" "+pair.Value));manaPool.text=string.IsNullOrEmpty(floating)?"":"Floating mana: "+floating;manaPool.style.display=string.IsNullOrEmpty(floating)?DisplayStyle.None:DisplayStyle.Flex;prompt.text=OpeningHandFan.PlainPrompt(frame.Decision.Prompt??"Choose an action");Root.style.display=DisplayStyle.Flex;controls.Clear();pages.Clear();numericSubmit=null;cardChoices=null;
+            if(!string.IsNullOrEmpty(frame.PaymentReason)){status.text="Manual payment required: "+frame.PaymentReason.Replace('_',' ').ToLowerInvariant()+".";UnityEngine.Debug.Log("Manaforge payment fallback: "+frame.PaymentReason);}
             IsLibraryOrdering=LibraryOrdering(prompt.text);
             Root.EnableInClassList("library-ordering",IsLibraryOrdering);
             if(IsLibraryOrdering){

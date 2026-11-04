@@ -83,6 +83,19 @@ class PublicArtworkServer:
         self.pin = hashlib.sha256(encoded).hexdigest()
 
     def respond(self, request):
+        if request.get("action") == "resolve_printing":
+            card = self.service.get_print(
+                set_code=str(request.get("set", "")).lower(),
+                collector_number=str(request.get("number", "")),
+            )
+            if (
+                card
+                and card.get("name") == request.get("name")
+                and card.get("id")
+                and card.get("oracle_id")
+            ):
+                return dict(oracle_id=card["oracle_id"], printing_id=card["id"]), b""
+            return dict(unavailable=True), b""
         if request.get("action") == "resolve_token":
             card = self.resolve_token(request)
             return (

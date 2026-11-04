@@ -77,7 +77,7 @@ namespace Manaforge.Play
             else if(Current.Stops.Contains("step:"+frame.Step) || Current.Stops.Contains("phase:"+frame.Phase))reason="Phase / step stop";
             else if(Current.Attempted.Contains(frame.Decision.DecisionId))reason="Waiting for engine confirmation";
             else if(Current.Yield==null && !Current.Automatic)reason="Automatic passing off";
-            else if(Current.Yield==null && Responses(frame)!=PriorityResponse.No)reason=Responses(frame)==PriorityResponse.Unknown?"Response information unavailable":"Responses available";
+            else if(Current.Yield==null && frame.Phase!="BEGINNING" && Responses(frame)!=PriorityResponse.No)reason=Responses(frame)==PriorityResponse.Unknown?"Response information unavailable":"Responses available";
             if(reason!=null){Current.Reason=reason;return null;}
             var passes=frame.Actions.Where(action=>action.Kind=="pass" && action.ObjectId==null).ToArray();
             if(passes.Length!=1){Current.Reason="Pass action unavailable";return null;}

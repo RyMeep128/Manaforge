@@ -75,6 +75,7 @@ namespace Manaforge.Play
     public sealed class ProjectedDecisionFrame
     {
         public CardProjectionContext Context {get;} public string Status {get;} public string Result {get;} public long? Turn {get;} public string Phase {get;} public string ActivePlayerId {get;} public bool ActionsComplete {get;}
+        public string PaymentReason {get;}
         public string Step {get;} public string PriorityPlayerId {get;}
         public IReadOnlyList<string> StackIds {get;}
         public IReadOnlyDictionary<string,long?> PlayerLifeTotals {get;}
@@ -88,6 +89,7 @@ namespace Manaforge.Play
         internal ProjectedDecisionFrame(JObject source)
         {
             if(source["commanders"] is JArray commanders)Commanders=Array.AsReadOnly(commanders.Select(value=>new ProjectedCommander(value,source)).ToArray());
+            PaymentReason=(string)source["payment_reason"];
             Step=(string)source["step"];PriorityPlayerId=(string)source["priority_player_id"];
             StackIds=Array.AsReadOnly(source["objects"].Where(card=>(string)card["zone"]=="stack").Select(card=>(string)card["object_id"]).ToArray());
             Result=(string)source["result"];Turn=(long?)source["turn"];Phase=(string)source["phase"];ActivePlayerId=(string)source["active_player_id"];

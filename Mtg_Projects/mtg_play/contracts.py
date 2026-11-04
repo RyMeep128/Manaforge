@@ -103,6 +103,7 @@ class GameObject(Serializable):
     attached_to: str | None = None
     commander_id: str | None = None
     copy_source_id: str | None = None
+    presentation_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -186,6 +187,10 @@ class CardObservation(Serializable):
     name: str | None = None
     set_code: str | None = None
     collector_number: str | None = None
+    group_id: str | None = None
+    group_label: str | None = None
+    oracle_id: str | None = None
+    printing_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -210,6 +215,7 @@ class GameSnapshot(Serializable):
     observations: tuple[CardObservation, ...] = ()
     unsupported_fields: tuple[str, ...] = ()
     actions_complete: bool = False
+    payment_reason: str | None = None
 
 
 @dataclass(frozen=True)

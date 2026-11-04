@@ -89,7 +89,8 @@ def main():
                             str(source), str(adapter), str(response), str(context_source),
                             str(PLAY / "java/payment-xmage/manaforge/payment/xmage/OrdinaryManaShape.java"),
                             str(PLAY / "java/payment-xmage/manaforge/payment/xmage/OrdinaryCostCoverage.java"),
-                            str(PLAY / "java/payment-xmage/manaforge/payment/xmage/NativePaymentHazards.java"), *map(str, bridge_sources)],
+                            str(PLAY / "java/payment-xmage/manaforge/payment/xmage/NativePaymentHazards.java"),
+                            str(PLAY / "java/payment-xmage/manaforge/payment/xmage/NativePaymentPlan.java"), *map(str, bridge_sources)],
                            check=True, timeout=60)
             subprocess.run([runtime, "-cp", output + os.pathsep + native_classpath,
                             "manaforge.payment.PinnedPaymentChecks"], cwd=output, check=True, timeout=30)

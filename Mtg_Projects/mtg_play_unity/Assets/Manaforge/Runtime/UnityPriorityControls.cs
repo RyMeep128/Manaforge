@@ -9,7 +9,7 @@ namespace Manaforge.Play
     {
         private readonly ViewerDecisionPanel panel;
         public VisualElement Root {get;}=new VisualElement{name="unity-priority-controls"};
-        private readonly Toggle automatic=new Toggle("Auto-pass with no responses");
+        private readonly Toggle automatic=new Toggle("Auto-pass priority");
         private readonly Toggle manual=new Toggle("Manual control");
         private readonly Label state=new Label{name="unity-priority-status",enableRichText=false};
         private readonly Button cancel,resume,untilTurn,untilStack;
@@ -21,7 +21,7 @@ namespace Manaforge.Play
             this.panel=panel??throw new ArgumentNullException(nameof(panel));panel.EnablePriority();
             Root.Add(automatic);Root.Add(manual);Root.Add(state);
             automatic.name="unity-priority-automatic";manual.name="unity-priority-manual";
-            automatic.tooltip="Pass genuine priority when the engine confirms no available response.";
+            automatic.tooltip="Pass through upkeep and draw unless a stop is set. In other phases, pass only when no response is available.";
             manual.tooltip="Hold every priority opportunity until Manual control is switched off.";
             automatic.RegisterValueChangedCallback(change=>{panel.Priority.Current.Automatic=change.newValue;Changed();});
             manual.RegisterValueChangedCallback(change=>{panel.Priority.Current.Manual=change.newValue;panel.Priority.CancelYield();Changed();});

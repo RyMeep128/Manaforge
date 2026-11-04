@@ -11,6 +11,8 @@ public final class ManaforgeOpeningProjection {
     private final Map<String,CardIdentity> printings=new HashMap<>();
     private final Map<String,String> players=new HashMap<>();
     private final Map<String,String> stackReferences=new HashMap<>();
+    private final Map<String,String> presentationReferences=new HashMap<>();
+    private final Map<String,CardObservation> observedCards=new LinkedHashMap<>();
     private final Map<String,String> commanderReferences=new HashMap<>();
     static boolean completePriorityActions(JsonArray offered,Collection<String> projected) {
         Set<String> expected=new HashSet<>(),actual=new HashSet<>();
@@ -270,6 +272,7 @@ public final class ManaforgeOpeningProjection {
             Set<String> commanderNativeIds=projectCommanders(raw,result);
             Map<String,String> visibleReferences=new HashMap<>();
             Set<String> currentStackIds=new HashSet<>();
+            Map<String,String> nextPresentationReferences=new HashMap<>();
             for(JsonObject row:displayed) {require(cardIds.add(row.get("id").getAsString()));
                 GameObject card=new GameObject();
                 boolean visibleStack=stackRows.contains(row) && Boolean.FALSE.equals(flag(row,"hidden")) && Boolean.FALSE.equals(flag(row,"face_down"));
@@ -300,6 +303,11 @@ public final class ManaforgeOpeningProjection {
                     if(binding!=null){card.card_identity=JSON.fromJson(JSON.toJson(binding),CardIdentity.class);if(!viewer.equals(card.owner_id))card.card_identity.deck_entry_id=null;}
                 } else card.hidden=true;
                 if(coreCombat && "battlefield".equals(card.zone) && !card.hidden && Boolean.FALSE.equals(card.face_down) && card.characteristics!=null && card.characteristics.type_line!=null && (card.characteristics.type_line.contains("Planeswalker") || card.characteristics.type_line.contains("Battle"))){require(knownCombatDefenders.contains(row.get("id").getAsString()) || knownCombatDefenders.size()<256);knownCombatDefenders.add(row.get("id").getAsString());}
+                if(!card.hidden && Boolean.FALSE.equals(card.face_down)){
+                    String nativeId=row.get("id").getAsString();
+                    card.presentation_id=presentationReferences.containsKey(nativeId)?presentationReferences.get(nativeId):opaque();
+                    nextPresentationReferences.put(nativeId,card.presentation_id);
+                }
                 cards.add(card);
             }
             stackReferences.keySet().retainAll(currentStackIds);
@@ -403,8 +411,18 @@ public final class ManaforgeOpeningProjection {
                 CombatAssignment assignment=new CombatAssignment();assignment.attackers=new String[]{reference};List<String> blockerReferences=new ArrayList<>();Set<String> uniqueBlockers=new HashSet<>();require(group.getAsJsonArray("blockers").size()<=256);
                 for(JsonElement item:group.getAsJsonArray("blockers")){require(item.isJsonPrimitive() && item.getAsJsonPrimitive().isString() && uniqueBlockers.add(item.getAsString()));String blockerReference=visibleReferences.get(item.getAsString());GameObject blocker=null;for(GameObject card:cards)if(card.object_id.equals(blockerReference))blocker=card;require(blocker!=null && "battlefield".equals(blocker.zone) && defender.equals(blocker.controller_id) && Boolean.FALSE.equals(blocker.hidden) && Boolean.FALSE.equals(blocker.face_down));blockerReferences.add(blockerReference);}
                 assignment.blockers=blockerReferences.toArray(new String[0]);assignment.defender_id=defender;assignment.blocked=flag(group,"blocked");result.combat=new CombatAssignment[]{assignment};
-            }result.observations=new CardObservation[0];
-            result.unsupported_fields=new String[]{"object_incarnations","commander_metadata","live_abilities","actions","mana","counters","eliminated","observations","attachments","copy_metadata","physical_printing"};
+            }
+            if(raw.has("observations"))for(JsonElement item:raw.getAsJsonArray("observations")){
+                JsonObject row=item.getAsJsonObject();if(!"revealed".equals(text(row,"source")) || !Boolean.FALSE.equals(flag(row,"hidden")))continue;
+                String id=text(row,"observation_id"),group=text(row,"group_id");if(id==null || group==null || observedCards.containsKey(id))continue;
+                require(observedCards.size()<2048 && id.length()<=128 && group.length()<=128);
+                CardObservation observation=new CardObservation();observation.observation_id=id;observation.source="revealed";observation.hidden=false;
+                observation.name=text(row,"name");observation.set_code=text(row,"set");observation.collector_number=text(row,"number");observation.group_id=group;observation.group_label=text(row,"group_label");
+                CardIdentity identity=NativeGameLaunch.observationArtwork(row);if(identity!=null){observation.oracle_id=identity.oracle_id;observation.printing_id=identity.printing_id;}
+                observedCards.put(id,observation);
+            }
+            result.observations=observedCards.values().toArray(new CardObservation[0]);result.payment_reason=text(raw,"payment_reason");
+            result.unsupported_fields=new String[]{"object_incarnations","commander_metadata","live_abilities","actions","mana","counters","eliminated","attachments","copy_metadata","physical_printing"};
             if(coreCombat && cards.stream().anyMatch(card->"stack".equals(card.zone) && (card.controller_id==null || card.owner_id==null))){List<String> unsupported=new ArrayList<>(Arrays.asList(result.unsupported_fields));unsupported.add("stack_ownership");result.unsupported_fields=unsupported.toArray(new String[0]);}
             if(missingCombatant){List<String> unsupported=new ArrayList<>(Arrays.asList(result.unsupported_fields));unsupported.add("combat_lki");result.unsupported_fields=unsupported.toArray(new String[0]);}
             if(missingDefender){List<String> unsupported=new ArrayList<>(Arrays.asList(result.unsupported_fields));unsupported.add("combat_defender_lki");result.unsupported_fields=unsupported.toArray(new String[0]);}
@@ -421,6 +439,7 @@ public final class ManaforgeOpeningProjection {
             nativeOptions.putAll(offeredOptions);
             nativeActions.putAll(offeredNative);
             if(coreCombat)for(JsonObject row:battlefield){require(knownCombatants.contains(row.get("id").getAsString()) || knownCombatants.size()<4096);knownCombatants.add(row.get("id").getAsString());}
+            presentationReferences.clear();presentationReferences.putAll(nextPresentationReferences);
             revision++;return output;
         }catch(IOException failure){throw failure;}catch(RuntimeException failure){IOException sanitized=new IOException("LIVE_OPENING_PROJECTION_UNSUPPORTED");sanitized.setStackTrace(failure.getStackTrace());throw sanitized;}
     }

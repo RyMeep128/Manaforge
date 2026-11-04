@@ -226,10 +226,10 @@ namespace Manaforge.Play
                 var card=item.card;var view=item.view;view.style.position=Position.Absolute;
                 view.style.display=DisplayStyle.None;
                 if(wired.Add(view)){
-                    string id=card.ObjectId;view.focusable=true;view.AddToClassList("table-card");
-                    view.RegisterCallback<PointerEnterEvent>(ev=>{hoveredCard=view;hoveredId=id;RefreshCardFocus();});
+                    view.focusable=true;view.AddToClassList("table-card");
+                    view.RegisterCallback<PointerEnterEvent>(ev=>{hoveredCard=view;hoveredId=Surface.CurrentObjectId(view);RefreshCardFocus();});
                     view.RegisterCallback<PointerLeaveEvent>(ev=>{if(hoveredCard==view){hoveredCard=null;hoveredId=null;}RefreshCardFocus();});
-                    view.RegisterCallback<FocusInEvent>(ev=>{focusedCard=view;focusedId=id;RefreshCardFocus();});
+                    view.RegisterCallback<FocusInEvent>(ev=>{focusedCard=view;focusedId=Surface.CurrentObjectId(view);RefreshCardFocus();});
                     view.RegisterCallback<FocusOutEvent>(ev=>{if(focusedCard==view){focusedCard=null;focusedId=null;}RefreshCardFocus();});
                     view.RegisterCallback<DetachFromPanelEvent>(ev=>{
                         if(ev.target!=view)return;
@@ -237,9 +237,11 @@ namespace Manaforge.Play
                         if(focusedCard==view){focusedCard=null;focusedId=null;}
                         RefreshCardFocus();
                     });
-                    view.RegisterCallback<PointerDownEvent>(ev=>{if(ev.button==1){InspectCard(id);ev.StopPropagation();}});
-                    view.RegisterCallback<KeyDownEvent>(ev=>{if(ev.keyCode==KeyCode.Space){InspectCard(id);ev.StopPropagation();}});
+                    view.RegisterCallback<PointerDownEvent>(ev=>{if(ev.button==1){InspectCard(Surface.CurrentObjectId(view));ev.StopPropagation();}});
+                    view.RegisterCallback<KeyDownEvent>(ev=>{if(ev.keyCode==KeyCode.Space){InspectCard(Surface.CurrentObjectId(view));ev.StopPropagation();}});
                 }
+                if(hoveredCard==view)hoveredId=card.ObjectId;if(focusedCard==view)focusedId=card.ObjectId;
+                if(emphasizedCard==view){emphasizedId=card.ObjectId;if(previewing)previewId=card.ObjectId;}
                 view.EnableInClassList("selected",frame.Decision?.Options.Any(o=>o.ObjectId==card.ObjectId && o.Selected)==true);
                 view.EnableInClassList("attacking",frame.Combat.Any(g=>g.AttackerIds.Contains(card.ObjectId)));
                 view.EnableInClassList("blocking",frame.Combat.Any(g=>g.BlockerIds.Contains(card.ObjectId)));

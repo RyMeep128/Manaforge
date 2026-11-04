@@ -18,6 +18,79 @@ from mtg_play.contracts import GameSetup, MatchSeat
 from generate_launch_fixtures import native_deck
 
 
+@pytest.fixture(autouse=True)
+def isolated_session_logs(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        "mtg_play.session_logs.core_data_root", lambda: tmp_path / "core"
+    )
+
+
+def test_player_log_survives_cleanup_without_private_launch_files(tmp_path):
+    launch = LiveGameLaunch()
+    launch.allocate()
+    root = launch.root
+    (root / "player.log").write_text("NullReferenceException: first-player choice\n")
+    (root / "game-error.json").write_text('{"code":"RECEIVE_SHAPE"}')
+    (root / "viewer-bootstrap.json").write_text("PRIVATE_AUTHENTICATION")
+    (root / "launch.json").write_text("PRIVATE_DECK")
+    launch.close()
+    assert not root.exists()
+    assert launch.log_directory.parent == tmp_path / "core/logs/unity-sessions"
+    assert (
+        launch.log_directory / "player.log"
+    ).read_text() == "NullReferenceException: first-player choice\n"
+    report = json.loads((launch.log_directory / "diagnostic.json").read_text())
+    assert report["error_code"] == "RECEIVE_SHAPE"
+    assert report["client_errors"] == ["NullReferenceException"]
+    assert {p.name for p in launch.log_directory.iterdir()} == {
+        "player.log",
+        "diagnostic.json",
+    }
+    archived = launch.log_directory
+    launch.close()
+    assert launch.log_directory == archived
+
+
+def test_log_retention_limits_sessions_and_preserves_oversized_log_tail(
+    tmp_path, monkeypatch
+):
+    from mtg_play import session_logs
+
+    source = tmp_path / "source"
+    source.mkdir()
+    destination = tmp_path / "archive"
+    monkeypatch.setattr(session_logs, "MAX_SESSIONS", 2)
+    monkeypatch.setattr(session_logs, "MAX_PLAYER_LOG_BYTES", 16)
+    (source / "player.log").write_bytes(b"old data " * 20 + b"FINAL_EXCEPTION\n")
+    first = session_logs.retain_session_logs(source, destination=destination)
+    second = session_logs.retain_session_logs(source, destination=destination)
+    third = session_logs.retain_session_logs(source, destination=destination)
+    assert not first.exists()
+    assert second.is_dir() and third.is_dir()
+    assert (third / "player.log").read_bytes().endswith(b"FINAL_EXCEPTION\n")
+    assert (third / "player.log").stat().st_size <= 16
+    assert (
+        json.loads((third / "diagnostic.json").read_text())["player_log_truncated"]
+        is True
+    )
+
+
+def test_log_storage_failure_does_not_prevent_private_workspace_cleanup(monkeypatch):
+    launch = LiveGameLaunch()
+    launch.allocate()
+    root = launch.root
+    (root / "player.log").write_text("a failure")
+
+    def unavailable(*args, **kwargs):
+        raise OSError("disk unavailable")
+
+    monkeypatch.setattr("mtg_play.live_game.retain_session_logs", unavailable)
+    launch.close()
+    assert not root.exists()
+    assert launch.root is None
+    assert launch.log_directory is None
+
+
 def test_owned_cleanup_preserves_only_bounded_result_and_safe_code():
     launch = LiveGameLaunch()
     launch.allocate()

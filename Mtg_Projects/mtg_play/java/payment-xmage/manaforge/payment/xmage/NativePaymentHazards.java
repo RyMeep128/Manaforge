@@ -42,10 +42,14 @@ public final class NativePaymentHazards {
                 if(id==null || player==null || !id.equals(player.getId()))return Result.UNKNOWN;
                 if(!state.getTriggered(id).isEmpty())return Result.REQUIRES_MANUAL;
             }
-            // Initial scope is spell payments. Activated/other payment families need review.
+            // Spell and activated-ability payments use the same guarded source context.
             UUID source=payingAbility.getSourceId();
-            if(payingAbility.getAbilityType()!=AbilityType.SPELL || source==null)return Result.UNKNOWN;
+            if((payingAbility.getAbilityType()!=AbilityType.SPELL && !payingAbility.getAbilityType().isActivatedAbility()) || source==null)return Result.UNKNOWN;
             Card card=game.getCard(source);
+            if(payingAbility.getAbilityType().isActivatedAbility()){
+                mage.MageObject object=game.getObject(source);
+                return object!=null && source.equals(object.getId()) && game.getState()==state && state.getApplyEffectsCounter()==cycle?Result.NO_REGISTERED_HAZARD:Result.UNKNOWN;
+            }
             if(!(card instanceof CardImpl) || !source.equals(card.getId()))return Result.UNKNOWN;
             // Same native check used by HumanPlayer before narrowing selected-source abilities.
             if(((CardImpl)card).caresAboutManaColor(game))return Result.REQUIRES_MANUAL;

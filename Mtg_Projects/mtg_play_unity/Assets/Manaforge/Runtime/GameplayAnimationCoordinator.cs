@@ -21,7 +21,7 @@ namespace Manaforge.Play
         private readonly List<Run> active=new List<Run>();
         private readonly Dictionary<string,Vector2> points=new Dictionary<string,Vector2>();
         private readonly Dictionary<string,(ProjectedCard card,CardView view)> bindings=new Dictionary<string,(ProjectedCard,CardView)>();
-        private string session,viewer;private long revision=-1;private float? holdStarted;
+        private string session,viewer;private long revision=-1,lastBatchRevision=-1;private float? holdStarted;
         private bool disposed,lastReduced,showingResult;private string lastResult;
         private sealed class Work
         {public GameplayMotionCue Cue;public Vector2? Prior;public float Ready,Queued;}
@@ -67,7 +67,8 @@ namespace Manaforge.Play
                 lastResult=frame.Result;showingResult=true;
             }
             foreach(var batch in incoming){
-                if(batch.Context.SessionId!=session || batch.Context.ViewerId!=viewer || batch.Context.Revision>revision)continue;
+                if(batch.Context.SessionId!=session || batch.Context.ViewerId!=viewer || batch.Context.Revision>revision || batch.Context.Revision<=lastBatchRevision)continue;
+                lastBatchRevision=batch.Context.Revision;
                 var cues=batch.Cues;
                 if(cues.Any(cue=>cue.Kind==GameplayMotionKind.Result)){ClearEffects();}
                 if(pending.Count>=MaximumPending){pending.Clear();cues=new[]{new GameplayMotionCue(GameplayMotionKind.Summary,text:"Battlefield updated")};}
@@ -75,7 +76,7 @@ namespace Manaforge.Play
                 foreach(var cue in cues){
                     if(Revoked(cue))continue;
                     bool stagger=cue.Kind==GameplayMotionKind.Draw || cue.Kind==GameplayMotionKind.Arrive;
-                    group.Add(new Work{Cue=cue,Prior=cue.ObjectId!=null && points.TryGetValue(cue.ObjectId,out var old)?old:(Vector2?)null,
+                    group.Add(new Work{Cue=cue,Prior=cue.SubjectId!=null && points.TryGetValue(cue.SubjectId,out var old)?old:(Vector2?)null,
                         Queued=now,Ready=now+(stagger?Mathf.Min(arrival++,6)*.1f:0)});
                 }
                 if(group.Count>0)pending.Enqueue(group);
@@ -86,11 +87,11 @@ namespace Manaforge.Play
         }
         private void RefreshBindings()
         {
-            bindings.Clear();surface.VisitAnimationBindings((card,view)=>bindings[card.ObjectId]=(card,view));
+            bindings.Clear();surface.VisitAnimationBindings((card,view)=>bindings[card.RenderId]=(card,view));
         }
         private bool Revoked(GameplayMotionCue cue)
         {
-            foreach(var id in new[]{cue.ObjectId,cue.RelatedId})if(id!=null){var card=surface.AnimationCard(id);if(card!=null && (card.Hidden || card.FaceDown!=false))return true;}
+            foreach(var id in new[]{cue.SubjectId,cue.RelatedId})if(id!=null){var card=surface.AnimationCard(id);if(card==null){if(!playerAnchor(id).HasValue)return true;}else if(card.Hidden || card.FaceDown!=false)return true;}
             return false;
         }
         private static bool Displayed(CardView view)=>view.parent!=null && view.style.display.value!=DisplayStyle.None && view.worldBound.width>1 && view.worldBound.height>1;
@@ -106,7 +107,7 @@ namespace Manaforge.Play
             return playerAnchor(id);
         }
         private static bool Conflicts(GameplayMotionCue a,GameplayMotionCue b)
-            =>a.ObjectId!=null && (a.ObjectId==b.ObjectId || a.ObjectId==b.RelatedId) || a.RelatedId!=null && (a.RelatedId==b.ObjectId || a.RelatedId==b.RelatedId);
+            =>a.SubjectId!=null && (a.SubjectId==b.SubjectId || a.SubjectId==b.RelatedId) || a.RelatedId!=null && (a.RelatedId==b.SubjectId || a.RelatedId==b.RelatedId);
         public void Advance()
         {
             if(disposed)return;
@@ -117,8 +118,8 @@ namespace Manaforge.Play
                 foreach(var run in active){run.Reduced=true;run.Started=now;run.Duration=.15f;run.Effect.Reduced=true;run.Effect.ParticleCount=0;run.Effect.Link=false;if(run.Card!=null)run.Card.style.display=DisplayStyle.None;}
             }lastReduced=minimal;
             for(int i=active.Count-1;i>=0;i--){
-                var run=active[i];var admitted=surface.AnimationCard(run.Work.Cue.ObjectId);
-                bool lost=Revoked(run.Work.Cue) || run.Texture!=null && (admitted==null || !bindings.TryGetValue(run.Work.Cue.ObjectId??"",out var bound)
+                var run=active[i];var admitted=surface.AnimationCard(run.Work.Cue.SubjectId);
+                bool lost=Revoked(run.Work.Cue) || run.Texture!=null && (admitted==null || !bindings.TryGetValue(run.Work.Cue.SubjectId??"",out var bound)
                     || bound.view.Artwork!=run.Texture || admitted.Printing?.PrintingId!=bound.card.Printing?.PrintingId || admitted.Printing?.OracleId!=bound.card.Printing?.OracleId);
                 float t=Mathf.Clamp01((now-run.Started)/run.Duration);
                 if(lost || t>=1){run.Root.RemoveFromHierarchy();active.RemoveAt(i);continue;}
@@ -141,7 +142,7 @@ namespace Manaforge.Play
         }
         private void Start(Work work,float now,bool minimal)
         {
-            var cue=work.Cue;var point=Anchor(cue.ObjectId)??zoneAnchor(cue.OwnerId,cue.ToZone??cue.FromZone)??Middle;
+            var cue=work.Cue;var point=Anchor(cue.SubjectId)??zoneAnchor(cue.OwnerId,cue.ToZone??cue.FromZone)??Middle;
             if(cue.Kind==GameplayMotionKind.Cast)point=zoneAnchor(cue.OwnerId,"stack")??point;
             if(cue.Kind==GameplayMotionKind.Depart && cue.ToZone!=null)point=zoneAnchor(cue.OwnerId,cue.ToZone)??point;
             if(cue.Kind==GameplayMotionKind.Turn || cue.Kind==GameplayMotionKind.Result || cue.Kind==GameplayMotionKind.Summary)point=Middle;
@@ -161,13 +162,13 @@ namespace Manaforge.Play
             if(!minimal && moving){
                 run.Card=new Image{name="motion-card",pickingMode=PickingMode.Ignore,scaleMode=ScaleMode.ScaleToFit};run.Card.style.position=Position.Absolute;
                 if(cue.Kind==GameplayMotionKind.Draw)GameplayTheme.Back(run.Card);
-                else if(cue.ObjectId!=null && bindings.TryGetValue(cue.ObjectId,out var bound) && !bound.card.Hidden && bound.card.FaceDown==false){
-                    var admitted=surface.AnimationCard(cue.ObjectId);
+                else if(cue.SubjectId!=null && bindings.TryGetValue(cue.SubjectId,out var bound) && !bound.card.Hidden && bound.card.FaceDown==false){
+                    var admitted=surface.AnimationCard(cue.SubjectId);
                     bool same=admitted!=null && !admitted.Hidden && admitted.FaceDown==false && admitted.Printing?.PrintingId==bound.card.Printing?.PrintingId && admitted.Printing?.OracleId==bound.card.Printing?.OracleId;
                     run.Texture=same?bound.view.Artwork:null;run.Card.image=run.Texture;
                     if(Displayed(bound.view))run.Size=new Vector2(Mathf.Clamp(bound.view.layout.width,65,170),Mathf.Clamp(bound.view.layout.height,90,238));
                 }
-                var visible=surface.AnimationCard(cue.ObjectId);
+                var visible=surface.AnimationCard(cue.SubjectId);
                 bool generic=visible!=null && !visible.Hidden && visible.FaceDown==false;
                 if(run.Texture==null && generic)GameplayTheme.Back(run.Card);
                 if(cue.Kind==GameplayMotionKind.Draw || run.Texture!=null || generic)run.Root.Add(run.Card);else run.Card=null;
@@ -208,7 +209,7 @@ namespace Manaforge.Play
             }
         }
         private void ClearEffects(){foreach(var run in active)run.Root.RemoveFromHierarchy();active.Clear();pending.Clear();holdStarted=null;}
-        public void Clear(){ClearEffects();bindings.Clear();points.Clear();session=viewer=null;revision=-1;lastReduced=false;showingResult=false;lastResult=null;}
+        public void Clear(){ClearEffects();bindings.Clear();points.Clear();session=viewer=null;revision=-1;lastBatchRevision=-1;lastReduced=false;showingResult=false;lastResult=null;}
         public void Dispose(){if(disposed)return;Clear();disposed=true;ticker.Pause();surface.Clearing-=Clear;root.UnregisterCallback<DetachFromPanelEvent>(Detached);layer.RemoveFromHierarchy();}
     }
 }

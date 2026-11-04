@@ -59,6 +59,20 @@ public final class NativeGameLaunch {
         for (String key : ambiguousArtwork) result.remove(key);
         return result;
     }
+    public static CardIdentity observationArtwork(JsonObject row){
+        String path=System.getProperty("manaforge.publicArtwork");if(path==null)return null;
+        try{
+            JsonObject manifest=JsonParser.parseString(new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(path)),java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject();
+            JsonObject resolver=manifest.getAsJsonObject("resolver");if(resolver==null || !"127.0.0.1".equals(resolver.get("host").getAsString()))return null;
+            JsonObject request=new JsonObject();request.addProperty("action","resolve_printing");request.add("key",resolver.get("key"));request.add("session_id",manifest.get("session_id"));request.add("viewer_id",manifest.get("viewer_id"));
+            for(String field:new String[]{"name","set","number"})if(row.has(field))request.add(field,row.get(field));
+            try(java.net.Socket socket=new java.net.Socket()){
+                socket.connect(new java.net.InetSocketAddress("127.0.0.1",resolver.get("port").getAsInt()),3000);socket.setSoTimeout(5000);
+                manaforge.protocol.TextFrame.write(socket.getOutputStream(),request.toString());JsonObject response=manaforge.protocol.WireEnvelope.parseObject(manaforge.protocol.TextFrame.read(socket.getInputStream()));
+                if(response.has("unavailable"))return null;CardIdentity identity=new CardIdentity();identity.oracle_id=response.get("oracle_id").getAsString();identity.printing_id=response.get("printing_id").getAsString();return identity;
+            }
+        }catch(Exception missing){return null;}
+    }
     private static final Map<String,CardIdentity> tokenArtwork=new HashMap<>();
     public static synchronized CardIdentity tokenArtwork(JsonObject row) {
         String path=System.getProperty("manaforge.publicArtwork");if(path==null)return null;

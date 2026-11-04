@@ -53,6 +53,8 @@ public final class ManaforgeBridge implements MageClient {
     private volatile boolean decisionFinishable;
     private int lastDecisionMessageId = -1;
     private int lastStateMessageId = -1;
+    private final java.util.Map<String,String> activeReveals=new java.util.HashMap<>();
+    private final JsonArray revealHistory=new JsonArray();
 
     private synchronized boolean claimManaResponse(UUID expectedGame,int expectedDecision,UUID source) {
         if(gameId==null || !gameId.equals(expectedGame) || expectedDecision!=decisionId || decisionId<0
@@ -340,8 +342,20 @@ public final class ManaforgeBridge implements MageClient {
         }
         data.add("players", players);
         JsonArray observations = new JsonArray();
-        for (RevealedView revealed : view.getRevealed())
-            for (CardView card : revealed.getCards().values()) observations.add(observation(card, "revealed"));
+        java.util.Map<String,String> nextReveals=new java.util.HashMap<>();
+        for(RevealedView revealed:view.getRevealed()){
+            java.util.List<CardView> sorted=new java.util.ArrayList<>(revealed.getCards().values());
+            sorted.sort(java.util.Comparator.comparing(card->card.getId().toString()));
+            String signature=revealed.getName()+"/"+sorted.stream().map(card->card.getId()+":"+card.hideInfo()+":"+card.isFaceDown()).collect(java.util.stream.Collectors.joining("|"));
+            String group=activeReveals.get(signature);boolean fresh=group==null;if(fresh)group="reveal-"+UUID.randomUUID();nextReveals.put(signature,group);
+            if(fresh)for(CardView card:sorted){
+                JsonObject entry=observation(card,"revealed");if(entry.get("hidden").getAsBoolean())continue;
+                if(revealHistory.size()>=2048)throw new IllegalStateException("REVEAL_HISTORY_LIMIT");
+                entry.addProperty("observation_id","observation-"+UUID.randomUUID());entry.addProperty("group_id",group);entry.addProperty("group_label","Revealed cards");revealHistory.add(entry);
+            }
+        }
+        activeReveals.clear();activeReveals.putAll(nextReveals);
+        for(com.google.gson.JsonElement entry:revealHistory)observations.add(entry.deepCopy());
         for (RevealedView companion : view.getCompanion())
             for (CardView card : companion.getCards().values()) observations.add(observation(card, "companion"));
         for (LookedAtView looked : view.getLookedAt())

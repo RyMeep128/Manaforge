@@ -839,9 +839,37 @@ public final class OpeningProjectionChecks {
         seat.getAsJsonArray("command").remove(0);seat.getAsJsonArray("battlefield").add(card);metadata.getAsJsonArray("commanders").get(0).getAsJsonObject().addProperty("plays",2);trace.observe(state,metadata);fails("COMMANDER_SCENARIO_UNPROVEN",trace::proof);
         metadata.getAsJsonArray("commanders").get(0).getAsJsonObject().addProperty("tax","{4}");trace.observe(state,metadata);check(new JsonPrimitive(true).equals(trace.proof().get("native_commander_tax_verified")));check(!trace.stop());
     }
+    static void presentationIdentityChecks() throws Exception {
+        ManaforgeOpeningProjection projection=projection();JsonObject raw=state();
+        JsonObject first=projection.project(raw,prompt());shape(first);
+        String identity=first.getAsJsonArray("objects").get(0).getAsJsonObject().get("presentation_id").getAsString();
+        String stale=choose(first,0);
+        JsonObject second=projection.project(raw,prompt());shape(second);
+        check(identity.equals(second.getAsJsonArray("objects").get(0).getAsJsonObject().get("presentation_id").getAsString()));
+        check(!first.getAsJsonArray("objects").get(0).getAsJsonObject().get("object_id").equals(second.getAsJsonArray("objects").get(0).getAsJsonObject().get("object_id")));
+        fails("STALE_DECISION",()->projection.claimBoolean(stale,"session","human","raw-game","raw-human",41,8));
+        JsonObject row=raw.getAsJsonArray("hand").get(0).getAsJsonObject();row.addProperty("hidden",true);
+        JsonObject hidden=projection.project(raw,prompt());shape(hidden);check(hidden.getAsJsonArray("objects").get(0).getAsJsonObject().get("presentation_id").isJsonNull());
+        row.addProperty("hidden",false);JsonObject revealed=projection.project(raw,prompt());shape(revealed);
+        String fresh=revealed.getAsJsonArray("objects").get(0).getAsJsonObject().get("presentation_id").getAsString();check(!identity.equals(fresh));
+        JsonObject removed=raw.getAsJsonArray("hand").remove(0).getAsJsonObject();projection.project(raw,prompt());raw.getAsJsonArray("hand").add(removed);
+        JsonObject returned=projection.project(raw,prompt());shape(returned);check(!fresh.equals(returned.getAsJsonArray("objects").get(0).getAsJsonObject().get("presentation_id").getAsString()));
+        JsonObject other=projection().project(raw,prompt());check(!returned.getAsJsonArray("objects").get(0).getAsJsonObject().get("presentation_id").equals(other.getAsJsonArray("objects").get(0).getAsJsonObject().get("presentation_id")));
+    }
+    static void revealObservationChecks() throws Exception {
+        ManaforgeOpeningProjection projection=projection();JsonObject raw=state();
+        JsonObject row=new JsonObject();row.addProperty("observation_id","observation-one");row.addProperty("group_id","reveal-one");row.addProperty("group_label","Revealed cards");row.addProperty("source","revealed");row.addProperty("hidden",false);row.addProperty("name","Forest");
+        JsonArray observations=new JsonArray();observations.add(row);JsonObject hidden=row.deepCopy();hidden.addProperty("hidden",true);hidden.addProperty("observation_id","hidden");hidden.addProperty("name","SECRET");observations.add(hidden);raw.add("observations",observations);
+        JsonObject first=projection.project(raw,prompt());shape(first);check(first.getAsJsonArray("observations").size()==1);check(!first.toString().contains("SECRET"));
+        check(projection.project(raw,prompt()).getAsJsonArray("observations").size()==1);
+        raw.add("observations",new JsonArray());check(projection.project(raw,prompt()).getAsJsonArray("observations").size()==1);
+        row=row.deepCopy();row.addProperty("observation_id","observation-two");row.addProperty("group_id","reveal-two");raw.getAsJsonArray("observations").add(row);
+        check(projection.project(raw,prompt()).getAsJsonArray("observations").size()==2);
+    }
     public static void main(String[] args) throws Exception {
+        presentationIdentityChecks();
         UnityPriorityProjectionChecks.run();
-        nativeLaunchChecks();publicStackAndOfferedCardChecks();automaticPaymentChecks();manualManaChecks();gameplaySessionChecks();combatCaseEvidenceChecks();coreCombatChecks();coreResponseChecks();terminalCombatChecks();coreChoiceChecks();combatCounterChecks();
+        revealObservationChecks();nativeLaunchChecks();publicStackAndOfferedCardChecks();automaticPaymentChecks();manualManaChecks();gameplaySessionChecks();combatCaseEvidenceChecks();coreCombatChecks();coreResponseChecks();terminalCombatChecks();coreChoiceChecks();combatCounterChecks();
         ManaforgeOpeningProjection projection=projection();JsonObject raw=state(),request=prompt();JsonObject snapshot=projection.project(raw,request);shape(snapshot);
         String text=snapshot.toString();for(String secret:new String[]{"raw-human","raw-ai","raw-card","raw-name","raw-opponent-name","OPPONENT_SECRET","MUTATED_BINDING"})check(!text.contains(secret));
         check(snapshot.get("revision").getAsLong()==1);check(!snapshot.get("actions_complete").getAsBoolean());

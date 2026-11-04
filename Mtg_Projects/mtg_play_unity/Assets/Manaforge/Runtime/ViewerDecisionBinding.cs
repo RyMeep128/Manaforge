@@ -25,11 +25,12 @@ namespace Manaforge.Play
         public ViewerDecisionOffer Current {get{lock(gate)return CurrentLocked()?offer:null;}}
         public bool IsCurrent(ViewerDecisionOffer supplied){lock(gate)return ReferenceEquals(supplied,offer) && CurrentLocked();}
         internal ProjectedDecisionFrame Read(ViewerDecisionOffer supplied){lock(gate)return ReferenceEquals(supplied,offer) && CurrentLocked()?frame:null;}
-        internal bool CanSubmit(ViewerDecisionOffer supplied){lock(gate)return reserved==null && ReferenceEquals(supplied,offer) && CurrentLocked() && channel.MatchesDecision(ticket.SessionId,ticket.ViewerId,frame.Context.Revision,frame.Decision.DecisionId,true);}
+        internal bool CanSubmit(ViewerDecisionOffer supplied){lock(gate)return !ticket.Mailbox.HasPendingReveals && reserved==null && ReferenceEquals(supplied,offer) && CurrentLocked() && channel.MatchesDecision(ticket.SessionId,ticket.ViewerId,frame.Context.Revision,frame.Decision.DecisionId,true);}
         internal Reservation Reserve(ViewerDecisionOffer supplied)
         {
             lock(gate) {
                 if(!ReferenceEquals(supplied,offer) || !CurrentLocked())throw new WireEnvelope.EnvelopeException("STALE_DECISION");
+                if(ticket.Mailbox.HasPendingReveals)throw new WireEnvelope.EnvelopeException("REVEAL_ACK_REQUIRED");
                 if(reserved!=null)throw new WireEnvelope.EnvelopeException("COMMAND_PENDING");
                 if(!channel.MatchesDecision(ticket.SessionId,ticket.ViewerId,frame.Context.Revision,frame.Decision.DecisionId,true)) {
                     var pending=channel.Pending;throw new WireEnvelope.EnvelopeException(pending==null?"COMMAND_UNAVAILABLE":pending.State==CommandState.Uncertain?"COMMAND_UNCERTAIN":"COMMAND_PENDING");

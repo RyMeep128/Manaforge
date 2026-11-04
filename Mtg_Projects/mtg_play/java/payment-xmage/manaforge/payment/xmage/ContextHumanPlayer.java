@@ -144,38 +144,82 @@ public final class ContextHumanPlayer extends HumanPlayer {
     /** Source IDs must already be visible to this payer; diagnostics export aggregate counts only. */
     /** Conservative private assessment. Caller supplies all counter-free visible own permanents
      * from the same guarded native view. No activation, IO or client serialization here. */
+    private transient NativePaymentPlan.Step plannedSource,executingSource;
+    private transient long plannedSequence;
+    @Override protected void playManaAbilities(UUID source,Ability paying,ManaCost unpaid,Game game){
+        NativePaymentPlan.Step planned=plannedSource;plannedSource=null;
+        if(!getManaPool().isAutoPayment() || planned==null || !source.equals(planned.source) || payment==null || payment.sequence!=plannedSequence){super.playManaAbilities(source,paying,unpaid,game);return;}
+        Map<UUID,ActivatedManaAbilityImpl> abilities=getUseableManaAbilities(game.getObject(source),Zone.BATTLEFIELD,game);
+        if(abilities==null || !ticketCurrent(game,getId(),game.getState().getApplyEffectsCounter(),planned.ticket,abilities))return;
+        ActivatedManaAbilityImpl ability=abilities.get(planned.ability);if(ability==null)return;
+        currentlyUnpaidMana=unpaid;executingSource=planned;
+        try{super.activateAbility(Collections.singletonMap(ability.getId(),ability),game.getObject(source),game);}
+        finally{executingSource=null;currentlyUnpaidMana=null;}
+    }
+    @Override public boolean choose(mage.constants.Outcome outcome,mage.choices.Choice choice,Game game){
+        if(executingSource!=null && outcome==mage.constants.Outcome.PutManaInPool && choice.isManaColorChoice()){
+            mage.constants.ManaType[] types={mage.constants.ManaType.WHITE,mage.constants.ManaType.BLUE,mage.constants.ManaType.BLACK,mage.constants.ManaType.RED,mage.constants.ManaType.GREEN,mage.constants.ManaType.COLORLESS};
+            int[] amounts={executingSource.production.getWhite(),executingSource.production.getBlue(),executingSource.production.getBlack(),executingSource.production.getRed(),executingSource.production.getGreen(),executingSource.production.getColorless()};
+            for(int i=0;i<types.length;i++)if(amounts[i]>0){
+                String code=new String[]{"W","U","B","R","G","C"}[i];
+                if(mage.util.ManaUtil.tryToAutoSelectAManaColor(choice,new mage.abilities.costs.mana.ManaCostsImpl<>("{"+code+"}")) && choice.isChosen())return true;
+                if(choice.isKeyChoice())for(Map.Entry<String,String> option:choice.getKeyChoices().entrySet()){
+                    if(option.getValue().equalsIgnoreCase(types[i].name()) || option.getKey().equalsIgnoreCase(code)){choice.setChoiceByKey(option.getKey());if(choice.isChosen())return true;}
+                }else for(String option:choice.getChoices())if(option.equalsIgnoreCase(types[i].name()) || option.replace("{","").replace("}","").equalsIgnoreCase(code)){choice.setChoice(option);if(choice.isChosen())return true;}
+            }
+        }
+        return super.choose(outcome,choice,game);
+    }
     public JsonObject ordinaryPayment(Game game,UUID payer,int cycle,UUID[] sources) throws ReflectiveOperationException {
         if(sources==null || sources.length>128)return null;
         return inspectPayment(game,payer,cycle,(paying,unpaid)->{
-            JsonObject result=new JsonObject();result.addProperty("safety","UNKNOWN");
-            NativePaymentHazards.Result hazard=NativePaymentHazards.inspectOrdinaryTap(game,paying);result.addProperty("reason",hazard.name());if(hazard!=NativePaymentHazards.Result.NO_REGISTERED_HAZARD)return result;if(!paying.getCosts().isEmpty()){result.addProperty("reason","ADDITIONAL_COST");return result;}if(getManaPool().count()!=0 || !getManaPool().getConditionalMana().isEmpty()){result.addProperty("reason","FLOATING_MANA");return result;}result.addProperty("reason","SOURCE_OR_COVERAGE");
-            JsonArray steps=new JsonArray();Mana total=new Mana();Class<?>[] sourceClass={null};boolean[] mixed={false};
-            for(UUID id:sources) {
-                Permanent permanent=game.getPermanent(id);mage.cards.Card card=game.getCard(id);
-                Integer usable;try{usable=inspectBattlefieldSource(game,payer,cycle,id,(a,c,options)->options.size());}catch(ReflectiveOperationException unavailable){return result;}if(usable==null)return result;if(usable==0)continue;
-                if(permanent==null || card==null || permanent.isCopy() || permanent.isToken() || permanent.isFlipped() || permanent.isTransformed()
-                        || !permanent.getAttachments().isEmpty() || permanent.getAttachedTo()!=null || !payer.equals(card.getOwnerId()))return result;
-                Class<?> kind=card.getClass();
-                if(kind!=mage.cards.basiclands.Forest.class && kind!=mage.cards.basiclands.Island.class && kind!=mage.cards.basiclands.Plains.class
-                        && kind!=mage.cards.basiclands.Swamp.class && kind!=mage.cards.basiclands.Mountain.class)return result;
-                SourceEvidence evidence;
-                try{evidence=inspectBattlefieldSource(game,payer,cycle,id,(ability,cost,candidates)->{
-                    if(candidates.size()!=1)return null;ActivatedManaAbilityImpl mana=candidates.values().iterator().next();
-                    if(OrdinaryManaShape.inspect(mana)!=OrdinaryManaShape.Result.ORDINARY_TAP_SHAPE)return null;
-                    SourceEvidence value=new SourceEvidence();value.base=((BasicManaEffect)mana.getEffects().get(0)).getManaTemplate().copy();return value;
-                });}catch(ReflectiveOperationException unavailable){return result;}
-                if(evidence==null)return result;
-                if(sourceClass[0]==null)sourceClass[0]=kind;else if(sourceClass[0]!=kind)mixed[0]=true;
-                total.add(evidence.base);JsonObject step=new JsonObject();step.addProperty("source",id.toString());step.addProperty("incarnation",game.getState().getZoneChangeCounter(id));steps.add(step);
+            plannedSource=null;JsonObject result=new JsonObject();result.addProperty("safety","UNKNOWN");
+            result.addProperty("reason","UNSUPPORTED_COST");
+            if(unpaid.getSourceFilter()!=null || OrdinaryCostCoverage.inspect(unpaid,new Mana())==OrdinaryCostCoverage.Result.UNSUPPORTED)return result;
+            for(mage.abilities.costs.Cost cost:paying.getCosts())if(!cost.isPaid()){result.addProperty("reason","ADDITIONAL_COST");return result;}
+            NativePaymentHazards.Result hazard=NativePaymentHazards.inspectOrdinaryTap(game,paying);
+            if(hazard!=NativePaymentHazards.Result.NO_REGISTERED_HAZARD){result.addProperty("reason",hazard.name());return result;}
+            Mana floating=NativePaymentPlan.pool(this,paying,unpaid,game);
+            java.util.List<NativePaymentPlan.Source> options=new java.util.ArrayList<>();
+            for(UUID id:sources){
+                NativePaymentPlan.Source source=new NativePaymentPlan.Source();
+                try{inspectBattlefieldSource(game,payer,cycle,id,(ability,cost,candidates)->{
+                    if(!game.getPermanent(id).getCounters(game).isEmpty())return false;
+                    for(ActivatedManaAbilityImpl mana:candidates.values()){
+                        if(mana.getCosts().size()!=1 || mana.getCosts().get(0).getClass()!=mage.abilities.costs.common.TapSourceCost.class
+                            || !mana.getManaCosts().isEmpty() || !mana.getTargets().isEmpty() || mana.isPoolDependant() || mana.getEffects().size()!=1)continue;
+                        Class<?> effect=mana.getEffects().get(0).getClass();
+                        if(effect!=BasicManaEffect.class && effect!=mage.abilities.effects.mana.AddManaOfAnyColorEffect.class
+                            && effect!=mage.abilities.effects.mana.AddConditionalManaEffect.class && effect!=mage.abilities.effects.mana.AddConditionalColorlessManaEffect.class
+                            && effect!=mage.abilities.effects.mana.AddConditionalManaOfAnyColorEffect.class && effect!=mage.abilities.effects.mana.AddManaChosenColorEffect.class
+                            && effect!=mage.abilities.effects.mana.AddConditionalManaChosenColorEffect.class && effect!=mage.abilities.effects.mana.AddManaFromColorChoicesEffect.class)continue;
+                        SourceTicket ticket;
+                        try{ticket=captureSourceTicket(game,payer,cycle,id,mana.getId());}catch(ReflectiveOperationException missing){continue;}
+                        if(ticket==null)continue;
+                        for(Mana production:mana.getNetMana(game)){
+                            Mana value=NativePaymentPlan.eligible(production,id,paying,unpaid,game);
+                            if(value!=null)source.alternatives.add(new NativePaymentPlan.Step(id,mana.getId(),game.getState().getZoneChangeCounter(id),value,ticket));
+                        }
+                    }return true;
+                });}catch(ReflectiveOperationException | RuntimeException missing){continue;}
+                if(!source.alternatives.isEmpty())options.add(source);
             }
-            if(mixed[0] || steps.size()==0 || OrdinaryCostCoverage.inspect(unpaid,total)!=OrdinaryCostCoverage.Result.COVERS)return result;
-            // Revalidate every borrowed ability/source identity before issuing the assessment.
-            for(JsonElement value:steps){UUID id=UUID.fromString(value.getAsJsonObject().get("source").getAsString());
-                try{UUID ability=inspectBattlefieldSource(game,payer,cycle,id,(a,c,options)->options.size()==1?options.keySet().iterator().next():null);
-                    SourceTicket ticket=captureSourceTicket(game,payer,cycle,id,ability);
-                    if(ticket==null || !Boolean.TRUE.equals(inspectSourceTicket(game,payer,cycle,ticket,(a,c,options)->true)))return result;
-                }catch(ReflectiveOperationException unavailable){return result;}
+            java.util.List<NativePaymentPlan.Step> plan=NativePaymentPlan.select(unpaid,floating,options);
+            if(plan==null){result.addProperty("reason","INSUFFICIENT_OR_UNSUPPORTED_SOURCES");return result;}
+            JsonArray steps=new JsonArray();
+            if(floating.count()>0){
+                mage.constants.ManaType type=null;
+                for(mage.constants.ManaType candidate:mage.util.ManaUtil.getManaTypesInCost(unpaid))if(floating.get(candidate)>0){type=candidate;break;}
+                if(type==null && unpaid.getUnpaid().getMana().getGeneric()>0)for(mage.constants.ManaType candidate:new mage.constants.ManaType[]{mage.constants.ManaType.COLORLESS,mage.constants.ManaType.WHITE,mage.constants.ManaType.BLUE,mage.constants.ManaType.BLACK,mage.constants.ManaType.RED,mage.constants.ManaType.GREEN})if(floating.get(candidate)>0){type=candidate;break;}
+                if(type!=null){JsonObject step=new JsonObject();step.addProperty("source","pool:"+type.name());step.addProperty("kind","mana_type");steps.add(step);}
             }
+            if(steps.size()==0 && !plan.isEmpty()){
+                NativePaymentPlan.Step first=plan.get(0);
+                try{if(!Boolean.TRUE.equals(inspectSourceTicket(game,payer,cycle,first.ticket,(a,c,abilities)->true))){result.addProperty("reason","SOURCE_CHANGED");return result;}}catch(ReflectiveOperationException changed){result.addProperty("reason","SOURCE_CHANGED");return result;}
+                plannedSource=first;plannedSequence=payment.sequence;
+                JsonObject step=new JsonObject();step.addProperty("source",first.source.toString());step.addProperty("ability",first.ability.toString());step.addProperty("incarnation",first.incarnation);step.addProperty("kind","object");steps.add(step);
+            }
+            if(steps.size()==0){result.addProperty("reason","NO_UNPAID_COST");return result;}
             result.addProperty("safety","VERIFIED_ORDINARY_EQUIVALENT");result.addProperty("reason","VERIFIED_ORDINARY_EQUIVALENT");result.addProperty("sequence",payment.sequence);result.addProperty("paying_source",paying.getSourceId().toString());result.addProperty("unpaid_count",unpaid.getUnpaid().getMana().count());result.add("steps",steps);return result;
         });
     }

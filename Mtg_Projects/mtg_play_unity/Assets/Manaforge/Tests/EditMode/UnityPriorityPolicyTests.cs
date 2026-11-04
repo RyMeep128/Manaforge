@@ -18,7 +18,7 @@ namespace Manaforge.Play.Tests
             var snapshot=wire["body"]["snapshot"];
             snapshot["viewer_id"]=viewer;snapshot["revision"]=revision;snapshot["turn"]=1;
             snapshot["active_player_id"]="one";snapshot["priority_player_id"]=viewer;
-            snapshot["phase"]="BEGINNING";snapshot["step"]="UPKEEP";snapshot["actions_complete"]=true;
+            snapshot["phase"]="PRECOMBAT_MAIN";snapshot["step"]="PRECOMBAT_MAIN";snapshot["actions_complete"]=true;
             snapshot["objects"]=new JArray();snapshot["unsupported_fields"]=new JArray();
             snapshot["decision"]["decision_id"]=decision;snapshot["decision"]["player_id"]=viewer;
             snapshot["decision"]["family"]="selection";snapshot["decision"]["is_priority"]=true;
@@ -48,6 +48,16 @@ namespace Manaforge.Play.Tests
             var wire=Source();wire["body"]["snapshot"]["actions_complete"]=false;
             var frame=Frame(wire);Assert.That(UnityPriorityPolicy.Responses(frame),Is.EqualTo(PriorityResponse.Unknown));
             Assert.That(new UnityPriorityPolicy().Evaluate(frame),Is.Null);
+        }
+        [TestCase("UNTAP")][TestCase("UPKEEP")][TestCase("DRAW")]
+        public void BeginningSkipsResponsesButStopsAtMainAndHonorsManualControl(string step)
+        {
+            var wire=Source();Response(wire);var snapshot=wire["body"]["snapshot"];snapshot["phase"]="BEGINNING";snapshot["step"]=step;
+            var policy=new UnityPriorityPolicy();Assert.That(policy.Evaluate(Frame(wire)),Is.Not.Null);
+            policy.Current.Manual=true;Assert.That(policy.Evaluate(Frame(wire)),Is.Null);policy.Current.Manual=false;
+            policy.SetStop("phase","BEGINNING",true);Assert.That(policy.Evaluate(Frame(wire)),Is.Null);policy.SetStop("phase","BEGINNING",false);
+            snapshot["decision"]["is_priority"]=false;Assert.That(policy.Evaluate(Frame(wire)),Is.Null);snapshot["decision"]["is_priority"]=true;
+            snapshot["phase"]="PRECOMBAT_MAIN";snapshot["step"]="PRECOMBAT_MAIN";Assert.That(policy.Evaluate(Frame(wire)),Is.Null);
         }
         [Test] public void AvailableResponsesHoldPriority()
         {
@@ -83,7 +93,8 @@ namespace Manaforge.Play.Tests
         [TestCase("phase","BEGINNING")][TestCase("step","UPKEEP")]
         public void StopsOverrideAutomaticAndExplicitYield(string kind,string value)
         {
-            var frame=Frame(Source());var policy=new UnityPriorityPolicy();policy.Observe(frame);
+            var wire=Source();wire["body"]["snapshot"]["phase"]="BEGINNING";wire["body"]["snapshot"]["step"]="UPKEEP";
+            var frame=Frame(wire);var policy=new UnityPriorityPolicy();policy.Observe(frame);
             Assert.That(policy.SetStop(kind,value,true),Is.True);Assert.That(policy.Evaluate(frame),Is.Null);
             policy.BeginYield("turn",frame);Assert.That(policy.Evaluate(frame),Is.Null);
             policy.SetStop(kind,value,false);Assert.That(policy.Evaluate(frame),Is.Not.Null);
@@ -102,8 +113,8 @@ namespace Manaforge.Play.Tests
             wire["body"]["snapshot"]["decision"]["is_priority"]=false;
             Assert.That(policy.Evaluate(Frame(wire)),Is.Null);Assert.That(policy.Current.Yield,Is.EqualTo("end-turn"));
             wire["body"]["snapshot"]["decision"]["is_priority"]=true;
-            policy.SetStop("step","UPKEEP",true);Assert.That(policy.Evaluate(Frame(wire)),Is.Null);
-            policy.SetStop("step","UPKEEP",false);Assert.That(policy.Evaluate(Frame(wire)),Is.Not.Null);
+            policy.SetStop("step","PRECOMBAT_MAIN",true);Assert.That(policy.Evaluate(Frame(wire)),Is.Null);
+            policy.SetStop("step","PRECOMBAT_MAIN",false);Assert.That(policy.Evaluate(Frame(wire)),Is.Not.Null);
             policy.Failed();Assert.That(policy.Current.Yield,Is.Null);Assert.That(policy.Evaluate(Frame(wire)),Is.Null);
         }
         [Test] public void NextTurnYieldExpiresAtTheViewersNextTurn()
@@ -171,7 +182,7 @@ namespace Manaforge.Play.Tests
         [Test] public void ProjectedPriorityContextIncludesStepAndImmutableStackOrder()
         {
             var wire=Source();Stack(wire,"fixture-stack-a","fixture-stack-b");var frame=Frame(wire);
-            Assert.That(frame.Step,Is.EqualTo("UPKEEP"));Assert.That(frame.PriorityPlayerId,Is.EqualTo("one"));
+            Assert.That(frame.Step,Is.EqualTo("PRECOMBAT_MAIN"));Assert.That(frame.PriorityPlayerId,Is.EqualTo("one"));
             CollectionAssert.AreEqual(new[]{"fixture-stack-a","fixture-stack-b"},frame.StackIds);
             Assert.That(((System.Collections.Generic.IList<string>)frame.StackIds).IsReadOnly,Is.True);
         }

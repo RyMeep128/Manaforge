@@ -2,9 +2,9 @@
 
 This implementation targets the active Unity Arena gameplay path. It supersedes the earlier Qt-only priority patch for normal matches.
 
-The top-right Unity priority panel starts with **Auto-pass with no responses** checked and **Manual control** unchecked. No phase or step stops are selected. Settings and temporary yields belong to the current viewer/session; a new game starts fresh.
+The top-right Unity priority panel starts with **Auto-pass priority** checked and **Manual control** unchecked. No phase or step stops are selected. Settings and temporary yields belong to the current viewer/session; a new game starts fresh.
 
-Ordinary automatic passing waits 350 ms, then submits the current engine-provided pass action only when this is a genuine priority opportunity and the engine's complete action list contains no non-pass action. Available actions (including mana activations) and incomplete information preserve the prompt. Empty rendered controls alone never prove there is nothing to do.
+Ordinary automatic passing waits 350 ms, then submits the current engine-provided pass action only when this is a genuine priority opportunity. During the beginning phase it passes upkeep/draw priority even when responses are available, stopping at the main phase. In other phases the engine's complete action list must contain no non-pass action. Available actions (including mana activations) and incomplete information preserve the prompt. Empty rendered controls alone never prove there is nothing to do.
 
 - **Manual control** cancels a yield and holds every priority opportunity until unchecked.
 - **Yield / phase stops** expands the controls; automation pauses while they are open.
