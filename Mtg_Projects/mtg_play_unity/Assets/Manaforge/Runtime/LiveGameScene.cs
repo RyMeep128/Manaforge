@@ -75,6 +75,9 @@ namespace Manaforge.Play
             if(captures.Add(state)){ScreenCapture.CaptureScreenshot(Path.Combine(output,state+".png"));captureReady=Time.unscaledTime+.15f;return false;}
             if(captures.Contains("battlefield") && !CaptureDesktopSizes())return false;
             if(captures.Contains("battlefield") && presentation is ArenaGameplayPresentation arena){
+                if(captures.Add("library-browser")){arena.BrowsePublicZone("library",frame.Context.ViewerId);ScreenCapture.CaptureScreenshot(Path.Combine(output,"library-browser.png"));captureReady=Time.unscaledTime+.2f;return false;}
+                if(captures.Add("exile-browser")){arena.BrowsePublicZone("exile",frame.Context.ViewerId);ScreenCapture.CaptureScreenshot(Path.Combine(output,"exile-browser.png"));captureReady=Time.unscaledTime+.2f;return false;}
+                arena.ClosePublicZone();
                 CardView review=null;string id=null;surface.VisitPresented((card,view)=>{if(review==null && !card.Hidden && card.Zone=="battlefield"){review=view;id=card.ObjectId;}});
                 if(review!=null && captures.Add("hover")){review.Focus();ScreenCapture.CaptureScreenshot(Path.Combine(output,"hover.png"));captureReady=Time.unscaledTime+.2f;return false;}
                 if(id!=null && captures.Add("inspection")){arena.InspectCard(id);ScreenCapture.CaptureScreenshot(Path.Combine(output,"inspection.png"));captureReady=Time.unscaledTime+.2f;return false;}

@@ -61,8 +61,11 @@ namespace Manaforge.Play
             if(transitioning || faulted)throw new InvalidOperationException("VIEWER_SURFACE_UNAVAILABLE");
         }
         // Clear references before asking an explicitly transferred private resource scope to dispose.
+        internal event Action Clearing;
+        internal event Action Rebinding;
         private void ClearOwnedState()
         {
+            Clearing?.Invoke();
             ticket?.Mailbox.Dispose();artworkJobs?.Dispose();artworkJobs=null;ticket=null;revision=-1;cards.Clear();requests.Clear();pendingArtwork.Clear();artwork.Clear();inspectedObject=null;InspectionView.Conceal();
             foreach(var view in views.Values)view.Dispose();views.Clear();CardsRoot.Clear();
             var assets=privateAssets;privateAssets=null;
@@ -116,6 +119,8 @@ namespace Manaforge.Play
                 || !ticket.Mailbox.AllowsFrame(frame.Context.Revision)
                 || frame.Context.SessionId!=ticket.SessionId || frame.Context.ViewerId!=ticket.ViewerId
                 || frame.Context.Revision<minimumRevision || frame.Context.Revision<=revision)return false;
+            // Drop borrowed decorative previews before changing any visibility/printing binding.
+            Rebinding?.Invoke();
             // No wire decision/action IDs are stored here. Inspection never submits a game command.
             transitioning=true;
             try {

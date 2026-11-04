@@ -113,7 +113,7 @@ namespace Manaforge.Play.Tests
                 var handNext=doc.rootVisualElement.Q<Button>("hand-next");Assert.That(handNext,Is.Not.Null);
                 using(var submit=NavigationSubmitEvent.GetPooled()){submit.target=handNext;handNext.SendEvent(submit);}yield return null;
                 Assert.That(views["table-0"].resolvedStyle.display,Is.EqualTo(DisplayStyle.None));
-                var graveButton=doc.rootVisualElement.Q<Button>("opponent-graveyard");Assert.That(graveButton,Is.Not.Null);
+                var graveButton=doc.rootVisualElement.Q<Label>("opponent-graveyard");Assert.That(graveButton,Is.Not.Null);
                 using(var submit=NavigationSubmitEvent.GetPooled()){submit.target=graveButton;graveButton.SendEvent(submit);}yield return null;
                 table.Surface.VisitPresented((card,view)=>{if(card.ObjectId=="grave-1")Assert.That(view.resolvedStyle.display,Is.EqualTo(DisplayStyle.Flex));if(card.ObjectId=="grave-0")Assert.That(view.resolvedStyle.display,Is.EqualTo(DisplayStyle.None));});
                 CardView graveView=null;table.Surface.VisitPresented((card,view)=>{if(card.ObjectId=="grave-1")graveView=view;if(card.Zone=="battlefield" || card.Zone=="hand")Assert.That(view.resolvedStyle.display,Is.EqualTo(DisplayStyle.None));});
@@ -122,10 +122,29 @@ namespace Manaforge.Play.Tests
                 var picked=doc.rootVisualElement.panel.Pick(graveView.worldBound.center);
                 Assert.That(picked==graveView || picked!=null && graveView.Contains(picked),Is.True,"The drawer must not cover the displayed card's pointer target");
                 Assert.That(table.BrowsePublicZone("hand",viewer),Is.False,"Private zones cannot be requested through public navigation");
-                Assert.That(table.BrowsePublicZone("exile",other),Is.False,"Absent zones cannot fabricate card objects");
+                Assert.That(table.BrowsePublicZone("exile",other),Is.True,"Empty zones remain discoverable without fabricating cards");
+                yield return null;
+                Assert.That(doc.rootVisualElement.Q<Label>("zone-browser-summary").text,Does.Contain("No viewer-visible cards"));
+                Assert.That(table.BrowsePublicZone("library","unknown-player"),Is.False);
+                Assert.That(table.BrowsePublicZone("library",viewer),Is.True);yield return null;
+                Assert.That(doc.rootVisualElement.Q<VisualElement>("zone-browser-back").resolvedStyle.display,Is.EqualTo(DisplayStyle.Flex));
+                Assert.That(doc.rootVisualElement.Q<Label>("zone-browser-summary").text,Does.Contain("0 known"));
+                table.Surface.VisitPresented((card,view)=>Assert.That(view.resolvedStyle.display,Is.EqualTo(DisplayStyle.None),"Browsing a hidden library must not expose the hand or other zones"));
                 var closeZone=doc.rootVisualElement.Q<Button>("close-public-zone");
                 using(var submit=NavigationSubmitEvent.GetPooled()){submit.target=closeZone;closeZone.SendEvent(submit);}yield return null;
                 table.Surface.VisitPresented((card,view)=>{if(card.Zone=="graveyard")Assert.That(view.resolvedStyle.display,Is.EqualTo(DisplayStyle.None));});
+                // A library search browser opens only for admitted engine-offered objects.
+                var known=original.DeepClone();known["object_id"]="known-library-card";known["zone"]="library";known["owner_id"]=viewer;known["controller_id"]=JValue.CreateNull();cards.Add(known);
+                var offered=JObject.Parse(File.ReadAllText(Path.Combine(Application.dataPath,"../../mtg_play/protocol/fixtures/receive-history-v1.json")))["cases"][0]["steps"][0]["envelope"]["body"]["snapshot"]["decision"].DeepClone();
+                offered["family"]="selection";offered["is_priority"]=false;offered["can_finish"]=true;
+                offered["options"]=new JArray(new JObject{["option_id"]="known-library-option",["label"]="Known card",["object_id"]="known-library-card",["player_id"]=JValue.CreateNull(),["selected"]=false});
+                snapshot["decision"]=offered;snapshot["revision"]=(long)snapshot["revision"]+1;
+                Assert.That(table.Surface.TryPresent(ticket,ViewerCardProjection.ParseSnapshot(envelope.ToString(),session,viewer,0,true)),Is.True);
+                table.Present(ViewerDecisionProjection.ParseSnapshot(envelope.ToString(),session,viewer,0,true));yield return null;
+                Assert.That(doc.rootVisualElement.Q<Label>("public-zone-title").text,Does.Contain("Library"));
+                Assert.That(doc.rootVisualElement.Q<Label>("zone-browser-summary").text,Does.Contain("1 known"));
+                Assert.That(doc.rootVisualElement.Q<VisualElement>("zone-browser-back").resolvedStyle.display,Is.EqualTo(DisplayStyle.None));
+                table.Surface.VisitPresented((card,view)=>{if(card.ObjectId=="known-library-card")Assert.That(view.resolvedStyle.display,Is.EqualTo(DisplayStyle.Flex));});
                 Assert.That(table.Surface.ClearViewer(ticket),Is.True);int visited=0;table.Surface.VisitPresented((c,v)=>visited++);Assert.That(visited,Is.Zero);Assert.That(table.Surface.CardsRoot.childCount,Is.Zero);
             }finally{table.Dispose();Object.Destroy(gameObject);Object.Destroy(settings);}
             yield return null;

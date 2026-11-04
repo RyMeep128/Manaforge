@@ -81,3 +81,23 @@
 #public-zone-drawer #public-zone-title { -unity-font-style: bold; }
 
 #arena-table.browsing-public-zone #board-input-hint, #arena-table.browsing-public-zone #battlefield-links { visibility: hidden; }
+
+/* Arena-inspired zone racks: a card back for library, visible-art previews for public zones. */
+#arena-table .zone-pile { position: absolute; background-color: rgb(21,20,22); border-width: 1px; border-color: rgb(151,121,74); border-radius: 5px; overflow: visible; }
+#arena-table .zone-pile:hover, #arena-table .zone-pile:focus, #arena-table .zone-pile.zone-open { border-width: 2px; border-color: rgb(255,213,132); }
+.zone-pile-sheet { position: absolute; width: 66px; height: 92px; background-color: rgb(30,26,25); border-width: 1px; border-color: rgb(109,94,71); border-radius: 4px; }
+.zone-pile-face { position: absolute; left: 0; right: 0; top: 0; bottom: 0; border-radius: 4px; }
+.zone-graveyard #zone-back { background-color: rgb(45,44,40); }
+.zone-exile #zone-back { background-color: rgb(35,37,56); }
+#zone-fallback { position: absolute; left: 3px; right: 3px; top: 20px; bottom: 20px; font-size: 10px; color: rgb(225,211,181); white-space: normal; -unity-text-align: middle-center; }
+#zone-count { position: absolute; right: -4px; bottom: -3px; min-width: 23px; height: 23px; padding: 2px 5px; background-color: rgb(12,16,21); border-width: 1px; border-color: rgb(202,163,94); border-radius: 12px; color: rgb(248,230,187); font-size: 14px; -unity-text-align: middle-center; }
+#zone-caption { position: absolute; top: 94px; left: -5px; width: 76px; font-size: 11px; color: rgb(239,218,176); -unity-text-align: middle-center; }
+#public-zone-drawer { top: 16%; bottom: 21%; }
+#zone-browser-tabs { position: absolute; top: 60px; left: 20px; right: 20px; flex-direction: row; }
+#zone-browser-tabs Button { min-width: 120px; height: 30px; margin-right: 8px; color: rgb(220,207,181); background-color: rgb(25,30,37); border-width: 1px; border-color: rgb(102,94,78); border-radius: 5px; }
+#zone-browser-tabs Button.zone-tab-selected, #zone-browser-tabs Button:hover, #zone-browser-tabs Button:focus { color: rgb(255,231,177); border-color: rgb(232,188,109); background-color: rgb(59,45,28); }
+#zone-browser-summary { position: absolute; left: 24px; right: 24px; bottom: 16px; font-size: 13px; color: rgb(216,202,176); white-space: normal; -unity-text-align: middle-center; }
+#zone-browser-back { position: absolute; top: 130px; left: 50%; margin-left: -60px; width: 120px; height: 168px; }
+#game-commanders { top: 360px; }
+
+#arena-table.opening-state .zone-pile { visibility: hidden; }

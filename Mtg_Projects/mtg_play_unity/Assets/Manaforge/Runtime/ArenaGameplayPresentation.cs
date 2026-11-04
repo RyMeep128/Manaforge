@@ -8,7 +8,8 @@ namespace Manaforge.Play
     public sealed class ArenaGameplayPresentation : IGameplayPresentation
     {
         private readonly VisualElement root,choices,navigation,opponentHand,zoneChoices,zoneDrawer;
-        private readonly Label zoneTitle,stackTitle;private string openZone,openZoneOwner,previewId;private bool previewing;
+        private readonly Label zoneTitle,zoneSummary,stackTitle;private readonly VisualElement zoneTabs,unknownLibrary;
+        private readonly Label localGraveyard,opponentGraveyard,localExile,opponentExile;private string openZone,openZoneOwner,previewId;private bool previewing;
         private CardView hoveredCard,focusedCard,emphasizedCard;private string hoveredId,focusedId,emphasizedId;
         private readonly System.Collections.Generic.Dictionary<string,int> rowPages=new System.Collections.Generic.Dictionary<string,int>();
         private readonly Label status,localPlayer,opponent,result,zones,commanders,localLibrary,opponentLibrary;
@@ -28,13 +29,22 @@ namespace Manaforge.Play
             navigation=new VisualElement{name="board-navigation",pickingMode=PickingMode.Ignore};root.Add(navigation);
             status=Label("table-phase","Connecting…");opponent=Label("opponent-seat","");localPlayer=Label("local-seat","");
             localLibrary=Label("local-library","");opponentLibrary=Label("opponent-library","");CardTypography.Apply(localLibrary,CardTextRole.Title);CardTypography.Apply(opponentLibrary,CardTextRole.Title);
+            localGraveyard=Label("local-graveyard","");opponentGraveyard=Label("opponent-graveyard","");
+            localExile=Label("local-exile","");opponentExile=Label("opponent-exile","");
+            ConfigurePile(localLibrary,"library",()=>frame?.Context.ViewerId);ConfigurePile(opponentLibrary,"library",OpponentId);
+            ConfigurePile(localGraveyard,"graveyard",()=>frame?.Context.ViewerId);ConfigurePile(opponentGraveyard,"graveyard",OpponentId);
+            ConfigurePile(localExile,"exile",()=>frame?.Context.ViewerId);ConfigurePile(opponentExile,"exile",OpponentId);
+            Surface.Clearing+=ClearZoneResources;Surface.Rebinding+=ClearPileArt;
             ArenaTableArt.Player(localPlayer,"YOU");ArenaTableArt.Player(opponent,"OPPONENT");
             opponentHand=new VisualElement{name="opponent-hand",pickingMode=PickingMode.Ignore};root.Add(opponentHand);
             WirePlayer(localPlayer,()=>frame?.Context.ViewerId);WirePlayer(opponent,()=>frame?.PlayerLifeTotals.Keys.FirstOrDefault(id=>id!=frame.Context.ViewerId));
             zones=Label("table-zones","");zones.style.display=DisplayStyle.None;
-            zoneChoices=new VisualElement{name="public-zone-choices"};root.Add(zoneChoices);
+            zoneChoices=new VisualElement{name="public-zone-choices"};zoneChoices.style.display=DisplayStyle.None;root.Add(zoneChoices);
             zoneDrawer=new VisualElement{name="public-zone-drawer"};root.Add(zoneDrawer);zoneDrawer.style.display=DisplayStyle.None;
-            zoneTitle=new Label{name="public-zone-title",enableRichText=false};zoneDrawer.Add(zoneTitle);
+            zoneTitle=new Label{name="public-zone-title",enableRichText=false};zoneDrawer.Add(zoneTitle);CardTypography.Apply(zoneTitle,CardTextRole.Title);
+            zoneTabs=new VisualElement{name="zone-browser-tabs"};zoneDrawer.Add(zoneTabs);
+            zoneSummary=new Label{name="zone-browser-summary",enableRichText=false};zoneDrawer.Add(zoneSummary);
+            unknownLibrary=new VisualElement{name="zone-browser-back",pickingMode=PickingMode.Ignore};ArenaTableArt.Back(unknownLibrary);zoneDrawer.Add(unknownLibrary);unknownLibrary.style.display=DisplayStyle.None;
             zoneDrawer.Add(new Button(()=>ClosePublicZone()){name="close-public-zone",text="Back to battlefield  ·  Esc"});
             stackTitle=Label("stack-title","");stackTitle.pickingMode=PickingMode.Ignore;
             commanders=Label("game-commanders","");
@@ -45,6 +55,37 @@ namespace Manaforge.Play
             var close=new Button(()=>CloseInspection()){text="Close inspection  ·  Esc",name="close-inspection"};root.Add(close);close.style.display=DisplayStyle.None;
             root.RegisterCallback<KeyDownEvent>(ev=>{if(ev.keyCode==KeyCode.Escape){CloseInspection();openZone=null;Layout();}});
             root.RegisterCallback<GeometryChangedEvent>(ev=>Layout());
+        }
+        private string OpponentId()=>frame?.PlayerLifeTotals.Keys.FirstOrDefault(id=>id!=frame.Context.ViewerId);
+        private static string ZoneName(string zone)=>zone=="library"?"Library":zone=="graveyard"?"Graveyard":"Exile";
+        private void ConfigurePile(Label pile,string zone,Func<string> owner)
+        {
+            pile.text="";pile.AddToClassList("zone-pile");pile.AddToClassList("zone-"+zone);pile.focusable=true;
+            pile.style.width=66;pile.style.height=92;pile.style.right=StyleKeyword.Auto;pile.style.bottom=StyleKeyword.Auto;
+            for(int i=0;i<2;i++){var sheet=new VisualElement{pickingMode=PickingMode.Ignore};sheet.AddToClassList("zone-pile-sheet");sheet.style.left=-3-i*3;sheet.style.top=3+i*3;pile.Add(sheet);}
+            var back=new VisualElement{name="zone-back",pickingMode=PickingMode.Ignore};back.AddToClassList("zone-pile-face");
+            if(zone=="library")ArenaTableArt.Back(back);pile.Add(back);
+            var art=new Image{name="zone-art",pickingMode=PickingMode.Ignore,scaleMode=ScaleMode.ScaleToFit};art.AddToClassList("zone-pile-face");pile.Add(art);
+            var fallback=new Label(zone=="library"?"":"—"){name="zone-fallback",enableRichText=false,pickingMode=PickingMode.Ignore};pile.Add(fallback);
+            pile.Add(new Label("?"){name="zone-count",enableRichText=false,pickingMode=PickingMode.Ignore});
+            var caption=new Label(ZoneName(zone)){name="zone-caption",enableRichText=false,pickingMode=PickingMode.Ignore};CardTypography.Apply(caption,CardTextRole.Title);pile.Add(caption);
+            pile.RegisterCallback<ClickEvent>(ev=>{if(ev.button==0)BrowsePublicZone(zone,owner());});
+            pile.RegisterCallback<NavigationSubmitEvent>(ev=>{BrowsePublicZone(zone,owner());ev.StopPropagation();});
+        }
+        private void ClearPileArt()
+        {
+            foreach(var pile in new[]{localLibrary,opponentLibrary,localGraveyard,opponentGraveyard,localExile,opponentExile}){
+                if(pile==null)continue;pile.Q<Image>("zone-art").image=null;pile.Q<Label>("zone-fallback").text="";
+            }
+        }
+        private void ClearZoneResources()
+        {
+            ClearCardFocus();CloseInspection();openZone=openZoneOwner=null;
+            if(zoneDrawer!=null)zoneDrawer.style.display=DisplayStyle.None;
+            root.RemoveFromClassList("browsing-public-zone");
+            foreach(var pile in new[]{localLibrary,opponentLibrary,localGraveyard,opponentGraveyard,localExile,opponentExile}){
+                if(pile==null)continue;pile.Q<Image>("zone-art").image=null;pile.Q<Label>("zone-count").text="?";pile.Q<Label>("zone-fallback").text="";
+            }
         }
         private Label Label(string name,string text){var label=new Label(text){name=name,enableRichText=false};root.Add(label);return label;}
         public void CloseInspection(){inspecting=false;previewing=false;previewId=null;Surface.InspectionView.pickingMode=PickingMode.Position;Surface.InspectionView.style.display=DisplayStyle.None;root.Q<Button>("close-inspection").style.display=DisplayStyle.None;}
@@ -66,7 +107,7 @@ namespace Manaforge.Play
             result.text=frame.Result==null?"":frame.Result=="win"?"Victory":frame.Result=="loss"?"Defeat":frame.Result=="draw"?"Draw":"Game complete\n"+frame.Result;result.style.display=frame.Result==null?DisplayStyle.None:DisplayStyle.Flex;if(frame.Result!=null)result.BringToFront();
             commanders.text=CommanderPresentationText.Format(frame);
             if(Decisions!=null)ArenaTableArt.Decision(Decisions,frame);
-            Layout();libraryMotion.Observe(frame);priorityGlow?.Refresh();
+            OpenOfferedZone();Layout();libraryMotion.Observe(frame);priorityGlow?.Refresh();
         }
         private static string PhaseName(string phase)
         {switch(phase){case "PRECOMBAT_MAIN":return "Main phase";case "POSTCOMBAT_MAIN":return "Second main phase";case "COMBAT":return "Combat";case "BEGINNING":return "Beginning phase";case "ENDING":return "Ending phase";default:return (phase??"Opening hand").Replace('_',' ');}}
@@ -151,12 +192,22 @@ namespace Manaforge.Play
             previewing=false;previewId=null;inspecting=true;Surface.InspectionView.pickingMode=PickingMode.Position;PlaceInspection();Surface.InspectionView.style.display=DisplayStyle.Flex;Surface.InspectionView.BringToFront();
             var close=root.Q<Button>("close-inspection");close.style.display=DisplayStyle.Flex;close.BringToFront();
         }
+        private void OpenOfferedZone()
+        {
+            var options=frame.Decision?.Options;
+            if(options==null || options.Count==0 || options.Any(o=>o.ObjectId==null))return;
+            var offered=new System.Collections.Generic.List<ProjectedCard>();
+            Surface.VisitPresented((card,view)=>{if(!card.Hidden && card.FaceDown!=true && new[]{"library","graveyard","exile"}.Contains(card.Zone) && options.Any(o=>o.ObjectId==card.ObjectId))offered.Add(card);});
+            if(offered.Count==0 || options.Any(o=>!offered.Any(card=>card.ObjectId==o.ObjectId)))return;
+            string zone=offered[0].Zone,owner=offered[0].OwnerId;
+            if(owner==null || offered.Any(card=>card.Zone!=zone || card.OwnerId!=owner))return;
+            // A browser opens only; every selection/confirmation still requires explicit input.
+            openZone=zone;openZoneOwner=owner;rowPages["public-zone"]=0;
+        }
         // Pure viewer-scoped navigation, also available to keyboard/accessibility callers.
         public bool BrowsePublicZone(string zone,string owner)
         {
-            if(disposed || frame==null || (zone!="graveyard" && zone!="exile") || owner==null)return false;
-            bool available=false;Surface.VisitPresented((card,view)=>{if(!card.Hidden && card.Zone==zone && card.OwnerId==owner)available=true;});
-            if(!available)return false;
+            if(disposed || frame==null || (zone!="library" && zone!="graveyard" && zone!="exile") || owner==null || !frame.PlayerLifeTotals.ContainsKey(owner))return false;
             ClearCardFocus();CloseInspection();openZone=zone;openZoneOwner=owner;rowPages["public-zone"]=0;Layout();return true;
         }
         public void ClosePublicZone(){if(disposed || openZone==null)return;ClearCardFocus();CloseInspection();openZone=null;Layout();}
@@ -211,7 +262,7 @@ namespace Manaforge.Play
                 float start=left+(span-size-step*(row.Count-1))*.5f;
                 for(int i=0;i<row.Count;i++){var v=row[i].view;v.style.display=DisplayStyle.Flex;v.SetPresentation(full?CardPresentationMode.Full:CardPresentationMode.Compact,size);v.style.left=reserveSeat?(i<leftSlots?gapStart-Mathf.Min(leftSlots,row.Count)*(size+18)+9+i*(size+18):gapEnd+9+(i-leftSlots)*(size+18)):start+i*step;v.style.top=top;v.style.rotate=new Rotate(new Angle(row[i].card.Tapped==true?90:0));}
             }
-            float boardLeft=145,boardSpan=width-300,cardWidth=Mathf.Clamp(boardSpan/7,85,125);
+            float boardLeft=260,boardSpan=Mathf.Max(100,width-425),cardWidth=Mathf.Clamp(boardSpan/7,85,125);
             var battlefield=items.Where(i=>i.card.Zone=="battlefield").ToList();
             Row(battlefield.Where(i=>i.card.ControllerId!=viewer && Land(i.card)).ToList(),height*.15f,boardLeft,boardSpan,Mathf.Min(cardWidth,110),key:"opponent-lands",reserveSeat:true);
             Row(battlefield.Where(i=>i.card.ControllerId!=viewer && !Land(i.card)).ToList(),height*.30f,boardLeft,boardSpan,cardWidth,key:"opponent-permanents");
@@ -250,26 +301,43 @@ namespace Manaforge.Play
             stackTitle.text=stack.Count==0?"":"STACK  ·  "+stack.Count;stackTitle.style.display=stack.Count==0?DisplayStyle.None:DisplayStyle.Flex;
             stackTitle.style.top=height*.36f-25;
             Row(stack,height*.36f,width-145,130,100,key:"stack");
-            Row(items.Where(i=>i.card.Zone=="command" && i.card.OwnerId!=viewer).ToList(),height*.23f,15,130,65,key:"opponent-command");
+            Row(items.Where(i=>i.card.Zone=="command" && i.card.OwnerId!=viewer).ToList(),height*.36f,15,130,65,key:"opponent-command");
             Row(items.Where(i=>i.card.Zone=="command" && i.card.OwnerId==viewer).ToList(),height*.50f,15,130,65,key:"local-command");
-            zoneChoices.Clear();
-            foreach(var group in items.Where(i=>!i.card.Hidden && (i.card.Zone=="graveyard" || i.card.Zone=="exile")).GroupBy(i=>new{i.card.Zone,i.card.OwnerId})){
-                string zone=group.Key.Zone,owner=group.Key.OwnerId;
-                var button=new Button(()=>BrowsePublicZone(zone,owner)){text=(owner==viewer?"Your ":"Opponent’s ")+zone+" · "+group.Count(),name=(owner==viewer?"local-":"opponent-")+zone};
-                button.EnableInClassList("zone-open",openZone==zone && openZoneOwner==owner);zoneChoices.Add(button);
+            // Piles use admitted visible artwork only. No card order/top-card identity is inferred.
+            void Pile(Label pile,string zone,string owner,float left,float top){
+                pile.style.left=left;pile.style.top=top;
+                var visible=items.Where(i=>i.card.Zone==zone && i.card.OwnerId==owner && !i.card.Hidden && i.card.FaceDown!=true).ToList();
+                long? total=zone=="library" && owner!=null && frame.PlayerLibraryCounts.TryGetValue(owner,out var count)?count:null;
+                string countText=zone=="library"?(total?.ToString()??"?"):visible.Count.ToString();
+                pile.Q<Label>("zone-count").text=countText;
+                var preview=zone=="library"?null:visible.FirstOrDefault(i=>i.view.Artwork!=null).view;
+                pile.Q<Image>("zone-art").image=preview?.Artwork;
+                pile.Q<Label>("zone-fallback").text=zone=="library" || preview!=null?"":visible.Count==0?"—":visible[0].card.Characteristics?.Name??"Visible card";
+                pile.tooltip=(owner==viewer?"Your ":"Opponent’s ")+ZoneName(zone)+" · "+countText+(zone=="library"?" cards":" visible cards")+"\nClick or press Enter to browse known cards.";
+                pile.EnableInClassList("zone-open",openZone==zone && openZoneOwner==owner);
             }
+            string opponentId=OpponentId();float localPileTop=Mathf.Max(350,height-242);
+            Pile(opponentLibrary,"library",opponentId,22,150);Pile(opponentGraveyard,"graveyard",opponentId,98,150);Pile(opponentExile,"exile",opponentId,174,150);
+            Pile(localLibrary,"library",viewer,22,localPileTop);Pile(localGraveyard,"graveyard",viewer,98,localPileTop);Pile(localExile,"exile",viewer,174,localPileTop);
             root.EnableInClassList("browsing-public-zone",openZone!=null);
             zoneDrawer.style.display=openZone==null?DisplayStyle.None:DisplayStyle.Flex;
             if(openZone!=null){
-                zoneTitle.text=(openZoneOwner==viewer?"Your ":"Opponent’s ")+openZone;
+                zoneTitle.text=(openZoneOwner==viewer?"Your ":"Opponent’s ")+ZoneName(openZone);
+                zoneTabs.Clear();
+                foreach(string zone in new[]{"library","graveyard","exile"}){
+                    var tab=new Button(()=>BrowsePublicZone(zone,openZoneOwner)){text=ZoneName(zone),name="browse-"+zone};tab.EnableInClassList("zone-tab-selected",zone==openZone);zoneTabs.Add(tab);
+                }
                 // A drawer is a presentation overlay, never another owner of card views.
                 // Hide the table's cards while browsing, then place the same owned card root
                 // above the backdrop. Bringing only children forward cannot cross sibling layers.
                 foreach(var item in items)item.view.style.display=DisplayStyle.None;
                 navigation.Clear();
                 zoneDrawer.BringToFront();Surface.CardsRoot.BringToFront();
-                var publicCards=items.Where(i=>!i.card.Hidden && i.card.Zone==openZone && i.card.OwnerId==openZoneOwner).ToList();
-                Row(publicCards,height*.32f,180,width-360,145,true,"public-zone");
+                var publicCards=items.Where(i=>!i.card.Hidden && i.card.FaceDown!=true && i.card.Zone==openZone && i.card.OwnerId==openZoneOwner).ToList();
+                long? total=openZone=="library" && frame.PlayerLibraryCounts.TryGetValue(openZoneOwner,out var libraryCount)?libraryCount:null;
+                zoneSummary.text=openZone=="library"?(total.HasValue?total+" cards · ":"Count unavailable · ")+publicCards.Count+" known\nUnrevealed cards and library order remain hidden.":publicCards.Count==0?"No viewer-visible cards in this zone.":publicCards.Count+" visible cards · Hover to inspect. Highlighted choices use the game’s current prompt.";
+                unknownLibrary.style.display=openZone=="library" && publicCards.Count==0?DisplayStyle.Flex:DisplayStyle.None;
+                Row(publicCards,height*.34f,180,width-360,185,true,"public-zone");
                 foreach(var item in publicCards)if(item.view.style.display.value==DisplayStyle.Flex)item.view.BringToFront();
                 navigation.BringToFront();zoneChoices.BringToFront();
             }
@@ -282,6 +350,6 @@ namespace Manaforge.Play
             choices.BringToFront();result.BringToFront();if(inspecting || previewing)Surface.InspectionView.BringToFront();root.Q<Button>("close-inspection").BringToFront();
             boardInput?.Refresh();RefreshPlayers();links.schedule.Execute(UpdateLinks);
         }
-        public void Dispose(){ClearCardFocus();disposed=true;priorityGlow?.Dispose();boardInput?.Dispose();libraryMotion.Dispose();Decisions?.Dispose();Surface.Dispose();wired.Clear();root.RemoveFromHierarchy();}
+        public void Dispose(){ClearCardFocus();disposed=true;priorityGlow?.Dispose();boardInput?.Dispose();libraryMotion.Dispose();Decisions?.Dispose();Surface.Dispose();Surface.Clearing-=ClearZoneResources;Surface.Rebinding-=ClearPileArt;wired.Clear();root.RemoveFromHierarchy();}
     }
 }

@@ -75,7 +75,7 @@ namespace Manaforge.Play
             if(wasDrag){
                 var local=root.WorldToLocal(position);float height=root.resolvedStyle.height;
                 if(local.x<145 || local.x>root.resolvedStyle.width-285 || local.y<height*.08f || local.y>height*.78f)return;
-                var frame=captured.Frame;if(frame==null || !frame.Actions.Any(a=>a.ObjectId==binding.Id && new[]{"play_land","cast_spell","select_object","activate","declare_attacker","declare_blocker"}.Contains(a.Kind)))return;
+                var frame=captured.Frame;if(frame==null || !(frame.Actions.Any(a=>a.ObjectId==binding.Id && new[]{"play_land","cast_spell","select_object","activate","declare_attacker","declare_blocker"}.Contains(a.Kind)) || frame.Decision.Options.Any(o=>o.ObjectId==binding.Id)))return;
             }
             Activate(captured,binding,position);
         }
