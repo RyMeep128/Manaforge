@@ -29,4 +29,4 @@ jobs:
       - name: Prepare hash-pinned engine in owned CI directory
         run: python -m mtg_play.ci_prepare --destination "$env:RUNNER_TEMP/manaforge-payment-engine" --jdk-path "$env:JAVA_HOME"
       - name: Native API, utility and ownership checks
-        run: python tools/check_play_payment_coordinator.py --probe-pinned-helpers --xmage-root "$env:RUNNER_TEMP/manaforge-payment-engine" --javap "$env:JAVA_HOME/bin/javap.exe"
+        run: python tools/check_play_payment_coordinator.py --probe-pinned-helpers --real-game-payment --xmage-root "$env:RUNNER_TEMP/manaforge-payment-engine" --javap "$env:JAVA_HOME/bin/javap.exe"

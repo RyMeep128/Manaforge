@@ -22,9 +22,13 @@ def main():
     parser.add_argument("--verify-pinned-api", action="store_true")
     parser.add_argument("--probe-pinned-helpers", action="store_true",
                         help="Also execute focused native utility-object checks after verifying every runtime JAR")
+    parser.add_argument("--real-game-payment", action="store_true",
+                        help="Also cast real red creatures against the screenshot board; requires --probe-pinned-helpers")
     parser.add_argument("--javap", type=Path)
     parser.add_argument("--xmage-root", type=Path, default=PLAY / "mage-full_1.4.62-dev_2026-10-03_20-47")
     args = parser.parse_args()
+    if args.real_game_payment and not args.probe_pinned_helpers:
+        parser.error("--real-game-payment requires --probe-pinned-helpers")
     compiler, runtime = shutil.which("javac"), shutil.which("java")
     if not compiler or not runtime:
         parser.error("A JDK with javac and java is required")
@@ -74,6 +78,8 @@ def main():
         dependencies = sorted(key for key in manifest["artifacts"]
                               if key.startswith("xmage/mage-server/lib/") and key.endswith(".jar"))
         dependencies.append(jars[1])
+        if args.real_game_payment:
+            dependencies.append(next(key for key in manifest["artifacts"] if key.endswith("/mage-game-twoplayerduel-1.4.62.jar")))
         for key in dependencies:
             if hashlib.sha256((engine / key).read_bytes()).hexdigest() != manifest["artifacts"][key]:
                 raise SystemExit("Pinned payment helper dependency mismatch")
@@ -85,6 +91,8 @@ def main():
             context_source = PLAY / "java/payment-xmage/manaforge/payment/xmage/ContextHumanPlayer.java"
             bridge_sources = [PLAY / "java" / name for name in ("ManaforgeBridge.java", "ManaforgeServerHost.java", "ManaforgeGameMetadata.java")]
             bridge_sources += [PLAY / "java/ManaforgeMetadataChannel.java", *sorted((PLAY / "protocol/java/manaforge/protocol").glob("*.java"))]
+            if args.real_game_payment:
+                bridge_sources.append(PLAY / "java/payment-native-test/manaforge/payment/RealPaymentGameChecks.java")
             subprocess.run([compiler, "--release", "8", "-encoding", "UTF-8", "-cp", native_classpath, "-d", output,
                             str(source), str(adapter), str(response), str(context_source),
                             str(PLAY / "java/payment-xmage/manaforge/payment/xmage/OrdinaryManaShape.java"),
@@ -95,6 +103,9 @@ def main():
             subprocess.run([runtime, "-cp", output + os.pathsep + native_classpath,
                             "manaforge.payment.PinnedPaymentChecks"], cwd=output, check=True, timeout=30)
             print("Owned Java bridge compiled against unchanged pinned SDK; no server/game started by this probe")
+            if args.real_game_payment:
+                subprocess.run([runtime, "-Djava.awt.headless=true", "-cp", output + os.pathsep + native_classpath,
+                                "manaforge.payment.RealPaymentGameChecks"], cwd=output, check=True, timeout=60)
 
 
 if __name__ == "__main__":
