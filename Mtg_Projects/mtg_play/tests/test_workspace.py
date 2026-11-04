@@ -69,3 +69,21 @@ def test_application_shutdown_cancels_owned_unity_job(launcher, monkeypatch):
     monkeypatch.setattr(launcher.native_jobs, "cancel_all", cancel)
     assert not launcher.prepare_to_close()
     cancel.assert_called_once()
+
+
+@pytest.mark.parametrize("remove_opponent", [False, True])
+def test_reload_tracks_deck_identity_and_clears_removed_selection(
+    launcher, remove_opponent
+):
+    select_decks(launcher)
+    original = launcher._decks
+    refreshed = (original[0],) if remove_opponent else tuple(reversed(original))
+    launcher._catalog_loaded("reload", "completed", (refreshed, ()))
+    selected = [
+        launcher._decks[selector.currentData()].key
+        if selector.currentData() is not None
+        else None
+        for selector in launcher.selectors
+    ]
+    assert selected == [original[0].key, None if remove_opponent else original[1].key]
+    assert launcher.start_button.isEnabled() is not remove_opponent
