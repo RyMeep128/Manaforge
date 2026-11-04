@@ -15,6 +15,7 @@ playable human-versus-AI acceptance coverage must be considered when applicable.
 Opening or fixture success alone does not establish playable acceptance. Missing,
 skipped, cancelled, unavailable or incomplete checks do not count as passing.
 Report code failures and runner, licensing or infrastructure blocks accurately.
+See [hosted Unity setup](unity-ci.md) for the Windows runner and Personal license secrets.
 
 The old `tools/ci_checkpoint.py` promotion helper and its Git-directory audit record
 are retained as historical tooling and evidence; they are no longer required for

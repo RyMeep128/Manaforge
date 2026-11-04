@@ -56,6 +56,12 @@ def test_log_retention_limits_sessions_and_preserves_oversized_log_tail(
 ):
     from mtg_play import session_logs
 
+    class FrozenDatetime(session_logs.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2026, 11, 4, tzinfo=tz)
+
+    monkeypatch.setattr(session_logs, "datetime", FrozenDatetime)
     source = tmp_path / "source"
     source.mkdir()
     destination = tmp_path / "archive"

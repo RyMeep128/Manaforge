@@ -1,24 +1,37 @@
 name: Unity Play feasibility
 
-# Licensed owner-controlled machine only. Do not run untrusted PR code on it.
+# Secrets are used only for trusted main commits, never pull request code.
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'Mtg_Projects/mtg_play_unity/**'
+      - 'tools/**'
+      - '.github/workflows/unity-play.yml'
 
 permissions:
   contents: read
 
 concurrency:
-  group: unity-play-licensed-runner
-  cancel-in-progress: false
+  group: unity-play-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   foundation:
-    runs-on: [self-hosted, Windows, X64, manaforge-unity]
-    timeout-minutes: 45
+    runs-on: windows-2025
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
+      - name: Install and activate pinned Unity editor
+        shell: pwsh
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        run: ./tools/setup_unity_ci.ps1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: '3.12'
@@ -34,7 +47,7 @@ jobs:
         run: ./tools/unity-play.ps1 -Mode EditMode -DownloadGson
       - name: Focused PlayMode test
         shell: pwsh
-        run: ./tools/unity-play.ps1 -Mode PlayMode
+        run: ./tools/unity-play.ps1 -Mode PlayMode -Graphics
       - name: Build Windows player
         shell: pwsh
         run: ./tools/unity-play.ps1 -Mode Build

@@ -1,6 +1,6 @@
 """Bounded local Unity diagnostics, independent of disposable session files."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 import re
@@ -44,6 +44,20 @@ def retain_session_logs(
         raise OSError("Unity diagnostic directory must not be a link")
     archive.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+    # Windows can return the same timestamp for consecutive sessions. Keep names
+    # ordered by allocation rather than letting a random UUID decide retention.
+    previous = max(
+        (
+            item.name[8:30]
+            for item in archive.iterdir()
+            if _SESSION_NAME.fullmatch(item.name)
+        ),
+        default="",
+    )
+    if stamp <= previous:
+        stamp = (
+            datetime.strptime(previous, "%Y%m%dT%H%M%S%fZ") + timedelta(microseconds=1)
+        ).strftime("%Y%m%dT%H%M%S%fZ")
     target = archive / ("session-" + stamp + "-" + uuid.uuid4().hex)
     target.mkdir(mode=0o700)
     truncated = False
