@@ -1,3 +1,7 @@
+> Historical record, archived November 3, 2026. Commands, status claims, and
+> acceptance notes below describe their original increment. Use the
+> [documentation index](../README.md) and [current roadmap](../roadmap.md) for current guidance.
+
 # P3.2a — Composable Unity Card Rendering
 
 Project: Manaforge Play. Status: **Planned; implementation and acceptance pending.**
@@ -22,13 +26,13 @@ enlargement and inspection. Keep the common pipeline extensible to future layout
 without prematurely reconstructing full-art, showcase, borderless, extended-art,
 sagas, battles, planeswalkers, split cards or promotional frames. Owner scope
 expansion on October 30 now includes these families in the
-[layout gallery](play-layout-gallery.md), using complete authentic printings for
+[layout gallery](../play-layout-gallery.md), using complete authentic printings for
 specialized layouts; bespoke dynamic components remain separate work.
 
 ## Existing foundations to inspect
 
 Before implementation, inspect the parent roadmap, [Play epic](manaforge-play-epic.md),
-[Unity README](../Mtg_Projects/mtg_play_unity/README.md), foundation scenes,
+[Unity README](unity-foundation-history.md), foundation scenes,
 renderers, fixtures and tests; shared Java/C# protocol definitions; Manaforge's
 printing identity and artwork services; and existing Play presentation, cropping,
 asset loading, cache and missing-asset behavior.
@@ -230,7 +234,7 @@ integration. Confirm reusable interfaces for P3.3 and later gameplay integration
 
 ## Foundation progress — October 30, 2026
 
-The Unity [offline printing policy](../Mtg_Projects/mtg_play_unity/README.md#offline-visual-printing-policy--foundation-increment)
+The Unity [offline printing policy](unity-foundation-history.md#offline-visual-printing-policy--foundation-increment)
 now separates selected/rendered identities and selects deterministic cached
 same-card/same-face standard or authentic image fallbacks. Eight focused policy
 tests pass locally (16 total EditMode checks). This uses supplied catalog
@@ -255,7 +259,7 @@ Three PlayMode checks pass locally with a shared default runtime theme. These
 headless checks do not demonstrate rendered pixels, real art or readable fonts;
 all visual acceptance and CI requirements remain open.
 
-The [real-artwork fixture preparation](play-artwork-fixtures.md) now exports
+The [real-artwork fixture preparation](../play-artwork-fixtures.md) now exports
 existing cached public-card art as bounded raw RGBA resources with exact printing
 and face metadata. Seven local demo cards have authentic art and standard
 alternatives. Unity texture ownership/loading and the actual packaged renderer
@@ -316,7 +320,7 @@ Prior benchmark results describe the earlier renderer, not this revision.
 The packaged capture now uses depth/stencil for rounded clipping; a depthless
 capture produced blank white cards and was corrected before handoff. The rebuilt
 20-object capture contains the card frames, artwork, symbol costs and P/T badge.
-The subsequent [owner-provided asset inventory](play-provided-art-assets.md)
+The subsequent [owner-provided asset inventory](../play-provided-art-assets.md)
 confirmed candidates for a more faithful renderer. No supplied assets have yet
 been imported into the tracked project; their next curation should replace
 prototype treatments where appropriate. Visual acceptance remains pending.
@@ -406,7 +410,7 @@ third-commit cadence; this is the first commit after the last checkpoint.
 
 ## Glyph-bound centering and inline rules symbols — October 30, 2026
 
-The [shared symbol renderer](play-card-symbol-rendering.md) replaces baseline-based
+The [shared symbol renderer](../play-card-symbol-rendering.md) replaces baseline-based
 pip labels with glyph-bound geometry and adds tap/untap/colorless/mana symbols to
 rules text. Unknown notation stays literal and supplied text cannot inject rich
 text. Current printing identities, authentic fallback images and game protocol
@@ -417,7 +421,7 @@ approval; this does not establish live mana payment or activated-ability support
 ## Specialized compact views — October 30, 2026
 
 Owner feedback expanded the earlier image-fallback increment into actual
-[compact profiles](play-layout-gallery.md#compact-layout-follow-up--october-30-2026).
+[compact profiles](../play-layout-gallery.md#compact-layout-follow-up--october-30-2026).
 The gallery now supplies layout metadata, nullable loyalty and defense, and draws
 cropped art with independent names/badges for specialized layouts. Split art panes
 share their source texture; Battle/Room/plane views support reading rotation.

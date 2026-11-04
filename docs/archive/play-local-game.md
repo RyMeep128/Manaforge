@@ -1,6 +1,10 @@
+> Historical record, archived November 3, 2026. Commands, status claims, and
+> acceptance notes below describe their original increment. Use the
+> [documentation index](../README.md) and [current roadmap](../roadmap.md) for current guidance.
+
 > Current implementation: Unity is the gameplay UI. The Python adapter and Qt
 > game UI are retired. Play offers one Start Game action for Unity; the plan
-> below retains historical context. See [Unity Play](../Mtg_Projects/mtg_play/README.md).
+> below retains historical context. See [Unity Play](../../Mtg_Projects/mtg_play/README.md).
 
 # Manaforge Play - historic PyQt delivery and regression baseline
 
@@ -548,7 +552,7 @@ Integration base: `3198da0a6be309832882bee4e0dc4be13f178c09` on
 `feature/xmage-real-deck-validation`, including the optional-payment fix. The
 existing adapter and pinned runtime/artifact manifest remain unchanged.
 
-The [real-deck validation report](../Mtg_Projects/mtg_play/REAL_DECK_VALIDATION.md)
+The [real-deck validation report](../../Mtg_Projects/mtg_play/REAL_DECK_VALIDATION.md)
 records the original scenario evidence and the outstanding new real-deck and
 complex-board CI evidence. Connected workflow/status queries returned no entries
 for the integration commit during implementation; that is not proof of a pass or
@@ -576,7 +580,7 @@ app toolbar hides during a focused match and restores on return. Diagnostics
 and issue reporting remain available through Match menu.
 
 The keep-first London mulligan engine change is prepared separately in
-[the engine follow-up](play-mulligan-engine-followup.md); it is not yet enabled.
+[the engine follow-up](../play-mulligan-engine-followup.md); it is not yet enabled.
 
 
 Stack and revealed-choice update (0.5.28-alpha.1): stack spells resolve physical

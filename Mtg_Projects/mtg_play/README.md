@@ -17,6 +17,6 @@ corpus; they no longer require the retired adapter to generate them.
 
 Build the Windows Unity player before starting a game. See
 [Unity tooling](../../tools/unity-play.ps1), the
-[Unity + Java roadmap](../../docs/play-unity-java-roadmap.md), and
+[current Play guide](../../docs/play.md), and
 [development workflow](../../docs/development-workflow.md). Test suites run in
 GitHub Actions; a successful launch alone does not prove playable acceptance.

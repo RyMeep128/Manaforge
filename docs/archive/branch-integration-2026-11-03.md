@@ -1,4 +1,8 @@
-# Development integration checkpoint — 2026-11-03
+> Historical record, archived November 3, 2026. Commands, status claims, and
+> acceptance notes below describe their original increment. Use the
+> [documentation index](../README.md) and [current roadmap](../roadmap.md) for current guidance.
+
+# Development integration checkpoint â€” 2026-11-03
 
 This checkpoint consolidates the repository's committed branch histories for
 `0.6.0-alpha.1`. It includes work in progress at the owner's explicit request;
@@ -10,7 +14,7 @@ it does not certify complete gameplay or fork acceptance.
 - Independent local-game history: `6e8111e`. Its concession/deadlock fix was
   already applied as `1cc908e`; the merge retains newer terminal-result handling.
 - XMage fork, rules identity, Unity transport and project WIP: `116a810`.
-- Feedback 6–10 and automatic Unity priority WIP: `b7a7bc9`.
+- Feedback 6â€“10 and automatic Unity priority WIP: `b7a7bc9`.
 
 The WIP snapshots exclude generated root `Artifacts/` and installed runtimes.
 Edits made in the original worktrees after these snapshots remain there for
@@ -61,7 +65,7 @@ Complete saved-deck/fork matches and owner visual acceptance remain unfinished.
 The merge was prepared locally without a tag, release or installation. It was
 later pushed at the owner's request.
 
-## CI follow-up � 0.6.1-alpha.1
+## CI follow-up — 0.6.1-alpha.1
 
 Required live-opening CI reproduced `LIVE_COMBAT_CLEANUP_UNPROVEN`. Unity's new
 priority preferences had also been applied to adapter/diagnostic games, adding

@@ -3,7 +3,7 @@
 Status: owned-child coordinator, private viewer pipe primitives and failure tests
 implemented. Packaged Unity wiring, OS containment, orphan recovery and the real
 product launcher remain pending.
-See the [roadmap](play-unity-java-roadmap.md) and [manifest boundary](play-launch-boundary.md).
+See the [roadmap](archive/play-unity-java-roadmap.md) and [manifest boundary](play-launch-boundary.md).
 
 ## Ownership contract
 
@@ -231,7 +231,7 @@ exact child-handle cleanup are reused. A preview-specific codec and ready marker
 remain separate from authenticated gameplay bootstrap/session readiness.
 PreviewLaunch retains temporary assets and the owner if cleanup fails, allowing
 worker-based retry without overlapping launches. See the
-[desktop preview handoff and acceptance](play-desktop-deck-preview.md).
+[desktop preview handoff and acceptance](archive/play-desktop-deck-preview.md).
 
 
 ### Private gateway manifest input (0.5.124)

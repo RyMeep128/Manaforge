@@ -5,7 +5,7 @@ native-deck export schema and Java-only DTOs. It is never a Unity snapshot or a
 second persistent deck format.
 
 Status: source inventory, pending review and CI. Not a frozen Java/C# wire schema,
-captured engine transcript, or G1 acceptance. See the [migration roadmap](../../../docs/play-unity-java-roadmap.md).
+captured engine transcript, or G1 acceptance. See the [migration roadmap](../../../docs/archive/play-unity-java-roadmap.md).
 
 `python-api-inventory.json` records every frozen dataclass field, type/default,
 `GameSession` signature, protocol/adapter version and pinned artifact manifest hash.

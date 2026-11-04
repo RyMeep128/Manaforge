@@ -2,7 +2,7 @@
 
 Status: isolated foundation through 0.5.113-alpha.1 for P2.3; production automation is
 **disabled/unmounted**. P4.3 real-engine acceptance has not happened. This implements
-the fallback scope explicitly allowed by the [owner story](play-safe-automatic-mana-payment-story.md),
+the fallback scope explicitly allowed by the [owner story](archive/play-safe-automatic-mana-payment-story.md),
 not the story's end-to-end definition of done. The existing manual command contract and Unity renderer are preserved. The manual
 Java bridge now shares the native response executor described below. No XMage fork/source copy,
 binary edit, upgrade, new download or weakened artifact verification is introduced.

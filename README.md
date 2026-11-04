@@ -2,283 +2,52 @@
 
 [![Tests](https://github.com/RyMeep128/Manaforge/actions/workflows/tests.yml/badge.svg)](https://github.com/RyMeep128/Manaforge/actions/workflows/tests.yml)
 
-Manaforge is a Python / PyQt6 desktop workspace for building Magic decks, consulting rules, and preparing proxies for print.
+Manaforge is a local-first Magic desktop workspace for building decks, consulting
+rules, sharing decks through private libraries, and preparing proxies for print.
+The desktop tools use Python/PyQt6; gameplay uses Unity with Java/XMage.
+Manaforge is in alpha development.
 
-An opt-in [self-hosted deck library server](docs/self-hosted-library.md) is available
-as a standalone source command. **Browse Online** on the home page connects to your
-own or a friend’s libraries, searches shared decks, and copies decks into your local
-collection. In the unified editor, **More → Publish to Library…** prepares an explicit
-snapshot for publishing, updating or unpublishing in a chosen library. **Follow Deck**
-keeps a read-only offline cache and offers newer revisions for explicit review and
-acceptance. Optional hosting setup UI is still planned. Normal installations
-require no library account and start no library service.
+## Install and launch
 
-Standalone Windows bundles need no Python or Git: extract **Manaforge-Windows.zip**
-and run **Manaforge/Manaforge.exe**. The first-run wizard sets up card data,
-recommendations, and on-demand or full-offline artwork. See
-[installation and updates](docs/installation-and-updates.md) for download/build locations,
-setup, pause/resume, Data Management and monthly updates. Source launchers below
-remain supported for development.
+Use **Manaforge-Setup.exe** for the Windows installer, or extract the entire
+**Manaforge-Windows.zip** for portable use. Both include Python and dependencies.
+See [installation and updates](docs/installation-and-updates.md) for build
+artifacts, setup, artwork modes, updates, diagnostics, and recovery.
 
-Launch **Launch Manaforge.cmd** at the repository root, or run `python run_manaforge.py`
-in the configured environment. The homepage opens Deck Editor, Rules & Rulings,
-and Print Studio; Play is visibly unavailable until implemented. The Windows
-launcher reuses the printer's existing environment and setup. Existing standalone
-launchers remain supported.
+For source development, run **Launch Manaforge.cmd** or `python run_manaforge.py`
+in the configured environment. The Windows launcher reuses the environment
+created by `Mtg_Projects/mtg_proxy/Setup Print Proxy Prep.cmd`.
+CI targets Python 3.12 and 3.13. Windows is the packaged target.
 
-The launcher is the Home page of one application window. Persistent top navigation
-switches between Home, Deck Editor, Rules & Rulings, and Print Studio without
-opening another tool window or process. Workspaces remain loaded as you switch,
-including unsaved deck edits and print layouts. Print Deck opens its linked
-project in the same Print Studio workspace. Closing Manaforge saves/checks active
-workspaces before releasing their resources; a failed save keeps the app open.
-Existing standalone launchers retain their original behavior.
+## Workspaces
 
-Settings opens the shared printing and artwork preference editors. Rules includes
-the offline Comprehensive Rules browser and exact-name lookup of locally cached
-Oracle text/card rulings; downloads remain explicit. Launching Manaforge again
-returns to its existing Home page.
-
-Download or refresh offline rulings for every card in the local catalog with
-`Mtg_Projects\mtg_proxy\venv\Scripts\python.exe tools\sync_rulings.py`.
-This uses Scryfall's bulk rulings export, includes Wizards rulings and Scryfall
-notes, and records cards with no rulings. Run it again after catalog updates or
-to refresh existing rulings. `--db-path` and `--rulings-path` support alternate
-databases. Failed downloads or invalid exports preserve the previous cache.
-The existing card reference dialogs read the updated cache automatically.
-
-**Build Manaforge.cmd** creates the unified packaged entry point at
-`Mtg_Projects/dist/Manaforge/Manaforge.exe`, including its Print Studio launch mode.
-The existing **Mtg_Projects/Build EXE.cmd** printer build path is unchanged.
-Workspace startup failures are reported in the shared application and diagnostic log.
-
-The existing tools share one card-data layer:
-
-See the [Manaforge delivery checklist](docs/roadmap.md) for the ordered printer,
-Deck Editor, integration, and recommendation roadmap.
-
-| App | Purpose | Current status |
-| --- | --- | --- |
-| **Print Proxy Prep** | Import cards, prepare images, arrange print sheets, and export PDFs with paired backs and oversized cards. | Runnable; Windows launchers and app-bundle build included. |
-| **MTG Core Database Admin** | Browse and manage cards, printings, images, and catalog synchronization. | Runnable Qt app backed by the shared `mtg_core` library. |
-| **MTG Deck Editor** | Build and organize decks with visual search, grouped grids/stacks, categories, Undo/Redo, autosave, and Print Deck. | Runnable Qt editor sharing Proxy styling, artwork tools, and print preparation. [Guide](Mtg_Projects/mtg_editor/README.md). |
-
-## See the apps
-
-### MTG Deck Editor
-
-![Deck Editor with visual search and grouped card images](docs/images/deck-editor-search.png)
-
-Use **Add Cards** to open local visual search, then arrange your deck in **Grid** or **Stacks**.
-Group by type, mana value, color, category, or section. Hold the right mouse button for quick
-radial categories/tags; quick right-click for artwork and bulk card actions. **Print Deck** opens a linked
-Proxy project while keeping your deck workspace in place.
-
-![Deck Editor with overlapping category stacks](docs/images/deck-editor-stacks.png)
-
-These captures use original demonstration cards. Regenerate them with
-`python tools/capture_editor.py`; set `QT_SCALE_FACTOR=2` to capture 200% scaling.
-
-### Print Proxy Prep
-
-![Print preview with oversized cards, empty-slot add buttons, occupancy, and Undo/Redo](docs/images/print-preview.png)
-
-Drag individual printed copies into exact slots, swap cards when they fit, or click **+** to add a card. Oversized cards occupy two horizontal slots; backs follow the fronts. Save the project to preserve placement, and export the same layout to PDF.
-
-![Preview move, Undo, and Redo demonstration](docs/images/layout-undo-redo.gif)
-
-Each sheet reports occupancy, such as **Page 4: 1/9 filled**. Under-filled sheets trigger a warning before export with **Go Back** and **Print Anyway**. Counts represent occupied slots, so oversized cards count as two. Empty trailing editing sheets are omitted; intentional gaps between populated sheets remain.
-
-![A fourth sheet with one of nine slots filled](docs/images/underfilled-sheet.png)
-
-![Under-filled sheet warning with Go Back and Print Anyway buttons](docs/images/export-warning.png)
-
-### MTG Core Database Admin
-
-![Core Admin showing sample card records and Cards, Prints, Images, and Sync tabs](docs/images/core-admin.png)
-
-These are captures of the actual Qt widgets using isolated demonstration data and original placeholder cards. The GIF demonstrates rendered move/undo/redo states. Regenerate them with `tools/capture_docs.py`; no user projects or live network lookups are used.
-
-## Install and launch on Windows
-
-Install Python with the Windows `py` launcher. CI targets Python **3.12 and 3.13**. Then clone or download this repository and run:
-
-```powershell
-& '.\Mtg_Projects\mtg_proxy\Setup Print Proxy Prep.cmd'
-& '.\Mtg_Projects\mtg_proxy\Launch Print Proxy Prep.cmd'
-```
-
-Setup creates `Mtg_Projects/mtg_proxy/venv` and installs the shared runtime dependencies. To launch the database app using that same environment:
-
-```powershell
-& '.\Mtg_Projects\mtg_core\Launch MTG Core Admin.cmd'
-```
-
-Launch the early Deck Editor using the same environment:
-
-```powershell
-& '.\Mtg_Projects\mtg_editor\Launch Manaforge Deck Editor.cmd'
-```
-
-Windows is the packaged target; the code includes data-path handling for other platforms, but this repository does not provide macOS/Linux bundles or CI coverage for them.
-
-### First print project
-
-1. Create/open a project and add individual cards, import a decklist, or choose existing images.
-   After an import, Manaforge offers locally known tokens and related cards from Scryfall `all_parts` relationships. The same chooser is available by right-clicking a token-producing project card.
-2. Prepare images and configure paper, bleed, and optional backs/oversized cards.
-3. Open **Preview**, arrange copies, and check each sheet's filled-slot count.
-4. Use **Undo / Redo** or `Ctrl+Z` / `Ctrl+Y` (`Ctrl+Shift+Z` also works) while focused in Preview. History covers moves, resets, added editing pages, and successful slot additions, including their quantities. It is session-only and clears after unrelated project/settings changes.
-5. **Save Project**, then choose **Export PDF** or **Print**. If sheets are under-filled, choose **Go Back** or **Print Anyway**.
-6. Direct printing lets you select fronts/backs and then opens the operating-system printer dialog for printer, copies, page range, and driver properties. PDF export remains available for external printing.
-
-Backside offsets and output settings are saved per project. **Print Settings > Printer profiles...** saves reusable paper, backside, alignment, and duplex preferences and lets you apply them to other projects. **Print Settings > Calibrate printer...** creates a two-sided alignment sheet and can save measured X/Y corrections into a profile. See [printer setup](docs/printing-roadmap.md) for the workflow.
-
-Named projects autosave after two seconds without edits. The header and window title show `*` while changes are unsaved; successful autosaving or **Save Project** clears it. Unnamed drafts save a recovery snapshot without asking for a name; use **Resume Draft** on the Projects screen after restarting. The first regular Save chooses the permanent project name. Closing or switching away saves pending work, and a failed save keeps the project open and marked unsaved.
-
-For large projects, unchanged card widgets and decoded previews are reused and preview-cache disk access is batched. **More → Application settings… → Preview Image Cache** controls the decoded-image RAM budget (256 MB default; up to 2048 MB), independently of export quality.
-
-For supported import formats, image preparation, and detailed controls, see the [Print Proxy Prep guide](Mtg_Projects/mtg_proxy/README.md).
-
-## Build the Windows app bundle
-
-From the repository root:
-
-```powershell
-& '.\Mtg_Projects\Build EXE.cmd'
-```
-
-The script installs PyInstaller, rebuilds the product `build` and `dist` directories, and produces:
-
-- `Mtg_Projects/dist/Print Proxy Prep/Print Proxy Prep.exe`
-- `Mtg_Projects/dist/PrintProxyPrep-<version>-win.zip`
-
-This bundle packages **Print Proxy Prep** and its shared dependencies. Core Admin and the early Deck Editor currently run from source.
-
-## Shared architecture
-
-See [infrastructure readiness](docs/infrastructure-readiness.md) for the storage,
-download, job, manifest and recovery interfaces prepared for installation and data updates.
-See [recommendation distribution](docs/recommendation-distribution.md) for central
-dataset builds, safe GitHub prerelease publication and application consumption.
-
-The shared database retains full Scryfall payloads, including rules text and all card faces. **Add Card → Local database only** and **Core Admin → Prints → Scryfall syntax** support local queries such as `t:creature o:"draw a card" mv<=3`. See the [local card data and search guide](docs/local-card-search.md) for supported filters, index upgrades, and data-freshness limits.
-
-```mermaid
-flowchart TD
-    Proxy[Print Proxy Prep / PyQt6] --> Core[mtg_core services]
-    Admin[MTG Core Database Admin / PyQt6] --> Core
-    Editor[Deck Editor / planned] -. future integration .-> Core
-    Core --> DB[(SQLite card catalog)]
-    Core --> Images[Shared image assets]
-    Core --> Remote[Scryfall lookups and catalog sync]
-    Proxy --> Projects[Project JSON: copies, settings, manual layout]
-    Proxy --> Layout[Shared print placement service]
-    Layout --> Preview[Interactive preview]
-    Layout --> PDF[ReportLab PDF rendering]
-```
-
-| Directory | Responsibility |
+| Workspace | Guide |
 | --- | --- |
-| `Mtg_Projects/mtg_proxy/` | Print UI, project library, image preparation, import orchestration, preview, and PDF export. |
-| `Mtg_Projects/mtg_core/mtg_core/` | Card/printing models, SQLite access, image storage, search, synchronization, and shared services. |
-| `Mtg_Projects/mtg_core/mtg_core_gui/` | Core Database Admin interface. |
-| `Mtg_Projects/mtg_editor/` | Deck Editor specification and future app boundary. |
-| `Mtg_Projects/integration_tests/` | Proxy/Core contract tests. |
+| Deck Editor | [Build and organize decks](Mtg_Projects/mtg_editor/README.md), [deck setup](docs/deck-setup.md), [discovery](docs/deck-builder-discovery.md) |
+| Rules & Rulings | [Local card data and search](docs/local-card-search.md) |
+| Print Studio | [Print guide](Mtg_Projects/mtg_proxy/README.md), [printer setup](docs/printing-roadmap.md) |
+| Browse Online | [Private library setup and use](docs/self-hosted-library.md) |
+| Play | [Unity gameplay and development status](docs/play.md) |
+| Card Database | [Settings workspace](docs/card-database-workspace.md) |
 
-On Windows, runtime data defaults to `%LOCALAPPDATA%\PrintProxyPrep`; the shared catalog and assets live beneath its `mtg_core` directory. Set `PRINT_PROXY_PREP_DATA_DIR` to isolate development/test data. Project JSON references shared assets rather than embedding full-resolution images. Keep runtime databases, caches, virtual environments, and generated bundles out of commits.
+Source Play has one **Start Game** button for Unity, with format, deck, and
+mana-payment selectors. A built Windows Unity player and pinned XMage runtime
+are required. Installed builds retain the Play release gate; source availability
+is not a claim of complete gameplay acceptance.
 
-## Development and tests
+Your decks, artwork, and preferences remain local. Runtime data defaults to
+`%LOCALAPPDATA%/PrintProxyPrep`; set `PRINT_PROXY_PREP_DATA_DIR` for isolated data.
+Normal use requires no library account or library server.
 
-CI runs `python -m ruff check .` and `python -m ruff format --check .` on
-Python 3.12 and 3.13 alongside pytest. The pinned Ruff version is installed by
-`requirements-dev.txt`. The explicit allowlist in `ruff.toml` initially covers
-Core's typed artwork/section/sync state, SQLite migrations, and their tests.
-Broader adoption should expand that list in small changes, without a suite-wide
-formatting rewrite. To format only these files, run `python -m ruff format .`
-from the repository root. CI reports lint and formatting failures separately.
+## Development
 
-Manaforge is in alpha/beta development. Commits increment the patch version (for example, `0.2.1-alpha.1` → `0.2.2-alpha.1`); merges into `main` increment the minor version and reset patch (`0.2.2-alpha.1` → `0.3.0-alpha.1`). `APP_VERSION` in `Mtg_Projects/mtg_proxy/constants.py` is the source for the app and build archive name. Alpha/beta builds stay marked as prereleases; tagging or publishing a release is a separate step. See [versioning instructions](AGENTS.md).
+Work on `main` in the canonical workspace and follow [AGENTS.md](AGENTS.md) and
+[the development workflow](docs/development-workflow.md). Run test suites through
+GitHub Actions. **Build Manaforge.cmd** builds the unified Windows application;
+[Unity build tooling](Mtg_Projects/mtg_play_unity/README.md) covers the game player.
+Application versions remain prereleases; commits and builds do not create releases.
 
-From the repository root, after setup:
-
-```powershell
-& '.\Mtg_Projects\mtg_proxy\venv\Scripts\python.exe' -m pip install -r requirements-dev.txt
-$env:QT_QPA_PLATFORM = 'offscreen'
-Push-Location Mtg_Projects
-& '.\mtg_proxy\venv\Scripts\python.exe' -m pytest -q
-Pop-Location
-```
-
-[CI](.github/workflows/tests.yml) runs the Proxy, Core, and integration tests on pushes and pull requests, with a manual workflow trigger as well. Qt tests run offscreen and CI uses a temporary application-data directory. Workflow setup follows the official [checkout](https://github.com/actions/checkout) and [setup-python](https://github.com/actions/setup-python) actions.
-
-To refresh the screenshots and GIF:
-
-```powershell
-& '.\Mtg_Projects\mtg_proxy\venv\Scripts\python.exe' tools/capture_docs.py
-```
-
-Repository description and discovery topics are maintained in [repository-metadata.json](docs/repository-metadata.json). GitHub's About fields are separate from tracked files.
-To apply those values to `origin`, run `tools/update_repository_metadata.py` with the same Python environment; it uses your configured GitHub credential and preserves existing topics.
-
-### Diagnostics and repair
-
-Open **Settings → Diagnostics & Repair** on the homepage (also available in
-Print Studio Settings and the installation wizard). First-run setup automatically
-checks local installation health before downloading. Healthy, Warning, Error and
-Not Checked identify working components, recoverable issues and checks not run.
-Missing initial datasets are expected until installation completes.
-
-Local checks never contact online services, regardless of artwork mode. Use
-**Check online services** to explicitly check Scryfall and the recommendation
-release source. Cached data remains usable without internet. Full offline artwork
-mode describes what is stored; it does not force background network diagnostics.
-
-Choose a repair and review its explanation before proceeding. Resume installation
-reuses download checkpoints. Recommendation repair verifies all managed bundles,
-keeps valid generations and atomically activates repaired generations. Card repair
-uses the existing staged transactional import, retains user data, and skips a
-healthy current catalog. Physically corrupt catalogs and unsupported newer schemas
-are reported for manual recovery rather than overwritten: catalogs can contain
-favorites and preferences. Reinstalling application files should retain the data
-folder. Never delete that folder as a troubleshooting step.
-
-Artwork verification checks recorded Scryfall artwork and its canonical assets.
-Artwork repair restores canonical files from intact local copies where possible
-and downloads missing remote images. Custom artwork is preserved. To collect images
-that have never been cached, use Data Management → Download missing artwork.
-Rebuild optional caches clears only reproducible copies with verified originals;
-canonical artwork and decks are retained. Restoring configuration makes a timestamped
-backup of config.ini and applies defaults after restart; installation paths,
-favorites and artwork profiles remain unchanged. Pause/cancel preserves completed
-work, and failed actions can be retried. An in-flight metadata request or bundle
-verification may finish before cancellation takes effect.
-
-**Copy report** and **Export Diagnostic Report** produce readable text with build,
-OS, data versions, subsystem health, capacity, recorded storage usage, recent
-operations, repair outcomes and bounded diagnostic log excerpts. Reports redact
-common credentials, remote URLs, email addresses and personal paths. Review reports
-before sharing; arbitrary text in third-party errors cannot be guaranteed secret-free.
-No report is uploaded automatically.
-
-Integrity checks cover readable runtime files, database schemas/SQLite health,
-recommendation bundle checksums and explicit artwork checksums. They do not verify
-release signatures or detect every missing card in a locally modified catalog.
-Storage figures describe managed card/bulk files and recorded canonical artwork;
-optional copies and retained recommendation generations can consume additional space.
-Unreadable/corrupt installation state is preserved and can still be reported; it is
-not silently reset because that could lose storage pointers. Portable recovery of
-such state and automatic recovery of physically corrupt catalogs are not supported.
-
-The UI uses the existing sequential JobQueue. Extensible checks live in
-`mtg_core.health`; reusable repair routing and a bounded, redacted operation history
-live in `mtg_core.repair`. Downloads, installations and atomic activation remain in
-the existing infrastructure. Tests cover offline behavior, broken catalogs,
-report redaction, cancellation, backups, retries and avoiding redundant downloads.
-
-## Friend feedback
-
-Help → Send Feedback supports anonymous reports, optional diagnostics/screenshots and local drafts. Maintainer deployment and privacy details: [Feedback relay setup](feedback-relay/README.md).
-
-
-Contributor guidance: [Shared components and domain operations](docs/shared-components.md).
+Start with the [documentation index](docs/README.md), [current roadmap](docs/roadmap.md),
+and [shared component boundaries](docs/shared-components.md). Help → Send Feedback
+supports reports and local drafts; maintainer setup is in the
+[feedback relay guide](feedback-relay/README.md).

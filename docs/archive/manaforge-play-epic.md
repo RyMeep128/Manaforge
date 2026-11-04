@@ -1,3 +1,7 @@
+> Historical record, archived November 3, 2026. Commands, status claims, and
+> acceptance notes below describe their original increment. Use the
+> [documentation index](../README.md) and [current roadmap](../roadmap.md) for current guidance.
+
 # Epic: Manaforge Play — Private Digital Magic & Playgroups
 
 Status: **Planned long-term scope.** Delivery order and prerequisites live in the [roadmap](roadmap.md); the [long-term product epic](long-term-product-epic.md) remains the broader product vision. This epic does not authorize immediate gameplay implementation. XMage integration and optional external synchronization remain subject to feasibility, licensing, and supported capabilities.

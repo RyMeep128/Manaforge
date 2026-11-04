@@ -1,3 +1,7 @@
+> Historical record, archived November 3, 2026. Commands, status claims, and
+> acceptance notes below describe their original increment. Use the
+> [documentation index](../README.md) and [current roadmap](../roadmap.md) for current guidance.
+
 # Feedback fixes: issues 6–10
 
 - #6: Deck Editor decorates card-specific errors from the existing Commander and constructed checkers. Grid cards receive a red border and violation badge; grouped text and table rows are red. Table tooltips explain violations. Unknown data and deckwide size issues do not mark unrelated cards. Checks use a debounced local metadata lookup and reject results after an edit or deck switch.

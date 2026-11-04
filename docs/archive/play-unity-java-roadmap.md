@@ -1,6 +1,10 @@
+> Historical record, archived November 3, 2026. Commands, status claims, and
+> acceptance notes below describe their original increment. Use the
+> [documentation index](../README.md) and [current roadmap](../roadmap.md) for current guidance.
+
 > Current implementation: Unity is the gameplay UI. The Python adapter and Qt
 > game UI are retired. Play offers one Start Game action for Unity; the plan
-> below retains historical context. See [Unity Play](../Mtg_Projects/mtg_play/README.md).
+> below retains historical context. See [Unity Play](../../Mtg_Projects/mtg_play/README.md).
 
 # Manaforge Play — Unity + Java Roadmap
 
@@ -475,7 +479,7 @@ persistence/recovery and shared playgroups.
 - P0.1/P0.2 foundation: installed/licensed `6000.6.7f1`, URP `17.6.0`,
   six EditMode checks, one PlayMode scene check, Windows player build and a
   20-placeholder packaged camera screenshot demonstrated locally. See the
-  [Unity foundation guide](../Mtg_Projects/mtg_play_unity/README.md).
+  [Unity foundation guide](unity-foundation-history.md).
 - The installed editor is a current release, not LTS. Approved LTS selection,
   executed licensed CI, real artwork/interaction benchmarks and distribution
   review remain open. No G0/G1 completion is claimed.
@@ -486,10 +490,10 @@ persistence/recovery and shared playgroups.
 
 - P1.3 foundation: immutable one-time native-deck export, separate private schema
   and Java-only DTOs; 29 focused Python checks and three positive/nine negative
-  Java launch fixtures passed locally. [Launch boundary](play-launch-boundary.md)
+  Java launch fixtures passed locally. [Launch boundary](../play-launch-boundary.md)
   documents pending engine resolution and authenticated process delivery.
 
-- P1.4 foundation: [owned-child lifecycle coordinator](play-launch-lifecycle.md),
+- P1.4 foundation: [owned-child lifecycle coordinator](../play-launch-lifecycle.md),
   explicit readiness/deadlines, cancellation, reverse cleanup and blocked retry.
   47 focused new/existing lifecycle checks passed, including tiny real child
   processes. Authenticated delivery, OS containment and orphan recovery remain open.
@@ -517,10 +521,10 @@ comfortable real 1v1. This plan creates no build/license/benchmark/CI success ev
   retain implementation history and regressions. Their AI-first/Qt delivery order
   is superseded. The owner subsequently confirmed human-versus-XMage-AI as the
   initial playable target; preserve its AI acceptance evidence and remaining gaps.
-- [Python adapter](../Mtg_Projects/mtg_play/ADAPTER.md) and existing acceptance
+- [Python adapter](../../Mtg_Projects/mtg_play/README.md) and existing acceptance
   fixtures are initial behavioral truth for parity. Update runtime docs as Java
   actually replaces Python; proposed schemas do not establish parity.
-- [Priority](play-priority-control.md) and [mulligan follow-up](play-mulligan-engine-followup.md)
+- [Priority](../play-priority-control.md) and [mulligan follow-up](../play-mulligan-engine-followup.md)
   retain baseline behavior/evidence, without prescribing Unity implementation.
 - [Architecture cleanup](architecture-cleanup-epic.md) and [product vision](long-term-product-epic.md)
   remain applicable outside this scoped migration.
@@ -533,7 +537,7 @@ private information kept private.
 
 ### G1 local dummy-transport evidence — October 30, 2026
 
-An [owned Java↔Unity EditMode fixture](../Mtg_Projects/mtg_play/protocol/dummy-exchange.md)
+An [owned Java↔Unity EditMode fixture](../../Mtg_Projects/mtg_play/protocol/dummy-exchange.md)
 now exchanges private viewer bootstrap/authentication, mock snapshot/action,
 stale/pending rejection, submitted ACK, explicit fixture-only result and clean
 shutdown. Wrong-key and owner-EOF checks pass locally. No Python action relay,
@@ -544,7 +548,7 @@ validation remain pending. G0/G1 remain open and the bulk P2 port stays gated.
 
 ### G0 real-artwork preparation — October 30, 2026
 
-An [offline fixture exporter](play-artwork-fixtures.md) now reuses the installed
+An [offline fixture exporter](../play-artwork-fixtures.md) now reuses the installed
 Core catalog/artwork cache to prepare authentic, bounded raw RGBA resources.
 The local seven-card bundle contains 21 assets (about 46 MiB), with selected
 identities preserved and standard alternatives available. Twenty-seven focused
@@ -555,7 +559,7 @@ startup, interaction or 20/70/200 performance evidence. G0 remains open.
 
 ### G0 packaged artwork fixture — October 30, 2026
 
-The [offline artwork fixture](play-artwork-fixtures.md) now loads through a strict
+The [offline artwork fixture](../play-artwork-fixtures.md) now loads through a strict
 worker boundary and renders in the packaged Unity player. Visually inspected
 20/70/200-object captures use seven shared textures (~15.3 MiB raw pixels), with
 compact cards and full inspection. Sixty-seven EditMode checks and three PlayMode
@@ -568,7 +572,7 @@ the playable direction, not claims made by this fixture.
 
 ### G0 scripted measurement harness — October 30, 2026
 
-The [packaged renderer harness](play-renderer-benchmarks.md) now exercises fixture
+The [packaged renderer harness](../play-renderer-benchmarks.md) now exercises fixture
 pointer selection, tap rotation and target-line animation at 20/70/200 objects.
 It records five-second offscreen loop/CPU intervals, startup and externally sampled
 process memory with raw artifacts. GPU counters were unavailable on this hidden
@@ -578,7 +582,7 @@ open for visible graphics/latency evidence and the other outstanding acceptance.
 
 ### G1 terminal error boundary — October 30, 2026
 
-The [session-error contract](play-session-errors.md) now validates fixed terminal
+The [session-error contract](../play-session-errors.md) now validates fixed terminal
 failure categories in Java/C# and preserves pending command uncertainty while
 refusing reconnect. An actual authenticated dummy process sends submitted ACK,
 SESSION_FAILED and EOF without a game result. Eighty focused EditMode checks,
@@ -588,7 +592,7 @@ cleanup, licensed CI and the G1 freeze remain pending; P2 has not started.
 
 ### G1 receive history — October 30, 2026
 
-The [bounded receive history](../Mtg_Projects/mtg_play/protocol/receive-history.md)
+The [bounded receive history](../../Mtg_Projects/mtg_play/protocol/receive-history.md)
 now drops identical data-message retries and rejects conflicting IDs, revision
 rollback and capacity overflow in Java/C#. A result terminates new data admission;
 events can share revisions. Ten shared sequences, mutation/concurrency checks and
@@ -599,7 +603,7 @@ licensed Unity CI and real-engine emission parity remain open. G1 is not frozen.
 
 ### G1 bounded client receive inbox — October 30, 2026
 
-A [client worker inbox](../Mtg_Projects/mtg_play/protocol/receive-inbox.md) now bounds
+A [client worker inbox](../../Mtg_Projects/mtg_play/protocol/receive-inbox.md) now bounds
 queued packet count/UTF-8 bytes and clears owned data/history on overflow,
 validation failure or cancellation. Dequeue transfers explicit packet ownership;
 normal input completion permits draining. Fifteen new checks plus the actual
@@ -610,7 +614,7 @@ remain pending; G1 is not frozen and bulk P2 remains gated.
 
 ### G1 client socket-read deadlines — October 30, 2026
 
-An [owned loopback frame reader](../Mtg_Projects/mtg_play/protocol/frame-read-deadlines.md)
+An [owned loopback frame reader](../../Mtg_Projects/mtg_play/protocol/frame-read-deadlines.md)
 now uses one monotonic budget for header/payload reads, observes cancellation and
 closes on failure. Fifteen real socket checks and a sixth authenticated dummy
 partial-frame timeout/cleanup case pass within 117 focused EditMode checks.
@@ -620,7 +624,7 @@ licensed CI remain pending. G1 is not frozen; no bulk P2 port has begun.
 
 ### G1 Java socket-read deadline parity — October 30, 2026
 
-Java now uses the matching [whole-frame loopback deadline](../Mtg_Projects/mtg_play/protocol/frame-read-deadlines.md)
+Java now uses the matching [whole-frame loopback deadline](../../Mtg_Projects/mtg_play/protocol/frame-read-deadlines.md)
 for dummy authentication and commands, with cancellation/interruption and owned
 socket closure. Sixteen Java loopback cases and a seventh authenticated Java↔C#
 partial-frame scenario pass locally, within 118 focused EditMode checks. Earlier
@@ -631,7 +635,7 @@ has not started; this is engine-independent transport work.
 
 ### G1 bounded C# frame writes — October 30, 2026
 
-A [client write boundary](../Mtg_Projects/mtg_play/protocol/frame-write-deadlines.md)
+A [client write boundary](../../Mtg_Projects/mtg_play/protocol/frame-write-deadlines.md)
 now validates before sending, bounds socket progress and closes without retrying
 uncertain chunks. The seven actual Java-dummy scenarios use it for normal client
 sends. Twelve new socket/ownership checks bring focused local EditMode validation
@@ -641,7 +645,7 @@ pending. G1 is not frozen and bulk P2 remains gated.
 
 ### G1 Java frame-write parity — October 30, 2026
 
-The [Java writer](../Mtg_Projects/mtg_play/protocol/frame-write-deadlines.md) now
+The [Java writer](../../Mtg_Projects/mtg_play/protocol/frame-write-deadlines.md) now
 bounds blocking output with an owned watchdog and closes uncertain failures
 without retrying. Fourteen Java write checks include interruption, stale-watch
 safety and scheduler cleanup. An eighth authenticated process scenario times out against a
@@ -652,7 +656,7 @@ remain open. This is transport infrastructure, not the bulk P2 engine port.
 
 ### G1 first client session owner — October 30, 2026
 
-The [C# client session channel](../Mtg_Projects/mtg_play/protocol/client-session-channel.md)
+The [C# client session channel](../../Mtg_Projects/mtg_play/protocol/client-session-channel.md)
 now coordinates perform-token admission, data/ACK/error routing, uncertainty,
 bounded inbox cleanup and socket closure. Matching shutdown permits final packet
 drain. Two authenticated process scenarios and 18 new focused checks pass within
@@ -663,7 +667,7 @@ frozen and the bulk P2 engine port has not started.
 
 ### G1 opaque choices and explicit controls — October 30, 2026
 
-The [client owner](../Mtg_Projects/mtg_play/protocol/client-session-channel.md) now
+The [client owner](../../Mtg_Projects/mtg_play/protocol/client-session-channel.md) now
 admits offered option IDs plus explicitly permitted finish/cancel commands using
 current viewer/revision/decision tokens. No prompt/card inference or automatic
 choice occurs. Java/C# reject duplicate/empty option IDs. Three authenticated
@@ -674,7 +678,7 @@ parity, product lifecycle and licensed CI remain open; G1 is not frozen.
 
 ### G1 numeric choice admission — October 30, 2026
 
-The [client numeric boundary](../Mtg_Projects/mtg_play/protocol/numeric-choices.md)
+The [client numeric boundary](../../Mtg_Projects/mtg_play/protocol/numeric-choices.md)
 now compares explicit number/amount entries with current engine-supplied bounds,
 using exact mathematical totals without clamping or defaults. Twenty new owner
 checks and two authenticated fixture modes pass within 186 local EditMode checks.
@@ -685,7 +689,7 @@ is Phase 2/G2 acceptance after G0/G1.
 
 ### G1 viewer-scoped mana source admission — October 30, 2026
 
-The [client mana path](../Mtg_Projects/mtg_play/protocol/mana-source-admission.md)
+The [client mana path](../../Mtg_Projects/mtg_play/protocol/mana-source-admission.md)
 now binds source clicks to a current mana decision and viewer object incarnation.
 It does not infer source usability or calculate payment. All seven specified wire
 command families now have client admission coverage; fifteen new owner checks
@@ -697,7 +701,7 @@ Phase 2/G2 after G0/G1; no bulk engine port has started.
 
 ### G1 bounded client authentication handoff — October 30, 2026
 
-The [client handshake](../Mtg_Projects/mtg_play/protocol/client-handshake.md) now
+The [client handshake](../../Mtg_Projects/mtg_play/protocol/client-handshake.md) now
 checks trusted pins/viewer/nonces and proof under one total deadline before
 returning the session owner. Sixteen new checks and two process cases pass within
 220 local EditMode checks. This changes no rendered UI and needs no hands-on UI
@@ -707,7 +711,7 @@ process ownership and licensed CI remain open; G1 is not frozen.
 
 ### G1 bounded Java authentication boundary — October 30, 2026
 
-The [gateway handshake](../Mtg_Projects/mtg_play/protocol/gateway-handshake.md)
+The [gateway handshake](../../Mtg_Projects/mtg_play/protocol/gateway-handshake.md)
 now applies one monotonic deadline to proof receipt, validation and reply before
 returning trusted viewer context. Sixteen Java authentication checks and 221
 Unity EditMode checks pass locally, including 19 Java process scenarios. No UI
@@ -728,7 +732,7 @@ remaining bootstrap, ownership and licensed CI requirements remain open.
 
 ### G1 Java viewer command admission — October 30, 2026
 
-The [Java command gate](../Mtg_Projects/mtg_play/protocol/gateway-command-admission.md) now binds all seven command families to an
+The [Java command gate](../../Mtg_Projects/mtg_play/protocol/gateway-command-admission.md) now binds all seven command families to an
 authenticated viewer's current offered IDs, flags and numeric bounds. Newer events,
 results and invalid observations revoke permissions; amount totals cannot wrap.
 The dummy uses this gate without claiming real-engine legality or confirmation.
@@ -738,7 +742,7 @@ product ownership/dispatch/licensed CI requirements remain open.
 
 ### G1 Java admission and receipt ownership — October 30, 2026
 
-The [Java viewer owner](../Mtg_Projects/mtg_play/protocol/gateway-session-boundary.md) now serializes offered-command admission and
+The [Java viewer owner](../../Mtg_Projects/mtg_play/protocol/gateway-session-boundary.md) now serializes offered-command admission and
 one-time ledger reservation. Disconnect/fault revokes permissions while retaining
 pending uncertainty; only trusted engine outcomes can resolve it. Thirty new Java
 checks cover ownership, results, failures and concurrent duplicates. The normal
@@ -748,7 +752,7 @@ bootstrap, engine dispatch, licensed CI and G0/G1 acceptance remain open.
 
 ### G1 Java reservation-to-enqueue handoff — October 30, 2026
 
-The [dispatch handoff](../Mtg_Projects/mtg_play/protocol/gateway-dispatch-handoff.md) invokes a trusted enqueue once per new reservation,
+The [dispatch handoff](../../Mtg_Projects/mtg_play/protocol/gateway-dispatch-handoff.md) invokes a trusted enqueue once per new reservation,
 under the viewer owner's monitor. Failures preserve uncertainty and revoke further
 admission; duplicate/rejected requests never invoke it. Thirty-six new Java checks
 cover failures, interruption, reentry and concurrent duplicates. The dummy uses a
@@ -769,7 +773,7 @@ live-game, G0/G1 or final renderer acceptance is claimed.
 ### P3.2a specialized-layout display gallery — October 30, 2026
 
 Owner-expanded visual scope now includes planeswalkers, sagas, battles, tokens and
-other layouts in a [25-entry gallery](play-layout-gallery.md). Specialized compact
+other layouts in a [25-entry gallery](../play-layout-gallery.md). Specialized compact
 and inspection views retain complete authentic images; normal-layout planeswalkers
 are excluded from ordinary-frame reconstruction. A dropdown exposes all faces.
 The supplied Downloads assets contain loyalty, chapter, defense and token parts;
@@ -779,7 +783,7 @@ This is printed-fixture presentation, not new gameplay support or G0/G1 acceptan
 
 ### P3.2a cost and inline rules symbols — October 30, 2026
 
-The [symbol component](play-card-symbol-rendering.md) centers actual glyph bounds
+The [symbol component](../play-card-symbol-rendering.md) centers actual glyph bounds
 inside pips and formats supplied tap/untap/colorless/mana tokens inline in rules
 text. Unknown/oversized notation retains a literal fallback. Concealment clears
 inline runs; source text is never interpreted as gameplay or injected rich text.
@@ -789,7 +793,7 @@ The symbol review build still requires owner visual approval; G0/G1 stay open.
 
 ### P3.2a specialized minis follow-up — October 30, 2026
 
-The [gallery](play-layout-gallery.md) now adds explicit compact profiles instead
+The [gallery](../play-layout-gallery.md) now adds explicit compact profiles instead
 of full-printing thumbnails for known families. Minis have art crops, independent
 nameplates, kind indicators and supplied P/T/loyalty/defense. Split panes share one
 texture; Battle, Room and plane orientations are supported. V2 printed-reference
@@ -800,7 +804,7 @@ are inferred. Owner visual review and G0/G1 acceptance remain open.
 
 ### G1 immutable viewer card slice — October 30, 2026
 
-The [card projection](../Mtg_Projects/mtg_play/protocol/viewer-card-projection.md)
+The [card projection](../../Mtg_Projects/mtg_play/protocol/viewer-card-projection.md)
 now turns validated snapshot/result messages into immutable, viewer-scoped card
 inputs without retaining mutable wire objects, action authority or private
 observations. Current characteristics and exact printing identity remain
@@ -818,7 +822,7 @@ third-commit checkpoint; local evidence is not licensed Unity CI acceptance.
 
 ### G1/P3 viewer surface handoff — October 30, 2026
 
-The [viewer surface owner](play-viewer-surface.md) now connects immutable card
+The [viewer surface owner](../play-viewer-surface.md) now connects immutable card
 projections to reusable CardViews under an epoch ticket and revision watermark.
 It clears old inspection/cards before private-scope disposal, enforces a whole
 empty frame on viewer switch, rejects late work and blocks callback reentry.
@@ -836,7 +840,7 @@ public fixture scene remains unchanged; production scene acceptance is pending.
 
 ### G1/P3 authorized single-face artwork
 
-The [artwork boundary](play-viewer-artwork.md) now accepts exact, compatible
+The [artwork boundary](../play-viewer-artwork.md) now accepts exact, compatible
 normal one-face catalog printings for visible, explicitly face-up projected
 objects. Requests/completions are tied to the viewer ticket, applied revision,
 watermark and current opaque object. Unknown/multi-face cases remain unavailable;
@@ -851,7 +855,7 @@ The public gallery is unchanged; no new owner UI verification is needed yet.
 
 ### G1/P3 bounded worker-to-UI handoff
 
-The [render mailbox](play-render-mailbox.md) now coalesces complete projected
+The [render mailbox](../play-render-mailbox.md) now coalesces complete projected
 snapshots per viewer epoch and bounds queued private artwork by count/bytes.
 Newer state retires obsolete completions; shutdown clears queued pixels. The UI
 owner drains snapshots before a limited number of texture uploads without
@@ -864,7 +868,7 @@ session mounting remain open, as do G0/G1 and P2 parity. No public scene changed
 
 ### G1/P3 bounded artwork jobs
 
-The [artwork coordinator](play-artwork-jobs.md) now runs asset providers off the
+The [artwork coordinator](../play-artwork-jobs.md) now runs asset providers off the
 UI thread under per-epoch concurrency/queue limits. Viewer cleanup stops owned
 jobs without waiting, signals cancellation on workers and disposes late or
 mismatched results. Provider errors expose only fixed diagnostic codes. Fast
@@ -877,7 +881,7 @@ acceptance are not claimed. CI review remains on the third-commit cadence.
 
 ### G1/P3 offline Core artwork provider
 
-The [Core artwork provider](play-core-artwork-provider.md) now exports exact,
+The [Core artwork provider](../play-core-artwork-provider.md) now exports exact,
 viewer-permitted cached printings once into a pinned launch sidecar and reads
 verified raw pixels lazily on Unity workers. It reuses existing Core conversion,
 reports unavailable/unsupported printings explicitly, and connects to the bounded
@@ -888,7 +892,7 @@ contracts, G0/G1 and P2 parity remain open. The public UI is unchanged.
 
 ### G1/P3 bounded presentation pump
 
-The [viewer presentation pump](play-presentation-pump.md) now joins mailbox drain,
+The [viewer presentation pump](../play-presentation-pump.md) now joins mailbox drain,
 bounded texture uploads and bounded artwork job admission in one per-update UI
 entry point. It keeps queue backpressure without replaying accepted failed work
 every frame, replaces pending requests on new snapshots, and preserves viewer
@@ -899,7 +903,7 @@ public fixture is unchanged and needs no new owner UI review.
 
 ### G1 private viewer bootstrap contract
 
-The [viewer bootstrap boundary](play-viewer-bootstrap.md) now shares a bounded
+The [viewer bootstrap boundary](../play-viewer-bootstrap.md) now shares a bounded
 one-viewer schema between Python export and Unity parsing. It carries a loopback
 endpoint, trusted expected context/pins, one seat-only key and optional artwork
 pin, rejecting owner/deck fields. Key transfer is single-use and disposal revokes
@@ -909,7 +913,7 @@ and production mounting remain open; G0/G1 acceptance is not claimed. No UI chan
 
 ### G1 private bootstrap pipe reader
 
-The [Windows private pipe primitive](play-bootstrap-pipe.md) now receives one
+The [Windows private pipe primitive](../play-bootstrap-pipe.md) now receives one
 bounded framed bootstrap and watches owner EOF without a blocking render-thread
 read. Real anonymous-pipe checks cover fragments, truncation, deadlines,
 cancellation and lifeline behavior; a Python child verifies inherited delivery.
@@ -919,7 +923,7 @@ and OS containment remain open. No public UI changed; G0/G1 remain unaccepted.
 
 ### G1 launch-owned bootstrap writing
 
-The [launch coordinator writer](play-owned-bootstrap-write.md) now supplies one
+The [launch coordinator writer](../play-owned-bootstrap-write.md) now supplies one
 framed viewer payload to its owned client using bounded nonblocking writes.
 Partial writes and pipe backpressure preserve cancellation and health checks;
 failure invokes owned cleanup. A completed write is not client readiness. Local
@@ -930,7 +934,7 @@ changed. CI is reviewed at this third-commit checkpoint without awaiting runs.
 
 ### G1 packaged private-bootstrap diagnostic
 
-The [headless packaged proof](play-packaged-bootstrap-proof.md) now connects the
+The [headless packaged proof](../play-packaged-bootstrap-proof.md) now connects the
 owned Python writer to the actual Windows Unity player's inherited stdin. Four
 cases passed: owner EOF, malformed payload, missing-frame timeout and non-fixture
 context rejection. Both owned roots exited without forced termination in every
@@ -941,7 +945,7 @@ containment and G0/G1 acceptance remain open. The public gallery is unchanged.
 
 ### G1 fresh viewer challenge exchange
 
-The [challenge wrappers](../Mtg_Projects/mtg_play/protocol/viewer-challenges.md)
+The [challenge wrappers](../../Mtg_Projects/mtg_play/protocol/viewer-challenges.md)
 now generate independent gateway/client nonces on each connection before the
 existing signed hello. Trusted bootstrap/template identity and pins are preserved;
 unsigned peer context is never adopted. One budget covers the exchange and failed
@@ -953,7 +957,7 @@ containment and G0/G1 remain open. No UI changed.
 
 ### G1/P3 viewer session receive bridge
 
-The [session receiver](play-viewer-session-receiver.md) now connects a matching
+The [session receiver](../play-viewer-session-receiver.md) now connects a matching
 authenticated channel to its viewer mailbox on the connection worker. Ordered
 events/results/receipts are retained under explicit queue budgets, while only
 render snapshots coalesce. Channel stop, owner cancellation, malformed data or
@@ -965,7 +969,7 @@ verification and G0/G1 remain open. The public gallery is unchanged.
 
 ### G1/P3 authenticated viewer session host
 
-The [session host](play-viewer-session-host.md) joins trusted bootstrap, bounded
+The [session host](../play-viewer-session-host.md) joins trusted bootstrap, bounded
 loopback connection, fresh authentication, ordered receive and UI pumping under
 one viewer lifetime. Owner loss revokes the mailbox before the next UI update;
 late attempts and retired hosts cannot populate or clear a replacement epoch.
@@ -977,7 +981,7 @@ verification and G0/G1 acceptance remain open. No public gallery changes.
 
 ### G1/P3 packaged authenticated session fixture — owner UI review pending
 
-The [explicit fixture scene](play-session-fixture.md) now joins inherited bootstrap,
+The [explicit fixture scene](../play-session-fixture.md) now joins inherited bootstrap,
 real Java/C# authentication, receive projection, shared card views and owner-loss
 cleanup in the packaged graphics player. The fixture shows one public and one
 concealed object, with inspection but no gameplay commands or artwork sidecar.
@@ -989,7 +993,7 @@ OS containment and G0/G1 remain open. Existing gallery and Qt Play are preserved
 
 ### G1/P3 authenticated host artwork lifetime
 
-The [host sidecar integration](play-host-artwork-lifecycle.md) now opens matching
+The [host sidecar integration](../play-host-artwork-lifecycle.md) now opens matching
 pinned Core artwork after peer authentication, mounts its bounded jobs on the UI
 thread, and awaits their retirement before index/channel cleanup. Wrong manifest
 context/pins fail closed; missing/corrupt pixels remain unavailable. Hidden objects
@@ -1001,7 +1005,7 @@ checked at this third-commit checkpoint without waiting for unfinished runs.
 
 ### P3.4 immutable decision-data boundary
 
-The [decision projection](play-viewer-decisions.md) now carries exact viewer-scoped
+The [decision projection](../play-viewer-decisions.md) now carries exact viewer-scoped
 engine actions, choice tokens, prompts, flags and numeric constraints as immutable
 data. It shares receive validation with cards, preserves unknown/null values and
 adds no legality inference or default submission. The ordered receiver carries
@@ -1012,7 +1016,7 @@ scoped UI binding, command submission, owner UI review and G0/G1 remain pending.
 
 ### P3.4 decision offer lifetime and availability
 
-The [offer binding](play-viewer-decision-binding.md) now ties immutable decision
+The [offer binding](../play-viewer-decision-binding.md) now ties immutable decision
 data to one receiver/snapshot identity and checks live channel context. Pending
 commands disable submission without discarding the prompt. New state, newer
 events, terminal/revoked scopes and matching stale rejections retire old offers;
@@ -1023,7 +1027,7 @@ pending owner UI review are unchanged; real-engine and G0/G1 acceptance remain o
 
 ### P3.3/P3.4 bound outgoing commands
 
-The [dispatcher](play-viewer-command-dispatch.md) accepts current opaque offers
+The [dispatcher](../play-viewer-command-dispatch.md) accepts current opaque offers
 and their exact engine-provided action/option objects. It reserves before worker
 scheduling, revalidates at admission, writes off the UI thread and preserves
 receipt versus confirmation versus uncertainty. Local evidence: 362 EditMode and
@@ -1033,7 +1037,7 @@ or mana entry UI, live-engine acceptance or owner UI approval is claimed.
 
 ### P3.4 explicit numeric command dispatch
 
-The [dispatcher](play-viewer-command-dispatch.md) now accepts explicit numbers
+The [dispatcher](../play-viewer-command-dispatch.md) now accepts explicit numbers
 and ordered amount arrays through the same current-offer reservation. It copies
 caller arrays, preserves signed integer limits, and delegates authoritative
 constraint validation to the existing channel contract. Invalid input releases
@@ -1043,7 +1047,7 @@ owner fixture UI review and real-engine/G0/G1 acceptance remain open.
 
 ### P3.4 viewer-bound mana-source submission
 
-The [dispatcher](play-viewer-command-dispatch.md) accepts only exact source
+The [dispatcher](../play-viewer-command-dispatch.md) accepts only exact source
 references from the current mana decision frame. These contain opaque viewer
 object routing, not eligibility or private identity. Engine validation remains
 mandatory; no printed-text heuristics or automatic mana choices are introduced.
@@ -1054,7 +1058,7 @@ acceptance remain open. CI is next checked at 0.5.105 without waiting on active 
 
 ### P3.3/P3.4 explicit decision controls
 
-The reusable [decision panel](play-viewer-decision-panel.md) displays prompts,
+The reusable [decision panel](../play-viewer-decision-panel.md) displays prompts,
 engine actions/options and flagged finish/cancel controls through the existing
 bound dispatcher. Its display gate requires the current viewer's card snapshot
 to be presented, including the empty-frame handoff barrier. Retained callbacks
@@ -1069,7 +1073,7 @@ for owner review. The reusable component is not enabled in existing scenes.
 
 ### P3.4 explicit numeric entry controls
 
-The [decision panel](play-viewer-decision-panel.md) adds initially blank number
+The [decision panel](../play-viewer-decision-panel.md) adds initially blank number
 and ordered amount fields, engine-provided bounds, deliberate submit, bounded
 pagination and recoverable admission errors. Defaults are not selected. Existing
 channel validation retains range/total/overflow authority; callbacks revalidate
@@ -1080,7 +1084,7 @@ widgets, ordered receipt UX, fixture mounting and real-engine gates remain open.
 
 ### P3.4 scoped gateway command feedback
 
-The [decision panel](play-viewer-decision-panel.md) now distinguishes gateway
+The [decision panel](../play-viewer-decision-panel.md) now distinguishes gateway
 submitted/confirmed/rejected/uncertain status for its own current command. It
 samples immutable records from the existing authenticated tracker, preserving
 the separate ordered receive queue. It neither promotes a socket write to
@@ -1094,7 +1098,7 @@ scheduled check is 0.5.108. Existing scenes remain unchanged.
 
 ### P3.3/P3.4 explicit card-based mana input
 
-The [decision panel](play-viewer-decision-panel.md) binds primary-card clicks and
+The [decision panel](../play-viewer-decision-panel.md) binds primary-card clicks and
 keyboard submit on existing displayed CardViews to the exact current mana source
 reference. It adds no renderer, inferred source eligibility or automatic payment.
 Hidden identities stay hidden; pending input, old callbacks and non-mana decisions
@@ -1110,7 +1114,7 @@ waiting; no current CI success or engine acceptance is inferred from local tests
 ### P2.3 safe automatic mana-payment foundation
 
 The owner supplied a [payment story](play-safe-automatic-mana-payment-story.md).
-The [isolated Java coordinator and pinned API investigation](play-payment-coordinator.md)
+The [isolated Java coordinator and pinned API investigation](../play-payment-coordinator.md)
 provide per-human-seat Auto/Manual/Full Control policy, conservative fallback,
 serialized manual/automatic ownership and separately observed outcomes. No native
 source solver or Unity payment rules were added. The live Java/XMage execution
@@ -1126,7 +1130,7 @@ Next scheduled CI review is 0.5.111; no current CI success is inferred.
 
 ### P2.3 native payment helper adapter and reference implementation
 
-The [native helper probe and reference findings](play-payment-coordinator.md)
+The [native helper probe and reference findings](../play-payment-coordinator.md)
 exercise unchanged pinned XMage objects and add a map-preserving selected-source
 adapter around ManaUtil. The downloaded reference client receives payment plans
 from its engine and submits original solution indices; it does not remove the need
@@ -1138,7 +1142,7 @@ claimed. Next scheduled CI review is 0.5.111.
 
 ### P2.3 shared manual/internal payment admission
 
-The [gateway payment port](play-payment-coordinator.md) now reserves automatic
+The [gateway payment port](../play-payment-coordinator.md) now reserves automatic
 internal work through the same existing session boundary used by authenticated
 client commands. Manual and internal work cannot both win admission; uncertainty,
 replacement and disconnect do not silently release pending work. This adds no
@@ -1153,7 +1157,7 @@ claimed. Relevant CI is checked at 0.5.111 without waiting on unfinished runs.
 
 ### P2.3 native source-response executor reused by the reference bridge
 
-The [native response executor](play-payment-coordinator.md) is now used by the
+The [native response executor](../play-payment-coordinator.md) is now used by the
 existing Java headless bridge's manual mana-source path. It consumes the exact
 current callback decision before the unchanged XMage SDK call and preserves
 Submitted versus Uncertain. The number scenario now requires two submitted
@@ -1170,7 +1174,7 @@ checks. No full application suite or new UI build ran. Next CI review is 0.5.114
 
 ### P2.3 native unpaid-cost context observation
 
-An [opt-in owned human-player extension](play-payment-coordinator.md) now observes
+An [opt-in owned human-player extension](../play-payment-coordinator.md) now observes
 the exact native unpaid Ability/ManaCost while delegating payment unchanged to
 XMage. A real number fixture observed native remaining counts 2 and 1 across two
 payment scopes and still proved source taps, spending and resolution. The original
@@ -1259,7 +1263,7 @@ session fixture. An actual UI choice passes through the current offer/dispatcher
 and Java session boundary, receives distinct submitted/confirmed receipts and a
 fixture result, then clears controls. Both roots exit cleanly; the original
 read-only scenario also passes. This is G1/P3.4 synthetic integration, not XMage
-or AI play. See [review instructions](play-session-fixture.md#packaged-explicit-decisions-05122).
+or AI play. See [review instructions](../play-session-fixture.md#packaged-explicit-decisions-05122).
 Owner UI verification is now required. Licensed CI and all existing architecture
 acceptance gates remain open; automatic-payment work stays parked/disabled.
 
@@ -1278,7 +1282,7 @@ remain pending and automatic mana work stays parked.
 ### Owner-directed live integration (0.5.128)
 
 The owner has prioritized moving into live Unity/XMage integration while formal
-G0/G1 acceptance remains open. The [live integration track](play-live-integration.md)
+G0/G1 acceptance remains open. The [live integration track](../play-live-integration.md)
 starts with a real Java-owned human/AI match opening through the existing pinned
 bridge. Local opening-hand/decision and cleanup proof passed; Unity public-state
 translation and interactive gameplay are next. This does not certify a completed
@@ -1288,7 +1292,7 @@ game, parity or any gate. Preserve the Python/Qt reference and keep mana work pa
 The .129 opening projection now validates actual XMage human-hand/boolean-decision
 state through the shared public receive schema, with privacy canaries and explicit
 unsupported fields. Authenticated command routing and live Unity mounting remain
-pending; see the [live integration track](play-live-integration.md).
+pending; see the [live integration track](../play-live-integration.md).
 
 
 The .130 live opening now submits an explicit public boolean choice through a
@@ -1309,7 +1313,7 @@ Unity now renders the real human/AI opening and submits one authenticated engine
 choice through Java, with subsequent engine advancement and viewer clearing.
 The local packaged proof passed. This is a public-deck opening spike with fallback
 art and incomplete later decisions, not full live gameplay or gate acceptance.
-See [review command and limitations](play-live-integration.md). Stop for owner UI
+See [review command and limitations](../play-live-integration.md). Stop for owner UI
 review before further presentation work.
 
 
@@ -1320,7 +1324,7 @@ post-declaration priority and a native 1/1 combat-damage life change in packaged
 Unity, with typed receipts and read-only result snapshots. Java additionally
 verifies the next explicit pass reaches native post-combat main with cleared
 combat, stable source incarnation and unchanged post-damage life totals. See the
-[live integration commands and limits](play-live-integration.md).
+[live integration commands and limits](../play-live-integration.md).
 
 P2/P3/P4 remain partial: this public Memnite/Forest fixture does not certify
 blocking, lethal combat, general choices/mana, a full match, result parity, product

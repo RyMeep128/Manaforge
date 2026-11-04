@@ -1,7 +1,7 @@
 # Viewer card surface ownership
 
 Status: tested UI-owner foundation; not mounted in the public artwork scene or a
-live match. Parent: [Unity/Java roadmap](play-unity-java-roadmap.md).
+live match. Parent: [Unity/Java roadmap](archive/play-unity-java-roadmap.md).
 
 `ViewerCardSurface` accepts the immutable [viewer card projection](../Mtg_Projects/mtg_play/protocol/viewer-card-projection.md)
 and updates the existing composable CardView components. It is owned by its

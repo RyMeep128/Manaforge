@@ -1,3 +1,7 @@
+> Historical record, archived November 3, 2026. Commands, status claims, and
+> acceptance notes below describe their original increment. Use the
+> [documentation index](../README.md) and [current roadmap](../roadmap.md) for current guidance.
+
 # Manaforge — Long-Term Product Epic
 
 The [Manaforge Play epic](manaforge-play-epic.md) defines the detailed gameplay and playgroup scope: versioned engine adapters, adaptive 2-5-player tables, mixed human/AI seats, borrowing, local history, custom brackets, optional synchronization, and preservation. The [roadmap](roadmap.md) owns delivery order; the development strategy below links to that authoritative sequence.

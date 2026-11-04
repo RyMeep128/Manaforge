@@ -1,3 +1,7 @@
+> Historical record, archived November 3, 2026. Commands, status claims, and
+> acceptance notes below describe their original increment. Use the
+> [documentation index](../README.md) and [current roadmap](../roadmap.md) for current guidance.
+
 # Desktop-to-Unity deck preview
 
 Implementation: 0.5.117-alpha.1, codex/play-desktop-deck-preview.

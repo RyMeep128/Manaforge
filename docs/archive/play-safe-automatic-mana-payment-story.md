@@ -1,5 +1,9 @@
+> Historical record, archived November 3, 2026. Commands, status claims, and
+> acceptance notes below describe their original increment. Use the
+> [documentation index](../README.md) and [current roadmap](../roadmap.md) for current guidance.
+
 Owner-supplied story, October 31, 2026. The reviewed baseline below is historical;
-see [current implementation and pin evidence](play-payment-coordinator.md).
+see [current implementation and pin evidence](../play-payment-coordinator.md).
 
 # Story: Java Gateway — Safe Automatic Mana Payment
 

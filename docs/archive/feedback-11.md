@@ -1,3 +1,7 @@
+> Historical record, archived November 3, 2026. Commands, status claims, and
+> acceptance notes below describe their original increment. Use the
+> [documentation index](../README.md) and [current roadmap](../roadmap.md) for current guidance.
+
 # Feedback #11: mulligan failure after thinking
 
 The private report from 0.5.220-alpha.1 describes a crash after selecting

@@ -1,3 +1,7 @@
+> Historical record, archived November 3, 2026. Commands, status claims, and
+> acceptance notes below describe their original increment. Use the
+> [documentation index](../README.md) and [current roadmap](../roadmap.md) for current guidance.
+
 # Story: Launch Unity Play from Manaforge with Real Deck Cards
 
 **Epic:** Manaforge Play — Unity + Java

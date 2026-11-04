@@ -1,3 +1,7 @@
+> Historical record, archived November 3, 2026. Commands, status claims, and
+> acceptance notes below describe their original increment. Use the
+> [documentation index](../README.md) and [current roadmap](../roadmap.md) for current guidance.
+
 # Things to test added on October 26, 2026
 
 All items below are pending manual checks, not recorded passes. No local tests,
@@ -101,7 +105,7 @@ version, result, and reproduction steps when reporting a problem.
   distribution workflow when publishing data is separately requested. A normal
   checklist commit does not publish application or dataset releases.
 
-See [installation](installation-and-updates.md), [precons](preconstructed-decks.md),
-[shared operations](shared-components.md), and [feedback setup](../feedback-relay/README.md)
+See [installation](../installation-and-updates.md), [precons](../preconstructed-decks.md),
+[shared operations](../shared-components.md), and [feedback setup](../../feedback-relay/README.md)
 for expected behavior and prerequisites. Earlier regression scenarios remain in
 [recent-change QA](recent-change-qa.md).

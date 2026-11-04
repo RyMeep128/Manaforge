@@ -1,7 +1,7 @@
 # Play launch manifest — P1.3 foundation
 
 Status: export, shared fixtures and Java runtime input validation implemented;
-process delivery and engine resolution remain pending. See the [migration roadmap](play-unity-java-roadmap.md).
+process delivery and engine resolution remain pending. See the [migration roadmap](archive/play-unity-java-roadmap.md).
 
 `mtg_play.launch_manifest.export_launch_manifest` accepts native `DeckDocument`s
 keyed by seat ID, existing `GameSetup`, application version and optional deck-owner

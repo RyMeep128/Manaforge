@@ -1,3 +1,7 @@
+> Historical record, archived November 3, 2026. Commands, status claims, and
+> acceptance notes below describe their original increment. Use the
+> [documentation index](../README.md) and [current roadmap](../roadmap.md) for current guidance.
+
 # Recent-change regression scenarios
 
 Local tests, linting, formatting, and runtime validation were intentionally not run. CI/CD owns validation. Existing tests were left unchanged; the already-started Moxfield pagination test is included with the in-progress work.
