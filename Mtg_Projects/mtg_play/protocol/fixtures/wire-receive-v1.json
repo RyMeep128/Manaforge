@@ -95,7 +95,8 @@
             "observations": [],
             "unsupported_fields": [],
             "actions_complete": false,
-            "payment_reason": null
+            "payment_reason": null,
+            "stack_targets": null
           }
         }
       },
@@ -176,7 +177,8 @@
             "observations": [],
             "unsupported_fields": [],
             "actions_complete": false,
-            "payment_reason": null
+            "payment_reason": null,
+            "stack_targets": null
           }
         }
       },
@@ -298,7 +300,8 @@
               "cancellable": false,
               "amounts": [],
               "can_finish": false,
-              "is_priority": false
+              "is_priority": false,
+              "targeting": null
             },
             "combat": [],
             "protocol_version": 1,
@@ -307,7 +310,8 @@
             "observations": [],
             "unsupported_fields": [],
             "actions_complete": false,
-            "payment_reason": null
+            "payment_reason": null,
+            "stack_targets": null
           }
         }
       },
@@ -414,7 +418,8 @@
               "cancellable": false,
               "amounts": [],
               "can_finish": false,
-              "is_priority": false
+              "is_priority": false,
+              "targeting": null
             },
             "combat": [],
             "protocol_version": 1,
@@ -423,7 +428,8 @@
             "observations": [],
             "unsupported_fields": [],
             "actions_complete": false,
-            "payment_reason": null
+            "payment_reason": null,
+            "stack_targets": null
           }
         }
       },
@@ -463,7 +469,8 @@
               "state_unavailable"
             ],
             "actions_complete": false,
-            "payment_reason": null
+            "payment_reason": null,
+            "stack_targets": null
           }
         }
       },
@@ -567,7 +574,8 @@
             "observations": [],
             "unsupported_fields": [],
             "actions_complete": false,
-            "payment_reason": null
+            "payment_reason": null,
+            "stack_targets": null
           }
         }
       },
@@ -708,7 +716,8 @@
             "observations": [],
             "unsupported_fields": [],
             "actions_complete": false,
-            "payment_reason": null
+            "payment_reason": null,
+            "stack_targets": null
           }
         }
       },
@@ -716,6 +725,297 @@
       "viewer": "one",
       "minimum_revision": 0,
       "fixture_mode": false
+    },
+    {
+      "name": "targeting-card-and-player",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "snapshot",
+        "message_id": "receive",
+        "body": {
+          "fixture_only": true,
+          "snapshot": {
+            "session_id": "fixture-0001",
+            "viewer_id": "one",
+            "revision": 1,
+            "status": "active",
+            "turn": 1,
+            "phase": null,
+            "step": null,
+            "active_player_id": "one",
+            "priority_player_id": "one",
+            "players": [
+              {
+                "player_id": "one",
+                "name": "One",
+                "life": 0,
+                "hand_count": 1,
+                "library_count": 0,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              },
+              {
+                "player_id": "two",
+                "name": "Two",
+                "life": 20,
+                "hand_count": 7,
+                "library_count": 53,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              }
+            ],
+            "objects": [
+              {
+                "object_id": "fixture-0002",
+                "zone": "hand",
+                "owner_id": "one",
+                "controller_id": "one",
+                "hidden": false,
+                "characteristics": {
+                  "name": "Synthetic Fixture Card",
+                  "power": "1",
+                  "toughness": "1",
+                  "type_line": "Artifact Creature",
+                  "color": null,
+                  "engine_view_text": null,
+                  "loyalty": null,
+                  "defense": null,
+                  "transformed": null,
+                  "counters": null,
+                  "is_copy": null,
+                  "flipped": null,
+                  "current_abilities": null,
+                  "unsupported_fields": [
+                    "current_rules_text",
+                    "ability_identities",
+                    "color_identity",
+                    "copy_provenance_history",
+                    "merged_components"
+                  ],
+                  "base_power": null,
+                  "base_toughness": null
+                },
+                "card_identity": null,
+                "tapped": null,
+                "damage": null,
+                "attacking_available": null,
+                "blocking_available": null,
+                "face_down": null,
+                "attachments": null,
+                "attached_to": null,
+                "commander_id": null,
+                "copy_source_id": null,
+                "presentation_id": null
+              }
+            ],
+            "actions": [],
+            "decision": {
+              "decision_id": "fixture-decision",
+              "player_id": "one",
+              "family": "selection",
+              "prompt": "Fixture only; no engine connected",
+              "options": [
+                {
+                  "option_id": "target-object",
+                  "label": "Synthetic legal target",
+                  "object_id": "fixture-0002",
+                  "player_id": null,
+                  "selected": false
+                }
+              ],
+              "minimum": null,
+              "maximum": null,
+              "cancellable": false,
+              "amounts": [],
+              "can_finish": false,
+              "is_priority": false,
+              "targeting": {
+                "source_id": "fixture-0002",
+                "minimum": 1,
+                "maximum": 2,
+                "selected": [
+                  {
+                    "object_id": null,
+                    "player_id": "one",
+                    "ordinal": 1,
+                    "amount": 3
+                  }
+                ],
+                "complete": true
+              }
+            },
+            "combat": [],
+            "protocol_version": 1,
+            "result": null,
+            "commanders": null,
+            "observations": [],
+            "unsupported_fields": [],
+            "actions_complete": false,
+            "payment_reason": null,
+            "stack_targets": null
+          }
+        }
+      },
+      "session": "fixture-0001",
+      "viewer": "one",
+      "minimum_revision": 0,
+      "fixture_mode": true
+    },
+    {
+      "name": "stack-confirmed-targets",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "snapshot",
+        "message_id": "receive",
+        "body": {
+          "fixture_only": true,
+          "snapshot": {
+            "session_id": "fixture-0001",
+            "viewer_id": "one",
+            "revision": 1,
+            "status": "active",
+            "turn": 1,
+            "phase": null,
+            "step": null,
+            "active_player_id": "one",
+            "priority_player_id": "one",
+            "players": [
+              {
+                "player_id": "one",
+                "name": "One",
+                "life": 0,
+                "hand_count": 1,
+                "library_count": 0,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              },
+              {
+                "player_id": "two",
+                "name": "Two",
+                "life": 20,
+                "hand_count": 7,
+                "library_count": 53,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              }
+            ],
+            "objects": [
+              {
+                "object_id": "fixture-0002",
+                "zone": "stack",
+                "owner_id": "one",
+                "controller_id": "one",
+                "hidden": false,
+                "characteristics": {
+                  "name": "Synthetic Fixture Card",
+                  "power": "1",
+                  "toughness": "1",
+                  "type_line": "Artifact Creature",
+                  "color": null,
+                  "engine_view_text": null,
+                  "loyalty": null,
+                  "defense": null,
+                  "transformed": null,
+                  "counters": null,
+                  "is_copy": null,
+                  "flipped": null,
+                  "current_abilities": null,
+                  "unsupported_fields": [
+                    "current_rules_text",
+                    "ability_identities",
+                    "color_identity",
+                    "copy_provenance_history",
+                    "merged_components"
+                  ],
+                  "base_power": null,
+                  "base_toughness": null
+                },
+                "card_identity": null,
+                "tapped": null,
+                "damage": null,
+                "attacking_available": null,
+                "blocking_available": null,
+                "face_down": null,
+                "attachments": null,
+                "attached_to": null,
+                "commander_id": null,
+                "copy_source_id": null,
+                "presentation_id": null
+              }
+            ],
+            "actions": [],
+            "decision": {
+              "decision_id": "fixture-decision",
+              "player_id": "one",
+              "family": "selection",
+              "prompt": "Fixture only; no engine connected",
+              "options": [
+                {
+                  "option_id": "target-object",
+                  "label": "Synthetic legal target",
+                  "object_id": "fixture-0002",
+                  "player_id": null,
+                  "selected": false
+                }
+              ],
+              "minimum": null,
+              "maximum": null,
+              "cancellable": false,
+              "amounts": [],
+              "can_finish": false,
+              "is_priority": false,
+              "targeting": {
+                "source_id": "fixture-0002",
+                "minimum": 1,
+                "maximum": 2,
+                "selected": [
+                  {
+                    "object_id": null,
+                    "player_id": "one",
+                    "ordinal": 1,
+                    "amount": 3
+                  }
+                ],
+                "complete": true
+              }
+            },
+            "combat": [],
+            "protocol_version": 1,
+            "result": null,
+            "commanders": null,
+            "observations": [],
+            "unsupported_fields": [],
+            "actions_complete": false,
+            "payment_reason": null,
+            "stack_targets": [
+              {
+                "source_id": "fixture-0002",
+                "targets": [
+                  {
+                    "object_id": null,
+                    "player_id": "one",
+                    "ordinal": 1,
+                    "amount": null
+                  }
+                ],
+                "complete": true
+              }
+            ]
+          }
+        }
+      },
+      "session": "fixture-0001",
+      "viewer": "one",
+      "minimum_revision": 0,
+      "fixture_mode": true
     }
   ],
   "negative": [
@@ -918,7 +1218,8 @@
             "observations": [],
             "unsupported_fields": [],
             "actions_complete": false,
-            "payment_reason": null
+            "payment_reason": null,
+            "stack_targets": null
           }
         }
       },
@@ -1024,7 +1325,8 @@
             "unsupported_fields": [],
             "actions_complete": false,
             "raw_engine_state": {},
-            "payment_reason": null
+            "payment_reason": null,
+            "stack_targets": null
           }
         }
       },
@@ -1129,7 +1431,8 @@
             "observations": [],
             "unsupported_fields": [],
             "actions_complete": false,
-            "payment_reason": null
+            "payment_reason": null,
+            "stack_targets": null
           }
         }
       },
@@ -1234,7 +1537,8 @@
             "observations": [],
             "unsupported_fields": [],
             "actions_complete": false,
-            "payment_reason": null
+            "payment_reason": null,
+            "stack_targets": null
           }
         }
       },
@@ -1339,7 +1643,8 @@
             "observations": [],
             "unsupported_fields": [],
             "actions_complete": false,
-            "payment_reason": null
+            "payment_reason": null,
+            "stack_targets": null
           }
         }
       },
@@ -1450,7 +1755,8 @@
             "observations": [],
             "unsupported_fields": [],
             "actions_complete": false,
-            "payment_reason": null
+            "payment_reason": null,
+            "stack_targets": null
           }
         }
       },
@@ -1555,7 +1861,8 @@
             "observations": [],
             "unsupported_fields": [],
             "actions_complete": false,
-            "payment_reason": null
+            "payment_reason": null,
+            "stack_targets": null
           }
         }
       },
@@ -1641,7 +1948,8 @@
             "observations": [],
             "unsupported_fields": [],
             "actions_complete": false,
-            "payment_reason": null
+            "payment_reason": null,
+            "stack_targets": null
           }
         }
       },
@@ -1723,7 +2031,8 @@
             "observations": [],
             "unsupported_fields": [],
             "actions_complete": false,
-            "payment_reason": null
+            "payment_reason": null,
+            "stack_targets": null
           }
         }
       },
@@ -1805,7 +2114,8 @@
             "observations": [],
             "unsupported_fields": [],
             "actions_complete": false,
-            "payment_reason": null
+            "payment_reason": null,
+            "stack_targets": null
           }
         }
       },
@@ -1910,7 +2220,8 @@
             "observations": [],
             "unsupported_fields": [],
             "actions_complete": false,
-            "payment_reason": null
+            "payment_reason": null,
+            "stack_targets": null
           }
         }
       },
@@ -2015,7 +2326,8 @@
             "observations": [],
             "unsupported_fields": [],
             "actions_complete": false,
-            "payment_reason": null
+            "payment_reason": null,
+            "stack_targets": null
           }
         }
       },
@@ -2120,7 +2432,8 @@
             "observations": [],
             "unsupported_fields": [],
             "actions_complete": false,
-            "payment_reason": null
+            "payment_reason": null,
+            "stack_targets": null
           }
         }
       },
@@ -2225,7 +2538,8 @@
             "observations": [],
             "unsupported_fields": [],
             "actions_complete": false,
-            "payment_reason": null
+            "payment_reason": null,
+            "stack_targets": null
           }
         }
       },
@@ -2330,7 +2644,8 @@
             "observations": [],
             "unsupported_fields": [],
             "actions_complete": false,
-            "payment_reason": null
+            "payment_reason": null,
+            "stack_targets": null
           },
           "owner_decks": []
         }
@@ -2478,7 +2793,8 @@
             "observations": [],
             "unsupported_fields": [],
             "actions_complete": false,
-            "payment_reason": null
+            "payment_reason": null,
+            "stack_targets": null
           }
         }
       },
@@ -2601,7 +2917,8 @@
               "cancellable": false,
               "amounts": [],
               "can_finish": false,
-              "is_priority": false
+              "is_priority": false,
+              "targeting": null
             },
             "combat": [],
             "protocol_version": 1,
@@ -2610,7 +2927,8 @@
             "observations": [],
             "unsupported_fields": [],
             "actions_complete": false,
-            "payment_reason": null
+            "payment_reason": null,
+            "stack_targets": null
           }
         }
       },
@@ -2715,7 +3033,8 @@
             "observations": [],
             "unsupported_fields": [],
             "actions_complete": false,
-            "payment_reason": null
+            "payment_reason": null,
+            "stack_targets": null
           }
         }
       },
@@ -2820,7 +3139,8 @@
             "observations": [],
             "unsupported_fields": [],
             "actions_complete": false,
-            "payment_reason": null
+            "payment_reason": null,
+            "stack_targets": null
           }
         }
       },
@@ -2925,7 +3245,8 @@
             "observations": [],
             "unsupported_fields": [],
             "actions_complete": false,
-            "payment_reason": null
+            "payment_reason": null,
+            "stack_targets": null
           }
         }
       },
@@ -3106,7 +3427,8 @@
             "observations": [],
             "unsupported_fields": [],
             "actions_complete": false,
-            "payment_reason": null
+            "payment_reason": null,
+            "stack_targets": null
           }
         }
       },
@@ -3229,7 +3551,8 @@
               "cancellable": false,
               "amounts": [],
               "can_finish": false,
-              "is_priority": false
+              "is_priority": false,
+              "targeting": null
             },
             "combat": [],
             "protocol_version": 1,
@@ -3238,7 +3561,8 @@
             "observations": [],
             "unsupported_fields": [],
             "actions_complete": false,
-            "payment_reason": null
+            "payment_reason": null,
+            "stack_targets": null
           }
         }
       },
@@ -3354,7 +3678,8 @@
               "cancellable": false,
               "amounts": [],
               "can_finish": false,
-              "is_priority": false
+              "is_priority": false,
+              "targeting": null
             },
             "combat": [],
             "protocol_version": 1,
@@ -3363,7 +3688,8 @@
             "observations": [],
             "unsupported_fields": [],
             "actions_complete": false,
-            "payment_reason": null
+            "payment_reason": null,
+            "stack_targets": null
           }
         }
       },
@@ -3510,7 +3836,8 @@
             "observations": [],
             "unsupported_fields": [],
             "actions_complete": false,
-            "payment_reason": null
+            "payment_reason": null,
+            "stack_targets": null
           }
         }
       },
@@ -3592,7 +3919,8 @@
             "observations": [],
             "unsupported_fields": [],
             "actions_complete": false,
-            "payment_reason": null
+            "payment_reason": null,
+            "stack_targets": null
           }
         }
       },
@@ -3697,7 +4025,8 @@
             "observations": [],
             "unsupported_fields": [],
             "actions_complete": false,
-            "payment_reason": null
+            "payment_reason": null,
+            "stack_targets": null
           }
         }
       },
@@ -3706,6 +4035,286 @@
       "minimum_revision": 0,
       "fixture_mode": true,
       "code": "RECEIVE_CONTEXT"
+    },
+    {
+      "name": "target-reference-both-identities",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "snapshot",
+        "message_id": "receive",
+        "body": {
+          "fixture_only": true,
+          "snapshot": {
+            "session_id": "fixture-0001",
+            "viewer_id": "one",
+            "revision": 1,
+            "status": "active",
+            "turn": 1,
+            "phase": null,
+            "step": null,
+            "active_player_id": "one",
+            "priority_player_id": "one",
+            "players": [
+              {
+                "player_id": "one",
+                "name": "One",
+                "life": 0,
+                "hand_count": 1,
+                "library_count": 0,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              },
+              {
+                "player_id": "two",
+                "name": "Two",
+                "life": 20,
+                "hand_count": 7,
+                "library_count": 53,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              }
+            ],
+            "objects": [
+              {
+                "object_id": "fixture-0002",
+                "zone": "hand",
+                "owner_id": "one",
+                "controller_id": "one",
+                "hidden": false,
+                "characteristics": {
+                  "name": "Synthetic Fixture Card",
+                  "power": "1",
+                  "toughness": "1",
+                  "type_line": "Artifact Creature",
+                  "color": null,
+                  "engine_view_text": null,
+                  "loyalty": null,
+                  "defense": null,
+                  "transformed": null,
+                  "counters": null,
+                  "is_copy": null,
+                  "flipped": null,
+                  "current_abilities": null,
+                  "unsupported_fields": [
+                    "current_rules_text",
+                    "ability_identities",
+                    "color_identity",
+                    "copy_provenance_history",
+                    "merged_components"
+                  ],
+                  "base_power": null,
+                  "base_toughness": null
+                },
+                "card_identity": null,
+                "tapped": null,
+                "damage": null,
+                "attacking_available": null,
+                "blocking_available": null,
+                "face_down": null,
+                "attachments": null,
+                "attached_to": null,
+                "commander_id": null,
+                "copy_source_id": null,
+                "presentation_id": null
+              }
+            ],
+            "actions": [],
+            "decision": {
+              "decision_id": "fixture-decision",
+              "player_id": "one",
+              "family": "selection",
+              "prompt": "Fixture only; no engine connected",
+              "options": [
+                {
+                  "option_id": "target-object",
+                  "label": "Synthetic legal target",
+                  "object_id": "fixture-0002",
+                  "player_id": null,
+                  "selected": false
+                }
+              ],
+              "minimum": null,
+              "maximum": null,
+              "cancellable": false,
+              "amounts": [],
+              "can_finish": false,
+              "is_priority": false,
+              "targeting": {
+                "source_id": "fixture-0002",
+                "minimum": 1,
+                "maximum": 2,
+                "selected": [
+                  {
+                    "object_id": "fixture-0002",
+                    "player_id": "one",
+                    "ordinal": 1,
+                    "amount": 3
+                  }
+                ],
+                "complete": true
+              }
+            },
+            "combat": [],
+            "protocol_version": 1,
+            "result": null,
+            "commanders": null,
+            "observations": [],
+            "unsupported_fields": [],
+            "actions_complete": false,
+            "payment_reason": null,
+            "stack_targets": null
+          }
+        }
+      },
+      "session": "fixture-0001",
+      "viewer": "one",
+      "minimum_revision": 0,
+      "fixture_mode": true,
+      "code": "RECEIVE_SHAPE"
+    },
+    {
+      "name": "target-negative-minimum",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "snapshot",
+        "message_id": "receive",
+        "body": {
+          "fixture_only": true,
+          "snapshot": {
+            "session_id": "fixture-0001",
+            "viewer_id": "one",
+            "revision": 1,
+            "status": "active",
+            "turn": 1,
+            "phase": null,
+            "step": null,
+            "active_player_id": "one",
+            "priority_player_id": "one",
+            "players": [
+              {
+                "player_id": "one",
+                "name": "One",
+                "life": 0,
+                "hand_count": 1,
+                "library_count": 0,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              },
+              {
+                "player_id": "two",
+                "name": "Two",
+                "life": 20,
+                "hand_count": 7,
+                "library_count": 53,
+                "eliminated": null,
+                "left_game": null,
+                "mana": null,
+                "counters": null
+              }
+            ],
+            "objects": [
+              {
+                "object_id": "fixture-0002",
+                "zone": "hand",
+                "owner_id": "one",
+                "controller_id": "one",
+                "hidden": false,
+                "characteristics": {
+                  "name": "Synthetic Fixture Card",
+                  "power": "1",
+                  "toughness": "1",
+                  "type_line": "Artifact Creature",
+                  "color": null,
+                  "engine_view_text": null,
+                  "loyalty": null,
+                  "defense": null,
+                  "transformed": null,
+                  "counters": null,
+                  "is_copy": null,
+                  "flipped": null,
+                  "current_abilities": null,
+                  "unsupported_fields": [
+                    "current_rules_text",
+                    "ability_identities",
+                    "color_identity",
+                    "copy_provenance_history",
+                    "merged_components"
+                  ],
+                  "base_power": null,
+                  "base_toughness": null
+                },
+                "card_identity": null,
+                "tapped": null,
+                "damage": null,
+                "attacking_available": null,
+                "blocking_available": null,
+                "face_down": null,
+                "attachments": null,
+                "attached_to": null,
+                "commander_id": null,
+                "copy_source_id": null,
+                "presentation_id": null
+              }
+            ],
+            "actions": [],
+            "decision": {
+              "decision_id": "fixture-decision",
+              "player_id": "one",
+              "family": "selection",
+              "prompt": "Fixture only; no engine connected",
+              "options": [
+                {
+                  "option_id": "target-object",
+                  "label": "Synthetic legal target",
+                  "object_id": "fixture-0002",
+                  "player_id": null,
+                  "selected": false
+                }
+              ],
+              "minimum": null,
+              "maximum": null,
+              "cancellable": false,
+              "amounts": [],
+              "can_finish": false,
+              "is_priority": false,
+              "targeting": {
+                "source_id": "fixture-0002",
+                "minimum": -1,
+                "maximum": 2,
+                "selected": [
+                  {
+                    "object_id": null,
+                    "player_id": "one",
+                    "ordinal": 1,
+                    "amount": 3
+                  }
+                ],
+                "complete": true
+              }
+            },
+            "combat": [],
+            "protocol_version": 1,
+            "result": null,
+            "commanders": null,
+            "observations": [],
+            "unsupported_fields": [],
+            "actions_complete": false,
+            "payment_reason": null,
+            "stack_targets": null
+          }
+        }
+      },
+      "session": "fixture-0001",
+      "viewer": "one",
+      "minimum_revision": 0,
+      "fixture_mode": true,
+      "code": "RECEIVE_SHAPE"
     }
   ]
 }

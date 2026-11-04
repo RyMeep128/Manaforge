@@ -45,6 +45,33 @@ public final class ContextHumanPlayer extends HumanPlayer {
         try{return super.playManaHandling(ability,unpaid,message,game);}
         finally{payment=previous;current.clear();}
     }
+    private static final class TargetFrame {
+        final Game game;final Ability source;final mage.target.Target target;
+        TargetFrame(Game game,Ability source,mage.target.Target target){this.game=game;this.source=source;this.target=target;}
+    }
+    private transient volatile TargetFrame targeting;
+    @Override public boolean chooseTarget(mage.constants.Outcome outcome,mage.target.Target target,Ability source,Game game){
+        TargetFrame previous=targeting;targeting=new TargetFrame(game,source,target);
+        try{return super.chooseTarget(outcome,target,source,game);}finally{targeting=previous;}
+    }
+    @Override public boolean chooseTarget(mage.constants.Outcome outcome,mage.cards.Cards cards,mage.target.TargetCard target,Ability source,Game game){
+        TargetFrame previous=targeting;targeting=new TargetFrame(game,source,target);
+        try{return super.chooseTarget(outcome,cards,target,source,game);}finally{targeting=previous;}
+    }
+    @Override public boolean chooseTargetAmount(mage.constants.Outcome outcome,mage.target.TargetAmount target,Ability source,Game game){
+        TargetFrame previous=targeting;targeting=new TargetFrame(game,source,target);
+        try{return super.chooseTargetAmount(outcome,target,source,game);}finally{targeting=previous;}
+    }
+    public JsonObject targetingProbe(Game game,UUID payer,int cycle) throws ReflectiveOperationException {
+        TargetFrame frame=targeting;
+        if(frame==null || frame.game!=game || frame.target==null || frame.target.isNotTarget() || game.hasEnded()
+            || !getId().equals(payer) || game.getPlayer(payer)!=this || !Thread.holdsLock(RESPONSE.get(this))
+            || !Boolean.TRUE.equals(OPEN.get(this)) || game.getState().getApplyEffectsCounter()!=cycle)return null;
+        JsonObject result=new JsonObject();if(frame.source!=null && frame.source.getSourceId()!=null)result.addProperty("source",frame.source.getSourceId().toString());
+        result.addProperty("minimum",frame.target.getMinNumberOfTargets());result.addProperty("maximum",frame.target.getMaxNumberOfTargets());
+        JsonArray selected=new JsonArray();if(frame.target.getTargets().size()>256)return null;
+        for(UUID id:frame.target.getTargets()){JsonObject row=new JsonObject();row.addProperty("id",id.toString());if(frame.target instanceof mage.target.TargetAmount){int amount=frame.target.getTargetAmount(id);if(amount>=0)row.addProperty("amount",amount);}selected.add(row);}result.add("selected",selected);return targeting==frame && Boolean.TRUE.equals(OPEN.get(this)) && !game.hasEnded() && game.getPlayer(payer)==this && game.getState().getApplyEffectsCounter()==cycle?result:null;
+    }
     /** Trusted server-only read callback. Caller MUST hold this player's native response monitor.
      * No IO, mutation, retained native references or client serialization inside the callback. */
     public interface Inspector<T>{T read(Ability ability,ManaCost unpaid);}

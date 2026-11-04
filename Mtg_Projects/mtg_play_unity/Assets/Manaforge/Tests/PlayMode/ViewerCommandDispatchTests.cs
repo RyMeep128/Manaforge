@@ -102,6 +102,32 @@ namespace Manaforge.Play.Tests
             Assert.That(panel.Root.Q<Button>("decision-option-0"),Is.Not.Null);Assert.That(panel.Root.Q<VisualElement>("yield-status"),Is.SameAs(status));Assert.That(panel.Root.Q<Button>("yield-status-cancel"),Is.SameAs(cancel));
             Click(cancel);panel.Tick();Assert.That(panel.Priority.Current.Yield,Is.Null);Assert.That(peer.PendingCommandBytes,Is.Zero);
         }
+        [UnityTest] public IEnumerator TargetClickUsesExactOfferedOption()=>TargetGesture(false);
+        [UnityTest] public IEnumerator TargetDragUsesExactOfferedOption()=>TargetGesture(true);
+        [UnityTest] public IEnumerator TargetDragOutsideDoesNotSubmit()=>TargetGesture(true,true);
+        [UnityTest] public IEnumerator NewOfferCancelsTargetDrag()=>TargetGesture(true,false,true);
+        private IEnumerator TargetGesture(bool drag,bool invalid=false,bool stale=false)
+        {
+            var envelope=BoardSnapshot();var snapshot=envelope["body"]["snapshot"];snapshot["actions"]=new JArray();snapshot["decision"]["is_priority"]=false;snapshot["decision"]["family"]="selection";
+            var source=snapshot["objects"][0].DeepClone();source["object_id"]="targeting-source";source["presentation_id"]=null;((JArray)snapshot["objects"]).Add(source);
+            snapshot["decision"]["targeting"]=new JObject{["source_id"]="targeting-source",["minimum"]=1,["maximum"]=1,["selected"]=new JArray(),["complete"]=true};
+            snapshot["decision"]["options"]=new JArray(new JObject{["option_id"]="exact-target-option",["label"]="Legal target",["object_id"]="fixture-0002",["player_id"]=null,["selected"]=false});
+            var host=Start(envelope,out var peer,out var owner);var panel=Panel(host);yield return Show(host,panel);var root=node.GetComponent<UIDocument>().rootVisualElement;root.style.width=1280;root.style.height=720;
+            using(var input=new ViewerBoardInput(root,surface,host,panel))using(var targeting=new ViewerTargetingController(root,surface,panel,Array.Empty<PlayerPanel>())){
+                input.Refresh();targeting.Observe(host.PresentedDecision.Frame);yield return null;
+                CardView origin=null,target=null;surface.VisitPresented((card,view)=>{if(card.ObjectId=="targeting-source")origin=view;else target=view;});
+                Assert.That(target,Is.Not.Null);Assert.That(origin,Is.Not.Null);Assert.That(target.ClassListContains("mf-target-legal"),Is.True);
+                var pressed=drag?origin:target;
+                using(var down=PointerDownEvent.GetPooled(new Event{type=EventType.MouseDown,button=0,mousePosition=pressed.worldBound.center})){down.target=pressed;pressed.SendEvent(down);}
+                var drop=invalid?new Vector2(1200,700):target.worldBound.center;
+                if(drag)using(var move=PointerMoveEvent.GetPooled(new Event{type=EventType.MouseDrag,button=0,mousePosition=drop})){move.target=root;root.SendEvent(move);}
+                Assert.That(peer.PendingCommandBytes,Is.Zero);
+                if(stale){var next=(JObject)envelope.DeepClone();next["message_id"]="fresh-target";next["body"]["snapshot"]["revision"]=8;next["body"]["snapshot"]["decision"]["decision_id"]="fresh-target";var old=host.CurrentDecision;var send=Task.Run(()=>peer.ReplyForFixture(next));yield return Until(()=>send.IsCompleted);send.GetAwaiter().GetResult();yield return Until(()=>host.CurrentDecision!=null && !ReferenceEquals(old,host.CurrentDecision));yield return Show(host,panel);targeting.Observe(host.PresentedDecision.Frame);input.Refresh();}
+                using(var up=PointerUpEvent.GetPooled(new Event{type=EventType.MouseUp,button=0,mousePosition=drop})){up.target=drag?root:target;((VisualElement)up.target).SendEvent(up);}
+                if(invalid || stale){Assert.That(peer.PendingCommandBytes,Is.Zero);yield break;}
+                var read=Task.Run(()=>WireMessages.Parse(peer.ReadCommandForFixture()));yield return Until(()=>read.IsCompleted);Assert.That((string)read.Result["body"]["option_id"],Is.EqualTo("exact-target-option"));Assert.That(peer.PendingCommandBytes,Is.Zero);
+            }
+        }
         [UnityTest] public IEnumerator DecisionPanelWaitsForPresentedSnapshotAndClearsOnOwnerLoss()
         {
             var host=Start(Snapshot(selection:true),out var peer,out var owner);var panel=Panel(host);yield return Until(()=>host.CurrentDecision!=null);panel.Tick();Assert.That(panel.Root.style.display.value,Is.EqualTo(DisplayStyle.None));Assert.That(panel.Root.Q<Label>("decision-prompt").text,Is.Empty);

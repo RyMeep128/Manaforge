@@ -19,16 +19,17 @@ namespace Manaforge.Play
         private readonly GameplayOverlay inspector;
         private readonly BattlefieldLinks links;private readonly GameplayAnimationCoordinator animations;private ViewerBoardInput boardInput;private UnityPriorityControls priorityControls;private bool disposed;
         private readonly System.Collections.Generic.HashSet<CardView> wired=new System.Collections.Generic.HashSet<CardView>();
+        private ViewerTargetingController targeting;
         private ViewerSessionHost host;private ProjectedDecisionFrame frame;private bool inspecting;private int artworkCount=-1;
         public ViewerCardSurface Surface {get;}
         public ViewerDecisionPanel Decisions {get;private set;}
-        public ArenaGameplayPresentation(VisualElement parent)
+        public ArenaGameplayPresentation(VisualElement parent,ICardBackProvider cardBacks=null)
         {
             root=new VisualElement{name="arena-table"};root.style.flexGrow=1;parent.Add(root);
             var theme=Resources.Load<StyleSheet>("ArenaTable");if(theme!=null)root.styleSheets.Add(theme);
             GameplayTheme.Attach(root);
             var material=new GameplayTableSurface();material.style.position=Position.Absolute;material.style.left=12;material.style.right=12;material.style.top=12;material.style.bottom=12;root.Add(material);
-            Surface=new ViewerCardSurface(root);Surface.CardsRoot.AddToClassList("table-cards");Surface.CardsRoot.pickingMode=PickingMode.Ignore;
+            Surface=new ViewerCardSurface(root,cardBacks);Surface.CardsRoot.AddToClassList("table-cards");Surface.CardsRoot.pickingMode=PickingMode.Ignore;
             Surface.InspectionView.AddToClassList("table-inspection");Surface.InspectionView.SetPresentation(CardPresentationMode.Full,290);Surface.InspectionView.style.display=DisplayStyle.None;
             links=new BattlefieldLinks();root.Add(links);
             navigation=new VisualElement{name="board-navigation",pickingMode=PickingMode.Ignore};root.Add(navigation);
@@ -42,7 +43,7 @@ namespace Manaforge.Play
             opponentHand=new VisualElement{name="opponent-hand",pickingMode=PickingMode.Ignore};root.Add(opponentHand);
             zones=Label("table-zones","");zones.style.display=DisplayStyle.None;
             zoneChoices=new VisualElement{name="public-zone-choices"};zoneChoices.style.display=DisplayStyle.None;root.Add(zoneChoices);
-            zoneDrawer=new ZoneBrowser();root.Add(zoneDrawer);zoneDrawer.BrowseRequested+=BrowseZone;zoneDrawer.Closed+=ClosePublicZone;
+            zoneDrawer=new ZoneBrowser(Surface.CardBacks);root.Add(zoneDrawer);zoneDrawer.BrowseRequested+=BrowseZone;zoneDrawer.Closed+=ClosePublicZone;
             stackTitle=Label("stack-title","");stackTitle.pickingMode=PickingMode.Ignore;
             commanders=Label("game-commanders","");
             choices=new ScrollView(ScrollViewMode.Vertical){name="table-choices"};root.Add(choices);
@@ -74,7 +75,7 @@ namespace Manaforge.Play
         private static string ZoneName(string zone)=>ZonePile.Title(zone);
         private ZonePile Pile(string name,string zone)
         {
-            var pile=new ZonePile(zone){name=name};pile.style.position=Position.Absolute;pile.style.width=66;pile.style.height=92;
+            var pile=new ZonePile(zone,Surface.CardBacks){name=name};pile.style.position=Position.Absolute;pile.style.width=66;pile.style.height=92;
             root.Add(pile);pile.BrowseRequested+=BrowseZone;return pile;
         }
         private void BrowseZone(string zone,string owner){BrowsePublicZone(zone,owner);}
@@ -97,7 +98,7 @@ namespace Manaforge.Play
         private Label Label(string name,string text){var label=new Label(text){name=name,enableRichText=false};root.Add(label);return label;}
         public void CloseInspection(){bool restore=inspecting;inspecting=false;previewing=false;previewId=null;restoringFocus=true;try{inspector?.Hide(restore);}finally{restoringFocus=false;}}
         public void Bind(ViewerSessionHost value)
-        {if(Decisions!=null)throw new InvalidOperationException("PRESENTATION_ALREADY_BOUND");host=value;Decisions=new ViewerDecisionPanel(choices,host);Decisions.PresentationHold=()=>animations.HoldAutomaticPassing;Decisions.SetSpatialPresentation(true);Decisions.SetChoicePreview(Surface.ChoicePreview);priorityControls=new UnityPriorityControls(root,Decisions);boardInput=new ViewerBoardInput(root,Surface,host,Decisions,GameplayTheme.Menu);}
+        {if(Decisions!=null)throw new InvalidOperationException("PRESENTATION_ALREADY_BOUND");host=value;Decisions=new ViewerDecisionPanel(choices,host);Decisions.PresentationHold=()=>animations.HoldAutomaticPassing;Decisions.SetSpatialPresentation(true);Decisions.SetChoicePreview(Surface.ChoicePreview);priorityControls=new UnityPriorityControls(root,Decisions);targeting=new ViewerTargetingController(root,Surface,Decisions,new[]{localPlayer,opponent});boardInput=new ViewerBoardInput(root,Surface,host,Decisions,GameplayTheme.Menu);}
         public void Present(ProjectedDecisionFrame value)
         {
             if(disposed)return;
@@ -109,12 +110,12 @@ namespace Manaforge.Play
             unsupportedTopology=false;Surface.CardsRoot.style.display=DisplayStyle.Flex;choices.style.display=DisplayStyle.Flex;
             localPlayer.Bind(value.Context.ViewerId,"You");opponent.Bind(seatIds.Single(id=>id!=value.Context.ViewerId),"Opponent");
             priorityControls?.Refresh();
-            if(frame!=null && frame.Context.Revision==value.Context.Revision && frame.Context.SessionId==value.Context.SessionId && frame.Context.ViewerId==value.Context.ViewerId){boardInput?.Refresh();RefreshPlayers();if(artworkCount!=Surface.PresentedArtworkCount){artworkCount=Surface.PresentedArtworkCount;Layout();}return;}
+            if(frame!=null && frame.Context.Revision==value.Context.Revision && frame.Context.SessionId==value.Context.SessionId && frame.Context.ViewerId==value.Context.ViewerId){boardInput?.Refresh();RefreshPlayers();targeting?.Observe(frame);if(artworkCount!=Surface.PresentedArtworkCount){artworkCount=Surface.PresentedArtworkCount;Layout();}return;}
             artworkCount=Surface.PresentedArtworkCount;
             if(frame==null || frame.Context.SessionId!=value.Context.SessionId || frame.Context.ViewerId!=value.Context.ViewerId || !Surface.HasInspection){
                 ClearCardFocus();CloseInspection();
             }
-            frame=value;
+            frame=value;targeting?.Observe(value);
             string viewer=frame.Context.ViewerId;
             localPlayer.Present(frame.PlayerLifeTotals[viewer],frame.Decision?.PlayerId==viewer,false,root.ClassListContains("reduced-motion"));
             opponent.Present(frame.PlayerLifeTotals[opponent.PlayerId],frame.Decision?.PlayerId==opponent.PlayerId,false,root.ClassListContains("reduced-motion"));
@@ -131,7 +132,7 @@ namespace Manaforge.Play
         private void UpdateOpponentHand(string player)
         {
             long? count=player!=null && frame.PlayerHandCounts.TryGetValue(player,out var value)?value:null;
-            GameplayCardLayout.HiddenHand(opponentHand,count,470,180);
+            GameplayCardLayout.HiddenHand(opponentHand,count,470,180,player,Surface.CardBacks);
 
         }
         private void RefreshPlayers()
@@ -278,9 +279,10 @@ namespace Manaforge.Play
             void UpdatePile(ZonePile pile,string zone,string owner,float left,float top){
                 pile.style.left=left;pile.style.top=top;pile.Bind(owner);
                 var visible=items.Where(i=>i.card.Zone==zone && i.card.OwnerId==owner && !i.card.Hidden && i.card.FaceDown!=true).ToList();
-                long? total=zone=="library"?(owner!=null && frame.PlayerLibraryCounts.TryGetValue(owner,out var count)?count:null):visible.Count;
+                int concealed=items.Count(i=>i.card.Zone==zone && i.card.OwnerId==owner && (i.card.Hidden || i.card.FaceDown==true));
+                long? total=zone=="library"?(owner!=null && frame.PlayerLibraryCounts.TryGetValue(owner,out var count)?count:null):visible.Count+concealed;
                 var preview=zone=="library"?null:visible.FirstOrDefault(i=>i.view.Artwork!=null).view;
-                pile.Present(total,preview?.Artwork,visible.Count==0?null:visible[0].card.Characteristics?.Name??"Visible card",openZone==zone && openZoneOwner==owner);
+                pile.Present(total,preview?.Artwork,visible.Count==0?null:visible[0].card.Characteristics?.Name??"Visible card",openZone==zone && openZoneOwner==owner,concealed>0 && visible.Count==0);
             }
             string opponentId=OpponentId();float localPileTop=Mathf.Max(350,height-242);
             UpdatePile(opponentLibrary,"library",opponentId,22,150);UpdatePile(opponentGraveyard,"graveyard",opponentId,98,150);UpdatePile(opponentExile,"exile",opponentId,174,150);
@@ -294,9 +296,10 @@ namespace Manaforge.Play
                 foreach(var item in items)item.view.style.display=DisplayStyle.None;
                 navigation.Clear();
                 zoneDrawer.BringToFront();Surface.CardsRoot.BringToFront();
-                var publicCards=items.Where(i=>!i.card.Hidden && i.card.FaceDown!=true && i.card.Zone==openZone && i.card.OwnerId==openZoneOwner).ToList();
+                var publicCards=items.Where(i=>i.card.Zone==openZone && i.card.OwnerId==openZoneOwner && (openZone!="library" || !i.card.Hidden && i.card.FaceDown!=true)).ToList();
+                int concealed=publicCards.Count(i=>i.card.Hidden || i.card.FaceDown==true);
                 long? total=openZone=="library" && frame.PlayerLibraryCounts.TryGetValue(openZoneOwner,out var libraryCount)?libraryCount:null;
-                zoneDrawer.Present(openZoneOwner,openZone,openZoneOwner==viewer?"Your zones":"Opponent zones",publicCards.Count,total);
+                zoneDrawer.Present(openZoneOwner,openZone,openZoneOwner==viewer?"Your zones":"Opponent zones",publicCards.Count-concealed,total,concealed);
                 Row(publicCards,height*.34f,180,width-360,185,true,"public-zone");
                 foreach(var item in publicCards)if(item.view.style.display.value==DisplayStyle.Flex)item.view.BringToFront();
                 navigation.BringToFront();zoneChoices.BringToFront();
@@ -309,9 +312,9 @@ namespace Manaforge.Play
             if(!inspecting && !previewing)Surface.InspectionView.style.display=DisplayStyle.None;
             foreach(var item in items){var availability=item.view.Q<Label>("status");if(availability!=null)availability.style.display=DisplayStyle.None;}
             choices.BringToFront();result.BringToFront();if(inspecting || previewing)Surface.InspectionView.BringToFront();root.Q<Button>("close-inspection").BringToFront();
-            boardInput?.Refresh();RefreshPlayers();links.schedule.Execute(UpdateLinks);
+            boardInput?.Refresh();RefreshPlayers();targeting?.Observe(frame);links.schedule.Execute(UpdateLinks);
         }
-        public void Dispose(){if(disposed)return;ClearZoneResources();disposed=true;boardInput?.Dispose();animations.Dispose();inspector.Dispose();priorityControls?.Dispose();Decisions?.Dispose();Surface.Clearing-=ClearZoneResources;Surface.Rebinding-=ClearPileArt;Surface.Dispose();
+        public void Dispose(){if(disposed)return;ClearZoneResources();disposed=true;targeting?.Dispose();boardInput?.Dispose();animations.Dispose();inspector.Dispose();priorityControls?.Dispose();Decisions?.Dispose();Surface.Clearing-=ClearZoneResources;Surface.Rebinding-=ClearPileArt;Surface.Dispose();
             localPlayer.Dispose();opponent.Dispose();foreach(var pile in new[]{localLibrary,opponentLibrary,localGraveyard,opponentGraveyard,localExile,opponentExile})pile.Dispose();zoneDrawer.Dispose();wired.Clear();root.RemoveFromHierarchy();}
     }
 }

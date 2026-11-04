@@ -81,6 +81,7 @@ namespace Manaforge.Play
                     table.Present(ViewerDecisionProjection.ParseSnapshot(tableJson,tableSession,tableViewer,0,true));for(int i=0;i<5;i++)yield return null;
                     yield return new WaitForEndOfFrame();ScreenCapture.CaptureScreenshot(Path.Combine(output,"default-1v1-"+size.x+"x"+size.y+".png"));
                     for(int i=0;i<5;i++)yield return null;
+                    yield return CaptureTargeting(output,size);
                     yield return CaptureAnimations(output,size,animationProof);
                 }
                 resolutions.Add(new JObject{["requested_width"]=size.x,["requested_height"]=size.y,["observed_width"]=Screen.width,["observed_height"]=Screen.height});
@@ -88,7 +89,23 @@ namespace Manaforge.Play
             File.WriteAllText(Path.Combine(output,"animation-proof.json"),new JObject{["fixture_only"]=true,["captures"]=animationProof}.ToString());
             File.WriteAllText(Path.Combine(output,"resolution-proof.json"),new JObject{["fixture_only"]=true,["sizes"]=resolutions}.ToString());
             File.WriteAllText(Path.Combine(output,"revision.txt"),ArtworkFixtureScene.Argument("-manaforgeRevision")??"uncommitted working tree");
+            var backs=new JArray();foreach(var back in document.rootVisualElement.Query<CardBackView>().ToList())backs.Add(new JObject{["texture_width"]=back.image?.width??0,["texture_height"]=back.image?.height??0,["element_width"]=back.resolvedStyle.width,["element_height"]=back.resolvedStyle.height,["display"]=back.resolvedStyle.display.ToString()});
+            File.WriteAllText(Path.Combine(output,"card-back-proof.json"),new JObject{["fixture_only"]=true,["backs"]=backs}.ToString());
             Application.Quit(0);
+        }
+        private IEnumerator CaptureTargeting(string output,Vector2Int size)
+        {
+            // Explicit synthetic component presentation; no target legality or command is invented.
+            var arena=document.rootVisualElement.Q("arena-table");var cards=new List<CardView>();table.Surface.VisitPresented((card,view)=>{if(card.Zone=="battlefield" && !card.Hidden)cards.Add(view);});
+            if(cards.Count<2)yield break;
+            var overlay=new TargetingOverlay(arena.Q("table-choices"));arena.Add(overlay);
+            foreach(var card in new[]{cards[0],cards[1]}){var outline=new VisualElement{name="targeting-outline",pickingMode=PickingMode.Ignore};outline.AddToClassList("mf-target-outline");card.Add(outline);}
+            cards[0].AddToClassList("mf-target-source");cards[1].AddToClassList("mf-target-legal");
+            for(int i=0;i<3;i++)yield return null;
+            var from=arena.WorldToLocal(cards[0].worldBound.center);var to=arena.WorldToLocal(cards[1].worldBound.center);
+            overlay.Present(new[]{new BattlefieldLinks.Link(from,to,overlay.HoverColor)},new Dictionary<string,(Vector2,string)>{{"synthetic-target",(to,"1")}},"SYNTHETIC TARGETING | Choose a highlighted target");overlay.BringToFront();
+            for(int i=0;i<5;i++)yield return null;yield return new WaitForEndOfFrame();ScreenCapture.CaptureScreenshot(Path.Combine(output,"targeting-selection-"+size.x+"x"+size.y+".png"));for(int i=0;i<5;i++)yield return null;
+            overlay.Dispose();cards[0].RemoveFromClassList("mf-target-source");cards[1].RemoveFromClassList("mf-target-legal");
         }
         private IEnumerator CaptureAnimations(string output,Vector2Int size,JArray proof)
         {

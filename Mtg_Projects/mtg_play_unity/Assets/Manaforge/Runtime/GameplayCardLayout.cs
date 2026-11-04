@@ -54,14 +54,15 @@ namespace Manaforge.Play
             }
 
         }
-        public static void HiddenHand(VisualElement root,long? count,float span,float rotation)
+        public static void HiddenHand(VisualElement root,long? count,float span,float rotation,string owner=null,ICardBackProvider cardBacks=null)
         {
-            root.Clear();if(!count.HasValue)return;
-            int shown=(int)Math.Min(12,Math.Max(0,count.Value));
+            int shown=count.HasValue?(int)Math.Min(12,Math.Max(0,count.Value)):0;
+            while(root.childCount>shown){if(root[root.childCount-1] is CardBackView old)old.ClearBinding();root.RemoveAt(root.childCount-1);}
+            while(root.childCount<shown){var cardBack=new CardBackView(cardBacks);cardBack.AddToClassList("opponent-hand-back");root.Add(cardBack);}
             for(int i=0;i<shown;i++){
                 float offset=i-(shown-1)*.5f;
-                var back=new VisualElement{pickingMode=PickingMode.Ignore};back.AddToClassList("opponent-hand-back");GameplayTheme.Back(back);
-                back.style.left=span*.5f-35+offset*24;back.style.top=Mathf.Abs(offset)*2;back.style.rotate=new Rotate(new Angle(rotation-offset*3));root.Add(back);
+                var back=(CardBackView)root[i];back.Bind(owner);
+                back.style.left=span*.5f-35+offset*24;back.style.top=Mathf.Abs(offset)*2;back.style.rotate=new Rotate(new Angle(rotation-offset*3));
             }
         }
     }

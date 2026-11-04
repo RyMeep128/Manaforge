@@ -19,10 +19,9 @@ namespace Manaforge.Play
             button.EnableInClassList("mf-primary", primary);
             button.style.backgroundImage = StyleKeyword.None;
         }
-        public static void Back(VisualElement root)
+        public static void Back(VisualElement root,string owner=null,ICardBackProvider provider=null)
         {
-            root.AddToClassList("mf-card-back");
-            root.Add(new Label("M"){pickingMode=PickingMode.Ignore, enableRichText=false});
+            var back=root.Q<CardBackView>();if(back==null){back=new CardBackView(provider);back.AddToClassList("mf-card-back-fill");root.Add(back);}back.Bind(owner);
         }
         public static void Menu(VisualElement root)
         {

@@ -99,7 +99,8 @@
         "observations": [],
         "unsupported_fields": [],
         "actions_complete": false,
-        "payment_reason": null
+        "payment_reason": null,
+        "stack_targets": null
       }
     },
     {
@@ -169,7 +170,8 @@
         "observations": [],
         "unsupported_fields": [],
         "actions_complete": false,
-        "payment_reason": null
+        "payment_reason": null,
+        "stack_targets": null
       }
     },
     {
@@ -280,7 +282,8 @@
           "cancellable": false,
           "amounts": [],
           "can_finish": false,
-          "is_priority": false
+          "is_priority": false,
+          "targeting": null
         },
         "combat": [],
         "protocol_version": 1,
@@ -289,7 +292,8 @@
         "observations": [],
         "unsupported_fields": [],
         "actions_complete": false,
-        "payment_reason": null
+        "payment_reason": null,
+        "stack_targets": null
       }
     },
     {
@@ -385,7 +389,8 @@
           "cancellable": false,
           "amounts": [],
           "can_finish": false,
-          "is_priority": false
+          "is_priority": false,
+          "targeting": null
         },
         "combat": [],
         "protocol_version": 1,
@@ -394,7 +399,8 @@
         "observations": [],
         "unsupported_fields": [],
         "actions_complete": false,
-        "payment_reason": null
+        "payment_reason": null,
+        "stack_targets": null
       }
     },
     {
@@ -423,7 +429,8 @@
           "state_unavailable"
         ],
         "actions_complete": false,
-        "payment_reason": null
+        "payment_reason": null,
+        "stack_targets": null
       }
     },
     {

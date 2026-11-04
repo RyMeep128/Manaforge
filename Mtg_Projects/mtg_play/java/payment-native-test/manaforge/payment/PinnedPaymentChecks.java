@@ -346,8 +346,26 @@ public final class PinnedPaymentChecks {
         check(manaforge.payment.xmage.NativePaymentPlan.select(cost,new Mana(),Collections.singletonList(flexible))==null);
         Mana both=Mana.GreenMana(1);both.add(Mana.BlueMana(1));check(manaforge.payment.xmage.NativePaymentPlan.select(cost,both,Collections.emptyList()).isEmpty());
     }
+    private static void targetingContextScopeChecks() throws Exception {
+        ContextHumanPlayer player=new ContextHumanPlayer("Public fixture",RangeOfInfluence.ALL,0);mage.game.GameState state=new mage.game.GameState();
+        mage.game.Game game=(mage.game.Game)java.lang.reflect.Proxy.newProxyInstance(PinnedPaymentChecks.class.getClassLoader(),new Class<?>[]{mage.game.Game.class},(proxy,method,args)->{
+            switch(method.getName()){case "getPlayer":return player;case "getState":return state;case "hasEnded":return false;default:throw new AssertionError("UNEXPECTED_TARGET_PROBE_CALL_"+method.getName());}
+        });
+        java.lang.reflect.Field response=mage.player.human.HumanPlayer.class.getDeclaredField("response");response.setAccessible(true);java.lang.reflect.Field open=mage.player.human.HumanPlayer.class.getDeclaredField("responseOpenedForAnswer");open.setAccessible(true);
+        java.lang.reflect.Field targeting=ContextHumanPlayer.class.getDeclaredField("targeting");targeting.setAccessible(true);check(java.lang.reflect.Modifier.isTransient(targeting.getModifiers()));
+        java.lang.reflect.Constructor<?> frame=Class.forName("manaforge.payment.xmage.ContextHumanPlayer$TargetFrame").getDeclaredConstructors()[0];frame.setAccessible(true);
+        mage.target.Target target=new mage.target.common.TargetCreaturePermanent();Ability source=new mage.abilities.SpellAbility(new ManaCostsImpl<>("{R}"),"Public fixture");source.setSourceId(UUID.randomUUID());source.setControllerId(player.getId());
+        check(player.targetingProbe(game,player.getId(),0)==null);targeting.set(player,frame.newInstance(game,source,target));open.set(player,true);
+        check(player.targetingProbe(game,player.getId(),0)==null);
+        synchronized(response.get(player)){
+            com.google.gson.JsonObject context=player.targetingProbe(game,player.getId(),state.getApplyEffectsCounter());check(context!=null && context.get("minimum").getAsInt()==1 && context.getAsJsonArray("selected").size()==0);
+            check(player.copy().targetingProbe(game,player.getId(),state.getApplyEffectsCounter())==null);check(player.targetingProbe(game,UUID.randomUUID(),state.getApplyEffectsCounter())==null);
+            target.withNotTarget(true);check(player.targetingProbe(game,player.getId(),state.getApplyEffectsCounter())==null);target.withNotTarget(false);
+            open.set(player,false);check(player.targetingProbe(game,player.getId(),state.getApplyEffectsCounter())==null);
+        }targeting.set(player,null);
+    }
     public static void main(String[] args) throws Exception {
-        twoMountainsAdapterChecks();nativePlanChecks();
+        targetingContextScopeChecks();twoMountainsAdapterChecks();nativePlanChecks();
         priorityScopeChecks();
         ContextHumanPlayer observed=new ContextHumanPlayer("Public fixture",RangeOfInfluence.ALL,0);
         ContextHumanPlayer copied=observed.copy();

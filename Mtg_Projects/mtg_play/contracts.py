@@ -146,6 +146,30 @@ class AmountConstraint(Serializable):
 
 
 @dataclass(frozen=True)
+class TargetReference(Serializable):
+    object_id: str | None = None
+    player_id: str | None = None
+    ordinal: int | None = None
+    amount: int | None = None
+
+
+@dataclass(frozen=True)
+class TargetingContext(Serializable):
+    source_id: str | None = None
+    minimum: int | None = None
+    maximum: int | None = None
+    selected: tuple[TargetReference, ...] = ()
+    complete: bool = False
+
+
+@dataclass(frozen=True)
+class StackTargets(Serializable):
+    source_id: str
+    targets: tuple[TargetReference, ...] = ()
+    complete: bool = False
+
+
+@dataclass(frozen=True)
 class ChoiceRequest(Serializable):
     decision_id: str
     player_id: str
@@ -158,6 +182,7 @@ class ChoiceRequest(Serializable):
     amounts: tuple[AmountConstraint, ...] = ()
     can_finish: bool = False
     is_priority: bool = False
+    targeting: TargetingContext | None = None
 
 
 @dataclass(frozen=True)
@@ -216,6 +241,7 @@ class GameSnapshot(Serializable):
     unsupported_fields: tuple[str, ...] = ()
     actions_complete: bool = False
     payment_reason: str | None = None
+    stack_targets: tuple[StackTargets, ...] | None = None
 
 
 @dataclass(frozen=True)

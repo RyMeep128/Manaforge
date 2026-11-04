@@ -33,8 +33,9 @@
 #zone-fallback { position: absolute; left: 4px; right: 4px; top: 20px; bottom: 20px; font-size: 11px; color: var(--mf-muted); white-space: normal; -unity-text-align: middle-center; }
 #zone-count { position: absolute; right: -4px; bottom: -3px; min-width: 25px; height: 25px; padding: 2px 5px; background-color: var(--mf-floor); border-width: 1px; border-color: var(--mf-metal); border-radius: 6px; color: var(--mf-ink); font-size: 14px; -unity-text-align: middle-center; }
 #zone-caption { position: absolute; top: 96px; left: -8px; width: 82px; font-size: 11px; color: var(--mf-muted); -unity-text-align: middle-center; }
-.mf-card-back { background-color: rgb(31,38,46); border-width: 2px; border-color: var(--mf-metal); border-radius: 5px; align-items: center; justify-content: center; }
-.mf-card-back > Label { color: var(--mf-muted); font-size: 20px; -unity-font-style: bold; border-width: 1px; border-color: var(--mf-metal); border-radius: 3px; padding: 3px 6px; rotate: 0deg; }
+.mf-card-back { background-color: rgb(31,38,46); border-radius: 5px; overflow: hidden; }
+.mf-card-back-fill { position: absolute; left: 0; right: 0; top: 0; bottom: 0; }
+.mf-artwork-unavailable { background-color: var(--mf-panel); border-width: 1px; border-color: var(--mf-metal); }
 .mf-zone-browser, .mf-menu, .mf-decision, #unity-priority-controls { background-color: rgba(25,30,37,.98); border-width: 1px; border-color: var(--mf-metal); border-top-width: 3px; border-top-color: var(--mf-ember); border-radius: 8px; padding: 16px; }
 .mf-zone-browser { min-height: 260px; }
 #public-zone-title { font-size: 21px; -unity-font-style: bold; }
@@ -89,3 +90,19 @@
 .mf-yield-status.mf-yield-visible { opacity: 1; }
 .mf-yield-status > Label { color: var(--mf-ink); font-size: 18px; white-space: normal; }
 .mf-yield-status > Button { align-self: flex-start; margin-top: 10px; }
+
+/* Reusable targeting components; table layouts supply only anchors. */
+.mf-target-overlay, .mf-target-lines { position: absolute; left: 0; right: 0; top: 0; bottom: 0; }
+.mf-target-overlay { --target-line-color: rgb(132,205,233); --target-hover-color: rgb(239,195,111); --target-line-width: 3; }
+.mf-target-marker { position: absolute; color: rgb(19,23,29); background-color: rgb(239,195,111); border-radius: 12px; padding: 3px 7px; font-size: 14px; -unity-font-style: bold; }
+.mf-target-status { color: var(--mf-focus); white-space: normal; margin-bottom: 8px; }
+
+.mf-target-outline { position: absolute; left: 0; right: 0; top: 0; bottom: 0; border-width: 3px; border-color: transparent; border-radius: 5px; transition-property: border-color; transition-duration: 120ms; }
+.mf-target-legal > .mf-target-outline { border-color: rgb(132,205,233); }
+.mf-target-selected > .mf-target-outline { border-color: rgb(143,203,169); }
+.mf-target-hover > .mf-target-outline, .mf-target-source > .mf-target-outline { border-color: rgb(239,195,111); }
+.reduced-motion .mf-target-outline { transition-duration: 0s; }
+
+/* Application display chrome shared by gameplay layouts. */
+.mf-display-controls { position: absolute; top: 16px; right: 240px; width: 160px; background-color: transparent; }
+.mf-display-controls > Button { height: 34px; margin: 0; font-size: 13px; }

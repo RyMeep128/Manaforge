@@ -183,7 +183,8 @@
         "observations": [],
         "unsupported_fields": [],
         "actions_complete": false,
-        "payment_reason": null
+        "payment_reason": null,
+        "stack_targets": null
       }
     },
     {
@@ -277,7 +278,8 @@
         "unsupported_fields": [],
         "actions_complete": false,
         "raw_engine_state": {},
-        "payment_reason": null
+        "payment_reason": null,
+        "stack_targets": null
       }
     },
     {
@@ -370,7 +372,8 @@
         "observations": [],
         "unsupported_fields": [],
         "actions_complete": false,
-        "payment_reason": null
+        "payment_reason": null,
+        "stack_targets": null
       }
     },
     {
@@ -463,7 +466,8 @@
         "observations": [],
         "unsupported_fields": [],
         "actions_complete": false,
-        "payment_reason": null
+        "payment_reason": null,
+        "stack_targets": null
       }
     },
     {
@@ -556,7 +560,8 @@
         "observations": [],
         "unsupported_fields": [],
         "actions_complete": false,
-        "payment_reason": null
+        "payment_reason": null,
+        "stack_targets": null
       }
     },
     {
@@ -655,7 +660,8 @@
         "observations": [],
         "unsupported_fields": [],
         "actions_complete": false,
-        "payment_reason": null
+        "payment_reason": null,
+        "stack_targets": null
       }
     },
     {
@@ -748,7 +754,8 @@
         "observations": [],
         "unsupported_fields": [],
         "actions_complete": false,
-        "payment_reason": null
+        "payment_reason": null,
+        "stack_targets": null
       }
     },
     {
@@ -822,7 +829,8 @@
         "observations": [],
         "unsupported_fields": [],
         "actions_complete": false,
-        "payment_reason": null
+        "payment_reason": null,
+        "stack_targets": null
       }
     },
     {
@@ -892,7 +900,8 @@
         "observations": [],
         "unsupported_fields": [],
         "actions_complete": false,
-        "payment_reason": null
+        "payment_reason": null,
+        "stack_targets": null
       }
     },
     {
@@ -962,7 +971,8 @@
         "observations": [],
         "unsupported_fields": [],
         "actions_complete": false,
-        "payment_reason": null
+        "payment_reason": null,
+        "stack_targets": null
       }
     },
     {

@@ -161,7 +161,7 @@ namespace Manaforge.Play
                 || cue.Kind==GameplayMotionKind.Tap || cue.Kind==GameplayMotionKind.Untap || cue.Kind==GameplayMotionKind.Attack || cue.Kind==GameplayMotionKind.Block;
             if(!minimal && moving){
                 run.Card=new Image{name="motion-card",pickingMode=PickingMode.Ignore,scaleMode=ScaleMode.ScaleToFit};run.Card.style.position=Position.Absolute;
-                if(cue.Kind==GameplayMotionKind.Draw)GameplayTheme.Back(run.Card);
+                if(cue.Kind==GameplayMotionKind.Draw)GameplayTheme.Back(run.Card,cue.OwnerId,surface.CardBacks);
                 else if(cue.SubjectId!=null && bindings.TryGetValue(cue.SubjectId,out var bound) && !bound.card.Hidden && bound.card.FaceDown==false){
                     var admitted=surface.AnimationCard(cue.SubjectId);
                     bool same=admitted!=null && !admitted.Hidden && admitted.FaceDown==false && admitted.Printing?.PrintingId==bound.card.Printing?.PrintingId && admitted.Printing?.OracleId==bound.card.Printing?.OracleId;
@@ -170,7 +170,7 @@ namespace Manaforge.Play
                 }
                 var visible=surface.AnimationCard(cue.SubjectId);
                 bool generic=visible!=null && !visible.Hidden && visible.FaceDown==false;
-                if(run.Texture==null && generic)GameplayTheme.Back(run.Card);
+                if(run.Texture==null && generic)run.Card.AddToClassList("mf-artwork-unavailable");
                 if(cue.Kind==GameplayMotionKind.Draw || run.Texture!=null || generic)run.Root.Add(run.Card);else run.Card=null;
             }
             string text=cue.Text;

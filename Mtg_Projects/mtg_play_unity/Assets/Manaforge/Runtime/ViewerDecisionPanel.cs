@@ -37,6 +37,7 @@ namespace Manaforge.Play
         // Decorative presentation may briefly hold automation, never manual controls.
         public Func<bool> PresentationHold {get;set;}
         public ProjectedDecisionFrame PriorityFrame=>offer?.Frame;
+        public ViewerDecisionOffer CurrentOffer=>offer;
         public void PrioritySettingsChanged(){ThreadOnly();autoAfter=-1;}
         private bool spatialPresentation;private Foldout cardChoices;
         private Func<string,CardView> choicePreview;
@@ -137,6 +138,7 @@ namespace Manaforge.Play
             foreach(var option in frame.Decision.Options)if(option.ObjectId==objectId)return Send(captured,()=>host.ChooseAsync(captured,option));
             return false;
         }
+        public bool TryCancelCurrentChoice(){var captured=offer;return captured?.Frame?.Decision?.Cancellable==true && Send(captured,()=>host.CancelChoiceAsync(captured));}
         public bool TryActivatePlayer(ViewerDecisionOffer captured,string playerId)
         {
             ThreadOnly();var frame=captured?.Frame;if(SuppressSpatialInput || disposed || frame==null || playerId==null)return false;

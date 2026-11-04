@@ -463,6 +463,83 @@
         "python_default": "None"
       }
     ],
+    "TargetReference": [
+      {
+        "name": "object_id",
+        "python_type": "str | None",
+        "required": false,
+        "python_default": "None"
+      },
+      {
+        "name": "player_id",
+        "python_type": "str | None",
+        "required": false,
+        "python_default": "None"
+      },
+      {
+        "name": "ordinal",
+        "python_type": "int | None",
+        "required": false,
+        "python_default": "None"
+      },
+      {
+        "name": "amount",
+        "python_type": "int | None",
+        "required": false,
+        "python_default": "None"
+      }
+    ],
+    "TargetingContext": [
+      {
+        "name": "source_id",
+        "python_type": "str | None",
+        "required": false,
+        "python_default": "None"
+      },
+      {
+        "name": "minimum",
+        "python_type": "int | None",
+        "required": false,
+        "python_default": "None"
+      },
+      {
+        "name": "maximum",
+        "python_type": "int | None",
+        "required": false,
+        "python_default": "None"
+      },
+      {
+        "name": "selected",
+        "python_type": "tuple[TargetReference, ...]",
+        "required": false,
+        "python_default": "()"
+      },
+      {
+        "name": "complete",
+        "python_type": "bool",
+        "required": false,
+        "python_default": "False"
+      }
+    ],
+    "StackTargets": [
+      {
+        "name": "source_id",
+        "python_type": "str",
+        "required": true
+      },
+      {
+        "name": "targets",
+        "python_type": "tuple[TargetReference, ...]",
+        "required": false,
+        "python_default": "()"
+      },
+      {
+        "name": "complete",
+        "python_type": "bool",
+        "required": false,
+        "python_default": "False"
+      }
+    ],
     "ChoiceRequest": [
       {
         "name": "decision_id",
@@ -524,6 +601,12 @@
         "python_type": "bool",
         "required": false,
         "python_default": "False"
+      },
+      {
+        "name": "targeting",
+        "python_type": "TargetingContext | None",
+        "required": false,
+        "python_default": "None"
       }
     ],
     "CombatAssignment": [
@@ -756,6 +839,12 @@
       {
         "name": "payment_reason",
         "python_type": "str | None",
+        "required": false,
+        "python_default": "None"
+      },
+      {
+        "name": "stack_targets",
+        "python_type": "tuple[StackTargets, ...] | None",
         "required": false,
         "python_default": "None"
       }

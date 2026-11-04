@@ -51,6 +51,37 @@ def contract_schema():
             "required": list(properties),
             "additionalProperties": False,
         }
+        if name == "TargetReference":
+            definition["anyOf"] = [
+                {
+                    "properties": {
+                        "object_id": {"type": "string"},
+                        "player_id": {"type": "null"},
+                    }
+                },
+                {
+                    "properties": {
+                        "object_id": {"type": "null"},
+                        "player_id": {"type": "string"},
+                    }
+                },
+            ]
+            properties["ordinal"] = {
+                "anyOf": [{"type": "integer", "minimum": 1}, {"type": "null"}]
+            }
+            properties["amount"] = {
+                "anyOf": [{"type": "integer", "minimum": 0}, {"type": "null"}]
+            }
+        if name == "TargetingContext":
+            properties["selected"]["maxItems"] = 256
+            for key in ("minimum", "maximum"):
+                properties[key] = {
+                    "anyOf": [{"type": "integer", "minimum": 0}, {"type": "null"}]
+                }
+        if name == "StackTargets":
+            properties["targets"]["maxItems"] = 256
+        if name == "GameSnapshot":
+            properties["stack_targets"]["anyOf"][0]["maxItems"] = 4096
         private_fields = {
             "GameObject": (
                 "characteristics",
@@ -59,7 +90,15 @@ def contract_schema():
                 "copy_source_id",
                 "presentation_id",
             ),
-            "CardObservation": ("name", "set_code", "collector_number", "group_id", "group_label", "oracle_id", "printing_id"),
+            "CardObservation": (
+                "name",
+                "set_code",
+                "collector_number",
+                "group_id",
+                "group_label",
+                "oracle_id",
+                "printing_id",
+            ),
         }.get(name)
         if private_fields:
             definition["allOf"] = [

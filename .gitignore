@@ -246,3 +246,6 @@ Mtg_Projects/mtg_proxy/projects/tmp_images/
 /Mtg_Projects/mtg_play_unity/*.sln*
 /Mtg_Projects/mtg_play_unity/Assets/Manaforge/Runtime/Resources/LocalCardVisuals/
 /Mtg_Projects/mtg_play_unity/Assets/Manaforge/Runtime/Resources/LocalCardVisuals.meta
+
+# Bundled shared gameplay card-back artwork (not a runtime image cache).
+!/Mtg_Projects/mtg_play_unity/Assets/Manaforge/Runtime/Resources/CardBackClassic.jpg

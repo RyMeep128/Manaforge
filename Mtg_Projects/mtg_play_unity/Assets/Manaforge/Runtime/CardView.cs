@@ -39,6 +39,7 @@ namespace Manaforge.Play
     // Textures are borrowed from the asset owner; this view never decodes/destroys them.
     public sealed class CardView : VisualElement, IDisposable
     {
+        private readonly CardBackView cardBack;private bool showingBack;
         private readonly Image artwork = new Image { name = "artwork", pickingMode = PickingMode.Ignore };
         private readonly VisualElement artWindow=new VisualElement {name="art-window",pickingMode=PickingMode.Ignore};
         private readonly VisualElement secondWindow=new VisualElement {name="second-art-window",pickingMode=PickingMode.Ignore};
@@ -82,10 +83,11 @@ namespace Manaforge.Play
         public Texture Artwork => artwork.image;
         public CardPresentationMode Mode => mode;
 
-        public CardView()
+        public CardView(ICardBackProvider backProvider=null)
         {
             name = "manaforge-card";
             style.position = Position.Relative;
+            cardBack=new CardBackView(backProvider);
             style.backgroundColor = new Color(0.09f, 0.11f, 0.13f);
             style.overflow = Overflow.Hidden;
             interior.style.position=Position.Absolute;interior.style.backgroundColor=new Color(.88f,.88f,.80f);
@@ -97,7 +99,7 @@ namespace Manaforge.Play
             rulesScroll.style.position=Position.Absolute;rulesScroll.Add(rules);rulesScroll.Add(rulesSymbols);rulesScroll.Add(sections);
             doorTabs.style.position=Position.Absolute;doorTabs.style.flexDirection=FlexDirection.Row;Add(doorTabs);
             Add(printingFooter);Add(type); Add(rulesScroll); Add(stats); Add(status);Add(miniKind);Add(loyaltyCounter);Add(collector);
-            edge.style.position=Position.Absolute;Add(edge);
+            edge.style.position=Position.Absolute;Add(edge);Add(cardBack);
             Conceal();
         }
 
@@ -232,6 +234,7 @@ namespace Manaforge.Play
             float scale = width / (landscape?400f:300f);
             style.borderTopLeftRadius=style.borderTopRightRadius=width*.03f;
             style.borderBottomLeftRadius=style.borderBottomRightRadius=width*(ability ? .43f : .03f);
+            Box(cardBack,0,0,100,100);cardBack.style.display=showingBack?DisplayStyle.Flex:DisplayStyle.None;
             Box(edge,0,0,100,100);
             float rim=landscape && !imageFallback || ability?width*.025f:full?0:Mathf.Max(1.5f,2*scale);
             edge.style.borderLeftWidth=edge.style.borderRightWidth=edge.style.borderBottomWidth=rim;
@@ -354,6 +357,7 @@ namespace Manaforge.Play
         // The shared asset owner must separately revoke/destroy private cached textures.
         public void Conceal()
         {
+            showingBack=false;cardBack.ClearBinding();
             ViewRevision++;concealed = true;
             selected = false;liveMarkers.text="";liveMarkers.style.display=DisplayStyle.None;RemoveFromClassList("selected");RemoveFromClassList("attacking");RemoveFromClassList("blocking");
             Identity = null;
@@ -365,6 +369,9 @@ namespace Manaforge.Play
             tooltip = null;
             Layout();
         }
+
+        public void ShowBack(string ownerId)
+        {if(!showingBack)Conceal();showingBack=true;cardBack.Bind(ownerId);Layout();}
 
         public void Dispose() { Conceal(); RemoveFromHierarchy(); }
     }

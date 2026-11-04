@@ -7,19 +7,19 @@ namespace Manaforge.Play
     public sealed class ZonePile : Label, IDisposable
     {
         private readonly Image art;
-        private readonly VisualElement back;
+        private readonly CardBackView back;
         private readonly Label count, fallback, caption;
         private bool disposed;
         public string OwnerId { get; private set; }
         public string Zone { get; private set; }
         public event Action<string,string> BrowseRequested;
         public static string Title(string zone) => zone=="library" ? "Library" : zone=="graveyard" ? "Graveyard" : "Exile";
-        public ZonePile(string zone)
+        public ZonePile(string zone,ICardBackProvider cardBacks=null)
         {
             if(zone!="library" && zone!="graveyard" && zone!="exile")throw new ArgumentException("Unsupported pile zone",nameof(zone));
             Zone=zone; text=""; focusable=true; enableRichText=false; AddToClassList("zone-pile"); AddToClassList("zone-"+zone);
             for(int i=0;i<2;i++){var sheet=new VisualElement{pickingMode=PickingMode.Ignore};sheet.AddToClassList("zone-pile-sheet");sheet.style.left=-3-i*3;sheet.style.top=3+i*3;Add(sheet);}
-            back=new VisualElement{name="zone-back",pickingMode=PickingMode.Ignore};back.AddToClassList("zone-pile-face");if(zone=="library")GameplayTheme.Back(back);Add(back);
+            back=new CardBackView(cardBacks){name="zone-back"};back.AddToClassList("zone-pile-face");Add(back);back.style.display=DisplayStyle.None;
             art=new Image{name="zone-art",pickingMode=PickingMode.Ignore,scaleMode=ScaleMode.ScaleToFit};art.AddToClassList("zone-pile-face");Add(art);
             fallback=new Label(){name="zone-fallback",enableRichText=false,pickingMode=PickingMode.Ignore};Add(fallback);
             count=new Label("?"){name="zone-count",enableRichText=false,pickingMode=PickingMode.Ignore};Add(count);
@@ -31,16 +31,20 @@ namespace Manaforge.Play
         public void Browse(){if(!disposed && OwnerId!=null)BrowseRequested?.Invoke(Zone,OwnerId);}
         public void Bind(string ownerId){if(disposed)return;if(ownerId!=OwnerId)ClearBinding();OwnerId=ownerId;}
         // Artwork is borrowed only from the admitted surface, never loaded/owned here.
-        public void Present(long? permittedCount, Texture artwork, string visibleName, bool open)
+        public void Present(long? permittedCount, Texture artwork, string visibleName, bool open,bool concealed=false)
         {
             if(disposed || OwnerId==null)return;
             count.text=permittedCount?.ToString() ?? "?";
-            art.image=Zone=="library"?null:artwork;
-            fallback.text=Zone=="library" || artwork!=null ? "" : visibleName ?? "Empty";
+            bool showBack=(Zone=="library" || concealed) && permittedCount!=0;
+            if(showBack)back.Bind(OwnerId);else back.ClearBinding();
+            back.style.display=showBack?DisplayStyle.Flex:DisplayStyle.None;
+            foreach(var child in Children())if(child.ClassListContains("zone-pile-sheet"))child.style.display=permittedCount==0?DisplayStyle.None:DisplayStyle.Flex;
+            art.image=Zone=="library" || concealed?null:artwork;
+            fallback.text=Zone=="library" || concealed || artwork!=null ? "" : visibleName ?? "Empty";
             EnableInClassList("zone-open",open);
-            tooltip=Title(Zone)+" | "+count.text+(Zone=="library"?" cards":" visible cards")+" | Enter to browse";
+            tooltip=Title(Zone)+" | "+count.text+" cards"+" | Enter to browse";
         }
-        public void ClearArtwork(){art.image=null;fallback.text="";}
+        public void ClearArtwork(){art.image=null;back.ClearBinding();back.style.display=DisplayStyle.None;fallback.text="";}
         public void ClearBinding(){OwnerId=null;ClearArtwork();count.text="?";tooltip="";RemoveFromClassList("zone-open");Blur();}
         public void Dispose(){if(disposed)return;ClearBinding();disposed=true;BrowseRequested=null;UnregisterCallback<ClickEvent>(Clicked);UnregisterCallback<NavigationSubmitEvent>(Submitted);}
     }

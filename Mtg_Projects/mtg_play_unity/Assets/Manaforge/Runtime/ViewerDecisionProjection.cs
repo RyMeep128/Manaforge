@@ -40,10 +40,12 @@ namespace Manaforge.Play
         public string Family {get;} public string Prompt {get;}
         public IReadOnlyList<ProjectedChoiceOption> Options {get;} public IReadOnlyList<ProjectedAmountConstraint> Amounts {get;}
         public long? Minimum {get;} public long? Maximum {get;} public bool Cancellable {get;} public bool CanFinish {get;} public bool IsPriority {get;}
+        public ProjectedTargetingContext Targeting {get;}
         internal ProjectedDecision(CardProjectionContext context,JToken source)
         {
             Context=context;DecisionId=(string)source["decision_id"];PlayerId=(string)source["player_id"];Family=(string)source["family"];Prompt=(string)source["prompt"];
             Minimum=(long?)source["minimum"];Maximum=(long?)source["maximum"];Cancellable=(bool)source["cancellable"];CanFinish=(bool)source["can_finish"];IsPriority=(bool)source["is_priority"];
+            if(source["targeting"] is JObject target)Targeting=new ProjectedTargetingContext(target);
             Options=Array.AsReadOnly(source["options"].Select(value=>new ProjectedChoiceOption(context,DecisionId,value)).ToArray());
             Amounts=Array.AsReadOnly(source["amounts"].Select(value=>new ProjectedAmountConstraint(value)).ToArray());
         }
@@ -86,10 +88,12 @@ namespace Manaforge.Play
         public IReadOnlyList<ProjectedAction> Actions {get;} public ProjectedDecision Decision {get;}
         public IReadOnlyList<ProjectedManaSource> ManaSourceReferences {get;}
         public IReadOnlyList<string> UnsupportedFields {get;}
+        public System.Collections.Generic.IReadOnlyList<ProjectedStackTargets> StackTargets {get;}
         internal ProjectedDecisionFrame(JObject source)
         {
             if(source["commanders"] is JArray commanders)Commanders=Array.AsReadOnly(commanders.Select(value=>new ProjectedCommander(value,source)).ToArray());
             PaymentReason=(string)source["payment_reason"];
+            StackTargets=Array.AsReadOnly((source["stack_targets"] as JArray ?? new JArray()).Select(value=>new ProjectedStackTargets(value)).ToArray());
             Step=(string)source["step"];PriorityPlayerId=(string)source["priority_player_id"];
             StackIds=Array.AsReadOnly(source["objects"].Where(card=>(string)card["zone"]=="stack").Select(card=>(string)card["object_id"]).ToArray());
             Result=(string)source["result"];Turn=(long?)source["turn"];Phase=(string)source["phase"];ActivePlayerId=(string)source["active_player_id"];
@@ -115,6 +119,17 @@ namespace Manaforge.Play
             var decision=snapshot["decision"];
             if(((JArray)snapshot["actions"]).Count>MaximumItems || (decision.Type!=JTokenType.Null && (((JArray)decision["options"]).Count>MaximumItems || ((JArray)decision["amounts"]).Count>MaximumItems)))
                 throw new WireEnvelope.EnvelopeException("DECISION_PROJECTION_LIMIT");
+            var objects=snapshot["objects"].Select(value=>(string)value["object_id"]).ToHashSet();
+            var players=snapshot["players"].Select(value=>(string)value["player_id"]).ToHashSet();
+            void CheckTarget(JToken target){if((string)target["object_id"] is string objectId && !objects.Contains(objectId) || (string)target["player_id"] is string playerId && !players.Contains(playerId))throw new WireEnvelope.EnvelopeException("TARGET_REFERENCE_UNAVAILABLE");}
+            if(decision is JObject decisionObject && decisionObject["targeting"] is JObject targeting){
+                if((string)targeting["source_id"] is string source && !objects.Contains(source) || (long?)targeting["minimum"]>(long?)targeting["maximum"])throw new WireEnvelope.EnvelopeException("TARGET_CONTEXT_INVALID");
+                foreach(var target in targeting["selected"])CheckTarget(target);
+            }
+            if(snapshot["stack_targets"] is JArray relationships)foreach(var relation in relationships){
+                if(!snapshot["objects"].Any(value=>(string)value["object_id"]==(string)relation["source_id"] && (string)value["zone"]=="stack"))throw new WireEnvelope.EnvelopeException("TARGET_SOURCE_UNAVAILABLE");
+                foreach(var target in relation["targets"])CheckTarget(target);
+            }
             return new ProjectedDecisionFrame(snapshot);
         }
     }

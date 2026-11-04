@@ -823,6 +823,161 @@
       ],
       "additionalProperties": false
     },
+    "TargetReference": {
+      "type": "object",
+      "properties": {
+        "object_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "player_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ordinal": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "amount": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "object_id",
+        "player_id",
+        "ordinal",
+        "amount"
+      ],
+      "additionalProperties": false,
+      "anyOf": [
+        {
+          "properties": {
+            "object_id": {
+              "type": "string"
+            },
+            "player_id": {
+              "type": "null"
+            }
+          }
+        },
+        {
+          "properties": {
+            "object_id": {
+              "type": "null"
+            },
+            "player_id": {
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "TargetingContext": {
+      "type": "object",
+      "properties": {
+        "source_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "minimum": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "maximum": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "selected": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TargetReference"
+          },
+          "maxItems": 256
+        },
+        "complete": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "source_id",
+        "minimum",
+        "maximum",
+        "selected",
+        "complete"
+      ],
+      "additionalProperties": false
+    },
+    "StackTargets": {
+      "type": "object",
+      "properties": {
+        "source_id": {
+          "type": "string"
+        },
+        "targets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TargetReference"
+          },
+          "maxItems": 256
+        },
+        "complete": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "source_id",
+        "targets",
+        "complete"
+      ],
+      "additionalProperties": false
+    },
     "ChoiceRequest": {
       "type": "object",
       "properties": {
@@ -878,6 +1033,16 @@
         },
         "is_priority": {
           "type": "boolean"
+        },
+        "targeting": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TargetingContext"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -891,7 +1056,8 @@
         "cancellable",
         "amounts",
         "can_finish",
-        "is_priority"
+        "is_priority",
+        "targeting"
       ],
       "additionalProperties": false
     },
@@ -1296,6 +1462,20 @@
               "type": "null"
             }
           ]
+        },
+        "stack_targets": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/StackTargets"
+              },
+              "maxItems": 4096
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -1319,7 +1499,8 @@
         "observations",
         "unsupported_fields",
         "actions_complete",
-        "payment_reason"
+        "payment_reason",
+        "stack_targets"
       ],
       "additionalProperties": false
     },

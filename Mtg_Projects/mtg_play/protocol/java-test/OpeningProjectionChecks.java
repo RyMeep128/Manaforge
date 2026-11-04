@@ -866,10 +866,19 @@ public final class OpeningProjectionChecks {
         row=row.deepCopy();row.addProperty("observation_id","observation-two");row.addProperty("group_id","reveal-two");raw.getAsJsonArray("observations").add(row);
         check(projection.project(raw,prompt()).getAsJsonArray("observations").size()==2);
     }
+    static void targetingPresentationChecks() throws Exception {
+        JsonObject raw=attackState(),prompt=priorityPrompt();prompt.addProperty("kind","GAME_TARGET");prompt.addProperty("is_priority",false);prompt.add("targets",JsonParser.parseString("[\"raw-human\",\"raw-card\"]"));
+        JsonObject context=new JsonObject();context.addProperty("source","raw-card");context.addProperty("minimum",1);context.addProperty("maximum",2);context.add("selected",JsonParser.parseString("[{\"id\":\"raw-human\",\"amount\":2},{\"id\":\"PRIVATE_REMOVED_TARGET\"}]"));prompt.add("targeting_context",context);
+        JsonObject snapshot=projection().projectCoreCombat(raw,prompt);shape(snapshot);JsonObject projected=snapshot.getAsJsonObject("decision").getAsJsonObject("targeting");
+        check(projected!=null && !projected.get("complete").getAsBoolean() && projected.getAsJsonArray("selected").size()==1);check(!snapshot.toString().contains("PRIVATE_REMOVED_TARGET") && !snapshot.toString().contains("raw-card"));
+        prompt.remove("targeting_context");check(projection().projectCoreCombat(raw,prompt).getAsJsonObject("decision").get("targeting").isJsonNull());
+        JsonObject stack=raw.getAsJsonArray("players").get(0).getAsJsonObject().getAsJsonArray("battlefield").get(0).getAsJsonObject().deepCopy();stack.addProperty("id","raw-stack");stack.addProperty("stack_controller","raw-human");stack.addProperty("stack_owner","raw-human");stack.add("stack_targets",JsonParser.parseString("[\"raw-human\",\"PRIVATE_REMOVED_TARGET\",\"raw-human\"]"));stack.addProperty("stack_targets_complete",false);raw.getAsJsonArray("stack").add(stack);
+        snapshot=projection().projectCoreCombat(raw,prompt);shape(snapshot);JsonObject relationship=snapshot.getAsJsonArray("stack_targets").get(0).getAsJsonObject();check(relationship.getAsJsonArray("targets").size()==2 && !relationship.get("complete").getAsBoolean());check(!snapshot.toString().contains("PRIVATE_REMOVED_TARGET"));
+    }
     public static void main(String[] args) throws Exception {
         presentationIdentityChecks();
         UnityPriorityProjectionChecks.run();
-        revealObservationChecks();nativeLaunchChecks();publicStackAndOfferedCardChecks();automaticPaymentChecks();manualManaChecks();gameplaySessionChecks();combatCaseEvidenceChecks();coreCombatChecks();coreResponseChecks();terminalCombatChecks();coreChoiceChecks();combatCounterChecks();
+        targetingPresentationChecks();revealObservationChecks();nativeLaunchChecks();publicStackAndOfferedCardChecks();automaticPaymentChecks();manualManaChecks();gameplaySessionChecks();combatCaseEvidenceChecks();coreCombatChecks();coreResponseChecks();terminalCombatChecks();coreChoiceChecks();combatCounterChecks();
         ManaforgeOpeningProjection projection=projection();JsonObject raw=state(),request=prompt();JsonObject snapshot=projection.project(raw,request);shape(snapshot);
         String text=snapshot.toString();for(String secret:new String[]{"raw-human","raw-ai","raw-card","raw-name","raw-opponent-name","OPPONENT_SECRET","MUTATED_BINDING"})check(!text.contains(secret));
         check(snapshot.get("revision").getAsLong()==1);check(!snapshot.get("actions_complete").getAsBoolean());

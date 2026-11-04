@@ -38,10 +38,12 @@ namespace Manaforge.Play
         private int readyFrame;
         private bool disposed,transitioning,faulted;
         public VisualElement CardsRoot {get;}=new VisualElement{name="viewer-cards"};
-        public CardView InspectionView {get;}=new CardView();
-        public ViewerCardSurface(VisualElement parent)
+        public ICardBackProvider CardBacks {get;}
+        public CardView InspectionView {get;}
+        public ViewerCardSurface(VisualElement parent,ICardBackProvider cardBacks=null)
         {
             if(parent==null)throw new ArgumentNullException(nameof(parent));
+            CardBacks=cardBacks??ClassicCardBackProvider.Shared;InspectionView=new CardView(CardBacks);
             CardsRoot.style.flexDirection=FlexDirection.Row;CardsRoot.style.flexWrap=Wrap.Wrap;
             InspectionView.SetPresentation(CardPresentationMode.Full,300);
             parent.Add(CardsRoot);parent.Add(InspectionView);
@@ -153,7 +155,7 @@ namespace Manaforge.Play
                 foreach(var card in frame.Cards) {
                     cards.Add(card.ObjectId,card);
                     if(!retainedViews.TryGetValue(card.RenderId,out var view)) {
-                        view=new CardView();view.SetPresentation(CardPresentationMode.Compact,160);
+                        view=new CardView(CardBacks);view.SetPresentation(CardPresentationMode.Compact,160);
                         CardsRoot.Add(view);
                     }
                     retainedViews.Remove(card.RenderId);views.Add(card.ObjectId,view);
@@ -232,7 +234,7 @@ namespace Manaforge.Play
         private void Bind(CardView view,ProjectedCard card)
         {
             view.style.rotate=new Rotate(new Angle(0));
-            if(card.Hidden){view.Conceal();return;}
+            if(card.Hidden || card.FaceDown==true){view.ShowBack(card.OwnerId);return;}
             artwork.TryGetValue(card.ObjectId,out var binding);
             if(binding==null)view.BindUnavailable();else view.Bind(binding.Identity,binding.Texture,binding.Profile?.Crop??CardCompactProfile.StandardArtCrop);
             var c=card.Characteristics;
@@ -266,8 +268,8 @@ namespace Manaforge.Play
         // A choice preview shares only artwork already admitted for the current viewer.
         public CardView ChoicePreview(string objectId)
         {
-            ThreadOnly();if(objectId==null || !cards.TryGetValue(objectId,out var card) || card.Hidden)return null;
-            var preview=new CardView();Bind(preview,card);preview.SetPresentation(CardPresentationMode.Full,150);return preview;
+            ThreadOnly();if(objectId==null || !cards.TryGetValue(objectId,out var card) || card.Hidden || card.FaceDown==true)return null;
+            var preview=new CardView(CardBacks);Bind(preview,card);preview.SetPresentation(CardPresentationMode.Full,150);return preview;
         }
         public static string RemainingToughness(string toughness,long? damage)
         {
@@ -287,7 +289,7 @@ namespace Manaforge.Play
             transitioning=true;
             try {
                 InspectionView.Conceal();inspectedObject=null;
-                if(objectId==null || !cards.TryGetValue(objectId,out var card) || card.Hidden)return false;
+                if(objectId==null || !cards.TryGetValue(objectId,out var card) || card.Hidden || card.FaceDown==true)return false;
                 Bind(InspectionView,card);InspectionView.style.rotate=new Rotate(new Angle(0));inspectedObject=objectId;return true;
             }
             catch {

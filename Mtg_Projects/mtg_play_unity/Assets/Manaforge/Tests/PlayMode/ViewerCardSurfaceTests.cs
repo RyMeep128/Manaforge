@@ -42,6 +42,16 @@ namespace Manaforge.Play.Tests
             if(!hidden && typeLine!=null)card["characteristics"]["type_line"]=typeLine;
             return ViewerCardProjection.ParseSnapshot(message.ToString(),session,viewer,0,true);
         }
+        [Test] public void HiddenObjectsUseSharedBackAndCannotBeInspected()
+        {
+            var ticket=surface.BeginViewer("fixture-0001","one");
+            Assert.That(surface.TryPresent(ticket,Frame(hidden:true)),Is.True);
+            var card=surface.CardsRoot.Q<CardView>();Assert.That(card.Q<CardBackView>().image,Is.Not.Null);Assert.That(card.Artwork,Is.Null);
+            Assert.That(surface.Inspect(ticket,"fixture-0002"),Is.False);
+            Assert.That(surface.TryPresent(ticket,Frame(revision:2)),Is.True);
+            card=surface.CardsRoot.Q<CardView>();Assert.That(card.Q<CardBackView>().image,Is.Null);
+            surface.ClearViewer(ticket);Assert.That(surface.CardsRoot.childCount,Is.Zero);
+        }
         [UnitySetUp] public IEnumerator Setup()
         {
             host=new GameObject("Viewer surface test");settings=ScriptableObject.CreateInstance<PanelSettings>();

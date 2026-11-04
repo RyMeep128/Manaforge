@@ -87,7 +87,8 @@
                   "cancellable": false,
                   "amounts": [],
                   "can_finish": false,
-                  "is_priority": true
+                  "is_priority": true,
+                  "targeting": null
                 },
                 "combat": [],
                 "protocol_version": 1,
@@ -96,7 +97,8 @@
                 "observations": [],
                 "unsupported_fields": [],
                 "actions_complete": false,
-                "payment_reason": null
+                "payment_reason": null,
+                "stack_targets": null
               }
             }
           },
@@ -124,7 +126,8 @@
                   "prompt": "Fixture only; no engine connected",
                   "family": "priority",
                   "player_id": "one",
-                  "decision_id": "fixture-decision"
+                  "decision_id": "fixture-decision",
+                  "targeting": null
                 },
                 "actions": [
                   {
@@ -189,7 +192,8 @@
                 "revision": 7,
                 "viewer_id": "one",
                 "session_id": "fixture-session",
-                "payment_reason": null
+                "payment_reason": null,
+                "stack_targets": null
               },
               "fixture_only": true
             },
@@ -308,7 +312,8 @@
                   "cancellable": false,
                   "amounts": [],
                   "can_finish": false,
-                  "is_priority": true
+                  "is_priority": true,
+                  "targeting": null
                 },
                 "combat": [],
                 "protocol_version": 1,
@@ -317,7 +322,8 @@
                 "observations": [],
                 "unsupported_fields": [],
                 "actions_complete": false,
-                "payment_reason": null
+                "payment_reason": null,
+                "stack_targets": null
               }
             }
           },
@@ -405,7 +411,8 @@
                   "cancellable": false,
                   "amounts": [],
                   "can_finish": false,
-                  "is_priority": true
+                  "is_priority": true,
+                  "targeting": null
                 },
                 "combat": [],
                 "protocol_version": 1,
@@ -414,7 +421,8 @@
                 "observations": [],
                 "unsupported_fields": [],
                 "actions_complete": false,
-                "payment_reason": null
+                "payment_reason": null,
+                "stack_targets": null
               }
             }
           },
@@ -529,7 +537,8 @@
                   "cancellable": false,
                   "amounts": [],
                   "can_finish": false,
-                  "is_priority": true
+                  "is_priority": true,
+                  "targeting": null
                 },
                 "combat": [],
                 "protocol_version": 1,
@@ -538,7 +547,8 @@
                 "observations": [],
                 "unsupported_fields": [],
                 "actions_complete": false,
-                "payment_reason": null
+                "payment_reason": null,
+                "stack_targets": null
               }
             }
           },
@@ -673,7 +683,8 @@
                   "cancellable": false,
                   "amounts": [],
                   "can_finish": false,
-                  "is_priority": true
+                  "is_priority": true,
+                  "targeting": null
                 },
                 "combat": [],
                 "protocol_version": 1,
@@ -682,7 +693,8 @@
                 "observations": [],
                 "unsupported_fields": [],
                 "actions_complete": false,
-                "payment_reason": null
+                "payment_reason": null,
+                "stack_targets": null
               }
             }
           },
@@ -817,7 +829,8 @@
                   "cancellable": false,
                   "amounts": [],
                   "can_finish": false,
-                  "is_priority": true
+                  "is_priority": true,
+                  "targeting": null
                 },
                 "combat": [],
                 "protocol_version": 1,
@@ -826,7 +839,8 @@
                 "observations": [],
                 "unsupported_fields": [],
                 "actions_complete": false,
-                "payment_reason": null
+                "payment_reason": null,
+                "stack_targets": null
               }
             }
           },
@@ -934,7 +948,8 @@
                   "cancellable": false,
                   "amounts": [],
                   "can_finish": false,
-                  "is_priority": true
+                  "is_priority": true,
+                  "targeting": null
                 },
                 "combat": [],
                 "protocol_version": 1,
@@ -943,7 +958,8 @@
                 "observations": [],
                 "unsupported_fields": [],
                 "actions_complete": false,
-                "payment_reason": null
+                "payment_reason": null,
+                "stack_targets": null
               }
             }
           },
@@ -1038,7 +1054,8 @@
                   "cancellable": false,
                   "amounts": [],
                   "can_finish": false,
-                  "is_priority": true
+                  "is_priority": true,
+                  "targeting": null
                 },
                 "combat": [],
                 "protocol_version": 1,
@@ -1047,7 +1064,8 @@
                 "observations": [],
                 "unsupported_fields": [],
                 "actions_complete": false,
-                "payment_reason": null
+                "payment_reason": null,
+                "stack_targets": null
               }
             }
           },
@@ -1135,7 +1153,8 @@
                   "cancellable": false,
                   "amounts": [],
                   "can_finish": false,
-                  "is_priority": true
+                  "is_priority": true,
+                  "targeting": null
                 },
                 "combat": [],
                 "protocol_version": 1,
@@ -1144,7 +1163,8 @@
                 "observations": [],
                 "unsupported_fields": [],
                 "actions_complete": false,
-                "payment_reason": null
+                "payment_reason": null,
+                "stack_targets": null
               }
             }
           },
@@ -1252,7 +1272,8 @@
                   "cancellable": false,
                   "amounts": [],
                   "can_finish": false,
-                  "is_priority": true
+                  "is_priority": true,
+                  "targeting": null
                 },
                 "combat": [],
                 "protocol_version": 1,
@@ -1261,7 +1282,8 @@
                 "observations": [],
                 "unsupported_fields": [],
                 "actions_complete": false,
-                "payment_reason": null
+                "payment_reason": null,
+                "stack_targets": null
               }
             }
           },
@@ -1356,7 +1378,8 @@
                   "cancellable": false,
                   "amounts": [],
                   "can_finish": false,
-                  "is_priority": true
+                  "is_priority": true,
+                  "targeting": null
                 },
                 "combat": [],
                 "protocol_version": 1,
@@ -1365,7 +1388,8 @@
                 "observations": [],
                 "unsupported_fields": [],
                 "actions_complete": false,
-                "payment_reason": null
+                "payment_reason": null,
+                "stack_targets": null
               }
             }
           },
@@ -1442,7 +1466,8 @@
                 "observations": [],
                 "unsupported_fields": [],
                 "actions_complete": false,
-                "payment_reason": null
+                "payment_reason": null,
+                "stack_targets": null
               }
             }
           },
@@ -1519,7 +1544,8 @@
                 "observations": [],
                 "unsupported_fields": [],
                 "actions_complete": false,
-                "payment_reason": null
+                "payment_reason": null,
+                "stack_targets": null
               }
             }
           },
@@ -1607,7 +1633,8 @@
                   "cancellable": false,
                   "amounts": [],
                   "can_finish": false,
-                  "is_priority": true
+                  "is_priority": true,
+                  "targeting": null
                 },
                 "combat": [],
                 "protocol_version": 1,
@@ -1616,7 +1643,8 @@
                 "observations": [],
                 "unsupported_fields": [],
                 "actions_complete": false,
-                "payment_reason": null
+                "payment_reason": null,
+                "stack_targets": null
               }
             }
           },
@@ -1731,7 +1759,8 @@
                   "cancellable": false,
                   "amounts": [],
                   "can_finish": false,
-                  "is_priority": true
+                  "is_priority": true,
+                  "targeting": null
                 },
                 "combat": [],
                 "protocol_version": 1,
@@ -1740,7 +1769,8 @@
                 "observations": [],
                 "unsupported_fields": [],
                 "actions_complete": false,
-                "payment_reason": null
+                "payment_reason": null,
+                "stack_targets": null
               }
             }
           },
@@ -1832,7 +1862,8 @@
                   "cancellable": false,
                   "amounts": [],
                   "can_finish": false,
-                  "is_priority": true
+                  "is_priority": true,
+                  "targeting": null
                 },
                 "combat": [],
                 "protocol_version": 1,
@@ -1841,7 +1872,8 @@
                 "observations": [],
                 "unsupported_fields": [],
                 "actions_complete": false,
-                "payment_reason": null
+                "payment_reason": null,
+                "stack_targets": null
               }
             }
           },
@@ -1929,7 +1961,8 @@
                   "cancellable": false,
                   "amounts": [],
                   "can_finish": false,
-                  "is_priority": true
+                  "is_priority": true,
+                  "targeting": null
                 },
                 "combat": [],
                 "protocol_version": 1,
@@ -1938,7 +1971,8 @@
                 "observations": [],
                 "unsupported_fields": [],
                 "actions_complete": false,
-                "payment_reason": null
+                "payment_reason": null,
+                "stack_targets": null
               }
             }
           },
@@ -2033,7 +2067,8 @@
                   "cancellable": false,
                   "amounts": [],
                   "can_finish": false,
-                  "is_priority": true
+                  "is_priority": true,
+                  "targeting": null
                 },
                 "combat": [],
                 "protocol_version": 1,
@@ -2042,7 +2077,8 @@
                 "observations": [],
                 "unsupported_fields": [],
                 "actions_complete": false,
-                "payment_reason": null
+                "payment_reason": null,
+                "stack_targets": null
               }
             }
           },
@@ -2130,7 +2166,8 @@
                   "cancellable": false,
                   "amounts": [],
                   "can_finish": false,
-                  "is_priority": true
+                  "is_priority": true,
+                  "targeting": null
                 },
                 "combat": [],
                 "protocol_version": 1,
@@ -2139,7 +2176,8 @@
                 "observations": [],
                 "unsupported_fields": [],
                 "actions_complete": false,
-                "payment_reason": null
+                "payment_reason": null,
+                "stack_targets": null
               }
             }
           },
@@ -2227,7 +2265,8 @@
                   "cancellable": false,
                   "amounts": [],
                   "can_finish": false,
-                  "is_priority": true
+                  "is_priority": true,
+                  "targeting": null
                 },
                 "combat": [],
                 "protocol_version": 1,
@@ -2236,7 +2275,8 @@
                 "observations": [],
                 "unsupported_fields": [],
                 "actions_complete": false,
-                "payment_reason": null
+                "payment_reason": null,
+                "stack_targets": null
               }
             }
           },
@@ -2331,7 +2371,8 @@
                   "cancellable": false,
                   "amounts": [],
                   "can_finish": false,
-                  "is_priority": true
+                  "is_priority": true,
+                  "targeting": null
                 },
                 "combat": [],
                 "protocol_version": 1,
@@ -2340,7 +2381,8 @@
                 "observations": [],
                 "unsupported_fields": [],
                 "actions_complete": false,
-                "payment_reason": null
+                "payment_reason": null,
+                "stack_targets": null
               }
             }
           },
