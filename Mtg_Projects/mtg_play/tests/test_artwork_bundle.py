@@ -16,13 +16,23 @@ def test_exact_cached_pixels_pin_context_and_source_are_preserved(tmp_path):
     assert image.save(str(source))
     before = source.read_bytes()
     service = Service(
-        card("selected", type_line="Creature"), paths={("selected", "default"): source}
+        card(
+            "selected",
+            type_line="Creature",
+            oracle_text="Whenever another red creature enters, this creature gets +1/+0 until end of turn.",
+            mana_cost="{R}",
+        ),
+        paths={("selected", "default"): source},
     )
     output = tmp_path / "assets"
     manifest, pin = export_artwork_bundle(
         service, ["selected"], output, session_id="session", viewer_id="one"
     )
     entry = manifest["entries"][0]
+    assert manifest["artwork_bundle_version"] == 2
+    assert entry["printed_name"] == "Card"
+    assert entry["printed_rules"] == service.selected["oracle_text"]
+    assert entry["printed_mana_cost"] == "{R}"
     raw = (output / entry["file"]).read_bytes()
     assert raw[:4] == bytes([10, 20, 30, 255])
     assert entry["printing_id"] == "selected" and entry["oracle_id"] == "oracle"

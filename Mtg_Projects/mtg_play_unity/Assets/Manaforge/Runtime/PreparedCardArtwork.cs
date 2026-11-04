@@ -17,9 +17,10 @@ namespace Manaforge.Play
     {
         public string OracleId {get;} public string PrintingId {get;} public string FaceKey {get;}
         public string Layout {get;} public string PrintedTypeLine {get;}
+        public string PrintedName {get;} public string PrintedRules {get;} public string PrintedManaCost {get;}
         public int FaceCount {get;} public bool StandardCompatible {get;}
-        public CatalogArtworkFace(string oracle,string printing,string face,string layout,int faceCount,bool standardCompatible,string printedTypeLine)
-        {OracleId=oracle;PrintingId=printing;FaceKey=face;Layout=layout;FaceCount=faceCount;StandardCompatible=standardCompatible;PrintedTypeLine=printedTypeLine;}
+        public CatalogArtworkFace(string oracle,string printing,string face,string layout,int faceCount,bool standardCompatible,string printedTypeLine,string printedName=null,string printedRules=null,string printedManaCost=null)
+        {OracleId=oracle;PrintingId=printing;FaceKey=face;Layout=layout;FaceCount=faceCount;StandardCompatible=standardCompatible;PrintedTypeLine=printedTypeLine;PrintedName=printedName;PrintedRules=printedRules;PrintedManaCost=printedManaCost;}
     }
     public sealed class PreparedCardArtwork : IDisposable
     {
@@ -28,12 +29,13 @@ namespace Manaforge.Play
         public ViewerArtworkRequest Request {get;}
         public CardVisualIdentity Identity {get;}
         public CardCompactProfile Profile {get;}
+        public CatalogArtworkFace Catalog {get;}
         public int Width {get;} public int Height {get;}
         internal string Digest {get;}
         public bool IsDisposed {get{lock(gate)return pixels==null;}}
         private PreparedCardArtwork(ViewerArtworkRequest request,CatalogArtworkFace catalog,int width,int height,byte[] bytes)
         {
-            Request=request;Width=width;Height=height;pixels=(byte[])bytes.Clone();
+            Request=request;Catalog=catalog;Width=width;Height=height;pixels=(byte[])bytes.Clone();
             using(var hash=SHA256.Create())Digest=BitConverter.ToString(hash.ComputeHash(pixels)).Replace("-","");
             Identity=VisualPrintingPolicy.Resolve(false,new VisualPrintingCandidate(catalog.OracleId,catalog.PrintingId,catalog.FaceKey,catalog.StandardCompatible,true),Array.Empty<VisualPrintingCandidate>());
             Profile=CardCompactProfile.FromMetadata("normal",catalog.PrintedTypeLine);

@@ -27,8 +27,9 @@ namespace Manaforge.Play
         {
             public readonly Texture2D Texture;public readonly CardVisualIdentity Identity;public readonly CardCompactProfile Profile;
             public readonly string Oracle,Printing;
+            public readonly CatalogArtworkFace Catalog;
             public ArtworkBinding(PreparedCardArtwork prepared,Texture2D texture)
-            {Texture=texture;Identity=prepared.Identity;Profile=prepared.Profile;Oracle=prepared.Request.OracleId;Printing=prepared.Request.PrintingId;}
+            {Texture=texture;Identity=prepared.Identity;Profile=prepared.Profile;Catalog=prepared.Catalog;Oracle=prepared.Request.OracleId;Printing=prepared.Request.PrintingId;}
         }
         private ViewerSurfaceTicket ticket;
         private IDisposable privateAssets;
@@ -199,9 +200,17 @@ namespace Manaforge.Play
             // Display engine-supplied text without inferring rules from artwork.
             string rules=DisplayRules(c?.CurrentAbilities,c?.EngineViewText);
             string unavailable=rules==null?"Rules text unavailable":c?.CurrentAbilities==null?"Engine view text":"";
+            // Printed metadata is viewer-scoped and exact-face only. A known live
+            // ability list (including an empty one) always wins over printed rules.
+            var printed=binding?.Catalog;
+            bool sameFace=c!=null && printed!=null && c.Name==printed.PrintedName && SamePrintedType(c.TypeLine,printed.PrintedTypeLine)
+                && c.IsCopy!=true && c.Transformed!=true && c.Flipped!=true;
+            if(sameFace && c.CurrentAbilities==null && string.IsNullOrWhiteSpace(rules) && !string.IsNullOrWhiteSpace(printed.PrintedRules)) {
+                rules=printed.PrintedRules;unavailable="Printed rules (live text unavailable)";
+            }
             if(binding==null)unavailable="Artwork unavailable"+(string.IsNullOrEmpty(unavailable)?"":" / "+unavailable);
             if(card.Tapped==null)unavailable+=" / tap state unavailable";
-            view.UpdateValues(new CardDisplayValues(c?.Name,null,c?.TypeLine,rules,pt,unavailable,binding?.Profile,loyalty:c?.Loyalty,defense:c?.Defense,hidePrintedStats:binding?.Profile?.MayHavePrintedStats??true));
+            view.UpdateValues(new CardDisplayValues(c?.Name,sameFace?printed.PrintedManaCost:null,c?.TypeLine,rules,pt,unavailable,binding?.Profile,loyalty:c?.Loyalty,defense:c?.Defense,hidePrintedStats:binding?.Profile?.MayHavePrintedStats??true));
             if(card.Tapped==true)view.style.rotate=new Rotate(new Angle(90));
         }
         public static string DisplayRules(IReadOnlyList<string> current,IReadOnlyList<string> engineView)
@@ -210,6 +219,10 @@ namespace Manaforge.Play
             return string.Join("\n",System.Linq.Enumerable.Select(lines,line=>System.Net.WebUtility.HtmlDecode(
                 System.Text.RegularExpressions.Regex.Replace(OpeningHandFan.PlainPrompt(line??""),"<[^>]*>","",System.Text.RegularExpressions.RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(50)))));
         }
+        private static bool SamePrintedType(string current,string printed)
+            =>current!=null && printed!=null && NormalizePrintedType(current)==NormalizePrintedType(printed);
+        private static string NormalizePrintedType(string value)
+            =>string.Join(" ",value.Replace('—','-').Replace('–','-').Split((char[])null,StringSplitOptions.RemoveEmptyEntries));
         // A choice preview shares only artwork already admitted for the current viewer.
         public CardView ChoicePreview(string objectId)
         {

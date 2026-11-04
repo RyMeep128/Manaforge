@@ -53,6 +53,29 @@ namespace Manaforge.Play.Tests
             surface.BeginViewer("fixture-0001","two",new ViewerArtworkScope());yield return null;yield return null;
             Assert.That(texture==null,Is.True);Assert.That(scope.Count,Is.Zero);
         }
+        [UnityTest] public IEnumerator PrintedRulesFallbackIsExactFaceScopedAndNeverReplacesLiveAbilities()
+        {
+            var ticket=surface.BeginViewer("fixture-0001","one",new ViewerArtworkScope());yield return null;yield return null;yield return null;
+            var frame=ViewerCardSurfaceTests.Frame(artwork:true,missingRules:true,name:"Krenko's Command",typeLine:"Creature  - Goblin Warrior ");
+            Assert.That(surface.TryPresent(ticket,frame),Is.True);
+            var catalog=new CatalogArtworkFace("oracle","exact-printing","front","normal",1,true,"Creature — Goblin Warrior",
+                "Krenko's Command","Create two 1/1 red Goblin creature tokens.","{1}{R}");
+            Assert.That(surface.TryApplyArtwork(ticket,PreparedCardArtwork.Prepare(surface.RequestArtwork(ticket,"fixture-0002"),catalog,2,2,new byte[16])),Is.True);
+            Assert.That(surface.Inspect(ticket,"fixture-0002"),Is.True);
+            Assert.That(surface.InspectionView.Q<Label>("rules").text,Is.EqualTo(catalog.PrintedRules));
+            Assert.That(surface.InspectionView.Q<ManaCostView>().Cost,Is.EqualTo("{1}{R}"));
+            Assert.That(surface.InspectionView.Q<Label>("status").text,Does.Contain("Printed rules"));
+            surface.TryPresent(ticket,ViewerCardSurfaceTests.Frame(revision:2,artwork:true,name:"Krenko's Command"));
+            surface.Inspect(ticket,"fixture-0002");
+            Assert.That(surface.InspectionView.Q<Label>("rules").text,Is.EqualTo("Not complete Oracle text"));
+            surface.TryPresent(ticket,ViewerCardSurfaceTests.Frame(revision:3,artwork:true,missingRules:true,emptyAbilities:true,name:"Krenko's Command"));
+            surface.Inspect(ticket,"fixture-0002");Assert.That(surface.InspectionView.Q<Label>("rules").text,Is.Empty);
+            surface.TryPresent(ticket,ViewerCardSurfaceTests.Frame(revision:4,artwork:true,missingRules:true,name:"Copied current name"));
+            surface.Inspect(ticket,"fixture-0002");Assert.That(surface.InspectionView.Q<Label>("rules").text,Is.Empty);
+            Assert.That(surface.InspectionView.Q<ManaCostView>().Cost,Is.Null.Or.Empty);
+            surface.TryPresent(ticket,ViewerCardSurfaceTests.Frame(revision:5,hidden:true));
+            Assert.That(surface.InspectionView.Q<Label>("rules").text,Is.Empty);
+        }
         [UnityTest] public IEnumerator GraphicsUploadUsesTheCopiedWorkerPixels()
         {
             if(SystemInfo.graphicsDeviceType==UnityEngine.Rendering.GraphicsDeviceType.Null)

@@ -110,6 +110,9 @@ def export_artwork_bundle(
                 face_count=len(payload.get("card_faces") or [payload]),
                 standard_compatible=selected.standard_compatible,
                 printed_type_line=payload["type_line"],
+                printed_name=payload.get("name"),
+                printed_rules=payload.get("oracle_text"),
+                printed_mana_cost=payload.get("mana_cost"),
                 file=digest + ".rgba",
                 width=width,
                 height=height,
@@ -120,7 +123,7 @@ def export_artwork_bundle(
             )
         )
     manifest = dict(
-        artwork_bundle_version=1,
+        artwork_bundle_version=2,
         source="manaforge_core_cache",
         session_id=session_id,
         viewer_id=viewer_id,

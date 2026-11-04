@@ -35,6 +35,25 @@ namespace Manaforge.Play.Tests
             var path=Path.GetFullPath(root);Assert.That(Path.GetDirectoryName(path),Is.EqualTo(Path.GetFullPath(Path.GetTempPath()).TrimEnd(Path.DirectorySeparatorChar)));
             Assert.That(Path.GetFileName(path),Does.StartWith("ManaforgeCoreArtworkTest-"));Directory.Delete(path,true);yield return null;
         }
+        [UnityTest] public IEnumerator VersionTwoCarriesPrintedTextThroughThePinnedWorkerBoundary()
+        {
+            manifest["artwork_bundle_version"]=2;
+            var entry=manifest["entries"][0];entry["printed_name"]="Viewer text";
+            entry["printed_rules"]="Create two 1/1 red Goblin creature tokens.";entry["printed_mana_cost"]="{1}{R}";Publish();
+            var open=CoreArtworkBundle.OpenAsync(root,pin,"fixture-0001","one");yield return Until(open);
+            using(var bundle=open.GetAwaiter().GetResult()) {
+                var ticket=surface.BeginViewer("fixture-0001","one",new ViewerArtworkScope());yield return null;yield return null;yield return null;
+                surface.TryPresent(ticket,ViewerCardSurfaceTests.Frame(artwork:true));
+                var load=bundle.LoadAsync(surface.RequestArtwork(ticket,"fixture-0002"),CancellationToken.None);yield return Until(load);
+                using(var prepared=load.GetAwaiter().GetResult()) {
+                    Assert.That(prepared.Catalog.PrintedName,Is.EqualTo("Viewer text"));
+                    Assert.That(prepared.Catalog.PrintedRules,Is.EqualTo((string)entry["printed_rules"]));
+                    Assert.That(prepared.Catalog.PrintedManaCost,Is.EqualTo("{1}{R}"));
+                }
+            }
+            entry["printed_rules"]=new string('x',16385);Publish();
+            var oversized=CoreArtworkBundle.OpenAsync(root,pin,"fixture-0001","one");yield return Until(oversized);AssertInvalid(oversized);
+        }
         [UnityTest] public IEnumerator PinnedPixelsReachTheOwnedRendererThroughJobs()
         {
             // Optional local cross-language evidence; synthetic checks always run without it.

@@ -107,6 +107,20 @@ namespace Manaforge.Play.Tests
         }
 
         [UnityTest]
+        public IEnumerator PlainRulesOccupyTheVisibleScrollViewport()
+        {
+            view.UpdateValues(new CardDisplayValues("Krenko's Command","{1}{R}","Sorcery","Create two 1/1 red Goblin creature tokens.",null,null));
+            yield return null;yield return null;
+            var label=view.Q<Label>("rules");
+            var scroll=view.Q<ScrollView>("rules-scroll");
+            Assert.That(label.resolvedStyle.display,Is.EqualTo(DisplayStyle.Flex));
+            Assert.That(label.worldBound.width,Is.GreaterThan(100));
+            Assert.That(label.worldBound.height,Is.GreaterThan(10));
+            Assert.That(label.worldBound.Overlaps(scroll.contentViewport.worldBound),Is.True);
+            Assert.That(label.worldBound.y,Is.EqualTo(scroll.contentViewport.worldBound.y).Within(2));
+        }
+
+        [UnityTest]
         public IEnumerator RulesSymbolsUpdateOnAnAttachedPanelAndClearOnHandoff()
         {
             view.UpdateValues(new CardDisplayValues("Symbol fixture","{1}","Artifact","{T}: Add {C}{C}.",null,null));

@@ -31,6 +31,8 @@ namespace Manaforge.Play
         {if(value?.Type!=JTokenType.String || string.IsNullOrWhiteSpace((string)value) || ((string)value).Length>1024)throw Invalid();return (string)value;}
         private static int Number(JToken value,int maximum)
         {if(value?.Type!=JTokenType.Integer || (long)value<1 || (long)value>maximum)throw Invalid();return (int)value;}
+        private static string PrintedText(JToken value,int maximum)
+        {if(value==null || value.Type==JTokenType.Null)return null;if(value.Type!=JTokenType.String || ((string)value).Length>maximum)throw Invalid();return (string)value;}
         private static void DirectorySafe(string root)
         {for(var dir=new DirectoryInfo(root);dir!=null;dir=dir.Parent)if((dir.Attributes&FileAttributes.ReparsePoint)!=0)throw Invalid();}
         internal static byte[] Read(string root,string file,int maximum,CancellationToken cancellation)
@@ -62,14 +64,17 @@ namespace Manaforge.Play
                 if(Digest(bytes)!=pin)throw Invalid();
                 var manifest=WireEnvelope.ParseObject(new UTF8Encoding(false,true).GetString(bytes));
                 Fields(manifest,"artwork_bundle_version","source","session_id","viewer_id","entries","unavailable");
-                if(Number(manifest["artwork_bundle_version"],1)!=1 || Text(manifest["source"])!="manaforge_core_cache"
+                int version=Number(manifest["artwork_bundle_version"],2);
+                if(Text(manifest["source"])!="manaforge_core_cache"
                     || Text(manifest["session_id"])!=session || Text(manifest["viewer_id"])!=viewer)throw Invalid();
                 if(!(manifest["entries"] is JArray records) || !(manifest["unavailable"] is JArray missing)
                     || records.Count+missing.Count<(previewOnly?0:1) || records.Count+missing.Count>256)throw Invalid();
                 bundle=new CoreArtworkBundle(root,session,viewer){previewOnly=previewOnly};var seen=new HashSet<string>(StringComparer.Ordinal);var files=new Dictionary<string,int>();long total=0;
                 foreach(var record in records) {
                     cancellation.ThrowIfCancellationRequested();
-                    Fields(record,"oracle_id","printing_id","face_key","layout","face_count","standard_compatible","printed_type_line","file","width","height","byte_length","sha256","pixel_format","row_origin");
+                    var fields=new List<string>{"oracle_id","printing_id","face_key","layout","face_count","standard_compatible","printed_type_line","file","width","height","byte_length","sha256","pixel_format","row_origin"};
+                    if(version==2)fields.AddRange(new[]{"printed_name","printed_rules","printed_mana_cost"});
+                    Fields(record,fields.ToArray());
                     string printing=Text(record["printing_id"]),digest=Text(record["sha256"]),file=Text(record["file"]);
                     int width=Number(record["width"],1024),height=Number(record["height"],1024),length=Number(record["byte_length"],4*1024*1024);
                     if(!seen.Add(printing) || !Hash.IsMatch(digest) || file!=digest+".rgba" || length!=width*height*4
@@ -78,7 +83,7 @@ namespace Manaforge.Play
                         || Text(record["pixel_format"])!="RGBA8" || Text(record["row_origin"])!="bottom_left")throw Invalid();
                     if(files.TryGetValue(file,out var previous)){if(previous!=length)throw Invalid();}
                     else{files.Add(file,length);if((total+=length)>256*1024*1024)throw Invalid();}
-                    bundle.entries.Add(printing,new Entry{Catalog=new CatalogArtworkFace(Text(record["oracle_id"]),printing,Text(record["face_key"]),Text(record["layout"]),Number(record["face_count"],8),(bool)record["standard_compatible"],Text(record["printed_type_line"])),File=file,Digest=digest,Width=width,Height=height,Bytes=length});
+                    bundle.entries.Add(printing,new Entry{Catalog=new CatalogArtworkFace(Text(record["oracle_id"]),printing,Text(record["face_key"]),Text(record["layout"]),Number(record["face_count"],8),(bool)record["standard_compatible"],Text(record["printed_type_line"]),PrintedText(record["printed_name"],1024),PrintedText(record["printed_rules"],16384),PrintedText(record["printed_mana_cost"],1024)),File=file,Digest=digest,Width=width,Height=height,Bytes=length});
                 }
                 foreach(var record in missing) {
                     Fields(record,"printing_id","code");if(!seen.Add(Text(record["printing_id"])))throw Invalid();

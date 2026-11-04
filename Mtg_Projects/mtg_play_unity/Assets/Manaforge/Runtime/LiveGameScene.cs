@@ -36,7 +36,8 @@ namespace Manaforge.Play
                 var leave=new Button(()=>{userRequested=true;quit=true;}){text="Return to Manaforge"};leave.name="game-leave";leave.style.position=Position.Absolute;leave.style.left=12;leave.style.top=10;leave.style.backgroundColor=new Color(.08f,.09f,.11f,.9f);leave.style.color=new Color(.94f,.88f,.76f);root.Add(leave);
                 presentation=presentationFactory(root);leave.BringToFront();surface=presentation.Surface;
                 host=new ViewerSessionHost(surface,reading.Result,pipe.WaitForOwnerCloseAsync(cancellation.Token),false,allowIdleWait:true);presentation.Bind(host);panel=presentation.Decisions;
-                if(ArtworkFixtureScene.Argument("-manaforgeGameAcceptance")=="1"){acceptance=new LiveGameAcceptanceDriver();if(presentation is ArenaGameplayPresentation)spatialAcceptance=new SpatialInputAcceptance(panel,surface,host);}
+                bool gameAcceptance=ArtworkFixtureScene.Argument("-manaforgeGameAcceptance")=="1";
+                if(gameAcceptance || ArtworkFixtureScene.Argument("-manaforgeRulesTextProof")=="1"){acceptance=new LiveGameAcceptanceDriver();if(gameAcceptance && presentation is ArenaGameplayPresentation)spatialAcceptance=new SpatialInputAcceptance(panel,surface,host);}
                 var token=cancellation.Token;consuming=Task.Run(()=>{
                     while(!token.IsCancellationRequested && !host.Completion.IsCompleted){if(host.TryTake(out var update))using(update){
                         if(update.Receive.Type=="snapshot" || update.Receive.Type=="result"){if(acceptance!=null){var snapshot=JObject.Parse(update.Packet.ReadJson())["body"]["snapshot"];int lands=0,creatures=0;var landIds=new System.Collections.Generic.List<string>();var ballistaIds=new System.Collections.Generic.List<string>();foreach(var card in snapshot["objects"]){if((string)card["controller_id"]==update.Decision.Context.ViewerId && (string)card["zone"]=="battlefield"){if((bool?)card["tapped"]==false && ((string)card["characteristics"]?["type_line"]??"").Contains("Land")){lands++;landIds.Add((string)card["object_id"]);}if((string)card["characteristics"]?["name"]=="Walking Ballista" && card["counters"] is JArray counters)foreach(var counter in counters)if((string)counter[0]=="+1/+1" && (long)counter[1]>0)ballistaIds.Add((string)card["object_id"]);if(((string)card["characteristics"]?["type_line"]??"").Contains("Creature"))creatures++;}}Volatile.Write(ref untappedLandIds,landIds.ToArray());Volatile.Write(ref counterBallistaIds,ballistaIds.ToArray());Volatile.Write(ref availableLands,lands);Volatile.Write(ref availableCreatures,creatures);}Volatile.Write(ref latest,update.Decision);Interlocked.Increment(ref snapshots);}
@@ -50,7 +51,24 @@ namespace Manaforge.Play
                 if(frame!=null && host.HasPresentedRevision(frame.Context.Revision)){
                     if(!ready){ready=true;Write("game-ready",new JObject{["live_game_version"]=1,["authenticated"]=host.Authenticated});}
                     presentation.Present(frame);
-                    if(acceptance!=null && CaptureReady(frame)){acceptance.SetAvailableLands(Volatile.Read(ref availableLands),Volatile.Read(ref availableCreatures),Volatile.Read(ref untappedLandIds),Volatile.Read(ref counterBallistaIds));quit=frame.UnsupportedFields.Contains("decision") || acceptance.Tick(host,panel,frame);}
+                    if(ArtworkFixtureScene.Argument("-manaforgeRulesTextProof")=="1") {
+                        ProjectedCard proofCard=null;
+                        surface.VisitPresented((card,view)=>{if(proofCard==null && !card.Hidden && card.Zone=="hand")proofCard=card;});
+                        if(proofCard!=null && presentation is ArenaGameplayPresentation proofArena) {
+                            // Opt-in public-deck screenshot proof; never submits a game command.
+                            float deadline=Time.realtimeSinceStartup+10;
+                            while(surface.ExpectedArtworkCount>surface.PresentedArtworkCount && Time.realtimeSinceStartup<deadline){host.Tick();yield return null;}
+                            proofArena.InspectCard(proofCard.ObjectId);yield return null;yield return null;
+                            var label=surface.InspectionView.Q<Label>("rules");var symbols=surface.InspectionView.Q<RulesTextView>();
+                            var viewport=surface.InspectionView.Q<ScrollView>("rules-scroll").contentViewport;
+                            var textElement=symbols.SymbolCount>0?(VisualElement)symbols:label;
+                            bool visible=textElement.resolvedStyle.display==DisplayStyle.Flex && textElement.worldBound.width>20 && textElement.worldBound.height>5 && textElement.worldBound.Overlaps(viewport.worldBound);
+                            Write("rules-text-proof",new JObject{["authenticated"]=host.Authenticated,["name"]=proofCard.Characteristics.Name,["engine_rules"]=ViewerCardSurface.DisplayRules(proofCard.Characteristics.CurrentAbilities,proofCard.Characteristics.EngineViewText),["displayed_rules"]=label.text,["mana_cost"]=surface.InspectionView.Q<ManaCostView>().Cost,["visible"]=visible});
+                            yield return new WaitForEndOfFrame();ScreenCapture.CaptureScreenshot(Path.Combine(output,"rules-text-proof.png"));
+                            yield return new WaitForSecondsRealtime(.3f);userRequested=true;quit=true;
+                        }
+                    }
+                    if(!quit && acceptance!=null && CaptureReady(frame)){acceptance.SetAvailableLands(Volatile.Read(ref availableLands),Volatile.Read(ref availableCreatures),Volatile.Read(ref untappedLandIds),Volatile.Read(ref counterBallistaIds));quit=frame.UnsupportedFields.Contains("decision") || acceptance.Tick(host,panel,frame);}
                 }
                 yield return null;
             }

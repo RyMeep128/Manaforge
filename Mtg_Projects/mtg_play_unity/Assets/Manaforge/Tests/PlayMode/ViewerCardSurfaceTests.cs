@@ -21,7 +21,7 @@ namespace Manaforge.Play.Tests
             public Scope(Action dispose){this.dispose=dispose;}
             public void Dispose(){dispose();}
         }
-        internal static ProjectedCardFrame Frame(string viewer="one",long revision=1,bool hidden=false,string name="Viewer text",bool empty=false,string session="fixture-0001",bool artwork=false,bool? faceDownState=false,int objectCount=1)
+        internal static ProjectedCardFrame Frame(string viewer="one",long revision=1,bool hidden=false,string name="Viewer text",bool empty=false,string session="fixture-0001",bool artwork=false,bool? faceDownState=false,int objectCount=1,bool missingRules=false,bool emptyAbilities=false,string typeLine=null)
         {
             var corpus=JObject.Parse(File.ReadAllText(Path.Combine(Application.dataPath,"../../mtg_play/protocol/fixtures/wire-receive-v1.json")));
             var message=(JObject)corpus["positive"][0]["envelope"];var snapshot=message["body"]["snapshot"];
@@ -33,6 +33,9 @@ namespace Manaforge.Play.Tests
             else {card["characteristics"]["name"]=name;card["characteristics"]["power"]="4";card["characteristics"]["toughness"]="5";card["characteristics"]["engine_view_text"]=new JArray("Not complete Oracle text");}
             if(empty)snapshot["objects"]=new JArray();
             else for(int i=1;i<objectCount;i++){var extra=card.DeepClone();extra["object_id"]="fixture-extra-"+i;((JArray)snapshot["objects"]).Add(extra);}
+            if(!hidden && missingRules)card["characteristics"]["engine_view_text"]=JValue.CreateNull();
+            if(!hidden && emptyAbilities)card["characteristics"]["current_abilities"]=new JArray();
+            if(!hidden && typeLine!=null)card["characteristics"]["type_line"]=typeLine;
             return ViewerCardProjection.ParseSnapshot(message.ToString(),session,viewer,0,true);
         }
         [UnitySetUp] public IEnumerator Setup()

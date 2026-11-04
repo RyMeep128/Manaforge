@@ -243,6 +243,7 @@ def run_live_game(
     acceptance=False,
     commander_scenario="single",
     no_capture=False,
+    rules_text_proof=None,
     presentation="current",
     xmage_root=transport.DEFAULT_BUNDLE,
     jdk_path=transport.DEFAULT_JDK,
@@ -456,6 +457,8 @@ def run_live_game(
                 str(root),
             ]
             command += ["-manaforgePresentation", presentation]
+            if rules_text_proof is not None:
+                command += ["-manaforgeRulesTextProof", "1"]
             if no_capture:
                 command += ["-manaforgeNoCapture", "1"]
             if acceptance:
@@ -507,6 +510,17 @@ def run_live_game(
             if owner.client_exit_code != 0:
                 raise LiveGameError("UNITY_GAME_PLAYER_FAILED")
             closed = wait_json("game-closed", 1)
+            if rules_text_proof is not None:
+                certificate = wait_json("rules-text-proof", 1)
+                if (
+                    not (certificate.get("displayed_rules") or "").strip()
+                    or certificate.get("visible") is not True
+                ):
+                    raise LiveGameError("UNITY_RULES_TEXT_UNPROVEN")
+                destination = Path(rules_text_proof)
+                destination.mkdir(parents=True, exist_ok=False)
+                for name in ("rules-text-proof.json", "rules-text-proof.png"):
+                    shutil.copyfile(root / name, destination / name)
             focused_scenario = acceptance and commander_scenario not in (
                 "single",
                 "tax",
@@ -552,6 +566,10 @@ def run_live_game(
             result = closed
         finally:
             key[:] = bytes(len(key))
+            if rules_text_proof is not None and (root / "player.log").is_file():
+                destination = Path(rules_text_proof)
+                destination.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(root / "player.log", destination / "player.log")
             launch.close()
 
     try:
