@@ -32,6 +32,15 @@ public final class RealPaymentGameChecks {
         game.getState().setActivePlayerId(payer.getId());game.getState().setPriorityPlayerId(payer.getId());
         game.getState().setTurnNum(4);game.getTurn().setPhase(new mage.game.turn.PreCombatMainPhase());
         payer.init(game);opponent.init(game);payer.getManaPool().setAutoPayment(true);
+        // GameImpl.init normally installs these after pregame. Include them in
+        // the focused board fixture rather than testing an unrealistically empty rules registry.
+        for(mage.abilities.effects.Effect rule:new mage.abilities.effects.Effect[]{
+            new mage.abilities.effects.keyword.ShieldCounterEffect(),new mage.abilities.effects.keyword.StunCounterEffect(),
+            new mage.abilities.effects.keyword.FinalityCounterEffect()})
+            game.getState().addAbility(new mage.abilities.common.SimpleStaticAbility(Zone.ALL,rule),(Card)null);
+        game.initGameDefaultWatchers();
+        game.getState().addHelperEmblem(new mage.game.command.emblems.RadiationEmblem(),payer.getId());
+        game.getState().addHelperEmblem(new mage.game.command.emblems.RadiationEmblem(),opponent.getId());
         Card first=new mage.cards.basiclands.Mountain(payer.getId(),info("Mountain"));
         Card second=new mage.cards.basiclands.Mountain(payer.getId(),info("Mountain"));
         load(game,first,Zone.BATTLEFIELD);load(game,second,Zone.BATTLEFIELD);

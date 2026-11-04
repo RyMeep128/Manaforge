@@ -1,8 +1,8 @@
 """Focused Java payment policy checks; optional read-only pinned XMage API inspection.
 
-No engine process is started, no runtime is downloaded or modified, and this is
-not real-game payment acceptance. --verify-pinned-api checks binary provenance
-before javap inspects any engine class.
+No runtime is downloaded or modified. --verify-pinned-api checks binary provenance
+before javap inspects any engine class. --real-game-payment additionally runs
+focused native casting/payment acceptance in real game objects, without Unity.
 """
 import argparse
 import hashlib
