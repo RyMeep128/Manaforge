@@ -28,6 +28,8 @@ reports are in the [archive](archive/README.md).
 
 ## Play implementation references
 
+Current visual-overhaul direction: [reusable elements and default 1v1 composition](play.md#reusable-visual-elements-and-views).
+
 These references remain separate because they describe distinct ownership,
 protocol, renderer, and engine boundaries. A historical local pass count is not
 current-revision CI or owner sign-off. See [Play acceptance](play.md#acceptance-and-references).

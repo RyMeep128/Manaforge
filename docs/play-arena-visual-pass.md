@@ -39,6 +39,12 @@ visual parity. Earlier owner references are documented in play-live-integration.
 
 ## View architecture
 
+Current architectural direction: the Arena table is the default **1v1 composition**.
+Its reusable elements must also work in other compositions. See
+[shared elements and view ownership](play.md#reusable-visual-elements-and-views)
+for the current extraction plan; the implementation journal below records its
+original increment and does not establish that extraction is complete.
+
 `ArenaGameplayPresentation` is one implementation of `IGameplayPresentation`.
 It is the default normal-game view through LiveGameScene's existing presentation
 factory. The original `TableGameplayPresentation` is retained, and callers can
