@@ -101,7 +101,10 @@ remain intact even when upstream source exists.
 
 Deck totals deduplicate positive-quantity mainboard, commander and sideboard
 entries by canonical Oracle ID (exact normalized name only when no ID exists).
-Generated token/emblem entries and display copies are reported separately.
+Generated token/emblem entries and display copies are reported separately. Token
+dependency counts describe unresolved catalog evidence; generated token correctness
+requires engine-level investigation and is not inferred from missing card records.
+Identity-review counts are not confirmed absent implementations.
 Rules availability does not certify a legal deck or successful launch: format,
 quantities and engine validation are not executed by this read-only audit.
 Saved files are hashed before/after and never rewritten. Existing locally cached

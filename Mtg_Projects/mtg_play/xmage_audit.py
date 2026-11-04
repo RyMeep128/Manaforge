@@ -300,6 +300,40 @@ def assemble(cards, engine, upstream, decks):
         and r["upstream_implemented"]
         for r in compared
     )
+    counts["missing_commander_by_status"] = dict(
+        sorted(
+            Counter(
+                r["status"]
+                for r in compared
+                if r["status"] != "available"
+                and r["category"] == "paper_rules"
+                and r["commander_legality"] == "legal"
+            ).items()
+        )
+    )
+    counts["missing_commander_upstream"] = sum(
+        r["status"] != "available"
+        and r["category"] == "paper_rules"
+        and r["commander_legality"] == "legal"
+        and r["upstream_implemented"]
+        for r in compared
+    )
+    counts["paper_identity_review"] = sum(
+        r["category"] == "paper_rules" and r["identity_review_required"]
+        for r in compared
+    )
+    counts["token_dependency_catalog_unresolved"] = sum(
+        r["category"] == "token_dependency" and r["status"] != "available"
+        for r in compared
+    )
+    counts["missing_novelty_by_marker"] = {
+        marker: sum(
+            marker in r.get("novelty_markers", [])
+            for r in compared
+            if r["category"] == "novelty" and r["status"] != "available"
+        )
+        for marker in ("silver", "acorn", "playtest")
+    }
     return dict(counts=counts, cards=compared, sets=sets, decks=decks)
 
 
@@ -392,6 +426,20 @@ def write(output, report):
     ]
     lines += [
         "",
+        "## Novelty and upstream comparison",
+        "",
+        "Novelty marker totals (markers can overlap): "
+        + json.dumps(
+            report["counts"].get("missing_novelty_by_marker", {}), sort_keys=True
+        )
+        + ". Full inventory: novelty-missing.csv.",
+        "Missing ordinary paper cards with newer upstream source: "
+        + str(report["counts"]["missing_paper_upstream"])
+        + "; Commander-legal subset: "
+        + str(report["counts"].get("missing_commander_upstream", 0))
+        + ". See upstream-missing.csv for exact names and source references.",
+        "The missing totals mean no confirmed installed card support. Identity-review cards are not proven absent implementations. Token dependencies are catalog-unresolved generated objects: the catalog probe cannot determine whether the engine can generate them. A missing token class is not established by these totals.",
+        "",
         "## Saved decks",
         "",
         "| Deck | Format | Available | Unsupported | Rules available | Missing |",
@@ -408,6 +456,18 @@ def write(output, report):
         "## Recommendation",
         "",
         "Resolve saved-deck blockers first; then review an upstream update for Commander cards with source registrations. Implement remaining Commander cards in mechanic batches after confirming engine support. No popularity score is used.",
+        "",
+        "## Token entries in saved decks",
+        "",
+        *[
+            f"- {d['name']}: "
+            + ", ".join(
+                r["name"] + " [" + str(r.get("oracle_id")) + "]"
+                for r in d.get("token_dependencies", [])
+            )
+            for d in report["decks"]
+            if d.get("token_dependencies")
+        ],
         "",
         "## Input warnings",
         "",
