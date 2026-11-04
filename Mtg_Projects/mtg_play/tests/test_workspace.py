@@ -1,4 +1,5 @@
 """Unity launcher regression coverage for GitHub Actions."""
+
 from dataclasses import replace
 from unittest.mock import Mock
 
@@ -15,7 +16,9 @@ def launcher(monkeypatch):
     app = W.QApplication.instance() or W.QApplication([])
     monkeypatch.setattr(module.PlayWorkspace, "load_decks", lambda self: None)
     widget = module.PlayWorkspace(None, lambda: None)
-    decks = tuple(SavedDeck(None, DeckDocument(), (), source_id=str(i)) for i in range(2))
+    decks = tuple(
+        SavedDeck(None, DeckDocument(), (), source_id=str(i)) for i in range(2)
+    )
     widget._catalog_loaded("catalog", "completed", (decks, ()))
     yield widget
     widget.deleteLater()
@@ -37,7 +40,9 @@ def test_only_start_button_launches_unity_with_selected_decks(launcher, monkeypa
     run = Mock(return_value={"outcome": "win"})
     monkeypatch.setattr(module, "run_live_game", run)
     queued = []
-    monkeypatch.setattr(launcher.native_jobs, "submit", lambda work, **kw: queued.append(work))
+    monkeypatch.setattr(
+        launcher.native_jobs, "submit", lambda work, **kw: queued.append(work)
+    )
     launcher.start_button.click()
     assert len(queued) == 1
     queued[0](None, None)
@@ -49,7 +54,10 @@ def test_only_start_button_launches_unity_with_selected_decks(launcher, monkeypa
 
 def test_blocked_deck_disables_start_and_explains_reason(launcher):
     blocked = DeckReadiness("freeform", "blocked", ("Deck needs review",))
-    launcher._decks = (replace(launcher._decks[0], checks=(blocked,)), launcher._decks[1])
+    launcher._decks = (
+        replace(launcher._decks[0], checks=(blocked,)),
+        launcher._decks[1],
+    )
     select_decks(launcher)
     assert not launcher.start_button.isEnabled()
     assert "Deck needs review" in launcher.status.text()

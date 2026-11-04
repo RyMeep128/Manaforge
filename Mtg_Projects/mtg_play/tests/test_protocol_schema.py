@@ -30,7 +30,6 @@ def test_schema_is_valid_and_matches_contracts():
     assert SCHEMA == contract_schema()
 
 
-
 @pytest.mark.parametrize("case", FIXTURES["cases"], ids=lambda case: case["name"])
 def test_sanitized_adapter_fixtures_validate(case):
     validate(case["record"], case["payload"])
