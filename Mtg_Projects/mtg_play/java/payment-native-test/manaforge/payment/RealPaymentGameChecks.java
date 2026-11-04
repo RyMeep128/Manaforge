@@ -47,6 +47,10 @@ public final class RealPaymentGameChecks {
         Card herald=new mage.cards.w.WirewoodHerald(opponent.getId(),info("Wirewood Herald"));
         Card elves=new mage.cards.l.LlanowarElves(opponent.getId(),info("Llanowar Elves"));
         load(game,herald,Zone.BATTLEFIELD);load(game,elves,Zone.BATTLEFIELD);
+        // A registered battlefield ability in a library must not affect this board.
+        // Real games register abilities for the whole deck, unlike a five-card fixture.
+        Card inactive=new mage.cards.m.Manabarbs(opponent.getId(),info("Manabarbs"));
+        load(game,inactive,Zone.LIBRARY);
         Card spell=doubleRed?new mage.cards.e.EmberHauler(payer.getId(),info("Ember Hauler")):
             new mage.cards.f.FoundryStreetDenizen(payer.getId(),info("Foundry Street Denizen"));
         load(game,spell,Zone.HAND);game.applyEffects();game.saveState(false);
