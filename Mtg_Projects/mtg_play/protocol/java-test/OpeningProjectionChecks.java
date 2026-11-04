@@ -847,7 +847,9 @@ public final class OpeningProjectionChecks {
         JsonObject second=projection.project(raw,prompt());shape(second);
         check(identity.equals(second.getAsJsonArray("objects").get(0).getAsJsonObject().get("presentation_id").getAsString()));
         check(!first.getAsJsonArray("objects").get(0).getAsJsonObject().get("object_id").equals(second.getAsJsonArray("objects").get(0).getAsJsonObject().get("object_id")));
-        fails("STALE_DECISION",()->projection.claimBoolean(stale,"session","human","raw-game","raw-human",41,8));
+        fails("STALE_REVISION",()->projection.claimBoolean(stale,"session","human","raw-game","raw-human",41,8));
+        JsonObject oldDecision=JsonParser.parseString(stale).getAsJsonObject();oldDecision.getAsJsonObject("body").add("revision",second.get("revision"));
+        fails("STALE_DECISION",()->projection.claimBoolean(oldDecision.toString(),"session","human","raw-game","raw-human",41,8));
         JsonObject row=raw.getAsJsonArray("hand").get(0).getAsJsonObject();row.addProperty("hidden",true);
         JsonObject hidden=projection.project(raw,prompt());shape(hidden);check(hidden.getAsJsonArray("objects").get(0).getAsJsonObject().get("presentation_id").isJsonNull());
         row.addProperty("hidden",false);JsonObject revealed=projection.project(raw,prompt());shape(revealed);

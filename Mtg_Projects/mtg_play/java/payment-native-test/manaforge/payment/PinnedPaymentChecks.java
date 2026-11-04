@@ -296,6 +296,7 @@ public final class PinnedPaymentChecks {
             switch(method.getName()){
                 case "getPlayer":return payer;case "getCard":return card;case "getState":return state;
                 case "getPermanent":return permanents.get(args[0]);case "hasEnded":return false;
+                case "inCheckPlayableState":return false; // Paused payment, not a speculative playability simulation.
                 default:throw new AssertionError("UNEXPECTED_MOUNTAIN_GAME_CALL_"+method.getName());
             }
         });

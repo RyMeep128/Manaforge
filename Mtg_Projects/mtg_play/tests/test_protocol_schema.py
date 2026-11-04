@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 from jsonschema import Draft202012Validator, ValidationError
 
+from mtg_play.contracts import CardObservation
 from mtg_play.protocol_schema import contract_schema
 
 DIRECTORY = Path(__file__).resolve().parents[1] / "protocol"
@@ -109,17 +110,22 @@ def test_concealed_object_cannot_carry_identity(field, value):
         validate("GameSnapshot", payload)
 
 
-def test_hidden_observation_cannot_carry_printing_information():
-    observation = dict(
-        observation_id="fixture",
-        source="look",
-        hidden=True,
-        name=None,
-        set_code=None,
-        collector_number=None,
-    )
+@pytest.mark.parametrize(
+    "field",
+    (
+        "name",
+        "set_code",
+        "collector_number",
+        "group_id",
+        "group_label",
+        "oracle_id",
+        "printing_id",
+    ),
+)
+def test_hidden_observation_cannot_carry_printing_information(field):
+    observation = CardObservation("fixture", "look", True).to_dict()
     validate("CardObservation", observation)
-    observation["collector_number"] = "174"
+    observation[field] = "LEAK"
     with pytest.raises(ValidationError):
         validate("CardObservation", observation)
 
