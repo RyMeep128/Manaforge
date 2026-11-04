@@ -14,7 +14,7 @@ namespace Manaforge.Play.Tests
             var node=new GameObject("Library animation test");var settings=ScriptableObject.CreateInstance<PanelSettings>();settings.themeStyleSheet=Resources.Load<ThemeStyleSheet>("CardTheme");
             var doc=node.AddComponent<UIDocument>();doc.panelSettings=settings;var root=doc.rootVisualElement;root.style.width=1280;root.style.height=720;
             var local=new Label();var opponent=new Label();root.Add(local);root.Add(opponent);bool reduced=false;
-            var motion=new ArenaLibraryMotion(root,local,opponent,()=>reduced);
+            var motion=new ArenaLibraryMotion(root,player=>new LibraryMotionAnchors(new Vector2(40,100),new Vector2(600,600)),()=>reduced);
             try{
                 var envelope=(JObject)JObject.Parse(File.ReadAllText(Path.Combine(Application.dataPath,"../../mtg_play/protocol/fixtures/receive-history-v1.json")))["cases"][0]["steps"][0]["envelope"].DeepClone();
                 var snapshot=envelope["body"]["snapshot"];snapshot["phase"]="PRECOMBAT_MAIN";var player=snapshot["players"][0];player["library_count"]=50;player["hand_count"]=6;

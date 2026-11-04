@@ -1,120 +1,60 @@
-#arena-table { background-color: rgb(17,26,30); color: rgb(238,225,200); }
+/* Default 1v1 composition geometry. Component appearance lives in GameplayTheme.uss. */
 .table-cards, #board-navigation, #battlefield-links { position: absolute; left: 0; right: 0; top: 0; bottom: 0; }
-#table-phase { position: absolute; top: 16px; left: 205px; width: 300px; color: rgb(230,221,202); font-size: 15px; white-space: normal; padding: 3px 10px; }
-#opponent-seat, #local-seat { position: absolute; left: 50%; margin-left: -42px; width: 84px; height: 84px; background-color: rgba(13,17,22,.96); border-radius: 42px; border-width: 2px; border-color: rgb(161,133,84); align-items: center; justify-content: center; }
-#opponent-seat { top: 54px; } #local-seat { bottom: 145px; }
-#seat-life { font-size: 36px; color: rgb(247,231,192); -unity-text-align: middle-center; margin: 0; padding: 0; transition-property: scale, color; transition-duration: .16s; }
-#seat-life.life-changed { scale: 1.14 1.14; color: white; }
-#seat-caption { position: absolute; top: 71px; left: -34px; width: 150px; height: 28px; -unity-text-align: middle-center; font-size: 13px; color: rgb(233,215,176); }
-#opponent-seat.has-priority, #local-seat.has-priority { border-color: rgb(255,178,64); border-width: 3px; background-color: rgba(37,27,18,.98); }
-#opponent-seat.targetable, #local-seat.targetable, #local-seat:focus, #opponent-seat:focus { border-color: rgb(255,226,145); border-width: 3px; }
+#table-phase { position: absolute; top: 16px; left: 205px; width: 300px; white-space: normal; padding: 3px 10px; }
+#opponent-seat, #local-seat { position: absolute; left: 50%; margin-left: -42px; }
+#opponent-seat { top: 54px; }
+#local-seat { bottom: 145px; }
 #opponent-hand { position: absolute; top: -68px; left: 50%; margin-left: -235px; width: 470px; height: 115px; }
 .opponent-hand-back { position: absolute; width: 70px; height: 100px; }
-.neutral-card-back { background-color: rgb(39,30,24); border-color: rgb(140,108,57); border-width: 2px; border-radius: 6px; }
-.card-back-mark { position: absolute; top: 16%; left: 10%; width: 80%; height: 22%; }
 #table-choices { position: absolute; right: 20px; bottom: 35px; width: 275px; max-height: 285px; }
-#table-choices #viewer-decision-panel { background-color: rgba(10,15,22,.72); border-radius: 10px; }
 #table-choices #decision-controls { flex-direction: column; }
-#table-choices #decision-mana-pool { white-space: normal; font-size: 13px; }
-#table-choices Button { flex-grow: 0; min-width: 110px; white-space: normal; background-color: rgb(51,45,39); }
-#table-choices .arena-primary { margin-top: 8px; margin-bottom: 4px; }
-#table-choices Button:hover, #table-choices Button:focus { -unity-background-image-tint-color: rgb(255,234,192); border-width: 2px; border-color: rgb(255,202,112); }
-#table-choices Button:disabled { opacity: .45; }
+#table-choices #decision-mana-pool { white-space: normal; }
+#table-choices Button { flex-grow: 0; min-width: 110px; white-space: normal; }
+#table-choices .mf-primary { margin-top: 8px; margin-bottom: 4px; }
 #board-choice-alternatives { margin-top: 3px; margin-bottom: 4px; }
-#board-choice-alternatives .unity-foldout__text { color: rgb(184,182,175); font-size: 13px; }
 #table-choices.opening-choices { width: 520px; right: 50%; margin-right: -260px; bottom: 35px; max-height: 170px; }
-#table-choices.opening-choices #viewer-decision-panel { background-color: rgba(8,13,21,.7); }
 #table-choices.opening-choices #decision-controls { flex-direction: row; justify-content: center; }
-#table-choices.opening-choices .arena-action { width: 190px; margin-left: 20px; margin-right: 20px; flex-shrink: 0; }
+#table-choices.opening-choices .mf-action { width: 190px; margin-left: 20px; margin-right: 20px; flex-shrink: 0; }
 #table-choices.opening-choices #decision-prompt { -unity-text-align: middle-center; }
-#table-zones { position: absolute; left: 24px; bottom: 205px; width: 110px; font-size: 13px; color: rgb(221,206,174); white-space: normal; }
-#game-commanders { position: absolute; left: 24px; top: 160px; max-width: 130px; white-space: normal; font-size: 13px; }
-.table-card { border-width: 2px; border-color: rgba(0,0,0,0); }
-#arena-table .table-card { transition-property: scale, translate, rotate; transition-duration: .12s, .12s, .18s; }
-.table-card:focus, .table-card:hover { border-color: rgb(245,207,135); }
-#arena-table .table-card.actionable { border-color: rgb(97,211,231); }
-#arena-table .table-card.targetable { border-color: rgb(255,208,96); border-width: 3px; }
-#arena-table .table-card.attacking { border-color: rgb(244,107,54); }
-#arena-table .table-card.blocking { border-color: rgb(97,175,242); }
-#arena-table .table-card.selected { border-color: rgb(255,224,91); border-width: 4px; }
-#arena-table .table-card.gesture-source { opacity: .6; }
-#live-markers { position: absolute; bottom: 20px; left: 3px; right: 3px; background-color: rgba(20,12,8,.96); color: rgb(255,220,160); font-size: 12px; white-space: normal; -unity-text-align: middle-center; }
+#table-zones { position: absolute; left: 24px; bottom: 205px; width: 110px; white-space: normal; }
+#game-commanders { position: absolute; left: 24px; top: 160px; max-width: 130px; white-space: normal; }
+#live-markers { position: absolute; bottom: 20px; left: 3px; right: 3px; white-space: normal; -unity-text-align: middle-center; }
 .table-inspection { position: absolute; left: 25px; top: 95px; }
 #close-inspection { position: absolute; left: 25px; top: 60px; width: 290px; height: 30px; }
-#table-result { position: absolute; top: 35%; left: 25%; right: 25%; background-color: rgba(12,16,23,.92); border-top-width: 1px; border-bottom-width: 1px; border-color: rgb(210,165,86); padding: 30px; font-size: 42px; -unity-text-align: middle-center; white-space: normal; }
-#table-motion { position: absolute; right: 20px; top: 16px; color: rgb(217,210,193); font-size: 12px; }
-#arena-table.reduced-motion .table-card, #arena-table.reduced-motion #seat-life { transition-duration: 0s; }
-.row-navigation { position: absolute; flex-direction: row; align-items: center; background-color: rgba(10,14,19,.7); border-radius: 5px; }
-.row-navigation Button { min-width: 26px; height: 28px; color: rgb(255,218,153); background-color: rgb(49,38,25); }
-.row-navigation Button:focus { border-color: rgb(255,218,153); border-width: 2px; }
-#board-input-hint { position: absolute; top: 45%; left: 200px; right: 315px; -unity-text-align: middle-center; color: rgb(247,221,169); font-size: 14px; padding: 4px; }
-#board-drag-ghost { position: absolute; padding: 8px; background-color: rgba(20,17,13,.9); border-width: 2px; border-color: rgb(255,208,96); color: rgb(255,232,184); font-size: 18px; border-radius: 6px; }
-#board-object-menu { position: absolute; width: 300px; max-height: 260px; background-color: rgb(20,25,32); border-width: 1px; border-color: rgb(211,173,107); padding: 12px; }
+#table-result { position: absolute; top: 35%; left: 25%; right: 25%; padding: 30px; -unity-text-align: middle-center; white-space: normal; }
+#table-motion { position: absolute; right: 20px; top: 16px; }
+.row-navigation { position: absolute; flex-direction: row; align-items: center; }
+.row-navigation Button { min-width: 26px; height: 28px; }
+#board-input-hint { position: absolute; top: 45%; left: 200px; right: 315px; -unity-text-align: middle-center; padding: 4px; }
+#board-drag-ghost { position: absolute; padding: 8px; }
+#board-object-menu { position: absolute; width: 300px; max-height: 260px; padding: 12px; }
 #board-object-menu Button { white-space: normal; }
-#local-library, #opponent-library { position: absolute; right: 32px; width: 76px; height: 104px; background-color: rgb(29,24,22); color: rgb(214,187,132); border-width: 2px; border-color: rgb(125,101,66); border-radius: 7px; -unity-text-align: middle-center; font-size: 14px; }
-#local-library { bottom: 235px; } #opponent-library { top: 110px; }
-.library-flight { position: absolute; width: 80px; height: 112px; color: rgb(208,168,89); font-size: 38px; -unity-text-align: middle-center; }
-
+#local-library, #opponent-library { position: absolute; right: 32px; width: 76px; height: 104px; -unity-text-align: middle-center; }
+#local-library { bottom: 235px; }
+#opponent-library { top: 110px; }
+.library-flight { position: absolute; width: 80px; height: 112px; -unity-text-align: middle-center; }
 #arena-table.opening-state #local-seat { left: 14%; bottom: 70px; }
-
-/* Public zones and hover inspection share the live surface; no duplicate card renderer. */
 #public-zone-choices { position: absolute; left: 18px; bottom: 92px; width: 160px; }
-#public-zone-choices Button { color: rgb(231,215,184); background-color: rgba(12,18,24,.88); border-width: 1px; border-color: rgb(120,102,73); border-radius: 5px; min-height: 30px; margin-top: 4px; white-space: normal; font-size: 13px; }
-#public-zone-choices Button:hover, #public-zone-choices Button:focus, #public-zone-choices .zone-open { border-color: rgb(255,213,128); background-color: rgb(54,43,29); }
-#public-zone-drawer { position: absolute; left: 150px; right: 150px; top: 24%; bottom: 29%; background-color: rgba(7,13,20,.97); border-width: 1px; border-color: rgb(172,139,83); border-radius: 12px; padding: 18px; }
-#public-zone-title { font-size: 22px; color: rgb(242,219,173); }
-#close-public-zone { position: absolute; right: 16px; top: 14px; height: 30px; color: rgb(242,219,173); background-color: rgb(41,36,29); }
-#close-public-zone:focus, #close-inspection:focus { border-width: 2px; border-color: rgb(255,220,147); }
-#stack-title { position: absolute; right: 20px; top: 31%; width: 130px; font-size: 13px; color: rgb(231,207,160); -unity-text-align: middle-center; }
+#public-zone-choices Button { min-height: 30px; margin-top: 4px; white-space: normal; }
+#public-zone-drawer { position: absolute; left: 150px; right: 150px; top: 24%; bottom: 29%; padding: 18px; }
+#close-public-zone { position: absolute; right: 16px; top: 14px; height: 30px; }
+#stack-title { position: absolute; right: 20px; top: 31%; width: 130px; -unity-text-align: middle-center; }
 #hand-navigation { height: 26px; }
-#arena-table #game-leave { color: rgb(239,222,186); }
-#arena-table .table-inspection { border-width: 2px; border-color: rgb(218,177,103); }
 #arena-table #table-result { padding-top: 44px; padding-bottom: 44px; }
-#arena-table #decision-status { color: rgb(208,202,190); }
-#arena-table #viewer-decision-panel.command-pending { border-left-width: 3px; border-left-color: rgb(101,185,222); }
-#arena-table #viewer-decision-panel.command-uncertain { border-left-width: 3px; border-left-color: rgb(245,175,78); }
-#arena-table #viewer-decision-panel.command-confirmed { border-left-width: 3px; border-left-color: rgb(146,201,148); }
-
-/* Keep auxiliary controls in the same source-only treatment as the live action rail. */
-#close-inspection, #close-public-zone { background-color: rgba(19,25,31,.96); color: rgb(239,218,178); border-width: 1px; border-color: rgb(160,130,82); border-radius: 5px; font-size: 14px; }
-#close-inspection:hover, #close-public-zone:hover { background-color: rgb(55,44,29); border-color: rgb(244,202,123); }
-#public-zone-drawer #public-zone-title { -unity-font-style: bold; }
-
 #arena-table.browsing-public-zone #board-input-hint, #arena-table.browsing-public-zone #battlefield-links { visibility: hidden; }
-
-/* Arena-inspired zone racks: a card back for library, visible-art previews for public zones. */
-#arena-table .zone-pile { position: absolute; background-color: rgb(21,20,22); border-width: 1px; border-color: rgb(151,121,74); border-radius: 5px; overflow: visible; }
-#arena-table .zone-pile:hover, #arena-table .zone-pile:focus, #arena-table .zone-pile.zone-open { border-width: 2px; border-color: rgb(255,213,132); }
-.zone-pile-sheet { position: absolute; width: 66px; height: 92px; background-color: rgb(30,26,25); border-width: 1px; border-color: rgb(109,94,71); border-radius: 4px; }
-.zone-pile-face { position: absolute; left: 0; right: 0; top: 0; bottom: 0; border-radius: 4px; }
-.zone-graveyard #zone-back { background-color: rgb(45,44,40); }
-.zone-exile #zone-back { background-color: rgb(35,37,56); }
-#zone-fallback { position: absolute; left: 3px; right: 3px; top: 20px; bottom: 20px; font-size: 10px; color: rgb(225,211,181); white-space: normal; -unity-text-align: middle-center; }
-#zone-count { position: absolute; right: -4px; bottom: -3px; min-width: 23px; height: 23px; padding: 2px 5px; background-color: rgb(12,16,21); border-width: 1px; border-color: rgb(202,163,94); border-radius: 12px; color: rgb(248,230,187); font-size: 14px; -unity-text-align: middle-center; }
-#zone-caption { position: absolute; top: 94px; left: -5px; width: 76px; font-size: 11px; color: rgb(239,218,176); -unity-text-align: middle-center; }
+#arena-table .zone-pile { position: absolute; overflow: visible; }
 #public-zone-drawer { top: 16%; bottom: 21%; }
-#zone-browser-tabs { position: absolute; top: 60px; left: 20px; right: 20px; flex-direction: row; }
-#zone-browser-tabs Button { min-width: 120px; height: 30px; margin-right: 8px; color: rgb(220,207,181); background-color: rgb(25,30,37); border-width: 1px; border-color: rgb(102,94,78); border-radius: 5px; }
-#zone-browser-tabs Button.zone-tab-selected, #zone-browser-tabs Button:hover, #zone-browser-tabs Button:focus { color: rgb(255,231,177); border-color: rgb(232,188,109); background-color: rgb(59,45,28); }
-#zone-browser-summary { position: absolute; left: 24px; right: 24px; bottom: 16px; font-size: 13px; color: rgb(216,202,176); white-space: normal; -unity-text-align: middle-center; }
-#zone-browser-back { position: absolute; top: 130px; left: 50%; margin-left: -60px; width: 120px; height: 168px; }
 #game-commanders { top: 360px; }
-
 #arena-table.opening-state .zone-pile { visibility: hidden; }
-
-
-/* Integrated library ordering and Unity priority controls. */
-
 #table-choices.library-ordering { left: 15%; right: 15%; top: 18%; bottom: auto; width: auto; max-height: 65%; }
-#table-choices.library-ordering #viewer-decision-panel { background-color: rgba(10,15,22,.98); padding: 18px; }
-#table-choices.library-ordering #decision-prompt { font-size: 18px; white-space: normal; flex-shrink: 0; }
+#table-choices.library-ordering #viewer-decision-panel { padding: 18px; }
+#table-choices.library-ordering #decision-prompt { white-space: normal; flex-shrink: 0; }
 #table-choices.library-ordering #decision-controls { flex-direction: row; flex-wrap: wrap; align-items: flex-start; }
 #library-order-help { width: 100%; margin-bottom: 12px; white-space: normal; }
-#library-choice { width: 170px; margin: 6px; padding: 6px; border-width: 1px; border-color: rgb(161,133,84); }
+#library-choice { width: 170px; margin: 6px; padding: 6px; }
 #library-choice Button { width: 100%; min-height: 52px; white-space: normal; }
-
-#unity-priority-controls { position: absolute; right: 16px; top: 16px; width: 285px; padding: 10px; background-color: rgba(10,15,22,.94); border-radius: 8px; }
-#unity-priority-controls .unity-toggle__label, #unity-priority-controls .unity-foldout__text { color: rgb(238,225,200); white-space: normal; }
-#unity-priority-status { white-space: normal; font-size: 12px; color: rgb(210,202,181); margin-top: 4px; margin-bottom: 4px; }
+#unity-priority-controls { position: absolute; right: 16px; top: 16px; width: 285px; padding: 10px; }
+#unity-priority-controls .unity-toggle__label, #unity-priority-controls .unity-foldout__text { white-space: normal; }
+#unity-priority-status { white-space: normal; margin-top: 4px; margin-bottom: 4px; }
 #unity-priority-controls Button { white-space: normal; min-height: 28px; margin-top: 4px; }
 #unity-priority-stops { max-height: 230px; margin-top: 8px; }
