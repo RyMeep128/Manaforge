@@ -13,10 +13,11 @@ namespace Manaforge.Play
         private readonly Dictionary<CardView,Binding> bindings=new Dictionary<CardView,Binding>();
         private readonly Label hint,ghost;private readonly Image ghostArtwork;private readonly VisualElement menu;
         private ViewerDecisionOffer offer,gestureOffer;private Binding pressed;private Vector2 start;private int pointer;private bool dragging,disposed;
+        private int gestureClickCount;
         private readonly EventCallback<KeyDownEvent> key;
         private sealed class Binding : IDisposable
         {
-            internal readonly CardView View;internal readonly string Id;
+            internal readonly CardView View;internal readonly string Id;internal bool InHand;
             private readonly EventCallback<PointerDownEvent> down;private readonly EventCallback<PointerMoveEvent> move;private readonly EventCallback<PointerUpEvent> up;
             private readonly EventCallback<PointerCaptureOutEvent> lost;private readonly EventCallback<DetachFromPanelEvent> detach;private readonly EventCallback<NavigationSubmitEvent> submit;
             internal Binding(ViewerBoardInput owner,CardView view,string id)
@@ -40,26 +41,28 @@ namespace Manaforge.Play
         {
             if(disposed)return;var current=host.PresentedDecision;
             if(!ReferenceEquals(current,offer)){CancelGesture();CloseMenu();offer=current;}
-            if(offer?.CanSubmit!=true){CancelGesture();CloseMenu();}
+            if(panel.SuppressSpatialInput || offer?.CanSubmit!=true){CancelGesture();CloseMenu();}
             var captured=offer;var frame=captured?.Frame;var decision=frame?.Decision;
             var seen=new HashSet<CardView>();
             surface.VisitPresented((card,view)=>{
                 if(card.Hidden)return;seen.Add(view);if(bindings.TryGetValue(view,out var existing) && existing.Id!=card.ObjectId){existing.Dispose();bindings.Remove(view);}if(!bindings.ContainsKey(view))bindings.Add(view,new Binding(this,view,card.ObjectId));
-                bool available=decision!=null && captured?.CanSubmit==true && panel.ObjectChoiceCount(captured,card.ObjectId)>0;
+                bool available=!panel.SuppressSpatialInput && decision!=null && captured?.CanSubmit==true && panel.ObjectChoiceCount(captured,card.ObjectId)>0;
                 view.EnableInClassList("actionable",available);view.EnableInClassList("targetable",available && decision.Options.Any(o=>o.ObjectId==card.ObjectId));
-                if(available)view.tooltip="Click or press Enter to choose. Drag to the battlefield to use the offered action. Right-click or Space to inspect.";
+                bindings[view].InHand=card.Zone=="hand";
+                if(available)view.tooltip=DeliberateHandPlay(frame,bindings[view])?"Click to preview. Double-click or drag to the battlefield to play. Enter chooses; right-click or Space inspects.":"Click or press Enter to choose. Drag to the battlefield to use the offered action. Right-click or Space to inspect.";
             });
             foreach(var view in bindings.Keys.Where(v=>!seen.Contains(v)).ToArray()){bindings[view].Dispose();bindings.Remove(view);}
-            hint.text=decision==null?"":captured?.CanSubmit!=true?"Waiting for the game to confirm your choice…":frame.Actions.Any(a=>a.Kind=="declare_attacker")?"Choose attackers on the battlefield · Finish attacks when ready":frame.Actions.Any(a=>a.Kind=="declare_blocker")?"Choose a blocker, then choose its attacker when prompted":decision.Options.Any(o=>o.ObjectId!=null || o.PlayerId!=null)?"Choose a highlighted card or player":frame.Actions.Any(a=>a.ObjectId!=null)?"Click a highlighted card, or drag it onto the battlefield":"";
-            hint.style.display=string.IsNullOrEmpty(hint.text)?DisplayStyle.None:DisplayStyle.Flex;
+            hint.text=decision==null?"":captured?.CanSubmit!=true?"Waiting for the game to confirm your choice…":frame.Actions.Any(a=>a.Kind=="declare_attacker")?"Choose attackers on the battlefield · Finish attacks when ready":frame.Actions.Any(a=>a.Kind=="declare_blocker")?"Choose a blocker, then choose its attacker when prompted":decision.Options.Any(o=>o.ObjectId!=null || o.PlayerId!=null)?"Choose a highlighted card or player":frame.Actions.Any(a=>a.ObjectId!=null)?"Double-click a hand card or drag it onto the battlefield � Click battlefield cards to choose":"";
+            hint.style.display=panel.SuppressSpatialInput || string.IsNullOrEmpty(hint.text)?DisplayStyle.None:DisplayStyle.Flex;
         }
-        private bool Current(ViewerDecisionOffer captured)=>!disposed && captured!=null && ReferenceEquals(captured,host.PresentedDecision) && captured.CanSubmit;
+        private bool Current(ViewerDecisionOffer captured)=>!panel.SuppressSpatialInput && !disposed && captured!=null && ReferenceEquals(captured,host.PresentedDecision) && captured.CanSubmit;
         private static bool Embedded(VisualElement target,CardView view){for(var e=target;e!=null && e!=view;e=e.parent)if(e is Button || e is TextField || e is Toggle)return true;return false;}
+        private static bool DeliberateHandPlay(ProjectedDecisionFrame frame,Binding binding)=>binding.InHand && (frame?.Decision?.IsPriority==true || frame?.Actions.Any(a=>a.ObjectId==binding.Id && (a.Kind=="cast_spell" || a.Kind=="play_land"))==true);
         private void Down(Binding binding,PointerDownEvent ev)
         {
             var captured=offer;var frame=captured?.Frame;
             if(ev.button!=0 || Embedded(ev.target as VisualElement,binding.View) || frame==null || !Current(captured) || frame.Decision?.Family=="mana" || panel.ObjectChoiceCount(captured,binding.Id)==0)return;
-            CancelGesture();CloseMenu();pressed=binding;gestureOffer=captured;start=ev.position;pointer=ev.pointerId;binding.View.CapturePointer(pointer);ev.StopPropagation();
+            CancelGesture();CloseMenu();binding.View.Focus();gestureClickCount=ev.clickCount;pressed=binding;gestureOffer=captured;start=ev.position;pointer=ev.pointerId;binding.View.CapturePointer(pointer);ev.StopPropagation();
         }
         private void Move(Binding binding,PointerMoveEvent ev)
         {
@@ -70,13 +73,14 @@ namespace Manaforge.Play
         }
         private void Up(Binding binding,PointerUpEvent ev)
         {
-            if(pressed!=binding || ev.pointerId!=pointer)return;var captured=gestureOffer;bool wasDrag=dragging;var position=(Vector2)ev.position;
+            if(pressed!=binding || ev.pointerId!=pointer)return;var captured=gestureOffer;bool wasDrag=dragging;int clicks=gestureClickCount;var position=(Vector2)ev.position;
             CancelGesture();ev.StopPropagation();if(!Current(captured))return;
             if(wasDrag){
                 var local=root.WorldToLocal(position);float height=root.resolvedStyle.height;
                 if(local.x<145 || local.x>root.resolvedStyle.width-285 || local.y<height*.08f || local.y>height*.78f)return;
                 var frame=captured.Frame;if(frame==null || !(frame.Actions.Any(a=>a.ObjectId==binding.Id && new[]{"play_land","cast_spell","select_object","activate","declare_attacker","declare_blocker"}.Contains(a.Kind)) || frame.Decision.Options.Any(o=>o.ObjectId==binding.Id)))return;
             }
+            if(!wasDrag && DeliberateHandPlay(captured.Frame,binding) && clicks!=2)return;
             Activate(captured,binding,position);
         }
         private void Activate(ViewerDecisionOffer captured,Binding binding,Vector2 position)

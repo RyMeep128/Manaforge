@@ -22,3 +22,9 @@ Targets, combat assignments, payments, trigger ordering, numeric input, and othe
 Ordinary snapshots retain unchanged artwork bindings and open inspection. Artwork is cleared when visibility is revoked or its identity changes. Creature stats show current power and current toughness minus marked damage; this is a display adjustment only. Each value is green above its engine-supplied original/base value, orange below it, and normal at base. Unknown or symbolic comparisons keep normal color. Damage cleanup restores the displayed toughness.
 
 Regression coverage lives in the Unity card/surface and priority tests and the Java projection checks. Run suites through GitHub Actions and verify checks against the implemented commit SHA; uncommitted changes have no exact-SHA CI evidence.
+
+## Stable yield presentation
+
+Explicit yields use the shared `YieldPresentation` model and passive `YieldStatusView`. The table view adds no yield rules or labels. The reusable component keeps one status and Cancel action mounted while fresh priority offers continue through the existing authenticated scheduler. Shared USS owns the component dimensions and 120 ms opacity transition.
+
+Ordinary yielded priority hides decision lists, transient command feedback, board hints and actionable card highlights. Required choices and configured stops show the full controls immediately while preserving the armed yield. Cancel, turn boundaries, failures, completion and session disposal restore or clear presentation through the existing policy. Reveal acknowledgement remains a separate blocking presentation. Normal automatic passing outside explicit yields keeps its existing dialogs.

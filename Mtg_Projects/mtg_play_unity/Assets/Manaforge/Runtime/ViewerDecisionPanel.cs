@@ -20,6 +20,11 @@ namespace Manaforge.Play
         private readonly Label status=new Label{name="decision-status",enableRichText=false};
         private readonly VisualElement controls=new VisualElement{name="decision-controls"};
         private readonly VisualElement pages=new VisualElement{name="decision-pages"};
+        private readonly VisualElement decisionBody=new VisualElement{name="decision-body"};
+        private readonly YieldStatusView yieldStatus;
+        private bool built;
+        public YieldPresentation Presentation {get;private set;}
+        public bool SuppressSpatialInput=>Presentation?.Compact==true;
         private string[] numericText;private int numericPage;private Button numericSubmit;
         private TrackedCommand submitted;
         private float autoAfter=-1;
@@ -47,13 +52,13 @@ namespace Manaforge.Play
             Root.style.backgroundColor=new Color(.07f,.10f,.13f);Root.style.paddingLeft=16;Root.style.paddingRight=16;Root.style.paddingTop=12;Root.style.paddingBottom=12;
             prompt.style.fontSize=20;prompt.style.color=Color.white;prompt.style.marginBottom=8;prompt.style.whiteSpace=WhiteSpace.Normal;
             status.style.fontSize=14;status.style.color=new Color(.8f,.85f,.9f);status.style.marginBottom=8;status.style.whiteSpace=WhiteSpace.Normal;pages.style.flexDirection=FlexDirection.Row;
-            Root.Add(prompt);Root.Add(manaPool);Root.Add(status);Root.Add(controls);Root.Add(pages);parent.Add(Root);Root.style.display=DisplayStyle.None;
+            decisionBody.Add(prompt);decisionBody.Add(manaPool);decisionBody.Add(status);decisionBody.Add(controls);decisionBody.Add(pages);Root.Add(decisionBody);yieldStatus=new YieldStatusView(Root,()=>{Priority.CancelYield();PrioritySettingsChanged();});parent.Add(Root);Root.style.display=DisplayStyle.None;
         }
         private void ThreadOnly(){if(Thread.CurrentThread.ManagedThreadId!=thread)throw new InvalidOperationException("VIEWER_DECISION_THREAD");}
         private void Clear()
         {
-            Root.RemoveFromClassList("command-pending");Root.RemoveFromClassList("command-uncertain");Root.RemoveFromClassList("command-confirmed");
-            autoAfter=-1;IsLibraryOrdering=false;manaInput.Refresh(null);offer=null;submitted=null;page=0;numericText=null;numericPage=0;numericSubmit=null;prompt.text="";manaPool.text="";status.text="";controls.Clear();pages.Clear();cardChoices=null;Root.style.display=DisplayStyle.None;
+            Root.RemoveFromClassList("library-ordering");Root.RemoveFromClassList("command-pending");Root.RemoveFromClassList("command-uncertain");Root.RemoveFromClassList("command-confirmed");
+            built=false;autoAfter=-1;IsLibraryOrdering=false;manaInput.Refresh(null);offer=null;submitted=null;page=0;numericText=null;numericPage=0;numericSubmit=null;prompt.text="";manaPool.text="";status.text="";controls.Clear();pages.Clear();cardChoices=null;Root.style.display=Presentation?.Compact==true?DisplayStyle.Flex:DisplayStyle.None;
             // Observe a retired task without carrying its result or touching UI from its worker.
             if(pending!=null)pending.ContinueWith(task=>{_=task.Exception;},TaskScheduler.Default);pending=null;
         }
@@ -75,9 +80,15 @@ namespace Manaforge.Play
         public void Tick()
         {
             ThreadOnly();if(disposed)return;if(priorityEnabled)MonitorPriorityCommands();var current=host.PresentedDecision;
-            if(!ReferenceEquals(current,offer)){Clear();offer=current;if(offer!=null)Build();}
+            if(!ReferenceEquals(current,offer)){Clear();offer=current;}
             if(host.Completion.IsCompleted){Priority.Suspend();autoAfter=-1;}
             Priority.Observe(offer?.Frame);
+            Presentation=YieldPresentation.Resolve(Priority.Current,offer?.Frame,PriorityControlsOpen,host.Completion.IsCompleted);
+            yieldStatus.Bind(Presentation);
+            if(!Presentation.Compact && offer!=null && !built)Build();
+            decisionBody.style.display=Presentation.Compact?DisplayStyle.None:DisplayStyle.Flex;
+            Root.style.display=Presentation.Compact || offer!=null || Presentation.Mode==YieldPresentationMode.Failed?DisplayStyle.Flex:DisplayStyle.None;
+            if(Presentation.Mode==YieldPresentationMode.Failed && offer==null){prompt.text=Presentation.Text;}
             manaInput.Refresh(offer);if(offer==null)return;
             if(pending!=null && pending.IsCompleted){
                 if(pending.Status==TaskStatus.RanToCompletion)submitted=pending.Result;
@@ -109,13 +120,14 @@ namespace Manaforge.Play
         private bool Send(ViewerDecisionOffer captured,Func<Task<TrackedCommand>> submit,bool automatic=false)
         {
             ThreadOnly();if(disposed || pending!=null || !ReferenceEquals(offer,captured) || !ReferenceEquals(host.PresentedDecision,captured) || !captured.CanSubmit)return false;
-            autoAfter=-1;if(!automatic && captured.Frame?.Decision?.IsPriority==true)Priority.CancelYield();
+            if(!automatic && SuppressSpatialInput)return false;
+            autoAfter=-1;if(!automatic && captured.Frame?.Decision?.IsPriority==true && Presentation?.Mode!=YieldPresentationMode.Stopped)Priority.CancelYield();
             submitted=null;pending=submit();if(priorityEnabled)priorityTasks.Add(pending);status.text="Sending command...";controls.SetEnabled(false);manaInput.SetEnabled(false);return true;
         }
         // Spatial input uses the same current offer, pending task and command feedback as buttons.
         public int ObjectChoiceCount(ViewerDecisionOffer captured,string objectId)
         {
-            ThreadOnly();var frame=captured?.Frame;if(disposed || objectId==null || frame==null || !ReferenceEquals(captured,offer) || !ReferenceEquals(host.PresentedDecision,captured))return 0;
+            ThreadOnly();var frame=captured?.Frame;if(SuppressSpatialInput || disposed || objectId==null || frame==null || !ReferenceEquals(captured,offer) || !ReferenceEquals(host.PresentedDecision,captured))return 0;
             return System.Linq.Enumerable.Count(frame.Actions,a=>a.ObjectId==objectId)+System.Linq.Enumerable.Count(frame.Decision.Options,o=>o.ObjectId==objectId);
         }
         public bool TryActivateObject(ViewerDecisionOffer captured,string objectId)
@@ -127,7 +139,7 @@ namespace Manaforge.Play
         }
         public bool TryActivatePlayer(ViewerDecisionOffer captured,string playerId)
         {
-            ThreadOnly();var frame=captured?.Frame;if(disposed || frame==null || playerId==null)return false;
+            ThreadOnly();var frame=captured?.Frame;if(SuppressSpatialInput || disposed || frame==null || playerId==null)return false;
             var matches=System.Linq.Enumerable.Where(frame.Decision.Options,o=>o.PlayerId==playerId).GetEnumerator();
             using(matches){if(!matches.MoveNext())return false;var option=matches.Current;if(matches.MoveNext())return false;return Send(captured,()=>host.ChooseAsync(captured,option));}
         }
@@ -175,7 +187,7 @@ namespace Manaforge.Play
         {var button=new Button(click){name=name,text=text??"Unlabelled engine option"};foreach(var label in button.Query<TextElement>().ToList())label.enableRichText=false;button.enableRichText=false;button.style.fontSize=16;button.style.color=Color.white;button.style.backgroundColor=new Color(.18f,.24f,.30f);button.style.paddingTop=8;button.style.paddingBottom=8;button.style.marginBottom=4;return button;}
         private void Build()
         {
-            var captured=offer;var frame=captured?.Frame;if(frame==null){Clear();return;}
+            var captured=offer;var frame=captured?.Frame;if(frame==null){Clear();return;}built=true;
             var floating=frame.ViewerMana==null?"":string.Join(", ",System.Linq.Enumerable.Select(System.Linq.Enumerable.Where(frame.ViewerMana,pair=>pair.Value>0),pair=>pair.Key+" "+pair.Value));manaPool.text=string.IsNullOrEmpty(floating)?"":"Floating mana: "+floating;manaPool.style.display=string.IsNullOrEmpty(floating)?DisplayStyle.None:DisplayStyle.Flex;prompt.text=OpeningHandFan.PlainPrompt(frame.Decision.Prompt??"Choose an action");Root.style.display=DisplayStyle.Flex;controls.Clear();pages.Clear();numericSubmit=null;cardChoices=null;
             if(!string.IsNullOrEmpty(frame.PaymentReason)){status.text="Manual payment required: "+frame.PaymentReason.Replace('_',' ').ToLowerInvariant()+".";UnityEngine.Debug.Log("Manaforge payment fallback: "+frame.PaymentReason);}
             IsLibraryOrdering=LibraryOrdering(prompt.text);
@@ -267,6 +279,6 @@ namespace Manaforge.Play
             if(disposed || !ReferenceEquals(offer,captured) || !ReferenceEquals(host.PresentedDecision,captured))return;
             var frame=captured.Frame;if(frame==null)return;int last=Math.Max(0,(frame.Actions.Count+frame.Decision.Options.Count-1)/PageSize);page=Math.Max(0,Math.Min(last,page+delta));Build();
         }
-        public void Dispose(){ThreadOnly();if(disposed)return;disposed=true;Priority.Suspend();PresentationHold=null;priorityTasks.Clear();priorityReceipts.Clear();manaInput.Dispose();Clear();prompt.RemoveFromHierarchy();Root.RemoveFromHierarchy();}
+        public void Dispose(){ThreadOnly();if(disposed)return;disposed=true;Priority.Suspend();PresentationHold=null;priorityTasks.Clear();priorityReceipts.Clear();manaInput.Dispose();yieldStatus.Dispose();Clear();prompt.RemoveFromHierarchy();Root.RemoveFromHierarchy();}
     }
 }

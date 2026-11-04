@@ -37,6 +37,34 @@ namespace Manaforge.Play.Tests
             var objects=new JArray();foreach(string id in ids){var card=sample.DeepClone();card["object_id"]=id;card["zone"]="stack";objects.Add(card);}
             wire["body"]["snapshot"]["objects"]=objects;
         }
+        [Test] public void YieldPresentationRemainsCompactAcrossOffersAndPendingClaims()
+        {
+            var policy=new UnityPriorityPolicy();var frame=Frame(Source());policy.BeginYield("end-turn",frame);
+            Assert.That(YieldPresentation.Resolve(policy.Current,frame).Compact,Is.True);policy.Claim(frame);
+            Assert.That(YieldPresentation.Resolve(policy.Current,frame).Text,Is.EqualTo("Ending your turn..."));
+            Assert.That(YieldPresentation.Resolve(policy.Current,null).Compact,Is.True);
+            var next=Frame(Source(revision:2,decision:"next"));policy.Observe(next);
+            Assert.That(YieldPresentation.Resolve(policy.Current,next).Compact,Is.True);
+            policy.SetStop("step","PRECOMBAT_MAIN",true);Assert.That(YieldPresentation.Resolve(policy.Current,next).Mode,Is.EqualTo(YieldPresentationMode.Stopped));
+            policy.SetStop("step","PRECOMBAT_MAIN",false);
+            var wire=Source();wire["body"]["snapshot"]["decision"]["is_priority"]=false;
+            Assert.That(YieldPresentation.Resolve(policy.Current,Frame(wire)).Mode,Is.EqualTo(YieldPresentationMode.RequiredInput));
+            Assert.That(policy.Current.Yield,Is.EqualTo("end-turn"));
+            policy.Failed();Assert.That(YieldPresentation.Resolve(policy.Current,next).Mode,Is.EqualTo(YieldPresentationMode.Failed));
+            Assert.That(YieldPresentation.Resolve(policy.Current,next,completed:true).Compact,Is.False);
+        }
+        [Test] public void PassiveYieldViewRetainsItsChildrenAndUsesSuppliedCancelAction()
+        {
+            var policy=new UnityPriorityPolicy();var frame=Frame(Source());policy.BeginYield("turn",frame);
+            var parent=new UnityEngine.UIElements.VisualElement();using(var view=new YieldStatusView(parent,policy.CancelYield)){
+                var label=view.Root[0];var button=view.Root[1];
+                for(int i=0;i<20;i++)view.Bind(YieldPresentation.Resolve(policy.Current,frame));
+                Assert.That(view.Root[0],Is.SameAs(label));Assert.That(view.Root[1],Is.SameAs(button));
+                Assert.That(((UnityEngine.UIElements.Label)label).text,Is.EqualTo("Passing to your turn..."));
+                policy.CancelYield();view.Bind(YieldPresentation.Resolve(policy.Current,frame));
+                Assert.That(view.Root.style.display.value,Is.EqualTo(UnityEngine.UIElements.DisplayStyle.None));
+            }
+        }
         [Test] public void DefaultIsAutomaticWithNoStopsOrYield()
         {
             var policy=new UnityPriorityPolicy();Assert.That(policy.Evaluate(Frame(Source())),Is.Not.Null);

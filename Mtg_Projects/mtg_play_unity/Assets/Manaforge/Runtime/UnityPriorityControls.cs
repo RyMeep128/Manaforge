@@ -58,8 +58,8 @@ namespace Manaforge.Play
             Root.SetEnabled(current.Revision>=0);
             automatic.SetValueWithoutNotify(current.Automatic);manual.SetValueWithoutNotify(current.Manual);
             foreach(var stop in stops)stop.Value.SetValueWithoutNotify(current.Stops.Contains(stop.Key));
-            state.text=details.value?"Close these controls to resume automatic passing.":current.Reason;
-            cancel.style.display=current.Yield!=null?DisplayStyle.Flex:DisplayStyle.None;
+            state.text=details.value?"Close these controls to resume automatic passing.":panel.Presentation?.Compact==true?panel.Presentation.Text:current.Reason;
+            cancel.style.display=current.Yield!=null && panel.Presentation?.Compact!=true?DisplayStyle.Flex:DisplayStyle.None;
             resume.style.display=current.Paused?DisplayStyle.Flex:DisplayStyle.None;
             bool active=panel.PriorityFrame?.Status=="active" && panel.PriorityFrame.Result==null;
             untilTurn.SetEnabled(active && !current.Paused);untilStack.SetEnabled(active && !current.Paused);

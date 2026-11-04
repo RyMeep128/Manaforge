@@ -83,3 +83,9 @@
 .mf-table-seam { position: absolute; left: 4%; right: 4%; top: 48%; height: 1px; background-color: rgb(67,61,55); border-left-width: 48px; border-right-width: 48px; border-color: rgb(119,75,47); }
 
 .mf-theme #asset-status { color: var(--mf-muted); background-color: var(--mf-panel); font-size: 11px; white-space: normal; }
+
+/* Reusable yield status: shared dimensions and motion, independent of table layout. */
+.mf-yield-status { min-height: 92px; height: 92px; flex-shrink: 0; justify-content: space-between; opacity: 0; transition-property: opacity; transition-duration: 120ms; }
+.mf-yield-status.mf-yield-visible { opacity: 1; }
+.mf-yield-status > Label { color: var(--mf-ink); font-size: 18px; white-space: normal; }
+.mf-yield-status > Button { align-self: flex-start; margin-top: 10px; }

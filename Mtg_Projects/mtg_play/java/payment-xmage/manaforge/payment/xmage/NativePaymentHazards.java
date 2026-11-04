@@ -16,16 +16,33 @@ public final class NativePaymentHazards {
     public enum Result { REQUIRES_MANUAL, NO_REGISTERED_HAZARD, UNKNOWN }
     private NativePaymentHazards() {}
     public static Result inspect(Game game,Ability payingAbility) {return inspect(game,payingAbility,false);}
-    /** Pinned intrinsic counter rules cannot react to an ordinary counter-free basic-land tap.
-     * This exception is valid only with the caller's ordinary-source/counter/ability checks. */
+    /** Screens only events emitted by ordinary counter-free tap mana sources.
+     * The caller still validates costs, native legality, production and source tickets. */
     public static Result inspectOrdinaryTap(Game game,Ability payingAbility){return inspect(game,payingAbility,true);}
-    private static boolean intrinsicCounterRules(mage.abilities.effects.ContinuousEffects effects,int expected) {
-        int count=0;for(mage.abilities.effects.ContinuousEffectsList<?> list:effects.allEffectsLists)for(Object effect:list){
-            if(++count>128 || effect==null)return false;Class<?> kind=effect.getClass();
-            if(kind!=mage.abilities.effects.keyword.ShieldCounterEffect.class && kind!=mage.abilities.effects.keyword.StunCounterEffect.class && kind!=mage.abilities.effects.keyword.FinalityCounterEffect.class)return false;
-        }return count==expected;
+    // Read only the native event-type prefilter. Never call applies/checkTrigger or
+    // replacement execution: those methods can change the game or ask a choice.
+    private static final mage.game.events.GameEvent.EventType[] PAYMENT_EVENTS={
+        mage.game.events.GameEvent.EventType.TAP,mage.game.events.GameEvent.EventType.TAPPED,
+        mage.game.events.GameEvent.EventType.TAPPED_FOR_MANA,mage.game.events.GameEvent.EventType.TAPPED_BATCH,
+        mage.game.events.GameEvent.EventType.ACTIVATE_ABILITY,mage.game.events.GameEvent.EventType.ACTIVATED_ABILITY,
+        mage.game.events.GameEvent.EventType.ADD_MANA,mage.game.events.GameEvent.EventType.MANA_ADDED,
+        mage.game.events.GameEvent.EventType.MANA_PAID};
+    private static boolean paymentTriggers(Iterable<? extends mage.abilities.TriggeredAbility> triggers,Game game,Ability paying){
+        int count=0;for(mage.abilities.TriggeredAbility trigger:triggers){
+            if(++count>128 || trigger==null)return true;
+            for(mage.game.events.GameEvent.EventType type:PAYMENT_EVENTS)
+                if(trigger.checkEventType(mage.game.events.GameEvent.getEvent(type,paying.getSourceId(),paying,paying.getControllerId()),game))return true;
+        }return false;
     }
-    private static boolean onlyFirstMainTriggers(mage.abilities.TriggeredAbilities triggers){if(triggers.size()>128)return false;for(mage.abilities.TriggeredAbility trigger:triggers.values())if(trigger==null || trigger.getClass()!=mage.abilities.triggers.BeginningOfFirstMainTriggeredAbility.class)return false;return true;}
+    private static boolean paymentEffects(mage.abilities.effects.ContinuousEffects effects,Game game,Ability paying){
+        int count=0;for(mage.abilities.effects.ContinuousEffectsList<?> list:effects.allEffectsLists)for(mage.abilities.effects.ContinuousEffect effect:list){
+            if(++count>128 || effect==null)return true;
+            if(effect instanceof mage.abilities.effects.ReplacementEffect){
+                for(mage.game.events.GameEvent.EventType type:PAYMENT_EVENTS)
+                    if(((mage.abilities.effects.ReplacementEffect)effect).checksEventType(mage.game.events.GameEvent.getEvent(type,paying.getSourceId(),paying,paying.getControllerId()),game))return true;
+            }else if(effect.getLayer()!=mage.constants.Layer.PTChangingEffects_7 && effect.getLayer()!=mage.constants.Layer.ColorChangingEffects_5)return true;
+        }return count!=effects.getTotalEffectsCount();
+    }
     private static Result inspect(Game game,Ability payingAbility,boolean ordinaryTap) {
         if(game==null || payingAbility==null)return Result.UNKNOWN;
         try {
@@ -35,7 +52,7 @@ public final class NativePaymentHazards {
             if(state.getContinuousEffects()==null || state.getTriggers()==null || state.getDelayed()==null || state.getPlayers()==null)return Result.UNKNOWN;
             int effects=state.getContinuousEffects().getTotalEffectsCount();
             if(effects<0 || state.getPlayers().size()>128)return Result.UNKNOWN;
-            if(state.isManaBurn() || effects>0 && !(ordinaryTap && intrinsicCounterRules(state.getContinuousEffects(),effects)) || !state.getTriggers().isEmpty() && !(ordinaryTap && onlyFirstMainTriggers(state.getTriggers())) || !state.getDelayed().isEmpty())return Result.REQUIRES_MANUAL;
+            if(state.isManaBurn() || (ordinaryTap?paymentEffects(state.getContinuousEffects(),game,payingAbility) || paymentTriggers(state.getTriggers().values(),game,payingAbility) || paymentTriggers(state.getDelayed(),game,payingAbility):effects>0 || !state.getTriggers().isEmpty() || !state.getDelayed().isEmpty()))return Result.REQUIRES_MANUAL;
             // No two-seat/five-seat rule: this is only a bounded internal read budget.
             for(UUID id:state.getPlayers().keySet()) {
                 Player player=state.getPlayers().get(id);

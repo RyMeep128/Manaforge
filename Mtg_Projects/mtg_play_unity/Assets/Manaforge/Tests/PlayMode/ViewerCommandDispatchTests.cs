@@ -83,6 +83,25 @@ namespace Manaforge.Play.Tests
         {Assert.That(button,Is.Not.Null);using(var submit=NavigationSubmitEvent.GetPooled()){submit.target=button;button.SendEvent(submit);}}
         private IEnumerator Show(ViewerSessionHost host,ViewerDecisionPanel panel)
         {yield return Until(()=>{host.Tick();panel.Tick();return host.PresentedDecision!=null;});}
+        [UnityTest] public IEnumerator YieldPanelRetainsCancelAndRestoresRequiredInput()
+        {
+            var envelope=Snapshot();var snapshot=envelope["body"]["snapshot"];
+            snapshot["turn"]=1;snapshot["phase"]="PRECOMBAT_MAIN";snapshot["step"]="PRECOMBAT_MAIN";
+            snapshot["active_player_id"]="one";snapshot["priority_player_id"]="one";
+            snapshot["decision"]["is_priority"]=true;snapshot["decision"]["family"]="selection";snapshot["decision"]["options"]=new JArray();
+            snapshot["actions"]=new JArray(new JObject{["action_id"]="yield-pass",["kind"]="pass",["object_id"]=null,["label"]="Pass priority",["priority_class"]="unknown"});
+            var host=Start(envelope,out var peer,out var owner);var panel=Panel(host);yield return Show(host,panel);
+            panel.Priority.BeginYield("end-turn",host.PresentedDecision.Frame);panel.Tick();
+            var cancel=panel.Root.Q<Button>("yield-status-cancel");var status=panel.Root.Q<VisualElement>("yield-status");
+            Assert.That(panel.SuppressSpatialInput,Is.True);Assert.That(panel.Root.Q<VisualElement>("decision-body").style.display.value,Is.EqualTo(DisplayStyle.None));
+            var next=(JObject)envelope.DeepClone();next["message_id"]="required-after-yield";next["body"]["snapshot"]["revision"]=8;
+            next["body"]["snapshot"]["decision"]["is_priority"]=false;next["body"]["snapshot"]["decision"]["decision_id"]="required-after-yield";
+            next["body"]["snapshot"]["actions"]=new JArray();next["body"]["snapshot"]["decision"]["options"]=new JArray(new JObject{["option_id"]="required-option",["label"]="Required choice",["object_id"]=null,["player_id"]=null,["selected"]=false});
+            var old=host.CurrentDecision;var send=Task.Run(()=>peer.ReplyForFixture(next));yield return Until(()=>send.IsCompleted);send.GetAwaiter().GetResult();yield return Until(()=>host.CurrentDecision!=null && !ReferenceEquals(old,host.CurrentDecision));yield return Show(host,panel);
+            Assert.That(panel.SuppressSpatialInput,Is.False);Assert.That(panel.Priority.Current.Yield,Is.EqualTo("end-turn"));
+            Assert.That(panel.Root.Q<Button>("decision-option-0"),Is.Not.Null);Assert.That(panel.Root.Q<VisualElement>("yield-status"),Is.SameAs(status));Assert.That(panel.Root.Q<Button>("yield-status-cancel"),Is.SameAs(cancel));
+            Click(cancel);panel.Tick();Assert.That(panel.Priority.Current.Yield,Is.Null);Assert.That(peer.PendingCommandBytes,Is.Zero);
+        }
         [UnityTest] public IEnumerator DecisionPanelWaitsForPresentedSnapshotAndClearsOnOwnerLoss()
         {
             var host=Start(Snapshot(selection:true),out var peer,out var owner);var panel=Panel(host);yield return Until(()=>host.CurrentDecision!=null);panel.Tick();Assert.That(panel.Root.style.display.value,Is.EqualTo(DisplayStyle.None));Assert.That(panel.Root.Q<Label>("decision-prompt").text,Is.Empty);
@@ -148,6 +167,40 @@ namespace Manaforge.Play.Tests
             if(multiple){var extra=snapshot["actions"][0].DeepClone();extra["action_id"]="another-action";extra["kind"]="activate";extra["label"]="Second offered action";((JArray)snapshot["actions"]).Add(extra);}
             return frame;
         }
+        [UnityTest] public IEnumerator HandSingleClickPreviewsAndDoubleClickSubmitsExactlyOnce()=>HandDoubleClick("cast_spell");
+        [UnityTest] public IEnumerator HandLandAlsoRequiresDoubleClick()=>HandDoubleClick("play_land");
+        private IEnumerator HandDoubleClick(string kind)
+        {
+            var envelope=BoardSnapshot();envelope["body"]["snapshot"]["objects"][0]["zone"]="hand";
+            envelope["body"]["snapshot"]["actions"][0]["kind"]=kind;
+            var host=Start(envelope,out var peer,out var owner);var panel=Panel(host);yield return Show(host,panel);
+            var root=node.GetComponent<UIDocument>().rootVisualElement;
+            using(var input=new ViewerBoardInput(root,surface,host,panel)){
+                input.Refresh();var view=surface.CardsRoot.Q<CardView>();
+                for(int count=1;count<=2;count++){
+                    using(var down=PointerDownEvent.GetPooled(new Event{type=EventType.MouseDown,button=0,clickCount=count,mousePosition=view.worldBound.center})){down.target=view;view.SendEvent(down);}
+                    Assert.That(peer.PendingCommandBytes,Is.Zero);
+                    using(var up=PointerUpEvent.GetPooled(new Event{type=EventType.MouseUp,button=0,clickCount=count,mousePosition=view.worldBound.center})){up.target=view;view.SendEvent(up);}
+                    if(count==1)Assert.That(peer.PendingCommandBytes,Is.Zero);
+                }
+                var read=Task.Run(()=>WireMessages.Parse(peer.ReadCommandForFixture()));yield return Until(()=>read.IsCompleted);
+                Assert.That((string)read.Result["body"]["action_id"],Is.EqualTo("fixture-action"));Assert.That(peer.PendingCommandBytes,Is.Zero);
+            }
+        }
+        [UnityTest] public IEnumerator RequiredHandSelectionStillUsesOneClick()
+        {
+            var envelope=BoardSnapshot();var snapshot=envelope["body"]["snapshot"];snapshot["objects"][0]["zone"]="hand";snapshot["actions"]=new JArray();
+            snapshot["decision"]["is_priority"]=false;snapshot["decision"]["family"]="selection";
+            snapshot["decision"]["options"]=new JArray(new JObject{["option_id"]="required-card",["label"]="Choose card",["object_id"]="fixture-0002",["player_id"]=JValue.CreateNull(),["selected"]=false});
+            var host=Start(envelope,out var peer,out var owner);var panel=Panel(host);yield return Show(host,panel);
+            using(var input=new ViewerBoardInput(node.GetComponent<UIDocument>().rootVisualElement,surface,host,panel)){
+                input.Refresh();var view=surface.CardsRoot.Q<CardView>();
+                using(var down=PointerDownEvent.GetPooled(new Event{type=EventType.MouseDown,button=0,clickCount=1,mousePosition=view.worldBound.center})){down.target=view;view.SendEvent(down);}
+                using(var up=PointerUpEvent.GetPooled(new Event{type=EventType.MouseUp,button=0,clickCount=1,mousePosition=view.worldBound.center})){up.target=view;view.SendEvent(up);}
+                var read=Task.Run(()=>WireMessages.Parse(peer.ReadCommandForFixture()));yield return Until(()=>read.IsCompleted);
+                Assert.That((string)read.Result["body"]["option_id"],Is.EqualTo("required-card"));
+            }
+        }
         [UnityTest] public IEnumerator BoardKeyboardSelectionUsesExactOfferAndBlocksPendingDuplicates()
         {
             var host=Start(BoardSnapshot(),out var peer,out var owner);var panel=Panel(host);yield return Show(host,panel);
@@ -182,7 +235,8 @@ namespace Manaforge.Play.Tests
         }
         [UnityTest] public IEnumerator BattlefieldDropWritesOnlyOnReleaseAndOutsideDropDoesNothing()
         {
-            var host=Start(BoardSnapshot(),out var peer,out var owner);var panel=Panel(host);yield return Show(host,panel);var root=node.GetComponent<UIDocument>().rootVisualElement;
+            var envelope=BoardSnapshot();envelope["body"]["snapshot"]["objects"][0]["zone"]="hand";envelope["body"]["snapshot"]["actions"][0]["kind"]="cast_spell";
+            var host=Start(envelope,out var peer,out var owner);var panel=Panel(host);yield return Show(host,panel);var root=node.GetComponent<UIDocument>().rootVisualElement;
             root.style.width=1280;root.style.height=720;yield return null;
             using(var input=new ViewerBoardInput(root,surface,host,panel)){
                 input.Refresh();var view=surface.CardsRoot.Q<CardView>();
