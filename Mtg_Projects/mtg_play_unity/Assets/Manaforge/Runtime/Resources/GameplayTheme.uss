@@ -1,0 +1,85 @@
+/* Manaforge forged-fantasy design tokens. Works under any composition root. */
+.mf-theme {
+    --mf-floor: rgb(19, 23, 29); --mf-panel: rgb(29, 34, 41);
+    --mf-raised: rgb(42, 48, 56); --mf-metal: rgb(100, 110, 121);
+    --mf-ink: rgb(239, 234, 222); --mf-muted: rgb(177, 184, 191);
+    --mf-ember: rgb(239, 143, 78); --mf-focus: rgb(132, 205, 233);
+    --mf-warning: rgb(239, 195, 111); --mf-good: rgb(143, 203, 169);
+    background-color: var(--mf-floor); color: var(--mf-ink); font-size: 14px;
+}
+.mf-theme Button, .mf-action {
+    background-color: var(--mf-raised); color: var(--mf-ink);
+    border-width: 1px; border-color: var(--mf-metal); border-radius: 5px;
+    min-height: 32px; padding: 6px 12px; margin: 3px 2px;
+    white-space: normal; -unity-font-style: bold;
+}
+.mf-theme Button:hover { background-color: rgb(57,65,75); border-color: var(--mf-ink); }
+.mf-theme Button:focus, .mf-theme Toggle:focus { border-width: 2px; border-color: var(--mf-focus); }
+.mf-theme Button:disabled { opacity: .45; }
+.mf-theme .mf-primary { background-color: rgb(102,49,28); border-color: var(--mf-ember); border-bottom-width: 3px; min-height: 44px; font-size: 18px; }
+.mf-theme .mf-primary:hover { background-color: rgb(134,63,32); }
+.mf-player { width: 84px; height: 84px; background-color: var(--mf-panel); border-width: 2px; border-color: var(--mf-metal); border-radius: 12px; align-items: center; justify-content: center; }
+.mf-player-life { font-size: 34px; -unity-font-style: bold; margin: 0; padding: 0; transition-property: scale,color; transition-duration: .16s; }
+.mf-player-life.life-changed { scale: 1.12 1.12; color: var(--mf-ember); }
+.mf-player-name { position: absolute; top: 79px; left: -34px; width: 150px; height: 26px; background-color: var(--mf-panel); border-bottom-width: 2px; border-bottom-color: var(--mf-metal); border-radius: 3px; -unity-text-align: middle-center; font-size: 13px; }
+.mf-player-state { position: absolute; top: -23px; left: -40px; width: 160px; height: 21px; -unity-text-align: middle-center; color: var(--mf-muted); font-size: 12px; }
+.mf-player.has-priority { border-color: var(--mf-ember); border-top-width: 4px; }
+.mf-player.targetable, .mf-player:focus { border-color: var(--mf-focus); border-width: 3px; }
+.mf-player.targetable .mf-player-state { color: var(--mf-focus); }
+.zone-pile { width: 66px; height: 92px; background-color: var(--mf-panel); border-width: 1px; border-color: var(--mf-metal); border-radius: 5px; overflow: visible; }
+.zone-pile:hover, .zone-pile:focus, .zone-pile.zone-open { border-width: 2px; border-color: var(--mf-focus); }
+.zone-pile-sheet { position: absolute; width: 100%; height: 100%; background-color: rgb(34,40,48); border-width: 1px; border-color: var(--mf-metal); border-radius: 4px; }
+.zone-pile-face { position: absolute; left: 0; right: 0; top: 0; bottom: 0; border-radius: 4px; }
+#zone-fallback { position: absolute; left: 4px; right: 4px; top: 20px; bottom: 20px; font-size: 11px; color: var(--mf-muted); white-space: normal; -unity-text-align: middle-center; }
+#zone-count { position: absolute; right: -4px; bottom: -3px; min-width: 25px; height: 25px; padding: 2px 5px; background-color: var(--mf-floor); border-width: 1px; border-color: var(--mf-metal); border-radius: 6px; color: var(--mf-ink); font-size: 14px; -unity-text-align: middle-center; }
+#zone-caption { position: absolute; top: 96px; left: -8px; width: 82px; font-size: 11px; color: var(--mf-muted); -unity-text-align: middle-center; }
+.mf-card-back { background-color: rgb(31,38,46); border-width: 2px; border-color: var(--mf-metal); border-radius: 5px; align-items: center; justify-content: center; }
+.mf-card-back > Label { color: var(--mf-muted); font-size: 20px; -unity-font-style: bold; border-width: 1px; border-color: var(--mf-metal); border-radius: 3px; padding: 3px 6px; rotate: 0deg; }
+.mf-zone-browser, .mf-menu, .mf-decision, #unity-priority-controls { background-color: rgba(25,30,37,.98); border-width: 1px; border-color: var(--mf-metal); border-top-width: 3px; border-top-color: var(--mf-ember); border-radius: 8px; padding: 16px; }
+.mf-zone-browser { min-height: 260px; }
+#public-zone-title { font-size: 21px; -unity-font-style: bold; }
+#zone-browser-tabs { flex-direction: row; margin-top: 12px; }
+#zone-browser-tabs Button { min-width: 110px; }
+#zone-browser-tabs .zone-tab-selected { border-bottom-width: 3px; border-bottom-color: var(--mf-ember); }
+#zone-browser-summary { white-space: normal; color: var(--mf-muted); font-size: 13px; }
+#decision-prompt { color: var(--mf-ink); font-size: 19px; white-space: normal; }
+#decision-status, #unity-priority-status { color: var(--mf-muted); font-size: 13px; white-space: normal; }
+.mf-decision.command-pending { border-left-width: 4px; border-left-color: var(--mf-focus); }
+.mf-decision.command-uncertain { border-left-width: 4px; border-left-color: var(--mf-warning); }
+.mf-decision.command-confirmed { border-left-width: 4px; border-left-color: var(--mf-good); }
+.mf-theme .table-card { border-width: 2px; border-color: rgba(0,0,0,0); transition-property: scale,translate,rotate; transition-duration: .12s,.12s,.18s; }
+.mf-theme .table-card:hover, .mf-theme .table-card:focus { border-color: var(--mf-ink); }
+.mf-theme .table-card.actionable { border-color: var(--mf-focus); }
+.mf-theme .table-card.targetable { border-width: 3px; border-color: var(--mf-warning); }
+.mf-theme .table-card.attacking { border-color: var(--mf-ember); }
+.mf-theme .table-card.blocking { border-color: var(--mf-focus); }
+.mf-theme .table-card.selected { border-width: 4px; border-color: var(--mf-warning); }
+.mf-theme .table-card.gesture-source { opacity: .6; }
+#live-markers { background-color: rgba(19,23,29,.96); color: var(--mf-ink); font-size: 12px; }
+.table-inspection { border-width: 2px; border-color: var(--mf-metal); border-radius: 6px; }
+#table-result { background-color: rgba(25,30,37,.98); border-width: 1px; border-color: var(--mf-metal); border-top-width: 3px; border-top-color: var(--mf-ember); border-radius: 8px; font-size: 40px; }
+#table-phase { color: var(--mf-muted); font-size: 15px; }
+#stack-title, #board-input-hint, #board-drag-ghost { color: var(--mf-ink); }
+#board-drag-ghost { background-color: var(--mf-panel); border-width: 2px; border-color: var(--mf-focus); border-radius: 5px; font-size: 18px; }
+.row-navigation { background-color: var(--mf-panel); border-radius: 5px; }
+.row-navigation Button { min-width: 28px; }
+.opponent-hand-back { position: absolute; width: 70px; height: 100px; }
+.library-flight { position: absolute; width: 80px; height: 112px; }
+.mf-theme.reduced-motion .table-card, .mf-theme.reduced-motion .mf-player-life { transition-duration: 0s; }
+.mf-review-title { font-size: 26px; -unity-font-style: bold; margin-bottom: 8px; }
+.mf-review-note { color: var(--mf-muted); white-space: normal; margin-bottom: 16px; }
+.mf-review-row { flex-direction: row; flex-wrap: wrap; margin-bottom: 20px; }
+.mf-review-tile { padding: 20px; margin: 6px; min-width: 230px; background-color: var(--mf-panel); border-width: 1px; border-color: var(--mf-metal); border-radius: 8px; }
+.mf-review-seat { flex-direction: row; align-items: center; margin-top: 32px; margin-bottom: 36px; }
+.mf-review-seat .zone-pile { margin-left: 32px; }
+.mf-review-tile > Label { margin-bottom: 8px; white-space: normal; }
+
+.mf-zone-browser #zone-browser-tabs { position: absolute; top: 48px; left: 20px; right: 20px; }
+.mf-zone-browser #zone-browser-summary { position: absolute; left: 24px; right: 24px; bottom: 16px; }
+.mf-zone-browser #zone-browser-back { position: absolute; top: 105px; left: 50%; margin-left: -40px; width: 80px; height: 112px; }
+.mf-zone-browser #close-public-zone { position: absolute; right: 16px; top: 12px; }
+
+.mf-table-surface { background-color: rgb(22,27,33); border-width: 1px; border-color: rgb(54,64,73); border-radius: 16px; }
+.mf-table-seam { position: absolute; left: 4%; right: 4%; top: 48%; height: 1px; background-color: rgb(67,61,55); border-left-width: 48px; border-right-width: 48px; border-color: rgb(119,75,47); }
+
+.mf-theme #asset-status { color: var(--mf-muted); background-color: var(--mf-panel); font-size: 11px; white-space: normal; }
