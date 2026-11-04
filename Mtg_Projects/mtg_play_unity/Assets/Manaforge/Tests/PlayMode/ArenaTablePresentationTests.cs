@@ -10,6 +10,43 @@ namespace Manaforge.Play.Tests
 {
     public sealed class ArenaTablePresentationTests
     {
+        [UnityTest] public IEnumerator HoverReturnsToKeyboardPreviewAndRevocationClearsItWithoutACommand()
+        {
+            var node=new GameObject("Authenticated Arena focus test");var settings=ScriptableObject.CreateInstance<PanelSettings>();
+            settings.themeStyleSheet=Resources.Load<ThemeStyleSheet>("CardTheme");var document=node.AddComponent<UIDocument>();document.panelSettings=settings;
+            var table=new ArenaGameplayPresentation(document.rootVisualElement);ViewerSessionHost host=null;
+            try{
+                string fixtures=Path.Combine(Application.dataPath,"../../mtg_play/protocol/fixtures");
+                var envelope=(JObject)JObject.Parse(File.ReadAllText(Path.Combine(fixtures,"receive-history-v1.json")))["cases"][0]["steps"][0]["envelope"].DeepClone();
+                var snapshot=envelope["body"]["snapshot"];
+                var card=JObject.Parse(File.ReadAllText(Path.Combine(fixtures,"wire-receive-v1.json")))["positive"][0]["envelope"]["body"]["snapshot"]["objects"][0].DeepClone();
+                card["object_id"]=snapshot["objects"][0]["object_id"];card["zone"]="hand";card["owner_id"]="one";card["controller_id"]="one";
+                var grave=card.DeepClone();grave["object_id"]="grave-card";grave["zone"]="graveyard";
+                snapshot["objects"]=new JArray(card,grave);
+                using var peer=new ViewerSessionHostTests.Peer(envelope.ToString());
+                var owner=new System.Threading.Tasks.TaskCompletionSource<bool>(System.Threading.Tasks.TaskCreationOptions.RunContinuationsAsynchronously);
+                host=new ViewerSessionHost(table.Surface,peer.Bootstrap(),owner.Task,true);table.Bind(host);
+                float deadline=Time.realtimeSinceStartup+10;
+                while(host.PresentedDecision==null && Time.realtimeSinceStartup<deadline){host.Tick();yield return null;}
+                Assert.That(host.PresentedDecision,Is.Not.Null);table.Decisions.Tick();table.Present(host.PresentedDecision.Frame);yield return null;
+                CardView view=null;table.Surface.VisitPresented((projected,presented)=>{if(projected.Zone=="hand")view=presented;});Assert.That(view,Is.Not.Null);
+                view.Focus();yield return null;
+                using(var enter=PointerEnterEvent.GetPooled()){enter.target=view;view.SendEvent(enter);}
+                using(var leave=PointerLeaveEvent.GetPooled()){leave.target=view;view.SendEvent(leave);}
+                Assert.That(table.Surface.InspectionView.resolvedStyle.display,Is.EqualTo(DisplayStyle.Flex));
+                Assert.That(table.Surface.InspectionView.Q<Label>("name").text,Is.Not.Empty);
+                Assert.That(peer.PendingCommandBytes,Is.Zero,"Focus and hover are presentation-only");
+                Assert.That(table.BrowsePublicZone("graveyard","one"),Is.True);yield return null;
+                table.Present(host.PresentedDecision.Frame);yield return null;
+                Assert.That(document.rootVisualElement.Q<Label>("board-input-hint").resolvedStyle.visibility,Is.EqualTo(Visibility.Hidden),"A refreshed inline display style must not restore battlefield hints over a zone drawer");
+                owner.TrySetResult(true);deadline=Time.realtimeSinceStartup+10;
+                while(!host.Completion.IsCompleted && Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(host.Completion.IsCompleted,Is.True);host.Tick();yield return null;
+                Assert.That(table.Surface.InspectionView.Q<Label>("name").text,Is.Empty);
+                Assert.That(table.Surface.CardsRoot.childCount,Is.Zero);
+            }finally{host?.Dispose();table.Dispose();Object.Destroy(node);Object.Destroy(settings);}
+            yield return null;
+        }
         [UnityTest] public IEnumerator AuthenticatedZonesRemainDistinctAtDesktopSizesAndClearOnHandoff()
         {
             var gameObject=new GameObject("Arena table test");var settings=ScriptableObject.CreateInstance<PanelSettings>();
@@ -42,6 +79,15 @@ namespace Manaforge.Play.Tests
 
                     foreach(var view in views.Values){Assert.That(view.resolvedStyle.left,Is.GreaterThanOrEqualTo(0));Assert.That(view.resolvedStyle.left+view.resolvedStyle.width,Is.LessThanOrEqualTo(size.x));}
                 }
+                doc.rootVisualElement.style.width=1280;doc.rootVisualElement.style.height=720;yield return null;
+                // Pointer focus temporarily overrides keyboard focus and returns to it on leave.
+                views["table-2"].Focus();yield return null;
+                using(var enter=PointerEnterEvent.GetPooled()){enter.target=views["table-3"];views["table-3"].SendEvent(enter);}
+                Assert.That(views["table-3"].style.scale.value.value.x,Is.EqualTo(1.12f));
+                Assert.That(views["table-2"].style.scale.value.value.x,Is.EqualTo(1));
+                using(var leave=PointerLeaveEvent.GetPooled()){leave.target=views["table-3"];views["table-3"].SendEvent(leave);}
+                Assert.That(views["table-2"].style.scale.value.value.x,Is.EqualTo(1.12f));
+                Assert.That(views["table-3"].style.scale.value.value.x,Is.EqualTo(1));
                 for(int i=4;i<20;i++){var extra=cards[2].DeepClone();extra["object_id"]="crowd-"+i;cards.Add(extra);}
                 snapshot["revision"]=(long)snapshot["revision"]+1;
                 Assert.That(table.Surface.TryPresent(ticket,ViewerCardProjection.ParseSnapshot(envelope.ToString(),session,viewer,0,true)),Is.True);
@@ -54,6 +100,8 @@ namespace Manaforge.Play.Tests
                 Assert.That(table.Surface.TryPresent(ticket,ViewerCardProjection.ParseSnapshot(envelope.ToString(),session,viewer,0,true)),Is.True);
                 table.Present(ViewerDecisionProjection.ParseSnapshot(envelope.ToString(),session,viewer,0,true));yield return null;
                 table.Surface.VisitPresented((card,view)=>{if(card.Zone=="command")Assert.That(view.resolvedStyle.display,Is.EqualTo(DisplayStyle.Flex),"Both public command zones remain available for inspection and native offers");});
+                // With a normal (non-opening) hand, rotated cards leave the action rail clear.
+                snapshot["turn"]=2;
                 // Large hands stay selectable through keyboard paging; public-zone browsing
                 // preserves authenticated ownership even when every card has the same name.
                 for(int i=0;i<30;i++){var extra=cards[0].DeepClone();extra["object_id"]="hand-"+i;cards.Add(extra);}
@@ -61,12 +109,20 @@ namespace Manaforge.Play.Tests
                 snapshot["revision"]=(long)snapshot["revision"]+1;
                 Assert.That(table.Surface.TryPresent(ticket,ViewerCardProjection.ParseSnapshot(envelope.ToString(),session,viewer,0,true)),Is.True);
                 table.Present(ViewerDecisionProjection.ParseSnapshot(envelope.ToString(),session,viewer,0,true));yield return null;
+                table.Surface.VisitPresented((card,view)=>{if(card.Zone=="hand" && view.resolvedStyle.display==DisplayStyle.Flex)Assert.That(view.worldBound.xMax,Is.LessThan(985),"Hand cards must leave the contextual action rail unobstructed");});
                 var handNext=doc.rootVisualElement.Q<Button>("hand-next");Assert.That(handNext,Is.Not.Null);
                 using(var submit=NavigationSubmitEvent.GetPooled()){submit.target=handNext;handNext.SendEvent(submit);}yield return null;
                 Assert.That(views["table-0"].resolvedStyle.display,Is.EqualTo(DisplayStyle.None));
                 var graveButton=doc.rootVisualElement.Q<Button>("opponent-graveyard");Assert.That(graveButton,Is.Not.Null);
                 using(var submit=NavigationSubmitEvent.GetPooled()){submit.target=graveButton;graveButton.SendEvent(submit);}yield return null;
                 table.Surface.VisitPresented((card,view)=>{if(card.ObjectId=="grave-1")Assert.That(view.resolvedStyle.display,Is.EqualTo(DisplayStyle.Flex));if(card.ObjectId=="grave-0")Assert.That(view.resolvedStyle.display,Is.EqualTo(DisplayStyle.None));});
+                CardView graveView=null;table.Surface.VisitPresented((card,view)=>{if(card.ObjectId=="grave-1")graveView=view;if(card.Zone=="battlefield" || card.Zone=="hand")Assert.That(view.resolvedStyle.display,Is.EqualTo(DisplayStyle.None));});
+                Assert.That(graveView,Is.Not.Null);
+                Assert.That(doc.rootVisualElement.Q<VisualElement>("board-navigation").childCount,Is.Zero,"Only the open zone's pagination may remain visible");
+                var picked=doc.rootVisualElement.panel.Pick(graveView.worldBound.center);
+                Assert.That(picked==graveView || picked!=null && graveView.Contains(picked),Is.True,"The drawer must not cover the displayed card's pointer target");
+                Assert.That(table.BrowsePublicZone("hand",viewer),Is.False,"Private zones cannot be requested through public navigation");
+                Assert.That(table.BrowsePublicZone("exile",other),Is.False,"Absent zones cannot fabricate card objects");
                 var closeZone=doc.rootVisualElement.Q<Button>("close-public-zone");
                 using(var submit=NavigationSubmitEvent.GetPooled()){submit.target=closeZone;closeZone.SendEvent(submit);}yield return null;
                 table.Surface.VisitPresented((card,view)=>{if(card.Zone=="graveyard")Assert.That(view.resolvedStyle.display,Is.EqualTo(DisplayStyle.None));});

@@ -145,3 +145,100 @@ The connected workflow query is PR-only and cannot establish all required runs.
 The licensed self-hosted Unity workflow and broader applicable historical-range
 checks remain mandatory before promotion. No main merge, tag or release is made.
 Owner visual approval remains **PENDING**.
+
+## Continuation: public-zone layering and keyboard focus
+
+Development continues from `dbbc140` on `codex/play-live-first-land` in the
+isolated worktree `C:/Users/ryanm/Proxy App/arena-visual-continuation`.
+The original directory is now checked out on `integration/all-branches-2026-11-03`
+and contains uncommitted artwork/text work. It was left untouched; that pipeline
+is neither incorporated nor certified by this visual continuation. The active
+branch's AGENTS.md and development-workflow.md were reread, and the shared
+persistent checkpoint record was resumed without replacing its pending SHA.
+
+The earlier public-zone display assertions missed a real stacking defect:
+bringing a card forward inside CardsRoot cannot put it above a sibling drawer.
+Public browsing now hides table cards and moves the same owned CardsRoot above
+the backdrop. Closing restores the normal layout. There is no reparenting of
+card objects, new renderer or texture ownership. BrowsePublicZone rejects private,
+absent and unsupported zones and consults the current admitted surface. It never
+submits a game action. Existing zone buttons use that same navigation API.
+
+Hover and keyboard focus now have separate inputs. Pointer hover temporarily
+wins; leaving restores the keyboard card's preview. New revisions clear emphasis.
+Inspection requires a still-admitted visible card, including during detachment
+and revocation, so teardown cannot re-enter a transitioning surface through focus.
+The stack heading is anchored above its row and the opponent library moved upward
+to leave a clear gap. Inspection/zone close controls use the shared dark/gold
+source-only button treatment rather than Unity's default gray.
+
+The explicit packaged capture path now also captures public-zone.png when an
+actual viewer-visible graveyard becomes available. It makes no strategic input
+and never fabricates a zone or card. The normal launch does not run this driver.
+
+Focused graphics PlayMode result: **50 passed**, zero failures/skips. Added checks
+exercise actual panel picking of the graveyard card above its drawer, keyboard
+focus restoration, authenticated hover without command bytes, and inspector
+clearing after owner revocation. The Windows non-development build succeeded.
+No broad application suite was run; required Actions remain a separate gate.
+
+Local optional visual resources were copied from the already prepared local pack;
+no Downloads extraction was repeated. The isolated worktree references the existing
+ignored approved engine installations and uses its own runtime/session directories.
+All supplied binaries, local resources and captures remain untracked/ignored.
+The approved app-owned engine lock is unchanged.
+
+Packaged match results follow after completion. Owner visual acceptance remains
+**PENDING**. Source-only packaged review, full reference comparison, manual normal
+result dismissal, and the prior live data/printing limitations remain open.
+
+The first continuation package (`Artifacts/ArenaVisualReview-a8968e29` in the
+isolated Unity project) completed a native loss with 191 snapshots, 190 confirmed
+inputs, zero uncertainty, viewer cleared and cleanup confirmed. Its actual
+public-zone capture exposed a background board hint showing through the drawer;
+a bottom-library selection capture also exposed hand/control crowding. Public
+browsing now suppresses battlefield hints/links and the normal fan reserves more
+space for the control rail. Opening-hand geometry remains generous. A focused
+bounds assertion protects the control margin. This also exposed and corrected
+a transient narrow-panel startup case: the fan viewport is clamped positive
+before passing it to OpeningHandFan. The corrected 50-check run passed without
+skips. Final captures below supersede this first iteration for those details.
+
+A second iteration (`Artifacts/ArenaVisualReview-fd096624`) completed a native
+loss with 241 snapshots, 240 confirmed inputs, zero uncertainty and clean teardown.
+It verified the hand/control margin but exposed two details in the actual drawer:
+the board hint's inline display property overrode the first stylesheet suppression,
+and pagination from hidden board rows remained visible. The final correction uses
+visibility (which the input refresher does not override) and clears background
+row navigation before laying out public-zone pages. The authenticated UI test now
+refreshes the offer while browsing and checks resolved hint visibility; the crowded
+board test checks that unrelated page controls are absent. All 50 checks pass.
+
+The original directory's running client/build was not replaced. To review this
+continuation, run `python run_manaforge.py` from the isolated worktree and use its
+normal Play launcher, or use the capture command above. An already-running
+Manaforge instance may still belong to the original workspace. The isolated
+Windows build is under that worktree's `Mtg_Projects/mtg_play_unity/Builds/Windows`.
+Required owner checks remain unchecked, including crowded normal-board paging,
+which can still approach the lower-right rail in late-game captures.
+
+### Final continuation evidence (0.5.222-alpha.1)
+
+Final capture directory in the isolated worktree:
+`Mtg_Projects/mtg_play_unity/Artifacts/ArenaVisualReview-dd7dc154`.
+Native win; 166 snapshots, **165 confirmed inputs**, zero uncertain, viewer cleared
+and cleanup confirmed. Spatial proof records **60 card keyboard inputs**.
+Opening, battlefield, hover, pinned inspection, priority, combat, draw, public-zone
+and result PNGs are present. Actual 1366x768, 1920x1080 and 2560x1440 framebuffer
+captures match their requests; baseline captures are 1280x720. The final public-zone
+image was inspected and shows its card above the backdrop, with the background
+hint and unrelated row paging absent. Hand/control spacing, stack/library gap,
+inspection close treatment and final native outcome were visually checked.
+
+Final non-development Windows build: successful. Focused graphics PlayMode:
+**50 passed**, no skips. Diff whitespace check: passed. Proprietary assets and
+captures are not committed. Owner visual acceptance and complete story acceptance
+remain **PENDING**. Required Actions remain unverified; the persistent baseline
+candidate is retained. The normal source-only and human-controlled review items
+above remain open; this continuation does not certify the uncommitted artwork/text
+pipeline in the original directory or claim Arena parity.

@@ -52,7 +52,7 @@
 #board-object-menu { position: absolute; width: 300px; max-height: 260px; background-color: rgb(20,25,32); border-width: 1px; border-color: rgb(211,173,107); padding: 12px; }
 #board-object-menu Button { white-space: normal; }
 #local-library, #opponent-library { position: absolute; right: 32px; width: 76px; height: 104px; background-color: rgb(29,24,22); color: rgb(214,187,132); border-width: 2px; border-color: rgb(125,101,66); border-radius: 7px; -unity-text-align: middle-center; font-size: 14px; }
-#local-library { bottom: 235px; } #opponent-library { top: 140px; }
+#local-library { bottom: 235px; } #opponent-library { top: 110px; }
 .library-flight { position: absolute; width: 80px; height: 112px; color: rgb(208,168,89); font-size: 38px; -unity-text-align: middle-center; }
 
 #arena-table.opening-state #local-seat { left: 14%; bottom: 70px; }
@@ -74,3 +74,10 @@
 #arena-table #viewer-decision-panel.command-pending { border-left-width: 3px; border-left-color: rgb(101,185,222); }
 #arena-table #viewer-decision-panel.command-uncertain { border-left-width: 3px; border-left-color: rgb(245,175,78); }
 #arena-table #viewer-decision-panel.command-confirmed { border-left-width: 3px; border-left-color: rgb(146,201,148); }
+
+/* Keep auxiliary controls in the same source-only treatment as the live action rail. */
+#close-inspection, #close-public-zone { background-color: rgba(19,25,31,.96); color: rgb(239,218,178); border-width: 1px; border-color: rgb(160,130,82); border-radius: 5px; font-size: 14px; }
+#close-inspection:hover, #close-public-zone:hover { background-color: rgb(55,44,29); border-color: rgb(244,202,123); }
+#public-zone-drawer #public-zone-title { -unity-font-style: bold; }
+
+#arena-table.browsing-public-zone #board-input-hint, #arena-table.browsing-public-zone #battlefield-links { visibility: hidden; }

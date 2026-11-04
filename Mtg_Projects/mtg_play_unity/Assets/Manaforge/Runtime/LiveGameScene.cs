@@ -79,6 +79,12 @@ namespace Manaforge.Play
                 if(review!=null && captures.Add("hover")){review.Focus();ScreenCapture.CaptureScreenshot(Path.Combine(output,"hover.png"));captureReady=Time.unscaledTime+.2f;return false;}
                 if(id!=null && captures.Add("inspection")){arena.InspectCard(id);ScreenCapture.CaptureScreenshot(Path.Combine(output,"inspection.png"));captureReady=Time.unscaledTime+.2f;return false;}
                 arena.CloseInspection();
+                string publicZone=null,zoneOwner=null;
+                surface.VisitPresented((card,view)=>{if(publicZone==null && !card.Hidden && card.Zone=="graveyard"){publicZone=card.Zone;zoneOwner=card.OwnerId;}});
+                if(publicZone!=null && !captures.Contains("public-zone") && arena.BrowsePublicZone(publicZone,zoneOwner)){
+                    captures.Add("public-zone");ScreenCapture.CaptureScreenshot(Path.Combine(output,"public-zone.png"));captureReady=Time.unscaledTime+.2f;return false;
+                }
+                arena.ClosePublicZone();
             }
             return true;
         }
