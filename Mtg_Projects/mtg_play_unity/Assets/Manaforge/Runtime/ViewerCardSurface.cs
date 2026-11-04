@@ -53,6 +53,18 @@ namespace Manaforge.Play
             foreach(var pair in cards)if(views.TryGetValue(pair.Key,out var view))visitor(pair.Value,view);
         }
         public string[] PresentedObjectIds(){ThreadOnly();var result=new string[views.Count];views.Keys.CopyTo(result,0);return result;}
+        public bool CanAnimate {get{ThreadOnly();return !disposed && !transitioning && !faulted && ticket!=null && !ticket.Mailbox.IsStopped;}}
+        internal ProjectedCard AnimationCard(string id)
+        {
+            ThreadOnly();if(!CanAnimate || id==null)return null;var pending=ticket.Mailbox.AnimationFrame;
+            if(pending!=null)return System.Linq.Enumerable.FirstOrDefault(pending.Cards,card=>card.ObjectId==id);
+            return cards.TryGetValue(id,out var card)?card:null;
+        }
+        internal void VisitAnimationBindings(Action<ProjectedCard,CardView> visitor)
+        {ThreadOnly();if(!CanAnimate)return;foreach(var pair in cards)if(views.TryGetValue(pair.Key,out var view))visitor(pair.Value,view);}
+        public GameplayMotionBatch[] TakeAnimations(){ThreadOnly();return CanAnimate && ticket.Mailbox.AllowsFrame(revision)?ticket.Mailbox.TakeAnimations(revision):Array.Empty<GameplayMotionBatch>();}
+        public bool HasPendingMajorAnimations {get{ThreadOnly();return CanAnimate && ticket.Mailbox.HasMajorAnimation;}}
+        public bool HasInspection {get{ThreadOnly();return inspectedObject!=null;}}
         public int PresentedArtworkCount {get{ThreadOnly();return artwork.Count;}}
         public int ExpectedArtworkCount {get{ThreadOnly();int count=0;foreach(var card in cards.Values)if(ArtworkPermitted(card))count++;return count;}}
         private void ThreadOnly(){if(thread!=Thread.CurrentThread.ManagedThreadId)throw new InvalidOperationException("VIEWER_SURFACE_THREAD");}
@@ -125,7 +137,7 @@ namespace Manaforge.Play
             // No wire decision/action IDs are stored here. Inspection never submits a game command.
             transitioning=true;
             try {
-                InspectionView.Conceal();inspectedObject=null;cards.Clear();requests.Clear();pendingArtwork.Clear();
+                cards.Clear();requests.Clear();pendingArtwork.Clear();
                 var present=new HashSet<string>(StringComparer.Ordinal);
                 foreach(var card in frame.Cards) {
                     present.Add(card.ObjectId);cards.Add(card.ObjectId,card);
@@ -140,6 +152,10 @@ namespace Manaforge.Play
                     if(ArtworkPermitted(card) && !artwork.ContainsKey(card.ObjectId))pendingArtwork.Enqueue(card.ObjectId);
                 }
                 foreach(var id in new List<string>(views.Keys))if(!present.Contains(id)){views[id].Dispose();views.Remove(id);artwork.Remove(id);}
+                if(inspectedObject!=null){
+                    if(cards.TryGetValue(inspectedObject,out var inspected) && !inspected.Hidden && inspected.FaceDown==false){Bind(InspectionView,inspected);InspectionView.style.rotate=new Rotate(new Angle(0));}
+                    else{InspectionView.Conceal();inspectedObject=null;}
+                }
                 revision=frame.Context.Revision;ticket.Mailbox.ObserveAppliedFrame(revision);return true;
             }
             catch {
@@ -201,7 +217,7 @@ namespace Manaforge.Play
             artwork.TryGetValue(card.ObjectId,out var binding);
             if(binding==null)view.BindUnavailable();else view.Bind(binding.Identity,binding.Texture,binding.Profile?.Crop??CardCompactProfile.StandardArtCrop);
             var c=card.Characteristics;
-            string pt=DisplayPowerToughness(c?.TypeLine,c?.Power,c?.Toughness);
+            string pt=DisplayPowerToughness(c?.TypeLine,c?.Power,RemainingToughness(c?.Toughness,card.Damage));
             // Display engine-supplied text without inferring rules from artwork.
             string rules=DisplayRules(c?.CurrentAbilities,c?.EngineViewText);
             string unavailable=rules==null?"Rules text unavailable":c?.CurrentAbilities==null?"Engine view text":"";
@@ -215,7 +231,7 @@ namespace Manaforge.Play
             }
             if(binding==null)unavailable="Artwork unavailable"+(string.IsNullOrEmpty(unavailable)?"":" / "+unavailable);
             if(card.Tapped==null)unavailable+=" / tap state unavailable";
-            view.UpdateValues(new CardDisplayValues(c?.Name,sameFace?printed.PrintedManaCost:null,c?.TypeLine,rules,pt,unavailable,binding?.Profile,loyalty:c?.Loyalty,defense:c?.Defense,hidePrintedStats:binding?.Profile?.MayHavePrintedStats??true));
+            view.UpdateValues(new CardDisplayValues(c?.Name,sameFace?printed.PrintedManaCost:null,c?.TypeLine,rules,pt,unavailable,binding?.Profile,loyalty:c?.Loyalty,defense:c?.Defense,hidePrintedStats:binding?.Profile?.MayHavePrintedStats??true,basePower:c?.BasePower,baseToughness:c?.BaseToughness));
             if(card.Tapped==true)view.style.rotate=new Rotate(new Angle(90));
         }
         public static string DisplayRules(IReadOnlyList<string> current,IReadOnlyList<string> engineView)
@@ -233,6 +249,11 @@ namespace Manaforge.Play
         {
             ThreadOnly();if(objectId==null || !cards.TryGetValue(objectId,out var card) || card.Hidden)return null;
             var preview=new CardView();Bind(preview,card);preview.SetPresentation(CardPresentationMode.Full,150);return preview;
+        }
+        public static string RemainingToughness(string toughness,long? damage)
+        {
+            if(!damage.HasValue || !long.TryParse(toughness,System.Globalization.NumberStyles.Integer,System.Globalization.CultureInfo.InvariantCulture,out var value))return toughness;
+            return ((decimal)value-damage.Value).ToString(System.Globalization.CultureInfo.InvariantCulture);
         }
         public static string DisplayPowerToughness(string typeLine,string power,string toughness)
         {

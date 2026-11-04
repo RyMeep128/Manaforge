@@ -13,6 +13,7 @@ namespace Manaforge.Play
         private readonly Queue<PreparedCardArtwork> artwork=new Queue<PreparedCardArtwork>();
         private readonly HashSet<ViewerArtworkRequest> requests=new HashSet<ViewerArtworkRequest>();
         private ProjectedCardFrame latest;
+        private readonly ViewerAnimationJournal animations=new ViewerAnimationJournal();
         private long newestRevision=-1,minimumRevision,bytes;
         private bool stopped;
         private System.Threading.Tasks.TaskCompletionSource<bool> space=NewSpace();
@@ -26,16 +27,19 @@ namespace Manaforge.Play
         public long MinimumRevision {get{lock(gate)return minimumRevision;}}
         public int ArtworkCount {get{lock(gate)return artwork.Count;}}
         public long ArtworkBytes {get{lock(gate)return bytes;}}
+        internal ProjectedCardFrame AnimationFrame {get{lock(gate)return stopped?null:latest;}}
         public bool HasPendingFrame {get{lock(gate)return latest!=null;}}
         private void ClearArtwork()
         {while(artwork.Count>0)artwork.Dequeue().Dispose();requests.Clear();bytes=0;SignalSpace();}
         // Coalesces immutable snapshots, not game events, command receipts or wire history.
-        public bool TryPostFrame(ProjectedCardFrame frame)
+        public bool TryPostFrame(ProjectedCardFrame frame,ProjectedDecisionFrame decision=null)
         {
             if(frame==null)throw new ArgumentNullException(nameof(frame));
+            if(decision!=null && (decision.Context.SessionId!=frame.Context.SessionId || decision.Context.ViewerId!=frame.Context.ViewerId || decision.Context.Revision!=frame.Context.Revision))return false;
             lock(gate) {
                 if(stopped || frame.Context.SessionId!=ticket.SessionId || frame.Context.ViewerId!=ticket.ViewerId
                     || frame.Context.Revision<minimumRevision || frame.Context.Revision<=newestRevision)return false;
+                animations.Observe(frame,decision);
                 newestRevision=frame.Context.Revision;latest=frame;ClearArtwork();return true;
             }
         }
@@ -92,6 +96,9 @@ namespace Manaforge.Play
                 prepared=artwork.Dequeue();requests.Remove(prepared.Request);bytes-=(long)prepared.Width*prepared.Height*4;SignalSpace();return true;
             }
         }
-        public void Dispose(){lock(gate){if(stopped)return;stopped=true;latest=null;ClearArtwork();}}
+        internal bool HasMajorAnimation {get{lock(gate)return !stopped && animations.HasMajor;}}
+        internal GameplayMotionBatch[] TakeAnimations(long revision)
+        {lock(gate)return stopped?Array.Empty<GameplayMotionBatch>():animations.TakeThrough(revision);}
+        public void Dispose(){lock(gate){if(stopped)return;stopped=true;latest=null;animations.Clear();ClearArtwork();}}
     }
 }

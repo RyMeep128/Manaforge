@@ -216,6 +216,18 @@
         "python_default": "None"
       },
       {
+        "name": "base_power",
+        "python_type": "str | None",
+        "required": false,
+        "python_default": "None"
+      },
+      {
+        "name": "base_toughness",
+        "python_type": "str | None",
+        "required": false,
+        "python_default": "None"
+      },
+      {
         "name": "unsupported_fields",
         "python_type": "tuple[str, ...]",
         "required": false,

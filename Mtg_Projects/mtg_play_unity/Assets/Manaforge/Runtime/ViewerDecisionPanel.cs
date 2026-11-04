@@ -29,6 +29,8 @@ namespace Manaforge.Play
         public void EnablePriority(){ThreadOnly();priorityEnabled=true;}
         public UnityPriorityPolicy Priority {get;}=new UnityPriorityPolicy();
         public bool PriorityControlsOpen {get;set;}
+        // Decorative presentation may briefly hold automation, never manual controls.
+        public Func<bool> PresentationHold {get;set;}
         public ProjectedDecisionFrame PriorityFrame=>offer?.Frame;
         public void PrioritySettingsChanged(){ThreadOnly();autoAfter=-1;}
         private bool spatialPresentation;private Foldout cardChoices;
@@ -93,9 +95,10 @@ namespace Manaforge.Play
             Root.EnableInClassList("command-confirmed",feedback?.State==CommandState.Confirmed);
             controls.SetEnabled(offer.CanSubmit && pending==null);manaInput.SetEnabled(offer.CanSubmit && pending==null);
             numericSubmit?.SetEnabled(TryNumbers(out _,false));
+            controls.Q<Button>("decision-pass-turn")?.SetEnabled(offer.CanSubmit && pending==null && !Priority.Current.Paused);
             if(!offer.CanSubmit && pending==null && string.IsNullOrEmpty(status.text))status.text="Waiting for gateway state.";
             var automatic=priorityEnabled?Priority.Evaluate(offer.Frame):null;
-            if(automatic==null || pending!=null || !offer.CanSubmit || PriorityControlsOpen){autoAfter=-1;return;}
+            if(automatic==null || pending!=null || !offer.CanSubmit || PriorityControlsOpen || PresentationHold?.Invoke()==true){autoAfter=-1;return;}
             if(autoAfter<0){autoAfter=Time.unscaledTime+.35f;return;}
             if(Time.unscaledTime>=autoAfter){
                 var captured=offer;autoAfter=-1;
@@ -106,7 +109,7 @@ namespace Manaforge.Play
         private bool Send(ViewerDecisionOffer captured,Func<Task<TrackedCommand>> submit,bool automatic=false)
         {
             ThreadOnly();if(disposed || pending!=null || !ReferenceEquals(offer,captured) || !ReferenceEquals(host.PresentedDecision,captured) || !captured.CanSubmit)return false;
-            autoAfter=-1;if(!automatic)Priority.CancelYield();
+            autoAfter=-1;if(!automatic && captured.Frame?.Decision?.IsPriority==true)Priority.CancelYield();
             submitted=null;pending=submit();if(priorityEnabled)priorityTasks.Add(pending);status.text="Sending command...";controls.SetEnabled(false);manaInput.SetEnabled(false);return true;
         }
         // Spatial input uses the same current offer, pending task and command feedback as buttons.
@@ -139,6 +142,19 @@ namespace Manaforge.Play
         {
             ThreadOnly();if(spatialPresentation==value)return;spatialPresentation=value;if(offer!=null)Build();
         }
+        private void AddTurnPass(ViewerDecisionOffer captured,ProjectedAction action)
+        {
+            var frame=captured.Frame;
+            if(!priorityEnabled || action.Kind!="pass" || action.ObjectId!=null || frame.Decision?.IsPriority!=true
+                || frame.Decision.PlayerId!=frame.Context.ViewerId || frame.PriorityPlayerId!=frame.Context.ViewerId
+                || !frame.Turn.HasValue || frame.ActivePlayerId==null || frame.Status!="active" || frame.Result!=null)return;
+            bool ownTurn=frame.ActivePlayerId==frame.Context.ViewerId;
+            var button=Button("decision-pass-turn",ownTurn?"End turn":"Pass to my turn",()=>{
+                if(!ReferenceEquals(offer,captured) || !ReferenceEquals(host.PresentedDecision,captured) || !captured.CanSubmit || pending!=null || Priority.Current.Paused)return;
+                Priority.BeginYield(ownTurn?"end-turn":"turn",frame);PrioritySettingsChanged();
+            });
+            button.SetEnabled(captured.CanSubmit && !Priority.Current.Paused);controls.Add(button);
+        }
         private void AddChoice(Button button,bool boundToBoard)
         {
             if(IsLibraryOrdering || !spatialPresentation || !boundToBoard){controls.Add(button);return;}
@@ -169,7 +185,7 @@ namespace Manaforge.Play
             }
             int total=frame.Actions.Count+frame.Decision.Options.Count;int start=page*PageSize,end=Math.Min(total,start+PageSize);
             for(int i=start;i<end;i++) {
-                if(i<frame.Actions.Count){var action=frame.Actions[i];AddChoice(Button("decision-action-"+i,action.Label,()=>Send(captured,()=>host.PerformAsync(captured,action))),action.ObjectId!=null);}
+                if(i<frame.Actions.Count){var action=frame.Actions[i];AddChoice(Button("decision-action-"+i,action.Label,()=>Send(captured,()=>host.PerformAsync(captured,action))),action.ObjectId!=null);AddTurnPass(captured,action);}
                 else {
                     var option=frame.Decision.Options[i-frame.Actions.Count];
                     var button=Button("decision-option-"+(i-frame.Actions.Count),(option.Selected?"Selected: ":"")+OpeningHandFan.PlainPrompt(option.Label??"Choose card"),()=>Send(captured,()=>host.ChooseAsync(captured,option)));
@@ -184,7 +200,7 @@ namespace Manaforge.Play
             // In the spatial view, pass/finish/cancel actions remain available even when
             // card alternatives occupy a different page. Keep the engine's exact index/token.
             if(spatialPresentation)for(int i=0;i<frame.Actions.Count;i++)if((i<start || i>=end) && frame.Actions[i].Kind=="pass"){
-                int index=i;var action=frame.Actions[i];controls.Add(Button("decision-action-"+index,action.Label,()=>Send(captured,()=>host.PerformAsync(captured,action))));
+                int index=i;var action=frame.Actions[i];controls.Add(Button("decision-action-"+index,action.Label,()=>Send(captured,()=>host.PerformAsync(captured,action))));AddTurnPass(captured,action);
             }
             if(frame.Decision.CanFinish)controls.Add(Button("decision-finish","Finish selection",()=>Send(captured,()=>host.FinishSelectionAsync(captured))));
             if(frame.Decision.Cancellable)controls.Add(Button("decision-cancel","Cancel choice",()=>Send(captured,()=>host.CancelChoiceAsync(captured))));
@@ -250,6 +266,6 @@ namespace Manaforge.Play
             if(disposed || !ReferenceEquals(offer,captured) || !ReferenceEquals(host.PresentedDecision,captured))return;
             var frame=captured.Frame;if(frame==null)return;int last=Math.Max(0,(frame.Actions.Count+frame.Decision.Options.Count-1)/PageSize);page=Math.Max(0,Math.Min(last,page+delta));Build();
         }
-        public void Dispose(){ThreadOnly();if(disposed)return;disposed=true;Priority.Suspend();priorityTasks.Clear();priorityReceipts.Clear();manaInput.Dispose();Clear();prompt.RemoveFromHierarchy();Root.RemoveFromHierarchy();}
+        public void Dispose(){ThreadOnly();if(disposed)return;disposed=true;Priority.Suspend();PresentationHold=null;priorityTasks.Clear();priorityReceipts.Clear();manaInput.Dispose();Clear();prompt.RemoveFromHierarchy();Root.RemoveFromHierarchy();}
     }
 }

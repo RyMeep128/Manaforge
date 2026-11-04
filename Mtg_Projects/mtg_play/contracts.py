@@ -74,6 +74,8 @@ class CardCharacteristics(Serializable):
     is_copy: bool | None = None
     flipped: bool | None = None
     current_abilities: tuple[str, ...] | None = None
+    base_power: str | None = None
+    base_toughness: str | None = None
     unsupported_fields: tuple[str, ...] = (
         "current_rules_text",
         "ability_identities",

@@ -64,7 +64,9 @@
                 "color_identity",
                 "copy_provenance_history",
                 "merged_components"
-              ]
+              ],
+              "base_power": null,
+              "base_toughness": null
             },
             "card_identity": null,
             "tapped": null,
@@ -153,7 +155,9 @@
                 "color_identity",
                 "copy_provenance_history",
                 "merged_components"
-              ]
+              ],
+              "base_power": null,
+              "base_toughness": null
             },
             "card_identity": null,
             "tapped": null,
@@ -242,7 +246,9 @@
                 "color_identity",
                 "copy_provenance_history",
                 "merged_components"
-              ]
+              ],
+              "base_power": null,
+              "base_toughness": null
             },
             "card_identity": null,
             "tapped": null,
@@ -332,7 +338,9 @@
                 "color_identity",
                 "copy_provenance_history",
                 "merged_components"
-              ]
+              ],
+              "base_power": null,
+              "base_toughness": null
             },
             "card_identity": null,
             "tapped": null,
@@ -421,7 +429,9 @@
                 "color_identity",
                 "copy_provenance_history",
                 "merged_components"
-              ]
+              ],
+              "base_power": null,
+              "base_toughness": null
             },
             "card_identity": null,
             "tapped": null,
@@ -510,7 +520,9 @@
                 "color_identity",
                 "copy_provenance_history",
                 "merged_components"
-              ]
+              ],
+              "base_power": null,
+              "base_toughness": null
             },
             "card_identity": null,
             "tapped": null,
@@ -605,7 +617,9 @@
                 "color_identity",
                 "copy_provenance_history",
                 "merged_components"
-              ]
+              ],
+              "base_power": null,
+              "base_toughness": null
             },
             "card_identity": null,
             "tapped": null,
@@ -694,7 +708,9 @@
                 "color_identity",
                 "copy_provenance_history",
                 "merged_components"
-              ]
+              ],
+              "base_power": null,
+              "base_toughness": null
             },
             "card_identity": null,
             "tapped": null,

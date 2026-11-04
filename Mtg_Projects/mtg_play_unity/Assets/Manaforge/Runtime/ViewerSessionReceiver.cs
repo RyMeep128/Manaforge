@@ -91,7 +91,7 @@ namespace Manaforge.Play
                     if(received.Type=="result" && frame!=null)outcome=new ViewerSessionOutcome(frame);
                     if(updates.Count>=maximumUpdates || update.ByteCount>maximumBytes-bytes){Stop("VIEWER_RECEIVE_OVERFLOW");return false;}
                     if(minimum.HasValue){ticket.Mailbox.AdvanceMinimumRevision(minimum.Value);Decisions.AdvanceMinimumRevision(minimum.Value);}
-                    if(frame!=null)ticket.Mailbox.TryPostFrame(frame);
+                    if(frame!=null)ticket.Mailbox.TryPostFrame(frame,decisions);
                     if(decisions!=null)Decisions.Observe(decisions);
                     updates.Enqueue(update);bytes+=update.ByteCount;update=null;return true;
                 }

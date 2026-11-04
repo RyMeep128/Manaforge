@@ -33,8 +33,9 @@ namespace Manaforge.Play
         public void Observe(ProjectedDecisionFrame frame)
         {
             if(disposed || revision==frame.Context.Revision && session==frame.Context.SessionId && viewer==frame.Context.ViewerId)return;
-            Cancel();bool initial=session!=frame.Context.SessionId || viewer!=frame.Context.ViewerId;
-            if(initial){libraries.Clear();hands.Clear();}session=frame.Context.SessionId;viewer=frame.Context.ViewerId;revision=frame.Context.Revision;
+            bool initial=session!=frame.Context.SessionId || viewer!=frame.Context.ViewerId;
+            if(initial){Cancel();libraries.Clear();hands.Clear();}
+            if(reduced() || frame.Result!=null)Cancel();session=frame.Context.SessionId;viewer=frame.Context.ViewerId;revision=frame.Context.Revision;
             foreach(var pair in frame.PlayerLibraryCounts){
                 frame.PlayerHandCounts.TryGetValue(pair.Key,out var hand);libraries.TryGetValue(pair.Key,out var oldLibrary);hands.TryGetValue(pair.Key,out var oldHand);
                 int count=initial || frame.Phase==null || (frame.Decision?.Prompt??"").StartsWith("Mulligan",StringComparison.OrdinalIgnoreCase) || frame.Result!=null?0:ConfirmedHandArrivals(oldLibrary,pair.Value,oldHand,hand);

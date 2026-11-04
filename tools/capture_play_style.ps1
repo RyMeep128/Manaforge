@@ -23,6 +23,12 @@ try {
             if(-not (Test-Path -LiteralPath $path) -or (Get-Item -LiteralPath $path).Length -eq 0){throw "Missing capture: $path"}
         }
     }
+    $animationProof=Get-Content -LiteralPath (Join-Path $OutputDirectory 'animation-proof.json') -Raw | ConvertFrom-Json
+    if($animationProof.captures.Count -ne 80){throw 'Missing animation evidence (10 scenarios, 2 motion modes, 4 resolutions)'}
+    foreach($capture in $animationProof.captures){
+        $path=Join-Path $OutputDirectory $capture.file
+        if(-not (Test-Path -LiteralPath $path) -or (Get-Item -LiteralPath $path).Length -eq 0){throw "Missing animation capture: $path"}
+    }
     Write-Output "Synthetic style captures: $OutputDirectory"
 } finally {
     if(-not $process.HasExited){$process.Kill($true);$process.WaitForExit()}

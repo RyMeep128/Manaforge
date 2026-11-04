@@ -14,6 +14,34 @@ namespace Manaforge.Play.Tests
                 Array.Empty<VisualPrintingCandidate>());
         private static CardDisplayValues Values(string pt = "2/2", string rules = "Explicit mock text") =>
             new CardDisplayValues("Mock creature", "{X}{G}", "Creature — Example", rules, pt, "1 counter");
+        [Test] public void RebindingUnchangedArtworkPreservesViewState()
+        {
+            view.UpdateValues(Values());view.tooltip="Keep inspection";
+            var revision=view.ViewRevision;var identity=view.Identity;
+            view.Bind(identity,texture,new Rect(0,.4f,1,.5f));
+            Assert.That(view.ViewRevision,Is.EqualTo(revision));
+            Assert.That(view.Artwork,Is.SameAs(texture));
+            Assert.That(view.Q<Label>("name").text,Is.EqualTo("Mock creature"));
+            Assert.That(view.tooltip,Is.EqualTo("Keep inspection"));
+        }
+        [Test] public void StatsColorIndependentlyAndResetAtBase()
+        {
+            view.UpdateValues(new CardDisplayValues("Creature",null,"Creature",null,"4/1",null,basePower:"2",baseToughness:"2"));
+            Assert.That(view.Q<Label>("stats").text,Is.EqualTo("<color=#56D879>4</color>/<color=#FFA34D>1</color>"));
+            view.UpdateValues(new CardDisplayValues("Creature",null,"Creature",null,"2/2",null,basePower:"2",baseToughness:"2"));
+            Assert.That(view.Q<Label>("stats").text,Is.EqualTo("2/2"));
+        }
+        [TestCase("4/4",null,null,"4/4")]
+        [TestCase("*/3","*","3","*/3")]
+        [TestCase("-1/0","2","2","<color=#FFA34D>-1</color>/<color=#FFA34D>0</color>")]
+        public void UnknownSymbolicAndNegativeStats(string value,string power,string toughness,string expected)
+        {Assert.That(CardView.ColoredStats(value,power,toughness),Is.EqualTo(expected));}
+        [TestCase("4",3L,"1")][TestCase("2",0L,"2")][TestCase("*",2L,"*")][TestCase("2",5L,"-3")]
+        public void MarkedDamageOnlyChangesNumericDisplayedToughness(string toughness,long damage,string expected)
+        {Assert.That(ViewerCardSurface.RemainingToughness(toughness,damage),Is.EqualTo(expected));}
+        [Test] public void UnknownDamagePreservesToughness()
+        {Assert.That(ViewerCardSurface.RemainingToughness("4",null),Is.EqualTo("4"));}
+
         [Test] public void EngineRulesAreDisplayedAndCurrentAbilitiesTakePrecedence()
         {
             Assert.That(ViewerCardSurface.DisplayRules(null,new[]{"<i>Exile target nonland permanent.</i>"}),Is.EqualTo("Exile target nonland permanent."));

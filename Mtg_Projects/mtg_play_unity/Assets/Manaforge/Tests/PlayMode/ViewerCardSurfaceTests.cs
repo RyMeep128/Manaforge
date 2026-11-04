@@ -21,7 +21,7 @@ namespace Manaforge.Play.Tests
             public Scope(Action dispose){this.dispose=dispose;}
             public void Dispose(){dispose();}
         }
-        internal static ProjectedCardFrame Frame(string viewer="one",long revision=1,bool hidden=false,string name="Viewer text",bool empty=false,string session="fixture-0001",bool artwork=false,bool? faceDownState=false,int objectCount=1,bool missingRules=false,bool emptyAbilities=false,string typeLine=null)
+        internal static ProjectedCardFrame Frame(string viewer="one",long revision=1,bool hidden=false,string name="Viewer text",bool empty=false,string session="fixture-0001",bool artwork=false,bool? faceDownState=false,int objectCount=1,bool missingRules=false,bool emptyAbilities=false,string typeLine=null,string basePower=null,string baseToughness=null,long? damage=null)
         {
             var corpus=JObject.Parse(File.ReadAllText(Path.Combine(Application.dataPath,"../../mtg_play/protocol/fixtures/wire-receive-v1.json")));
             var message=(JObject)corpus["positive"][0]["envelope"];var snapshot=message["body"]["snapshot"];
@@ -31,6 +31,7 @@ namespace Manaforge.Play.Tests
             if(artwork && !hidden){card["card_identity"]=new JObject{["oracle_id"]="oracle",["printing_id"]="exact-printing",["deck_entry_id"]=JValue.CreateNull()};card["face_down"]=faceDownState.HasValue?new JValue(faceDownState.Value):JValue.CreateNull();}
             if(hidden){card["characteristics"]=JValue.CreateNull();card["card_identity"]=JValue.CreateNull();}
             else {card["characteristics"]["name"]=name;card["characteristics"]["power"]="4";card["characteristics"]["toughness"]="5";card["characteristics"]["engine_view_text"]=new JArray("Not complete Oracle text");}
+            if(!hidden){card["characteristics"]["base_power"]=basePower;card["characteristics"]["base_toughness"]=baseToughness;if(damage.HasValue)card["damage"]=damage.Value;}
             if(empty)snapshot["objects"]=new JArray();
             else for(int i=1;i<objectCount;i++){var extra=card.DeepClone();extra["object_id"]="fixture-extra-"+i;((JArray)snapshot["objects"]).Add(extra);}
             if(!hidden && missingRules)card["characteristics"]["engine_view_text"]=JValue.CreateNull();
@@ -83,6 +84,41 @@ namespace Manaforge.Play.Tests
                 Assert.That(surface.InspectionView.Q<Label>("name").text,Is.EqualTo("Second viewer"));
             }
             UnityEngine.Object.Destroy(sharedTexture);
+        }
+        [UnityTest] public IEnumerator LiveStatsUseProjectedBaseAndMarkedDamageInBothViews()
+        {
+            var ticket=surface.BeginViewer("fixture-0001","one");yield return null;yield return null;yield return null;
+            // Current 4/5, original 2/3, four marked damage: 4/1.
+            Assert.That(surface.TryPresent(ticket,Frame(typeLine:"Creature",basePower:"2",baseToughness:"3",damage:4)),Is.True);
+            var id=surface.PresentedObjectIds()[0];Assert.That(surface.Inspect(ticket,id),Is.True);
+            string expected="<color=#56D879>4</color>/<color=#FFA34D>1</color>";
+            Assert.That(surface.CardsRoot.Q<Label>("stats").text,Is.EqualTo(expected));
+            Assert.That(surface.InspectionView.Q<Label>("stats").text,Is.EqualTo(expected));
+            Assert.That(surface.TryPresent(ticket,Frame(revision:2,typeLine:"Creature",basePower:"4",baseToughness:"5",damage:0)),Is.True);
+            Assert.That(surface.CardsRoot.Q<Label>("stats").text,Is.EqualTo("4/5"));
+            Assert.That(surface.InspectionView.Q<Label>("stats").text,Is.EqualTo("4/5"));
+        }
+        [UnityTest] public IEnumerator OrdinarySnapshotsPreserveArtworkAndInspectionUntilVisibilityChanges()
+        {
+            var ticket=surface.BeginViewer("fixture-0001","one",new ViewerArtworkScope());
+            yield return null;yield return null;yield return null;
+            Assert.That(surface.TryPresent(ticket,Frame(artwork:true)),Is.True);
+            var id=surface.PresentedObjectIds()[0];var request=surface.RequestArtwork(ticket,id);
+            var catalog=new CatalogArtworkFace("oracle","exact-printing","front","normal",1,true,"Creature");
+            Assert.That(surface.TryApplyArtwork(ticket,PreparedCardArtwork.Prepare(request,catalog,2,2,new byte[16])),Is.True);
+            var view=surface.CardsRoot.Q<CardView>();var texture=view.Artwork;
+            Assert.That(surface.Inspect(ticket,id),Is.True);
+            surface.InspectionView.tooltip="Inspection remains open";
+            for(int i=2;i<=4;i++){
+                Assert.That(surface.TryPresent(ticket,Frame(revision:i,artwork:true,name:"Updated "+i)),Is.True);
+                Assert.That(surface.CardsRoot.Q<CardView>(),Is.SameAs(view));Assert.That(view.Artwork,Is.SameAs(texture));
+                Assert.That(surface.RequestArtwork(ticket,id),Is.Null);Assert.That(surface.PresentedArtworkCount,Is.EqualTo(1));
+                Assert.That(surface.HasInspection,Is.True);Assert.That(surface.InspectionView.Artwork,Is.SameAs(texture));
+                Assert.That(surface.InspectionView.tooltip,Is.EqualTo("Inspection remains open"));
+                Assert.That(surface.InspectionView.Q<Label>("name").text,Is.EqualTo("Updated "+i));
+            }
+            Assert.That(surface.TryPresent(ticket,Frame(revision:5,hidden:true)),Is.True);
+            Assert.That(view.Artwork,Is.Null);Assert.That(surface.InspectionView.Artwork,Is.Null);Assert.That(surface.HasInspection,Is.False);
         }
         [UnityTest] public IEnumerator StaleFramesWrongScopeAndRetiredTicketsCannotPublish()
         {

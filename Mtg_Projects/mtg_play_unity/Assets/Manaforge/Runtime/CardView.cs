@@ -15,6 +15,7 @@ namespace Manaforge.Play
         public string TypeLine { get; }
         public string RulesText { get; }
         public string PowerToughness { get; }
+        public string BasePower {get;} public string BaseToughness {get;}
         public string Status { get; }
         public CardCompactProfile CompactProfile {get;}
         public string Loyalty {get;}
@@ -25,8 +26,9 @@ namespace Manaforge.Play
         public bool HidePrintedStats {get;}
         public System.Collections.Generic.IReadOnlyList<RoomDoorDisplay> RoomDoors {get;}
         public CardDisplayValues(string name, string manaCost, string typeLine,
-            string rulesText, string powerToughness, string status, CardCompactProfile compactProfile=null, string loyalty=null,string defense=null,FontStyle rulesStyle=FontStyle.Normal,string collectorText=null,System.Collections.Generic.IReadOnlyList<RoomDoorDisplay> roomDoors=null,bool isAbility=false,bool hidePrintedStats=false)
+            string rulesText, string powerToughness, string status, CardCompactProfile compactProfile=null, string loyalty=null,string defense=null,FontStyle rulesStyle=FontStyle.Normal,string collectorText=null,System.Collections.Generic.IReadOnlyList<RoomDoorDisplay> roomDoors=null,bool isAbility=false,bool hidePrintedStats=false,string basePower=null,string baseToughness=null)
         {
+            BasePower=basePower;BaseToughness=baseToughness;
             HidePrintedStats=hidePrintedStats;IsAbility=isAbility;Name = name; ManaCost = manaCost; TypeLine = typeLine;
             RulesText = rulesText; PowerToughness = powerToughness; Status = status;
             CompactProfile=compactProfile;Loyalty=loyalty;Defense=defense;RulesStyle=rulesStyle;CollectorText=collectorText;RoomDoors=roomDoors==null?null:new System.Collections.Generic.List<RoomDoorDisplay>(roomDoors).AsReadOnly();
@@ -121,6 +123,7 @@ namespace Manaforge.Play
                 throw new ArgumentOutOfRangeException(nameof(crop));
             if (identity.MissingAsset && texture != null)
                 throw new ArgumentException("Missing asset cannot bind an unrelated texture");
+            if(!concealed && ReferenceEquals(Identity,identity) && artwork.image==texture && artCrop==crop)return;
             Conceal();
             concealed = false;
             Identity = identity;
@@ -135,6 +138,7 @@ namespace Manaforge.Play
         // Does not invent a printing ID, face key, crop profile or substitute image.
         public void BindUnavailable()
         {
+            if(!concealed && Identity==null && artwork.image==null)return;
             Conceal();concealed=false;authenticOnly=false;artCrop=new Rect(0,0,1,1);
             missing.text="Artwork unavailable";Layout();
         }
@@ -144,18 +148,36 @@ namespace Manaforge.Play
             if (concealed) return;
             if (values == null) throw new ArgumentNullException(nameof(values));
             ViewRevision++;
-            displayValues=values;doorIndex=0;doorTabs.Clear();
-            if(values.CompactProfile?.Kind=="Room" && values.RoomDoors!=null) {
+            var previous=displayValues;
+            bool sameDoors=ReferenceEquals(previous?.RoomDoors,values.RoomDoors);
+            displayValues=values;
+            if(!sameDoors){doorIndex=0;doorTabs.Clear();}
+            if(!sameDoors && values.CompactProfile?.Kind=="Room" && values.RoomDoors!=null) {
                 for(int i=0;i<values.RoomDoors.Count && i<2;i++){int index=i;var button=new Button(()=>InspectRoomDoor(index)){text=(i+1)+". "+values.RoomDoors[i].Name,tooltip=values.RoomDoors[i].Name};
                     button.style.flexGrow=1;button.style.flexBasis=0;button.style.overflow=Overflow.Hidden;doorTabs.Add(button);}
             }
-            sections.SetText(values.CompactProfile?.Kind,values.RulesText);
+            if(previous==null || previous.CompactProfile?.Kind!=values.CompactProfile?.Kind || previous.RulesText!=values.RulesText)sections.SetText(values.CompactProfile?.Kind,values.RulesText);
             Set(title, values.Name); mana.SetCost(values.ManaCost); Set(type, values.TypeLine);
             compactProfile=values.CompactProfile;
             authenticOnly=Identity?.LayoutProfileId=="authentic-image-v1" || !string.IsNullOrEmpty(compactProfile?.Kind);
             Set(rules, values.RulesText); rulesSymbols.SetText(values.RulesText);
-            Set(stats,values.PowerToughness ?? values.Defense);loyaltyCounter.SetValue(values.Loyalty);
+            stats.enableRichText=values.PowerToughness!=null && System.Text.RegularExpressions.Regex.IsMatch(values.PowerToughness,@"^[0-9+*−\-/]+$",System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+            Set(stats,stats.enableRichText?ColoredStats(values.PowerToughness,values.BasePower,values.BaseToughness):values.PowerToughness??values.Defense);loyaltyCounter.SetValue(values.Loyalty);
             Set(status, values.Status);Set(miniKind,compactProfile?.Kind);Set(collector,values.CollectorText);rulesEmphasis=values.RulesStyle; Layout();
+        }
+
+        public static string ColoredStats(string pt,string basePower,string baseToughness)
+        {
+            var parts=pt.Split('/');if(parts.Length!=2)return EscapeStat(pt);
+            return ColoredStat(parts[0],basePower)+"/"+ColoredStat(parts[1],baseToughness);
+        }
+        private static string EscapeStat(string value)=>value.Replace("&","&amp;").Replace("<","&lt;").Replace(">","&gt;");
+        private static string ColoredStat(string value,string baseline)
+        {
+            string safe=EscapeStat(value);
+            if(!long.TryParse(value,System.Globalization.NumberStyles.Integer,System.Globalization.CultureInfo.InvariantCulture,out var current)
+                || !long.TryParse(baseline,System.Globalization.NumberStyles.Integer,System.Globalization.CultureInfo.InvariantCulture,out var original) || current==original)return safe;
+            return "<color="+(current>original?"#56D879":"#FFA34D")+">"+safe+"</color>";
         }
 
         public void InspectRoomDoor(int index)
@@ -336,6 +358,7 @@ namespace Manaforge.Play
             selected = false;liveMarkers.text="";liveMarkers.style.display=DisplayStyle.None;RemoveFromClassList("selected");RemoveFromClassList("attacking");RemoveFromClassList("blocking");
             Identity = null;
             artwork.image = null;secondArt.image=null; frame.image = null;printingFooter.image=null;compactProfile=null;miniKind.text="";loyaltyCounter.SetValue(null); mana.Conceal(); rulesSymbols.Conceal();
+            stats.enableRichText=false;
             rulesEmphasis=FontStyle.Normal;rulesScroll.scrollOffset=Vector2.zero;sections.Conceal();doorTabs.Clear();displayValues=null;doorIndex=0;
             foreach (var label in new[] { title, type, rules, stats, status, missing,collector })
                 label.text = "";

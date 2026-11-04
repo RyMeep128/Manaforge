@@ -71,6 +71,8 @@ jobs:
             Mtg_Projects/mtg_play_unity/Artifacts/ForgeStyle-*/side-by-side-*.png
             Mtg_Projects/mtg_play_unity/Artifacts/ForgeStyle-*/multi-seat-*.png
             Mtg_Projects/mtg_play_unity/Artifacts/ForgeStyle-*/default-1v1-*.png
+            Mtg_Projects/mtg_play_unity/Artifacts/ForgeStyle-*/animation-*.png
+            Mtg_Projects/mtg_play_unity/Artifacts/ForgeStyle-*/animation-proof.json
             Mtg_Projects/mtg_play_unity/Artifacts/ForgeStyle-*/resolution-proof.json
             Mtg_Projects/mtg_play_unity/Artifacts/ForgeStyle-*/revision.txt
             Mtg_Projects/mtg_play_unity/Artifacts/DeckPreviewSmoke/

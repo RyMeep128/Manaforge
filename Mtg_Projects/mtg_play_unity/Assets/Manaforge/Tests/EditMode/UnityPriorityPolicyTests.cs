@@ -88,6 +88,24 @@ namespace Manaforge.Play.Tests
             policy.BeginYield("turn",frame);Assert.That(policy.Evaluate(frame),Is.Null);
             policy.SetStop(kind,value,false);Assert.That(policy.Evaluate(frame),Is.Not.Null);
         }
+        [TestCase("two")][TestCase("one")]
+        public void EndTurnYieldExpiresOnNextTurnIncludingExtraTurns(string nextPlayer)
+        {
+            var wire=Source();Response(wire);var policy=new UnityPriorityPolicy();
+            policy.BeginYield("end-turn",Frame(wire));Assert.That(policy.Evaluate(Frame(wire)),Is.Not.Null);
+            wire["body"]["snapshot"]["turn"]=2;wire["body"]["snapshot"]["active_player_id"]=nextPlayer;
+            Assert.That(policy.Evaluate(Frame(wire)),Is.Null);Assert.That(policy.Current.Yield,Is.Null);
+        }
+        [Test] public void EndTurnYieldSurvivesRequiredChoicesAndRespectsStops()
+        {
+            var wire=Source();Response(wire);var policy=new UnityPriorityPolicy();policy.BeginYield("end-turn",Frame(wire));
+            wire["body"]["snapshot"]["decision"]["is_priority"]=false;
+            Assert.That(policy.Evaluate(Frame(wire)),Is.Null);Assert.That(policy.Current.Yield,Is.EqualTo("end-turn"));
+            wire["body"]["snapshot"]["decision"]["is_priority"]=true;
+            policy.SetStop("step","UPKEEP",true);Assert.That(policy.Evaluate(Frame(wire)),Is.Null);
+            policy.SetStop("step","UPKEEP",false);Assert.That(policy.Evaluate(Frame(wire)),Is.Not.Null);
+            policy.Failed();Assert.That(policy.Current.Yield,Is.Null);Assert.That(policy.Evaluate(Frame(wire)),Is.Null);
+        }
         [Test] public void NextTurnYieldExpiresAtTheViewersNextTurn()
         {
             var wire=Source();Response(wire);var policy=new UnityPriorityPolicy();policy.BeginYield("turn",Frame(wire));

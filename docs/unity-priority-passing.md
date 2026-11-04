@@ -8,6 +8,7 @@ Ordinary automatic passing waits 350 ms, then submits the current engine-provide
 
 - **Manual control** cancels a yield and holds every priority opportunity until unchecked.
 - **Yield / phase stops** expands the controls; automation pauses while they are open.
+- Beneath **Pass priority**, **End turn** yields through the current turn and stops when the next turn starts, including an extra turn. On opponents’ turns the button reads **Pass to my turn** and yields until your next turn begins. Both respect phase/step stops and leave required choices manual; completing those choices preserves the yield. The button requires a current actionable priority offer.
 - **Yield until my next turn** explicitly permits passing available responses until the viewer's next turn begins.
 - **Yield until stack changes** explicitly permits passing available responses until stack membership or order changes. Opaque stack references remain stable while continuously present and retire on removal.
 - **Cancel yield** ends the explicit yield; the ordinary auto-pass checkbox still applies.
@@ -16,6 +17,8 @@ Ordinary automatic passing waits 350 ms, then submits the current engine-provide
 
 Targets, combat assignments, payments, trigger ordering, numeric input, and other non-priority choices remain manual. Existing authenticated offer identity, command tracking, and native submission validation remain authoritative. Late command failures are monitored even after the displayed offer is replaced. Viewer changes, completion, disconnect, and disposal cancel pending automation/yields. Engine desktop phase-skipping preferences are disabled so Unity receives priority opportunities needed for stops and manual control.
 
-Validation: all Unity runtime C# scripts compiled against the installed Unity assemblies; 26 focused C# policy checks passed using the production projection and policy code. Seventeen native-to-Unity boundary checks passed, covering incomplete/filtered action lists, non-priority decisions and stack-reference lifetime/order. The updated Java bridge compiled. Eighty-six affected launch/adapter regressions passed on Python 3.13. Unity visual/player acceptance and full suites remain for CI; no CI run was awaited.
+## Live card updates
 
-Changes are uncommitted on `feature/feedback-6-through-10`, alongside the feedback fixes. No installed application, Unity player, release or tag was changed. Rebuild/install the Unity player before testing this feature through the installed application.
+Ordinary snapshots retain unchanged artwork bindings and open inspection. Artwork is cleared when visibility is revoked or its identity changes. Creature stats show current power and current toughness minus marked damage; this is a display adjustment only. Each value is green above its engine-supplied original/base value, orange below it, and normal at base. Unknown or symbolic comparisons keep normal color. Damage cleanup restores the displayed toughness.
+
+Regression coverage lives in the Unity card/surface and priority tests and the Java projection checks. Run suites through GitHub Actions and verify checks against the implemented commit SHA; uncommitted changes have no exact-SHA CI evidence.

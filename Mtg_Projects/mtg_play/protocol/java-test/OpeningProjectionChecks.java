@@ -867,6 +867,13 @@ public final class OpeningProjectionChecks {
         raw=state();raw.getAsJsonArray("players").add(raw.getAsJsonArray("players").get(0).deepCopy());rejects(raw,prompt());
         raw=state();raw.getAsJsonArray("players").get(0).getAsJsonObject().addProperty("life",true);rejects(raw,prompt());
         request=prompt();request.addProperty("message","Use 12345678-abcd-1234-abcd-123456789abc");check(!projection().project(state(),request).toString().contains("12345678-abcd-1234-abcd-123456789abc"));
+        JsonObject baseState=state(),baseCard=baseState.getAsJsonArray("hand").get(0).getAsJsonObject();
+        baseCard.addProperty("base_power","2");baseCard.addProperty("base_toughness","2");baseCard.addProperty("power","4");baseCard.addProperty("toughness","4");
+        JsonObject baseView=projection().project(baseState,prompt());shape(baseView);
+        JsonObject characteristics=baseView.getAsJsonArray("objects").get(0).getAsJsonObject().getAsJsonObject("characteristics");
+        check("2".equals(characteristics.get("base_power").getAsString()) && "2".equals(characteristics.get("base_toughness").getAsString()));
+        baseCard.addProperty("hidden",true);JsonObject hiddenBase=projection().project(baseState,prompt());shape(hiddenBase);
+        check(hiddenBase.getAsJsonArray("objects").get(0).getAsJsonObject().get("characteristics").isJsonNull());
         choiceChecks();landChecks();abilityChecks();stackPriorityChecks();castCorrelationChecks();attackFinishChecks();attackerSelectionChecks();declaredAttackChecks();declaredPriorityChecks();combatDamageChecks();combatCleanupChecks();blockedDamageChecks();turnContinuationChecks();repeatedCombatChecks();combatEntryChecks();
         System.out.println("Opening projection: "+checks+" privacy, schema, isolation and fail-closed checks passed");
     }

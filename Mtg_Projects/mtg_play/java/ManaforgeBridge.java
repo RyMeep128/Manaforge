@@ -248,6 +248,8 @@ public final class ManaforgeBridge implements MageClient {
                 JsonArray value = new JsonArray(); value.add(counter.getName()); value.add(counter.getCount()); counters.add(value);
             }
             item.add("counters", counters);
+            item.addProperty("base_power",card.getOriginalPower()==null?null:card.getOriginalPower().toString());
+            item.addProperty("base_toughness",card.getOriginalToughness()==null?null:card.getOriginalToughness().toString());
             item.addProperty("power", card.getPower());
             item.addProperty("toughness", card.getToughness());
             item.addProperty("type", card.getTypeText());

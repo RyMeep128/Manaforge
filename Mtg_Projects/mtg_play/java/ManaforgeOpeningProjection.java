@@ -285,7 +285,7 @@ public final class ManaforgeOpeningProjection {
                 Boolean hidden=flag(row,"hidden");require(hidden!=null);card.hidden=hidden;card.face_down=flag(row,"face_down");
                 if(!hidden && !Boolean.TRUE.equals(card.face_down)) {
                     String commanderSource=stackRows.contains(row) && row.has("commander_source")?row.get("commander_source").getAsString():row.get("id").getAsString();if(commanderNativeIds.contains(commanderSource))card.commander_id=commanderReferences.get(commanderSource);
-                    CardCharacteristics c=new CardCharacteristics();c.name=text(row,"name");c.power=text(row,"power");c.toughness=text(row,"toughness");
+                    CardCharacteristics c=new CardCharacteristics();c.name=text(row,"name");c.power=text(row,"power");c.toughness=text(row,"toughness");c.base_power=text(row,"base_power");c.base_toughness=text(row,"base_toughness");
                     c.type_line=text(row,"type");c.color=text(row,"color");
                     if(coreCombat){c.loyalty=text(row,"loyalty");c.defense=text(row,"defense");if(row.has("counters"))c.counters=counters(row);}
                     if(row.has("view_rules") && row.get("view_rules").isJsonArray()) {

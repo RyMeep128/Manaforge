@@ -64,7 +64,7 @@ namespace Manaforge.Play
             Directory.CreateDirectory(output);
             // Force an initial swapchain resize; a hidden Windows launch may not paint its initial size.
             Screen.SetResolution(1366,768,FullScreenMode.Windowed);for(int i=0;i<60;i++)yield return null;
-            var resolutions=new JArray();
+            var resolutions=new JArray();var animationProof=new JArray();
             foreach(var size in new[]{new Vector2Int(1280,720),new Vector2Int(1366,768),new Vector2Int(1920,1080),new Vector2Int(2560,1440)}){
                 Screen.SetResolution(size.x,size.y,FullScreenMode.Windowed);
                 for(int i=0;i<30;i++)yield return null;
@@ -81,12 +81,47 @@ namespace Manaforge.Play
                     table.Present(ViewerDecisionProjection.ParseSnapshot(tableJson,tableSession,tableViewer,0,true));for(int i=0;i<5;i++)yield return null;
                     yield return new WaitForEndOfFrame();ScreenCapture.CaptureScreenshot(Path.Combine(output,"default-1v1-"+size.x+"x"+size.y+".png"));
                     for(int i=0;i<5;i++)yield return null;
+                    yield return CaptureAnimations(output,size,animationProof);
                 }
                 resolutions.Add(new JObject{["requested_width"]=size.x,["requested_height"]=size.y,["observed_width"]=Screen.width,["observed_height"]=Screen.height});
             }
+            File.WriteAllText(Path.Combine(output,"animation-proof.json"),new JObject{["fixture_only"]=true,["captures"]=animationProof}.ToString());
             File.WriteAllText(Path.Combine(output,"resolution-proof.json"),new JObject{["fixture_only"]=true,["sizes"]=resolutions}.ToString());
             File.WriteAllText(Path.Combine(output,"revision.txt"),ArtworkFixtureScene.Argument("-manaforgeRevision")??"uncommitted working tree");
             Application.Quit(0);
+        }
+        private IEnumerator CaptureAnimations(string output,Vector2Int size,JArray proof)
+        {
+            var arena=document.rootVisualElement.Q("arena-table");float time=0;bool minimal=false;
+            Vector2? Zone(string owner,string zone){
+                var pile=arena.Q<ZonePile>((owner==tableViewer?"local-":"opponent-")+(zone=="graveyard"?"graveyard":"library"));
+                if(zone=="library" || zone=="graveyard")return arena.WorldToLocal(pile.worldBound.center);
+                if(zone=="battlefield")return new Vector2(arena.resolvedStyle.width*.55f,arena.resolvedStyle.height*.6f);
+                return zone=="stack"?new Vector2(arena.resolvedStyle.width-90,arena.resolvedStyle.height*.42f):new Vector2(arena.resolvedStyle.width*.48f,arena.resolvedStyle.height-130);
+            }
+            var frame=ViewerDecisionProjection.ParseSnapshot(tableJson,tableSession,tableViewer,0,true);
+            var scenes=new[]{
+                ("draw",new[]{new GameplayMotionCue(GameplayMotionKind.Draw,owner:tableViewer,from:"library",to:"hand")}),
+                ("cast",new[]{new GameplayMotionCue(GameplayMotionKind.Cast,"review-card-4",owner:tableViewer,from:"hand",to:"stack")}),
+                ("arrival",new[]{new GameplayMotionCue(GameplayMotionKind.Arrive,"review-card-4",owner:tableViewer,from:"stack",to:"battlefield")}),
+                ("tap",new[]{new GameplayMotionCue(GameplayMotionKind.Tap,"review-card-4")}),
+                ("combat",new[]{new GameplayMotionCue(GameplayMotionKind.Attack,"review-card-4",related:"review-card-8")}),
+                ("block",new[]{new GameplayMotionCue(GameplayMotionKind.Block,"review-card-8",related:"review-card-4")}),
+                ("damage-stats",new[]{new GameplayMotionCue(GameplayMotionKind.Damage,"review-card-4",text:"-3"),new GameplayMotionCue(GameplayMotionKind.Boost,"review-card-6",text:"+2/+2")}),
+                ("departure",new[]{new GameplayMotionCue(GameplayMotionKind.Depart,"review-card-4",owner:tableViewer,from:"battlefield",to:"graveyard")}),
+                ("turn",new[]{new GameplayMotionCue(GameplayMotionKind.Turn,text:"Your turn")}),
+                ("result",new[]{new GameplayMotionCue(GameplayMotionKind.Result,text:"Victory")})
+            };
+            using(var review=new GameplayAnimationCoordinator(arena,table.Surface,Zone,player=>null,()=>minimal,()=>time)){
+                foreach(bool reduced in new[]{false,true})foreach(var scene in scenes){
+                    review.Clear();minimal=reduced;time=0;
+                    review.Observe(frame,new[]{new GameplayMotionBatch(frame.Context,scene.Item2)});review.Advance();yield return null;
+                    time=reduced?.05f:.35f;review.Advance();yield return new WaitForEndOfFrame();
+                    string filename="animation-"+scene.Item1+(reduced?"-reduced":"-full")+"-"+size.x+"x"+size.y+".png";
+                    ScreenCapture.CaptureScreenshot(Path.Combine(output,filename));for(int i=0;i<5;i++)yield return null;
+                    proof.Add(new JObject{["file"]=filename,["scenario"]=scene.Item1,["reduced_motion"]=reduced,["width"]=Screen.width,["height"]=Screen.height});
+                }
+            }
         }
         private void ShowTable(string fixture)
         {
@@ -105,7 +140,7 @@ namespace Manaforge.Play
             for(int i=0;i<13;i++){
                 var card=original.DeepClone();bool enemy=i>=8;card["object_id"]="review-card-"+i;card["owner_id"]=enemy?other:tableViewer;card["controller_id"]=enemy?other:tableViewer;
                 card["zone"]=i<4?"hand":i==12?"graveyard":"battlefield";card["characteristics"]["name"]=i<4?"Forge Study "+(i+1):i%2==0?"Ember Sentinel":"Ashen Workshop";
-                card["characteristics"]["type_line"]=i>=4 && i%2==1?"Basic Land":"Artifact Creature";card["tapped"]=i==5;cards.Add(card);
+                card["characteristics"]["type_line"]=i>=4 && i%2==1?"Basic Land":"Artifact Creature";card["tapped"]=i==5;card["face_down"]=false;card["damage"]=0;cards.Add(card);
             }
             snapshot["objects"]=cards;tableJson=envelope.ToString();tableTicket=table.Surface.BeginViewer(tableSession,tableViewer);
             table.Surface.TryPresent(tableTicket,ViewerCardProjection.ParseSnapshot(tableJson,tableSession,tableViewer,0,true));note.BringToFront();

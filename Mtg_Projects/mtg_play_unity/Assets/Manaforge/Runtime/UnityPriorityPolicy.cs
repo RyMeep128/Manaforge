@@ -38,7 +38,7 @@ namespace Manaforge.Play
         public void Resume(){Current.Paused=false;}
         public void BeginYield(string mode,ProjectedDecisionFrame frame)
         {
-            Observe(frame);if(frame==null || (mode!="turn" && mode!="stack") || frame.Status!="active" || frame.Result!=null)return;
+            Observe(frame);if(frame==null || (mode!="turn" && mode!="stack" && mode!="end-turn") || frame.Status!="active" || frame.Result!=null)return;
             Current.Yield=mode;Current.YieldTurn=frame.Turn;Current.YieldStack=StackKey(frame);Current.Manual=false;
         }
         public bool SetStop(string kind,string value,bool enabled)
@@ -60,6 +60,7 @@ namespace Manaforge.Play
             if(frame.Status!="active" || frame.Result!=null){Suspend();return;}
             if(Current.Yield=="turn" && (!frame.Turn.HasValue || !Current.YieldTurn.HasValue
                 || frame.Turn<Current.YieldTurn || frame.ActivePlayerId==frame.Context.ViewerId && frame.Turn!=Current.YieldTurn))CancelYield();
+            if(Current.Yield=="end-turn" && (!frame.Turn.HasValue || frame.Turn!=Current.YieldTurn))CancelYield();
             if(Current.Yield=="stack" && StackKey(frame)!=Current.YieldStack)CancelYield();
         }
         public ProjectedAction Evaluate(ProjectedDecisionFrame frame)
@@ -80,7 +81,7 @@ namespace Manaforge.Play
             if(reason!=null){Current.Reason=reason;return null;}
             var passes=frame.Actions.Where(action=>action.Kind=="pass" && action.ObjectId==null).ToArray();
             if(passes.Length!=1){Current.Reason="Pass action unavailable";return null;}
-            Current.Reason=Current.Yield=="turn"?"Yielding until my next turn":Current.Yield=="stack"?"Yielding until stack changes":"Automatic priority";
+            Current.Reason=Current.Yield=="end-turn"?"Yielding until this turn ends":Current.Yield=="turn"?"Yielding until my next turn":Current.Yield=="stack"?"Yielding until stack changes":"Automatic priority";
             return passes[0];
         }
         public bool Claim(ProjectedDecisionFrame frame)

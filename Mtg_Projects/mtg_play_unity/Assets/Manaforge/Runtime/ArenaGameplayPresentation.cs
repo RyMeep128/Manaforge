@@ -17,7 +17,7 @@ namespace Manaforge.Play
         private readonly PlayerPanel localPlayer,opponent;
         private bool unsupportedTopology,restoringFocus;
         private readonly GameplayOverlay inspector;
-        private readonly BattlefieldLinks links;private readonly ArenaLibraryMotion libraryMotion;private ViewerBoardInput boardInput;private UnityPriorityControls priorityControls;private bool disposed;
+        private readonly BattlefieldLinks links;private readonly GameplayAnimationCoordinator animations;private ViewerBoardInput boardInput;private UnityPriorityControls priorityControls;private bool disposed;
         private readonly System.Collections.Generic.HashSet<CardView> wired=new System.Collections.Generic.HashSet<CardView>();
         private ViewerSessionHost host;private ProjectedDecisionFrame frame;private bool inspecting;private int artworkCount=-1;
         public ViewerCardSurface Surface {get;}
@@ -46,18 +46,29 @@ namespace Manaforge.Play
             stackTitle=Label("stack-title","");stackTitle.pickingMode=PickingMode.Ignore;
             commanders=Label("game-commanders","");
             choices=new ScrollView(ScrollViewMode.Vertical){name="table-choices"};root.Add(choices);
-            var motion=new Toggle("Reduced motion"){name="table-motion",value=false};motion.RegisterValueChangedCallback(ev=>root.EnableInClassList("reduced-motion",ev.newValue));root.Add(motion);
-            libraryMotion=new ArenaLibraryMotion(root,player=>{
-                var pile=player==localPlayer.PlayerId?localLibrary:player==opponent.PlayerId?opponentLibrary:null;
-                if(pile==null)return null;
-                var origin=root.WorldToLocal(pile.worldBound.center);
-                var destination=player==localPlayer.PlayerId?new Vector2(root.resolvedStyle.width*.48f,root.resolvedStyle.height-130):root.WorldToLocal(opponentHand.worldBound.center);
-                return new LibraryMotionAnchors(origin,destination);
-            },()=>motion.value);
+            var motion=new Toggle("Reduced motion"){name="table-motion",value=false};motion.RegisterValueChangedCallback(ev=>{root.EnableInClassList("reduced-motion",ev.newValue);animations?.Advance();});root.Add(motion);
+            animations=new GameplayAnimationCoordinator(root,Surface,MotionZoneAnchor,MotionPlayerAnchor,()=>motion.value);
             result=Label("table-result","");CardTypography.Apply(result,CardTextRole.Title);result.style.display=DisplayStyle.None;
             var close=new Button(()=>CloseInspection()){text="Close inspection | Esc",name="close-inspection"};root.Add(close);close.style.display=DisplayStyle.None;inspector=new GameplayOverlay(Surface.InspectionView,close);
             root.RegisterCallback<KeyDownEvent>(ev=>{if(ev.keyCode==KeyCode.Escape){CloseInspection();ClosePublicZone();}});
             root.RegisterCallback<GeometryChangedEvent>(ev=>Layout());
+        }
+        private Vector2? MotionPlayerAnchor(string player)
+        {
+            var panel=player==localPlayer.PlayerId?localPlayer:player==opponent.PlayerId?opponent:null;
+            return panel==null?null:(Vector2?)root.WorldToLocal(panel.worldBound.center);
+        }
+        private Vector2? MotionZoneAnchor(string owner,string zone)
+        {
+            if(owner==null || owner!=localPlayer.PlayerId && owner!=opponent.PlayerId)return null;
+            bool local=owner==localPlayer.PlayerId;
+            var pile=zone=="library"?(local?localLibrary:opponentLibrary):zone=="graveyard"?(local?localGraveyard:opponentGraveyard):zone=="exile"?(local?localExile:opponentExile):null;
+            if(pile!=null)return root.WorldToLocal(pile.worldBound.center);
+            float width=root.resolvedStyle.width,height=root.resolvedStyle.height;
+            if(zone=="hand")return local?new Vector2(width*.48f,height-130):root.WorldToLocal(opponentHand.worldBound.center);
+            if(zone=="stack")return new Vector2(width-90,height*.42f);
+            if(zone=="battlefield")return new Vector2(width*.55f,height*(local?.6f:.3f));
+            return null;
         }
         private string OpponentId()=>opponent.PlayerId;
         private static string ZoneName(string zone)=>ZonePile.Title(zone);
@@ -76,7 +87,7 @@ namespace Manaforge.Play
         }
         private void ClearZoneResources()
         {
-            ClearCardFocus();inspecting=false;inspector?.Hide(false);CloseInspection();openZone=openZoneOwner=null;localPlayer.ClearBinding();opponent.ClearBinding();opponentHand.Clear();libraryMotion?.Clear();links.Set(Array.Empty<BattlefieldLinks.Link>());
+            ClearCardFocus();inspecting=false;inspector?.Hide(false);CloseInspection();openZone=openZoneOwner=null;localPlayer.ClearBinding();opponent.ClearBinding();opponentHand.Clear();animations?.Clear();links.Set(Array.Empty<BattlefieldLinks.Link>());
             zoneDrawer?.ClearBinding();
             root.RemoveFromClassList("browsing-public-zone");frame=null;rowPages.Clear();
             foreach(var pile in new[]{localLibrary,opponentLibrary,localGraveyard,opponentGraveyard,localExile,opponentExile}){
@@ -86,7 +97,7 @@ namespace Manaforge.Play
         private Label Label(string name,string text){var label=new Label(text){name=name,enableRichText=false};root.Add(label);return label;}
         public void CloseInspection(){bool restore=inspecting;inspecting=false;previewing=false;previewId=null;restoringFocus=true;try{inspector?.Hide(restore);}finally{restoringFocus=false;}}
         public void Bind(ViewerSessionHost value)
-        {if(Decisions!=null)throw new InvalidOperationException("PRESENTATION_ALREADY_BOUND");host=value;Decisions=new ViewerDecisionPanel(choices,host);Decisions.SetSpatialPresentation(true);Decisions.SetChoicePreview(Surface.ChoicePreview);priorityControls=new UnityPriorityControls(root,Decisions);boardInput=new ViewerBoardInput(root,Surface,host,Decisions,GameplayTheme.Menu);}
+        {if(Decisions!=null)throw new InvalidOperationException("PRESENTATION_ALREADY_BOUND");host=value;Decisions=new ViewerDecisionPanel(choices,host);Decisions.PresentationHold=()=>animations.HoldAutomaticPassing;Decisions.SetSpatialPresentation(true);Decisions.SetChoicePreview(Surface.ChoicePreview);priorityControls=new UnityPriorityControls(root,Decisions);boardInput=new ViewerBoardInput(root,Surface,host,Decisions,GameplayTheme.Menu);}
         public void Present(ProjectedDecisionFrame value)
         {
             if(disposed)return;
@@ -100,7 +111,10 @@ namespace Manaforge.Play
             priorityControls?.Refresh();
             if(frame!=null && frame.Context.Revision==value.Context.Revision && frame.Context.SessionId==value.Context.SessionId && frame.Context.ViewerId==value.Context.ViewerId){boardInput?.Refresh();RefreshPlayers();if(artworkCount!=Surface.PresentedArtworkCount){artworkCount=Surface.PresentedArtworkCount;Layout();}return;}
             artworkCount=Surface.PresentedArtworkCount;
-            ClearCardFocus();inspecting=false;inspector.Hide(false);frame=value;CloseInspection();
+            if(frame==null || frame.Context.SessionId!=value.Context.SessionId || frame.Context.ViewerId!=value.Context.ViewerId || !Surface.HasInspection){
+                ClearCardFocus();CloseInspection();
+            }
+            frame=value;
             string viewer=frame.Context.ViewerId;
             localPlayer.Present(frame.PlayerLifeTotals[viewer],frame.Decision?.PlayerId==viewer,false,root.ClassListContains("reduced-motion"));
             opponent.Present(frame.PlayerLifeTotals[opponent.PlayerId],frame.Decision?.PlayerId==opponent.PlayerId,false,root.ClassListContains("reduced-motion"));
@@ -110,7 +124,7 @@ namespace Manaforge.Play
             result.text=frame.Result==null?"":frame.Result=="win"?"Victory":frame.Result=="loss"?"Defeat":frame.Result=="draw"?"Draw":"Game complete\n"+frame.Result;result.style.display=frame.Result==null?DisplayStyle.None:DisplayStyle.Flex;if(frame.Result!=null)result.BringToFront();
             commanders.text=CommanderPresentationText.Format(frame);
             if(Decisions!=null)GameplayTheme.Decision(Decisions,frame);
-            OpenOfferedZone();Layout();libraryMotion.Observe(frame);
+            OpenOfferedZone();Layout();animations.Observe(frame,Surface.TakeAnimations());
         }
         private static string PhaseName(string phase)
         {switch(phase){case "PRECOMBAT_MAIN":return "Main phase";case "POSTCOMBAT_MAIN":return "Second main phase";case "COMBAT":return "Combat";case "BEGINNING":return "Beginning phase";case "ENDING":return "Ending phase";default:return (phase??"Opening hand").Replace('_',' ');}}
@@ -295,7 +309,7 @@ namespace Manaforge.Play
             choices.BringToFront();result.BringToFront();if(inspecting || previewing)Surface.InspectionView.BringToFront();root.Q<Button>("close-inspection").BringToFront();
             boardInput?.Refresh();RefreshPlayers();links.schedule.Execute(UpdateLinks);
         }
-        public void Dispose(){if(disposed)return;ClearZoneResources();disposed=true;boardInput?.Dispose();libraryMotion.Dispose();inspector.Dispose();priorityControls?.Dispose();Decisions?.Dispose();Surface.Clearing-=ClearZoneResources;Surface.Rebinding-=ClearPileArt;Surface.Dispose();
+        public void Dispose(){if(disposed)return;ClearZoneResources();disposed=true;boardInput?.Dispose();animations.Dispose();inspector.Dispose();priorityControls?.Dispose();Decisions?.Dispose();Surface.Clearing-=ClearZoneResources;Surface.Rebinding-=ClearPileArt;Surface.Dispose();
             localPlayer.Dispose();opponent.Dispose();foreach(var pile in new[]{localLibrary,opponentLibrary,localGraveyard,opponentGraveyard,localExile,opponentExile})pile.Dispose();zoneDrawer.Dispose();wired.Clear();root.RemoveFromHierarchy();}
     }
 }
