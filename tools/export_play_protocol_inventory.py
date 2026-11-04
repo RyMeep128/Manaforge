@@ -56,7 +56,7 @@ def inventory():
     # Candidate strings deliberately retain provenance: not all uppercase literals
     # are public errors, and dynamically constructed codes need manual review.
     candidates = {}
-    for filename in ("adapter.py", "decks.py", "connection_proof.py"):
+    for filename in ("decks.py", "connection_proof.py", "live_game.py"):
         path = PLAY / filename
         literals = {
             node.value

@@ -1,3 +1,7 @@
+> Current implementation: Unity is the gameplay UI. The Python adapter and Qt
+> game UI are retired. Play offers one Start Game action for Unity; the plan
+> below retains historical context. See [Unity Play](../Mtg_Projects/mtg_play/README.md).
+
 # Manaforge Play - historic PyQt delivery and regression baseline
 
 The [Unity + Java roadmap](play-unity-java-roadmap.md) is the proposed replacement

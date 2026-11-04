@@ -1,9 +1,9 @@
 name: Play native payment
 on:
   push:
-    paths: ['Mtg_Projects/mtg_play/java/payment*/**', 'Mtg_Projects/mtg_play/adapter.py', 'Mtg_Projects/mtg_play/adapter_acceptance.py', 'Mtg_Projects/mtg_play/connection_proof.py', 'tools/check_play_payment_coordinator.py', '.github/workflows/play-payment-native.yml']
+    paths: ['Mtg_Projects/mtg_play/java/payment*/**', 'Mtg_Projects/mtg_play/connection_proof.py', 'tools/check_play_payment_coordinator.py', '.github/workflows/play-payment-native.yml']
   pull_request:
-    paths: ['Mtg_Projects/mtg_play/java/payment*/**', 'Mtg_Projects/mtg_play/adapter.py', 'Mtg_Projects/mtg_play/adapter_acceptance.py', 'Mtg_Projects/mtg_play/connection_proof.py', 'tools/check_play_payment_coordinator.py', '.github/workflows/play-payment-native.yml']
+    paths: ['Mtg_Projects/mtg_play/java/payment*/**', 'Mtg_Projects/mtg_play/connection_proof.py', 'tools/check_play_payment_coordinator.py', '.github/workflows/play-payment-native.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -30,15 +30,3 @@ jobs:
         run: python -m mtg_play.ci_prepare --destination "$env:RUNNER_TEMP/manaforge-payment-engine" --jdk-path "$env:JAVA_HOME"
       - name: Native API, utility and ownership checks
         run: python tools/check_play_payment_coordinator.py --probe-pinned-helpers --xmage-root "$env:RUNNER_TEMP/manaforge-payment-engine" --javap "$env:JAVA_HOME/bin/javap.exe"
-      - name: Real native payment observation
-        run: |
-          New-Item -ItemType Directory -Force "$env:RUNNER_TEMP/manaforge-payment-reports" | Out-Null
-          python -m mtg_play.adapter_acceptance --scenario number --payment-context-probe --xmage-root "$env:RUNNER_TEMP/manaforge-payment-engine" --jdk-path "$env:JAVA_HOME" --output "$env:RUNNER_TEMP/manaforge-payment-reports/payment-context.json"
-          if ($LASTEXITCODE -ne 0) { throw 'Native payment observation failed' }
-      - name: Upload sanitized public-fixture evidence
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: native-payment-${{ github.sha }}
-          if-no-files-found: warn
-          path: '${{ runner.temp }}/manaforge-payment-reports/*.json'

@@ -30,7 +30,7 @@ layout selection and an authoritative face-selection contract remain subsequent
 work; this slice never guesses artwork from a name or transform flag.
 
 `engine_view_text`, `current_abilities` and `unsupported_fields` remain separate,
-read-only properties. As [ADAPTER.md](../ADAPTER.md) states, engine presentation
+read-only properties. As [Unity Play](../README.md) states, engine presentation
 text is not guaranteed complete dynamic Oracle text. There is no automatic
 conversion to `CardDisplayValues.RulesText`, no printed-text replacement of
 unknown current text, no extracted ability identities and no legality inference.

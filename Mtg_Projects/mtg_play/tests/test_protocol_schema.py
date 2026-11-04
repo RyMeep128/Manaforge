@@ -7,7 +7,6 @@ from pathlib import Path
 import pytest
 from jsonschema import Draft202012Validator, ValidationError
 
-from generate_protocol_fixtures import artifacts
 from mtg_play.protocol_schema import contract_schema
 
 DIRECTORY = Path(__file__).resolve().parents[1] / "protocol"
@@ -26,14 +25,10 @@ def snapshot(name="visible-hand"):
     )
 
 
-def test_schema_is_valid_and_artifacts_are_reproducible():
+def test_schema_is_valid_and_matches_contracts():
     Draft202012Validator.check_schema(SCHEMA)
     assert SCHEMA == contract_schema()
-    for name, payload in artifacts().items():
-        # JSON serialization intentionally converts tuple fields to arrays.
-        assert json.loads((DIRECTORY / name).read_text()) == json.loads(
-            json.dumps(payload)
-        )
+
 
 
 @pytest.mark.parametrize("case", FIXTURES["cases"], ids=lambda case: case["name"])

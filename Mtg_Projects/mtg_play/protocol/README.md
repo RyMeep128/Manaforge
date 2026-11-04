@@ -73,7 +73,7 @@ the session. Preserve stale-decision/object rejection, unavailable coherent fram
 unsupported cancellation, invalid amounts and closed/unauthorized-seat errors.
 AI seats cannot be inspected or commanded through the human session boundary.
 
-Use [ADAPTER.md](../ADAPTER.md) for existing scenario evidence and limitations.
+See [Unity Play](../README.md) for the current gameplay entry point.
 `tests/test_adapter.py` covers serialization, hidden printing scrubbing, incarnation
 retirement, private observations, stale/consumed prompts, disconnect/uncertainty,
 amounts, selection completion, metadata coherence, commanders and AI seat isolation.
@@ -105,8 +105,6 @@ contain no user decks or private match data. Opaque IDs are deterministic fixtur
 IDs, and provenance includes normalized-source hashes. No real engine starts.
 
 ```powershell
-./Mtg_Projects/mtg_proxy/venv/Scripts/python.exe Mtg_Projects/mtg_play/tests/generate_protocol_fixtures.py
-./Mtg_Projects/mtg_proxy/venv/Scripts/python.exe Mtg_Projects/mtg_play/tests/generate_protocol_fixtures.py --check
 ./Mtg_Projects/mtg_proxy/venv/Scripts/python.exe -m pytest Mtg_Projects/mtg_play/tests/test_protocol_schema.py -q
 ```
 

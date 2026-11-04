@@ -1,1166 +1,150 @@
-"""Embedded local Play foundation, using only Manaforge gameplay contracts."""
+"""Saved-deck launcher for Unity gameplay; game decisions belong to Unity/Java."""
 
+from copy import deepcopy
+from dataclasses import replace
 from PyQt6 import QtCore as C, QtWidgets as W
 from mtg_core.paths import data_root
 from mtg_ui.jobs import JobQueue
-from dataclasses import replace
-from copy import deepcopy
-import time
-import json
-from .assets import prepare_assets
-from .deck_preview import run_preview, PreviewLaunch
 from .live_game import run_live_game, LiveGameLaunch
 from .lobby import DeckSelection, offline_lobby
-from .navigation import ModeSelection, PlayLanding, PlayPages
-from .opponents import OpponentRandomizer
-from .presentation import SessionController, local_adapter
-from .setup import prepare_catalog, saved_decks
-from .table import GameTable
-from .priority_ui import PriorityControls
-from mtg_editor.card_views import Thumbnails
+from .setup import saved_decks, prepare_catalog
 
 
 class PlayWorkspace(W.QWidget):
-    def __init__(
-        self,
-        service,
-        home,
-        parent=None,
-        *,
-        adapter_factory=local_adapter,
-        deck_provider=None,
-        lobby=None,
-        browse_library=None,
-    ):
+    def __init__(self, service, home, parent=None, *, deck_provider=None,
+                 lobby=None, browse_library=None):
         super().__init__(parent)
         self.setWindowTitle("Play")
         self.service = service
+        self.lobby = lobby or offline_lobby()
         self._deck_provider = deck_provider or (lambda: saved_decks(data_root()))
         self._decks = ()
-        self._browse_library = browse_library
-        self.lobby = lobby or offline_lobby()
-        self.lobby.offline_setup()
-        self._focused_toolbar_state = None
-        self._window_snapshot = None
-        self._approved_close = False
-        self._format_confirmed = False
-        self._confirmed_format = None
-        self._asset_pending = None
-        self._asset_epoch = 0
-        self._asset_cancelled = False
-        self._prepared_match = None
-        self._view = None
-        self._seats = ()
-        self._seat_id = self.lobby.local_seat_id
-        self.deck_artwork = Thumbnails(service, self)
-        self.deck_artwork.updated.connect(self._deck_images)
-        self.session = SessionController(
-            self,
-            adapter_factory=adapter_factory,
-            authorized_viewer_id=self.lobby.local_seat_id,
-        )
-        self.opponents = OpponentRandomizer(self, adapter_factory=adapter_factory)
-        self.opponents.changed.connect(self._selection_changed)
-        self.opponents.changed.connect(self._opponent_loading_changed)
-        self.opponents.message.connect(self._status)
-        self.opponents.selected.connect(self._randomized)
-        self.asset_jobs = JobQueue(self)
-        self.asset_jobs.status.connect(self._assets_completed)
-        self.asset_jobs.progress.connect(self._assets_progress)
-        self.asset_jobs.idle.connect(self._assets_idle)
         self._native_launch = None
         self.native_jobs = JobQueue(self)
         self.native_jobs.progress.connect(self._native_progress)
         self.native_jobs.status.connect(self._native_status)
         self.native_jobs.idle.connect(self._selection_changed)
-        self._preview_launch = None
-        self.preview_jobs = JobQueue(self)
-        self.preview_jobs.progress.connect(self._preview_progress)
-        self.preview_jobs.status.connect(self._preview_status)
-        self.preview_jobs.idle.connect(self._selection_changed)
         self.catalog_jobs = JobQueue(self)
         self.catalog_jobs.status.connect(self._catalog_loaded)
-        self.catalog_jobs.progress.connect(self._catalog_progress)
         self.catalog_jobs.idle.connect(self._selection_changed)
-        self.session.statusChanged.connect(self._status)
-        self.session.snapshotChanged.connect(self._show_snapshot)
-        self.session.viewCleared.connect(self._clear_view)
-        self.session.stopped.connect(self._stopped)
-        self.session.jobs.idle.connect(self._selection_changed)
-        self.session.jobs.idle.connect(self._engine_loading_idle)
-        self.session.interactionPending.connect(self._pending)
         layout = W.QVBoxLayout(self)
         layout.setContentsMargins(24, 20, 24, 20)
-        heading = W.QHBoxLayout()
-        title = self.workspace_title = W.QLabel("Play")
+        title = W.QLabel("Play")
         title.setProperty("role", "title")
-        heading.addWidget(title)
-        heading.addStretch()
-        self.home_button = W.QPushButton("Home")
-        self.home_button.clicked.connect(home)
-        heading.addWidget(self.home_button)
-        layout.addLayout(heading)
-        intro = self.intro = W.QLabel(
-            "You and your decks against an offline AI opponent."
-        )
-        intro.setProperty("role", "subtitle")
+        layout.addWidget(title)
+        intro = W.QLabel("Choose your decks and start a Unity game against an offline AI opponent.")
+        intro.setWordWrap(True)
         layout.addWidget(intro)
-        self.pages = PlayPages()
-        layout.addWidget(self.pages, 1)
-        self.landing_page = PlayLanding()
-        self.mode_page = ModeSelection()
-        self.pages.addWidget(self.landing_page)
-        self.pages.addWidget(self.mode_page)
-        self._format_origin = self.landing_page
-        self.landing_page.playRequested.connect(lambda: self._show_page(self.mode_page))
-        self.landing_page.offlineRequested.connect(self._open_offline)
-        self.mode_page.offlineRequested.connect(self._open_offline)
-        self.mode_page.backRequested.connect(lambda: self._show_page(self.landing_page))
-        self.format_page = W.QWidget()
-        format_layout = W.QVBoxLayout(self.format_page)
-        format_layout.setContentsMargins(0, 24, 0, 24)
-        format_layout.setSpacing(20)
-        format_title = W.QLabel("Choose your format")
-        format_title.setProperty("role", "title")
-        format_layout.addWidget(format_title)
-        format_note = W.QLabel(
-            "Choose a format before selecting your deck and the AI opponent's deck."
-        )
-        format_note.setWordWrap(True)
-        format_layout.addWidget(format_note)
-        format_row = W.QFormLayout()
+        form = W.QFormLayout()
         self.format = W.QComboBox()
-        self.format.addItem("Choose a format", None)
         self.format.addItem("Freeform", "freeform")
         self.format.addItem("Commander", "commander")
-        self.format.setMaximumWidth(640)
-        self.format.setAccessibleName("Offline match format")
-        format_row.addRow("Format", self.format)
-        format_layout.addLayout(format_row)
-        format_actions = W.QHBoxLayout()
-        self.format_back = W.QPushButton("Back")
-        self.format_back.clicked.connect(self._back_from_format)
-        format_actions.addWidget(self.format_back)
-        format_actions.addStretch()
-        self.format_continue = W.QPushButton("Continue to Lobby")
-        self.format_continue.setProperty("buttonRole", "primary")
-        self.format_continue.setEnabled(False)
-        self.format_continue.clicked.connect(self._enter_lobby)
-        format_actions.addWidget(self.format_continue)
-        format_layout.addLayout(format_actions)
-        format_layout.addStretch()
-        self.pages.addWidget(self.format_page)
-        self.setup_page = W.QScrollArea()
-        self.setup_page.setFrameShape(W.QFrame.Shape.NoFrame)
-        self.setup_page.setWidgetResizable(True)
-        setup_content = W.QWidget()
-        self.setup_page.setWidget(setup_content)
-        setup_layout = W.QVBoxLayout(setup_content)
-        setup_layout.setContentsMargins(0, 16, 0, 0)
-        lobby_heading = W.QHBoxLayout()
-        self.setup_format = W.QLabel("Offline match lobby")
-        self.setup_format.setProperty("role", "title")
-        lobby_heading.addWidget(self.setup_format)
-        lobby_heading.addStretch()
-        self.change_format = W.QPushButton("Change format")
-        self.change_format.clicked.connect(self._open_offline)
-        lobby_heading.addWidget(self.change_format)
-        setup_layout.addLayout(lobby_heading)
-        seats = W.QHBoxLayout()
-        self.selectors, self.details, self.covers = [], [], []
-        self.readiness_labels, self.partner_covers = [], []
-        for index, seat in enumerate(self.lobby.seats):
-            box = W.QGroupBox(seat.player.name)
-            form = W.QFormLayout(box)
-            if index == 1:
-                opponent_options = W.QHBoxLayout()
-                self.use_ai = W.QPushButton("Use AI")
-                self.use_ai.setCheckable(True)
-                self.use_ai.setChecked(True)
-                self.use_ai.setAutoExclusive(True)
-                self.invite_friend = W.QPushButton("Invite Friend - Coming Soon")
-                self.invite_friend.setEnabled(False)
-                self.invite_friend.setToolTip(
-                    "Inviting friends will be available with multiplayer."
-                )
-                opponent_options.addWidget(self.use_ai)
-                opponent_options.addWidget(self.invite_friend)
-                form.addRow(opponent_options)
+        self.format.setCurrentIndex(self.format.findData(self.lobby.format))
+        self.format.currentIndexChanged.connect(self._selection_changed)
+        form.addRow("Format", self.format)
+        self.selectors = []
+        for label in ("Your deck", "AI opponent deck"):
             selector = W.QComboBox()
-            selector.setMinimumContentsLength(18)
-            selector.setSizeAdjustPolicy(
-                W.QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
-            )
-            details = W.QLabel("Choose a saved deck")
-            details.setWordWrap(True)
-            details.setTextFormat(C.Qt.TextFormat.PlainText)
-            form.addRow("Deck", selector)
-            if index == 1:
-                random_actions = W.QHBoxLayout()
-                self.randomize = W.QPushButton("Randomize")
-                self.randomize.setToolTip(
-                    "Check saved decks with offline XMage and choose an eligible opponent."
-                )
-                self.randomize.clicked.connect(self._randomize)
-                self.cancel_randomize = W.QPushButton("Cancel preparation")
-                self.cancel_randomize.clicked.connect(self.opponents.cancel)
-                self.retry_preparation = W.QPushButton("Retry preparation cleanup")
-                self.retry_preparation.clicked.connect(self.opponents.retry_cleanup)
-                random_actions.addWidget(self.randomize)
-                random_actions.addWidget(self.cancel_randomize)
-                random_actions.addWidget(self.retry_preparation)
-                form.addRow(random_actions)
-            form.addRow(details)
-            readiness = W.QLabel("Choose a deck to check readiness.")
-            readiness.setWordWrap(True)
-            readiness.setTextFormat(C.Qt.TextFormat.PlainText)
-            readiness.setAccessibleName(seat.player.name + " deck readiness")
-            form.addRow(readiness)
-            self.readiness_labels.append(readiness)
-            cover = W.QLabel()
-            cover.setMinimumHeight(140)
-            cover.setAlignment(C.Qt.AlignmentFlag.AlignCenter)
-            partner = W.QLabel()
-            partner.setMinimumHeight(140)
-            partner.setAlignment(C.Qt.AlignmentFlag.AlignCenter)
-            partner.hide()
-            cover_row = W.QHBoxLayout()
-            cover_row.addWidget(cover)
-            cover_row.addWidget(partner)
-            form.addRow(cover_row)
-            self.partner_covers.append(partner)
-            self.selectors.append(selector)
-            self.details.append(details)
-            self.covers.append(cover)
+            selector.setAccessibleName(label)
             selector.currentIndexChanged.connect(self._selection_changed)
-            seats.addWidget(box)
-        setup_layout.addLayout(seats)
-        note = W.QLabel(
-            "Offline Play preview. You control your own seat; the AI handles its own decisions."
-        )
-        note.setWordWrap(True)
-        note.setProperty("role", "muted")
-        setup_layout.addWidget(note)
-        engine_note = W.QLabel(
-            "XMage validates the selected cards and printings when you start."
-        )
-        engine_note.setWordWrap(True)
-        engine_note.setProperty("role", "muted")
-        setup_layout.addWidget(engine_note)
-        self.shared_decks = W.QPushButton("Browse shared decks")
-        self.shared_decks.setEnabled(callable(self._browse_library))
-        self.shared_decks.setToolTip(
-            "Use Browse Online to follow a shared deck, then return here and refresh. Accepted cached decks can be used offline."
-        )
-        self.shared_decks.clicked.connect(self._browse_shared)
-        setup_layout.addWidget(self.shared_decks, 0, C.Qt.AlignmentFlag.AlignLeft)
-        shared_hint = W.QLabel(
-            "Follow a deck in Browse Online, then return here and Refresh decks. Accepted cached copies remain available offline."
-        )
-        shared_hint.setWordWrap(True)
-        shared_hint.setProperty("role", "muted")
-        setup_layout.addWidget(shared_hint)
-        self.start_reason = W.QLabel()
-        self.start_reason.setWordWrap(True)
-        self.start_reason.setTextFormat(C.Qt.TextFormat.PlainText)
-        self.start_reason.setAccessibleName("Match readiness")
-        setup_layout.addWidget(self.start_reason)
-        actions = W.QHBoxLayout()
-        self.lobby_back = W.QPushButton("Back to Play")
-        self.lobby_back.clicked.connect(lambda: self._show_page(self.landing_page))
-        actions.addWidget(self.lobby_back)
-        self.reload = W.QPushButton("Refresh decks")
-        self.reload.clicked.connect(self.load_decks)
-        actions.addWidget(self.reload)
-        actions.addStretch()
+            form.addRow(label, selector)
+            self.selectors.append(selector)
+        self.unity_payment_mode = W.QComboBox()
+        self.unity_payment_mode.setAccessibleName("Unity mana payment")
+        for label, mode in (("Auto mana", "auto"), ("Manual mana", "manual"),
+                            ("Full Control", "full-control")):
+            self.unity_payment_mode.addItem(label, mode)
+        form.addRow("Mana payment", self.unity_payment_mode)
+        layout.addLayout(form)
         self.start_button = W.QPushButton("Start Game")
         self.start_button.setProperty("buttonRole", "primary")
         self.start_button.setEnabled(False)
         self.start_button.clicked.connect(self.start_game)
-        actions.addWidget(self.start_button)
-        self.preview_button = W.QPushButton("Start Play Preview")
-        self.preview_button.setToolTip(
-            "View your saved deck in Unity. No live game or AI starts."
-        )
-        self.preview_button.clicked.connect(self.start_preview)
-        actions.addWidget(self.preview_button)
-        self.unity_game_button = W.QPushButton("Play in Unity")
-        self.unity_game_button.setToolTip(
-            "Play Freeform or Commander 1v1 against XMage AI using the selected saved decks."
-        )
-        self.unity_game_button.setEnabled(False)
-        self.unity_game_button.clicked.connect(self.start_unity_game)
-        actions.addWidget(self.unity_game_button)
-        self.unity_payment_mode = W.QComboBox()
-        self.unity_payment_mode.setAccessibleName("Unity mana payment")
-        for label, mode in (
-            ("Auto mana", "auto"),
-            ("Manual mana", "manual"),
-            ("Full Control", "full-control"),
-        ):
-            self.unity_payment_mode.addItem(label, mode)
-        self.unity_payment_mode.setToolTip(
-            "Mana payment preference for your next Unity match. Priority controls are inside the Unity game."
-        )
-        actions.addWidget(self.unity_payment_mode)
-        self.close_unity_game = W.QPushButton("Close Unity Game / Cancel")
-        self.close_unity_game.clicked.connect(self._close_unity_game)
-        self.close_unity_game.hide()
-        actions.addWidget(self.close_unity_game)
-
-        self.close_preview = W.QPushButton("Close Preview / Cancel")
-        self.close_preview.clicked.connect(self._close_preview)
-        self.close_preview.hide()
-        actions.addWidget(self.close_preview)
-        setup_layout.addLayout(actions)
-        setup_layout.addStretch()
-        self.pages.addWidget(self.setup_page)
-        self.asset_page = W.QWidget()
-        asset_layout = W.QVBoxLayout(self.asset_page)
-        self.asset_heading = W.QLabel("Preparing local artwork")
-        asset_layout.addWidget(self.asset_heading)
-        self.asset_progress = W.QProgressBar()
-        self.asset_progress.setRange(0, 0)
-        asset_layout.addWidget(self.asset_progress)
-        self.asset_missing = W.QTextBrowser()
-        asset_layout.addWidget(self.asset_missing, 1)
-        asset_actions = W.QHBoxLayout()
-        self.asset_return = W.QPushButton("Return to Lobby")
-        self.asset_return.clicked.connect(self._return_from_assets)
-        self.asset_continue = W.QPushButton("Continue Anyway")
-        self.asset_continue.clicked.connect(self._launch_prepared)
-        self.asset_continue.hide()
-        asset_actions.addWidget(self.asset_return)
-        asset_actions.addStretch()
-        asset_actions.addWidget(self.asset_continue)
-        asset_layout.addLayout(asset_actions)
-        self.pages.addWidget(self.asset_page)
-        self.loading_page = W.QWidget()
-        loading_layout = W.QVBoxLayout(self.loading_page)
-        loading_layout.addStretch()
-        self.loading_title = W.QLabel("Preparing your match")
-        self.loading_title.setProperty("role", "title")
-        self.loading_title.setWordWrap(True)
-        self.loading_detail = W.QLabel()
-        self.loading_detail.setWordWrap(True)
-        self.loading_detail.setTextFormat(C.Qt.TextFormat.PlainText)
-        self.loading_bar = W.QProgressBar()
-        self.loading_bar.setRange(0, 0)
-        self.loading_elapsed = W.QLabel()
-        self.loading_cancel = W.QPushButton("Cancel preparation")
-        self.loading_cancel.clicked.connect(self._cancel_loading)
-        for widget in (
-            self.loading_title,
-            self.loading_detail,
-            self.loading_bar,
-            self.loading_elapsed,
-            self.loading_cancel,
-        ):
-            loading_layout.addWidget(widget)
-        loading_layout.addStretch()
-        self.pages.addWidget(self.loading_page)
-        self._loading_purpose = None
-        self._loading_started = 0
-        self.loading_timer = C.QTimer(self)
-        self.loading_timer.setInterval(1000)
-        self.loading_timer.timeout.connect(self._loading_tick)
-        self.game_page = W.QWidget()
-        game_layout = W.QVBoxLayout(self.game_page)
-        self.game_heading = W.QLabel("Preparing your table…")
-        self.game_heading.setProperty("role", "title")
-        self.game_heading.setTextFormat(C.Qt.TextFormat.PlainText)
-        game_layout.addWidget(self.game_heading)
-        self.table = GameTable(service)
-        self.priority = PriorityControls(
-            self.session, self.lobby.local_seat_id, self.table
-        )
-        self.table.priority_controls = self.priority
-        self.table.board.layout().insertWidget(1, self.priority)
-        self.table.command.connect(self._command)
-        self.table.returnRequested.connect(self.request_close_game)
-        game_layout.addWidget(self.table, 1)
-        game_actions = W.QHBoxLayout()
-        self.match_menu = W.QToolButton()
-        self.match_menu.setText("Match menu")
-        self.match_menu.setPopupMode(W.QToolButton.ToolButtonPopupMode.InstantPopup)
-        menu = W.QMenu(self.match_menu)
-        menu.addAction(
-            "Copy Play diagnostics",
-            lambda: W.QApplication.clipboard().setText(self._play_report_text()),
-        )
-        menu.addAction("Report a Play issue", self._report_play_issue)
-        self.match_menu.setMenu(menu)
-        game_actions.addWidget(self.match_menu)
-        game_actions.addStretch()
-        self.concede_button = W.QPushButton("Concede")
-        self.concede_button.setEnabled(False)
-        self.concede_button.clicked.connect(self.concede)
-        game_actions.addWidget(self.concede_button)
-        self.close_button = W.QPushButton("Close game")
-        self.close_button.clicked.connect(self.request_close_game)
-        game_actions.addWidget(self.close_button)
-        game_layout.addLayout(game_actions)
-        self.pages.addWidget(self.game_page)
-        self.status = W.QLabel("Loading your decks…")
+        layout.addWidget(self.start_button)
+        self.status = W.QLabel()
         self.status.setWordWrap(True)
         self.status.setTextFormat(C.Qt.TextFormat.PlainText)
-        self.status.setAccessibleName("Game status")
-        layout.insertWidget(2, self.status)
-        support = W.QHBoxLayout()
-        self.recover_button = W.QPushButton("Close failed match")
-        self.recover_button.clicked.connect(self.request_close_game)
-        self.recover_button.hide()
-        support.addWidget(self.recover_button)
-        support.addStretch()
-        self.copy_play_report = W.QPushButton("Copy Play diagnostics")
-        self.copy_play_report.clicked.connect(
-            lambda: W.QApplication.clipboard().setText(self._play_report_text())
-        )
-        support.addWidget(self.copy_play_report)
-        self.report_play_issue = W.QPushButton("Report a Play issue")
-        self.report_play_issue.clicked.connect(self._report_play_issue)
-        support.addWidget(self.report_play_issue)
-        layout.addLayout(support)
-        self.format.currentIndexChanged.connect(self._format_changed)
-        self._format_changed()
+        layout.addWidget(self.status)
+        layout.addStretch()
         self.load_decks()
 
-    def _play_report_text(self):
-        from mtg_ui.diagnostics import app_version
-
-        report = self.session.diagnostic_report(application_version=app_version())
-        report["opponent_preparation"] = self.opponents.diagnostic_report()
-        return json.dumps(report, indent=2, sort_keys=True)
-
-    def _report_play_issue(self):
-        from mtg_ui.feedback import FeedbackDialog
-
-        FeedbackDialog(
-            self,
-            operation="Manaforge Play",
-            detail="Describe the Play issue and what you were doing. Review the optional diagnostics before sending.",
-            diagnostics=self._play_report_text(),
-        ).exec()
-
-    def _show_page(self, page):
-        if (
-            self.session.active
-            or self.session.closing
-            or self.opponents.busy
-            or self._asset_pending is not None
-        ):
-            return
-        self.pages.setCurrentWidget(page)
-        self._selection_changed()
-
-    def _open_offline(self):
-        if (
-            self.session.active
-            or self.session.closing
-            or self.opponents.busy
-            or self._asset_pending is not None
-        ):
-            return
-        self._format_origin = self.pages.currentWidget()
-        self._format_confirmed = False
-        self._show_page(self.format_page)
-
-    def _format_changed(self):
-        self._format_confirmed = False
-        self.format_continue.setEnabled(
-            self.format.currentData() in {"freeform", "commander"}
-        )
-        self._selection_changed()
-
-    def _enter_lobby(self):
-        if (
-            self.pages.currentWidget() is not self.format_page
-            or not self.format_continue.isEnabled()
-        ):
-            return
-        self._format_confirmed = True
-        self._confirmed_format = self.format.currentData()
-        self.setup_format.setText(self.format.currentText() + " - Offline lobby")
-        self._show_page(self.setup_page)
-
-    def _back_from_format(self):
-        if (
-            self._format_origin is self.setup_page
-            and self._confirmed_format is not None
-        ):
-            self.format.blockSignals(True)
-            self.format.setCurrentIndex(self.format.findData(self._confirmed_format))
-            self.format.blockSignals(False)
-            self._format_confirmed = True
-        self._show_page(self._format_origin)
-
     def load_decks(self):
-        if (
-            self.catalog_jobs.busy
-            or self.session.active
-            or self.opponents.busy
-            or self._asset_pending is not None
-        ):
+        if self.busy:
             return
-        self.deck_artwork.stopping = False
-        self.reload.setEnabled(False)
-        self.start_button.setEnabled(False)
-        self.status.setText("Loading your saved decks…")
-
-        def prepare(cancel, report):
-            rows, errors = self._deck_provider()
-            return prepare_catalog(
-                rows, self.service, cancel=cancel, report=report
-            ), errors
-
-        self.catalog_jobs.submit(prepare)
-
-    def _browse_shared(self):
-        if (
-            self._asset_pending is None
-            and not self.opponents.busy
-            and not self.session.active
-            and not self.session.closing
-            and callable(self._browse_library)
-        ):
-            self._browse_library()
-
-    @C.pyqtSlot(str, object)
-    def _catalog_progress(self, job, value):
-        if (
-            self.session.active
-            or self.session.closing
-            or job != self.catalog_jobs.current_id
-        ):
-            return
-        if isinstance(value, dict) and value.get("stage") == "local_deck_checks":
-            self.status.setText(
-                f"Checking local decks: {value['current']} of {value['total']}"
-            )
+        self.status.setText("Loading saved decks�")
+        def work(cancel, report):
+            decks, errors = self._deck_provider()
+            return prepare_catalog(decks, self.service, cancel=cancel, report=report), errors
+        self.catalog_jobs.submit(work, quiet=True)
+        self._selection_changed()
 
     @C.pyqtSlot(str, str, object)
     def _catalog_loaded(self, job, state, value):
-        if state not in ("completed", "failed", "cancelled"):
-            return
-        self.reload.setEnabled(True)
-        if state != "completed":
-            self.status.setText(
-                "Could not load saved decks. Open Deck Editor to review your library, then refresh."
-            )
-            return
-        previous_paths = [
-            self._decks[selector.currentData()].key
-            if selector.currentData() is not None
-            else None
-            for selector in self.selectors
-        ]
-        self._decks, errors = value
-        for selector, previous in zip(self.selectors, previous_paths):
-            selector.blockSignals(True)
-            selector.clear()
-            selector.addItem("Choose a saved deck", None)
-            for index, deck in enumerate(self._decks):
-                title = deck.document.deck.name
-                if deck.source_id:
-                    title += " [" + deck.source_label + "]"
-                selector.addItem(title, index)
-            for index, deck in enumerate(self._decks):
-                if deck.key == previous:
-                    selector.setCurrentIndex(index + 1)
-            selector.blockSignals(False)
-        self.status.setText(
-            "Some decks could not be read. Review Deck Editor or Browse Online, then refresh."
-            if errors
-            else (
-                "Choose your deck and the AI opponent's deck."
-                if self.pages.currentWidget() is self.setup_page
-                else "Your saved decks are ready. Choose how you would like to play."
-            )
-            if self._decks
-            else "Save a deck in Deck Editor, then choose Refresh decks."
-        )
+        if state == "completed":
+            previous = [self._decks[selector.currentData()].key
+                        if selector.currentData() is not None else None
+                        for selector in self.selectors]
+            self._decks, errors = value
+            for selector, key in zip(self.selectors, previous) in self.selectors:
+                selector.blockSignals(True)
+                selector.clear()
+                selector.addItem("Choose a saved deck", None)
+                for index, deck in enumerate(self._decks):
+                    selector.addItem(deck.document.deck.name, index)
+                for index, deck in enumerate(self._decks):
+                    if deck.key == key:
+                        selector.setCurrentIndex(index + 1)
+                        break
+                selector.blockSignals(False)
+            self.status.setText("Some saved decks could not be read. Review them in Deck Editor."
+                                if errors else "Choose your deck and the AI opponent's deck."
+                                if self._decks else "Save decks in Deck Editor, then return to Play.")
+        elif state == "failed":
+            self.status.setText("Could not load saved decks. Review them in Deck Editor, then return to Play.")
         self._selection_changed()
-
-    def _randomize(self):
-        if not self.randomize.isEnabled():
-            return
-        started = self.opponents.start(
-            tuple(item.document for item in self._decks),
-            self.format.currentData(),
-            self.selectors[1].currentData(),
-            oracle_lookup=lambda oracle_id: self.service.database.get_oracle_card(
-                oracle_id
-            ),
-        )
-
-        if started:
-            self._show_loading(
-                "opponent",
-                "Finding an eligible opponent deck",
-                "Starting offline XMage. This can take a few minutes...",
-            )
-
-    def _show_loading(self, purpose, title, detail):
-        self._loading_purpose = purpose
-        self._loading_started = time.monotonic()
-        self.loading_title.setText(title)
-        self.loading_detail.setText(detail)
-        self.loading_cancel.setText("Cancel preparation")
-        self.loading_cancel.setEnabled(True)
-        self.pages.setCurrentWidget(self.loading_page)
-        self.loading_timer.start()
-        self._loading_tick()
-        self._selection_changed()
-
-    def _loading_tick(self):
-        if self.pages.currentWidget() is not self.loading_page:
-            self.loading_timer.stop()
-            return
-        elapsed = int(time.monotonic() - self._loading_started)
-        self.loading_elapsed.setText(
-            f"Elapsed: {elapsed // 60}:{elapsed % 60:02d}. Keep this window open while preparation finishes."
-        )
-
-    def _cancel_loading(self):
-        self.loading_cancel.setEnabled(False)
-        self.loading_detail.setText(
-            "Retrying local runtime cleanup..."
-            if self._loading_purpose == "close"
-            else "Cancelling preparation and waiting for runtime cleanup..."
-        )
-        if self._loading_purpose == "opponent":
-            self.opponents.cancel()
-        else:
-            self.session.stop()
-
-    def _engine_loading_idle(self):
-        if (
-            self.pages.currentWidget() is self.loading_page
-            and self._loading_purpose in {"match", "close"}
-        ):
-            if self._loading_purpose == "close":
-                self.loading_cancel.setText("Retry cleanup")
-            self.loading_cancel.setEnabled(
-                self.session.active and not self.session.closing
-            )
-
-    def _opponent_loading_changed(self):
-        if (
-            hasattr(self, "loading_page")
-            and self._loading_purpose == "opponent"
-            and self.pages.currentWidget() is self.loading_page
-            and not self.opponents.jobs.busy
-        ):
-            self.loading_timer.stop()
-            self.pages.setCurrentWidget(self.setup_page)
-            self._selection_changed()
-
-    @C.pyqtSlot(int)
-    def _randomized(self, index):
-        self.selectors[1].setCurrentIndex(self.selectors[1].findData(index))
 
     def _selection_changed(self):
-        previewing = self.preview_jobs.busy or (
-            self._preview_launch is not None and self._preview_launch.root is not None
-        )
-        self.close_preview.setText(
-            "Close Preview / Cancel"
-            if self.preview_jobs.busy
-            else "Retry preview cleanup"
-        )
-        native_playing = self.native_jobs.busy or (
-            self._native_launch is not None and self._native_launch.root is not None
-        )
-        self.unity_payment_mode.setEnabled(not native_playing)
-        self.close_unity_game.setVisible(native_playing)
-        self.close_unity_game.setText(
-            "Close Unity Game / Cancel"
-            if self.native_jobs.busy
-            else "Retry game cleanup"
-        )
-        self.unity_game_button.setEnabled(False)
-        preparing = (
-            self.opponents.busy
-            or self._asset_pending is not None
-            or previewing
-            or native_playing
-        )
-        self.close_preview.setVisible(previewing)
-        self.preview_button.setEnabled(
-            not preparing
-            and not self.session.active
-            and not self.session.busy
-            and not self.catalog_jobs.busy
-            and self._format_confirmed
-            and self.format.currentData() in {"freeform", "commander"}
-            and self.selectors[0].currentData() is not None
-        )
-        self.recover_button.setVisible(self.session.needs_recovery)
-        self.recover_button.setEnabled(
-            not self.session.busy and not self.session.closing
-        )
-        self.randomize.setEnabled(
-            not preparing
-            and not self.session.active
-            and not self.session.busy
-            and not self.catalog_jobs.busy
-            and self._format_confirmed
-            and self.pages.currentWidget() is self.setup_page
-            and bool(self._decks)
-        )
-        self.cancel_randomize.setVisible(self.opponents.jobs.busy)
-        self.retry_preparation.setVisible(self.opponents.cleanup_pending)
-        self.format.setEnabled(not preparing)
-        self.change_format.setEnabled(not preparing)
-        self.reload.setEnabled(not preparing and not self.catalog_jobs.busy)
-        self.lobby_back.setEnabled(not preparing)
-        self.home_button.setEnabled(not preparing)
-        self.shared_decks.setEnabled(not preparing and callable(self._browse_library))
-        if self.session.active:
-            self.start_button.setEnabled(False)
+        if not hasattr(self, "start_button"):
             return
-        chosen_format = self.format.currentData()
-        lobby = (
-            replace(self.lobby, format=chosen_format)
-            if chosen_format in {"freeform", "commander"}
-            else self.lobby
-        )
-        for selector in self.selectors:
-            selector.setEnabled(self._format_confirmed and not preparing)
+        busy = self.busy
+        self.format.setEnabled(not busy)
+        self.unity_payment_mode.setEnabled(not busy)
+        lobby = replace(self.lobby, format=self.format.currentData())
+        ready = True
+        reasons = []
         for seat, selector in zip(lobby.seats, self.selectors):
+            selector.setEnabled(not busy)
             index = selector.currentData()
             selection = None
-            if index is not None:
-                document = self._decks[index].document
-                item = self._decks[index]
-                selection = DeckSelection.local(
-                    document, owner_id=item.owner_id, source_id=item.key
-                )
-            lobby = lobby.select_deck(seat.seat_id, selection)
-        self.lobby = lobby
-        selected_checks = []
-        for selector, label, readiness in zip(
-            self.selectors, self.details, self.readiness_labels
-        ):
-            index = selector.currentData()
             if index is None:
-                label.setText("Choose a saved deck")
-                readiness.setText("Choose a deck to check readiness.")
-                selected_checks.append(None)
+                ready = False
             else:
                 item = self._decks[index]
-                check = item.readiness(self.format.currentData())
-                selected_checks.append(check)
-                readiness.setText(
-                    check.summary
-                    + ("\n" + "\n".join(check.messages) if check.messages else "")
-                    if check
-                    else "Choose a format to check this deck."
-                )
-                label.setText(
-                    item.document.deck.format
-                    + (
-                        "\nCommander: " + ", ".join(item.commanders)
-                        if item.commanders
-                        else ""
-                    )
-                )
-                if item.colors is not None:
-                    color_names = {
-                        "W": "White",
-                        "U": "Blue",
-                        "B": "Black",
-                        "R": "Red",
-                        "G": "Green",
-                    }
-                    label.setText(
-                        label.text()
-                        + "\nColors: "
-                        + (
-                            ", ".join(color_names[color] for color in item.colors)
-                            or "Colorless"
-                        )
-                    )
-                if item.source_id:
-                    label.setText(
-                        label.text()
-                        + "\n"
-                        + item.source_label
-                        + "\nIsolated match copy; the shared deck is not edited."
-                    )
-        self._deck_images()
-        reasons = []
-        if preparing:
-            reasons.append("Preparation is running. Wait for completion or cancel it.")
-        elif self.session.busy:
-            reasons.append("Finishing match preparation or runtime cleanup...")
-        elif self.catalog_jobs.busy:
-            reasons.append("Loading and checking saved decks...")
-        else:
-            for seat, check in zip(self.lobby.seats, selected_checks):
-                if check is None:
-                    reasons.append(seat.player.name + ": choose a deck.")
-                elif not check.can_start:
-                    reasons.append(seat.player.name + ": " + " ".join(check.messages))
-        if self.opponents.cleanup_pending:
-            reasons = [
-                "Runtime cleanup is unconfirmed. Use Retry preparation cleanup before starting."
-            ]
-        self.start_reason.setText(
-            "\n".join(reasons)
-            if reasons
-            else "Both decks selected. Ready to prepare your match."
-        )
-        self.start_button.setToolTip(self.start_reason.text())
-        self.start_button.setEnabled(
-            self._format_confirmed
-            and self.pages.currentWidget() is self.setup_page
-            and self.format.currentData() in {"freeform", "commander"}
-            and not self.session.active
-            and not self.session.busy
-            and not self.catalog_jobs.busy
-            and not preparing
-            and all(selector.currentData() is not None for selector in self.selectors)
-            and all(check is not None and check.can_start for check in selected_checks)
-        )
-        self.unity_game_button.setEnabled(
-            self.start_button.isEnabled()
-            and self.format.currentData() in ("freeform", "commander")
-        )
+                check = item.readiness(lobby.format)
+                if check is not None and not check.can_start:
+                    ready = False
+                    reasons.extend(check.messages)
+                selection = DeckSelection.local(item.document, owner_id=item.owner_id,
+                                                source_id=item.source_id)
+            lobby = lobby.select_deck(seat.seat_id, selection)
+        self.lobby = lobby
+        self.start_button.setEnabled(ready and not busy)
+        if not busy:
+            if reasons:
+                self.status.setText("\n".join(dict.fromkeys(reasons)))
+            elif ready:
+                self.status.setText("Ready to start your Unity game.")
+
+    def _status(self, message):
+        self.status.setText(message)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if not self.busy:
+            self.load_decks()
 
     def start_game(self):
         if not self.start_button.isEnabled():
-            return
-        self._asset_pending = self.lobby.offline_setup()
-        self._asset_epoch += 1
-        self._asset_cancelled = False
-        self._prepared_match = None
-        decks = self.lobby.selected_documents()
-        self.deck_artwork.stopping = True
-        self.deck_artwork.pending.clear()
-        self.deck_artwork.next_timer.stop()
-        self.asset_progress.setRange(0, 0)
-        self.asset_progress.show()
-        self.asset_heading.setText("Preparing local artwork")
-        self.asset_missing.setPlainText(
-            "Checking cached printing images and preparing battlefield artwork. No downloads are requested."
-        )
-        self.asset_continue.hide()
-        self.pages.setCurrentWidget(self.asset_page)
-        self._selection_changed()
-
-        def work(cancel, report):
-            try:
-                documents = tuple(deepcopy(document) for document in decks)
-                assets = prepare_assets(
-                    documents, self.service, cancel=cancel, report=report
-                )
-                return (documents, assets) if assets is not None else None
-            except Exception:
-                return None
-
-        self.asset_jobs.submit(work, quiet=True)
-
-    @C.pyqtSlot(str, object)
-    def _assets_progress(self, job, value):
-        if isinstance(value, dict) and value.get("stage") == "match_artwork":
-            self.asset_progress.setRange(0, max(1, value["total"]))
-            self.asset_progress.setValue(value["current"])
-            self.status.setText(
-                f"Preparing local artwork: {value['current']} of {value['total']}"
-            )
-
-    @C.pyqtSlot(str, str, object)
-    def _assets_completed(self, job, state, value):
-        if state not in {"completed", "cancelled", "failed"}:
-            return
-        if self._asset_cancelled or state != "completed" or value is None:
-            self._return_from_assets()
-            self.status.setText(
-                "Artwork preparation stopped. Your deck selections have been kept."
-            )
-            return
-        self._prepared_match = value
-        self._finish_asset_preparation()
-
-    @C.pyqtSlot()
-    def _assets_idle(self):
-        if self._asset_cancelled and (
-            self._asset_pending is not None
-            or self.pages.currentWidget() is self.asset_page
-        ):
-            self._return_from_assets()
-        self._selection_changed()
-
-    def _finish_asset_preparation(self, epoch=None):
-        if (
-            self._asset_pending is None
-            or self._prepared_match is None
-            or self._asset_cancelled
-            or (epoch is not None and epoch != self._asset_epoch)
-        ):
-            return
-        # Lobby readers may have begun a remote request before Start Game. Let
-        # that owned worker finish before any game starts; never block Qt.
-        if self.deck_artwork.worker is not None:
-            self.status.setText(
-                "Waiting for the current lobby image request to finish..."
-            )
-            current_epoch = self._asset_epoch
-            C.QTimer.singleShot(
-                100, lambda: self._finish_asset_preparation(current_epoch)
-            )
-            return
-        _, assets = self._prepared_match
-        if assets.missing:
-            self.asset_progress.hide()
-            self.asset_heading.setText("Some artwork is unavailable locally")
-            self.asset_missing.setPlainText(
-                "These cards will use placeholders. Gameplay still works offline.\n\n"
-                + "\n".join(assets.missing)
-            )
-            self.asset_continue.show()
-            self.status.setText("Continue with placeholders or return to the lobby.")
-        else:
-            self._launch_prepared()
-
-    def _return_from_assets(self):
-        self._asset_cancelled = True
-        self.asset_jobs.cancel_all()
-        if self.asset_jobs.busy:
-            self.status.setText("Cancelling artwork preparation...")
-            return
-        self._asset_pending = self._prepared_match = None
-        self._asset_epoch += 1
-        self.deck_artwork.stopping = False
-        self.pages.setCurrentWidget(self.setup_page)
-        self._selection_changed()
-
-    def _launch_prepared(self):
-        if (
-            self._prepared_match is None
-            or self._asset_cancelled
-            or self.deck_artwork.worker is not None
-        ):
-            return
-        setup = self._asset_pending
-        decks, assets = self._prepared_match
-        self._asset_pending = self._prepared_match = None
-        self.table.artwork.service = assets.image_service()
-        self._approved_close = False
-        self._seats = setup.seats
-        self._seat_id = self.lobby.local_seat_id
-        self.table.artwork.stopping = False
-        if self.session.start(
-            setup,
-            decks,
-            oracle_lookup=lambda oracle_id: self.service.database.get_oracle_card(
-                oracle_id
-            ),
-        ):
-            self._enter_focused_view()
-            self._show_loading(
-                "match",
-                "Starting your match",
-                "Starting offline XMage and preparing the opening hand...",
-            )
-            self.start_button.setEnabled(False)
-        else:
-            self._return_from_assets()
-
-    def _enter_focused_view(self):
-        window = self.window()
-        if self._window_snapshot is None and window.isVisible():
-            self._window_snapshot = (
-                window,
-                window.saveGeometry(),
-                window.windowState(),
-            )
-            window.showMaximized()
-        toolbar = getattr(window, "navigation_toolbar", None)
-        if toolbar is not None and self._focused_toolbar_state is None:
-            self._focused_toolbar_state = (toolbar, not toolbar.isHidden())
-            toolbar.hide()
-        self.copy_play_report.hide()
-        self.report_play_issue.hide()
-        self.table.set_view_mode("focused")
-        self.workspace_title.hide()
-        self.intro.hide()
-        self.home_button.hide()
-        self.game_heading.hide()
-        self.layout().setContentsMargins(8, 6, 8, 6)
-
-    def _leave_focused_view(self):
-        if self._focused_toolbar_state is not None:
-            toolbar, visible = self._focused_toolbar_state
-            self._focused_toolbar_state = None
-            toolbar.setVisible(visible)
-        self.copy_play_report.show()
-        self.report_play_issue.show()
-        self.status.show()
-        if self._window_snapshot is not None:
-            window, geometry, state = self._window_snapshot
-            self._window_snapshot = None
-            window.setWindowState(state)
-            window.restoreGeometry(geometry)
-        self.workspace_title.show()
-        self.intro.show()
-        self.home_button.show()
-        self.game_heading.show()
-        self.layout().setContentsMargins(24, 20, 24, 20)
-
-    @C.pyqtSlot()
-    def _deck_images(self):
-        if self.session.active:
-            return
-        keys = []
-        for selector, cover, partner in zip(
-            self.selectors, self.covers, self.partner_covers
-        ):
-            index = selector.currentData()
-            cover.clear()
-            partner.clear()
-            partner.hide()
-            if index is None:
-                continue
-            item = self._decks[index]
-            previews = (
-                item.commander_art[:2]
-                if self.format.currentData() == "commander"
-                else ()
-            )
-            if previews:
-                artwork = [(cover, previews[0][1], "Commander: " + previews[0][0])]
-                if len(previews) == 2:
-                    partner.show()
-                    artwork.append(
-                        (partner, previews[1][1], "Commander: " + previews[1][0])
-                    )
-            else:
-                artwork = [(cover, item.cover, "Deck artwork")]
-            for target, key, description in artwork:
-                target.setAccessibleName(description)
-                target.setText("No artwork preview")
-                if any(key):
-                    keys.append(key)
-                    image = self.deck_artwork.get(*key)
-                    if image is not None and not image.isNull():
-                        target.setPixmap(
-                            image.scaled(
-                                110,
-                                154,
-                                C.Qt.AspectRatioMode.KeepAspectRatio,
-                                C.Qt.TransformationMode.SmoothTransformation,
-                            )
-                        )
-        self.deck_artwork.set_visible("setup", keys)
-
-    @C.pyqtSlot(str)
-    def _status(self, message):
-        self.status.setText(message)
-        if self.session.needs_recovery or not self.session.active:
-            self.status.show()
-        if self.pages.currentWidget() is self.loading_page:
-            self.loading_detail.setText(message)
-        if not self.session.active and not self.session.closing:
-            if self.pages.currentWidget() is self.game_page or (
-                self.pages.currentWidget() is self.loading_page
-                and self._loading_purpose == "match"
-            ):
-                self._leave_focused_view()
-                self.pages.setCurrentWidget(self.setup_page)
-            self._selection_changed()
-
-    @C.pyqtSlot()
-    def _clear_view(self):
-        self._view = None
-        self.game_heading.setText("Waiting for your table…")
-        self.table.clear()
-        self.concede_button.setEnabled(False)
-
-    @C.pyqtSlot()
-    def _pending(self):
-        self._view = None
-        self.table.pending()
-        self.concede_button.setEnabled(False)
-
-    @C.pyqtSlot(object)
-    def _show_snapshot(self, view):
-        if view.viewer_id != self.lobby.local_seat_id:
-            return
-        if (
-            self.pages.currentWidget() is self.loading_page
-            and self._loading_purpose == "match"
-        ):
-            self.loading_timer.stop()
-            self.pages.setCurrentWidget(self.game_page)
-        self._view = view
-        self.status.hide()
-        self.game_heading.setText(view.result or "You versus Opponent")
-        self.table.present(view)
-        self.priority.observe(view)
-        self.concede_button.setEnabled(
-            not view.result and not self.session.concession_pending
-        )
-
-    @C.pyqtSlot(object, str, object)
-    def _command(self, view, method, args):
-        self.priority.manual(view, method, args)
-
-    def concede(self):
-        view = self._view
-        if view is None:
-            return
-        answer = W.QMessageBox.question(
-            self,
-            "Concede game?",
-            "Concede this game to the AI opponent?",
-            W.QMessageBox.StandardButton.Yes | W.QMessageBox.StandardButton.No,
-            W.QMessageBox.StandardButton.No,
-        )
-        if answer == W.QMessageBox.StandardButton.Yes:
-            self.session.concede(view)
-
-    def request_close_game(self):
-        if self.session.closing:
-            return
-        if not self.session.needs_recovery and (
-            self._view is None or self._view.result is None
-        ):
-            if not self._confirm_close():
-                return
-        self.session.stop()
-        self._show_loading(
-            "close",
-            "Closing your match",
-            "Waiting for the local runtime to finish cleanup...",
-        )
-        self.loading_cancel.setText("Closing...")
-        self.loading_cancel.setEnabled(False)
-
-    def _confirm_close(self):
-        if self._approved_close:
-            return True
-        answer = W.QMessageBox.question(
-            self,
-            "Close local game?",
-            "End this local session? Your saved decks will remain available.",
-            W.QMessageBox.StandardButton.Yes | W.QMessageBox.StandardButton.No,
-            W.QMessageBox.StandardButton.No,
-        )
-        self._approved_close = answer == W.QMessageBox.StandardButton.Yes
-        return self._approved_close
-
-    @C.pyqtSlot()
-    def _stopped(self):
-        self.loading_timer.stop()
-        self._leave_focused_view()
-        self.deck_artwork.stopping = False
-        self.pages.setCurrentWidget(self.setup_page)
-        self._selection_changed()
-
-    def start_unity_game(self):
-        if not self.unity_game_button.isEnabled():
             return
         from mtg_proxy.constants import APP_VERSION
 
@@ -1224,7 +208,7 @@ class PlayWorkspace(W.QWidget):
                     "UNITY_GAME_PRINTING_UNSUPPORTED": "A card could not be resolved by XMage.",
                     "UNITY_GAME_CARD_UNSUPPORTED": "XMage does not support a card in the selected decks.",
                     "UNITY_GAME_CARD_RESOLUTION_FAILED": "XMage could not resolve the selected cards. Please try again.",
-                    "UNITY_GAME_SETUP_UNSUPPORTED": "Unity gameplay currently supports Freeform 1v1 with one human and one AI.",
+                    "UNITY_GAME_SETUP_UNSUPPORTED": "Unity gameplay supports Freeform or Commander 1v1 with one human and one AI.",
                 }.get(
                     value,
                     "Unity game stopped or could not start. Saved decks are unchanged.",
@@ -1238,120 +222,17 @@ class PlayWorkspace(W.QWidget):
                 else "Unity game closed. Deck selections are unchanged."
             )
 
-    def start_preview(self):
-        if not self.preview_button.isEnabled():
-            return
-        index = self.selectors[0].currentData()
-        item = self._decks[index]
-        document = deepcopy(item.document)
-        format = self.format.currentData()
-        source_path = item.path
-        self._preview_launch = launch = PreviewLaunch()
-
-        def work(cancel, report):
-            # Re-read file-backed selections: a deleted/corrupt deck is not silently previewed from stale memory.
-            if source_path is not None:
-                from mtg_core.decks import DeckStore
-
-                try:
-                    selected = DeckStore().load(source_path)
-                except Exception:
-                    raise ValueError("PREVIEW_DECK_UNREADABLE") from None
-                if selected.deck.deck_id != document.deck.deck_id:
-                    raise ValueError("PREVIEW_DECK_CHANGED")
-            else:
-                selected = document
-            return run_preview(
-                selected, format, self.service, cancel, report, launch=launch
-            )
-
-        self.preview_jobs.submit(work, quiet=True)
-        self._selection_changed()
-
-    def _close_preview(self):
-        if self.preview_jobs.busy:
-            self.preview_jobs.cancel_all()
-        elif self._preview_launch is not None and self._preview_launch.root is not None:
-            launch = self._preview_launch
-
-            def cleanup(cancel, report):
-                launch.close()
-                return "closed"
-
-            self.preview_jobs.submit(cleanup, quiet=True)
-            self._selection_changed()
-
-    @C.pyqtSlot(str, object)
-    def _preview_progress(self, job, value):
-        if isinstance(value, dict):
-            self._status(str(value.get("phase", "Preparing preview…")))
-
-    @C.pyqtSlot(str, str, object)
-    def _preview_status(self, job, state, result):
-        if state == "failed":
-            messages = {
-                "PREVIEW_BUILD_MISSING": "Unity preview build is missing. Build the Windows Play player first.",
-                "PREVIEW_DECK_UNREADABLE": "This saved deck could not be read. Open it in Deck Editor and save it again.",
-                "PREVIEW_DECK_CHANGED": "The selected deck changed. Reload your decks and try again.",
-                "PREVIEW_CLEANUP_UNCONFIRMED": "Preview cleanup could not be confirmed. Close the owned preview window before continuing.",
-                "PREVIEW_FILES_CLEANUP_FAILED": "Unity closed, but its temporary preview files could not be removed.",
-            }
-            self._status(
-                messages.get(
-                    result,
-                    "Unity preview could not start or exited unexpectedly. Your saved deck is unchanged.",
-                )
-            )
-        elif state in {"completed", "cancelled"}:
-            self._status("Preview closed. Your deck selections are unchanged.")
-
     def prepare_to_close(self):
-        if self.native_jobs.busy or (
-            self._native_launch is not None and self._native_launch.root is not None
-        ):
+        if self.native_jobs.busy or (self._native_launch is not None
+                                     and self._native_launch.root is not None):
             self._close_unity_game()
             return False
-        if self.preview_jobs.busy or (
-            self._preview_launch is not None and self._preview_launch.root is not None
-        ):
-            self._close_preview()
+        if self.catalog_jobs.busy:
+            self.catalog_jobs.cancel_all()
             return False
-        if self._asset_pending is not None:
-            self._return_from_assets()
-            return False
-        if self.opponents.busy:
-            if self.opponents.cleanup_pending:
-                self.opponents.retry_cleanup()
-            else:
-                self.opponents.cancel()
-            return False
-        if self.session.active or self.session.closing:
-            if not self.session.closing and self._confirm_close():
-                self.session.stop()
-            return False
-        self.deck_artwork.stopping = True
-        self.deck_artwork.pending.clear()
-        self.deck_artwork.next_timer.stop()
-        return (
-            not self.session.busy
-            and not self.catalog_jobs.busy
-            and self.table.artwork.shutdown()
-            and self.deck_artwork.worker is None
-        )
+        return True
 
     @property
     def busy(self):
-        return (
-            self._asset_pending is not None
-            or self.preview_jobs.busy
-            or (
-                self._preview_launch is not None
-                and self._preview_launch.root is not None
-            )
-            or self.asset_jobs.busy
-            or self.session.busy
-            or self.opponents.busy
-            or self.catalog_jobs.busy
-            or self.table.artwork.worker is not None
-            or self.deck_artwork.worker is not None
-        )
+        return (self.native_jobs.busy or self.catalog_jobs.busy
+                or (self._native_launch is not None and self._native_launch.root is not None))
