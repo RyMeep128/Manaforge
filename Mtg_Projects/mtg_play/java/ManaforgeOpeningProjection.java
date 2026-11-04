@@ -20,8 +20,8 @@ public final class ManaforgeOpeningProjection {
         for(String value:projected)if(value!=null)actual.add(value);
         return expected.equals(actual);
     }
-    private static TargetReference targetReference(String id,Map<String,String> references,Map<String,String> players,int ordinal,Long amount){
-        TargetReference target=new TargetReference();target.object_id=references.get(id);target.player_id=players.get(id);
+    private TargetReference targetReference(String id,Map<String,String> references,Map<String,String> players,int ordinal,Long amount){
+        TargetReference target=new TargetReference();target.object_id=references.get(id);target.player_id=engineViewer.equals(id)?viewer:players.get(id);
         if(target.object_id==null && target.player_id==null)return null;
         target.ordinal=(long)ordinal;target.amount=amount;return target;
     }
@@ -440,7 +440,7 @@ public final class ManaforgeOpeningProjection {
             for(JsonElement item:raw.getAsJsonArray("stack")){JsonObject row=item.getAsJsonObject();String source=visibleReferences.get(text(row,"id"));if(source==null || !row.has("stack_targets"))continue;
                 StackTargets relationship=new StackTargets();relationship.source_id=source;relationship.complete=Boolean.TRUE.equals(flag(row,"stack_targets_complete"));List<TargetReference> targets=new ArrayList<>();int index=0;
                 for(JsonElement id:row.getAsJsonArray("stack_targets")){require(++index<=256);TargetReference target=targetReference(id.getAsString(),visibleReferences,players,index,null);if(target==null)relationship.complete=false;else{if(!relationship.complete)target.ordinal=null;targets.add(target);}}
-                relationship.targets=targets.toArray(new TargetReference[0]);relationships.add(relationship);
+                if(!relationship.complete)for(TargetReference target:targets)target.ordinal=null;relationship.targets=targets.toArray(new TargetReference[0]);relationships.add(relationship);
             }result.stack_targets=relationships.toArray(new StackTargets[0]);
             result.observations=observedCards.values().toArray(new CardObservation[0]);result.payment_reason=text(raw,"payment_reason");
             result.unsupported_fields=new String[]{"object_incarnations","commander_metadata","live_abilities","actions","mana","counters","eliminated","attachments","copy_metadata","physical_printing"};
