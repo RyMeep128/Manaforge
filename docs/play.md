@@ -22,7 +22,8 @@ developers. Installed builds retain the release gate; the source override is
 The current Arena-style table is the **default 1v1 view**, not the universal
 layout. Other views compose the same elements around the same authorized session
 projection. This is the current direction for the custom-element visual overhaul;
-the extraction work below is pending, not an implementation or acceptance claim.
+the shared components and default composition are implemented below. Owner visual
+approval and Unity Actions execution remain separate acceptance requirements.
 
 ### Existing foundations and gaps
 
@@ -37,11 +38,23 @@ alternative gameplay composition.
 reusable foundations. Extend them rather than creating a second rendering,
 artwork, interaction, or dispatch pipeline.
 
-The Arena presentation still constructs and updates player plaques, zone piles,
-zone browsing, hand geometry, inspection placement, and paging inline. It selects
-the first non-viewer player as the opponent. `ArenaLibraryMotion` takes a fixed
-local/opponent pair and computes destinations itself. These are 1v1 composition
-assumptions to extract, not contracts for shared elements.
+The Arena presentation now composes `PlayerPanel`, `ZonePile`, `ZoneBrowser`,
+`GameplayOverlay`, and the shared `GameplayCardLayout` helpers. `GameplayTheme`
+and its stylesheet supply component appearance independently of `ArenaTable.uss`,
+which retains default 1v1 placement. `GameplayTableSurface` supplies an original,
+decorative slate/metal material. The default view explicitly rejects extra seats
+instead of combining every non-viewer player into one opponent.
+
+Library motion resolves source/destination anchors by explicit player ID. It no
+longer chooses a fixed local/opponent label, loads an Arena motion resource, or
+updates library counts itself. Overlapping seat flights finish independently;
+revision changes, detachment, disposal and reduced motion cancel movement.
+
+The shared forged theme uses slate panels, metal edging, ember primary actions,
+cyan focus/target accents, and text for priority and command states. It requires
+no supplied Arena backdrop, button skins, name backer or sleeve. Existing card
+rendering, selected printing identity and optional card-font/art resources remain
+on the established pipeline. Printed card frames have not been redesigned.
 
 ### Ownership
 
@@ -62,9 +75,9 @@ and zones. Theme selectors must work under any composition root.
 
 ### First extraction: player panel and zone pile
 
-Extract the existing life/name/priority/target plaque into a reusable player panel
-bound to one explicit player ID. Extract library/graveyard/exile rendering into a
-zone-pile element bound to an explicit owner and zone. Keep supported zone
+The life/name/priority/target plaque is a reusable player panel bound to one
+explicit player ID. Library/graveyard/exile rendering uses a zone-pile element
+bound to an explicit owner and zone. Keep supported zone
 semantics explicit; arbitrary zones need not share identical behavior.
 
 The 1v1 composition creates two player panels and the relevant zone piles, then
@@ -75,8 +88,8 @@ current decision binding. A library shows only permitted counts and card backs;
 unknown values remain unknown. Rebinding or revocation clears images, targets,
 focus, callbacks and pending visual work.
 
-Then extract the zone browser, hand/rank layout, and inspection/overlay placement
-incrementally. Movement receives source/destination anchors for an explicit seat;
+The zone browser, hand/rank paging helpers, and inspection/overlay placement
+are also shared; caller-supplied bounds and reserved intervals control geometry. Movement receives source/destination anchors for an explicit seat;
 its visual adapter may observe authorized changes but never infer hidden card
 identity or issue gameplay commands. Preserve existing motion cancellation and
 reduced-motion behavior. Avoid building a general plugin or layout framework.
@@ -102,6 +115,38 @@ The archived [composable card requirements](archive/play-composable-card-renderi
 retain earlier card-rendering detail. For current live artwork authorization and
 identity behavior, use the current implementation references and exact-revision
 evidence; archived fallback proposals are not new runtime policy.
+
+## Review the forged theme
+
+Build the Windows player, then run the synthetic review from the repository root:
+
+```powershell
+./tools/unity-play.ps1 -Mode Build
+./tools/capture_play_style.ps1
+```
+
+For interactive component review, run the built player with
+`-manaforgeStyleReview 1`. The component sheet and side-by-side/multi-seat
+compositions use the same components with explicit synthetic seat IDs. Controls
+only display fixture requests; they never start a game or submit a command.
+The capture script also mounts the default 1v1 composition with synthetic card
+projections and intentional missing-art fallbacks. It records requested/observed
+sizes and captures 1280x720, 1366x768, 1920x1080 and 2560x1440 in a unique ignored
+`Artifacts/ForgeStyle-*` directory. This is visual evidence, not live gameplay
+or human-controlled acceptance. Historical or uncommitted capture revisions are
+not represented as CI evidence.
+
+Unity regression coverage includes identity isolation, unknown counts, hidden
+library artwork, rebinding, disposal, mounting under independent layout roots,
+overlay focus and extra-seat rejection, alongside existing surface/command and
+four-resolution table tests. The manual Unity Actions workflow runs the suites,
+builds the player and uploads synthetic style captures.
+
+As of this implementation, the GitHub runner inventory returned no registered
+self-hosted runners. Unity Actions requires an owner-controlled Windows runner
+labelled `manaforge-unity`, a valid license and a graphics session. No local test
+suites were run. Owner approval, Unity Actions results and current live-match
+visual acceptance remain **pending**; synthetic captures do not close these gates.
 
 ## Acceptance and references
 

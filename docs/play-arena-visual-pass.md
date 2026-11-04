@@ -39,7 +39,8 @@ visual parity. Earlier owner references are documented in play-live-integration.
 
 ## View architecture
 
-Current architectural direction: the Arena table is the default **1v1 composition**.
+Current implementation uses a shared forged-fantasy theme; this Arena visual
+pass is historical evidence. The table remains the default **1v1 composition**.
 Its reusable elements must also work in other compositions. See
 [shared elements and view ownership](play.md#reusable-visual-elements-and-views)
 for the current extraction plan; the implementation journal below records its

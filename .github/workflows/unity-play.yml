@@ -41,6 +41,9 @@ jobs:
       - name: Render packaged player smoke screenshot
         shell: pwsh
         run: ./tools/unity-play.ps1 -Mode Smoke
+      - name: Capture reusable forged-theme elements and default 1v1 fixture
+        shell: pwsh
+        run: ./tools/capture_play_style.ps1
       - name: Record source revision
         if: always()
         shell: pwsh
@@ -65,6 +68,11 @@ jobs:
             Mtg_Projects/mtg_play_unity/Artifacts/*mode.xml
             Mtg_Projects/mtg_play_unity/Artifacts/commit.txt
             Mtg_Projects/mtg_play_unity/Artifacts/PlayerSmoke/
+            Mtg_Projects/mtg_play_unity/Artifacts/ForgeStyle-*/side-by-side-*.png
+            Mtg_Projects/mtg_play_unity/Artifacts/ForgeStyle-*/multi-seat-*.png
+            Mtg_Projects/mtg_play_unity/Artifacts/ForgeStyle-*/default-1v1-*.png
+            Mtg_Projects/mtg_play_unity/Artifacts/ForgeStyle-*/resolution-proof.json
+            Mtg_Projects/mtg_play_unity/Artifacts/ForgeStyle-*/revision.txt
             Mtg_Projects/mtg_play_unity/Artifacts/DeckPreviewSmoke/
             Mtg_Projects/mtg_play_unity/Artifacts/SessionFixture-*/report.json
             Mtg_Projects/mtg_play_unity/Artifacts/SessionFixture-*/connected.png

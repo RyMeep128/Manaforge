@@ -4,6 +4,10 @@ Unity is the gameplay UI, with Java/XMage providing the rules engine. The deskto
 launcher prepares saved decks, artwork, and owned process lifetime. See the
 [current Play guide](../../docs/play.md) for launch behavior and acceptance limits.
 
+The default 1v1 view uses the shared forged-fantasy theme and reusable player,
+zone, paging and overlay components. See [component review](../../docs/play.md#review-the-forged-theme)
+for the alternate-layout fixture and packaged capture command.
+
 ## Build and validation
 
 The editor pin is recorded in [ProjectVersion.txt](ProjectSettings/ProjectVersion.txt);
