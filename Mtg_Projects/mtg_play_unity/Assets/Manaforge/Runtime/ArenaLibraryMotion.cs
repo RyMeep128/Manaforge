@@ -40,7 +40,9 @@ namespace Manaforge.Play
             foreach(var pair in frame.PlayerLibraryCounts){
                 frame.PlayerHandCounts.TryGetValue(pair.Key,out var hand);libraries.TryGetValue(pair.Key,out var oldLibrary);hands.TryGetValue(pair.Key,out var oldHand);
                 int count=initial || frame.Phase==null || (frame.Decision?.Prompt??"").StartsWith("Mulligan",StringComparison.OrdinalIgnoreCase) || frame.Result!=null?0:ConfirmedHandArrivals(oldLibrary,pair.Value,oldHand,hand);
-                var pile=pair.Key==viewer?local:opponent;pile.text="LIBRARY\n"+(pair.Value?.ToString()??"?")+"\nHand "+(hand?.ToString()??"?");
+                var pile=pair.Key==viewer?local:opponent;var badge=pile.Q<Label>("zone-count");
+                if(badge!=null)badge.text=pair.Value?.ToString()??"?";
+                else pile.text="LIBRARY\n"+(pair.Value?.ToString()??"?")+"\nHand "+(hand?.ToString()??"?");
                 libraries[pair.Key]=pair.Value;hands[pair.Key]=hand;
                 if(count>0 && !reduced())Start(pile,pair.Key==viewer,count);
             }

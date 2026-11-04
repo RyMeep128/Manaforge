@@ -320,7 +320,7 @@ def main():
                 "MetadataChannelChecks",
             ],
             check=True,
-            timeout=60,
+            timeout=90,
         )
         subprocess.run(
             [

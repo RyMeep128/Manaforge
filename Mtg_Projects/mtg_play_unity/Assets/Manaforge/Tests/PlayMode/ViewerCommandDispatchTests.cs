@@ -197,6 +197,24 @@ namespace Manaforge.Play.Tests
                 var read=Task.Run(()=>WireMessages.Parse(peer.ReadCommandForFixture()));yield return Until(()=>read.IsCompleted);Assert.That((string)read.Result["body"]["action_id"],Is.EqualTo("fixture-action"));
             }
         }
+        [UnityTest] public IEnumerator DraggingAnOfferedLibraryCardUsesOnlyItsCurrentOptionToken()
+        {
+            var envelope=BoardSnapshot();var snapshot=envelope["body"]["snapshot"];snapshot["objects"][0]["zone"]="library";snapshot["actions"]=new JArray();
+            snapshot["decision"]["options"]=new JArray(new JObject{["option_id"]="exact-library-choice",["label"]="Engine card choice",["object_id"]="fixture-0002",["player_id"]=JValue.CreateNull(),["selected"]=false});
+            var host=Start(envelope,out var peer,out var owner);var panel=Panel(host);yield return Show(host,panel);var root=node.GetComponent<UIDocument>().rootVisualElement;
+            root.style.width=1280;root.style.height=720;yield return null;
+            using(var input=new ViewerBoardInput(root,surface,host,panel)){
+                input.Refresh();var view=surface.CardsRoot.Q<CardView>();
+                using(var down=PointerDownEvent.GetPooled(new Event{type=EventType.MouseDown,button=0,mousePosition=view.worldBound.center})){down.target=view;view.SendEvent(down);}
+                var point=new Vector2(400,300);
+                using(var move=PointerMoveEvent.GetPooled(new Event{type=EventType.MouseDrag,button=0,mousePosition=point})){move.target=view;view.SendEvent(move);}
+                Assert.That(peer.PendingCommandBytes,Is.Zero);
+                using(var up=PointerUpEvent.GetPooled(new Event{type=EventType.MouseUp,button=0,mousePosition=point})){up.target=view;view.SendEvent(up);}
+                var read=Task.Run(()=>WireMessages.Parse(peer.ReadCommandForFixture()));yield return Until(()=>read.IsCompleted);
+                Assert.That((string)read.Result["body"]["option_id"],Is.EqualTo("exact-library-choice"));
+                Assert.That((string)read.Result["body"]["operation"],Is.EqualTo("choose"));
+            }
+        }
         [UnityTest] public IEnumerator SpatialCardAndPlayerTargetsRetainExactOfferedOptionTokens()
         {
             foreach(bool player in new[]{false,true}){

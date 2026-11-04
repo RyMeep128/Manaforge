@@ -24,6 +24,14 @@ public final class MetadataChannelChecks {
         }catch(Exception failure){frames.close();throw failure;}
     }
     public static void main(String[] args) throws Exception {
+        // Orderly viewer EOF must never be handed to the JSON parser.
+        try(ServerSocket listener=new ServerSocket(0,1,InetAddress.getByName("127.0.0.1"));
+            Socket sender=new Socket("127.0.0.1",listener.getLocalPort());
+            LoopbackFrameReader receiver=new LoopbackFrameReader(listener.accept())) {
+            sender.shutdownOutput();
+            try{ManaforgeUnityOpening.readDecision(receiver,System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(3),()->false);throw new AssertionError("EOF_ACCEPTED");}
+            catch(IOException expected){check("LIVE_UNITY_DISCONNECTED".equals(expected.getMessage()));}
+        }
         check(ManaforgeMetadataChannel.validate(request().toString(),GAME,VIEWER).equals(request()));
         for(int mode=0;mode<12;mode++) {
             JsonObject bad=request();
@@ -52,6 +60,15 @@ public final class MetadataChannelChecks {
             try{check(client.read(3000)==null && calls.get()==1);}catch(IOException expected){check(calls.get()==1);}
         }
         check(Arrays.equals(key,original));
+        // Reproduce the reported mulligan failure: the human thinks for longer
+        // than the old 60-second metadata read timeout, then submits a choice.
+        try(ManaforgeMetadataChannel server=new ManaforgeMetadataChannel(key,GAME,VIEWER,"synthetic-engine",HASH,command->{JsonObject result=new JsonObject();result.addProperty("status","ok");return result;});
+            ManaforgeMetadataChannel.Client client=ManaforgeMetadataChannel.connect(server.port(),server.session(),key,GAME,VIEWER,"synthetic-engine",HASH)) {
+            check("ok".equals(client.read(request()).get("status").getAsString()));
+            Thread.sleep(61000);
+            check("ok".equals(client.read(request()).get("status").getAsString()));
+            check("ok".equals(client.read(request()).get("status").getAsString()));
+        }
         try(ManaforgeMetadataChannel server=new ManaforgeMetadataChannel(key,GAME,VIEWER,"synthetic-engine",HASH,command->{calls.incrementAndGet();JsonObject result=new JsonObject();result.addProperty("status","ok");return result;});ManaforgeMetadataChannel.Client client=ManaforgeMetadataChannel.connect(server.port(),server.session(),key,GAME,VIEWER,"synthetic-engine",HASH)) {
             check(client.read(request()).get("status").getAsString().equals("ok"));int count=calls.get();JsonObject invalid=request();invalid.addProperty("player",GAME);
             try{client.read(invalid);throw new AssertionError("CLIENT_CROSS_VIEWER_ACCEPTED");}catch(IOException expected){check(calls.get()==count);}

@@ -58,7 +58,7 @@ namespace Manaforge.Play.Editor
             var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
             {
                 scenes = new[] { ScenePath }, locationPathName = "Builds/Windows/ManaforgePlay.exe",
-                target = BuildTarget.StandaloneWindows64, options = BuildOptions.Development
+                target = BuildTarget.StandaloneWindows64, options = BuildOptions.None
             });
             if (report.summary.result != BuildResult.Succeeded)
                 throw new BuildFailedException("Windows player build failed: " + report.summary.result);

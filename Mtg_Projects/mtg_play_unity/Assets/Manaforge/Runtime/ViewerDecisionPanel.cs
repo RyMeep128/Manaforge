@@ -50,6 +50,7 @@ namespace Manaforge.Play
         private void ThreadOnly(){if(Thread.CurrentThread.ManagedThreadId!=thread)throw new InvalidOperationException("VIEWER_DECISION_THREAD");}
         private void Clear()
         {
+            Root.RemoveFromClassList("command-pending");Root.RemoveFromClassList("command-uncertain");Root.RemoveFromClassList("command-confirmed");
             autoAfter=-1;IsLibraryOrdering=false;manaInput.Refresh(null);offer=null;submitted=null;page=0;numericText=null;numericPage=0;numericSubmit=null;prompt.text="";manaPool.text="";status.text="";controls.Clear();pages.Clear();cardChoices=null;Root.style.display=DisplayStyle.None;
             // Observe a retired task without carrying its result or touching UI from its worker.
             if(pending!=null)pending.ContinueWith(task=>{_=task.Exception;},TaskScheduler.Default);pending=null;
@@ -87,6 +88,9 @@ namespace Manaforge.Play
                 status.text=FeedbackText(feedback.State);
                 if(feedback.State==CommandState.Rejected || feedback.State==CommandState.Uncertain)Priority.Failed();
             }
+            Root.EnableInClassList("command-pending",pending!=null || feedback?.State==CommandState.Submitted);
+            Root.EnableInClassList("command-uncertain",feedback?.State==CommandState.Uncertain);
+            Root.EnableInClassList("command-confirmed",feedback?.State==CommandState.Confirmed);
             controls.SetEnabled(offer.CanSubmit && pending==null);manaInput.SetEnabled(offer.CanSubmit && pending==null);
             numericSubmit?.SetEnabled(TryNumbers(out _,false));
             if(!offer.CanSubmit && pending==null && string.IsNullOrEmpty(status.text))status.text="Waiting for gateway state.";

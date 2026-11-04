@@ -124,12 +124,14 @@ public final class ManaforgeUnityOpening {
     public static void serveTurns(TurnOffer initial,ManaforgeOpeningProjection projection,String game,String engineViewer,String engine,String hash,byte[] key,Path ready,BooleanSupplier cancelled) throws Exception {
         serveChoice(initial.snapshot(),projection,game,engineViewer,0,0,engine,hash,key,ready,null,cancelled,null,initial);
     }
-    private static String readDecision(LoopbackFrameReader frames,long deadline,BooleanSupplier cancelled) throws IOException {
+    static String readDecision(LoopbackFrameReader frames,long deadline,BooleanSupplier cancelled) throws IOException {
         long remaining=java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(deadline-System.nanoTime());
         if(remaining<=0)throw new IOException("LIVE_UNITY_TURN_TIMEOUT");
-        return Boolean.getBoolean("manaforge.liveGame")
+        String wire=Boolean.getBoolean("manaforge.liveGame")
                 ? frames.readWithIdleWait((int)Math.min(21600000,remaining),(int)Math.min(60000,remaining),cancelled)
                 : frames.read((int)Math.min(60000,remaining),cancelled);
+        if(wire==null)throw new IOException("LIVE_UNITY_DISCONNECTED");
+        return wire;
     }
     private static void serveChoice(JsonObject snapshot,ManaforgeOpeningProjection projection,String game,String engineViewer,long decision,long cycle,
             String engine,String hash,byte[] key,Path ready,ChoiceSubmit submit,BooleanSupplier cancelled,NextPriority continuation) throws Exception {

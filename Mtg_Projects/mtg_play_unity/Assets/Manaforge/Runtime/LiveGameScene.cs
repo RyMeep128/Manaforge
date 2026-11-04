@@ -72,8 +72,9 @@ namespace Manaforge.Play
                 }
                 yield return null;
             }
-            Write("game-closing",new JObject{["live_game_version"]=1,["requested"]=quit});var final=Volatile.Read(ref latest);
-            if(final?.Result!=null){presentation.Present(final);yield return new WaitForEndOfFrame();if(acceptance!=null && ArtworkFixtureScene.Argument("-manaforgeNoCapture")!="1")ScreenCapture.CaptureScreenshot(Path.Combine(output,"result.png"));yield return new WaitForSecondsRealtime(acceptance!=null?.3f:3f);}
+            var final=Volatile.Read(ref latest);
+            if(final?.Result!=null){presentation.Present(final);yield return new WaitForEndOfFrame();if(acceptance!=null && ArtworkFixtureScene.Argument("-manaforgeNoCapture")!="1")ScreenCapture.CaptureScreenshot(Path.Combine(output,"result.png"));if(acceptance!=null)yield return new WaitForSecondsRealtime(.3f);else while(!quit){host.Tick();yield return null;}}
+            Write("game-closing",new JObject{["live_game_version"]=1,["requested"]=quit});
             if(spatialAcceptance!=null){Write("board-input-proof",new JObject{["card_keyboard_inputs"]=spatialAcceptance.Inputs});spatialAcceptance.Dispose();}
             host.Cancel();host.Tick();host.Dispose();presentation.Dispose();while(!consuming.IsCompleted)yield return null;
             bool cleared=document.rootVisualElement.Query<CardView>().ToList().Count==0;Write("game-closed",new JObject{["live_game_version"]=1,["outcome"]=final?.Result,["user_requested"]=userRequested,["snapshots"]=Volatile.Read(ref snapshots),["confirmed"]=Volatile.Read(ref confirmed),["uncertain"]=Volatile.Read(ref uncertain),["viewer_cleared"]=cleared,["cleanup_confirmed"]=host.Completion.Result.CleanupConfirmed});
@@ -92,10 +93,19 @@ namespace Manaforge.Play
             if(captures.Add(state)){ScreenCapture.CaptureScreenshot(Path.Combine(output,state+".png"));captureReady=Time.unscaledTime+.15f;return false;}
             if(captures.Contains("battlefield") && !CaptureDesktopSizes())return false;
             if(captures.Contains("battlefield") && presentation is ArenaGameplayPresentation arena){
+                if(captures.Add("library-browser")){arena.BrowsePublicZone("library",frame.Context.ViewerId);ScreenCapture.CaptureScreenshot(Path.Combine(output,"library-browser.png"));captureReady=Time.unscaledTime+.2f;return false;}
+                if(captures.Add("exile-browser")){arena.BrowsePublicZone("exile",frame.Context.ViewerId);ScreenCapture.CaptureScreenshot(Path.Combine(output,"exile-browser.png"));captureReady=Time.unscaledTime+.2f;return false;}
+                arena.ClosePublicZone();
                 CardView review=null;string id=null;surface.VisitPresented((card,view)=>{if(review==null && !card.Hidden && card.Zone=="battlefield"){review=view;id=card.ObjectId;}});
                 if(review!=null && captures.Add("hover")){review.Focus();ScreenCapture.CaptureScreenshot(Path.Combine(output,"hover.png"));captureReady=Time.unscaledTime+.2f;return false;}
                 if(id!=null && captures.Add("inspection")){arena.InspectCard(id);ScreenCapture.CaptureScreenshot(Path.Combine(output,"inspection.png"));captureReady=Time.unscaledTime+.2f;return false;}
                 arena.CloseInspection();
+                string publicZone=null,zoneOwner=null;
+                surface.VisitPresented((card,view)=>{if(publicZone==null && !card.Hidden && card.Zone=="graveyard"){publicZone=card.Zone;zoneOwner=card.OwnerId;}});
+                if(publicZone!=null && !captures.Contains("public-zone") && arena.BrowsePublicZone(publicZone,zoneOwner)){
+                    captures.Add("public-zone");ScreenCapture.CaptureScreenshot(Path.Combine(output,"public-zone.png"));captureReady=Time.unscaledTime+.2f;return false;
+                }
+                arena.ClosePublicZone();
             }
             return true;
         }
