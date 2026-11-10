@@ -85,8 +85,22 @@ public final class NativePaymentHazards {
                 // cannot add a cost to the zero-mana, tap-only source candidates
                 // that ordinaryPayment separately verifies. Increases and sets can.
                 if(!simulation && ((mage.abilities.effects.CostModificationEffect)effect).getModificationType()!=mage.constants.CostModificationType.REDUCE_COST)return "MANA_COST_MODIFIER";
+            }else if(simulation && nativeLegalityEffect(effect)){
+                // Restrictions include combat keywords such as flying, but also
+                // real activation prohibitions. Do not evaluate or bypass them
+                // here: usable mana abilities and each activation/allocation are
+                // checked by the native engine on the isolated search branch.
+                // A choice, resource change or inability to pay rejects that branch.
+                continue;
             }else if(effect.getEffectType()!=mage.constants.EffectType.CONTINUOUS || !derivedCharacteristics(effect))return "UNSUPPORTED_CONTINUOUS_EFFECT";
         }return count!=effects.getTotalEffectsCount()?"EFFECT_REGISTRY_CHANGED":null;
+    }
+    private static boolean nativeLegalityEffect(mage.abilities.effects.ContinuousEffect effect){
+        return effect instanceof mage.abilities.effects.RestrictionEffect
+            || effect instanceof mage.abilities.effects.RequirementEffect
+            || effect instanceof mage.abilities.effects.RestrictionUntapNotMoreThanEffect
+            || effect instanceof mage.abilities.effects.AsThoughEffect
+            || effect instanceof mage.abilities.effects.SpliceCardEffect;
     }
     // These layers have already been applied to the native objects. Inspect the
     // resulting controller, legal mana abilities, costs and productions instead

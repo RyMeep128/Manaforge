@@ -82,3 +82,42 @@ Only GitHub Actions runs suites. Compilation is not behavioral acceptance.
 Hosted Unity acceptance remains blocked until its license is configured. Rebuild
 the local player after reviewing the relevant exact-SHA CI results, preserve the
 previous player/logs and record application SHA plus engine bundle identity.
+
+
+## Artifact / post-Phyrexian payment regression
+
+A reported Grixis Affinity game repeatedly logged
+`UNSUPPORTED_CONTINUOUS_EFFECT`. The hazard prefilter rejected restriction
+interfaces wholesale. Native flying is implemented as a `RestrictionEffect`, so
+a flying creature entering the battlefield could block unrelated later payments.
+This is separate from the deliberate Phyrexian mana-versus-life choice. The
+reported first card and exact board were not captured; this is a confirmed code
+classification defect, not a claimed replay of that unrecorded game.
+
+Simulation assessment now delegates native restriction, requirement, untap-limit,
+as-though and splice interfaces to the existing isolated native search. Source
+availability still calls native activation prohibitions; activation and pool
+allocation still run on copies and reject unresolved choices or consequential
+resource changes. The live prefilter does not call these predicates, and the
+non-simulation exclusion screen remains conservative. Mana-event replacement
+and trigger checks and unknown-effect fallback remain intact. There are no
+production card-name exceptions or client payment rules.
+
+The production-path native CI checks now include:
+
+- A manually confirmed Phyrexian life choice for Vault Skirge, its automatic
+  remaining generic payment and resolution, followed by two ordinary casts in
+  the same game using the same payer and automation coordinator. Later casts
+  must stay in Auto, use mana without spending life, reach the stack and require
+  no manual mana windows.
+- A flying artifact already in play while a normal colored cost is paid.
+- Myr Enforcer, Thoughtcast and a zero-cost Frogmite after native affinity
+  reduction, using Seat of the Synod, Great Furnace and Vault of Whispers, with
+  an additional Mountain. Checks require the finalized cost, correct colored
+  source, minimum taps and no payment for a fully reduced cost.
+- Null Rod disabling an artifact mana source, plus a legal basic-land alternative
+  that must remain usable without activating the prohibited artifact source.
+
+These behavioral checks run in Actions for stock and pinned delivery engines.
+Compile-only success does not establish their passing result. An already running
+game retains its loaded gateway classes; edits cannot repair that game in place.

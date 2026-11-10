@@ -111,6 +111,8 @@ public final class NativePaymentAcceptanceChecks {
             if(name.equals("tapped-source"))engine.game.getPermanent(lands.get(0).getId()).setTapped(true);
             if(name.equals("sacrifice-source"))engine.game.getPermanent(lands.get(0).getId()).getCounters(engine.game).addCounter(mage.counters.CounterType.DEPLETION.createInstance(2));
             if(counters && !lands.isEmpty())engine.game.getPermanent(lands.get(0).getId()).getCounters(engine.game).addCounter(mage.counters.CounterType.P1P1.createInstance());
+            if(name.startsWith("affinity-") || name.startsWith("artifact-"))engine.load(new mage.cards.o.Ornithopter(engine.payer.getId(),info("Ornithopter")),Zone.BATTLEFIELD);
+            if(name.startsWith("artifact-null-rod"))engine.load(new mage.cards.n.NullRod(engine.opponent.getId(),info("Null Rod")),Zone.BATTLEFIELD);
             if(name.equals("cost-reducer"))engine.load(new mage.cards.h.HelmOfAwakening(engine.payer.getId(),info("Helm of Awakening")),Zone.BATTLEFIELD);
             if(name.equals("cost-increase"))engine.load(new mage.cards.s.SphereOfResistance(engine.opponent.getId(),info("Sphere of Resistance")),Zone.BATTLEFIELD);
             if(doubler)engine.load(new mage.cards.m.ManaFlare(engine.opponent.getId(),info("Mana Flare")),Zone.BATTLEFIELD);
@@ -121,7 +123,7 @@ public final class NativePaymentAcceptanceChecks {
             }
             // Whole-library ability registration must not disable normal payment.
             for(int i=0;i<24;i++)engine.load(new mage.cards.basiclands.Forest(engine.payer.getId(),info("Forest")),Zone.LIBRARY);
-            Card spell=name.equals("denizen")?new mage.cards.f.FoundryStreetDenizen(engine.payer.getId(),info("Foundry Street Denizen")):new Probe(engine.payer.getId(),cost);
+            Card spell=name.equals("affinity-enforcer")?new mage.cards.m.MyrEnforcer(engine.payer.getId(),info("Myr Enforcer")):name.equals("affinity-thoughtcast")?new mage.cards.t.Thoughtcast(engine.payer.getId(),info("Thoughtcast")):name.equals("affinity-zero")?new mage.cards.f.Frogmite(engine.payer.getId(),info("Frogmite")):name.equals("denizen")?new mage.cards.f.FoundryStreetDenizen(engine.payer.getId(),info("Foundry Street Denizen")):new Probe(engine.payer.getId(),cost);
             ActivatedAbility activation=null;
             if(ability){activation=new mage.abilities.common.SimpleActivatedAbility(Zone.BATTLEFIELD,new mage.abilities.effects.common.GainLifeEffect(1),new ManaCostsImpl<>(cost));if(name.equals("nonstack-activation"))activation=new ImmediateAbility(cost);spell.addAbility(activation);engine.load(spell,Zone.BATTLEFIELD);activation=(ActivatedAbility)engine.game.getPermanent(spell.getId()).getAbilities().get(engine.game.getPermanent(spell.getId()).getAbilities().size()-1);}
             else engine.load(spell,Zone.HAND);
@@ -142,12 +144,17 @@ public final class NativePaymentAcceptanceChecks {
                 if(manual){check("GAME_PLAY_MANA".equals(next.prompt.get("kind").getAsString()),name+"_DID_NOT_REQUEST_MANUAL");check(!engine.paid.get(),name+"_PAID_UNSAFE");check(engine.payer.getLife()==initialLife,name+"_LOST_LIFE");for(Card source:lands){check(engine.game.getPermanent(source.getId()).isTapped()==initialTaps.get(source.getId()),name+"_PARTIAL_TAP");check(engine.game.getPermanent(source.getId()).getCounters(engine.game).equals(initialCounters.get(source.getId())),name+"_REMOVED_COUNTER");}}
                 else {
                     check(engine.paid.get(),name+"_AUTO_FALLBACK_"+payment.reason());check("GAME_ASK".equals(next.prompt.get("kind").getAsString()),name+"_PAYMENT_NOT_FINISHED");
-                    check(payment.report().get("native_auto_payment_manual_windows").getAsInt()==0,name+"_MANUAL_INPUT");check(payment.report().get("native_auto_payment_completed").getAsInt()==1,name+"_COMPLETION_UNPROVEN");
+                    check(payment.report().get("native_auto_payment_manual_windows").getAsInt()==0,name+"_MANUAL_INPUT");check(payment.report().get("native_auto_payment_completed").getAsInt()==(name.equals("affinity-zero")?0:1),name+"_COMPLETION_UNPROVEN");
                     int taps=0;for(Card source:lands)if(engine.game.getPermanent(source.getId()).isTapped())taps++;
                     if(name.equals("denizen"))check(taps==1,"DENIZEN_MUST_LEAVE_ONE_MOUNTAIN");if(name.equals("double-red"))check(taps==2,"DOUBLE_RED_NEEDS_BOTH");if(doubler)check(taps==1,"DOUBLER_USED_EXTRA_SOURCE");
                     if(name.equals("chosen-x") || name.equals("commander-tax"))check(taps==3,"FINALIZED_EXTRA_MANA_NOT_PAID");
                     if(name.equals("cost-reducer"))check(taps==1,"REDUCED_COST_OVERPAID");if(name.equals("cost-increase"))check(taps==2,"INCREASED_COST_UNDERPAID");
                     if(name.equals("safe-before-life"))check(!engine.game.getPermanent(lands.get(0).getId()).isTapped() && engine.payer.getLife()==20,"AUTO_USED_LIFE_SOURCE");
+                    if(name.equals("affinity-enforcer"))check(taps==3,"AFFINITY_ENFORCER_MUST_PAY_REDUCED_THREE");
+                    if(name.equals("affinity-thoughtcast")){check(taps==1,"AFFINITY_THOUGHTCAST_OVERPAID");check(engine.game.getPermanent(lands.get(0).getId()).isTapped(),"AFFINITY_THOUGHTCAST_WRONG_COLOR");}
+                    if(name.equals("affinity-zero"))check(taps==0,"FREE_AFFINITY_TAPPED_SOURCE");
+                    if(name.equals("artifact-flying"))check(taps==1,"FLYING_PREVENTED_PAYMENT");
+                    if(name.equals("artifact-null-rod-basic"))check(taps==1 && !engine.game.getPermanent(lands.get(0).getId()).isTapped() && engine.game.getPermanent(lands.get(1).getId()).isTapped(),"NULL_ROD_BYPASSED_OR_BASIC_UNUSED");
                     if(name.startsWith("generated-"))check(taps==2,"GENERATED_NONMINIMAL_TAPS");
                     if(!ability)check(engine.game.getStack().size()==1 && engine.game.getStack().getFirst().getSourceId().equals(spell.getId()),name+"_SPELL_NOT_STACKED");
                 }
@@ -160,8 +167,47 @@ public final class NativePaymentAcceptanceChecks {
             } finally {payment.close();}
         }
     }
+    static void answer(Engine engine,ManaforgeGameplaySession.Advance next,boolean value){
+        JsonObject command=new JsonObject();command.addProperty("protocol",1);command.addProperty("command","respond");command.addProperty("request_id","manual-choice-"+UUID.randomUUID());
+        command.add("game_id",next.state.get("game_id"));command.add("decision_id",next.prompt.get("decision_id"));command.addProperty("kind","boolean");command.addProperty("value",value);
+        check(new JsonPrimitive(true).equals(engine.submit(command).get("accepted")),"MANUAL_PHYREXIAN_CHOICE_REJECTED");
+    }
+    static void phyrexianThenOrdinary() throws Exception {
+        try(Engine engine=new Engine();NativeAutomaticPayment payment=new NativeAutomaticPayment("acceptance",engine.payer.getId().toString(),Mode.AUTO)){
+            List<Card> lands=new ArrayList<>();for(int i=0;i<3;i++)lands.add(engine.load(new mage.cards.basiclands.Mountain(engine.payer.getId(),info("Mountain")),Zone.BATTLEFIELD));
+            Card skirge=engine.load(new mage.cards.v.VaultSkirge(engine.payer.getId(),info("Vault Skirge")),Zone.HAND);engine.cast(skirge,null);
+            ManaforgeAutomaticEngine wrapper=new ManaforgeAutomaticEngine(engine,payment,()->false);ManaforgeGameplaySession.Advance next=wrapper.advance(0);
+            check("GAME_ASK".equals(next.prompt.get("kind").getAsString()) && !engine.paid.get(),"PHYREXIAN_LIFE_MUST_ASK");
+            check(engine.payer.getLife()==20 && payment.report().get("native_auto_payment_steps").getAsInt()==0,"AUTO_CHOSE_PHYREXIAN_LIFE");
+            answer(engine,next,true);next=wrapper.advance(next.prompt.get("decision_id").getAsLong());
+            check(engine.paid.get() && engine.payer.getLife()==18,"EXPLICIT_PHYREXIAN_LIFE_NOT_PAID");
+            check(payment.report().get("native_auto_payment_completed").getAsInt()==1,"PHYREXIAN_GENERIC_NOT_AUTOMATIC");
+            answer(engine,next,false);engine.running.get(2,TimeUnit.SECONDS);engine.game.getStack().resolve(engine.game);
+            check(engine.game.getPermanent(skirge.getId())!=null,"PHYREXIAN_FLYER_NOT_RESOLVED");
+            for(int spellIndex=0;spellIndex<2;spellIndex++){
+                engine.paid.set(false);Card spell=engine.load(new Probe(engine.payer.getId(),"{R}"),Zone.HAND);int life=engine.payer.getLife();engine.cast(spell,null);
+                next=wrapper.advance(next.prompt.get("decision_id").getAsLong());
+                check(engine.paid.get(),"AFTER_PHYREXIAN_AUTO_FALLBACK_"+payment.reason());check(engine.payer.getLife()==life,"LATER_AUTO_SPENT_LIFE");
+                check(payment.report().get("native_auto_payment_completed").getAsInt()==spellIndex+2,"PHYREXIAN_CHOICE_POISONED_LATER_PAYMENT");
+                check("AUTO".equals(payment.report().get("native_auto_payment_mode").getAsString()),"PHYREXIAN_CHANGED_PAYMENT_MODE");
+                check(engine.game.getStack().size()==1 && engine.game.getStack().getFirst().getSourceId().equals(spell.getId()),"LATER_SPELL_NOT_ON_STACK");
+                answer(engine,next,false);engine.running.get(2,TimeUnit.SECONDS);engine.game.getStack().resolve(engine.game);
+            }
+            check(payment.report().get("native_auto_payment_manual_windows").getAsInt()==0,"LATER_SPELL_REQUIRED_MANUAL_MANA");
+            check(lands.stream().allMatch(card->engine.game.getPermanent(card.getId()).isTapped()),"SEQUENTIAL_PAYMENT_WRONG_SOURCES");
+            System.out.println("Payment production path: phyrexian-life-then-two-ordinary-casts "+payment.report());
+        }
+    }
     public static void main(String[] args) throws Exception {
         Thread.currentThread().setName("GAME-payment-acceptance-owner");String mountain="mage.cards.basiclands.Mountain",forest="mage.cards.basiclands.Forest",island="mage.cards.basiclands.Island";
+        phyrexianThenOrdinary();
+        String[] artifacts={"mage.cards.s.SeatOfTheSynod","mage.cards.g.GreatFurnace","mage.cards.v.VaultOfWhispers",mountain};
+        scenario("artifact-flying","{U}",new String[]{island,island},false,false,false,false);
+        scenario("affinity-enforcer","{7}",artifacts,false,false,false,false);
+        scenario("affinity-thoughtcast","{4}{U}",artifacts,false,false,false,false);
+        scenario("affinity-zero","{4}",artifacts,false,false,false,false);
+        scenario("artifact-null-rod","{C}",new String[]{"mage.cards.s.SolRing"},true,false,false,false);
+        scenario("artifact-null-rod-basic","{U}",new String[]{"mage.cards.s.SeatOfTheSynod",island},false,false,false,false);
         scenario("denizen","{R}",new String[]{mountain,mountain},false,false,false,false);
         scenario("double-red","{R}{R}",new String[]{mountain,mountain},false,false,false,false);
         scenario("chosen-x","{X}{R}",new String[]{mountain,mountain,mountain},false,false,false,false);
