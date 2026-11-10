@@ -150,3 +150,22 @@ def test_printing_identity_and_unsupported_fields_survive_serialization():
     fields = payload["objects"][0]["characteristics"]["unsupported_fields"]
     assert "current_rules_text" in fields
     assert "copy_provenance_history" in fields
+
+
+def test_pile_preview_concealment_and_bounds():
+    validate("ChoicePreview", dict(hidden=True, name=None, type_line=None, rules=None))
+    with pytest.raises(ValidationError):
+        validate(
+            "ChoicePreview",
+            dict(hidden=True, name="secret", type_line=None, rules=None),
+        )
+    with pytest.raises(ValidationError):
+        validate(
+            "ChoiceGroup",
+            dict(
+                group_id="pile",
+                label="Pile",
+                option_id="option",
+                cards=[dict(hidden=True, name=None, type_line=None, rules=None)] * 257,
+            ),
+        )

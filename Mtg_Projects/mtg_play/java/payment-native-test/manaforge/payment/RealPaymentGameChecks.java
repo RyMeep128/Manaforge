@@ -133,8 +133,45 @@ public final class RealPaymentGameChecks {
             proof.addProperty("spell_stacked_and_resolved",true);System.out.println(proof);
         }finally{payer.abort();opponent.abort();cast.cancel(true);executor.shutdownNow();executor.awaitTermination(2,TimeUnit.SECONDS);}
     }
+    private static void nativeSessionRequests() throws Exception {
+        Class<?> bridgeType=Class.forName("ManaforgeBridge"),transportType=Class.forName("ManaforgeBridge$RequestTransport");
+        UUID game=UUID.randomUUID(),related=UUID.randomUUID();List<Object[]> sends=new ArrayList<>();List<JsonObject> events=new ArrayList<>();
+        Object transport=java.lang.reflect.Proxy.newProxyInstance(bridgeType.getClassLoader(),new Class<?>[]{transportType},(proxy,method,args)->{sends.add(args);return true;});
+        java.lang.reflect.Constructor<?> constructor=bridgeType.getDeclaredConstructor(java.util.function.Consumer.class,transportType);constructor.setAccessible(true);
+        Object bridge=constructor.newInstance((java.util.function.Consumer<JsonObject>)events::add,transport);
+        Field gameField=bridgeType.getDeclaredField("gameId");gameField.setAccessible(true);gameField.set(bridge,game);
+        java.lang.reflect.Method receive=bridgeType.getDeclaredMethod("sessionRequest",mage.view.UserRequestMessage.class,int.class),poll=bridgeType.getDeclaredMethod("pollSessionRequest"),current=bridgeType.getDeclaredMethod("sessionRequestCurrent",String.class),execute=bridgeType.getDeclaredMethod("execute",JsonObject.class);
+        for(java.lang.reflect.Method method:new java.lang.reflect.Method[]{receive,poll,current,execute})method.setAccessible(true);
+        int decision=10;
+        for(boolean rollback:new boolean[]{false,true})for(int option=0;option<2;option++){
+            mage.view.UserRequestMessage message=new mage.view.UserRequestMessage("Permission","Allow this request?");message.setGameId(game);message.setRelatedUser(related,"Public requester");
+            mage.constants.PlayerAction accept=rollback?mage.constants.PlayerAction.ADD_PERMISSION_TO_ROLLBACK_TURN:mage.constants.PlayerAction.ADD_PERMISSION_TO_SEE_HAND_CARDS;
+            mage.constants.PlayerAction decline=rollback?mage.constants.PlayerAction.DENY_PERMISSION_TO_ROLLBACK_TURN:null;
+            message.setButton1("Accept",accept);message.setButton2("Deny",decline);receive.invoke(bridge,message,decision++);
+            JsonObject request=(JsonObject)poll.invoke(bridge);require(request!=null,"NATIVE_REQUEST_NOT_CAPTURED");int previous=sends.size();
+            JsonObject reply=new JsonObject();reply.addProperty("protocol",1);reply.addProperty("request_id","explicit-request-reply");reply.addProperty("command","respond_request");reply.addProperty("game_id",game.toString());reply.add("decision_id",request.get("decision_id"));reply.add("session_request_id",request.get("session_request_id"));reply.addProperty("value",Integer.toString(option));execute.invoke(bridge,reply);
+            require(!((Boolean)current.invoke(bridge,request.get("session_request_id").getAsString())),"NATIVE_REQUEST_NOT_CONSUMED");
+            require(sends.size()==previous+(option==1 && !rollback?0:1),"NATIVE_REQUEST_UNEXPECTED_IO");
+            if(sends.size()>previous){Object[] sent=sends.get(previous);require(sent[0]==(option==0?accept:decline) && game.equals(sent[1]) && related.equals(sent[2]),"NATIVE_REQUEST_WRONG_AUTHORITY");}
+            execute.invoke(bridge,reply);require(sends.size()==previous+(option==1 && !rollback?0:1),"NATIVE_REQUEST_REPLAYED");
+            receive.invoke(bridge,message,decision++);JsonObject old=(JsonObject)poll.invoke(bridge);receive.invoke(bridge,message,decision++);require(!((Boolean)current.invoke(bridge,old.get("session_request_id").getAsString())),"NATIVE_DUPLICATE_REQUEST_RETAINED");
+            Field pending=bridgeType.getDeclaredField("requests");pending.setAccessible(true);Map<?,?> map=(Map<?,?>)pending.get(bridge);Object entry=map.values().iterator().next();Field created=entry.getClass().getDeclaredField("created");created.setAccessible(true);created.setLong(entry,System.nanoTime()-TimeUnit.MINUTES.toNanos(3));require(poll.invoke(bridge)==null,"NATIVE_REQUEST_DID_NOT_EXPIRE");
+        }
+        System.out.println("Native permission adapter: accept/decline, authority, duplicates, expiry and no replay passed; transport fixture only");
+    }
+    private static void nativePileChoice(boolean firstPile) throws Exception {
+        TwoPlayerDuel game=new TwoPlayerDuel(MultiplayerAttackOption.MULTIPLE,RangeOfInfluence.ALL,new mage.game.mulligan.LondonMulligan(0),20,7,7);
+        ContextHumanPlayer payer=new ContextHumanPlayer("Pile chooser",RangeOfInfluence.ALL,0);payer.setUserData(mage.players.net.UserData.getDefaultUserDataView());
+        ContextHumanPlayer other=new ContextHumanPlayer("Other player",RangeOfInfluence.ALL,0);other.setUserData(mage.players.net.UserData.getDefaultUserDataView());
+        game.addPlayer(payer,new mage.cards.decks.Deck());game.addPlayer(other,new mage.cards.decks.Deck());payer.init(game);other.init(game);
+        Card card=new mage.cards.basiclands.Mountain(payer.getId(),info("Mountain"));load(game,card,Zone.LIBRARY);
+        BlockingQueue<PlayerQueryEvent> queries=new LinkedBlockingQueue<>();game.addPlayerQueryEventListener(queries::add);
+        ExecutorService executor=Executors.newSingleThreadExecutor();Future<Boolean> result=executor.submit(()->payer.choosePile(Outcome.Benefit,"Choose a pile",Collections.singletonList(card),Collections.emptyList(),game));
+        try{PlayerQueryEvent query=queries.poll(2,TimeUnit.SECONDS);require(query!=null && query.getQueryType()==PlayerQueryEvent.QueryType.CHOOSE_PILE,"REAL_PILE_QUERY_MISSING");payer.setResponseBoolean(firstPile);require(result.get(2,TimeUnit.SECONDS)==firstPile,"REAL_PILE_RESPONSE_CHANGED");System.out.println("Native pile response: "+firstPile+"; choice completed");}
+        finally{payer.abort();other.abort();result.cancel(true);executor.shutdownNow();executor.awaitTermination(2,TimeUnit.SECONDS);}
+    }
     public static void main(String[] args) throws Exception {
-        Thread.currentThread().setName("GAME-real-payment-setup");
+        Thread.currentThread().setName("GAME-real-payment-setup");nativeSessionRequests();nativePileChoice(true);nativePileChoice(false);
         scenario("foundry-street-opponent-triggers",false,false);
         scenario("two-red-mountains",true,false);
         scenario("active-mana-hazard",false,true);

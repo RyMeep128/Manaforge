@@ -556,6 +556,21 @@ public final class ManaforgeLiveOpening {
         CoreCombatCycle(ManaforgeOpeningProjection projection) {
             if(automaticPayment==null && System.getProperty("manaforge.paymentMode")!=null)automaticPayment=new NativeAutomaticPayment(liveLaunch==null?"live-opening":liveLaunch.session(),engineViewer,manaforge.payment.PaymentCoordinator.Mode.valueOf(System.getProperty("manaforge.paymentMode")));
             ManaforgeGameplaySession.Engine nativeEngine=new ManaforgeGameplaySession.Engine(){
+                public JsonObject pollRequest(){return bridge.pollSessionRequest();}
+                public String sessionNotice(){return bridge.sessionNotice();}
+                public boolean requestCurrent(String id){return bridge.sessionRequestCurrent(id);}
+                public ManaforgeGameplaySession.Advance refresh() throws Exception {
+                    for(int attempt=0;attempt<40 && !cancelled.get();attempt++){
+                        JsonObject context=bridge.currentContext();JsonElement view=context.get("state"),decision=context.get("prompt");
+                        if(view==null || view.isJsonNull() || decision==null || decision.isJsonNull())throw new IOException("SESSION_REQUEST_GAME_CHANGED");
+                        JsonObject current=view.getAsJsonObject(),choice=decision.getAsJsonObject();
+                        JsonObject query=new JsonObject();query.addProperty("command","metadata");query.addProperty("game",game);query.addProperty("player",engineViewer);query.add("cycle",current.get("cycle"));query.add("object_ids",new JsonArray());query.add("identified_ids",new JsonArray());JsonObject guard=metadataClient.read(query);
+                        if(new JsonPrimitive("finished").equals(guard.get("status")))throw new IOException("SESSION_REQUEST_GAME_CHANGED");
+                        boolean priority=new JsonPrimitive("GAME_SELECT").equals(choice.get("kind")) && new JsonPrimitive(true).equals(choice.get("is_priority"));
+                        if(new JsonPrimitive("ok").equals(guard.get("status")) && current.get("cycle").equals(guard.get("cycle")) && new JsonPrimitive(priority).equals(guard.get("priority_open"))){choice.add("cycle",current.get("cycle"));state=current;return new ManaforgeGameplaySession.Advance(current,choice,terminalCallback);}
+                        Thread.sleep(25);
+                    }throw new IOException("SESSION_REQUEST_CONTEXT_UNPROVEN");
+                }
                 public JsonObject metadata(JsonObject view,String... ids) throws Exception{Set<String> requested=new LinkedHashSet<>(Arrays.asList(ids));if(commanderTrace!=null)requested.addAll(Arrays.asList(commanderTrace.requested(view)));JsonObject result=sourceMetadata(view,requested.toArray(new String[0]));if(liveLaunch!=null)liveLaunch.verifyCommanders(view,result);if(commanderTrace!=null)commanderTrace.observe(view,result);return result;}
                 public JsonObject submit(JsonObject command) throws Exception{return request(command,"response_sent");}
                 public ManaforgeGameplaySession.Advance advance(long previous) throws Exception {

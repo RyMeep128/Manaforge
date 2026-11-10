@@ -17,7 +17,13 @@ namespace Manaforge.Play
                 UnityEngine.Debug.LogError("AUTO_PAYMENT_MANUAL_INPUT_REQUIRED");UnityEngine.Application.Quit(1);return false;
             }
             if(frame.Result!=null || frame.Decision==null && frame.Actions.Count==0)return true;var offer=host.PresentedDecision;if(offer?.CanSubmit!=true || submitted==frame.Context.Revision)return false;
-            var controls=panel.Root.Query<Button>().ToList();Button button=commanderScenario.Choose(frame,controls,availableLands+(frame.ViewerMana?.Values.Sum()??0));var decision=frame.Decision;
+            var controls=panel.Root.Query<Button>().ToList();var decision=frame.Decision;
+            if(decision.Groups.Count>0){
+                var confirm=controls.Find(value=>value.name=="decision-group-confirm");
+                if(confirm==null || !confirm.enabledInHierarchy){var group=decision.Groups[ArtworkFixtureScene.Argument("-manaforgePileChoice")=="1"?1:0];var select=controls.Find(value=>value.name=="decision-group-"+group.GroupId);if(select!=null)using(var selection=NavigationSubmitEvent.GetPooled()){selection.target=select;select.SendEvent(selection);}return false;}
+                submitted=frame.Context.Revision;using(var confirmation=NavigationSubmitEvent.GetPooled()){confirmation.target=confirm;confirm.SendEvent(confirmation);}return false;
+            }
+            Button button=decision.RequestId!=null?controls.Find(value=>value.name=="decision-option-1"):commanderScenario.Choose(frame,controls,availableLands+(frame.ViewerMana?.Values.Sum()??0));
             if(decision.Family=="number" || decision.Family=="amounts"){
                 long remaining=decision.Maximum??0;long[] values=new long[decision.Family=="number"?1:decision.Amounts.Count];
                 if(decision.Family=="number")values[0]=Math.Max(decision.Minimum??0,Math.Min(1,decision.Maximum??1));

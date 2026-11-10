@@ -150,6 +150,29 @@ namespace Manaforge.Play.Tests
                 string button=operation=="perform"?"decision-action-0":operation=="cancel"?"decision-cancel":"decision-finish";Click(panel.Root.Q<Button>(button));var read=Task.Run(()=>WireMessages.Parse(peer.ReadCommandForFixture()));yield return Until(()=>read.IsCompleted);Assert.That((string)read.Result["body"]["operation"],Is.EqualTo(operation));host.Cancel();yield return Until(()=>host.Completion.IsCompleted);panel.Tick();Assert.That(panel.Root.style.display.value,Is.EqualTo(DisplayStyle.None));
             }
         }
+        [UnityTest] public IEnumerator PilePagingAndSelectionSendNothingUntilExplicitConfirmation()
+        {
+            var frame=Snapshot(selection:true);var decision=frame["body"]["snapshot"]["decision"];decision["is_priority"]=false;decision["can_finish"]=false;decision["cancellable"]=false;
+            decision["options"]=new JArray(new JObject{["option_id"]="first-option",["label"]="First pile",["object_id"]=null,["player_id"]=null,["selected"]=false},new JObject{["option_id"]="second-option",["label"]="Second pile",["object_id"]=null,["player_id"]=null,["selected"]=false});
+            var cards=new JArray();for(int i=0;i<33;i++)cards.Add(new JObject{["hidden"]=false,["name"]="Public card "+i,["type_line"]="Instant",["rules"]=new JArray("Engine text")});
+            decision["groups"]=new JArray(new JObject{["group_id"]="first",["label"]="Pile 1",["option_id"]="first-option",["cards"]=cards},new JObject{["group_id"]="second",["label"]="Pile 2",["option_id"]="second-option",["cards"]=new JArray()});
+            var host=Start(frame,out var peer,out var owner);var panel=Panel(host);yield return Show(host,panel);
+            Assert.That(panel.Root.Query<CardView>().ToList().Count,Is.EqualTo(ViewerDecisionPanel.PageSize));Assert.That(panel.Root.Q<Button>("decision-group-confirm").enabledSelf,Is.False);
+            Click(panel.Root.Q<Button>("decision-group-next-first"));Click(panel.Root.Q<Button>("decision-group-next-first"));Assert.That(panel.Root.Query<CardView>().ToList().Count,Is.EqualTo(1));Assert.That(peer.PendingCommandBytes,Is.Zero);
+            Click(panel.Root.Q<Button>("decision-group-second"));Assert.That(peer.PendingCommandBytes,Is.Zero);var confirm=panel.Root.Q<Button>("decision-group-confirm");Assert.That(confirm.enabledInHierarchy,Is.True);Assert.That(confirm.text,Does.Contain("Second pile"));Click(confirm);
+            var read=Task.Run(()=>WireMessages.Parse(peer.ReadCommandForFixture()));yield return Until(()=>read.IsCompleted);Assert.That((string)read.Result["body"]["operation"],Is.EqualTo("choose"));Assert.That((string)read.Result["body"]["option_id"],Is.EqualTo("second-option"));Assert.That(read.Result["body"]["cards"],Is.Null);
+            host.Cancel();yield return Until(()=>host.Completion.IsCompleted);panel.Tick();Assert.That(panel.Root.Query<CardView>().ToList(),Is.Empty);
+        }
+        [UnityTest] public IEnumerator PermissionDialogDoesNotAutomaticallyGrantConsent()
+        {
+            var frame=Snapshot(selection:true);var decision=frame["body"]["snapshot"]["decision"];decision["is_priority"]=false;decision["can_finish"]=false;decision["cancellable"]=false;
+            decision["request"]=new JObject{["request_id"]=(string)decision["decision_id"],["kind"]="hand_visibility"};
+            decision["options"]=new JArray(new JObject{["option_id"]="accept",["label"]="Accept",["object_id"]=null,["player_id"]=null,["selected"]=false},new JObject{["option_id"]="deny",["label"]="Reject",["object_id"]=null,["player_id"]=null,["selected"]=false});
+            var host=Start(frame,out var peer,out var owner);var panel=Panel(host);panel.EnablePriority();yield return Show(host,panel);
+            for(int i=0;i<5;i++){panel.Tick();yield return null;}Assert.That(peer.PendingCommandBytes,Is.Zero);Assert.That(panel.Root.ClassListContains("session-request"),Is.True);
+            Click(panel.Root.Q<Button>("decision-option-1"));var read=Task.Run(()=>WireMessages.Parse(peer.ReadCommandForFixture()));yield return Until(()=>read.IsCompleted);Assert.That((string)read.Result["body"]["option_id"],Is.EqualTo("deny"));
+            host.Cancel();yield return Until(()=>host.Completion.IsCompleted);panel.Tick();Assert.That(panel.Root.ClassListContains("session-request"),Is.False);
+        }
         [UnityTest] public IEnumerator PanelFeedbackUsesOwnedReceiptsWithoutConsumingTheOrderedQueue()
         {
             var host=Start(Snapshot(selection:true),out var peer,out var owner);var panel=Panel(host);yield return Show(host,panel);Click(panel.Root.Q<Button>("decision-option-0"));var read=Task.Run(()=>WireMessages.Parse(peer.ReadCommandForFixture()));yield return Until(()=>read.IsCompleted);var command=read.Result;

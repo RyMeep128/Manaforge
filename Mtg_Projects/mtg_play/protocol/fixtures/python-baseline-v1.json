@@ -100,7 +100,9 @@
         "unsupported_fields": [],
         "actions_complete": false,
         "payment_reason": null,
-        "stack_targets": null
+        "stack_targets": null,
+        "decision_error": null,
+        "session_notice": null
       }
     },
     {
@@ -171,7 +173,9 @@
         "unsupported_fields": [],
         "actions_complete": false,
         "payment_reason": null,
-        "stack_targets": null
+        "stack_targets": null,
+        "decision_error": null,
+        "session_notice": null
       }
     },
     {
@@ -283,7 +287,9 @@
           "amounts": [],
           "can_finish": false,
           "is_priority": false,
-          "targeting": null
+          "targeting": null,
+          "groups": null,
+          "request": null
         },
         "combat": [],
         "protocol_version": 1,
@@ -293,7 +299,9 @@
         "unsupported_fields": [],
         "actions_complete": false,
         "payment_reason": null,
-        "stack_targets": null
+        "stack_targets": null,
+        "decision_error": null,
+        "session_notice": null
       }
     },
     {
@@ -390,7 +398,9 @@
           "amounts": [],
           "can_finish": false,
           "is_priority": false,
-          "targeting": null
+          "targeting": null,
+          "groups": null,
+          "request": null
         },
         "combat": [],
         "protocol_version": 1,
@@ -400,7 +410,9 @@
         "unsupported_fields": [],
         "actions_complete": false,
         "payment_reason": null,
-        "stack_targets": null
+        "stack_targets": null,
+        "decision_error": null,
+        "session_notice": null
       }
     },
     {
@@ -430,7 +442,9 @@
         ],
         "actions_complete": false,
         "payment_reason": null,
-        "stack_targets": null
+        "stack_targets": null,
+        "decision_error": null,
+        "session_notice": null
       }
     },
     {
@@ -553,6 +567,34 @@
         "oracle_id": "fixture-oracle",
         "printing_id": "fixture-print",
         "deck_entry_id": "fixture-entry"
+      }
+    },
+    {
+      "name": "empty-choice-group",
+      "record": "ChoiceGroup",
+      "payload": {
+        "group_id": "pile",
+        "label": "Empty pile",
+        "option_id": "choose-pile",
+        "cards": []
+      }
+    },
+    {
+      "name": "concealed-choice-preview",
+      "record": "ChoicePreview",
+      "payload": {
+        "hidden": true,
+        "name": null,
+        "type_line": null,
+        "rules": null
+      }
+    },
+    {
+      "name": "explicit-session-request",
+      "record": "SessionRequest",
+      "payload": {
+        "request_id": "request",
+        "kind": "rollback"
       }
     }
   ]

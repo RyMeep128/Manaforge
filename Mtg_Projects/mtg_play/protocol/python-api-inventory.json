@@ -540,6 +540,65 @@
         "python_default": "False"
       }
     ],
+    "ChoicePreview": [
+      {
+        "name": "hidden",
+        "python_type": "bool",
+        "required": true
+      },
+      {
+        "name": "name",
+        "python_type": "str | None",
+        "required": false,
+        "python_default": "None"
+      },
+      {
+        "name": "type_line",
+        "python_type": "str | None",
+        "required": false,
+        "python_default": "None"
+      },
+      {
+        "name": "rules",
+        "python_type": "tuple[str, ...] | None",
+        "required": false,
+        "python_default": "None"
+      }
+    ],
+    "ChoiceGroup": [
+      {
+        "name": "group_id",
+        "python_type": "str",
+        "required": true
+      },
+      {
+        "name": "label",
+        "python_type": "str",
+        "required": true
+      },
+      {
+        "name": "option_id",
+        "python_type": "str",
+        "required": true
+      },
+      {
+        "name": "cards",
+        "python_type": "tuple[ChoicePreview, ...]",
+        "required": true
+      }
+    ],
+    "SessionRequest": [
+      {
+        "name": "request_id",
+        "python_type": "str",
+        "required": true
+      },
+      {
+        "name": "kind",
+        "python_type": "Literal['hand_visibility', 'rollback']",
+        "required": true
+      }
+    ],
     "ChoiceRequest": [
       {
         "name": "decision_id",
@@ -605,6 +664,18 @@
       {
         "name": "targeting",
         "python_type": "TargetingContext | None",
+        "required": false,
+        "python_default": "None"
+      },
+      {
+        "name": "groups",
+        "python_type": "tuple[ChoiceGroup, ...] | None",
+        "required": false,
+        "python_default": "None"
+      },
+      {
+        "name": "request",
+        "python_type": "SessionRequest | None",
         "required": false,
         "python_default": "None"
       }
@@ -845,6 +916,18 @@
       {
         "name": "stack_targets",
         "python_type": "tuple[StackTargets, ...] | None",
+        "required": false,
+        "python_default": "None"
+      },
+      {
+        "name": "decision_error",
+        "python_type": "str | None",
+        "required": false,
+        "python_default": "None"
+      },
+      {
+        "name": "session_notice",
+        "python_type": "str | None",
         "required": false,
         "python_default": "None"
       }

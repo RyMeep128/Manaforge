@@ -35,7 +35,8 @@ namespace Manaforge.Play
         public void Present(ProjectedDecisionFrame frame)
         {
             string life=string.Join("  ",frame.PlayerLifeTotals.Select(seat=>(seat.Key==frame.Context.ViewerId?"You":"Opponent")+": "+seat.Value));
-            status.text=frame.UnsupportedFields.Contains("decision")?"This choice is not supported yet. Return to Manaforge to end the session.":frame.Result!=null?"Result: "+frame.Result:life+"  Turn "+frame.Turn+" — "+frame.Phase;
+            status.text=frame.UnsupportedFields.Contains("decision")?"This choice cannot be displayed. Report code: "+(frame.DecisionError??"DECISION_UNSUPPORTED"):frame.Result!=null?"Result: "+frame.Result:life+"  Turn "+frame.Turn+" — "+frame.Phase;
+            if(frame.SessionNotice!=null)status.text+="\nA permission request could not be displayed. Code: "+frame.SessionNotice;
             commanders.text=CommanderPresentationText.Format(frame);
             commanders.style.display=frame.Commanders?.Count>0?DisplayStyle.Flex:DisplayStyle.None;
             foreach(var child in Surface.CardsRoot.Children())if(child is CardView card)card.SetPresentation(CardPresentationMode.Compact,130);

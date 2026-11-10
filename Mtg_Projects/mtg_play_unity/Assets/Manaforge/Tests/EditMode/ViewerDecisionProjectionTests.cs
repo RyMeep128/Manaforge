@@ -16,6 +16,19 @@ namespace Manaforge.Play.Tests
         private static JObject Choice()=>(JObject)Corpus()["positive"][2]["envelope"].DeepClone();
         private static JObject Priority()=>(JObject)JObject.Parse(File.ReadAllText(Path.Combine(Application.dataPath,"../../mtg_play/protocol/fixtures/receive-history-v1.json")))["cases"][0]["steps"][0]["envelope"].DeepClone();
         private static ProjectedDecisionFrame Project(JObject source)=>ViewerDecisionProjection.ParseSnapshot(source.ToString(Formatting.None),(string)source["body"]["snapshot"]["session_id"],(string)source["body"]["snapshot"]["viewer_id"],0,true);
+        [Test] public void PilePreviewsAreImmutableAndHiddenCardsStayConcealed()
+        {
+            var source=(JObject)Corpus()["positive"].First(value=>(string)value["name"]=="pile-choice-groups")["envelope"].DeepClone();
+            var frame=Project(source);Assert.That(frame.Decision.Groups.Count,Is.EqualTo(2));Assert.That(frame.Decision.Groups[1].Cards,Is.Empty);
+            Assert.That(frame.Decision.Groups[0].Cards[1].Hidden,Is.True);Assert.That(frame.Decision.Groups[0].Cards[1].Name,Is.Null);
+            source["body"]["snapshot"]["decision"]["groups"][0]["cards"][0]["name"]="changed";
+            Assert.That(frame.Decision.Groups[0].Cards[0].Name,Is.EqualTo("Public card"));Assert.That(((IList<ProjectedChoiceGroup>)frame.Decision.Groups).IsReadOnly,Is.True);
+        }
+        [Test] public void ConsentRequestsRemainExplicitNonpriorityChoices()
+        {
+            var source=(JObject)Corpus()["positive"].First(value=>(string)value["name"]=="hand-visibility-permission")["envelope"].DeepClone();
+            var frame=Project(source);Assert.That(frame.Decision.RequestId,Is.EqualTo(frame.Decision.DecisionId));Assert.That(frame.Decision.RequestKind,Is.EqualTo("hand_visibility"));Assert.That(frame.Decision.IsPriority,Is.False);Assert.That(frame.Decision.Options.Count,Is.EqualTo(2));
+        }
         [Test] public void PublicLibraryAndHandCountsAreImmutableAndDoNotExposeContents()
         {
             var source=Priority();var snapshot=source["body"]["snapshot"];var player=snapshot["players"][0];string id=(string)player["player_id"];

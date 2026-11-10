@@ -25,12 +25,15 @@ def main():
     parser.add_argument(
         "--payment-mode", choices=("auto", "manual", "full-control"), default=None
     )
+    parser.add_argument("--pile-choice", choices=("first", "second"), default="first")
     parser.add_argument(
         "--casting-case",
         choices=(
             "repeat",
+            "pile",
             "cancel",
             "x",
+            "x-zero",
             "ability",
             "green",
             "blue",
@@ -48,7 +51,7 @@ def main():
             "kicker",
             "discount",
         ),
-        help="Native manual casting/payment acceptance",
+        help="Real native casting and choice acceptance, including guarded Auto payment",
     )
     parser.add_argument(
         "--combat-keyword",
@@ -611,8 +614,17 @@ def main():
                     command += ["-manaforgeLiveCreature", "1"]
                 if args.combat_keyword:
                     command += ["-manaforgeLiveCombatKeyword", args.combat_keyword]
+                    if args.casting_case == "pile":
+                        command += [
+                            "-manaforgePileChoice",
+                            "0" if args.pile_choice == "first" else "1",
+                        ]
                 if args.payment_mode == "auto" and args.casting_case in (
-                    "green", "blue", "generic", "floating"
+                    "green",
+                    "blue",
+                    "generic",
+                    "floating",
+                    "pile",
                 ):
                     command += ["-manaforgeRequireAutoPayment", "1"]
                 command += [
@@ -1209,15 +1221,23 @@ def main():
                         and case_result.get("case_numeric_submitted", 0) <= 0
                     ):
                         raise RuntimeError("LIVE_UNITY_CASTING_NUMBER_UNPROVEN")
+                    if args.casting_case == "pile" and (
+                        native.get("native_casting_case_pile_verified") is not True
+                        or native.get("native_casting_case_first_pile")
+                        != (args.pile_choice == "first")
+                    ):
+                        raise RuntimeError("LIVE_UNITY_PILE_CHOICE_UNPROVEN")
                     if args.payment_mode and native.get(
                         "native_auto_payment_mode"
                     ) != args.payment_mode.upper().replace("-", "_"):
                         raise RuntimeError("LIVE_UNITY_PAYMENT_MODE_UNPROVEN")
                     if (
                         args.payment_mode == "auto"
-                        and args.casting_case in ("green", "blue", "generic")
+                        and args.casting_case in ("green", "blue", "generic", "pile")
                         and native.get("native_auto_payment_steps", 0)
-                        < {"green": 1, "blue": 2, "generic": 3}[args.casting_case]
+                        < {"green": 1, "blue": 2, "generic": 3, "pile": 4}[
+                            args.casting_case
+                        ]
                     ):
                         raise RuntimeError("LIVE_UNITY_AUTO_PAYMENT_UNPROVEN")
                     if (

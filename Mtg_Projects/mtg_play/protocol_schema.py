@@ -82,7 +82,18 @@ def contract_schema():
             properties["targets"]["maxItems"] = 256
         if name == "GameSnapshot":
             properties["stack_targets"]["anyOf"][0]["maxItems"] = 4096
+            definition["required"].remove("decision_error")
+            definition["required"].remove("session_notice")
+        if name == "ChoiceRequest":
+            definition["required"].remove("groups")
+            definition["required"].remove("request")
+            properties["groups"]["anyOf"][0].update(minItems=2, maxItems=2)
+        if name == "ChoiceGroup":
+            properties["cards"]["maxItems"] = 256
+        if name == "ChoicePreview":
+            properties["rules"]["anyOf"][0]["maxItems"] = 128
         private_fields = {
+            "ChoicePreview": ("name", "type_line", "rules"),
             "GameObject": (
                 "characteristics",
                 "card_identity",

@@ -16,6 +16,7 @@ reports are in the [archive](archive/README.md).
 | Explore preconstructed decks | [Preconstructed decks](preconstructed-decks.md) |
 | Share through private libraries | [Library server and clients](self-hosted-library.md) |
 | Play in Unity | [Play guide](play.md) |
+| Understand supported in-game decisions | [In-game choices](play-in-game-choices.md) |
 | Send feedback or host the relay | [Feedback relay](../feedback-relay/README.md) |
 
 ## Develop and maintain

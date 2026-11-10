@@ -121,8 +121,9 @@ namespace Manaforge.Play
             localPlayer.Present(frame.PlayerLifeTotals[viewer],frame.Decision?.PlayerId==viewer,false,root.ClassListContains("reduced-motion"));
             opponent.Present(frame.PlayerLifeTotals[opponent.PlayerId],frame.Decision?.PlayerId==opponent.PlayerId,false,root.ClassListContains("reduced-motion"));
             UpdateOpponentHand(opponent.PlayerId);
-            status.text=frame.UnsupportedFields.Contains("decision")?"This choice is not supported yet. Return to Manaforge to end the session.":(frame.ActivePlayerId==viewer?"Your turn":"Opponent’s turn")+" · "+frame.Turn+"\n"+PhaseName(frame.Phase);
+            status.text=frame.UnsupportedFields.Contains("decision")?"This choice cannot be displayed. Report code: "+(frame.DecisionError??"DECISION_UNSUPPORTED"):(frame.ActivePlayerId==viewer?"Your turn":"Opponent’s turn")+" · "+frame.Turn+"\n"+PhaseName(frame.Phase);
             if(frame.Turn==0 || frame.Decision?.Family=="mulligan" || (frame.Decision?.Prompt??"").StartsWith("Mulligan",StringComparison.OrdinalIgnoreCase))status.text="Opening hand\nChoose your starting hand";
+            if(frame.SessionNotice!=null)status.text+="\nA permission request could not be displayed. Code: "+frame.SessionNotice;
             result.text=frame.Result==null?"":frame.Result=="win"?"Victory":frame.Result=="loss"?"Defeat":frame.Result=="draw"?"Draw":"Game complete\n"+frame.Result;result.style.display=frame.Result==null?DisplayStyle.None:DisplayStyle.Flex;if(frame.Result!=null)result.BringToFront();
             commanders.text=CommanderPresentationText.Format(frame);
             if(Decisions!=null)GameplayTheme.Decision(Decisions,frame);

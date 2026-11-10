@@ -29,7 +29,10 @@ public final class ManaforgeBridge implements MageClient {
     private final java.util.function.Consumer<JsonObject> eventSink;
 
     public ManaforgeBridge() { this(null); }
-    ManaforgeBridge(java.util.function.Consumer<JsonObject> eventSink) { this.eventSink = eventSink; }
+    interface RequestTransport {boolean send(mage.constants.PlayerAction action,UUID game,UUID related);}
+    private final RequestTransport requestTransport;
+    ManaforgeBridge(java.util.function.Consumer<JsonObject> eventSink) {this(eventSink,null);}
+    ManaforgeBridge(java.util.function.Consumer<JsonObject> eventSink,RequestTransport transport) {this.eventSink=eventSink;this.requestTransport=transport==null?session::sendPlayerAction:transport;}
 
     // Saved-deck Unity games own phase stops. Adapter and diagnostic games keep
     // their existing defaults so exact transition proofs do not gain extra stops.
@@ -51,6 +54,33 @@ public final class ManaforgeBridge implements MageClient {
     private volatile int amountMax;
     private volatile boolean decisionCancellable;
     private volatile boolean decisionFinishable;
+    private static final class PendingRequest {
+        final UUID id=UUID.randomUUID(),game,related;final long created=System.nanoTime();final int decision;final String kind;final JsonObject prompt;final mage.constants.PlayerAction[] actions;
+        PendingRequest(UUID game,UUID related,int decision,String kind,JsonObject prompt,mage.constants.PlayerAction[] actions){this.game=game;this.related=related;this.decision=decision;this.kind=kind;this.prompt=prompt;this.actions=actions;}
+    }
+    private final java.util.LinkedHashMap<String,PendingRequest> requests=new java.util.LinkedHashMap<>();
+    private JsonObject latestState,latestDecision;private String sessionNotice;private int lastRequestMessageId=-1;
+    synchronized String sessionNotice(){return sessionNotice;}
+    private void expireRequests(){requests.values().removeIf(value->!value.game.equals(gameId) || System.nanoTime()-value.created>java.util.concurrent.TimeUnit.MINUTES.toNanos(2));}
+    synchronized JsonObject pollSessionRequest(){expireRequests();return requests.isEmpty()?null:requests.values().iterator().next().prompt.deepCopy();}
+    synchronized JsonObject currentState(){if(latestState==null)return null;JsonObject value=latestState.deepCopy();value.addProperty("session_notice",sessionNotice);return value;}
+    synchronized JsonObject currentDecision(){return latestDecision==null?null:latestDecision.deepCopy();}
+    synchronized JsonObject currentContext(){JsonObject value=new JsonObject();value.add("state",currentState());value.add("prompt",currentDecision());return value;}
+    synchronized boolean sessionRequestCurrent(String id){expireRequests();return requests.containsKey(id);}
+    private void sessionRequest(UserRequestMessage message,int decision) {
+        if(gameId==null || !gameId.equals(message.getGameId()) || message.getRelatedUserId()==null || decision<=lastRequestMessageId)return;
+        lastRequestMessageId=decision;
+        mage.constants.PlayerAction[] actions={message.getButton1Action(),message.getButton2Action(),message.getButton3Action()};
+        String[] labels={message.getButton1Text(),message.getButton2Text(),message.getButton3Text()};String kind=null;
+        if(actions[0]==mage.constants.PlayerAction.ADD_PERMISSION_TO_SEE_HAND_CARDS && actions[1]==null && labels[1]!=null && actions[2]==null && labels[2]==null)kind="hand_visibility";
+        if(actions[0]==mage.constants.PlayerAction.ADD_PERMISSION_TO_ROLLBACK_TURN && actions[1]==mage.constants.PlayerAction.DENY_PERMISSION_TO_ROLLBACK_TURN && actions[2]==null && labels[2]==null)kind="rollback";
+        if(kind==null){message("unsupported_request",null,"SESSION_REQUEST_KIND_UNSUPPORTED");return;}
+        expireRequests();final String family=kind;requests.values().removeIf(value->value.kind.equals(family) && value.related.equals(message.getRelatedUserId()));
+        if(requests.size()>=16){message("unsupported_request",null,"SESSION_REQUEST_QUEUE_LIMIT");return;}
+        JsonObject prompt=new JsonObject();prompt.addProperty("kind","USER_REQUEST_DIALOG");prompt.addProperty("decision_id",decision);prompt.addProperty("request_kind",kind);prompt.addProperty("message",message.getMessage());
+        JsonObject choices=new JsonObject();for(int i=0;i<2;i++){if(labels[i]==null || labels[i].length()>4096){message("unsupported_request",null,"SESSION_REQUEST_OPTIONS_UNSUPPORTED");return;}choices.addProperty(Integer.toString(i),labels[i]);}prompt.add("key_choices",choices);
+        sessionNotice=null;PendingRequest request=new PendingRequest(gameId,message.getRelatedUserId(),decision,kind,prompt,actions);prompt.addProperty("session_request_id",request.id.toString());requests.put(request.id.toString(),request);
+    }
     private int lastDecisionMessageId = -1;
     private int lastStateMessageId = -1;
     private final java.util.Map<String,String> activeReveals=new java.util.HashMap<>();
@@ -63,6 +93,8 @@ public final class ManaforgeBridge implements MageClient {
     }
 
     private synchronized void emit(String event, String requestId, JsonObject data) {
+        if("game_state".equals(event)){data.addProperty("session_notice",sessionNotice);latestState=data.deepCopy();}
+        if("decision".equals(event))latestDecision=data.deepCopy();
         data.addProperty("protocol", 1);
         data.addProperty("event", event);
         if (requestId != null) data.addProperty("request_id", requestId);
@@ -78,6 +110,7 @@ public final class ManaforgeBridge implements MageClient {
     }
 
     private void message(String event, String id, String text) {
+        if("unsupported_request".equals(event))sessionNotice=text;
         JsonObject data = new JsonObject();
         data.addProperty("message", text);
         emit(event, id, data);
@@ -101,7 +134,7 @@ public final class ManaforgeBridge implements MageClient {
             String method = callback.getMethod().name();
             if (method.equals("START_GAME")) {
                 TableClientMessage start = (TableClientMessage) callback.getData();
-                gameId = start.getGameId();
+                gameId = start.getGameId();requests.clear();latestState=latestDecision=null;sessionNotice=null;lastRequestMessageId=-1;
                 JsonObject started = new JsonObject();
                 started.addProperty("game_id", gameId.toString());
                 started.addProperty("player_id", start.getPlayerId().toString());
@@ -109,7 +142,8 @@ public final class ManaforgeBridge implements MageClient {
                 if (!session.joinGame(gameId)) throw new IllegalStateException("Cannot join game");
             }
             if (method.equals("GAME_ERROR")) message("error", null, "ENGINE_GAME_FAILED");
-            if (method.equals("USER_REQUEST_DIALOG") || method.equals("SIDEBOARD") || method.equals("CONSTRUCT"))
+            if(method.equals("USER_REQUEST_DIALOG")){sessionRequest((UserRequestMessage)callback.getData(),callback.getMessageId());return;}
+            if (method.equals("SIDEBOARD") || method.equals("CONSTRUCT"))
                 message("error", null, "UNSUPPORTED_DECISION: " + method);
             Object payload = callback.getData();
             GameView view = payload instanceof GameView ? (GameView) payload : null;
@@ -570,6 +604,15 @@ public final class ManaforgeBridge implements MageClient {
                 JsonObject data = new JsonObject();
                 data.addProperty("accepted", accepted);
                 emit("response_sent", id, data);
+            } else if(operation.equals("respond_request")) {
+                PendingRequest pending;int option;
+                synchronized(this){expireRequests();String requestId=requiredString(command,"session_request_id");pending=requests.get(requestId);
+                    if(pending==null || !pending.game.toString().equals(requiredString(command,"game_id")) || command.get("decision_id").getAsInt()!=pending.decision)throw new IllegalArgumentException("STALE_SESSION_REQUEST");
+                    String selected=requiredString(command,"value");if(!selected.equals("0") && !selected.equals("1"))throw new IllegalArgumentException("SESSION_REQUEST_OPTION_UNAVAILABLE");option=Integer.parseInt(selected);requests.remove(requestId);
+                }
+                // Claim exactly once before native IO. Null is the pinned hand-request Reject button.
+                boolean accepted=pending.actions[option]==null || requestTransport.send(pending.actions[option],pending.game,pending.related);
+                JsonObject reply=new JsonObject();reply.addProperty("accepted",accepted);reply.addProperty("session_request_id",pending.id.toString());reply.addProperty("request_consumed",true);emit("response_sent",id,reply);
             } else if (operation.equals("concede")) {
                 if (gameId == null || !session.sendPlayerAction(mage.constants.PlayerAction.CONCEDE, gameId, null))
                     throw new IllegalStateException("Concede rejected");

@@ -10,9 +10,15 @@ public final class ManaforgeAutomaticEngine implements ManaforgeGameplaySession.
     public JsonObject metadata(JsonObject state,String... ids) throws Exception{return nativeEngine.metadata(state,ids);}
     public JsonObject submit(JsonObject command) throws Exception{return nativeEngine.submit(command);}
     public JsonObject terminalMetadata(JsonObject before) throws Exception{return nativeEngine.terminalMetadata(before);}
-    public ManaforgeGameplaySession.Advance advance(long previous) throws Exception {
-        ManaforgeGameplaySession.Advance next=nativeEngine.advance(previous);
+    public String sessionNotice() throws Exception{return nativeEngine.sessionNotice();}
+    public JsonObject pollRequest() throws Exception{return nativeEngine.pollRequest();}
+    public boolean requestCurrent(String id) throws Exception{return nativeEngine.requestCurrent(id);}
+    public ManaforgeGameplaySession.Advance refresh() throws Exception{return nativeEngine.refresh();}
+    public ManaforgeGameplaySession.Advance advance(long previous) throws Exception {return automate(nativeEngine.advance(previous));}
+    public ManaforgeGameplaySession.Advance resume(ManaforgeGameplaySession.Advance fresh) throws Exception {return automate(nativeEngine.resume(fresh));}
+    private ManaforgeGameplaySession.Advance automate(ManaforgeGameplaySession.Advance next) throws Exception {
         for(int step=0;next.prompt!=null && next.terminal==null && step<128;step++) {
+            if(nativeEngine.pollRequest()!=null)break;
             if(cancelled.getAsBoolean() || Thread.currentThread().isInterrupted()){payment.uncertain();throw new IOException("AUTO_PAYMENT_CANCELLED");}
             JsonObject before=next.state.deepCopy(),prompt=next.prompt.deepCopy(),guard=metadata(before);
             JsonObject command=payment.prepare(before,prompt,guard);if(command==null){

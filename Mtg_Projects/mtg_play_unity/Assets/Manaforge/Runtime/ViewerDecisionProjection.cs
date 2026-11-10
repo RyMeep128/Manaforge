@@ -34,6 +34,16 @@ namespace Manaforge.Play
         public string Label {get;} public long Minimum {get;} public long Maximum {get;} public long? Default {get;}
         internal ProjectedAmountConstraint(JToken source){Label=(string)source["label"];Minimum=(long)source["minimum"];Maximum=(long)source["maximum"];Default=(long?)source["default"];}
     }
+    public sealed class ProjectedChoicePreview
+    {
+        public bool Hidden {get;} public string Name {get;} public string TypeLine {get;} public string Rules {get;}
+        internal ProjectedChoicePreview(JToken card){Hidden=(bool)card["hidden"];if(Hidden)return;Name=(string)card["name"];TypeLine=(string)card["type_line"];Rules=card["rules"] is JArray rules?string.Join("\n",rules.Select(line=>(string)line)):null;}
+    }
+    public sealed class ProjectedChoiceGroup
+    {
+        public string GroupId {get;} public string Label {get;} public string OptionId {get;} public IReadOnlyList<ProjectedChoicePreview> Cards {get;}
+        internal ProjectedChoiceGroup(JToken value){GroupId=(string)value["group_id"];Label=(string)value["label"];OptionId=(string)value["option_id"];Cards=Array.AsReadOnly(value["cards"].Select(card=>new ProjectedChoicePreview(card)).ToArray());}
+    }
     public sealed class ProjectedDecision
     {
         public CardProjectionContext Context {get;} public string DecisionId {get;} public string PlayerId {get;}
@@ -41,8 +51,12 @@ namespace Manaforge.Play
         public IReadOnlyList<ProjectedChoiceOption> Options {get;} public IReadOnlyList<ProjectedAmountConstraint> Amounts {get;}
         public long? Minimum {get;} public long? Maximum {get;} public bool Cancellable {get;} public bool CanFinish {get;} public bool IsPriority {get;}
         public ProjectedTargetingContext Targeting {get;}
+        public IReadOnlyList<ProjectedChoiceGroup> Groups {get;}
+        public string RequestId {get;} public string RequestKind {get;}
         internal ProjectedDecision(CardProjectionContext context,JToken source)
         {
+            if(source["request"] is JObject request){RequestId=(string)request["request_id"];RequestKind=(string)request["kind"];}
+            Groups=Array.AsReadOnly((source["groups"] as JArray ?? new JArray()).Select(group=>new ProjectedChoiceGroup(group)).ToArray());
             Context=context;DecisionId=(string)source["decision_id"];PlayerId=(string)source["player_id"];Family=(string)source["family"];Prompt=(string)source["prompt"];
             Minimum=(long?)source["minimum"];Maximum=(long?)source["maximum"];Cancellable=(bool)source["cancellable"];CanFinish=(bool)source["can_finish"];IsPriority=(bool)source["is_priority"];
             if(source["targeting"] is JObject target)Targeting=new ProjectedTargetingContext(target);
@@ -77,7 +91,7 @@ namespace Manaforge.Play
     public sealed class ProjectedDecisionFrame
     {
         public CardProjectionContext Context {get;} public string Status {get;} public string Result {get;} public long? Turn {get;} public string Phase {get;} public string ActivePlayerId {get;} public bool ActionsComplete {get;}
-        public string PaymentReason {get;}
+        public string PaymentReason {get;} public string DecisionError {get;} public string SessionNotice {get;}
         public string Step {get;} public string PriorityPlayerId {get;}
         public IReadOnlyList<string> StackIds {get;}
         public IReadOnlyDictionary<string,long?> PlayerLifeTotals {get;}
@@ -92,7 +106,7 @@ namespace Manaforge.Play
         internal ProjectedDecisionFrame(JObject source)
         {
             if(source["commanders"] is JArray commanders)Commanders=Array.AsReadOnly(commanders.Select(value=>new ProjectedCommander(value,source)).ToArray());
-            PaymentReason=(string)source["payment_reason"];
+            PaymentReason=(string)source["payment_reason"];DecisionError=(string)source["decision_error"];SessionNotice=(string)source["session_notice"];
             StackTargets=Array.AsReadOnly((source["stack_targets"] as JArray ?? new JArray()).Select(value=>new ProjectedStackTargets(value)).ToArray());
             Step=(string)source["step"];PriorityPlayerId=(string)source["priority_player_id"];
             StackIds=Array.AsReadOnly(source["objects"].Where(card=>(string)card["zone"]=="stack").Select(card=>(string)card["object_id"]).ToArray());

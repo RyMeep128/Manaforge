@@ -17,6 +17,11 @@ skipped, cancelled, unavailable or incomplete checks do not count as passing.
 Report code failures and runner, licensing or infrastructure blocks accurately.
 See [hosted Unity setup](unity-ci.md) for the Windows runner and Personal license secrets.
 
+Full CI can take 30–40 minutes. Start the requested workflows and report their
+links; the owner will notify the agent when execution is complete. Do not poll or
+wait for completion unless the owner asks for a CI check. Rebuild delivery players
+after reviewing the exact source SHA's results, and report any blocked acceptance.
+
 The old `tools/ci_checkpoint.py` promotion helper and its Git-directory audit record
 are retained as historical tooling and evidence; they are no longer required for
 the main-only workflow. Do not overwrite the prior audit record.

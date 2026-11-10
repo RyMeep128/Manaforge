@@ -87,6 +87,20 @@ jobs:
               if ($LASTEXITCODE -ne 0) { throw "Manual payment failed: $mode $case" }
             }
           }
+      - name: Real pile selection and destination evidence through the packaged player
+        shell: pwsh
+        run: |
+          foreach ($choice in @('first', 'second')) {
+            python tools/check_play_unity_live.py --casting-case pile --pile-choice $choice --payment-mode auto --no-capture --xmage-root "$env:RUNNER_TEMP/manaforge-unity-engine" --jdk-path "$env:JAVA_HOME" --output "Mtg_Projects/mtg_play_unity/Artifacts/InGameChoice-pile-$choice"
+            if ($LASTEXITCODE -ne 0) { throw "Pile selection failed: $choice" }
+          }
+      - name: Real X and existing choice variants through the packaged player
+        shell: pwsh
+        run: |
+          foreach ($case in @('x-zero', 'x', 'cancel', 'search', 'modes')) {
+            python tools/check_play_unity_live.py --casting-case $case --payment-mode manual --no-capture --xmage-root "$env:RUNNER_TEMP/manaforge-unity-engine" --jdk-path "$env:JAVA_HOME" --output "Mtg_Projects/mtg_play_unity/Artifacts/InGameChoice-$case"
+            if ($LASTEXITCODE -ne 0) { throw "In-game choice failed: $case" }
+          }
       - name: Packaged desktop preview with public generated artwork
         shell: pwsh
         run: python tools/check_play_deck_preview.py
@@ -119,4 +133,5 @@ jobs:
             Mtg_Projects/mtg_play_unity/Artifacts/SessionFixture-*/decision-complete.png
             Mtg_Projects/mtg_play_unity/Artifacts/SessionFixture-*/cleared.png
             Mtg_Projects/mtg_play_unity/Artifacts/Payment-*/**/*.json
+            Mtg_Projects/mtg_play_unity/Artifacts/InGameChoice-*/**/*.json
             Mtg_Projects/mtg_play_unity/Builds/Windows/

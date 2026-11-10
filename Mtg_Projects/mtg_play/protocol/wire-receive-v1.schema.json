@@ -1039,6 +1039,129 @@
       ],
       "additionalProperties": false
     },
+    "ChoicePreview": {
+      "type": "object",
+      "properties": {
+        "hidden": {
+          "type": "boolean"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type_line": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rules": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "hidden",
+        "name",
+        "type_line",
+        "rules"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "hidden": {
+                "const": true
+              }
+            },
+            "required": [
+              "hidden"
+            ]
+          },
+          "then": {
+            "properties": {
+              "name": {
+                "type": "null"
+              },
+              "type_line": {
+                "type": "null"
+              },
+              "rules": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "ChoiceGroup": {
+      "type": "object",
+      "properties": {
+        "group_id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "option_id": {
+          "type": "string"
+        },
+        "cards": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ChoicePreview"
+          },
+          "maxItems": 256
+        }
+      },
+      "required": [
+        "group_id",
+        "label",
+        "option_id",
+        "cards"
+      ],
+      "additionalProperties": false
+    },
+    "SessionRequest": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "hand_visibility",
+            "rollback"
+          ]
+        }
+      },
+      "required": [
+        "request_id",
+        "kind"
+      ],
+      "additionalProperties": false
+    },
     "ChoiceRequest": {
       "type": "object",
       "properties": {
@@ -1099,6 +1222,31 @@
           "anyOf": [
             {
               "$ref": "#/$defs/TargetingContext"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "groups": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ChoiceGroup"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "request": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SessionRequest"
             },
             {
               "type": "null"
@@ -1532,6 +1680,26 @@
                 "$ref": "#/$defs/StackTargets"
               },
               "maxItems": 4096
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "decision_error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "session_notice": {
+          "anyOf": [
+            {
+              "type": "string"
             },
             {
               "type": "null"

@@ -105,6 +105,16 @@ public final class DeadlineFixtureConsumer {
                 require("after-thinking".equals(p.reader.readWithIdleWait(2000,100,()->false)) && !p.reader.isClosed());sender.get(2,TimeUnit.SECONDS);passed++;
             }
             try(Pair p=new Pair()) {
+                java.util.concurrent.atomic.AtomicInteger observations=new java.util.concurrent.atomic.AtomicInteger();
+                Future<?> sender=POOL.submit(()->{try{Thread.sleep(100);p.send(new byte[]{0,0,4,116,101,115,116});}catch(Exception e){throw new RuntimeException(e);}});
+                require("test".equals(p.reader.readWithIdleWait(2000,1000,()->false,()->{require(observations.incrementAndGet()==1);p.send(new byte[]{0});})));
+                require(observations.get()==1 && !p.reader.isClosed());sender.get(2,TimeUnit.SECONDS);passed++;
+            }
+            try(Pair p=new Pair()) {
+                try{p.reader.readWithIdleWait(1000,100,()->false,()->{throw new LoopbackFrameReader.OwnerException("SESSION_REQUEST_CONTEXT_UNPROVEN");});throw new AssertionError("Accepted failed owner poll");}
+                catch(LoopbackFrameReader.OwnerException expected){require(expected.getMessage().equals("SESSION_REQUEST_CONTEXT_UNPROVEN") && p.reader.isClosed());}passed++;
+            }
+            try(Pair p=new Pair()) {
                 p.send(new byte[]{0,0});long start=System.nanoTime();
                 require("FRAME_TIMEOUT".equals(failure(()->p.reader.readWithIdleWait(3000,120,()->false))));
                 require(TimeUnit.NANOSECONDS.toMillis(System.nanoTime()-start)<1500 && p.reader.isClosed());passed++;

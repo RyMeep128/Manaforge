@@ -170,6 +170,28 @@ class StackTargets(Serializable):
 
 
 @dataclass(frozen=True)
+class ChoicePreview(Serializable):
+    hidden: bool
+    name: str | None = None
+    type_line: str | None = None
+    rules: tuple[str, ...] | None = None
+
+
+@dataclass(frozen=True)
+class ChoiceGroup(Serializable):
+    group_id: str
+    label: str
+    option_id: str
+    cards: tuple[ChoicePreview, ...]
+
+
+@dataclass(frozen=True)
+class SessionRequest(Serializable):
+    request_id: str
+    kind: Literal["hand_visibility", "rollback"]
+
+
+@dataclass(frozen=True)
 class ChoiceRequest(Serializable):
     decision_id: str
     player_id: str
@@ -183,6 +205,8 @@ class ChoiceRequest(Serializable):
     can_finish: bool = False
     is_priority: bool = False
     targeting: TargetingContext | None = None
+    groups: tuple[ChoiceGroup, ...] | None = None
+    request: SessionRequest | None = None
 
 
 @dataclass(frozen=True)
@@ -242,6 +266,8 @@ class GameSnapshot(Serializable):
     actions_complete: bool = False
     payment_reason: str | None = None
     stack_targets: tuple[StackTargets, ...] | None = None
+    decision_error: str | None = None
+    session_notice: str | None = None
 
 
 @dataclass(frozen=True)

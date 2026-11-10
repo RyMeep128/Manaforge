@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Newtonsoft.Json.Linq;
 
@@ -64,6 +65,16 @@ namespace Manaforge.Play.Protocol
         }
 
 
+        private static bool ChoiceGroups(JObject snapshot)
+        {
+            if(!(snapshot["decision"] is JObject decision))return true;
+            if(decision["request"] is JObject request && ((string)request["request_id"]!=(string)decision["decision_id"] || (bool)decision["is_priority"] || (string)decision["family"]!="selection" || decision["options"].Count()!=2 || snapshot["actions"].Count()!=0 || decision["groups"] is JArray))return false;
+            if(!(decision["groups"] is JArray groups))return true;
+            var options=new HashSet<string>(decision["options"].Select(option=>(string)option["option_id"]));var bound=new HashSet<string>();
+            if(!Unique(groups,"group_id"))return false;
+            foreach(var group in groups){string id=(string)group["option_id"];if(!options.Contains(id) || !bound.Add(id))return false;}
+            return bound.SetEquals(options);
+        }
         private static bool PresentationIds(JObject snapshot)
         {
             var ids=new System.Collections.Generic.HashSet<string>(snapshot["players"].Select(player=>(string)player["player_id"]),StringComparer.Ordinal);
@@ -97,7 +108,7 @@ namespace Manaforge.Play.Protocol
                 receivedSession=(string)snapshot["session_id"];receivedViewer=(string)snapshot["viewer_id"];revision=(long)snapshot["revision"];
                 if(type=="result" && ((string)snapshot["status"]!="finished" || snapshot["result"].Type!=JTokenType.String
                     || string.IsNullOrEmpty((string)snapshot["result"])))Fail("RECEIVE_SHAPE");
-                if(!PresentationIds(snapshot) || !Unique((JArray)snapshot["players"],"player_id") || !Unique((JArray)snapshot["objects"],"object_id")
+                if(!ChoiceGroups(snapshot) || !PresentationIds(snapshot) || !Unique((JArray)snapshot["players"],"player_id") || !Unique((JArray)snapshot["objects"],"object_id")
                     || !Unique((JArray)snapshot["actions"],"action_id"))Fail("RECEIVE_CONTEXT");
                 if(snapshot["decision"].Type!=JTokenType.Null && (string)snapshot["decision"]["player_id"]!=viewer)Fail("RECEIVE_VIEWER");
                 if(snapshot["decision"].Type!=JTokenType.Null && !Unique((JArray)snapshot["decision"]["options"],"option_id"))Fail("RECEIVE_CONTEXT");

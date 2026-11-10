@@ -766,6 +766,54 @@ public final class OpeningProjectionChecks {
         engine=new SessionEngine();projection=projection();session=new ManaforgeGameplaySession(projection,engine,null,true);offer=session.offer(engine.state,prompt());command=sessionCommand(projection,offer);engine.badCycle=true;final ManaforgeUnityOpening.TurnSubmit stale=nativeSubmit(offer);final JsonObject staleCommand=command;fails("GAMEPLAY_RESPONSE_UNPROVEN",()->stale.submit(staleCommand));session.close();
         engine=new SessionEngine();projection=projection();session=new ManaforgeGameplaySession(projection,engine,null,true);offer=session.offer(engine.state,prompt());command=sessionCommand(projection,offer);session.close();try{nativeSubmit(offer).submit(command);throw new AssertionError("CLOSED");}catch(IllegalStateException expected){check(engine.submissions==0);}
     }
+    static final class RequestEngine implements ManaforgeGameplaySession.Engine {
+        JsonObject state=OpeningProjectionChecks.state(),choice=prompt(),pending;int replies;
+        public JsonObject metadata(JsonObject view,String... ids){JsonObject guard=attackMetadata(false);guard.add("cycle",view.get("cycle"));return guard;}
+        public JsonObject submit(JsonObject command){replies++;JsonObject reply=new JsonObject();reply.addProperty("event","response_sent");reply.addProperty("accepted",true);reply.addProperty("request_consumed",true);reply.add("request_id",command.get("request_id"));reply.add("session_request_id",command.get("session_request_id"));pending=null;return reply;}
+        public ManaforgeGameplaySession.Advance advance(long previous){throw new AssertionError("PERMISSION_CONSUMED_GAMEPLAY_DECISION");}
+        public JsonObject terminalMetadata(JsonObject before){throw new AssertionError("UNEXPECTED_TERMINAL");}
+        public JsonObject pollRequest(){return pending;}
+        public boolean requestCurrent(String id){return pending!=null && id.equals(pending.get("session_request_id").getAsString());}
+        public ManaforgeGameplaySession.Advance refresh(){return new ManaforgeGameplaySession.Advance(state,choice,null);}
+    }
+    static JsonObject permissionRequest(String kind){JsonObject request=new JsonObject();request.addProperty("kind","USER_REQUEST_DIALOG");request.addProperty("decision_id",77);request.addProperty("request_kind",kind);request.addProperty("session_request_id","native-private-request");request.addProperty("message","Permission request");JsonObject choices=new JsonObject();choices.addProperty("0","Accept");choices.addProperty("1","Deny");request.add("key_choices",choices);return request;}
+    static void sessionRequestChecks() throws Exception {
+        for(String kind:new String[]{"hand_visibility","rollback"})for(int option=0;option<2;option++){
+            RequestEngine engine=new RequestEngine();ManaforgeOpeningProjection projection=projection();ManaforgeGameplaySession session=new ManaforgeGameplaySession(projection,engine,null,true);
+            ManaforgeUnityOpening.TurnOffer gameplay=session.offer(engine.state,engine.choice);JsonObject oldView=gameplay.snapshot().getAsJsonObject("body").getAsJsonObject("snapshot");String oldWire=choose(oldView,0);
+            engine.pending=permissionRequest(kind);ManaforgeUnityOpening.TurnOffer modal=gameplay.poll();check(modal!=null && engine.replies==0);
+            JsonObject view=modal.snapshot().getAsJsonObject("body").getAsJsonObject("snapshot");shape(view);check(view.getAsJsonObject("decision").getAsJsonObject("request").get("kind").getAsString().equals(kind));check(!view.toString().contains("native-private-request"));
+            fails("STALE_DECISION",()->projection.claimBoolean(oldWire,"session","human","raw-game","raw-human",41,8));
+            JsonObject response=projection.claimBoolean(choose(view,option),"session","human","raw-game","raw-human",77,8);check("respond_request".equals(response.get("command").getAsString()) && Integer.toString(option).equals(response.get("value").getAsString()));
+            ManaforgeUnityOpening.TurnResult result=nativeSubmit(modal).submit(response);java.lang.reflect.Field next=result.getClass().getDeclaredField("next");next.setAccessible(true);ManaforgeUnityOpening.TurnOffer resumed=(ManaforgeUnityOpening.TurnOffer)next.get(result);
+            check(engine.replies==1 && resumed!=null);JsonObject restored=resumed.snapshot().getAsJsonObject("body").getAsJsonObject("snapshot");shape(restored);check(!restored.getAsJsonObject("decision").has("request"));
+            fails("STALE_SESSION_REQUEST",()->nativeSubmit(modal).submit(response));session.close();
+        }
+        RequestEngine changed=new RequestEngine();changed.pending=permissionRequest("rollback");ManaforgeOpeningProjection projection=projection();ManaforgeGameplaySession changing=new ManaforgeGameplaySession(projection,changed,null,true);ManaforgeUnityOpening.TurnOffer consent=changing.offer(changed.state,changed.choice);
+        JsonObject view=consent.snapshot().getAsJsonObject("body").getAsJsonObject("snapshot"),response=projection.claimBoolean(choose(view,1),"session","human","raw-game","raw-human",77,8);
+        changed.state.addProperty("cycle",9);changed.choice.addProperty("cycle",9);changed.choice.addProperty("decision_id",88);ManaforgeUnityOpening.TurnResult continued=nativeSubmit(consent).submit(response);check(continued!=null && changed.replies==1);changing.close();
+        RequestEngine engine=new RequestEngine();engine.pending=permissionRequest("hand_visibility");ManaforgeGameplaySession session=new ManaforgeGameplaySession(projection(),engine,null,true);ManaforgeUnityOpening.TurnOffer modal=session.offer(engine.state,engine.choice);engine.pending=null;check(modal.poll()!=null && engine.replies==0);session.close();
+    }
+    static void genericSelectionChecks() throws Exception {
+        JsonObject raw=attackState(),prompt=attackPrompt();prompt.remove("attackers");prompt.add("targets",JsonParser.parseString("[\"raw-ai\",\"raw-card\"]"));
+        ManaforgeOpeningProjection projection=projection();JsonObject view=projection.projectCoreCombat(raw,prompt,true);shape(view);check(view.getAsJsonObject("decision").getAsJsonArray("options").size()==2);
+        JsonObject response=projection.claimBoolean(choose(view,0),"session","human","raw-game","raw-human",41,8);check("object".equals(response.get("kind").getAsString()) && "raw-ai".equals(response.get("value").getAsString()));
+        prompt.add("targets",new JsonArray());fails("LIVE_OPENING_PROJECTION_UNSUPPORTED",()->projection.projectCoreCombat(raw,prompt,true));
+    }
+    static void pileChoiceChecks() throws Exception {
+        for(int selected=0;selected<2;selected++){
+            JsonObject raw=attackState(),prompt=attackPrompt();prompt.addProperty("kind","GAME_CHOOSE_PILE");prompt.remove("attackers");
+            JsonObject card=state().getAsJsonArray("hand").get(0).getAsJsonObject().deepCopy();card.addProperty("name","Same visible name");
+            JsonArray first=new JsonArray();first.add(card);first.add(card.deepCopy());JsonObject hidden=card.deepCopy();hidden.addProperty("hidden",true);hidden.addProperty("name","SECRET_PILE_CARD");first.add(hidden);
+            prompt.add("cards",first);prompt.add("second_pile",new JsonArray());ManaforgeOpeningProjection projection=projection();
+            JsonObject view=projection.projectCoreCombat(raw,prompt,true);shape(view);String text=view.toString();check(!text.contains("SECRET_PILE_CARD") && !text.contains("raw-card"));
+            JsonArray groups=view.getAsJsonObject("decision").getAsJsonArray("groups");check(groups.size()==2 && groups.get(0).getAsJsonObject().getAsJsonArray("cards").size()==3 && groups.get(1).getAsJsonObject().getAsJsonArray("cards").size()==0);
+            String wire=choose(view,selected);JsonObject response=projection.claimBoolean(wire,"session","human","raw-game","raw-human",41,8);
+            check(response.get("value").getAsBoolean()==(selected==0));fails("STALE_DECISION",()->projection.claimBoolean(wire,"session","human","raw-game","raw-human",41,8));
+            JsonObject broken=view.deepCopy();broken.getAsJsonObject("decision").getAsJsonArray("groups").get(0).getAsJsonObject().addProperty("option_id","unoffered");
+            try{shape(broken);throw new AssertionError("UNBOUND_PILE_ACCEPTED");}catch(java.io.IOException expected){check("RECEIVE_CONTEXT".equals(expected.getMessage()));}
+        }
+    }
     static void emptyOptionalTargetChecks() throws Exception {
         JsonObject raw=attackState(),target=attackPrompt();target.addProperty("kind","GAME_TARGET");target.remove("attackers");
         target.add("targets",new JsonArray());target.addProperty("can_finish",true);
@@ -818,7 +866,7 @@ public final class OpeningProjectionChecks {
         manifest.seats[0].document.deck.entries = new NativeLaunchEntry[]{original};
         manifest.seats[1].controller="local_human";fails("UNITY_GAME_SETUP_UNSUPPORTED",()->new NativeGameLaunch(manifest));manifest.seats[1].controller="engine_ai";manifest.format="commander";fails("UNITY_GAME_SETUP_UNSUPPORTED",()->new NativeGameLaunch(manifest));manifest.format="freeform";
         manifest.seats[0].document.deck.entries[0].set_code=null;fails("UNITY_GAME_PRINTING_UNSUPPORTED",()->new NativeGameLaunch(manifest));manifest.seats[0].document.deck.entries[0].set_code="TRK";manifest.seats[0].document.deck.companion_entry_id="extra";fails("UNITY_GAME_SETUP_UNSUPPORTED",()->new NativeGameLaunch(manifest));manifest.seats[0].document.deck.companion_entry_id=null;
-        SessionEngine engine=new SessionEngine();JsonObject unknown=prompt();unknown.addProperty("kind","GAME_CHOOSE_PILE");ManaforgeGameplaySession session=new ManaforgeGameplaySession(projection(),engine,null,true);ManaforgeUnityOpening.TurnOffer offered=session.offer(engine.state,unknown);JsonObject view=offered.snapshot().getAsJsonObject("body").getAsJsonObject("snapshot");shape(view);check(view.get("decision").isJsonNull() && view.getAsJsonArray("actions").size()==0 && view.getAsJsonArray("unsupported_fields").contains(new JsonPrimitive("decision")));fails("GAMEPLAY_DECISION_UNSUPPORTED",()->nativeSubmit(offered).submit(new JsonObject()));check(engine.submissions==0);session.close();
+        SessionEngine engine=new SessionEngine();JsonObject unknown=prompt();unknown.addProperty("kind","GAME_CHOOSE_UNKNOWN");ManaforgeGameplaySession session=new ManaforgeGameplaySession(projection(),engine,null,true);ManaforgeUnityOpening.TurnOffer offered=session.offer(engine.state,unknown);JsonObject view=offered.snapshot().getAsJsonObject("body").getAsJsonObject("snapshot");shape(view);check(view.get("decision").isJsonNull() && view.getAsJsonArray("actions").size()==0 && view.getAsJsonArray("unsupported_fields").contains(new JsonPrimitive("decision")));fails("GAMEPLAY_DECISION_UNSUPPORTED",()->nativeSubmit(offered).submit(new JsonObject()));check(engine.submissions==0);session.close();
     }
     static void publicStackAndOfferedCardChecks() throws Exception {
         JsonObject raw=landState(),prompt=priorityPrompt(),stacked=raw.getAsJsonArray("hand").get(0).getAsJsonObject().deepCopy();stacked.addProperty("id","public-spell");stacked.addProperty("stack_owner","raw-ai");stacked.addProperty("stack_controller","raw-ai");stacked.addProperty("name","Public spell");raw.getAsJsonArray("stack").add(stacked);JsonObject view=projection().projectCoreCombat(raw,prompt,true);shape(view);check(view.getAsJsonArray("objects").asList().stream().anyMatch(value->"stack".equals(value.getAsJsonObject().get("zone").getAsString())));check(!view.getAsJsonArray("unsupported_fields").contains(new JsonPrimitive("stack")));check(view.getAsJsonArray("actions").size()>0);
@@ -925,7 +973,7 @@ public final class OpeningProjectionChecks {
         check("2".equals(characteristics.get("base_power").getAsString()) && "2".equals(characteristics.get("base_toughness").getAsString()));
         baseCard.addProperty("hidden",true);JsonObject hiddenBase=projection().project(baseState,prompt());shape(hiddenBase);
         check(hiddenBase.getAsJsonArray("objects").get(0).getAsJsonObject().get("characteristics").isJsonNull());
-        emptyOptionalTargetChecks();choiceChecks();landChecks();abilityChecks();stackPriorityChecks();castCorrelationChecks();attackFinishChecks();attackerSelectionChecks();declaredAttackChecks();declaredPriorityChecks();combatDamageChecks();combatCleanupChecks();blockedDamageChecks();turnContinuationChecks();repeatedCombatChecks();combatEntryChecks();
+        genericSelectionChecks();sessionRequestChecks();pileChoiceChecks();emptyOptionalTargetChecks();choiceChecks();landChecks();abilityChecks();stackPriorityChecks();castCorrelationChecks();attackFinishChecks();attackerSelectionChecks();declaredAttackChecks();declaredPriorityChecks();combatDamageChecks();combatCleanupChecks();blockedDamageChecks();turnContinuationChecks();repeatedCombatChecks();combatEntryChecks();
         System.out.println("Opening projection: "+checks+" privacy, schema, isolation and fail-closed checks passed");
     }
 }

@@ -22,7 +22,10 @@ namespace Manaforge.Play
         private readonly VisualElement pages=new VisualElement{name="decision-pages"};
         private readonly VisualElement decisionBody=new VisualElement{name="decision-body"};
         private readonly YieldStatusView yieldStatus;
-        private bool built;
+        private bool built;private string selectedGroup;
+        private readonly System.Collections.Generic.Dictionary<string,int> groupPages=new System.Collections.Generic.Dictionary<string,int>();
+        private readonly System.Collections.Generic.List<CardView> groupPreviews=new System.Collections.Generic.List<CardView>();
+        private void ClearGroupPreviews(){foreach(var view in groupPreviews)view.Dispose();groupPreviews.Clear();}
         public YieldPresentation Presentation {get;private set;}
         public bool SuppressSpatialInput=>Presentation?.Compact==true;
         private string[] numericText;private int numericPage;private Button numericSubmit;
@@ -58,8 +61,8 @@ namespace Manaforge.Play
         private void ThreadOnly(){if(Thread.CurrentThread.ManagedThreadId!=thread)throw new InvalidOperationException("VIEWER_DECISION_THREAD");}
         private void Clear()
         {
-            Root.RemoveFromClassList("library-ordering");Root.RemoveFromClassList("command-pending");Root.RemoveFromClassList("command-uncertain");Root.RemoveFromClassList("command-confirmed");
-            built=false;autoAfter=-1;IsLibraryOrdering=false;manaInput.Refresh(null);offer=null;submitted=null;page=0;numericText=null;numericPage=0;numericSubmit=null;prompt.text="";manaPool.text="";status.text="";controls.Clear();pages.Clear();cardChoices=null;Root.style.display=Presentation?.Compact==true?DisplayStyle.Flex:DisplayStyle.None;
+            Root.RemoveFromClassList("session-request");Root.RemoveFromClassList("library-ordering");Root.RemoveFromClassList("command-pending");Root.RemoveFromClassList("command-uncertain");Root.RemoveFromClassList("command-confirmed");
+            ClearGroupPreviews();groupPages.Clear();selectedGroup=null;built=false;autoAfter=-1;IsLibraryOrdering=false;manaInput.Refresh(null);offer=null;submitted=null;page=0;numericText=null;numericPage=0;numericSubmit=null;prompt.text="";manaPool.text="";status.text="";controls.Clear();pages.Clear();cardChoices=null;Root.style.display=Presentation?.Compact==true?DisplayStyle.Flex:DisplayStyle.None;
             // Observe a retired task without carrying its result or touching UI from its worker.
             if(pending!=null)pending.ContinueWith(task=>{_=task.Exception;},TaskScheduler.Default);pending=null;
         }
@@ -189,15 +192,18 @@ namespace Manaforge.Play
         {var button=new Button(click){name=name,text=text??"Unlabelled engine option"};foreach(var label in button.Query<TextElement>().ToList())label.enableRichText=false;button.enableRichText=false;button.style.fontSize=16;button.style.color=Color.white;button.style.backgroundColor=new Color(.18f,.24f,.30f);button.style.paddingTop=8;button.style.paddingBottom=8;button.style.marginBottom=4;return button;}
         private void Build()
         {
-            var captured=offer;var frame=captured?.Frame;if(frame==null){Clear();return;}built=true;
+            var captured=offer;var frame=captured?.Frame;if(frame==null){Clear();return;}built=true;ClearGroupPreviews();
             var floating=frame.ViewerMana==null?"":string.Join(", ",System.Linq.Enumerable.Select(System.Linq.Enumerable.Where(frame.ViewerMana,pair=>pair.Value>0),pair=>pair.Key+" "+pair.Value));manaPool.text=string.IsNullOrEmpty(floating)?"":"Floating mana: "+floating;manaPool.style.display=string.IsNullOrEmpty(floating)?DisplayStyle.None:DisplayStyle.Flex;prompt.text=OpeningHandFan.PlainPrompt(frame.Decision.Prompt??"Choose an action");Root.style.display=DisplayStyle.Flex;controls.Clear();pages.Clear();numericSubmit=null;cardChoices=null;
             if(!string.IsNullOrEmpty(frame.PaymentReason)){status.text="Manual payment required: "+frame.PaymentReason.Replace('_',' ').ToLowerInvariant()+".";UnityEngine.Debug.Log("Manaforge payment fallback: "+frame.PaymentReason);}
+            if(frame.Decision.RequestId!=null)status.text="Permission request. Nothing is granted until you choose Accept. Requests expire after two minutes.";
+            Root.EnableInClassList("session-request",frame.Decision.RequestId!=null);
             IsLibraryOrdering=LibraryOrdering(prompt.text);
             Root.EnableInClassList("library-ordering",IsLibraryOrdering);
             if(IsLibraryOrdering){
                 var instructions=NumericLabel("Choose cards one at a time in the requested order. Follow the engine prompt for which end will be topmost.");
                 instructions.name="library-order-help";controls.Add(instructions);
             }
+            if(frame.Decision.Groups.Count>0){BuildGroups(captured);controls.SetEnabled(captured.CanSubmit && pending==null);return;}
             int total=frame.Actions.Count+frame.Decision.Options.Count;int start=page*PageSize,end=Math.Min(total,start+PageSize);
             for(int i=start;i<end;i++) {
                 if(i<frame.Actions.Count){var action=frame.Actions[i];AddChoice(Button("decision-action-"+i,action.Label,()=>Send(captured,()=>host.PerformAsync(captured,action))),action.ObjectId!=null);AddTurnPass(captured,action);}
@@ -227,6 +233,34 @@ namespace Manaforge.Play
                 var next=Button("decision-next","Next",()=>Move(captured,1));next.SetEnabled(end<total);pages.Add(next);
             }
             controls.SetEnabled(captured.CanSubmit && pending==null);
+        }
+        private void BuildGroups(ViewerDecisionOffer captured)
+        {
+            ProjectedChoiceOption selected=null;
+            var groupScroll=new ScrollView(ScrollViewMode.Vertical){name="decision-groups"};groupScroll.style.maxHeight=420;controls.Add(groupScroll);
+            foreach(var group in captured.Frame.Decision.Groups){
+                var tile=new VisualElement{name="choice-group"};tile.AddToClassList("mf-menu");tile.style.marginBottom=12;
+                tile.Add(NumericLabel(group.Label+" · "+group.Cards.Count+" cards"));
+                var scroll=new ScrollView(ScrollViewMode.Vertical);scroll.style.maxHeight=390;tile.Add(scroll);
+                if(group.Cards.Count==0)scroll.Add(NumericLabel("Empty pile"));
+                int page=groupPages.TryGetValue(group.GroupId,out var requested)?Mathf.Clamp(requested,0,Math.Max(0,(group.Cards.Count-1)/PageSize)):0;
+                for(int index=page*PageSize;index<Math.Min(group.Cards.Count,(page+1)*PageSize);index++){var card=group.Cards[index];
+                    var view=new CardView();view.SetPresentation(CardPresentationMode.Full,190);
+                    if(card.Hidden)view.Conceal();else{view.BindUnavailable();view.UpdateValues(new CardDisplayValues(card.Name,null,card.TypeLine,card.Rules,null,"Pile card"));}
+                    scroll.Add(view);groupPreviews.Add(view);
+                }
+                if(group.Cards.Count>PageSize){
+                    var previous=Button("decision-group-previous-"+group.GroupId,"Previous cards",()=>{groupPages[group.GroupId]=page-1;Build();});previous.SetEnabled(page>0);tile.Add(previous);
+                    tile.Add(NumericLabel("Page "+(page+1)+" / "+((group.Cards.Count+PageSize-1)/PageSize)));
+                    var next=Button("decision-group-next-"+group.GroupId,"Next cards",()=>{groupPages[group.GroupId]=page+1;Build();});next.SetEnabled((page+1)*PageSize<group.Cards.Count);tile.Add(next);
+                }
+                ProjectedChoiceOption option=null;foreach(var candidate in captured.Frame.Decision.Options)if(candidate.OptionId==group.OptionId)option=candidate;
+                if(option==null)continue;
+                tile.Add(Button("decision-group-"+group.GroupId,(selectedGroup==group.OptionId?"Selected: ":"")+option.Label,()=>{selectedGroup=group.OptionId;Build();}));groupScroll.Add(tile);
+                if(selectedGroup==group.OptionId)selected=option;
+            }
+            var confirmation=Button("decision-group-confirm",selected==null?"Confirm pile":"Confirm: "+selected.Label,()=>{if(selected!=null)Send(captured,()=>host.ChooseAsync(captured,selected));});
+            confirmation.SetEnabled(selected!=null);controls.Add(confirmation);
         }
         private static string Integer(long value)=>value.ToString(CultureInfo.InvariantCulture);
         private static Label NumericLabel(string text)
@@ -279,6 +313,7 @@ namespace Manaforge.Play
         private void Move(ViewerDecisionOffer captured,int delta)
         {
             if(disposed || !ReferenceEquals(offer,captured) || !ReferenceEquals(host.PresentedDecision,captured))return;
+            ClearGroupPreviews();
             var frame=captured.Frame;if(frame==null)return;int last=Math.Max(0,(frame.Actions.Count+frame.Decision.Options.Count-1)/PageSize);page=Math.Max(0,Math.Min(last,page+delta));Build();
         }
         public void Dispose(){ThreadOnly();if(disposed)return;disposed=true;Priority.Suspend();PresentationHold=null;priorityTasks.Clear();priorityReceipts.Clear();manaInput.Dispose();yieldStatus.Dispose();Clear();prompt.RemoveFromHierarchy();Root.RemoveFromHierarchy();}

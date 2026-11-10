@@ -77,6 +77,18 @@ public final class ReceiveMessages {
         for(JsonElement item:items) { String id=item.getAsJsonObject().get(key).getAsString();if(id.isEmpty() || !seen.add(id))return false; }
         return true;
     }
+    private static boolean choiceGroups(JsonObject snapshot) {
+        JsonElement decision=snapshot.get("decision");if(decision==null || decision.isJsonNull())return true;
+        JsonObject value=decision.getAsJsonObject();JsonElement groups=value.get("groups"),request=value.get("request");
+        if(request!=null && !request.isJsonNull()){
+            if(!value.get("decision_id").equals(request.getAsJsonObject().get("request_id")) || !new JsonPrimitive(false).equals(value.get("is_priority")) || !new JsonPrimitive("selection").equals(value.get("family")) || value.getAsJsonArray("options").size()!=2 || snapshot.getAsJsonArray("actions").size()!=0 || groups!=null && !groups.isJsonNull())return false;
+        }
+        if(groups==null || groups.isJsonNull())return true;
+        Set<String> options=new HashSet<>(),bound=new HashSet<>();for(JsonElement option:value.getAsJsonArray("options"))options.add(option.getAsJsonObject().get("option_id").getAsString());
+        if(!unique(groups.getAsJsonArray(),"group_id"))return false;
+        for(JsonElement item:groups.getAsJsonArray()){String id=item.getAsJsonObject().get("option_id").getAsString();if(!options.contains(id) || !bound.add(id))return false;}
+        return bound.equals(options);
+    }
     private static boolean presentationIds(JsonObject snapshot) {
         Set<String> ids=new HashSet<>();for(JsonElement player:snapshot.getAsJsonArray("players"))ids.add(player.getAsJsonObject().get("player_id").getAsString());
         for(JsonElement value:snapshot.getAsJsonArray("objects")){
@@ -103,7 +115,7 @@ public final class ReceiveMessages {
             JsonObject snapshot=body.getAsJsonObject("snapshot");
             receivedSession=snapshot.get("session_id").getAsString();receivedViewer=snapshot.get("viewer_id").getAsString();revision=snapshot.get("revision").getAsLong();
             if(type.equals("result") && (!snapshot.get("status").getAsString().equals("finished") || !string(snapshot.get("result")) || snapshot.get("result").getAsString().isEmpty()))fail("RECEIVE_SHAPE");
-            if(!presentationIds(snapshot) || !unique(snapshot.getAsJsonArray("players"),"player_id") || !unique(snapshot.getAsJsonArray("objects"),"object_id") || !unique(snapshot.getAsJsonArray("actions"),"action_id"))fail("RECEIVE_CONTEXT");
+            if(!choiceGroups(snapshot) || !presentationIds(snapshot) || !unique(snapshot.getAsJsonArray("players"),"player_id") || !unique(snapshot.getAsJsonArray("objects"),"object_id") || !unique(snapshot.getAsJsonArray("actions"),"action_id"))fail("RECEIVE_CONTEXT");
             if(!snapshot.get("decision").isJsonNull() && !snapshot.getAsJsonObject("decision").get("player_id").getAsString().equals(viewer))fail("RECEIVE_VIEWER");
             if(!snapshot.get("decision").isJsonNull() && !unique(snapshot.getAsJsonObject("decision").getAsJsonArray("options"),"option_id"))fail("RECEIVE_CONTEXT");
         }

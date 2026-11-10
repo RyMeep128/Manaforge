@@ -43,16 +43,28 @@ public final class LoopbackFrameReader implements AutoCloseable {
             throw new IllegalArgumentException("FRAME_READ_CONTEXT");
         return readBounded(milliseconds, frameMilliseconds, cancellation);
     }
+    public interface IdleObserver {void tick() throws IOException;}
+    public static final class OwnerException extends IOException {
+        public OwnerException(String code){super(code!=null && code.matches("[A-Z_]{1,100}")?code:"SESSION_REQUEST_POLL_FAILED");}
+    }
+    public String readWithIdleWait(int milliseconds,int frameMilliseconds,BooleanSupplier cancellation,IdleObserver observer) throws IOException {
+        if(milliseconds<1 || milliseconds>21600000 || frameMilliseconds<1 || frameMilliseconds>60000 || cancellation==null || observer==null)throw new IllegalArgumentException("FRAME_READ_CONTEXT");
+        return readBounded(milliseconds,frameMilliseconds,cancellation,false,observer);
+    }
     private String readBounded(int milliseconds,int frameMilliseconds,BooleanSupplier cancellation) throws IOException {
         return readBounded(milliseconds,frameMilliseconds,cancellation,false);
     }
     private String readBounded(int milliseconds,int frameMilliseconds,BooleanSupplier cancellation,boolean idle) throws IOException {
+        return readBounded(milliseconds,frameMilliseconds,cancellation,idle,()->{});
+    }
+    private String readBounded(int milliseconds,int frameMilliseconds,BooleanSupplier cancellation,boolean idle,IdleObserver observer) throws IOException {
         if(closed.get())throw new TextFrame.FrameException("FRAME_CLOSED");
         if(!reading.compareAndSet(false,true)){abort();throw new TextFrame.FrameException("FRAME_CONCURRENT");}
         try {
-            DeadlineInput input=new DeadlineInput(milliseconds,frameMilliseconds,cancellation,idle);input.check();
+            DeadlineInput input=new DeadlineInput(milliseconds,frameMilliseconds,cancellation,idle,observer);input.check();
             String text=TextFrame.read(input);input.check();return text;
         } catch(TextFrame.FrameException error){abort();throw error;}
+        catch(OwnerException error){abort();throw error;}
         catch(IOException error){String code=closed.get()?"FRAME_CLOSED":"FRAME_IO";abort();throw new TextFrame.FrameException(code);}
         catch(RuntimeException error){abort();throw new TextFrame.FrameException("FRAME_IO");}
         finally{reading.set(false);}
@@ -116,11 +128,11 @@ public final class LoopbackFrameReader implements AutoCloseable {
     private final class DeadlineInput extends InputStream {
         private final long started=System.nanoTime(),budget,frameBudget;
         private long frameStarted;
-        private final boolean idle;
+        private final boolean idle;private final IdleObserver observer;
         private final BooleanSupplier cancellation;
         private final InputStream input;
-        DeadlineInput(int milliseconds,int frameMilliseconds,BooleanSupplier cancellation,boolean idle) throws IOException {
-            this.idle=idle;budget=TimeUnit.MILLISECONDS.toNanos(milliseconds);frameBudget=TimeUnit.MILLISECONDS.toNanos(frameMilliseconds);this.cancellation=cancellation;input=socket.getInputStream();
+        DeadlineInput(int milliseconds,int frameMilliseconds,BooleanSupplier cancellation,boolean idle,IdleObserver observer) throws IOException {
+            this.observer=observer;this.idle=idle;budget=TimeUnit.MILLISECONDS.toNanos(milliseconds);frameBudget=TimeUnit.MILLISECONDS.toNanos(frameMilliseconds);this.cancellation=cancellation;input=socket.getInputStream();
         }
         void check() throws IOException {
             if(cancellation.getAsBoolean() || Thread.currentThread().isInterrupted())throw new TextFrame.FrameException("FRAME_CANCELLED");
@@ -134,6 +146,7 @@ public final class LoopbackFrameReader implements AutoCloseable {
             if(offset<0 || count<0 || offset>bytes.length-count)throw new IndexOutOfBoundsException();
             if(count==0)return 0;
             while(true) {
+                check();if(frameStarted==0)observer.tick();
                 check();long remaining=idle?TimeUnit.MILLISECONDS.toNanos(25):budget-(System.nanoTime()-started);
                 if(frameStarted!=0)remaining=Math.min(remaining,frameBudget-(System.nanoTime()-frameStarted));
                 int wait=(int)Math.max(1,Math.min(25,(remaining+999999)/1000000));
