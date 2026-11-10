@@ -772,7 +772,7 @@ public final class OpeningProjectionChecks {
         ManaforgeOpeningProjection projection=projection();JsonObject view=projection.projectCoreCombat(raw,target,true);shape(view);
         check(view.getAsJsonObject("decision").getAsJsonArray("options").size()==0);
         check(view.getAsJsonArray("actions").size()==1);
-        JsonObject response=projection.claimBoolean(perform(view),"session","human","raw-game","raw-human",41,8);
+        JsonObject response=projection.claimAction(perform(view),"session","human","raw-game","raw-human",41,8);
         check("boolean".equals(response.get("kind").getAsString()) && !response.get("value").getAsBoolean());
         target.addProperty("can_finish",false);
         fails("LIVE_OPENING_PROJECTION_UNSUPPORTED",()->projection.projectCoreCombat(raw,target,true));
