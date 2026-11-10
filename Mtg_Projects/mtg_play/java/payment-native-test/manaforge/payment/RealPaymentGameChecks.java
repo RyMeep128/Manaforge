@@ -189,6 +189,53 @@ public final class RealPaymentGameChecks {
         }
         System.out.println("Native permission adapter: accept/decline, authority, duplicates, expiry and no replay passed; transport fixture only");
     }
+    private static void nativeTriggerOrderingChecks() throws Exception {
+        mage.game.TwoPlayerDuel game=new mage.game.TwoPlayerDuel(mage.constants.MultiplayerAttackOption.MULTIPLE,mage.constants.RangeOfInfluence.ALL,new mage.game.mulligan.LondonMulligan(0),40,7,7);
+        ContextHumanPlayer payer=new ContextHumanPlayer("Trigger chooser",RangeOfInfluence.ALL,0);payer.setUserData(mage.players.net.UserData.getDefaultUserDataView());payer.getUserData().setAutoOrderTrigger(false);
+        ContextHumanPlayer other=new ContextHumanPlayer("Other player",RangeOfInfluence.ALL,0);other.setUserData(mage.players.net.UserData.getDefaultUserDataView());
+        game.addPlayer(payer,new mage.cards.decks.Deck());game.addPlayer(other,new mage.cards.decks.Deck());payer.init(game);other.init(game);
+        UUID owner=payer.getId();
+        mage.cards.Card herald=new mage.cards.p.PrimevalHerald(owner,new mage.cards.CardSetInfo("Primeval Herald","CLB","249",mage.constants.Rarity.COMMON));
+        mage.cards.Card wulfgar=new mage.cards.w.WulfgarOfIcewindDale(owner,new mage.cards.CardSetInfo("Wulfgar of Icewind Dale","AFC","54",mage.constants.Rarity.RARE));
+        load(game,herald,Zone.BATTLEFIELD);load(game,wulfgar,Zone.BATTLEFIELD);
+        mage.abilities.TriggeredAbility attack=null;
+        for(mage.abilities.Ability ability:herald.getAbilities())if(ability instanceof mage.abilities.TriggeredAbility)attack=(mage.abilities.TriggeredAbility)ability;
+        require(attack!=null,"NATIVE_TRIGGER_CHOICE_REGRESSION");
+        mage.abilities.TriggeredAbility duplicate=attack.copy();duplicate.newId();
+        BlockingQueue<PlayerQueryEvent> queries=new LinkedBlockingQueue<>();game.addPlayerQueryEventListener(queries::add);
+        final List<mage.abilities.TriggeredAbility> triggers=Arrays.asList(attack,duplicate);
+        ExecutorService executor=Executors.newSingleThreadExecutor(task->{Thread thread=new Thread(task,"GAME-real-trigger-order");thread.setDaemon(true);return thread;});
+        Future<mage.abilities.TriggeredAbility> result=executor.submit(()->payer.chooseTriggeredAbility(triggers,game));
+        try {
+            PlayerQueryEvent query=queries.poll(2,TimeUnit.SECONDS);require(query!=null && query.getQueryType()==PlayerQueryEvent.QueryType.PICK_ABILITY,"REAL_TRIGGER_ORDER_QUERY_MISSING");
+            mage.view.CardsView cards=new mage.view.CardsView(query.getAbilities(),game);
+            require(cards.size()==2,"NATIVE_TRIGGER_CHOICE_REGRESSION");
+            mage.view.GameClientMessage nativePrompt=new mage.view.GameClientMessage(null,Collections.emptyMap(),query.getMessage(),cards,query.getTargets(),query.isRequired());
+            Class<?> bridgeType=Class.forName("ManaforgeBridge");List<JsonObject> events=new ArrayList<>();
+            java.lang.reflect.Constructor<?> constructor=bridgeType.getDeclaredConstructor(java.util.function.Consumer.class);constructor.setAccessible(true);
+            Object bridge=constructor.newInstance((java.util.function.Consumer<JsonObject>)events::add);
+            java.lang.reflect.Method nativeIds=bridgeType.getDeclaredMethod("nativeTargetIds",String.class,mage.view.GameClientMessage.class);nativeIds.setAccessible(true);
+            mage.interfaces.callback.ClientCallback callback=new mage.interfaces.callback.ClientCallback(mage.interfaces.callback.ClientCallbackMethod.GAME_TARGET,game.getId(),nativePrompt);
+            callback.setMessageId(41);bridgeType.getMethod("onCallback",mage.interfaces.callback.ClientCallback.class).invoke(bridge,callback);
+            JsonObject prompt=events.stream().filter(e->e.has("event") && "decision".equals(e.get("event").getAsString())).findFirst().get();
+            require(prompt.getAsJsonArray("targets").size()==2 && !prompt.get("can_finish").getAsBoolean(),"NATIVE_TRIGGER_CHOICE_REGRESSION");
+            require(prompt.getAsJsonArray("targets").contains(new JsonPrimitive(attack.getId().toString())),"NATIVE_TRIGGER_CHOICE_REGRESSION");
+            require(prompt.getAsJsonArray("targets").contains(new JsonPrimitive(duplicate.getId().toString())),"NATIVE_TRIGGER_CHOICE_REGRESSION");
+            require(!prompt.getAsJsonArray("targets").contains(new JsonPrimitive(herald.getId().toString())),"NATIVE_TRIGGER_CHOICE_REGRESSION");
+            payer.setResponseUUID(UUID.fromString(prompt.getAsJsonArray("targets").get(1).getAsString()));
+            require(result.get(2,TimeUnit.SECONDS).getId().equals(duplicate.getId()),"REAL_TRIGGER_ORDER_WRONG_ABILITY");
+            // Displaying normal cards (or mixed card/ability views) is not permission to choose them.
+            mage.view.CardsView ordinary=new mage.view.CardsView();ordinary.put(herald.getId(),new mage.view.CardView(herald,game));
+            require(((Set<?>)nativeIds.invoke(null,"GAME_TARGET",new mage.view.GameClientMessage(null,Collections.emptyMap(),"Choose",ordinary,null,true))).isEmpty(),"NATIVE_TRIGGER_CHOICE_REGRESSION");
+            cards.putAll(ordinary);require(((Set<?>)nativeIds.invoke(null,"GAME_TARGET",nativePrompt)).isEmpty(),"NATIVE_TRIGGER_CHOICE_REGRESSION");cards.remove(herald.getId());
+            require(((Set<?>)nativeIds.invoke(null,"GAME_SELECT",nativePrompt)).isEmpty(),"NATIVE_TRIGGER_CHOICE_REGRESSION");
+            Set<UUID> legal=Collections.singleton(wulfgar.getId());
+            require(((Set<?>)nativeIds.invoke(null,"GAME_TARGET",new mage.view.GameClientMessage(null,Collections.emptyMap(),"Choose",cards,legal,true))).equals(legal),"NATIVE_TRIGGER_CHOICE_REGRESSION");
+            Map<String,java.io.Serializable> options=new HashMap<>();options.put("possibleTargets",new HashSet<>(legal));
+            require(((Set<?>)nativeIds.invoke(null,"GAME_TARGET",new mage.view.GameClientMessage(null,options,"Search",ordinary,null,true))).equals(legal),"NATIVE_TRIGGER_CHOICE_REGRESSION");
+            System.out.println("Native trigger ordering: Primeval Herald ability copies with Wulfgar present; both ability IDs offered, second choice accepted");
+        } finally {payer.abort();other.abort();result.cancel(true);executor.shutdownNow();executor.awaitTermination(2,TimeUnit.SECONDS);}
+    }
     private static void nativePileChoice(boolean firstPile) throws Exception {
         TwoPlayerDuel game=new TwoPlayerDuel(MultiplayerAttackOption.MULTIPLE,RangeOfInfluence.ALL,new mage.game.mulligan.LondonMulligan(0),20,7,7);
         ContextHumanPlayer payer=new ContextHumanPlayer("Pile chooser",RangeOfInfluence.ALL,0);payer.setUserData(mage.players.net.UserData.getDefaultUserDataView());
@@ -222,7 +269,7 @@ public final class RealPaymentGameChecks {
         System.out.println("Unrestricted Commander: native 300-card duplicate/banned/off-identity deck accepted; instant commander initialized at 40 starting life");
     }
     public static void main(String[] args) throws Exception {
-        Thread.currentThread().setName("GAME-real-payment-setup");unrestrictedCommander();nativeSessionRequests();nativePileChoice(true);nativePileChoice(false);
+        Thread.currentThread().setName("GAME-real-payment-setup");unrestrictedCommander();nativeTriggerOrderingChecks();nativeSessionRequests();nativePileChoice(true);nativePileChoice(false);
         scenario("lackey-decks-empty",false,false);scenario("lackey-decks-lifegain",false,false);scenario("lackey-decks-warchief",false,false);
         scenario("lackey-lifegain",false,false);scenario("lackey-lifegain-lord",false,false);
         scenario("foundry-street-opponent-triggers",false,false);

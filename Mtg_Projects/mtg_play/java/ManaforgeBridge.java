@@ -182,7 +182,7 @@ public final class ManaforgeBridge implements MageClient {
                 choice.addProperty("max", prompt.getMax());
                 amountMin = prompt.getMin(); amountMax = prompt.getMax();
                 JsonArray targetCards = new JsonArray();
-                if (prompt.getCardsView1() != null) for (CardView candidate : prompt.getCardsView1().values()) targetCards.add(card(candidate));
+                if (prompt.getCardsView1() != null) for (CardView candidate : prompt.getCardsView1().values()) targetCards.add(targetChoiceCard(candidate));
                 choice.add("cards", targetCards);
                 JsonArray secondPile = new JsonArray();
                 if (prompt.getCardsView2() != null) for (CardView candidate : prompt.getCardsView2().values()) secondPile.add(card(candidate));
@@ -211,11 +211,7 @@ public final class ManaforgeBridge implements MageClient {
                 }
                 // Native library target prompts carry legal IDs in possibleTargets and
                 // reveal labels in CardsView. CardsView alone does not establish legality.
-                java.util.Set<UUID> offeredTargets=new java.util.LinkedHashSet<>();
-                if(prompt.getTargets()!=null)offeredTargets.addAll(prompt.getTargets());
-                if(method.equals("GAME_TARGET") && offeredTargets.isEmpty() && prompt.getOptions()!=null && prompt.getOptions().get("possibleTargets") instanceof java.util.Set)
-                    for(Object candidate:(java.util.Set<?>)prompt.getOptions().get("possibleTargets"))if(candidate instanceof UUID)offeredTargets.add((UUID)candidate);
-                choice.add("targets", JSON.toJsonTree(offeredTargets));
+                choice.add("targets", JSON.toJsonTree(nativeTargetIds(method,prompt)));
                 if (prompt.getChoice() != null) {
                     choice.addProperty("message", prompt.getChoice().getMessage());
                     choice.addProperty("required", prompt.getChoice().isRequired());
@@ -257,6 +253,41 @@ public final class ManaforgeBridge implements MageClient {
             error.printStackTrace(System.err);
             message("error", null, "GAME_CALLBACK_FAILED: " + error.getClass().getSimpleName());
         }
+    }
+
+    /** Native PICK_ABILITY uses AbilityView IDs rather than the normal target set.
+     * Ordinary card views are display context and must never imply target legality. */
+    static java.util.Set<UUID> nativeTargetIds(String method,GameClientMessage prompt) {
+        java.util.Set<UUID> ids=new java.util.LinkedHashSet<>();
+        if(prompt.getTargets()!=null)ids.addAll(prompt.getTargets());
+        if(!"GAME_TARGET".equals(method) || !ids.isEmpty())return ids;
+        Object possible=prompt.getOptions()==null?null:prompt.getOptions().get("possibleTargets");
+        if(possible instanceof java.util.Set) {
+            for(Object candidate:(java.util.Set<?>)possible)if(candidate instanceof UUID)ids.add((UUID)candidate);
+            return ids;
+        }
+        CardsView cards=prompt.getCardsView1();
+        if(!prompt.isFlag() || cards==null || cards.isEmpty() || cards.size()>256)return ids;
+        for(java.util.Map.Entry<UUID,CardView> entry:cards.entrySet()) {
+            CardView card=entry.getValue();
+            if(!(card instanceof AbilityView) || card.hideInfo() || card.isFaceDown()
+                || entry.getKey()==null || !entry.getKey().equals(card.getId()))return new java.util.LinkedHashSet<>();
+            ids.add(entry.getKey());
+        }
+        return ids;
+    }
+
+    private static JsonObject targetChoiceCard(CardView candidate) {
+        JsonObject result=card(candidate);
+        if(candidate instanceof AbilityView && !candidate.hideInfo() && !candidate.isFaceDown()) {
+            CardView source=((AbilityView)candidate).getSourceCard();
+            String label=source!=null && !source.hideInfo() && !source.isFaceDown()?source.getName():candidate.getName();
+            if(candidate.getRules()!=null)for(String rule:candidate.getRules())if(rule!=null && !rule.isEmpty())label+=" — "+rule;
+            label=label.replaceAll("<[^>]*>","");
+            result.addProperty("name",label.length()>4096?label.substring(0,4096):label);
+            result.addProperty("type","Ability");
+        }
+        return result;
     }
 
     private static JsonObject card(CardView card) {

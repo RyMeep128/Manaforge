@@ -868,6 +868,19 @@ public final class OpeningProjectionChecks {
         manifest.seats[0].document.deck.entries[0].set_code=null;fails("UNITY_GAME_PRINTING_UNSUPPORTED",()->new NativeGameLaunch(manifest));manifest.seats[0].document.deck.entries[0].set_code="TRK";manifest.seats[0].document.deck.companion_entry_id="extra";fails("UNITY_GAME_SETUP_UNSUPPORTED",()->new NativeGameLaunch(manifest));manifest.seats[0].document.deck.companion_entry_id=null;
         SessionEngine engine=new SessionEngine();JsonObject unknown=prompt();unknown.addProperty("kind","GAME_CHOOSE_UNKNOWN");ManaforgeGameplaySession session=new ManaforgeGameplaySession(projection(),engine,null,true);ManaforgeUnityOpening.TurnOffer offered=session.offer(engine.state,unknown);JsonObject view=offered.snapshot().getAsJsonObject("body").getAsJsonObject("snapshot");shape(view);check(view.get("decision").isJsonNull() && view.getAsJsonArray("actions").size()==0 && view.getAsJsonArray("unsupported_fields").contains(new JsonPrimitive("decision")));fails("GAMEPLAY_DECISION_UNSUPPORTED",()->nativeSubmit(offered).submit(new JsonObject()));check(engine.submissions==0);session.close();
     }
+    static void triggerOrderingProjectionChecks() throws Exception {
+        JsonObject raw=attackState(),prompt=priorityPrompt();prompt.addProperty("kind","GAME_TARGET");prompt.addProperty("is_priority",false);prompt.addProperty("can_finish",false);
+        JsonArray targets=new JsonArray();targets.add("native-trigger-1");targets.add("native-trigger-2");prompt.add("targets",targets);JsonArray cards=new JsonArray();
+        for(String id:new String[]{"native-trigger-1","native-trigger-2"}) {
+            JsonObject card=new JsonObject();card.addProperty("id",id);card.addProperty("hidden",false);card.addProperty("face_down",false);card.addProperty("name","Primeval Herald");card.addProperty("type","Ability");cards.add(card);
+        }
+        prompt.add("cards",cards);ManaforgeOpeningProjection projection=projection();JsonObject view=projection.projectCoreCombat(raw,prompt,true);shape(view);
+        check(view.getAsJsonObject("decision").getAsJsonArray("options").size()==2 && view.getAsJsonArray("actions").size()==0);
+        check(!view.toString().contains("native-trigger-"));
+        check("native-trigger-2".equals(claim(projection,choose(view,1)).get("value").getAsString()));
+        fails("STALE_DECISION",()->claim(projection,choose(view,0)));
+        cards.get(0).getAsJsonObject().addProperty("hidden",true);fails("LIVE_OPENING_PROJECTION_UNSUPPORTED",()->projection().projectCoreCombat(raw,prompt,true));
+    }
     static void publicStackAndOfferedCardChecks() throws Exception {
         JsonObject raw=landState(),prompt=priorityPrompt(),stacked=raw.getAsJsonArray("hand").get(0).getAsJsonObject().deepCopy();stacked.addProperty("id","public-spell");stacked.addProperty("stack_owner","raw-ai");stacked.addProperty("stack_controller","raw-ai");stacked.addProperty("name","Public spell");raw.getAsJsonArray("stack").add(stacked);JsonObject view=projection().projectCoreCombat(raw,prompt,true);shape(view);check(view.getAsJsonArray("objects").asList().stream().anyMatch(value->"stack".equals(value.getAsJsonObject().get("zone").getAsString())));check(!view.getAsJsonArray("unsupported_fields").contains(new JsonPrimitive("stack")));check(view.getAsJsonArray("actions").size()>0);
         JsonObject target=prompt.deepCopy();target.addProperty("kind","GAME_TARGET");target.addProperty("is_priority",false);target.add("targets",JsonParser.parseString("[\"offered-library-land\"]"));target.add("cards",new JsonArray());JsonObject land=stacked.deepCopy();land.addProperty("id","offered-library-land");land.addProperty("name","Native offered Forest");target.getAsJsonArray("cards").add(land);view=projection().projectCoreCombat(raw,target,true);shape(view);check(view.getAsJsonObject("decision").getAsJsonArray("options").get(0).getAsJsonObject().get("label").getAsString().equals("Native offered Forest"));check(!view.toString().contains("offered-library-land"));
@@ -951,7 +964,7 @@ public final class OpeningProjectionChecks {
     public static void main(String[] args) throws Exception {
         presentationIdentityChecks();
         UnityPriorityProjectionChecks.run();
-        targetingPresentationChecks();revealObservationChecks();nativeLaunchChecks();publicStackAndOfferedCardChecks();automaticPaymentChecks();manualManaChecks();gameplaySessionChecks();combatCaseEvidenceChecks();coreCombatChecks();coreResponseChecks();terminalCombatChecks();coreChoiceChecks();combatCounterChecks();
+        targetingPresentationChecks();revealObservationChecks();nativeLaunchChecks();triggerOrderingProjectionChecks();publicStackAndOfferedCardChecks();automaticPaymentChecks();manualManaChecks();gameplaySessionChecks();combatCaseEvidenceChecks();coreCombatChecks();coreResponseChecks();terminalCombatChecks();coreChoiceChecks();combatCounterChecks();
         ManaforgeOpeningProjection projection=projection();JsonObject raw=state(),request=prompt();JsonObject snapshot=projection.project(raw,request);shape(snapshot);
         String text=snapshot.toString();for(String secret:new String[]{"raw-human","raw-ai","raw-card","raw-name","raw-opponent-name","OPPONENT_SECRET","MUTATED_BINDING"})check(!text.contains(secret));
         check(snapshot.get("revision").getAsLong()==1);check(!snapshot.get("actions_complete").getAsBoolean());
