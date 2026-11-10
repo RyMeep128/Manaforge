@@ -474,17 +474,31 @@ def test_disconnect_retains_original_unsupported_context_without_private_values(
     launch = LiveGameLaunch()
     launch.allocate()
     root = launch.root
-    (root / "game-error.json").write_text(json.dumps(dict(code="LIVE_UNITY_DISCONNECTED")))
-    (root / "game-unsupported.json").write_text(json.dumps(dict(
-        code="UNSUPPORTED_GAME_TARGET_OPTIONS", prompt_family="GAME_TARGET",
-        phase="PRECOMBAT_MAIN", targets_count=0, cards_count=1,
-        private="PRIVATE_CARD_NAME", message="PRIVATE_PROMPT", amounts_count=-1,
-    )))
+    (root / "game-error.json").write_text(
+        json.dumps(dict(code="LIVE_UNITY_DISCONNECTED"))
+    )
+    (root / "game-unsupported.json").write_text(
+        json.dumps(
+            dict(
+                code="UNSUPPORTED_GAME_TARGET_OPTIONS",
+                prompt_family="GAME_TARGET",
+                phase="PRECOMBAT_MAIN",
+                targets_count=0,
+                cards_count=1,
+                private="PRIVATE_CARD_NAME",
+                message="PRIVATE_PROMPT",
+                amounts_count=-1,
+            )
+        )
+    )
     launch.close()
     assert launch.last_error == "LIVE_UNITY_DISCONNECTED"
     assert launch.unsupported_diagnostics == dict(
-        code="UNSUPPORTED_GAME_TARGET_OPTIONS", prompt_family="GAME_TARGET",
-        phase="PRECOMBAT_MAIN", targets_count=0, cards_count=1,
+        code="UNSUPPORTED_GAME_TARGET_OPTIONS",
+        prompt_family="GAME_TARGET",
+        phase="PRECOMBAT_MAIN",
+        targets_count=0,
+        cards_count=1,
     )
     retained = json.loads((launch.log_directory / "diagnostic.json").read_text())
     assert retained["unsupported"] == launch.unsupported_diagnostics
@@ -495,9 +509,16 @@ def test_owned_process_exit_evidence_is_retained_separately_from_error():
     launch = LiveGameLaunch()
     launch.allocate()
     (launch.root / "player.log").write_text("Orderly viewer shutdown")
-    launch.owner = SimpleNamespace(close=lambda: SimpleNamespace(
-        confirmed=True, children=[SimpleNamespace(role="client", exit_code=0, forced=False, reaped=True)]
-    ))
+    launch.owner = SimpleNamespace(
+        close=lambda: SimpleNamespace(
+            confirmed=True,
+            children=[
+                SimpleNamespace(role="client", exit_code=0, forced=False, reaped=True)
+            ],
+        )
+    )
     launch.close()
     retained = json.loads((launch.log_directory / "diagnostic.json").read_text())
-    assert retained["processes"] == [dict(role="client", exit_code=0, forced=False, reaped=True)]
+    assert retained["processes"] == [
+        dict(role="client", exit_code=0, forced=False, reaped=True)
+    ]
