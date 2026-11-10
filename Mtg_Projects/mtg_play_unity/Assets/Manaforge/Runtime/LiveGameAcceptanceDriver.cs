@@ -13,6 +13,9 @@ namespace Manaforge.Play
         private long submitted=-1;private readonly HashSet<string> pregameCommanders=new HashSet<string>();
         public bool Tick(ViewerSessionHost host,ViewerDecisionPanel panel,ProjectedDecisionFrame frame)
         {
+            if(ArtworkFixtureScene.Argument("-manaforgeRequireAutoPayment")=="1" && frame.Actions.Any(action=>action.Kind=="pay_mana")){
+                UnityEngine.Debug.LogError("AUTO_PAYMENT_MANUAL_INPUT_REQUIRED");UnityEngine.Application.Quit(1);return false;
+            }
             if(frame.Result!=null || frame.Decision==null && frame.Actions.Count==0)return true;var offer=host.PresentedDecision;if(offer?.CanSubmit!=true || submitted==frame.Context.Revision)return false;
             var controls=panel.Root.Query<Button>().ToList();Button button=commanderScenario.Choose(frame,controls,availableLands+(frame.ViewerMana?.Values.Sum()??0));var decision=frame.Decision;
             if(decision.Family=="number" || decision.Family=="amounts"){

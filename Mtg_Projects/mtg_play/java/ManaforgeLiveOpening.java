@@ -102,6 +102,7 @@ public final class ManaforgeLiveOpening {
     }
     private String game, stage="initialize", decisionKind="none";
     private void writeGameReport(String name,JsonObject value) throws IOException {
+        if(automaticPayment!=null)for(Map.Entry<String,JsonElement> entry:automaticPayment.report().entrySet())value.add(entry.getKey(),entry.getValue());
         java.nio.file.Path file=unityReady.resolveSibling(name+".json"),temporary=unityReady.resolveSibling(name+".tmp");
         java.nio.file.Files.write(temporary,value.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));java.nio.file.Files.move(temporary,file,java.nio.file.StandardCopyOption.ATOMIC_MOVE);
     }

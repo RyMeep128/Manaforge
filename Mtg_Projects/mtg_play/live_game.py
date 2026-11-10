@@ -291,6 +291,7 @@ def run_live_game(
     payment_mode="auto",
     deck_owners=None,
     acceptance=False,
+    require_auto_payment=False,
     commander_scenario="single",
     no_capture=False,
     rules_text_proof=None,
@@ -528,6 +529,8 @@ def run_live_game(
                 ]
             if no_capture:
                 command += ["-manaforgeNoCapture", "1"]
+            if require_auto_payment:
+                command += ["-manaforgeRequireAutoPayment", "1"]
             if acceptance:
                 command += [
                     "-manaforgeGameAcceptance",
@@ -621,6 +624,17 @@ def run_live_game(
                     "outcome"
                 ] not in ("win", "loss", "draw"):
                     raise LiveGameError("UNITY_GAME_RESULT_UNPROVEN")
+                if require_auto_payment:
+                    if (
+                        native.get("native_auto_payment_mode") != "AUTO"
+                        or type(native.get("native_auto_payment_steps")) is not int
+                        or native["native_auto_payment_steps"] < 1
+                        or type(native.get("native_auto_payment_completed")) is not int
+                        or native["native_auto_payment_completed"] < 1
+                        or native.get("native_auto_payment_manual_windows") != 0
+                    ):
+                        raise LiveGameError("UNITY_GAME_AUTO_PAYMENT_UNPROVEN")
+                    closed.update({key: value for key, value in native.items() if key.startswith("native_auto_payment_")})
             if acceptance and setup.format == "commander" and not focused_scenario:
                 proof = wait_json("game-result", 1)
                 if (

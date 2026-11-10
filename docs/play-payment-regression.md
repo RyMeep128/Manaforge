@@ -25,3 +25,17 @@ The reported screenshot session used `0.6.13-alpha.1`, whose broad hazard filter
 rejected unrelated battlefield triggers. The ordinary-payment event filter was
 narrowed in `0.6.14-alpha.1`. Preserve retained session logs when rebuilding the
 player, and record the exact verified source SHA beside the resulting build.
+
+## Production acceptance gate
+
+The native-payment job also covers green, mixed/generic costs, floating mana alone
+and with a source, insufficient mana, and a deck-registry stress case. Inactive
+registrations use a bounded registry scan separate from the active-hazard budget.
+Cancellation fixtures initialize native preferences and the live turn-order cursor.
+
+The hosted Unity workflow runs ordinary Auto cases with manual payment rescue
+explicitly disabled in the acceptance driver, Manual/Full Control cases, and a
+normal shuffled human-versus-AI game through the production gateway. That game
+must end with native automatic-payment progress and completion, zero manual
+fallback windows, confirmed receipts, and owned cleanup. A missing Unity license
+blocks this evidence; native fixtures alone do not satisfy this gate.

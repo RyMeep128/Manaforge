@@ -1,6 +1,18 @@
 # Safe automatic mana payment — Java coordinator
 
-Status: isolated foundation through 0.5.113-alpha.1 for P2.3; production automation is
+Current status (0.6.28-alpha.1): the Java production gateway uses
+NativeAutomaticPayment and ManaforgeAutomaticEngine with ContextHumanPlayer's
+native cost/source assessment. Auto is the default human-seat launch preference;
+Manual and Full Control remain available. Real-engine ordinary and floating
+payment fixtures run in GitHub Actions. Packaged and normal-game acceptance must
+also pass the gates in [payment regression](play-payment-regression.md); helper
+success does not establish that automatic payment works in a normal game.
+
+The sections below record the earlier implementation history, including disabled
+foundation stages and their original evidence. Their local-test commands and old
+branch cadence are historical; follow AGENTS.md and the current workflow guide.
+
+Historical status: isolated foundation through 0.5.113-alpha.1 for P2.3; production automation is
 **disabled/unmounted**. P4.3 real-engine acceptance has not happened. This implements
 the fallback scope explicitly allowed by the [owner story](archive/play-safe-automatic-mana-payment-story.md),
 not the story's end-to-end definition of done. The existing manual command contract and Unity renderer are preserved. The manual

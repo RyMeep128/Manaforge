@@ -189,6 +189,7 @@ def main():
         / ("LiveGame-" + uuid.uuid4().hex[:10]),
     )
     parser.add_argument("--xmage-root", type=Path, help="Explicit pinned engine candidate bundle")
+    parser.add_argument("--jdk-path", type=Path, help="JDK used to compile the owned gateway")
     parser.add_argument("--startup-only", action="store_true", help="Check normal authenticated startup, then cancel without submitting gameplay choices")
     parser.add_argument("--startup-seconds", type=int, default=10, help="Startup-only idle observation duration (1–120 seconds)")
     args = parser.parse_args()
@@ -252,6 +253,8 @@ def main():
             commander_scenario=args.commander_scenario,
             no_capture=args.no_capture,
             presentation=args.presentation,
+            require_auto_payment=args.public_decks and args.payment_mode == "auto" and args.format == "freeform" and not args.startup_only,
+            **({"jdk_path": args.jdk_path} if args.jdk_path else {}),
             **({"xmage_root": args.xmage_root} if args.xmage_root else {}),
         )
         if args.startup_only:

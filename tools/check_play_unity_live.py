@@ -611,6 +611,10 @@ def main():
                     command += ["-manaforgeLiveCreature", "1"]
                 if args.combat_keyword:
                     command += ["-manaforgeLiveCombatKeyword", args.combat_keyword]
+                if args.payment_mode == "auto" and args.casting_case in (
+                    "green", "blue", "generic", "floating"
+                ):
+                    command += ["-manaforgeRequireAutoPayment", "1"]
                 command += [
                     "-manaforgeLiveCombatTrigger",
                     "1" if args.combat_trigger else "0",

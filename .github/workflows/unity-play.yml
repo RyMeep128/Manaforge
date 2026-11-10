@@ -65,9 +65,34 @@ jobs:
           git rev-parse HEAD | Set-Content Mtg_Projects/mtg_play_unity/Artifacts/commit.txt
       - name: Install offline artwork exporter dependencies
         run: python -m pip install -r Mtg_Projects/mtg_proxy/requirements.txt
+      - name: Install native acceptance dependencies
+        run: python -m pip install -r requirements-dev.txt
+      - name: Prepare hash-pinned real engine
+        env:
+          PYTHONPATH: '${{ github.workspace }}/Mtg_Projects;${{ github.workspace }}/Mtg_Projects/mtg_core'
+        run: python -m mtg_play.ci_prepare --destination "$env:RUNNER_TEMP/manaforge-unity-engine" --jdk-path "$env:JAVA_HOME"
+      - name: Packaged real-engine automatic payment without manual rescue
+        shell: pwsh
+        run: |
+          foreach ($case in @('green', 'blue', 'generic', 'floating')) {
+            python tools/check_play_unity_live.py --casting-case $case --payment-mode auto --no-capture --xmage-root "$env:RUNNER_TEMP/manaforge-unity-engine" --jdk-path "$env:JAVA_HOME" --output "Mtg_Projects/mtg_play_unity/Artifacts/Payment-auto-$case"
+            if ($LASTEXITCODE -ne 0) { throw "Automatic payment failed: $case" }
+          }
+      - name: Packaged real-engine manual payment and full control
+        shell: pwsh
+        run: |
+          foreach ($mode in @('manual', 'full-control')) {
+            foreach ($case in @('green', 'floating')) {
+              python tools/check_play_unity_live.py --casting-case $case --payment-mode $mode --no-capture --xmage-root "$env:RUNNER_TEMP/manaforge-unity-engine" --jdk-path "$env:JAVA_HOME" --output "Mtg_Projects/mtg_play_unity/Artifacts/Payment-$mode-$case"
+              if ($LASTEXITCODE -ne 0) { throw "Manual payment failed: $mode $case" }
+            }
+          }
       - name: Packaged desktop preview with public generated artwork
         shell: pwsh
         run: python tools/check_play_deck_preview.py
+      - name: Normal shuffled human versus AI match with automatic payment
+        shell: pwsh
+        run: python tools/check_play_unity_game.py --public-decks --payment-mode auto --no-capture --xmage-root "$env:RUNNER_TEMP/manaforge-unity-engine" --jdk-path "$env:JAVA_HOME" --output Mtg_Projects/mtg_play_unity/Artifacts/Payment-normal-game
       - name: Packaged authenticated decision UI fixture
         shell: pwsh
         run: python tools/check_play_unity_session.py --decisions
@@ -93,4 +118,5 @@ jobs:
             Mtg_Projects/mtg_play_unity/Artifacts/SessionFixture-*/connected.png
             Mtg_Projects/mtg_play_unity/Artifacts/SessionFixture-*/decision-complete.png
             Mtg_Projects/mtg_play_unity/Artifacts/SessionFixture-*/cleared.png
+            Mtg_Projects/mtg_play_unity/Artifacts/Payment-*/**/*.json
             Mtg_Projects/mtg_play_unity/Builds/Windows/

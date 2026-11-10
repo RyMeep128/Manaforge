@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Manaforge.Play.Protocol;
@@ -314,6 +315,9 @@ namespace Manaforge.Play
                 }
                 if(completeGame && humanBlockPresented && Volatile.Read(ref nativeOutcome)!=null && Volatile.Read(ref snapshotReadOnly)==1 && host.PresentedDecision==null && controls.Count==0){gamePresented=true;if(!Report("game-ready")){Fail();yield break;}host.Cancel();host.Tick();panel.Tick();if(!Report("choice",true)){Fail();yield break;}break;}
                 if(ready && host.PresentedDecision?.CanSubmit==true && submitted!=revision && ArtworkFixtureScene.Argument("-manaforgeLiveScript")=="1"){
+                    // Acceptance only: routine Auto scenarios must never be rescued by
+                    // this driver's manual payment buttons. Java owns all payment.
+                    if(ArtworkFixtureScene.Argument("-manaforgeRequireAutoPayment")=="1" && host.PresentedDecision.Frame.Actions.Any(action=>action.Kind=="pay_mana")){Fail();yield break;}
                     Button button=null;if(reselects==0 && (combatKeyword=="haste" || combatKeyword=="reach")){button=controls.Find(value=>value.text==(combatKeyword=="reach"?"Remove blocker":"Remove attacker"));if(button!=null)reselects++;}
                     if(button==null && combatKeyword.Length>0 && (host.PresentedDecision.Frame.Decision.Family=="number" || host.PresentedDecision.Frame.Decision.Family=="amounts")){
                         var decision=host.PresentedDecision.Frame.Decision;var fields=panel.Root.Query<TextField>().ToList();long remaining=decision.Maximum??0;long[] values=new long[decision.Family=="number"?1:decision.Amounts.Count];
