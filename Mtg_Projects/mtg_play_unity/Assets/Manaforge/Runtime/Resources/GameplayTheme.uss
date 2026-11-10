@@ -49,15 +49,14 @@
 .mf-decision.command-uncertain { border-left-width: 4px; border-left-color: var(--mf-warning); }
 .mf-decision.command-confirmed { border-left-width: 4px; border-left-color: var(--mf-good); }
 .mf-theme .table-card { border-width: 2px; border-color: rgba(0,0,0,0); transition-property: scale,translate,rotate; transition-duration: .12s,.12s,.18s; }
-.mf-theme .table-card:hover, .mf-theme .table-card:focus { border-color: var(--mf-ink); }
 .mf-theme .table-card.actionable { border-color: var(--mf-focus); }
 .mf-theme .table-card.targetable { border-width: 3px; border-color: var(--mf-warning); }
 .mf-theme .table-card.attacking { border-color: var(--mf-ember); }
 .mf-theme .table-card.blocking { border-color: var(--mf-focus); }
-.mf-theme .table-card.selected { border-width: 4px; border-color: var(--mf-warning); }
+.mf-theme .table-card.selected { border-width: 0; }
 .mf-theme .table-card.gesture-source { opacity: .6; }
 #live-markers { background-color: rgba(19,23,29,.96); color: var(--mf-ink); font-size: 12px; }
-.table-inspection { border-width: 2px; border-color: var(--mf-metal); border-radius: 6px; }
+.table-inspection { border-width: 0; }
 #table-result { background-color: rgba(25,30,37,.98); border-width: 1px; border-color: var(--mf-metal); border-top-width: 3px; border-top-color: var(--mf-ember); border-radius: 8px; font-size: 40px; }
 #table-phase { color: var(--mf-muted); font-size: 15px; }
 #stack-title, #board-input-hint, #board-drag-ghost { color: var(--mf-ink); }

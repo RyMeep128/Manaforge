@@ -240,9 +240,9 @@ namespace Manaforge.Play
             edge.style.borderLeftWidth=edge.style.borderRightWidth=edge.style.borderBottomWidth=rim;
             // The upper printing surround is narrow; do not cover it with the heavier lower rim.
             float topRim=landscape && !imageFallback || ability?rim:full?0:Mathf.Max(.75f,.9f*scale);
-            edge.style.borderTopWidth=selected?Mathf.Max(1.5f,topRim):topRim;
+            edge.style.borderTopWidth=topRim;
             edge.style.borderLeftColor=edge.style.borderRightColor=edge.style.borderBottomColor=new Color(.025f,.025f,.025f);
-            edge.style.borderTopColor=selected?Color.cyan:new Color(.025f,.025f,.025f);
+            edge.style.borderTopColor=new Color(.025f,.025f,.025f);
             edge.style.borderTopLeftRadius=edge.style.borderTopRightRadius=width*.03f;
             edge.style.borderBottomLeftRadius=edge.style.borderBottomRightRadius=width*(ability ? .43f : .03f);
             edge.style.display=concealed?DisplayStyle.None:DisplayStyle.Flex;
