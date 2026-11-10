@@ -10,6 +10,30 @@ namespace Manaforge.Play.Tests
 {
     public sealed class ArenaTablePresentationTests
     {
+        [UnityTest] public IEnumerator ExileBrowserCardSubmitsItsExactEngineOfferedAction()
+        {
+            var node=new GameObject("Playable exile");var settings=ScriptableObject.CreateInstance<PanelSettings>();settings.themeStyleSheet=Resources.Load<ThemeStyleSheet>("CardTheme");var document=node.AddComponent<UIDocument>();document.panelSettings=settings;
+            document.rootVisualElement.style.width=1280;document.rootVisualElement.style.height=720;
+            using var table=new ArenaGameplayPresentation(document.rootVisualElement);
+            var envelope=(JObject)JObject.Parse(File.ReadAllText(Path.Combine(Application.dataPath,"../../mtg_play/protocol/fixtures/receive-history-v1.json")))["cases"][0]["steps"][0]["envelope"].DeepClone();var snapshot=envelope["body"]["snapshot"];
+            var card=JObject.Parse(File.ReadAllText(Path.Combine(Application.dataPath,"../../mtg_play/protocol/fixtures/wire-receive-v1.json")))["positive"][0]["envelope"]["body"]["snapshot"]["objects"][0].DeepClone();
+            card["object_id"]="permitted-exile";card["zone"]="exile";card["owner_id"]="one";card["controller_id"]=null;card["hidden"]=false;card["face_down"]=false;snapshot["objects"]=new JArray(card);
+            snapshot["turn"]=2;snapshot["phase"]="PRECOMBAT_MAIN";snapshot["step"]="PRECOMBAT_MAIN";snapshot["priority_player_id"]="one";snapshot["actions_complete"]=true;
+            snapshot["decision"]["is_priority"]=true;snapshot["decision"]["options"]=new JArray();
+            snapshot["actions"]=new JArray(new JObject{["action_id"]="cast-permitted-exile",["kind"]="cast_spell",["object_id"]="permitted-exile",["label"]="Cast from exile",["priority_class"]="meaningful"});
+            using var peer=new ViewerSessionHostTests.Peer(envelope.ToString());var owner=new System.Threading.Tasks.TaskCompletionSource<bool>(System.Threading.Tasks.TaskCreationOptions.RunContinuationsAsynchronously);
+            using var host=new ViewerSessionHost(table.Surface,peer.Bootstrap(),owner.Task,true);table.Bind(host);
+            try{
+                float deadline=Time.realtimeSinceStartup+10;while(host.PresentedDecision==null && Time.realtimeSinceStartup<deadline){host.Tick();yield return null;}
+                Assert.That(host.PresentedDecision,Is.Not.Null);table.Decisions.Tick();table.Present(host.PresentedDecision.Frame);yield return null;
+                Assert.That(table.BrowsePublicZone("exile","one"),Is.True);yield return null;
+                CardView view=null;table.Surface.VisitPresented((projected,presented)=>{if(projected.ObjectId=="permitted-exile")view=presented;});
+                Assert.That(view,Is.Not.Null);Assert.That(view.style.display.value,Is.EqualTo(DisplayStyle.Flex));Assert.That(view.ClassListContains("actionable"),Is.True);
+                using(var submit=NavigationSubmitEvent.GetPooled()){submit.target=view;view.SendEvent(submit);}
+                var read=System.Threading.Tasks.Task.Run(()=>Manaforge.Play.Protocol.WireMessages.Parse(peer.ReadCommandForFixture()));while(!read.IsCompleted && Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(read.IsCompleted,Is.True);Assert.That((string)read.GetAwaiter().GetResult()["body"]["action_id"],Is.EqualTo("cast-permitted-exile"));
+            }finally{host.Cancel();Object.Destroy(node);Object.Destroy(settings);}yield return null;
+        }
         [UnityTest] public IEnumerator AuraSitsWithItsHostAndCountOpensTheAttachmentBrowser()
         {
             var node=new GameObject("Attachment presentation");var settings=ScriptableObject.CreateInstance<PanelSettings>();settings.themeStyleSheet=Resources.Load<ThemeStyleSheet>("CardTheme");var document=node.AddComponent<UIDocument>();document.panelSettings=settings;document.rootVisualElement.style.width=1280;document.rootVisualElement.style.height=720;var table=new ArenaGameplayPresentation(document.rootVisualElement);

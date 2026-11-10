@@ -888,6 +888,29 @@ public final class OpeningProjectionChecks {
         fails("STALE_DECISION",()->claim(projection,choose(view,0)));
         cards.get(0).getAsJsonObject().addProperty("hidden",true);fails("LIVE_OPENING_PROJECTION_UNSUPPORTED",()->projection().projectCoreCombat(raw,prompt,true));
     }
+    static void playableExileChecks() throws Exception {
+        for(String action:new String[]{"cast_spell","play_land","select_object","activate"})for(String owner:new String[]{"raw-human","raw-ai"}){
+            JsonObject raw=attackState(),prompt=priorityPrompt();raw.addProperty("priority_player","raw-name");raw.addProperty("playable_information_complete",true);
+            JsonObject card=raw.getAsJsonArray("players").get(0).getAsJsonObject().getAsJsonArray("battlefield").get(0).getAsJsonObject().deepCopy();
+            card.addProperty("id","impulse-card");card.addProperty("exile_owner",owner);card.addProperty("hidden",false);card.addProperty("face_down",false);
+            raw.getAsJsonArray("exile").add(card);raw.add("playable",new JsonArray());raw.getAsJsonArray("playable").add("impulse-card");
+            raw.getAsJsonObject("action_kinds").addProperty("impulse-card",action);
+            ManaforgeOpeningProjection projection=projection();JsonObject view=projection.projectCoreCombat(raw,prompt,true);shape(view);
+            check(view.get("actions_complete").getAsBoolean());
+            JsonObject offered=view.getAsJsonArray("actions").get(0).getAsJsonObject();check(action.equals(offered.get("kind").getAsString()));
+            JsonObject exiled=view.getAsJsonArray("objects").asList().stream().map(JsonElement::getAsJsonObject).filter(row->new JsonPrimitive("exile").equals(row.get("zone"))).findFirst().get();
+            check(offered.get("object_id").equals(exiled.get("object_id")));
+            JsonObject chosen=projection.claimAction(perform(view),"session","human","raw-game","raw-human",41,8);
+            check("object".equals(chosen.get("kind").getAsString()) && "impulse-card".equals(chosen.get("value").getAsString()));
+            fails("STALE_DECISION",()->projection.claimAction(perform(view),"session","human","raw-game","raw-human",41,8));
+            // Expiry/removal of native permission leaves the visible card browsable, not playable.
+            raw.add("playable",new JsonArray());JsonObject expired=projection.projectCoreCombat(raw,prompt,true);shape(expired);
+            check(expired.getAsJsonArray("actions").asList().stream().allMatch(item->new JsonPrimitive("pass").equals(item.getAsJsonObject().get("kind"))));
+            raw.getAsJsonArray("playable").add("impulse-card");card.addProperty("hidden",true);card.addProperty("face_down",true);
+            JsonObject concealed=projection.projectCoreCombat(raw,prompt,true);shape(concealed);check(!concealed.get("actions_complete").getAsBoolean());
+            check(concealed.getAsJsonArray("actions").asList().stream().allMatch(item->new JsonPrimitive("pass").equals(item.getAsJsonObject().get("kind"))));
+        }
+    }
     static void publicStackAndOfferedCardChecks() throws Exception {
         JsonObject raw=landState(),prompt=priorityPrompt(),stacked=raw.getAsJsonArray("hand").get(0).getAsJsonObject().deepCopy();stacked.addProperty("id","public-spell");stacked.addProperty("stack_owner","raw-ai");stacked.addProperty("stack_controller","raw-ai");stacked.addProperty("name","Public spell");raw.getAsJsonArray("stack").add(stacked);JsonObject view=projection().projectCoreCombat(raw,prompt,true);shape(view);check(view.getAsJsonArray("objects").asList().stream().anyMatch(value->"stack".equals(value.getAsJsonObject().get("zone").getAsString())));check(!view.getAsJsonArray("unsupported_fields").contains(new JsonPrimitive("stack")));check(view.getAsJsonArray("actions").size()>0);
         JsonObject target=prompt.deepCopy();target.addProperty("kind","GAME_TARGET");target.addProperty("is_priority",false);target.add("targets",JsonParser.parseString("[\"offered-library-land\"]"));target.add("cards",new JsonArray());JsonObject land=stacked.deepCopy();land.addProperty("id","offered-library-land");land.addProperty("name","Native offered Forest");target.getAsJsonArray("cards").add(land);view=projection().projectCoreCombat(raw,target,true);shape(view);check(view.getAsJsonObject("decision").getAsJsonArray("options").get(0).getAsJsonObject().get("label").getAsString().equals("Native offered Forest"));check(!view.toString().contains("offered-library-land"));
@@ -971,7 +994,7 @@ public final class OpeningProjectionChecks {
     public static void main(String[] args) throws Exception {
         presentationIdentityChecks();
         UnityPriorityProjectionChecks.run();
-        targetingPresentationChecks();revealObservationChecks();nativeLaunchChecks();triggerOrderingProjectionChecks();publicStackAndOfferedCardChecks();automaticPaymentChecks();manualManaChecks();gameplaySessionChecks();combatCaseEvidenceChecks();coreCombatChecks();coreResponseChecks();terminalCombatChecks();coreChoiceChecks();combatCounterChecks();
+        targetingPresentationChecks();revealObservationChecks();nativeLaunchChecks();triggerOrderingProjectionChecks();publicStackAndOfferedCardChecks();playableExileChecks();automaticPaymentChecks();manualManaChecks();gameplaySessionChecks();combatCaseEvidenceChecks();coreCombatChecks();coreResponseChecks();terminalCombatChecks();coreChoiceChecks();combatCounterChecks();
         ManaforgeOpeningProjection projection=projection();JsonObject raw=state(),request=prompt();JsonObject snapshot=projection.project(raw,request);shape(snapshot);
         String text=snapshot.toString();for(String secret:new String[]{"raw-human","raw-ai","raw-card","raw-name","raw-opponent-name","OPPONENT_SECRET","MUTATED_BINDING"})check(!text.contains(secret));
         check(snapshot.get("revision").getAsLong()==1);check(!snapshot.get("actions_complete").getAsBoolean());

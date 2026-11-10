@@ -370,7 +370,13 @@ public final class ManaforgeOpeningProjection {
                 if(reference==null)continue;
                 JsonElement kind=raw.getAsJsonObject("action_kinds").get(source);if(kind==null || !(kind.getAsString().equals("play_land") || includeSpells && (kind.getAsString().equals("cast_spell") || coreCombat && (kind.getAsString().equals("select_object") || kind.getAsString().equals("activate")))))continue;
                 GameObject object=null;for(GameObject candidate:cards)if(candidate.object_id.equals(reference))object=candidate;
-                if(object==null || object.hidden || !("command".equals(object.zone)?viewer.equals(object.owner_id):viewer.equals(object.controller_id)) || !("command".equals(object.zone) || "hand".equals(object.zone) || coreCombat && "battlefield".equals(object.zone) && (kind.getAsString().equals("activate") || kind.getAsString().equals("select_object"))))continue;
+                // Permission comes from the engine's current playable list, not zone ownership.
+                // Exile may include another player's card that this viewer is permitted to play.
+                boolean exilePlay=object!=null && coreCombat && "exile".equals(object.zone);
+                if(object==null || object.hidden || Boolean.TRUE.equals(object.face_down) || !exilePlay &&
+                    (!("command".equals(object.zone)?viewer.equals(object.owner_id):viewer.equals(object.controller_id))
+                    || !("command".equals(object.zone) || "hand".equals(object.zone) || coreCombat && "battlefield".equals(object.zone)
+                        && (kind.getAsString().equals("activate") || kind.getAsString().equals("select_object")))))continue;
                 LegalAction action=new LegalAction();action.action_id=opaque();action.object_id=reference;action.kind="battlefield".equals(object.zone)?"activate":kind.getAsString();action.label=action.kind.equals("cast_spell")?"Cast spell":action.kind.equals("select_object")?"Select object":action.kind.equals("activate")?"Activate":"Play land";if(coreCombat)action.label+=": "+object.characteristics.name;action.priority_class="meaningful";
                 // Preserve engine classification; mixed/non-mana abilities must still hold priority.
                 JsonObject classes=raw.has("priority_classes") && raw.get("priority_classes").isJsonObject()?raw.getAsJsonObject("priority_classes"):null;

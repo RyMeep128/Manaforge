@@ -2231,3 +2231,18 @@ connection in `Play live Java opening`, native Swords to Plowshares resolution
 against an 8-power Panther Robot (including different owner/controller), and a
 projection regression with stale display totals. The native card check exercises
 the real effect and zone change; it is not a complete casting/targeting UI test.
+
+
+## Engine-offered exile actions
+
+Visible cards in exile can expose the engine's current cast, land-play, activation,
+or source-selection action through the existing action drawer and exile browser.
+The adapter does not require an exiled card's owner to be the viewer: native
+permissions can allow playing another player's card. A source-selection action
+also preserves the native chooser for cards with more than one available use.
+
+The native playable list remains the authority. Exile membership alone grants no
+action, concealed cards are not exposed, and a fresh offer removes actions when
+permission or timing changes. Existing opaque action tokens, decision binding,
+payment, and duplicate-submission checks remain in use. No UI expiry timer or
+card-name-specific permission rule is added.
