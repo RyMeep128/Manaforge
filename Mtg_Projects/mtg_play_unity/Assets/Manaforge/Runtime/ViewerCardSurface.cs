@@ -252,7 +252,7 @@ namespace Manaforge.Play
             }
             if(binding==null)unavailable="Artwork unavailable"+(string.IsNullOrEmpty(unavailable)?"":" / "+unavailable);
             if(card.Tapped==null)unavailable+=" / tap state unavailable";
-            view.UpdateValues(new CardDisplayValues(c?.Name,sameFace?printed.PrintedManaCost:null,c?.TypeLine,rules,pt,unavailable,binding?.Profile,loyalty:c?.Loyalty,defense:c?.Defense,hidePrintedStats:binding?.Profile?.MayHavePrintedStats??true,basePower:c?.BasePower,baseToughness:c?.BaseToughness));
+            view.UpdateValues(new CardDisplayValues(c?.Name,sameFace?printed.PrintedManaCost:null,c?.TypeLine,rules,pt,unavailable,binding?.Profile,loyalty:c?.Loyalty,defense:c?.Defense,hidePrintedStats:binding?.Profile?.MayHavePrintedStats??true,basePower:c?.BasePower,baseToughness:c?.BaseToughness,isAbility:card.Zone=="stack" && c?.TypeLine=="Ability"));
             if(card.Tapped==true)view.style.rotate=new Rotate(new Angle(90));
         }
         public static string DisplayRules(IReadOnlyList<string> current,IReadOnlyList<string> engineView)

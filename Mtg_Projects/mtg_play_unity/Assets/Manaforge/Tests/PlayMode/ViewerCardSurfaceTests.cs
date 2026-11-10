@@ -21,7 +21,7 @@ namespace Manaforge.Play.Tests
             public Scope(Action dispose){this.dispose=dispose;}
             public void Dispose(){dispose();}
         }
-        internal static ProjectedCardFrame Frame(string viewer="one",long revision=1,bool hidden=false,string name="Viewer text",bool empty=false,string session="fixture-0001",bool artwork=false,bool? faceDownState=false,int objectCount=1,bool missingRules=false,bool emptyAbilities=false,string typeLine=null,string basePower=null,string baseToughness=null,long? damage=null,string objectId=null,string presentationId=null)
+        internal static ProjectedCardFrame Frame(string viewer="one",long revision=1,bool hidden=false,string name="Viewer text",bool empty=false,string session="fixture-0001",bool artwork=false,bool? faceDownState=false,int objectCount=1,bool missingRules=false,bool emptyAbilities=false,string typeLine=null,string basePower=null,string baseToughness=null,long? damage=null,string objectId=null,string presentationId=null,string zone=null)
         {
             var corpus=JObject.Parse(File.ReadAllText(Path.Combine(Application.dataPath,"../../mtg_play/protocol/fixtures/wire-receive-v1.json")));
             var message=(JObject)corpus["positive"][0]["envelope"];var snapshot=message["body"]["snapshot"];
@@ -29,6 +29,7 @@ namespace Manaforge.Play.Tests
             snapshot["decision"]=JValue.CreateNull();snapshot["actions"]=new JArray();
             var card=snapshot["objects"][0];card["hidden"]=hidden;
             if(objectId!=null)card["object_id"]=objectId;
+            if(zone!=null)card["zone"]=zone;
             card["presentation_id"]=hidden?null:presentationId;
             if(!hidden && presentationId!=null)card["face_down"]=false;
             if(artwork && !hidden){card["card_identity"]=new JObject{["oracle_id"]="oracle",["printing_id"]="exact-printing",["deck_entry_id"]=JValue.CreateNull()};card["face_down"]=faceDownState.HasValue?new JValue(faceDownState.Value):JValue.CreateNull();}
@@ -115,6 +116,33 @@ namespace Manaforge.Play.Tests
             Assert.That(view.Artwork,Is.Null);Assert.That(surface.HasInspection,Is.False);Assert.That(surface.PresentedArtworkCount,Is.Zero);
             Assert.That(surface.TryPresent(ticket,Frame(revision:4,artwork:true,objectId:"route-4",presentationId:"visual-new")),Is.True);
             Assert.That(surface.CardsRoot.Q<CardView>(),Is.Not.SameAs(view));Assert.That(surface.CardsRoot.Q<CardView>().Artwork,Is.Null);
+        }
+        [UnityTest] public IEnumerator CommanderDashboardShowsBadgesAndDamageWithoutStatusParagraphs()
+        {
+            var corpus=JObject.Parse(File.ReadAllText(Path.Combine(Application.dataPath,"../../mtg_play/protocol/fixtures/wire-receive-v1.json")));
+            var message=(JObject)corpus["positive"][0]["envelope"].DeepClone();var snapshot=message["body"]["snapshot"];
+            snapshot["session_id"]="fixture-0001";snapshot["viewer_id"]="one";snapshot["revision"]=1;snapshot["decision"]=null;snapshot["actions"]=new JArray();snapshot["objects"][0]["commander_id"]="commander-one";
+            snapshot["commanders"]=new JArray(new JObject{["commander_id"]="commander-one",["owner_id"]="one",["name"]="A very long commander name that must not cover the table",["card_identity"]=null,["command_zone_plays"]=2,["additional_cast_cost"]="{4}",["damage_dealt"]=new JArray(new JArray("one",0),new JArray("two",7))});
+            var ticket=surface.BeginViewer("fixture-0001","one");Assert.That(surface.TryPresent(ticket,ViewerCardProjection.ParseSnapshot(message.ToString(),"fixture-0001","one",0,true)),Is.True);
+            var dashboard=new CommanderDashboard();host.GetComponent<UIDocument>().rootVisualElement.Add(dashboard);dashboard.style.width=232;dashboard.style.height=140;
+            try{dashboard.Present(ViewerDecisionProjection.ParseSnapshot(message.ToString(),"fixture-0001","one",0,true),surface);yield return null;
+                Assert.That(dashboard.Q<ManaCostView>("commander-tax").Cost,Is.EqualTo("{4}"));Assert.That(dashboard.Query<ProgressBar>().ToList().Count,Is.EqualTo(2));
+                Assert.That(dashboard.Query<Label>().ToList().Exists(label=>label.text.Contains("command-zone cost")),Is.False);
+                dashboard.ClearPresentation();Assert.That(dashboard.Q<CardView>(),Is.Null);Assert.That(dashboard.style.display.value,Is.EqualTo(DisplayStyle.None));
+            }finally{dashboard.Dispose();}
+        }
+        [UnityTest] public IEnumerator StackAbilityUsesSourceArtworkAndRoundedMockInBothViews()
+        {
+            var ticket=surface.BeginViewer("fixture-0001","one",new ViewerArtworkScope());yield return null;yield return null;yield return null;
+            Assert.That(surface.TryPresent(ticket,Frame(artwork:true,typeLine:"Ability",zone:"stack")),Is.True);
+            string id=surface.PresentedObjectIds()[0];var request=surface.RequestArtwork(ticket,id);
+            var catalog=new CatalogArtworkFace("oracle","exact-printing","front","normal",1,true,"Creature");
+            Assert.That(surface.TryApplyArtwork(ticket,PreparedCardArtwork.Prepare(request,catalog,2,2,new byte[16])),Is.True);
+            var view=surface.CardsRoot.Q<CardView>();Assert.That(view.Artwork,Is.Not.Null);
+            Assert.That(view.style.borderBottomLeftRadius.value.value,Is.GreaterThan(80));
+            Assert.That(surface.Inspect(ticket,id),Is.True);Assert.That(surface.InspectionView.Artwork,Is.SameAs(view.Artwork));
+            Assert.That(surface.InspectionView.style.borderBottomLeftRadius.value.value,Is.GreaterThan(100));
+            Assert.That(view.Q<Label>("rules").text,Does.Contain("Not complete Oracle text"));
         }
         [UnityTest] public IEnumerator LiveStatsUseProjectedBaseAndMarkedDamageInBothViews()
         {

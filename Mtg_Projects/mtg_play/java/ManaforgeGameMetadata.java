@@ -160,6 +160,7 @@ public final class ManaforgeGameMetadata {
                 for (JsonElement value : command.getAsJsonArray("object_ids")) requested.add(UUID.fromString(value.getAsString()));
                 for (JsonElement value : command.getAsJsonArray("identified_ids")) requestedIdentified.add(UUID.fromString(value.getAsString()));
                 if (!visible.containsAll(requested)) return status("retry");
+                Set<UUID> publicArtworkSources=new HashSet<>(identified);
                 Set<UUID> permittedTargets=new HashSet<>(visible);for(PlayerView seat:permitted.getPlayers())permittedTargets.add(seat.getPlayerId());visible.retainAll(requested); identified.retainAll(requestedIdentified);
                 JsonObject objects = new JsonObject();
                 for (UUID id : visible) {
@@ -169,12 +170,19 @@ public final class ManaforgeGameMetadata {
                     mage.game.permanent.Permanent permanent = game.getPermanent(id);
                     mage.game.stack.StackObject stacked = game.getStack().getStackObject(id);
                     // A spell has its own stack ID; its physical card retains the source ID.
-                    if (source == null && stacked instanceof mage.game.stack.Spell)
+                    if (source == null && stacked != null)
                         source = game.getCard(stacked.getSourceId());
                     UUID owner = source == null ? null : source.getOwnerId();
                     UUID control = permanent != null ? permanent.getControllerId() : stacked == null ? null : stacked.getControllerId();
                     if (stacked != null && stacked.getSourceId() != null) metadata.addProperty("source", stacked.getSourceId().toString());
                     if (identified.contains(id)) {
+                        // An ability borrows artwork only from a source whose identity
+                        // is independently visible to this viewer in the same context.
+                        if(stacked instanceof mage.game.stack.StackAbility && source!=null
+                                && publicArtworkSources.contains(source.getId())){
+                            metadata.addProperty("ability_art_set",source.getExpansionSetCode());
+                            metadata.addProperty("ability_art_number",source.getCardNumber());
+                        }
                         if(stacked instanceof mage.game.stack.Spell && source!=null) {
                             metadata.addProperty("source_incarnation",state.getZoneChangeCounter(stacked.getSourceId()));
                             JsonArray spellAbilities=new JsonArray();
@@ -196,7 +204,7 @@ public final class ManaforgeGameMetadata {
                                 && copied.getZoneChangeCounter(game) == state.getZoneChangeCounter(copied.getId()))
                             metadata.addProperty("copy_source", copied.getId().toString());
                     }
-                    if (source != null && identified.contains(id)) {
+                    if (source != null && identified.contains(id) && (stacked==null || stacked instanceof mage.game.stack.Spell || publicArtworkSources.contains(source.getId()))) {
                         mage.cards.Card original = source.getMainCard();
                         // Private physical-card correlation across a native double-face zone transition.
                         metadata.addProperty("main_card",original.getId().toString());metadata.addProperty("main_card_incarnation",state.getZoneChangeCounter(original.getId()));

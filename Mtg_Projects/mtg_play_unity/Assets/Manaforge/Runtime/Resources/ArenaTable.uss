@@ -17,7 +17,7 @@
 #table-choices.opening-choices .mf-action { width: 190px; margin-left: 20px; margin-right: 20px; flex-shrink: 0; }
 #table-choices.opening-choices #decision-prompt { -unity-text-align: middle-center; }
 #table-zones { position: absolute; left: 24px; bottom: 205px; width: 110px; white-space: normal; }
-#game-commanders { position: absolute; left: 24px; top: 160px; max-width: 130px; white-space: normal; }
+#game-commanders { position: absolute; left: 16px; top: 260px; width: 232px; overflow: hidden; }
 #live-markers { position: absolute; bottom: 20px; left: 3px; right: 3px; white-space: normal; -unity-text-align: middle-center; }
 .table-inspection { position: absolute; left: 25px; top: 95px; }
 #close-inspection { position: absolute; left: 25px; top: 60px; width: 290px; height: 30px; }
@@ -44,7 +44,7 @@
 #arena-table.browsing-public-zone #board-input-hint, #arena-table.browsing-public-zone #battlefield-links { visibility: hidden; }
 #arena-table .zone-pile { position: absolute; overflow: visible; }
 #public-zone-drawer { top: 16%; bottom: 21%; }
-#game-commanders { top: 360px; }
+
 #arena-table.opening-state .zone-pile { visibility: hidden; }
 #table-choices.library-ordering { left: 15%; right: 15%; top: 18%; bottom: auto; width: auto; max-height: 65%; }
 #table-choices.library-ordering #viewer-decision-panel { padding: 18px; }

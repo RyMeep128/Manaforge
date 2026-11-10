@@ -288,7 +288,7 @@ public final class ManaforgeBridge implements MageClient {
             item.addProperty("base_toughness",card.getOriginalToughness()==null?null:card.getOriginalToughness().toString());
             item.addProperty("power", card.getPower());
             item.addProperty("toughness", card.getToughness());
-            item.addProperty("type", card.getTypeText());
+            item.addProperty("type", card.isAbility()?"Ability":card.getTypeText());
             item.addProperty("color", card.getColorText());
             // Rules are the engine's view text, not a substitute for full dynamic abilities.
             item.add("view_rules", JSON.toJsonTree(card.getRules()));

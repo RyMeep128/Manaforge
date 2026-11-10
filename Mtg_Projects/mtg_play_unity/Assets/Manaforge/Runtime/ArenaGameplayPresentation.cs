@@ -14,7 +14,7 @@ namespace Manaforge.Play
         private CardView hoveredCard,focusedCard,emphasizedCard;private string hoveredId,focusedId,emphasizedId;
         private readonly System.Collections.Generic.Dictionary<string,int> rowPages=new System.Collections.Generic.Dictionary<string,int>();
         private readonly System.Collections.Generic.List<string> handOrder=new System.Collections.Generic.List<string>();
-        private readonly Label status,result,zones,commanders;
+        private readonly Label status,result,zones;private readonly CommanderDashboard commanders;
         private readonly PlayerPanel localPlayer,opponent;
         private bool unsupportedTopology,restoringFocus;
         private readonly GameplayOverlay inspector;
@@ -46,7 +46,7 @@ namespace Manaforge.Play
             zoneChoices=new VisualElement{name="public-zone-choices"};zoneChoices.style.display=DisplayStyle.None;root.Add(zoneChoices);
             zoneDrawer=new ZoneBrowser(Surface.CardBacks);root.Add(zoneDrawer);zoneDrawer.BrowseRequested+=BrowseZone;zoneDrawer.Closed+=ClosePublicZone;
             stackTitle=Label("stack-title","");stackTitle.pickingMode=PickingMode.Ignore;
-            commanders=Label("game-commanders","");
+            commanders=new CommanderDashboard();root.Add(commanders);
             choices=new ScrollView(ScrollViewMode.Vertical){name="table-choices"};root.Add(choices);
             var motion=new Toggle("Reduced motion"){name="table-motion",value=false};motion.RegisterValueChangedCallback(ev=>{root.EnableInClassList("reduced-motion",ev.newValue);animations?.Advance();});root.Add(motion);
             animations=new GameplayAnimationCoordinator(root,Surface,MotionZoneAnchor,MotionPlayerAnchor,()=>motion.value);
@@ -89,7 +89,7 @@ namespace Manaforge.Play
         }
         private void ClearZoneResources()
         {
-            ClearCardFocus();inspecting=false;inspector?.Hide(false);CloseInspection();openZone=openZoneOwner=null;localPlayer.ClearBinding();opponent.ClearBinding();opponentHand.Clear();animations?.Clear();links.Set(Array.Empty<BattlefieldLinks.Link>());
+            commanders?.ClearPresentation();ClearCardFocus();inspecting=false;inspector?.Hide(false);CloseInspection();openZone=openZoneOwner=null;localPlayer.ClearBinding();opponent.ClearBinding();opponentHand.Clear();animations?.Clear();links.Set(Array.Empty<BattlefieldLinks.Link>());
             zoneDrawer?.ClearBinding();
             root.RemoveFromClassList("browsing-public-zone");frame=null;rowPages.Clear();handOrder.Clear();
             foreach(var pile in new[]{localLibrary,opponentLibrary,localGraveyard,opponentGraveyard,localExile,opponentExile}){
@@ -125,7 +125,7 @@ namespace Manaforge.Play
             if(frame.Turn==0 || frame.Decision?.Family=="mulligan" || (frame.Decision?.Prompt??"").StartsWith("Mulligan",StringComparison.OrdinalIgnoreCase))status.text="Opening hand";
             if(frame.SessionNotice!=null)status.text+="\nA permission request could not be displayed. Code: "+frame.SessionNotice;
             result.text=frame.Result==null?"":frame.Result=="win"?"Victory":frame.Result=="loss"?"Defeat":frame.Result=="draw"?"Draw":"Game complete\n"+frame.Result;result.style.display=frame.Result==null?DisplayStyle.None:DisplayStyle.Flex;if(frame.Result!=null)result.BringToFront();
-            commanders.text=CommanderPresentationText.Format(frame);
+            commanders.Present(frame,Surface,InspectCard);
             if(Decisions!=null)GameplayTheme.Decision(Decisions,frame);
             OpenOfferedZone();Layout();animations.Observe(frame,Surface.TakeAnimations());
         }
@@ -295,6 +295,7 @@ namespace Manaforge.Play
             }
             string opponentId=OpponentId();float localPileTop=Mathf.Max(350,height-242);
             UpdatePile(opponentLibrary,"library",opponentId,22,150);UpdatePile(opponentGraveyard,"graveyard",opponentId,98,150);UpdatePile(opponentExile,"exile",opponentId,174,150);
+            commanders.style.top=260;commanders.style.height=Mathf.Max(60,localPileTop-272);commanders.Present(frame,Surface,InspectCard);
             UpdatePile(localLibrary,"library",viewer,22,localPileTop);UpdatePile(localGraveyard,"graveyard",viewer,98,localPileTop);UpdatePile(localExile,"exile",viewer,174,localPileTop);
             root.EnableInClassList("browsing-public-zone",openZone!=null);
             zoneDrawer.style.display=openZone==null?DisplayStyle.None:DisplayStyle.Flex;
@@ -324,6 +325,6 @@ namespace Manaforge.Play
             boardInput?.Refresh();RefreshPlayers();targeting?.Observe(frame);links.schedule.Execute(UpdateLinks);
         }
         public void Dispose(){if(disposed)return;ClearZoneResources();disposed=true;targeting?.Dispose();boardInput?.Dispose();animations.Dispose();inspector.Dispose();priorityControls?.Dispose();Decisions?.Dispose();Surface.Clearing-=ClearZoneResources;Surface.Rebinding-=ClearPileArt;Surface.Dispose();
-            localPlayer.Dispose();opponent.Dispose();foreach(var pile in new[]{localLibrary,opponentLibrary,localGraveyard,opponentGraveyard,localExile,opponentExile})pile.Dispose();zoneDrawer.Dispose();wired.Clear();root.RemoveFromHierarchy();}
+            commanders.Dispose();localPlayer.Dispose();opponent.Dispose();foreach(var pile in new[]{localLibrary,opponentLibrary,localGraveyard,opponentGraveyard,localExile,opponentExile})pile.Dispose();zoneDrawer.Dispose();wired.Clear();root.RemoveFromHierarchy();}
     }
 }
