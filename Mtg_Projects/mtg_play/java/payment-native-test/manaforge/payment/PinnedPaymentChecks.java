@@ -311,7 +311,10 @@ public final class PinnedPaymentChecks {
             state.getDelayed().add(new mage.abilities.common.delayed.AtTheBeginOfNextEndStepDelayedTriggeredAbility(new mage.abilities.effects.mana.BasicManaEffect(Mana.RedMana(1))));
             check("VERIFIED_ORDINARY_EQUIVALENT".equals(payer.ordinaryPayment(game,payer.getId(),state.getApplyEffectsCounter(),ids).get("safety").getAsString()));
             state.getTriggers().put("mana-sensitive",new ManaTapTrigger());
-            check("REQUIRES_MANUAL".equals(payer.ordinaryPayment(game,payer.getId(),state.getApplyEffectsCounter(),ids).get("reason").getAsString()));state.getTriggers().clear();
+            com.google.gson.JsonObject hazardous=payer.ordinaryPayment(game,payer.getId(),state.getApplyEffectsCounter(),ids);
+            check("MANA_TRIGGER_EVENT".equals(hazardous.get("reason").getAsString()));
+            check("UNKNOWN".equals(hazardous.get("safety").getAsString()) && !hazardous.has("steps"));
+            check(!tapped[0] && !tapped[1] && !unpaid.isPaid());state.getTriggers().clear();
             tapped[1]=true;check("INSUFFICIENT_OR_UNSUPPORTED_SOURCES".equals(payer.ordinaryPayment(game,payer.getId(),state.getApplyEffectsCounter(),ids).get("reason").getAsString()));
         }}finally{payment.set(payer,null);open.set(payer,false);payer.setPayManaMode(false);}
     }
