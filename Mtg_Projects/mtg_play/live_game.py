@@ -222,6 +222,9 @@ class LiveGameLaunch:
                     error = resolved / "game-error.json"
                     if not error.is_file():
                         error = resolved / "game-unsupported.json"
+                    if not error.is_file():
+                        # Successful normal games also carry engine payment diagnostics.
+                        error = resolved / "game-result.json"
                     if (
                         error.is_file()
                         and not error.is_symlink()

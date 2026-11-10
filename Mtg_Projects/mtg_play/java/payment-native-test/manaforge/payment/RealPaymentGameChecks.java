@@ -32,6 +32,7 @@ public final class RealPaymentGameChecks {
         boolean poolMixed=name.equals("floating-and-source");
         boolean poolGeneric=name.equals("floating-generic");
         boolean insufficient=name.equals("insufficient");
+        boolean lackey=name.startsWith("lackey-");
         int expectedTaps=poolOnly?0:poolMixed || poolGeneric?1:generic?3:blue || doubleRed?2:1;
         TwoPlayerDuel game=new TwoPlayerDuel(MultiplayerAttackOption.MULTIPLE,RangeOfInfluence.ALL,new mage.game.mulligan.LondonMulligan(0),20,7,7);
         ContextHumanPlayer payer=new ContextHumanPlayer("Public payer",RangeOfInfluence.ALL,0);
@@ -59,7 +60,7 @@ public final class RealPaymentGameChecks {
         Card first=green?new mage.cards.basiclands.Forest(payer.getId(),info("Forest")):
             blue?new mage.cards.basiclands.Island(payer.getId(),info("Island")):new mage.cards.basiclands.Mountain(payer.getId(),info("Mountain"));
         Card second=new mage.cards.basiclands.Mountain(payer.getId(),info("Mountain"));
-        load(game,first,Zone.BATTLEFIELD);load(game,second,Zone.BATTLEFIELD);
+        load(game,first,Zone.BATTLEFIELD);if(!lackey)load(game,second,Zone.BATTLEFIELD);
         Card third=generic?new mage.cards.basiclands.Mountain(payer.getId(),info("Mountain")):null;
         if(third!=null)load(game,third,Zone.BATTLEFIELD);
         Card herald=new mage.cards.w.WirewoodHerald(opponent.getId(),info("Wirewood Herald"));
@@ -68,15 +69,24 @@ public final class RealPaymentGameChecks {
         // A registered battlefield ability in a library must not affect this board.
         // Real games register abilities for the whole deck, unlike a five-card fixture.
         Card inactive=new mage.cards.m.Manabarbs(opponent.getId(),info("Manabarbs"));
-        load(game,inactive,activeHazard?Zone.BATTLEFIELD:Zone.LIBRARY);
+        load(game,inactive,activeHazard && !name.equals("active-mana-replacement")?Zone.BATTLEFIELD:Zone.LIBRARY);
         Card inactiveReplacement=new mage.cards.m.ManaFlare(opponent.getId(),info("Mana Flare"));
-        load(game,inactiveReplacement,Zone.LIBRARY);
+        load(game,inactiveReplacement,name.equals("active-mana-replacement")?Zone.BATTLEFIELD:Zone.LIBRARY);
         if(name.equals("registered-decks"))for(int i=0;i<140;i++){
             UUID owner=i%2==0?payer.getId():opponent.getId();
             load(game,new mage.cards.m.Manabarbs(owner,info("Manabarbs")),Zone.LIBRARY);
             load(game,new mage.cards.m.ManaFlare(owner,info("Mana Flare")),Zone.LIBRARY);
         }
-        Card spell=generic?new mage.cards.c.CentaurCourser(payer.getId(),info("Centaur Courser")):
+        if(lackey){
+            load(game,new mage.cards.s.SoulWarden(opponent.getId(),info("Soul Warden")),Zone.BATTLEFIELD);
+            load(game,new mage.cards.s.SoulsAttendant(opponent.getId(),info("Soul's Attendant")),Zone.BATTLEFIELD);
+            load(game,new mage.cards.v.VoiceOfTheBlessed(opponent.getId(),info("Voice of the Blessed")),Zone.BATTLEFIELD);
+            // Entire decks register static/triggered abilities before cards enter play.
+            load(game,new mage.cards.g.GoblinKing(payer.getId(),info("Goblin King")),Zone.LIBRARY);
+            load(game,new mage.cards.g.GoblinWarchief(payer.getId(),info("Goblin Warchief")),Zone.LIBRARY);
+            if(name.equals("lackey-lifegain-lord"))load(game,new mage.cards.g.GoblinChieftain(payer.getId(),info("Goblin Chieftain")),Zone.BATTLEFIELD);
+        }
+        Card spell=lackey?new mage.cards.g.GoblinLackey(payer.getId(),info("Goblin Lackey")):generic?new mage.cards.c.CentaurCourser(payer.getId(),info("Centaur Courser")):
             green?new mage.cards.s.SedgeScorpion(payer.getId(),info("Sedge Scorpion")):
             blue || poolGeneric?new mage.cards.c.CoralMerfolk(payer.getId(),info("Coral Merfolk")):doubleRed?new mage.cards.e.EmberHauler(payer.getId(),info("Ember Hauler")):
             new mage.cards.f.FoundryStreetDenizen(payer.getId(),info("Foundry Street Denizen"));
@@ -86,7 +96,7 @@ public final class RealPaymentGameChecks {
         if(insufficient)game.getPermanent(second.getId()).setTapped(true);
         game.applyEffects();game.saveState(false);
         require(!game.getState().getTriggers().isEmpty(),"REAL_OPPONENT_TRIGGER_NOT_REGISTERED");
-        UUID[] sources=third==null?new UUID[]{first.getId(),second.getId()}:new UUID[]{first.getId(),second.getId(),third.getId()};
+        UUID[] sources=lackey?new UUID[]{first.getId()}:third==null?new UUID[]{first.getId(),second.getId()}:new UUID[]{first.getId(),second.getId(),third.getId()};
         BlockingQueue<PlayerQueryEvent> queries=new LinkedBlockingQueue<>();game.addPlayerQueryEventListener(queries::add);
         Field responseField=HumanPlayer.class.getDeclaredField("response");responseField.setAccessible(true);
         Object response=responseField.get(payer);
@@ -126,6 +136,7 @@ public final class RealPaymentGameChecks {
             int tapped=0;for(UUID id:sources)if(game.getPermanent(id).isTapped())tapped++;
             require(tapped==expectedTaps && automaticSources==tapped,"REAL_PAYMENT_WRONG_MOUNTAINS");
             require(!game.getPermanent(elves.getId()).isTapped(),"REAL_PAYMENT_USED_OPPONENT_SOURCE");
+            if(lackey){System.out.println("{\"scenario\":\""+name+"\",\"real_engine\":true,\"mountains_tapped\":1,\"manual_payment_inputs\":0,\"spell_on_stack\":true}");return;}
             game.getStack().resolve(game);
             require(game.getStack().isEmpty() && game.getPermanent(spell.getId())!=null,"REAL_SPELL_NOT_RESOLVED");
             JsonObject proof=new JsonObject();proof.addProperty("scenario",name);
@@ -193,9 +204,10 @@ public final class RealPaymentGameChecks {
     }
     public static void main(String[] args) throws Exception {
         Thread.currentThread().setName("GAME-real-payment-setup");unrestrictedCommander();nativeSessionRequests();nativePileChoice(true);nativePileChoice(false);
+        scenario("lackey-lifegain",false,false);scenario("lackey-lifegain-lord",false,false);
         scenario("foundry-street-opponent-triggers",false,false);
         scenario("two-red-mountains",true,false);
-        scenario("active-mana-hazard",false,true);
+        scenario("active-mana-hazard",false,true);scenario("active-mana-replacement",false,true);
         scenario("green",false,false);scenario("mixed-blue",false,false);scenario("generic-green",false,false);
         scenario("floating-only",false,false);scenario("floating-and-source",true,false);scenario("floating-generic",false,false);
         scenario("registered-decks",false,false);

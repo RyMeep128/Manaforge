@@ -59,8 +59,21 @@ public final class NativePaymentHazards {
             if(effect instanceof mage.abilities.effects.ReplacementEffect){
                 for(mage.game.events.GameEvent.EventType type:PAYMENT_EVENTS)
                     if(((mage.abilities.effects.ReplacementEffect)effect).checksEventType(mage.game.events.GameEvent.getEvent(type,paying.getSourceId(),paying,paying.getControllerId()),game))return true;
-            }else if(effect.getLayer()!=mage.constants.Layer.PTChangingEffects_7 && effect.getLayer()!=mage.constants.Layer.ColorChangingEffects_5)return true;
+            }else if(effect instanceof mage.abilities.effects.ContinuousRuleModifyingEffect){
+                for(mage.game.events.GameEvent.EventType type:PAYMENT_EVENTS)
+                    if(((mage.abilities.effects.ContinuousRuleModifyingEffect)effect).checksEventType(mage.game.events.GameEvent.getEvent(type,paying.getSourceId(),paying,paying.getControllerId()),game))return true;
+            }else if(effect.getEffectType()!=mage.constants.EffectType.CONTINUOUS || !derivedCharacteristics(effect))return true;
         }return count!=effects.getTotalEffectsCount();
+    }
+    // These layers have already been applied to the native objects. Inspect the
+    // resulting controller, legal mana abilities, costs and productions instead
+    // of treating lifelink, creature types or lord abilities as payment events.
+    private static boolean derivedCharacteristics(mage.abilities.effects.ContinuousEffect effect){
+        mage.constants.Layer layer=effect.getLayer();
+        return layer==mage.constants.Layer.CopyEffects_1 || layer==mage.constants.Layer.ControlChangingEffects_2
+            || layer==mage.constants.Layer.TextChangingEffects_3 || layer==mage.constants.Layer.TypeChangingEffects_4
+            || layer==mage.constants.Layer.ColorChangingEffects_5 || layer==mage.constants.Layer.AbilityAddingRemovingEffects_6
+            || layer==mage.constants.Layer.PTChangingEffects_7;
     }
     private static Result inspect(Game game,Ability payingAbility,boolean ordinaryTap) {
         if(game==null || payingAbility==null)return Result.UNKNOWN;
