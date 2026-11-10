@@ -37,16 +37,17 @@ public final class NativePaymentHazards {
             && game.getPermanent(ability.getSourceId())==null && game.getCard(ability.getSourceId())!=null;
     }
     private static boolean paymentTriggers(Iterable<? extends mage.abilities.TriggeredAbility> triggers,Game game,Ability paying,boolean registered){
-        int count=0;for(mage.abilities.TriggeredAbility trigger:triggers){
-            if(++count>128 || trigger==null)return true;
+        int scanned=0,active=0;for(mage.abilities.TriggeredAbility trigger:triggers){
+            if(++scanned>4096 || trigger==null)return true;
             if(registered && inactiveBattlefieldSource(trigger,game))continue;
+            if(++active>128)return true;
             for(mage.game.events.GameEvent.EventType type:PAYMENT_EVENTS)
                 if(trigger.checkEventType(mage.game.events.GameEvent.getEvent(type,paying.getSourceId(),paying,paying.getControllerId()),game))return true;
         }return false;
     }
     private static boolean paymentEffects(mage.abilities.effects.ContinuousEffects effects,Game game,Ability paying){
-        int count=0;for(mage.abilities.effects.ContinuousEffectsList<?> list:effects.allEffectsLists)for(mage.abilities.effects.ContinuousEffect effect:list){
-            if(++count>128 || effect==null)return true;
+        int count=0,active=0;for(mage.abilities.effects.ContinuousEffectsList<?> list:effects.allEffectsLists)for(mage.abilities.effects.ContinuousEffect effect:list){
+            if(++count>4096 || effect==null)return true;
             java.util.Set<Ability> origins=list.getAbility(effect.getId());
             if(origins!=null && !origins.isEmpty()){
                 boolean inactive=true;
@@ -54,6 +55,7 @@ public final class NativePaymentHazards {
                     || !inactiveBattlefieldSource(origin,game)){inactive=false;break;}
                 if(inactive)continue;
             }
+            if(++active>128)return true;
             if(effect instanceof mage.abilities.effects.ReplacementEffect){
                 for(mage.game.events.GameEvent.EventType type:PAYMENT_EVENTS)
                     if(((mage.abilities.effects.ReplacementEffect)effect).checksEventType(mage.game.events.GameEvent.getEvent(type,paying.getSourceId(),paying,paying.getControllerId()),game))return true;

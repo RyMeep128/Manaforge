@@ -71,6 +71,11 @@ public final class RealPaymentGameChecks {
         load(game,inactive,activeHazard?Zone.BATTLEFIELD:Zone.LIBRARY);
         Card inactiveReplacement=new mage.cards.m.ManaFlare(opponent.getId(),info("Mana Flare"));
         load(game,inactiveReplacement,Zone.LIBRARY);
+        if(name.equals("registered-decks"))for(int i=0;i<140;i++){
+            UUID owner=i%2==0?payer.getId():opponent.getId();
+            load(game,new mage.cards.m.Manabarbs(owner,info("Manabarbs")),Zone.LIBRARY);
+            load(game,new mage.cards.m.ManaFlare(owner,info("Mana Flare")),Zone.LIBRARY);
+        }
         Card spell=generic?new mage.cards.c.CentaurCourser(payer.getId(),info("Centaur Courser")):
             green?new mage.cards.s.SedgeScorpion(payer.getId(),info("Sedge Scorpion")):
             blue || poolGeneric?new mage.cards.c.CoralMerfolk(payer.getId(),info("Coral Merfolk")):doubleRed?new mage.cards.e.EmberHauler(payer.getId(),info("Ember Hauler")):
@@ -135,6 +140,7 @@ public final class RealPaymentGameChecks {
         scenario("active-mana-hazard",false,true);
         scenario("green",false,false);scenario("mixed-blue",false,false);scenario("generic-green",false,false);
         scenario("floating-only",false,false);scenario("floating-and-source",true,false);scenario("floating-generic",false,false);
+        scenario("registered-decks",false,false);
         scenario("insufficient",true,false);
     }
 }
