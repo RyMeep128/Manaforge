@@ -150,7 +150,7 @@ namespace Manaforge.Play.Tests
             // Current 4/5, original 2/3, four marked damage: 4/1.
             Assert.That(surface.TryPresent(ticket,Frame(typeLine:"Creature",basePower:"2",baseToughness:"3",damage:4)),Is.True);
             var id=surface.PresentedObjectIds()[0];Assert.That(surface.Inspect(ticket,id),Is.True);
-            string expected="<color=#56D879>4</color>/<color=#FFA34D>1</color>";
+            string expected="<color=#166534>4</color>/<color=#FFA34D>1</color>";
             Assert.That(surface.CardsRoot.Q<Label>("stats").text,Is.EqualTo(expected));
             Assert.That(surface.InspectionView.Q<Label>("stats").text,Is.EqualTo(expected));
             Assert.That(surface.TryPresent(ticket,Frame(revision:2,typeLine:"Creature",basePower:"4",baseToughness:"5",damage:0)),Is.True);

@@ -27,7 +27,7 @@ namespace Manaforge.Play.Tests
         [Test] public void StatsColorIndependentlyAndResetAtBase()
         {
             view.UpdateValues(new CardDisplayValues("Creature",null,"Creature",null,"4/1",null,basePower:"2",baseToughness:"2"));
-            Assert.That(view.Q<Label>("stats").text,Is.EqualTo("<color=#56D879>4</color>/<color=#FFA34D>1</color>"));
+            Assert.That(view.Q<Label>("stats").text,Is.EqualTo("<color=#166534>4</color>/<color=#FFA34D>1</color>"));
             view.UpdateValues(new CardDisplayValues("Creature",null,"Creature",null,"2/2",null,basePower:"2",baseToughness:"2"));
             Assert.That(view.Q<Label>("stats").text,Is.EqualTo("2/2"));
         }
@@ -184,6 +184,19 @@ namespace Manaforge.Play.Tests
         [TestCase("Instant")] [TestCase("Sorcery")]
         public void NonPermanentSpellsDoNotReceiveBattlefieldProfiles(string typeLine)
         {Assert.That(CardCompactProfile.FromMetadata("normal",typeLine),Is.Null);}
+        [Test] public void OrdinaryCounterValuesNeverUseThePlaneswalkerBadge()
+        {
+            var view=new CardView();
+            try{
+                view.UpdateValues(new CardDisplayValues("Walker",null,"Legendary Planeswalker — Test",null,null,null,loyalty:"5"));
+                Assert.That(view.Q<LoyaltyCounterView>().Value,Is.EqualTo("5"));
+                foreach(string type in new[]{"Creature — Elf","Artifact","Enchantment",null}){
+                    view.UpdateValues(new CardDisplayValues("Counter bearer",null,type,null,"3/3",null,loyalty:"2"));
+                    Assert.That(view.Q<LoyaltyCounterView>().Value,Is.Empty);
+                    Assert.That(view.Q<LoyaltyCounterView>().style.display.value,Is.EqualTo(DisplayStyle.None));
+                }
+            }finally{view.Dispose();}
+        }
         [Test] public void LoyaltyBadgeUpdatesWithoutInventingAMissingValue()
         {
             view.Bind(Identity(false),texture,new Rect(0,0,1,1));var profile=CardCompactProfile.FromMetadata("normal","Planeswalker");

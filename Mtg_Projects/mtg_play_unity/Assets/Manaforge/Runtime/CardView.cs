@@ -164,7 +164,7 @@ namespace Manaforge.Play
             authenticOnly=Identity?.LayoutProfileId=="authentic-image-v1" || !string.IsNullOrEmpty(compactProfile?.Kind);
             Set(rules, values.RulesText); rulesSymbols.SetText(values.RulesText);
             stats.enableRichText=values.PowerToughness!=null && System.Text.RegularExpressions.Regex.IsMatch(values.PowerToughness,@"^[0-9+*âˆ’\-/]+$",System.Text.RegularExpressions.RegexOptions.CultureInvariant);
-            Set(stats,stats.enableRichText?ColoredStats(values.PowerToughness,values.BasePower,values.BaseToughness):values.PowerToughness??values.Defense);loyaltyCounter.SetValue(values.Loyalty);
+            Set(stats,stats.enableRichText?ColoredStats(values.PowerToughness,values.BasePower,values.BaseToughness):values.PowerToughness??values.Defense);loyaltyCounter.SetValue(Array.IndexOf((values.TypeLine??"").Split('—')[0].Split(' '),"Planeswalker")>=0?values.Loyalty:null);
             Set(status, values.Status);Set(miniKind,compactProfile?.Kind);Set(collector,values.CollectorText);rulesEmphasis=values.RulesStyle; Layout();
         }
 
@@ -179,7 +179,7 @@ namespace Manaforge.Play
             string safe=EscapeStat(value);
             if(!long.TryParse(value,System.Globalization.NumberStyles.Integer,System.Globalization.CultureInfo.InvariantCulture,out var current)
                 || !long.TryParse(baseline,System.Globalization.NumberStyles.Integer,System.Globalization.CultureInfo.InvariantCulture,out var original) || current==original)return safe;
-            return "<color="+(current>original?"#56D879":"#FFA34D")+">"+safe+"</color>";
+            return "<color="+(current>original?"#166534":"#FFA34D")+">"+safe+"</color>";
         }
 
         public void InspectRoomDoor(int index)
