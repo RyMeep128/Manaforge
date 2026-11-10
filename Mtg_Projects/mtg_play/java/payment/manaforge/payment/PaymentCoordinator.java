@@ -7,7 +7,8 @@ import java.util.Objects;
 
 /** Trusted Java engine-owner policy. Not a rules solver, wire command or client receipt authority.
  * All calls, including manual admission and observations, belong on ONE serialized engine owner.
- * No production native EnginePort exists yet. A view's object list is NOT a safe payment assessment. */
+ * NativeAutomaticPayment supplies the production port after server-side native verification.
+ * A viewer object list alone is never a payment assessment. */
 public final class PaymentCoordinator implements AutoCloseable {
     public enum Mode { AUTO, MANUAL, FULL_CONTROL }
     public enum State { IDLE, MANUAL_REQUIRED, SUBMITTED, PROGRESSED, COMPLETED, REJECTED, UNCERTAIN, STOPPED }

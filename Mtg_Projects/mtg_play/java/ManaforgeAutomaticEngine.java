@@ -24,11 +24,11 @@ public final class ManaforgeAutomaticEngine implements ManaforgeGameplaySession.
             JsonObject command=payment.prepare(before,prompt,guard);if(command==null){
                 if("GAME_PLAY_MANA".equals(prompt.get("kind").getAsString()))next.state.addProperty("payment_reason",payment.reason());break;
             }
-            if(!payment.revalidate(metadata(before))){payment.uncertain();throw new IOException("AUTO_PAYMENT_CHANGED");}
+            if(!payment.revalidate(metadata(before))){payment.rejectedBeforeSubmission();ManaforgeGameplaySession.Advance fresh=nativeEngine.refresh();if(fresh==null){next.state.addProperty("payment_reason","STALE_CONTEXT");return next;}next=fresh;continue;}
             JsonObject accepted;
             try{accepted=submit(command);next=nativeEngine.advance(prompt.get("decision_id").getAsLong());}
             catch(Exception failure){payment.uncertain();throw failure;}
-            if(next.terminal!=null){payment.uncertain();return next;}
+            if(next.terminal!=null){payment.observedTerminal(command,accepted,nativeEngine.terminalMetadata(before));return next;}
             if(next.prompt==null){payment.uncertain();throw new IOException("AUTO_PAYMENT_INTERRUPTED");}
             List<String> ids=new ArrayList<>();if("object".equals(command.get("kind").getAsString()))ids.add(command.get("value").getAsString());
             for(JsonElement stacked:next.state.getAsJsonArray("stack"))ids.add(stacked.getAsJsonObject().get("id").getAsString());

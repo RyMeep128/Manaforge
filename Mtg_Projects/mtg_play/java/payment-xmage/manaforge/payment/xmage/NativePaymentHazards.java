@@ -22,11 +22,12 @@ public final class NativePaymentHazards {
     private static Assessment manual(String reason){return new Assessment(Result.REQUIRES_MANUAL,reason);}
     private static Assessment clear(){return new Assessment(Result.NO_REGISTERED_HAZARD,"NO_REGISTERED_HAZARD");}
     private NativePaymentHazards() {}
-    public static Result inspect(Game game,Ability payingAbility) {return assess(game,payingAbility,false).result;}
+    public static Result inspect(Game game,Ability payingAbility) {return assess(game,payingAbility,false,false).result;}
     /** Screens only events emitted by ordinary counter-free tap mana sources.
      * The caller still validates costs, native legality, production and source tickets. */
     public static Result inspectOrdinaryTap(Game game,Ability payingAbility){return assessOrdinaryTap(game,payingAbility).result;}
-    public static Assessment assessOrdinaryTap(Game game,Ability payingAbility){return assess(game,payingAbility,true);}
+    public static Assessment assessOrdinaryTap(Game game,Ability payingAbility){return assess(game,payingAbility,true,false);}
+    public static Assessment assessSimulation(Game game,Ability payingAbility){return assess(game,payingAbility,true,true);}
     // Read only the native event-type prefilter. Never call applies/checkTrigger or
     // replacement execution: those methods can change the game or ask a choice.
     private static final mage.game.events.GameEvent.EventType[] PAYMENT_EVENTS={
@@ -44,16 +45,24 @@ public final class NativePaymentHazards {
             || zone==mage.constants.Zone.GRAVEYARD || zone==mage.constants.Zone.EXILED)
             && game.getPermanent(ability.getSourceId())==null && game.getCard(ability.getSourceId())!=null;
     }
-    private static String paymentTriggers(Iterable<? extends mage.abilities.TriggeredAbility> triggers,Game game,Ability paying,boolean registered){
+    private static String paymentTriggers(Iterable<? extends mage.abilities.TriggeredAbility> triggers,Game game,Ability paying,boolean registered,boolean simulation){
         int scanned=0,active=0;for(mage.abilities.TriggeredAbility trigger:triggers){
             if(++scanned>4096 || trigger==null)return "TRIGGER_SCAN_UNAVAILABLE";
             if(registered && inactiveBattlefieldSource(trigger,game))continue;
             if(++active>128)return "ACTIVE_HAZARD_SCAN_LIMIT";
             for(mage.game.events.GameEvent.EventType type:PAYMENT_EVENTS)
-                if(trigger.checkEventType(mage.game.events.GameEvent.getEvent(type,paying.getSourceId(),paying,paying.getControllerId()),game))return "MANA_TRIGGER_EVENT";
+                if(trigger.checkEventType(mage.game.events.GameEvent.getEvent(type,paying.getSourceId(),paying,paying.getControllerId()),game)) {
+                    if(simulation) {
+                        // Ordinary queued triggers are checked for actual applicability by
+                        // native activation on the copy. They never resolve during planning.
+                        if(trigger.isUsesStack())continue;
+                        if(trigger instanceof mage.abilities.mana.TriggeredManaAbility && NativePaymentSearch.deterministicEffects(trigger))continue;
+                    }
+                    return "MANA_TRIGGER_EVENT";
+                }
         }return null;
     }
-    private static String paymentEffects(mage.abilities.effects.ContinuousEffects effects,Game game,Ability paying){
+    private static String paymentEffects(mage.abilities.effects.ContinuousEffects effects,Game game,Ability paying,boolean simulation){
         int count=0,active=0;for(mage.abilities.effects.ContinuousEffectsList<?> list:effects.allEffectsLists)for(mage.abilities.effects.ContinuousEffect effect:list){
             if(++count>4096 || effect==null)return "EFFECT_SCAN_UNAVAILABLE";
             java.util.Set<Ability> origins=list.getAbility(effect.getId());
@@ -68,13 +77,14 @@ public final class NativePaymentHazards {
                 for(mage.game.events.GameEvent.EventType type:PAYMENT_EVENTS)
                     if(((mage.abilities.effects.ReplacementEffect)effect).checksEventType(mage.game.events.GameEvent.getEvent(type,paying.getSourceId(),paying,paying.getControllerId()),game))return "MANA_REPLACEMENT_EVENT";
             }else if(effect instanceof mage.abilities.effects.ContinuousRuleModifyingEffect){
+                if(simulation)continue; // Native legality checks apply these on each copied candidate.
                 for(mage.game.events.GameEvent.EventType type:PAYMENT_EVENTS)
                     if(((mage.abilities.effects.ContinuousRuleModifyingEffect)effect).checksEventType(mage.game.events.GameEvent.getEvent(type,paying.getSourceId(),paying,paying.getControllerId()),game))return "MANA_RULE_EVENT";
             }else if(effect instanceof mage.abilities.effects.CostModificationEffect){
                 // The spell's unpaid cost is already finalized. A cost reduction
                 // cannot add a cost to the zero-mana, tap-only source candidates
                 // that ordinaryPayment separately verifies. Increases and sets can.
-                if(((mage.abilities.effects.CostModificationEffect)effect).getModificationType()!=mage.constants.CostModificationType.REDUCE_COST)return "MANA_COST_MODIFIER";
+                if(!simulation && ((mage.abilities.effects.CostModificationEffect)effect).getModificationType()!=mage.constants.CostModificationType.REDUCE_COST)return "MANA_COST_MODIFIER";
             }else if(effect.getEffectType()!=mage.constants.EffectType.CONTINUOUS || !derivedCharacteristics(effect))return "UNSUPPORTED_CONTINUOUS_EFFECT";
         }return count!=effects.getTotalEffectsCount()?"EFFECT_REGISTRY_CHANGED":null;
     }
@@ -88,7 +98,7 @@ public final class NativePaymentHazards {
             || layer==mage.constants.Layer.ColorChangingEffects_5 || layer==mage.constants.Layer.AbilityAddingRemovingEffects_6
             || layer==mage.constants.Layer.PTChangingEffects_7;
     }
-    private static Assessment assess(Game game,Ability payingAbility,boolean ordinaryTap) {
+    private static Assessment assess(Game game,Ability payingAbility,boolean ordinaryTap,boolean simulation) {
         if(game==null || payingAbility==null)return unknown();
         try {
             if(game.hasEnded())return unknown();
@@ -99,9 +109,9 @@ public final class NativePaymentHazards {
             if(effects<0 || state.getPlayers().size()>128)return unknown();
             if(state.isManaBurn())return manual("MANA_BURN");
             if(ordinaryTap){
-                String reason=paymentEffects(state.getContinuousEffects(),game,payingAbility);
-                if(reason==null)reason=paymentTriggers(state.getTriggers().values(),game,payingAbility,true);
-                if(reason==null)reason=paymentTriggers(state.getDelayed(),game,payingAbility,false);
+                String reason=paymentEffects(state.getContinuousEffects(),game,payingAbility,simulation);
+                if(reason==null)reason=paymentTriggers(state.getTriggers().values(),game,payingAbility,true,simulation);
+                if(reason==null)reason=paymentTriggers(state.getDelayed(),game,payingAbility,false,simulation);
                 if(reason!=null)return manual(reason);
             }else if(effects>0 || !state.getTriggers().isEmpty() || !state.getDelayed().isEmpty())return manual("REGISTERED_HAZARDS");
             // No two-seat/five-seat rule: this is only a bounded internal read budget.

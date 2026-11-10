@@ -53,6 +53,6 @@ public final class PaymentCoordinatorChecks {
         p=new Port();c=new PaymentCoordinator("session","human",true,p);c.offer(context(7));final PaymentCoordinator enqueueOwner=c;p.onEnqueue=()->enqueueOwner.close();c.consider();check(c.state()==State.UNCERTAIN && p.enqueues==1);
         p=new Port();PaymentCoordinator first=new PaymentCoordinator("session","human",true,Mode.MANUAL,p);PaymentCoordinator second=new PaymentCoordinator("session","human-2",true,new Port());check(first.mode()==Mode.MANUAL && second.mode()==Mode.AUTO);
         boolean invalid=false;try{new Assessment(Safety.VERIFIED_ORDINARY_EQUIVALENT,Arrays.asList("same","same"));}catch(IllegalArgumentException expected){invalid=true;}check(invalid);
-        System.out.println("Java payment coordinator: "+checks+" synthetic safety/lifecycle checks passed; production integration disabled");
+        System.out.println("Java payment coordinator: "+checks+" synthetic safety/lifecycle checks passed; native acceptance is a separate suite");
     }
 }

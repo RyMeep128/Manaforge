@@ -412,9 +412,13 @@ def run_proof(
                     / "java/payment-xmage/manaforge/payment/xmage/NativePaymentHazards.java"
                 )
             if payment_context_probe:
-                context_sources.append(
-                    HERE
-                    / "java/payment-xmage/manaforge/payment/xmage/NativePaymentPlan.java"
+                context_sources.extend(
+                    [
+                        HERE
+                        / "java/payment-xmage/manaforge/payment/xmage/NativePaymentSearch.java",
+                        HERE
+                        / "java/payment-xmage/manaforge/payment/xmage/PaymentSimulationPlayer.java",
+                    ]
                 )
             compile_log = (workspace / "compile.log").open("w", encoding="utf-8")
             logs.append(compile_log)

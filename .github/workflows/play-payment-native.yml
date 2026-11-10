@@ -1,16 +1,21 @@
 name: Play native payment
 on:
   push:
-    paths: ['Mtg_Projects/mtg_play/java/payment*/**', 'Mtg_Projects/mtg_play/connection_proof.py', 'tools/check_play_payment_coordinator.py', '.github/workflows/play-payment-native.yml']
+    paths: ['Mtg_Projects/mtg_play/java/payment*/**', 'Mtg_Projects/mtg_play/connection_proof.py', 'Mtg_Projects/mtg_play/java/*.java', 'Mtg_Projects/mtg_play/engine-lock.json', 'tools/prepare_payment_ci_engine.py', 'tools/check_play_payment_coordinator.py', '.github/workflows/play-payment-native.yml']
   pull_request:
-    paths: ['Mtg_Projects/mtg_play/java/payment*/**', 'Mtg_Projects/mtg_play/connection_proof.py', 'tools/check_play_payment_coordinator.py', '.github/workflows/play-payment-native.yml']
+    paths: ['Mtg_Projects/mtg_play/java/payment*/**', 'Mtg_Projects/mtg_play/connection_proof.py', 'Mtg_Projects/mtg_play/java/*.java', 'Mtg_Projects/mtg_play/engine-lock.json', 'tools/prepare_payment_ci_engine.py', 'tools/check_play_payment_coordinator.py', '.github/workflows/play-payment-native.yml']
   workflow_dispatch:
 permissions:
   contents: read
+  actions: read
 jobs:
   pinned-native-payment:
     runs-on: windows-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: [stock, delivery]
     env:
       PYTHONPATH: '${{ github.workspace }}/Mtg_Projects;${{ github.workspace }}/Mtg_Projects/mtg_core'
       QT_QPA_PLATFORM: offscreen
@@ -26,7 +31,22 @@ jobs:
           distribution: temurin
           java-version: '23.0.2+7'
       - run: python -m pip install -r requirements-dev.txt
-      - name: Prepare hash-pinned engine in owned CI directory
+      - name: Prepare stock compatibility engine
+        if: matrix.engine == 'stock'
         run: python -m mtg_play.ci_prepare --destination "$env:RUNNER_TEMP/manaforge-payment-engine" --jdk-path "$env:JAVA_HOME"
+      - name: Prepare exact hash-pinned delivery engine
+        if: matrix.engine == 'delivery'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python tools/prepare_payment_ci_engine.py --destination "$env:RUNNER_TEMP/manaforge-payment-engine" --jdk-path "$env:JAVA_HOME"
       - name: Native API, utility and ownership checks
-        run: python tools/check_play_payment_coordinator.py --probe-pinned-helpers --real-game-payment --xmage-root "$env:RUNNER_TEMP/manaforge-payment-engine" --javap "$env:JAVA_HOME/bin/javap.exe"
+        run: |
+          python tools/check_play_payment_coordinator.py --probe-pinned-helpers --real-game-payment --xmage-root "$env:RUNNER_TEMP/manaforge-payment-engine" --javap "$env:JAVA_HOME/bin/javap.exe" 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/payment-evidence.log"
+          exit $LASTEXITCODE
+      - name: Preserve payment evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: payment-${{ matrix.engine }}-${{ github.sha }}
+          path: ${{ runner.temp }}/payment-evidence.log
+          if-no-files-found: warn

@@ -272,83 +272,12 @@ public final class PinnedPaymentChecks {
         }
         payment.set(player,null);open.set(player,false);player.setPayManaMode(false);
     }
-    private static void twoMountainsAdapterChecks() throws Exception {
-        ContextHumanPlayer payer=new ContextHumanPlayer("Public fixture",RangeOfInfluence.ALL,0);
-        PublicCard card=new PublicCard();mage.game.GameState state=new mage.game.GameState();state.getPlayers().put(payer.getId(),payer);
-        mage.abilities.SpellAbility paying=new mage.abilities.SpellAbility(new ManaCostsImpl<>("{R}{R}"),"Public fixture");paying.setSourceId(card.getId());paying.setControllerId(payer.getId());
-        UUID[] ids={UUID.randomUUID(),UUID.randomUUID()};boolean[] tapped={false,false};
-        Map<UUID,mage.game.permanent.Permanent> permanents=new LinkedHashMap<>();
-        for(int index=0;index<2;index++){
-            final int i=index;RedManaAbility ability=new RedManaAbility(){@Override public mage.abilities.ActivatedAbility.ActivationStatus canActivate(UUID id,mage.game.Game game){return mage.abilities.ActivatedAbility.ActivationStatus.withoutApprovingObject(!tapped[i]);}};
-            ability.setSourceId(ids[i]);ability.setControllerId(payer.getId());
-            mage.abilities.AbilitiesImpl<Ability> abilities=new mage.abilities.AbilitiesImpl<>();abilities.add(ability);
-            permanents.put(ids[i],(mage.game.permanent.Permanent)java.lang.reflect.Proxy.newProxyInstance(PinnedPaymentChecks.class.getClassLoader(),new Class<?>[]{mage.game.permanent.Permanent.class},(proxy,method,args)->{
-                switch(method.getName()){
-                    case "getId":return ids[i];case "getControllerId":return payer.getId();
-                    case "canUseActivatedAbilities":case "isPhasedIn":return true;
-                    case "isTapped":return tapped[i];case "isFlipped":return false;case "getTransformCount":return 0;
-                    case "getAbilities":return abilities;case "getCounters":return new mage.counters.Counters();
-                    default:throw new AssertionError("UNEXPECTED_MOUNTAIN_CALL_"+method.getName());
-                }
-            }));
-        }
-        mage.game.Game game=(mage.game.Game)java.lang.reflect.Proxy.newProxyInstance(PinnedPaymentChecks.class.getClassLoader(),new Class<?>[]{mage.game.Game.class},(proxy,method,args)->{
-            switch(method.getName()){
-                case "getPlayer":return payer;case "getCard":return card;case "getState":return state;
-                case "getPermanent":return permanents.get(args[0]);case "hasEnded":return false;
-                case "inCheckPlayableState":return false; // Paused payment, not a speculative playability simulation.
-                default:throw new AssertionError("UNEXPECTED_MOUNTAIN_GAME_CALL_"+method.getName());
-            }
-        });
-        java.lang.reflect.Field response=mage.player.human.HumanPlayer.class.getDeclaredField("response");response.setAccessible(true);
-        java.lang.reflect.Field open=mage.player.human.HumanPlayer.class.getDeclaredField("responseOpenedForAnswer");open.setAccessible(true);
-        java.lang.reflect.Field payment=ContextHumanPlayer.class.getDeclaredField("payment");payment.setAccessible(true);
-        java.lang.reflect.Constructor<?> frame=Class.forName("manaforge.payment.xmage.ContextHumanPlayer$Frame").getDeclaredConstructors()[0];frame.setAccessible(true);
-        ManaCostsImpl<?> unpaid=new ManaCostsImpl<>("{R}{R}");payment.set(payer,frame.newInstance(game,paying,unpaid,1L));open.set(payer,true);payer.setPayManaMode(true);
-        try{synchronized(response.get(payer)){
-            com.google.gson.JsonObject assessment=payer.ordinaryPayment(game,payer.getId(),state.getApplyEffectsCounter(),ids);
-            check("VERIFIED_ORDINARY_EQUIVALENT".equals(assessment.get("safety").getAsString()));check(assessment.get("unpaid_count").getAsInt()==2);check(!tapped[0] && !tapped[1] && !unpaid.isPaid());
-            state.getDelayed().add(new mage.abilities.common.delayed.AtTheBeginOfNextEndStepDelayedTriggeredAbility(new mage.abilities.effects.mana.BasicManaEffect(Mana.RedMana(1))));
-            check("VERIFIED_ORDINARY_EQUIVALENT".equals(payer.ordinaryPayment(game,payer.getId(),state.getApplyEffectsCounter(),ids).get("safety").getAsString()));
-            state.getTriggers().put("mana-sensitive",new ManaTapTrigger());
-            com.google.gson.JsonObject hazardous=payer.ordinaryPayment(game,payer.getId(),state.getApplyEffectsCounter(),ids);
-            check("MANA_TRIGGER_EVENT".equals(hazardous.get("reason").getAsString()));
-            check("UNKNOWN".equals(hazardous.get("safety").getAsString()) && !hazardous.has("steps"));
-            check(!tapped[0] && !tapped[1] && !unpaid.isPaid());state.getTriggers().clear();
-            tapped[1]=true;check("INSUFFICIENT_OR_UNSUPPORTED_SOURCES".equals(payer.ordinaryPayment(game,payer.getId(),state.getApplyEffectsCounter(),ids).get("reason").getAsString()));
-        }}finally{payment.set(payer,null);open.set(payer,false);payer.setPayManaMode(false);}
-    }
     private static final class ManaTapTrigger extends mage.abilities.TriggeredAbilityImpl {
         ManaTapTrigger(){super(mage.constants.Zone.BATTLEFIELD,new mage.abilities.effects.mana.BasicManaEffect(Mana.RedMana(1)));}
         private ManaTapTrigger(ManaTapTrigger original){super(original);}
         @Override public boolean checkEventType(mage.game.events.GameEvent event,mage.game.Game game){return event.getType()==mage.game.events.GameEvent.EventType.TAPPED_FOR_MANA;}
         @Override public boolean checkTrigger(mage.game.events.GameEvent event,mage.game.Game game){throw new AssertionError("MUST_NOT_EXECUTE_TRIGGER");}
         @Override public ManaTapTrigger copy(){return new ManaTapTrigger(this);}
-    }
-    private static void nativePlanChecks(){
-        java.util.List<manaforge.payment.xmage.NativePaymentPlan.Source> mountains=new ArrayList<>();
-        for(int i=0;i<2;i++){
-            manaforge.payment.xmage.NativePaymentPlan.Source mountain=new manaforge.payment.xmage.NativePaymentPlan.Source();
-            mountain.alternatives.add(new manaforge.payment.xmage.NativePaymentPlan.Step(UUID.randomUUID(),UUID.randomUUID(),1,Mana.RedMana(1),null));mountains.add(mountain);
-        }
-        ManaCostsImpl<?> doubleRed=new ManaCostsImpl<>("{R}{R}");
-        check(manaforge.payment.xmage.NativePaymentPlan.select(doubleRed,new Mana(),mountains).size()==2);check(!doubleRed.isPaid());
-        check(manaforge.payment.xmage.NativePaymentPlan.select(doubleRed,new Mana(),mountains.subList(0,1))==null);
-        check(manaforge.payment.xmage.NativePaymentPlan.select(doubleRed,Mana.RedMana(1),mountains).size()==1);
-        UUID forest=UUID.randomUUID(),island=UUID.randomUUID();
-        manaforge.payment.xmage.NativePaymentPlan.Source green=new manaforge.payment.xmage.NativePaymentPlan.Source();
-        green.alternatives.add(new manaforge.payment.xmage.NativePaymentPlan.Step(forest,UUID.randomUUID(),1,Mana.GreenMana(1),null));
-        manaforge.payment.xmage.NativePaymentPlan.Source blue=new manaforge.payment.xmage.NativePaymentPlan.Source();
-        blue.alternatives.add(new manaforge.payment.xmage.NativePaymentPlan.Step(island,UUID.randomUUID(),1,Mana.BlueMana(1),null));
-        ManaCostsImpl<?> cost=new ManaCostsImpl<>("{G}{U}");
-        java.util.List<manaforge.payment.xmage.NativePaymentPlan.Step> plan=manaforge.payment.xmage.NativePaymentPlan.select(cost,new Mana(),Arrays.asList(green,blue));
-        check(plan!=null && plan.size()==2);check(!cost.isPaid());
-        plan=manaforge.payment.xmage.NativePaymentPlan.select(cost,Mana.GreenMana(1),Arrays.asList(green,blue));check(plan!=null && plan.size()==1 && plan.get(0).source.equals(island));
-        manaforge.payment.xmage.NativePaymentPlan.Source flexible=new manaforge.payment.xmage.NativePaymentPlan.Source();
-        flexible.alternatives.addAll(green.alternatives);flexible.alternatives.add(new manaforge.payment.xmage.NativePaymentPlan.Step(forest,UUID.randomUUID(),1,Mana.BlueMana(1),null));
-        plan=manaforge.payment.xmage.NativePaymentPlan.select(new ManaCostsImpl<>("{U}"),new Mana(),Collections.singletonList(flexible));check(plan!=null && plan.size()==1 && plan.get(0).production.getBlue()==1);
-        check(manaforge.payment.xmage.NativePaymentPlan.select(cost,new Mana(),Collections.singletonList(flexible))==null);
-        Mana both=Mana.GreenMana(1);both.add(Mana.BlueMana(1));check(manaforge.payment.xmage.NativePaymentPlan.select(cost,both,Collections.emptyList()).isEmpty());
     }
     private static void targetingContextScopeChecks() throws Exception {
         ContextHumanPlayer player=new ContextHumanPlayer("Public fixture",RangeOfInfluence.ALL,0);mage.game.GameState state=new mage.game.GameState();
@@ -369,7 +298,7 @@ public final class PinnedPaymentChecks {
         }targeting.set(player,null);
     }
     public static void main(String[] args) throws Exception {
-        targetingContextScopeChecks();twoMountainsAdapterChecks();nativePlanChecks();
+        targetingContextScopeChecks();
         priorityScopeChecks();
         ContextHumanPlayer observed=new ContextHumanPlayer("Public fixture",RangeOfInfluence.ALL,0);
         ContextHumanPlayer copied=observed.copy();

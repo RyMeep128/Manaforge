@@ -22,6 +22,10 @@ public final class ManaforgeGameMetadata {
     });
     private static JsonObject terminal(Game game,UUID gameId,UUID viewerId) {
         JsonObject result=status("finished");Player viewer=game.getPlayer(viewerId);
+        if(viewer!=null && viewer.getClass().getName().equals("manaforge.payment.xmage.ContextHumanPlayer"))try {
+            Object execution=viewer.getClass().getMethod("paymentExecution",Game.class,UUID.class,int.class).invoke(viewer,game,viewerId,game.getState().getApplyEffectsCounter());
+            if(execution instanceof JsonObject)result.add("payment_execution",(JsonObject)execution);
+        }catch(ReflectiveOperationException unavailable){ /* A terminal result is still valid without payment evidence. */ }
         if(game.hasEnded() && viewer!=null){String outcome=game.isADraw()?"draw":viewer.hasWon()?"win":viewer.hasLost()?"loss":null;
             if(outcome!=null){result.addProperty("game_id",gameId.toString());result.addProperty("viewer",viewerId.toString());result.addProperty("outcome",outcome);}}
         if(result.has("outcome")){GameState state=game.getState();int cycle=state.getApplyEffectsCounter();List<UUID> seats=new ArrayList<>(game.getPlayers().keySet());JsonObject commanderData=publicCommanders(game,state,seats);JsonArray players=new JsonArray();for(UUID seat:seats){Player player=game.getPlayer(seat);JsonObject row=new JsonObject();row.addProperty("id",seat.toString());row.addProperty("life",player.getLife());row.addProperty("lost",player.hasLost());players.add(row);}if(game.getState()==state && state.getApplyEffectsCounter()==cycle){result.add("commanders",commanderData.get("commanders"));result.add("commander_metadata_complete",commanderData.get("commander_metadata_complete"));result.add("public_players",players);result.addProperty("cycle",cycle);}}
@@ -96,6 +100,11 @@ public final class ManaforgeGameMetadata {
         Game game=controller==null?recentGames.get(gameId):(Game)field(controller,GameController.class,"game");
         if(game==null)return status("finished");
         Player viewer=game.getPlayer(playerId);if(viewer==null)return status("unauthorized");recentGames.put(gameId,game);if(controller==null && !game.hasEnded())return status("finished");
+        return readPaused(game,playerId,cycle,command,()->controller.getGameView(playerId));
+    }
+    /** Server-owned game capability only; never a wire endpoint or caller-supplied game ID lookup. */
+    static JsonObject readPaused(Game game,UUID playerId,int cycle,JsonObject command,java.util.function.Supplier<GameView> views) throws Exception {
+        UUID gameId=game.getId();Player viewer=game.getPlayer(playerId);if(viewer==null)return status("unauthorized");
         // Terminal flags are monotonic. A departed viewer has no fresh cycle,
         // even when there is no remaining human response monitor to acquire.
         if (game.hasEnded() || (viewer != null && (viewer.hasLost() || viewer.hasLeft())))
@@ -119,7 +128,7 @@ public final class ManaforgeGameMetadata {
                 // continue playing. Their last cycle cannot become current again.
                 if (game.hasEnded() || (viewer != null && (viewer.hasLost() || viewer.hasLeft())))
                     return terminal(game,gameId,playerId);
-                GameView permitted = controller.getGameView(playerId);
+                GameView permitted = views.get();
                 GameState state = game.getState();
                 if (permitted == null || permitted.getGameCycle() != cycle) return status("retry");
                 if (permitted.getMyPlayer() == null || !permitted.getMyPlayer().getPlayerId().equals(playerId))
@@ -248,6 +257,8 @@ public final class ManaforgeGameMetadata {
                     List<UUID> ordinarySources=new ArrayList<>();boolean ordinaryVisible=true;for(CardView source:permitted.getMyPlayer().getBattlefield().values()){if(!source.isFaceDown() && !source.hideInfo())ordinarySources.add(source.getId());}
                     Object assessment=ordinaryVisible?type.getMethod("ordinaryPayment",Game.class,UUID.class,int.class,UUID[].class).invoke(human,game,playerId,cycle,ordinarySources.toArray(new UUID[0])):null;
                     if(assessment instanceof JsonObject)result.add("ordinary_payment",(JsonObject)assessment);
+                    Object execution=type.getMethod("paymentExecution",Game.class,UUID.class,int.class).invoke(human,game,playerId,cycle);
+                    if(execution instanceof JsonObject)result.add("payment_execution",(JsonObject)execution);
 
                 }
                 if(paymentProbe && player.getId().equals(playerId)){Object targetProbe=type.getMethod("targetingProbe",Game.class,UUID.class,int.class).invoke(human,game,playerId,cycle);if(targetProbe instanceof JsonObject)result.add("targeting_context",(JsonObject)targetProbe);}

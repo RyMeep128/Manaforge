@@ -522,3 +522,43 @@ def test_owned_process_exit_evidence_is_retained_separately_from_error():
     assert retained["processes"] == [
         dict(role="client", exit_code=0, forced=False, reaped=True)
     ]
+
+
+@pytest.mark.parametrize("report_name", ["game-error.json", "game-result.json"])
+def test_payment_outcomes_and_engine_identity_survive_cleanup(report_name):
+    launch = LiveGameLaunch()
+    launch.allocate()
+    launch.engine_identity = {
+        "manifest_sha256": "a" * 64,
+        "source_sha": "b" * 40,
+        "bundle_id": "b" * 40 + "-" + "c" * 12,
+    }
+    (launch.root / "player.log").write_text("Native payment evidence")
+    (launch.root / report_name).write_text(
+        json.dumps(
+            {
+                "code": "AUTO_PAYMENT_UNPROVEN",
+                "native_auto_payment_steps": 3,
+                "native_auto_payment_outcomes": {
+                    "INSUFFICIENT_MANA": 2,
+                    "SEARCH_LIMIT_REACHED": 1,
+                    "PRIVATE_CARD_NAME": "private source value",
+                    "raw private name": 5,
+                    "BOOLEAN_IS_NOT_A_COUNT": True,
+                },
+                "private_plan_token": "PRIVATE_TOKEN",
+            }
+        )
+    )
+    launch.close()
+    report = json.loads((launch.log_directory / "diagnostic.json").read_text())
+    assert report["engine"] == launch.engine_identity
+    assert report["payment"] == {
+        "native_auto_payment_steps": 3,
+        "native_auto_payment_outcomes": {
+            "INSUFFICIENT_MANA": 2,
+            "SEARCH_LIMIT_REACHED": 1,
+        },
+    }
+    assert "PRIVATE_TOKEN" not in json.dumps(report)
+    assert "private source value" not in json.dumps(report)

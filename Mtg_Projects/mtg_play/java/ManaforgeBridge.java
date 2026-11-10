@@ -24,7 +24,7 @@ public final class ManaforgeBridge implements MageClient {
     private static final PrintStream PROTOCOL = System.out;
     private static final Gson JSON = new Gson();
     private final SessionImpl session = new SessionImpl(this);
-    private final ManaResponseExecutor manaResponses = new ManaResponseExecutor(this::claimManaResponse, session::sendPlayerUUID);
+    private final ManaResponseExecutor manaResponses;
 
     private final java.util.function.Consumer<JsonObject> eventSink;
 
@@ -32,7 +32,22 @@ public final class ManaforgeBridge implements MageClient {
     interface RequestTransport {boolean send(mage.constants.PlayerAction action,UUID game,UUID related);}
     private final RequestTransport requestTransport;
     ManaforgeBridge(java.util.function.Consumer<JsonObject> eventSink) {this(eventSink,null);}
-    ManaforgeBridge(java.util.function.Consumer<JsonObject> eventSink,RequestTransport transport) {this.eventSink=eventSink;this.requestTransport=transport==null?session::sendPlayerAction:transport;}
+    interface ResponseTransport {
+        boolean object(UUID game,UUID source);
+        boolean mana(UUID game,UUID player,mage.constants.ManaType type);
+        boolean bool(UUID game,boolean value);
+    }
+    private final ResponseTransport responses;
+    ManaforgeBridge(java.util.function.Consumer<JsonObject> eventSink,RequestTransport transport){this(eventSink,transport,null);}
+    ManaforgeBridge(java.util.function.Consumer<JsonObject> eventSink,RequestTransport transport,ResponseTransport responses) {
+        this.eventSink=eventSink;this.requestTransport=transport==null?session::sendPlayerAction:transport;
+        this.responses=responses==null?new ResponseTransport(){
+            public boolean object(UUID game,UUID source){return session.sendPlayerUUID(game,source);}
+            public boolean mana(UUID game,UUID player,mage.constants.ManaType type){return session.sendPlayerManaType(game,player,type);}
+            public boolean bool(UUID game,boolean value){return session.sendPlayerBoolean(game,value);}
+        }:responses;
+        manaResponses=new ManaResponseExecutor(this::claimManaResponse,this.responses::object);
+    }
 
     // Saved-deck Unity games own phase stops. Adapter and diagnostic games keep
     // their existing defaults so exact transition proofs do not gain extra stops.
@@ -518,7 +533,7 @@ public final class ManaforgeBridge implements MageClient {
                 connection.setProxyType(Connection.ProxyType.NONE);
                 connection.setUserIdStr(UUID.randomUUID().toString());
                 UserData preferences = UserData.getDefaultUserDataView();
-                String paymentMode=command.has("payment_mode")?requiredString(command,"payment_mode"):System.getProperty("manaforge.paymentMode");if(paymentMode!=null){if(!java.util.Arrays.asList("AUTO","MANUAL","FULL_CONTROL").contains(paymentMode))throw new IllegalArgumentException("PAYMENT_MODE_INVALID");preferences.setManaPoolAutomatic(paymentMode.equals("AUTO"));preferences.setManaPoolAutomaticRestricted(paymentMode.equals("AUTO"));}
+                String paymentMode=command.has("payment_mode")?requiredString(command,"payment_mode"):System.getProperty("manaforge.paymentMode");if(paymentMode!=null){if(!java.util.Arrays.asList("AUTO","MANUAL","FULL_CONTROL").contains(paymentMode))throw new IllegalArgumentException("PAYMENT_MODE_INVALID");preferences.setManaPoolAutomatic(paymentMode.equals("AUTO"));preferences.setManaPoolAutomaticRestricted(false);}
                 preferences.setPassPriorityCast(false);
                 preferences.setPassPriorityActivation(false);
                 configurePriorityStops(preferences);
@@ -622,15 +637,15 @@ public final class ManaforgeBridge implements MageClient {
                     if(!(kind.equals("object") && pendingMethod.equals("GAME_PLAY_MANA")))decisionId = -1;
                 }
                 boolean accepted;
-                if (kind.equals("boolean")) accepted = session.sendPlayerBoolean(gameId, command.get("value").getAsBoolean());
+                if (kind.equals("boolean")) accepted = responses.bool(gameId, command.get("value").getAsBoolean());
                 else if (kind.equals("object") && pendingMethod.equals("GAME_PLAY_MANA")) {
                     ManaResponseExecutor.Outcome outcome=manaResponses.submit(UUID.fromString(requiredString(command,"game_id")),
                         command.get("decision_id").getAsInt(),UUID.fromString(requiredString(command,"value")));
                     if(outcome==ManaResponseExecutor.Outcome.STALE)throw new IllegalArgumentException("STALE_DECISION");
                     accepted=outcome==ManaResponseExecutor.Outcome.SUBMITTED;
                 }
-                else if(kind.equals("mana_type")) accepted=session.sendPlayerManaType(gameId,UUID.fromString(requiredString(command,"player_id")),mage.constants.ManaType.valueOf(requiredString(command,"value")));
-                else if (kind.equals("object")) accepted = session.sendPlayerUUID(gameId, UUID.fromString(requiredString(command, "value")));
+                else if(kind.equals("mana_type")) accepted=responses.mana(gameId,UUID.fromString(requiredString(command,"player_id")),mage.constants.ManaType.valueOf(requiredString(command,"value")));
+                else if (kind.equals("object")) accepted = responses.object(gameId, UUID.fromString(requiredString(command, "value")));
                 else if (kind.equals("integer")) accepted = session.sendPlayerInteger(gameId, command.get("value").getAsInt());
                 else if (kind.equals("string")) accepted = session.sendPlayerString(gameId, requiredString(command, "value"));
                 else throw new IllegalArgumentException("UNSUPPORTED_RESPONSE");

@@ -120,8 +120,8 @@ public final class RealPaymentGameChecks {
                     if(assessment==null)Thread.sleep(1);
                 }
                 require(assessment!=null,"REAL_PAYMENT_CONTEXT_MISSING");
-                if(activeHazard || insufficient){
-                    require((activeHazard?(name.equals("active-mana-replacement")?"MANA_REPLACEMENT_EVENT":"MANA_TRIGGER_EVENT"):"INSUFFICIENT_OR_UNSUPPORTED_SOURCES").equals(assessment.get("reason").getAsString()),"REAL_UNSAFE_PAYMENT_NOT_REJECTED");
+                if(activeHazard && !name.equals("active-mana-replacement") || insufficient){
+                    require((activeHazard?"CONSEQUENTIAL_CHOICE_REQUIRED":"INSUFFICIENT_MANA").equals(assessment.get("reason").getAsString()),"REAL_UNSAFE_PAYMENT_NOT_REJECTED");
                     require(automaticSources==0 && !game.getPermanent(first.getId()).isTapped() && game.getPermanent(second.getId()).isTapped()==insufficient,"REAL_HAZARD_TAPPED_SOURCE");
                     payer.setResponseBoolean(false);
                     require(!cast.get(2,TimeUnit.SECONDS),"REAL_HAZARD_CAST_NOT_CANCELLED");

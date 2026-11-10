@@ -141,6 +141,7 @@ class LiveGameLaunch:
         self.payment_diagnostics = None
         self.unsupported_diagnostics = None
         self.process_diagnostics = None
+        self.engine_identity = None
         self.version = None
         self.player = None
 
@@ -228,7 +229,7 @@ class LiveGameLaunch:
                     if (
                         error.is_file()
                         and not error.is_symlink()
-                        and error.stat().st_size <= 1024
+                        and error.stat().st_size <= 8192
                     ):
                         error_report = json.loads(error.read_text(encoding="utf-8"))
                         code = error_report.get("code")
@@ -250,6 +251,23 @@ class LiveGameLaunch:
                                 and re.fullmatch(r"[A-Z_]{1,100}", value)
                             )
                         } or None
+                        outcomes = error_report.get("native_auto_payment_outcomes")
+                        if isinstance(outcomes, dict) and len(outcomes) <= 32:
+                            safe_outcomes = {
+                                key: count
+                                for key, count in outcomes.items()
+                                if isinstance(key, str)
+                                and re.fullmatch(r"[A-Z_]{1,100}", key)
+                                and type(count) is int
+                                and 0 <= count <= 1000000
+                            }
+                            if safe_outcomes:
+                                self.payment_diagnostics = (
+                                    self.payment_diagnostics or {}
+                                )
+                                self.payment_diagnostics[
+                                    "native_auto_payment_outcomes"
+                                ] = safe_outcomes
                         unsupported = resolved / "game-unsupported.json"
                         if (
                             code == "LIVE_OPENING_PROJECTION_UNSUPPORTED"
@@ -303,6 +321,7 @@ class LiveGameLaunch:
                         payment=self.payment_diagnostics,
                         unsupported=self.unsupported_diagnostics,
                         processes=self.process_diagnostics,
+                        engine=self.engine_identity,
                     )
                     if self.log_directory is not None and (
                         self.last_error or self.client_errors or self.summary is None
@@ -383,9 +402,21 @@ def run_live_game(
     launch.version = version
     launch.player = player
     result = None
-    from .engine_fork import manifest_digest
+    from .engine_fork import installation_manifest, manifest_digest
 
     pin = manifest_digest(xmage_root)
+    engine_pin = json.loads(
+        installation_manifest(xmage_root).read_text(encoding="utf-8")
+    )
+    launch.engine_identity = {"manifest_sha256": pin}
+    source_sha = engine_pin.get("fork_commit")
+    if isinstance(source_sha, str) and re.fullmatch(r"[0-9a-f]{40}", source_sha):
+        launch.engine_identity["source_sha"] = source_sha
+    bundle_id = engine_pin.get("bundle_id")
+    if isinstance(bundle_id, str) and re.fullmatch(
+        r"[0-9a-f]{40}(?:-[0-9a-f]{12})?", bundle_id
+    ):
+        launch.engine_identity["bundle_id"] = bundle_id
 
     def consume(first, events, peers, port, server_process, server):
         nonlocal result
