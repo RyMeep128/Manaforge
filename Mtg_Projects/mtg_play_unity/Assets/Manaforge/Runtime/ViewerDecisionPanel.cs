@@ -22,7 +22,7 @@ namespace Manaforge.Play
         private readonly VisualElement pages=new VisualElement{name="decision-pages"};
         private readonly VisualElement decisionBody=new VisualElement{name="decision-body"};
         private readonly YieldStatusView yieldStatus;
-        private bool built;private string selectedGroup;
+        private bool built,soleAbilityAttempted;private string selectedGroup;
         private readonly System.Collections.Generic.Dictionary<string,int> groupPages=new System.Collections.Generic.Dictionary<string,int>();
         private readonly System.Collections.Generic.List<CardView> groupPreviews=new System.Collections.Generic.List<CardView>();
         private void ClearGroupPreviews(){foreach(var view in groupPreviews)view.Dispose();groupPreviews.Clear();}
@@ -62,7 +62,7 @@ namespace Manaforge.Play
         private void Clear()
         {
             Root.RemoveFromClassList("session-request");Root.RemoveFromClassList("library-ordering");Root.RemoveFromClassList("command-pending");Root.RemoveFromClassList("command-uncertain");Root.RemoveFromClassList("command-confirmed");
-            ClearGroupPreviews();groupPages.Clear();selectedGroup=null;built=false;autoAfter=-1;IsLibraryOrdering=false;manaInput.Refresh(null);offer=null;submitted=null;page=0;numericText=null;numericPage=0;numericSubmit=null;prompt.text="";manaPool.text="";status.text="";controls.Clear();pages.Clear();cardChoices=null;Root.style.display=Presentation?.Compact==true?DisplayStyle.Flex:DisplayStyle.None;
+            ClearGroupPreviews();groupPages.Clear();selectedGroup=null;built=false;soleAbilityAttempted=false;autoAfter=-1;IsLibraryOrdering=false;manaInput.Refresh(null);offer=null;submitted=null;page=0;numericText=null;numericPage=0;numericSubmit=null;prompt.text="";manaPool.text="";status.text="";controls.Clear();pages.Clear();cardChoices=null;Root.style.display=Presentation?.Compact==true?DisplayStyle.Flex:DisplayStyle.None;
             // Observe a retired task without carrying its result or touching UI from its worker.
             if(pending!=null)pending.ContinueWith(task=>{_=task.Exception;},TaskScheduler.Default);pending=null;
         }
@@ -112,6 +112,11 @@ namespace Manaforge.Play
             numericSubmit?.SetEnabled(TryNumbers(out _,false));
             controls.Q<Button>("decision-pass-turn")?.SetEnabled(offer.CanSubmit && pending==null && !Priority.Current.Paused);
             if(!offer.CanSubmit && pending==null && string.IsNullOrEmpty(status.text))status.text="Waiting for gateway state.";
+            if(!soleAbilityAttempted && pending==null && offer.CanSubmit && offer.Frame.Decision?.AbilitySelection==true
+                && offer.Frame.Decision.Family=="selection" && !offer.Frame.Decision.IsPriority && offer.Frame.Decision.RequestId==null
+                && !offer.Frame.Decision.CanFinish && offer.Frame.Decision.Options.Count==1 && offer.Frame.Actions.Count==0){
+                soleAbilityAttempted=true;var captured=offer;var only=captured.Frame.Decision.Options[0];Send(captured,()=>host.ChooseAsync(captured,only));return;
+            }
             var automatic=priorityEnabled?Priority.Evaluate(offer.Frame):null;
             if(automatic==null || pending!=null || !offer.CanSubmit || PriorityControlsOpen || PresentationHold?.Invoke()==true){autoAfter=-1;return;}
             if(autoAfter<0){autoAfter=Time.unscaledTime+.35f;return;}
@@ -234,7 +239,7 @@ namespace Manaforge.Play
             var groupScroll=new ScrollView(ScrollViewMode.Vertical){name="decision-groups"};groupScroll.style.maxHeight=420;controls.Add(groupScroll);
             foreach(var group in captured.Frame.Decision.Groups){
                 var tile=new VisualElement{name="choice-group"};tile.AddToClassList("mf-menu");tile.style.marginBottom=12;
-                tile.Add(NumericLabel(group.Label+" · "+group.Cards.Count+" cards"));
+                tile.Add(NumericLabel(group.Label+" Â· "+group.Cards.Count+" cards"));
                 var scroll=new ScrollView(ScrollViewMode.Vertical);scroll.style.maxHeight=390;tile.Add(scroll);
                 if(group.Cards.Count==0)scroll.Add(NumericLabel("Empty pile"));
                 int page=groupPages.TryGetValue(group.GroupId,out var requested)?Mathf.Clamp(requested,0,Math.Max(0,(group.Cards.Count-1)/PageSize)):0;

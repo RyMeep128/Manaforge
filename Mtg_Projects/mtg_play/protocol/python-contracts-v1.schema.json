@@ -1191,6 +1191,16 @@
               "type": "null"
             }
           ]
+        },
+        "ability_selection": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [

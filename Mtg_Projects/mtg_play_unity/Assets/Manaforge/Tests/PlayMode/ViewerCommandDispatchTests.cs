@@ -216,11 +216,26 @@ namespace Manaforge.Play.Tests
             if(multiple){var extra=snapshot["actions"][0].DeepClone();extra["action_id"]="another-action";extra["kind"]="activate";extra["label"]="Second offered action";((JArray)snapshot["actions"]).Add(extra);}
             return frame;
         }
+        [UnityTest] public IEnumerator SingleNativeAbilityChoosesOnceAndMultipleAbilitiesWaitForInput()
+        {
+            foreach(int count in new[]{1,2}){
+                var envelope=Snapshot(selection:true);var decision=envelope["body"]["snapshot"]["decision"];decision["ability_selection"]=true;decision["is_priority"]=false;decision["can_finish"]=false;
+                if(count==2){var other=decision["options"][0].DeepClone();other["option_id"]="other-ability";((JArray)decision["options"]).Add(other);}
+                var host=Start(envelope,out var peer,out var owner);var panel=Panel(host);yield return Show(host,panel);
+                if(count==2){for(int i=0;i<5;i++)panel.Tick();Assert.That(peer.PendingCommandBytes,Is.Zero);Click(panel.Root.Q<Button>("decision-option-1"));}
+                var read=Task.Run(()=>WireMessages.Parse(peer.ReadCommandForFixture()));yield return Until(()=>read.IsCompleted);
+                Assert.That((string)read.Result["body"]["operation"],Is.EqualTo("choose"));Assert.That((string)read.Result["body"]["option_id"],Is.EqualTo(count==1?"fixture-option":"other-ability"));
+                var rejected=Ack(read.Result,"rejected");rejected["body"]["code"]="ENGINE_REJECTED";var send=Task.Run(()=>peer.ReplyForFixture(rejected));yield return Until(()=>send.IsCompleted);var receipt=Receipt(host);yield return Until(()=>receipt.IsCompleted);yield return null;
+                for(int i=0;i<5;i++)panel.Tick();Assert.That(peer.PendingCommandBytes,Is.Zero,"A rejected single ability must not retry automatically");host.Cancel();yield return Until(()=>host.Completion.IsCompleted);
+            }
+        }
         [UnityTest] public IEnumerator HandSingleClickPreviewsAndDoubleClickSubmitsExactlyOnce()=>HandDoubleClick("cast_spell");
         [UnityTest] public IEnumerator HandLandAlsoRequiresDoubleClick()=>HandDoubleClick("play_land");
-        private IEnumerator HandDoubleClick(string kind)
+        [UnityTest] public IEnumerator CreatureAbilityUsesDoubleClickWithoutASingleClickActivation()=>HandDoubleClick("activate",true);
+        private IEnumerator HandDoubleClick(string kind,bool battlefield=false)
         {
-            var envelope=BoardSnapshot();envelope["body"]["snapshot"]["objects"][0]["zone"]="hand";
+            var envelope=BoardSnapshot();envelope["body"]["snapshot"]["objects"][0]["zone"]=battlefield?"battlefield":"hand";
+            if(battlefield)envelope["body"]["snapshot"]["objects"][0]["characteristics"]["type_line"]="Creature";
             envelope["body"]["snapshot"]["actions"][0]["kind"]=kind;
             var host=Start(envelope,out var peer,out var owner);var panel=Panel(host);yield return Show(host,panel);
             var root=node.GetComponent<UIDocument>().rootVisualElement;

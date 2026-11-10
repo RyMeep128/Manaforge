@@ -207,6 +207,7 @@ class ChoiceRequest(Serializable):
     targeting: TargetingContext | None = None
     groups: tuple[ChoiceGroup, ...] | None = None
     request: SessionRequest | None = None
+    ability_selection: bool | None = None
 
 
 @dataclass(frozen=True)

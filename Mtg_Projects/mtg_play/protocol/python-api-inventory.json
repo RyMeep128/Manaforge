@@ -678,6 +678,12 @@
         "python_type": "SessionRequest | None",
         "required": false,
         "python_default": "None"
+      },
+      {
+        "name": "ability_selection",
+        "python_type": "bool | None",
+        "required": false,
+        "python_default": "None"
       }
     ],
     "CombatAssignment": [

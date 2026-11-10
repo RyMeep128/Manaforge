@@ -87,6 +87,7 @@ def contract_schema():
         if name == "ChoiceRequest":
             definition["required"].remove("groups")
             definition["required"].remove("request")
+            definition["required"].remove("ability_selection")
             properties["groups"]["anyOf"][0].update(minItems=2, maxItems=2)
         if name == "ChoiceGroup":
             properties["cards"]["maxItems"] = 256

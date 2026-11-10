@@ -17,7 +17,7 @@ namespace Manaforge.Play
         private readonly EventCallback<KeyDownEvent> key;
         private sealed class Binding : IDisposable
         {
-            internal readonly CardView View;internal readonly string Id;internal bool InHand;
+            internal readonly CardView View;internal readonly string Id;internal bool InHand,CreatureOnBattlefield;
             private readonly EventCallback<PointerDownEvent> down;private readonly EventCallback<PointerMoveEvent> move;private readonly EventCallback<PointerUpEvent> up;
             private readonly EventCallback<PointerCaptureOutEvent> lost;private readonly EventCallback<DetachFromPanelEvent> detach;private readonly EventCallback<NavigationSubmitEvent> submit;
             internal Binding(ViewerBoardInput owner,CardView view,string id)
@@ -48,6 +48,7 @@ namespace Manaforge.Play
                 bool available=!panel.SuppressSpatialInput && decision!=null && captured?.CanSubmit==true && panel.ObjectChoiceCount(captured,card.ObjectId)>0;
                 view.EnableInClassList("actionable",available);view.EnableInClassList("targetable",available && decision.Options.Any(o=>o.ObjectId==card.ObjectId));
                 bindings[view].InHand=card.Zone=="hand";
+                bindings[view].CreatureOnBattlefield=card.Zone=="battlefield" && Array.IndexOf((card.Characteristics?.TypeLine??"").Split('—')[0].Split(' '),"Creature")>=0;
             });
             foreach(var view in bindings.Keys.Where(v=>!seen.Contains(v)).ToArray()){bindings[view].Dispose();bindings.Remove(view);}
         }
@@ -76,7 +77,7 @@ namespace Manaforge.Play
                 if(local.x<145 || local.x>root.resolvedStyle.width-285 || local.y<height*.08f || local.y>height*.78f)return;
                 var frame=captured.Frame;if(frame==null || !(frame.Actions.Any(a=>a.ObjectId==binding.Id && new[]{"play_land","cast_spell","select_object","activate","declare_attacker","declare_blocker"}.Contains(a.Kind)) || frame.Decision.Options.Any(o=>o.ObjectId==binding.Id)))return;
             }
-            if(!wasDrag && DeliberateHandPlay(captured.Frame,binding) && clicks!=2)return;
+            if(!wasDrag && (DeliberateHandPlay(captured.Frame,binding) || binding.CreatureOnBattlefield && captured.Frame.Decision.IsPriority) && clicks!=2)return;
             Activate(captured,binding,position);
         }
         private void Activate(ViewerDecisionOffer captured,Binding binding,Vector2 position)

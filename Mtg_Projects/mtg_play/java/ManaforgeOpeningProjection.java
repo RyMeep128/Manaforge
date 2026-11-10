@@ -405,6 +405,7 @@ public final class ManaforgeOpeningProjection {
                 choice.options=entries.toArray(new ChoiceOption[0]);
                 if(Boolean.TRUE.equals(flag(prompt,"can_finish"))){LegalAction finish=new LegalAction();finish.action_id=opaque();finish.kind="pass";finish.label="Finish selection";finish.priority_class="unknown";actions.add(finish);offeredNative.put(finish.action_id,null);result.actions=actions.toArray(new LegalAction[0]);}
             } else if(ability) {
+                choice.ability_selection=true;
                 JsonObject choices=prompt.getAsJsonObject("key_choices");require(choices.size()>0 && choices.size()<=32);
                 List<ChoiceOption> entries=new ArrayList<>();
                 for(Map.Entry<String,JsonElement> entry:choices.entrySet()) {
@@ -482,7 +483,7 @@ public final class ManaforgeOpeningProjection {
             JsonObject output=JSON.toJsonTree(result).getAsJsonObject();
             // Do not add unused optional fields to ordinary snapshots consumed by
             // an earlier strict protocol-1 player. New choice types require its rebuilt UI.
-            JsonObject rendered=output.getAsJsonObject("decision");for(String key:new String[]{"groups","request"})if(rendered.has(key) && rendered.get(key).isJsonNull())rendered.remove(key);
+            JsonObject rendered=output.getAsJsonObject("decision");for(String key:new String[]{"groups","request","ability_selection"})if(rendered.has(key) && rendered.get(key).isJsonNull())rendered.remove(key);
             for(String key:new String[]{"decision_error","session_notice"})if(output.has(key) && output.get(key).isJsonNull())output.remove(key);
             nativeGame=raw.get("game_id").getAsString();nativeDecision=integer(prompt,"decision_id");nativeCycle=integer(raw,"cycle");
             decision=choice.decision_id;consumed=false;nativeRequest=sessionRequest?text(prompt,"session_request_id"):null;

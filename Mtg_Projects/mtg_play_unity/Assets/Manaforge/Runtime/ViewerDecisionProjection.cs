@@ -53,9 +53,11 @@ namespace Manaforge.Play
         public ProjectedTargetingContext Targeting {get;}
         public IReadOnlyList<ProjectedChoiceGroup> Groups {get;}
         public string RequestId {get;} public string RequestKind {get;}
+        public bool AbilitySelection {get;}
         internal ProjectedDecision(CardProjectionContext context,JToken source)
         {
             if(source["request"] is JObject request){RequestId=(string)request["request_id"];RequestKind=(string)request["kind"];}
+            AbilitySelection=(bool?)source["ability_selection"]==true;
             Groups=Array.AsReadOnly((source["groups"] as JArray ?? new JArray()).Select(group=>new ProjectedChoiceGroup(group)).ToArray());
             Context=context;DecisionId=(string)source["decision_id"];PlayerId=(string)source["player_id"];Family=(string)source["family"];Prompt=(string)source["prompt"];
             Minimum=(long?)source["minimum"];Maximum=(long?)source["maximum"];Cancellable=(bool)source["cancellable"];CanFinish=(bool)source["can_finish"];IsPriority=(bool)source["is_priority"];
