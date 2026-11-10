@@ -27,9 +27,19 @@ public final class NativePaymentHazards {
         mage.game.events.GameEvent.EventType.ACTIVATE_ABILITY,mage.game.events.GameEvent.EventType.ACTIVATED_ABILITY,
         mage.game.events.GameEvent.EventType.ADD_MANA,mage.game.events.GameEvent.EventType.MANA_ADDED,
         mage.game.events.GameEvent.EventType.MANA_PAID};
-    private static boolean paymentTriggers(Iterable<? extends mage.abilities.TriggeredAbility> triggers,Game game,Ability paying){
+    private static boolean inactiveBattlefieldSource(Ability ability,Game game){
+        if(ability.getZone()!=mage.constants.Zone.BATTLEFIELD || ability.getSourceId()==null)return false;
+        mage.constants.Zone zone=game.getState().getZone(ability.getSourceId());
+        // Only exclude sources proven to be in a different stable zone. Unknown
+        // identities, delayed abilities and pending triggers remain conservative.
+        return (zone==mage.constants.Zone.LIBRARY || zone==mage.constants.Zone.HAND
+            || zone==mage.constants.Zone.GRAVEYARD || zone==mage.constants.Zone.EXILED)
+            && game.getPermanent(ability.getSourceId())==null && game.getCard(ability.getSourceId())!=null;
+    }
+    private static boolean paymentTriggers(Iterable<? extends mage.abilities.TriggeredAbility> triggers,Game game,Ability paying,boolean registered){
         int count=0;for(mage.abilities.TriggeredAbility trigger:triggers){
             if(++count>128 || trigger==null)return true;
+            if(registered && inactiveBattlefieldSource(trigger,game))continue;
             for(mage.game.events.GameEvent.EventType type:PAYMENT_EVENTS)
                 if(trigger.checkEventType(mage.game.events.GameEvent.getEvent(type,paying.getSourceId(),paying,paying.getControllerId()),game))return true;
         }return false;
@@ -37,6 +47,13 @@ public final class NativePaymentHazards {
     private static boolean paymentEffects(mage.abilities.effects.ContinuousEffects effects,Game game,Ability paying){
         int count=0;for(mage.abilities.effects.ContinuousEffectsList<?> list:effects.allEffectsLists)for(mage.abilities.effects.ContinuousEffect effect:list){
             if(++count>128 || effect==null)return true;
+            java.util.Set<Ability> origins=list.getAbility(effect.getId());
+            if(origins!=null && !origins.isEmpty()){
+                boolean inactive=true;
+                for(Ability origin:origins)if(origin==null || origin.getAbilityType()!=AbilityType.STATIC
+                    || !inactiveBattlefieldSource(origin,game)){inactive=false;break;}
+                if(inactive)continue;
+            }
             if(effect instanceof mage.abilities.effects.ReplacementEffect){
                 for(mage.game.events.GameEvent.EventType type:PAYMENT_EVENTS)
                     if(((mage.abilities.effects.ReplacementEffect)effect).checksEventType(mage.game.events.GameEvent.getEvent(type,paying.getSourceId(),paying,paying.getControllerId()),game))return true;
@@ -52,7 +69,7 @@ public final class NativePaymentHazards {
             if(state.getContinuousEffects()==null || state.getTriggers()==null || state.getDelayed()==null || state.getPlayers()==null)return Result.UNKNOWN;
             int effects=state.getContinuousEffects().getTotalEffectsCount();
             if(effects<0 || state.getPlayers().size()>128)return Result.UNKNOWN;
-            if(state.isManaBurn() || (ordinaryTap?paymentEffects(state.getContinuousEffects(),game,payingAbility) || paymentTriggers(state.getTriggers().values(),game,payingAbility) || paymentTriggers(state.getDelayed(),game,payingAbility):effects>0 || !state.getTriggers().isEmpty() || !state.getDelayed().isEmpty()))return Result.REQUIRES_MANUAL;
+            if(state.isManaBurn() || (ordinaryTap?paymentEffects(state.getContinuousEffects(),game,payingAbility) || paymentTriggers(state.getTriggers().values(),game,payingAbility,true) || paymentTriggers(state.getDelayed(),game,payingAbility,false):effects>0 || !state.getTriggers().isEmpty() || !state.getDelayed().isEmpty()))return Result.REQUIRES_MANUAL;
             // No two-seat/five-seat rule: this is only a bounded internal read budget.
             for(UUID id:state.getPlayers().keySet()) {
                 Player player=state.getPlayers().get(id);

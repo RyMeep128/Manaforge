@@ -9,6 +9,13 @@ Mountain taps respectively, without manually selected payment sources or any
 opponent source use. Existing native hazard checks still reject mana-sensitive
 triggers.
 
+Real games register abilities for cards in hidden zones too. The fixtures include
+inactive Manabarbs and Mana Flare in the opponent's library: their battlefield
+abilities must not block payment or change mana production. A separate fixture
+puts Manabarbs onto the battlefield and requires manual fallback with neither
+Mountain tapped. The engine-side filter ignores only proven inactive battlefield
+sources; delayed and pending triggers and unknown sources remain guarded.
+
 These focused fixtures are not a networked Unity acceptance run. The separate
 Java human-versus-AI workflow checks gateway gameplay; Unity visual acceptance is
 reported separately and requires an activated editor in CI. Do not count API or

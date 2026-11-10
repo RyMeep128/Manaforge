@@ -24,7 +24,7 @@ public final class RealPaymentGameChecks {
             for(mage.abilities.Ability ability:permanent.getAbilities())game.getState().addAbility(ability,permanent);
         }else if(zone==Zone.HAND)game.getPlayer(card.getOwnerId()).getHand().add(card);
     }
-    private static void scenario(boolean doubleRed) throws Exception {
+    private static void scenario(boolean doubleRed,boolean activeHazard) throws Exception {
         TwoPlayerDuel game=new TwoPlayerDuel(MultiplayerAttackOption.MULTIPLE,RangeOfInfluence.ALL,new mage.game.mulligan.LondonMulligan(0),20,7,7);
         ContextHumanPlayer payer=new ContextHumanPlayer("Public payer",RangeOfInfluence.ALL,0);
         ContextHumanPlayer opponent=new ContextHumanPlayer("Public opponent",RangeOfInfluence.ALL,0);
@@ -50,7 +50,9 @@ public final class RealPaymentGameChecks {
         // A registered battlefield ability in a library must not affect this board.
         // Real games register abilities for the whole deck, unlike a five-card fixture.
         Card inactive=new mage.cards.m.Manabarbs(opponent.getId(),info("Manabarbs"));
-        load(game,inactive,Zone.LIBRARY);
+        load(game,inactive,activeHazard?Zone.BATTLEFIELD:Zone.LIBRARY);
+        Card inactiveReplacement=new mage.cards.m.ManaFlare(opponent.getId(),info("Mana Flare"));
+        load(game,inactiveReplacement,Zone.LIBRARY);
         Card spell=doubleRed?new mage.cards.e.EmberHauler(payer.getId(),info("Ember Hauler")):
             new mage.cards.f.FoundryStreetDenizen(payer.getId(),info("Foundry Street Denizen"));
         load(game,spell,Zone.HAND);game.applyEffects();game.saveState(false);
@@ -72,6 +74,14 @@ public final class RealPaymentGameChecks {
                     if(assessment==null)Thread.sleep(1);
                 }
                 require(assessment!=null,"REAL_PAYMENT_CONTEXT_MISSING");
+                if(activeHazard){
+                    require("REQUIRES_MANUAL".equals(assessment.get("reason").getAsString()),"REAL_ACTIVE_HAZARD_NOT_REJECTED");
+                    require(automaticSources==0 && !game.getPermanent(first.getId()).isTapped() && !game.getPermanent(second.getId()).isTapped(),"REAL_HAZARD_TAPPED_SOURCE");
+                    payer.setResponseBoolean(false);
+                    require(!cast.get(2,TimeUnit.SECONDS),"REAL_HAZARD_CAST_NOT_CANCELLED");
+                    System.out.println("{\"scenario\":\"active-mana-hazard\",\"real_engine\":true,\"manual_required\":true,\"mountains_tapped\":0}");
+                    return;
+                }
                 require("VERIFIED_ORDINARY_EQUIVALENT".equals(assessment.get("safety").getAsString()),"REAL_PAYMENT_FALLBACK_"+assessment.get("reason").getAsString());
                 JsonObject step=assessment.getAsJsonArray("steps").get(0).getAsJsonObject();
                 if("mana_type".equals(step.get("kind").getAsString())){
@@ -95,6 +105,6 @@ public final class RealPaymentGameChecks {
         }finally{payer.abort();opponent.abort();cast.cancel(true);executor.shutdownNow();executor.awaitTermination(2,TimeUnit.SECONDS);}
     }
     public static void main(String[] args) throws Exception {
-        Thread.currentThread().setName("GAME-real-payment-setup");scenario(false);scenario(true);
+        Thread.currentThread().setName("GAME-real-payment-setup");scenario(false,false);scenario(true,false);scenario(false,true);
     }
 }
