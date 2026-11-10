@@ -8,6 +8,29 @@ namespace Manaforge.Play
     // Geometry and paging of admitted views. Caller supplies space and identity-keyed page state.
     public static class GameplayCardLayout
     {
+        // Persistent chrome only. Drawer state deliberately is not an input.
+        // Opponents share rows until a dedicated multiplayer composition is introduced.
+        public readonly struct BattlefieldGeometry
+        {
+            public readonly float Left, Span, CardWidth, OpponentLands, OpponentPermanents, LocalPermanents, LocalLands, HandTop;
+            public BattlefieldGeometry(float width,float height)
+            {
+                Left=280; // compact player/Commander rail, independent of zone drawer
+                Span=Mathf.Max(100,width-Left-24);
+                HandTop=height-148;
+                float top=78,bottom=HandTop-24;
+                // Include tapped extent and the existing attachment/land fan offsets.
+                CardWidth=Mathf.Clamp((bottom-top-3*24-24)/4,62,110);
+                float extent=CardWidth;
+                float gap=Mathf.Max(24,(bottom-top-24-4*extent)/3);
+                OpponentLands=top+24;
+                OpponentPermanents=top+extent+gap;
+                LocalPermanents=top+2*(extent+gap);
+                LocalLands=top+3*(extent+gap)+24;
+            }
+            public float PermanentSpan(bool activeStack)=>Mathf.Max(100,Span-(activeStack?220:0));
+        }
+
         // Viewer-local presentation continuity. A changed opaque command reference
         // or native collection order must not reverse the player's visible hand.
         public static void RetainHandOrder(List<string> order,IEnumerable<string> current)

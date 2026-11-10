@@ -258,15 +258,17 @@ namespace Manaforge.Play
             bool Land(ProjectedCard c)=>!c.Hidden && (c.Characteristics?.TypeLine??"").Split('—')[0].Split(' ').Contains("Land");
             void Row(System.Collections.Generic.List<(ProjectedCard card,CardView view)> row,float top,float left,float span,float size,bool full=false,string key=null,bool reserveSeat=false)
                 =>GameplayCardLayout.Row(row,navigation,rowPages,Layout,width,top,left,span,size,full,key,reserveSeat?new Vector2(width*.5f-90,width*.5f+90):(Vector2?)null);
-            float boardLeft=280,boardSpan=Mathf.Max(100,width-445),cardWidth=Mathf.Clamp(boardSpan/7,85,125);
+            var geometry=new GameplayCardLayout.BattlefieldGeometry(width,height);
+            float boardLeft=geometry.Left,boardSpan=geometry.Span,cardWidth=geometry.CardWidth;
+            bool activeStack=items.Any(i=>i.card.Zone=="stack");
             var attachmentGroups=GameplayCardLayout.AttachmentGroups(items.Select(i=>i.card),frame.PlayerLifeTotals.Keys);
             if(openZone=="attachments" && !attachmentGroups.ContainsKey(openZoneOwner)){openZone=openZoneOwner=null;zoneDrawer.ClearBinding(true);rowPages.Remove("public-zone");}
             var attachedIds=new System.Collections.Generic.HashSet<string>(attachmentGroups.Values.SelectMany(group=>group).Select(card=>card.ObjectId));
             var battlefield=items.Where(i=>i.card.Zone=="battlefield" && !attachedIds.Contains(i.card.ObjectId)).ToList();
-            GameplayCardLayout.LandRow(battlefield.Where(i=>i.card.ControllerId!=viewer && Land(i.card)).ToList(),navigation,rowPages,Layout,width,height*.15f,boardLeft,boardSpan,Mathf.Min(cardWidth,110),"opponent-lands",new Vector2(width*.5f-90,width*.5f+90));
-            Row(battlefield.Where(i=>i.card.ControllerId!=viewer && !Land(i.card)).ToList(),height*.30f,boardLeft,boardSpan,cardWidth,key:"opponent-permanents");
-            Row(battlefield.Where(i=>i.card.ControllerId==viewer && !Land(i.card)).ToList(),height*.53f,boardLeft,boardSpan,cardWidth,key:"local-permanents");
-            GameplayCardLayout.LandRow(battlefield.Where(i=>i.card.ControllerId==viewer && Land(i.card)).ToList(),navigation,rowPages,Layout,width,height*.72f,boardLeft,boardSpan,Mathf.Min(cardWidth,110),"local-lands",new Vector2(width*.5f-90,width*.5f+90));
+            GameplayCardLayout.LandRow(battlefield.Where(i=>i.card.ControllerId!=viewer && Land(i.card)).ToList(),navigation,rowPages,Layout,width,geometry.OpponentLands,boardLeft,boardSpan,Mathf.Min(cardWidth,110),"opponent-lands",new Vector2(boardLeft,boardLeft));
+            Row(battlefield.Where(i=>i.card.ControllerId!=viewer && !Land(i.card)).ToList(),geometry.OpponentPermanents,boardLeft,geometry.PermanentSpan(activeStack),cardWidth,key:"opponent-permanents");
+            Row(battlefield.Where(i=>i.card.ControllerId==viewer && !Land(i.card)).ToList(),geometry.LocalPermanents,boardLeft,geometry.PermanentSpan(activeStack),cardWidth,key:"local-permanents");
+            GameplayCardLayout.LandRow(battlefield.Where(i=>i.card.ControllerId==viewer && Land(i.card)).ToList(),navigation,rowPages,Layout,width,geometry.LocalLands,boardLeft,boardSpan,Mathf.Min(cardWidth,110),"local-lands",new Vector2(boardLeft,boardLeft));
             var attachmentViews=items.ToDictionary(item=>item.card.ObjectId);
             foreach(var group in attachmentGroups){
                 Vector2 anchor;float size=95;CardView parentView=null;
