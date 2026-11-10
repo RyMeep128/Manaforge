@@ -14,6 +14,7 @@ namespace Manaforge.Play
     // Create/tick/dispose on the surface's UI thread. No network reads, parsing or waits occur there.
     public sealed class ViewerSessionHost : IDisposable
     {
+        public string GameplayFormat=>bootstrap.GameplayFormat;
         private readonly object gate=new object();private readonly int thread=Thread.CurrentThread.ManagedThreadId;
         private readonly ViewerCardSurface surface;private readonly ViewerSurfaceTicket ticket;private readonly ViewerBootstrap bootstrap;
         private readonly Task ownerEnded;private readonly CancellationTokenSource cancellation=new CancellationTokenSource();

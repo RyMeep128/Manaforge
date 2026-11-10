@@ -101,7 +101,9 @@ namespace Manaforge.Play.Tests
                     Assert.That(views["table-2"].resolvedStyle.top,Is.LessThan(views["table-1"].resolvedStyle.top));
                     Assert.That(views["table-1"].style.rotate.value.angle.value,Is.EqualTo(90));Assert.That(views["table-1"].Q<Label>("status").resolvedStyle.display,Is.EqualTo(DisplayStyle.None));
                     var localSeat=doc.rootVisualElement.Q<Label>("local-seat");var opposingSeat=doc.rootVisualElement.Q<Label>("opponent-seat");
-                    Assert.That(localSeat.worldBound.center.x,Is.EqualTo(size.x*.5f).Within(2));Assert.That(opposingSeat.worldBound.center.x,Is.EqualTo(size.x*.5f).Within(2));
+                    Assert.That(doc.rootVisualElement.Query<PlayerPanel>().ToList().Count,Is.EqualTo(2));
+                    Assert.That(localSeat.worldBound.xMax,Is.LessThan(260));Assert.That(opposingSeat.worldBound.xMax,Is.LessThan(260));
+                    Assert.That(localSeat.worldBound.Overlaps(opposingSeat.worldBound),Is.False);
                     Assert.That(views["table-1"].worldBound.Overlaps(localSeat.worldBound),Is.False,"Tapped lands must leave the life medallion visible");
 
                     foreach(var view in views.Values){Assert.That(view.resolvedStyle.left,Is.GreaterThanOrEqualTo(0));Assert.That(view.resolvedStyle.left+view.resolvedStyle.width,Is.LessThanOrEqualTo(size.x));}
@@ -140,6 +142,7 @@ namespace Manaforge.Play.Tests
                 var handNext=doc.rootVisualElement.Q<Button>("hand-next");Assert.That(handNext,Is.Not.Null);
                 using(var submit=NavigationSubmitEvent.GetPooled()){submit.target=handNext;handNext.SendEvent(submit);}yield return null;
                 Assert.That(views["table-0"].resolvedStyle.display,Is.EqualTo(DisplayStyle.None));
+                doc.rootVisualElement.Q<GameplayDrawer>("zones-drawer").SetOpen(true);yield return null;
                 var graveButton=doc.rootVisualElement.Q<Label>("opponent-graveyard");Assert.That(graveButton,Is.Not.Null);
                 using(var submit=NavigationSubmitEvent.GetPooled()){submit.target=graveButton;graveButton.SendEvent(submit);}yield return null;
                 table.Surface.VisitPresented((card,view)=>{if(card.ObjectId=="grave-1")Assert.That(view.resolvedStyle.display,Is.EqualTo(DisplayStyle.Flex));if(card.ObjectId=="grave-0")Assert.That(view.resolvedStyle.display,Is.EqualTo(DisplayStyle.None));});

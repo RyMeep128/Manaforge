@@ -628,6 +628,7 @@ def run_live_game(
                 command,
                 cwd=str(player.parent),
                 viewer_bootstrap=export_viewer_bootstrap(
+                    format=manifest["format"],
                     port=address["port"],
                     session_id=manifest["manifest_id"],
                     viewer_id=human["seat_id"],

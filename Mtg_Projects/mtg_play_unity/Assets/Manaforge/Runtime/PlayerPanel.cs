@@ -31,13 +31,14 @@ namespace Manaforge.Play
             if(PlayerId!=playerId) ClearBinding();
             PlayerId=playerId; caption.text=displayName ?? "Player";
         }
-        public void Present(long? total, bool priority, bool canTarget, bool reducedMotion)
+        public void Present(long? total, bool priority, bool canTarget, bool reducedMotion, bool active=false)
         {
             if(disposed || PlayerId==null) return;
             bool changed=lastLife.HasValue && total.HasValue && lastLife!=total;
-            StopPulse(); life.text=total?.ToString() ?? "?"; lastLife=total;
+            if(changed || reducedMotion)StopPulse(); life.text=total?.ToString() ?? "?"; lastLife=total;
             targetable=canTarget; EnableInClassList("targetable",canTarget); EnableInClassList("has-priority",priority);
-            state.text=canTarget ? "Choose target" : priority ? "Priority" : "";
+            EnableInClassList("is-active",active);
+            state.text=canTarget ? "Choose target" : priority ? "Priority" : active ? "Active" : "";
             tooltip=caption.text+" | Life "+life.text+(state.text.Length>0?" | "+state.text:"");
             if(changed && !reducedMotion) { life.AddToClassList("life-changed"); pulse=life.schedule.Execute(StopPulse).StartingIn(400); }
         }
@@ -46,12 +47,12 @@ namespace Manaforge.Play
         {
             if(disposed || PlayerId==null)return;
             targetable=value;EnableInClassList("targetable",value);
-            state.text=value?"Choose target":ClassListContains("has-priority")?"Priority":"";
+            state.text=value?"Choose target":ClassListContains("has-priority")?"Priority":ClassListContains("is-active")?"Active":"";
         }
         public void ClearBinding()
         {
             StopPulse(); PlayerId=null; lastLife=null; targetable=false; life.text="?"; caption.text=""; state.text=""; tooltip="";
-            RemoveFromClassList("has-priority"); RemoveFromClassList("targetable"); Blur();
+            RemoveFromClassList("is-active"); RemoveFromClassList("has-priority"); RemoveFromClassList("targetable"); Blur();
         }
         public void Dispose()
         {

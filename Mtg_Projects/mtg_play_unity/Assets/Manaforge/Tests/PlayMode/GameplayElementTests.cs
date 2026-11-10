@@ -47,7 +47,7 @@ namespace Manaforge.Play.Tests
                 UnityEngine.Object.Destroy(art);
             }finally{foreach(var item in owned)item.Dispose();UnityEngine.Object.Destroy(node);UnityEngine.Object.Destroy(settings);}yield return null;
         }
-        [UnityTest] public IEnumerator DefaultViewRejectsExtraSeatsWithoutChoosingAnArbitraryOpponent()
+        [UnityTest] public IEnumerator UnifiedHudRetainsEveryExplicitSeat()
         {
             var node=new GameObject("Topology test");var settings=ScriptableObject.CreateInstance<PanelSettings>();settings.themeStyleSheet=Resources.Load<ThemeStyleSheet>("CardTheme");var doc=node.AddComponent<UIDocument>();doc.panelSettings=settings;
             var table=new ArenaGameplayPresentation(doc.rootVisualElement);
@@ -56,9 +56,9 @@ namespace Manaforge.Play.Tests
                 var snapshot=envelope["body"]["snapshot"];var players=(JArray)snapshot["players"];var extra=players[1].DeepClone();extra["player_id"]="third-seat";players.Add(extra);
                 string session=(string)snapshot["session_id"],viewer=(string)snapshot["viewer_id"];
                 table.Present(ViewerDecisionProjection.ParseSnapshot(envelope.ToString(),session,viewer,0,true));yield return null;
-                Assert.That(doc.rootVisualElement.Q<Label>("table-phase").text,Does.Contain("two players"));
-                Assert.That(table.Surface.CardsRoot.style.display.value,Is.EqualTo(DisplayStyle.None));
-                Assert.That(doc.rootVisualElement.Q<PlayerPanel>("opponent-seat").PlayerId,Is.Null);
+                Assert.That(doc.rootVisualElement.Query<PlayerPanel>().ToList().Count,Is.EqualTo(3));
+                Assert.That(table.Surface.CardsRoot.style.display.value,Is.EqualTo(DisplayStyle.Flex));
+                Assert.That(doc.rootVisualElement.Q<GameplayPlayerHud>().Player("third-seat").PlayerId,Is.EqualTo("third-seat"));
             }finally{table.Dispose();UnityEngine.Object.Destroy(node);UnityEngine.Object.Destroy(settings);}yield return null;
         }
         [UnityTest] public IEnumerator OverlayDismissalRestoresFocusAndClearDoesNotReviveIt()

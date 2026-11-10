@@ -1,9 +1,6 @@
 /* Default 1v1 composition geometry. Component appearance lives in GameplayTheme.uss. */
 .table-cards, #board-navigation, #battlefield-links { position: absolute; left: 0; right: 0; top: 0; bottom: 0; }
 #table-phase { position: absolute; top: 16px; left: 205px; width: 300px; white-space: normal; padding: 3px 10px; }
-#opponent-seat, #local-seat { position: absolute; left: 50%; margin-left: -42px; }
-#opponent-seat { top: 54px; }
-#local-seat { bottom: 145px; }
 #opponent-hand { position: absolute; top: -68px; left: 50%; margin-left: -235px; width: 470px; height: 115px; }
 .opponent-hand-back { position: absolute; width: 70px; height: 100px; }
 #table-choices { position: absolute; right: 20px; bottom: 35px; width: 275px; max-height: 285px; }
@@ -17,7 +14,6 @@
 #table-choices.opening-choices .mf-action { width: 190px; margin-left: 20px; margin-right: 20px; flex-shrink: 0; }
 #table-choices.opening-choices #decision-prompt { -unity-text-align: middle-center; }
 #table-zones { position: absolute; left: 24px; bottom: 205px; width: 110px; white-space: normal; }
-#game-commanders { position: absolute; left: 16px; top: 260px; width: 232px; overflow: hidden; }
 #live-markers { position: absolute; bottom: 20px; left: 3px; right: 3px; white-space: normal; -unity-text-align: middle-center; }
 .table-inspection { position: absolute; left: 25px; top: 95px; }
 #close-inspection { position: absolute; left: 25px; top: 60px; width: 290px; height: 30px; }
@@ -29,11 +25,7 @@
 #board-drag-ghost { position: absolute; padding: 8px; }
 #board-object-menu { position: absolute; width: 300px; max-height: 260px; padding: 12px; }
 #board-object-menu Button { white-space: normal; }
-#local-library, #opponent-library { position: absolute; right: 32px; width: 76px; height: 104px; -unity-text-align: middle-center; }
-#local-library { bottom: 235px; }
-#opponent-library { top: 110px; }
 .library-flight { position: absolute; width: 80px; height: 112px; -unity-text-align: middle-center; }
-#arena-table.opening-state #local-seat { left: 14%; bottom: 70px; }
 #public-zone-choices { position: absolute; left: 18px; bottom: 92px; width: 160px; }
 #public-zone-choices Button { min-height: 30px; margin-top: 4px; white-space: normal; }
 #public-zone-drawer { position: absolute; left: 150px; right: 150px; top: 24%; bottom: 29%; padding: 18px; }
@@ -58,3 +50,23 @@
 #unity-priority-status { white-space: normal; margin-top: 4px; margin-bottom: 4px; }
 #unity-priority-controls Button { white-space: normal; min-height: 28px; margin-top: 4px; }
 #unity-priority-stops { max-height: 230px; margin-top: 8px; }
+
+/* Composition only: expanded bodies retain the previous choice and pile anchors. */
+.arena-player-hud { position: absolute; left: 16px; top: 54px; width: 232px; }
+.arena-player-hud > .mf-hud-players { height: 88px; flex-shrink: 0; }
+.arena-player-hud > .mf-hud-commanders { position: absolute; left: 0; right: 0; top: 224px; bottom: 0; }
+#action-drawer { right: 20px; bottom: 35px; width: 275px; max-height: 317px; }
+#action-drawer.opening-choices { width: 520px; right: 50%; margin-right: -260px; max-height: 202px; }
+#action-drawer.library-ordering { left: 15%; right: 15%; top: 18%; bottom: auto; width: auto; margin-right: 0; max-height: 65%; }
+#action-drawer .mf-drawer-content { max-height: 285px; }
+#action-drawer.opening-choices .mf-drawer-content { max-height: 170px; }
+#action-drawer.library-ordering .mf-drawer-content { max-height: 100%; }
+#action-drawer #table-choices { position: relative; left: auto; right: auto; top: auto; bottom: auto; width: auto; margin-right: 0; max-height: 100%; flex-shrink: 1; }
+#priority-drawer { right: 16px; top: 16px; width: 285px; max-height: 70%; }
+#priority-drawer #unity-priority-controls { position: relative; right: auto; top: auto; width: auto; }
+#priority-drawer .mf-drawer-content { flex-shrink: 1; overflow: hidden; }
+#zones-drawer { left: 16px; top: 150px; width: 232px; }
+#zones-drawer .mf-drawer-viewport { padding-top: 0; }
+#zones-drawer > .mf-drawer-tab { top: auto; bottom: -32px; }
+#zones-drawer .mf-drawer-viewport, #zones-drawer .mf-drawer-content { flex-shrink: 1; }
+#table-motion { top: auto; bottom: 8px; right: 20px; }

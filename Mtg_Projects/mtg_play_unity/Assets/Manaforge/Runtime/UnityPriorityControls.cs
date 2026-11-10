@@ -16,6 +16,8 @@ namespace Manaforge.Play
         private readonly Foldout details=new Foldout{text="Yield / phase stops",value=false};
         private readonly Dictionary<string,Toggle> stops=new Dictionary<string,Toggle>(StringComparer.Ordinal);
         private bool disposed;
+        public bool PresentationVisible {get;private set;}=true;
+        public void SetPresentationVisible(bool visible){if(disposed || PresentationVisible==visible)return;PresentationVisible=visible;panel.PriorityControlsOpen=visible && details.value;Changed();}
         public UnityPriorityControls(VisualElement parent,ViewerDecisionPanel panel)
         {
             this.panel=panel??throw new ArgumentNullException(nameof(panel));panel.EnablePriority();
@@ -27,7 +29,7 @@ namespace Manaforge.Play
             manual.RegisterValueChangedCallback(change=>{panel.Priority.Current.Manual=change.newValue;panel.Priority.CancelYield();Changed();});
             cancel=new Button(()=>{panel.Priority.CancelYield();Changed();}){text="Cancel yield",name="unity-priority-cancel"};Root.Add(cancel);
             resume=new Button(()=>{panel.Priority.Resume();Changed();}){text="Resume automatic passing",name="unity-priority-resume"};Root.Add(resume);
-            Root.Add(details);details.RegisterValueChangedCallback(change=>{if(!ReferenceEquals(change.target,details))return;panel.PriorityControlsOpen=change.newValue;Changed();});
+            Root.Add(details);details.RegisterValueChangedCallback(change=>{if(!ReferenceEquals(change.target,details))return;panel.PriorityControlsOpen=PresentationVisible && change.newValue;Changed();});
             untilTurn=new Button(()=>Yield("turn")){text="Yield until my next turn",name="unity-priority-yield-turn"};
             untilStack=new Button(()=>Yield("stack")){text="Yield until stack changes",name="unity-priority-yield-stack"};
             untilTurn.tooltip="Pass priority even when responses are available, until your next turn. Phase stops still apply.";
@@ -58,7 +60,7 @@ namespace Manaforge.Play
             Root.SetEnabled(current.Revision>=0);
             automatic.SetValueWithoutNotify(current.Automatic);manual.SetValueWithoutNotify(current.Manual);
             foreach(var stop in stops)stop.Value.SetValueWithoutNotify(current.Stops.Contains(stop.Key));
-            state.text=details.value?"Close these controls to resume automatic passing.":panel.Presentation?.Compact==true?panel.Presentation.Text:current.Reason;
+            state.text=PresentationVisible && details.value?"Close these controls to resume automatic passing.":panel.Presentation?.Compact==true?panel.Presentation.Text:current.Reason;
             cancel.style.display=current.Yield!=null && panel.Presentation?.Compact!=true?DisplayStyle.Flex:DisplayStyle.None;
             resume.style.display=current.Paused?DisplayStyle.Flex:DisplayStyle.None;
             bool active=panel.PriorityFrame?.Status=="active" && panel.PriorityFrame.Result==null;

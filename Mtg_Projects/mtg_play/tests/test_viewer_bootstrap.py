@@ -124,3 +124,18 @@ def test_invalid_bootstrap_is_sanitized(field, value):
     args[field] = value
     with pytest.raises(ViewerBootstrapError, match="^VIEWER_BOOTSTRAP_INVALID$"):
         export_viewer_bootstrap(**args)
+
+
+@pytest.mark.parametrize("format", ["freeform", "commander", "unrestricted_commander"])
+def test_authoritative_format_is_optional_private_context(format):
+    value = json.loads(export_viewer_bootstrap(**arguments(), format=format))
+    assert value["format"] == format
+    schema = json.loads((ROOT / "viewer-bootstrap-v1.schema.json").read_text())
+    Draft202012Validator(schema).validate(value)
+    assert "format" not in json.loads(export_viewer_bootstrap(**arguments()))
+
+
+@pytest.mark.parametrize("format", ["", "standard", "Commander", 40, True, []])
+def test_unknown_formats_are_rejected_without_inference(format):
+    with pytest.raises(ViewerBootstrapError, match="^VIEWER_BOOTSTRAP_INVALID$"):
+        export_viewer_bootstrap(**arguments(), format=format)

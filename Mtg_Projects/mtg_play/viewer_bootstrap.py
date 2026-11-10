@@ -34,6 +34,7 @@ def export_viewer_bootstrap(
     engine_version,
     artifact_manifest_sha256,
     viewer_key,
+    format=None,
     artwork_directory=None,
     artwork_manifest_sha256=None,
 ):
@@ -56,6 +57,12 @@ def export_viewer_bootstrap(
         or not matches(artifact_manifest_sha256, r"[0-9a-f]{64}")
         or not isinstance(viewer_key, (bytes, bytearray))
         or len(viewer_key) != 32
+    ):
+        raise ViewerBootstrapError("VIEWER_BOOTSTRAP_INVALID")
+    if format is not None and format not in (
+        "freeform",
+        "commander",
+        "unrestricted_commander",
     ):
         raise ViewerBootstrapError("VIEWER_BOOTSTRAP_INVALID")
     artwork = None
@@ -84,6 +91,8 @@ def export_viewer_bootstrap(
         viewer_key_hex=viewer_key.hex(),
         artwork=artwork,
     )
+    if format is not None:
+        payload["format"] = format
     try:
         encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode(
             "utf-8"

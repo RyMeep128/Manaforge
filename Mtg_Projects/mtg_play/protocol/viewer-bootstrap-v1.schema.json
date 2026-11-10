@@ -73,6 +73,14 @@
           "additionalProperties": false
         }
       ]
+    },
+    "format": {
+      "type": "string",
+      "enum": [
+        "freeform",
+        "commander",
+        "unrestricted_commander"
+      ]
     }
   },
   "required": [

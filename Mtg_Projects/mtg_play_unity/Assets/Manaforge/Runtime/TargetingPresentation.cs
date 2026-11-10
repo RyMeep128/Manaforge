@@ -70,21 +70,23 @@ namespace Manaforge.Play
     // UI controller shared by layouts. Anchors are supplied/bound components, not inferred game rules.
     public sealed class ViewerTargetingController : IDisposable
     {
-        private readonly VisualElement root;private readonly ViewerCardSurface surface;private readonly ViewerDecisionPanel decisions;private readonly PlayerPanel[] players;
+        private readonly VisualElement root;private readonly ViewerCardSurface surface;private readonly ViewerDecisionPanel decisions;private readonly Func<IEnumerable<PlayerPanel>> players;
         private readonly TargetingOverlay overlay;private readonly IVisualElementScheduledItem ticker;
         private readonly Dictionary<string,VisualElement> anchors=new Dictionary<string,VisualElement>();private readonly HashSet<VisualElement> decorated=new HashSet<VisualElement>();
         private ProjectedDecisionFrame frame;private TargetingState state=new TargetingState(null);private ViewerDecisionOffer observed,dragOffer;
         private string pressedTarget;private bool sourceDrag;
         private Vector2 cursor,start;private bool hasCursor,pressed,dragging,disposed;private int pointer;
         public ViewerTargetingController(VisualElement root,ViewerCardSurface surface,ViewerDecisionPanel decisions,IEnumerable<PlayerPanel> players)
+            :this(root,surface,decisions,()=>players) {}
+        public ViewerTargetingController(VisualElement root,ViewerCardSurface surface,ViewerDecisionPanel decisions,Func<IEnumerable<PlayerPanel>> players)
         {
-            this.root=root;this.surface=surface;this.decisions=decisions;this.players=players.ToArray();overlay=new TargetingOverlay(decisions.Root);root.Add(overlay);
+            this.root=root;this.surface=surface;this.decisions=decisions;this.players=players;overlay=new TargetingOverlay(decisions.Root);root.Add(overlay);
             root.RegisterCallback<PointerMoveEvent>(Move,TrickleDown.TrickleDown);root.RegisterCallback<PointerDownEvent>(Down,TrickleDown.TrickleDown);root.RegisterCallback<PointerUpEvent>(Up,TrickleDown.TrickleDown);
             root.RegisterCallback<PointerLeaveEvent>(Leave);root.RegisterCallback<PointerCaptureOutEvent>(Lost);root.RegisterCallback<FocusInEvent>(Focus);root.RegisterCallback<KeyDownEvent>(Key,TrickleDown.TrickleDown);
             surface.Clearing+=Clear;ticker=root.schedule.Execute(Tick).Every(16);
         }
         public void Observe(ProjectedDecisionFrame value){if(disposed)return;if(frame!=null && (value.Context.SessionId!=frame.Context.SessionId || value.Context.ViewerId!=frame.Context.ViewerId))Clear();frame=value;Tick();}
-        private static bool Displayed(VisualElement element){for(var e=element;e!=null;e=e.parent)if(e.resolvedStyle.display==DisplayStyle.None || e.resolvedStyle.visibility==Visibility.Hidden)return false;return element.panel!=null && element.worldBound.width>0 && element.worldBound.height>0;}
+        private static bool Displayed(VisualElement element){for(var e=element;e!=null;e=e.parent){if(e.resolvedStyle.display==DisplayStyle.None || e.resolvedStyle.visibility==Visibility.Hidden)return false;if(e!=element && e.ClassListContains("unity-scroll-view__content-viewport") && !e.worldBound.Contains(element.worldBound.center))return false;}return element.panel!=null && element.worldBound.width>0 && element.worldBound.height>0;}
         private static bool Within(VisualElement child,VisualElement parent){for(var e=child;e!=null;e=e.parent)if(e==parent)return true;return false;}
         private string Hit(Vector2 point,IEnumerable<string> candidates){var hit=root.panel?.Pick(point);return candidates.FirstOrDefault(key=>anchors.TryGetValue(key,out var element) && Displayed(element) && Within(hit,element));}
         private Vector2? Center(string key)=>key!=null && anchors.TryGetValue(key,out var element) && Displayed(element) && root.worldBound.Contains(element.worldBound.center)?root.WorldToLocal(element.worldBound.center):(Vector2?)null;
@@ -124,7 +126,7 @@ namespace Manaforge.Play
             if(disposed)return;var current=decisions.PriorityFrame;
             if(!ReferenceEquals(observed,decisions.CurrentOffer)){CancelDrag();observed=decisions.CurrentOffer;}
             state=new TargetingState(current!=null && frame!=null && current.Context.Revision==frame.Context.Revision && current.Context.SessionId==frame.Context.SessionId && current.Context.ViewerId==frame.Context.ViewerId?current:null);
-            anchors.Clear();surface.VisitPresented((card,view)=>anchors["object:"+card.ObjectId]=view);foreach(var player in players)if(player.PlayerId!=null)anchors["player:"+player.PlayerId]=player;
+            anchors.Clear();surface.VisitPresented((card,view)=>anchors["object:"+card.ObjectId]=view);foreach(var player in players())if(player.PlayerId!=null)anchors["player:"+player.PlayerId]=player;
             var desired=new Dictionary<VisualElement,HashSet<string>>();
             void Decorate(string key,string style){if(key!=null && anchors.TryGetValue(key,out var element)){if(element.Q<VisualElement>("targeting-outline")==null){var outline=new VisualElement{name="targeting-outline",pickingMode=PickingMode.Ignore};outline.AddToClassList("mf-target-outline");element.Add(outline);}if(!desired.TryGetValue(element,out var styles)){styles=new HashSet<string>();desired.Add(element,styles);}styles.Add(style);}}
             var links=new List<BattlefieldLinks.Link>();var labels=new Dictionary<string,(Vector2,string)>();string status=null;

@@ -105,3 +105,28 @@
 /* Application display chrome shared by gameplay layouts. */
 .mf-display-controls { position: absolute; top: 16px; right: 240px; width: 160px; background-color: transparent; }
 .mf-display-controls > Button { height: 34px; margin: 0; font-size: 13px; }
+
+/* Shared gameplay composition primitives, usable outside Arena. */
+.mf-gameplay-drawer { position: absolute; }
+.mf-drawer-tab { position: absolute; top: 0; left: 0; right: 0; height: 30px; min-height: 30px; margin: 0; }
+.mf-drawer-viewport { overflow: hidden; padding-top: 32px; }
+.mf-drawer-content { transition-property: translate, opacity; transition-duration: 230ms; transition-timing-function: ease-out; }
+.drawer-left .mf-drawer-content { translate: -100% 0; opacity: 0; }
+.drawer-right .mf-drawer-content { translate: 100% 0; opacity: 0; }
+.drawer-up .mf-drawer-content { translate: 0 -100%; opacity: 0; }
+.drawer-down .mf-drawer-content { translate: 0 100%; opacity: 0; }
+.drawer-open .mf-drawer-content { translate: 0 0; opacity: 1; }
+.drawer-reduced-motion .mf-drawer-content { transition-duration: 0ms; }
+.drawer-attention > .mf-drawer-tab { border-color: rgb(214, 165, 75); color: rgb(255, 225, 162); }
+.mf-player-hud { flex-shrink: 0; }
+.mf-hud-players { min-height: 88px; }
+.mf-hud-commanders { flex-grow: 1; }
+.mf-hud-commander-info { flex-shrink: 0; }
+.mf-player.mf-hud-player { position: relative; width: 108px; height: 78px; min-height: 78px; margin: 2px; padding: 4px; border-radius: 9px; flex-shrink: 0; }
+.mf-hud-player > .mf-player-life { position: absolute; left: 6px; top: 20px; right: 6px; height: 36px; font-size: 29px; -unity-text-align: middle-center; }
+.mf-hud-player > .mf-player-name { position: absolute; left: 4px; right: 4px; top: 2px; height: 20px; width: auto; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; -unity-text-align: middle-center; }
+.mf-hud-player > .mf-player-state { position: absolute; left: 2px; right: 2px; top: 58px; height: 16px; width: auto; font-size: 10px; -unity-text-align: middle-center; }
+.mf-hud-player.is-active { background-color: rgba(77, 61, 36, 0.96); }
+
+.mf-gameplay-drawer.mf-theme, .mf-player-hud.mf-theme, .mf-zone-panel.mf-theme { background-color: rgba(0, 0, 0, 0); }
+.mf-drawer-tab { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

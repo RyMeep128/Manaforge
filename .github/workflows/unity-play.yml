@@ -119,6 +119,7 @@ jobs:
           path: |
             Mtg_Projects/mtg_play_unity/Artifacts/*mode.xml
             Mtg_Projects/mtg_play_unity/Artifacts/commit.txt
+            Mtg_Projects/mtg_play_unity/Artifacts/HudDrawers/
             Mtg_Projects/mtg_play_unity/Artifacts/PlayerSmoke/
             Mtg_Projects/mtg_play_unity/Artifacts/ForgeStyle-*/side-by-side-*.png
             Mtg_Projects/mtg_play_unity/Artifacts/ForgeStyle-*/multi-seat-*.png

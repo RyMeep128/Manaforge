@@ -27,6 +27,19 @@ namespace Manaforge.Play.Tests
             }
             Assert.That(input,Is.EqualTo(before));
         }
+        [TestCase("freeform")][TestCase("commander")][TestCase("unrestricted_commander")]
+        public void ExplicitFormatSurvivesPrivateBootstrap(string format)
+        {
+            var value=Example();value["format"]=format;using var bootstrap=ViewerBootstrap.Parse(Bytes(value));
+            Assert.That(bootstrap.GameplayFormat,Is.EqualTo(format));
+            Assert.That(GameplayPlayerHud.HasCommanderContent(format),Is.EqualTo(format!="freeform"));
+        }
+        [Test] public void UnknownOrMissingFormatCannotInventCommanderContent()
+        {
+            using(var old=ViewerBootstrap.Parse(Bytes(Example())))Assert.That(old.GameplayFormat,Is.Null);
+            foreach(var format in new JToken[]{JValue.CreateNull(),new JValue("Commander"),new JValue(40),new JObject()}){var value=Example();value["format"]=format;Invalid(Bytes(value));}
+            Assert.That(GameplayPlayerHud.HasCommanderContent(null),Is.False);
+        }
         [Test] public void SharedNegativeCorpusRejectsEveryInvalidShape()
         {foreach(var item in Corpus()["negative"])Invalid(Bytes(item["value"]));}
         [Test] public void ArtworkMetadataIsPinnedAndRequiresAnAbsolutePath()
