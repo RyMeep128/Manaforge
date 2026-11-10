@@ -204,8 +204,8 @@ public final class ContextHumanPlayer extends HumanPlayer {
             result.addProperty("reason","UNSUPPORTED_COST");
             if(unpaid.getSourceFilter()!=null || OrdinaryCostCoverage.inspect(unpaid,new Mana())==OrdinaryCostCoverage.Result.UNSUPPORTED)return result;
             for(mage.abilities.costs.Cost cost:paying.getCosts())if(!cost.isPaid()){result.addProperty("reason","ADDITIONAL_COST");return result;}
-            NativePaymentHazards.Result hazard=NativePaymentHazards.inspectOrdinaryTap(game,paying);
-            if(hazard!=NativePaymentHazards.Result.NO_REGISTERED_HAZARD){result.addProperty("reason",hazard.name());return result;}
+            NativePaymentHazards.Assessment hazard=NativePaymentHazards.assessOrdinaryTap(game,paying);
+            if(hazard.result!=NativePaymentHazards.Result.NO_REGISTERED_HAZARD){result.addProperty("reason",hazard.reason);return result;}
             Mana floating=NativePaymentPlan.pool(this,paying,unpaid,game);
             java.util.List<NativePaymentPlan.Source> options=new java.util.ArrayList<>();
             for(UUID id:sources){

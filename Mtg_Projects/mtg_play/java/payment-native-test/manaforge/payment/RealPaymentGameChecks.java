@@ -65,7 +65,7 @@ public final class RealPaymentGameChecks {
         if(third!=null)load(game,third,Zone.BATTLEFIELD);
         Card herald=new mage.cards.w.WirewoodHerald(opponent.getId(),info("Wirewood Herald"));
         Card elves=new mage.cards.l.LlanowarElves(opponent.getId(),info("Llanowar Elves"));
-        load(game,herald,Zone.BATTLEFIELD);load(game,elves,Zone.BATTLEFIELD);
+        load(game,herald,lackey?Zone.LIBRARY:Zone.BATTLEFIELD);load(game,elves,lackey?Zone.LIBRARY:Zone.BATTLEFIELD);
         // A registered battlefield ability in a library must not affect this board.
         // Real games register abilities for the whole deck, unlike a five-card fixture.
         Card inactive=new mage.cards.m.Manabarbs(opponent.getId(),info("Manabarbs"));
@@ -78,12 +78,19 @@ public final class RealPaymentGameChecks {
             load(game,new mage.cards.m.ManaFlare(owner,info("Mana Flare")),Zone.LIBRARY);
         }
         if(lackey){
+            boolean fullDeck=name.startsWith("lackey-decks");
+            if(!fullDeck || !name.endsWith("empty")){
             load(game,new mage.cards.s.SoulWarden(opponent.getId(),info("Soul Warden")),Zone.BATTLEFIELD);
             load(game,new mage.cards.s.SoulsAttendant(opponent.getId(),info("Soul's Attendant")),Zone.BATTLEFIELD);
             load(game,new mage.cards.v.VoiceOfTheBlessed(opponent.getId(),info("Voice of the Blessed")),Zone.BATTLEFIELD);
+            }
+            if(fullDeck)registerReportedDecks(game,payer,opponent,name.endsWith("empty"),name.endsWith("warchief"));
+            else {
             // Entire decks register static/triggered abilities before cards enter play.
             load(game,new mage.cards.g.GoblinKing(payer.getId(),info("Goblin King")),Zone.LIBRARY);
             load(game,new mage.cards.g.GoblinWarchief(payer.getId(),info("Goblin Warchief")),Zone.LIBRARY);
+            }
+            if(name.endsWith("warchief"))load(game,new mage.cards.g.GoblinWarchief(payer.getId(),info("Goblin Warchief")),Zone.BATTLEFIELD);
             if(name.equals("lackey-lifegain-lord"))load(game,new mage.cards.g.GoblinChieftain(payer.getId(),info("Goblin Chieftain")),Zone.BATTLEFIELD);
         }
         Card spell=lackey?new mage.cards.g.GoblinLackey(payer.getId(),info("Goblin Lackey")):generic?new mage.cards.c.CentaurCourser(payer.getId(),info("Centaur Courser")):
@@ -114,7 +121,7 @@ public final class RealPaymentGameChecks {
                 }
                 require(assessment!=null,"REAL_PAYMENT_CONTEXT_MISSING");
                 if(activeHazard || insufficient){
-                    require((activeHazard?"REQUIRES_MANUAL":"INSUFFICIENT_OR_UNSUPPORTED_SOURCES").equals(assessment.get("reason").getAsString()),"REAL_UNSAFE_PAYMENT_NOT_REJECTED");
+                    require((activeHazard?(name.equals("active-mana-replacement")?"MANA_REPLACEMENT_EVENT":"MANA_TRIGGER_EVENT"):"INSUFFICIENT_OR_UNSUPPORTED_SOURCES").equals(assessment.get("reason").getAsString()),"REAL_UNSAFE_PAYMENT_NOT_REJECTED");
                     require(automaticSources==0 && !game.getPermanent(first.getId()).isTapped() && game.getPermanent(second.getId()).isTapped()==insufficient,"REAL_HAZARD_TAPPED_SOURCE");
                     payer.setResponseBoolean(false);
                     require(!cast.get(2,TimeUnit.SECONDS),"REAL_HAZARD_CAST_NOT_CANCELLED");
@@ -135,7 +142,7 @@ public final class RealPaymentGameChecks {
             require(game.getStack().size()==1 && game.getStack().getFirst().getSourceId().equals(spell.getId()),"REAL_SPELL_NOT_ON_STACK");
             int tapped=0;for(UUID id:sources)if(game.getPermanent(id).isTapped())tapped++;
             require(tapped==expectedTaps && automaticSources==tapped,"REAL_PAYMENT_WRONG_MOUNTAINS");
-            require(!game.getPermanent(elves.getId()).isTapped(),"REAL_PAYMENT_USED_OPPONENT_SOURCE");
+            require(lackey || !game.getPermanent(elves.getId()).isTapped(),"REAL_PAYMENT_USED_OPPONENT_SOURCE");
             if(lackey){System.out.println("{\"scenario\":\""+name+"\",\"real_engine\":true,\"mountains_tapped\":1,\"manual_payment_inputs\":0,\"spell_on_stack\":true}");return;}
             game.getStack().resolve(game);
             require(game.getStack().isEmpty() && game.getPermanent(spell.getId())!=null,"REAL_SPELL_NOT_RESOLVED");
@@ -143,6 +150,18 @@ public final class RealPaymentGameChecks {
             proof.addProperty("real_engine",true);proof.addProperty("mountains_tapped",tapped);proof.addProperty("manual_payment_inputs",0);
             proof.addProperty("spell_stacked_and_resolved",true);System.out.println(proof);
         }finally{payer.abort();opponent.abort();cast.cancel(true);executor.shutdownNow();executor.awaitTermination(2,TimeUnit.SECONDS);}
+    }
+    private static void registerReportedDecks(TwoPlayerDuel game,ContextHumanPlayer payer,ContextHumanPlayer opponent,boolean empty,boolean warchief) throws Exception {
+        // Canonical card names/classes/quantities only; no saved IDs or private metadata.
+        String[][][] decks=new String[][][]{new String[][]{{"Krenko, Mob Boss","mage.cards.k.KrenkoMobBoss","2"},{"Goblin Lackey","mage.cards.g.GoblinLackey","4"},{"Foundry Street Denizen","mage.cards.f.FoundryStreetDenizen","3"},{"Gempalm Incinerator","mage.cards.g.GempalmIncinerator","2"},{"Goblin Chieftain","mage.cards.g.GoblinChieftain","3"},{"Goblin Grenade","mage.cards.g.GoblinGrenade","4"},{"Goblin King","mage.cards.g.GoblinKing","1"},{"Goblin Ringleader","mage.cards.g.GoblinRingleader","4"},{"Goblin Warchief","mage.cards.g.GoblinWarchief","3"},{"Light Up the Stage","mage.cards.l.LightUpTheStage","4"},{"Lightning Bolt","mage.cards.l.LightningBolt","4"},{"Mogg War Marshal","mage.cards.m.MoggWarMarshal","4"},{"Mountain","mage.cards.basiclands.Mountain","21"},{"Thrill of Possibility","mage.cards.t.ThrillOfPossibility","2"}},new String[][]{{"Soul Warden","mage.cards.s.SoulWarden","4"},{"Soul's Attendant","mage.cards.s.SoulsAttendant","4"},{"Essence Channeler","mage.cards.e.EssenceChanneler","4"},{"Exemplar of Light","mage.cards.e.ExemplarOfLight","3"},{"Leonardo, Cutting Edge","mage.cards.l.LeonardoCuttingEdge","2"},{"Voice of the Blessed","mage.cards.v.VoiceOfTheBlessed","4"},{"Plains","mage.cards.basiclands.Plains","21"},{"Sheltered by Ghosts","mage.cards.s.ShelteredByGhosts","4"},{"Swords to Plowshares","mage.cards.s.SwordsToPlowshares","4"},{"Revitalize","mage.cards.r.Revitalize","4"},{"Haliya, Guided by Light","mage.cards.h.HaliyaGuidedByLight","2"},{"Inspiring Overseer","mage.cards.i.InspiringOverseer","4"}}};
+        for(int seat=0;seat<decks.length;seat++)for(String[] row:decks[seat]){
+            int count=Integer.parseInt(row[2]);
+            if(seat==0 && (row[0].equals("Mountain") || row[0].equals("Goblin Lackey")))count--;
+            if(seat==0 && warchief && row[0].equals("Goblin Warchief"))count--;
+            if(seat==1 && !empty && Arrays.asList("Soul Warden","Soul's Attendant","Voice of the Blessed").contains(row[0]))count--;
+            UUID owner=seat==0?payer.getId():opponent.getId();
+            for(int i=0;i<count;i++)load(game,(Card)Class.forName(row[1]).getConstructor(UUID.class,CardSetInfo.class).newInstance(owner,info(row[0])),Zone.LIBRARY);
+        }
     }
     private static void nativeSessionRequests() throws Exception {
         Class<?> bridgeType=Class.forName("ManaforgeBridge"),transportType=Class.forName("ManaforgeBridge$RequestTransport");
@@ -204,6 +223,7 @@ public final class RealPaymentGameChecks {
     }
     public static void main(String[] args) throws Exception {
         Thread.currentThread().setName("GAME-real-payment-setup");unrestrictedCommander();nativeSessionRequests();nativePileChoice(true);nativePileChoice(false);
+        scenario("lackey-decks-empty",false,false);scenario("lackey-decks-lifegain",false,false);scenario("lackey-decks-warchief",false,false);
         scenario("lackey-lifegain",false,false);scenario("lackey-lifegain-lord",false,false);
         scenario("foundry-street-opponent-triggers",false,false);
         scenario("two-red-mountains",true,false);
