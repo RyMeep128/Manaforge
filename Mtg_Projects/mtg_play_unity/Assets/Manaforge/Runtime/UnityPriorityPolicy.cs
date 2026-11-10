@@ -31,7 +31,7 @@ namespace Manaforge.Play
         public static PriorityResponse Responses(ProjectedDecisionFrame frame)
         {
             if(frame==null || !frame.ActionsComplete || frame.Decision?.IsPriority!=true)return PriorityResponse.Unknown;
-            return frame.Actions.Any(action=>action.Kind!="pass") || frame.Decision?.Options.Count>0
+            return frame.Actions.Any(action=>action.Kind!="pass" && !(action.Kind=="activate" && action.PriorityClass=="basic_mana")) || frame.Decision?.Options.Count>0
                 ?PriorityResponse.Yes:PriorityResponse.No;
         }
         public void CancelYield(){if(Current.YieldManual.HasValue && !Current.Manual)Current.Manual=Current.YieldManual.Value;Current.YieldManual=null;Current.Yield=null;Current.YieldTurn=null;Current.YieldStack=null;Current.ResolveBoundary=null;}

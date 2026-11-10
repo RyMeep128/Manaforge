@@ -372,6 +372,10 @@ public final class ManaforgeOpeningProjection {
                 GameObject object=null;for(GameObject candidate:cards)if(candidate.object_id.equals(reference))object=candidate;
                 if(object==null || object.hidden || !("command".equals(object.zone)?viewer.equals(object.owner_id):viewer.equals(object.controller_id)) || !("command".equals(object.zone) || "hand".equals(object.zone) || coreCombat && "battlefield".equals(object.zone) && (kind.getAsString().equals("activate") || kind.getAsString().equals("select_object"))))continue;
                 LegalAction action=new LegalAction();action.action_id=opaque();action.object_id=reference;action.kind="battlefield".equals(object.zone)?"activate":kind.getAsString();action.label=action.kind.equals("cast_spell")?"Cast spell":action.kind.equals("select_object")?"Select object":action.kind.equals("activate")?"Activate":"Play land";if(coreCombat)action.label+=": "+object.characteristics.name;action.priority_class="meaningful";
+                // Preserve engine classification; mixed/non-mana abilities must still hold priority.
+                JsonObject classes=raw.has("priority_classes") && raw.get("priority_classes").isJsonObject()?raw.getAsJsonObject("priority_classes"):null;
+                if("activate".equals(action.kind) && classes!=null && classes.has(source)
+                    && classes.get(source).isJsonPrimitive() && "basic_mana".equals(classes.get(source).getAsString()))action.priority_class="basic_mana";
                 actions.add(action);offeredNative.put(action.action_id,source);
             }
             if((priority && includePriorityPass) || attackFinish) {

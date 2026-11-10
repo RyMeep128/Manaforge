@@ -117,6 +117,26 @@ namespace Manaforge.Play.Tests
                 for(int i=0;i<4;i++){host.Tick();panel.Tick();yield return null;}Assert.That(peer.PendingCommandBytes,Is.Zero,"No duplicate pass may be created by hidden controls");
             }finally{host.Cancel();UnityEngine.Object.Destroy(node);UnityEngine.Object.Destroy(settings);}yield return null;
         }
+        [UnityTest] public IEnumerator AfterCastingManaOnlyOfferDispatchesPassWithoutManualInput()
+        {
+            var envelope=Fixture("receive-history-v1.json");var snapshot=envelope["body"]["snapshot"];snapshot["phase"]="PRECOMBAT_MAIN";snapshot["step"]="PRECOMBAT_MAIN";snapshot["actions_complete"]=true;snapshot["decision"]["family"]="selection";
+            snapshot["actions"]=new JArray(new JObject{["action_id"]="pass-offered",["kind"]="pass",["label"]="Pass",["object_id"]=null,["priority_class"]="unknown"});
+            ((JArray)snapshot["actions"]).Add(new JObject{["action_id"]="remaining-mana",["kind"]="activate",["label"]="Activate",["object_id"]=null,["priority_class"]="basic_mana"});
+            var spell=Fixture("wire-receive-v1.json")["body"]["snapshot"]["objects"][0].DeepClone();spell["object_id"]="just-cast";spell["zone"]="stack";snapshot["objects"]=new JArray(spell);
+            var doc=Document(out var node,out var settings);using var surface=new ViewerCardSurface(doc.rootVisualElement);
+            using var peer=new ViewerSessionHostTests.Peer(envelope.ToString());var owner=new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);using var host=new ViewerSessionHost(surface,peer.Bootstrap(),owner.Task,true);
+            using var actions=new GameplayDrawer("Actions");doc.rootVisualElement.Add(actions);using var panel=new ViewerDecisionPanel(actions.Content,host);
+            var priorityDrawer=new GameplayDrawer("Priority");doc.rootVisualElement.Add(priorityDrawer);using var priority=new GameplayPriorityDrawer(priorityDrawer,panel);
+            try{
+                float deadline=Time.realtimeSinceStartup+10;
+                while(peer.PendingCommandBytes==0 && Time.realtimeSinceStartup<deadline){host.Tick();panel.Tick();priority.Refresh();actions.RefreshInput();yield return null;}
+                Assert.That(peer.PendingCommandBytes,Is.GreaterThan(0));Assert.That(actions.IsOpen,Is.False);Assert.That(priorityDrawer.IsOpen,Is.False);
+                var read=Task.Run(()=>Manaforge.Play.Protocol.WireMessages.Parse(peer.ReadCommandForFixture()));
+                while(!read.IsCompleted && Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(read.IsCompleted,Is.True);Assert.That((string)read.GetAwaiter().GetResult()["body"]["action_id"],Is.EqualTo("pass-offered"));
+                for(int i=0;i<4;i++){host.Tick();panel.Tick();yield return null;}Assert.That(peer.PendingCommandBytes,Is.Zero,"No duplicate pass may be created by hidden controls");
+            }finally{host.Cancel();UnityEngine.Object.Destroy(node);UnityEngine.Object.Destroy(settings);}yield return null;
+        }
         [UnityTest] public IEnumerator MandatoryChoiceReopensOnceAndCollapsedPriorityRetainsPreferences()
         {
             var envelope=Fixture("receive-history-v1.json");var snapshot=envelope["body"]["snapshot"];snapshot["phase"]="BEGINNING";snapshot["step"]="UPKEEP";snapshot["decision"]["family"]="selection";

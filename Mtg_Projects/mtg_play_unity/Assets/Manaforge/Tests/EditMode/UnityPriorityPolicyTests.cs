@@ -87,6 +87,33 @@ namespace Manaforge.Play.Tests
             snapshot["decision"]["is_priority"]=false;Assert.That(policy.Evaluate(Frame(wire)),Is.Null);snapshot["decision"]["is_priority"]=true;
             snapshot["phase"]="PRECOMBAT_MAIN";snapshot["step"]="PRECOMBAT_MAIN";Assert.That(policy.Evaluate(Frame(wire)),Is.Null);
         }
+        [Test] public void AfterCastingManaOnlyPriorityPassesOnceAndFreshOffersRemainAutomatic()
+        {
+            var wire=Source();Stack(wire,"cast-spell");
+            ((JArray)wire["body"]["snapshot"]["actions"]).Add(new JObject{["action_id"]="unused-land",["kind"]="activate",["object_id"]=null,["label"]="Activate",["priority_class"]="basic_mana"});
+            var policy=new UnityPriorityPolicy();var frame=Frame(wire);
+            Assert.That(UnityPriorityPolicy.Responses(frame),Is.EqualTo(PriorityResponse.No));
+            Assert.That(policy.Claim(frame),Is.True);Assert.That(policy.Claim(frame),Is.False);
+            wire["body"]["snapshot"]["revision"]=2;wire["body"]["snapshot"]["decision"]["decision_id"]="fresh-priority";
+            Assert.That(policy.Evaluate(Frame(wire)),Is.Not.Null);
+            policy.Current.Manual=true;Assert.That(policy.Evaluate(Frame(wire)),Is.Null);policy.Current.Manual=false;
+            policy.SetStop("step","PRECOMBAT_MAIN",true);Assert.That(policy.Evaluate(Frame(wire)),Is.Null);
+        }
+        [TestCase("activate","unknown")][TestCase("activate","meaningful")][TestCase("cast_spell","basic_mana")]
+        public void OnlyExplicitEngineManaActivationsCanBeIgnored(string kind,string classification)
+        {
+            var wire=Source();Stack(wire,"cast-spell");
+            ((JArray)wire["body"]["snapshot"]["actions"]).Add(new JObject{["action_id"]="response",["kind"]=kind,["object_id"]=null,["label"]="Response",["priority_class"]=classification});
+            Assert.That(new UnityPriorityPolicy().Evaluate(Frame(wire)),Is.Null);
+        }
+        [Test] public void ManaOnlyActionsStillRequireCompleteInformationAndNoChoices()
+        {
+            var wire=Source();((JArray)wire["body"]["snapshot"]["actions"]).Add(new JObject{["action_id"]="mana",["kind"]="activate",["object_id"]=null,["label"]="Mana",["priority_class"]="basic_mana"});
+            wire["body"]["snapshot"]["actions_complete"]=false;Assert.That(new UnityPriorityPolicy().Evaluate(Frame(wire)),Is.Null);
+            wire["body"]["snapshot"]["actions_complete"]=true;
+            wire["body"]["snapshot"]["decision"]["options"]=new JArray(new JObject{["option_id"]="choice",["label"]="Response",["object_id"]=null,["player_id"]=null,["selected"]=false});
+            Assert.That(new UnityPriorityPolicy().Evaluate(Frame(wire)),Is.Null);
+        }
         [Test] public void AvailableResponsesHoldPriority()
         {
             var wire=Source();Response(wire);var frame=Frame(wire);

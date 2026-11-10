@@ -21,6 +21,13 @@ public final class UnityPriorityProjectionChecks {
         raw.add("playable",new JsonArray());raw.getAsJsonArray("playable").add("raw-card");raw.getAsJsonObject("action_kinds").addProperty("raw-card","activate");
         snapshot=projection.projectCoreCombat(raw,prompt,true);OpeningProjectionChecks.shape(snapshot);
         require(snapshot.get("actions_complete").getAsBoolean());require(snapshot.getAsJsonArray("actions").size()==2);
+        JsonObject classes=new JsonObject();classes.addProperty("raw-card","basic_mana");raw.add("priority_classes",classes);
+        snapshot=projection.projectCoreCombat(raw,prompt,true);
+        require(snapshot.getAsJsonArray("actions").get(0).getAsJsonObject().get("priority_class").getAsString().equals("basic_mana"));
+        classes.addProperty("raw-card","meaningful");snapshot=projection.projectCoreCombat(raw,prompt,true);
+        require(snapshot.getAsJsonArray("actions").get(0).getAsJsonObject().get("priority_class").getAsString().equals("meaningful"));
+        raw.remove("priority_classes");snapshot=projection.projectCoreCombat(raw,prompt,true);
+        require(snapshot.getAsJsonArray("actions").get(0).getAsJsonObject().get("priority_class").getAsString().equals("meaningful"));
         snapshot=projection.projectCoreCombat(raw,OpeningProjectionChecks.attackPrompt());require(!snapshot.get("actions_complete").getAsBoolean());require(!snapshot.getAsJsonObject("decision").get("is_priority").getAsBoolean());
         JsonArray duplicate=new JsonArray();duplicate.add("one");duplicate.add("one");
         require(!ManaforgeOpeningProjection.completePriorityActions(duplicate,Arrays.asList("one",null)));
