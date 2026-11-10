@@ -276,10 +276,10 @@ namespace Manaforge.Play
                 =>GameplayCardLayout.Row(row,navigation,rowPages,Layout,width,top,left,span,size,full,key,reserveSeat?new Vector2(width*.5f-90,width*.5f+90):(Vector2?)null);
             float boardLeft=260,boardSpan=Mathf.Max(100,width-425),cardWidth=Mathf.Clamp(boardSpan/7,85,125);
             var battlefield=items.Where(i=>i.card.Zone=="battlefield").ToList();
-            Row(battlefield.Where(i=>i.card.ControllerId!=viewer && Land(i.card)).ToList(),height*.15f,boardLeft,boardSpan,Mathf.Min(cardWidth,110),key:"opponent-lands",reserveSeat:true);
+            GameplayCardLayout.LandRow(battlefield.Where(i=>i.card.ControllerId!=viewer && Land(i.card)).ToList(),navigation,rowPages,Layout,width,height*.15f,boardLeft,boardSpan,Mathf.Min(cardWidth,110),"opponent-lands",new Vector2(width*.5f-90,width*.5f+90));
             Row(battlefield.Where(i=>i.card.ControllerId!=viewer && !Land(i.card)).ToList(),height*.30f,boardLeft,boardSpan,cardWidth,key:"opponent-permanents");
             Row(battlefield.Where(i=>i.card.ControllerId==viewer && !Land(i.card)).ToList(),height*.53f,boardLeft,boardSpan,cardWidth,key:"local-permanents");
-            Row(battlefield.Where(i=>i.card.ControllerId==viewer && Land(i.card)).ToList(),height*.72f,boardLeft,boardSpan,Mathf.Min(cardWidth,110),key:"local-lands",reserveSeat:true);
+            GameplayCardLayout.LandRow(battlefield.Where(i=>i.card.ControllerId==viewer && Land(i.card)).ToList(),navigation,rowPages,Layout,width,height*.72f,boardLeft,boardSpan,Mathf.Min(cardWidth,110),"local-lands",new Vector2(width*.5f-90,width*.5f+90));
             foreach(var item in items)item.view.RemoveFromClassList("in-hand");
             var hand=items.Where(i=>i.card.Zone=="hand" && i.card.OwnerId==viewer).ToList();
             GameplayCardLayout.RetainHandOrder(handOrder,hand.Select(item=>item.card.RenderId));

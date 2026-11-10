@@ -36,6 +36,63 @@ namespace Manaforge.Play
                 for(int i=0;i<row.Count;i++){var v=row[i].view;v.style.display=DisplayStyle.Flex;v.SetPresentation(full?CardPresentationMode.Full:CardPresentationMode.Compact,size);v.style.left=reserveSeat?(i<leftSlots?gapStart-Mathf.Min(leftSlots,row.Count)*(size+18)+9+i*(size+18):gapEnd+9+(i-leftSlots)*(size+18)):start+i*step;v.style.top=top;v.style.rotate=new Rotate(new Angle(row[i].card.Tapped==true?90:0));}
             }
 
+        public const int MaximumLandStack=2;
+        public static float LandSize(int count,float maximum=110)=>Mathf.Clamp(maximum/(1+.045f*Mathf.Max(0,count-4)),62,maximum);
+        private static string LandIdentity(ProjectedCard card)
+        {
+            var c=card.Characteristics;
+            if(card.Hidden || card.FaceDown!=false || card.Zone!="battlefield" || !card.Tapped.HasValue || c==null
+                || string.IsNullOrEmpty(c.Name) || c.Counters==null || c.Counters.Count!=0 || card.Attachments==null || card.Attachments.Count!=0
+                || card.AttachedTo!=null || card.CommanderId!=null || c.IsCopy==true || c.Transformed==true || c.Flipped==true
+                || Array.IndexOf((c.TypeLine??"").Split('—')[0].Split(' '),"Land")<0
+                || Array.IndexOf((c.TypeLine??"").Split('—')[0].Split(' '),"Creature")>=0
+                || c.CurrentAbilities==null && c.EngineViewText==null)return "single:"+card.RenderId;
+            var fields=new[]{card.Printing?.OracleId??c.Name,c.Name,c.TypeLine,c.Color,card.ControllerId,card.OwnerId,
+                card.Tapped.ToString(),c.Power,c.Toughness,card.Damage?.ToString(),
+                c.CurrentAbilities==null?"view":"live",string.Join("\n",c.CurrentAbilities??c.EngineViewText)};
+            return string.Concat(fields.Select(value=>(value?.Length??-1)+":"+value));
+        }
+        // Keep every native object/view separate; piles are geometry, never a combined action.
+        public static IReadOnlyList<IReadOnlyList<ProjectedCard>> LandStacks(IEnumerable<ProjectedCard> cards)
+        {
+            var result=new List<IReadOnlyList<ProjectedCard>>();
+            foreach(var group in cards.OrderBy(c=>c.Characteristics?.Name,StringComparer.Ordinal).ThenBy(c=>c.Tapped)
+                .ThenBy(c=>c.RenderId,StringComparer.Ordinal).GroupBy(LandIdentity)){
+                var same=group.ToArray();for(int i=0;i<same.Length;i+=MaximumLandStack)result.Add(Array.AsReadOnly(same.Skip(i).Take(MaximumLandStack).ToArray()));
+            }return result.AsReadOnly();
+        }
+        public static void LandRow(List<(ProjectedCard card,CardView view)> cards,VisualElement navigation,Dictionary<string,int> pages,Action relayout,
+            float width,float top,float left,float span,float maximum,string key,Vector2 reserved)
+        {
+            if(cards.Count==0){pages.Remove(key);return;}
+            foreach(var item in cards)item.view.style.display=DisplayStyle.None;
+            var stacks=LandStacks(cards.Select(item=>item.card));var views=cards.ToDictionary(item=>item.card,item=>item.view);
+            float size=LandSize(cards.Count,maximum);
+            float leftSpan=Mathf.Max(0,reserved.x-left),rightStart=Mathf.Max(left,reserved.y),rightSpan=Mathf.Max(0,left+span-rightStart);
+            float Pitch(float value)=>value*1.15f+Mathf.Max(12,value*.14f)+18;
+            while(size>62 && Mathf.FloorToInt(leftSpan/Pitch(size))+Mathf.FloorToInt(rightSpan/Pitch(size))<stacks.Count)size=Mathf.Max(62,size-2);
+            float offset=Mathf.Max(12,size*.14f),pitch=Pitch(size);
+            int leftSlots=Mathf.Max(0,Mathf.FloorToInt(leftSpan/pitch)),rightSlots=Mathf.Max(0,Mathf.FloorToInt(rightSpan/pitch));
+            if(leftSlots+rightSlots==0){if(leftSpan>=rightSpan)leftSlots=1;else rightSlots=1;}
+            int capacity=leftSlots+rightSlots,last=(stacks.Count-1)/capacity,page=pages.TryGetValue(key,out var requested)?Mathf.Clamp(requested,0,last):0;pages[key]=page;
+            if(last>0){
+                var nav=new VisualElement();nav.AddToClassList("row-navigation");nav.style.left=Mathf.Min(width-120,left+span+8);nav.style.top=top;navigation.Add(nav);
+                var previous=new Button(()=>{pages[key]=Mathf.Max(0,page-1);relayout();}){text="‹",name=key+"-previous"};previous.SetEnabled(page>0);nav.Add(previous);
+                nav.Add(new Label((page+1)+" / "+(last+1)){enableRichText=false});
+                var next=new Button(()=>{pages[key]=Mathf.Min(last,page+1);relayout();}){text="›",name=key+"-next"};next.SetEnabled(page<last);nav.Add(next);
+            }
+            var shown=stacks.Skip(page*capacity).Take(capacity).ToArray();int onLeft=Mathf.Min(leftSlots,shown.Length),onRight=shown.Length-onLeft;
+            for(int i=0;i<shown.Length;i++){
+                bool first=i<onLeft;int slot=first?i:i-onLeft,slots=first?onLeft:onRight;float start=first?left:rightStart,available=first?leftSpan:rightSpan;
+                float step=Mathf.Min(pitch,available/Mathf.Max(1,slots)),x=start+(available-step*slots)*.5f+slot*step+8;
+                var stack=shown[i];for(int depth=0;depth<stack.Count;depth++){
+                    var card=stack[depth];var view=views[card];int behind=stack.Count-depth-1;
+                    view.SetPresentation(CardPresentationMode.Compact,size);view.style.left=x+behind*offset;view.style.top=top-behind*Mathf.Max(20,size*.22f);
+                    view.style.rotate=new Rotate(new Angle(card.Tapped==true?90:0));view.style.display=DisplayStyle.Flex;view.BringToFront();
+                }
+            }
+        }
+
         public static void Hand(List<(ProjectedCard card,CardView view)> hand,VisualElement navigation,Dictionary<string,int> rowPages,Action relayout,Action closeInspection,Rect bounds,float navigationY,bool opening,float handWidth)
         {
             float handSpan=Mathf.Max(handWidth,bounds.width);
