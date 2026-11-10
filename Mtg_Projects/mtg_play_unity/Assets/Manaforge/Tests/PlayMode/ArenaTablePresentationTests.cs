@@ -10,6 +10,20 @@ namespace Manaforge.Play.Tests
 {
     public sealed class ArenaTablePresentationTests
     {
+        [UnityTest] public IEnumerator StackAutomaticallyExpandsAndClearsItsToolbar()
+        {
+            var node=new GameObject("Stack focus presentation");var settings=ScriptableObject.CreateInstance<PanelSettings>();settings.themeStyleSheet=Resources.Load<ThemeStyleSheet>("CardTheme");var document=node.AddComponent<UIDocument>();document.panelSettings=settings;document.rootVisualElement.style.width=1280;document.rootVisualElement.style.height=720;
+            var table=new ArenaGameplayPresentation(document.rootVisualElement);
+            try{
+                var corpus=JObject.Parse(File.ReadAllText(Path.Combine(Application.dataPath,"../../mtg_play/protocol/fixtures/wire-receive-v1.json")));var message=(JObject)corpus["positive"][0]["envelope"].DeepClone();var snapshot=message["body"]["snapshot"];snapshot["decision"]=null;snapshot["actions"]=new JArray();snapshot["commanders"]=null;snapshot["stack_targets"]=new JArray();var card=snapshot["objects"][0];card["zone"]="stack";card["hidden"]=false;card["face_down"]=false;card["characteristics"]["type_line"]="Ability";
+                string session=(string)snapshot["session_id"],viewer=(string)snapshot["viewer_id"];var ticket=table.Surface.BeginViewer(session,viewer);
+                table.Surface.TryPresent(ticket,ViewerCardProjection.ParseSnapshot(message.ToString(),session,viewer,0,true));table.Present(ViewerDecisionProjection.ParseSnapshot(message.ToString(),session,viewer,0,true));yield return null;
+                var toggle=document.rootVisualElement.Q<Button>("stack-focus-toggle");Assert.That(toggle.text,Is.EqualTo("Minimize"));Assert.That(document.rootVisualElement.Q<Button>("stack-resolve-all").style.display.value,Is.EqualTo(DisplayStyle.Flex));
+                using(var click=ClickEvent.GetPooled()){click.target=toggle;toggle.SendEvent(click);}Assert.That(toggle.text,Is.EqualTo("View"));
+                snapshot["revision"]=(long)snapshot["revision"]+1;snapshot["objects"]=new JArray();table.Surface.TryPresent(ticket,ViewerCardProjection.ParseSnapshot(message.ToString(),session,viewer,0,true));table.Present(ViewerDecisionProjection.ParseSnapshot(message.ToString(),session,viewer,0,true));
+                Assert.That(document.rootVisualElement.Q<VisualElement>("stack-toolbar").style.display.value,Is.EqualTo(DisplayStyle.None));
+            }finally{table.Dispose();Object.Destroy(node);Object.Destroy(settings);}
+        }
         [UnityTest] public IEnumerator HoverReturnsToKeyboardPreviewAndRevocationClearsItWithoutACommand()
         {
             var node=new GameObject("Authenticated Arena focus test");var settings=ScriptableObject.CreateInstance<PanelSettings>();

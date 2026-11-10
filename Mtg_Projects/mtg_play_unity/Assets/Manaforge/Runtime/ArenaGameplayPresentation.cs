@@ -10,6 +10,10 @@ namespace Manaforge.Play
         private readonly VisualElement root,choices,navigation,opponentHand,zoneChoices;
         private readonly ZoneBrowser zoneDrawer;
         private readonly Label stackTitle;
+        private readonly VisualElement stackBackdrop,stackToolbar;
+        private readonly Button stackToggle,resolveAll;
+        private bool stackFocused;private float stackAttentionUntil;
+        private readonly System.Collections.Generic.HashSet<string> seenStack=new System.Collections.Generic.HashSet<string>();
         private readonly ZonePile localGraveyard,opponentGraveyard,localExile,opponentExile,localLibrary,opponentLibrary;private string openZone,openZoneOwner,previewId;private bool previewing;
         private CardView hoveredCard,focusedCard,emphasizedCard;private string hoveredId,focusedId,emphasizedId;
         private readonly System.Collections.Generic.Dictionary<string,int> rowPages=new System.Collections.Generic.Dictionary<string,int>();
@@ -30,6 +34,7 @@ namespace Manaforge.Play
             var theme=Resources.Load<StyleSheet>("ArenaTable");if(theme!=null)root.styleSheets.Add(theme);
             GameplayTheme.Attach(root);
             var material=new GameplayTableSurface();material.style.position=Position.Absolute;material.style.left=12;material.style.right=12;material.style.top=12;material.style.bottom=12;root.Add(material);
+            stackBackdrop=new VisualElement{name="stack-focus-backdrop",pickingMode=PickingMode.Ignore};stackBackdrop.style.position=Position.Absolute;stackBackdrop.style.backgroundColor=new Color(.025f,.035f,.05f,.94f);stackBackdrop.style.borderTopLeftRadius=stackBackdrop.style.borderTopRightRadius=stackBackdrop.style.borderBottomLeftRadius=stackBackdrop.style.borderBottomRightRadius=12;stackBackdrop.style.display=DisplayStyle.None;root.Add(stackBackdrop);
             Surface=new ViewerCardSurface(root,cardBacks);Surface.CardsRoot.AddToClassList("table-cards");Surface.CardsRoot.pickingMode=PickingMode.Ignore;
             Surface.InspectionView.AddToClassList("table-inspection");Surface.InspectionView.SetPresentation(CardPresentationMode.Full,290);Surface.InspectionView.style.display=DisplayStyle.None;
             links=new BattlefieldLinks();root.Add(links);
@@ -45,7 +50,10 @@ namespace Manaforge.Play
             zones=Label("table-zones","");zones.style.display=DisplayStyle.None;
             zoneChoices=new VisualElement{name="public-zone-choices"};zoneChoices.style.display=DisplayStyle.None;root.Add(zoneChoices);
             zoneDrawer=new ZoneBrowser(Surface.CardBacks);root.Add(zoneDrawer);zoneDrawer.BrowseRequested+=BrowseZone;zoneDrawer.Closed+=ClosePublicZone;
-            stackTitle=Label("stack-title","");stackTitle.pickingMode=PickingMode.Ignore;
+            stackToolbar=new VisualElement{name="stack-toolbar"};stackToolbar.style.position=Position.Absolute;stackToolbar.style.flexDirection=FlexDirection.Row;stackToolbar.style.alignItems=Align.Center;root.Add(stackToolbar);
+            stackTitle=new Label{name="stack-title",enableRichText=false};stackTitle.style.position=Position.Relative;stackTitle.style.top=0;stackTitle.style.right=0;stackTitle.style.width=StyleKeyword.Auto;stackTitle.style.flexGrow=1;stackToolbar.Add(stackTitle);
+            stackToggle=new Button(()=>{stackFocused=!stackFocused;Layout();}){name="stack-focus-toggle",text="Minimize"};stackToolbar.Add(stackToggle);GameplayTheme.Button(stackToggle);
+            resolveAll=new Button(()=>{if(Decisions==null)return;if(Decisions.Priority.Current.Yield=="resolve-stack")Decisions.Priority.CancelYield();else if(CanResolveStack()){Decisions.Priority.BeginYield("resolve-stack",Decisions.PriorityFrame);stackAttentionUntil=0;}Decisions.PrioritySettingsChanged();RefreshStackControls();}){name="stack-resolve-all",text="Resolve All"};stackToolbar.Add(resolveAll);GameplayTheme.Button(resolveAll,true);stackToolbar.style.display=DisplayStyle.None;
             commanders=new CommanderDashboard();root.Add(commanders);
             choices=new ScrollView(ScrollViewMode.Vertical){name="table-choices"};root.Add(choices);
             var motion=new Toggle("Reduced motion"){name="table-motion",value=false};motion.RegisterValueChangedCallback(ev=>{root.EnableInClassList("reduced-motion",ev.newValue);animations?.Advance();});root.Add(motion);
@@ -89,7 +97,7 @@ namespace Manaforge.Play
         }
         private void ClearZoneResources()
         {
-            commanders?.ClearPresentation();ClearCardFocus();inspecting=false;inspector?.Hide(false);CloseInspection();openZone=openZoneOwner=null;localPlayer.ClearBinding();opponent.ClearBinding();opponentHand.Clear();animations?.Clear();links.Set(Array.Empty<BattlefieldLinks.Link>());
+            seenStack.Clear();stackFocused=false;stackAttentionUntil=0;stackToolbar.style.display=stackBackdrop.style.display=DisplayStyle.None;commanders?.ClearPresentation();ClearCardFocus();inspecting=false;inspector?.Hide(false);CloseInspection();openZone=openZoneOwner=null;localPlayer.ClearBinding();opponent.ClearBinding();opponentHand.Clear();animations?.Clear();links.Set(Array.Empty<BattlefieldLinks.Link>());
             zoneDrawer?.ClearBinding();
             root.RemoveFromClassList("browsing-public-zone");frame=null;rowPages.Clear();handOrder.Clear();
             foreach(var pile in new[]{localLibrary,opponentLibrary,localGraveyard,opponentGraveyard,localExile,opponentExile}){
@@ -99,7 +107,7 @@ namespace Manaforge.Play
         private Label Label(string name,string text){var label=new Label(text){name=name,enableRichText=false};root.Add(label);return label;}
         public void CloseInspection(){bool restore=inspecting;inspecting=false;previewing=false;previewId=null;restoringFocus=true;try{inspector?.Hide(restore);}finally{restoringFocus=false;}}
         public void Bind(ViewerSessionHost value)
-        {if(Decisions!=null)throw new InvalidOperationException("PRESENTATION_ALREADY_BOUND");host=value;Decisions=new ViewerDecisionPanel(choices,host);Decisions.PresentationHold=()=>animations.HoldAutomaticPassing;Decisions.SetSpatialPresentation(true);Decisions.SetChoicePreview(Surface.ChoicePreview);priorityControls=new UnityPriorityControls(root,Decisions);targeting=new ViewerTargetingController(root,Surface,Decisions,new[]{localPlayer,opponent});boardInput=new ViewerBoardInput(root,Surface,host,Decisions,GameplayTheme.Menu);}
+        {if(Decisions!=null)throw new InvalidOperationException("PRESENTATION_ALREADY_BOUND");host=value;Decisions=new ViewerDecisionPanel(choices,host);Decisions.PresentationHold=()=>animations.HoldAutomaticPassing || Time.unscaledTime<stackAttentionUntil;Decisions.SetSpatialPresentation(true);Decisions.SetChoicePreview(Surface.ChoicePreview);priorityControls=new UnityPriorityControls(root,Decisions);targeting=new ViewerTargetingController(root,Surface,Decisions,new[]{localPlayer,opponent});boardInput=new ViewerBoardInput(root,Surface,host,Decisions,GameplayTheme.Menu);}
         public void Present(ProjectedDecisionFrame value)
         {
             if(disposed)return;
@@ -110,12 +118,16 @@ namespace Manaforge.Play
             }
             unsupportedTopology=false;Surface.CardsRoot.style.display=DisplayStyle.Flex;choices.style.display=DisplayStyle.Flex;
             localPlayer.Bind(value.Context.ViewerId,"You");opponent.Bind(seatIds.Single(id=>id!=value.Context.ViewerId),"Opponent");
-            priorityControls?.Refresh();
+            priorityControls?.Refresh();RefreshStackControls();
             if(frame!=null && frame.Context.Revision==value.Context.Revision && frame.Context.SessionId==value.Context.SessionId && frame.Context.ViewerId==value.Context.ViewerId){boardInput?.Refresh();RefreshPlayers();targeting?.Observe(frame);if(artworkCount!=Surface.PresentedArtworkCount){artworkCount=Surface.PresentedArtworkCount;Layout();}return;}
             artworkCount=Surface.PresentedArtworkCount;
             if(frame==null || frame.Context.SessionId!=value.Context.SessionId || frame.Context.ViewerId!=value.Context.ViewerId || !Surface.HasInspection){
                 ClearCardFocus();CloseInspection();
             }
+            bool newStack=value.StackIds.Any(id=>!seenStack.Contains(id));
+            seenStack.Clear();foreach(string id in value.StackIds)seenStack.Add(id);
+            if(newStack){stackFocused=true;stackAttentionUntil=Time.unscaledTime+.9f;rowPages["stack"]=0;}
+            if(value.StackIds.Count==0){stackFocused=false;stackAttentionUntil=0;}
             frame=value;targeting?.Observe(value);
             string viewer=frame.Context.ViewerId;
             localPlayer.Present(frame.PlayerLifeTotals[viewer],frame.Decision?.PlayerId==viewer,false,root.ClassListContains("reduced-motion"));
@@ -129,6 +141,8 @@ namespace Manaforge.Play
             if(Decisions!=null)GameplayTheme.Decision(Decisions,frame);
             OpenOfferedZone();Layout();animations.Observe(frame,Surface.TakeAnimations());
         }
+        private bool CanResolveStack(){var offered=Decisions?.CurrentOffer;var value=offered?.Frame;return offered?.CanSubmit==true && value?.StackIds.Count>0 && value.Decision?.IsPriority==true && value.Decision.PlayerId==value.Context.ViewerId && value.PriorityPlayerId==value.Context.ViewerId && value.Actions.Count(a=>a.Kind=="pass" && a.ObjectId==null)==1 && !Decisions.Priority.Current.Paused;}
+        private void RefreshStackControls(){if(resolveAll==null)return;bool running=Decisions?.Priority.Current.Yield=="resolve-stack";resolveAll.text=running?"Cancel":"Resolve All";resolveAll.style.display=stackFocused?DisplayStyle.Flex:DisplayStyle.None;resolveAll.SetEnabled(running || CanResolveStack());stackToggle.text=stackFocused?"Minimize":"View";}
         private static string PhaseName(string phase)
         {switch(phase){case "PRECOMBAT_MAIN":return "Main phase";case "POSTCOMBAT_MAIN":return "Second main phase";case "COMBAT":return "Combat";case "BEGINNING":return "Beginning phase";case "ENDING":return "Ending phase";default:return (phase??"Opening hand").Replace('_',' ');}}
         private void UpdateOpponentHand(string player)
@@ -279,9 +293,14 @@ namespace Manaforge.Play
             float handSpan=opening?Mathf.Max(230,width-240):Mathf.Clamp(width-680,145,900),handSize=opening?210:145;
             GameplayCardLayout.Hand(hand,navigation,rowPages,Layout,CloseInspection,new Rect((width-handSpan)*.5f,opening?height*.24f:height-handSize*1.4f+55,handSpan,handSize*1.4f),height-30,opening,handSize);
             var stack=items.Where(i=>i.card.Zone=="stack").ToList();
-            stackTitle.text=stack.Count==0?"":"STACK  ·  "+stack.Count;stackTitle.style.display=stack.Count==0?DisplayStyle.None:DisplayStyle.Flex;
-            stackTitle.style.top=height*.36f-25;
-            Row(stack,height*.36f,width-145,130,100,key:"stack");
+            stackTitle.text=stack.Count==0?"":"STACK · "+stack.Count;stackToolbar.style.display=stack.Count==0?DisplayStyle.None:DisplayStyle.Flex;
+            float stackWidth=stackFocused?Mathf.Min(520,Mathf.Max(220,width*.4f)):200,stackLeft=Mathf.Max(260,width-stackWidth-20),stackTop=stackFocused?height*.27f:height*.36f;
+            stackWidth=Mathf.Max(100,width-stackLeft-20);float stackSize=stackFocused?Mathf.Clamp((height*.42f)/1.4f,120,190):100;
+            stackToolbar.style.left=stackLeft;stackToolbar.style.top=stackTop-38;stackToolbar.style.width=stackWidth;
+            stackBackdrop.style.display=stackFocused && stack.Count>0?DisplayStyle.Flex:DisplayStyle.None;stackBackdrop.style.left=stackLeft-10;stackBackdrop.style.top=stackTop-46;stackBackdrop.style.width=stackWidth+20;stackBackdrop.style.height=stackSize*1.4f+75;
+            Row(stack,stackTop,stackLeft,stackWidth,stackSize,full:true,key:"stack");
+            foreach(var item in items)if(item.card.Zone!="stack")item.view.style.opacity=stackFocused?.72f:1;
+            foreach(var item in stack)item.view.BringToFront();RefreshStackControls();stackToolbar.BringToFront();if(Decisions?.PriorityControlsOpen==true)priorityControls?.Root.BringToFront();
             Row(items.Where(i=>i.card.Zone=="command" && i.card.OwnerId!=viewer).ToList(),height*.36f,15,130,65,key:"opponent-command");
             Row(items.Where(i=>i.card.Zone=="command" && i.card.OwnerId==viewer).ToList(),height*.50f,15,130,65,key:"local-command");
             // Piles use admitted visible artwork only. No card order/top-card identity is inferred.

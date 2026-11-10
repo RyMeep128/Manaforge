@@ -207,6 +207,30 @@ namespace Manaforge.Play.Tests
             wire=Source();wire["body"]["snapshot"]["priority_player_id"]="two";
             Assert.That(new UnityPriorityPolicy().Evaluate(Frame(wire)),Is.Null);
         }
+        [Test] public void ResolveAllContinuesThroughRemovalsAndStopsAtEmptyStack()
+        {
+            var wire=Source();Stack(wire,"a","b");Response(wire);var policy=new UnityPriorityPolicy();policy.BeginYield("resolve-stack",Frame(wire));
+            Assert.That(policy.Evaluate(Frame(wire)),Is.Not.Null);
+            wire["body"]["snapshot"]["revision"]=2;wire["body"]["snapshot"]["decision"]["decision_id"]="after-one";Stack(wire,"a");
+            Assert.That(policy.Evaluate(Frame(wire)),Is.Not.Null);
+            wire["body"]["snapshot"]["revision"]=3;wire["body"]["snapshot"]["decision"]["decision_id"]="after-all";Stack(wire);
+            Assert.That(policy.Evaluate(Frame(wire)),Is.Null);Assert.That(policy.Current.Yield,Is.Null);Assert.That(policy.Current.Reason,Is.EqualTo("Stack resolved"));
+        }
+        [Test] public void ResolveAllPausesForChoicesAndStopsForNewStackObjectsOrFailure()
+        {
+            var wire=Source();Stack(wire,"a");Response(wire);var policy=new UnityPriorityPolicy();policy.BeginYield("resolve-stack",Frame(wire));
+            wire["body"]["snapshot"]["decision"]["is_priority"]=false;Assert.That(policy.Evaluate(Frame(wire)),Is.Null);Assert.That(policy.Current.Yield,Is.EqualTo("resolve-stack"));
+            wire["body"]["snapshot"]["decision"]["is_priority"]=true;Assert.That(policy.Evaluate(Frame(wire)),Is.Not.Null);
+            Stack(wire,"a","new-response");Assert.That(policy.Evaluate(Frame(wire)),Is.Null);Assert.That(policy.Current.Yield,Is.Null);
+            policy.BeginYield("resolve-stack",Frame(wire));policy.Failed();Assert.That(policy.Claim(Frame(wire)),Is.False);
+        }
+        [Test] public void ResolveAllHonorsStopsAndRestoresManualControl()
+        {
+            var wire=Source();Stack(wire,"a");var policy=new UnityPriorityPolicy();policy.Observe(Frame(wire));policy.Current.Manual=true;policy.BeginYield("resolve-stack",Frame(wire));
+            policy.SetStop("step","PRECOMBAT_MAIN",true);Assert.That(policy.Evaluate(Frame(wire)),Is.Null);
+            policy.SetStop("step","PRECOMBAT_MAIN",false);Assert.That(policy.Evaluate(Frame(wire)),Is.Not.Null);
+            policy.CancelYield();Assert.That(policy.Current.Manual,Is.True);Assert.That(policy.Evaluate(Frame(wire)),Is.Null);
+        }
         [Test] public void ProjectedPriorityContextIncludesStepAndImmutableStackOrder()
         {
             var wire=Source();Stack(wire,"fixture-stack-a","fixture-stack-b");var frame=Frame(wire);

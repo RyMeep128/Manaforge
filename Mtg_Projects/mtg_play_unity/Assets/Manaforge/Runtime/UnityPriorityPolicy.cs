@@ -13,6 +13,8 @@ namespace Manaforge.Play
         public string Reason {get;internal set;}="Waiting for priority";
         internal long? YieldTurn;
         internal string YieldStack;
+        internal string ResolveBoundary;
+        internal bool? YieldManual;
         internal long Revision=-1;
         internal readonly HashSet<string> Attempted=new HashSet<string>(StringComparer.Ordinal);
     }
@@ -32,13 +34,15 @@ namespace Manaforge.Play
             return frame.Actions.Any(action=>action.Kind!="pass") || frame.Decision?.Options.Count>0
                 ?PriorityResponse.Yes:PriorityResponse.No;
         }
-        public void CancelYield(){Current.Yield=null;Current.YieldTurn=null;Current.YieldStack=null;}
+        public void CancelYield(){if(Current.YieldManual.HasValue && !Current.Manual)Current.Manual=Current.YieldManual.Value;Current.YieldManual=null;Current.Yield=null;Current.YieldTurn=null;Current.YieldStack=null;Current.ResolveBoundary=null;}
         public void Suspend(){CancelYield();Current.Paused=true;Current.Reason="Automatic passing suspended";}
         public void Failed(){CancelYield();Current.Paused=true;Current.Reason="Automatic passing paused after a command failure";}
         public void Resume(){Current.Paused=false;}
         public void BeginYield(string mode,ProjectedDecisionFrame frame)
         {
-            Observe(frame);if(frame==null || (mode!="turn" && mode!="stack" && mode!="end-turn") || frame.Status!="active" || frame.Result!=null)return;
+            Observe(frame);if(frame==null || (mode!="turn" && mode!="stack" && mode!="end-turn" && mode!="resolve-stack") || frame.Status!="active" || frame.Result!=null)return;
+            if(mode=="resolve-stack" && frame.StackIds.Count==0)return;
+            CancelYield();Current.YieldManual=mode=="resolve-stack"?(bool?)Current.Manual:null;
             Current.Yield=mode;Current.YieldTurn=frame.Turn;Current.YieldStack=StackKey(frame);Current.Manual=false;
         }
         public bool SetStop(string kind,string value,bool enabled)
@@ -62,6 +66,10 @@ namespace Manaforge.Play
                 || frame.Turn<Current.YieldTurn || frame.ActivePlayerId==frame.Context.ViewerId && frame.Turn!=Current.YieldTurn))CancelYield();
             if(Current.Yield=="end-turn" && (!frame.Turn.HasValue || frame.Turn!=Current.YieldTurn))CancelYield();
             if(Current.Yield=="stack" && StackKey(frame)!=Current.YieldStack)CancelYield();
+            if(Current.Yield=="resolve-stack"){
+                if(frame.StackIds.Count==0){CancelYield();Current.ResolveBoundary=frame.Decision?.DecisionId;}
+                else if(frame.StackIds.Any(id=>!(Current.YieldStack??"").Split('|').Contains(id)))CancelYield();
+            }
         }
         public ProjectedAction Evaluate(ProjectedDecisionFrame frame)
         {
@@ -70,6 +78,7 @@ namespace Manaforge.Play
             if(frame==null || frame.Status!="active" || frame.Result!=null)reason="Waiting for priority";
             else if(frame.Context.Revision<Current.Revision)reason="Waiting for current state";
             else if(Current.Paused)reason="Automatic passing paused after a command failure";
+            else if(Current.ResolveBoundary!=null && Current.ResolveBoundary==frame.Decision?.DecisionId)reason="Stack resolved";
             else if(Current.Manual)reason="Manual control";
             else if(frame.Decision==null || !frame.Decision.IsPriority || frame.Decision.Family!="selection"
                 || frame.Decision.PlayerId!=frame.Context.ViewerId || frame.PriorityPlayerId!=frame.Context.ViewerId)reason="Decision requires input";
@@ -81,7 +90,7 @@ namespace Manaforge.Play
             if(reason!=null){Current.Reason=reason;return null;}
             var passes=frame.Actions.Where(action=>action.Kind=="pass" && action.ObjectId==null).ToArray();
             if(passes.Length!=1){Current.Reason="Pass action unavailable";return null;}
-            Current.Reason=Current.Yield=="end-turn"?"Yielding until this turn ends":Current.Yield=="turn"?"Yielding until my next turn":Current.Yield=="stack"?"Yielding until stack changes":"Automatic priority";
+            Current.Reason=Current.Yield=="resolve-stack"?"Resolving stack":Current.Yield=="end-turn"?"Yielding until this turn ends":Current.Yield=="turn"?"Yielding until my next turn":Current.Yield=="stack"?"Yielding until stack changes":"Automatic priority";
             return passes[0];
         }
         public bool Claim(ProjectedDecisionFrame frame)
