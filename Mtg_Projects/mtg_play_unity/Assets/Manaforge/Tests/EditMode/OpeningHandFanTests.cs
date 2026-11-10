@@ -28,6 +28,18 @@ namespace Manaforge.Play.Tests
             Assert.That(cards[0].Top,Is.GreaterThan(cards[3].Top));Assert.That(cards[0].Top,Is.EqualTo(cards[6].Top).Within(.01f));
             Assert.That(cards[6].Angle-cards[0].Angle,Is.LessThanOrEqualTo(30));
         }
+        [Test] public void SnapshotReorderingDrawAndReentryPreserveTheExistingHandOrder()
+        {
+            var order=new System.Collections.Generic.List<string>();
+            GameplayCardLayout.RetainHandOrder(order,new[]{"first","second","third"});
+            GameplayCardLayout.RetainHandOrder(order,new[]{"third","drawn","second","first"});
+            Assert.That(order,Is.EqualTo(new[]{"first","second","third","drawn"}));
+            GameplayCardLayout.RetainHandOrder(order,new[]{"drawn","third","first"});
+            Assert.That(order,Is.EqualTo(new[]{"first","third","drawn"}));
+            GameplayCardLayout.RetainHandOrder(order,new[]{"second","drawn","first","third"});
+            Assert.That(order,Is.EqualTo(new[]{"first","third","drawn","second"}));
+            GameplayCardLayout.RetainHandOrder(order,System.Array.Empty<string>());Assert.That(order,Is.Empty);
+        }
         [Test] public void EmptyHandDoesNotInventCards(){Assert.That(OpeningHandFan.Arrange(0,1200),Is.Empty);}
         [TestCase(-1,100)][TestCase(257,100)][TestCase(7,0)][TestCase(7,-1)]
         public void InvalidGeometryFailsExplicitly(int count,float width){Assert.Throws<System.ArgumentOutOfRangeException>(()=>OpeningHandFan.Arrange(count,width));}

@@ -8,6 +8,14 @@ namespace Manaforge.Play
     // Geometry and paging of admitted views. Caller supplies space and identity-keyed page state.
     public static class GameplayCardLayout
     {
+        // Viewer-local presentation continuity. A changed opaque command reference
+        // or native collection order must not reverse the player's visible hand.
+        public static void RetainHandOrder(List<string> order,IEnumerable<string> current)
+        {
+            var present=current.ToList();var ids=new HashSet<string>(present,StringComparer.Ordinal);
+            order.RemoveAll(id=>!ids.Contains(id));
+            foreach(var id in present)if(!order.Contains(id))order.Add(id);
+        }
         public static void Row(System.Collections.Generic.List<(ProjectedCard card,CardView view)> row,VisualElement navigation,System.Collections.Generic.Dictionary<string,int> rowPages,Action relayout,float width,float top,float left,float span,float size,bool full=false,string key=null,Vector2? reservedInterval=null){
                 if(row.Count==0)return;
                 bool reserveSeat=reservedInterval.HasValue;float gapStart=reservedInterval?.x??left,gapEnd=reservedInterval?.y??left;

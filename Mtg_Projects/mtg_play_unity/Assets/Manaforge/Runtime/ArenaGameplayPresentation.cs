@@ -13,6 +13,7 @@ namespace Manaforge.Play
         private readonly ZonePile localGraveyard,opponentGraveyard,localExile,opponentExile,localLibrary,opponentLibrary;private string openZone,openZoneOwner,previewId;private bool previewing;
         private CardView hoveredCard,focusedCard,emphasizedCard;private string hoveredId,focusedId,emphasizedId;
         private readonly System.Collections.Generic.Dictionary<string,int> rowPages=new System.Collections.Generic.Dictionary<string,int>();
+        private readonly System.Collections.Generic.List<string> handOrder=new System.Collections.Generic.List<string>();
         private readonly Label status,result,zones,commanders;
         private readonly PlayerPanel localPlayer,opponent;
         private bool unsupportedTopology,restoringFocus;
@@ -90,7 +91,7 @@ namespace Manaforge.Play
         {
             ClearCardFocus();inspecting=false;inspector?.Hide(false);CloseInspection();openZone=openZoneOwner=null;localPlayer.ClearBinding();opponent.ClearBinding();opponentHand.Clear();animations?.Clear();links.Set(Array.Empty<BattlefieldLinks.Link>());
             zoneDrawer?.ClearBinding();
-            root.RemoveFromClassList("browsing-public-zone");frame=null;rowPages.Clear();
+            root.RemoveFromClassList("browsing-public-zone");frame=null;rowPages.Clear();handOrder.Clear();
             foreach(var pile in new[]{localLibrary,opponentLibrary,localGraveyard,opponentGraveyard,localExile,opponentExile}){
                 if(pile==null)continue;pile.ClearBinding();
             }
@@ -190,6 +191,11 @@ namespace Manaforge.Play
         private void Lower(CardView view,string id)
         {
             view.style.scale=new Scale(Vector3.one);view.style.translate=new Translate(0,0);
+            if(view.ClassListContains("in-hand")){
+                var hand=new System.Collections.Generic.List<(string id,CardView view)>();
+                Surface.VisitPresented((card,cardView)=>{if(cardView.ClassListContains("in-hand") && cardView.style.display.value!=DisplayStyle.None)hand.Add((card.RenderId,cardView));});
+                foreach(var item in hand.OrderBy(item=>handOrder.IndexOf(item.id)))item.view.BringToFront();
+            }
             if(previewing && previewId==id && !inspecting)CloseInspection();
         }
         public void InspectCard(string id)
@@ -261,6 +267,8 @@ namespace Manaforge.Play
             Row(battlefield.Where(i=>i.card.ControllerId==viewer && Land(i.card)).ToList(),height*.72f,boardLeft,boardSpan,Mathf.Min(cardWidth,110),key:"local-lands",reserveSeat:true);
             foreach(var item in items)item.view.RemoveFromClassList("in-hand");
             var hand=items.Where(i=>i.card.Zone=="hand" && i.card.OwnerId==viewer).ToList();
+            GameplayCardLayout.RetainHandOrder(handOrder,hand.Select(item=>item.card.RenderId));
+            hand=hand.OrderBy(item=>handOrder.IndexOf(item.card.RenderId)).ToList();
             bool opening=frame.Turn==0 || frame.Decision?.Family=="mulligan" || (frame.Decision?.Prompt??"").StartsWith("Mulligan",StringComparison.OrdinalIgnoreCase);
             // Opening uses the existing generous fan; normal hand keeps full proportions and reserves controls.
             root.EnableInClassList("opening-state",opening);
