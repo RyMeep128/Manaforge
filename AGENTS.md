@@ -11,5 +11,6 @@
 - Always work directly on `main`. Do not create development, integration, feature, or release branches unless the user explicitly requests one.
 - The canonical workspace is `C:/Users/ryanm/Proxy App/branch_print-proxy-prep-QtPort`.
 - Preserve existing work and shared Git history. Never force-push or bypass repository protection.
+- Always rebuild the local Unity Windows player after Unity changes using `./tools/unity-play.ps1 -Mode Build`. Report build failures explicitly; a CI run does not replace the local rebuild.
 - Use GitHub Actions for test suites; do not run local test suites. Report unavailable or incomplete checks accurately.
 - Follow [the workflow guide](docs/development-workflow.md) for CI evidence. The former development-branch promotion cadence is retired.

@@ -9,6 +9,8 @@ namespace Manaforge.Play
     public sealed class GameplayPlayerHud : VisualElement, IDisposable
     {
         private readonly ScrollView players=new ScrollView(ScrollViewMode.Vertical){name="hud-players"};
+        private readonly VisualElement localSeat=new VisualElement{name="hud-local-player",pickingMode=PickingMode.Ignore};
+        private readonly bool localSeatAtBottom;
         private readonly ScrollView commanders=new ScrollView(ScrollViewMode.Vertical){name="hud-commanders"};
         private readonly Dictionary<string,PlayerPanel> seats=new Dictionary<string,PlayerPanel>(StringComparer.Ordinal);
         private readonly Dictionary<string,CommanderDashboard> commanderViews=new Dictionary<string,CommanderDashboard>(StringComparer.Ordinal);
@@ -18,7 +20,7 @@ namespace Manaforge.Play
         public IEnumerable<PlayerPanel> Players=>seats.Values;
         public PlayerPanel Player(string id)=>id!=null && seats.TryGetValue(id,out var panel)?panel:null;
         public static bool HasCommanderContent(string format)=>format=="commander" || format=="unrestricted_commander";
-        public GameplayPlayerHud(){name="gameplay-player-hud";AddToClassList("mf-player-hud");pickingMode=PickingMode.Ignore;GameplayTheme.Attach(this);players.AddToClassList("mf-hud-players");players.contentContainer.style.flexDirection=FlexDirection.Row;players.contentContainer.style.flexWrap=Wrap.Wrap;commanders.AddToClassList("mf-hud-commanders");Add(players);Add(commanders);}
+        public GameplayPlayerHud(bool localSeatAtBottom=false){this.localSeatAtBottom=localSeatAtBottom;name="gameplay-player-hud";AddToClassList("mf-player-hud");pickingMode=PickingMode.Ignore;GameplayTheme.Attach(this);players.AddToClassList("mf-hud-players");players.contentContainer.style.flexDirection=FlexDirection.Row;players.contentContainer.style.flexWrap=Wrap.Wrap;commanders.AddToClassList("mf-hud-commanders");Add(players);Add(commanders);if(localSeatAtBottom)Add(localSeat);}
         private void Activate(string id){PlayerActivated?.Invoke(id);}
         public void Present(ProjectedDecisionFrame frame,ViewerCardSurface surface,string activeFormat,bool reducedMotion=false,Action<string> inspect=null)
         {
@@ -29,7 +31,7 @@ namespace Manaforge.Play
             foreach(string id in seats.Keys.Where(id=>!frame.PlayerLifeTotals.ContainsKey(id)).ToArray()){seats[id].Activated-=Activate;seats[id].Dispose();seats[id].RemoveFromHierarchy();seats.Remove(id);commanderViews[id].Dispose();commanderViews.Remove(id);}
             foreach(string id in frame.PlayerLifeTotals.Keys.OrderBy(id=>id==viewer?1:0)) {
                 if(!seats.TryGetValue(id,out var panel)) {
-                    panel=new PlayerPanel();panel.AddToClassList("mf-hud-player");panel.Activated+=Activate;seats.Add(id,panel);players.Add(panel);
+                    panel=new PlayerPanel();panel.AddToClassList("mf-hud-player");panel.Activated+=Activate;seats.Add(id,panel);if(localSeatAtBottom && id==viewer)localSeat.Add(panel);else players.Add(panel);
                     var commander=new CommanderDashboard(false);commander.name="commander-info-"+id;commander.AddToClassList("mf-hud-commander-info");commanderViews.Add(id,commander);commanders.Add(commander);rebuild=true;
                 }
                 panel.name=id==viewer?"local-seat":frame.PlayerLifeTotals.Count==2?"opponent-seat":"player-seat-"+id;
@@ -39,7 +41,7 @@ namespace Manaforge.Play
             commanders.style.display=HasCommanderContent(activeFormat)?DisplayStyle.Flex:DisplayStyle.None;
         }
         public void SetTargetable(Func<string,bool> available){foreach(var pair in seats)pair.Value.SetTargetable(available?.Invoke(pair.Key)==true);}
-        public void ClearPresentation(){foreach(var seat in seats.Values){seat.Activated-=Activate;seat.Dispose();}seats.Clear();foreach(var view in commanderViews.Values)view.Dispose();commanderViews.Clear();players.Clear();commanders.Clear();session=viewer=format=null;revision=-1;artwork=-1;}
+        public void ClearPresentation(){foreach(var seat in seats.Values){seat.Activated-=Activate;seat.Dispose();}seats.Clear();foreach(var view in commanderViews.Values)view.Dispose();commanderViews.Clear();players.Clear();localSeat.Clear();commanders.Clear();session=viewer=format=null;revision=-1;artwork=-1;}
         public void Dispose(){if(disposed)return;ClearPresentation();disposed=true;PlayerActivated=null;RemoveFromHierarchy();}
     }
 }

@@ -54,7 +54,8 @@
 /* Composition only: expanded bodies retain the previous choice and pile anchors. */
 .arena-player-hud { position: absolute; left: 16px; top: 54px; width: 252px; }
 .arena-player-hud > .mf-hud-players { height: 88px; flex-shrink: 0; }
-.arena-player-hud > .mf-hud-commanders { position: absolute; left: 0; right: 0; top: 224px; bottom: 0; }
+.arena-player-hud > .mf-hud-commanders { position: absolute; left: 0; right: 0; top: 224px; bottom: 132px; }
+.arena-player-hud > #hud-local-player { position: absolute; left: 0; bottom: 0; width: 112px; height: 82px; }
 #action-drawer .mf-drawer-content { max-height: 285px; }
 #action-drawer.opening-choices .mf-drawer-content { max-height: 170px; }
 #action-drawer.library-ordering .mf-drawer-content { max-height: 100%; }

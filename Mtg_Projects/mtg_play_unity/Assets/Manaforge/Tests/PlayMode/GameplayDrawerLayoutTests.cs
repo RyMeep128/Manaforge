@@ -66,6 +66,11 @@ namespace Manaforge.Play.Tests
                     }
                     yield return null;Capture(target,$"battlefield-previous-fixed-margins-{size.x}x{size.y}");
                     arena.Present(frame);root.Q<GameplayPlayerHud>().Present(frame,arena.Surface,"commander");yield return null;
+                    var localSeat=root.Q<PlayerPanel>("local-seat");
+                    Assert.That(localSeat.parent.name,Is.EqualTo("hud-local-player"));
+                    Assert.That(localSeat.worldBound.xMin-root.worldBound.xMin,Is.LessThan(24));
+                    Assert.That(root.worldBound.yMax-localSeat.worldBound.yMax,Is.InRange(12,24));
+                    Assert.That(root.Q("hud-players").worldBound.yMax,Is.LessThan(localSeat.worldBound.yMin));
                     var cardBounds=arena.Surface.CardsRoot.worldBound;
                     var placements=new Dictionary<CardView,(float x,float y,float width,float height,DisplayStyle display)>();
                     arena.Surface.VisitPresented((card,view)=>placements[view]=(view.style.left.value.value,view.style.top.value.value,view.style.width.value.value,view.style.height.value.value,view.style.display.value));

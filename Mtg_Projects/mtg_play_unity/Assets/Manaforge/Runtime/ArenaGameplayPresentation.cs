@@ -39,7 +39,7 @@ namespace Manaforge.Play
             links=new BattlefieldLinks();root.Add(links);
             navigation=new VisualElement{name="board-navigation",pickingMode=PickingMode.Ignore};root.Add(navigation);
             status=Label("table-phase","Connecting...");
-            hud=new GameplayPlayerHud();hud.AddToClassList("arena-player-hud");root.Add(hud);hud.PlayerActivated+=ActivatePlayer;
+            hud=new GameplayPlayerHud(localSeatAtBottom:true);hud.AddToClassList("arena-player-hud");root.Add(hud);hud.PlayerActivated+=ActivatePlayer;
             zonePanelDrawer=new GameplayDrawer("Zones",GameplayDrawerDirection.Left){name="zones-drawer"};root.Add(zonePanelDrawer);
             var zoneScroll=new ScrollView(ScrollViewMode.Vertical){name="zone-panel-scroll",horizontalScrollerVisibility=ScrollerVisibility.Hidden};zoneScroll.pickingMode=PickingMode.Ignore;zoneScroll.contentViewport.pickingMode=PickingMode.Ignore;zoneScroll.contentContainer.pickingMode=PickingMode.Ignore;zoneScroll.style.maxHeight=Length.Percent(100);zonePanelDrawer.Content.Add(zoneScroll);
             zonePanel=new GameplayZonePanel(Surface.CardBacks);zoneScroll.Add(zonePanel);zonePanel.BrowseRequested+=BrowseZone;
@@ -304,7 +304,7 @@ namespace Manaforge.Play
             float localPileTop=Mathf.Max(350,height-242);
             zonePanel.Present(frame,Surface,localPileTop-150,openZone,openZoneOwner);zonePanelDrawer.RefreshInput();
             zonePanelDrawer.Viewport.style.top=272-height;zonePanelDrawer.style.maxHeight=30;zonePanelDrawer.Content.style.maxHeight=height-182;zonePanelDrawer.Q<ScrollView>("zone-panel-scroll").style.maxHeight=height-182;
-            hud.style.height=Mathf.Max(170,localPileTop-66);
+            hud.style.height=Mathf.Max(170,height-70);
             root.EnableInClassList("browsing-public-zone",openZone!=null);
             zoneDrawer.style.display=openZone==null?DisplayStyle.None:DisplayStyle.Flex;
             if(openZone!=null){
