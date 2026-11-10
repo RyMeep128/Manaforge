@@ -39,6 +39,11 @@ public final class RealPaymentGameChecks {
         payer.setUserData(mage.players.net.UserData.getDefaultUserDataView());
         opponent.setUserData(mage.players.net.UserData.getDefaultUserDataView());
         game.addPlayer(payer,new mage.cards.decks.Deck());game.addPlayer(opponent,new mage.cards.decks.Deck());
+        // GameImpl.init normally binds this transient turn-order cursor. Failed
+        // casts restore the saved state and need the same cursor as a live game.
+        Field playerList= mage.game.GameImpl.class.getDeclaredField("playerList");playerList.setAccessible(true);
+        game.getState().getPlayerList().add(payer.getId());game.getState().getPlayerList().add(opponent.getId());
+        game.getState().getPlayerList().setCurrent(payer.getId());playerList.set(game,game.getState().getPlayerList());
         game.getState().setActivePlayerId(payer.getId());game.getState().setPriorityPlayerId(payer.getId());
         game.getState().setTurnNum(4);game.getTurn().setPhase(new mage.game.turn.PreCombatMainPhase());
         payer.init(game);opponent.init(game);payer.getManaPool().setAutoPayment(true);
