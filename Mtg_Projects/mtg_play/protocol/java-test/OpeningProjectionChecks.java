@@ -750,9 +750,9 @@ public final class OpeningProjectionChecks {
         NativeCombatCase draw=new NativeCombatCase("draw");fails("COMBAT_CASE_RESULT_UNPROVEN",()->{draw.terminal("draw");return;});
     }
     static final class SessionEngine implements ManaforgeGameplaySession.Engine {
-        JsonObject state=OpeningProjectionChecks.state(),next=prompt();int submissions;boolean accepted=true,badCycle;
+        JsonObject state=OpeningProjectionChecks.state(),next=prompt();int submissions;boolean accepted=true,badCycle;Long authoritativeLife;
         SessionEngine(){next.addProperty("decision_id",42);}
-        public JsonObject metadata(JsonObject state,String... ids){JsonObject result=attackMetadata(false);if(badCycle)result.addProperty("cycle",9);return result;}
+        public JsonObject metadata(JsonObject state,String... ids){JsonObject result=attackMetadata(false);if(authoritativeLife!=null){JsonArray seats=new JsonArray();for(JsonElement player:state.getAsJsonArray("players")){JsonObject row=new JsonObject();row.add("id",player.getAsJsonObject().get("id"));row.addProperty("life",authoritativeLife);seats.add(row);}result.add("players",seats);}if(badCycle)result.addProperty("cycle",9);return result;}
         public JsonObject submit(JsonObject command){submissions++;JsonObject result=new JsonObject();result.addProperty("event","response_sent");result.addProperty("accepted",accepted);result.add("request_id",command.get("request_id"));return result;}
         public ManaforgeGameplaySession.Advance advance(long previous){return new ManaforgeGameplaySession.Advance(state,next,null);}
         public JsonObject terminalMetadata(JsonObject state){throw new AssertionError("UNEXPECTED_TERMINAL_READ");}
@@ -760,6 +760,12 @@ public final class OpeningProjectionChecks {
     static ManaforgeUnityOpening.TurnSubmit nativeSubmit(ManaforgeUnityOpening.TurnOffer offer) throws Exception {java.lang.reflect.Field field=offer.getClass().getDeclaredField("submit");field.setAccessible(true);return (ManaforgeUnityOpening.TurnSubmit)field.get(offer);}
     static JsonObject sessionCommand(ManaforgeOpeningProjection projection,ManaforgeUnityOpening.TurnOffer offer) throws Exception {JsonObject view=offer.snapshot().getAsJsonObject("body").getAsJsonObject("snapshot");return projection.claimBoolean(choose(view,0),"session","human","raw-game","raw-human",41,8);}
     static void gameplaySessionChecks() throws Exception {
+        SessionEngine lifeEngine=new SessionEngine();lifeEngine.authoritativeLife=28L;
+        String originalLife=lifeEngine.state.getAsJsonArray("players").get(0).getAsJsonObject().get("life").toString();
+        ManaforgeGameplaySession lifeSession=new ManaforgeGameplaySession(projection(),lifeEngine,null,true);
+        JsonObject lifeOffer=lifeSession.offer(lifeEngine.state,prompt()).snapshot().getAsJsonObject("body").getAsJsonObject("snapshot");shape(lifeOffer);
+        for(JsonElement seat:lifeOffer.getAsJsonArray("players"))check(seat.getAsJsonObject().get("life").getAsLong()==28);
+        check(originalLife.equals(lifeEngine.state.getAsJsonArray("players").get(0).getAsJsonObject().get("life").toString()));lifeSession.close();
         SessionEngine engine=new SessionEngine();ManaforgeOpeningProjection projection=projection();ManaforgeGameplaySession session=new ManaforgeGameplaySession(projection,engine,new ManaforgeGameplaySession.Observer(){public boolean after(JsonObject state,JsonObject prompt){state.addProperty("viewer","MUTATED");return true;}},true);
         ManaforgeUnityOpening.TurnOffer offer=session.offer(engine.state,prompt());shape(offer.snapshot().getAsJsonObject("body").getAsJsonObject("snapshot"));JsonObject command=sessionCommand(projection,offer);nativeSubmit(offer).submit(command);check(engine.submissions==1 && "raw-human".equals(engine.state.get("viewer").getAsString()));try{nativeSubmit(offer).submit(command);throw new AssertionError("REPLAY");}catch(IllegalStateException expected){check(engine.submissions==1);}session.close();
         engine=new SessionEngine();engine.accepted=false;projection=projection();session=new ManaforgeGameplaySession(projection,engine,null,true);offer=session.offer(engine.state,prompt());command=sessionCommand(projection,offer);final ManaforgeUnityOpening.TurnSubmit rejected=nativeSubmit(offer);final JsonObject rejectedCommand=command;fails("GAMEPLAY_RESPONSE_REJECTED",()->rejected.submit(rejectedCommand));check(engine.submissions==1);fails("STALE_DECISION",()->rejected.submit(rejectedCommand));session.close();

@@ -2211,3 +2211,23 @@ Unsupported decisions invalidate response authority and display a read-only retu
 message. Public combat may omit departed combatants with `combat_lki`; those IDs
 never become current target authority. Broader casting/cost acceptance and visual
 review remain separate pending work.
+
+
+## Idle connection and public life totals
+
+The headless bridge owns an application-level XMage heartbeat every 30 seconds,
+independently of viewer commands. XMage's remoting lease alone does not extend
+its application user session. The heartbeat starts after connection and stops
+on disconnect, explicit shutdown, or input EOF. It does not send gameplay actions
+or select/pass a decision.
+
+Gameplay offers take public player life totals from the same paused native
+metadata read as their card metadata. A cached serializable GameView can precede
+the final life change within an effect; it is not allowed to overwrite those
+current totals. The UI never computes spell life gain.
+
+Hosted coverage includes heartbeat lifecycle checks, a real four-minute idle
+connection in `Play live Java opening`, native Swords to Plowshares resolution
+against an 8-power Panther Robot (including different owner/controller), and a
+projection regression with stale display totals. The native card check exercises
+the real effect and zone change; it is not a complete casting/targeting UI test.

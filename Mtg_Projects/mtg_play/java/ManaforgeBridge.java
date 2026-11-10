@@ -24,6 +24,7 @@ public final class ManaforgeBridge implements MageClient {
     private static final PrintStream PROTOCOL = System.out;
     private static final Gson JSON = new Gson();
     private final SessionImpl session = new SessionImpl(this);
+    private final ManaforgeHeartbeat heartbeat = new ManaforgeHeartbeat(session::ping,()->message("error",null,"ENGINE_HEARTBEAT_FAILED"));
     private final ManaResponseExecutor manaResponses;
 
     private final java.util.function.Consumer<JsonObject> eventSink;
@@ -134,7 +135,7 @@ public final class ManaforgeBridge implements MageClient {
     @Override public MageVersion getVersion() { return new MageVersion(SessionImpl.class); }
     @Override public void connected(String text) { message("connection", null, text); }
     @Override public void disconnected(boolean reconnect, boolean keep) {
-        message("disconnected", null, "Disconnected from XMage");
+        heartbeat.close();message("disconnected", null, "Disconnected from XMage");
     }
     @Override public void showMessage(String text) { message("message", null, text); }
     @Override public void showError(String text) { message("error", null, text); }
@@ -543,7 +544,7 @@ public final class ManaforgeBridge implements MageClient {
                 if (!session.connectStart(connection)) {
                     throw new IllegalStateException("XMage connection failed: " + session.getLastError());
                 }
-                message("connected", id, getVersion().toString());
+                heartbeat.start();message("connected", id, getVersion().toString());
             } else if (operation.equals("status")) {
                 if (!session.isConnected()) throw new IllegalStateException("Not connected");
                 UUID room = session.getMainRoomId();
@@ -667,7 +668,7 @@ public final class ManaforgeBridge implements MageClient {
                     throw new IllegalStateException("Concede rejected");
                 message("concede_sent", id, "Concede requested");
             } else if (operation.equals("shutdown")) {
-                session.connectStop(false, false);
+                heartbeat.close();session.connectStop(false, false);
                 JsonObject data = new JsonObject();
                 data.addProperty("connected", session.isConnected());
                 emit("shutdown", id, data);
@@ -698,7 +699,7 @@ public final class ManaforgeBridge implements MageClient {
                 bridge.message("error", null, "Malformed command: " + error);
             }
         }
-        bridge.session.connectStop(false, false);
+        bridge.heartbeat.close();bridge.session.connectStop(false, false);
         System.exit(0);
     }
 }

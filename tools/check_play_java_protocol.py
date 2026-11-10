@@ -79,6 +79,8 @@ def main():
             PLAY / "java/ManaforgeOpeningSession.java",
             PLAY / "java/ManaforgeUnityOpening.java",
             PLAY / "java/ManaforgeGameplaySession.java",
+            PLAY / "java/ManaforgeHeartbeat.java",
+            PROTOCOL / "java-test/HeartbeatChecks.java",
             PLAY / "java/NativeAutomaticPayment.java",
             PLAY / "java/ManaforgeAutomaticEngine.java",
             PLAY / "java/ManaforgeOpeningLoopback.java",
@@ -332,6 +334,8 @@ def main():
             check=True,
             timeout=60,
         )
+
+        subprocess.run([runtime, "-cp", str(workspace), "HeartbeatChecks"], check=True, timeout=15)
 
         if args.dummy_output:
             output = args.dummy_output.resolve()

@@ -212,6 +212,7 @@ def main():
                 PLAY / "java" / name
                 for name in (
                     "ManaforgeBridge.java",
+                    "ManaforgeHeartbeat.java",
                     "ManaforgeServerHost.java",
                     "ManaforgeGameMetadata.java",
                 )

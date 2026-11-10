@@ -1,16 +1,16 @@
 name: Play live Java opening
 on:
   push:
-    paths: ['Mtg_Projects/mtg_play/protocol/java/**', 'Mtg_Projects/mtg_play/java/*.java', 'Mtg_Projects/mtg_play/connection_proof.py', 'Mtg_Projects/mtg_play/artifacts.json', 'tools/check_play_live_opening.py', 'tools/play_native_metadata.py', '.github/workflows/play-live-opening.yml']
+    paths: ['Mtg_Projects/mtg_play/protocol/java/**', 'Mtg_Projects/mtg_play/java/*.java', 'Mtg_Projects/mtg_play/connection_proof.py', 'Mtg_Projects/mtg_play/artifacts.json', 'tools/check_play_live_opening.py', 'tools/check_play_idle_connection.py', 'tools/play_native_metadata.py', '.github/workflows/play-live-opening.yml']
   pull_request:
-    paths: ['Mtg_Projects/mtg_play/protocol/java/**', 'Mtg_Projects/mtg_play/java/*.java', 'Mtg_Projects/mtg_play/connection_proof.py', 'Mtg_Projects/mtg_play/artifacts.json', 'tools/check_play_live_opening.py', 'tools/play_native_metadata.py', '.github/workflows/play-live-opening.yml']
+    paths: ['Mtg_Projects/mtg_play/protocol/java/**', 'Mtg_Projects/mtg_play/java/*.java', 'Mtg_Projects/mtg_play/connection_proof.py', 'Mtg_Projects/mtg_play/artifacts.json', 'tools/check_play_live_opening.py', 'tools/check_play_idle_connection.py', 'tools/play_native_metadata.py', '.github/workflows/play-live-opening.yml']
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
   pinned-human-ai-opening:
     runs-on: windows-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     env:
       PYTHONPATH: '${{ github.workspace }}/Mtg_Projects'
     steps:
@@ -26,6 +26,8 @@ jobs:
           java-version: '23.0.2+7'
       - name: Prepare hash-pinned engine
         run: python -m mtg_play.ci_prepare --destination "$env:RUNNER_TEMP/manaforge-live-engine" --jdk-path "$env:JAVA_HOME"
+      - name: Real XMage connection survives four minutes without gameplay input
+        run: python tools/check_play_idle_connection.py --xmage-root "$env:RUNNER_TEMP/manaforge-live-engine" --jdk-path "$env:JAVA_HOME" --output Mtg_Projects/mtg_play_unity/Artifacts/IdleConnection/report.json
       - name: Real Java-owned human versus AI opening
         run: python tools/check_play_live_opening.py --xmage-root "$env:RUNNER_TEMP/manaforge-live-engine" --jdk-path "$env:JAVA_HOME"
       - name: Real engine-offered land action
@@ -57,6 +59,7 @@ jobs:
         with:
           name: java-live-opening-${{ github.sha }}
           path: |
+            Mtg_Projects/mtg_play_unity/Artifacts/IdleConnection/report.json
             Mtg_Projects/mtg_play_unity/Artifacts/LiveOpening/report.json
             Mtg_Projects/mtg_play_unity/Artifacts/FirstLand/report.json
             Mtg_Projects/mtg_play_unity/Artifacts/FirstCreature/report.json

@@ -225,7 +225,7 @@ public final class ManaforgeGameMetadata {
                     objects.add(id.toString(), metadata);
                 }
                 JsonArray players=new JsonArray();List<UUID> publicSeats=new ArrayList<>();
-                for(PlayerView view:permitted.getPlayers()){Player current=game.getPlayer(view.getPlayerId());JsonObject row=new JsonObject();row.addProperty("id",current.getId().toString());row.addProperty("lost",current.hasLost());row.addProperty("left",current.hasLeft());players.add(row);publicSeats.add(current.getId());}
+                for(PlayerView view:permitted.getPlayers()){Player current=game.getPlayer(view.getPlayerId());JsonObject row=new JsonObject();row.addProperty("id",current.getId().toString());row.addProperty("life",current.getLife());row.addProperty("lost",current.hasLost());row.addProperty("left",current.hasLeft());players.add(row);publicSeats.add(current.getId());}
                 JsonObject commanderData=publicCommanders(game,state,publicSeats);
                 if (game.getState() != state || state.getApplyEffectsCounter() != cycle) return status("retry");
                 // Confirm the engine is waiting in HumanPlayer.priority(), not a

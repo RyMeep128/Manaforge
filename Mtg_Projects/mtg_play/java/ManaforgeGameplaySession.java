@@ -103,7 +103,16 @@ public final class ManaforgeGameplaySession implements AutoCloseable {
             if(!Objects.equals(notice,engine.sessionNotice())){Advance fresh=refreshed(before,prompt);return offer(fresh.state,fresh.prompt);}return null;});
     }
     private JsonObject decorate(JsonObject before,JsonObject guard) {
-        JsonObject publicView=before.deepCopy();for(JsonElement card:publicView.getAsJsonArray("stack")){JsonObject row=card.getAsJsonObject(),entry=guard.getAsJsonObject("objects").getAsJsonObject(row.get("id").getAsString());if(entry!=null){if(entry.has("ability_art_set") && entry.has("ability_art_number")){row.add("set",entry.get("ability_art_set"));row.add("number",entry.get("ability_art_number"));}if(entry.has("source"))row.add("target_source",entry.get("source"));if(entry.has("stack_targets")){row.add("stack_targets",entry.get("stack_targets"));row.add("stack_targets_complete",entry.get("stack_targets_complete"));}if(entry.has("controller"))row.add("stack_controller",entry.get("controller"));if(entry.has("owner"))row.add("stack_owner",entry.get("owner"));if(entry.has("source") && entry.has("spell_ability_ids"))row.add("commander_source",entry.get("source"));}}
+        JsonObject publicView=before.deepCopy();
+        // Cached GameViews can precede the final life change of a resolving effect.
+        // Use public totals read under the same native response monitor/cycle as the offer.
+        if(guard.has("players"))for(JsonElement item:guard.getAsJsonArray("players")){
+            JsonObject current=item.getAsJsonObject();if(!current.has("life"))continue;
+            for(JsonElement player:publicView.getAsJsonArray("players")){
+                JsonObject seat=player.getAsJsonObject();if(seat.get("id").equals(current.get("id")))seat.add("life",current.get("life").deepCopy());
+            }
+        }
+        for(JsonElement card:publicView.getAsJsonArray("stack")){JsonObject row=card.getAsJsonObject(),entry=guard.getAsJsonObject("objects").getAsJsonObject(row.get("id").getAsString());if(entry!=null){if(entry.has("ability_art_set") && entry.has("ability_art_number")){row.add("set",entry.get("ability_art_set"));row.add("number",entry.get("ability_art_number"));}if(entry.has("source"))row.add("target_source",entry.get("source"));if(entry.has("stack_targets")){row.add("stack_targets",entry.get("stack_targets"));row.add("stack_targets_complete",entry.get("stack_targets_complete"));}if(entry.has("controller"))row.add("stack_controller",entry.get("controller"));if(entry.has("owner"))row.add("stack_owner",entry.get("owner"));if(entry.has("source") && entry.has("spell_ability_ids"))row.add("commander_source",entry.get("source"));}}
         for(JsonElement card:publicView.getAsJsonArray("exile")){JsonObject row=card.getAsJsonObject(),entry=guard.getAsJsonObject("objects").getAsJsonObject(row.get("id").getAsString());if(entry!=null && entry.has("owner"))row.add("exile_owner",entry.get("owner"));}
         if(guard.has("commanders")){publicView.add("commander_metadata",guard.get("commanders").deepCopy());publicView.add("commander_metadata_complete",guard.get("commander_metadata_complete"));}
         return publicView;

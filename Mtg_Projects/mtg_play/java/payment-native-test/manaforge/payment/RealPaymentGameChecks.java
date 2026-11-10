@@ -268,8 +268,33 @@ public final class RealPaymentGameChecks {
         payer.abort();
         System.out.println("Unrestricted Commander: native 300-card duplicate/banned/off-identity deck accepted; instant commander initialized at 40 starting life");
     }
+    private static void nativeSwordsLifeChecks() throws Exception {
+        // Exercise the engine card effect, including a controller distinct from the owner.
+        for(boolean stolen:new boolean[]{false,true}){
+            TwoPlayerDuel game=new TwoPlayerDuel(MultiplayerAttackOption.MULTIPLE,RangeOfInfluence.ALL,new mage.game.mulligan.LondonMulligan(0),20,7,7);
+            ContextHumanPlayer caster=new ContextHumanPlayer("Swords caster",RangeOfInfluence.ALL,0),opponent=new ContextHumanPlayer("Robot controller",RangeOfInfluence.ALL,0);
+            caster.setUserData(mage.players.net.UserData.getDefaultUserDataView());opponent.setUserData(mage.players.net.UserData.getDefaultUserDataView());
+            game.addPlayer(caster,new mage.cards.decks.Deck());game.addPlayer(opponent,new mage.cards.decks.Deck());
+            game.getState().getPlayerList().add(caster.getId());game.getState().getPlayerList().add(opponent.getId());game.getState().getPlayerList().setCurrent(caster.getId());
+            Field cursor=mage.game.GameImpl.class.getDeclaredField("playerList");cursor.setAccessible(true);cursor.set(game,game.getState().getPlayerList());
+            game.getState().setActivePlayerId(caster.getId());game.getState().setPriorityPlayerId(caster.getId());caster.init(game);opponent.init(game);game.initGameDefaultWatchers();
+            Card robot=new mage.cards.p.PantherRobot(stolen?caster.getId():opponent.getId(),info("Panther Robot"));
+            game.loadCards(Collections.singleton(robot),robot.getOwnerId());game.setZone(robot.getId(),Zone.BATTLEFIELD);
+            PermanentCard permanent=new PermanentCard(robot,opponent.getId(),game);game.addPermanent(permanent,0);
+            for(mage.abilities.Ability rule:permanent.getAbilities())game.getState().addAbility(rule,permanent);
+            Card swords=new mage.cards.s.SwordsToPlowshares(caster.getId(),info("Swords to Plowshares"));load(game,swords,Zone.HAND);
+            game.applyEffects();require(permanent.getPower().getValue()==8,"SWORDS_ROBOT_NOT_EIGHT_POWER");
+            mage.abilities.SpellAbility ability=swords.getSpellAbility();ability.getTargets().get(0).add(permanent.getId(),game);
+            int before=opponent.getLife(),casterBefore=caster.getLife();
+            require(ability.getEffects().get(0).apply(game,ability),"SWORDS_EFFECT_FAILED");
+            require(game.getPermanent(robot.getId())==null && game.getState().getZone(robot.getId())==Zone.EXILED,"SWORDS_ROBOT_NOT_EXILED");
+            require(opponent.getLife()==before+8 && caster.getLife()==casterBefore,"SWORDS_CONTROLLER_DID_NOT_GAIN_EIGHT");
+            caster.abort();opponent.abort();
+        }
+        System.out.println("Swords to Plowshares: native Panther Robot exile and controller +8 life verified for owned and stolen creatures");
+    }
     public static void main(String[] args) throws Exception {
-        Thread.currentThread().setName("GAME-real-payment-setup");unrestrictedCommander();nativeTriggerOrderingChecks();nativeSessionRequests();nativePileChoice(true);nativePileChoice(false);
+        Thread.currentThread().setName("GAME-real-payment-setup");nativeSwordsLifeChecks();unrestrictedCommander();nativeTriggerOrderingChecks();nativeSessionRequests();nativePileChoice(true);nativePileChoice(false);
         scenario("lackey-decks-empty",false,false);scenario("lackey-decks-lifegain",false,false);scenario("lackey-decks-warchief",false,false);
         scenario("lackey-lifegain",false,false);scenario("lackey-lifegain-lord",false,false);
         scenario("foundry-street-opponent-triggers",false,false);
