@@ -197,3 +197,24 @@ def test_unknown_play_sections_are_identified_without_ignoring_them():
     assert not check.can_start
     assert "planar" in " ".join(check.messages)
     assert "Special" not in " ".join(check.messages)
+
+
+def test_unrestricted_commander_skips_all_legality_checks_but_keeps_document_integrity():
+    document, records = commander_fixture()
+    document.deck.entries[0].name = "Dark Ritual"
+    document.deck.entries[1].quantity = 299
+    records["leader-print"]["payload"].update(
+        type_line="Instant", color_identity=["B"], legalities={"commander": "banned"}
+    )
+    before = deepcopy(document.to_dict())
+    assert (
+        local_readiness(document, "unrestricted_commander", records).state
+        == "available"
+    )
+    assert local_readiness(document, "commander", records).state == "blocked"
+    assert document.to_dict() == before
+    document.deck.entries[1].quantity = -1
+    assert (
+        "INVALID_QUANTITY"
+        in local_readiness(document, "unrestricted_commander", records).codes
+    )

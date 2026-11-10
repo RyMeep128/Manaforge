@@ -245,7 +245,8 @@
         "format": {
           "enum": [
             "freeform",
-            "commander"
+            "commander",
+            "unrestricted_commander"
           ]
         },
         "seats": {

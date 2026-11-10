@@ -116,6 +116,7 @@ public final class ManaforgeServerHost {
         String format = command.get("format").getAsString();
         String deckType;
         if (format.equals("freeform")) deckType = "Constructed - Freeform Unlimited";
+        else if (format.equals("unrestricted_commander")) deckType = "Variant Magic - Freeform Unlimited Commander";
         else if (format.equals("commander")) deckType = "Variant Magic - Commander";
         else {
             result.addProperty("code", "UNSUPPORTED_GAME_SETUP");

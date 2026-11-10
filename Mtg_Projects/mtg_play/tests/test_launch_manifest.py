@@ -181,3 +181,21 @@ def test_invalid_seat_and_owner_mapping_are_rejected():
             {"one": native_deck()},
             manaforge_version="fixture-alpha.1",
         )
+
+
+def test_unrestricted_commander_launch_preserves_arbitrary_commanders_and_large_decks():
+    document = native_deck(True)
+    document.deck.entries[0].quantity = 299
+    before = deepcopy(document.to_dict())
+    setup = GameSetup(
+        (MatchSeat("one", "Human"), MatchSeat("two", "AI", "engine_ai")),
+        format="unrestricted_commander",
+    )
+    value = json.loads(launch(document, setup=setup))
+    Draft202012Validator(SCHEMA).validate(value)
+    assert value["format"] == "unrestricted_commander"
+    projected = value["seats"][0]["document"]["deck"]
+    assert projected["commander_entry_ids"] == document.deck.commander_entry_ids
+    assert projected["entries"][0]["quantity"] == 299
+    assert projected["companion_entry_id"] is None
+    assert document.to_dict() == before

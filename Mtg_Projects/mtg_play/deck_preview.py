@@ -36,7 +36,7 @@ def text(value, maximum=16384):
 
 def project_deck(document, format, service):
     if (
-        format not in ("freeform", "commander")
+        format not in ("freeform", "commander", "unrestricted_commander")
         or not 1 <= len(document.deck.entries) <= 2048
     ):
         raise PreviewError("PREVIEW_INVALID_DECK")

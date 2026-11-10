@@ -49,6 +49,12 @@ class PlayWorkspace(W.QWidget):
         self.format = W.QComboBox()
         self.format.addItem("Freeform", "freeform")
         self.format.addItem("Commander", "commander")
+        self.format.addItem("Unrestricted Commander", "unrestricted_commander")
+        self.format.setItemData(
+            2,
+            "Commander gameplay with no deck size, copy, color identity, ban-list or commander-type restrictions. Cards must be supported by the engine.",
+            C.Qt.ItemDataRole.ToolTipRole,
+        )
         self.format.setCurrentIndex(self.format.findData(self.lobby.format))
         self.format.currentIndexChanged.connect(self._selection_changed)
         form.addRow("Format", self.format)
@@ -235,7 +241,7 @@ class PlayWorkspace(W.QWidget):
                     "UNITY_GAME_PRINTING_UNSUPPORTED": "A card could not be resolved by XMage.",
                     "UNITY_GAME_CARD_UNSUPPORTED": "XMage does not support a card in the selected decks.",
                     "UNITY_GAME_CARD_RESOLUTION_FAILED": "XMage could not resolve the selected cards. Please try again.",
-                    "UNITY_GAME_SETUP_UNSUPPORTED": "Unity gameplay supports Freeform or Commander 1v1 with one human and one AI.",
+                    "UNITY_GAME_SETUP_UNSUPPORTED": "Unity gameplay supports Freeform, Commander or Unrestricted Commander 1v1 with one human and one AI.",
                 }.get(
                     value,
                     "Unity game stopped or could not start. Saved decks are unchanged.",

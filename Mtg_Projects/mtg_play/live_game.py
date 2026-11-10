@@ -48,7 +48,7 @@ def validate_scenario_close_report(closed, certificate, expected):
 
 def project_launch(setup, documents, version, deck_owners=None, *, engine_bundle=None):
     if (
-        setup.format not in ("freeform", "commander")
+        setup.format not in ("freeform", "commander", "unrestricted_commander")
         or len(setup.seats) != 2
         or sorted(s.controller for s in setup.seats) != ["engine_ai", "local_human"]
     ):
@@ -438,7 +438,13 @@ def run_live_game(
                     quantity=e["quantity"],
                 )
                 for e in entries
-                if e["section"] in ("sideboard", "commander")
+                if (
+                    e["section"] == "commander"
+                    or (
+                        e["section"] == "sideboard"
+                        and setup.format != "unrestricted_commander"
+                    )
+                )
                 or e["entry_id"] in seat["document"]["deck"]["commander_entry_ids"]
             ]
             if (

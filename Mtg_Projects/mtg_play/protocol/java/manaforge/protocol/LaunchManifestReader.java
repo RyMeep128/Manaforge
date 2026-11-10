@@ -67,7 +67,7 @@ public final class LaunchManifestReader {
             if(integer(root.get("launch_manifest_version"),Long.MIN_VALUE)!=1)fail("INCOMPATIBLE_LAUNCH_VERSION");
             if(integer(root.get("protocol_version"),Long.MIN_VALUE)!=1)fail("INCOMPATIBLE_GAME_PROTOCOL");
             text(root.get("manifest_id"));text(root.get("manaforge_version"));
-            String format=text(root.get("format"));if(!format.equals("freeform") && !format.equals("commander"))invalid();
+            String format=text(root.get("format"));if(!format.equals("freeform") && !format.equals("commander") && !format.equals("unrestricted_commander"))invalid();
             JsonObject pin=fields(root.get("engine"),"engine_version","adapter_version","artifact_manifest_sha256");
             if(!text(pin.get("engine_version")).equals(expectedEngine) || !text(pin.get("adapter_version")).equals(expectedAdapter)
                     || !text(pin.get("artifact_manifest_sha256")).equals(expectedManifestHash))fail("ENGINE_PIN_MISMATCH");

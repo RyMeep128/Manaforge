@@ -519,6 +519,9 @@ public final class ManaforgeBridge implements MageClient {
                 String deckType;
                 if (format.equals("freeform") && seats == 2) {
                     gameType = "Two Player Duel"; deckType = "Constructed - Freeform Unlimited";
+                } else if (format.equals("unrestricted_commander") && seats >= 2) {
+                    gameType = "Freeform Unlimited Commander";
+                    deckType = "Variant Magic - Freeform Unlimited Commander";
                 } else if (format.equals("commander") && seats >= 2) {
                     gameType = seats == 2 ? "Commander Two Player Duel" : "Commander Free For All";
                     deckType = "Variant Magic - Commander";

@@ -79,7 +79,8 @@ def main():
                               if key.startswith("xmage/mage-server/lib/") and key.endswith(".jar"))
         dependencies.append(jars[1])
         if args.real_game_payment:
-            dependencies.append(next(key for key in manifest["artifacts"] if key.endswith("/mage-game-twoplayerduel-1.4.62.jar")))
+            for plugin in ("mage-game-twoplayerduel-1.4.62.jar", "mage-game-freeformunlimitedcommander-1.4.62.jar", "mage-deck-constructed-1.4.62.jar"):
+                dependencies.append(next(key for key in manifest["artifacts"] if key.endswith("/" + plugin)))
         for key in dependencies:
             if hashlib.sha256((engine / key).read_bytes()).hexdigest() != manifest["artifacts"][key]:
                 raise SystemExit("Pinned payment helper dependency mismatch")

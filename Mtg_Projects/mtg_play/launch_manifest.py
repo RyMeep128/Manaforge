@@ -47,7 +47,7 @@ def _text(value, *, optional=False):
         raise LaunchManifestError("INVALID_TEXT_FIELD")
 
 
-def _project_deck(document, *, commander):
+def _project_deck(document, *, commander, unrestricted=False):
     if not isinstance(document, DeckDocument):
         raise LaunchManifestError("NATIVE_DECK_REQUIRED")
     if (
@@ -73,7 +73,9 @@ def _project_deck(document, *, commander):
         _text(entry.entry_id)
     # Reuse the executable baseline's structural checks. Never resolve rules,
     # names, printings or companion restrictions as exporter policy.
-    issues = deck_document_issues(document, commander=commander)
+    issues = deck_document_issues(
+        document, commander=commander, allow_empty=unrestricted
+    )
     if issues:
         raise LaunchManifestError(issues[0].code, entry_id=issues[0].entry_id)
     entries = []
@@ -112,7 +114,7 @@ def _project_deck(document, *, commander):
         raise LaunchManifestError("INVALID_COMMANDER_REFERENCES")
     if any(value not in by_id for value in commanders):
         raise LaunchManifestError("INVALID_COMMANDER_REFERENCES")
-    companion = deck.extras.get("companion_entry_id")
+    companion = None if unrestricted else deck.extras.get("companion_entry_id")
     _text(companion, optional=True)
     if companion is not None and (
         companion not in by_id or by_id[companion]["section"] != "sideboard"
@@ -161,7 +163,7 @@ def export_launch_manifest(
         or setup.protocol_version != GAME_PROTOCOL_VERSION
     ):
         raise LaunchManifestError("INCOMPATIBLE_GAME_PROTOCOL")
-    if setup.format not in ("freeform", "commander"):
+    if setup.format not in ("freeform", "commander", "unrestricted_commander"):
         raise LaunchManifestError("UNSUPPORTED_GAME_SETUP")
     _text(manaforge_version)
     seat_ids = []
@@ -184,7 +186,9 @@ def export_launch_manifest(
         _text(owner, optional=True)
         try:
             document = _project_deck(
-                documents[seat.seat_id], commander=setup.format == "commander"
+                documents[seat.seat_id],
+                commander=setup.format in {"commander", "unrestricted_commander"},
+                unrestricted=setup.format == "unrestricted_commander",
             )
         except LaunchManifestError as error:
             raise LaunchManifestError(

@@ -171,8 +171,28 @@ public final class RealPaymentGameChecks {
         try{PlayerQueryEvent query=queries.poll(2,TimeUnit.SECONDS);require(query!=null && query.getQueryType()==PlayerQueryEvent.QueryType.CHOOSE_PILE,"REAL_PILE_QUERY_MISSING");payer.setResponseBoolean(firstPile);require(result.get(2,TimeUnit.SECONDS)==firstPile,"REAL_PILE_RESPONSE_CHANGED");System.out.println("Native pile response: "+firstPile+"; choice completed");}
         finally{payer.abort();other.abort();result.cancel(true);executor.shutdownNow();executor.awaitTermination(2,TimeUnit.SECONDS);}
     }
+    private static void unrestrictedCommander() throws Exception {
+        mage.cards.decks.Deck deck=new mage.cards.decks.Deck();UUID owner=UUID.randomUUID();
+        // These are real implemented cards: duplicate banned cards, off-identity
+        // lands and an instant commander in a 300-card main deck.
+        for(int i=0;i<298;i++)deck.getCards().add(new mage.cards.basiclands.Forest(owner,info("Forest")));
+        deck.getCards().add(new mage.cards.b.BlackLotus(owner,info("Black Lotus")));
+        deck.getCards().add(new mage.cards.b.BlackLotus(owner,info("Black Lotus")));
+        Card instant=new mage.cards.d.DarkRitual(owner,info("Dark Ritual"));deck.getSideboard().add(instant);
+        mage.cards.decks.DeckValidator validator=(mage.cards.decks.DeckValidator)Class.forName("mage.deck.FreeformUnlimitedCommander").getConstructor().newInstance();
+        require(validator.validate(deck),"UNRESTRICTED_COMMANDER_DECK_REJECTED");
+        mage.game.GameCommanderImpl game=(mage.game.GameCommanderImpl)Class.forName("mage.game.FreeformUnlimitedCommander").getConstructor(MultiplayerAttackOption.class,RangeOfInfluence.class,mage.game.mulligan.Mulligan.class,int.class,int.class).newInstance(MultiplayerAttackOption.MULTIPLE,RangeOfInfluence.ALL,new mage.game.mulligan.LondonMulligan(0),40,7);
+        ContextHumanPlayer payer=new ContextHumanPlayer("Unrestricted",RangeOfInfluence.ALL,0);payer.setUserData(mage.players.net.UserData.getDefaultUserDataView());
+        game.addPlayer(payer,new mage.cards.decks.Deck());payer.init(game);
+        instant=new mage.cards.d.DarkRitual(payer.getId(),info("Dark Ritual"));
+        game.loadCards(Collections.singleton(instant),payer.getId());game.setZone(instant.getId(),Zone.OUTSIDE);payer.getSideboard().add(instant);
+        game.addCommander(instant,payer);game.initCommander(instant,payer);
+        require(game.getStartingLife()==40 && payer.getCommandersIds().contains(instant.getId()) && game.getState().getZone(instant.getId())==Zone.COMMAND,"UNRESTRICTED_INSTANT_COMMANDER_NOT_INITIALIZED");
+        payer.abort();
+        System.out.println("Unrestricted Commander: native 300-card duplicate/banned/off-identity deck accepted; instant commander initialized at 40 starting life");
+    }
     public static void main(String[] args) throws Exception {
-        Thread.currentThread().setName("GAME-real-payment-setup");nativeSessionRequests();nativePileChoice(true);nativePileChoice(false);
+        Thread.currentThread().setName("GAME-real-payment-setup");unrestrictedCommander();nativeSessionRequests();nativePileChoice(true);nativePileChoice(false);
         scenario("foundry-street-opponent-triggers",false,false);
         scenario("two-red-mountains",true,false);
         scenario("active-mana-hazard",false,true);

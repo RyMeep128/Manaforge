@@ -58,7 +58,7 @@ COMMANDER_MESSAGES = {
 
 
 def local_readiness(document, format, records=None):
-    if format not in {"freeform", "commander"}:
+    if format not in {"freeform", "commander", "unrestricted_commander"}:
         return DeckReadiness(
             format,
             "blocked",
@@ -66,7 +66,11 @@ def local_readiness(document, format, records=None):
             ("UNSUPPORTED_GAME_SETUP",),
         )
     try:
-        structural = deck_document_issues(document, commander=format == "commander")
+        structural = deck_document_issues(
+            document,
+            commander=format in {"commander", "unrestricted_commander"},
+            allow_empty=format == "unrestricted_commander",
+        )
     except (TypeError, ValueError, AttributeError):
         return DeckReadiness(
             format,
@@ -109,8 +113,8 @@ def local_readiness(document, format, records=None):
             )[:6],
             codes,
         )
-    if format == "freeform":
-        # Freeform is not Standard/Modern/etc.; do not impose constructed rules.
+    if format in {"freeform", "unrestricted_commander"}:
+        # These modes impose no deck legality, size, copy or commander eligibility rules.
         return DeckReadiness(format, "available", ())
     try:
         report = check_commander(document, records or {})

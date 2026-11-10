@@ -89,7 +89,7 @@ class MatchLobby:
         )
 
     def offline_setup(self):
-        if self.format not in {"freeform", "commander"}:
+        if self.format not in {"freeform", "commander", "unrestricted_commander"}:
             raise ValueError("Choose a supported offline format.")
         if (
             len(self.seats) != 2
@@ -114,7 +114,8 @@ class MatchLobby:
 
         return tuple(
             document_for_format(
-                seat.deck.document, commander=self.format == "commander"
+                seat.deck.document,
+                commander=self.format in {"commander", "unrestricted_commander"},
             )
             for seat in self.seats
         )

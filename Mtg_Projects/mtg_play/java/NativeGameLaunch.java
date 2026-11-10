@@ -8,7 +8,7 @@ import manaforge.protocol.PlayContracts.CardIdentity;
 public final class NativeGameLaunch {
     private final LaunchManifest manifest;private final LaunchSeat human,ai;
     public NativeGameLaunch(LaunchManifest manifest) throws IOException {
-        if(manifest==null || !Arrays.asList("freeform","commander").contains(manifest.format) || manifest.seats.length!=2)throw new IOException("UNITY_GAME_SETUP_UNSUPPORTED");
+        if(manifest==null || !Arrays.asList("freeform","commander","unrestricted_commander").contains(manifest.format) || manifest.seats.length!=2)throw new IOException("UNITY_GAME_SETUP_UNSUPPORTED");
         this.manifest=manifest;LaunchSeat h=null,a=null;
         for(LaunchSeat seat:manifest.seats){if(("freeform".equals(manifest.format) && seat.document.deck.commander_entry_ids.length!=0) || seat.document.deck.companion_entry_id!=null)throw new IOException("UNITY_GAME_SETUP_UNSUPPORTED");if(!seat.seat_id.matches("[A-Za-z0-9_.:-]{1,128}"))throw new IOException("UNITY_GAME_SEAT_INVALID");if(seat.controller.equals("local_human")){if(h!=null)throw new IOException("UNITY_GAME_SETUP_UNSUPPORTED");h=seat;}else if(seat.controller.equals("engine_ai")){if(a!=null)throw new IOException("UNITY_GAME_SETUP_UNSUPPORTED");a=seat;}else throw new IOException("UNITY_GAME_SETUP_UNSUPPORTED");}
         if(h==null || a==null || !manifest.manifest_id.matches("[A-Za-z0-9_.:-]{1,128}"))throw new IOException("UNITY_GAME_SETUP_UNSUPPORTED");human=h;ai=a;
@@ -16,10 +16,10 @@ public final class NativeGameLaunch {
     }
     private List<NativeLaunchEntry> designations(LaunchSeat seat){List<NativeLaunchEntry> result=new ArrayList<>();for(NativeLaunchEntry entry:seat.document.deck.entries)if(entry.section.equals("commander") || Arrays.asList(seat.document.deck.commander_entry_ids).contains(entry.entry_id))result.add(entry);return result;}
     public void verifyCommanders(JsonObject state,JsonObject metadata) throws IOException {
-        if(!format().equals("commander") || !new JsonPrimitive(true).equals(metadata.get("priority_open")))return;
+        if(!(format().equals("commander") || format().equals("unrestricted_commander")) || !new JsonPrimitive(true).equals(metadata.get("priority_open")))return;
         if(!new JsonPrimitive(true).equals(metadata.get("commander_metadata_complete")))throw new IOException("UNITY_GAME_COMMANDERS_UNPROVEN");
         String viewer=state.get("viewer").getAsString();Map<String,Integer> expected=new HashMap<>(),actual=new HashMap<>();
-        for(JsonElement player:state.getAsJsonArray("players")){String owner=player.getAsJsonObject().get("id").getAsString();for(NativeLaunchEntry entry:designations(owner.equals(viewer)?human:ai)){String key=owner+"/"+entry.set_code.toUpperCase(Locale.ROOT)+"/"+entry.collector_number+"/"+entry.name;expected.put(key,expected.getOrDefault(key,0)+1);}}
+        for(JsonElement player:state.getAsJsonArray("players")){String owner=player.getAsJsonObject().get("id").getAsString();for(NativeLaunchEntry entry:designations(owner.equals(viewer)?human:ai)){String key=owner+"/"+entry.set_code.toUpperCase(Locale.ROOT)+"/"+entry.collector_number+"/"+entry.name;expected.put(key,expected.getOrDefault(key,0)+entry.quantity.intValue());}}
         for(JsonElement item:metadata.getAsJsonArray("commanders")){JsonObject row=item.getAsJsonObject();String key=row.get("owner").getAsString()+"/"+row.get("set").getAsString().toUpperCase(Locale.ROOT)+"/"+row.get("number").getAsString()+"/"+row.get("name").getAsString();actual.put(key,actual.getOrDefault(key,0)+1);}
         if(!expected.equals(actual))throw new IOException("UNITY_GAME_COMMANDERS_MISMATCH");
     }
@@ -30,10 +30,10 @@ public final class NativeGameLaunch {
     public JsonArray cards(boolean opponent,boolean sideboard) throws IOException {
         JsonArray result=new JsonArray();long count=0;
         LaunchSeat seat=opponent?ai:human;Set<String> designated=new HashSet<>(Arrays.asList(seat.document.deck.commander_entry_ids));
-        for(NativeLaunchEntry entry:seat.document.deck.entries){boolean command=entry.section.equals("commander") || designated.contains(entry.entry_id);if(sideboard?!(entry.section.equals("sideboard") || command):!entry.section.equals("mainboard") || command)continue;
+        for(NativeLaunchEntry entry:seat.document.deck.entries){boolean command=entry.section.equals("commander") || designated.contains(entry.entry_id);if(sideboard?!(command || (entry.section.equals("sideboard") && !format().equals("unrestricted_commander"))):!entry.section.equals("mainboard") || command)continue;
             if(entry.set_code==null || entry.collector_number==null || entry.name==null || entry.name.isEmpty() || entry.name.contains(" // "))throw new IOException("UNITY_GAME_PRINTING_UNSUPPORTED");
             count+=entry.quantity;if(count>10000)throw new IOException("UNITY_GAME_DECK_LIMIT");JsonObject row=new JsonObject();row.addProperty("name",entry.name);row.addProperty("set",entry.set_code);row.addProperty("number",entry.collector_number);row.addProperty("quantity",entry.quantity);result.add(row);
-        }if(!sideboard && count==0)throw new IOException("UNITY_GAME_DECK_EMPTY");return result;
+        }if(!sideboard && count==0 && !format().equals("unrestricted_commander"))throw new IOException("UNITY_GAME_DECK_EMPTY");return result;
     }
     public Map<String,CardIdentity> bindings() {
         Map<String,CardIdentity> result = new HashMap<>();

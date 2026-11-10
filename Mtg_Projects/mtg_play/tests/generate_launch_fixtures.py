@@ -107,6 +107,15 @@ def artifacts():
                 payload=value,
             )
         )
+    unrestricted = deepcopy(cases[1])
+    unrestricted["name"] = "launch-2-unrestricted-commander"
+    unrestricted["payload"]["format"] = "unrestricted_commander"
+    unrestricted["payload"]["seats"][0]["document"]["deck"]["entries"][0][
+        "quantity"
+    ] = 299
+    for seat in unrestricted["payload"]["seats"]:
+        seat["document"]["deck"]["companion_entry_id"] = None
+    cases.append(unrestricted)
     negative = []
     for name in (
         "wrong-version",

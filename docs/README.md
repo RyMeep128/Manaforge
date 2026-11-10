@@ -96,3 +96,5 @@ contracts from those journals as the corresponding behavior settles.
 Keep one current guide per workflow. Update that guide when behavior changes;
 avoid adding a new top-level story document for each increment. Archive dated
 investigations and superseded plans, and link historical requirements explicitly.
+
+- [Unrestricted Commander](play-unrestricted-commander.md) — Commander gameplay without deck legality restrictions.

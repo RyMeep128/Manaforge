@@ -84,7 +84,9 @@ def launch_schema():
                     "manifest_id": string,
                     "manaforge_version": string,
                     "engine": reference("LaunchEnginePin"),
-                    "format": {"enum": ["freeform", "commander"]},
+                    "format": {
+                        "enum": ["freeform", "commander", "unrestricted_commander"]
+                    },
                     "seats": {
                         "type": "array",
                         "items": reference("LaunchSeat"),

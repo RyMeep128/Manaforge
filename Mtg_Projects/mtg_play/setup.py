@@ -162,7 +162,7 @@ def prepare_catalog(decks, service=None, *, cancel=None, report=None):
             colors = tuple(color for color in "WUBRG" if color in present)
         checks = tuple(
             local_readiness(row.document, format, records)
-            for format in ("freeform", "commander")
+            for format in ("freeform", "commander", "unrestricted_commander")
         )
         prepared.append(
             replace(

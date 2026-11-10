@@ -87,3 +87,24 @@ def test_reload_tracks_deck_identity_and_clears_removed_selection(
     ]
     assert selected == [original[0].key, None if remove_opponent else original[1].key]
     assert launcher.start_button.isEnabled() is not remove_opponent
+
+
+def test_unrestricted_commander_is_selectable_and_reaches_the_launch(
+    launcher, monkeypatch
+):
+    index = launcher.format.findData("unrestricted_commander")
+    assert index >= 0 and launcher.format.itemText(index) == "Unrestricted Commander"
+    launcher.format.setCurrentIndex(index)
+    select_decks(launcher)
+    launch = Mock(root=None)
+    monkeypatch.setattr(module, "LiveGameLaunch", lambda: launch)
+    run = Mock(return_value={"outcome": "win"})
+    monkeypatch.setattr(module, "run_live_game", run)
+    queued = []
+    monkeypatch.setattr(
+        launcher.native_jobs, "submit", lambda work, **kw: queued.append(work)
+    )
+    launcher.start_button.click()
+    assert len(queued) == 1
+    queued[0](None, None)
+    assert run.call_args.args[0].format == "unrestricted_commander"

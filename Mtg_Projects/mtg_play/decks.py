@@ -107,15 +107,19 @@ def _deck_queries(document, oracle_lookup=None, *, commander=False, resolve_name
     return entries, queries, issues
 
 
-def deck_document_issues(document, *, commander=False):
+def deck_document_issues(document, *, commander=False, allow_empty=False):
     """Adapter structural checks only; never fabricate printing resolution."""
     entries, _, issues = _deck_queries(
         document, commander=commander, resolve_names=False
     )
     commander_ids = set(document.deck.commander_entry_ids) if commander else set()
-    if not issues and not any(
-        entry.section == "mainboard" and entry.entry_id not in commander_ids
-        for entry in entries
+    if (
+        not allow_empty
+        and not issues
+        and not any(
+            entry.section == "mainboard" and entry.entry_id not in commander_ids
+            for entry in entries
+        )
     ):
         issues.append(DeckIssue("", "EMPTY_MAINBOARD"))
     return tuple(issues)
