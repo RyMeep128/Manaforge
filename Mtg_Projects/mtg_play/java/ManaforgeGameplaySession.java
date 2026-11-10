@@ -17,6 +17,7 @@ public final class ManaforgeGameplaySession implements AutoCloseable {
         default void terminal(String outcome) throws Exception {}
         default void terminal(String outcome,JsonObject state,JsonObject metadata) throws Exception {terminal(outcome);}
         default void unsupported(String code) throws Exception {}
+        default void unsupported(String code,JsonObject context) throws Exception {unsupported(code);}
     }
     public static final class Advance {
         final JsonObject state,prompt,terminal;
@@ -55,8 +56,13 @@ public final class ManaforgeGameplaySession implements AutoCloseable {
         if(guard.has("targeting_context") && "GAME_TARGET".equals(prompt.get("kind").getAsString()))prompt.add("targeting_context",guard.get("targeting_context"));
         JsonObject projected;
         try{projected=projection.projectCoreCombat(publicView,prompt,casting);}catch(IOException unsupported){
-            if(!"LIVE_OPENING_PROJECTION_UNSUPPORTED".equals(unsupported.getMessage()))throw unsupported;String family=prompt.get("kind").getAsString();int line=0;for(StackTraceElement location:(unsupported.getCause()==null?unsupported:unsupported.getCause()).getStackTrace())if(location.getClassName().equals("ManaforgeOpeningProjection") && !location.getMethodName().equals("require")){line=location.getLineNumber();break;}observer.unsupported("UNSUPPORTED_"+(family.matches("[A-Z_]{1,60}")?family:"CHOICE")+"_"+line);
-            if(!Boolean.getBoolean("manaforge.liveGame"))System.err.println("Unsupported native choice: "+family+":"+line);
+            if(!"LIVE_OPENING_PROJECTION_UNSUPPORTED".equals(unsupported.getMessage()))throw unsupported;
+            String code=projection.unsupportedCode();JsonObject context=new JsonObject();
+            for(String key:new String[]{"phase","step"}){JsonElement value=before.get(key);if(value!=null && value.isJsonPrimitive() && value.getAsJsonPrimitive().isString() && value.getAsString().matches("[A-Z_]{1,40}"))context.add(key,value);}
+            String family=prompt.get("kind").getAsString();if(family.matches("[A-Z_]{1,40}"))context.addProperty("prompt_family",family);
+            for(String key:new String[]{"targets","choices","cards","amounts"})if(prompt.has(key) && prompt.get(key).isJsonArray() && prompt.getAsJsonArray(key).size()<=256)context.addProperty(key+"_count",prompt.getAsJsonArray(key).size());
+            observer.unsupported(code,context);
+            if(!Boolean.getBoolean("manaforge.liveGame"))System.err.println("Unsupported native choice: "+code);
             JsonObject unknown=prompt.deepCopy();unknown.addProperty("kind","GAME_ASK");unknown.addProperty("is_priority",false);unknown.remove("attackers");unknown.remove("blockers");unknown.addProperty("message","This choice is not supported yet. Return to Manaforge to end the session.");
             projected=projection.projectCoreCombat(publicView,unknown,false);projected.add("decision",JsonNull.INSTANCE);projected.add("actions",new JsonArray());projected.getAsJsonArray("unsupported_fields").add("decision");projection.invalidateDecision();final JsonObject readonly=envelope(projected);
             return new ManaforgeUnityOpening.TurnOffer(readonly,prompt.get("decision_id").getAsLong(),before.get("cycle").getAsLong(),command->{throw new IOException("GAMEPLAY_DECISION_UNSUPPORTED");});

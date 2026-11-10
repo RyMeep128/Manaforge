@@ -24,6 +24,8 @@ def retain_session_logs(
     player=None,
     destination=None,
     payment=None,
+    unsupported=None,
+    processes=None,
 ):
     """Keep player.log and a small summary only; never copy bootstraps or decks.
 
@@ -80,6 +82,8 @@ def retain_session_logs(
         "client_errors": list(client_errors)[-12:],
         "summary": summary,
         "payment": payment,
+        "unsupported": unsupported,
+        "processes": processes,
     }
     (target / "diagnostic.json").write_text(
         json.dumps(report, indent=2) + "\n", encoding="utf-8"

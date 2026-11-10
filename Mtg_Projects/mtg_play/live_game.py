@@ -139,6 +139,8 @@ class LiveGameLaunch:
         self.client_errors = []
         self.log_directory = None
         self.payment_diagnostics = None
+        self.unsupported_diagnostics = None
+        self.process_diagnostics = None
         self.version = None
         self.player = None
 
@@ -149,8 +151,15 @@ class LiveGameLaunch:
         self._identity = (stat.st_dev, stat.st_ino)
 
     def close(self):
-        if self.owner is not None and not self.owner.close().confirmed:
-            raise LiveGameError("UNITY_GAME_CLEANUP_UNCONFIRMED")
+        if self.owner is not None:
+            cleanup = self.owner.close()
+            self.process_diagnostics = [
+                dict(role=child.role, exit_code=child.exit_code, forced=child.forced, reaped=child.reaped)
+                for child in getattr(cleanup, "children", ())
+                if child.role in ("gateway", "client")
+            ]
+            if not cleanup.confirmed:
+                raise LiveGameError("UNITY_GAME_CLEANUP_UNCONFIRMED")
         if self.root is not None:
             resolved = self.root.resolve()
             if (
@@ -250,6 +259,19 @@ class LiveGameLaunch:
                 except (OSError, ValueError):
                     pass
                 try:
+                    unsupported = resolved / "game-unsupported.json"
+                    if unsupported.is_file() and not unsupported.is_symlink() and unsupported.stat().st_size <= 2048:
+                        value = json.loads(unsupported.read_text(encoding="utf-8"))
+                        self.unsupported_diagnostics = {
+                            key: item for key, item in value.items()
+                            if key in ("code", "prompt_family", "phase", "step")
+                            and isinstance(item, str) and re.fullmatch(r"[A-Z_0-9]{1,100}", item)
+                            or key in ("targets_count", "choices_count", "cards_count", "amounts_count")
+                            and type(item) is int and 0 <= item <= 256
+                        } or None
+                except (OSError, ValueError, AttributeError):
+                    pass
+                try:
                     self.log_directory = retain_session_logs(
                         resolved,
                         summary=self.summary,
@@ -258,6 +280,8 @@ class LiveGameLaunch:
                         version=self.version,
                         player=self.player,
                         payment=self.payment_diagnostics,
+                        unsupported=self.unsupported_diagnostics,
+                        processes=self.process_diagnostics,
                     )
                     if self.log_directory is not None and (
                         self.last_error or self.client_errors or self.summary is None

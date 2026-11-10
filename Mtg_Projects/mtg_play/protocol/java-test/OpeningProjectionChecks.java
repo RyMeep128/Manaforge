@@ -766,6 +766,18 @@ public final class OpeningProjectionChecks {
         engine=new SessionEngine();projection=projection();session=new ManaforgeGameplaySession(projection,engine,null,true);offer=session.offer(engine.state,prompt());command=sessionCommand(projection,offer);engine.badCycle=true;final ManaforgeUnityOpening.TurnSubmit stale=nativeSubmit(offer);final JsonObject staleCommand=command;fails("GAMEPLAY_RESPONSE_UNPROVEN",()->stale.submit(staleCommand));session.close();
         engine=new SessionEngine();projection=projection();session=new ManaforgeGameplaySession(projection,engine,null,true);offer=session.offer(engine.state,prompt());command=sessionCommand(projection,offer);session.close();try{nativeSubmit(offer).submit(command);throw new AssertionError("CLOSED");}catch(IllegalStateException expected){check(engine.submissions==0);}
     }
+    static void emptyOptionalTargetChecks() throws Exception {
+        JsonObject raw=attackState(),target=attackPrompt();target.addProperty("kind","GAME_TARGET");target.remove("attackers");
+        target.add("targets",new JsonArray());target.addProperty("can_finish",true);
+        ManaforgeOpeningProjection projection=projection();JsonObject view=projection.projectCoreCombat(raw,target,true);shape(view);
+        check(view.getAsJsonObject("decision").getAsJsonArray("options").size()==0);
+        check(view.getAsJsonArray("actions").size()==1);
+        JsonObject response=projection.claimBoolean(perform(view),"session","human","raw-game","raw-human",41,8);
+        check("boolean".equals(response.get("kind").getAsString()) && !response.get("value").getAsBoolean());
+        target.addProperty("can_finish",false);
+        fails("LIVE_OPENING_PROJECTION_UNSUPPORTED",()->projection.projectCoreCombat(raw,target,true));
+        check("UNSUPPORTED_GAME_TARGET_OPTIONS".equals(projection.unsupportedCode()));
+    }
     static void manualManaChecks() throws Exception {
         JsonObject raw=attackState(),prompt=priorityPrompt();raw.addProperty("priority_player","raw-name");raw.getAsJsonObject("action_kinds").addProperty("raw-card","activate");for(JsonElement player:raw.getAsJsonArray("players"))player.getAsJsonObject().add("mana",JsonParser.parseString("[[\"green\",2],[\"colorless\",1]]"));ManaforgeOpeningProjection projection=projection();JsonObject view=projection.projectCoreCombat(raw,prompt,true);shape(view);check("Activate: Forest".equals(view.getAsJsonArray("actions").get(0).getAsJsonObject().get("label").getAsString()));check(view.getAsJsonArray("players").get(0).getAsJsonObject().getAsJsonArray("mana").size()==2);check(!view.getAsJsonArray("unsupported_fields").contains(new JsonPrimitive("mana")));check("raw-card".equals(projection.claimAction(perform(view),"session","human","raw-game","raw-human",41,8).get("value").getAsString()));
         JsonObject mana=prompt.deepCopy();mana.addProperty("kind","GAME_PLAY_MANA");mana.addProperty("is_priority",false);projection=projection();JsonObject poolView=projection.projectCoreCombat(raw,mana,true);shape(poolView);JsonObject poolWire=JsonParser.parseString(perform(poolView)).getAsJsonObject();poolWire.getAsJsonObject("body").add("action_id",poolView.getAsJsonArray("actions").get(1).getAsJsonObject().get("action_id"));JsonObject poolCommand=projection.claimAction(poolWire.toString(),"session","human","raw-game","raw-human",41,8);check("mana_type".equals(poolCommand.get("kind").getAsString()) && "GREEN".equals(poolCommand.get("value").getAsString()) && "raw-human".equals(poolCommand.get("player_id").getAsString()));
@@ -913,7 +925,7 @@ public final class OpeningProjectionChecks {
         check("2".equals(characteristics.get("base_power").getAsString()) && "2".equals(characteristics.get("base_toughness").getAsString()));
         baseCard.addProperty("hidden",true);JsonObject hiddenBase=projection().project(baseState,prompt());shape(hiddenBase);
         check(hiddenBase.getAsJsonArray("objects").get(0).getAsJsonObject().get("characteristics").isJsonNull());
-        choiceChecks();landChecks();abilityChecks();stackPriorityChecks();castCorrelationChecks();attackFinishChecks();attackerSelectionChecks();declaredAttackChecks();declaredPriorityChecks();combatDamageChecks();combatCleanupChecks();blockedDamageChecks();turnContinuationChecks();repeatedCombatChecks();combatEntryChecks();
+        emptyOptionalTargetChecks();choiceChecks();landChecks();abilityChecks();stackPriorityChecks();castCorrelationChecks();attackFinishChecks();attackerSelectionChecks();declaredAttackChecks();declaredPriorityChecks();combatDamageChecks();combatCleanupChecks();blockedDamageChecks();turnContinuationChecks();repeatedCombatChecks();combatEntryChecks();
         System.out.println("Opening projection: "+checks+" privacy, schema, isolation and fail-closed checks passed");
     }
 }

@@ -8,6 +8,8 @@ import java.util.*;
 public final class ManaforgeOpeningProjection {
     private static final Gson JSON=new GsonBuilder().serializeNulls().create();
     private final String session, viewer, engineViewer;
+    private String unsupportedCode="UNSUPPORTED_CHOICE_CONTEXT";
+    public synchronized String unsupportedCode(){return unsupportedCode;}
     private final Map<String,CardIdentity> printings=new HashMap<>();
     private final Map<String,String> players=new HashMap<>();
     private final Map<String,String> stackReferences=new HashMap<>();
@@ -231,6 +233,7 @@ public final class ManaforgeOpeningProjection {
     }
     private JsonObject project(JsonObject raw,JsonObject prompt,boolean includePriorityPass,boolean includeSpells,boolean omitStack,boolean attackFinish,boolean includeAttackers,boolean combatObservation,boolean includeBlockers,boolean turnMode) throws IOException {
         invalidateDecision();
+        String diagnosticStage="CONTEXT";
         try {
             require(engineViewer.equals(raw.get("viewer").getAsString()));
             boolean priority="GAME_SELECT".equals(prompt.get("kind").getAsString()) && Boolean.TRUE.equals(flag(prompt,"is_priority"));
@@ -257,6 +260,7 @@ public final class ManaforgeOpeningProjection {
             result.turn=integer(raw,"turn");result.phase=text(raw,"phase");result.step=text(raw,"step");
             List<PlayerView> seats=new ArrayList<>();Map<String,String> names=new HashMap<>();Set<String> seen=new HashSet<>();
             boolean found=false;Map<String,String> seatNames=new HashMap<>();List<JsonObject> battlefield=new ArrayList<>();Map<JsonObject,String> exileOwners=new IdentityHashMap<>();Map<JsonObject,String> commandOwners=new IdentityHashMap<>();Map<JsonObject,String> graveOwners=new IdentityHashMap<>();
+            diagnosticStage="PLAYERS";
             for(JsonElement item:raw.getAsJsonArray("players")) {
                 JsonObject row=item.getAsJsonObject();String id=row.get("id").getAsString();require(seen.add(id));
                 boolean local=engineViewer.equals(id);found|=local;
@@ -285,6 +289,7 @@ public final class ManaforgeOpeningProjection {
             for(JsonObject row:displayed) {require(cardIds.add(row.get("id").getAsString()));
                 GameObject card=new GameObject();
                 boolean visibleStack=stackRows.contains(row) && Boolean.FALSE.equals(flag(row,"hidden")) && Boolean.FALSE.equals(flag(row,"face_down"));
+                diagnosticStage="OBJECTS";
                 String stackId=row.get("id").getAsString();
                 if(visibleStack){currentStackIds.add(stackId);card.object_id=stackReferences.computeIfAbsent(stackId,ignored->opaque());}
                 else card.object_id=opaque();
@@ -320,9 +325,10 @@ public final class ManaforgeOpeningProjection {
                 cards.add(card);
             }
             stackReferences.keySet().retainAll(currentStackIds);
+            diagnosticStage="ACTIONS";
             result.objects=cards.toArray(new GameObject[0]);List<LegalAction> actions=new ArrayList<>();Map<String,String> offeredNative=new HashMap<>();
             if(discard) {
-                JsonArray targets=prompt.getAsJsonArray("targets");require(targets.size()>0 && targets.size()<=256);Set<String> unique=new HashSet<>();
+                JsonArray targets=prompt.getAsJsonArray("targets");require((targets.size()>0 || Boolean.TRUE.equals(flag(prompt,"can_finish"))) && targets.size()<=256);Set<String> unique=new HashSet<>();
                 for(JsonElement target:targets){require(target.isJsonPrimitive() && target.getAsJsonPrimitive().isString() && unique.add(target.getAsString()));String reference=visibleReferences.get(target.getAsString());GameObject card=null;for(GameObject item:cards)if(item.object_id.equals(reference))card=item;
                     require(card!=null && "hand".equals(card.zone) && viewer.equals(card.owner_id) && !card.hidden && Boolean.FALSE.equals(card.face_down) && card.characteristics!=null && card.characteristics.name!=null);LegalAction action=new LegalAction();action.action_id=opaque();action.object_id=reference;action.kind="discard";action.label="Discard "+card.characteristics.name;action.priority_class="meaningful";actions.add(action);offeredNative.put(action.action_id,target.getAsString());}
             }
@@ -364,6 +370,7 @@ public final class ManaforgeOpeningProjection {
                 && Boolean.TRUE.equals(flag(raw,"playable_information_complete"))
                 && raw.has("playable") && raw.get("playable").isJsonArray()
                 && completePriorityActions(raw.getAsJsonArray("playable"),offeredNative.values());
+            diagnosticStage="OPTIONS";
             ChoiceRequest choice=new ChoiceRequest();choice.decision_id=opaque();choice.player_id=viewer;choice.family=priority || ability || attackFinish || discard || targeting || stringChoice || mana?"selection":"boolean";
             choice.prompt=text(prompt,"message");if(coreCombat && choice.prompt==null)choice.prompt=numeric?("GAME_GET_AMOUNT".equals(text(prompt,"kind"))?"Choose a number":"Choose amounts"):"Choose a response";choice.cancellable=false;choice.can_finish=false;choice.is_priority=priority;choice.amounts=new AmountConstraint[0];
             Map<String,String> offeredOptions=new HashMap<>();
@@ -462,6 +469,11 @@ public final class ManaforgeOpeningProjection {
             if(coreCombat)for(JsonObject row:battlefield){require(knownCombatants.contains(row.get("id").getAsString()) || knownCombatants.size()<4096);knownCombatants.add(row.get("id").getAsString());}
             presentationReferences.clear();presentationReferences.putAll(nextPresentationReferences);
             revision++;return output;
-        }catch(IOException failure){throw failure;}catch(RuntimeException failure){IOException sanitized=new IOException("LIVE_OPENING_PROJECTION_UNSUPPORTED");sanitized.setStackTrace(failure.getStackTrace());throw sanitized;}
+        }catch(IOException | RuntimeException failure){
+            JsonElement kind=prompt==null?null:prompt.get("kind");
+            String family=kind!=null && kind.isJsonPrimitive() && kind.getAsJsonPrimitive().isString()?kind.getAsString():"CHOICE";
+            unsupportedCode="UNSUPPORTED_"+(family.matches("[A-Z_]{1,40}")?family:"CHOICE")+"_"+diagnosticStage;
+            IOException sanitized=new IOException("LIVE_OPENING_PROJECTION_UNSUPPORTED");sanitized.setStackTrace(failure.getStackTrace());throw sanitized;
+        }
     }
 }
