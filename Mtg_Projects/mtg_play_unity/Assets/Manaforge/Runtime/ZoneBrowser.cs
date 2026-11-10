@@ -29,9 +29,10 @@ namespace Manaforge.Play
         public void Present(string owner, string zone, string ownerName, int visible, long? total,int concealedCount=0)
         {
             if(disposed)return;OwnerId=owner;Zone=zone;style.display=DisplayStyle.Flex;
-            title.text=ownerName+" / "+ZonePile.Title(zone);
+            title.text=ownerName+" / "+(zone=="attachments"?"Attachments":ZonePile.Title(zone));
+            tabs.style.display=zone=="attachments"?DisplayStyle.None:DisplayStyle.Flex;
             foreach(var tab in tabs.Children())tab.EnableInClassList("zone-tab-selected",tab.name=="browse-"+zone);
-            summary.text=concealedCount>0?visible+" visible cards | "+concealedCount+" face-down cards":zone=="library"?(total.HasValue?total+" cards | ":"Count unavailable | ")+visible+" known. Unrevealed cards and library order remain hidden.":visible==0?"No viewer-visible cards in this zone.":visible+" visible cards | Hover to inspect. Highlighted choices use the current prompt.";
+            summary.text=zone=="attachments"?visible+" attached cards":concealedCount>0?visible+" visible cards | "+concealedCount+" face-down cards":zone=="library"?(total.HasValue?total+" cards | ":"Count unavailable | ")+visible+" known. Unrevealed cards and library order remain hidden.":visible==0?"No viewer-visible cards in this zone.":visible+" visible cards | Hover to inspect. Highlighted choices use the current prompt.";
             unknown.Bind(owner);
             unknown.style.display=zone=="library" && visible==0 && total!=0?DisplayStyle.Flex:DisplayStyle.None;
         }

@@ -36,6 +36,19 @@ namespace Manaforge.Play
                 for(int i=0;i<row.Count;i++){var v=row[i].view;v.style.display=DisplayStyle.Flex;v.SetPresentation(full?CardPresentationMode.Full:CardPresentationMode.Compact,size);v.style.left=reserveSeat?(i<leftSlots?gapStart-Mathf.Min(leftSlots,row.Count)*(size+18)+9+i*(size+18):gapEnd+9+(i-leftSlots)*(size+18)):start+i*step;v.style.top=top;v.style.rotate=new Rotate(new Angle(row[i].card.Tapped==true?90:0));}
             }
 
+        public static IReadOnlyDictionary<string,IReadOnlyList<ProjectedCard>> AttachmentGroups(IEnumerable<ProjectedCard> cards,IEnumerable<string> players)
+        {
+            var visible=cards.Where(c=>c.Zone=="battlefield" && !c.Hidden && c.FaceDown==false).ToDictionary(c=>c.ObjectId);var seats=new HashSet<string>(players);var groups=new Dictionary<string,List<ProjectedCard>>();
+            foreach(var card in visible.Values.OrderBy(c=>c.RenderId,StringComparer.Ordinal)){
+                if(card.AttachedTo==null)continue;string parent=card.AttachedTo;var seen=new HashSet<string>{card.ObjectId};bool valid=false;
+                for(int depth=0;depth<32;depth++){
+                    if(!seen.Add(parent))break;if(seats.Contains(parent)){valid=true;break;}
+                    if(!visible.TryGetValue(parent,out var host))break;if(host.AttachedTo==null){valid=true;break;}parent=host.AttachedTo;
+                }
+                if(!valid)continue;if(!groups.TryGetValue(parent,out var group)){group=new List<ProjectedCard>();groups.Add(parent,group);}group.Add(card);
+            }
+            return new System.Collections.ObjectModel.ReadOnlyDictionary<string,IReadOnlyList<ProjectedCard>>(groups.ToDictionary(pair=>pair.Key,pair=>(IReadOnlyList<ProjectedCard>)pair.Value.AsReadOnly()));
+        }
         public const int MaximumLandStack=2;
         public static float LandSize(int count,float maximum=110)=>Mathf.Clamp(maximum/(1+.045f*Mathf.Max(0,count-4)),62,maximum);
         private static string LandIdentity(ProjectedCard card)

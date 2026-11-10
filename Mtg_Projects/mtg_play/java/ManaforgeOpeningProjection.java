@@ -329,6 +329,18 @@ public final class ManaforgeOpeningProjection {
                 cards.add(card);
             }
             stackReferences.keySet().retainAll(currentStackIds);
+            boolean attachmentsComplete=coreCombat;
+            if(coreCombat){
+                Map<String,GameObject> publicBattlefield=new HashMap<>();
+                for(JsonObject row:battlefield){GameObject object=visibleCard(cards,visibleReferences.get(text(row,"id")));if(object!=null && "battlefield".equals(object.zone))publicBattlefield.put(text(row,"id"),object);}
+                for(JsonObject row:battlefield){GameObject object=publicBattlefield.get(text(row,"id"));if(object==null)continue;
+                    if(!row.has("attachments") || !row.get("attachments").isJsonArray() || !row.has("attached_to")){attachmentsComplete=false;continue;}
+                    List<String> attached=new ArrayList<>();Set<String> unique=new HashSet<>();require(row.getAsJsonArray("attachments").size()<=256);
+                    for(JsonElement id:row.getAsJsonArray("attachments")){require(id.isJsonPrimitive() && id.getAsJsonPrimitive().isString() && unique.add(id.getAsString()));GameObject child=publicBattlefield.get(id.getAsString());if(child!=null)attached.add(child.object_id);else attachmentsComplete=false;}
+                    object.attachments=attached.toArray(new String[0]);String parent=text(row,"attached_to");
+                    if(parent!=null){GameObject host=publicBattlefield.get(parent);object.attached_to=host!=null?host.object_id:engineViewer.equals(parent)?viewer:players.get(parent);if(object.attached_to==null)attachmentsComplete=false;}
+                }
+            }
             diagnosticStage="ACTIONS";
             result.objects=cards.toArray(new GameObject[0]);List<LegalAction> actions=new ArrayList<>();Map<String,String> offeredNative=new HashMap<>();
             if(discard) {
@@ -474,6 +486,7 @@ public final class ManaforgeOpeningProjection {
             if(coreCombat && cards.stream().anyMatch(card->"stack".equals(card.zone) && (card.controller_id==null || card.owner_id==null))){List<String> unsupported=new ArrayList<>(Arrays.asList(result.unsupported_fields));unsupported.add("stack_ownership");result.unsupported_fields=unsupported.toArray(new String[0]);}
             if(missingCombatant){List<String> unsupported=new ArrayList<>(Arrays.asList(result.unsupported_fields));unsupported.add("combat_lki");result.unsupported_fields=unsupported.toArray(new String[0]);}
             if(missingDefender){List<String> unsupported=new ArrayList<>(Arrays.asList(result.unsupported_fields));unsupported.add("combat_defender_lki");result.unsupported_fields=unsupported.toArray(new String[0]);}
+            if(attachmentsComplete){List<String> unsupported=new ArrayList<>(Arrays.asList(result.unsupported_fields));unsupported.remove("attachments");result.unsupported_fields=unsupported.toArray(new String[0]);}
             if(result.actions_complete){List<String> unsupported=new ArrayList<>(Arrays.asList(result.unsupported_fields));unsupported.remove("actions");result.unsupported_fields=unsupported.toArray(new String[0]);}
             if(result.commanders!=null){List<String> unsupported=new ArrayList<>(Arrays.asList(result.unsupported_fields));unsupported.remove("commander_metadata");result.unsupported_fields=unsupported.toArray(new String[0]);}
             if(coreCombat && seats.stream().allMatch(seat->seat.mana!=null)){List<String> unsupported=new ArrayList<>(Arrays.asList(result.unsupported_fields));unsupported.remove("mana");result.unsupported_fields=unsupported.toArray(new String[0]);}

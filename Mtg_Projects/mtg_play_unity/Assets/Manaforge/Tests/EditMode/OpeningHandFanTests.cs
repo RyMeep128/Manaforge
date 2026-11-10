@@ -82,6 +82,18 @@ namespace Manaforge.Play.Tests
                 var next=cards.Where(c=>c.view.style.display.value==DisplayStyle.Flex).Select(c=>c.card.ObjectId).ToArray();Assert.That(next.Intersect(first),Is.Empty);Assert.That(next.Length%2,Is.Zero);
             }finally{foreach(var item in cards)item.view.Dispose();}
         }
+        [Test] public void AttachmentsFollowTheirHostAcrossControllersAndDetachCleanly()
+        {
+            var cards=Lands(3,(card,i)=>{if(i>0){card["attached_to"]="land-0";card["controller_id"]="two";card["characteristics"]["type_line"]="Enchantment — Aura";}});
+            var groups=GameplayCardLayout.AttachmentGroups(cards,new[]{"one","two"});Assert.That(groups.Count,Is.EqualTo(1));Assert.That(groups["land-0"].Select(c=>c.ObjectId),Is.EquivalentTo(new[]{"land-1","land-2"}));
+            Assert.That(GameplayCardLayout.AttachmentGroups(Lands(3),new[]{"one","two"}),Is.Empty);
+        }
+        [Test] public void CyclesAndUnknownAttachmentHostsRemainSeparateButPlayerCursesGroup()
+        {
+            var cycle=Lands(2,(card,i)=>card["attached_to"]="land-"+(1-i));Assert.That(GameplayCardLayout.AttachmentGroups(cycle,new[]{"one","two"}),Is.Empty);
+            var unknown=Lands(2,(card,i)=>card["attached_to"]="unavailable");Assert.That(GameplayCardLayout.AttachmentGroups(unknown,new[]{"one","two"}),Is.Empty);
+            var curse=Lands(1,(card,i)=>card["attached_to"]="two");Assert.That(GameplayCardLayout.AttachmentGroups(curse,new[]{"one","two"})["two"].Count,Is.EqualTo(1));
+        }
         [Test] public void EmptyHandDoesNotInventCards(){Assert.That(OpeningHandFan.Arrange(0,1200),Is.Empty);}
         [TestCase(-1,100)][TestCase(257,100)][TestCase(7,0)][TestCase(7,-1)]
         public void InvalidGeometryFailsExplicitly(int count,float width){Assert.Throws<System.ArgumentOutOfRangeException>(()=>OpeningHandFan.Arrange(count,width));}

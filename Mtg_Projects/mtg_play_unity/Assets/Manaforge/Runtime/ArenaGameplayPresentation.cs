@@ -237,6 +237,10 @@ namespace Manaforge.Play
             if(disposed || unsupportedTopology || frame==null || (zone!="library" && zone!="graveyard" && zone!="exile") || owner==null || !frame.PlayerLifeTotals.ContainsKey(owner))return false;
             ClearCardFocus();CloseInspection();zoneDrawer.SetReturnFocus(new[]{localLibrary,opponentLibrary,localGraveyard,opponentGraveyard,localExile,opponentExile}.FirstOrDefault(p=>p.OwnerId==owner && p.Zone==zone));openZone=zone;openZoneOwner=owner;rowPages["public-zone"]=0;Layout();return true;
         }
+        private void BrowseAttachments(string target)
+        {
+            if(disposed || frame==null)return;ClearCardFocus();CloseInspection();zoneDrawer.SetReturnFocus(null);openZone="attachments";openZoneOwner=target;rowPages["public-zone"]=0;Layout();
+        }
         public void ClosePublicZone(){if(disposed || openZone==null)return;ClearCardFocus();CloseInspection();openZone=null;zoneDrawer.ClearBinding(true);Layout();}
         private void Layout()
         {
@@ -275,11 +279,23 @@ namespace Manaforge.Play
             void Row(System.Collections.Generic.List<(ProjectedCard card,CardView view)> row,float top,float left,float span,float size,bool full=false,string key=null,bool reserveSeat=false)
                 =>GameplayCardLayout.Row(row,navigation,rowPages,Layout,width,top,left,span,size,full,key,reserveSeat?new Vector2(width*.5f-90,width*.5f+90):(Vector2?)null);
             float boardLeft=260,boardSpan=Mathf.Max(100,width-425),cardWidth=Mathf.Clamp(boardSpan/7,85,125);
-            var battlefield=items.Where(i=>i.card.Zone=="battlefield").ToList();
+            var attachmentGroups=GameplayCardLayout.AttachmentGroups(items.Select(i=>i.card),frame.PlayerLifeTotals.Keys);
+            if(openZone=="attachments" && !attachmentGroups.ContainsKey(openZoneOwner)){openZone=openZoneOwner=null;zoneDrawer.ClearBinding(true);rowPages.Remove("public-zone");}
+            var attachedIds=new System.Collections.Generic.HashSet<string>(attachmentGroups.Values.SelectMany(group=>group).Select(card=>card.ObjectId));
+            var battlefield=items.Where(i=>i.card.Zone=="battlefield" && !attachedIds.Contains(i.card.ObjectId)).ToList();
             GameplayCardLayout.LandRow(battlefield.Where(i=>i.card.ControllerId!=viewer && Land(i.card)).ToList(),navigation,rowPages,Layout,width,height*.15f,boardLeft,boardSpan,Mathf.Min(cardWidth,110),"opponent-lands",new Vector2(width*.5f-90,width*.5f+90));
             Row(battlefield.Where(i=>i.card.ControllerId!=viewer && !Land(i.card)).ToList(),height*.30f,boardLeft,boardSpan,cardWidth,key:"opponent-permanents");
             Row(battlefield.Where(i=>i.card.ControllerId==viewer && !Land(i.card)).ToList(),height*.53f,boardLeft,boardSpan,cardWidth,key:"local-permanents");
             GameplayCardLayout.LandRow(battlefield.Where(i=>i.card.ControllerId==viewer && Land(i.card)).ToList(),navigation,rowPages,Layout,width,height*.72f,boardLeft,boardSpan,Mathf.Min(cardWidth,110),"local-lands",new Vector2(width*.5f-90,width*.5f+90));
+            var attachmentViews=items.ToDictionary(item=>item.card.ObjectId);
+            foreach(var group in attachmentGroups){
+                Vector2 anchor;float size=95;CardView parentView=null;
+                if(attachmentViews.TryGetValue(group.Key,out var parent)){
+                    parentView=parent.view;if(parentView.style.display.value==DisplayStyle.None)continue;anchor=new Vector2(parentView.style.left.value.value,parentView.style.top.value.value);size=parentView.style.width.value.value;
+                }else{var seat=group.Key==viewer?localPlayer:opponent;if(seat.PlayerId!=group.Key)continue;anchor=root.WorldToLocal(seat.worldBound.center)+new Vector2(48,-30);size=80;}
+                var shown=group.Value.Take(3).ToArray();for(int i=shown.Length-1;i>=0;i--){var child=attachmentViews[shown[i].ObjectId];child.view.SetPresentation(CardPresentationMode.Compact,Mathf.Max(62,size*.88f));child.view.style.left=anchor.x+18+i*16;child.view.style.top=anchor.y+24+i*16;child.view.style.rotate=new Rotate(new Angle(child.card.Tapped==true?90:0));child.view.style.display=DisplayStyle.Flex;child.view.BringToFront();}
+                parentView?.BringToFront();string target=group.Key;var count=new Button(()=>BrowseAttachments(target)){name="attachment-count-"+target,text=group.Value.Count.ToString(),tooltip="Attachments"};count.style.position=Position.Absolute;count.style.left=anchor.x+size-9;count.style.top=anchor.y+size*BattlefieldFrame.Aspect-12;count.style.width=28;count.style.height=26;GameplayTheme.Button(count);navigation.Add(count);
+            }
             foreach(var item in items)item.view.RemoveFromClassList("in-hand");
             var hand=items.Where(i=>i.card.Zone=="hand" && i.card.OwnerId==viewer).ToList();
             GameplayCardLayout.RetainHandOrder(handOrder,hand.Select(item=>item.card.RenderId));
@@ -325,10 +341,10 @@ namespace Manaforge.Play
                 foreach(var item in items)item.view.style.display=DisplayStyle.None;
                 navigation.Clear();
                 zoneDrawer.BringToFront();Surface.CardsRoot.BringToFront();
-                var publicCards=items.Where(i=>i.card.Zone==openZone && i.card.OwnerId==openZoneOwner && (openZone!="library" || !i.card.Hidden && i.card.FaceDown!=true)).ToList();
+                var publicCards=openZone=="attachments"?items.Where(i=>attachmentGroups.TryGetValue(openZoneOwner,out var family) && family.Any(card=>card.ObjectId==i.card.ObjectId)).ToList():items.Where(i=>i.card.Zone==openZone && i.card.OwnerId==openZoneOwner && (openZone!="library" || !i.card.Hidden && i.card.FaceDown!=true)).ToList();
                 int concealed=publicCards.Count(i=>i.card.Hidden || i.card.FaceDown==true);
                 long? total=openZone=="library" && frame.PlayerLibraryCounts.TryGetValue(openZoneOwner,out var libraryCount)?libraryCount:null;
-                zoneDrawer.Present(openZoneOwner,openZone,openZoneOwner==viewer?"Your zones":"Opponent zones",publicCards.Count-concealed,total,concealed);
+                zoneDrawer.Present(openZoneOwner,openZone,openZone=="attachments"?(attachmentViews.TryGetValue(openZoneOwner,out var enchanted)?enchanted.card.Characteristics?.Name:openZoneOwner==viewer?"You":"Opponent"):openZoneOwner==viewer?"Your zones":"Opponent zones",publicCards.Count-concealed,total,concealed);
                 Row(publicCards,height*.34f,180,width-360,185,true,"public-zone");
                 foreach(var item in publicCards)if(item.view.style.display.value==DisplayStyle.Flex)item.view.BringToFront();
                 navigation.BringToFront();zoneChoices.BringToFront();
