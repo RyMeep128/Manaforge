@@ -52,12 +52,9 @@
 #unity-priority-stops { max-height: 230px; margin-top: 8px; }
 
 /* Composition only: expanded bodies retain the previous choice and pile anchors. */
-.arena-player-hud { position: absolute; left: 16px; top: 54px; width: 232px; }
+.arena-player-hud { position: absolute; left: 16px; top: 54px; width: 252px; }
 .arena-player-hud > .mf-hud-players { height: 88px; flex-shrink: 0; }
 .arena-player-hud > .mf-hud-commanders { position: absolute; left: 0; right: 0; top: 224px; bottom: 0; }
-#action-drawer { right: 20px; bottom: 35px; width: 275px; max-height: 317px; }
-#action-drawer.opening-choices { width: 520px; right: 50%; margin-right: -260px; max-height: 202px; }
-#action-drawer.library-ordering { left: 15%; right: 15%; top: 18%; bottom: auto; width: auto; margin-right: 0; max-height: 65%; }
 #action-drawer .mf-drawer-content { max-height: 285px; }
 #action-drawer.opening-choices .mf-drawer-content { max-height: 170px; }
 #action-drawer.library-ordering .mf-drawer-content { max-height: 100%; }
@@ -65,8 +62,15 @@
 #priority-drawer { right: 16px; top: 16px; width: 285px; max-height: 70%; }
 #priority-drawer #unity-priority-controls { position: relative; right: auto; top: auto; width: auto; }
 #priority-drawer .mf-drawer-content { flex-shrink: 1; overflow: hidden; }
-#zones-drawer { left: 16px; top: 150px; width: 232px; }
 #zones-drawer .mf-drawer-viewport { padding-top: 0; }
-#zones-drawer > .mf-drawer-tab { top: auto; bottom: -32px; }
 #zones-drawer .mf-drawer-viewport, #zones-drawer .mf-drawer-content { flex-shrink: 1; }
 #table-motion { top: auto; bottom: 8px; right: 20px; }
+
+/* Persistent edge handles: content geometry must not move the handles. */
+#action-drawer, #action-drawer.opening-choices, #action-drawer.library-ordering { left: auto; top: auto; right: 20px; bottom: 35px; width: 275px; height: 30px; max-height: 30px; margin-right: 0; }
+#action-drawer > .mf-drawer-viewport { position: absolute; padding-top: 0; bottom: 32px; right: 0; width: 275px; overflow: hidden; }
+#zones-drawer { left: 16px; top: auto; bottom: 92px; width: 252px; height: 30px; }
+#zones-drawer > .mf-drawer-tab { top: 0; bottom: auto; }
+#zones-drawer > .mf-drawer-viewport { position: absolute; left: 0; width: 252px; padding-top: 0; }
+#zone-panel-scroll { width: 252px; }
+#zone-panel-scroll .unity-scroll-view__content-container { min-width: 232px; }

@@ -130,3 +130,6 @@
 
 .mf-gameplay-drawer.mf-theme, .mf-player-hud.mf-theme, .mf-zone-panel.mf-theme { background-color: rgba(0, 0, 0, 0); }
 .mf-drawer-tab { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.mf-theme .mf-drawer-tab { padding-left: 34px; min-height: 30px; height: 30px; margin: 0; }
+#drawer-glyph { position: absolute; left: 9px; top: 6px; width: 18px; height: 17px; }

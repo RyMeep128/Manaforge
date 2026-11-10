@@ -18,6 +18,7 @@ namespace Manaforge.Play
         public bool NeedsAttention {get;private set;}
         public event Action<bool> OpenChanged;
         private readonly string title;
+        private readonly DrawerGlyph glyph=new DrawerGlyph();
         private readonly Dictionary<VisualElement,(PickingMode picking,bool focusable)> suppressed=new Dictionary<VisualElement,(PickingMode,bool)>();
         private IVisualElementScheduledItem closing;
         private VisualElement returnFocus;
@@ -26,11 +27,21 @@ namespace Manaforge.Play
         {
             this.title=title??throw new ArgumentNullException(nameof(title));AddToClassList("mf-gameplay-drawer");AddToClassList("drawer-"+direction.ToString().ToLowerInvariant());pickingMode=PickingMode.Ignore;
             GameplayTheme.Attach(this);
-            Tab=new Button(Toggle){name="drawer-tab",text=title,focusable=true};Tab.AddToClassList("mf-drawer-tab");GameplayTheme.Button(Tab);
+            Tab=new Button(Toggle){name="drawer-tab",text=title,focusable=true};Tab.AddToClassList("mf-drawer-tab");GameplayTheme.Button(Tab);Tab.Add(glyph);
             Viewport=new VisualElement{name="drawer-viewport",pickingMode=PickingMode.Ignore};Viewport.AddToClassList("mf-drawer-viewport");
             Content=new VisualElement{name="drawer-content",pickingMode=PickingMode.Ignore,focusable=true};Content.AddToClassList("mf-drawer-content");Viewport.Add(Content);Add(Viewport);Add(Tab);
             RegisterCallback<KeyDownEvent>(Key);RegisterCallback<DetachFromPanelEvent>(Detached);
             IsOpen=open;ApplyState(true);
+        }
+        private sealed class DrawerGlyph : VisualElement
+        {
+            internal bool Open;
+            internal DrawerGlyph(){name="drawer-glyph";pickingMode=PickingMode.Ignore;generateVisualContent+=Draw;}
+            private void Draw(MeshGenerationContext context){
+                var pen=context.painter2D;pen.strokeColor=new Color(.94f,.85f,.66f);pen.lineWidth=1.8f;
+                pen.BeginPath();pen.MoveTo(new Vector2(1,9));pen.LineTo(new Vector2(1,15));pen.LineTo(new Vector2(17,15));pen.LineTo(new Vector2(17,9));pen.Stroke();
+                pen.BeginPath();pen.MoveTo(new Vector2(5,Open?4:1));pen.LineTo(new Vector2(9,Open?0:5));pen.LineTo(new Vector2(13,Open?4:1));pen.Stroke();
+            }
         }
         private void Toggle(){SetOpen(!IsOpen,IsOpen==false);}
         public void SetOpen(bool open,bool focusContent=false)
@@ -52,7 +63,7 @@ namespace Manaforge.Play
         }
         private void ApplyState(bool immediate)
         {
-            closing?.Pause();closing=null;EnableInClassList("drawer-open",IsOpen);Tab.tooltip=title+(IsOpen?" — collapse":" — expand")+(NeedsAttention?" — attention required":"");
+            glyph.Open=IsOpen;glyph.MarkDirtyRepaint();closing?.Pause();closing=null;EnableInClassList("drawer-open",IsOpen);Tab.tooltip=title+(IsOpen?" — collapse":" — expand")+(NeedsAttention?" — attention required":"");
             Content.SetEnabled(IsOpen);RefreshInput();
             if(IsOpen)Content.style.visibility=Visibility.Visible;
             else if(immediate || panel==null)Content.style.visibility=Visibility.Hidden;

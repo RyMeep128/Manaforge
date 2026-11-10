@@ -104,3 +104,15 @@ sessions before treating the story as visually accepted. Missing hosted Unity
 licensing or unavailable captures must be reported as unverified. Rebuild the
 local delivery player only after the exact source revision's CI is reviewed, in
 accordance with `development-workflow.md`; preserve previous builds and logs.
+
+
+## Stable drawer handles
+
+Arena handles remain anchored independently of their body height. Actions stays
+at the bottom right even when opening-hand, library-ordering or ordinary choice
+content changes size; those body layouts retain their own positions. Zones keeps
+its left-edge handle fixed while the pile banks change. Each handle carries a
+code-drawn tray and open/closed chevron. The zone drawer is 252 pixels wide to
+accommodate all three pile columns and the vertical scrollbar, and disables
+horizontal scrolling. Layout coverage checks handle bounds through content
+growth, collapse/reopen and the four desktop sizes, plus the zone viewport width.

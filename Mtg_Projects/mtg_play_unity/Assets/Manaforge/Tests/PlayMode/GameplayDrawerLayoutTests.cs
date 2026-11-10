@@ -32,6 +32,15 @@ namespace Manaforge.Play.Tests
                         Assert.That(drawer.Tab.worldBound.yMin,Is.GreaterThanOrEqualTo(root.worldBound.yMin));Assert.That(drawer.worldBound.yMax,Is.LessThanOrEqualTo(root.worldBound.yMax+1));
                         Assert.That(arena.Surface.CardsRoot.worldBound,Is.EqualTo(cardBounds),"Drawers must not resize the battlefield");
                     }
+                    foreach(var drawer in new[]{action,priority,zones}){
+                        var handle=drawer.Tab.worldBound;
+                        drawer.Content.style.minHeight=40;yield return null;drawer.Content.style.minHeight=180;yield return null;
+                        Assert.That(drawer.Tab.worldBound,Is.EqualTo(handle),"Content growth must not move the handle: "+drawer.name);
+                        drawer.SetOpen(false);yield return null;Assert.That(drawer.Tab.worldBound,Is.EqualTo(handle));drawer.SetOpen(true);drawer.Content.style.minHeight=StyleKeyword.Null;
+                        Assert.That(drawer.Tab.Q("drawer-glyph"),Is.Not.Null);
+                    }
+                    Assert.That(zones.Q<ScrollView>("zone-panel-scroll").horizontalScrollerVisibility,Is.EqualTo(ScrollerVisibility.Hidden));
+                    Assert.That(zones.Q<ScrollView>("zone-panel-scroll").contentViewport.resolvedStyle.width,Is.GreaterThanOrEqualTo(232));
                     var pile=root.Q<ZonePile>("opponent-library");Assert.That(pile.worldBound.xMin-root.worldBound.xMin,Is.EqualTo(22).Within(2));Assert.That(pile.worldBound.yMin-root.worldBound.yMin,Is.EqualTo(150).Within(2));
                     Assert.That(pile.Q<Image>("zone-art").image,Is.Null);Assert.That(pile.Q<Label>("zone-fallback").text,Is.Empty);
                     string directory=Path.Combine(Application.dataPath,"../Artifacts/HudDrawers");Directory.CreateDirectory(directory);

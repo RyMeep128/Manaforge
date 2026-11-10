@@ -41,7 +41,7 @@ namespace Manaforge.Play
             status=Label("table-phase","Connecting...");
             hud=new GameplayPlayerHud();hud.AddToClassList("arena-player-hud");root.Add(hud);hud.PlayerActivated+=ActivatePlayer;
             zonePanelDrawer=new GameplayDrawer("Zones",GameplayDrawerDirection.Left){name="zones-drawer"};root.Add(zonePanelDrawer);
-            var zoneScroll=new ScrollView(ScrollViewMode.Vertical){name="zone-panel-scroll"};zoneScroll.pickingMode=PickingMode.Ignore;zoneScroll.contentViewport.pickingMode=PickingMode.Ignore;zoneScroll.contentContainer.pickingMode=PickingMode.Ignore;zoneScroll.style.maxHeight=Length.Percent(100);zonePanelDrawer.Content.Add(zoneScroll);
+            var zoneScroll=new ScrollView(ScrollViewMode.Vertical){name="zone-panel-scroll",horizontalScrollerVisibility=ScrollerVisibility.Hidden};zoneScroll.pickingMode=PickingMode.Ignore;zoneScroll.contentViewport.pickingMode=PickingMode.Ignore;zoneScroll.contentContainer.pickingMode=PickingMode.Ignore;zoneScroll.style.maxHeight=Length.Percent(100);zonePanelDrawer.Content.Add(zoneScroll);
             zonePanel=new GameplayZonePanel(Surface.CardBacks);zoneScroll.Add(zonePanel);zonePanel.BrowseRequested+=BrowseZone;
             Surface.Clearing+=ClearZoneResources;Surface.Rebinding+=ClearPileArt;
             opponentHand=new VisualElement{name="opponent-hand",pickingMode=PickingMode.Ignore};root.Add(opponentHand);
@@ -258,7 +258,7 @@ namespace Manaforge.Play
             bool Land(ProjectedCard c)=>!c.Hidden && (c.Characteristics?.TypeLine??"").Split('—')[0].Split(' ').Contains("Land");
             void Row(System.Collections.Generic.List<(ProjectedCard card,CardView view)> row,float top,float left,float span,float size,bool full=false,string key=null,bool reserveSeat=false)
                 =>GameplayCardLayout.Row(row,navigation,rowPages,Layout,width,top,left,span,size,full,key,reserveSeat?new Vector2(width*.5f-90,width*.5f+90):(Vector2?)null);
-            float boardLeft=260,boardSpan=Mathf.Max(100,width-425),cardWidth=Mathf.Clamp(boardSpan/7,85,125);
+            float boardLeft=280,boardSpan=Mathf.Max(100,width-445),cardWidth=Mathf.Clamp(boardSpan/7,85,125);
             var attachmentGroups=GameplayCardLayout.AttachmentGroups(items.Select(i=>i.card),frame.PlayerLifeTotals.Keys);
             if(openZone=="attachments" && !attachmentGroups.ContainsKey(openZoneOwner)){openZone=openZoneOwner=null;zoneDrawer.ClearBinding(true);rowPages.Remove("public-zone");}
             var attachedIds=new System.Collections.Generic.HashSet<string>(attachmentGroups.Values.SelectMany(group=>group).Select(card=>card.ObjectId));
@@ -301,7 +301,7 @@ namespace Manaforge.Play
             Row(items.Where(i=>i.card.Zone=="command" && i.card.OwnerId==viewer).ToList(),height*.50f,15,130,65,key:"local-command");
             float localPileTop=Mathf.Max(350,height-242);
             zonePanel.Present(frame,Surface,localPileTop-150,openZone,openZoneOwner);zonePanelDrawer.RefreshInput();
-            zonePanelDrawer.style.maxHeight=height-182;zonePanelDrawer.Content.style.maxHeight=height-182;zonePanelDrawer.Q<ScrollView>("zone-panel-scroll").style.maxHeight=height-182;
+            zonePanelDrawer.Viewport.style.top=272-height;zonePanelDrawer.style.maxHeight=30;zonePanelDrawer.Content.style.maxHeight=height-182;zonePanelDrawer.Q<ScrollView>("zone-panel-scroll").style.maxHeight=height-182;
             hud.style.height=Mathf.Max(170,localPileTop-66);
             root.EnableInClassList("browsing-public-zone",openZone!=null);
             zoneDrawer.style.display=openZone==null?DisplayStyle.None:DisplayStyle.Flex;
@@ -323,6 +323,11 @@ namespace Manaforge.Play
             zones.text=string.Join("\n",items.Where(i=>i.card.Zone!="hand" && i.card.Zone!="battlefield" && i.card.Zone!="stack").GroupBy(i=>i.card.Zone).Select(g=>g.Key+"  "+g.Count()));
             choices.EnableInClassList("opening-choices",opening);actionDrawer.EnableInClassList("opening-choices",opening);
             choices.EnableInClassList("library-ordering",Decisions!=null && Decisions.IsLibraryOrdering);actionDrawer.EnableInClassList("library-ordering",Decisions!=null && Decisions.IsLibraryOrdering);
+            bool ordering=Decisions?.IsLibraryOrdering==true;
+            actionDrawer.Viewport.style.width=ordering?width*.7f:opening?520:275;
+            actionDrawer.Viewport.style.right=ordering?width*.15f-20:opening?width*.5f-280:0;
+            actionDrawer.Viewport.style.top=ordering?(StyleLength)(65-height*.82f):StyleKeyword.Auto;
+            actionDrawer.Viewport.style.bottom=ordering?(StyleLength)StyleKeyword.Auto:32;
             actionDrawer.Content.style.maxHeight=Decisions?.IsLibraryOrdering==true?height*.65f-32:opening?170:285;
             priorityDrawer.Content.style.maxHeight=height*.7f-32;
             if(opening && Decisions!=null)GameplayTheme.Mulligan(Decisions.Root,handCount);
