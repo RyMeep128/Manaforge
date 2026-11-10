@@ -24,10 +24,20 @@ public final class RealPaymentGameChecks {
             for(mage.abilities.Ability ability:permanent.getAbilities())game.getState().addAbility(ability,permanent);
         }else if(zone==Zone.HAND)game.getPlayer(card.getOwnerId()).getHand().add(card);
     }
-    private static void scenario(boolean doubleRed,boolean activeHazard) throws Exception {
+    private static void scenario(String name,boolean doubleRed,boolean activeHazard) throws Exception {
+        boolean green=name.equals("green") || name.equals("generic-green");
+        boolean blue=name.equals("mixed-blue");
+        boolean generic=name.equals("generic-green");
+        boolean poolOnly=name.equals("floating-only");
+        boolean poolMixed=name.equals("floating-and-source");
+        boolean poolGeneric=name.equals("floating-generic");
+        boolean insufficient=name.equals("insufficient");
+        int expectedTaps=poolOnly?0:poolMixed || poolGeneric?1:generic?3:blue || doubleRed?2:1;
         TwoPlayerDuel game=new TwoPlayerDuel(MultiplayerAttackOption.MULTIPLE,RangeOfInfluence.ALL,new mage.game.mulligan.LondonMulligan(0),20,7,7);
         ContextHumanPlayer payer=new ContextHumanPlayer("Public payer",RangeOfInfluence.ALL,0);
         ContextHumanPlayer opponent=new ContextHumanPlayer("Public opponent",RangeOfInfluence.ALL,0);
+        payer.setUserData(mage.players.net.UserData.getDefaultUserDataView());
+        opponent.setUserData(mage.players.net.UserData.getDefaultUserDataView());
         game.addPlayer(payer,new mage.cards.decks.Deck());game.addPlayer(opponent,new mage.cards.decks.Deck());
         game.getState().setActivePlayerId(payer.getId());game.getState().setPriorityPlayerId(payer.getId());
         game.getState().setTurnNum(4);game.getTurn().setPhase(new mage.game.turn.PreCombatMainPhase());
@@ -41,9 +51,12 @@ public final class RealPaymentGameChecks {
         game.initGameDefaultWatchers();
         game.getState().addHelperEmblem(new mage.game.command.emblems.RadiationEmblem(),payer.getId());
         game.getState().addHelperEmblem(new mage.game.command.emblems.RadiationEmblem(),opponent.getId());
-        Card first=new mage.cards.basiclands.Mountain(payer.getId(),info("Mountain"));
+        Card first=green?new mage.cards.basiclands.Forest(payer.getId(),info("Forest")):
+            blue?new mage.cards.basiclands.Island(payer.getId(),info("Island")):new mage.cards.basiclands.Mountain(payer.getId(),info("Mountain"));
         Card second=new mage.cards.basiclands.Mountain(payer.getId(),info("Mountain"));
         load(game,first,Zone.BATTLEFIELD);load(game,second,Zone.BATTLEFIELD);
+        Card third=generic?new mage.cards.basiclands.Mountain(payer.getId(),info("Mountain")):null;
+        if(third!=null)load(game,third,Zone.BATTLEFIELD);
         Card herald=new mage.cards.w.WirewoodHerald(opponent.getId(),info("Wirewood Herald"));
         Card elves=new mage.cards.l.LlanowarElves(opponent.getId(),info("Llanowar Elves"));
         load(game,herald,Zone.BATTLEFIELD);load(game,elves,Zone.BATTLEFIELD);
@@ -53,11 +66,17 @@ public final class RealPaymentGameChecks {
         load(game,inactive,activeHazard?Zone.BATTLEFIELD:Zone.LIBRARY);
         Card inactiveReplacement=new mage.cards.m.ManaFlare(opponent.getId(),info("Mana Flare"));
         load(game,inactiveReplacement,Zone.LIBRARY);
-        Card spell=doubleRed?new mage.cards.e.EmberHauler(payer.getId(),info("Ember Hauler")):
+        Card spell=generic?new mage.cards.c.CentaurCourser(payer.getId(),info("Centaur Courser")):
+            green?new mage.cards.s.SedgeScorpion(payer.getId(),info("Sedge Scorpion")):
+            blue || poolGeneric?new mage.cards.c.CoralMerfolk(payer.getId(),info("Coral Merfolk")):doubleRed?new mage.cards.e.EmberHauler(payer.getId(),info("Ember Hauler")):
             new mage.cards.f.FoundryStreetDenizen(payer.getId(),info("Foundry Street Denizen"));
-        load(game,spell,Zone.HAND);game.applyEffects();game.saveState(false);
+        load(game,spell,Zone.HAND);
+        if(poolOnly || poolMixed)payer.getManaPool().addMana(mage.Mana.RedMana(1),game,first.getAbilities().get(0));
+        if(poolGeneric)payer.getManaPool().addMana(mage.Mana.BlueMana(1),game,first.getAbilities().get(0));
+        if(insufficient)game.getPermanent(second.getId()).setTapped(true);
+        game.applyEffects();game.saveState(false);
         require(!game.getState().getTriggers().isEmpty(),"REAL_OPPONENT_TRIGGER_NOT_REGISTERED");
-        UUID[] sources={first.getId(),second.getId()};
+        UUID[] sources=third==null?new UUID[]{first.getId(),second.getId()}:new UUID[]{first.getId(),second.getId(),third.getId()};
         BlockingQueue<PlayerQueryEvent> queries=new LinkedBlockingQueue<>();game.addPlayerQueryEventListener(queries::add);
         Field responseField=HumanPlayer.class.getDeclaredField("response");responseField.setAccessible(true);
         Object response=responseField.get(payer);
@@ -74,12 +93,12 @@ public final class RealPaymentGameChecks {
                     if(assessment==null)Thread.sleep(1);
                 }
                 require(assessment!=null,"REAL_PAYMENT_CONTEXT_MISSING");
-                if(activeHazard){
-                    require("REQUIRES_MANUAL".equals(assessment.get("reason").getAsString()),"REAL_ACTIVE_HAZARD_NOT_REJECTED");
-                    require(automaticSources==0 && !game.getPermanent(first.getId()).isTapped() && !game.getPermanent(second.getId()).isTapped(),"REAL_HAZARD_TAPPED_SOURCE");
+                if(activeHazard || insufficient){
+                    require((activeHazard?"REQUIRES_MANUAL":"INSUFFICIENT_OR_UNSUPPORTED_SOURCES").equals(assessment.get("reason").getAsString()),"REAL_UNSAFE_PAYMENT_NOT_REJECTED");
+                    require(automaticSources==0 && !game.getPermanent(first.getId()).isTapped() && game.getPermanent(second.getId()).isTapped()==insufficient,"REAL_HAZARD_TAPPED_SOURCE");
                     payer.setResponseBoolean(false);
                     require(!cast.get(2,TimeUnit.SECONDS),"REAL_HAZARD_CAST_NOT_CANCELLED");
-                    System.out.println("{\"scenario\":\"active-mana-hazard\",\"real_engine\":true,\"manual_required\":true,\"mountains_tapped\":0}");
+                    System.out.println("{\"scenario\":\""+name+"\",\"real_engine\":true,\"manual_required\":true,\"automatic_sources\":0}");
                     return;
                 }
                 require("VERIFIED_ORDINARY_EQUIVALENT".equals(assessment.get("safety").getAsString()),"REAL_PAYMENT_FALLBACK_"+assessment.get("reason").getAsString());
@@ -88,23 +107,29 @@ public final class RealPaymentGameChecks {
                     require(++poolResponses<=2,"REAL_PAYMENT_POOL_LOOP");
                     payer.setResponseManaType(payer.getId(),ManaType.valueOf(step.get("source").getAsString().substring(5)));
                 }else{
-                    require(++automaticSources<=2,"REAL_PAYMENT_SOURCE_LOOP");
+                    require(++automaticSources<=sources.length,"REAL_PAYMENT_SOURCE_LOOP");
                     payer.setResponseUUID(UUID.fromString(step.get("source").getAsString()));
                 }
             }
             require(cast.get(1,TimeUnit.SECONDS),"REAL_CAST_FAILED");
             require(game.getStack().size()==1 && game.getStack().getFirst().getSourceId().equals(spell.getId()),"REAL_SPELL_NOT_ON_STACK");
-            int tapped=(game.getPermanent(first.getId()).isTapped()?1:0)+(game.getPermanent(second.getId()).isTapped()?1:0);
-            require(tapped==(doubleRed?2:1) && automaticSources==tapped,"REAL_PAYMENT_WRONG_MOUNTAINS");
+            int tapped=0;for(UUID id:sources)if(game.getPermanent(id).isTapped())tapped++;
+            require(tapped==expectedTaps && automaticSources==tapped,"REAL_PAYMENT_WRONG_MOUNTAINS");
             require(!game.getPermanent(elves.getId()).isTapped(),"REAL_PAYMENT_USED_OPPONENT_SOURCE");
             game.getStack().resolve(game);
             require(game.getStack().isEmpty() && game.getPermanent(spell.getId())!=null,"REAL_SPELL_NOT_RESOLVED");
-            JsonObject proof=new JsonObject();proof.addProperty("scenario",doubleRed?"two-red-mountains":"foundry-street-opponent-triggers");
+            JsonObject proof=new JsonObject();proof.addProperty("scenario",name);
             proof.addProperty("real_engine",true);proof.addProperty("mountains_tapped",tapped);proof.addProperty("manual_payment_inputs",0);
             proof.addProperty("spell_stacked_and_resolved",true);System.out.println(proof);
         }finally{payer.abort();opponent.abort();cast.cancel(true);executor.shutdownNow();executor.awaitTermination(2,TimeUnit.SECONDS);}
     }
     public static void main(String[] args) throws Exception {
-        Thread.currentThread().setName("GAME-real-payment-setup");scenario(false,false);scenario(true,false);scenario(false,true);
+        Thread.currentThread().setName("GAME-real-payment-setup");
+        scenario("foundry-street-opponent-triggers",false,false);
+        scenario("two-red-mountains",true,false);
+        scenario("active-mana-hazard",false,true);
+        scenario("green",false,false);scenario("mixed-blue",false,false);scenario("generic-green",false,false);
+        scenario("floating-only",false,false);scenario("floating-and-source",true,false);scenario("floating-generic",false,false);
+        scenario("insufficient",true,false);
     }
 }
