@@ -55,7 +55,7 @@ namespace Manaforge.Play
             actionDrawer=new GameplayDrawer("Spells & Abilities",GameplayDrawerDirection.Right){name="action-drawer"};root.Add(actionDrawer);
             choices=new ScrollView(ScrollViewMode.Vertical){name="table-choices"};actionDrawer.Content.Add(choices);
             priorityDrawer=new GameplayDrawer("Priority",GameplayDrawerDirection.Right){name="priority-drawer"};root.Add(priorityDrawer);
-            var motion=new Toggle("Reduced motion"){name="table-motion",value=false};motion.RegisterValueChangedCallback(ev=>{root.EnableInClassList("reduced-motion",ev.newValue);animations?.Advance();foreach(var drawer in new[]{actionDrawer,priorityDrawer,zonePanelDrawer})drawer.SetReducedMotion(ev.newValue);if(frame!=null)hud.Present(frame,Surface,host?.GameplayFormat,ev.newValue,InspectCard);});root.Add(motion);
+            var motion=new Toggle("Reduced motion"){name="table-motion",value=false};motion.RegisterValueChangedCallback(ev=>{root.EnableInClassList("reduced-motion",ev.newValue);animations?.Advance();foreach(var drawer in new[]{actionDrawer,priorityDrawer,zonePanelDrawer,hud.CommanderDrawer})drawer.SetReducedMotion(ev.newValue);if(frame!=null)hud.Present(frame,Surface,host?.GameplayFormat,ev.newValue,InspectCard);});root.Add(motion);
             animations=new GameplayAnimationCoordinator(root,Surface,MotionZoneAnchor,MotionPlayerAnchor,()=>motion.value);
             result=Label("table-result","");CardTypography.Apply(result,CardTextRole.Title);result.style.display=DisplayStyle.None;
             var close=new Button(()=>CloseInspection()){text="Close inspection | Esc",name="close-inspection"};root.Add(close);close.style.display=DisplayStyle.None;inspector=new GameplayOverlay(Surface.InspectionView,close);

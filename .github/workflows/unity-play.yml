@@ -97,7 +97,7 @@ jobs:
       - name: Real X and existing choice variants through the packaged player
         shell: pwsh
         run: |
-          foreach ($case in @('x-zero', 'x', 'cancel', 'search', 'modes')) {
+          foreach ($case in @('x-zero', 'x', 'cancel', 'search', 'shared-roots', 'modes')) {
             python tools/check_play_unity_live.py --casting-case $case --payment-mode manual --no-capture --xmage-root "$env:RUNNER_TEMP/manaforge-unity-engine" --jdk-path "$env:JAVA_HOME" --output "Mtg_Projects/mtg_play_unity/Artifacts/InGameChoice-$case"
             if ($LASTEXITCODE -ne 0) { throw "In-game choice failed: $case" }
           }

@@ -52,7 +52,7 @@ namespace Manaforge.Play
                     badges.Add(Text(" ×"+(commander.CommandZonePlays?.ToString()??"?"),"Casts from the command zone"));
                     var zone=Text((commander.Zone??"—").ToUpperInvariant(),"Current zone");zone.style.fontSize=9;zone.style.marginLeft=5;badges.Add(zone);
                     var damage=new VisualElement{name="commander-damage"};damage.style.flexDirection=FlexDirection.Row;damage.style.flexWrap=Wrap.Wrap;details.Add(damage);
-                    foreach(var seat in frame.PlayerLifeTotals.Keys){long dealt=0;bool known=commander.DamageDealt!=null && commander.DamageDealt.TryGetValue(seat,out dealt);var meter=new ProgressBar{lowValue=0,highValue=21,value=known?Mathf.Min(dealt,21):0,title=(frame.PlayerNames.TryGetValue(seat,out var seatName)?seatName+" ":"Player ")+(known?dealt.ToString():"?")+"/21",tooltip="Commander combat damage"};meter.style.width=72;meter.style.height=17;meter.style.marginRight=3;damage.Add(meter);}
+                    foreach(var seat in frame.PlayerLifeTotals.Keys){long dealt=0;bool known=commander.DamageDealt!=null && commander.DamageDealt.TryGetValue(seat,out dealt);var meter=new ProgressBar{lowValue=0,highValue=21,value=known?Mathf.Min(dealt,21):0,title=(frame.PlayerNames.TryGetValue(seat,out var seatName)?seatName+" ":"Player ")+(known?dealt.ToString():"?")+"/21",tooltip="Commander combat damage"};meter.style.width=150;meter.style.height=17;meter.style.marginRight=3;meter.style.marginBottom=3;damage.Add(meter);}
                     rows.Add(tile);
                 }
             }

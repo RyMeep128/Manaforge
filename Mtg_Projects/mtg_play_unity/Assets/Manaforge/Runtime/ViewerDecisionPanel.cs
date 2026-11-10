@@ -84,7 +84,10 @@ namespace Manaforge.Play
         public void Tick()
         {
             ThreadOnly();if(disposed)return;if(priorityEnabled)MonitorPriorityCommands();var current=host.PresentedDecision;
-            if(!ReferenceEquals(current,offer)){Clear();offer=current;}
+            if(!ReferenceEquals(current,offer)){
+                Clear();offer=current;
+                if(offer?.Frame?.Decision!=null){var decision=offer.Frame.Decision;Debug.Log("Manaforge decision: family="+decision.Family+" priority="+decision.IsPriority+" options="+decision.Options.Count+" actions="+offer.Frame.Actions.Count+" finish="+decision.CanFinish+" stack="+offer.Frame.StackIds.Count);}
+            }
             if(host.Completion.IsCompleted){Priority.Suspend();autoAfter=-1;}
             Priority.Observe(offer?.Frame);
             Presentation=YieldPresentation.Resolve(Priority.Current,offer?.Frame,PriorityControlsOpen,host.Completion.IsCompleted);

@@ -133,3 +133,7 @@
 
 .mf-theme .mf-drawer-tab { padding-left: 34px; min-height: 30px; height: 30px; margin: 0; }
 #drawer-glyph { position: absolute; left: 9px; top: 6px; width: 18px; height: 17px; }
+
+#commander-damage .unity-progress-bar__title { font-size: 11px; color: rgb(235, 229, 216); -unity-text-align: middle-center; }
+#commander-damage .unity-progress-bar__background { background-color: rgb(24, 31, 39); }
+#commander-damage .unity-progress-bar__progress { background-color: rgb(128, 88, 38); }

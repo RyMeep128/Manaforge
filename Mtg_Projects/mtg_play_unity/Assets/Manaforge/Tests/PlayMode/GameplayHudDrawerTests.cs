@@ -50,10 +50,10 @@ namespace Manaforge.Play.Tests
                 snapshot["commanders"]=new JArray(Enumerable.Range(0,3).Select(i=>new JObject{["commander_id"]="commander-"+i,["owner_id"]=i<2?"one":"third-seat",["name"]="Partner "+i,["card_identity"]=null,["command_zone_plays"]=i,["additional_cast_cost"]="{2}",["damage_dealt"]=new JArray(new JArray("one",0),new JArray("two",7),new JArray("third-seat",3))}));
                 var frame=Frame(envelope);hud.Present(frame,surface,"freeform");zones.Present(frame,surface,180);yield return null;
                 Assert.That(zones.Query<ZonePile>().ToList().Count,Is.EqualTo(9));Assert.That(zones.Pile("third-seat","library").OwnerId,Is.EqualTo("third-seat"));
-                Assert.That(hud.Players.Count(),Is.EqualTo(3));Assert.That(hud.Q("commander-tile"),Is.Null,"Life 40 and commander data must not override format");
+                Assert.That(hud.CommanderDrawer.style.display.value,Is.EqualTo(DisplayStyle.None));Assert.That(hud.Players.Count(),Is.EqualTo(3));Assert.That(hud.Q("commander-tile"),Is.Null,"Life 40 and commander data must not override format");
                 string activated=null;hud.PlayerActivated+=id=>activated=id;hud.SetTargetable(id=>id=="third-seat");hud.Player("one").Activate();Assert.That(activated,Is.Null);hud.Player("third-seat").Activate();Assert.That(activated,Is.EqualTo("third-seat"));
                 foreach(string format in new[]{"commander","unrestricted_commander"}){
-                    hud.Present(frame,surface,format);Assert.That(hud.Query<VisualElement>("commander-tile").ToList().Count,Is.EqualTo(3));
+                    hud.Present(frame,surface,format);Assert.That(hud.CommanderDrawer.style.display.value,Is.EqualTo(DisplayStyle.Flex));Assert.That(hud.CommanderDrawer.IsOpen,Is.False);hud.CommanderDrawer.SetReducedMotion(true);hud.CommanderDrawer.SetOpen(true);Assert.That(hud.Q("hud-commanders").parent,Is.SameAs(hud.CommanderDrawer.Content));hud.CommanderDrawer.SetOpen(false);Assert.That(hud.Query<VisualElement>("commander-tile").ToList().Count,Is.EqualTo(3));
                     Assert.That(hud.Q<CommanderDashboard>("commander-info-one").Query<VisualElement>("commander-tile").ToList().Count,Is.EqualTo(2));
                     Assert.That(hud.Query<ProgressBar>().ToList().Count,Is.EqualTo(9));
                 }

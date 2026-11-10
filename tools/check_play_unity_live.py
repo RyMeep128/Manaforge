@@ -44,6 +44,7 @@ def main():
             "mixed",
             "countered",
             "search",
+            "shared-roots",
             "changed-target",
             "hybrid",
             "phyrexian",

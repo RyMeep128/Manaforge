@@ -49,11 +49,11 @@ namespace Manaforge.Play.Tests
                 for(int i=0;i<8;i++){var card=prototype.DeepClone();card["object_id"]="support-"+i;card["owner_id"]=(string)snapshot["viewer_id"];card["controller_id"]=(string)snapshot["viewer_id"];card["zone"]=i==7?"stack":"hand";card["hidden"]=false;card["face_down"]=false;card["attached_to"]=null;card["attachments"]=new JArray();dense.Add(card);}
                 snapshot["objects"]=dense;
                 string session=(string)snapshot["session_id"],viewer=(string)snapshot["viewer_id"];var ticket=arena.Surface.BeginViewer(session,viewer);arena.Surface.TryPresent(ticket,ViewerCardProjection.ParseSnapshot(message.ToString(),session,viewer,0,true));var frame=ViewerDecisionProjection.ParseSnapshot(message.ToString(),session,viewer,0,true);
-                var root=doc.rootVisualElement;var action=root.Q<GameplayDrawer>("action-drawer");var priority=root.Q<GameplayDrawer>("priority-drawer");var zones=root.Q<GameplayDrawer>("zones-drawer");
+                var root=doc.rootVisualElement;var action=root.Q<GameplayDrawer>("action-drawer");var priority=root.Q<GameplayDrawer>("priority-drawer");var zones=root.Q<GameplayDrawer>("zones-drawer");var commanders=root.Q<GameplayDrawer>("commander-drawer");
                 action.Content.Add(new Button{text="Fixture action"});priority.Content.Add(new Toggle("Fixture preference"));
                 foreach(var size in new[]{new Vector2Int(1280,720),new Vector2Int(1366,768),new Vector2Int(1920,1080),new Vector2Int(2560,1440)}){
                     target=new RenderTexture(size.x,size.y,24);target.Create();settings.targetTexture=target;root.style.width=size.x;root.style.height=size.y;yield return null;arena.Present(frame);root.Q<GameplayPlayerHud>().Present(frame,arena.Surface,"commander");yield return null;
-                    foreach(var drawer in new[]{action,priority,zones}){drawer.SetReducedMotion(true);drawer.SetOpen(false);}yield return null;
+                    foreach(var drawer in new[]{action,priority,zones,commanders}){drawer.SetReducedMotion(true);drawer.SetOpen(false);}yield return null;
                     Capture(target,$"battlefield-collapsed-{size.x}x{size.y}");
                     // Reproduce the former geometry with the same views and dense fixture for comparison.
                     var oldCards=new List<(ProjectedCard card,CardView view)>();arena.Surface.VisitPresented((card,view)=>{view.style.display=DisplayStyle.None;oldCards.Add((card,view));});
@@ -75,7 +75,7 @@ namespace Manaforge.Play.Tests
                     var placements=new Dictionary<CardView,(float x,float y,float width,float height,DisplayStyle display)>();
                     arena.Surface.VisitPresented((card,view)=>placements[view]=(view.style.left.value.value,view.style.top.value.value,view.style.width.value.value,view.style.height.value.value,view.style.display.value));
                     var pagination=root.Query<Label>().ToList().Where(label=>label.parent?.ClassListContains("row-navigation")==true).Select(label=>label.text).ToArray();
-                    foreach(var drawer in new[]{action,priority,zones}){
+                    foreach(var drawer in new[]{action,priority,zones,commanders}){
                         drawer.SetReducedMotion(true);drawer.SetOpen(false);yield return null;
                         Assert.That(drawer.Tab.worldBound.width,Is.GreaterThan(100));Assert.That(drawer.Tab.enabledInHierarchy,Is.True);
                         var picked=root.panel.Pick(drawer.Tab.worldBound.center);Assert.That(picked==drawer.Tab || drawer.Tab.Contains(picked),Is.True,"Closed tab remains clickable: "+drawer.name);
@@ -89,7 +89,7 @@ namespace Manaforge.Play.Tests
                         drawer.SetOpen(false);yield return null;
                         foreach(var pair in placements){var view=pair.Key;Assert.That((view.style.left.value.value,view.style.top.value.value,view.style.width.value.value,view.style.height.value.value,view.style.display.value),Is.EqualTo(pair.Value),"Closing "+drawer.name);}
                     }
-                    foreach(var drawer in new[]{action,priority,zones}){
+                    foreach(var drawer in new[]{action,priority,zones,commanders}){
                         var handle=drawer.Tab.worldBound;
                         drawer.Content.style.minHeight=40;yield return null;drawer.Content.style.minHeight=180;yield return null;
                         Assert.That(drawer.Tab.worldBound,Is.EqualTo(handle),"Content growth must not move the handle: "+drawer.name);
@@ -106,7 +106,7 @@ namespace Manaforge.Play.Tests
                     settings.targetTexture=null;RenderTexture.active=previous;target.Release();UnityEngine.Object.Destroy(target);target=null;
                 }
                 arena.Surface.ClearViewer(ticket);Assert.That(root.Query<PlayerPanel>().ToList(),Is.Empty);Assert.That(root.Query<ZonePile>().ToList(),Is.Empty);
-                foreach(var drawer in new[]{action,priority,zones})Assert.That(drawer.IsOpen,Is.False);
+                foreach(var drawer in new[]{action,priority,zones,commanders})Assert.That(drawer.IsOpen,Is.False);
             }finally{settings.targetTexture=null;RenderTexture.active=previous;if(target!=null){target.Release();UnityEngine.Object.Destroy(target);}UnityEngine.Object.Destroy(node);UnityEngine.Object.Destroy(settings);}yield return null;
         }
     }
