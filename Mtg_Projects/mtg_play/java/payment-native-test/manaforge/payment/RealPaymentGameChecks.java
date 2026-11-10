@@ -166,7 +166,8 @@ public final class RealPaymentGameChecks {
         game.addPlayer(payer,new mage.cards.decks.Deck());game.addPlayer(other,new mage.cards.decks.Deck());payer.init(game);other.init(game);
         Card card=new mage.cards.basiclands.Mountain(payer.getId(),info("Mountain"));load(game,card,Zone.LIBRARY);
         BlockingQueue<PlayerQueryEvent> queries=new LinkedBlockingQueue<>();game.addPlayerQueryEventListener(queries::add);
-        ExecutorService executor=Executors.newSingleThreadExecutor();Future<Boolean> result=executor.submit(()->payer.choosePile(Outcome.Benefit,"Choose a pile",Collections.singletonList(card),Collections.emptyList(),game));
+        // HumanPlayer requires its feedback calls to run on an engine game thread.
+        ExecutorService executor=Executors.newSingleThreadExecutor(task->{Thread thread=new Thread(task,"GAME-real-pile");thread.setDaemon(true);return thread;});Future<Boolean> result=executor.submit(()->payer.choosePile(Outcome.Benefit,"Choose a pile",Collections.singletonList(card),Collections.emptyList(),game));
         try{PlayerQueryEvent query=queries.poll(2,TimeUnit.SECONDS);require(query!=null && query.getQueryType()==PlayerQueryEvent.QueryType.CHOOSE_PILE,"REAL_PILE_QUERY_MISSING");payer.setResponseBoolean(firstPile);require(result.get(2,TimeUnit.SECONDS)==firstPile,"REAL_PILE_RESPONSE_CHANGED");System.out.println("Native pile response: "+firstPile+"; choice completed");}
         finally{payer.abort();other.abort();result.cancel(true);executor.shutdownNow();executor.awaitTermination(2,TimeUnit.SECONDS);}
     }

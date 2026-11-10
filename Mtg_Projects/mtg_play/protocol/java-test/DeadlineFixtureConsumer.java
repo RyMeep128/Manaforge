@@ -136,7 +136,7 @@ public final class DeadlineFixtureConsumer {
                 long start=System.nanoTime();require("FRAME_TIMEOUT".equals(failure(()->p.reader.readWithIdleWait(200,50,()->false))));
                 require(TimeUnit.NANOSECONDS.toMillis(System.nanoTime()-start)>=150);passed++;
             }
-            require(passed==25);System.out.println("Java owned frame deadlines: 25 real loopback checks passed");
+            require(passed==27);System.out.println("Java owned frame deadlines: 27 real loopback checks passed");
         } finally{POOL.shutdownNow();require(POOL.awaitTermination(3,TimeUnit.SECONDS));}
     }
 }
