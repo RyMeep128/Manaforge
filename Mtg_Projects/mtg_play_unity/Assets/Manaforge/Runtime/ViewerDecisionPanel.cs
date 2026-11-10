@@ -195,14 +195,9 @@ namespace Manaforge.Play
             var captured=offer;var frame=captured?.Frame;if(frame==null){Clear();return;}built=true;ClearGroupPreviews();
             var floating=frame.ViewerMana==null?"":string.Join(", ",System.Linq.Enumerable.Select(System.Linq.Enumerable.Where(frame.ViewerMana,pair=>pair.Value>0),pair=>pair.Key+" "+pair.Value));manaPool.text=string.IsNullOrEmpty(floating)?"":"Floating mana: "+floating;manaPool.style.display=string.IsNullOrEmpty(floating)?DisplayStyle.None:DisplayStyle.Flex;prompt.text=OpeningHandFan.PlainPrompt(frame.Decision.Prompt??"Choose an action");Root.style.display=DisplayStyle.Flex;controls.Clear();pages.Clear();numericSubmit=null;cardChoices=null;
             if(!string.IsNullOrEmpty(frame.PaymentReason)){status.text="Manual payment required: "+frame.PaymentReason.Replace('_',' ').ToLowerInvariant()+".";UnityEngine.Debug.Log("Manaforge payment fallback: "+frame.PaymentReason);}
-            if(frame.Decision.RequestId!=null)status.text="Permission request. Nothing is granted until you choose Accept. Requests expire after two minutes.";
             Root.EnableInClassList("session-request",frame.Decision.RequestId!=null);
             IsLibraryOrdering=LibraryOrdering(prompt.text);
             Root.EnableInClassList("library-ordering",IsLibraryOrdering);
-            if(IsLibraryOrdering){
-                var instructions=NumericLabel("Choose cards one at a time in the requested order. Follow the engine prompt for which end will be topmost.");
-                instructions.name="library-order-help";controls.Add(instructions);
-            }
             if(frame.Decision.Groups.Count>0){BuildGroups(captured);controls.SetEnabled(captured.CanSubmit && pending==null);return;}
             int total=frame.Actions.Count+frame.Decision.Options.Count;int start=page*PageSize,end=Math.Min(total,start+PageSize);
             for(int i=start;i<end;i++) {
@@ -226,7 +221,6 @@ namespace Manaforge.Play
             if(frame.Decision.CanFinish)controls.Add(Button("decision-finish","Finish selection",()=>Send(captured,()=>host.FinishSelectionAsync(captured))));
             if(frame.Decision.Cancellable)controls.Add(Button("decision-cancel","Cancel choice",()=>Send(captured,()=>host.CancelChoiceAsync(captured))));
             if(frame.Decision.Family=="number" || frame.Decision.Family=="amounts")BuildNumbers(captured,frame.Decision);
-            if(frame.Decision.Family=="mana")status.text=frame.ManaSourceReferences.Count==0?"No cards are available for mana-source selection.":"Choose a card to use as a mana source. The game validates your selection.";
             if(total>PageSize) {
                 var previous=Button("decision-previous","Previous",()=>Move(captured,-1));previous.SetEnabled(page>0);pages.Add(previous);
                 pages.Add(new Label("Page "+(page+1)+" of "+((total+PageSize-1)/PageSize)){enableRichText=false});

@@ -11,7 +11,7 @@ namespace Manaforge.Play
     {
         private readonly VisualElement root;private readonly ViewerCardSurface surface;private readonly ViewerSessionHost host;private readonly ViewerDecisionPanel panel;private readonly Action<VisualElement> decorateMenu;
         private readonly Dictionary<CardView,Binding> bindings=new Dictionary<CardView,Binding>();
-        private readonly Label hint,ghost;private readonly Image ghostArtwork;private readonly VisualElement menu;
+        private readonly Label ghost;private readonly Image ghostArtwork;private readonly VisualElement menu;
         private ViewerDecisionOffer offer,gestureOffer;private Binding pressed;private Vector2 start;private int pointer;private bool dragging,disposed;
         private int gestureClickCount;
         private readonly EventCallback<KeyDownEvent> key;
@@ -32,7 +32,6 @@ namespace Manaforge.Play
         public ViewerBoardInput(VisualElement root,ViewerCardSurface surface,ViewerSessionHost host,ViewerDecisionPanel panel,Action<VisualElement> decorateMenu=null)
         {
             this.root=root;this.surface=surface;this.host=host;this.panel=panel;this.decorateMenu=decorateMenu;
-            hint=new Label{name="board-input-hint",enableRichText=false,pickingMode=PickingMode.Ignore};root.Add(hint);
             ghost=new Label{name="board-drag-ghost",enableRichText=false,pickingMode=PickingMode.Ignore};root.Add(ghost);ghost.style.display=DisplayStyle.None;ghostArtwork=new Image{name="board-drag-art",pickingMode=PickingMode.Ignore,scaleMode=ScaleMode.ScaleToFit};ghostArtwork.style.width=100;ghostArtwork.style.height=140;ghost.Add(ghostArtwork);
             menu=new VisualElement{name="board-object-menu"};root.Add(menu);menu.style.display=DisplayStyle.None;
             key=ev=>{if(ev.keyCode==KeyCode.Escape){CancelGesture();CloseMenu();}};root.RegisterCallback(key);
@@ -49,11 +48,8 @@ namespace Manaforge.Play
                 bool available=!panel.SuppressSpatialInput && decision!=null && captured?.CanSubmit==true && panel.ObjectChoiceCount(captured,card.ObjectId)>0;
                 view.EnableInClassList("actionable",available);view.EnableInClassList("targetable",available && decision.Options.Any(o=>o.ObjectId==card.ObjectId));
                 bindings[view].InHand=card.Zone=="hand";
-                if(available)view.tooltip=DeliberateHandPlay(frame,bindings[view])?"Click to preview. Double-click or drag to the battlefield to play. Enter chooses; right-click or Space inspects.":"Click or press Enter to choose. Drag to the battlefield to use the offered action. Right-click or Space to inspect.";
             });
             foreach(var view in bindings.Keys.Where(v=>!seen.Contains(v)).ToArray()){bindings[view].Dispose();bindings.Remove(view);}
-            hint.text=decision==null?"":captured?.CanSubmit!=true?"Waiting for the game to confirm your choice…":frame.Actions.Any(a=>a.Kind=="declare_attacker")?"Choose attackers on the battlefield · Finish attacks when ready":frame.Actions.Any(a=>a.Kind=="declare_blocker")?"Choose a blocker, then choose its attacker when prompted":decision.Options.Any(o=>o.ObjectId!=null || o.PlayerId!=null)?"Choose a highlighted card or player":frame.Actions.Any(a=>a.ObjectId!=null)?"Double-click a hand card or drag it onto the battlefield � Click battlefield cards to choose":"";
-            hint.style.display=panel.SuppressSpatialInput || string.IsNullOrEmpty(hint.text)?DisplayStyle.None:DisplayStyle.Flex;
         }
         private bool Current(ViewerDecisionOffer captured)=>!panel.SuppressSpatialInput && !disposed && captured!=null && ReferenceEquals(captured,host.PresentedDecision) && captured.CanSubmit;
         private static bool Embedded(VisualElement target,CardView view){for(var e=target;e!=null && e!=view;e=e.parent)if(e is Button || e is TextField || e is Toggle)return true;return false;}
@@ -87,7 +83,7 @@ namespace Manaforge.Play
         {
             if(!Current(captured))return;int count=panel.ObjectChoiceCount(captured,binding.Id);if(count==0)return;
             if(count==1){panel.TryActivateObject(captured,binding.Id);return;}
-            menu.Clear();menu.Add(new Label("Choose an action"){enableRichText=false});var scroll=new ScrollView(ScrollViewMode.Vertical);scroll.style.maxHeight=180;scroll.Add(panel.ObjectChoices(captured,binding.Id));menu.Add(scroll);
+            menu.Clear();var scroll=new ScrollView(ScrollViewMode.Vertical);scroll.style.maxHeight=180;scroll.Add(panel.ObjectChoices(captured,binding.Id));menu.Add(scroll);
             var close=new Button(CloseMenu){text="Close"};menu.Add(close);var point=root.WorldToLocal(position);
             menu.style.left=Mathf.Clamp(point.x,10,Mathf.Max(10,root.resolvedStyle.width-310));menu.style.top=Mathf.Clamp(point.y,50,Mathf.Max(50,root.resolvedStyle.height-270));menu.style.display=DisplayStyle.Flex;decorateMenu?.Invoke(menu);menu.BringToFront();menu.Q<Button>()?.Focus();
         }
@@ -97,6 +93,6 @@ namespace Manaforge.Play
             var old=pressed;pressed=null;gestureOffer=null;dragging=false;ghost.style.display=DisplayStyle.None;ghost.text="";ghostArtwork.image=null;
             if(old!=null){old.View.RemoveFromClassList("gesture-source");if(old.View.HasPointerCapture(pointer))old.View.ReleasePointer(pointer);}
         }
-        public void Dispose(){if(disposed)return;CancelGesture();CloseMenu();disposed=true;foreach(var value in bindings.Values)value.Dispose();bindings.Clear();root.UnregisterCallback(key);hint.RemoveFromHierarchy();ghost.RemoveFromHierarchy();menu.RemoveFromHierarchy();offer=null;}
+        public void Dispose(){if(disposed)return;CancelGesture();CloseMenu();disposed=true;foreach(var value in bindings.Values)value.Dispose();bindings.Clear();root.UnregisterCallback(key);ghost.RemoveFromHierarchy();menu.RemoveFromHierarchy();offer=null;}
     }
 }

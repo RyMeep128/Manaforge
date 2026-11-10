@@ -38,7 +38,7 @@ namespace Manaforge.Play.Tests
                 Assert.That(peer.PendingCommandBytes,Is.Zero,"Focus and hover are presentation-only");
                 Assert.That(table.BrowsePublicZone("graveyard","one"),Is.True);yield return null;
                 table.Present(host.PresentedDecision.Frame);yield return null;
-                Assert.That(document.rootVisualElement.Q<Label>("board-input-hint").resolvedStyle.visibility,Is.EqualTo(Visibility.Hidden),"A refreshed inline display style must not restore battlefield hints over a zone drawer");
+                Assert.That(document.rootVisualElement.Q<Label>("board-input-hint"),Is.Null,"The table must not mount instructional hints");
                 owner.TrySetResult(true);deadline=Time.realtimeSinceStartup+10;
                 while(!host.Completion.IsCompleted && Time.realtimeSinceStartup<deadline)yield return null;
                 Assert.That(host.Completion.IsCompleted,Is.True);host.Tick();yield return null;
