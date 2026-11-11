@@ -31,23 +31,23 @@ namespace Manaforge.Play.Protocol
             }
         }
         public static int Negotiate(IEnumerable<int> local,IEnumerable<int> peer,bool authenticated)=>authenticated && local!=null && peer!=null && local.Contains(1) && peer.Contains(1)?1:0;
-        private static bool Valid(JToken value,JToken element)
+        private static bool Valid(JToken value,JToken element,JObject root)
         {
             if(element.Type==JTokenType.Boolean)return (bool)element;var rule=(JObject)element;
-            if(rule["$ref"]!=null){string reference=(string)rule["$ref"];return Valid(value,Schema["$defs"][reference.Substring(reference.LastIndexOf('/')+1)]);}
-            if(rule["anyOf"] is JArray any && !any.Any(part=>Valid(value,part)))return false;
-            if(rule["allOf"] is JArray all && !all.All(part=>Valid(value,part)))return false;
-            if(rule["if"]!=null && Valid(value,rule["if"]) && rule["then"]!=null && !Valid(value,rule["then"]))return false;
+            if(rule["$ref"]!=null){string reference=(string)rule["$ref"];return Valid(value,root["$defs"][reference.Substring(reference.LastIndexOf('/')+1)],root);}
+            if(rule["anyOf"] is JArray any && !any.Any(part=>Valid(value,part,root)))return false;
+            if(rule["allOf"] is JArray all && !all.All(part=>Valid(value,part,root)))return false;
+            if(rule["if"]!=null && Valid(value,rule["if"],root) && rule["then"]!=null && !Valid(value,rule["then"],root))return false;
             if(rule["const"]!=null && !JToken.DeepEquals(value,rule["const"]))return false;
             if(rule["enum"] is JArray options && !options.Any(option=>JToken.DeepEquals(value,option)))return false;
             if(rule["type"]!=null){bool matches;switch((string)rule["type"]){case "null":matches=value.Type==JTokenType.Null;break;case "object":matches=value is JObject;break;case "array":matches=value is JArray;break;case "string":matches=value.Type==JTokenType.String;break;case "integer":matches=value.Type==JTokenType.Integer;break;default:return false;}if(!matches)return false;}
             if(value is JObject obj){var properties=rule["properties"] as JObject??new JObject();
                 if(rule["required"] is JArray required && required.Any(key=>obj[(string)key]==null))return false;
-                foreach(var field in obj.Properties()){if(properties[field.Name]!=null){if(!Valid(field.Value,properties[field.Name]))return false;}else if(rule["additionalProperties"]?.Type==JTokenType.Boolean && !(bool)rule["additionalProperties"])return false;}
+                foreach(var field in obj.Properties()){if(properties[field.Name]!=null){if(!Valid(field.Value,properties[field.Name],root))return false;}else if(rule["additionalProperties"]?.Type==JTokenType.Boolean && !(bool)rule["additionalProperties"])return false;}
             }
             if(value is JArray array){
                 if(rule["minItems"]!=null && array.Count<(int)rule["minItems"] || rule["maxItems"]!=null && array.Count>(int)rule["maxItems"])return false;
-                for(int i=0;i<array.Count;i++){if(rule["items"]!=null && !Valid(array[i],rule["items"]))return false;if((bool?)rule["uniqueItems"]==true)for(int j=0;j<i;j++)if(JToken.DeepEquals(array[i],array[j]))return false;}
+                for(int i=0;i<array.Count;i++){if(rule["items"]!=null && !Valid(array[i],rule["items"],root))return false;if((bool?)rule["uniqueItems"]==true)for(int j=0;j<i;j++)if(JToken.DeepEquals(array[i],array[j]))return false;}
             }
             if(value.Type==JTokenType.String){string text=(string)value;int length=0;for(int i=0;i<text.Length;i++,length++)if(char.IsHighSurrogate(text[i]))i++;
                 if(rule["minLength"]!=null && length<(int)rule["minLength"] || rule["maxLength"]!=null && length>(int)rule["maxLength"])return false;
@@ -62,7 +62,11 @@ namespace Manaforge.Play.Protocol
         {
             Require(raw!=null && raw.Length<=MaxBytes,"ORGANIZATION_SIZE");
             try{Require(new UTF8Encoding(false,true).GetByteCount(raw)<=MaxBytes,"ORGANIZATION_SIZE");}catch(EncoderFallbackException){throw new WireEnvelope.EnvelopeException("JSON_INVALID");}
-            var message=WireEnvelope.ParseObject(raw);Require(message!=null && Valid(message,Schema),"ORGANIZATION_INVALID");return message;
+            var message=WireEnvelope.ParseObject(raw);Require(message!=null && Valid(message,Schema,Schema),"ORGANIZATION_INVALID");return message;
+        }
+        internal static JObject ParseV2Contract(string raw)
+        {
+            Require(raw!=null && raw.Length<=MaxBytes,"ORGANIZATION_SIZE");try{Require(new UTF8Encoding(false,true).GetByteCount(raw)<=MaxBytes,"ORGANIZATION_SIZE");}catch(EncoderFallbackException){throw new WireEnvelope.EnvelopeException("JSON_INVALID");}var message=WireEnvelope.ParseObject(raw);var schema=JObject.Parse(OrganizationV2ContractSchema.Json);Require(Valid(message,schema,schema),"ORGANIZATION_INVALID");return message;
         }
         public static JObject ParseReceipt(string raw,string trustedMatchEpoch,IEnumerable<string> pendingCommandIds)
         {

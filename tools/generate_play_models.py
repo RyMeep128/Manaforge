@@ -217,8 +217,10 @@ def receive_outputs():
     }
 
 
-def organization_outputs():
-    raw = (PROTOCOL / "organization-v1.schema.json").read_text(encoding="utf-8")
+def organization_outputs(version=1):
+    raw = (PROTOCOL / f"organization-v{version}.schema.json").read_text(
+        encoding="utf-8"
+    )
     schema = json.loads(raw)
     check_fixture_schema_subset(schema, organization=True)
     compact = json.dumps(schema, separators=(",", ":"), ensure_ascii=True)
@@ -239,9 +241,9 @@ def organization_outputs():
         + literal
         + "; }\n"
     )
-    return {
+    result = {
         **_schema_outputs(
-            "organization-v1.schema.json",
+            f"organization-v{version}.schema.json",
             "OrganizationContracts",
             include_cs=True,
             cs_class="OrganizationContracts",
@@ -252,11 +254,25 @@ def organization_outputs():
         PROTOCOL / "java/manaforge/protocol/OrganizationContractSchema.java": java,
     }
 
+    if version == 2:
+        result = {
+            Path(
+                str(path)
+                .replace("OrganizationContracts", "OrganizationV2Contracts")
+                .replace("OrganizationContractSchema", "OrganizationV2ContractSchema")
+            ): text.replace("OrganizationContracts", "OrganizationV2Contracts").replace(
+                "OrganizationContractSchema", "OrganizationV2ContractSchema"
+            )
+            for path, text in result.items()
+        }
+    return result
+
 
 def outputs():
     return {
         **receive_outputs(),
         **organization_outputs(),
+        **organization_outputs(2),
         **_schema_outputs(
             "python-contracts-v1.schema.json", "PlayContracts", include_cs=True
         ),

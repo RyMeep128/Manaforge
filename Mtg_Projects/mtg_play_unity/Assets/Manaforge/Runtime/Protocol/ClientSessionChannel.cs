@@ -25,7 +25,10 @@ namespace Manaforge.Play.Protocol
     // Owns a connected transport, packet inbox and command tracking; never starts processes.
     public sealed class ClientSessionChannel : IDisposable
     {
-        private readonly object gate=new object();
+        private readonly object gate=new object();private readonly object writeGate=new object();
+        public ClientOrganizationSession Organization {get;}
+        private bool organizationEnabled;
+        internal void EnableOrganization(){lock(gate){Open();organizationEnabled=true;}}
         private readonly LoopbackFrameReader transport;
         private readonly ReceiveInbox inbox;
         private readonly CommandTracker commands;
@@ -51,7 +54,7 @@ namespace Manaforge.Play.Protocol
         {
             if(ownedTransport==null || ownedTransport.IsClosed)throw new ArgumentException("SESSION_TRANSPORT");
             inbox=new ReceiveInbox(session,viewer,fixtureMode,maximumMessages,maximumBytes);
-            commands=new CommandTracker(session,viewer);transport=ownedTransport;this.session=session;this.viewer=viewer;
+            commands=new CommandTracker(session,viewer);transport=ownedTransport;this.session=session;this.viewer=viewer;Organization=new ClientOrganizationSession(viewer,WriteOrganization);
         }
         public ClientChannelState State {get{lock(gate)return state;}}
         public string SessionId=>session;
@@ -80,7 +83,7 @@ namespace Manaforge.Play.Protocol
             if(state==ClientChannelState.Disposed || state==ClientChannelState.Stopped)return;
             if(state==ClientChannelState.Completed && graceful)return;
             state=graceful?ClientChannelState.Completed:ClientChannelState.Stopped;
-            ClearDecision();commands.Disconnect();
+            ClearDecision();commands.Disconnect();Organization.Dispose();
             if(graceful)inbox.FinishInput();else inbox.Cancel();
             transport.Dispose();completion.TrySetResult(new ClientChannelStop(graceful,code));
         }
@@ -130,17 +133,20 @@ namespace Manaforge.Play.Protocol
         internal TrackedCommand WriteSubmission(PreparedSubmission prepared,int milliseconds,CancellationToken cancellation)
         {
             string text=prepared.Claim(this);
-            try{transport.Write(text,milliseconds,cancellation);return prepared.Receipt;}
+            try{WriteSerialized(text,milliseconds,cancellation);return prepared.Receipt;}
             catch(TextFrame.FrameException error){Failed(error.Code);throw;}
             catch{Failed("SESSION_WRITE_FAILED");throw new WireEnvelope.EnvelopeException("SESSION_WRITE_FAILED");}
             finally{prepared.Dispose();}
         }
+        private void WriteSerialized(string text,int milliseconds,CancellationToken cancellation){lock(writeGate)transport.Write(text,milliseconds,cancellation);}
+        private void WriteOrganization(string raw){lock(gate)Open();WriteSerialized(raw,5000,default);}
         public ClientReceive ReceiveNext(int milliseconds,CancellationToken cancellation=default,bool allowIdleWait=false)
         {
             lock(gate)Open();
             try
             {
                 string text=allowIdleWait?transport.ReadWithIdleWait(21600000,milliseconds,cancellation):transport.Read(milliseconds,cancellation);
+                if(text!=null){var candidate=WireEnvelope.ParseObject(text);if(organizationEnabled && ((string)candidate["message_type"])?.StartsWith("organization_",StringComparison.Ordinal)==true){string response=Organization.Receive(text);if(response!=null)WriteOrganization(response);return new ClientReceive("organization",false);}}
                 lock(gate)
                 {
                     Open();if(text==null){Stop("SESSION_EOF");return new ClientReceive("eof");}
@@ -153,9 +159,9 @@ namespace Manaforge.Play.Protocol
                             var body=envelope["body"];
                             if(type=="event") {
                                 long incoming=(long)body["event"]["revision"];
-                                if(incoming>revision){revision=incoming;ClearDecision();}
+                                if(incoming>revision){Organization.AdvanceMinimum(incoming);revision=incoming;ClearDecision();}
                             } else {
-                                var snapshot=body["snapshot"];matchActive=(string)snapshot["status"]=="active";revision=(long)snapshot["revision"];
+                                var snapshot=body["snapshot"];Organization.ObserveGameplay((JObject)snapshot);matchActive=(string)snapshot["status"]=="active";revision=(long)snapshot["revision"];
                                 ClearDecision();var request=snapshot["decision"];
                                 if(request.Type!=JTokenType.Null) {
                                     numeric=new NumericDecisionBounds(request);mana=(string)request["family"]=="mana";
@@ -191,7 +197,7 @@ namespace Manaforge.Play.Protocol
                 ["body"]=new JObject{["session_id"]=session,["viewer_id"]=viewer,["reason"]=reason}}.ToString(Formatting.None);
             WireMessages.Parse(text);
             lock(gate){Open();if(shutdownRequested)Fail("SESSION_SHUTDOWN_PENDING");shutdownRequested=true;shutdownReason=reason;}
-            try{transport.Write(text,milliseconds,cancellation);}
+            try{WriteSerialized(text,milliseconds,cancellation);}
             catch(TextFrame.FrameException error){Failed(error.Code);throw;}
             catch{Failed("SESSION_WRITE_FAILED");throw new WireEnvelope.EnvelopeException("SESSION_WRITE_FAILED");}
         }

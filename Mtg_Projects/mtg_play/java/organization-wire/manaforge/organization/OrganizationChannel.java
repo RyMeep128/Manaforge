@@ -31,7 +31,7 @@ public final class OrganizationChannel implements ViewerChannelExtension {
     private static void require(boolean value) throws IOException {if(!value)throw new IOException("ORGANIZATION_CONTEXT");}
     private String messageId(){return "organization-"+(serial++);}
     private static Map<String,OrganizationCodec.HostContext> checkedContexts(Map<String,OrganizationCodec.HostContext> contexts,Basis basis,long revision) throws IOException {
-        require(contexts!=null && contexts.keySet().equals(basis.seats));Map<String,OrganizationCodec.HostContext> result=new TreeMap<>();Set<String> viewers=new HashSet<>();
+        require(contexts!=null && !contexts.isEmpty() && basis.seats.containsAll(contexts.keySet()));Map<String,OrganizationCodec.HostContext> result=new TreeMap<>();Set<String> viewers=new HashSet<>();
         for(Map.Entry<String,OrganizationCodec.HostContext> entry:contexts.entrySet()){
             OrganizationCodec.HostContext context=entry.getValue();require(context!=null && context.viewer.matchEpoch.equals(basis.matchEpoch) && context.viewer.basisRevision==revision && context.seatReferences.containsKey(entry.getKey()) && viewers.add(context.viewer.viewerId));result.put(entry.getKey(),context);
         }
@@ -56,6 +56,12 @@ public final class OrganizationChannel implements ViewerChannelExtension {
         String receipt=OrganizationCodec.rejectedReceipt(messageId(),commandId,code,session.snapshot(),contexts.get(seat));
         if(record)ledger.get(seat).put(commandId,new Record(digest,receipt));sender.send(seat,Kind.RECEIPT,receipt);snapshot(seat);
     }
+    /** A newer rules publication has no safe basis yet; still honor the historical ledger. */
+    public void rejectUnready(String seat,String raw) throws Exception {
+        owned();require(connected.contains(seat) && negotiated.contains(seat));JsonObject message=OrganizationMessages.parseContract(raw);require(message.get("message_type").getAsString().equals("organization_command"));JsonObject body=message.getAsJsonObject("body");String id=body.get("command_id").getAsString();byte[] digest=MessageDigest.getInstance("SHA-256").digest(canonical(body).toString().getBytes(StandardCharsets.UTF_8));Map<String,Record> records=ledger.get(seat);Record previous=records.get(id);
+        if(previous!=null){if(MessageDigest.isEqual(previous.digest,digest))sender.send(seat,Kind.RECEIPT,previous.receipt);else reject(seat,id,"COMMAND_CONFLICT",digest,false);return;}
+        boolean capacity=records.size()>=COMMAND_LIMIT;reject(seat,id,capacity?"COMMAND_LIMIT_REACHED":"STALE_BASIS_REVISION",digest,!capacity);
+    }
     public void receive(String seat,String raw) throws Exception {
         owned();require(connected.contains(seat));JsonObject message=OrganizationMessages.parseContract(raw);String type=message.get("message_type").getAsString();JsonObject body=message.getAsJsonObject("body");
         if(type.equals("organization_capabilities")){
@@ -79,12 +85,19 @@ public final class OrganizationChannel implements ViewerChannelExtension {
         if(code!=null){reject(seat,commandId,code,digest,true);return;}
         OrganizationCodec.DecodedCommand decoded;
         try{decoded=OrganizationCodec.command(raw,contexts.get(seat),seat);}catch(IOException invalid){reject(seat,commandId,"INVALID_OPERATION",digest,true);return;}
+        Operation actual=decoded.operation;
+        if(actual.kind==BattlefieldOrganizationService.Kind.MOVE && actual.groupId==null){
+            Set<String> moving=new HashSet<>(actual.members),admitted=new HashSet<>();for(OrganizationCodec.Binding binding:contexts.get(seat).bindings.values()){Member member=before.state.basis.members.get(binding.incarnation);if(member!=null && member.eligible)admitted.add(binding.incarnation);}
+            List<String> remaining=new ArrayList<>(),visible=new ArrayList<>();for(String member:before.state.seats.get(seat).root)if(!moving.contains(member)){remaining.add(member);if(admitted.contains(member))visible.add(member);}
+            if(actual.index<0 || actual.index>visible.size()){reject(seat,commandId,"INVALID_INDEX",digest,true);return;}
+            actual=Operation.move(actual.members,null,actual.index==visible.size()?remaining.size():remaining.indexOf(visible.get(actual.index)));
+        }
         State candidate;
-        try{candidate=BattlefieldOrganizationService.apply(before.state,seat,decoded.operation,before.state.basis);}catch(Rejected invalid){reject(seat,commandId,invalid.getMessage(),digest,true);return;}
+        try{candidate=BattlefieldOrganizationService.apply(before.state,seat,actual,before.state.basis);}catch(Rejected invalid){reject(seat,commandId,invalid.getMessage(),digest,true);return;}
         boolean changed=!candidate.seats.equals(before.state.seats);if(changed && before.organizationRevision==Long.MAX_VALUE){reject(seat,commandId,"ORGANIZATION_REVISION_EXHAUSTED",digest,true);return;}
         Map<String,String> snapshots;
         try{snapshots=changed?render(candidate,before.organizationRevision+1,before.basisRevision,contexts):Collections.emptyMap();}catch(IOException invalid){reject(seat,commandId,"ORGANIZATION_LIMIT_REACHED",digest,true);return;}
-        BattlefieldOrganizationSession.Result result=session.apply(seat,decoded.expectedOrganizationRevision,decoded.basisRevision,decoded.operation);
+        BattlefieldOrganizationSession.Result result=session.apply(seat,decoded.expectedOrganizationRevision,decoded.basisRevision,actual);
         String receipt=OrganizationCodec.receipt(messageId(),commandId,result,contexts.get(seat));records.put(commandId,new Record(digest,receipt));sender.send(seat,Kind.RECEIPT,receipt);
         if(result.organizationChanged)broadcast(snapshots);else snapshot(seat);
     }

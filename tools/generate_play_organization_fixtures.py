@@ -315,12 +315,29 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
-    text = json.dumps(corpus(), indent=2, ensure_ascii=True) + "\n"
-    if args.check:
-        if OUTPUT.read_text(encoding="utf-8") != text:
-            parser.exit(1, "Organization fixture drift\n")
-    else:
-        OUTPUT.write_text(text, encoding="utf-8")
+    original = corpus()
+    v2 = json.loads(json.dumps(original))
+    for case in v2["cases"]:
+        raw = case["text"].replace(
+            '"organization_version":1', '"organization_version":2'
+        )
+        if '"message_type":"organization_snapshot"' in raw:
+            raw = raw.replace('"body":{', '"body":{"gameplay_revision":7,', 1)
+        if case["name"] == "unsupported-version":
+            raw = raw.replace('"organization_version":2', '"organization_version":3')
+        if case["name"] == "exact-byte-limit":
+            raw = raw.rstrip() + " " * (262144 - len(raw.rstrip().encode()))
+        case["text"] = raw
+    for output, data in [
+        (OUTPUT, original),
+        (OUTPUT.with_name("organization-v2.json"), v2),
+    ]:
+        text = json.dumps(data, indent=2, ensure_ascii=True) + "\n"
+        if args.check:
+            if output.read_text(encoding="utf-8") != text:
+                parser.exit(1, "Organization fixture drift\n")
+        else:
+            output.write_text(text, encoding="utf-8")
     print(
         "Organization shared fixtures match"
         if args.check

@@ -22,6 +22,10 @@ namespace Manaforge.Play
         private ViewerSessionReceiver receiver;private ClientSessionChannel channel;private CoreArtworkBundle artwork;private ViewerArtworkJobs artworkJobs;private ViewerCommandDispatcher commands;
         private bool stopped,disposed;private string stopCode;
         public Task<ViewerHostStop> Completion=>completion.Task;
+        public ProjectedOrganizationFrame OrganizationFor(long revision){lock(gate)return stopped?null:channel?.Organization.ForRevision(revision);}
+        public bool OrganizationPending {get{lock(gate)return !stopped && channel?.Organization.Pending==true;}}
+        public string OrganizationError {get{lock(gate)return channel?.Organization.LastError;}}
+        public Task<bool> OrganizeAsync(ProjectedOrganizationFrame frame,Newtonsoft.Json.Linq.JObject operation){ThreadOnly();if(frame==null || !surface.HasPresentedFrame(ticket,frame.GameplayRevision))return Task.FromResult(false);lock(gate)return stopped || channel==null?Task.FromResult(false):channel.Organization.Submit(frame,operation);}
         public bool Authenticated {get{lock(gate)return !stopped && channel!=null;}}
         public ViewerDecisionOffer CurrentDecision
         {get{if(ownerEnded.IsCompleted)Stop("VIEWER_OWNER_ENDED");lock(gate)return !stopped && receiver!=null?receiver.Decisions.Current:null;}}

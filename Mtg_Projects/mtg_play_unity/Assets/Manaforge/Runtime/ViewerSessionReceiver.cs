@@ -77,6 +77,7 @@ namespace Manaforge.Play
                 if(ticket.Mailbox.IsStopped){Stop("VIEWER_REVOKED");return false;}
                 var received=channel.ReceiveNext(milliseconds,cancellation,allowIdleWait);
                 if(channel.State!=ClientChannelState.Active){Stop("VIEWER_CHANNEL_STOPPED",channel.Completion.Result.Graceful);return false;}
+                if(received.Type=="organization")return true;
                 ProjectedCardFrame frame=null;ProjectedDecisionFrame decisions=null;long? minimum=null;
                 if(received.Applied && (received.Type=="snapshot" || received.Type=="event" || received.Type=="result")) {
                     if(!channel.TryTake(out packet))throw new InvalidOperationException();

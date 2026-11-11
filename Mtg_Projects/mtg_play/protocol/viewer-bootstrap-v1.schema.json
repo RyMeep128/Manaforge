@@ -81,6 +81,10 @@
         "commander",
         "unrestricted_commander"
       ]
+    },
+    "organization_version": {
+      "type": "integer",
+      "const": 2
     }
   },
   "required": [

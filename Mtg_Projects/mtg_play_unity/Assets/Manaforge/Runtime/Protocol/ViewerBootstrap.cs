@@ -14,6 +14,7 @@ namespace Manaforge.Play.Protocol
         private readonly object gate=new object();private byte[] key;private bool disposed,taken;
         public string Host=>"127.0.0.1";public int Port {get;}
         public string GameplayFormat {get;}
+        public int OrganizationVersion {get;}
         public string SessionId {get;} public string ViewerId {get;} public string EngineVersion {get;}
         public string ArtifactManifestSha256 {get;} public string ArtworkDirectory {get;} public string ArtworkManifestSha256 {get;}
         private static IOException Invalid()=>new IOException("VIEWER_BOOTSTRAP_INVALID");
@@ -26,6 +27,7 @@ namespace Manaforge.Play.Protocol
         {
             var metadata=(JObject)value.DeepClone();
             if(metadata.TryGetValue("format",out var format)){GameplayFormat=Match(format,"(?:freeform|commander|unrestricted_commander)");metadata.Remove("format");}
+            if(metadata.TryGetValue("organization_version",out var organization)){if(organization.Type!=JTokenType.Integer || (long)organization!=2)throw Invalid();OrganizationVersion=2;metadata.Remove("organization_version");}
             Fields(metadata,"viewer_bootstrap_version","protocol_version","endpoint","session_id","viewer_id","engine_version","artifact_manifest_sha256","viewer_key_hex","artwork");
             Version(value["viewer_bootstrap_version"]);Version(value["protocol_version"]);var endpoint=value["endpoint"];Fields(endpoint,"host","port");
             if(endpoint["host"]?.Type!=JTokenType.String || (string)endpoint["host"]!="127.0.0.1" || endpoint["port"]?.Type!=JTokenType.Integer || (long)endpoint["port"]<1 || (long)endpoint["port"]>65535)throw Invalid();Port=(int)endpoint["port"];

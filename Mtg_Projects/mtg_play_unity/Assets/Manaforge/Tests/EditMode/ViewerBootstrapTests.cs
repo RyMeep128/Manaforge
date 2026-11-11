@@ -55,6 +55,12 @@ namespace Manaforge.Play.Tests
             var text=Example().ToString();Invalid(Encoding.UTF8.GetBytes(text.Replace("\"viewer_bootstrap_version\": 1","\"viewer_bootstrap_version\": 1, \"viewer_bootstrap_version\": 1")));
             Invalid(Encoding.UTF8.GetBytes("\ufeff"+text));
         }
+        [Test] public void OrganizationOptInIsExplicitAndDoesNotChangeAuthenticationVersion()
+        {
+            using(var legacy=ViewerBootstrap.Parse(Bytes(Example())))Assert.That(legacy.OrganizationVersion,Is.Zero);
+            var value=Example();value["organization_version"]=2;using(var current=ViewerBootstrap.Parse(Bytes(value)))Assert.That(current.OrganizationVersion,Is.EqualTo(2));
+            foreach(JToken version in new JToken[]{new JValue(1),new JValue(3),new JValue(true),new JValue("2")}){value["organization_version"]=version;Invalid(Bytes(value));}
+        }
         [Test] public void DisposeRevokesUnclaimedKeyAndConcurrentTransfersHaveOneWinner()
         {
             using(var disposed=ViewerBootstrap.Parse(Bytes(Example()))){disposed.Dispose();Assert.Throws<IOException>(()=>disposed.TakeViewerKey());}

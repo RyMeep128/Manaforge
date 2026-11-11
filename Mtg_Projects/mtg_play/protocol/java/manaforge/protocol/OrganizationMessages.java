@@ -28,12 +28,12 @@ public final class OrganizationMessages {
     }
     private static boolean id(String value){return value!=null && ID.matcher(value).matches();}
     public static int negotiate(Collection<Integer> local,Collection<Integer> peer,boolean authenticated){return authenticated && local!=null && peer!=null && local.contains(1) && peer.contains(1)?1:0;}
-    private static boolean valid(JsonElement value,JsonElement element){
+    private static boolean valid(JsonElement value,JsonElement element,JsonObject root){
         if(element.isJsonPrimitive())return element.getAsBoolean();JsonObject rule=element.getAsJsonObject();
-        if(rule.has("$ref")){String ref=rule.get("$ref").getAsString();return valid(value,schema.getAsJsonObject("$defs").get(ref.substring(ref.lastIndexOf('/')+1)));}
-        if(rule.has("anyOf")){boolean found=false;for(JsonElement option:rule.getAsJsonArray("anyOf"))found|=valid(value,option);if(!found)return false;}
-        if(rule.has("allOf"))for(JsonElement part:rule.getAsJsonArray("allOf"))if(!valid(value,part))return false;
-        if(rule.has("if") && valid(value,rule.get("if")) && rule.has("then") && !valid(value,rule.get("then")))return false;
+        if(rule.has("$ref")){String ref=rule.get("$ref").getAsString();return valid(value,root.getAsJsonObject("$defs").get(ref.substring(ref.lastIndexOf('/')+1)),root);}
+        if(rule.has("anyOf")){boolean found=false;for(JsonElement option:rule.getAsJsonArray("anyOf"))found|=valid(value,option,root);if(!found)return false;}
+        if(rule.has("allOf"))for(JsonElement part:rule.getAsJsonArray("allOf"))if(!valid(value,part,root))return false;
+        if(rule.has("if") && valid(value,rule.get("if"),root) && rule.has("then") && !valid(value,rule.get("then"),root))return false;
         if(rule.has("const") && !value.equals(rule.get("const")))return false;
         if(rule.has("enum")){boolean found=false;for(JsonElement option:rule.getAsJsonArray("enum"))found|=value.equals(option);if(!found)return false;}
         if(rule.has("type")){
@@ -45,13 +45,13 @@ public final class OrganizationMessages {
             JsonObject object=value.getAsJsonObject(),properties=rule.has("properties")?rule.getAsJsonObject("properties"):new JsonObject();
             if(rule.has("required"))for(JsonElement key:rule.getAsJsonArray("required"))if(!object.has(key.getAsString()))return false;
             for(Map.Entry<String,JsonElement> field:object.entrySet()){
-                if(properties.has(field.getKey())){if(!valid(field.getValue(),properties.get(field.getKey())))return false;}
+                if(properties.has(field.getKey())){if(!valid(field.getValue(),properties.get(field.getKey()),root))return false;}
                 else if(rule.has("additionalProperties") && !rule.get("additionalProperties").getAsBoolean())return false;
             }
         }
         if(value.isJsonArray()){
             JsonArray array=value.getAsJsonArray();if(rule.has("minItems") && array.size()<rule.get("minItems").getAsInt() || rule.has("maxItems") && array.size()>rule.get("maxItems").getAsInt())return false;
-            Set<JsonElement> unique=new HashSet<>();for(JsonElement item:array){if(rule.has("items") && !valid(item,rule.get("items")))return false;if(rule.has("uniqueItems") && rule.get("uniqueItems").getAsBoolean() && !unique.add(item))return false;}
+            Set<JsonElement> unique=new HashSet<>();for(JsonElement item:array){if(rule.has("items") && !valid(item,rule.get("items"),root))return false;if(rule.has("uniqueItems") && rule.get("uniqueItems").getAsBoolean() && !unique.add(item))return false;}
         }
         if(value.isJsonPrimitive() && value.getAsJsonPrimitive().isString()){
             String text=value.getAsString();int length=text.codePointCount(0,text.length());
@@ -68,7 +68,10 @@ public final class OrganizationMessages {
     private static void name(JsonElement value) throws IOException {if(!value.isJsonNull())require(!value.getAsString().replaceAll(WHITE,"").isEmpty(),"ORGANIZATION_INVALID");}
     public static JsonObject parseContract(String raw) throws IOException {
         require(raw!=null && raw.length()<=MAX_BYTES && raw.getBytes(StandardCharsets.UTF_8).length<=MAX_BYTES,"ORGANIZATION_SIZE");
-        JsonObject message=WireEnvelope.parseObject(raw);require(valid(message,schema),"ORGANIZATION_INVALID");return message;
+        JsonObject message=WireEnvelope.parseObject(raw);require(valid(message,schema,schema),"ORGANIZATION_INVALID");return message;
+    }
+    static JsonObject parseV2Contract(String raw) throws IOException {
+        require(raw!=null && raw.length()<=MAX_BYTES && raw.getBytes(StandardCharsets.UTF_8).length<=MAX_BYTES,"ORGANIZATION_SIZE");JsonObject message=WireEnvelope.parseObject(raw);JsonObject v2=JsonParser.parseString(OrganizationV2ContractSchema.JSON).getAsJsonObject();require(valid(message,v2,v2),"ORGANIZATION_INVALID");return message;
     }
     /** Receipts carry no object mappings; only a known pending command can admit historical basis. */
     public static JsonObject parseReceipt(String raw,String trustedMatchEpoch,Collection<String> pendingCommandIds) throws IOException {

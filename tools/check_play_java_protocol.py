@@ -78,6 +78,7 @@ def main():
             PROTOCOL / "java-test/MetadataChannelChecks.java",
             PLAY / "java/ManaforgeOpeningSession.java",
             PLAY / "java/ManaforgeUnityOpening.java",
+            PLAY / "java/OrganizationEndpoint.java",
             PLAY / "java/ManaforgeGameplaySession.java",
             PLAY / "java/ManaforgeHeartbeat.java",
             PROTOCOL / "java-test/HeartbeatChecks.java",
@@ -136,10 +137,14 @@ def main():
         ]
         sources += [
             PROTOCOL / "java/manaforge/protocol/OrganizationMessages.java",
+            PROTOCOL / "java/manaforge/protocol/OrganizationV2Messages.java",
+            PROTOCOL / "java/manaforge/protocol/OrganizationV2Contracts.java",
+            PROTOCOL / "java/manaforge/protocol/OrganizationV2ContractSchema.java",
             PROTOCOL / "java/manaforge/protocol/OrganizationContracts.java",
             PROTOCOL / "java/manaforge/protocol/OrganizationContractSchema.java",
             PROTOCOL / "java-test/OrganizationFixtureConsumer.java",
             PROTOCOL / "java-test/OrganizationChannelUnitChecks.java",
+            PROTOCOL / "java-test/OrganizationV2Checks.java",
             PROTOCOL / "java-test/OrganizationChannelChecks.java",
             *sorted((PLAY / "java/organization").rglob("*.java")),
             *sorted((PLAY / "java/organization-wire").rglob("*.java")),
@@ -412,6 +417,18 @@ def main():
             ],
             check=True,
             timeout=120,
+        )
+
+        subprocess.run(
+            [
+                runtime,
+                "-cp",
+                str(workspace) + os.pathsep + str(jar),
+                "OrganizationV2Checks",
+                str(PROTOCOL / "fixtures/organization-v2.json"),
+            ],
+            check=True,
+            timeout=60,
         )
 
         if args.dummy_output:
