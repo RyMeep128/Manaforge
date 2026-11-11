@@ -112,3 +112,14 @@ live rollout. Synthetic socket success cannot substitute for either.
   with `Build Finished, Result: Success.` No local test suites were run. The local
   build also included pre-existing uncommitted HUD rollout edits, which are outside
   these commits. Hosted Unity and playable acceptance are separate evidence gates.
+
+## CT-11B: native identity bridge
+
+The control-transfer fixture previously called `changeControllerId` directly and
+then applied native effects. The control layer resets transient controller changes;
+the fixture now installs native `GainControlTargetEffect` with a generation-aware
+`FixedTarget`. It asserts the new native controller after effects before testing
+incarnation stability, old-handle revocation and projected seat ownership. Public
+fixture diagnostics record controller/generation and old-handle resolution. No
+identity assertion is removed and no native production rules are changed. Hosted
+stock and delivery-engine evidence is required for this correction.

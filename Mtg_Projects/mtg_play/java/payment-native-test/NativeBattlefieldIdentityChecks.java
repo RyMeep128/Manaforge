@@ -118,11 +118,21 @@ public final class NativeBattlefieldIdentityChecks {
             check(f.registry.resolve(f.e.payer.getId(),handle)==null,"STALE_BLINK_HANDLE");resume(f.e);
         }
     }
+    static void transfer(NativePaymentAcceptanceChecks.Engine e,Card land) {
+        // A direct changeControllerId is reset by the next native control-layer pass.
+        // Install the same continuous effect used by native control-changing cards.
+        mage.abilities.effects.common.continuous.GainControlTargetEffect effect=new mage.abilities.effects.common.continuous.GainControlTargetEffect(Duration.Custom,e.opponent.getId());
+        effect.setTargetPointer(new mage.target.targetpointer.FixedTarget(permanent(e,land),e.game));
+        e.game.addEffect(effect,land.getSpellAbility());
+    }
     static void control() throws Exception {
         try(Fixture f=new Fixture()){
             Card land=f.forest();pause(f.e,()->f.enter(land));f.observe(land);
             String before=f.registry.incarnation(land.getId()),handle=member(f.registry.project(snapshot(f.e,f.e.payer.getId())),land.getId()).handle;resume(f.e);
-            pause(f.e,()->check(permanent(f.e,land).changeControllerId(f.e.opponent.getId(),f.e.game,land.getSpellAbility()),"CONTROL_TRANSFER"));f.observe(land);
+            System.out.println("IDENTITY_CONTROL before controller="+permanent(f.e,land).getControllerId()+" generation="+permanent(f.e,land).getZoneChangeCounter(f.e.game)+" handle="+handle);
+            pause(f.e,()->transfer(f.e,land));f.observe(land);
+            check(permanent(f.e,land).getControllerId().equals(f.e.opponent.getId()),"CONTROL_NATIVE_CONTROLLER");
+            System.out.println("IDENTITY_CONTROL after controller="+permanent(f.e,land).getControllerId()+" generation="+permanent(f.e,land).getZoneChangeCounter(f.e.game)+" oldHandleResolved="+(f.registry.resolve(f.e.payer.getId(),handle)!=null));
             check(before.equals(f.registry.incarnation(land.getId())),"CONTROL_INCARNATION");check(f.registry.resolve(f.e.payer.getId(),handle)==null,"CONTROL_HANDLE");
             check(member(f.registry.project(snapshot(f.e,f.e.payer.getId())),land.getId()).seat.equals(f.registry.seat(f.e.opponent.getId())),"CONTROL_SEAT");resume(f.e);
         }
