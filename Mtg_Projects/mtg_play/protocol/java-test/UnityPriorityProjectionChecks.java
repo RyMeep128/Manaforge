@@ -11,6 +11,11 @@ public final class UnityPriorityProjectionChecks {
         raw.addProperty("priority_player","raw-name");raw.add("playable",new JsonArray());raw.add("action_kinds",new JsonObject());
         raw.addProperty("playable_information_complete",true);
         ManaforgeOpeningProjection projection=OpeningProjectionChecks.projection();
+        ManaforgeOpeningProjection.ObserverResult publicView=OpeningProjectionChecks.projection().projectObserverWithBindings(raw,prompt);
+        require(publicView.objects.size()==1 && publicView.objects.containsKey("raw-card") && publicView.seats.get("raw-human").equals("human"));
+        String publicReference=publicView.objects.get("raw-card");boolean present=false;for(JsonElement item:publicView.snapshot().getAsJsonArray("objects"))if(item.getAsJsonObject().get("object_id").getAsString().equals(publicReference))present=true;require(present);
+        try{publicView.objects.clear();throw new AssertionError("MUTABLE_PUBLIC_BINDINGS");}catch(UnsupportedOperationException expected){}
+        JsonObject copied=publicView.snapshot();copied.addProperty("viewer_id","mutated");require(!publicView.snapshot().get("viewer_id").getAsString().equals("mutated"));
         JsonObject snapshot=projection.projectCoreCombat(raw,prompt,true);OpeningProjectionChecks.shape(snapshot);
         require(snapshot.get("actions_complete").getAsBoolean());require(snapshot.getAsJsonObject("decision").get("is_priority").getAsBoolean());
         require(snapshot.getAsJsonArray("actions").size()==1);require(!snapshot.getAsJsonArray("unsupported_fields").asList().contains(new JsonPrimitive("actions")));

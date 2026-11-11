@@ -123,7 +123,9 @@ public final class NativeBattlefieldIdentityChecks {
         // Install the same continuous effect used by native control-changing cards.
         mage.abilities.effects.common.continuous.GainControlTargetEffect effect=new mage.abilities.effects.common.continuous.GainControlTargetEffect(Duration.Custom,e.opponent.getId());
         effect.setTargetPointer(new mage.target.targetpointer.FixedTarget(permanent(e,land),e.game));
-        e.game.addEffect(effect,land.getSpellAbility());
+        mage.abilities.Ability source=new mage.abilities.common.SimpleActivatedAbility(Zone.BATTLEFIELD,effect,new mage.abilities.costs.mana.ManaCostsImpl<>("0"));
+        source.setSourceId(land.getId());source.setControllerId(e.payer.getId());
+        e.game.addEffect(effect,source);
     }
     static void control() throws Exception {
         try(Fixture f=new Fixture()){

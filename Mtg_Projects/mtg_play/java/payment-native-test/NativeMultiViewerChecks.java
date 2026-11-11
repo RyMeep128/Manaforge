@@ -22,11 +22,12 @@ public final class NativeMultiViewerChecks {
         throw new AssertionError("NATIVE_PRIORITY_NOT_PAUSED");
     }
     static void resume(NativePaymentAcceptanceChecks.Engine e) throws Exception {e.payer.setResponseBoolean(false);e.running.get(5,TimeUnit.SECONDS);check(e.queries.isEmpty(),"NATIVE_PRIORITY_NOT_CONSUMED");}
-    static Map<String,ManaforgeMatchCoordinator.Observation> observations(NativePaymentAcceptanceChecks.Engine e,PlayerQueryEvent query,AtomicInteger submissions) throws Exception {
+    static Map<String,ManaforgeMatchCoordinator.Observation> observations(NativePaymentAcceptanceChecks.Engine e,PlayerQueryEvent query,AtomicInteger submissions) throws Exception {return observations(e,query,submissions,null);}
+    static Map<String,ManaforgeMatchCoordinator.Observation> observations(NativePaymentAcceptanceChecks.Engine e,PlayerQueryEvent query,AtomicInteger submissions,Map<UUID,GameView> views) throws Exception {
         synchronized(e.response.get(e.payer)){
             check(Boolean.TRUE.equals(e.opened.get(e.payer)),"NATIVE_UNSAFE_READ");GameState state=e.game.getState();int cycle=state.getApplyEffectsCounter();Map<String,ManaforgeMatchCoordinator.Observation> result=new HashMap<>();
             for(UUID viewer:Arrays.asList(e.payer.getId(),e.opponent.getId())){
-                GameView view=new GameView(state,e.game,viewer,null);
+                GameView view=views==null?new GameView(state,e.game,viewer,null):views.get(viewer);check(view!=null && view.getGameCycle()==cycle,"NATIVE_CAPTURED_VIEW");
                 ManaforgeBridge bridge=new ManaforgeBridge(value->{},null,new ManaforgeBridge.ResponseTransport(){
                     public boolean object(UUID game,UUID source){submissions.incrementAndGet();throw new AssertionError("READ_ONLY_NATIVE_OBJECT_SUBMISSION");}
                     public boolean mana(UUID game,UUID player,ManaType type){submissions.incrementAndGet();throw new AssertionError("READ_ONLY_NATIVE_MANA_SUBMISSION");}

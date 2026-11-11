@@ -154,3 +154,42 @@ refreshes. Group membership remains incarnation-based. Native cycle validation
 remains independent of this revision. Fixed roster, public eligibility and existing
 receipt/queue limits remain enforced. The bridge owns and disposes its registry and
 channel with the match. No native response transport is available to this module.
+
+### Native socket acceptance
+
+`NativeOrganizationChecks` runs alongside the existing native two-viewer proof in
+both stock and hash-pinned delivery-engine matrix jobs. Its battlefield is created
+through real native entry operations, with two Forests, a creature, Equipment, a
+transforming permanent and a native token. Two authenticated sockets create and
+edit groups. Each received mapping is checked against that viewer's exact admitted
+gameplay object and controller references; native IDs and private hand names must
+not appear in organization payloads.
+
+Coverage includes individual unassignment, foreign groups/owners/viewer handles,
+same-cycle object-reference rotation, stale basis, historical receipts, mixed tapped
+lands, counters/damage/attachments, transformation, coalesced blink, native control
+transfer, face-down/reveal and token removal. Invalid game/cycle/roster/admission
+batches must leave the committed organization snapshot and viewer handles intact.
+A non-reading and then disconnected viewer does not stop the other viewer's edits
+or subsequent native publication; reattachment reconstructs state and retains retry
+history. Protocol overflow/stalled-writer tests remain the deterministic queue-pressure
+proof. Organization edits must leave the native checkpoint cycle unchanged and
+record zero native response submissions. Parent shutdown disposes the bridge and
+shared native fixture exactly once.
+
+The first control-effect CI attempt exposed a null source because basic lands have
+no spell ability. The fixture now gives the effect an explicit activated-ability
+context with the real permanent source/controller, without activating it or inventing
+zone counters. The post-effects native-controller assertion remains mandatory.
+
+No Unity files changed in CT-11B, so this slice does not require a new local Unity
+player build. The previous local player rebuild remains separate from hosted Unity
+and normal saved-deck human-versus-AI acceptance. No live launcher capability is
+enabled by this work. Final exact-SHA checks must be reported as pending until they
+finish; native fixture success alone is not full-game acceptance.
+
+Hosted protocol coverage also exposed a disconnect-reason race: closing a saturated
+socket could wake its reader before the overflow path recorded the cause. The
+coordinator now records the first disconnect and clears its queues under the
+channel lock before closing the socket. The overflow assertion remains strict;
+secondary reader/write failures cannot overwrite the recorded cause.

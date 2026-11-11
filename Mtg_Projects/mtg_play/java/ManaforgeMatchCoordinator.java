@@ -153,9 +153,10 @@ public final class ManaforgeMatchCoordinator implements AutoCloseable {
         }}catch(InterruptedException interrupted){Thread.currentThread().interrupt();}catch(IOException failure){disconnect(channel,connection,"WRITE_FAILED");}
     }
     private void disconnect(Channel channel,Connection connection,String reason){
-        boolean wasActive=connection.active;connection.active=false;try{connection.frames.close();}catch(IOException ignored){}
         boolean notify=false;
-        synchronized(channel){if(channel.connection==connection){channel.connection=null;channel.status=stopping.get()?Status.CLOSED:Status.DISCONNECTED;channel.reason=reason;channel.pending=null;channel.control=channel.organization=null;channel.extensionReady=false;channel.receipts.clear();notify=wasActive && channel.extensionAllowed && !stopping.get();channel.notifyAll();}}
+        // Record the first disconnect cause before closing the socket wakes its reader.
+        synchronized(channel){boolean wasActive=connection.active;connection.active=false;if(channel.connection==connection){channel.connection=null;channel.status=stopping.get()?Status.CLOSED:Status.DISCONNECTED;channel.reason=reason;channel.pending=null;channel.control=channel.organization=null;channel.extensionReady=false;channel.receipts.clear();notify=wasActive && channel.extensionAllowed && !stopping.get();channel.notifyAll();}}
+        try{connection.frames.close();}catch(IOException ignored){}
         if(notify)try{owner.execute(()->{if(stopping.get())return;synchronized(channel){if(channel.connection!=null)return;}extension.disconnected(channel.viewer.seat);});}catch(RejectedExecutionException ignored){}
     }
     /** Trusted preprojected fixture port, not a client-facing publication endpoint. */

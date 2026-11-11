@@ -247,6 +247,7 @@ def main():
             if args.real_game_multiview:
                 bridge_sources += [
                     PLAY / "java/payment-native-test/NativeMultiViewerChecks.java",
+                    PLAY / "java/payment-native-test/NativeOrganizationChecks.java",
                     PLAY / "protocol/java-test/MatchCoordinatorChecks.java",
                     *sorted((PLAY / "java/organization").rglob("*.java")),
                     *sorted((PLAY / "java/organization-wire").rglob("*.java")),
@@ -363,6 +364,18 @@ def main():
                         "-cp",
                         output + os.pathsep + native_classpath,
                         "NativeMultiViewerChecks",
+                    ],
+                    cwd=output,
+                    check=True,
+                    timeout=180,
+                )
+                subprocess.run(
+                    [
+                        runtime,
+                        "-Djava.awt.headless=true",
+                        "-cp",
+                        output + os.pathsep + native_classpath,
+                        "NativeOrganizationChecks",
                     ],
                     cwd=output,
                     check=True,

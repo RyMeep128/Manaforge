@@ -30,7 +30,7 @@ public final class ExtensionPlumbingChecks {
                 try{MatchCoordinatorChecks.await(()->coordinator.status("a").status==ManaforgeMatchCoordinator.Status.DISCONNECTED,incoming?"INPUT_LIMIT_NOT_ENFORCED":"OUTPUT_LIMIT_NOT_ENFORCED");}
                 finally{release.countDown();}
                 MatchCoordinatorChecks.await(()->coordinator.status("a").pendingInputs==0,"INPUTS_NOT_DRAINED");
-                check((incoming?"EXTENSION_INPUT_OVERFLOW":"EXTENSION_OUTPUT_OVERFLOW").equals(coordinator.status("a").reason),"WRONG_OVERFLOW_REASON");
+                check((incoming?"EXTENSION_INPUT_OVERFLOW":"EXTENSION_OUTPUT_OVERFLOW").equals(coordinator.status("a").reason),"WRONG_OVERFLOW_REASON_"+coordinator.status("a").reason);
                 check(incoming || overflow.get(),"OUTPUT_CAPACITY_NOT_REPORTED");check(coordinator.status("a").queuedReceipts==0 && coordinator.status("a").pendingOrganizationSnapshots==0,"DISCONNECTED_QUEUE_LEAK");
                 coordinator.publishSnapshots(MatchCoordinatorChecks.batch(fixture,a,b,1,false));clientB.read();check(disposed.get()==0,"OVERFLOW_DISPOSED_SHARED_MATCH");
             }
