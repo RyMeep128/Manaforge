@@ -4,7 +4,6 @@ import java.util.function.Supplier;
 import mage.game.Game;
 import mage.game.GameState;
 import mage.game.permanent.Permanent;
-import mage.player.human.HumanPlayer;
 import mage.players.Player;
 import mage.view.*;
 
@@ -14,10 +13,14 @@ final class NativeBattlefieldIdentity {
     static BattlefieldIdentityRegistry.Snapshot capturePaused(Game game,UUID viewer,int cycle,Supplier<GameView> views) throws Exception {
         Player owner=game.getPlayer(viewer);
         if(owner==null || owner.hasLost() || owner.hasLeft() || game.hasEnded())throw new IllegalArgumentException("IDENTITY_VIEWER");
-        Field response=HumanPlayer.class.getDeclaredField("response"),opened=HumanPlayer.class.getDeclaredField("responseOpenedForAnswer");response.setAccessible(true);opened.setAccessible(true);
         for(Player player:game.getPlayers().values()){
-            if(player.hasLost() || player.hasLeft() || !(player.getRealPlayer() instanceof HumanPlayer))continue;
-            Object human=player.getRealPlayer();
+            if(player.hasLost() || player.hasLeft())continue;
+            Object human=player.getRealPlayer();Class<?> type=human.getClass();
+            // HumanPlayer is a server plugin, absent from the ordinary bridge SDK.
+            // Mirror metadata's server-owned reflection without linking that plugin.
+            while(type!=null && !type.getName().equals("mage.player.human.HumanPlayer"))type=type.getSuperclass();
+            if(type==null)continue;
+            Field response=type.getDeclaredField("response"),opened=type.getDeclaredField("responseOpenedForAnswer");response.setAccessible(true);opened.setAccessible(true);
             synchronized(response.get(human)){
                 if(!Boolean.TRUE.equals(opened.get(human)))continue;
                 GameState state=game.getState();GameView view=views.get();

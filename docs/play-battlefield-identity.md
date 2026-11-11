@@ -76,3 +76,13 @@ save the completed transition state, and build only a native GameView. They asse
 initial permanent/incarnation presence, promptly surface transition-worker failures,
 and verify response/query completion between checkpoints. Native transitions and
 all lifecycle assertions remain required; this is not yet passing hosted evidence.
+
+The live idle proof on the same base failed before the idle callback. Static
+inspection found the new adapter linked HumanPlayer from a plugin absent from the
+ordinary bridge compilation classpath. The adapter now uses the existing metadata
+reader's reflection pattern; a library-only compile verifies that SDK boundary.
+Idle proof now writes allowlisted stage/reason/timing evidence before failure, and
+the workflow uploads the report even on failure. No raw errors, paths, authentication
+material, or event transcripts are included. The 240-second idle and expiry checks
+are unchanged. Hosted confirmation and the subsequent live gameplay steps remain
+required; unrelated shared-worktree Unity rollout edits are not part of this fix.
