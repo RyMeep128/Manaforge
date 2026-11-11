@@ -88,7 +88,7 @@ public final class BattlefieldOrganizationService {
         Map<String,Seat> seats=new TreeMap<>();for(String seat:basis.seats){List<String> root=new ArrayList<>();for(Member member:basis.members.values())if(member.controller.equals(seat))root.add(member.incarnation);seats.put(seat,new Seat(root,Collections.emptyList()));}return new State(basis,seats);
     }
     public static State apply(State state,String trustedActorSeat,Operation operation,Basis battlefieldBasis){
-        require(state!=null && operation!=null && state.basis.equals(battlefieldBasis),"STALE_BASIS");require(state.seats.containsKey(trustedActorSeat),"UNKNOWN_ACTOR");
+        require(state!=null && operation!=null && state.basis.equals(battlefieldBasis),"STALE_BASIS");require(trustedActorSeat!=null && state.seats.containsKey(trustedActorSeat),"UNKNOWN_ACTOR");
         Seat original=state.seats.get(trustedActorSeat);List<String> root=new ArrayList<>(original.root);List<Group> groups=new ArrayList<>(original.groups);
         int selected=-1;for(int i=0;i<groups.size();i++)if(groups.get(i).id.equals(operation.groupId))selected=i;
         if(operation.kind!=Kind.CREATE && !(operation.kind==Kind.MOVE && operation.groupId==null))require(selected>=0,"GROUP_NOT_OWNED");
@@ -103,7 +103,7 @@ public final class BattlefieldOrganizationService {
             case REORDER:require(operation.index>=0 && operation.index<groups.size(),"INVALID_INDEX");groups.remove(selected);groups.add(operation.index,group);break;
             case MOVE:
                 Set<String> moving=new HashSet<>();require(!operation.members.isEmpty(),"EMPTY_SELECTION");
-                for(String memberId:operation.members){Member member=state.basis.members.get(memberId);require(member!=null && member.controller.equals(trustedActorSeat) && member.eligible,"MEMBER_NOT_OWNED_OR_ELIGIBLE");require(moving.add(memberId),"DUPLICATE_SELECTION");}
+                for(String memberId:operation.members){require(memberId!=null,"INVALID_ID");Member member=state.basis.members.get(memberId);require(member!=null && member.controller.equals(trustedActorSeat) && member.eligible,"MEMBER_NOT_OWNED_OR_ELIGIBLE");require(moving.add(memberId),"DUPLICATE_SELECTION");}
                 root.removeIf(moving::contains);for(int i=0;i<groups.size();i++){Group current=groups.get(i);List<String> members=new ArrayList<>(current.members);members.removeIf(moving::contains);groups.set(i,current.withMembers(members));}
                 List<String> destination=selected<0?root:new ArrayList<>(groups.get(selected).members);
                 require(operation.index>=0 && operation.index<=destination.size(),"INVALID_INDEX");destination.addAll(operation.index,operation.members);
@@ -111,5 +111,24 @@ public final class BattlefieldOrganizationService {
             default:throw new Rejected("UNKNOWN_OPERATION");
         }
         Map<String,Seat> next=new TreeMap<>(state.seats);next.put(trustedActorSeat,new Seat(root,groups));return new State(state.basis,next);
+    }
+    /** No generation inference here: a new incarnation is always a new member. */
+    public static State reconcile(State state,Basis battlefieldBasis){
+        require(state!=null && battlefieldBasis!=null && state.basis.matchEpoch.equals(battlefieldBasis.matchEpoch),"FOREIGN_MATCH");
+        // Join/leave/elimination policy is CT-17; this internal slice uses a fixed roster.
+        require(state.basis.seats.equals(battlefieldBasis.seats),"ROSTER_CHANGED");
+        Map<String,Seat> next=new TreeMap<>();
+        for(String seat:battlefieldBasis.seats){
+            Seat previous=state.seats.get(seat);List<String> root=new ArrayList<>();List<Group> groups=new ArrayList<>();Set<String> assigned=new HashSet<>();
+            for(String incarnation:previous.root){Member now=battlefieldBasis.members.get(incarnation),old=state.basis.members.get(incarnation);
+                // Newly eligible objects append with other arrivals instead of inheriting concealed placement.
+                if(now!=null && now.controller.equals(seat) && !(now.eligible && !old.eligible)){root.add(incarnation);assigned.add(incarnation);}
+            }
+            for(Group group:previous.groups){List<String> members=new ArrayList<>();for(String incarnation:group.members){Member now=battlefieldBasis.members.get(incarnation);if(now!=null && now.controller.equals(seat) && now.eligible){members.add(incarnation);assigned.add(incarnation);}}groups.add(group.withMembers(members));}
+            // Basis is sorted by incarnation ID. Survivors retain order; additions are deterministic.
+            for(Member member:battlefieldBasis.members.values())if(member.controller.equals(seat) && assigned.add(member.incarnation))root.add(member.incarnation);
+            next.put(seat,new Seat(root,groups));
+        }
+        return new State(battlefieldBasis,next);
     }
 }

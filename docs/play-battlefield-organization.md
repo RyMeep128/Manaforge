@@ -52,6 +52,31 @@ empty group preservation, default-root behavior, ownership isolation, stale basi
 invalid input, input immutability, and unchanged state after rejection. No passing
 hosted evidence is claimed until the exact pushed SHA's workflow completes.
 
-Lifecycle reconciliation and retained-seed invariant sequences are the next review
-step within CT-08A. Drawers, stacks, nesting, automatic assignment, persistence,
-networking, and Unity projections are deliberately outside this module.
+## Lifecycle reconciliation
+
+`reconcile(state, battlefieldBasis)` accepts a new server-owned basis for the same
+match and fixed seat roster. Roster changes are rejected until join/leave policy
+is implemented separately. The future serialized host must supply current bases;
+this pure model does not infer network freshness, authenticate seats, or mint
+incarnations. No direct dependency on the unaccepted native fixture is introduced.
+
+Surviving root and group members retain their relative order. Departed incarnations
+are removed. A control change removes old membership and appends the member at the
+new controller's root. Concealment removes custom membership and places the object
+at root; restored eligibility never restores an old manual assignment. New entries,
+transfers, and newly eligible entries append in incarnation-ID order. Existing
+empty groups, labels, coordinates, and group order are preserved. A returning card
+with a new incarnation has no relationship to its previous group membership.
+Reconciliation is atomic, deterministic, and idempotent for an unchanged basis.
+
+Hosted checks cover these lifecycle cases and sixteen retained seeds
+`2026111100` through `2026111115`. Each seed executes 400 mixed edit/reconcile
+steps, validates one-location/ownership/eligibility invariants after every step,
+checks old-state immutability and rejection atomicity, checks reconciliation
+idempotence, and replays to an equal final state. No suite is executed locally.
+
+Drawers, stacks, nesting, automatic assignment, persistence, networking, and Unity
+projections are deliberately outside this module. CT-08A is implemented internally;
+full CT-08 and CT-07 integration are incomplete. Do not advertise shared groups or
+enable persisted membership from this reducer alone. Native control-transfer
+acceptance remains separate unfinished work before production integration.
