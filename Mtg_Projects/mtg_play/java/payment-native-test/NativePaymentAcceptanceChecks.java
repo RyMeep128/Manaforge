@@ -21,7 +21,12 @@ import manaforge.payment.xmage.ContextHumanPlayer;
 public final class NativePaymentAcceptanceChecks {
     static void check(boolean value,String code){if(!value)throw new AssertionError(code);}
     static CardSetInfo info(String name){return new CardSetInfo(name,"TST","1",Rarity.COMMON);}
-    static Card card(String type,UUID owner) throws Exception{return (Card)Class.forName(type).getConstructor(UUID.class,CardSetInfo.class).newInstance(owner,info(type));}
+    static Card card(String type,UUID owner) throws Exception{
+        Class<?> cardType=Class.forName(type);
+        // BasicLand derives its subtype from CardSetInfo.name; a Java class path is not a card name.
+        String name=cardType.getSimpleName().replace("SnowCovered","Snow-Covered").replaceAll("(?<=[a-z])(?=[A-Z])"," ").replace(" Of "," of ").replace(" The "," the ");
+        return (Card)cardType.getConstructor(UUID.class,CardSetInfo.class).newInstance(owner,info(name));
+    }
     static final class Probe extends CardImpl {
         Probe(UUID owner,String cost){super(owner,info("Payment probe"),new CardType[]{CardType.ARTIFACT},cost);getSpellAbility().addEffect(new mage.abilities.effects.common.GainLifeEffect(1));}
         Probe(Probe original){super(original);}

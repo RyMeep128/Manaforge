@@ -114,7 +114,11 @@ Inherited evidence on base commit 1abe52d73a7670c44809e6d1fcc0e9afa314eb8d:
   Correlation now accepts the first matching VERIFIED_ORDINARY_EQUIVALENT object
   step from server-only metadata, while retaining cycle/receipt and visible controlled
   permanent checks. Native negative cases reject absent/unsafe plans, wrong sources
-  or step kinds, and hidden/foreign permanents. Candidate CI must establish the fix.
+  or step kinds, and hidden/foreign permanents. Native CI on eb667d1 passed the
+  Phyrexian-plus-two-casts regression (three automatic completions, zero manual
+  mana windows), then exposed fixture source-card names containing Java class
+  paths. The factory now supplies card names, including Snow-Covered Mountain;
+  the remaining native scenarios still require a candidate pass.
 - No Unity run exists for that base SHA. Earlier hosted Unity setup was blocked by
   license configuration; its current availability has not been established.
 
