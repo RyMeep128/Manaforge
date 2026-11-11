@@ -31,6 +31,11 @@ namespace Manaforge.Play
         }
         public Task<TrackedCommand> SelectManaSourceAsync(ViewerDecisionOffer offer,ProjectedManaSource source,CancellationToken cancellation=default)
             =>Queue(offer,Operation.Mana,null,null,cancellation,source:source);
+        public Task<TrackedCommand> ConcedeAsync(CancellationToken cancellation=default)
+        {
+            lock(gate){if(stopped)return Task.FromException<TrackedCommand>(new WireEnvelope.EnvelopeException("SESSION_STOPPED"));if(running!=0)return Task.FromException<TrackedCommand>(new WireEnvelope.EnvelopeException("COMMAND_PENDING"));running++;}
+            return Task.Run(()=>{try{cancellation.ThrowIfCancellationRequested();return channel.Concede(milliseconds,cancellation);}finally{lock(gate){running--;if(stopped && running==0)completion.TrySetResult(true);}}});
+        }
         private static void Fail(string code)=>throw new WireEnvelope.EnvelopeException(code);
         private Task<TrackedCommand> Queue(ViewerDecisionOffer offer,Operation operation,ProjectedAction action,ProjectedChoiceOption option,CancellationToken cancellation,long number=0,long[] amounts=null,ProjectedManaSource source=null)
         {

@@ -156,3 +156,22 @@ failure closure before returning this owner. The low-level constructor still
 requires prior authentication. Local validation is now 220 focused EditMode
 checks with eighteen process scenarios; product bootstrap/renderer integration
 and licensed CI remain pending.
+
+## In-match menu concession
+
+`concede` is an authenticated session command with `session_id`, `viewer_id`,
+`revision`, and `operation="concede"`. It has no `decision_id` and is admitted
+only after an active match snapshot, independently of the current decision.
+Identity, revision, terminal-state, and unresolved-command checks still apply.
+The shared receipt ledger prevents replay. Closing the menu sends no command.
+
+The live gateway maps concession to the authenticated native seat and requires
+both its correlated `concede_sent` response and the matching native terminal loss
+callback/metadata before confirming and publishing the result. The native result
+wait is bounded to 20 seconds. A missing result or transport failure remains
+uncertain; the UI never automatically retries or infers defeat from shutdown.
+
+The packaged acceptance command
+`python tools/check_play_unity_game.py --public-decks --concede --no-capture`
+exercises the menu confirmation against a real engine. Run it through GitHub Actions; fixture and compilation evidence do
+not establish real concession acceptance.

@@ -111,6 +111,16 @@ public final class NativeCastCorrelation {
             return new TurnDecisionEvidence(command);
         }catch(RuntimeException unsupported){return null;}
     }
+    /** A native concession response needs a matching terminal loss before confirmation. */
+    public static TurnDecisionEvidence concessionEvidence(JsonObject before,JsonObject command,JsonObject accepted,JsonObject terminal,JsonObject callback) {
+        try {
+            if(callback==null || !"concede".equals(string(command,"command")) || !"concede_sent".equals(string(accepted,"event")) || !string(command,"request_id").equals(string(accepted,"request_id")))return null;
+            if(!"finished".equals(string(terminal,"status")) || !"loss".equals(string(terminal,"outcome")) || !"game_result".equals(string(callback,"event")) || !new JsonPrimitive(false).equals(callback.get("won")))return null;
+            for(String key:new String[]{"game_id","viewer"})if(!string(before,key).equals(string(terminal,key)) || !string(before,key).equals(string(callback,key)))return null;
+            if(!string(before,"game_id").equals(string(command,"game_id")) || !string(before,"viewer").equals(string(command,"player_id")))return null;
+            return new TurnDecisionEvidence(command);
+        }catch(RuntimeException invalid){return null;}
+    }
     /** A guarded native result may follow any supported input, including a final cost or target. */
     public static TurnDecisionEvidence terminalGameplayEvidence(JsonObject before,JsonObject prompt,JsonObject command,JsonObject guard,JsonObject accepted,JsonObject terminal,JsonObject callback) {
         try {

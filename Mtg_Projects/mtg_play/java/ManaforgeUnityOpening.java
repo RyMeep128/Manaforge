@@ -82,6 +82,8 @@ public final class ManaforgeUnityOpening {
         private final JsonObject snapshot;private final long decision,cycle;private final TurnSubmit submit;private final TurnPoll poll;
         public TurnOffer(JsonObject snapshot,long decision,long cycle,TurnSubmit submit){this(snapshot,decision,cycle,submit,null);}
         public TurnOffer(JsonObject snapshot,long decision,long cycle,TurnSubmit submit,TurnPoll poll){this.snapshot=snapshot.deepCopy();this.decision=decision;this.cycle=cycle;this.submit=submit;this.poll=poll;}
+        TurnSubmit concession;
+        public TurnOffer withConcession(TurnSubmit handler){concession=handler;return this;}
         public TurnOffer poll() throws Exception{return poll==null?null:poll.poll();}
         public JsonObject snapshot(){return snapshot.deepCopy();}
     }
@@ -224,7 +226,7 @@ public final class ManaforgeUnityOpening {
                         for(int retries=0;retries<8 && !sent;retries++) {
                             long remaining=java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(deadline-System.nanoTime());if(remaining<=0)throw new IOException("LIVE_UNITY_TURN_TIMEOUT");
                             String wireTurn=readDecision(frames,deadline,cancelled,observeRequest);observeRequest.tick();TurnOffer offer=activeOffer[0];SubmissionLedger.Prepared admitted=owner.dispatch(wireTurn,game,engineViewer,offer.decision,offer.cycle);frames.write(admitted.receipt().toString(),5000,cancelled);if(!admitted.shouldSubmit)continue;
-                            JsonObject commandTurn=owner.pollNative();if(commandTurn==null || owner.pollNative()!=null || cancelled.getAsBoolean())throw new IOException("LIVE_UNITY_TURN_QUEUE_FAILED");TurnResult result=offer.submit.submit(commandTurn);String turnId=WireMessages.parse(wireTurn).get("message_id").getAsString();frames.write(owner.confirmTurnDecision(turnId,result.evidence).toString(),5000,cancelled);owner.observe(result.snapshot.toString());frames.write(result.snapshot.toString(),5000,cancelled);turn=result.next;sent=true;
+                            JsonObject commandTurn=owner.pollNative();if(commandTurn==null || owner.pollNative()!=null || cancelled.getAsBoolean())throw new IOException("LIVE_UNITY_TURN_QUEUE_FAILED");TurnResult result="concede".equals(commandTurn.get("command").getAsString())?offer.concession.submit(commandTurn):offer.submit.submit(commandTurn);String turnId=WireMessages.parse(wireTurn).get("message_id").getAsString();frames.write(owner.confirmTurnDecision(turnId,result.evidence).toString(),5000,cancelled);owner.observe(result.snapshot.toString());frames.write(result.snapshot.toString(),5000,cancelled);turn=result.next;sent=true;
                         }
                         if(!sent)throw new IOException("LIVE_UNITY_TURN_RETRY_LIMIT");
                     }

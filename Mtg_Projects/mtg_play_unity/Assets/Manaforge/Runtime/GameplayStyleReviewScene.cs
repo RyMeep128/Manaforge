@@ -11,6 +11,7 @@ namespace Manaforge.Play
     public sealed class GameplayStyleReviewScene : MonoBehaviour
     {
         private readonly List<IDisposable> owned=new List<IDisposable>();
+        private GameplayLayoutWorkspace layoutWorkspace;
         private ArenaGameplayPresentation table;private string tableJson,tableSession,tableViewer;private ViewerSurfaceTicket tableTicket;
         private PanelSettings settings;private UIDocument document;private VisualElement content;
         public static void Populate(VisualElement root,ICollection<IDisposable> owned,int seats=3,bool vertical=false)
@@ -47,16 +48,37 @@ namespace Manaforge.Play
             document=gameObject.AddComponent<UIDocument>();document.panelSettings=settings;var root=document.rootVisualElement;GameplayTheme.Attach(root);
             var scroll=new ScrollView();scroll.style.flexGrow=1;root.Add(scroll);
             var navigation=new VisualElement();navigation.style.flexDirection=FlexDirection.Row;scroll.Add(navigation);
-            foreach(var mode in new[]{"Component sheet","Side by side","Multi-seat"}){string selected=mode;var button=new Button(()=>Show(selected)){text=mode};GameplayTheme.Button(button);navigation.Add(button);}
+            foreach(var mode in new[]{"Component sheet","Side by side","Multi-seat","Layout workspace"}){string selected=mode;var button=new Button(()=>Show(selected)){text=mode};GameplayTheme.Button(button);navigation.Add(button);}
             var reduced=new Toggle("Reduced motion");reduced.RegisterValueChangedCallback(e=>root.EnableInClassList("reduced-motion",e.newValue));scroll.Add(reduced);
             content=new VisualElement();content.style.paddingLeft=24;content.style.paddingRight=24;content.style.paddingTop=20;scroll.Add(content);Show("Multi-seat");
+        }
+        private IEnumerator CaptureGameMenu(string output,Vector2Int size)
+        {
+            var root=document.rootVisualElement;
+            using(var menu=new GameplayMenuOverlay(root,()=>true,()=>System.Threading.Tasks.Task.FromException<Manaforge.Play.Protocol.TrackedCommand>(new InvalidOperationException("REVIEW_ONLY")),id=>null))
+            using(var display=new PlayerDisplayControls(root,false,menu.OptionsContent)){
+                menu.Open();for(int i=0;i<3;i++)yield return null;
+                yield return new WaitForEndOfFrame();ScreenCapture.CaptureScreenshot(Path.Combine(output,"menu-"+size.x+"x"+size.y+".png"));for(int i=0;i<3;i++)yield return null;
+                using(var ev=NavigationSubmitEvent.GetPooled()){ev.target=root.Q<Button>("game-menu-options");root.Q<Button>("game-menu-options").SendEvent(ev);}for(int i=0;i<3;i++)yield return null;
+                yield return new WaitForEndOfFrame();ScreenCapture.CaptureScreenshot(Path.Combine(output,"menu-options-"+size.x+"x"+size.y+".png"));for(int i=0;i<3;i++)yield return null;
+                using(var ev=NavigationSubmitEvent.GetPooled()){ev.target=root.Q<Button>("game-menu-back");root.Q<Button>("game-menu-back").SendEvent(ev);}
+                using(var ev=NavigationSubmitEvent.GetPooled()){ev.target=root.Q<Button>("game-menu-concede");root.Q<Button>("game-menu-concede").SendEvent(ev);}for(int i=0;i<3;i++)yield return null;
+                yield return new WaitForEndOfFrame();ScreenCapture.CaptureScreenshot(Path.Combine(output,"menu-confirm-"+size.x+"x"+size.y+".png"));for(int i=0;i<3;i++)yield return null;
+            }
         }
         private void Show(string mode)
         {
             table?.Dispose();table=null;settings.scaleMode=PanelScaleMode.ConstantPixelSize;
             if(content.panel==null){var root=document.rootVisualElement;root.Clear();var scroll=new ScrollView();scroll.style.flexGrow=1;root.Add(scroll);content=new VisualElement();content.style.paddingLeft=24;content.style.paddingRight=24;content.style.paddingTop=20;scroll.Add(content);}
             foreach(var item in owned)item.Dispose();owned.Clear();content.Clear();
-            Populate(content,owned,mode=="Multi-seat"?3:2,mode=="Component sheet");
+            layoutWorkspace=null;
+            if(mode=="Layout workspace"){
+                // Automated captures are isolated from the user's named presets.
+                ILayoutPresetStore store=ArtworkFixtureScene.Argument("-manaforgeStyleCapture")!=null
+                    ?(ILayoutPresetStore)new MemoryLayoutPresetStore()
+                    :new JsonLayoutPresetStore(Path.Combine(Application.persistentDataPath,"profiles","default","layouts","fixture"));
+                layoutWorkspace=new GameplayLayoutWorkspace(store);layoutWorkspace.style.height=Mathf.Max(500,Screen.height-140);content.Add(layoutWorkspace);owned.Add(layoutWorkspace);
+            }else Populate(content,owned,mode=="Multi-seat"?3:2,mode=="Component sheet");
         }
         private IEnumerator Start()
         {
@@ -74,6 +96,29 @@ namespace Manaforge.Play
                 Show("Multi-seat");for(int i=0;i<10;i++)yield return null;
                 yield return new WaitForEndOfFrame();ScreenCapture.CaptureScreenshot(Path.Combine(output,"multi-seat-"+size.x+"x"+size.y+".png"));
                 for(int i=0;i<5;i++)yield return null;
+                Show("Layout workspace");for(int i=0;i<10;i++)yield return null;
+                yield return new WaitForEndOfFrame();ScreenCapture.CaptureScreenshot(Path.Combine(output,"layout-floating-"+size.x+"x"+size.y+".png"));
+                for(int i=0;i<5;i++)yield return null;
+                layoutWorkspace.Dock("panel",null,ContainerDockEdge.Left);layoutWorkspace.Dock("drawer",null,ContainerDockEdge.Left);
+                for(int i=0;i<5;i++)yield return null;
+                yield return new WaitForEndOfFrame();ScreenCapture.CaptureScreenshot(Path.Combine(output,"layout-docked-"+size.x+"x"+size.y+".png"));
+                for(int i=0;i<5;i++)yield return null;
+                var layoutState=layoutWorkspace.Controller.State("drawer");
+                layoutWorkspace.Controller.TrySet(new ContainerLayoutState("drawer",layoutState.FloatingRect,ContainerMode.Drawer,layoutState.DockTarget,layoutState.Edge,layoutState.Order));
+                layoutWorkspace.Shell("drawer").Drawer.SetReducedMotion(true);layoutWorkspace.Shell("drawer").Drawer.SetOpen(false);
+                for(int i=0;i<5;i++)yield return null;
+                yield return new WaitForEndOfFrame();ScreenCapture.CaptureScreenshot(Path.Combine(output,"layout-collapsed-"+size.x+"x"+size.y+".png"));
+                for(int i=0;i<5;i++)yield return null;
+                var presetSave=layoutWorkspace.Presets.SaveAsync("Compact",true);
+                while(!presetSave.IsCompleted)yield return null;
+                if(!presetSave.Result)throw new InvalidOperationException("REVIEW_PRESET_SAVE_FAILED");
+                for(int i=0;i<5;i++)yield return null;
+                yield return new WaitForEndOfFrame();ScreenCapture.CaptureScreenshot(Path.Combine(output,"layout-preset-saved-"+size.x+"x"+size.y+".png"));
+                for(int i=0;i<5;i++)yield return null;
+                layoutWorkspace.Nudge(8,0,false);layoutWorkspace.Presets.RestoreDefault();
+                for(int i=0;i<5;i++)yield return null;
+                yield return new WaitForEndOfFrame();ScreenCapture.CaptureScreenshot(Path.Combine(output,"layout-preset-confirm-"+size.x+"x"+size.y+".png"));
+                for(int i=0;i<5;i++)yield return null;
                 string fixture=ArtworkFixtureScene.Argument("-manaforgeStyleTableFixture");
                 if(fixture!=null){
                     ShowTable(fixture);for(int i=0;i<20;i++)yield return null;
@@ -81,6 +126,7 @@ namespace Manaforge.Play
                     table.Present(ViewerDecisionProjection.ParseSnapshot(tableJson,tableSession,tableViewer,0,true));for(int i=0;i<5;i++)yield return null;
                     yield return new WaitForEndOfFrame();ScreenCapture.CaptureScreenshot(Path.Combine(output,"default-1v1-"+size.x+"x"+size.y+".png"));
                     for(int i=0;i<5;i++)yield return null;
+                    yield return CaptureGameMenu(output,size);
                     yield return CaptureTargeting(output,size);
                     yield return CaptureAnimations(output,size,animationProof);
                 }

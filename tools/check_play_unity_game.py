@@ -192,7 +192,10 @@ def main():
     parser.add_argument("--jdk-path", type=Path, help="JDK used to compile the owned gateway")
     parser.add_argument("--startup-only", action="store_true", help="Check normal authenticated startup, then cancel without submitting gameplay choices")
     parser.add_argument("--startup-seconds", type=int, default=10, help="Startup-only idle observation duration (1–120 seconds)")
+    parser.add_argument("--concede", action="store_true", help="Confirm concession through the menu and require a native loss result")
     args = parser.parse_args()
+    if args.concede and (args.startup_only or args.format != "freeform"):
+        parser.error("--concede requires a full freeform acceptance launch")
     if not 1 <= args.startup_seconds <= 120:
         parser.error("--startup-seconds must be between 1 and 120")
     if (
@@ -250,10 +253,11 @@ def main():
             launch=launch,
             payment_mode=args.payment_mode,
             acceptance=not args.startup_only,
+            concede_acceptance=args.concede,
             commander_scenario=args.commander_scenario,
             no_capture=args.no_capture,
             presentation=args.presentation,
-            require_auto_payment=args.public_decks and args.payment_mode == "auto" and args.format == "freeform" and not args.startup_only,
+            require_auto_payment=args.public_decks and args.payment_mode == "auto" and args.format == "freeform" and not args.startup_only and not args.concede,
             **({"jdk_path": args.jdk_path} if args.jdk_path else {}),
             **({"xmage_root": args.xmage_root} if args.xmage_root else {}),
         )

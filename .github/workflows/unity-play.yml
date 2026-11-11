@@ -107,6 +107,9 @@ jobs:
       - name: Normal shuffled human versus AI match with automatic payment
         shell: pwsh
         run: python tools/check_play_unity_game.py --public-decks --payment-mode auto --no-capture --xmage-root "$env:RUNNER_TEMP/manaforge-unity-engine" --jdk-path "$env:JAVA_HOME" --output Mtg_Projects/mtg_play_unity/Artifacts/Payment-normal-game
+      - name: Confirmed concession through the live Escape menu
+        shell: pwsh
+        run: python tools/check_play_unity_game.py --public-decks --concede --no-capture --xmage-root "$env:RUNNER_TEMP/manaforge-unity-engine" --jdk-path "$env:JAVA_HOME" --output Mtg_Projects/mtg_play_unity/Artifacts/Concede-menu
       - name: Packaged authenticated decision UI fixture
         shell: pwsh
         run: python tools/check_play_unity_session.py --decisions
@@ -124,6 +127,9 @@ jobs:
             Mtg_Projects/mtg_play_unity/Artifacts/ForgeStyle-*/side-by-side-*.png
             Mtg_Projects/mtg_play_unity/Artifacts/ForgeStyle-*/multi-seat-*.png
             Mtg_Projects/mtg_play_unity/Artifacts/ForgeStyle-*/default-1v1-*.png
+            Mtg_Projects/mtg_play_unity/Artifacts/ForgeStyle-*/layout-*.png
+            Mtg_Projects/mtg_play_unity/Artifacts/ForgeStyle-*/menu*.png
+            Mtg_Projects/mtg_play_unity/Artifacts/Concede-menu/**/*.json
             Mtg_Projects/mtg_play_unity/Artifacts/ForgeStyle-*/animation-*.png
             Mtg_Projects/mtg_play_unity/Artifacts/ForgeStyle-*/animation-proof.json
             Mtg_Projects/mtg_play_unity/Artifacts/ForgeStyle-*/resolution-proof.json

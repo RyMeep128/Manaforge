@@ -4,6 +4,25 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /** Engine-free public fixture over real authenticated sockets and production admission. */
 public final class OpeningSessionChecks {
+    static void concessionAdmissionChecks(manaforge.protocol.GatewayHandshake.ViewerContext context) throws Exception {
+        ManaforgeOpeningProjection projection=OpeningProjectionChecks.projection();JsonObject before=OpeningProjectionChecks.attackState();JsonObject snapshot=projection.projectCoreCombat(before,OpeningProjectionChecks.priorityPrompt());
+        snapshot.add("decision",JsonNull.INSTANCE);snapshot.add("actions",new JsonArray());
+        JsonObject body=new JsonObject();body.addProperty("session_id","session");body.addProperty("viewer_id","human");body.add("revision",snapshot.get("revision"));body.addProperty("operation","concede");
+        JsonObject wire=new JsonObject();wire.addProperty("wire_version",1);wire.addProperty("message_type","command");wire.addProperty("message_id","concession");wire.add("body",body);
+        try(ManaforgeOpeningSession owner=new ManaforgeOpeningSession(context,projection,envelope(snapshot).toString())){
+            if(!owner.dispatch(wire.toString(),"raw-game","raw-human",41,8).shouldSubmit)throw new AssertionError("CONCESSION_NOT_ADMITTED_WITHOUT_DECISION");
+            JsonObject command=owner.pollNative();if(!"concede".equals(command.get("command").getAsString()) || !"raw-human".equals(command.get("player_id").getAsString()))throw new AssertionError("CONCESSION_WRONG_NATIVE_CONTEXT");
+            if(owner.dispatch(wire.toString(),"raw-game","raw-human",41,8).shouldSubmit || owner.pollNative()!=null)throw new AssertionError("CONCESSION_REPLAYED");
+            JsonObject accepted=new JsonObject();accepted.addProperty("event","concede_sent");accepted.add("request_id",command.get("request_id"));
+            JsonObject terminal=new JsonObject();terminal.addProperty("status","finished");terminal.addProperty("outcome","loss");terminal.addProperty("game_id","raw-game");terminal.addProperty("viewer","raw-human");
+            JsonObject callback=new JsonObject();callback.addProperty("event","game_result");callback.addProperty("won",false);callback.addProperty("game_id","raw-game");callback.addProperty("viewer","raw-human");
+            NativeCastCorrelation.TurnDecisionEvidence proof=NativeCastCorrelation.concessionEvidence(before,command,accepted,terminal,callback);
+            if(proof==null)throw new AssertionError("CONCESSION_PROOF_MISSING");owner.confirmTurnDecision("concession",proof);
+            accepted.addProperty("request_id","wrong");if(NativeCastCorrelation.concessionEvidence(before,command,accepted,terminal,callback)!=null)throw new AssertionError("CONCESSION_UNCORRELATED_ACK");
+            accepted.add("request_id",command.get("request_id"));callback.addProperty("won",true);if(NativeCastCorrelation.concessionEvidence(before,command,accepted,terminal,callback)!=null)throw new AssertionError("CONCESSION_INFERRED_LOSS");
+            if(owner.dispatch(wire.toString(),"raw-game","raw-human",41,8).shouldSubmit || owner.pollNative()!=null)throw new AssertionError("CONCESSION_CONFIRMED_REPLAYED");
+        }
+    }
     static void numericAdmissionChecks(manaforge.protocol.GatewayHandshake.ViewerContext context) throws Exception {
         ManaforgeOpeningProjection projection=OpeningProjectionChecks.projection();JsonObject prompt=OpeningProjectionChecks.priorityPrompt();prompt.addProperty("kind","GAME_GET_AMOUNT");prompt.addProperty("is_priority",false);prompt.addProperty("min",0);prompt.addProperty("max",3);JsonObject snapshot=projection.projectCoreCombat(OpeningProjectionChecks.attackState(),prompt);JsonObject command=JsonParser.parseString(OpeningProjectionChecks.perform(snapshotForNumericCommand(snapshot))).getAsJsonObject(),body=command.getAsJsonObject("body");body.addProperty("operation","choose_number");body.remove("action_id");body.addProperty("value",2);command.addProperty("message_id","numeric-input");
         try(ManaforgeOpeningSession owner=new ManaforgeOpeningSession(context,projection,envelope(snapshot).toString())){if(!owner.dispatch(command.toString(),"raw-game","raw-human",41,8).shouldSubmit)throw new AssertionError("NUMERIC_NOT_ADMITTED");JsonObject nativeCommand=owner.pollNative();if(nativeCommand==null || !"integer".equals(nativeCommand.get("kind").getAsString()) || nativeCommand.get("value").getAsInt()!=2)throw new AssertionError("NUMERIC_NOT_NATIVE");if(owner.dispatch(command.toString(),"raw-game","raw-human",41,8).shouldSubmit || owner.pollNative()!=null)throw new AssertionError("NUMERIC_REPLAYED");}
@@ -21,7 +40,7 @@ public final class OpeningSessionChecks {
             manaforge.protocol.TextFrame.write(peer.getOutputStream(),signed.toString());peer.getOutputStream().flush();
             manaforge.protocol.GatewayHandshake.ViewerContext context=manaforge.protocol.GatewayHandshake.accept(frames,client.toString(),gateway.toString(),key,5000);
             manaforge.protocol.TextFrame.read(peer.getInputStream());
-            numericAdmissionChecks(context);
+            numericAdmissionChecks(context);concessionAdmissionChecks(context);
             ManaforgeOpeningProjection projection=OpeningProjectionChecks.projection();JsonObject snapshot=projection.project(before,prompt,false,true);
             String wire=OpeningProjectionChecks.choose(snapshot,0),id="public-choice";
             try(ManaforgeOpeningSession owner=new ManaforgeOpeningSession(context,projection,envelope(snapshot).toString())) {

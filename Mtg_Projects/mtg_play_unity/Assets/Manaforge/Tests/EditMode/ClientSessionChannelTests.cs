@@ -36,6 +36,21 @@ namespace Manaforge.Play.Tests
             public void Prime(bool pending=false){Send(Snapshot());Channel.ReceiveNext(1000);if(pending){Channel.Submit(Command().ToString());WireMessages.Parse(TextFrame.Read(Peer.GetStream()));}}
             public void Dispose(){Channel.Dispose();Peer.Dispose();}
         }
+        [Test] public void ConcessionNeedsActiveSnapshotButNoDecisionAndCannotBeDuplicated()
+        {
+            using(var p=new Pair()){
+                Assert.That(p.Channel.CanConcede,Is.False);
+                var snapshot=Snapshot();snapshot["body"]["snapshot"]["decision"]=JValue.CreateNull();snapshot["body"]["snapshot"]["actions"]=new JArray();
+                p.Send(snapshot);p.Channel.ReceiveNext(1000);Assert.That(p.Channel.CanConcede,Is.True);Assert.That(p.Channel.CanSubmit,Is.False);
+                var sent=p.Channel.Concede();var wire=WireMessages.Parse(TextFrame.Read(p.Peer.GetStream()));
+                Assert.That((string)wire["body"]["operation"],Is.EqualTo("concede"));Assert.That(wire["body"]["decision_id"],Is.Null);
+                Assert.That(p.Channel.CanConcede,Is.False);Assert.Throws<WireEnvelope.EnvelopeException>(()=>p.Channel.Concede());
+                var ack=Ack("rejected");ack["body"]["command_id"]=sent.CommandId;ack["body"]["code"]="ENGINE_REJECTED";p.Send(ack);p.Channel.ReceiveNext(1000);
+                Assert.That(p.Channel.CanConcede,Is.True);
+                snapshot=Snapshot("finished",8);snapshot["body"]["snapshot"]["status"]="finished";snapshot["body"]["snapshot"]["result"]="loss";snapshot["body"]["snapshot"]["decision"]=JValue.CreateNull();snapshot["body"]["snapshot"]["actions"]=new JArray();snapshot["message_type"]="result";
+                p.Send(snapshot);p.Channel.ReceiveNext(1000);Assert.That(p.Channel.CanConcede,Is.False);Assert.Throws<WireEnvelope.EnvelopeException>(()=>p.Channel.Concede());
+            }
+        }
         private static void Stopped(Pair p,string code,bool pending=true)
         {
             Assert.That(p.Channel.State,Is.EqualTo(ClientChannelState.Stopped));Assert.That(p.Channel.CanSubmit,Is.False);

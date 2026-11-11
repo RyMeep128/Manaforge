@@ -190,6 +190,20 @@
           "decision_id": "decision"
         }
       }
+    },
+    {
+      "name": "concede",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "command",
+        "message_id": "m1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "revision": 7,
+          "operation": "concede"
+        }
+      }
     }
   ],
   "negative": [
@@ -767,7 +781,7 @@
       "code": "MESSAGE_INVALID"
     },
     {
-      "name": "concede-still-unsupported",
+      "name": "concede-forbids-decision-id",
       "envelope": {
         "wire_version": 1,
         "message_type": "command",
@@ -1130,6 +1144,66 @@
         }
       },
       "code": "STALE_DECISION"
+    },
+    {
+      "name": "concede-binding-None",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "command",
+        "message_id": "m1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "revision": 7,
+          "operation": "concede"
+        }
+      },
+      "code": null
+    },
+    {
+      "name": "concede-binding-session_id",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "command",
+        "message_id": "m1",
+        "body": {
+          "session_id": "other",
+          "viewer_id": "seat-one",
+          "revision": 7,
+          "operation": "concede"
+        }
+      },
+      "code": "SESSION_MISMATCH"
+    },
+    {
+      "name": "concede-binding-viewer_id",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "command",
+        "message_id": "m1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "other",
+          "revision": 7,
+          "operation": "concede"
+        }
+      },
+      "code": "VIEWER_MISMATCH"
+    },
+    {
+      "name": "concede-binding-revision",
+      "envelope": {
+        "wire_version": 1,
+        "message_type": "command",
+        "message_id": "m1",
+        "body": {
+          "session_id": "session",
+          "viewer_id": "seat-one",
+          "revision": 6,
+          "operation": "concede"
+        }
+      },
+      "code": "STALE_REVISION"
     }
   ]
 }

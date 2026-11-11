@@ -75,6 +75,10 @@ namespace Manaforge.Play
             if(ticket.Mailbox.HasPendingReveals)return Task.FromException<TrackedCommand>(new WireEnvelope.EnvelopeException("REVEAL_ACK_REQUIRED"));
             return target==null?Task.FromException<TrackedCommand>(new WireEnvelope.EnvelopeException("SESSION_STOPPED")):send(target);
         }
+        public bool CanConcede {get{lock(gate)return !stopped && channel?.CanConcede==true;}}
+        public TrackedCommand ConcessionReceipt(string id){lock(gate)return channel?.FindCommand(id);}
+        public Task<TrackedCommand> ConcedeAsync(CancellationToken cancellation=default)
+        {ViewerCommandDispatcher target;lock(gate)target=stopped?null:commands;return target==null?Task.FromException<TrackedCommand>(new WireEnvelope.EnvelopeException("SESSION_STOPPED")):target.ConcedeAsync(cancellation);}
         public Task<TrackedCommand> PerformAsync(ViewerDecisionOffer offer,ProjectedAction action,CancellationToken cancellation=default)=>Dispatch(target=>target.PerformAsync(offer,action,cancellation));
         public Task<TrackedCommand> ChooseAsync(ViewerDecisionOffer offer,ProjectedChoiceOption option,CancellationToken cancellation=default)=>Dispatch(target=>target.ChooseAsync(offer,option,cancellation));
         public Task<TrackedCommand> FinishSelectionAsync(ViewerDecisionOffer offer,CancellationToken cancellation=default)=>Dispatch(target=>target.FinishSelectionAsync(offer,cancellation));

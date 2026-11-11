@@ -11,12 +11,12 @@ namespace Manaforge.Play
         private readonly bool remember,wasFocusable;private bool held,disposed,lastFullscreen;private bool? requested;private float deadline;
         private int windowWidth,windowHeight;
         private static bool Fullscreen=>Screen.fullScreenMode!=FullScreenMode.Windowed;
-        public PlayerDisplayControls(VisualElement root,bool rememberPreference=true)
+        public PlayerDisplayControls(VisualElement root,bool rememberPreference=true,VisualElement buttonParent=null)
         {
             this.root=root??throw new ArgumentNullException(nameof(root));remember=rememberPreference;wasFocusable=root.focusable;root.focusable=true;
             windowWidth=remember?PlayerPrefs.GetInt(WidthKey,Screen.width):Screen.width;windowHeight=remember?PlayerPrefs.GetInt(HeightKey,Screen.height):Screen.height;
             chrome=new VisualElement{name="player-display-controls"};chrome.AddToClassList("mf-display-controls");GameplayTheme.Attach(chrome);
-            toggle=new Button(Toggle){name="player-fullscreen-toggle"};GameplayTheme.Button(toggle);chrome.Add(toggle);root.Add(chrome);
+            toggle=new Button(Toggle){name="player-fullscreen-toggle"};GameplayTheme.Button(toggle);chrome.Add(toggle);(buttonParent??root).Add(chrome);if(buttonParent!=null){chrome.RemoveFromClassList("mf-display-controls");chrome.style.position=Position.Relative;toggle.style.width=Length.Percent(100);}
             root.RegisterCallback<KeyDownEvent>(Down,TrickleDown.TrickleDown);root.RegisterCallback<KeyUpEvent>(Up,TrickleDown.TrickleDown);
             lastFullscreen=Fullscreen;
             if(remember && PlayerPrefs.GetInt(ModeKey,0)==1 && !Fullscreen)Request(true,false);

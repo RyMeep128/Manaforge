@@ -573,6 +573,18 @@ public final class ManaforgeLiveOpening {
                 }
                 public JsonObject metadata(JsonObject view,String... ids) throws Exception{Set<String> requested=new LinkedHashSet<>(Arrays.asList(ids));if(commanderTrace!=null)requested.addAll(Arrays.asList(commanderTrace.requested(view)));JsonObject result=sourceMetadata(view,requested.toArray(new String[0]));if(liveLaunch!=null)liveLaunch.verifyCommanders(view,result);if(commanderTrace!=null)commanderTrace.observe(view,result);return result;}
                 public JsonObject submit(JsonObject command) throws Exception{return request(command,"response_sent");}
+                public JsonObject concede(JsonObject command) throws Exception{return request(command,"concede_sent");}
+                public ManaforgeGameplaySession.Advance finishConcession() throws Exception {
+                    pending=null;long resultDeadline=Math.min(deadline,System.nanoTime()+TimeUnit.SECONDS.toNanos(20));
+                    while(terminalCallback==null && !cancelled.get() && System.nanoTime()<resultDeadline){
+                        if(overflow.get())throw new IOException("LIVE_OPENING_QUEUE_LIMIT");
+                        JsonObject event=events.poll(100,TimeUnit.MILLISECONDS);if(event==null)continue;
+                        String kind=event.get("event").getAsString();if(kind.equals("error") || kind.equals("disconnected"))throw new IOException("LIVE_OPENING_ENGINE_FAILED");
+                        if(kind.equals("game_state"))state=event;if(kind.equals("game_result"))terminalCallback=event.deepCopy();
+                    }
+                    if(terminalCallback==null)throw new IOException("CONCESSION_RESULT_MISSING");
+                    return new ManaforgeGameplaySession.Advance(state,null,terminalCallback);
+                }
                 public ManaforgeGameplaySession.Advance advance(long previous) throws Exception {
                     JsonObject nextPrompt=null;
                     for(int count=0;count<160;count++){if(terminalCallback!=null)break;JsonObject event=pending==null?next():pending;if("decision".equals(event.get("event").getAsString())){pending=null;if(event.get("decision_id").getAsLong()>previous){nextPrompt=event.deepCopy();break;}}}

@@ -27,6 +27,14 @@ reports are in the [archive](archive/README.md).
 - Collector operations: [Archidekt](archidekt-collection.md), [EDHREC](edhrec-collection.md), [Moxfield](moxfield-collection.md).
 - [Unity project and build](../Mtg_Projects/mtg_play_unity/README.md), [launch package](../Mtg_Projects/mtg_play/README.md), [shared protocol index](../Mtg_Projects/mtg_play/protocol/README.md).
 
+- [Customizable tabletop and shared battlefield organization epic](customizable-tabletop-epic.md) - proposed architecture, stories, and rollout gates.
+
+- [HUD registration and default layout foundation](play-hud-layout-foundation.md) - component extension contract and pending acceptance.
+
+- [Container layout infrastructure](play-container-layout.md) - synthetic workspace, ownership contracts and verification status.
+
+- [Named layout presets](play-layout-presets.md) - explicit-save fixture controls, local storage and recovery.
+
 ## Play implementation references
 
 Current visual-overhaul direction: [reusable elements and default 1v1 composition](play.md#reusable-visual-elements-and-views).

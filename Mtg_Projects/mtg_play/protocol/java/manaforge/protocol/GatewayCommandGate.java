@@ -11,7 +11,7 @@ public final class GatewayCommandGate implements AutoCloseable {
     private final ReceiveHistory history;
     private final Set<String> actions=new HashSet<>(),options=new HashSet<>(),objects=new HashSet<>();
     private JsonObject decision;
-    private boolean closed,faulted;
+    private boolean closed,faulted,matchActive;
     public GatewayCommandGate(GatewayHandshake.ViewerContext context,boolean fixtureMode,int capacity) {
         if(context==null)throw new IllegalArgumentException("GATE_CONTEXT");
         session=context.sessionId;viewer=context.viewerId;
@@ -29,7 +29,7 @@ public final class GatewayCommandGate implements AutoCloseable {
             if(envelope==null)return;
             String type=envelope.get("message_type").getAsString();
             if(type.equals("event")){if(history.revision()>previous)clear();return;}
-            clear();JsonObject snapshot=envelope.getAsJsonObject("body").getAsJsonObject("snapshot");
+            clear();JsonObject snapshot=envelope.getAsJsonObject("body").getAsJsonObject("snapshot");matchActive=!type.equals("result") && snapshot.get("status").getAsString().equals("active");
             if(type.equals("result") || !snapshot.get("status").getAsString().equals("active") || snapshot.get("decision").isJsonNull())return;
             JsonObject offered=snapshot.getAsJsonObject("decision");
             if(!offered.get("player_id").getAsString().equals(viewer))return;
@@ -58,6 +58,7 @@ public final class GatewayCommandGate implements AutoCloseable {
         if(!envelope.get("message_type").getAsString().equals("command"))throw new WireEnvelope.EnvelopeException("MESSAGE_UNSUPPORTED");
         String mismatch=WireMessages.checkBinding(text,session,viewer,history.revision(),decision==null?null:decision.get("decision_id").getAsString());
         if(mismatch!=null)return mismatch;
+        if("concede".equals(envelope.getAsJsonObject("body").get("operation").getAsString()))return matchActive?null:"ACTION_UNAVAILABLE";
         if(decision==null)return "ACTION_UNAVAILABLE";
         JsonObject body=envelope.getAsJsonObject("body");String operation=body.get("operation").getAsString(),family=decision.get("family").getAsString();boolean allowed=false;
         switch(operation) {

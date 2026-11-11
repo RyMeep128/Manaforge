@@ -43,6 +43,8 @@ public final class NativePaymentAcceptanceChecks {
         Engine() throws Exception {this(false);}
         Engine(boolean commander) throws Exception {
             game=commander?(Game)Class.forName("mage.game.FreeformUnlimitedCommander").getConstructor(MultiplayerAttackOption.class,RangeOfInfluence.class,mage.game.mulligan.Mulligan.class,int.class,int.class).newInstance(MultiplayerAttackOption.MULTIPLE,RangeOfInfluence.ALL,new mage.game.mulligan.LondonMulligan(0),40,7):new TwoPlayerDuel(MultiplayerAttackOption.MULTIPLE,RangeOfInfluence.ALL,new mage.game.mulligan.LondonMulligan(0),20,7,7);
+            // This focused fixture bypasses MatchImpl.initGame, which installs options.
+            game.setGameOptions(new GameOptions());
             payer.setUserData(mage.players.net.UserData.getDefaultUserDataView());opponent.setUserData(mage.players.net.UserData.getDefaultUserDataView());
             payer.getUserData().setManaPoolAutomatic(true);payer.getUserData().setManaPoolAutomaticRestricted(false);
             game.addPlayer(payer,new mage.cards.decks.Deck());game.addPlayer(opponent,new mage.cards.decks.Deck());

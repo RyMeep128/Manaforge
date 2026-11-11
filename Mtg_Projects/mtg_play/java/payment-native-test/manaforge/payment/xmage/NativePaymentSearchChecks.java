@@ -33,6 +33,8 @@ public final class NativePaymentSearchChecks {
     }
     static void restrictedPool() {
         TwoPlayerDuel game=new TwoPlayerDuel(MultiplayerAttackOption.MULTIPLE,RangeOfInfluence.ALL,new mage.game.mulligan.LondonMulligan(0),20,7,7);
+        // Match startup initializes options before any native simulation copies.
+        game.setGameOptions(new GameOptions());
         ContextHumanPlayer player=new ContextHumanPlayer("Restricted mana",RangeOfInfluence.ALL,0);player.setUserData(mage.players.net.UserData.getDefaultUserDataView());game.addPlayer(player,new mage.cards.decks.Deck());player.init(game);
         Card card=new mage.cards.basiclands.Mountain(player.getId(),info("Mountain"));game.loadCards(Collections.singleton(card),player.getId());game.setZone(card.getId(),Zone.BATTLEFIELD);game.addPermanent(new PermanentCard(card,player.getId(),game),0);
         SpellAbility spell=new SpellAbility(new ManaCostsImpl<>("{R}"),"Restricted probe");spell.setSourceId(card.getId());spell.setControllerId(player.getId());
@@ -48,6 +50,8 @@ public final class NativePaymentSearchChecks {
         Thread.currentThread().setName("GAME-payment-oracle");restrictedPool();Random seeds=new Random(20261110L);
         for(int seed=0;seed<16;seed++) {
             TwoPlayerDuel game=new TwoPlayerDuel(MultiplayerAttackOption.MULTIPLE,RangeOfInfluence.ALL,new mage.game.mulligan.LondonMulligan(0),20,7,7);
+            // Match startup initializes options before any native simulation copies.
+            game.setGameOptions(new GameOptions());
             ContextHumanPlayer player=new ContextHumanPlayer("Oracle",RangeOfInfluence.ALL,0);player.setUserData(mage.players.net.UserData.getDefaultUserDataView());game.addPlayer(player,new mage.cards.decks.Deck());player.init(game);
             ContextHumanPlayer opponent=new ContextHumanPlayer("Oracle opponent",RangeOfInfluence.ALL,0);opponent.setUserData(mage.players.net.UserData.getDefaultUserDataView());game.addPlayer(opponent,new mage.cards.decks.Deck());opponent.init(game);
             game.getState().getPlayerList().add(opponent.getId());game.getState().getPlayerList().add(player.getId());game.getState().getPlayerList().setCurrent(player.getId());

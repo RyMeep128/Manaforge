@@ -355,6 +355,7 @@ def run_live_game(
     payment_mode="auto",
     deck_owners=None,
     acceptance=False,
+    concede_acceptance=False,
     require_auto_payment=False,
     commander_scenario="single",
     no_capture=False,
@@ -389,6 +390,10 @@ def run_live_game(
         or presentation not in ("current", "table")
     ):
         raise LiveGameError("PAYMENT_MODE_INVALID")
+    if type(concede_acceptance) is not bool or concede_acceptance and (
+        not acceptance or setup.format != "freeform" or require_auto_payment
+    ):
+        raise LiveGameError("CONCEDE_ACCEPTANCE_INVALID")
     payload = project_launch(
         setup, documents, version, deck_owners, engine_bundle=xmage_root
     )
@@ -609,6 +614,8 @@ def run_live_game(
                     "-manaforgeGameAcceptance",
                     "1",
                 ]
+            if concede_acceptance:
+                command += ["-manaforgeConcedeAcceptance", "1"]
             if no_capture:
                 command += ["-manaforgeNoCapture", "1"]
             if require_auto_payment:
@@ -750,6 +757,12 @@ def run_live_game(
                 or closed.get("confirmed") != closed.get("snapshots", 0) - 1
             ):
                 raise LiveGameError("UNITY_GAME_ACCEPTANCE_UNPROVEN")
+            if concede_acceptance and (
+                closed.get("outcome") != "loss"
+                or closed.get("concession_menu_submitted") is not True
+                or closed.get("confirmed") != 1
+            ):
+                raise LiveGameError("UNITY_CONCESSION_UNPROVEN")
             result = closed
         finally:
             key[:] = bytes(len(key))

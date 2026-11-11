@@ -120,6 +120,7 @@ namespace Manaforge.Play
             var target=state.Legal.FirstOrDefault(value=>anchors.TryGetValue(value.Key,out var anchor) && Within(element,anchor));
             if(target!=null && (target.ObjectId!=null?decisions.TryActivateObject(observed,target.ObjectId):decisions.TryActivatePlayer(observed,target.PlayerId))){ev.StopImmediatePropagation();}
         }
+        public void InterruptGesture(){CancelDrag();hasCursor=false;}
         private void CancelDrag(){pressed=dragging=false;dragOffer=null;pressedTarget=null;sourceDrag=false;if(root.HasPointerCapture(pointer))root.ReleasePointer(pointer);}
         public void Tick()
         {

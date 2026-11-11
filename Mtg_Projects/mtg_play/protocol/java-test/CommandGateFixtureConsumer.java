@@ -56,9 +56,12 @@ public final class CommandGateFixtureConsumer {
             gate.observe(wrap("event","e1",body).toString());JsonObject current=action.deepCopy();current.getAsJsonObject("body").addProperty("revision",8);check(gate,current,"STALE_DECISION");
             JsonObject old=JsonParser.parseString(new String(Files.readAllBytes(path),StandardCharsets.UTF_8)).getAsJsonObject().getAsJsonObject("snapshot");old.addProperty("viewer_id",context.viewerId);old.getAsJsonObject("decision").addProperty("player_id",context.viewerId);gate.observe(update(old,"s1").toString());check(gate,current,"STALE_DECISION");
             snapshot.addProperty("revision",8);snapshot.add("decision",JsonNull.INSTANCE);gate.observe(update(snapshot,"s8").toString());check(gate,current,"STALE_DECISION");
+            JsonObject concession=command("concede",null);concession.getAsJsonObject("body").remove("decision_id");concession.getAsJsonObject("body").addProperty("revision",8);check(gate,concession,null);
+            for(String field:new String[]{"session_id","viewer_id","revision"}) {JsonObject wrong=concession.deepCopy();wrong.getAsJsonObject("body").add(field,field.equals("revision")?new JsonPrimitive(7):new JsonPrimitive("other"));check(gate,wrong,field.equals("session_id")?"SESSION_MISMATCH":field.equals("viewer_id")?"VIEWER_MISMATCH":"STALE_REVISION");}
+
             snapshot.addProperty("status","finished");snapshot.addProperty("result","fixture_complete");
             JsonObject terminal=update(snapshot,"result-1");terminal.addProperty("message_type","result");gate.observe(terminal.toString());
-            check(gate,action,"STALE_REVISION");check(gate,current,"STALE_DECISION");
+            check(gate,action,"STALE_REVISION");check(gate,current,"STALE_DECISION");check(gate,concession,"ACTION_UNAVAILABLE");
             gate.close();try{gate.check(action.toString());throw new AssertionError();}catch(WireEnvelope.EnvelopeException expected){require(expected.code.equals("GATE_CLOSED"));}
         }
         try(GatewayCommandGate gate=new GatewayCommandGate(context,true,64)) {

@@ -18,7 +18,7 @@ try {
     if($proof.sizes.Count -ne 4){throw 'Missing capture resolutions'}
     foreach($size in $proof.sizes){
         if($size.requested_width -ne $size.observed_width -or $size.requested_height -ne $size.observed_height){throw 'Observed capture resolution differs from requested size'}
-        foreach($mode in @('side-by-side','multi-seat','default-1v1')){
+        foreach($mode in @('side-by-side','multi-seat','default-1v1','menu','menu-options','menu-confirm','layout-floating','layout-docked','layout-collapsed','layout-preset-saved','layout-preset-confirm')){
             $path=Join-Path $OutputDirectory "$mode-$($size.requested_width)x$($size.requested_height).png"
             if(-not (Test-Path -LiteralPath $path) -or (Get-Item -LiteralPath $path).Length -eq 0){throw "Missing capture: $path"}
         }

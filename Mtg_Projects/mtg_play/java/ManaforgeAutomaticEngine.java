@@ -8,6 +8,8 @@ public final class ManaforgeAutomaticEngine implements ManaforgeGameplaySession.
     private final ManaforgeGameplaySession.Engine nativeEngine;private final NativeAutomaticPayment payment;private final java.util.function.BooleanSupplier cancelled;
     public ManaforgeAutomaticEngine(ManaforgeGameplaySession.Engine nativeEngine,NativeAutomaticPayment payment,java.util.function.BooleanSupplier cancelled){this.cancelled=Objects.requireNonNull(cancelled);this.nativeEngine=Objects.requireNonNull(nativeEngine);this.payment=Objects.requireNonNull(payment);}
     public JsonObject metadata(JsonObject state,String... ids) throws Exception{return nativeEngine.metadata(state,ids);}
+    public JsonObject concede(JsonObject command) throws Exception{return nativeEngine.concede(command);}
+    public ManaforgeGameplaySession.Advance finishConcession() throws Exception{return nativeEngine.finishConcession();}
     public JsonObject submit(JsonObject command) throws Exception{return nativeEngine.submit(command);}
     public JsonObject terminalMetadata(JsonObject before) throws Exception{return nativeEngine.terminalMetadata(before);}
     public String sessionNotice() throws Exception{return nativeEngine.sessionNotice();}

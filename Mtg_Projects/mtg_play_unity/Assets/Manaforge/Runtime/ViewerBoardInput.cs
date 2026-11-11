@@ -36,6 +36,7 @@ namespace Manaforge.Play
             menu=new VisualElement{name="board-object-menu"};root.Add(menu);menu.style.display=DisplayStyle.None;
             key=ev=>{if(ev.keyCode==KeyCode.Escape){CancelGesture();CloseMenu();}};root.RegisterCallback(key);
         }
+        public void InterruptGesture(){CancelGesture();CloseMenu();}
         public void Refresh()
         {
             if(disposed)return;var current=host.PresentedDecision;

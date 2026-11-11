@@ -39,7 +39,13 @@ namespace Manaforge.Play.Protocol
         private ClientChannelState state;
         private string decision,shutdownReason;
         private long revision;
-        private bool resultSeen,shutdownRequested;
+        private bool resultSeen,shutdownRequested,matchActive;
+        public bool CanConcede {get{lock(gate)return state==ClientChannelState.Active && matchActive && !resultSeen && !shutdownRequested && commands.CanSubmit;}}
+        public TrackedCommand Concede(int milliseconds=5000,CancellationToken cancellation=default)
+        {
+            PreparedSubmission prepared;lock(gate){Open();var text=new JObject{["wire_version"]=1,["message_type"]="command",["message_id"]="ui_"+Guid.NewGuid().ToString("N"),["body"]=new JObject{["session_id"]=session,["viewer_id"]=viewer,["revision"]=revision,["operation"]="concede"}}.ToString(Formatting.None);prepared=PrepareSubmission(text);}
+            using(prepared)return WriteSubmission(prepared,milliseconds,cancellation);
+        }
         public ClientSessionChannel(LoopbackFrameReader ownedTransport,string session,string viewer,bool fixtureMode=false,
             int maximumMessages=128,int maximumBytes=8*1024*1024)
         {
@@ -100,8 +106,9 @@ namespace Manaforge.Play.Protocol
                 var envelope=WireMessages.Parse(text);
                 if((string)envelope["message_type"]!="command")Fail("SESSION_COMMAND_UNSUPPORTED");
                 var body=envelope["body"];string operation=(string)body["operation"];
-                if(operation!="perform" && operation!="choose" && operation!="finish_selection" && operation!="cancel" && operation!="choose_number" && operation!="choose_amounts" && operation!="select_mana_source")Fail("SESSION_COMMAND_UNSUPPORTED");
-                if(string.IsNullOrEmpty(decision))Fail("SESSION_NO_DECISION");
+                if(operation!="perform" && operation!="choose" && operation!="finish_selection" && operation!="cancel" && operation!="choose_number" && operation!="choose_amounts" && operation!="select_mana_source" && operation!="concede")Fail("SESSION_COMMAND_UNSUPPORTED");
+                if(operation=="concede"){if(!matchActive)Fail("ACTION_UNAVAILABLE");}
+                else if(string.IsNullOrEmpty(decision))Fail("SESSION_NO_DECISION");
                 string rejection=operation=="perform"?WireMessages.CheckCurrent(text,session,viewer,revision,decision,actions)
                     :WireMessages.CheckBinding(text,session,viewer,revision,decision);
                 if(rejection!=null)Fail(rejection);
@@ -148,7 +155,7 @@ namespace Manaforge.Play.Protocol
                                 long incoming=(long)body["event"]["revision"];
                                 if(incoming>revision){revision=incoming;ClearDecision();}
                             } else {
-                                var snapshot=body["snapshot"];revision=(long)snapshot["revision"];
+                                var snapshot=body["snapshot"];matchActive=(string)snapshot["status"]=="active";revision=(long)snapshot["revision"];
                                 ClearDecision();var request=snapshot["decision"];
                                 if(request.Type!=JTokenType.Null) {
                                     numeric=new NumericDecisionBounds(request);mana=(string)request["family"]=="mana";

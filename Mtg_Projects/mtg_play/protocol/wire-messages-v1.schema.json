@@ -339,6 +339,34 @@
                     "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
                   }
                 }
+              },
+              {
+                "type": "object",
+                "required": [
+                  "session_id",
+                  "viewer_id",
+                  "revision",
+                  "operation"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "session_id": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+                  },
+                  "viewer_id": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+                  },
+                  "revision": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9223372036854775807
+                  },
+                  "operation": {
+                    "const": "concede"
+                  }
+                }
               }
             ]
           }

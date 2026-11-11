@@ -12,6 +12,8 @@ public final class ManaforgeGameplaySession implements AutoCloseable {
         JsonObject submit(JsonObject command) throws Exception;
         Advance advance(long previousDecision) throws Exception;
         JsonObject terminalMetadata(JsonObject before) throws Exception;
+        default JsonObject concede(JsonObject command) throws Exception {throw new IOException("CONCEDE_UNAVAILABLE");}
+        default Advance finishConcession() throws Exception {throw new IOException("CONCEDE_UNAVAILABLE");}
         default JsonObject pollRequest() throws Exception {return null;}
         default String sessionNotice() throws Exception {return null;}
         default boolean requestCurrent(String id) throws Exception {return false;}
@@ -48,6 +50,19 @@ public final class ManaforgeGameplaySession implements AutoCloseable {
         body.addProperty("fixture_only",false);body.add("snapshot",snapshot);result.add("body",body);return result;
     }
     public ManaforgeUnityOpening.TurnOffer offer(JsonObject state,JsonObject nativePrompt) throws Exception {
+        return offerCore(state,nativePrompt).withConcession(command->concede(state,command));
+    }
+    private ManaforgeUnityOpening.TurnResult concede(JsonObject before,JsonObject command) throws Exception {
+        current();generation++;JsonObject accepted=engine.concede(command);Advance next=engine.finishConcession();
+        JsonObject terminal=engine.terminalMetadata(before);
+        NativeCastCorrelation.TurnDecisionEvidence proof=NativeCastCorrelation.concessionEvidence(before,command,accepted,terminal,next.terminal);
+        if(proof==null)throw new IOException("CONCESSION_TERMINAL_UNPROVEN");
+        String outcome=terminal.get("outcome").getAsString();observer.terminal(outcome,next.state.deepCopy(),terminal.deepCopy());
+        JsonObject finalState=next.state.deepCopy();if(terminal.has("commanders") && finalState.get("cycle").equals(terminal.get("cycle"))){finalState.add("commander_metadata",terminal.get("commanders").deepCopy());finalState.add("commander_metadata_complete",terminal.get("commander_metadata_complete"));}
+        JsonObject result=envelope(projection.projectCombatResult(finalState,outcome));result.addProperty("message_type","result");stopped=true;
+        return new ManaforgeUnityOpening.TurnResult(result,proof,null);
+    }
+    private ManaforgeUnityOpening.TurnOffer offerCore(JsonObject state,JsonObject nativePrompt) throws Exception {
         current();if(serial>=4095)throw new IOException("GAMEPLAY_LIMIT");
         JsonObject request=engine.pollRequest();if(request!=null)return offerRequest(state,nativePrompt,request);
         final long offered=++generation;
@@ -128,6 +143,9 @@ public final class ManaforgeGameplaySession implements AutoCloseable {
         return fresh;
     }
     private ManaforgeUnityOpening.TurnOffer offerRequest(JsonObject state,JsonObject original,JsonObject request) throws Exception {
+        return offerRequestCore(state,original,request).withConcession(command->concede(state,command));
+    }
+    private ManaforgeUnityOpening.TurnOffer offerRequestCore(JsonObject state,JsonObject original,JsonObject request) throws Exception {
         current();if(serial>=4095)throw new IOException("GAMEPLAY_LIMIT");
         Advance live=refreshed(state,original);JsonObject before=live.state,prompt=request.deepCopy();prompt.add("cycle",before.get("cycle"));
         JsonObject guard=requestGuard(before);if(!new JsonPrimitive("ok").equals(guard.get("status")) || !before.get("cycle").equals(guard.get("cycle")))throw new IOException("SESSION_REQUEST_CONTEXT_UNPROVEN");

@@ -26,7 +26,7 @@ namespace Manaforge.Play.Protocol
             if (type == "command")
             {
                 if (!Id(body["session_id"]) || !Id(body["viewer_id"]) || !Revision(body["revision"])
-                    || !Id(body["decision_id"]) || body["operation"]?.Type != JTokenType.String) Fail();
+                    || body["operation"]?.Type != JTokenType.String || ((string)body["operation"]!="concede" && !Id(body["decision_id"]))) Fail();
                 string argument = null;
                 switch ((string)body["operation"])
                 {
@@ -38,10 +38,10 @@ namespace Manaforge.Play.Protocol
                         argument = "values";
                         if (!(body[argument] is JArray amounts) || amounts.Count > MaxAmountValues || amounts.Any(v => v.Type != JTokenType.Integer)) Fail();
                         break;
-                    case "finish_selection": case "cancel": break;
+                    case "concede": case "finish_selection": case "cancel": break;
                     default: Fail(); break;
                 }
-                var required = new[] { "session_id", "viewer_id", "revision", "operation", "decision_id" };
+                var required = (string)body["operation"]=="concede"?new[] { "session_id", "viewer_id", "revision", "operation" }:new[] { "session_id", "viewer_id", "revision", "operation", "decision_id" };
                 if (!Keys(body, argument == null ? required : required.Concat(new[] { argument }).ToArray())) Fail();
             }
             else if (type == "ack")
@@ -71,7 +71,7 @@ namespace Manaforge.Play.Protocol
             if ((string)body["session_id"] != session) return "SESSION_MISMATCH";
             if ((string)body["viewer_id"] != viewer) return "VIEWER_MISMATCH";
             if ((long)body["revision"] != revision) return "STALE_REVISION";
-            if ((string)body["decision_id"] != decision) return "STALE_DECISION";
+            if ((string)body["operation"]!="concede" && (string)body["decision_id"] != decision) return "STALE_DECISION";
             return null;
         }
         // Context only. A match does NOT authorize a choice, numeric value, source or cancellation.

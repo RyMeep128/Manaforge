@@ -18,7 +18,10 @@ public final class ManaforgeOpeningSession implements AutoCloseable {
     }
     public SubmissionLedger.Prepared dispatch(String wire,String game,String engineViewer,long decision,long cycle) throws IOException {
         return boundary.dispatch(wire,request->{
-            JsonObject nativeCommand=projection.claimOperation(request.toString(),context.sessionId,context.viewerId,game,engineViewer,decision,cycle);
+            JsonObject nativeCommand;
+            if("concede".equals(request.getAsJsonObject("body").get("operation").getAsString())) {
+                nativeCommand=new JsonObject();nativeCommand.addProperty("protocol",1);nativeCommand.addProperty("command","concede");nativeCommand.add("request_id",request.get("message_id").deepCopy());nativeCommand.addProperty("game_id",game);nativeCommand.addProperty("player_id",engineViewer);
+            } else nativeCommand=projection.claimOperation(request.toString(),context.sessionId,context.viewerId,game,engineViewer,decision,cycle);
             if(!nativeQueue.offer(nativeCommand))throw new IOException("OPENING_QUEUE_FULL");
             submittedNative=nativeCommand.deepCopy();
         });

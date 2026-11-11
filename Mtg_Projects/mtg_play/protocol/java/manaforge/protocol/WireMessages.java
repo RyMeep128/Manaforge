@@ -26,7 +26,7 @@ public final class WireMessages {
         String type = envelope.get("message_type").getAsString();
         if (type.equals("command")) {
             if (!id(body.get("session_id")) || !id(body.get("viewer_id")) || !revision(body.get("revision"))
-                || !id(body.get("decision_id")) || !string(body.get("operation"))) fail();
+                || !string(body.get("operation")) || (!"concede".equals(body.get("operation").getAsString()) && !id(body.get("decision_id")))) fail();
             String argument=null;
             switch(body.get("operation").getAsString()) {
                 case "perform": argument="action_id";if(!id(body.get(argument)))fail();break;
@@ -38,10 +38,11 @@ public final class WireMessages {
                     if(!body.has(argument) || !body.get(argument).isJsonArray() || body.getAsJsonArray(argument).size()>MAX_AMOUNT_VALUES)fail();
                     for(JsonElement amount:body.getAsJsonArray(argument))if(!integer(amount))fail();
                     break;
-                case "finish_selection":case "cancel":break;
+                case "concede":case "finish_selection":case "cancel":break;
                 default:fail();
             }
             List<String> required=new ArrayList<>(Arrays.asList("session_id","viewer_id","revision","operation","decision_id"));
+            if("concede".equals(body.get("operation").getAsString()))required.remove("decision_id");
             if(argument!=null)required.add(argument);
             if(!keys(body,required.toArray(new String[0])))fail();
         } else if (type.equals("ack")) {
@@ -67,7 +68,7 @@ public final class WireMessages {
         if(!body.get("session_id").getAsString().equals(session))return "SESSION_MISMATCH";
         if(!body.get("viewer_id").getAsString().equals(viewer))return "VIEWER_MISMATCH";
         if(body.get("revision").getAsLong()!=revision)return "STALE_REVISION";
-        if(!body.get("decision_id").getAsString().equals(decision))return "STALE_DECISION";
+        if(!"concede".equals(body.get("operation").getAsString()) && !body.get("decision_id").getAsString().equals(decision))return "STALE_DECISION";
         return null;
     }
     /** Context comparison only, never authorization of an option/source/value/cancellation. */

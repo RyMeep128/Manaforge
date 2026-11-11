@@ -35,6 +35,9 @@ public final class RealPaymentGameChecks {
         boolean lackey=name.startsWith("lackey-");
         int expectedTaps=poolOnly?0:poolMixed || poolGeneric?1:generic?3:blue || doubleRed?2:1;
         TwoPlayerDuel game=new TwoPlayerDuel(MultiplayerAttackOption.MULTIPLE,RangeOfInfluence.ALL,new mage.game.mulligan.LondonMulligan(0),20,7,7);
+        // MatchImpl normally installs these before game startup. Native payment
+        // simulation copies gameOptions directly; getOptions()' fallback does not initialize it.
+        game.setGameOptions(new mage.game.GameOptions());
         ContextHumanPlayer payer=new ContextHumanPlayer("Public payer",RangeOfInfluence.ALL,0);
         ContextHumanPlayer opponent=new ContextHumanPlayer("Public opponent",RangeOfInfluence.ALL,0);
         payer.setUserData(mage.players.net.UserData.getDefaultUserDataView());
@@ -102,6 +105,9 @@ public final class RealPaymentGameChecks {
         if(poolGeneric)payer.getManaPool().addMana(mage.Mana.BlueMana(1),game,first.getAbilities().get(0));
         if(insufficient)game.getPermanent(second.getId()).setTapped(true);
         game.applyEffects();game.saveState(false);
+        mage.game.Game simulation=game.createSimulationForAI();
+        require(simulation!=game && simulation.isSimulation() && simulation.getState()!=game.getState()
+            && simulation.getOptions()!=game.getOptions(),"REAL_PAYMENT_FIXTURE_NOT_COPYABLE");
         require(!game.getState().getTriggers().isEmpty(),"REAL_OPPONENT_TRIGGER_NOT_REGISTERED");
         UUID[] sources=lackey?new UUID[]{first.getId()}:third==null?new UUID[]{first.getId(),second.getId()}:new UUID[]{first.getId(),second.getId(),third.getId()};
         BlockingQueue<PlayerQueryEvent> queries=new LinkedBlockingQueue<>();game.addPlayerQueryEventListener(queries::add);
