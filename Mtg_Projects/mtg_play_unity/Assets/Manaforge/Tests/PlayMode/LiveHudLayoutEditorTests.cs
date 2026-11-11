@@ -33,7 +33,7 @@ namespace Manaforge.Play.Tests
             internal readonly HudLayoutEditor Editor;
             internal bool Gated,Blocked;
             internal int Inputs;
-            internal Harness(ObservedStore store=null)
+            internal Harness(ObservedStore store=null,ILayoutPresetStore persistentStore=null)
             {
                 Store=store??new ObservedStore();Root.Add(Canvas);Canvas.style.width=1280;Canvas.style.height=720;
                 foreach(var id in new[]{GameplayHudIds.Priority,GameplayHudIds.Actions,GameplayHudIds.Zones,GameplayHudIds.Commanders}){
@@ -41,7 +41,7 @@ namespace Manaforge.Play.Tests
                     drawer.Content.Add(new Button(()=>Inputs++){text="Existing command"});Canvas.Add(drawer);Drawers.Add(id,drawer);
                     Registry.Register(new GameplayHudDescriptor(id,id,id,GameplayHudCapabilities.Drawer,presetKey:"hud."+id),drawer,available:id!=GameplayHudIds.Commanders);
                 }
-                Editor=new HudLayoutEditor(Root,Canvas,Registry,Drawers.Select(p=>(p.Key,p.Key,p.Value)),Store,()=>{},()=>{},value=>Gated=value,()=>Blocked);
+                Editor=new HudLayoutEditor(Root,Canvas,Registry,Drawers.Select(p=>(p.Key,p.Key,p.Value)),persistentStore??Store,()=>{},()=>{},value=>Gated=value,()=>Blocked);
                 Editor.Observe("session","viewer",false,false);
             }
             public void Dispose(){Editor.Dispose();foreach(var drawer in Drawers.Values)drawer.Dispose();Registry.Dispose();}
@@ -92,6 +92,45 @@ namespace Manaforge.Play.Tests
                 store.Fail=true;h.Editor.Open();h.Editor.Adjust(GameplayHudIds.Actions,-16,0,false);h.Editor.Apply();var before=h.Editor.Controller.State(GameplayHudIds.Actions);
                 var save=h.Editor.SaveAsync(false);yield return new WaitUntil(()=>save.IsCompleted);Assert.That(save.Result,Is.False);Assert.That(h.Editor.Controller.State(GameplayHudIds.Actions),Is.SameAs(before));
             }
+        }
+        [Test] public void DefaultCompositionRemainsGatedWhileAcceptanceOptsInLocally()
+        {
+            var root=new VisualElement();
+            using var ordinary=(ArenaGameplayPresentation)LiveGameScene.CreateDefaultPresentation(root,false);
+            using var acceptance=(ArenaGameplayPresentation)LiveGameScene.CreateDefaultPresentation(root,true);
+            Assert.That(ordinary.Capabilities.PrivateLayout,Is.False,"Release gate requires hosted and full-game acceptance");
+            Assert.That(acceptance.Capabilities.PrivateLayout,Is.True);
+            Assert.That(GameplayPresentationCapabilities.Default.PrivateLayout,Is.False);
+            Assert.That(acceptance.Capabilities.SharedOrganization || acceptance.Capabilities.VisualStacks || acceptance.Capabilities.AutomaticOrganization,Is.False);
+        }
+        [UnityTest] public IEnumerator JsonPresetSurvivesEditorRestartAndSessionResetWithoutChangingStartup()
+        {
+            string directory=Path.Combine(Path.GetTempPath(),"manaforge-live-layout-"+Guid.NewGuid().ToString("N"));
+            Rect saved=default;string original=null;
+            try{
+                using(var h=new Harness(persistentStore:new JsonLayoutPresetStore(directory))){
+                    yield return new WaitUntil(()=>h.Editor.Initialization.IsCompleted);
+                    Assert.That(h.Editor.OwnsGeometry(GameplayHudIds.Actions),Is.False);
+                    Assert.That(h.Editor.Open(),Is.True);h.Editor.Adjust(GameplayHudIds.Actions,-64,-16,false);
+                    Assert.That(h.Editor.Apply(),Is.True);saved=h.Editor.Controller.State(GameplayHudIds.Actions).FloatingRect;
+                    Assert.That(File.Exists(Path.Combine(directory,"presets.json")),Is.False,"Apply must not persist");
+                    var save=h.Editor.SaveAsync(true,"Restart layout");yield return new WaitUntil(()=>save.IsCompleted);
+                    Assert.That(save.Result,Is.True);original=File.ReadAllText(Path.Combine(directory,"presets.json"));
+                }
+                using(var h=new Harness(persistentStore:new JsonLayoutPresetStore(directory))){
+                    yield return new WaitUntil(()=>h.Editor.Initialization.IsCompleted);
+                    Assert.That(h.Editor.OwnsGeometry(GameplayHudIds.Actions),Is.True);
+                    Assert.That(h.Editor.Controller.State(GameplayHudIds.Actions).FloatingRect,Is.EqualTo(saved));
+                    Assert.That(h.Editor.OwnsGeometry(GameplayHudIds.Zones),Is.False);
+                    h.Editor.ResetForGame();Assert.That(h.Editor.OwnsGeometry(GameplayHudIds.Actions),Is.False);
+                    Assert.That(File.ReadAllText(Path.Combine(directory,"presets.json")),Is.EqualTo(original));
+                }
+                using(var h=new Harness(persistentStore:new JsonLayoutPresetStore(directory))){
+                    yield return new WaitUntil(()=>h.Editor.Initialization.IsCompleted);
+                    Assert.That(h.Editor.OwnsGeometry(GameplayHudIds.Actions),Is.True);
+                    Assert.That(h.Editor.Controller.State(GameplayHudIds.Actions).FloatingRect,Is.EqualTo(saved));
+                }
+            }finally{if(Directory.Exists(directory))Directory.Delete(directory,true);}
         }
         [UnityTest] public IEnumerator DormantCommanderAndUnknownComponentsSurviveStartupAndSave()
         {

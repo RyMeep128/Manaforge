@@ -1,6 +1,25 @@
 # Customizable Tabletop, Modular HUD, and Shared Battlefield Organization
 
-Status: proposed engineering epic; planning only, no functionality implemented.
+Status: implementation in progress; private-layout preview is implemented but gated.
+
+## Implementation status (2026-11-11)
+
+| Stories | Current state |
+| --- | --- |
+| CT-01–02 | HUD registry, capability boundaries, and legacy geometry extraction implemented. |
+| CT-03 | Reusable container geometry and gesture infrastructure implemented. |
+| CT-04 | Versioned named preset storage implemented. |
+| CT-05A / CT-06 | Live editor for Priority, Actions, Zones, and Commander drawers, plus resolution recovery and session reset implemented; hosted Unity/full-game and owner acceptance incomplete. |
+| CT-07–17 | Shared battlefield identity, groups, authority, rendering, and reconnect remain unimplemented. |
+| CT-18–22 | Automatic rules, visual stacks, land organization, and nested groups remain unimplemented. |
+| CT-23–24 | Release acceptance and four-player shared-table gates remain incomplete. |
+
+Normal-game customization remains disabled. The next delivery is acceptance and
+production composition enablement for the four existing drawer families; it does
+not enable hand/battlefield repositioning or shared organization. See
+[recovery and release evidence](play-layout-recovery.md#evidence-and-release-gate).
+The story specifications below describe the full target, not completed acceptance.
+
 Assessment date: 2026-11-10. Baseline: `b97f4914dba3847036fa6094603280f826a63aea`
 plus the existing uncommitted working tree on `main`. In particular, Arena input,
 menu, protocol, payment/session, styling, and CI changes were already present.

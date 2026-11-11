@@ -92,9 +92,52 @@ suites still exercise the normal interaction paths.
 
 ## Evidence and release gate
 
-Implementation is on main; candidate hosted acceptance is pending. Local Windows player rebuild and script/test
-assembly compilation pass; no local test suite has been run. Exact-SHA hosted runs
+Implementation is on main; candidate hosted acceptance is pending. The earlier local Windows player rebuild and script/test
+assembly compilation passed; the new acceptance-preparation rebuild is blocked as
+detailed below. No local test suite has been run. Exact-SHA hosted runs
 for this worktree and the owner walkthrough remain pending. Keep production disabled.
+
+### Current candidate evidence and remaining rollout work
+
+On `9a967af` (`0.6.65-alpha.1`), [general tests](https://github.com/RyMeep128/Manaforge/actions/runs/43026761417),
+[protocol fixtures](https://github.com/RyMeep128/Manaforge/actions/runs/43026761447),
+[native payment on stock and delivery engines](https://github.com/RyMeep128/Manaforge/actions/runs/43026761285),
+preview, and coverage-audit workflows passed. These are not evidence for subsequent
+uncommitted changes. The [Unity run](https://github.com/RyMeep128/Manaforge/actions/runs/43027104535)
+failed during setup with missing `UNITY_LICENSE`; account secrets were also empty.
+Unity tests, captures, and the normal saved-deck match were skipped, not passed.
+The owner must configure the secrets through repository settings as documented in
+[hosted Unity setup](unity-ci.md); never place credentials in chat or tracked files.
+
+Acceptance preparation adds a real JSON-store editor restart scenario: explicit
+Save As survives disposal and reconstruction, untouched drawers stay legacy, and
+session reset does not alter the saved startup preset. Arena now passes the store
+a directory (`profiles/default/layouts/arena`), rather than a directory accidentally
+named `presets.json`; the store itself appends the filename. No migration is added:
+ordinary-game layout IO has never been enabled. Trusted pre-release compositions
+that used the erroneous nested directory must retain/export their own presets.
+The acceptance path continues to use isolated memory storage.
+
+The required local rebuild was attempted on 2026-11-11 after these changes and
+failed with exit 198 before compilation: `No valid Unity Editor license found`;
+`com.unity.editor.headless` entitlement was unavailable. The earlier successful
+rebuild does not validate these edits. No local test suite was run. Restore local
+Unity licensing and repeat `./tools/unity-play.ps1 -Mode Build` before delivery.
+
+Rollout sequence:
+
+1. Keep ordinary composition gated; run hosted Unity and normal saved-deck acceptance
+   plus the owner walkthrough on the prepared candidate. Correct failures without
+   removing assertions. Rebuild the local Windows player after Unity changes.
+2. Only after those pass, enable `PrivateLayout` explicitly in ordinary Arena's
+   `LiveGameScene.CreateDefaultPresentation`, keeping global capability defaults
+   disabled, custom factories authoritative, and acceptance memory storage isolated.
+   Update the composition gate test to expect the enabled ordinary capability.
+3. Re-run applicable workflows on the enabled SHA, including persistent preset
+   save/restart and full-game acceptance. Menu entry is the opt-in interaction;
+   add no experimental setting or launch argument. A fresh profile remains legacy.
+4. Mark CT-05A/CT-06 accepted only after final-SHA evidence and owner acceptance.
+   If blocked, leave the ordinary capability disabled and report the exact blocker.
 
 Inherited evidence on base commit 1abe52d73a7670c44809e6d1fcc0e9afa314eb8d:
 
