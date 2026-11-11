@@ -11,7 +11,7 @@ namespace Manaforge.Play
     public sealed class GameplayMenuOverlay : IDisposable
     {
         private readonly VisualElement root,shade,card,main,options,confirm,resetConfirm;
-        private readonly Button gear,resume,concede,confirmConcede,cancel;
+        private readonly Button resume,concede,confirmConcede,cancel;
         private readonly Label title,message;
         private Button customize,resetLayout,confirmReset,cancelReset;private HudLayoutEditor layoutEditor;
         private readonly Func<bool> canConcede;
@@ -26,11 +26,9 @@ namespace Manaforge.Play
         private string commandId;
         public bool IsOpen {get;private set;}
         public VisualElement OptionsContent {get;}
-        public GameplayMenuOverlay(VisualElement root,Func<bool> canConcede,Func<Task<TrackedCommand>> send,Func<string,TrackedCommand> receipt,Action interrupt=null)
+        public GameplayMenuOverlay(VisualElement root,Func<bool> canConcede,Func<Task<TrackedCommand>> send,Func<string,TrackedCommand> receipt,Action interrupt=null,Action returnToManaforge=null)
         {
             this.root=root;this.canConcede=canConcede;this.send=send;this.receipt=receipt;this.interrupt=interrupt;
-            gear=MakeButton("game-menu-toggle","",Open);gear.tooltip="Game menu (Esc)";gear.style.position=Position.Absolute;gear.style.right=12;gear.style.top=54;gear.style.width=44;root.Add(gear);
-            var cog=new VisualElement{pickingMode=PickingMode.Ignore};cog.style.width=24;cog.style.height=24;cog.style.alignSelf=Align.Center;cog.generateVisualContent+=DrawCog;gear.Add(cog);
             shade=new VisualElement{name="game-menu-overlay"};shade.AddToClassList("mf-game-menu-overlay");GameplayTheme.Attach(shade);root.Add(shade);
             card=new ScrollView(ScrollViewMode.Vertical){name="game-menu-card",horizontalScrollerVisibility=ScrollerVisibility.Hidden};card.AddToClassList("mf-game-menu-card");shade.Add(card);
             title=new Label("Game Menu"){name="game-menu-title"};card.Add(title);
@@ -38,6 +36,7 @@ namespace Manaforge.Play
             resume=MakeButton("game-menu-resume","Resume",Close);main.Add(resume);
             main.Add(MakeButton("game-menu-options","Options",()=>Navigate(1)));
             concede=MakeButton("game-menu-concede","Concede",()=>Navigate(2));concede.AddToClassList("mf-concede");main.Add(concede);
+            if(returnToManaforge!=null)main.Add(MakeButton("game-leave","Return to Manaforge",()=>{Close();returnToManaforge();}));
             options=new VisualElement{name="game-menu-options-page"};card.Add(options);
             OptionsContent=new VisualElement{name="game-menu-display-options"};options.Add(OptionsContent);
             options.Add(MakeButton("game-menu-back","Back",()=>Navigate(0)));
@@ -59,13 +58,6 @@ namespace Manaforge.Play
             root.RegisterCallback<FocusInEvent>(Focus,TrickleDown.TrickleDown);
             ticker=root.schedule.Execute(Tick).Every(100);
         }
-        private static void DrawCog(MeshGenerationContext context)
-        {
-            var pen=context.painter2D;pen.strokeColor=new Color(.94f,.85f,.66f);pen.lineWidth=1.6f;
-            for(int ring=0;ring<2;ring++){
-                pen.BeginPath();for(int i=0;i<32;i++){float angle=i*Mathf.PI/16;float radius=ring==1?3.5f:i%4<2?10:7.5f;var point=new Vector2(12+Mathf.Cos(angle)*radius,12+Mathf.Sin(angle)*radius);if(i==0)pen.MoveTo(point);else pen.LineTo(point);}pen.ClosePath();pen.Stroke();
-            }
-        }
         private static Button MakeButton(string name,string text,Action action){var button=new Button(action){name=name,text=text};GameplayTheme.Button(button);return button;}
         private bool Inside(object target)=>target is VisualElement element && (element==shade || shade.Contains(element));
         private void Block<T>(T ev) where T:EventBase<T>,new(){if(IsOpen && !Inside(ev.target))ev.StopImmediatePropagation();}
@@ -75,7 +67,7 @@ namespace Manaforge.Play
         public void SetLayoutEditor(HudLayoutEditor editor)
         {
             if(editor==null || customize!=null)return;layoutEditor=editor;
-            customize=MakeButton("game-menu-customize-layout","Customize Layout",()=>{Close();editor.Open(gear);});main.Insert(2,customize);
+            customize=MakeButton("game-menu-customize-layout","Customize Layout",()=>{Close();editor.Open();});main.Insert(2,customize);
             resetLayout=MakeButton("game-menu-reset-layout","Reset Layout for This Game",()=>Navigate(3));main.Insert(3,resetLayout);
         }
         public void Open()
@@ -86,7 +78,7 @@ namespace Manaforge.Play
         public void Close()
         {
             if(!IsOpen)return;IsOpen=false;shade.style.display=DisplayStyle.None;
-            var origin=returnFocus;returnFocus=null;if(origin?.panel!=null && origin.enabledInHierarchy && Visible(origin))origin.Focus();else gear.Focus();
+            var origin=returnFocus;returnFocus=null;if(origin?.panel!=null && origin.enabledInHierarchy && Visible(origin))origin.Focus();else root.Focus();
         }
         private void Navigate(int value)
         {
@@ -127,7 +119,7 @@ namespace Manaforge.Play
             root.UnregisterCallback<PointerDownEvent>(Block,TrickleDown.TrickleDown);root.UnregisterCallback<PointerUpEvent>(Block,TrickleDown.TrickleDown);root.UnregisterCallback<PointerMoveEvent>(Block,TrickleDown.TrickleDown);
             root.UnregisterCallback<WheelEvent>(Block,TrickleDown.TrickleDown);root.UnregisterCallback<ClickEvent>(Block,TrickleDown.TrickleDown);
             root.UnregisterCallback<NavigationSubmitEvent>(Block,TrickleDown.TrickleDown);root.UnregisterCallback<NavigationMoveEvent>(Block,TrickleDown.TrickleDown);root.UnregisterCallback<NavigationCancelEvent>(NavigationCancel,TrickleDown.TrickleDown);root.UnregisterCallback<FocusInEvent>(Focus,TrickleDown.TrickleDown);
-            shade.RemoveFromHierarchy();gear.RemoveFromHierarchy();
+            shade.RemoveFromHierarchy();
         }
     }
 }
