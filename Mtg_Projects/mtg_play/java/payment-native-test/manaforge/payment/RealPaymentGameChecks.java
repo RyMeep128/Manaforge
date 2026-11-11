@@ -34,7 +34,7 @@ public final class RealPaymentGameChecks {
         boolean insufficient=name.equals("insufficient");
         boolean lackey=name.startsWith("lackey-");
         int expectedTaps=poolOnly?0:poolMixed || poolGeneric?1:generic?3:blue || doubleRed?2:1;
-        TwoPlayerDuel game=new TwoPlayerDuel(MultiplayerAttackOption.MULTIPLE,RangeOfInfluence.ALL,new mage.game.mulligan.LondonMulligan(0),20,7,7);
+        TwoPlayerDuel game=new TwoPlayerDuel(MultiplayerAttackOption.MULTIPLE,RangeOfInfluence.ALL,new mage.game.mulligan.LondonMulligan(0),60,20,7);
         // MatchImpl normally installs these before game startup. Native payment
         // simulation copies gameOptions directly; getOptions()' fallback does not initialize it.
         game.setGameOptions(new mage.game.GameOptions());
@@ -196,7 +196,7 @@ public final class RealPaymentGameChecks {
         System.out.println("Native permission adapter: accept/decline, authority, duplicates, expiry and no replay passed; transport fixture only");
     }
     private static void nativeTriggerOrderingChecks() throws Exception {
-        mage.game.TwoPlayerDuel game=new mage.game.TwoPlayerDuel(mage.constants.MultiplayerAttackOption.MULTIPLE,mage.constants.RangeOfInfluence.ALL,new mage.game.mulligan.LondonMulligan(0),40,7,7);
+        mage.game.TwoPlayerDuel game=new mage.game.TwoPlayerDuel(mage.constants.MultiplayerAttackOption.MULTIPLE,mage.constants.RangeOfInfluence.ALL,new mage.game.mulligan.LondonMulligan(0),60,40,7);
         ContextHumanPlayer payer=new ContextHumanPlayer("Trigger chooser",RangeOfInfluence.ALL,0);payer.setUserData(mage.players.net.UserData.getDefaultUserDataView());payer.getUserData().setAutoOrderTrigger(false);
         ContextHumanPlayer other=new ContextHumanPlayer("Other player",RangeOfInfluence.ALL,0);other.setUserData(mage.players.net.UserData.getDefaultUserDataView());
         game.addPlayer(payer,new mage.cards.decks.Deck());game.addPlayer(other,new mage.cards.decks.Deck());payer.init(game);other.init(game);
@@ -243,7 +243,7 @@ public final class RealPaymentGameChecks {
         } finally {payer.abort();other.abort();result.cancel(true);executor.shutdownNow();executor.awaitTermination(2,TimeUnit.SECONDS);}
     }
     private static void nativePileChoice(boolean firstPile) throws Exception {
-        TwoPlayerDuel game=new TwoPlayerDuel(MultiplayerAttackOption.MULTIPLE,RangeOfInfluence.ALL,new mage.game.mulligan.LondonMulligan(0),20,7,7);
+        TwoPlayerDuel game=new TwoPlayerDuel(MultiplayerAttackOption.MULTIPLE,RangeOfInfluence.ALL,new mage.game.mulligan.LondonMulligan(0),60,20,7);
         ContextHumanPlayer payer=new ContextHumanPlayer("Pile chooser",RangeOfInfluence.ALL,0);payer.setUserData(mage.players.net.UserData.getDefaultUserDataView());
         ContextHumanPlayer other=new ContextHumanPlayer("Other player",RangeOfInfluence.ALL,0);other.setUserData(mage.players.net.UserData.getDefaultUserDataView());
         game.addPlayer(payer,new mage.cards.decks.Deck());game.addPlayer(other,new mage.cards.decks.Deck());payer.init(game);other.init(game);
@@ -277,7 +277,7 @@ public final class RealPaymentGameChecks {
     private static void nativeSwordsLifeChecks() throws Exception {
         // Exercise the engine card effect, including a controller distinct from the owner.
         for(boolean stolen:new boolean[]{false,true}){
-            TwoPlayerDuel game=new TwoPlayerDuel(MultiplayerAttackOption.MULTIPLE,RangeOfInfluence.ALL,new mage.game.mulligan.LondonMulligan(0),20,7,7);
+            TwoPlayerDuel game=new TwoPlayerDuel(MultiplayerAttackOption.MULTIPLE,RangeOfInfluence.ALL,new mage.game.mulligan.LondonMulligan(0),60,20,7);
             ContextHumanPlayer caster=new ContextHumanPlayer("Swords caster",RangeOfInfluence.ALL,0),opponent=new ContextHumanPlayer("Robot controller",RangeOfInfluence.ALL,0);
             caster.setUserData(mage.players.net.UserData.getDefaultUserDataView());opponent.setUserData(mage.players.net.UserData.getDefaultUserDataView());
             game.addPlayer(caster,new mage.cards.decks.Deck());game.addPlayer(opponent,new mage.cards.decks.Deck());

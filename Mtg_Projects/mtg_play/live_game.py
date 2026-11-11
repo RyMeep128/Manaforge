@@ -759,6 +759,27 @@ def run_live_game(
                 or closed.get("confirmed") != closed.get("snapshots", 0) - 1
             ):
                 raise LiveGameError("UNITY_GAME_ACCEPTANCE_UNPROVEN")
+            if (
+                acceptance
+                and not concede_acceptance
+                and presentation == "current"
+                and setup.format == "freeform"
+            ):
+                layout = closed.get("hud_layout")
+                if not isinstance(layout, dict) or not all(
+                    layout.get(key) is True
+                    for key in (
+                        "complete",
+                        "opened",
+                        "moved",
+                        "resized",
+                        "input_gate",
+                        "cancel",
+                        "reset",
+                        "custom_gameplay",
+                    )
+                ):
+                    raise LiveGameError("UNITY_GAME_ACCEPTANCE_UNPROVEN")
             if concede_acceptance and (
                 closed.get("outcome") != "loss"
                 or closed.get("concession_menu_submitted") is not True

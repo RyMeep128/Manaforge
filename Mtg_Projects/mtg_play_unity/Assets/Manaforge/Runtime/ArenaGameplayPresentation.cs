@@ -25,14 +25,17 @@ namespace Manaforge.Play
         private readonly System.Collections.Generic.HashSet<CardView> wired=new System.Collections.Generic.HashSet<CardView>();
         private ViewerTargetingController targeting;
         private ViewerSessionHost host;private ProjectedDecisionFrame frame;private bool inspecting;private int artworkCount=-1;
+        private bool layoutAttentionFocus;
+        public HudLayoutEditor LayoutEditor {get;private set;}
         public GameplayHudRegistry HudRegistry {get;}=new GameplayHudRegistry();
         public GameplayPresentationCapabilities Capabilities {get;}
+        private readonly ILayoutPresetStore layoutPresetStore;
         private readonly IGameplayLayoutStrategy layoutStrategy=new LegacyGameplayLayoutStrategy();
         public ViewerCardSurface Surface {get;}
         public ViewerDecisionPanel Decisions {get;private set;}
-        public ArenaGameplayPresentation(VisualElement parent,ICardBackProvider cardBacks=null,GameplayPresentationCapabilities capabilities=null)
+        public ArenaGameplayPresentation(VisualElement parent,ICardBackProvider cardBacks=null,GameplayPresentationCapabilities capabilities=null,ILayoutPresetStore layoutPresetStore=null)
         {
-            Capabilities=capabilities??GameplayPresentationCapabilities.Default;
+            Capabilities=capabilities??GameplayPresentationCapabilities.Default;this.layoutPresetStore=layoutPresetStore;
             root=new VisualElement{name="arena-table"};root.style.flexGrow=1;parent.Add(root);
             var theme=Resources.Load<StyleSheet>("ArenaTable");if(theme!=null)root.styleSheets.Add(theme);
             GameplayTheme.Attach(root);
@@ -68,9 +71,9 @@ namespace Manaforge.Play
             HudRegistry.Register(new GameplayHudDescriptor(GameplayHudIds.Hand,"Hand","hand"),adapter:new GameplayHudLayoutAdapter(GameplayLayoutSlot.Hand));
             HudRegistry.Register(new GameplayHudDescriptor(GameplayHudIds.Battlefield,"Battlefield","battlefield"),adapter:new GameplayHudLayoutAdapter(GameplayLayoutSlot.Battlefield));
             HudRegistry.Register(new GameplayHudDescriptor(GameplayHudIds.GameStack,"Game stack","game-stack"),stackToolbar,new GameplayHudLayoutAdapter(GameplayLayoutSlot.GameStack));
-            HudRegistry.Register(new GameplayHudDescriptor(GameplayHudIds.Priority,"Priority","priority",GameplayHudCapabilities.Drawer),priorityDrawer);
-            HudRegistry.Register(new GameplayHudDescriptor(GameplayHudIds.Actions,"Spells and abilities","actions",GameplayHudCapabilities.Drawer),actionDrawer);
-            HudRegistry.Register(new GameplayHudDescriptor(GameplayHudIds.Zones,"Zones","zones",GameplayHudCapabilities.Drawer),zonePanelDrawer);
+            HudRegistry.Register(new GameplayHudDescriptor(GameplayHudIds.Priority,"Priority","priority",GameplayHudCapabilities.Drawer,presetKey:"hud.priority"),priorityDrawer);
+            HudRegistry.Register(new GameplayHudDescriptor(GameplayHudIds.Actions,"Spells and abilities","actions",GameplayHudCapabilities.Drawer,presetKey:"hud.actions"),actionDrawer);
+            HudRegistry.Register(new GameplayHudDescriptor(GameplayHudIds.Zones,"Zones","zones",GameplayHudCapabilities.Drawer,presetKey:"hud.zones"),zonePanelDrawer);
             // Zone families share a panel; these are logical child descriptors, not new pile owners.
             foreach(string zone in new[]{"library","graveyard","exile"})
                 HudRegistry.Register(new GameplayHudDescriptor("zones/"+zone,ZonePile.Title(zone),"zones",parentId:GameplayHudIds.Zones),zonePanel);
@@ -99,6 +102,7 @@ namespace Manaforge.Play
         private void ClearPileArt(){zonePanel.ClearArtwork();}
         private void ClearZoneResources()
         {
+            LayoutEditor?.EndSession();
             seenStack.Clear();stackFocused=false;stackAttentionUntil=0;stackToolbar.style.display=stackBackdrop.style.display=DisplayStyle.None;hud?.ClearPresentation();ClearCardFocus();inspecting=false;inspector?.Hide(false);CloseInspection();openZone=openZoneOwner=null;opponentHand.Clear();animations?.Clear();links.Set(Array.Empty<BattlefieldLinks.Link>());
             zoneDrawer?.ClearBinding();
             root.RemoveFromClassList("browsing-public-zone");frame=null;rowPages.Clear();handOrder.Clear();
@@ -109,10 +113,34 @@ namespace Manaforge.Play
         public void InterruptGestures(){boardInput?.InterruptGesture();targeting?.InterruptGesture();}
         public void CloseInspection(){bool restore=inspecting;inspecting=false;previewing=false;previewId=null;restoringFocus=true;try{inspector?.Hide(restore);}finally{restoringFocus=false;}}
         public void Bind(ViewerSessionHost value)
-        {if(Decisions!=null)throw new InvalidOperationException("PRESENTATION_ALREADY_BOUND");host=value;Decisions=new ViewerDecisionPanel(choices,host);Decisions.PresentationHold=()=>animations.HoldAutomaticPassing || Time.unscaledTime<stackAttentionUntil;Decisions.SetSpatialPresentation(true);Decisions.SetChoicePreview(Surface.ChoicePreview);actionBinding=new GameplayActionDrawer(actionDrawer,Decisions);priorityBinding=new GameplayPriorityDrawer(priorityDrawer,Decisions);targeting=new ViewerTargetingController(root,Surface,Decisions,()=>hud.Players);boardInput=new ViewerBoardInput(root,Surface,host,Decisions,GameplayTheme.Menu);}
+        {if(Decisions!=null)throw new InvalidOperationException("PRESENTATION_ALREADY_BOUND");host=value;Decisions=new ViewerDecisionPanel(choices,host);Decisions.PresentationHold=()=>animations.HoldAutomaticPassing || Time.unscaledTime<stackAttentionUntil;Decisions.SetSpatialPresentation(true);Decisions.SetChoicePreview(Surface.ChoicePreview);actionBinding=new GameplayActionDrawer(actionDrawer,Decisions);priorityBinding=new GameplayPriorityDrawer(priorityDrawer,Decisions);targeting=new ViewerTargetingController(root,Surface,Decisions,()=>hud.Players);boardInput=new ViewerBoardInput(root,Surface,host,Decisions,GameplayTheme.Menu);
+            if(Capabilities.PrivateLayout)LayoutEditor=new HudLayoutEditor(root.parent,root,HudRegistry,
+                new[]{(GameplayHudIds.Priority,"Priority",priorityDrawer),(GameplayHudIds.Actions,"Spells & Abilities",actionDrawer),(GameplayHudIds.Zones,"Zones",zonePanelDrawer),(GameplayHudIds.Commanders,"Commanders",hud.CommanderDrawer)},
+                layoutPresetStore??new JsonLayoutPresetStore(System.IO.Path.Combine(Application.persistentDataPath,"profiles","default","layouts","arena","presets.json")),
+                ()=>{InterruptGestures();ClearCardFocus();CloseInspection();ClosePublicZone();},Layout,Decisions.SetLayoutEditing,()=>LayoutAttentionRequired(),FocusGameplayAttention);
+        }
+        private void FocusGameplayAttention()
+        {
+            if(host?.PendingReveal!=null){root.parent?.Q<Button>("reveal-acknowledge")?.Focus();return;}
+            var current=host?.PresentedDecision?.Frame;
+            if(current?.Decision!=null && !current.Decision.IsPriority && current.Decision.PlayerId==current.Context.ViewerId){actionDrawer.SetOpen(true,true);return;}
+            if(openZone!=null){root.Q<Button>("close-public-zone")?.Focus();return;}
+            if(inspecting){root.Q<Button>("close-inspection")?.Focus();return;}
+            priorityDrawer.Tab.Focus();
+        }
+        private bool LayoutAttentionRequired()
+        {
+            var current=host?.PresentedDecision;var value=current?.Frame;
+            return host==null || !host.Authenticated || host.Completion.IsCompleted || host.PendingReveal!=null || value==null || value.Result!=null
+                || value.Decision!=null && !value.Decision.IsPriority && value.Decision.PlayerId==value.Context.ViewerId
+                || current?.CanSubmit==false || Decisions?.Root.ClassListContains("command-uncertain")==true || Decisions?.Presentation?.Mode==YieldPresentationMode.Failed;
+        }
+        public void BeforeDecisionTick()
+        {bool editing=LayoutEditor?.IsEditing==true;LayoutEditor?.BeforeDecisionTick(LayoutAttentionRequired());if(editing && LayoutEditor?.IsEditing==false){layoutAttentionFocus=true;if(host?.PendingReveal!=null)root.parent?.Q<Button>("reveal-acknowledge")?.Focus();}}
         public void Present(ProjectedDecisionFrame value)
         {
             if(disposed)return;
+            LayoutEditor?.Observe(value.Context.SessionId,value.Context.ViewerId,LayoutAttentionRequired(),value.Turn==0 || Decisions?.IsLibraryOrdering==true,value.Result!=null);
             var seatIds=value.PlayerLifeTotals.Keys.ToArray();
             if(!seatIds.Contains(value.Context.ViewerId)){
                 unsupportedTopology=true;ClearZoneResources();Surface.CardsRoot.style.display=DisplayStyle.None;choices.style.display=DisplayStyle.None;
@@ -120,7 +148,8 @@ namespace Manaforge.Play
             }
             unsupportedTopology=false;Surface.CardsRoot.style.display=DisplayStyle.Flex;choices.style.display=DisplayStyle.Flex;
             hud.Present(value,Surface,host?.GameplayFormat,root.ClassListContains("reduced-motion"),InspectCard);
-            actionBinding?.Refresh(value);priorityBinding?.Refresh();zonePanelDrawer.RefreshInput();RefreshStackControls();
+            actionBinding?.Refresh(value);if(layoutAttentionFocus){layoutAttentionFocus=false;if(host?.PendingReveal==null && value.Decision!=null && !value.Decision.IsPriority && value.Decision.PlayerId==value.Context.ViewerId)actionDrawer.SetOpen(true,true);}
+            priorityBinding?.Refresh();zonePanelDrawer.RefreshInput();RefreshStackControls();
             if(frame!=null && frame.Context.Revision==value.Context.Revision && frame.Context.SessionId==value.Context.SessionId && frame.Context.ViewerId==value.Context.ViewerId){boardInput?.Refresh();RefreshPlayers();targeting?.Observe(frame);if(artworkCount!=Surface.PresentedArtworkCount){artworkCount=Surface.PresentedArtworkCount;Layout();}return;}
             artworkCount=Surface.PresentedArtworkCount;
             if(frame==null || frame.Context.SessionId!=value.Context.SessionId || frame.Context.ViewerId!=value.Context.ViewerId || !Surface.HasInspection){
@@ -239,6 +268,7 @@ namespace Manaforge.Play
         private void Layout()
         {
             if(disposed || frame==null || unsupportedTopology)return;
+            LayoutEditor?.BeforeLegacyLayout();
             float width=root.resolvedStyle.width,height=root.resolvedStyle.height;if(float.IsNaN(width) || width<1 || height<1)return;
             var items=new System.Collections.Generic.List<(ProjectedCard card,CardView view)>();Surface.VisitPresented((c,v)=>items.Add((c,v)));
             wired.RemoveWhere(v=>v.parent==null);
@@ -316,7 +346,7 @@ namespace Manaforge.Play
             Row(items.Where(i=>i.card.Zone=="command" && i.card.OwnerId!=viewer).ToList(),plan.OpponentCommandTop,15,130,65,key:"opponent-command");
             Row(items.Where(i=>i.card.Zone=="command" && i.card.OwnerId==viewer).ToList(),plan.LocalCommandTop,15,130,65,key:"local-command");
             zonePanel.Present(frame,Surface,plan.ZoneBankSeparation,openZone,openZoneOwner);zonePanelDrawer.RefreshInput();
-            zonePanelDrawer.Viewport.style.top=plan.ZoneViewportTop;zonePanelDrawer.style.maxHeight=30;zonePanelDrawer.Content.style.maxHeight=plan.ZoneMaxHeight;zonePanelDrawer.Q<ScrollView>("zone-panel-scroll").style.maxHeight=plan.ZoneMaxHeight;
+            if(LayoutEditor?.OwnsGeometry(GameplayHudIds.Zones)!=true){zonePanelDrawer.Viewport.style.top=plan.ZoneViewportTop;zonePanelDrawer.style.maxHeight=30;zonePanelDrawer.Content.style.maxHeight=plan.ZoneMaxHeight;zonePanelDrawer.Q<ScrollView>("zone-panel-scroll").style.maxHeight=plan.ZoneMaxHeight;}
             hud.style.height=plan.PlayerHudHeight;
             root.EnableInClassList("browsing-public-zone",openZone!=null);
             zoneDrawer.style.display=openZone==null?DisplayStyle.None:DisplayStyle.Flex;
@@ -338,20 +368,21 @@ namespace Manaforge.Play
             zones.text=string.Join("\n",items.Where(i=>i.card.Zone!="hand" && i.card.Zone!="battlefield" && i.card.Zone!="stack").GroupBy(i=>i.card.Zone).Select(g=>g.Key+"  "+g.Count()));
             choices.EnableInClassList("opening-choices",opening);actionDrawer.EnableInClassList("opening-choices",opening);
             choices.EnableInClassList("library-ordering",Decisions!=null && Decisions.IsLibraryOrdering);actionDrawer.EnableInClassList("library-ordering",Decisions!=null && Decisions.IsLibraryOrdering);
+            if(LayoutEditor?.OwnsGeometry(GameplayHudIds.Actions)!=true){
             actionDrawer.Viewport.style.width=plan.ActionViewportWidth;
             actionDrawer.Viewport.style.right=plan.ActionViewportRight;
             actionDrawer.Viewport.style.top=plan.ActionViewportTop.HasValue?(StyleLength)plan.ActionViewportTop.Value:StyleKeyword.Auto;
             actionDrawer.Viewport.style.bottom=plan.ActionViewportBottom.HasValue?(StyleLength)plan.ActionViewportBottom.Value:StyleKeyword.Auto;
-            actionDrawer.Content.style.maxHeight=plan.ActionMaxHeight;
-            priorityDrawer.Content.style.maxHeight=plan.PriorityMaxHeight;
+            actionDrawer.Content.style.maxHeight=plan.ActionMaxHeight;}
+            if(LayoutEditor?.OwnsGeometry(GameplayHudIds.Priority)!=true)priorityDrawer.Content.style.maxHeight=plan.PriorityMaxHeight;
             if(opening && Decisions!=null)GameplayTheme.Mulligan(Decisions.Root,handCount);
             if(inspecting)PlaceInspection();
             if(!inspecting && !previewing)Surface.InspectionView.style.display=DisplayStyle.None;
             foreach(var item in items){var availability=item.view.Q<Label>("status");if(availability!=null)availability.style.display=DisplayStyle.None;}
             actionDrawer.BringToFront();result.BringToFront();if(inspecting || previewing)Surface.InspectionView.BringToFront();root.Q<Button>("close-inspection").BringToFront();
-            boardInput?.Refresh();RefreshPlayers();targeting?.Observe(frame);links.schedule.Execute(UpdateLinks);
+            boardInput?.Refresh();RefreshPlayers();targeting?.Observe(frame);links.schedule.Execute(UpdateLinks);LayoutEditor?.AfterLegacyLayout();
         }
-        public void Dispose(){if(disposed)return;ClearZoneResources();disposed=true;targeting?.Dispose();boardInput?.Dispose();animations.Dispose();inspector.Dispose();priorityBinding?.Dispose();actionBinding?.Dispose();Decisions?.Dispose();Surface.Clearing-=ClearZoneResources;Surface.Rebinding-=ClearPileArt;Surface.Dispose();
+        public void Dispose(){if(disposed)return;LayoutEditor?.Dispose();LayoutEditor=null;ClearZoneResources();disposed=true;targeting?.Dispose();boardInput?.Dispose();animations.Dispose();inspector.Dispose();priorityBinding?.Dispose();actionBinding?.Dispose();Decisions?.Dispose();Surface.Clearing-=ClearZoneResources;Surface.Rebinding-=ClearPileArt;Surface.Dispose();
             hud.PlayerActivated-=ActivatePlayer;hud.Dispose();zonePanel.BrowseRequested-=BrowseZone;zonePanel.Dispose();zonePanelDrawer.Dispose();if(actionBinding==null)actionDrawer.Dispose();if(priorityBinding==null)priorityDrawer.Dispose();zoneDrawer.Dispose();HudRegistry.Dispose();wired.Clear();root.RemoveFromHierarchy();}
     }
 }

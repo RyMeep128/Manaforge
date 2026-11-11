@@ -380,6 +380,8 @@ without creating a tag/release. No local test suites. A blocked check is not a p
 
 ### CT-06 — Resolution recovery and default compatibility (MVP, S / medium)
 
+Implementation and outstanding acceptance: [recovery guide](play-layout-recovery.md). Production enablement remains gated.
+
 - **Problem:** Saved layouts can strand controls after display changes.
 - **Behavior:** Presets adapt to aspect ratio/window size; recovery/reset is always reachable.
 - **Approach/modules:** LayoutResolver safe area/UI-scale policy, overflow paging, PlayerDisplayControls resize integration and default fixture comparisons.

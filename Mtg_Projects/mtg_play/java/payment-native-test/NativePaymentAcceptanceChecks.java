@@ -42,7 +42,8 @@ public final class NativePaymentAcceptanceChecks {
         final Field response,opened;
         Engine() throws Exception {this(false);}
         Engine(boolean commander) throws Exception {
-            game=commander?(Game)Class.forName("mage.game.FreeformUnlimitedCommander").getConstructor(MultiplayerAttackOption.class,RangeOfInfluence.class,mage.game.mulligan.Mulligan.class,int.class,int.class).newInstance(MultiplayerAttackOption.MULTIPLE,RangeOfInfluence.ALL,new mage.game.mulligan.LondonMulligan(0),40,7):new TwoPlayerDuel(MultiplayerAttackOption.MULTIPLE,RangeOfInfluence.ALL,new mage.game.mulligan.LondonMulligan(0),20,7,7);
+            game=commander?(Game)Class.forName("mage.game.FreeformUnlimitedCommander").getConstructor(MultiplayerAttackOption.class,RangeOfInfluence.class,mage.game.mulligan.Mulligan.class,int.class,int.class).newInstance(MultiplayerAttackOption.MULTIPLE,RangeOfInfluence.ALL,new mage.game.mulligan.LondonMulligan(0),40,7):new TwoPlayerDuel(MultiplayerAttackOption.MULTIPLE,RangeOfInfluence.ALL,new mage.game.mulligan.LondonMulligan(0),60,20,7);
+            // TwoPlayerDuel arguments are minimum deck size, starting life, starting hand size.
             // This focused fixture bypasses MatchImpl.initGame, which installs options.
             game.setGameOptions(new GameOptions());
             payer.setUserData(mage.players.net.UserData.getDefaultUserDataView());opponent.setUserData(mage.players.net.UserData.getDefaultUserDataView());
@@ -57,6 +58,7 @@ public final class NativePaymentAcceptanceChecks {
             Field cursor=GameImpl.class.getDeclaredField("playerList");cursor.setAccessible(true);cursor.set(game,game.getState().getPlayerList());
             game.getState().setActivePlayerId(payer.getId());game.getState().setPriorityPlayerId(payer.getId());game.getState().setTurnNum(4);game.getTurn().setPhase(new mage.game.turn.PreCombatMainPhase());
             payer.init(game);opponent.init(game);payer.getManaPool().setAutoPayment(true);payer.getManaPool().setAutoPaymentRestricted(false);((GameImpl)game).initGameDefaultWatchers();
+            check(payer.getLife()==(commander?40:20) && opponent.getLife()==payer.getLife(),"FIXTURE_STARTING_LIFE");
             response=HumanPlayer.class.getDeclaredField("response");response.setAccessible(true);opened=HumanPlayer.class.getDeclaredField("responseOpenedForAnswer");opened.setAccessible(true);
             game.addPlayerQueryEventListener(queries::add);
             bridge=new ManaforgeBridge(events::add,null,new ManaforgeBridge.ResponseTransport(){

@@ -66,7 +66,7 @@ namespace Manaforge.Play
         public IEnumerable<Registration> Entries=>entries.Values;
         public Registration Find(string id)=>entries.TryGetValue(id,out var entry)?entry:null;
         public Registration Register(GameplayHudDescriptor descriptor, VisualElement element=null,
-            GameplayHudLayoutAdapter adapter=null, bool available=true)
+            GameplayHudLayoutAdapter adapter=null, bool available=true, IGameplayContainerBinding container=null)
         {
             if(disposed)throw new ObjectDisposedException(nameof(GameplayHudRegistry));
             if(descriptor==null)throw new ArgumentNullException(nameof(descriptor));
@@ -74,24 +74,35 @@ namespace Manaforge.Play
             if(entries.ContainsKey(descriptor.Id))throw new InvalidOperationException("HUD_DUPLICATE_ID");
             if(descriptor.PresetKey!=null)foreach(var existing in entries.Values)
                 if(existing.Descriptor.PresetKey==descriptor.PresetKey)throw new InvalidOperationException("HUD_DUPLICATE_PRESET_KEY");
-            var registration=new Registration(this,descriptor,element,adapter,available);
+            var binding=container??element as IGameplayContainerBinding;
+            if(binding!=null && binding.Element!=element)throw new ArgumentException("HUD_CONTAINER_VIEW_MISMATCH");
+            var registration=new Registration(this,descriptor,element,adapter,available,binding);
             entries.Add(descriptor.Id,registration);return registration;
         }
         public sealed class Registration : IDisposable
         {
             private GameplayHudRegistry owner;
-            public GameplayHudDescriptor Descriptor { get; }
+            public GameplayHudDescriptor Descriptor { get; private set; }
             public VisualElement Element { get; }
             public GameplayHudLayoutAdapter Adapter { get; }
+            public IGameplayContainerBinding Container { get; private set; }
             public bool Available { get; set; }
             public bool IsRegistered=>owner!=null;
             internal Registration(GameplayHudRegistry owner, GameplayHudDescriptor descriptor, VisualElement element,
-                GameplayHudLayoutAdapter adapter, bool available)
-            { this.owner=owner; Descriptor=descriptor; Element=element; Adapter=adapter; Available=available; }
+                GameplayHudLayoutAdapter adapter, bool available, IGameplayContainerBinding container)
+            { Container=container;this.owner=owner; Descriptor=descriptor; Element=element; Adapter=adapter; Available=available; }
+            public void SetContainerBinding(IGameplayContainerBinding container,GameplayHudCapabilities capabilities=GameplayHudCapabilities.Drawer)
+            {
+                if(owner==null)throw new ObjectDisposedException(nameof(Registration));
+                if(container!=null && container.Element!=Element)throw new ArgumentException("HUD_CONTAINER_VIEW_MISMATCH");
+                Container=container;var d=Descriptor;
+                var caps=container==null?d.Capabilities&~(GameplayHudCapabilities.Move|GameplayHudCapabilities.Resize|GameplayHudCapabilities.Dock):capabilities;
+                Descriptor=new GameplayHudDescriptor(d.Id,d.DisplayName,d.DefaultSlot,caps,d.ParentId,d.PresetKey);
+            }
             public void Dispose()
             {
                 if(owner==null)return;
-                owner.entries.Remove(Descriptor.Id);owner=null;Available=false;
+                owner.entries.Remove(Descriptor.Id);owner=null;Container=null;Available=false;
             }
         }
         public void Dispose()

@@ -33,6 +33,8 @@ reports are in the [archive](archive/README.md).
 
 - [Container layout infrastructure](play-container-layout.md) - synthetic workspace, ownership contracts and verification status.
 
+- [Layout resolution recovery](play-layout-recovery.md) - viewport scaling, independent reset and gated acceptance.
+- [Live drawer layout editor](play-live-layout-editor.md) - gated CT-05A integration, ownership, transactions and acceptance.
 - [Named layout presets](play-layout-presets.md) - explicit-save fixture controls, local storage and recovery.
 
 ## Play implementation references

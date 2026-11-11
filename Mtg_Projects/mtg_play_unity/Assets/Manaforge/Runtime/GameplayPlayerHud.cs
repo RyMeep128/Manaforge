@@ -27,7 +27,7 @@ namespace Manaforge.Play
         public GameplayPlayerHud(bool localSeatAtBottom=false,GameplayHudRegistry registry=null){this.registry=registry;this.localSeatAtBottom=localSeatAtBottom;name="gameplay-player-hud";AddToClassList("mf-player-hud");pickingMode=PickingMode.Ignore;GameplayTheme.Attach(this);players.AddToClassList("mf-hud-players");players.contentContainer.style.flexDirection=FlexDirection.Row;players.contentContainer.style.flexWrap=Wrap.Wrap;commanders.AddToClassList("mf-hud-commanders");CommanderDrawer=new GameplayDrawer("Commanders",GameplayDrawerDirection.Left){name="commander-drawer"};CommanderDrawer.Content.Add(commanders);Add(players);Add(CommanderDrawer);if(localSeatAtBottom)Add(localSeat);
             if(registry!=null){
                 playersRegistration=registry.Register(new GameplayHudDescriptor(GameplayHudIds.Players,"Player information","player-rail"),this);
-                commandersRegistration=registry.Register(new GameplayHudDescriptor(GameplayHudIds.Commanders,"Commander information","commander-rail",GameplayHudCapabilities.Drawer),CommanderDrawer,available:false);
+                commandersRegistration=registry.Register(new GameplayHudDescriptor(GameplayHudIds.Commanders,"Commander information","commander-rail",GameplayHudCapabilities.Drawer,presetKey:"hud.commanders"),CommanderDrawer,available:false);
             }
         }
         private void UnregisterSeat(string id)

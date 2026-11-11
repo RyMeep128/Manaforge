@@ -32,7 +32,7 @@ public final class NativePaymentSearchChecks {
         @Override public boolean apply(Game game,Ability source,UUID producer,mage.abilities.costs.Cost cost){return source.getAbilityType()==AbilityType.SPELL;}
     }
     static void restrictedPool() {
-        TwoPlayerDuel game=new TwoPlayerDuel(MultiplayerAttackOption.MULTIPLE,RangeOfInfluence.ALL,new mage.game.mulligan.LondonMulligan(0),20,7,7);
+        TwoPlayerDuel game=new TwoPlayerDuel(MultiplayerAttackOption.MULTIPLE,RangeOfInfluence.ALL,new mage.game.mulligan.LondonMulligan(0),60,20,7);
         // Match startup initializes options before any native simulation copies.
         game.setGameOptions(new GameOptions());
         ContextHumanPlayer player=new ContextHumanPlayer("Restricted mana",RangeOfInfluence.ALL,0);player.setUserData(mage.players.net.UserData.getDefaultUserDataView());game.addPlayer(player,new mage.cards.decks.Deck());player.init(game);
@@ -49,7 +49,7 @@ public final class NativePaymentSearchChecks {
     public static void main(String[] args) throws Exception {
         Thread.currentThread().setName("GAME-payment-oracle");restrictedPool();Random seeds=new Random(20261110L);
         for(int seed=0;seed<16;seed++) {
-            TwoPlayerDuel game=new TwoPlayerDuel(MultiplayerAttackOption.MULTIPLE,RangeOfInfluence.ALL,new mage.game.mulligan.LondonMulligan(0),20,7,7);
+            TwoPlayerDuel game=new TwoPlayerDuel(MultiplayerAttackOption.MULTIPLE,RangeOfInfluence.ALL,new mage.game.mulligan.LondonMulligan(0),60,20,7);
             // Match startup initializes options before any native simulation copies.
             game.setGameOptions(new GameOptions());
             ContextHumanPlayer player=new ContextHumanPlayer("Oracle",RangeOfInfluence.ALL,0);player.setUserData(mage.players.net.UserData.getDefaultUserDataView());game.addPlayer(player,new mage.cards.decks.Deck());player.init(game);

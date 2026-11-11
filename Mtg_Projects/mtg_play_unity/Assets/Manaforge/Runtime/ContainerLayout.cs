@@ -28,15 +28,19 @@ namespace Manaforge.Play
         public Vector2 Maximum { get; }
         public GameplayHudCapabilities Capabilities { get; }
         public bool AcceptsDockedContainers { get; }
+        public bool ResizeDrawer { get; }
+        public float HeaderHeight { get; }
+        public bool WrapViewportRails { get; }
         private readonly HashSet<string> targets;
         public ContainerConstraints(Vector2 minimum,Vector2 maximum,GameplayHudCapabilities capabilities,
-            bool acceptsDockedContainers=false,IEnumerable<string> permittedTargets=null)
+            bool acceptsDockedContainers=false,IEnumerable<string> permittedTargets=null,bool resizeDrawer=false,float headerHeight=32,bool wrapViewportRails=false)
         {
             if(!ContainerLayoutResolver.Finite(minimum.x) || !ContainerLayoutResolver.Finite(minimum.y) ||
                 !ContainerLayoutResolver.Finite(maximum.x) || !ContainerLayoutResolver.Finite(maximum.y) ||
                 minimum.x<80 || minimum.y<60 || maximum.x<minimum.x || maximum.y<minimum.y)
                 throw new ArgumentException("CONTAINER_CONSTRAINTS");
-            Minimum=minimum;Maximum=maximum;Capabilities=capabilities;AcceptsDockedContainers=acceptsDockedContainers;
+            if(!ContainerLayoutResolver.Finite(headerHeight) || headerHeight<24)throw new ArgumentException("CONTAINER_HEADER");
+            WrapViewportRails=wrapViewportRails;ResizeDrawer=resizeDrawer;HeaderHeight=headerHeight;Minimum=minimum;Maximum=maximum;Capabilities=capabilities;AcceptsDockedContainers=acceptsDockedContainers;
             targets=permittedTargets==null?null:new HashSet<string>(permittedTargets,StringComparer.Ordinal);
         }
         public bool Supports(GameplayHudCapabilities capability)=>(Capabilities&capability)==capability;
@@ -64,8 +68,8 @@ namespace Manaforge.Play
             foreach(var c in constraints.Values)canvas=Vector2.Max(canvas,c.Minimum);
             Rect Size(ContainerLayoutState state){
                 var c=constraints[state.Id];var n=state.FloatingRect;
-                return new Rect(n.x*viewport.x,n.y*viewport.y,Mathf.Clamp(n.width*viewport.x,c.Minimum.x,c.Maximum.x),
-                    state.Mode==ContainerMode.Drawer?32:Mathf.Clamp(n.height*viewport.y,c.Minimum.y,c.Maximum.y));
+                return new Rect(n.x*viewport.x,n.y*viewport.y,c.WrapViewportRails?Mathf.Min(viewport.x,Mathf.Clamp(n.width*viewport.x,c.Minimum.x,c.Maximum.x)):Mathf.Clamp(n.width*viewport.x,c.Minimum.x,c.Maximum.x),
+                    state.Mode==ContainerMode.Drawer?c.HeaderHeight:Mathf.Clamp(n.height*viewport.y,c.Minimum.y,c.Maximum.y));
             }
             Rect Place(string id){
                 if(bounds.TryGetValue(id,out var existing))return existing;
@@ -89,6 +93,25 @@ namespace Manaforge.Play
                         case ContainerDockEdge.Right:rect.position=new Vector2(inside?target.xMax-rect.width:target.xMax+8,target.y+offset);break;
                         case ContainerDockEdge.Top:rect.position=new Vector2(target.x+offset,inside?target.y:target.y-rect.height-8);break;
                         case ContainerDockEdge.Bottom:rect.position=new Vector2(target.x+offset,inside?target.yMax-rect.height:target.yMax+8);break;
+                    }
+                    // Live edge handles wrap into another rail instead of covering a sibling
+                    // beyond the viewport. The synthetic scrollable canvas keeps its old policy.
+                    if(inside && constraints[id].WrapViewportRails){
+                        float along=0,across=0,rail=0;
+                        foreach(var sibling in states.Values.Where(s=>s.Edge==state.Edge && s.DockTarget==null)
+                            .OrderBy(s=>s.Order).ThenBy(s=>s.Id,StringComparer.Ordinal)){
+                            var size=Size(sibling);float length=vertical?size.height:size.width;
+                            if(along>0 && along+length>(vertical?viewport.y:viewport.x)){across+=rail+8;along=0;rail=0;}
+                            if(sibling.Id==id){
+                                switch(state.Edge){
+                                    case ContainerDockEdge.Left:rect.position=new Vector2(across,along);break;
+                                    case ContainerDockEdge.Right:rect.position=new Vector2(viewport.x-rect.width-across,along);break;
+                                    case ContainerDockEdge.Top:rect.position=new Vector2(along,across);break;
+                                    case ContainerDockEdge.Bottom:rect.position=new Vector2(along,viewport.y-rect.height-across);break;
+                                }break;
+                            }
+                            along+=length+8;rail=Mathf.Max(rail,vertical?size.width:size.height);
+                        }
                     }
                     // Content scrolls rather than shrinking below minimum. Headers stay nonnegative.
                     rect.x=Mathf.Max(0,rect.x);rect.y=Mathf.Max(0,rect.y);
@@ -146,7 +169,7 @@ namespace Manaforge.Play
         {
             if(state==null || string.IsNullOrWhiteSpace(state.Id) || limits==null || states.ContainsKey(state.Id))throw new ArgumentException("CONTAINER_REGISTRATION");
             states.Add(state.Id,state);constraints.Add(state.Id,limits);
-            if(!Valid(state) || state.Mode==ContainerMode.Drawer && !limits.Supports(GameplayHudCapabilities.ConvertDrawer)){
+            if(!Valid(state) || state.Mode==ContainerMode.Drawer && !limits.Supports(GameplayHudCapabilities.Drawer) && !limits.Supports(GameplayHudCapabilities.ConvertDrawer)){
                 states.Remove(state.Id);constraints.Remove(state.Id);throw new ArgumentException("CONTAINER_STATE");
             }
             Refresh();

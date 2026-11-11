@@ -58,21 +58,7 @@ namespace Manaforge.Play
             try{await operation();}catch(OperationCanceledException){}catch(Exception){if(!disposed)Error(PresetStoreStatus.IoError);}
         }
         private bool CanStart=>!disposed && !Busy && pendingConfirmation==null;
-        private static string Describe(PresetStoreStatus code)
-        {
-            switch(code){
-                case PresetStoreStatus.Ready:return "Presets ready";
-                case PresetStoreStatus.Missing:return "No saved presets yet";
-                case PresetStoreStatus.RecoveredBackup:return "Saved presets recovered from backup";
-                case PresetStoreStatus.Corrupt:return "Saved presets are damaged. Default is available; Save As preserves the damaged file";
-                case PresetStoreStatus.UnsupportedVersion:return "Presets use an unsupported app version; storage is read-only";
-                case PresetStoreStatus.Conflict:return "Changed in another window; Refresh list before saving";
-                case PresetStoreStatus.ValidationError:return "Invalid preset name or layout";
-                case PresetStoreStatus.Busy:return "Preset storage is in use; retry with Refresh list";
-                default:return "Could not access saved presets; retry with Refresh list";
-            }
-        }
-        private void Error(PresetStoreStatus code){LastStatus=code;message=Describe(code);Refresh();}
+        private void Error(PresetStoreStatus code){LastStatus=code;message=HudLayoutPresetSession.Describe(code);Refresh();}
         private void RefreshChoices()
         {
             selector.choices=new[]{"Default"}.Concat(library.Presets.Select(p=>p.Name)).ToList();
@@ -101,7 +87,7 @@ namespace Manaforge.Play
             if(!CanStart)return;Busy=true;Refresh();
             try{
                 var result=await store.ReadAsync(cancellation.Token);if(disposed)return;
-                LastStatus=result.Status;receipt=result;message=Describe(result.Status);
+                LastStatus=result.Status;receipt=result;message=HudLayoutPresetSession.Describe(result.Status);
                 if(result.Library==null)return;library=result.Library;
                 if(restore){
                     var preset=result.Success?library.Find(library.LastSelectedId):null;selectedId=preset?.Id;
@@ -109,7 +95,7 @@ namespace Manaforge.Play
                     if(application!=null && binding.Apply(application)){
                         SetLoaded(preset,application);
                         if(result.Success && library.LastSelectedId!=null && preset==null)message="Previous preset unavailable; Default loaded";
-                        if(result.Status!=PresetStoreStatus.Ready && result.Status!=PresetStoreStatus.Missing)message=Describe(result.Status)+"; "+message;
+                        if(result.Status!=PresetStoreStatus.Ready && result.Status!=PresetStoreStatus.Missing)message=HudLayoutPresetSession.Describe(result.Status)+"; "+message;
                     }else message="Preset could not be applied; using default workspace";
                 }
                 RefreshChoices();
@@ -120,7 +106,7 @@ namespace Manaforge.Play
         {
             var result=await store.WriteAsync(next,receipt?.Revision,cancellation.Token);if(disposed)return false;
             LastStatus=result.Status;
-            if(!result.Success){if(result.Status==PresetStoreStatus.UnsupportedVersion)receipt=result;message=Describe(result.Status);Refresh();return false;}
+            if(!result.Success){if(result.Status==PresetStoreStatus.UnsupportedVersion)receipt=result;message=HudLayoutPresetSession.Describe(result.Status);Refresh();return false;}
             library=result.Library;receipt=result;return true;
         }
         public async Task<bool> SaveAsync(string name,bool asNew)

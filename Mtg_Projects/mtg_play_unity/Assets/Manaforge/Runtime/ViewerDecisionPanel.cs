@@ -27,7 +27,9 @@ namespace Manaforge.Play
         private readonly System.Collections.Generic.List<CardView> groupPreviews=new System.Collections.Generic.List<CardView>();
         private void ClearGroupPreviews(){foreach(var view in groupPreviews)view.Dispose();groupPreviews.Clear();}
         public YieldPresentation Presentation {get;private set;}
-        public bool SuppressSpatialInput=>Presentation?.Compact==true;
+        public bool LayoutEditing {get;private set;}
+        public void SetLayoutEditing(bool value){ThreadOnly();if(LayoutEditing==value)return;LayoutEditing=value;autoAfter=-1;}
+        public bool SuppressSpatialInput=>LayoutEditing || Presentation?.Compact==true;
         private string[] numericText;private int numericPage;private Button numericSubmit;
         private TrackedCommand submitted;
         private float autoAfter=-1;
@@ -121,7 +123,7 @@ namespace Manaforge.Play
                 soleAbilityAttempted=true;var captured=offer;var only=captured.Frame.Decision.Options[0];Send(captured,()=>host.ChooseAsync(captured,only));return;
             }
             var automatic=priorityEnabled?Priority.Evaluate(offer.Frame):null;
-            if(automatic==null || pending!=null || !offer.CanSubmit || PriorityControlsOpen || PresentationHold?.Invoke()==true){autoAfter=-1;return;}
+            if(automatic==null || pending!=null || !offer.CanSubmit || PriorityControlsOpen || LayoutEditing || PresentationHold?.Invoke()==true){autoAfter=-1;return;}
             if(autoAfter<0){autoAfter=Time.unscaledTime+.35f;return;}
             if(Time.unscaledTime>=autoAfter){
                 var captured=offer;autoAfter=-1;
@@ -318,6 +320,6 @@ namespace Manaforge.Play
             ClearGroupPreviews();
             var frame=captured.Frame;if(frame==null)return;int last=Math.Max(0,(frame.Actions.Count+frame.Decision.Options.Count-1)/PageSize);page=Math.Max(0,Math.Min(last,page+delta));Build();
         }
-        public void Dispose(){ThreadOnly();if(disposed)return;disposed=true;Priority.Suspend();PresentationHold=null;priorityTasks.Clear();priorityReceipts.Clear();manaInput.Dispose();yieldStatus.Dispose();Clear();prompt.RemoveFromHierarchy();Root.RemoveFromHierarchy();}
+        public void Dispose(){ThreadOnly();if(disposed)return;disposed=true;LayoutEditing=false;Priority.Suspend();PresentationHold=null;priorityTasks.Clear();priorityReceipts.Clear();manaInput.Dispose();yieldStatus.Dispose();Clear();prompt.RemoveFromHierarchy();Root.RemoveFromHierarchy();}
     }
 }

@@ -23,14 +23,14 @@ namespace Manaforge.Play
         public bool IsApplying { get; private set; }
         public LayoutPresetApplicator(ContainerLayoutController controller,GameplayHudRegistry registry,Action cancelGestures)
         {this.controller=controller;this.registry=registry;this.cancelGestures=cancelGestures;defaults=controller.Ids.ToDictionary(id=>id,id=>controller.State(id));}
-        private Dictionary<string,GameplayHudRegistry.Registration> Bindings()=>registry.Entries.Where(e=>e.Descriptor.PresetKey!=null && e.Element is GameplayContainerShell)
+        private Dictionary<string,GameplayHudRegistry.Registration> Bindings()=>registry.Entries.Where(e=>e.Descriptor.PresetKey!=null && e.Container!=null)
             .ToDictionary(e=>e.Descriptor.PresetKey,e=>e,StringComparer.Ordinal);
         public HudLayoutPreset Capture(string id,string name,HudLayoutPreset prior=null)
         {
             var entries=prior==null?new Dictionary<string,HudComponentSnapshot>():prior.Components.ToDictionary(e=>e.Key,e=>e.Value);
-            var bindings=Bindings();var ids=bindings.ToDictionary(e=>((GameplayContainerShell)e.Value.Element).ComponentId,e=>e.Key);
+            var bindings=Bindings();var ids=bindings.ToDictionary(e=>(e.Value.Container).ComponentId,e=>e.Key);
             foreach(var pair in bindings){
-                var shell=(GameplayContainerShell)pair.Value.Element;if(!pair.Value.Available || !controller.Ids.Contains(shell.ComponentId))continue;
+                var shell=pair.Value.Container;if(!pair.Value.Available || !controller.Ids.Contains(shell.ComponentId))continue;
                 var state=controller.State(shell.ComponentId);string target=null;
                 if(state.DockTarget!=null)ids.TryGetValue(state.DockTarget,out target);
                 var edge=state.DockTarget!=null && target==null?ContainerDockEdge.None:state.Edge;
@@ -41,9 +41,9 @@ namespace Manaforge.Play
         }
         public HudLayoutPreset BuiltInDefault()
         {
-            var bindings=Bindings();var ids=bindings.ToDictionary(e=>((GameplayContainerShell)e.Value.Element).ComponentId,e=>e.Key);
+            var bindings=Bindings();var ids=bindings.ToDictionary(e=>(e.Value.Container).ComponentId,e=>e.Key);
             var entries=new Dictionary<string,HudComponentSnapshot>();
-            foreach(var pair in bindings){var id=((GameplayContainerShell)pair.Value.Element).ComponentId;if(!defaults.TryGetValue(id,out var state))continue;
+            foreach(var pair in bindings){var id=(pair.Value.Container).ComponentId;if(!defaults.TryGetValue(id,out var state))continue;
                 string target=null;if(state.DockTarget!=null)ids.TryGetValue(state.DockTarget,out target);
                 entries.Add(pair.Key,new HudComponentSnapshot(state.FloatingRect,state.Mode,target,state.Edge,state.Order,true));}
             return new HudLayoutPreset("built-in","Built-in layout",entries);
@@ -54,18 +54,18 @@ namespace Manaforge.Play
             var proposed=controller.Ids.ToDictionary(id=>id,id=>controller.State(id));var expansion=new Dictionary<string,bool>();var adjustments=new List<string>();
             var bindings=Bindings();
             foreach(var pair in bindings){
-                var registration=pair.Value;var shell=(GameplayContainerShell)registration.Element;string id=shell.ComponentId;
+                var registration=pair.Value;var shell=registration.Container;string id=shell.ComponentId;
                 if(!registration.Available || !proposed.ContainsKey(id) || !defaults.ContainsKey(id))continue;
                 var fallback=defaults[id];var limits=controller.Constraints(id);ContainerLayoutState candidate=fallback;bool expanded=true;
                 if(preset.Components.TryGetValue(pair.Key,out var saved)){
                     string target=null;bool missingTarget=false;
                     if(saved.DockTarget!=null){
-                        if(bindings.TryGetValue(saved.DockTarget,out var host) && host.Available && proposed.ContainsKey(((GameplayContainerShell)host.Element).ComponentId))
-                            target=((GameplayContainerShell)host.Element).ComponentId;
+                        if(bindings.TryGetValue(saved.DockTarget,out var host) && host.Available && proposed.ContainsKey((host.Container).ComponentId))
+                            target=(host.Container).ComponentId;
                         else missingTarget=true;
                     }
                     var rect=saved.FloatingRect;
-                    bool unsupported=saved.Mode==ContainerMode.Drawer && !limits.Supports(GameplayHudCapabilities.ConvertDrawer)
+                    bool unsupported=saved.Mode!=fallback.Mode && !limits.Supports(GameplayHudCapabilities.ConvertDrawer)
                         || !limits.Supports(GameplayHudCapabilities.Move) && rect.position!=fallback.FloatingRect.position
                         || !limits.Supports(GameplayHudCapabilities.Resize) && rect.size!=fallback.FloatingRect.size
                         || !limits.Supports(GameplayHudCapabilities.Dock) && saved.Edge!=ContainerDockEdge.None;
@@ -90,7 +90,7 @@ namespace Manaforge.Play
             IsApplying=true;
             try{
                 cancelGestures?.Invoke();if(!controller.TryApplyLayout(application.States))return false;
-                foreach(var entry in Bindings().Values){var shell=(GameplayContainerShell)entry.Element;
+                foreach(var entry in Bindings().Values){var shell=entry.Container;
                     if(entry.Available && application.DrawerExpansion.TryGetValue(shell.ComponentId,out var expanded))shell.RestoreDrawerExpanded(expanded);}
                 return true;
             }finally{IsApplying=false;}

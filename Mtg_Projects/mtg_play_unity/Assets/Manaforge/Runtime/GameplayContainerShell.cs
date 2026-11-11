@@ -1,13 +1,16 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.UIElements;
 
 namespace Manaforge.Play
 {
     // Borrows content. Dispose unhooks the shell, but never disposes borrowed content.
-    public sealed class GameplayContainerShell : VisualElement,IDisposable
+    public sealed class GameplayContainerShell : VisualElement,IGameplayContainerBinding,IDisposable
     {
+        public VisualElement Element=>this;
+        VisualElement IGameplayContainerBinding.MoveHandle=>MoveHandle;
         public string ComponentId { get; }
         public Label MoveHandle { get; }
         public Label Title { get; }
@@ -96,6 +99,8 @@ namespace Manaforge.Play
         private VisualElement captured;
         private int pointer;
         public bool IsActive=>active!=null;
+        public string ActiveId=>active;
+        public ContainerLayoutState PreviewState=>candidate;
         public string DockPreviewTarget { get; private set; }
         public ContainerDockEdge DockPreviewEdge { get; private set; }
         public ContainerGestureController(ContainerLayoutController controller,VisualElement canvas,Action<ContainerLayoutResult> render)
@@ -105,24 +110,24 @@ namespace Manaforge.Play
             canvas.RegisterCallback(key,TrickleDown.TrickleDown);
             changed=()=>{if(!committing && IsActive)Cancel();};controller.Changed+=changed;
         }
-        public IDisposable Attach(GameplayContainerShell shell)
+        public IDisposable Attach(IGameplayContainerBinding shell)
         {
             if(disposed)throw new ObjectDisposedException(nameof(ContainerGestureController));
             var unbind=new List<Action>();
             Bind(shell.MoveHandle,shell.ComponentId,false,Vector2.zero,unbind);
-            foreach(var grip in shell.ResizeHandles)Bind(grip.handle,shell.ComponentId,true,grip.axes,unbind);
-            EventCallback<DetachFromPanelEvent> detached=ev=>{if(ev.target==shell && active==shell.ComponentId)Cancel();};
-            shell.RegisterCallback(detached);unbind.Add(()=>shell.UnregisterCallback(detached));
+            foreach(var grip in shell.ResizeHandles)Bind(grip.handle,shell.ComponentId,true,grip.axes,unbind,()=>shell.ResizeHandles.First(g=>g.handle==grip.handle).axes);
+            EventCallback<DetachFromPanelEvent> detached=ev=>{if(ev.target==shell.Element && active==shell.ComponentId)Cancel();};
+            shell.Element.RegisterCallback(detached);unbind.Add(()=>shell.Element.UnregisterCallback(detached));
             Attachment attachment=null;
             Action disposing=()=>attachment?.Dispose();shell.Disposing+=disposing;unbind.Add(()=>shell.Disposing-=disposing);
             attachment=new Attachment(()=>{if(active==shell.ComponentId)Cancel();foreach(var action in unbind)action();attachments.Remove(attachment);});
             attachments.Add(attachment);return attachment;
         }
-        private void Bind(VisualElement handle,string id,bool sizing,Vector2 direction,List<Action> unbind)
+        private void Bind(VisualElement handle,string id,bool sizing,Vector2 direction,List<Action> unbind,Func<Vector2> currentDirection=null)
         {
             EventCallback<PointerDownEvent> down=ev=>{
                 if(ev.button!=0 || !handle.enabledInHierarchy)return;
-                if(!Begin(id,canvas.WorldToLocal(ev.position),sizing,direction))return;
+                if(!Begin(id,canvas.WorldToLocal(ev.position),sizing,currentDirection?.Invoke()??direction))return;
                 captured=handle;pointer=ev.pointerId;handle.CapturePointer(pointer);handle.Focus();ev.StopPropagation();
             };
             EventCallback<PointerMoveEvent> move=ev=>{if(captured!=handle || ev.pointerId!=pointer)return;Move(canvas.WorldToLocal(ev.position));ev.StopPropagation();};
@@ -136,8 +141,8 @@ namespace Manaforge.Play
             if(disposed)return false;Cancel();
             var limits=controller.Constraints(id);
             if(!limits.Supports(sizing?GameplayHudCapabilities.Resize:GameplayHudCapabilities.Move))return false;
-            if(sizing && controller.State(id).Mode==ContainerMode.Drawer)return false;
-            active=id;start=position;resize=sizing;axes=direction;original=controller.State(id);initial=controller.Resolved[id];candidate=null;
+            if(sizing && controller.State(id).Mode==ContainerMode.Drawer && !limits.ResizeDrawer)return false;
+            active=id;start=position;resize=sizing;axes=direction;original=controller.State(id);initial=controller.Resolved[id];if(sizing && original.Mode==ContainerMode.Drawer)initial.height=Mathf.Clamp(original.FloatingRect.height*controller.Viewport.y,limits.Minimum.y,limits.Maximum.y);candidate=null;
             return true;
         }
         public void Move(Vector2 position)

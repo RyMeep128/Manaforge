@@ -24,7 +24,8 @@ namespace Manaforge.Play
         private readonly System.Collections.Generic.HashSet<string> artworkProof=new System.Collections.Generic.HashSet<string>();
         private readonly JArray artworkEvidence=new JArray();
         private long artworkProgressRevision=-1;private bool concessionMenuSubmitted;
-        private GameplayMenuOverlay gameMenu;private PlayerDisplayControls displayControls;private ViewerRevealPanel reveals;private IGameplayPresentation presentation;private Func<VisualElement,IGameplayPresentation> presentationFactory=root=>new ArenaGameplayPresentation(root);private LiveGameAcceptanceDriver acceptance;private SpatialInputAcceptance spatialAcceptance;
+        private LiveHudLayoutAcceptance layoutAcceptance;
+        private GameplayMenuOverlay gameMenu;private PlayerDisplayControls displayControls;private ViewerRevealPanel reveals;private IGameplayPresentation presentation;private Func<VisualElement,IGameplayPresentation> presentationFactory;private LiveGameAcceptanceDriver acceptance;private SpatialInputAcceptance spatialAcceptance;
         public void SetPresentationFactory(Func<VisualElement,IGameplayPresentation> factory){if(document!=null)throw new InvalidOperationException("PRESENTATION_ALREADY_STARTED");presentationFactory=factory??throw new ArgumentNullException(nameof(factory));}
         private void Write(string name,JObject value){string temporary=Path.Combine(output,name+".tmp");File.WriteAllText(temporary,value.ToString());File.Move(temporary,Path.Combine(output,name+".json"));}
         private IEnumerator Start()
@@ -37,9 +38,10 @@ namespace Manaforge.Play
                 settings=ScriptableObject.CreateInstance<PanelSettings>();settings.themeStyleSheet=Resources.Load<ThemeStyleSheet>("CardTheme");settings.scaleMode=PanelScaleMode.ScaleWithScreenSize;settings.referenceResolution=new Vector2Int(1280,720);
                 document=gameObject.AddComponent<UIDocument>();document.panelSettings=settings;var root=document.rootVisualElement;root.style.flexGrow=1;root.style.backgroundColor=new Color(.025f,.055f,.075f);
                 var leave=new Button(()=>{userRequested=true;quit=true;}){text="Return to Manaforge"};leave.name="game-leave";leave.style.position=Position.Absolute;leave.style.left=12;leave.style.top=10;leave.style.backgroundColor=new Color(.08f,.09f,.11f,.9f);leave.style.color=new Color(.94f,.88f,.76f);root.Add(leave);
-                GameplayTheme.Attach(root);GameplayTheme.Button(leave);leave.style.backgroundColor=StyleKeyword.Null;leave.style.color=StyleKeyword.Null;presentation=presentationFactory(root);leave.BringToFront();surface=presentation.Surface;
-                host=new ViewerSessionHost(surface,reading.Result,pipe.WaitForOwnerCloseAsync(cancellation.Token),false,allowIdleWait:true);presentation.Bind(host);panel=presentation.Decisions;reveals=new ViewerRevealPanel(root,host,surface);gameMenu=new GameplayMenuOverlay(root,()=>host.CanConcede,()=>host.ConcedeAsync(),id=>host.ConcessionReceipt(id),()=>{if(presentation is ArenaGameplayPresentation arena)arena.InterruptGestures();});displayControls=new PlayerDisplayControls(root,ArtworkFixtureScene.Argument("-manaforgeGameAcceptance")!="1",gameMenu.OptionsContent);
+                GameplayTheme.Attach(root);GameplayTheme.Button(leave);leave.style.backgroundColor=StyleKeyword.Null;leave.style.color=StyleKeyword.Null;presentation=presentationFactory!=null?presentationFactory(root):CreateDefaultPresentation(root,ArtworkFixtureScene.Argument("-manaforgeGameAcceptance")=="1");if(presentation is ArenaGameplayPresentation){settings.scaleMode=PanelScaleMode.ConstantPixelSize;UpdateArenaScale();}leave.BringToFront();surface=presentation.Surface;
+                host=new ViewerSessionHost(surface,reading.Result,pipe.WaitForOwnerCloseAsync(cancellation.Token),false,allowIdleWait:true);presentation.Bind(host);panel=presentation.Decisions;reveals=new ViewerRevealPanel(root,host,surface);gameMenu=new GameplayMenuOverlay(root,()=>host.CanConcede,()=>host.ConcedeAsync(),id=>host.ConcessionReceipt(id),()=>{if(presentation is ArenaGameplayPresentation arena)arena.InterruptGestures();});if(presentation is ArenaGameplayPresentation layoutArena)gameMenu.SetLayoutEditor(layoutArena.LayoutEditor);displayControls=new PlayerDisplayControls(root,ArtworkFixtureScene.Argument("-manaforgeGameAcceptance")!="1",gameMenu.OptionsContent);
                 bool gameAcceptance=ArtworkFixtureScene.Argument("-manaforgeGameAcceptance")=="1";
+                if(gameAcceptance && ArtworkFixtureScene.Argument("-manaforgeConcedeAcceptance")!="1" && host.GameplayFormat=="freeform" && presentation is ArenaGameplayPresentation acceptanceArena)layoutAcceptance=new LiveHudLayoutAcceptance(root,acceptanceArena,gameMenu);
                 if(gameAcceptance || ArtworkFixtureScene.Argument("-manaforgeRulesTextProof")=="1"){acceptance=new LiveGameAcceptanceDriver();if(gameAcceptance && presentation is ArenaGameplayPresentation)spatialAcceptance=new SpatialInputAcceptance(panel,surface,host);}
                 var token=cancellation.Token;consuming=Task.Run(()=>{
                     while(!token.IsCancellationRequested && !host.Completion.IsCompleted){if(host.TryTake(out var update))using(update){
@@ -50,7 +52,8 @@ namespace Manaforge.Play
                 });
             }catch{Application.Quit(1);yield break;}
             while(!quit && !host.Completion.IsCompleted){
-                host.Tick();panel.Tick();var frame=Volatile.Read(ref latest);
+                UpdateArenaScale();
+                host.Tick();if(presentation is ArenaGameplayPresentation beforeArena)beforeArena.BeforeDecisionTick();panel.Tick();if(presentation is ArenaGameplayPresentation afterArena)afterArena.BeforeDecisionTick();var frame=Volatile.Read(ref latest);
                 if(frame!=null && host.HasPresentedRevision(frame.Context.Revision)){
                     if(!ready){ready=true;Write("game-ready",new JObject{["live_game_version"]=1,["authenticated"]=host.Authenticated});}
                     presentation.Present(frame);if(frame.Result!=null)gameMenu.EndMatch();
@@ -79,6 +82,7 @@ namespace Manaforge.Play
                         }
                         if(frame.Result!=null)quit=true;
                     }
+                    else if(!quit && layoutAcceptance?.Tick()==true){if(layoutAcceptance.Failed)quit=true;}
                     else if(!quit && acceptance!=null && CaptureReady(frame)){acceptance.SetAvailableLands(Volatile.Read(ref availableLands),Volatile.Read(ref availableCreatures),Volatile.Read(ref untappedLandIds),Volatile.Read(ref counterBallistaIds));quit=frame.UnsupportedFields.Contains("decision") || acceptance.Tick(host,panel,frame);}
                 }
                 yield return null;
@@ -89,9 +93,17 @@ namespace Manaforge.Play
             Write("game-closing",new JObject{["live_game_version"]=1,["requested"]=quit});
             if(spatialAcceptance!=null){Write("board-input-proof",new JObject{["card_keyboard_inputs"]=spatialAcceptance.Inputs});spatialAcceptance.Dispose();}
             host.Cancel();host.Tick();host.Dispose();reveals.Dispose();presentation.Dispose();while(!consuming.IsCompleted)yield return null;
-            bool cleared=document.rootVisualElement.Query<CardView>().ToList().Count==0;Write("game-closed",new JObject{["live_game_version"]=1,["outcome"]=final?.Result,["user_requested"]=userRequested,["concession_menu_submitted"]=concessionMenuSubmitted,["snapshots"]=Volatile.Read(ref snapshots),["confirmed"]=Volatile.Read(ref confirmed),["uncertain"]=Volatile.Read(ref uncertain),["viewer_cleared"]=cleared,["cleanup_confirmed"]=host.Completion.Result.CleanupConfirmed});
+            bool cleared=document.rootVisualElement.Query<CardView>().ToList().Count==0;Write("game-closed",new JObject{["live_game_version"]=1,["outcome"]=final?.Result,["user_requested"]=userRequested,["concession_menu_submitted"]=concessionMenuSubmitted,["hud_layout"]=layoutAcceptance?.Certificate(),["snapshots"]=Volatile.Read(ref snapshots),["confirmed"]=Volatile.Read(ref confirmed),["uncertain"]=Volatile.Read(ref uncertain),["viewer_cleared"]=cleared,["cleanup_confirmed"]=host.Completion.Result.CleanupConfirmed});
             Application.Quit(cleared && host.Completion.Result.CleanupConfirmed?0:1);
         }
+        private void UpdateArenaScale()
+        {
+            if(!(presentation is ArenaGameplayPresentation) || settings==null)return;
+            float scale=GameplayViewportContext.ScaleForPixels(new Vector2(Screen.width,Screen.height));
+            if(!Mathf.Approximately(settings.scale,scale))settings.scale=scale;
+        }
+        internal static IGameplayPresentation CreateDefaultPresentation(VisualElement root,bool acceptance)
+            =>new ArenaGameplayPresentation(root,capabilities:acceptance?new GameplayPresentationCapabilities(privateLayout:true):null,layoutPresetStore:acceptance?new MemoryLayoutPresetStore():null);
         // Public-deck acceptance evidence only; no capture or pacing changes in normal play.
         private bool CaptureReady(ProjectedDecisionFrame frame)
         {

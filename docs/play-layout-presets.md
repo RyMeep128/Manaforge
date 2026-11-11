@@ -3,7 +3,7 @@
 The synthetic Layout workspace now supports explicit Save, Save As, Load, Rename,
 Delete and Restore Default. Live Arena layout, gameplay input, networking and
 PlayerPrefs display settings are unchanged. See [container primitives](play-container-layout.md)
-and [the epic](customizable-tabletop-epic.md). CT-05 will add the live editor.
+and [the epic](customizable-tabletop-epic.md). The gated [CT-05A live editor](play-live-layout-editor.md) reuses this infrastructure.
 
 ## Use the fixture
 
@@ -34,7 +34,7 @@ references enter the store or its UI diagnostics.
 ## Identity, snapshot and application contracts
 
 GameplayHudDescriptor.PresetKey is optional. Only explicit stable authored keys
-participate in capture; all existing live descriptors remain excluded. The fixture
+participate in capture; live drawers opt in only through their container adapters. The fixture
 uses `fixture.panel`, `fixture.drawer`, `fixture.restricted`, and `fixture.host`.
 Registration rejects duplicate persistent keys before mutation. Runtime component,
 viewer, seat, session and card identifiers are never automatically captured.
