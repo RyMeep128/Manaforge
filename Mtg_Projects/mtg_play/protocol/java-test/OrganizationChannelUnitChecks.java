@@ -71,5 +71,18 @@ public final class OrganizationChannelUnitChecks {
             channel.receive("b",command("limit-0",1,7,Operation.create("b-group","Other",0,0)));check(reason(last.get())==null && channel.snapshot().organizationRevision==2,"LEDGER_NOT_SEAT_SCOPED");
         }
     }
-    public static void main(String[] args) throws Exception {admission();ledgerLimit();System.out.println("Organization owner admission, contextual preflight, historical retry, conflict and per-seat command bounds passed");}
+    static void preparedBasis() throws Exception {
+        List<Packet> packets=new ArrayList<>();
+        try(OrganizationChannel channel=new OrganizationChannel((seat,kind,raw)->{packets.add(new Packet(seat,kind,raw));return true;},basis(),7,contexts(basis(),7))){
+            channel.connected("a");channel.receive("a",capabilities());packets.clear();
+            OrganizationChannel.PreparedBasis prepared=channel.prepareBasis(basis(),8,contexts(basis(),8));
+            check(packets.isEmpty() && channel.snapshot().basisRevision==7,"PREPARE_PUBLISHED_OR_MUTATED");
+            prepared.commit();check(channel.snapshot().basisRevision==8 && packets.size()==1,"PREPARED_BASIS_COMMIT");
+            try{prepared.commit();throw new AssertionError("PREPARED_DOUBLE_COMMIT");}catch(IllegalStateException expected){}
+            prepared=channel.prepareBasis(basis(),9,contexts(basis(),9));channel.receive("a",command("intervening",0,8,Operation.create("g","G",0,0)));
+            try{prepared.commit();throw new AssertionError("PREPARED_STALE_COMMIT");}catch(IllegalStateException expected){}
+            check(channel.snapshot().basisRevision==8 && channel.snapshot().organizationRevision==1,"STALE_PREPARATION_MUTATED_STATE");
+        }
+    }
+    public static void main(String[] args) throws Exception {admission();ledgerLimit();preparedBasis();System.out.println("Organization owner admission, contextual preflight, historical retry, conflict and per-seat command bounds passed");}
 }

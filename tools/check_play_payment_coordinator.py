@@ -248,6 +248,9 @@ def main():
                 bridge_sources += [
                     PLAY / "java/payment-native-test/NativeMultiViewerChecks.java",
                     PLAY / "protocol/java-test/MatchCoordinatorChecks.java",
+                    *sorted((PLAY / "java/organization").rglob("*.java")),
+                    *sorted((PLAY / "java/organization-wire").rglob("*.java")),
+                    *sorted((PLAY / "java/organization-native").rglob("*.java")),
                 ]
             subprocess.run(
                 [

@@ -29,12 +29,22 @@ final class BattlefieldIdentityRegistry implements AutoCloseable {
         Result(Collection<Identity> current,Set<String> removed){this.current=Collections.unmodifiableList(new ArrayList<>(current));this.removed=Collections.unmodifiableSet(new HashSet<>(removed));}
     }
     private final UUID game;
-    final String matchEpoch=UUID.randomUUID().toString();
+    final String matchEpoch;
     private final Map<UUID,String> seats=new HashMap<>();
     private Map<String,Identity> live=new LinkedHashMap<>();
     private final Map<UUID,Map<String,Member>> viewers=new HashMap<>();
-    private int cycle=-1; private boolean closed;
-    BattlefieldIdentityRegistry(UUID game){this.game=Objects.requireNonNull(game);}
+    private int cycle=-1; private boolean closed;private long version;
+    BattlefieldIdentityRegistry(UUID game){this(game,UUID.randomUUID().toString());}
+    private BattlefieldIdentityRegistry(UUID game,String epoch){this.game=Objects.requireNonNull(game);matchEpoch=epoch;}
+    static final class Prepared {
+        private final BattlefieldIdentityRegistry owner;final BattlefieldIdentityRegistry candidate;private final long version;private boolean committed;
+        private Prepared(BattlefieldIdentityRegistry owner,BattlefieldIdentityRegistry candidate,long version){this.owner=owner;this.candidate=candidate;this.version=version;}
+        void commit(){synchronized(owner){if(committed || owner.closed || owner.version!=version)throw new IllegalStateException("IDENTITY_PREPARED_STALE");owner.seats.clear();owner.seats.putAll(candidate.seats);owner.live=new LinkedHashMap<>(candidate.live);owner.viewers.clear();for(Map.Entry<UUID,Map<String,Member>> entry:candidate.viewers.entrySet())owner.viewers.put(entry.getKey(),new LinkedHashMap<>(entry.getValue()));owner.cycle=candidate.cycle;owner.version++;committed=true;}}
+    }
+    synchronized Prepared prepare(){
+        if(closed)throw new IllegalStateException("IDENTITY_CLOSED");BattlefieldIdentityRegistry copy=new BattlefieldIdentityRegistry(game,matchEpoch);copy.seats.putAll(seats);copy.live=new LinkedHashMap<>(live);copy.cycle=cycle;
+        for(Map.Entry<UUID,Map<String,Member>> entry:viewers.entrySet())copy.viewers.put(entry.getKey(),new LinkedHashMap<>(entry.getValue()));return new Prepared(this,copy,version);
+    }
     private void validate(Snapshot snapshot){
         if(closed)throw new IllegalStateException("IDENTITY_CLOSED");
         if(!game.equals(snapshot.game) || snapshot.cycle<cycle || !snapshot.seats.contains(snapshot.viewer))throw new IllegalArgumentException("IDENTITY_BASIS");
@@ -56,7 +66,7 @@ final class BattlefieldIdentityRegistry implements AutoCloseable {
         Set<String> removed=new HashSet<>();for(Identity old:live.values())if(!next.containsKey(old.nativeObject.key()))removed.add(old.incarnation);
         // Revoke disappeared and transferred objects for every viewer, even before their next projection.
         for(Map<String,Member> handles:viewers.values())handles.entrySet().removeIf(entry->{Identity now=next.get(entry.getKey());return now==null || !now.nativeObject.eligible || !now.seat.equals(entry.getValue().seat);});
-        seats.clear();seats.putAll(nextSeats);live=next;cycle=snapshot.cycle;
+        seats.clear();seats.putAll(nextSeats);live=next;cycle=snapshot.cycle;version++;
         return new Result(next.values(),removed);
     }
     synchronized List<Member> project(Snapshot snapshot){
@@ -67,7 +77,7 @@ final class BattlefieldIdentityRegistry implements AutoCloseable {
             Member previous=old.get(identity.nativeObject.key());
             next.put(identity.nativeObject.key(),new Member(previous==null?UUID.randomUUID().toString():previous.handle,identity.seat,reference));
         }
-        viewers.put(snapshot.viewer,next);return Collections.unmodifiableList(new ArrayList<>(next.values()));
+        viewers.put(snapshot.viewer,next);version++;return Collections.unmodifiableList(new ArrayList<>(next.values()));
     }
     synchronized String resolve(UUID viewer,String handle){
         if(closed)return null;for(Member member:viewers.getOrDefault(viewer,Collections.emptyMap()).values())if(member.handle.equals(handle))return member.objectReference;return null;

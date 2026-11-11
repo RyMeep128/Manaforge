@@ -10,6 +10,28 @@ import mage.view.*;
 /** Read-only adapter using the same native response-monitor boundary as metadata. */
 final class NativeBattlefieldIdentity {
     private NativeBattlefieldIdentity(){}
+    interface Capture<T> {T capture(Map<UUID,GameView> views) throws Exception;}
+    static final class Batch<T> {
+        final Map<UUID,BattlefieldIdentityRegistry.Snapshot> identities;final T value;
+        private Batch(Map<UUID,BattlefieldIdentityRegistry.Snapshot> identities,T value){this.identities=Collections.unmodifiableMap(new HashMap<>(identities));this.value=value;}
+    }
+    /** Views, native observations and callback projection share one response-monitor checkpoint. */
+    static <T> Batch<T> captureBatchPaused(Game game,Collection<UUID> viewers,Capture<T> capture) throws Exception {
+        if(viewers.isEmpty() || new HashSet<>(viewers).size()!=viewers.size())throw new IllegalArgumentException("IDENTITY_VIEWERS");
+        for(Player player:game.getPlayers().values()){
+            if(player.hasLost() || player.hasLeft())continue;Object human=player.getRealPlayer();Class<?> type=human.getClass();
+            while(type!=null && !type.getName().equals("mage.player.human.HumanPlayer"))type=type.getSuperclass();if(type==null)continue;
+            Field response=type.getDeclaredField("response"),opened=type.getDeclaredField("responseOpenedForAnswer");response.setAccessible(true);opened.setAccessible(true);
+            synchronized(response.get(human)){
+                if(!Boolean.TRUE.equals(opened.get(human)))continue;GameState state=game.getState();int cycle=state.getApplyEffectsCounter();
+                Map<UUID,GameView> views=new LinkedHashMap<>();Map<UUID,BattlefieldIdentityRegistry.Snapshot> snapshots=new LinkedHashMap<>();
+                for(UUID viewer:viewers){GameView view=new GameView(state,game,viewer,null);views.put(viewer,view);snapshots.put(viewer,capturePaused(game,viewer,cycle,()->view));}
+                T value=capture.capture(Collections.unmodifiableMap(views));
+                if(game.getState()!=state || state.getApplyEffectsCounter()!=cycle)throw new IllegalArgumentException("IDENTITY_CYCLE");return new Batch<>(snapshots,value);
+            }
+        }
+        throw new IllegalStateException("IDENTITY_NOT_PAUSED");
+    }
     static BattlefieldIdentityRegistry.Snapshot capturePaused(Game game,UUID viewer,int cycle,Supplier<GameView> views) throws Exception {
         Player owner=game.getPlayer(viewer);
         if(owner==null || owner.hasLost() || owner.hasLeft() || game.hasEnded())throw new IllegalArgumentException("IDENTITY_VIEWER");

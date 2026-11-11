@@ -8,6 +8,16 @@ import java.util.*;
 public final class ManaforgeOpeningProjection {
     private static final Gson JSON=new GsonBuilder().serializeNulls().create();
     private final String session, viewer, engineViewer;
+    static final class ObserverResult {
+        private final JsonObject snapshot;
+        final Map<String,String> objects,seats;
+        ObserverResult(JsonObject snapshot,Map<String,String> objects,Map<String,String> seats){this.snapshot=snapshot.deepCopy();this.objects=Collections.unmodifiableMap(new HashMap<>(objects));this.seats=Collections.unmodifiableMap(new HashMap<>(seats));}
+        JsonObject snapshot(){return snapshot.deepCopy();}
+    }
+    private ObserverResult lastObserver;
+    synchronized ObserverResult projectObserverWithBindings(JsonObject raw,JsonObject prompt) throws IOException {
+        projectObserverPriority(raw,prompt);require(lastObserver!=null);return lastObserver;
+    }
     private String unsupportedCode="UNSUPPORTED_CHOICE_CONTEXT";
     public synchronized String unsupportedCode(){return unsupportedCode;}
     private final Map<String,CardIdentity> printings=new HashMap<>();
@@ -243,6 +253,7 @@ public final class ManaforgeOpeningProjection {
     }
     private JsonObject project(JsonObject raw,JsonObject prompt,boolean includePriorityPass,boolean includeSpells,boolean omitStack,boolean attackFinish,boolean includeAttackers,boolean combatObservation,boolean includeBlockers,boolean turnMode,boolean observer) throws IOException {
         invalidateDecision();
+        lastObserver=null;
         String diagnosticStage="CONTEXT";
         try {
             require(engineViewer.equals(raw.get("viewer").getAsString()));
@@ -356,6 +367,10 @@ public final class ManaforgeOpeningProjection {
                 result.unsupported_fields=new String[]{"object_incarnations","commander_metadata","live_abilities","actions","mana","counters","eliminated","attachments","copy_metadata","physical_printing","observations","stack_targets"};
                 if(omitStack){List<String> unsupported=new ArrayList<>(Arrays.asList(result.unsupported_fields));unsupported.add("stack");result.unsupported_fields=unsupported.toArray(new String[0]);}
                 JsonObject output=JSON.toJsonTree(result).getAsJsonObject();for(String key:new String[]{"decision_error","session_notice"})output.remove(key);
+                Map<String,String> publicObjects=new HashMap<>(),publicSeats=new HashMap<>();
+                for(JsonObject row:displayed){String id=text(row,"id");GameObject card=visibleCard(cards,visibleReferences.get(id));if(card!=null)publicObjects.put(id,card.object_id);}
+                for(String nativeSeat:seen)publicSeats.put(nativeSeat,engineViewer.equals(nativeSeat)?viewer:players.get(nativeSeat));
+                lastObserver=new ObserverResult(output,publicObjects,publicSeats);
                 presentationReferences.clear();presentationReferences.putAll(nextPresentationReferences);invalidateDecision();revision++;return output;
             }
             result.objects=cards.toArray(new GameObject[0]);List<LegalAction> actions=new ArrayList<>();Map<String,String> offeredNative=new HashMap<>();

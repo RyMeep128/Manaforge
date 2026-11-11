@@ -88,15 +88,24 @@ public final class OrganizationChannel implements ViewerChannelExtension {
         String receipt=OrganizationCodec.receipt(messageId(),commandId,result,contexts.get(seat));records.put(commandId,new Record(digest,receipt));sender.send(seat,Kind.RECEIPT,receipt);
         if(result.organizationChanged)broadcast(snapshots);else snapshot(seat);
     }
+    public final class PreparedBasis {
+        private final BattlefieldOrganizationSession.PreparedBasis prepared;
+        private final Map<String,OrganizationCodec.HostContext> checked;private final Map<String,String> snapshots;
+        private PreparedBasis(BattlefieldOrganizationSession.PreparedBasis prepared,Map<String,OrganizationCodec.HostContext> checked,Map<String,String> snapshots){this.prepared=prepared;this.checked=checked;this.snapshots=snapshots;}
+        public BattlefieldOrganizationSession.Result commit() throws Exception {owned();BattlefieldOrganizationSession.Result result=prepared.commit();contexts=checked;broadcast(snapshots);return result;}
+    }
+    public PreparedBasis prepareBasis(Basis basis,long revision,Map<String,OrganizationCodec.HostContext> nextContexts) throws Exception {
+        owned();require(revision>session.snapshot().basisRevision);
+        BattlefieldOrganizationSession.PreparedBasis prepared=session.prepareBasis(basis,revision);
+        require(prepared.result.outcome==BattlefieldOrganizationSession.Outcome.APPLIED);
+        Map<String,OrganizationCodec.HostContext> checked=checkedContexts(nextContexts,basis,revision);
+        BattlefieldOrganizationSession.Snapshot after=prepared.result.snapshot;
+        return new PreparedBasis(prepared,checked,render(after.state,after.organizationRevision,revision,checked));
+    }
     public BattlefieldOrganizationSession.Result updateBasis(Basis basis,long revision,Map<String,OrganizationCodec.HostContext> nextContexts) throws Exception {
         owned();BattlefieldOrganizationSession.Snapshot before=session.snapshot();
         if(basis==null || !basis.matchEpoch.equals(before.matchEpoch) || revision<=before.basisRevision)return session.updateBasis(basis,revision);
-        State candidate;
-        try{candidate=BattlefieldOrganizationService.reconcile(before.state,basis);}catch(Rejected invalid){return session.updateBasis(basis,revision);}
-        Map<String,OrganizationCodec.HostContext> checked=checkedContexts(nextContexts,basis,revision);boolean changed=!candidate.seats.equals(before.state.seats);
-        if(changed && before.organizationRevision==Long.MAX_VALUE)return session.updateBasis(basis,revision);
-        Map<String,String> snapshots=render(candidate,before.organizationRevision+(changed?1:0),revision,checked);
-        BattlefieldOrganizationSession.Result result=session.updateBasis(basis,revision);if(result.outcome==BattlefieldOrganizationSession.Outcome.APPLIED){contexts=checked;broadcast(snapshots);}return result;
+        return prepareBasis(basis,revision,nextContexts).commit();
     }
     /** Immutable host snapshot, not a viewer DTO. */
     public BattlefieldOrganizationSession.Snapshot snapshot(){return session.snapshot();}

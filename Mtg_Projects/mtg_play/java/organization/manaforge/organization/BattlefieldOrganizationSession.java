@@ -45,7 +45,14 @@ public final class BattlefieldOrganizationSession implements AutoCloseable {
         Snapshot after=changed?new Snapshot(next,before.organizationRevision+1,before.basisRevision):before;
         current=after;return new Result(Outcome.APPLIED,null,changed,after);
     }
-    public Result updateBasis(Basis newBasis,long basisRevision){
+    public final class PreparedBasis {
+        private final Snapshot before;public final Result result;private boolean committed;
+        private PreparedBasis(Snapshot before,Result result){this.before=before;this.result=result;}
+        public Result commit(){if(owned()!=before || committed)throw new IllegalStateException("ORGANIZATION_PREPARED_STALE");current=result.snapshot;committed=true;return result;}
+    }
+    public PreparedBasis prepareBasis(Basis newBasis,long basisRevision){Snapshot before=owned();return new PreparedBasis(before,resolveBasis(newBasis,basisRevision));}
+    public Result updateBasis(Basis newBasis,long basisRevision){return prepareBasis(newBasis,basisRevision).commit();}
+    private Result resolveBasis(Basis newBasis,long basisRevision){
         Snapshot before=owned();
         if(newBasis==null)return rejected("INVALID_BASIS",before);
         if(!newBasis.matchEpoch.equals(before.matchEpoch))return rejected("FOREIGN_MATCH",before);
@@ -60,7 +67,7 @@ public final class BattlefieldOrganizationSession implements AutoCloseable {
         boolean changed=!next.seats.equals(before.state.seats);
         if(changed && before.organizationRevision==Long.MAX_VALUE)return rejected("ORGANIZATION_REVISION_EXHAUSTED",before);
         Snapshot after=new Snapshot(next,before.organizationRevision+(changed?1:0),basisRevision);
-        current=after;return new Result(Outcome.APPLIED,null,changed,after);
+        return new Result(Outcome.APPLIED,null,changed,after);
     }
     public void close(){
         if(Thread.currentThread()!=owner)throw new IllegalStateException("ORGANIZATION_OWNER_THREAD");

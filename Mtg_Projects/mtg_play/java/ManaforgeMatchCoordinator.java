@@ -23,6 +23,16 @@ public final class ManaforgeMatchCoordinator implements AutoCloseable {
         private final JsonObject state,prompt;
         public Observation(JsonObject state,JsonObject prompt){this.state=state.deepCopy();this.prompt=prompt.deepCopy();}
     }
+    /** Host-only projection bindings. Never serialized or accepted from a socket. */
+    public static final class ProjectedObservation {
+        public final Viewer viewer;public final long cycle;
+        public final Map<String,String> objects,seats;
+        private final JsonObject snapshot;
+        private ProjectedObservation(Viewer viewer,long cycle,ManaforgeOpeningProjection.ObserverResult result){this.viewer=viewer;this.cycle=cycle;objects=result.objects;seats=result.seats;snapshot=result.snapshot();}
+        public JsonObject snapshot(){return snapshot.deepCopy();}
+    }
+    public interface PreparedPublication {void commit() throws Exception;}
+    public interface PublicationHook {PreparedPublication prepare(Map<String,ProjectedObservation> projected) throws Exception;}
     private static final class Connection {
         final LoopbackFrameReader frames;volatile boolean active;
         Connection(Socket socket) throws IOException {frames=new LoopbackFrameReader(socket);}
@@ -164,17 +174,21 @@ public final class ManaforgeMatchCoordinator implements AutoCloseable {
         }
         for(Channel channel:channels.values())synchronized(channel){channel.latest=payloads.get(channel.viewer.seat);channel.revision=revisions.get(channel.viewer.seat);channel.pending=channel.latest;channel.notifyAll();}
     }
-    public void publishNative(Map<String,Observation> observations) throws Exception {
+    public void publishNative(Map<String,Observation> observations) throws Exception {publishNative(observations,null);}
+    public void publishNative(Map<String,Observation> observations,PublicationHook hook) throws Exception {
         Map<String,Observation> copy=new HashMap<>(observations);
         invoke(()->{
-            require(copy.keySet().equals(channels.keySet()),"COORDINATOR_PUBLICATION");Long cycle=null;Map<String,JsonObject> snapshots=new HashMap<>();
+            require(copy.keySet().equals(channels.keySet()),"COORDINATOR_PUBLICATION");Long cycle=null;Map<String,JsonObject> snapshots=new HashMap<>();Map<String,ProjectedObservation> projected=new HashMap<>();
             for(Channel channel:channels.values()){
                 Observation observation=copy.get(channel.viewer.seat);require(observation!=null && nativeGame.equals(observation.state.get("game_id").getAsString()) && channel.viewer.nativePlayer.equals(observation.state.get("viewer").getAsString()),"COORDINATOR_NATIVE_CONTEXT");
                 long next=observation.state.get("cycle").getAsLong();require(cycle==null || cycle==next,"COORDINATOR_NATIVE_BASIS");cycle=next;
-                JsonObject snapshot=channel.projection.projectObserverPriority(observation.state,observation.prompt),envelope=new JsonObject(),body=new JsonObject();
+                ManaforgeOpeningProjection.ObserverResult result=channel.projection.projectObserverWithBindings(observation.state,observation.prompt);
+                projected.put(channel.viewer.seat,new ProjectedObservation(channel.viewer,next,result));
+                JsonObject snapshot=result.snapshot(),envelope=new JsonObject(),body=new JsonObject();
                 envelope.addProperty("wire_version",1);envelope.addProperty("message_type","snapshot");envelope.addProperty("message_id","match-view-"+snapshot.get("revision").getAsLong());body.addProperty("fixture_only",fixtureMode);body.add("snapshot",snapshot);envelope.add("body",body);snapshots.put(channel.viewer.seat,envelope);
             }
-            publishOwned(snapshots);return null;
+            PreparedPublication prepared=hook==null?null:Objects.requireNonNull(hook.prepare(Collections.unmodifiableMap(projected)));
+            publishOwned(snapshots);if(prepared!=null)prepared.commit();return null;
         });
     }
     public ConnectionStatus status(String seat){Channel channel=channels.get(seat);if(channel==null)throw new IllegalArgumentException("COORDINATOR_SEAT");synchronized(channel){return new ConnectionStatus(channel.status,channel.reason,channel.sent,channel.pending==null?0:1,channel.organization==null?0:1,channel.receipts.size(),channel.incoming.get());}}

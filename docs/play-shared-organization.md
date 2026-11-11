@@ -123,3 +123,34 @@ incarnation stability, old-handle revocation and projected seat ownership. Publi
 fixture diagnostics record controller/generation and old-handle resolution. No
 identity assertion is removed and no native production rules are changed. Hosted
 stock and delivery-engine evidence is required for this correction.
+
+### Trusted projection bridge
+
+`NativeBattlefieldIdentity.captureBatchPaused` captures all registered viewers and
+runs their native callback projection under a single open native response monitor.
+Its identity snapshots are immutable host inputs. `projectObserverWithBindings`
+returns the existing read-only gameplay snapshot plus immutable native-to-opaque
+object and seat mappings, collected during projection, never inferred from names.
+Only eligible visible battlefield objects appear in those object bindings.
+
+`NativeOrganizationBridge`, in the explicitly compiled `java/organization-native`
+module, is an optional `ViewerChannelExtension`. Construct it in the coordinator
+factory with the exact registrations and match ID. Pass its `publication` hook
+alongside the captured observation batch to the overloaded `publishNative` call.
+The ordinary launcher and old publication overload do not install this bridge.
+
+On the coordinator owner, the hook stages registry reconciliation on a private
+candidate and preflights organization contexts and payloads. The coordinator first
+validates and enqueues the entire gameplay batch, then commits identity and the
+prepared organization basis. There is no intervening owner work. Failed validation
+leaves committed identity, contexts and organization unchanged. Native projection
+may consume an unused gameplay revision on failure; no rejected snapshot is sent.
+A prepared update rejects double commit or intervening committed state changes.
+
+The bridge starts with empty basis zero and temporary opaque seat references. Each
+accepted native publication replaces these with the exact gameplay seat/object
+references and advances its own basis revision, including same-cycle reference
+refreshes. Group membership remains incarnation-based. Native cycle validation
+remains independent of this revision. Fixed roster, public eligibility and existing
+receipt/queue limits remain enforced. The bridge owns and disposes its registry and
+channel with the match. No native response transport is available to this module.
