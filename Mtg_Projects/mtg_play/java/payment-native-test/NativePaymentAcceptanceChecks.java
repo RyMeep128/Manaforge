@@ -98,7 +98,10 @@ public final class NativePaymentAcceptanceChecks {
             if(query==null){if(running!=null && running.isDone())running.get();throw new AssertionError("NATIVE_PAYMENT_PROMPT_TIMEOUT");}
             check(query.getPlayerId().equals(payer.getId()),"FOREIGN_PAYMENT_QUERY");
             long end=System.nanoTime()+TimeUnit.SECONDS.toNanos(5);Object monitor=response.get(payer);
-            while(true){synchronized(monitor){if(Boolean.TRUE.equals(opened.get(payer))){view=new GameView(game.getState(),game,payer.getId(),null);break;}}if(System.nanoTime()>end)throw new AssertionError("NATIVE_RESPONSE_NOT_OPEN");Thread.yield();}
+            while(true){synchronized(monitor){if(Boolean.TRUE.equals(opened.get(payer))){view=new GameView(game.getState(),game,payer.getId(),null);
+                // Mirror GameSessionPlayer.getGameView: source correlation needs the native
+                // playable list, not a fabricated bridge offer or relaxed receipt checks.
+                view.setCanPlayObjects(payer.getPlayableObjects(game,Zone.ALL));break;}}if(System.nanoTime()>end)throw new AssertionError("NATIVE_RESPONSE_NOT_OPEN");Thread.yield();}
             ClientCallbackMethod method=query.getQueryType()==PlayerQueryEvent.QueryType.PLAY_MANA?ClientCallbackMethod.GAME_PLAY_MANA:ClientCallbackMethod.GAME_ASK;
             check(query.getQueryType()==PlayerQueryEvent.QueryType.PLAY_MANA || query.getQueryType()==PlayerQueryEvent.QueryType.ASK,"UNEXPECTED_NATIVE_QUERY_"+query.getQueryType());
             ClientCallback callback=new ClientCallback(method,game.getId(),new GameClientMessage(view,query.getOptions(),query.getMessage()));callback.setMessageId(++decision);bridge.onCallback(callback);
