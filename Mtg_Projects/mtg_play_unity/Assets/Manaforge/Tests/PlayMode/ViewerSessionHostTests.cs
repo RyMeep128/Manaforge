@@ -23,10 +23,10 @@ namespace Manaforge.Play.Tests
         internal sealed class Peer:IDisposable
         {
             private readonly TcpListener listener=new TcpListener(IPAddress.Loopback,0);private readonly TaskCompletionSource<bool> release=Signal();private readonly Task work;
-            private TcpClient client;private int disposed;public readonly TaskCompletionSource<bool> Accepted=Signal(),Sent=Signal();public int Port {get;}
-            public Peer(string frame,bool silent=false,bool wrongPin=false)
+            private readonly string viewer;private TcpClient client;private int disposed;public readonly TaskCompletionSource<bool> Accepted=Signal(),Sent=Signal();public int Port {get;}
+            public Peer(string frame,bool silent=false,bool wrongPin=false,string viewer="one")
             {
-                listener.Start();Port=((IPEndPoint)listener.LocalEndpoint).Port;
+                this.viewer=viewer;listener.Start();Port=((IPEndPoint)listener.LocalEndpoint).Port;
                 work=Task.Run(async()=>{
                     try {
                         client=await listener.AcceptTcpClientAsync().ConfigureAwait(false);client.ReceiveTimeout=3000;var stream=client.GetStream();Accepted.TrySetResult(true);
@@ -42,11 +42,11 @@ namespace Manaforge.Play.Tests
                     }catch(Exception error){if(Volatile.Read(ref disposed)==0 && !(wrongPin && (error is IOException || error is SocketException)))throw;}
                 });
             }
-            private static JObject Hello(string role,string server,string nonce,bool wrong)=>new JObject{["wire_version"]=1,["message_type"]="hello",["message_id"]="auth-"+role,["body"]=new JObject{["protocol_version"]=1,["engine_version"]="fixture-engine",["artifact_manifest_sha256"]=new string(wrong?'b':'a',64),["session_id"]="fixture-session",["viewer_id"]="one",["server_nonce"]=server,["client_nonce"]=nonce,["role"]=role,["proof"]=new string('0',64)}};
-            public ViewerBootstrap Bootstrap(string artworkDirectory=null,string artworkPin=null)
+            private JObject Hello(string role,string server,string nonce,bool wrong)=>new JObject{["wire_version"]=1,["message_type"]="hello",["message_id"]="auth-"+role,["body"]=new JObject{["protocol_version"]=1,["engine_version"]="fixture-engine",["artifact_manifest_sha256"]=new string(wrong?'b':'a',64),["session_id"]="fixture-session",["viewer_id"]=viewer,["server_nonce"]=server,["client_nonce"]=nonce,["role"]=role,["proof"]=new string('0',64)}};
+            public ViewerBootstrap Bootstrap(string artworkDirectory=null,string artworkPin=null,int organizationVersion=0)
             {
                 byte[] key=new byte[32];for(int i=0;i<32;i++)key[i]=(byte)i;string hex=BitConverter.ToString(key).Replace("-","").ToLowerInvariant();Array.Clear(key,0,key.Length);
-                var value=new JObject{["viewer_bootstrap_version"]=1,["protocol_version"]=1,["endpoint"]=new JObject{["host"]="127.0.0.1",["port"]=Port},["session_id"]="fixture-session",["viewer_id"]="one",["engine_version"]="fixture-engine",["artifact_manifest_sha256"]=new string('a',64),["viewer_key_hex"]=hex,["artwork"]=artworkDirectory==null?JValue.CreateNull():(JToken)new JObject{["directory"]=artworkDirectory,["manifest_sha256"]=artworkPin}};return ViewerBootstrap.Parse(Encoding.UTF8.GetBytes(value.ToString()));
+                var value=new JObject{["viewer_bootstrap_version"]=1,["protocol_version"]=1,["endpoint"]=new JObject{["host"]="127.0.0.1",["port"]=Port},["session_id"]="fixture-session",["viewer_id"]=viewer,["engine_version"]="fixture-engine",["artifact_manifest_sha256"]=new string('a',64),["viewer_key_hex"]=hex,["artwork"]=artworkDirectory==null?JValue.CreateNull():(JToken)new JObject{["directory"]=artworkDirectory,["manifest_sha256"]=artworkPin}};if(organizationVersion!=0)value["organization_version"]=organizationVersion;return ViewerBootstrap.Parse(Encoding.UTF8.GetBytes(value.ToString()));
             }
             // Test-driver worker methods. The handshake writer has retired before these run.
             public string ReadCommandForFixture(){Sent.Task.GetAwaiter().GetResult();return TextFrame.Read(client.GetStream());}

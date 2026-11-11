@@ -10,8 +10,9 @@ Status: implementation in progress; private drawer customization is enabled in t
 | CT-03 | Reusable container geometry and gesture infrastructure implemented. |
 | CT-04 | Versioned named preset storage implemented. |
 | CT-05A / CT-06 | Live editor for Priority, Actions, Zones, and Commander drawers, plus resolution recovery and session reset implemented; hosted Unity/full-game and owner acceptance incomplete. |
-| CT-07A | Internal Java identity registry and paused native adapter added; hosted lifecycle evidence pending. No production integration or wire contract. |
-| CT-07 remainder / CT-08–17 | Match-lifetime integration, shared groups, authority, rendering, and reconnect remain unimplemented. |
+| CT-07–11 | Identity/session reducer, authenticated shared organization transport, native bridge, and opt-in normal owner integration implemented; exact-SHA native/full-game acceptance remains a release gate. |
+| CT-12–14 | Flat-group rendering, selection and editing candidate implemented behind v2 opt-in; hosted/manual/native acceptance incomplete. See [shared rendering](play-shared-rendering.md). |
+| CT-15–17 | Dynamic group drawers, reconnect reconstruction and join/leave policies remain unimplemented. |
 | CT-18–22 | Automatic rules, visual stacks, land organization, and nested groups remain unimplemented. |
 | CT-23–24 | Release acceptance and four-player shared-table gates remain incomplete. |
 

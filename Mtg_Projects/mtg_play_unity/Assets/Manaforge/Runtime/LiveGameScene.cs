@@ -37,7 +37,7 @@ namespace Manaforge.Play
             try{
                 settings=ScriptableObject.CreateInstance<PanelSettings>();settings.themeStyleSheet=Resources.Load<ThemeStyleSheet>("CardTheme");settings.scaleMode=PanelScaleMode.ScaleWithScreenSize;settings.referenceResolution=new Vector2Int(1280,720);
                 document=gameObject.AddComponent<UIDocument>();document.panelSettings=settings;var root=document.rootVisualElement;root.style.flexGrow=1;root.style.backgroundColor=new Color(.025f,.055f,.075f);
-                GameplayTheme.Attach(root);presentation=presentationFactory!=null?presentationFactory(root):CreateDefaultPresentation(root,ArtworkFixtureScene.Argument("-manaforgeGameAcceptance")=="1");if(presentation is ArenaGameplayPresentation){settings.scaleMode=PanelScaleMode.ConstantPixelSize;UpdateArenaScale();}surface=presentation.Surface;
+                GameplayTheme.Attach(root);presentation=presentationFactory!=null?presentationFactory(root):CreateDefaultPresentation(root,ArtworkFixtureScene.Argument("-manaforgeGameAcceptance")=="1",reading.Result.OrganizationVersion==2);if(presentation is ArenaGameplayPresentation){settings.scaleMode=PanelScaleMode.ConstantPixelSize;UpdateArenaScale();}surface=presentation.Surface;
                 host=new ViewerSessionHost(surface,reading.Result,pipe.WaitForOwnerCloseAsync(cancellation.Token),false,allowIdleWait:true);presentation.Bind(host);panel=presentation.Decisions;reveals=new ViewerRevealPanel(root,host,surface);gameMenu=new GameplayMenuOverlay(root,()=>host.CanConcede,()=>host.ConcedeAsync(),id=>host.ConcessionReceipt(id),()=>{if(presentation is ArenaGameplayPresentation arena)arena.InterruptGestures();},returnToManaforge:()=>{userRequested=true;quit=true;});if(presentation is ArenaGameplayPresentation layoutArena)gameMenu.SetLayoutEditor(layoutArena.LayoutEditor);displayControls=new PlayerDisplayControls(root,ArtworkFixtureScene.Argument("-manaforgeGameAcceptance")!="1",gameMenu.OptionsContent);
                 bool gameAcceptance=ArtworkFixtureScene.Argument("-manaforgeGameAcceptance")=="1";
                 if(gameAcceptance && ArtworkFixtureScene.Argument("-manaforgeConcedeAcceptance")!="1" && host.GameplayFormat=="freeform" && presentation is ArenaGameplayPresentation acceptanceArena)layoutAcceptance=new LiveHudLayoutAcceptance(root,acceptanceArena,gameMenu);
@@ -55,6 +55,7 @@ namespace Manaforge.Play
                 host.Tick();if(presentation is ArenaGameplayPresentation beforeArena)beforeArena.BeforeDecisionTick();panel.Tick();if(presentation is ArenaGameplayPresentation afterArena)afterArena.BeforeDecisionTick();var frame=Volatile.Read(ref latest);
                 if(frame!=null && host.HasPresentedRevision(frame.Context.Revision)){
                     if(!ready){ready=true;Write("game-ready",new JObject{["live_game_version"]=1,["authenticated"]=host.Authenticated});}
+                    if(presentation is IOrganizationPresentation organized)organized.PresentOrganization(host.OrganizationFor(frame.Context.Revision));
                     presentation.Present(frame);if(frame.Result!=null)gameMenu.EndMatch();
                     if(ArtworkFixtureScene.Argument("-manaforgeArtworkProof")=="1" && frame.Result==null && frame.Decision==null && frame.Actions.Count==0) {yield return null;continue;}
                     if(ArtworkFixtureScene.Argument("-manaforgeRulesTextProof")=="1") {
@@ -101,8 +102,8 @@ namespace Manaforge.Play
             float scale=GameplayViewportContext.ScaleForPixels(new Vector2(Screen.width,Screen.height));
             if(!Mathf.Approximately(settings.scale,scale))settings.scale=scale;
         }
-        internal static IGameplayPresentation CreateDefaultPresentation(VisualElement root,bool acceptance)
-            =>new ArenaGameplayPresentation(root,capabilities:new GameplayPresentationCapabilities(privateLayout:true),layoutPresetStore:acceptance?new MemoryLayoutPresetStore():null);
+        internal static IGameplayPresentation CreateDefaultPresentation(VisualElement root,bool acceptance,bool organization=false)
+            =>new ArenaGameplayPresentation(root,capabilities:new GameplayPresentationCapabilities(privateLayout:true,sharedOrganization:organization),layoutPresetStore:acceptance?new MemoryLayoutPresetStore():null);
         // Public-deck acceptance evidence only; no capture or pacing changes in normal play.
         private bool CaptureReady(ProjectedDecisionFrame frame)
         {

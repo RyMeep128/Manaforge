@@ -79,3 +79,7 @@
 #zones-drawer > .mf-drawer-viewport { position: absolute; left: 0; width: 252px; padding-top: 0; }
 #zone-panel-scroll { width: 252px; }
 #zone-panel-scroll .unity-scroll-view__content-container { min-width: 232px; }
+
+.table-card.organization-selected { border-left-color: rgb(62, 205, 215); border-right-color: rgb(62, 205, 215); border-top-color: rgb(62, 205, 215); border-bottom-color: rgb(62, 205, 215); border-left-width: 3px; border-right-width: 3px; border-top-width: 3px; border-bottom-width: 3px; }
+#organization-controls { background-color: rgba(20, 28, 31, 0.96); color: rgb(235, 230, 216); }
+#organization-drag-ghost { background-color: rgb(20, 48, 53); color: white; padding-left: 10px; padding-right: 10px; }
