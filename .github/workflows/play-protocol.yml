@@ -4,6 +4,8 @@ on:
   push:
     paths:
       - 'Mtg_Projects/mtg_play/protocol/**'
+      - 'Mtg_Projects/mtg_play/java/organization/**'
+      - 'Mtg_Projects/mtg_play/java/organization-wire/**'
       - 'Mtg_Projects/mtg_play/java/ManaforgeOpening*.java'
       - 'Mtg_Projects/mtg_play/java/ManaforgeUnityOpening.java'
       - 'Mtg_Projects/mtg_play/gateway_bootstrap.py'
@@ -21,10 +23,13 @@ on:
       - 'Mtg_Projects/mtg_play_unity/Assets/Manaforge/Runtime/Protocol/**'
       - 'tools/*play*protocol*.py'
       - 'tools/generate_play_models.py'
+      - 'tools/generate_play_organization_fixtures.py'
       - '.github/workflows/play-protocol.yml'
   pull_request:
     paths:
       - 'Mtg_Projects/mtg_play/protocol/**'
+      - 'Mtg_Projects/mtg_play/java/organization/**'
+      - 'Mtg_Projects/mtg_play/java/organization-wire/**'
       - 'Mtg_Projects/mtg_play/java/ManaforgeOpening*.java'
       - 'Mtg_Projects/mtg_play/java/ManaforgeUnityOpening.java'
       - 'Mtg_Projects/mtg_play/gateway_bootstrap.py'
@@ -42,6 +47,7 @@ on:
       - 'Mtg_Projects/mtg_play_unity/Assets/Manaforge/Runtime/Protocol/**'
       - 'tools/*play*protocol*.py'
       - 'tools/generate_play_models.py'
+      - 'tools/generate_play_organization_fixtures.py'
       - '.github/workflows/play-protocol.yml'
   workflow_dispatch:
 
@@ -63,6 +69,8 @@ jobs:
         with:
           distribution: temurin
           java-version: '23.0.2+7'
+      - name: Check organization shared corpus drift
+        run: python tools/generate_play_organization_fixtures.py --check
       - name: Check generated Java and CSharp models
         run: python tools/generate_play_models.py --check
       - name: Compile and run Java fixture consumer with pinned Gson

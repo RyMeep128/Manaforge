@@ -128,6 +128,14 @@ def main():
             / "java/payment-gateway/manaforge/payment/gateway/GatewayPaymentPort.java",
             PROTOCOL / "java-test/InternalPaymentFixtureConsumer.java",
         ]
+        sources += [
+            PROTOCOL / "java/manaforge/protocol/OrganizationMessages.java",
+            PROTOCOL / "java/manaforge/protocol/OrganizationContracts.java",
+            PROTOCOL / "java/manaforge/protocol/OrganizationContractSchema.java",
+            PROTOCOL / "java-test/OrganizationFixtureConsumer.java",
+            *sorted((PLAY / "java/organization").rglob("*.java")),
+            *sorted((PLAY / "java/organization-wire").rglob("*.java")),
+        ]
         subprocess.run(
             [
                 compiler,
@@ -335,7 +343,21 @@ def main():
             timeout=60,
         )
 
-        subprocess.run([runtime, "-cp", str(workspace), "HeartbeatChecks"], check=True, timeout=15)
+        subprocess.run(
+            [runtime, "-cp", str(workspace), "HeartbeatChecks"], check=True, timeout=15
+        )
+
+        subprocess.run(
+            [
+                runtime,
+                "-cp",
+                str(workspace) + os.pathsep + str(jar),
+                "manaforge.protocol.OrganizationFixtureConsumer",
+                str(PROTOCOL / "fixtures/organization-v1.json"),
+            ],
+            check=True,
+            timeout=60,
+        )
 
         if args.dummy_output:
             output = args.dummy_output.resolve()

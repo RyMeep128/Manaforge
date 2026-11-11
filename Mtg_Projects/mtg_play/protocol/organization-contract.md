@@ -52,9 +52,52 @@ the parsed structure, while strict Java/C# readers additionally reject duplicate
 keys, fractional integer spelling, invalid Unicode, over-budget bytes, and wrong
 viewer/basis references. Schema conformance alone is not admission or authentication.
 
-Java and C# validators/codecs and cross-language contextual checks follow in the
-second review step. Hosted cross-language evidence is required before CT-09A is
-accepted. A local Unity build is attempted after C# changes; missing licensing or
+Java and C# validators/codecs and cross-language contextual checks are implemented
+in the second review step. Hosted cross-language evidence is required before
+CT-09A is accepted. A local Unity build is attempted after C# changes; missing licensing or
 skipped hosted Unity checks are not passing evidence. Native identity acceptance,
 authenticated viewer coordination, deduplication, and live integration remain gates
 before any shared organization can be exposed to players.
+
+## Contextual codecs
+
+`OrganizationMessages.parse/Parse` reads the standalone envelope through the shared
+strict JSON object reader, then validates the embedded generated schema and semantic
+constraints. Duplicate seats/groups/members, dangling/duplicate mappings, wrong
+viewer/epoch/basis, and unadmitted references reject before DTO use. Context inputs
+are copied into read-only authorization maps. Context is server/session-owned data,
+never reconstructed from an untrusted message's claimed identity.
+
+The Java `organization-wire` codec is deliberately separate from the JDK-only
+reducer module. Its HostContext explicitly maps viewer handles to host incarnations
+and canonical seats to viewer-safe seat references. Command conversion retains both
+expected revisions and command ID, resolves only the trusted actor's handles, and
+still requires session admission. It does not invoke gameplay or organization edits.
+Snapshot construction projects each field and filters unadmitted/ineligible members;
+it never serializes a host State. Host-ID-as-handle aliases reject. Normalized points
+use round-to-nearest fixed-point integers on output. Labels/count/byte overflows
+reject serialization rather than truncate. Receipt serialization admits only reviewed
+reason codes; raw exceptions and native identifiers are not exported as diagnostics.
+
+The C# codec validates and encodes generated client operation DTOs and validates
+incoming receipts/snapshots against explicit viewer context. It has no host-incarnation
+table and does not duplicate the Java reducer. The new parser is not registered in
+ClientSession, authentication, or live receive dispatch. Old parsers still reject
+organization messages. Negotiation is a pure mutual-version/authenticated-context
+helper; it sends no packets and enables no presentation capability by itself.
+
+Shared corpus checks run in the Java protocol workflow and hosted Unity EditMode
+suite. Additional Java checks cover codec/session revision isolation, foreign actor
+handles, projection privacy canaries, hidden-member omission, contextual mapping
+rejection, generated DTOs, and a structurally bounded but oversized 1,024-member
+snapshot that must fail with ORGANIZATION_SIZE. C# checks use the same corpus,
+generated DTO encoder, context-copy/capability checks, and oversized serialization.
+The Python schema corpus intentionally distinguishes structural conformance from
+strict lexical/contextual validation. All existing gameplay/auth fixtures remain.
+
+Local Windows rebuilds succeeded for the initial generated C# contract and validator
+implementation. No local test suite was run. Exact-SHA hosted Java/C# evidence is
+still required; local builds do not establish cross-language or full-game acceptance.
+Unrelated Unity rollout edits in the shared workspace were preserved and excluded
+from these contract commits. Native identity/control-transfer acceptance and the
+future authenticated coordinator remain prerequisites for live integration.
