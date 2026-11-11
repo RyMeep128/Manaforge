@@ -173,7 +173,7 @@ def main():
             if key.startswith("xmage/mage-server/lib/") and key.endswith(".jar")
         )
         dependencies.append(jars[1])
-        if args.real_game_payment:
+        if args.real_game_payment or args.real_game_multiview:
             for plugin in (
                 "mage-game-twoplayerduel-1.4.62.jar",
                 "mage-game-freeformunlimitedcommander-1.4.62.jar",
