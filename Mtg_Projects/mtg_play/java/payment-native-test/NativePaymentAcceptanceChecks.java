@@ -36,7 +36,7 @@ public final class NativePaymentAcceptanceChecks {
         final Game game;boolean chooseX,declinePhyrexian,staleOnce,ageSources=true;int metadataReads,nativeSourceResponses;JsonObject lastCommand;
         final ContextHumanPlayer payer=new ContextHumanPlayer("Payment human",RangeOfInfluence.ALL,0),opponent=new ContextHumanPlayer("Payment opponent",RangeOfInfluence.ALL,0);
         final BlockingQueue<PlayerQueryEvent> queries=new LinkedBlockingQueue<>();
-        final List<JsonObject> events=new ArrayList<>();final ManaforgeBridge bridge;
+        final List<JsonObject> events=new ArrayList<>(),diagnostics=new ArrayList<>();final ManaforgeBridge bridge;
         final ExecutorService thread=Executors.newSingleThreadExecutor(task->{Thread t=new Thread(task,"GAME-native-payment-acceptance");t.setDaemon(true);return t;});
         final AtomicBoolean paid=new AtomicBoolean();Future<?> running;GameView view;int decision;
         final Field response,opened;
@@ -83,7 +83,14 @@ public final class NativePaymentAcceptanceChecks {
             JsonObject request=new JsonObject();JsonArray objects=new JsonArray();for(String id:ids)objects.add(id);request.add("object_ids",objects);request.add("identified_ids",objects.deepCopy());
             JsonObject result=ManaforgeGameMetadata.readPaused(game,payer.getId(),state.get("cycle").getAsInt(),request,()->view);
             if(staleOnce && ++metadataReads==2 && result.has("ordinary_payment"))result.getAsJsonObject("ordinary_payment").addProperty("cost_fingerprint","different-cost");
+            JsonObject trace=new JsonObject();trace.add("state",state.deepCopy());trace.add("prompt",bridge.currentDecision());trace.add("metadata",result.deepCopy());diagnostics.add(trace);
             return result;
+        }
+        ManaforgeGameplaySession.Advance advanceThrough(ManaforgeAutomaticEngine wrapper,long previous) throws Exception {
+            try{return wrapper.advance(previous);}catch(Exception failure){
+                // Only this public, synthetic fixture has traces. Production never logs private state.
+                System.out.println("PAYMENT_FIXTURE_CORRELATION "+new Gson().toJson(diagnostics));throw failure;
+            }
         }
         public JsonObject submit(JsonObject command){lastCommand=command.deepCopy();int first=events.size();bridge.execute(command);for(int i=first;i<events.size();i++)if("response_sent".equals(events.get(i).get("event").getAsString()))return events.get(i);throw new AssertionError("BRIDGE_RESPONSE_MISSING "+events.subList(first,events.size()));}
         public JsonObject terminalMetadata(JsonObject state){throw new AssertionError("UNEXPECTED_TERMINAL");}
@@ -188,17 +195,17 @@ public final class NativePaymentAcceptanceChecks {
         try(Engine engine=new Engine();NativeAutomaticPayment payment=new NativeAutomaticPayment("acceptance",engine.payer.getId().toString(),Mode.AUTO)){
             List<Card> lands=new ArrayList<>();for(int i=0;i<3;i++)lands.add(engine.load(new mage.cards.basiclands.Mountain(engine.payer.getId(),info("Mountain")),Zone.BATTLEFIELD));
             Card skirge=engine.load(new mage.cards.v.VaultSkirge(engine.payer.getId(),info("Vault Skirge")),Zone.HAND);engine.cast(skirge,null);
-            ManaforgeAutomaticEngine wrapper=new ManaforgeAutomaticEngine(engine,payment,()->false);ManaforgeGameplaySession.Advance next=wrapper.advance(0);
+            ManaforgeAutomaticEngine wrapper=new ManaforgeAutomaticEngine(engine,payment,()->false);ManaforgeGameplaySession.Advance next=engine.advanceThrough(wrapper,0);
             check("GAME_ASK".equals(next.prompt.get("kind").getAsString()) && !engine.paid.get(),"PHYREXIAN_LIFE_MUST_ASK");
             check(engine.payer.getLife()==20 && payment.report().get("native_auto_payment_steps").getAsInt()==0,"AUTO_CHOSE_PHYREXIAN_LIFE");
-            answer(engine,next,true);next=wrapper.advance(next.prompt.get("decision_id").getAsLong());
+            answer(engine,next,true);next=engine.advanceThrough(wrapper,next.prompt.get("decision_id").getAsLong());
             check(engine.paid.get() && engine.payer.getLife()==18,"EXPLICIT_PHYREXIAN_LIFE_NOT_PAID");
             check(payment.report().get("native_auto_payment_completed").getAsInt()==1,"PHYREXIAN_GENERIC_NOT_AUTOMATIC");
             answer(engine,next,false);engine.running.get(2,TimeUnit.SECONDS);engine.game.getStack().resolve(engine.game);
             check(engine.game.getPermanent(skirge.getId())!=null,"PHYREXIAN_FLYER_NOT_RESOLVED");
             for(int spellIndex=0;spellIndex<2;spellIndex++){
                 engine.paid.set(false);Card spell=engine.load(new Probe(engine.payer.getId(),"{R}"),Zone.HAND);int life=engine.payer.getLife();engine.cast(spell,null);
-                next=wrapper.advance(next.prompt.get("decision_id").getAsLong());
+                next=engine.advanceThrough(wrapper,next.prompt.get("decision_id").getAsLong());
                 check(engine.paid.get(),"AFTER_PHYREXIAN_AUTO_FALLBACK_"+payment.reason());check(engine.payer.getLife()==life,"LATER_AUTO_SPENT_LIFE");
                 check(payment.report().get("native_auto_payment_completed").getAsInt()==spellIndex+2,"PHYREXIAN_CHOICE_POISONED_LATER_PAYMENT");
                 check("AUTO".equals(payment.report().get("native_auto_payment_mode").getAsString()),"PHYREXIAN_CHANGED_PAYMENT_MODE");
