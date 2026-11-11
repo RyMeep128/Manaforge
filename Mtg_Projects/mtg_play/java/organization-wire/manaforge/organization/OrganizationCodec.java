@@ -57,21 +57,28 @@ public final class OrganizationCodec {
     public static String receipt(String messageId,String commandId,BattlefieldOrganizationSession.Result result,HostContext context) throws IOException {
         basis(result.snapshot,context);JsonObject body=body(result.snapshot);body.addProperty("command_id",commandId);body.addProperty("outcome",result.outcome==BattlefieldOrganizationSession.Outcome.APPLIED?"applied":"rejected");body.add("reason_code",result.reasonCode==null?JsonNull.INSTANCE:new JsonPrimitive(result.reasonCode));return OrganizationMessages.serialize(envelope("receipt",messageId,body),context.viewer);
     }
+    public static String rejectedReceipt(String messageId,String commandId,String reason,BattlefieldOrganizationSession.Snapshot snapshot,HostContext context) throws IOException {
+        basis(snapshot,context);JsonObject body=body(snapshot);body.addProperty("command_id",commandId);body.addProperty("outcome","rejected");body.addProperty("reason_code",reason);return OrganizationMessages.serialize(envelope("receipt",messageId,body),context.viewer);
+    }
     public static String snapshot(String messageId,BattlefieldOrganizationSession.Snapshot snapshot,HostContext context) throws IOException {
-        basis(snapshot,context);snapshot.state.validate();Map<String,String> handles=new HashMap<>();
-        require(Collections.disjoint(snapshot.state.basis.members.keySet(),context.viewer.objects.keySet()) && Collections.disjoint(snapshot.state.basis.members.keySet(),context.viewer.objects.values()) && Collections.disjoint(snapshot.state.basis.members.keySet(),context.seatReferences.values()));
+        return snapshotState(messageId,snapshot.state,snapshot.organizationRevision,snapshot.basisRevision,context);
+    }
+    /** Preflight a pure reducer candidate before committing session state. */
+    public static String snapshotState(String messageId,State state,long organizationRevision,long basisRevision,HostContext context) throws IOException {
+        require(state.basis.matchEpoch.equals(context.viewer.matchEpoch) && basisRevision==context.viewer.basisRevision);state.validate();Map<String,String> handles=new HashMap<>();
+        require(Collections.disjoint(state.basis.members.keySet(),context.viewer.objects.keySet()) && Collections.disjoint(state.basis.members.keySet(),context.viewer.objects.values()) && Collections.disjoint(state.basis.members.keySet(),context.seatReferences.values()));
         for(Map.Entry<String,Binding> entry:context.bindings.entrySet()){
-            Binding binding=entry.getValue();Member member=snapshot.state.basis.members.get(binding.incarnation);require(member!=null && member.controller.equals(binding.hostSeat));
+            Binding binding=entry.getValue();Member member=state.basis.members.get(binding.incarnation);require(member!=null && member.controller.equals(binding.hostSeat));
             if(member.eligible)handles.put(binding.incarnation,entry.getKey());
         }
         JsonArray seats=new JsonArray(),mappings=new JsonArray();
         for(Map.Entry<String,String> seatRef:context.seatReferences.entrySet()){
-            Seat state=snapshot.state.seats.get(seatRef.getKey());require(state!=null);JsonObject seat=new JsonObject();seat.addProperty("seat_id",seatRef.getValue());
-            seat.add("root",members(state.root,handles,context,seatRef.getValue(),mappings));JsonArray groups=new JsonArray();
-            for(Group group:state.groups){JsonObject entry=new JsonObject();entry.addProperty("group_id",group.id);entry.addProperty("name",group.name);entry.addProperty("x",Math.round(group.x*1000000));entry.addProperty("y",Math.round(group.y*1000000));entry.add("members",members(group.members,handles,context,seatRef.getValue(),mappings));groups.add(entry);}
+            Seat seatState=state.seats.get(seatRef.getKey());require(seatState!=null);JsonObject seat=new JsonObject();seat.addProperty("seat_id",seatRef.getValue());
+            seat.add("root",members(seatState.root,handles,context,seatRef.getValue(),mappings));JsonArray groups=new JsonArray();
+            for(Group group:seatState.groups){JsonObject entry=new JsonObject();entry.addProperty("group_id",group.id);entry.addProperty("name",group.name);entry.addProperty("x",Math.round(group.x*1000000));entry.addProperty("y",Math.round(group.y*1000000));entry.add("members",members(group.members,handles,context,seatRef.getValue(),mappings));groups.add(entry);}
             seat.add("groups",groups);seats.add(seat);
         }
-        JsonObject body=body(snapshot);body.addProperty("viewer_id",context.viewer.viewerId);body.add("seats",seats);body.add("mappings",mappings);
+        JsonObject body=new JsonObject();body.addProperty("match_epoch",state.basis.matchEpoch);body.addProperty("organization_revision",organizationRevision);body.addProperty("basis_revision",basisRevision);body.addProperty("viewer_id",context.viewer.viewerId);body.add("seats",seats);body.add("mappings",mappings);
         return OrganizationMessages.serialize(envelope("snapshot",messageId,body),context.viewer);
     }
     private static JsonArray members(List<String> members,Map<String,String> handles,HostContext context,String seat,JsonArray mappings){

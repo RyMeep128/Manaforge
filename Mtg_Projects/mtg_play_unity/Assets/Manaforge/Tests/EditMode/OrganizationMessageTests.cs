@@ -40,6 +40,19 @@ namespace Manaforge.Play.Tests
             Assert.That(OrganizationMessages.Negotiate(new[]{1},new[]{1},false),Is.Zero);Assert.That(OrganizationMessages.Negotiate(new[]{1},new[]{2},true),Is.Zero);Assert.That(OrganizationMessages.Negotiate(null,new[]{1},true),Is.Zero);
             Assert.Throws<ArgumentException>(()=>new OrganizationMessages.Context("match","viewer-a",7,new Dictionary<string,string>{{"h1","private"}},new Dictionary<string,string>{{"h1","seat-a"}},new[]{"object-1"},new[]{"seat-a"}));
         }
+        [Test] public void HistoricalReceiptsRequireKnownPendingCommandAndMatch()
+        {
+            var corpus=Corpus();var context=Context((JObject)corpus["context"]);
+            var message=JObject.Parse((string)((JArray)corpus["cases"]).OfType<JObject>().Single(test=>(string)test["name"]=="receipt-command_limit_reached")["text"]);
+            message["body"]["basis_revision"]=6;string raw=message.ToString();
+            Assert.That((long)OrganizationMessages.ParseReceipt(raw,"match",new[]{"cmd-1"})["body"]["basis_revision"],Is.EqualTo(6));
+            Assert.That(context.BasisRevision,Is.EqualTo(7));
+            Assert.Throws<WireEnvelope.EnvelopeException>(()=>OrganizationMessages.Parse(raw,context));
+            Assert.Throws<WireEnvelope.EnvelopeException>(()=>OrganizationMessages.ParseReceipt(raw,"other",new[]{"cmd-1"}));
+            Assert.Throws<WireEnvelope.EnvelopeException>(()=>OrganizationMessages.ParseReceipt(raw,"match",new[]{"unknown"}));
+            message["message_type"]="organization_snapshot";
+            Assert.Throws<WireEnvelope.EnvelopeException>(()=>OrganizationMessages.ParseReceipt(message.ToString(),"match",new[]{"cmd-1"}));
+        }
         [Test] public void OversizedSnapshotSerializationRejectsInsteadOfTruncating()
         {
             var root=new JArray();var mappings=new JArray();var objects=new Dictionary<string,string>();var seats=new Dictionary<string,string>();string padding=new string('x',115);

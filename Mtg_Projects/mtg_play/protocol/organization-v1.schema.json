@@ -474,7 +474,10 @@
                 "ORGANIZATION_REVISION_EXHAUSTED",
                 "UNKNOWN_MEMBER_HANDLE",
                 "UNSUPPORTED_ORGANIZATION_VERSION",
-                "COMMAND_CONFLICT"
+                "COMMAND_CONFLICT",
+                "COMMAND_LIMIT_REACHED",
+                "ORGANIZATION_LIMIT_REACHED",
+                "FOREIGN_MATCH"
               ]
             }
           ]
@@ -525,7 +528,10 @@
                   "ORGANIZATION_REVISION_EXHAUSTED",
                   "UNKNOWN_MEMBER_HANDLE",
                   "UNSUPPORTED_ORGANIZATION_VERSION",
-                  "COMMAND_CONFLICT"
+                  "COMMAND_CONFLICT",
+                  "COMMAND_LIMIT_REACHED",
+                  "ORGANIZATION_LIMIT_REACHED",
+                  "FOREIGN_MATCH"
                 ]
               }
             }

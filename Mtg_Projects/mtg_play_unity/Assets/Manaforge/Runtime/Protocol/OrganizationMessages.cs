@@ -58,11 +58,20 @@ namespace Manaforge.Play.Protocol
         }
         private static void Require(bool value,string code){if(!value)throw new WireEnvelope.EnvelopeException(code);}
         private static void Name(JToken value){if(value.Type!=JTokenType.Null)Require(Regex.Replace((string)value,White,"").Length>0,"ORGANIZATION_INVALID");}
-        public static JObject Parse(string raw,Context context)
+        public static JObject ParseContract(string raw)
         {
             Require(raw!=null && raw.Length<=MaxBytes,"ORGANIZATION_SIZE");
             try{Require(new UTF8Encoding(false,true).GetByteCount(raw)<=MaxBytes,"ORGANIZATION_SIZE");}catch(EncoderFallbackException){throw new WireEnvelope.EnvelopeException("JSON_INVALID");}
-            var message=WireEnvelope.ParseObject(raw);Require(message!=null && Valid(message,Schema),"ORGANIZATION_INVALID");string type=(string)message["message_type"];var body=(JObject)message["body"];
+            var message=WireEnvelope.ParseObject(raw);Require(message!=null && Valid(message,Schema),"ORGANIZATION_INVALID");return message;
+        }
+        public static JObject ParseReceipt(string raw,string trustedMatchEpoch,IEnumerable<string> pendingCommandIds)
+        {
+            var message=ParseContract(raw);Require((string)message["message_type"]=="organization_receipt","ORGANIZATION_INVALID");var body=(JObject)message["body"];
+            Require((string)body["match_epoch"]==trustedMatchEpoch && pendingCommandIds!=null && pendingCommandIds.Contains((string)body["command_id"]),"ORGANIZATION_CONTEXT");return message;
+        }
+        public static JObject Parse(string raw,Context context)
+        {
+            var message=ParseContract(raw);string type=(string)message["message_type"];var body=(JObject)message["body"];
             if(type=="organization_capabilities")return message;
             Require(context!=null && (string)body["match_epoch"]==context.MatchEpoch && (long)body["basis_revision"]==context.BasisRevision,"ORGANIZATION_CONTEXT");
             if(type=="organization_command"){

@@ -34,3 +34,35 @@ assertions. The native identity/control-transfer failure remains a separate gate
 
 Host admission, retry handling, viewer-safe fanout, and their end-to-end evidence
 follow in the next review steps. Live shared organization remains disabled.
+
+## Host admission and historical receipts
+
+`OrganizationChannel` owns a `BattlefieldOrganizationSession` on the coordinator
+owner. Its constructor takes explicit trusted per-viewer contexts and a fixed-seat
+basis. These are harness inputs; no native identity bridge or production launcher
+wiring is implied. Socket registration supplies the actor. Capabilities must be
+mutually selected before commands or snapshots use the extension.
+
+Each seat retains at most 4096 command records for the match lifetime, without
+eviction. The SHA-256 digest covers recursively key-sorted command body JSON,
+including revisions and handles, excluding the transport message ID. An identical
+known command returns its exact original receipt before checking current basis or
+handles. Conflicting bodies reject with `COMMAND_CONFLICT`; capacity rejects new
+IDs with `COMMAND_LIMIT_REACHED`. Neither replaces an existing record. Rejections
+for admitted new IDs are recorded as well. Receipts precede snapshot fanout.
+
+Pure reducer candidates are rendered and validated for every viewer before session
+mutation, including group counts and the 256 KiB wire limit. Rejected edits leave
+state intact and return an issuer-only resynchronization snapshot. Changed edits
+broadcast viewer-specific snapshots; no-ops refresh only the issuer. A basis update
+similarly preflights reconciliation and contexts before committing. Context mapping
+refresh requires a new basis revision; equal-revision contexts are never adopted.
+
+Historical receipts carry no object mappings. Java `parseReceipt` and C#
+`ParseReceipt` accept them only for a trusted match and known pending command ID.
+They do not advance a snapshot or admit historical object handles. Normal parsing
+continues to require the current basis. Consumers must keep pending IDs scoped to
+their authenticated session. `OrganizationChannelUnitChecks` covers admission,
+foreign edits, stale/duplicate/unknown handles, atomic limits, retry conflicts and
+ledger saturation through hosted protocol CI only. The shared Java/C# corpus also
+covers new stable rejection codes and receipt-specific admission.

@@ -66,9 +66,17 @@ public final class OrganizationMessages {
     private static String text(JsonObject object,String field){return object.get(field).getAsString();}
     private static void require(boolean value,String code) throws IOException {if(!value)throw new WireEnvelope.EnvelopeException(code);}
     private static void name(JsonElement value) throws IOException {if(!value.isJsonNull())require(!value.getAsString().replaceAll(WHITE,"").isEmpty(),"ORGANIZATION_INVALID");}
-    public static JsonObject parse(String raw,Context context) throws IOException {
+    public static JsonObject parseContract(String raw) throws IOException {
         require(raw!=null && raw.length()<=MAX_BYTES && raw.getBytes(StandardCharsets.UTF_8).length<=MAX_BYTES,"ORGANIZATION_SIZE");
-        JsonObject message=WireEnvelope.parseObject(raw);require(valid(message,schema),"ORGANIZATION_INVALID");String type=text(message,"message_type");JsonObject body=message.getAsJsonObject("body");
+        JsonObject message=WireEnvelope.parseObject(raw);require(valid(message,schema),"ORGANIZATION_INVALID");return message;
+    }
+    /** Receipts carry no object mappings; only a known pending command can admit historical basis. */
+    public static JsonObject parseReceipt(String raw,String trustedMatchEpoch,Collection<String> pendingCommandIds) throws IOException {
+        JsonObject message=parseContract(raw);require(text(message,"message_type").equals("organization_receipt"),"ORGANIZATION_INVALID");JsonObject body=message.getAsJsonObject("body");
+        require(text(body,"match_epoch").equals(trustedMatchEpoch) && pendingCommandIds!=null && pendingCommandIds.contains(text(body,"command_id")),"ORGANIZATION_CONTEXT");return message;
+    }
+    public static JsonObject parse(String raw,Context context) throws IOException {
+        JsonObject message=parseContract(raw);String type=text(message,"message_type");JsonObject body=message.getAsJsonObject("body");
         if(type.equals("organization_capabilities"))return message;
         require(context!=null && text(body,"match_epoch").equals(context.matchEpoch) && body.get("basis_revision").getAsLong()==context.basisRevision,"ORGANIZATION_CONTEXT");
         if(type.equals("organization_command")){

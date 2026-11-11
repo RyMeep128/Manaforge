@@ -286,6 +286,13 @@ def corpus():
     add("applied-with-reason", receipt, False)
     receipt["body"].update(outcome="rejected", reason_code=None)
     add("rejected-without-reason", receipt, False)
+    for code in (
+        "COMMAND_LIMIT_REACHED",
+        "ORGANIZATION_LIMIT_REACHED",
+        "FOREIGN_MATCH",
+    ):
+        receipt["body"]["reason_code"] = code
+        add("receipt-" + code.lower(), receipt, True)
     raw = json.dumps(caps, separators=(",", ":"))
     add(
         "duplicate-key",

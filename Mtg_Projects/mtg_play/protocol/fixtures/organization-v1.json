@@ -280,6 +280,24 @@
       "valid": false
     },
     {
+      "name": "receipt-command_limit_reached",
+      "text": "{\"wire_version\":1,\"organization_version\":1,\"message_type\":\"organization_receipt\",\"message_id\":\"message-1\",\"body\":{\"match_epoch\":\"match\",\"command_id\":\"cmd-1\",\"outcome\":\"rejected\",\"organization_revision\":0,\"basis_revision\":7,\"reason_code\":\"COMMAND_LIMIT_REACHED\"}}",
+      "schema_valid": true,
+      "valid": true
+    },
+    {
+      "name": "receipt-organization_limit_reached",
+      "text": "{\"wire_version\":1,\"organization_version\":1,\"message_type\":\"organization_receipt\",\"message_id\":\"message-1\",\"body\":{\"match_epoch\":\"match\",\"command_id\":\"cmd-1\",\"outcome\":\"rejected\",\"organization_revision\":0,\"basis_revision\":7,\"reason_code\":\"ORGANIZATION_LIMIT_REACHED\"}}",
+      "schema_valid": true,
+      "valid": true
+    },
+    {
+      "name": "receipt-foreign_match",
+      "text": "{\"wire_version\":1,\"organization_version\":1,\"message_type\":\"organization_receipt\",\"message_id\":\"message-1\",\"body\":{\"match_epoch\":\"match\",\"command_id\":\"cmd-1\",\"outcome\":\"rejected\",\"organization_revision\":0,\"basis_revision\":7,\"reason_code\":\"FOREIGN_MATCH\"}}",
+      "schema_valid": true,
+      "valid": true
+    },
+    {
       "name": "duplicate-key",
       "text": "{\"wire_version\":1,\"wire_version\":1,\"organization_version\":1,\"message_type\":\"organization_capabilities\",\"message_id\":\"message-1\",\"body\":{\"versions\":[1]}}",
       "schema_valid": true,

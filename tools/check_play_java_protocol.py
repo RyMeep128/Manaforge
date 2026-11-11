@@ -139,6 +139,7 @@ def main():
             PROTOCOL / "java/manaforge/protocol/OrganizationContracts.java",
             PROTOCOL / "java/manaforge/protocol/OrganizationContractSchema.java",
             PROTOCOL / "java-test/OrganizationFixtureConsumer.java",
+            PROTOCOL / "java-test/OrganizationChannelUnitChecks.java",
             *sorted((PLAY / "java/organization").rglob("*.java")),
             *sorted((PLAY / "java/organization-wire").rglob("*.java")),
         ]
@@ -387,6 +388,17 @@ def main():
             ],
             check=True,
             timeout=60,
+        )
+
+        subprocess.run(
+            [
+                runtime,
+                "-cp",
+                str(workspace) + os.pathsep + str(jar),
+                "OrganizationChannelUnitChecks",
+            ],
+            check=True,
+            timeout=120,
         )
 
         if args.dummy_output:

@@ -31,6 +31,12 @@ public final class OrganizationFixtureConsumer {
             if(parsed!=null){check(OrganizationMessages.parse(OrganizationMessages.serialize(parsed,context.viewer),context.viewer).equals(parsed),"ROUNDTRIP_"+name);rejects(()->WireEnvelope.parse(raw),"LEGACY_ACCEPTED_ORGANIZATION");}
             count++;
         }
+        JsonObject historical=JsonParser.parseString(messages.get("receipt-command_limit_reached")).getAsJsonObject();historical.getAsJsonObject("body").addProperty("basis_revision",6);String oldReceipt=historical.toString();
+        OrganizationMessages.parseReceipt(oldReceipt,"match",Collections.singletonList("cmd-1"));
+        rejects(()->OrganizationMessages.parse(oldReceipt,context.viewer),"HISTORICAL_RECEIPT_CURRENT_CONTEXT");
+        rejects(()->OrganizationMessages.parseReceipt(oldReceipt,"other",Collections.singletonList("cmd-1")),"RECEIPT_FOREIGN_MATCH");
+        rejects(()->OrganizationMessages.parseReceipt(oldReceipt,"match",Collections.singletonList("other")),"RECEIPT_UNKNOWN_COMMAND");
+        rejects(()->OrganizationMessages.parseReceipt(messages.get("command-create"),"match",Collections.singletonList("cmd-1")),"COMMAND_AS_RECEIPT");
         check(OrganizationMessages.negotiate(Arrays.asList(1),Arrays.asList(1),true)==1 && OrganizationMessages.negotiate(Arrays.asList(1),Arrays.asList(1),false)==0 && OrganizationMessages.negotiate(Arrays.asList(1),Arrays.asList(2),true)==0 && OrganizationMessages.negotiate(null,Arrays.asList(1),true)==0,"CAPABILITY_SELECTION");
         rejects(()->OrganizationCodec.command(messages.get("command-move"),context,"host-b"),"FOREIGN_ACTOR_HANDLE");
         OrganizationCodec.DecodedCommand decoded=OrganizationCodec.command(messages.get("command-create"),context,"host-a");check(decoded.expectedOrganizationRevision==0 && decoded.basisRevision==7 && decoded.commandId.equals("cmd-1") && decoded.operation.x==.25 && decoded.operation.y==.75,"COMMAND_CONVERSION");
