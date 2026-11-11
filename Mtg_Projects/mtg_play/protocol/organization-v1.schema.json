@@ -1,0 +1,748 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:manaforge:play:organization:1",
+  "title": "Standalone organization contract; not admitted on legacy gameplay channels",
+  "type": "object",
+  "required": [
+    "wire_version",
+    "organization_version",
+    "message_type",
+    "message_id",
+    "body"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "wire_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "organization_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "message_type": {
+      "enum": [
+        "organization_capabilities",
+        "organization_command",
+        "organization_receipt",
+        "organization_snapshot"
+      ]
+    },
+    "message_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+    },
+    "body": {
+      "type": "object"
+    }
+  },
+  "$defs": {
+    "OrganizationOperation": {
+      "type": "object",
+      "required": [
+        "kind",
+        "group_id",
+        "name",
+        "x",
+        "y",
+        "index",
+        "members"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "create",
+            "rename",
+            "delete",
+            "position",
+            "reorder",
+            "move"
+          ]
+        },
+        "group_id": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+            }
+          ]
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f]+(?![\\s\\S])"
+            }
+          ]
+        },
+        "x": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000
+            }
+          ]
+        },
+        "y": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000
+            }
+          ]
+        },
+        "index": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1024
+            }
+          ]
+        },
+        "members": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+          },
+          "minItems": 0,
+          "maxItems": 128
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "create"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "group_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64,
+                "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f]+(?![\\s\\S])"
+              },
+              "x": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 1000000
+              },
+              "y": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 1000000
+              },
+              "index": {
+                "type": "null"
+              },
+              "members": {
+                "type": "array",
+                "maxItems": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "rename"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "group_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64,
+                "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f]+(?![\\s\\S])"
+              },
+              "x": {
+                "type": "null"
+              },
+              "y": {
+                "type": "null"
+              },
+              "index": {
+                "type": "null"
+              },
+              "members": {
+                "type": "array",
+                "maxItems": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "delete"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "group_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+              },
+              "name": {
+                "type": "null"
+              },
+              "x": {
+                "type": "null"
+              },
+              "y": {
+                "type": "null"
+              },
+              "index": {
+                "type": "null"
+              },
+              "members": {
+                "type": "array",
+                "maxItems": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "position"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "group_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+              },
+              "name": {
+                "type": "null"
+              },
+              "x": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 1000000
+              },
+              "y": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 1000000
+              },
+              "index": {
+                "type": "null"
+              },
+              "members": {
+                "type": "array",
+                "maxItems": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "reorder"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "group_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+              },
+              "name": {
+                "type": "null"
+              },
+              "x": {
+                "type": "null"
+              },
+              "y": {
+                "type": "null"
+              },
+              "index": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 31
+              },
+              "members": {
+                "type": "array",
+                "maxItems": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "move"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "group_id": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+                  }
+                ]
+              },
+              "name": {
+                "type": "null"
+              },
+              "x": {
+                "type": "null"
+              },
+              "y": {
+                "type": "null"
+              },
+              "index": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 1024
+              },
+              "members": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+                },
+                "minItems": 1,
+                "maxItems": 128
+              }
+            }
+          }
+        }
+      ]
+    },
+    "OrganizationCapabilities": {
+      "type": "object",
+      "required": [
+        "versions"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "versions": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "minItems": 0,
+          "maxItems": 8,
+          "uniqueItems": true
+        }
+      }
+    },
+    "OrganizationCommand": {
+      "type": "object",
+      "required": [
+        "match_epoch",
+        "command_id",
+        "expected_organization_revision",
+        "basis_revision",
+        "operation"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "match_epoch": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+        },
+        "command_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+        },
+        "expected_organization_revision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9223372036854775807
+        },
+        "basis_revision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9223372036854775807
+        },
+        "operation": {
+          "$ref": "#/$defs/OrganizationOperation"
+        }
+      }
+    },
+    "OrganizationReceipt": {
+      "type": "object",
+      "required": [
+        "match_epoch",
+        "command_id",
+        "outcome",
+        "organization_revision",
+        "basis_revision",
+        "reason_code"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "match_epoch": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+        },
+        "command_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+        },
+        "outcome": {
+          "enum": [
+            "applied",
+            "rejected"
+          ]
+        },
+        "organization_revision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9223372036854775807
+        },
+        "basis_revision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9223372036854775807
+        },
+        "reason_code": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "enum": [
+                "INVALID_OPERATION",
+                "UNKNOWN_ACTOR",
+                "STALE_ORGANIZATION_REVISION",
+                "STALE_BASIS_REVISION",
+                "GROUP_NOT_OWNED",
+                "DUPLICATE_GROUP",
+                "INVALID_ID",
+                "INVALID_NAME",
+                "INVALID_POSITION",
+                "INVALID_INDEX",
+                "EMPTY_SELECTION",
+                "MEMBER_NOT_OWNED_OR_ELIGIBLE",
+                "DUPLICATE_SELECTION",
+                "ORGANIZATION_REVISION_EXHAUSTED",
+                "UNKNOWN_MEMBER_HANDLE",
+                "UNSUPPORTED_ORGANIZATION_VERSION",
+                "COMMAND_CONFLICT"
+              ]
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "applied"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "reason_code": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "rejected"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "reason_code": {
+                "enum": [
+                  "INVALID_OPERATION",
+                  "UNKNOWN_ACTOR",
+                  "STALE_ORGANIZATION_REVISION",
+                  "STALE_BASIS_REVISION",
+                  "GROUP_NOT_OWNED",
+                  "DUPLICATE_GROUP",
+                  "INVALID_ID",
+                  "INVALID_NAME",
+                  "INVALID_POSITION",
+                  "INVALID_INDEX",
+                  "EMPTY_SELECTION",
+                  "MEMBER_NOT_OWNED_OR_ELIGIBLE",
+                  "DUPLICATE_SELECTION",
+                  "ORGANIZATION_REVISION_EXHAUSTED",
+                  "UNKNOWN_MEMBER_HANDLE",
+                  "UNSUPPORTED_ORGANIZATION_VERSION",
+                  "COMMAND_CONFLICT"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "OrganizationGroup": {
+      "type": "object",
+      "required": [
+        "group_id",
+        "name",
+        "x",
+        "y",
+        "members"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "group_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f]+(?![\\s\\S])"
+        },
+        "x": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "y": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "members": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+          },
+          "minItems": 0,
+          "maxItems": 1024
+        }
+      }
+    },
+    "OrganizationSeat": {
+      "type": "object",
+      "required": [
+        "seat_id",
+        "root",
+        "groups"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "seat_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+        },
+        "root": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+          },
+          "minItems": 0,
+          "maxItems": 1024
+        },
+        "groups": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/OrganizationGroup"
+          },
+          "minItems": 0,
+          "maxItems": 32
+        }
+      }
+    },
+    "OrganizationMapping": {
+      "type": "object",
+      "required": [
+        "handle",
+        "object_reference",
+        "seat_id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "handle": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+        },
+        "object_reference": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+        },
+        "seat_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+        }
+      }
+    },
+    "OrganizationSnapshot": {
+      "type": "object",
+      "required": [
+        "match_epoch",
+        "organization_revision",
+        "basis_revision",
+        "viewer_id",
+        "seats",
+        "mappings"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "match_epoch": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+        },
+        "organization_revision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9223372036854775807
+        },
+        "basis_revision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9223372036854775807
+        },
+        "viewer_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}(?![\\s\\S])"
+        },
+        "seats": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/OrganizationSeat"
+          },
+          "minItems": 1,
+          "maxItems": 8
+        },
+        "mappings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/OrganizationMapping"
+          },
+          "minItems": 0,
+          "maxItems": 1024
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "message_type": {
+            "const": "organization_capabilities"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "$ref": "#/$defs/OrganizationCapabilities"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "message_type": {
+            "const": "organization_command"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "$ref": "#/$defs/OrganizationCommand"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "message_type": {
+            "const": "organization_receipt"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "$ref": "#/$defs/OrganizationReceipt"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "message_type": {
+            "const": "organization_snapshot"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "$ref": "#/$defs/OrganizationSnapshot"
+          }
+        }
+      }
+    }
+  ]
+}
