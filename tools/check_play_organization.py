@@ -45,11 +45,12 @@ def main():
             timeout=60,
         )
         if not args.compile_only:
-            subprocess.run(
-                [java, "-cp", output, "manaforge.organization.OrganizationChecks"],
-                check=True,
-                timeout=60,
-            )
+            for check in ("OrganizationChecks", "OrganizationSessionChecks"):
+                subprocess.run(
+                    [java, "-cp", output, "manaforge.organization." + check],
+                    check=True,
+                    timeout=60,
+                )
     sha = subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
     ).strip()

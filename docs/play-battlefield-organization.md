@@ -80,3 +80,28 @@ projections are deliberately outside this module. CT-08A is implemented internal
 full CT-08 and CT-07 integration are incomplete. Do not advertise shared groups or
 enable persisted membership from this reducer alone. Native control-transfer
 acceptance remains separate unfinished work before production integration.
+
+## Match-scoped session: edit admission
+
+`BattlefieldOrganizationSession` owns a reducer state on its constructing thread.
+It starts at organization revision zero and a caller-supplied nonnegative basis
+revision. `apply(trustedActorSeat, expectedOrganizationRevision,
+expectedBasisRevision, operation)` returns APPLIED or REJECTED, a stable rejection
+code when relevant, an organizationChanged flag, and the current immutable host
+snapshot. Stale revisions are rejected before reducer invocation. A changed edit
+increments organization revision exactly once; successful no-ops retain the same
+snapshot and revision. Rejections retain the exact previous published snapshot.
+
+Snapshots expose match epoch, organization revision, basis revision, and reducer
+state. They contain host incarnation/seat information and are never wire messages
+or viewer-safe projections. Immutable snapshots may be read or retained on other
+threads, but apply and close require the constructing thread. Close releases the
+session's reference to state, is idempotent on that owner, and rejects subsequent
+snapshot/edit access. Previously returned immutable snapshots remain valid.
+
+The independent organization workflow runs both reducer and session check classes.
+Session coverage includes two seats, stale revision rejection, invalid batch
+atomicity, no-op revision behavior, historical snapshots, cross-thread mutation
+rejection, and disposal. Local verification remains compile-only. The session is
+not authentication, a retry ledger, networking, or live-match integration. Basis
+revision handling is the second review step for this session slice.
