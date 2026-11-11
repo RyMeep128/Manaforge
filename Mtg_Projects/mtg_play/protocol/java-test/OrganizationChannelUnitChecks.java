@@ -43,6 +43,8 @@ public final class OrganizationChannelUnitChecks {
             channel.connected("a");channel.connected("b");channel.receive("a",capabilities());channel.receive("b",capabilities());packets.clear();
             String create=command("create",0,7,Operation.create("g1","Mana Rocks",.2,.3));channel.receive("a",create);String original=receipt(packets).raw;
             check(reason(receipt(packets))==null && channel.snapshot().organizationRevision==1 && packets.stream().filter(p->p.kind==ViewerChannelExtension.Kind.SNAPSHOT).count()==2,"APPLY_AND_FANOUT");packets.clear();
+            try{channel.updateBasis(basis(),8,contexts);throw new AssertionError("INVALID_CONTEXT_MUTATED_BASIS");}catch(IOException expected){}
+            check(channel.snapshot().basisRevision==7 && channel.snapshot().organizationRevision==1,"PARTIAL_BASIS_COMMIT");
             channel.updateBasis(basis(),8,contexts(basis(),8));check(channel.snapshot().organizationRevision==1 && channel.snapshot().basisRevision==8,"BASIS_ONLY_UPDATE");packets.clear();
             JsonObject retry=JsonParser.parseString(create).getAsJsonObject();retry.addProperty("message_id","new-transport-id");channel.receive("a",retry.toString());
             check(packets.size()==1 && receipt(packets).raw.equals(original) && channel.snapshot().organizationRevision==1,"HISTORICAL_RETRY_APPLIED_TWICE");

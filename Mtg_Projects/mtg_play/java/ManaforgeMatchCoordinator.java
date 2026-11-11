@@ -30,7 +30,7 @@ public final class ManaforgeMatchCoordinator implements AutoCloseable {
     private final class Channel {
         final Viewer viewer;final ServerSocket listener;final byte[] key;final String client,gateway;
         ManaforgeOpeningProjection projection;
-        final boolean extensionAllowed;final ArrayDeque<String> receipts=new ArrayDeque<>();final AtomicInteger incoming=new AtomicInteger();String control,organization;
+        final boolean extensionAllowed;final ArrayDeque<String> receipts=new ArrayDeque<>();final AtomicInteger incoming=new AtomicInteger();String control,organization;boolean extensionReady;
         Connection connection;Status status=Status.REGISTERED;String reason,pending,latest;long revision=-1,sent=-1;
         Channel(Viewer viewer,ServerSocket listener,byte[] key,boolean extensionAllowed){this.extensionAllowed=extensionAllowed;this.viewer=viewer;this.listener=listener;this.key=key.clone();client=hello(viewer,"client");gateway=hello(viewer,"gateway");projection=new ManaforgeOpeningProjection(viewer.session,viewer.viewer,viewer.nativePlayer,Collections.emptyMap());}
     }
@@ -88,7 +88,7 @@ public final class ManaforgeMatchCoordinator implements AutoCloseable {
     }
     private void extensionConnected(Channel channel,Connection connection){
         owner.execute(()->{if(stopping.get())return;synchronized(channel){if(channel.connection!=connection || !connection.active)return;}
-            try{extension.connected(channel.viewer.seat);}catch(Exception failure){disconnect(channel,connection,"EXTENSION_FAILED");}
+            try{extension.connected(channel.viewer.seat);synchronized(channel){if(channel.connection==connection && connection.active){channel.extensionReady=true;channel.notifyAll();}}}catch(Exception failure){disconnect(channel,connection,"EXTENSION_FAILED");}
         });
     }
     private String hello(Viewer viewer,String role){
@@ -130,7 +130,7 @@ public final class ManaforgeMatchCoordinator implements AutoCloseable {
     private void write(Channel channel,Connection connection){
         try{while(!stopping.get()){
             String pending;long revision;boolean gameplay;
-            synchronized(channel){while(channel.pending==null && channel.control==null && channel.organization==null && channel.receipts.isEmpty() && channel.connection==connection && connection.active && !stopping.get())channel.wait(100);
+            synchronized(channel){while((channel.extensionAllowed && !channel.extensionReady || channel.pending==null && channel.control==null && channel.organization==null && channel.receipts.isEmpty()) && channel.connection==connection && connection.active && !stopping.get())channel.wait(100);
                 if(channel.connection!=connection || !connection.active || stopping.get())return;
                 revision=channel.revision;gameplay=false;
                 if(channel.control!=null){pending=channel.control;channel.control=null;}
@@ -145,7 +145,7 @@ public final class ManaforgeMatchCoordinator implements AutoCloseable {
     private void disconnect(Channel channel,Connection connection,String reason){
         boolean wasActive=connection.active;connection.active=false;try{connection.frames.close();}catch(IOException ignored){}
         boolean notify=false;
-        synchronized(channel){if(channel.connection==connection){channel.connection=null;channel.status=stopping.get()?Status.CLOSED:Status.DISCONNECTED;channel.reason=reason;channel.pending=null;channel.control=channel.organization=null;channel.receipts.clear();notify=wasActive && channel.extensionAllowed && !stopping.get();channel.notifyAll();}}
+        synchronized(channel){if(channel.connection==connection){channel.connection=null;channel.status=stopping.get()?Status.CLOSED:Status.DISCONNECTED;channel.reason=reason;channel.pending=null;channel.control=channel.organization=null;channel.extensionReady=false;channel.receipts.clear();notify=wasActive && channel.extensionAllowed && !stopping.get();channel.notifyAll();}}
         if(notify)try{owner.execute(()->{if(stopping.get())return;synchronized(channel){if(channel.connection!=null)return;}extension.disconnected(channel.viewer.seat);});}catch(RejectedExecutionException ignored){}
     }
     /** Trusted preprojected fixture port, not a client-facing publication endpoint. */
@@ -184,7 +184,7 @@ public final class ManaforgeMatchCoordinator implements AutoCloseable {
         try{
             for(Channel channel:channels.values()){
                 try{channel.listener.close();}catch(IOException failure){failed=true;}
-                synchronized(channel){if(channel.connection!=null)disconnect(channel,channel.connection,"OWNER_CLOSED");channel.status=Status.CLOSED;channel.pending=channel.latest=channel.control=channel.organization=null;channel.receipts.clear();channel.projection.invalidateDecision();channel.projection=null;Arrays.fill(channel.key,(byte)0);channel.notifyAll();}
+                synchronized(channel){if(channel.connection!=null)disconnect(channel,channel.connection,"OWNER_CLOSED");channel.status=Status.CLOSED;channel.pending=channel.latest=channel.control=channel.organization=null;channel.extensionReady=false;channel.receipts.clear();channel.projection.invalidateDecision();channel.projection=null;Arrays.fill(channel.key,(byte)0);channel.notifyAll();}
             }
             workers.shutdownNow();try{if(!workers.awaitTermination(5,TimeUnit.SECONDS))failed=true;}catch(InterruptedException interrupted){Thread.currentThread().interrupt();failed=true;}
         }finally{

@@ -140,6 +140,7 @@ def main():
             PROTOCOL / "java/manaforge/protocol/OrganizationContractSchema.java",
             PROTOCOL / "java-test/OrganizationFixtureConsumer.java",
             PROTOCOL / "java-test/OrganizationChannelUnitChecks.java",
+            PROTOCOL / "java-test/OrganizationChannelChecks.java",
             *sorted((PLAY / "java/organization").rglob("*.java")),
             *sorted((PLAY / "java/organization-wire").rglob("*.java")),
         ]
@@ -396,6 +397,18 @@ def main():
                 "-cp",
                 str(workspace) + os.pathsep + str(jar),
                 "OrganizationChannelUnitChecks",
+            ],
+            check=True,
+            timeout=120,
+        )
+
+        subprocess.run(
+            [
+                runtime,
+                "-cp",
+                str(workspace) + os.pathsep + str(jar),
+                "OrganizationChannelChecks",
+                str(PROTOCOL / "fixtures/receive-history-v1.json"),
             ],
             check=True,
             timeout=120,

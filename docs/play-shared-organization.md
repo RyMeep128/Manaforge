@@ -32,8 +32,8 @@ multi-view mode compiled fixtures without TwoPlayerDuel/TwoPlayerMatch available
 This fixes a source-assembly condition, not a change to native rules or identity
 assertions. The native identity/control-transfer failure remains a separate gate.
 
-Host admission, retry handling, viewer-safe fanout, and their end-to-end evidence
-follow in the next review steps. Live shared organization remains disabled.
+Host admission, retry handling and viewer-safe fanout are implemented below.
+Live shared organization remains disabled.
 
 ## Host admission and historical receipts
 
@@ -66,3 +66,49 @@ their authenticated session. `OrganizationChannelUnitChecks` covers admission,
 foreign edits, stale/duplicate/unknown handles, atomic limits, retry conflicts and
 ledger saturation through hosted protocol CI only. The shared Java/C# corpus also
 covers new stable rejection codes and receipt-specific admission.
+
+## Two-client integration and remaining gates
+
+`OrganizationChannelChecks` connects two real authenticated loopback sockets to the
+opted-in coordinator. The basis, identity contexts and gameplay snapshots are
+explicitly synthetic. It exercises create, rename, move, unassign, reorder, delete,
+position, opponent inspection, unauthorized edits, stale and duplicate selections,
+exact receipt replay, conflicting reuse, lifecycle reconciliation, privacy canaries,
+slow-reader isolation, authenticated reattachment and retained retry history. The
+gameplay revision advances only through explicit read-only fixture publication.
+Sending a gameplay command through this extension disconnects its sender.
+
+`ExtensionPlumbingChecks` additionally forces input overflow while the owner is
+paused and receipt overflow while a socket reader is stalled. Queues are bounded,
+disconnect clears them, and the other viewer continues. Writer startup waits for the
+owner's connection callback, ensuring the initial capability control packet precedes
+a retained gameplay snapshot on reattachment. This wait applies only to opted-in
+registrations. Existing production/read-only registrations keep their behavior.
+
+This slice has a fixed two-registration roster and an in-memory match-lifetime
+ledger. Reattachment is to an existing listener and credential, not host restart
+recovery or remote peer discovery. It does not implement TLS, internet transport,
+seat joining/leaving, native command ownership, a Unity network receive mailbox,
+shared visual panels or in-game gestures. Group collapse remains a future local
+presentation preference, outside shared state.
+
+The next integration gate is a trusted native basis/context bridge with verified
+incarnation and controller identity, followed by CT-12 coherent Unity receive and
+rendering. Native `CONTROL_HANDLE` acceptance must be resolved independently before
+production wiring; do not weaken that assertion to enable this feature. Normal
+saved-deck human-versus-AI acceptance and hosted Unity tests remain required for
+live rollout. Synthetic socket success cannot substitute for either.
+
+### Verification record
+
+- Plumbing commit `3ea1afc`: hosted protocol and native two-viewer coordinator passed.
+  Native payment failed at the inherited `NativeBattlefieldIdentityChecks`
+  `CONTROL_HANDLE` assertion, independently of organization admission.
+- Host admission commit `9a68c1c`: hosted protocol passed, including the shared
+  corpus, per-seat 4096-command bound, preflight rejection and historical receipts;
+  native two-viewer coordinator also passed. Later end-to-end additions need their
+  own exact-SHA run.
+- Local `./tools/unity-play.ps1 -Mode Build` after parser/contract changes completed
+  with `Build Finished, Result: Success.` No local test suites were run. The local
+  build also included pre-existing uncommitted HUD rollout edits, which are outside
+  these commits. Hosted Unity and playable acceptance are separate evidence gates.
