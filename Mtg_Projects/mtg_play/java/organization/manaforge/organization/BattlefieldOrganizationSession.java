@@ -45,6 +45,23 @@ public final class BattlefieldOrganizationSession implements AutoCloseable {
         Snapshot after=changed?new Snapshot(next,before.organizationRevision+1,before.basisRevision):before;
         current=after;return new Result(Outcome.APPLIED,null,changed,after);
     }
+    public Result updateBasis(Basis newBasis,long basisRevision){
+        Snapshot before=owned();
+        if(newBasis==null)return rejected("INVALID_BASIS",before);
+        if(!newBasis.matchEpoch.equals(before.matchEpoch))return rejected("FOREIGN_MATCH",before);
+        if(basisRevision<before.basisRevision)return rejected("STALE_BASIS_REVISION",before);
+        if(basisRevision==before.basisRevision){
+            if(!newBasis.equals(before.state.basis))return rejected("CONFLICTING_BASIS_REVISION",before);
+            return new Result(Outcome.APPLIED,null,false,before);
+        }
+        final State next;
+        try{next=BattlefieldOrganizationService.reconcile(before.state,newBasis);}
+        catch(Rejected invalid){return rejected(invalid.getMessage(),before);}
+        boolean changed=!next.seats.equals(before.state.seats);
+        if(changed && before.organizationRevision==Long.MAX_VALUE)return rejected("ORGANIZATION_REVISION_EXHAUSTED",before);
+        Snapshot after=new Snapshot(next,before.organizationRevision+(changed?1:0),basisRevision);
+        current=after;return new Result(Outcome.APPLIED,null,changed,after);
+    }
     public void close(){
         if(Thread.currentThread()!=owner)throw new IllegalStateException("ORGANIZATION_OWNER_THREAD");
         current=null;

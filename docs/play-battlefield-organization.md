@@ -104,4 +104,35 @@ Session coverage includes two seats, stale revision rejection, invalid batch
 atomicity, no-op revision behavior, historical snapshots, cross-thread mutation
 rejection, and disposal. Local verification remains compile-only. The session is
 not authentication, a retry ledger, networking, or live-match integration. Basis
-revision handling is the second review step for this session slice.
+revision handling is described below.
+
+### Basis updates and lifecycle revisions
+
+`updateBasis(newBasis, basisRevision)` requires the same serialized owner. The host
+assigns basis revisions from coherent trusted battlefield updates; this session
+never reads native game state or advances a game/decision revision. Foreign matches,
+older revisions, conflicting content at the same revision, and invalid fixed-roster
+updates return rejected results with the exact prior snapshot. Repeating identical
+content at the current revision is an applied no-op. A newer valid basis reconciles
+and publishes atomically, even if the organization placement is unchanged.
+
+Organization revision advances only when the seat/group/root organization changes.
+A newer basis with unchanged placement advances only basis revision. Root eligibility
+changes can therefore update the basis without changing organization revision;
+regained eligibility may subsequently reorder root membership according to the
+reducer's deterministic append rule. Control transfers, departures, arrivals, and
+concealment of grouped members update placement and increment organization revision
+once per coherent update, regardless of how many members changed. Revision overflow
+rejects before publishing. Group names, coordinates, and empty groups survive.
+
+Session hosted coverage additionally checks same-revision conflict, repeat and
+stale bases, foreign matches/roster changes, immutable history, lifecycle placement,
+root-only eligibility changes, and owner/closed-session rejection of basis updates.
+The existing sixteen-seed reducer/reconciliation checks continue to run unchanged.
+Local compile-only, lint, formatting, and diff checks are not hosted acceptance.
+
+This completes the internal session implementation, not live match integration.
+The next contract must add viewer-safe projection, authenticated seat binding,
+command deduplication, bounded transport, and reconnect ownership before any shared
+state is exposed. Native identity/control-transfer acceptance remains separate;
+shared-worktree Unity rollout changes were preserved outside these commits.
