@@ -191,6 +191,26 @@ public final class NativePaymentAcceptanceChecks {
         command.add("game_id",next.state.get("game_id"));command.add("decision_id",next.prompt.get("decision_id"));command.addProperty("kind","boolean");command.addProperty("value",value);
         check(new JsonPrimitive(true).equals(engine.submit(command).get("accepted")),"MANUAL_PHYREXIAN_CHOICE_REJECTED");
     }
+    static void privatePaymentCorrelation(Engine engine){
+        JsonObject before=null,after=engine.diagnostics.get(engine.diagnostics.size()-1),command=engine.lastCommand,accepted=null;
+        for(JsonObject row:engine.diagnostics)if(row.getAsJsonObject("metadata").has("ordinary_payment"))before=row;
+        for(JsonObject event:engine.events)if("response_sent".equals(event.get("event").getAsString()) && command.get("request_id").equals(event.get("request_id")))accepted=event;
+        check(before!=null && accepted!=null,"PRIVATE_PAYMENT_EVIDENCE_MISSING");
+        JsonObject state=before.getAsJsonObject("state").deepCopy(),guard=before.getAsJsonObject("metadata").deepCopy(),prompt=before.getAsJsonObject("prompt");
+        state.add("playable",new JsonArray());
+        java.util.function.Function<JsonObject,Boolean> proves=g->NativeCastCorrelation.coreCombatResponseEvidence(state,prompt,command,g,acceptedReceipt(engine,command),after.getAsJsonObject("state"),after.getAsJsonObject("prompt"),after.getAsJsonObject("metadata"))!=null;
+        check(proves.apply(guard),"PRIVATE_NATIVE_SOURCE_NOT_CORRELATED");
+        JsonObject missing=guard.deepCopy();missing.remove("ordinary_payment");check(!proves.apply(missing),"UNPROVEN_PRIVATE_SOURCE_ACCEPTED");
+        JsonObject unsafe=guard.deepCopy();unsafe.getAsJsonObject("ordinary_payment").addProperty("safety","UNKNOWN");check(!proves.apply(unsafe),"UNSAFE_PRIVATE_SOURCE_ACCEPTED");
+        JsonObject wrong=guard.deepCopy();wrong.getAsJsonObject("ordinary_payment").getAsJsonArray("steps").get(0).getAsJsonObject().addProperty("source",UUID.randomUUID().toString());check(!proves.apply(wrong),"WRONG_PRIVATE_SOURCE_ACCEPTED");
+        JsonObject wrongKind=guard.deepCopy();wrongKind.getAsJsonObject("ordinary_payment").getAsJsonArray("steps").get(0).getAsJsonObject().addProperty("kind","mana_type");check(!proves.apply(wrongKind),"WRONG_PRIVATE_STEP_KIND_ACCEPTED");
+        JsonObject source=null;for(JsonElement player:state.getAsJsonArray("players"))for(JsonElement card:player.getAsJsonObject().getAsJsonArray("battlefield"))if(command.get("value").equals(card.getAsJsonObject().get("id")))source=card.getAsJsonObject();
+        check(source!=null,"PRIVATE_SOURCE_NOT_VISIBLE");source.addProperty("hidden",true);check(!proves.apply(guard),"HIDDEN_PRIVATE_SOURCE_ACCEPTED");source.addProperty("hidden",false);source.addProperty("controller_name","Other controller");check(!proves.apply(guard),"FOREIGN_PRIVATE_SOURCE_ACCEPTED");
+    }
+    static JsonObject acceptedReceipt(Engine engine,JsonObject command){
+        for(JsonObject event:engine.events)if("response_sent".equals(event.get("event").getAsString()) && command.get("request_id").equals(event.get("request_id")))return event;
+        throw new AssertionError("PRIVATE_PAYMENT_RECEIPT_MISSING");
+    }
     static void phyrexianThenOrdinary() throws Exception {
         try(Engine engine=new Engine();NativeAutomaticPayment payment=new NativeAutomaticPayment("acceptance",engine.payer.getId().toString(),Mode.AUTO)){
             List<Card> lands=new ArrayList<>();for(int i=0;i<3;i++)lands.add(engine.load(new mage.cards.basiclands.Mountain(engine.payer.getId(),info("Mountain")),Zone.BATTLEFIELD));
@@ -201,6 +221,7 @@ public final class NativePaymentAcceptanceChecks {
             answer(engine,next,true);next=engine.advanceThrough(wrapper,next.prompt.get("decision_id").getAsLong());
             check(engine.paid.get() && engine.payer.getLife()==18,"EXPLICIT_PHYREXIAN_LIFE_NOT_PAID");
             check(payment.report().get("native_auto_payment_completed").getAsInt()==1,"PHYREXIAN_GENERIC_NOT_AUTOMATIC");
+            privatePaymentCorrelation(engine);
             answer(engine,next,false);engine.running.get(2,TimeUnit.SECONDS);engine.game.getStack().resolve(engine.game);
             check(engine.game.getPermanent(skirge.getId())!=null,"PHYREXIAN_FLYER_NOT_RESOLVED");
             for(int spellIndex=0;spellIndex<2;spellIndex++){

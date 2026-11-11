@@ -109,7 +109,12 @@ Inherited evidence on base commit 1abe52d73a7670c44809e6d1fcc0e9afa314eb8d:
   remain unchanged. The next native run advanced past that assertion and exposed
   a missing native playable-object list in the focused GameView. The fixture now
   mirrors GameSessionPlayer.getGameView using payer.getPlayableObjects(game, Zone.ALL);
-  response-correlation checks remain strict. Candidate native CI must establish both fixes.
+  source correlation still failed because XMage legitimately returned an empty public
+  playable list while its private payment plan and completion receipt were valid.
+  Correlation now accepts the first matching VERIFIED_ORDINARY_EQUIVALENT object
+  step from server-only metadata, while retaining cycle/receipt and visible controlled
+  permanent checks. Native negative cases reject absent/unsafe plans, wrong sources
+  or step kinds, and hidden/foreign permanents. Candidate CI must establish the fix.
 - No Unity run exists for that base SHA. Earlier hosted Unity setup was blocked by
   license configuration; its current availability has not been established.
 
