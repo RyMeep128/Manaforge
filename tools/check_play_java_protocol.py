@@ -129,6 +129,10 @@ def main():
             PROTOCOL / "java-test/InternalPaymentFixtureConsumer.java",
         ]
         sources += [
+            PLAY / "java/ManaforgeMatchCoordinator.java",
+            PROTOCOL / "java-test/MatchCoordinatorChecks.java",
+        ]
+        sources += [
             PROTOCOL / "java/manaforge/protocol/OrganizationMessages.java",
             PROTOCOL / "java/manaforge/protocol/OrganizationContracts.java",
             PROTOCOL / "java/manaforge/protocol/OrganizationContractSchema.java",
@@ -357,6 +361,18 @@ def main():
             ],
             check=True,
             timeout=60,
+        )
+
+        subprocess.run(
+            [
+                runtime,
+                "-cp",
+                str(workspace) + os.pathsep + str(jar),
+                "MatchCoordinatorChecks",
+                str(PROTOCOL / "fixtures/receive-history-v1.json"),
+            ],
+            check=True,
+            timeout=120,
         )
 
         if args.dummy_output:
