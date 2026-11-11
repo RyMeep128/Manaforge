@@ -244,10 +244,18 @@ def main():
                     for item in (PLAY / "java").glob("*.java")
                     if item not in bridge_sources
                 ]
+            if args.real_game_payment:
+                bridge_sources += [
+                    *sorted((PLAY / "java/organization").rglob("*.java")),
+                    *sorted((PLAY / "java/organization-wire").rglob("*.java")),
+                    *sorted((PLAY / "java/organization-native").rglob("*.java")),
+                ]
             if args.real_game_multiview:
                 bridge_sources += [
                     PLAY / "java/payment-native-test/NativeMultiViewerChecks.java",
                     PLAY / "java/payment-native-test/NativeOrganizationChecks.java",
+                    PLAY / "java/payment-native-test/NormalOrganizationChecks.java",
+                    PLAY / "protocol/java-test/OrganizationChannelUnitChecks.java",
                     PLAY / "protocol/java-test/MatchCoordinatorChecks.java",
                     *sorted((PLAY / "java/organization").rglob("*.java")),
                     *sorted((PLAY / "java/organization-wire").rglob("*.java")),
@@ -380,6 +388,31 @@ def main():
                     cwd=output,
                     check=True,
                     timeout=180,
+                )
+                subprocess.run(
+                    [
+                        runtime,
+                        "-Djava.awt.headless=true",
+                        "-cp",
+                        output + os.pathsep + native_classpath,
+                        "NativeOrganizationChecks",
+                        "--v2",
+                    ],
+                    cwd=output,
+                    check=True,
+                    timeout=180,
+                )
+                subprocess.run(
+                    [
+                        runtime,
+                        "-Djava.awt.headless=true",
+                        "-cp",
+                        output + os.pathsep + native_classpath,
+                        "NormalOrganizationChecks",
+                    ],
+                    cwd=output,
+                    check=True,
+                    timeout=120,
                 )
 
 

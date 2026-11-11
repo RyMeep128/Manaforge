@@ -35,6 +35,7 @@ def export_viewer_bootstrap(
     artifact_manifest_sha256,
     viewer_key,
     format=None,
+    organization_version=None,
     artwork_directory=None,
     artwork_manifest_sha256=None,
 ):
@@ -65,6 +66,10 @@ def export_viewer_bootstrap(
         "unrestricted_commander",
     ):
         raise ViewerBootstrapError("VIEWER_BOOTSTRAP_INVALID")
+    if organization_version is not None and (
+        type(organization_version) is not int or organization_version != 2
+    ):
+        raise ViewerBootstrapError("VIEWER_BOOTSTRAP_INVALID")
     artwork = None
     if artwork_directory is not None or artwork_manifest_sha256 is not None:
         if (
@@ -93,6 +98,8 @@ def export_viewer_bootstrap(
     )
     if format is not None:
         payload["format"] = format
+    if organization_version is not None:
+        payload["organization_version"] = organization_version
     try:
         encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode(
             "utf-8"

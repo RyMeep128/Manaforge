@@ -22,17 +22,18 @@ public final class NativeOrganizationChecks {
         }
     }
     static final class Peer implements AutoCloseable {
-        final String seat;final MatchCoordinatorChecks.Client client;final Set<String> pending=new HashSet<>();
+        final boolean version2;final String seat;final MatchCoordinatorChecks.Client client;final Set<String> pending=new HashSet<>();
         JsonObject game,state;long revision,basis;String epoch;
-        Peer(String seat,ManaforgeMatchCoordinator.Viewer viewer,byte[] key) throws Exception {
+        Peer(String seat,ManaforgeMatchCoordinator.Viewer viewer,byte[] key,boolean version2) throws Exception {
+            this.version2=version2;
             this.seat=seat;client=new MatchCoordinatorChecks.Client(viewer,key,false);
-            JsonObject cap=OrganizationMessages.parseContract(raw());check(cap.get("message_type").getAsString().equals("organization_capabilities"),"NATIVE_CAPABILITIES_FIRST");
-            client.send("{\"wire_version\":1,\"organization_version\":1,\"message_type\":\"organization_capabilities\",\"message_id\":\"cap\",\"body\":{\"versions\":[1]}}");
+            JsonObject cap=version2?OrganizationV2Messages.parseContract(raw()):OrganizationMessages.parseContract(raw());check(cap.get("message_type").getAsString().equals("organization_capabilities"),"NATIVE_CAPABILITIES_FIRST");
+            String capabilities="{\"wire_version\":1,\"organization_version\":1,\"message_type\":\"organization_capabilities\",\"message_id\":\"cap\",\"body\":{\"versions\":[1]}}";client.send(version2?OrganizationV2Messages.upgrade(capabilities,0):capabilities);
         }
         String raw() throws IOException {String raw=TextFrame.read(client.socket.getInputStream());check(raw!=null,"NATIVE_ORGANIZATION_EOF");return raw;}
         void game() throws Exception {game=NativeMultiViewerChecks.snapshot(client.read());}
         void organization() throws Exception {
-            String raw=raw();JsonObject message=OrganizationMessages.parseContract(raw),body=message.getAsJsonObject("body");check(message.get("message_type").getAsString().equals("organization_snapshot"),"NATIVE_EXPECTED_SNAPSHOT");
+            String raw=raw();JsonObject message=version2?OrganizationV2Messages.parseContract(raw):OrganizationMessages.parseContract(raw),body=message.getAsJsonObject("body");check(message.get("message_type").getAsString().equals("organization_snapshot"),"NATIVE_EXPECTED_SNAPSHOT");
             Map<String,String> objects=new HashMap<>(),seats=new HashMap<>(),admitted=new HashMap<>();Set<String> visibleSeats=new HashSet<>();
             if(game!=null){
                 for(JsonElement item:game.getAsJsonArray("players"))visibleSeats.add(item.getAsJsonObject().get("player_id").getAsString());
@@ -41,7 +42,8 @@ public final class NativeOrganizationChecks {
             for(JsonElement item:body.getAsJsonArray("mappings")){JsonObject mapping=item.getAsJsonObject();String handle=mapping.get("handle").getAsString(),reference=mapping.get("object_reference").getAsString(),owner=mapping.get("seat_id").getAsString();check(owner.equals(admitted.get(reference)),"MAPPING_NOT_IN_GAMEPLAY");objects.put(handle,reference);seats.put(handle,owner);}
             check(new HashSet<>(objects.values()).equals(admitted.keySet()),"ADMITTED_PUBLIC_OBJECT_MISSING");
             epoch=body.get("match_epoch").getAsString();basis=body.get("basis_revision").getAsLong();revision=body.get("organization_revision").getAsLong();
-            OrganizationMessages.parse(raw,new OrganizationMessages.Context(epoch,client.viewer.viewer,basis,objects,seats,admitted.keySet(),visibleSeats));
+            OrganizationMessages.Context context=new OrganizationMessages.Context(epoch,client.viewer.viewer,basis,objects,seats,admitted.keySet(),visibleSeats);
+            if(version2){OrganizationV2Messages.parse(raw,context);check(game==null || body.get("gameplay_revision").getAsLong()==game.get("revision").getAsLong(),"NATIVE_V2_EXACT_GAMEPLAY");}else OrganizationMessages.parse(raw,context);
             check(!raw.contains("incarnation") && !raw.contains("host_seat") && !raw.contains("Goblin Guide") && !raw.contains("Llanowar Elves"),"NATIVE_METADATA_PRIVACY");state=body;
         }
         String handle(String reference){for(JsonElement item:state.getAsJsonArray("mappings")){JsonObject mapping=item.getAsJsonObject();if(mapping.get("object_reference").getAsString().equals(reference))return mapping.get("handle").getAsString();}return null;}
@@ -50,7 +52,7 @@ public final class NativeOrganizationChecks {
         JsonObject group(String id){for(JsonElement seat:state.getAsJsonArray("seats"))for(JsonElement group:seat.getAsJsonObject().getAsJsonArray("groups"))if(group.getAsJsonObject().get("group_id").getAsString().equals(id))return group.getAsJsonObject();throw new AssertionError("NATIVE_GROUP_MISSING");}
         boolean grouped(String group,String handle){return group(group).getAsJsonArray("members").contains(new JsonPrimitive(handle));}
         String command(String id,Operation operation){
-            JsonObject message=new JsonObject(),body=new JsonObject(),op=new JsonObject();message.addProperty("wire_version",1);message.addProperty("organization_version",1);message.addProperty("message_type","organization_command");message.addProperty("message_id","packet-"+id);message.add("body",body);
+            JsonObject message=new JsonObject(),body=new JsonObject(),op=new JsonObject();message.addProperty("wire_version",1);message.addProperty("organization_version",version2?2:1);message.addProperty("message_type","organization_command");message.addProperty("message_id","packet-"+id);message.add("body",body);
             body.addProperty("match_epoch",epoch);body.addProperty("command_id",id);body.addProperty("expected_organization_revision",revision);body.addProperty("basis_revision",basis);body.add("operation",op);
             op.addProperty("kind",operation.kind.name().toLowerCase(Locale.ROOT));for(String field:new String[]{"group_id","name","x","y","index"})op.add(field,JsonNull.INSTANCE);JsonArray members=new JsonArray();op.add("members",members);
             if(operation.groupId!=null)op.addProperty("group_id",operation.groupId);
@@ -59,7 +61,7 @@ public final class NativeOrganizationChecks {
         }
         void send(String id,String raw) throws Exception {pending.add(id);client.send(raw);}
         String receipt(String id,String reason) throws Exception {
-            String raw=raw();JsonObject body=OrganizationMessages.parseReceipt(raw,epoch,pending).getAsJsonObject("body");check(body.get("command_id").getAsString().equals(id),"NATIVE_RECEIPT_ID");
+            String raw=raw();JsonObject body=(version2?OrganizationV2Messages.parseReceipt(raw,epoch,pending):OrganizationMessages.parseReceipt(raw,epoch,pending)).getAsJsonObject("body");check(body.get("command_id").getAsString().equals(id),"NATIVE_RECEIPT_ID");
             check(reason==null?body.get("reason_code").isJsonNull():reason.equals(body.get("reason_code").getAsString()),"NATIVE_RECEIPT_REASON_"+reason);pending.remove(id);return raw;
         }
         public void close() throws IOException {client.close();}
@@ -78,15 +80,16 @@ public final class NativeOrganizationChecks {
         check(host.snapshot()==before,"INVALID_NATIVE_BATCH_PARTIALLY_COMMITTED");
     }
     public static void main(String[] args) throws Exception {
+        boolean version2=Arrays.asList(args).contains("--v2");
         NativeBattlefieldIdentityChecks.Fixture fixture=new NativeBattlefieldIdentityChecks.Fixture();NativePaymentAcceptanceChecks.Engine e=fixture.e;
         AtomicInteger disposed=new AtomicInteger(),submissions=new AtomicInteger();AtomicBoolean cancel=new AtomicBoolean();AtomicReference<NativeOrganizationBridge> bridge=new AtomicReference<>();byte[] keyA=MatchCoordinatorChecks.key(51),keyB=MatchCoordinatorChecks.key(52);
         try(ManaforgeMatchCoordinator coordinator=new ManaforgeMatchCoordinator(e.game.getId().toString(),MatchCoordinatorChecks.ENGINE,MatchCoordinatorChecks.HASH,()->{disposed.incrementAndGet();fixture.close();},cancel::get,10000,300,false)){
             ManaforgeMatchCoordinator.Viewer a=coordinator.register("a",e.payer.getId().toString(),"session-a","viewer-a",keyA,true),b=coordinator.register("b",e.opponent.getId().toString(),"session-b","viewer-b",keyB,true);Map<String,ManaforgeMatchCoordinator.Viewer> roster=new TreeMap<>();roster.put("a",a);roster.put("b",b);
-            coordinator.installExtension(sender->{NativeOrganizationBridge host=new NativeOrganizationBridge(e.game.getId(),roster,sender);bridge.set(host);return host;});coordinator.start();
+            coordinator.installExtension(sender->{NativeOrganizationBridge host=new NativeOrganizationBridge(e.game.getId(),roster,sender,version2);bridge.set(host);return host;});coordinator.start();
             Card forest=fixture.forest(),forest2=fixture.forest(),bear=fixture.bear(),equipment=fixture.load(new mage.cards.b.Bonesplitter(e.payer.getId(),NativePaymentAcceptanceChecks.info("Bonesplitter"))),delver=fixture.load(new mage.cards.d.DelverOfSecrets(e.payer.getId(),NativePaymentAcceptanceChecks.info("Delver of Secrets")));Card front=fixture.battlefieldCard(delver);SoldierToken token=new SoldierToken();
             e.load(new mage.cards.g.GoblinGuide(e.payer.getId(),NativePaymentAcceptanceChecks.info("Goblin Guide")),Zone.HAND);e.load(new mage.cards.l.LlanowarElves(e.opponent.getId(),NativePaymentAcceptanceChecks.info("Llanowar Elves")),Zone.HAND);
             PlayerQueryEvent query=NativeMultiViewerChecks.priority(e,()->{for(Card card:Arrays.asList(forest,forest2,bear,equipment,delver))fixture.enter(card);check(token.putOntoBattlefield(1,e.game,NativeBattlefieldIdentityChecks.fixtureSource(e,forest),e.payer.getId(),false,false,null,null,false,Collections.singletonList(token)),"NATIVE_ORGANIZATION_TOKEN_ENTRY");});UUID tokenId=token.getLastAddedTokenIds().get(0);
-            try(Peer clientA=new Peer("a",a,keyA);Peer clientB=new Peer("b",b,keyB)){
+            try(Peer clientA=new Peer("a",a,keyA,version2);Peer clientB=new Peer("b",b,keyB,version2)){
                 clientA.organization();clientB.organization();publish(coordinator,bridge.get(),new Capture(e,query,submissions),clientA,clientB);
                 check(clientA.state.getAsJsonArray("mappings").size()==6 && clientB.state.getAsJsonArray("mappings").size()==6,"PRIVATE_HAND_ADMITTED");NativeMultiViewerChecks.privacy(envelope(clientA.game),"Goblin Guide","Llanowar Elves");NativeMultiViewerChecks.privacy(envelope(clientB.game),"Llanowar Elves","Goblin Guide");
                 int unchangedCycle=e.game.getState().getApplyEffectsCounter();
@@ -117,7 +120,7 @@ public final class NativeOrganizationChecks {
                 apply(clientB,null,"non-reading-peer",Operation.rename("bg","Peer is not reading"));
                 clientA.close();MatchCoordinatorChecks.await(()->coordinator.status("a").status==ManaforgeMatchCoordinator.Status.DISCONNECTED,"NATIVE_ORGANIZATION_DISCONNECT");apply(clientB,null,"independent",Operation.rename("bg","Still active"));
                 NativeMultiViewerChecks.resume(e);query=NativeMultiViewerChecks.priority(e,()->check(e.game.getPermanent(forest2.getId()).tap(equipment.getSpellAbility(),e.game),"NATIVE_AFTER_DISCONNECT_TAP"));publish(coordinator,bridge.get(),new Capture(e,query,submissions),null,clientB);check(disposed.get()==0 && submissions.get()==0 && !e.running.isDone(),"DISCONNECT_STOPPED_NATIVE_MATCH");
-                try(Peer reattached=new Peer("a",a,keyA)){
+                try(Peer reattached=new Peer("a",a,keyA,version2)){
                     reattached.game();reattached.organization();check(reattached.revision==clientB.revision && reattached.group("bg").get("name").getAsString().equals("Still active"),"NATIVE_REATTACH_RECONSTRUCTION");reattached.send("create",original);check(reattached.receipt("create",null).equals(originalReceipt),"NATIVE_REATTACH_RETRY_HISTORY");
                 }
                 cancel.set(true);MatchCoordinatorChecks.await(coordinator::isClosed,"NATIVE_ORGANIZATION_PARENT_CLEANUP");coordinator.close();check(disposed.get()==1 && submissions.get()==0,"NATIVE_ORGANIZATION_OWNERSHIP");try{bridge.get().snapshot();throw new AssertionError("NATIVE_ORGANIZATION_LEAK");}catch(IllegalStateException expected){}

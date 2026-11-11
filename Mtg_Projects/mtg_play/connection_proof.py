@@ -433,6 +433,9 @@ def run_proof(
                 "-d",
                 str(classes),
                 *map(str, sorted((HERE / "java").glob("*.java"))),
+                *map(str, sorted((HERE / "java/organization").rglob("*.java"))),
+                *map(str, sorted((HERE / "java/organization-wire").rglob("*.java"))),
+                *map(str, sorted((HERE / "java/organization-native").rglob("*.java"))),
                 *map(
                     str,
                     sorted((HERE / "protocol/java/manaforge/protocol").glob("*.java")),

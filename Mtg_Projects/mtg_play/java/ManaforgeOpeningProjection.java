@@ -15,6 +15,12 @@ public final class ManaforgeOpeningProjection {
         JsonObject snapshot(){return snapshot.deepCopy();}
     }
     private ObserverResult lastObserver;
+    private JsonObject organizationRaw;
+    synchronized ObserverResult organizationBindings(){return lastObserver;}
+    synchronized JsonObject organizationRaw(){return organizationRaw==null?null:organizationRaw.deepCopy();}
+    private void captureOrganization(JsonObject output,JsonObject raw,List<GameObject> cards,Map<String,String> references,Set<String> seen){
+        Map<String,String> objects=new HashMap<>(),seats=new HashMap<>();for(Map.Entry<String,String> entry:references.entrySet())if(visibleCard(cards,entry.getValue())!=null)objects.put(entry.getKey(),entry.getValue());for(String seat:seen)seats.put(seat,engineViewer.equals(seat)?viewer:players.get(seat));lastObserver=new ObserverResult(output,objects,seats);organizationRaw=raw.deepCopy();
+    }
     synchronized ObserverResult projectObserverWithBindings(JsonObject raw,JsonObject prompt) throws IOException {
         projectObserverPriority(raw,prompt);require(lastObserver!=null);return lastObserver;
     }
@@ -253,7 +259,7 @@ public final class ManaforgeOpeningProjection {
     }
     private JsonObject project(JsonObject raw,JsonObject prompt,boolean includePriorityPass,boolean includeSpells,boolean omitStack,boolean attackFinish,boolean includeAttackers,boolean combatObservation,boolean includeBlockers,boolean turnMode,boolean observer) throws IOException {
         invalidateDecision();
-        lastObserver=null;
+        lastObserver=null;organizationRaw=null;
         String diagnosticStage="CONTEXT";
         try {
             require(engineViewer.equals(raw.get("viewer").getAsString()));
@@ -370,7 +376,7 @@ public final class ManaforgeOpeningProjection {
                 Map<String,String> publicObjects=new HashMap<>(),publicSeats=new HashMap<>();
                 for(JsonObject row:displayed){String id=text(row,"id");GameObject card=visibleCard(cards,visibleReferences.get(id));if(card!=null)publicObjects.put(id,card.object_id);}
                 for(String nativeSeat:seen)publicSeats.put(nativeSeat,engineViewer.equals(nativeSeat)?viewer:players.get(nativeSeat));
-                lastObserver=new ObserverResult(output,publicObjects,publicSeats);
+                captureOrganization(output,raw,cards,visibleReferences,seen);
                 presentationReferences.clear();presentationReferences.putAll(nextPresentationReferences);invalidateDecision();revision++;return output;
             }
             result.objects=cards.toArray(new GameObject[0]);List<LegalAction> actions=new ArrayList<>();Map<String,String> offeredNative=new HashMap<>();
@@ -539,6 +545,7 @@ public final class ManaforgeOpeningProjection {
             // an earlier strict protocol-1 player. New choice types require its rebuilt UI.
             JsonObject rendered=output.getAsJsonObject("decision");for(String key:new String[]{"groups","request","ability_selection"})if(rendered.has(key) && rendered.get(key).isJsonNull())rendered.remove(key);
             for(String key:new String[]{"decision_error","session_notice"})if(output.has(key) && output.get(key).isJsonNull())output.remove(key);
+            captureOrganization(output,raw,cards,visibleReferences,seen);
             nativeGame=raw.get("game_id").getAsString();nativeDecision=integer(prompt,"decision_id");nativeCycle=integer(raw,"cycle");
             decision=choice.decision_id;consumed=false;nativeRequest=sessionRequest?text(prompt,"session_request_id"):null;
             if(!priority && !ability && !attackFinish && !discard && !targeting && !numeric && !stringChoice && !mana){options.put(choice.options[0].option_id,true);options.put(choice.options[1].option_id,false);}

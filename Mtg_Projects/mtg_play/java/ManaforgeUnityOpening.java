@@ -8,6 +8,13 @@ import java.util.function.BooleanSupplier;
 
 /** Opt-in public-fixture live opening endpoint; no product launch or broad gameplay support. */
 public final class ManaforgeUnityOpening {
+    private static boolean organizationAllowed;
+    public static boolean organizationAllowed(){return organizationAllowed;}
+    public interface OrganizationFactory {OrganizationEndpoint open(LoopbackFrameReader frames) throws Exception;}
+    private static final ThreadLocal<OrganizationEndpoint> organization=new ThreadLocal<>();
+    private static void writeFrame(LoopbackFrameReader frames,String wire,BooleanSupplier cancelled) throws Exception {
+        frames.write(wire,5000,cancelled);OrganizationEndpoint endpoint=organization.get();if(endpoint!=null)try{endpoint.observe(wire);}catch(Exception unavailable){System.err.println("ORGANIZATION_FRAME_UNAVAILABLE");}
+    }
     public interface VerifiedAttackerSubmit {VerifiedAttackerResult submit(JsonObject command) throws Exception;}
     public static final class VerifiedAttackerResult {
         private final NativeCastCorrelation.AttackerSelectionEvidence evidence;private final JsonObject snapshot;private final DeclaredAttackOffer declared;
@@ -98,9 +105,12 @@ public final class ManaforgeUnityOpening {
         public PriorityOffer(JsonObject snapshot,long decision,long cycle,ManaforgeOpeningLoopback.NativeSubmit submit,Observation observation){this.snapshot=snapshot.deepCopy();this.decision=decision;this.cycle=cycle;this.submit=submit;this.observation=observation;}
     }
     public static byte[] readBootstrap(InputStream input) throws IOException {
+        organizationAllowed=false;
         try {
             JsonObject boot=WireEnvelope.parseObject(TextFrame.read(input));
-            if(boot.size()!=2 || !boot.has("live_opening_bootstrap_version") || !boot.get("live_opening_bootstrap_version").toString().equals("1")
+            organizationAllowed=boot.has("organization_version") && boot.get("organization_version").toString().equals("2");
+            if(boot.has("organization_version") && !organizationAllowed)throw new IOException();
+            if(boot.size()!=(organizationAllowed?3:2) || !boot.has("live_opening_bootstrap_version") || !boot.get("live_opening_bootstrap_version").toString().equals("1")
                 || !boot.has("viewer_key_hex") || !boot.get("viewer_key_hex").isJsonPrimitive() || !boot.getAsJsonPrimitive("viewer_key_hex").isString()
                 || !boot.get("viewer_key_hex").getAsString().matches("[0-9a-f]{64}"))throw new IOException();
             String hex=boot.get("viewer_key_hex").getAsString();byte[] key=new byte[32];for(int i=0;i<32;i++)key[i]=(byte)Integer.parseInt(hex.substring(i*2,i*2+2),16);return key;
@@ -127,21 +137,24 @@ public final class ManaforgeUnityOpening {
         serveChoice(snapshot,projection,game,engineViewer,decision,cycle,engine,hash,key,ready,command->{VerifiedAttackResult result=submit.submit(command);return result==null?null:new ChoiceEvidence(null,result.evidence,result.snapshot,result.followup);},cancelled,null);
     }
     public static void serveTurns(TurnOffer initial,ManaforgeOpeningProjection projection,String game,String engineViewer,String engine,String hash,byte[] key,Path ready,BooleanSupplier cancelled) throws Exception {
-        serveChoice(initial.snapshot(),projection,game,engineViewer,0,0,engine,hash,key,ready,null,cancelled,null,initial);
+        serveTurns(initial,projection,game,engineViewer,engine,hash,key,ready,cancelled,null);
     }
-    static String readDecision(LoopbackFrameReader frames,long deadline,BooleanSupplier cancelled) throws IOException {
-        long remaining=java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(deadline-System.nanoTime());
-        if(remaining<=0)throw new IOException("LIVE_UNITY_TURN_TIMEOUT");
-        String wire=Boolean.getBoolean("manaforge.liveGame")
-                ? frames.readWithIdleWait((int)Math.min(21600000,remaining),(int)Math.min(60000,remaining),cancelled)
-                : frames.read((int)Math.min(60000,remaining),cancelled);
-        if(wire==null)throw new IOException("LIVE_UNITY_DISCONNECTED");
-        return wire;
+    public static void serveTurns(TurnOffer initial,ManaforgeOpeningProjection projection,String game,String engineViewer,String engine,String hash,byte[] key,Path ready,BooleanSupplier cancelled,OrganizationFactory factory) throws Exception {
+        serveChoice(initial.snapshot(),projection,game,engineViewer,0,0,engine,hash,key,ready,null,cancelled,null,initial,factory);
     }
+    static String readDecision(LoopbackFrameReader frames,long deadline,BooleanSupplier cancelled) throws IOException {return readDecision(frames,deadline,cancelled,null);}
     private static String readDecision(LoopbackFrameReader frames,long deadline,BooleanSupplier cancelled,LoopbackFrameReader.IdleObserver observer) throws IOException {
-        long remaining=java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(deadline-System.nanoTime());if(remaining<=0)throw new IOException("LIVE_UNITY_TURN_TIMEOUT");
-        String wire=frames.readWithIdleWait((int)Math.min(Boolean.getBoolean("manaforge.liveGame")?21600000:60000,remaining),(int)Math.min(60000,remaining),cancelled,observer);
-        if(wire==null)throw new IOException("LIVE_UNITY_DISCONNECTED");return wire;
+        long window=System.nanoTime();int organizationPackets=0;
+        while(true){
+            long remaining=java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(deadline-System.nanoTime());if(remaining<=0)throw new IOException("LIVE_UNITY_TURN_TIMEOUT");
+            int budget=(int)Math.min(60000,remaining);String wire;
+            if(observer!=null)wire=frames.readWithIdleWait((int)Math.min(Boolean.getBoolean("manaforge.liveGame")?21600000:60000,remaining),budget,cancelled,observer);
+            else wire=Boolean.getBoolean("manaforge.liveGame")?frames.readWithIdleWait((int)Math.min(21600000,remaining),budget,cancelled):frames.read(budget,cancelled);
+            if(wire==null)throw new IOException("LIVE_UNITY_DISCONNECTED");OrganizationEndpoint endpoint=organization.get();
+            try{if(endpoint==null || !endpoint.receive(wire))return wire;}catch(Exception failure){throw new IOException("ORGANIZATION_RECEIVE",failure);}
+            if(System.nanoTime()-window>java.util.concurrent.TimeUnit.SECONDS.toNanos(1)){window=System.nanoTime();organizationPackets=0;}
+            if(++organizationPackets>32)throw new IOException("ORGANIZATION_INPUT_OVERFLOW");if(observer!=null)observer.tick();
+        }
     }
     private static void serveChoice(JsonObject snapshot,ManaforgeOpeningProjection projection,String game,String engineViewer,long decision,long cycle,
             String engine,String hash,byte[] key,Path ready,ChoiceSubmit submit,BooleanSupplier cancelled,NextPriority continuation) throws Exception {
@@ -149,6 +162,9 @@ public final class ManaforgeUnityOpening {
     }
     private static void serveChoice(JsonObject snapshot,ManaforgeOpeningProjection projection,String game,String engineViewer,long decision,long cycle,
             String engine,String hash,byte[] key,Path ready,ChoiceSubmit submit,BooleanSupplier cancelled,NextPriority continuation,TurnOffer initialTurn) throws Exception {
+        serveChoice(snapshot,projection,game,engineViewer,decision,cycle,engine,hash,key,ready,submit,cancelled,continuation,initialTurn,null);
+    }
+    private static void serveChoice(JsonObject snapshot,ManaforgeOpeningProjection projection,String game,String engineViewer,long decision,long cycle,String engine,String hash,byte[] key,Path ready,ChoiceSubmit submit,BooleanSupplier cancelled,NextPriority continuation,TurnOffer initialTurn,OrganizationFactory factory) throws Exception {
         try(ServerSocket listener=new ServerSocket(0,1,InetAddress.getByName("127.0.0.1"))) {
             listener.setSoTimeout(500);
             JsonObject address=new JsonObject();address.addProperty("host","127.0.0.1");address.addProperty("port",listener.getLocalPort());
@@ -160,35 +176,36 @@ public final class ManaforgeUnityOpening {
             try(LoopbackFrameReader frames=new LoopbackFrameReader(socket)) {
                 JsonObject client=ManaforgeOpeningLoopback.hello(snapshot.getAsJsonObject("body").getAsJsonObject("snapshot").get("session_id").getAsString(),snapshot.getAsJsonObject("body").getAsJsonObject("snapshot").get("viewer_id").getAsString(),engine,hash,"client"),gateway=ManaforgeOpeningLoopback.hello(snapshot.getAsJsonObject("body").getAsJsonObject("snapshot").get("session_id").getAsString(),snapshot.getAsJsonObject("body").getAsJsonObject("snapshot").get("viewer_id").getAsString(),engine,hash,"gateway");
                 GatewayHandshake.ViewerContext context=ViewerChallengeHandshake.accept(frames,client.toString(),gateway.toString(),key,5000,cancelled);
+                if(factory!=null)organization.set(factory.open(frames));
                 try(ManaforgeOpeningSession owner=new ManaforgeOpeningSession(context,projection,snapshot.toString())) {
-                    frames.write(snapshot.toString(),5000,cancelled);
+                    writeFrame(frames,snapshot.toString(),cancelled);
                     TurnOffer turn=initialTurn;
                     if(initialTurn==null){
                     String wire=readDecision(frames,deadline,cancelled);SubmissionLedger.Prepared prepared=owner.dispatch(wire,game,engineViewer,decision,cycle);
-                    frames.write(prepared.receipt().toString(),5000,cancelled);
+                    writeFrame(frames,prepared.receipt().toString(),cancelled);
                     if(!prepared.shouldSubmit)throw new IOException("LIVE_UNITY_CHOICE_REJECTED");
                     JsonObject command=owner.pollNative();if(command==null || owner.pollNative()!=null)throw new IOException("LIVE_UNITY_QUEUE_FAILED");
                     if(cancelled.getAsBoolean())throw new IOException("LIVE_UNITY_CANCELLED");
                     ChoiceEvidence evidence=submit.submit(command);
                     // Advancement alone remains uncertain. Only exact typed native evidence may settle.
                     JsonObject request=WireMessages.parse(wire);String id=request.get("message_id").getAsString();
-                    frames.write((evidence==null?owner.uncertain(id):evidence.confirm(owner,id)).toString(),5000,cancelled);
-                    if(evidence!=null && evidence.snapshot!=null){owner.observe(evidence.snapshot.toString());frames.write(evidence.snapshot.toString(),5000,cancelled);}
+                    writeFrame(frames,(evidence==null?owner.uncertain(id):evidence.confirm(owner,id)).toString(),cancelled);
+                    if(evidence!=null && evidence.snapshot!=null){owner.observe(evidence.snapshot.toString());writeFrame(frames,evidence.snapshot.toString(),cancelled);}
                     PriorityOffer next=evidence==null?null:evidence.followup;
                     if(evidence!=null && evidence.declared!=null) {
                         DeclaredAttackOffer offer=evidence.declared;boolean sent=false;
                         for(int retries=0;retries<8 && !sent;retries++) {
                             long remaining=java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(deadline-System.nanoTime());if(remaining<=0)throw new IOException("LIVE_UNITY_DECLARED_ATTACK_TIMEOUT");
-                            String follow=readDecision(frames,deadline,cancelled);SubmissionLedger.Prepared admitted=owner.dispatch(follow,game,engineViewer,offer.decision,offer.cycle);frames.write(admitted.receipt().toString(),5000,cancelled);if(!admitted.shouldSubmit)continue;
+                            String follow=readDecision(frames,deadline,cancelled);SubmissionLedger.Prepared admitted=owner.dispatch(follow,game,engineViewer,offer.decision,offer.cycle);writeFrame(frames,admitted.receipt().toString(),cancelled);if(!admitted.shouldSubmit)continue;
                             JsonObject finish=owner.pollNative();if(finish==null || owner.pollNative()!=null || cancelled.getAsBoolean())throw new IOException("LIVE_UNITY_DECLARED_ATTACK_QUEUE_FAILED");
                             VerifiedDeclaredAttackResult result=offer.submit.submit(finish);if(result==null)throw new IOException("LIVE_UNITY_DECLARED_ATTACK_UNPROVEN");
-                            String finishId=WireMessages.parse(follow).get("message_id").getAsString();frames.write(owner.confirmDeclaredAttack(finishId,result.evidence).toString(),5000,cancelled);owner.observe(result.snapshot.toString());frames.write(result.snapshot.toString(),5000,cancelled);next=result.followup;sent=true;
+                            String finishId=WireMessages.parse(follow).get("message_id").getAsString();writeFrame(frames,owner.confirmDeclaredAttack(finishId,result.evidence).toString(),cancelled);owner.observe(result.snapshot.toString());writeFrame(frames,result.snapshot.toString(),cancelled);next=result.followup;sent=true;
                         }
                         if(!sent)throw new IOException("LIVE_UNITY_DECLARED_ATTACK_RETRY_LIMIT");
                     }
                     if(continuation!=null) {
                         if(evidence==null || evidence.ability==null)throw new IOException("LIVE_UNITY_CONTINUATION_UNCONFIRMED");
-                        next=continuation.next();owner.observe(next.snapshot.toString());frames.write(next.snapshot.toString(),5000,cancelled);
+                        next=continuation.next();owner.observe(next.snapshot.toString());writeFrame(frames,next.snapshot.toString(),cancelled);
                     }
                     if(next!=null) {
                         for(int stage=0;stage<3 && next!=null;stage++) {
@@ -199,16 +216,16 @@ public final class ManaforgeUnityOpening {
                                 if(remaining<=0)throw new IOException("LIVE_UNITY_PRIORITY_TIMEOUT");
                                 String follow=readDecision(frames,deadline,cancelled);
                                 SubmissionLedger.Prepared admitted=owner.dispatch(follow,game,engineViewer,next.decision,next.cycle);
-                                frames.write(admitted.receipt().toString(),5000,cancelled);
+                                writeFrame(frames,admitted.receipt().toString(),cancelled);
                                 if(!admitted.shouldSubmit)continue;
                                 JsonObject pass=owner.pollNative();if(pass==null || owner.pollNative()!=null)throw new IOException("LIVE_UNITY_QUEUE_FAILED");
                                 if(cancelled.getAsBoolean())throw new IOException("LIVE_UNITY_CANCELLED");
                                 next.submit.submit(pass);String passId=WireMessages.parse(follow).get("message_id").getAsString();
-                                if(next.observation==null)frames.write(owner.uncertain(passId).toString(),5000,cancelled);
+                                if(next.observation==null)writeFrame(frames,owner.uncertain(passId).toString(),cancelled);
                                 else {
                                     ObservedSnapshot observed=next.observation.read();
-                                    frames.write(owner.confirmPriority(passId,observed.evidence).toString(),5000,cancelled);
-                                    owner.observe(observed.snapshot.toString());frames.write(observed.snapshot.toString(),5000,cancelled);
+                                    writeFrame(frames,owner.confirmPriority(passId,observed.evidence).toString(),cancelled);
+                                    owner.observe(observed.snapshot.toString());writeFrame(frames,observed.snapshot.toString(),cancelled);
                                     following=observed.followup;turn=observed.turn;
                                 }
                                 sent=true;
@@ -221,12 +238,12 @@ public final class ManaforgeUnityOpening {
                     }
                     for(int turnStage=0;turn!=null && turnStage<(Boolean.getBoolean("manaforge.liveGame")?4096:Boolean.getBoolean("manaforge.completeGame") || !System.getProperty("manaforge.combatKeyword","").isEmpty()?512:128);turnStage++) {
                         final TurnOffer[] activeOffer={turn};turn=null;boolean sent=false;
-                        LoopbackFrameReader.IdleObserver observeRequest=()->{try{TurnOffer replacement=activeOffer[0].poll();if(replacement!=null){owner.observe(replacement.snapshot.toString());frames.write(replacement.snapshot.toString(),5000,cancelled);activeOffer[0]=replacement;}}
+                        LoopbackFrameReader.IdleObserver observeRequest=()->{try{TurnOffer replacement=activeOffer[0].poll();if(replacement!=null){owner.observe(replacement.snapshot.toString());writeFrame(frames,replacement.snapshot.toString(),cancelled);activeOffer[0]=replacement;}}
                             catch(Exception failure){String code=failure.getMessage();throw new LoopbackFrameReader.OwnerException(code);}};
                         for(int retries=0;retries<8 && !sent;retries++) {
                             long remaining=java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(deadline-System.nanoTime());if(remaining<=0)throw new IOException("LIVE_UNITY_TURN_TIMEOUT");
-                            String wireTurn=readDecision(frames,deadline,cancelled,observeRequest);observeRequest.tick();TurnOffer offer=activeOffer[0];SubmissionLedger.Prepared admitted=owner.dispatch(wireTurn,game,engineViewer,offer.decision,offer.cycle);frames.write(admitted.receipt().toString(),5000,cancelled);if(!admitted.shouldSubmit)continue;
-                            JsonObject commandTurn=owner.pollNative();if(commandTurn==null || owner.pollNative()!=null || cancelled.getAsBoolean())throw new IOException("LIVE_UNITY_TURN_QUEUE_FAILED");TurnResult result="concede".equals(commandTurn.get("command").getAsString())?offer.concession.submit(commandTurn):offer.submit.submit(commandTurn);String turnId=WireMessages.parse(wireTurn).get("message_id").getAsString();frames.write(owner.confirmTurnDecision(turnId,result.evidence).toString(),5000,cancelled);owner.observe(result.snapshot.toString());frames.write(result.snapshot.toString(),5000,cancelled);turn=result.next;sent=true;
+                            String wireTurn=readDecision(frames,deadline,cancelled,observeRequest);observeRequest.tick();TurnOffer offer=activeOffer[0];SubmissionLedger.Prepared admitted=owner.dispatch(wireTurn,game,engineViewer,offer.decision,offer.cycle);writeFrame(frames,admitted.receipt().toString(),cancelled);if(!admitted.shouldSubmit)continue;
+                            JsonObject commandTurn=owner.pollNative();if(commandTurn==null || owner.pollNative()!=null || cancelled.getAsBoolean())throw new IOException("LIVE_UNITY_TURN_QUEUE_FAILED");TurnResult result="concede".equals(commandTurn.get("command").getAsString())?offer.concession.submit(commandTurn):offer.submit.submit(commandTurn);String turnId=WireMessages.parse(wireTurn).get("message_id").getAsString();writeFrame(frames,owner.confirmTurnDecision(turnId,result.evidence).toString(),cancelled);owner.observe(result.snapshot.toString());writeFrame(frames,result.snapshot.toString(),cancelled);turn=result.next;sent=true;
                         }
                         if(!sent)throw new IOException("LIVE_UNITY_TURN_RETRY_LIMIT");
                     }
@@ -235,6 +252,6 @@ public final class ManaforgeUnityOpening {
                     owner.disconnected();
                 }
             }
-        }finally{projection.invalidateDecision();}
+        }finally{OrganizationEndpoint endpoint=organization.get();organization.remove();try{if(endpoint!=null)endpoint.close();}finally{projection.invalidateDecision();}}
     }
 }

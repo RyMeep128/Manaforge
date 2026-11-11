@@ -45,3 +45,30 @@ only admitted members; the host translates them around unadmitted/ineligible roo
 entries without exposing hidden membership counts. During an unavailable native
 basis, historical retries still return their original receipt and new rejections
 remain bounded and recorded in the independent command ledger.
+
+## Normal owner integration
+
+`run_live_game(..., organization=True)` is the explicit acceptance-candidate opt-in.
+It puts organization version 2 into both private inherited bootstraps. The global
+`SHARED_ORGANIZATION_ENABLED` default remains false until the rollout gates pass.
+No keys or capability configuration are passed on command lines or in public game
+packets. Without the opt-in, both Java and Unity retain their legacy wire path.
+
+Normal organization uses the existing gameplay owner and writer, not a replacement
+multiplayer session. Every published actionable or observer projection captures its
+own native-to-opaque bindings. The normal endpoint reads battlefield generations,
+controllers and eligibility through bounded authenticated owner metadata requests,
+each verified against the same paused cycle. It stages registry reconciliation and
+viewer payload validation before adoption. It never exports raw state or native IDs.
+
+Organization reads are consumed before native dispatch and do not consume native
+retry slots, offers, receipts or auto-payment reservations. The read loop uses a
+32-packet/second extension budget and still services native idle polling. A busy
+native advancement can delay organization confirmation; Unity displays pending
+feedback and does not commit optimistic geometry. A missing safe basis causes
+legacy placement and bounded recorded rejections; historical retries remain valid.
+
+`NormalOrganizationChecks` exercises real guarded metadata with one human recipient
+and human/AI roster seats. The native two-client suite also runs in v2 mode and
+checks each snapshot's exact gameplay revision. These are separate from packaged
+Unity and normal saved-deck human-versus-AI completion evidence.

@@ -10,9 +10,12 @@ final class NativeOrganizationBridge implements ViewerChannelExtension {
     private final UUID game;private final Map<String,ManaforgeMatchCoordinator.Viewer> registrations;
     private final Map<UUID,String> actors=new HashMap<>();
     private final BattlefieldIdentityRegistry identities;private final OrganizationChannel channel;
-    private long revision;private boolean closed;
+    private long revision;private boolean closed;private final boolean version2;private final Map<String,Long> gameplay=new HashMap<>();
     NativeOrganizationBridge(UUID game,Map<String,ManaforgeMatchCoordinator.Viewer> registrations,Sender sender) throws Exception {
-        this.game=Objects.requireNonNull(game);this.registrations=Collections.unmodifiableMap(new TreeMap<>(registrations));
+        this(game,registrations,sender,false);
+    }
+    NativeOrganizationBridge(UUID game,Map<String,ManaforgeMatchCoordinator.Viewer> registrations,Sender sender,boolean version2) throws Exception {
+        this.version2=version2;this.game=Objects.requireNonNull(game);this.registrations=Collections.unmodifiableMap(new TreeMap<>(registrations));
         for(Map.Entry<String,ManaforgeMatchCoordinator.Viewer> entry:this.registrations.entrySet()){
             ManaforgeMatchCoordinator.Viewer viewer=entry.getValue();if(!entry.getKey().equals(viewer.seat) || actors.put(UUID.fromString(viewer.nativePlayer),viewer.seat)!=null)throw new IllegalArgumentException("NATIVE_ORGANIZATION_REGISTRATION");
         }
@@ -22,7 +25,7 @@ final class NativeOrganizationBridge implements ViewerChannelExtension {
             OrganizationMessages.Context context=new OrganizationMessages.Context(identities.matchEpoch,viewer.viewer,0,Collections.emptyMap(),Collections.emptyMap(),Collections.emptyList(),refs.values());
             contexts.put(viewer.seat,new OrganizationCodec.HostContext(context,Collections.emptyMap(),refs));
         }
-        try{channel=new OrganizationChannel(sender,new Basis(identities.matchEpoch,this.registrations.keySet(),Collections.emptyList()),0,contexts);}catch(Exception failure){identities.close();throw failure;}
+        try{channel=new OrganizationChannel((seat,kind,wire)->sender.send(seat,kind,version2?OrganizationV2Messages.upgrade(wire,gameplay.getOrDefault(seat,0L)):wire),new Basis(identities.matchEpoch,this.registrations.keySet(),Collections.emptyList()),0,contexts);}catch(Exception failure){identities.close();throw failure;}
     }
     private void owned(){if(Thread.currentThread()!=owner || closed)throw new IllegalStateException("NATIVE_ORGANIZATION_OWNER");}
     private static void require(boolean value) throws IOException {if(!value)throw new IOException("NATIVE_ORGANIZATION_BASIS");}
@@ -54,13 +57,15 @@ final class NativeOrganizationBridge implements ViewerChannelExtension {
             }
             OrganizationMessages.Context wire=new OrganizationMessages.Context(identities.matchEpoch,view.viewer.viewer,nextRevision,objects,seats,objects.values(),refs.values());contexts.put(seat,new OrganizationCodec.HostContext(wire,bindings,refs));
         }
+        Map<String,Long> nextGameplay=new HashMap<>();for(String seat:registrations.keySet())nextGameplay.put(seat,projected.get(seat).snapshot().get("revision").getAsLong());
+        if(version2){BattlefieldOrganizationSession.Snapshot before=channel.snapshot();State candidate=BattlefieldOrganizationService.reconcile(before.state,basis);long next=before.organizationRevision+(candidate.seats.equals(before.state.seats)?0:1);for(String seat:registrations.keySet())OrganizationV2Messages.upgrade(OrganizationCodec.snapshotState("preflight",candidate,next,nextRevision,contexts.get(seat)),nextGameplay.get(seat));}
         OrganizationChannel.PreparedBasis organization=channel.prepareBasis(basis,nextRevision,contexts);
-        return ()->{owned();require(revision+1==nextRevision);identity.commit();organization.commit();revision=nextRevision;};
+        return ()->{owned();require(revision+1==nextRevision);identity.commit();gameplay.clear();gameplay.putAll(nextGameplay);organization.commit();revision=nextRevision;};
     }
     private static Set<String> stringIds(Collection<UUID> ids){Set<String> result=new HashSet<>();for(UUID id:ids)result.add(id.toString());return result;}
     BattlefieldOrganizationSession.Snapshot snapshot(){return channel.snapshot();}
     public void connected(String seat) throws Exception {owned();channel.connected(seat);}
-    public void receive(String seat,String raw) throws Exception {owned();channel.receive(seat,raw);}
+    public void receive(String seat,String raw) throws Exception {owned();if(version2){com.google.gson.JsonObject message=OrganizationV2Messages.parseContract(raw);com.google.gson.JsonObject legacy=OrganizationV2Messages.legacy(message);if(message.get("message_type").getAsString().equals("organization_capabilities")){boolean found=false;for(com.google.gson.JsonElement version:message.getAsJsonObject("body").getAsJsonArray("versions"))found|=version.getAsInt()==2;require(found);com.google.gson.JsonArray versions=new com.google.gson.JsonArray();versions.add(1);legacy.getAsJsonObject("body").add("versions",versions);}raw=legacy.toString();}channel.receive(seat,raw);}
     public void disconnected(String seat){owned();channel.disconnected(seat);}
     public void close(){owned();try{channel.close();}finally{identities.close();closed=true;}}
 }
