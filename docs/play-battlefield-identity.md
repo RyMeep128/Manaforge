@@ -86,3 +86,25 @@ the workflow uploads the report even on failure. No raw errors, paths, authentic
 material, or event transcripts are included. The 240-second idle and expiry checks
 are unchanged. Hosted confirmation and the subsequent live gameplay steps remain
 required; unrelated shared-worktree Unity rollout edits are not part of this fix.
+
+### Double-faced fixture correction
+
+On `1208202`, Java live gameplay passed, including the full idle proof. Both native
+jobs failed at the initial Delver presence assertion. Pinned `ZonesHandler`
+bytecode confirms that entry of a composite `DoubleFacedCard` rewrites the event
+object to its registered left-half ID. The fixture incorrectly looked up the
+composite ID as a permanent; the permanent had not disappeared.
+
+The fixture now obtains registered cards from the native game, enters through
+native zone movement, and resolves the registered front half explicitly for the
+Delver transform scenario. It asserts the distinct composite/front IDs and the
+front permanent's incarnation before transformation, then requires the same
+incarnation and generation after a real native transform. No registry, rules, or
+adapter behavior changes are needed for that lookup correction.
+
+Seven independently owned native games cover ordinary characteristic/attachment
+changes, transformation, coalesced blink, controller transfer, concealment, token
+replacement, and viewer/rejection/disposal behavior. Synthetic fixture traces
+contain only IDs, zones, generation, and presence at registration, entry, effect
+application, and checkpoint boundaries. All native lifecycle assertions remain
+required. Compile-only checks do not establish passing hosted acceptance.
