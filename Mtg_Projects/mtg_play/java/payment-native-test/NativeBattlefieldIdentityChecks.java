@@ -1,5 +1,6 @@
 import java.util.*;
 import java.util.concurrent.TimeUnit;
+import mage.game.events.PlayerQueryEvent;
 import mage.cards.Card;
 import mage.constants.*;
 import mage.game.permanent.Permanent;
@@ -14,9 +15,34 @@ public final class NativeBattlefieldIdentityChecks {
         try{action.run();}catch(IllegalArgumentException | IllegalStateException expected){return;}throw new AssertionError(code);
     }
     static void pause(NativePaymentAcceptanceChecks.Engine e,Runnable change) throws Exception {
-        e.running=e.thread.submit(()->{change.run();e.game.applyEffects();e.payer.chooseUse(Outcome.Benefit,"Identity snapshot",null,e.game);});e.advance(0);
+        check(e.running==null || e.running.isDone(),"PREVIOUS_IDENTITY_WORKER_ACTIVE");
+        check(e.queries.isEmpty(),"PREVIOUS_IDENTITY_QUERY_PENDING");
+        e.running=e.thread.submit(()->{change.run();e.game.applyEffects();e.game.saveState(false);e.payer.chooseUse(Outcome.Benefit,"Identity snapshot",null,e.game);});
+        // Wait for either the expected native query or the worker failure, rather
+        // than hiding a failed transition behind the payment fixture's timeout.
+        long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(10);
+        PlayerQueryEvent query=null;
+        while(query==null && System.nanoTime()<deadline){
+            if(e.running.isDone())e.running.get();
+            query=e.queries.poll(20,TimeUnit.MILLISECONDS);
+        }
+        check(query!=null && query.getQueryType()==PlayerQueryEvent.QueryType.ASK && query.getPlayerId().equals(e.payer.getId()),"IDENTITY_CHECKPOINT_QUERY");
+        Object monitor=e.response.get(e.payer);
+        while(System.nanoTime()<deadline){
+            if(e.running.isDone())e.running.get();
+            synchronized(monitor){if(Boolean.TRUE.equals(e.opened.get(e.payer))){e.view=new GameView(e.game.getState(),e.game,e.payer.getId(),null);return;}}
+            Thread.yield();
+        }
+        throw new AssertionError("IDENTITY_CHECKPOINT_NOT_OPEN");
     }
-    static void resume(NativePaymentAcceptanceChecks.Engine e) throws Exception {e.payer.setResponseBoolean(false);e.running.get(5,TimeUnit.SECONDS);}
+    static void resume(NativePaymentAcceptanceChecks.Engine e) throws Exception {
+        e.payer.setResponseBoolean(false);e.running.get(5,TimeUnit.SECONDS);
+        synchronized(e.response.get(e.payer)){check(!Boolean.TRUE.equals(e.opened.get(e.payer)),"IDENTITY_RESPONSE_STILL_OPEN");}
+        check(e.queries.isEmpty(),"IDENTITY_QUERY_NOT_CONSUMED");
+    }
+    static Permanent permanent(NativePaymentAcceptanceChecks.Engine e,Card card){
+        Permanent result=e.game.getPermanent(card.getId());check(result!=null,"FIXTURE_PERMANENT_MISSING_"+card.getName());return result;
+    }
     static BattlefieldIdentityRegistry.Snapshot snapshot(NativePaymentAcceptanceChecks.Engine e,UUID viewer) throws Exception {
         return NativeBattlefieldIdentity.capturePaused(e.game,viewer,e.game.getState().getApplyEffectsCounter(),()->new GameView(e.game.getState(),e.game,viewer,null));
     }
@@ -29,7 +55,9 @@ public final class NativeBattlefieldIdentityChecks {
             Card equipment=e.load(new mage.cards.b.Bonesplitter(e.payer.getId(),NativePaymentAcceptanceChecks.info("Bonesplitter")),Zone.HAND);
             pause(e,()->{check(equipment.putOntoBattlefield(e.game,Zone.HAND,equipment.getSpellAbility(),e.payer.getId()),"EQUIPMENT_ENTER");check(land.putOntoBattlefield(e.game,Zone.HAND,land.getSpellAbility(),e.payer.getId()),"LAND_ENTER");check(delver.putOntoBattlefield(e.game,Zone.HAND,delver.getSpellAbility(),e.payer.getId()),"DELVER_ENTER");});
             BattlefieldIdentityRegistry.Snapshot first=snapshot(e,e.payer.getId());registry.reconcile(first);
-            String incarnation=registry.incarnation(land.getId()),transformed=registry.incarnation(delver.getId());int generation=e.game.getPermanent(land.getId()).getZoneChangeCounter(e.game);
+            permanent(e,land);permanent(e,delver);permanent(e,equipment);
+            String incarnation=registry.incarnation(land.getId()),transformed=registry.incarnation(delver.getId());int generation=permanent(e,land).getZoneChangeCounter(e.game);
+            check(incarnation!=null && transformed!=null && registry.incarnation(equipment.getId())!=null,"FIXTURE_INITIAL_INCARNATIONS");
             BattlefieldIdentityRegistry.Member a=member(registry.project(first),land.getId()),b=member(registry.project(snapshot(e,e.opponent.getId())),land.getId());
             check(!a.handle.equals(b.handle) && a.seat.equals(b.seat),"VIEWER_ISOLATION");check(registry.resolve(e.opponent.getId(),a.handle)==null,"FOREIGN_HANDLE");
             rejects(()->NativeBattlefieldIdentity.capturePaused(e.game,e.payer.getId(),first.cycle-1,()->e.view),"STALE_CAPTURE");
@@ -39,7 +67,7 @@ public final class NativeBattlefieldIdentityChecks {
             check(incarnation.equals(registry.incarnation(land.getId())) && registry.resolve(e.payer.getId(),a.handle)!=null,"REJECTION_MUTATED_STATE");resume(e);
             rejects(()->NativeBattlefieldIdentity.capturePaused(e.game,e.payer.getId(),first.cycle,()->e.view),"UNPAUSED_READ");
             pause(e,()->{
-                Permanent permanent=e.game.getPermanent(delver.getId());permanent.tap(land.getSpellAbility(),e.game);
+                Permanent permanent=permanent(e,delver);permanent.tap(land.getSpellAbility(),e.game);
                 permanent.getCounters(e.game).addCounter(mage.counters.CounterType.P1P1.createInstance());
                 permanent.damage(1,land.getId(),land.getSpellAbility(),e.game);
                 check(permanent.transform(land.getSpellAbility(),e.game),"NATIVE_TRANSFORM");

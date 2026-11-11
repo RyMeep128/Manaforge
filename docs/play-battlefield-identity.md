@@ -65,3 +65,14 @@ Do not enable persisted membership, shared organization, or advertise multiplaye
 support from these internal types. CT-08 can consume the proven incarnation and
 canonical-seat boundary only after native lifecycle evidence passes. Wire DTOs,
 multiplayer coordination, reconnect, and Unity group rendering remain later work.
+
+## Stabilization evidence
+
+The first hosted run on `fc4e6d8` failed before characteristic-transition checks:
+Delver was no longer present after the payment fixture's generic advance helper.
+That helper also queried playable actions, which is unrelated to identity capture.
+Identity checkpoints now consume their own real native ASK and response monitor,
+save the completed transition state, and build only a native GameView. They assert
+initial permanent/incarnation presence, promptly surface transition-worker failures,
+and verify response/query completion between checkpoints. Native transitions and
+all lifecycle assertions remain required; this is not yet passing hosted evidence.
