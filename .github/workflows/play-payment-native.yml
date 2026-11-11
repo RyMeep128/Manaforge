@@ -39,7 +39,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: python tools/prepare_payment_ci_engine.py --destination "$env:RUNNER_TEMP/manaforge-payment-engine" --jdk-path "$env:JAVA_HOME"
-      - name: Native API, utility and ownership checks
+      - name: Native API, payment, identity lifecycle and ownership checks
         run: |
           python tools/check_play_payment_coordinator.py --probe-pinned-helpers --real-game-payment --xmage-root "$env:RUNNER_TEMP/manaforge-payment-engine" --javap "$env:JAVA_HOME/bin/javap.exe" 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/payment-evidence.log"
           exit $LASTEXITCODE

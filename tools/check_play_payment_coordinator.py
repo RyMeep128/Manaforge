@@ -228,6 +228,8 @@ def main():
                     PLAY
                     / "java/payment-native-test/NativePaymentAcceptanceChecks.java",
                     PLAY
+                    / "java/payment-native-test/NativeBattlefieldIdentityChecks.java",
+                    PLAY
                     / "java/payment-native-test/manaforge/payment/xmage/NativePaymentSearchChecks.java",
                     PLAY / "java/ManaforgeAutomaticEngine.java",
                     PLAY / "java/NativeAutomaticPayment.java",
@@ -316,6 +318,18 @@ def main():
                     cwd=output,
                     check=True,
                     timeout=180,
+                )
+                subprocess.run(
+                    [
+                        runtime,
+                        "-Djava.awt.headless=true",
+                        "-cp",
+                        output + os.pathsep + native_classpath,
+                        "NativeBattlefieldIdentityChecks",
+                    ],
+                    cwd=output,
+                    check=True,
+                    timeout=120,
                 )
                 subprocess.run(
                     [
