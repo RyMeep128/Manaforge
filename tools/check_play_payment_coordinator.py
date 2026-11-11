@@ -3,6 +3,7 @@
 No runtime is downloaded or modified. --verify-pinned-api checks binary provenance
 before javap inspects any engine class. --real-game-payment additionally runs
 focused native casting/payment acceptance in real game objects, without Unity.
+--real-game-multiview separately proves read-only native two-seat channels.
 """
 
 import argparse
@@ -38,9 +39,12 @@ def main():
         type=Path,
         default=PLAY / "mage-full_1.4.62-dev_2026-10-03_20-47",
     )
+    parser.add_argument("--real-game-multiview", action="store_true")
     args = parser.parse_args()
-    if args.real_game_payment and not args.probe_pinned_helpers:
-        parser.error("--real-game-payment requires --probe-pinned-helpers")
+    if (
+        args.real_game_payment or args.real_game_multiview
+    ) and not args.probe_pinned_helpers:
+        parser.error("Real-game checks require --probe-pinned-helpers")
     compiler, runtime = shutil.which("javac"), shutil.which("java")
     if not compiler or not runtime:
         parser.error("A JDK with javac and java is required")
@@ -221,7 +225,7 @@ def main():
                 PLAY / "java/ManaforgeMetadataChannel.java",
                 *sorted((PLAY / "protocol/java/manaforge/protocol").glob("*.java")),
             ]
-            if args.real_game_payment:
+            if args.real_game_payment or args.real_game_multiview:
                 bridge_sources += [
                     PLAY
                     / "java/payment-native-test/manaforge/payment/RealPaymentGameChecks.java",
@@ -239,6 +243,11 @@ def main():
                     item
                     for item in (PLAY / "java").glob("*.java")
                     if item not in bridge_sources
+                ]
+            if args.real_game_multiview:
+                bridge_sources += [
+                    PLAY / "java/payment-native-test/NativeMultiViewerChecks.java",
+                    PLAY / "protocol/java-test/MatchCoordinatorChecks.java",
                 ]
             subprocess.run(
                 [
@@ -338,6 +347,19 @@ def main():
                         "-cp",
                         output + os.pathsep + native_classpath,
                         "manaforge.payment.xmage.NativePaymentSearchChecks",
+                    ],
+                    cwd=output,
+                    check=True,
+                    timeout=180,
+                )
+            if args.real_game_multiview:
+                subprocess.run(
+                    [
+                        runtime,
+                        "-Djava.awt.headless=true",
+                        "-cp",
+                        output + os.pathsep + native_classpath,
+                        "NativeMultiViewerChecks",
                     ],
                     cwd=output,
                     check=True,
