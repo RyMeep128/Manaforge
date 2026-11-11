@@ -390,8 +390,10 @@ def run_live_game(
         or presentation not in ("current", "table")
     ):
         raise LiveGameError("PAYMENT_MODE_INVALID")
-    if type(concede_acceptance) is not bool or concede_acceptance and (
-        not acceptance or setup.format != "freeform" or require_auto_payment
+    if (
+        type(concede_acceptance) is not bool
+        or concede_acceptance
+        and (not acceptance or setup.format != "freeform" or require_auto_payment)
     ):
         raise LiveGameError("CONCEDE_ACCEPTANCE_INVALID")
     payload = project_launch(

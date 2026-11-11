@@ -5,7 +5,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 /** Engine-free public fixture over real authenticated sockets and production admission. */
 public final class OpeningSessionChecks {
     static void concessionAdmissionChecks(manaforge.protocol.GatewayHandshake.ViewerContext context) throws Exception {
-        ManaforgeOpeningProjection projection=OpeningProjectionChecks.projection();JsonObject before=OpeningProjectionChecks.attackState();JsonObject snapshot=projection.projectCoreCombat(before,OpeningProjectionChecks.priorityPrompt());
+        ManaforgeOpeningProjection projection=OpeningProjectionChecks.projection();JsonObject before=OpeningProjectionChecks.attackState();before.addProperty("priority_player","raw-name");JsonObject snapshot=projection.projectCoreCombat(before,OpeningProjectionChecks.priorityPrompt());
         snapshot.add("decision",JsonNull.INSTANCE);snapshot.add("actions",new JsonArray());
         JsonObject body=new JsonObject();body.addProperty("session_id","session");body.addProperty("viewer_id","human");body.add("revision",snapshot.get("revision"));body.addProperty("operation","concede");
         JsonObject wire=new JsonObject();wire.addProperty("wire_version",1);wire.addProperty("message_type","command");wire.addProperty("message_id","concession");wire.add("body",body);

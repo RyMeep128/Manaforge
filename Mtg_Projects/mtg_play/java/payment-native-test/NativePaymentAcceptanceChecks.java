@@ -47,7 +47,12 @@ public final class NativePaymentAcceptanceChecks {
             game.setGameOptions(new GameOptions());
             payer.setUserData(mage.players.net.UserData.getDefaultUserDataView());opponent.setUserData(mage.players.net.UserData.getDefaultUserDataView());
             payer.getUserData().setManaPoolAutomatic(true);payer.getUserData().setManaPoolAutomaticRestricted(false);
-            game.addPlayer(payer,new mage.cards.decks.Deck());game.addPlayer(opponent,new mage.cards.decks.Deck());
+            // Native GameView reads MatchPlayer score/deck metadata even in this focused fixture.
+            // Install real match ownership without starting a second game or changing payment rules.
+            mage.cards.decks.Deck payerDeck=new mage.cards.decks.Deck(),opponentDeck=new mage.cards.decks.Deck();
+            mage.game.match.Match match=new TwoPlayerMatch(new mage.game.match.MatchOptions("Payment fixture","Two Player Duel",false));
+            match.addPlayer(payer,payerDeck);match.addPlayer(opponent,opponentDeck);
+            game.addPlayer(payer,payerDeck);game.addPlayer(opponent,opponentDeck);
             game.getState().getPlayerList().add(payer.getId());game.getState().getPlayerList().add(opponent.getId());game.getState().getPlayerList().setCurrent(payer.getId());
             Field cursor=GameImpl.class.getDeclaredField("playerList");cursor.setAccessible(true);cursor.set(game,game.getState().getPlayerList());
             game.getState().setActivePlayerId(payer.getId());game.getState().setPriorityPlayerId(payer.getId());game.getState().setTurnNum(4);game.getTurn().setPhase(new mage.game.turn.PreCombatMainPhase());
