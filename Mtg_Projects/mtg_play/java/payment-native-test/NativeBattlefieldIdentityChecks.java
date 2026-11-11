@@ -118,6 +118,9 @@ public final class NativeBattlefieldIdentityChecks {
             check(f.registry.resolve(f.e.payer.getId(),handle)==null,"STALE_BLINK_HANDLE");resume(f.e);
         }
     }
+    static mage.abilities.Ability fixtureSource(NativePaymentAcceptanceChecks.Engine e,Card card) {
+        if(card.getSpellAbility()!=null)return card.getSpellAbility();mage.abilities.Ability source=new mage.abilities.common.SimpleActivatedAbility(Zone.BATTLEFIELD,new mage.abilities.effects.common.GainLifeEffect(0),new mage.abilities.costs.mana.ManaCostsImpl<>("{0}"));source.setSourceId(card.getId());source.setControllerId(card.getOwnerId());return source;
+    }
     static void transfer(NativePaymentAcceptanceChecks.Engine e,Card land) {
         // A direct changeControllerId is reset by the next native control-layer pass.
         // Install the same continuous effect used by native control-changing cards.
@@ -153,9 +156,9 @@ public final class NativeBattlefieldIdentityChecks {
     static void tokens() throws Exception {
         try(Fixture f=new Fixture()){
             Card source=f.forest();SoldierToken token=new SoldierToken();
-            pause(f.e,()->{f.enter(source);check(token.putOntoBattlefield(1,f.e.game,source.getSpellAbility(),f.e.payer.getId(),false,false,null,null,false,null),"TOKEN_ENTER");});
+            pause(f.e,()->{f.enter(source);check(token.putOntoBattlefield(1,f.e.game,fixtureSource(f.e,source),f.e.payer.getId(),false,false,null,null,false,Collections.singletonList(token)),"TOKEN_ENTER");});
             UUID first=token.getLastAddedTokenIds().get(0);f.registry.reconcile(snapshot(f.e,f.e.payer.getId()));String before=f.registry.incarnation(first);check(before!=null,"TOKEN_IDENTITY");resume(f.e);
-            pause(f.e,()->{check(f.e.game.getPermanent(first).moveToZone(Zone.EXILED,source.getSpellAbility(),f.e.game,false),"TOKEN_LEAVE");check(token.putOntoBattlefield(1,f.e.game,source.getSpellAbility(),f.e.payer.getId(),false,false,null,null,false,null),"TOKEN_RECREATE");});
+            pause(f.e,()->{check(f.e.game.getPermanent(first).moveToZone(Zone.EXILED,source.getSpellAbility(),f.e.game,false),"TOKEN_LEAVE");check(token.putOntoBattlefield(1,f.e.game,fixtureSource(f.e,source),f.e.payer.getId(),false,false,null,null,false,Collections.singletonList(token)),"TOKEN_RECREATE");});
             UUID second=token.getLastAddedTokenIds().get(0);BattlefieldIdentityRegistry.Result result=f.registry.reconcile(snapshot(f.e,f.e.payer.getId()));
             check(result.removed.contains(before) && f.registry.incarnation(first)==null,"TOKEN_REMOVAL");check(!first.equals(second) && f.registry.incarnation(second)!=null && !before.equals(f.registry.incarnation(second)),"TOKEN_REPLACEMENT_IDENTITY");resume(f.e);
         }
