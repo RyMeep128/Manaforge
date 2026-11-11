@@ -110,12 +110,12 @@ namespace Manaforge.Play
             canvas.RegisterCallback(key,TrickleDown.TrickleDown);
             changed=()=>{if(!committing && IsActive)Cancel();};controller.Changed+=changed;
         }
-        public IDisposable Attach(IGameplayContainerBinding shell)
+        public IDisposable Attach(IGameplayContainerBinding shell,Func<float?> drawerHeight=null)
         {
             if(disposed)throw new ObjectDisposedException(nameof(ContainerGestureController));
             var unbind=new List<Action>();
             Bind(shell.MoveHandle,shell.ComponentId,false,Vector2.zero,unbind);
-            foreach(var grip in shell.ResizeHandles)Bind(grip.handle,shell.ComponentId,true,grip.axes,unbind,()=>shell.ResizeHandles.First(g=>g.handle==grip.handle).axes);
+            foreach(var grip in shell.ResizeHandles)Bind(grip.handle,shell.ComponentId,true,grip.axes,unbind,()=>shell.ResizeHandles.First(g=>g.handle==grip.handle).axes,drawerHeight);
             EventCallback<DetachFromPanelEvent> detached=ev=>{if(ev.target==shell.Element && active==shell.ComponentId)Cancel();};
             shell.Element.RegisterCallback(detached);unbind.Add(()=>shell.Element.UnregisterCallback(detached));
             Attachment attachment=null;
@@ -123,11 +123,11 @@ namespace Manaforge.Play
             attachment=new Attachment(()=>{if(active==shell.ComponentId)Cancel();foreach(var action in unbind)action();attachments.Remove(attachment);});
             attachments.Add(attachment);return attachment;
         }
-        private void Bind(VisualElement handle,string id,bool sizing,Vector2 direction,List<Action> unbind,Func<Vector2> currentDirection=null)
+        private void Bind(VisualElement handle,string id,bool sizing,Vector2 direction,List<Action> unbind,Func<Vector2> currentDirection=null,Func<float?> drawerHeight=null)
         {
             EventCallback<PointerDownEvent> down=ev=>{
                 if(ev.button!=0 || !handle.enabledInHierarchy)return;
-                if(!Begin(id,canvas.WorldToLocal(ev.position),sizing,currentDirection?.Invoke()??direction))return;
+                if(!Begin(id,canvas.WorldToLocal(ev.position),sizing,currentDirection?.Invoke()??direction,drawerHeight?.Invoke()))return;
                 captured=handle;pointer=ev.pointerId;handle.CapturePointer(pointer);handle.Focus();ev.StopPropagation();
             };
             EventCallback<PointerMoveEvent> move=ev=>{if(captured!=handle || ev.pointerId!=pointer)return;Move(canvas.WorldToLocal(ev.position));ev.StopPropagation();};
@@ -136,13 +136,13 @@ namespace Manaforge.Play
             handle.RegisterCallback(down);handle.RegisterCallback(move);handle.RegisterCallback(up);handle.RegisterCallback(lost);
             unbind.Add(()=>{handle.UnregisterCallback(down);handle.UnregisterCallback(move);handle.UnregisterCallback(up);handle.UnregisterCallback(lost);});
         }
-        public bool Begin(string id,Vector2 position,bool sizing=false,Vector2 direction=default)
+        public bool Begin(string id,Vector2 position,bool sizing=false,Vector2 direction=default,float? presentedHeight=null)
         {
             if(disposed)return false;Cancel();
             var limits=controller.Constraints(id);
             if(!limits.Supports(sizing?GameplayHudCapabilities.Resize:GameplayHudCapabilities.Move))return false;
             if(sizing && controller.State(id).Mode==ContainerMode.Drawer && !limits.ResizeDrawer)return false;
-            active=id;start=position;resize=sizing;axes=direction;original=controller.State(id);initial=controller.Resolved[id];if(sizing && original.Mode==ContainerMode.Drawer)initial.height=Mathf.Clamp(original.FloatingRect.height*controller.Viewport.y,limits.Minimum.y,limits.Maximum.y);candidate=null;
+            active=id;start=position;resize=sizing;axes=direction;original=controller.State(id);initial=controller.Resolved[id];if(sizing && original.Mode==ContainerMode.Drawer)initial.height=Mathf.Clamp(presentedHeight??original.FloatingRect.height*controller.Viewport.y,limits.Minimum.y,limits.Maximum.y);candidate=null;
             return true;
         }
         public void Move(Vector2 position)

@@ -117,7 +117,7 @@ namespace Manaforge.Play
             if(Capabilities.PrivateLayout)LayoutEditor=new HudLayoutEditor(root.parent,root,HudRegistry,
                 new[]{(GameplayHudIds.Priority,"Priority",priorityDrawer),(GameplayHudIds.Actions,"Spells & Abilities",actionDrawer),(GameplayHudIds.Zones,"Zones",zonePanelDrawer),(GameplayHudIds.Commanders,"Commanders",hud.CommanderDrawer)},
                 layoutPresetStore??new JsonLayoutPresetStore(System.IO.Path.Combine(Application.persistentDataPath,"profiles","default","layouts","arena")),
-                ()=>{InterruptGestures();ClearCardFocus();CloseInspection();ClosePublicZone();},Layout,Decisions.SetLayoutEditing,()=>LayoutAttentionRequired(),FocusGameplayAttention);
+                ()=>{InterruptGestures();ClearCardFocus();CloseInspection();ClosePublicZone();},Layout,Decisions.SetLayoutEditing,()=>LayoutAttentionRequired(),FocusGameplayAttention,previewRoots:new VisualElement[]{zonePanel,zoneDrawer,navigation,Surface.InspectionView,root.Q<Button>("close-inspection")},closePreviews:()=>{CloseInspection();ClosePublicZone();});
         }
         private void FocusGameplayAttention()
         {
@@ -218,7 +218,7 @@ namespace Manaforge.Play
             if(!inspecting && !restoringFocus && host?.Inspect(id)==true){
                 previewing=true;previewId=id;inspector.Show(false);PlaceInspection(view);Surface.InspectionView.BringToFront();
             }
-            actionDrawer.BringToFront();result.BringToFront();if(inspecting){Surface.InspectionView.BringToFront();root.Q<Button>("close-inspection").BringToFront();}root.Q<VisualElement>("board-object-menu")?.BringToFront();
+            actionDrawer.BringToFront();result.BringToFront();if(inspecting){Surface.InspectionView.BringToFront();root.Q<Button>("close-inspection").BringToFront();}root.Q<VisualElement>("board-object-menu")?.BringToFront();LayoutEditor?.BringToFront();
         }
         private void PlaceInspection(CardView source=null)
         {

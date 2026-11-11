@@ -23,6 +23,7 @@ namespace Manaforge.Play
         private void Submit(string name)
         {
             var button=root.Q<Button>(name);if(button==null || !button.enabledInHierarchy)throw new InvalidOperationException("Control unavailable: "+name);
+            for(var parent=button.parent;parent!=null;parent=parent.parent)if(parent is Foldout foldout)foldout.value=true;
             using(var submit=NavigationSubmitEvent.GetPooled()){submit.target=button;button.SendEvent(submit);}
         }
         private static void Require(bool condition,string message){if(!condition)throw new InvalidOperationException(message);}

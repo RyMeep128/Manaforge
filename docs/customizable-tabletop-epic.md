@@ -1,6 +1,6 @@
 # Customizable Tabletop, Modular HUD, and Shared Battlefield Organization
 
-Status: implementation in progress; private-layout preview is implemented but gated.
+Status: implementation in progress; private drawer customization is enabled in the normal game menu by owner request. Hosted/full-game and owner acceptance remain incomplete.
 
 ## Implementation status (2026-11-11)
 
@@ -15,9 +15,8 @@ Status: implementation in progress; private-layout preview is implemented but ga
 | CT-18–22 | Automatic rules, visual stacks, land organization, and nested groups remain unimplemented. |
 | CT-23–24 | Release acceptance and four-player shared-table gates remain incomplete. |
 
-Normal-game customization remains disabled. The next delivery is acceptance and
-production composition enablement for the four existing drawer families; it does
-not enable hand/battlefield repositioning or shared organization. See
+Normal games expose Customize Layout for the four existing drawer families.
+This does not enable hand/battlefield repositioning or shared organization. Remaining acceptance is tracked in
 [recovery and release evidence](play-layout-recovery.md#evidence-and-release-gate).
 The story specifications below describe the full target, not completed acceptance.
 See [CT-07A identity foundation](play-battlefield-identity.md) for its internal contracts and remaining gates.

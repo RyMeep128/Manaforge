@@ -180,3 +180,5 @@
 .mf-layout-presets .unity-text-field { width: 260px; }
 .mf-layout-confirm { background-color: rgb(42,48,56); border-width: 2px; border-color: rgb(239,143,78); padding: 12px; }
 .mf-layout-confirm > Label { white-space: normal; }
+
+.layout-preview-outline { border-left-width: 1px; border-right-width: 1px; border-top-width: 1px; border-bottom-width: 1px; border-left-color: rgb(76, 184, 199); border-right-color: rgb(76, 184, 199); border-top-color: rgb(76, 184, 199); border-bottom-color: rgb(76, 184, 199); background-color: rgba(25, 63, 69, 0.08); }

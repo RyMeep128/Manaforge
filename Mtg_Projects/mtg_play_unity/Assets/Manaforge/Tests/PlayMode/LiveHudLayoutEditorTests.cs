@@ -93,14 +93,15 @@ namespace Manaforge.Play.Tests
                 var save=h.Editor.SaveAsync(false);yield return new WaitUntil(()=>save.IsCompleted);Assert.That(save.Result,Is.False);Assert.That(h.Editor.Controller.State(GameplayHudIds.Actions),Is.SameAs(before));
             }
         }
-        [Test] public void DefaultCompositionRemainsGatedWhileAcceptanceOptsInLocally()
+        [Test] public void DefaultCompositionEnablesPrivateLayoutWithoutSharedOrganization()
         {
             var root=new VisualElement();
             using var ordinary=(ArenaGameplayPresentation)LiveGameScene.CreateDefaultPresentation(root,false);
             using var acceptance=(ArenaGameplayPresentation)LiveGameScene.CreateDefaultPresentation(root,true);
-            Assert.That(ordinary.Capabilities.PrivateLayout,Is.False,"Release gate requires hosted and full-game acceptance");
+            Assert.That(ordinary.Capabilities.PrivateLayout,Is.True);
             Assert.That(acceptance.Capabilities.PrivateLayout,Is.True);
             Assert.That(GameplayPresentationCapabilities.Default.PrivateLayout,Is.False);
+            Assert.That(ordinary.Capabilities.SharedOrganization || ordinary.Capabilities.VisualStacks || ordinary.Capabilities.AutomaticOrganization,Is.False);
             Assert.That(acceptance.Capabilities.SharedOrganization || acceptance.Capabilities.VisualStacks || acceptance.Capabilities.AutomaticOrganization,Is.False);
         }
         [UnityTest] public IEnumerator JsonPresetSurvivesEditorRestartAndSessionResetWithoutChangingStartup()

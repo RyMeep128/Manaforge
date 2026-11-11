@@ -11,7 +11,8 @@ namespace Manaforge.Play
     public sealed class HudLayoutEditor : IDisposable
     {
         public const GameplayHudCapabilities DrawerCapabilities=GameplayHudCapabilities.Drawer|GameplayHudCapabilities.Move|GameplayHudCapabilities.Resize|GameplayHudCapabilities.Dock;
-        private readonly VisualElement root,canvas,layer,toolbar,controls;
+        private readonly VisualElement root,canvas,layer,toolbar,controls,dockHint;
+        private readonly VisualElement[] previewRoots;private readonly Action closePreviews;
         private readonly GameplayHudRegistry registry;
         private readonly Dictionary<string,LiveDrawerLayoutAdapter> adapters=new Dictionary<string,LiveDrawerLayoutAdapter>();
         private readonly List<Action> cleanup=new List<Action>();
@@ -47,12 +48,14 @@ namespace Manaforge.Play
         public string Status=>status.text;
         public HudLayoutEditor(VisualElement root,VisualElement canvas,GameplayHudRegistry registry,
             IEnumerable<(string id,string title,GameplayDrawer drawer)> drawers,ILayoutPresetStore store,
-            Action interrupt,Action relayout,Action<bool> gate,Func<bool> blocked,Action focusGameplay=null)
+            Action interrupt,Action relayout,Action<bool> gate,Func<bool> blocked,Action focusGameplay=null,IEnumerable<VisualElement> previewRoots=null,Action closePreviews=null)
         {
+            this.previewRoots=(previewRoots??Array.Empty<VisualElement>()).Where(e=>e!=null).ToArray();this.closePreviews=closePreviews;
             this.focusGameplay=focusGameplay;this.root=root;this.canvas=canvas;this.registry=registry;this.interrupt=interrupt;this.relayout=relayout;this.gate=gate;this.blocked=blocked;
             layer=new VisualElement{name="hud-layout-editor",pickingMode=PickingMode.Ignore};layer.style.position=Position.Absolute;layer.style.left=layer.style.top=layer.style.right=layer.style.bottom=0;canvas.Add(layer);GameplayTheme.Attach(layer);
             viewportWarning=new Label("Layout customization needs 1024 x 768 UI units, or 1280 x 720 widescreen. Default placement is temporarily active. Enlarge the window, or use Esc > Reset Layout for This Game."){name="layout-viewport-warning",enableRichText=false,focusable=true,pickingMode=PickingMode.Ignore};
             viewportWarning.style.position=Position.Absolute;viewportWarning.style.left=12;viewportWarning.style.bottom=12;viewportWarning.style.right=12;viewportWarning.style.maxWidth=620;viewportWarning.style.whiteSpace=WhiteSpace.Normal;viewportWarning.style.backgroundColor=new Color(.08f,.06f,.02f,.96f);viewportWarning.style.color=new Color(1,.85f,.6f);viewportWarning.style.display=DisplayStyle.None;layer.Add(viewportWarning);
+            dockHint=new VisualElement{name="layout-dock-preview",pickingMode=PickingMode.Ignore};dockHint.style.position=Position.Absolute;dockHint.style.backgroundColor=new Color(.2f,.8f,.85f,.55f);dockHint.style.display=DisplayStyle.None;layer.Add(dockHint);
             Controller=new ContainerLayoutController(Viewport.Size);
             foreach(var entry in drawers){
                 var adapter=new LiveDrawerLayoutAdapter(entry.id,entry.title,entry.drawer,canvas,layer);adapters.Add(entry.id,adapter);
@@ -60,32 +63,31 @@ namespace Manaforge.Play
                 Controller.Register(DefaultState(entry.id,Controller.Viewport),new ContainerConstraints(new Vector2(entry.id==GameplayHudIds.Priority?285:entry.id==GameplayHudIds.Actions?275:252,100),new Vector2(720,900),DrawerCapabilities,permittedTargets:new[]{"$viewport"},resizeDrawer:true,headerHeight:30,wrapViewportRails:true));
             }
             gestures=new ContainerGestureController(Controller,canvas,Render);
-            foreach(var adapter in adapters.Values){cleanup.Add(gestures.Attach(adapter).Dispose);
+            foreach(var adapter in adapters.Values){cleanup.Add(gestures.Attach(adapter,()=>adapter.PresentedBodyHeight).Dispose);
                 EventCallback<KeyDownEvent> key=ev=>HandleArrow(ev,adapter.ComponentId);adapter.MoveHandle.RegisterCallback(key);cleanup.Add(()=>adapter.MoveHandle.UnregisterCallback(key));
                 foreach(var grip in adapter.ResizeHandles){grip.handle.RegisterCallback(key);cleanup.Add(()=>grip.handle.UnregisterCallback(key));}
             }
             binding=new LayoutPresetApplicator(Controller,registry,gestures.Cancel);storage=new HudLayoutPresetSession(store);
-            toolbar=new ScrollView(ScrollViewMode.Vertical){name="layout-editor-controls"};toolbar.style.position=Position.Absolute;toolbar.style.left=Length.Percent(26);toolbar.style.top=60;toolbar.style.width=Length.Percent(48);toolbar.style.maxHeight=Length.Percent(65);toolbar.style.backgroundColor=new Color(.035f,.045f,.06f,.98f);toolbar.style.paddingLeft=toolbar.style.paddingRight=12;toolbar.style.paddingTop=toolbar.style.paddingBottom=10;layer.Add(toolbar);
-            toolbar.Add(new Label("Customize Layout - game continues"));
+            toolbar=new ScrollView(ScrollViewMode.Vertical){name="layout-editor-controls",focusable=true};toolbar.style.position=Position.Absolute;toolbar.style.left=Length.Percent(28);toolbar.style.top=8;toolbar.style.width=Length.Percent(44);toolbar.style.maxHeight=Length.Percent(46);toolbar.style.backgroundColor=new Color(.035f,.045f,.06f,.98f);toolbar.style.paddingLeft=toolbar.style.paddingRight=12;toolbar.style.paddingTop=toolbar.style.paddingBottom=10;layer.Add(toolbar);
+            toolbar.Add(new Label("Customize Layout | drag headers and resize corners"));
+            toolbar.Add(new Label("Drop near a screen edge to dock. Open a drawer preview to see its contents."));
             controls=new VisualElement();toolbar.Add(controls);
-            component=new PopupField<string>("Drawer",adapters.Keys.ToList(),0){name="layout-editor-component"};controls.Add(component);
+            component=new PopupField<string>("Drawer",adapters.Keys.ToList(),0){name="layout-editor-component"};
             var row=new VisualElement();row.style.flexDirection=FlexDirection.Row;row.style.flexWrap=Wrap.Wrap;controls.Add(row);
             Button Button(string title,Action action,VisualElement parent=null){var button=new Button(action){text=title,name="layout-editor-"+title.ToLowerInvariant().Replace(" ","-")};GameplayTheme.Button(button);(parent??row).Add(button);cleanup.Add(()=>button.clickable=null);return button;}
-            foreach(var edge in new[]{ContainerDockEdge.Left,ContainerDockEdge.Right,ContainerDockEdge.Top,ContainerDockEdge.Bottom}){var dock=edge;Button("Dock "+edge,()=>Dock(component.value,dock));}
-            Button("Float",()=>EditSelected(id=>Controller.Undock(id)));Button("Earlier",()=>EditSelected(id=>Controller.Reorder(id,-1)));Button("Later",()=>EditSelected(id=>Controller.Reorder(id,1)));
-            Button("Move left",()=>Adjust(component.value,-8,0,false));Button("Move right",()=>Adjust(component.value,8,0,false));Button("Move up",()=>Adjust(component.value,0,-8,false));Button("Move down",()=>Adjust(component.value,0,8,false));
-            Button("Narrower",()=>Adjust(component.value,-8,0,true));Button("Wider",()=>Adjust(component.value,8,0,true));Button("Shorter",()=>Adjust(component.value,0,-8,true));Button("Taller",()=>Adjust(component.value,0,8,true));
             apply=Button("Apply",()=>Apply());Button("Cancel",Cancel);Button("Restore Default",RestoreDefault);
-            presets=new PopupField<string>("Preset",new List<string>{"Default"},0){name="live-preset-selector"};controls.Add(presets);
-            presetName=new TextField("Name"){name="live-preset-name"};controls.Add(presetName);
-            var presetRow=new VisualElement();presetRow.style.flexDirection=FlexDirection.Row;presetRow.style.flexWrap=Wrap.Wrap;controls.Add(presetRow);
+            var library=new Foldout{text="Presets and keyboard controls",value=false,name="layout-editor-presets"};controls.Add(library);library.Add(component);
+            presets=new PopupField<string>("Preset",new List<string>{"Default"},0){name="live-preset-selector"};library.Add(presets);
+            presetName=new TextField("Name"){name="live-preset-name"};library.Add(presetName);
+            var presetRow=new VisualElement();presetRow.style.flexDirection=FlexDirection.Row;presetRow.style.flexWrap=Wrap.Wrap;library.Add(presetRow);
             Button("Stage preset",()=>StagePreset(storage.Library.Presets.FirstOrDefault(p=>p.Name==presets.value)?.Id),presetRow);
             save=Button("Save",()=>Run(()=>SaveAsync(false)),presetRow);saveAs=Button("Save As",()=>Run(()=>SaveAsync(true)),presetRow);
             rename=Button("Rename applied",()=>Run(RenameAsync),presetRow);delete=Button("Delete applied",()=>{if(!confirmDelete){confirmDelete=true;status.text="Delete applied preset "+storage.Library.Find(selectedId)?.Name+"? Press Delete applied again to confirm. Current layout is kept.";}else Run(DeleteAsync);},presetRow);
             Button("Refresh list",()=>Run(RefreshPresetsAsync),presetRow);
             status=new Label{enableRichText=false};status.style.whiteSpace=WhiteSpace.Normal;toolbar.Add(status);storageStatus=new Label{enableRichText=false};storageStatus.style.whiteSpace=WhiteSpace.Normal;toolbar.Add(storageStatus);
-            toolbar.Add(new Label("Apply changes in memory. Save explicitly after Apply. Escape cancels; arrows move; Shift+arrows resize."));
+            library.Add(new Label("Apply keeps placement; Save keeps a preset. Arrows move, Shift+arrows resize, Ctrl+arrows dock, Alt+arrows reorder. Escape cancels."));
             toolbar.style.display=DisplayStyle.None;
+            foreach(var adapter in adapters.Values){var current=adapter;Action preview=()=>{if(IsEditing && !suppress){component.SetValueWithoutNotify(current.ComponentId);Render(Controller.Resolved);RefreshControls();}};current.PreviewChanged+=preview;cleanup.Add(()=>current.PreviewChanged-=preview);EventCallback<PointerDownEvent> select=ev=>component.SetValueWithoutNotify(current.ComponentId);current.MoveHandle.RegisterCallback(select,TrickleDown.TrickleDown);cleanup.Add(()=>current.MoveHandle.UnregisterCallback(select,TrickleDown.TrickleDown));}
             committed=Snapshot();RememberStates();Controller.Changed+=Changed;
             root.RegisterCallback<KeyDownEvent>(Key,TrickleDown.TrickleDown);root.RegisterCallback<KeyUpEvent>(KeyUp,TrickleDown.TrickleDown);
             root.RegisterCallback<PointerDownEvent>(Block,TrickleDown.TrickleDown);root.RegisterCallback<PointerMoveEvent>(Block,TrickleDown.TrickleDown);root.RegisterCallback<PointerUpEvent>(Block,TrickleDown.TrickleDown);root.RegisterCallback<ClickEvent>(Block,TrickleDown.TrickleDown);root.RegisterCallback<WheelEvent>(Block,TrickleDown.TrickleDown);
@@ -119,6 +121,7 @@ namespace Manaforge.Play
             if(!suppress && IsEditing){foreach(string id in Controller.Ids)if(!ReferenceEquals(lastStates[id],Controller.State(id)))draftOverrides.Add(id);}
             RememberStates();Render(Controller.Resolved);RefreshControls();
         }
+        public void BringToFront(){if(IsEditing){layer.BringToFront();toolbar.BringToFront();}}
         public bool CanOpen=>!disposed && ViewportSupported && hasFrame && !temporary && !storage.Busy && !(blocked?.Invoke()??false);
         public bool Open(VisualElement origin=null)
         {
@@ -134,7 +137,7 @@ namespace Manaforge.Play
                 }
                 suppress=false;committed=Snapshot();draftOverrides.Clear();draftOverrides.UnionWith(committedOverrides);working=committedWorking;selectedId=committedSelected;
             }
-            toolbar.style.display=DisplayStyle.Flex;layer.BringToFront();status.text="Edit drawer handles or use the controls. Apply before saving.";Render(Controller.Resolved);RefreshControls();component.Focus();return true;
+            toolbar.style.display=DisplayStyle.Flex;layer.BringToFront();status.text="Drag a header to move it. Open previews to inspect the live layout. Apply before saving.";Render(Controller.Resolved);RefreshControls();toolbar.Focus();return true;
         }
         public bool Apply()
         {
@@ -144,7 +147,7 @@ namespace Manaforge.Play
         private void RestoreCommitted(){suppress=true;binding.Apply(committed);suppress=false;working=committedWorking;selectedId=committedSelected;relayout?.Invoke();}
         private void CloseEditor()
         {
-            gestures.Cancel();IsEditing=false;gate?.Invoke(false);toolbar.style.display=DisplayStyle.None;foreach(var adapter in adapters.Values)adapter.SetEditing(false);BeforeLegacyLayout();relayout?.Invoke();Render(Controller.Resolved);
+            gestures.Cancel();IsEditing=false;closePreviews?.Invoke();gate?.Invoke(false);toolbar.style.display=DisplayStyle.None;foreach(var adapter in adapters.Values)adapter.SetEditing(false);BeforeLegacyLayout();relayout?.Invoke();Render(Controller.Resolved);
             var origin=returnFocus;returnFocus=null;if(origin?.panel!=null && origin.enabledInHierarchy)origin.Focus();
         }
         public void Suspend()
@@ -224,6 +227,8 @@ namespace Manaforge.Play
                 else{restored|=pair.Value.RestoreLegacy();pair.Value.PositionHandles(GameplayDrawerGeometry.Resolve(pair.Value.HeaderBounds,requested,Viewport));}
             }
             if(restored)relayout?.Invoke();
+            dockHint.style.display=IsEditing && gestures?.IsActive==true && gestures.DockPreviewEdge!=ContainerDockEdge.None?DisplayStyle.Flex:DisplayStyle.None;
+            if(dockHint.style.display.value==DisplayStyle.Flex){var edge=gestures.DockPreviewEdge;dockHint.style.left=edge==ContainerDockEdge.Right?Controller.Viewport.x-8:0;dockHint.style.top=edge==ContainerDockEdge.Bottom?Controller.Viewport.y-8:0;dockHint.style.width=edge==ContainerDockEdge.Left || edge==ContainerDockEdge.Right?8:Controller.Viewport.x;dockHint.style.height=edge==ContainerDockEdge.Top || edge==ContainerDockEdge.Bottom?8:Controller.Viewport.y;}
             if(IsEditing){layer.BringToFront();toolbar.BringToFront();}
         }
         public void RestoreDefault()
@@ -255,25 +260,28 @@ namespace Manaforge.Play
         {
             if(!IsEditing)return;Vector2 delta;
             switch(ev.keyCode){case KeyCode.LeftArrow:delta=Vector2.left;break;case KeyCode.RightArrow:delta=Vector2.right;break;case KeyCode.UpArrow:delta=Vector2.down;break;case KeyCode.DownArrow:delta=Vector2.up;break;default:return;}
-            component.SetValueWithoutNotify(id);Adjust(id,delta.x*8,delta.y*8,ev.shiftKey);ev.StopImmediatePropagation();
+            component.SetValueWithoutNotify(id);if(ev.ctrlKey)Dock(id,ev.keyCode==KeyCode.LeftArrow?ContainerDockEdge.Left:ev.keyCode==KeyCode.RightArrow?ContainerDockEdge.Right:ev.keyCode==KeyCode.UpArrow?ContainerDockEdge.Top:ContainerDockEdge.Bottom);else if(ev.altKey)Controller.Reorder(id,delta.x+delta.y<0?-1:1);else Adjust(id,delta.x*8,delta.y*8,ev.shiftKey);ev.StopImmediatePropagation();
         }
         private bool Inside(object target)
         {
             if(!(target is VisualElement element))return false;
-            if(element==layer || layer.Contains(element))return true;
+            if(element==layer || layer.Contains(element) || previewRoots.Any(preview=>preview==element || preview.Contains(element)) || adapters.Values.Any(adapter=>ReferenceEquals(adapter.PreviewTab,element)))return true;
+            for(var e=element;e!=null && e!=root;e=e.parent)if(e is Scroller && adapters.Values.Any(adapter=>adapter.Element.Contains(e)))return true;
             // UI Toolkit mounts PopupField menus at the panel root, outside their field.
             for(var e=element;e!=null && e!=root;e=e.parent)if(e.ClassListContains("unity-base-dropdown") && root.Contains(e))return true;
             return false;
         }
-        private void Block<T>(T ev) where T:EventBase<T>,new(){if(IsEditing && !Inside(ev.target)){ev.StopImmediatePropagation();}}
-        private void Focus(FocusInEvent ev){if(IsEditing && !Inside(ev.target)){ev.StopImmediatePropagation();component.Focus();}}
+        private static bool CardTarget(object target){for(var e=target as VisualElement;e!=null;e=e.parent)if(e is CardView)return true;return false;}
+        private static bool InspectionEvent(EventBase ev)=>ev is PointerEnterEvent || ev is PointerLeaveEvent || ev is PointerOverEvent || ev is PointerOutEvent || ev is PointerMoveEvent || ev is PointerDownEvent down && down.button==1 || ev is PointerUpEvent up && up.button==1 || ev is ClickEvent click && click.button==1;
+        private void Block<T>(T ev) where T:EventBase<T>,new(){if(IsEditing && !Inside(ev.target) && !(CardTarget(ev.target) && InspectionEvent(ev)) && !(ev is WheelEvent && ev.target is VisualElement target && adapters.Values.Any(adapter=>adapter.Element.Contains(target)))){ev.StopImmediatePropagation();}}
+        private void Focus(FocusInEvent ev){if(IsEditing && !Inside(ev.target) && !CardTarget(ev.target)){ev.StopImmediatePropagation();toolbar.Focus();}}
         private void NavigationCancel(NavigationCancelEvent ev){if(IsEditing){if(gestures.IsActive)gestures.Cancel();else Cancel();ev.StopImmediatePropagation();}}
         private void Key(KeyDownEvent ev)
         {
             if(!IsEditing || ev.keyCode==KeyCode.F11)return;
             if(ev.keyCode==KeyCode.Escape){if(!heldEscape){heldEscape=true;if(gestures.IsActive)gestures.Cancel();else Cancel();}ev.StopImmediatePropagation();return;}
-            if(ev.keyCode==KeyCode.Tab){var focusables=layer.Query<VisualElement>().ToList().Where(e=>e.focusable && e.enabledInHierarchy && Visible(e)).ToArray();if(focusables.Length>0){int index=Array.IndexOf(focusables,root.panel?.focusController.focusedElement as VisualElement);focusables[(index+(ev.shiftKey?-1:1)+focusables.Length)%focusables.Length].Focus();}ev.StopImmediatePropagation();return;}
-            if(!Inside(ev.target)){ev.StopImmediatePropagation();}
+            if(ev.keyCode==KeyCode.Tab){var focusables=layer.Query<VisualElement>().ToList().Concat(previewRoots.SelectMany(preview=>preview.Query<VisualElement>().ToList())).Distinct().Where(e=>e.focusable && e.enabledInHierarchy && Visible(e)).ToArray();if(focusables.Length>0){int index=Array.IndexOf(focusables,root.panel?.focusController.focusedElement as VisualElement);focusables[(index+(ev.shiftKey?-1:1)+focusables.Length)%focusables.Length].Focus();}ev.StopImmediatePropagation();return;}
+            if(!Inside(ev.target) && !(CardTarget(ev.target) && ev.keyCode==KeyCode.Space)){ev.StopImmediatePropagation();}
         }
         private static bool Visible(VisualElement element){for(var e=element;e!=null;e=e.parent)if(e.resolvedStyle.display==DisplayStyle.None || e.resolvedStyle.visibility==Visibility.Hidden)return false;return true;}
         private void KeyUp(KeyUpEvent ev){if(ev.keyCode==KeyCode.Escape && heldEscape){heldEscape=false;ev.StopImmediatePropagation();}else Block(ev);}
@@ -281,7 +289,7 @@ namespace Manaforge.Play
         {
             if(disposed || apply==null)return;bool busy=storage.Busy;storageStatus.text=HudLayoutPresetSession.Describe(storage.Receipt?.Status??PresetStoreStatus.Busy)+(busy?" | Busy":"");controls.SetEnabled(!busy);apply.SetEnabled(!busy && NeedsApply);
             bool write=storage.CanWrite && !NeedsApply;save.SetEnabled(write && selectedId!=null);saveAs.SetEnabled(write);rename.SetEnabled(write && selectedId!=null);delete.SetEnabled(write && selectedId!=null);
-            foreach(var pair in adapters){bool enabled=!busy && registry.Find(pair.Key)?.Available==true;pair.Value.MoveHandle.SetEnabled(enabled);foreach(var grip in pair.Value.ResizeHandles)grip.handle.SetEnabled(enabled);}
+            foreach(var pair in adapters){bool enabled=!busy && registry.Find(pair.Key)?.Available==true;pair.Value.MoveHandle.SetEnabled(enabled);pair.Value.PreviewToggle.SetEnabled(enabled);foreach(var grip in pair.Value.ResizeHandles)grip.handle.SetEnabled(enabled);}
         }
         private void PresetChoices(){presets.choices=new[]{"Default"}.Concat(storage.Library.Presets.Select(p=>p.Name)).ToList();presets.SetValueWithoutNotify(storage.Library.Find(selectedId)?.Name??"Default");}
         private async void Run(Func<Task<bool>> action)

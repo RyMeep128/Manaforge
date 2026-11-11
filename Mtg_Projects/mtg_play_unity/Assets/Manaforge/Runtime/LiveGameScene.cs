@@ -103,7 +103,7 @@ namespace Manaforge.Play
             if(!Mathf.Approximately(settings.scale,scale))settings.scale=scale;
         }
         internal static IGameplayPresentation CreateDefaultPresentation(VisualElement root,bool acceptance)
-            =>new ArenaGameplayPresentation(root,capabilities:acceptance?new GameplayPresentationCapabilities(privateLayout:true):null,layoutPresetStore:acceptance?new MemoryLayoutPresetStore():null);
+            =>new ArenaGameplayPresentation(root,capabilities:new GameplayPresentationCapabilities(privateLayout:true),layoutPresetStore:acceptance?new MemoryLayoutPresetStore():null);
         // Public-deck acceptance evidence only; no capture or pacing changes in normal play.
         private bool CaptureReady(ProjectedDecisionFrame frame)
         {

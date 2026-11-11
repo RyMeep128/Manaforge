@@ -171,8 +171,13 @@ Inherited evidence on base commit 1abe52d73a7670c44809e6d1fcc0e9afa314eb8d:
 
 After an authorized candidate commit/push, run applicable Unity, protocol, native
 payment, and saved-deck human-versus-AI workflows on the exact SHA. Missing, failed,
-skipped, or unavailable evidence is not a pass. Record failures separately and enable
-ordinary private layout only after required evidence plus the owner walkthrough pass.
+skipped, or unavailable evidence is not a pass. Ordinary private layout was enabled
+at the owner's explicit request on 2026-11-11; required hosted evidence and the
+owner walkthrough remain pending. Initial local rebuild attempts failed with exit
+198 because the command-line editor did not recognize the Personal license.
+Opening the project through Unity Hub resolved the licensing issue; the subsequent
+`./tools/unity-play.ps1 -Mode Build` completed successfully on 2026-11-11 and updated
+the local Windows player.
 
 ### Manual owner walkthrough
 
@@ -195,3 +200,35 @@ ordinary private layout only after required evidence plus the owner walkthrough 
    targeting, and combat. Verify public zones, library ordering, Commander gating,
    menu options, and concession separately. Record exact SHA, workflow links, actual
    sizes/modes, screenshots, and unresolved inherited failures.
+
+
+## Visual editor and zone preview correction
+
+Customization is performed directly on the live table. Drag a drawer header to
+move it, drag the visible corner grip to resize its expanded preview, and drop
+near a viewport edge to dock. The thin cyan edge indicator shows docking intent.
+The compact top toolbar contains Apply, Cancel and Restore Default. Preset storage
+and keyboard controls are in a collapsed foldout; placement is no longer a grid
+of movement/size buttons.
+
+Zones automatically opens while editing. Each header has a Preview/Close preview
+control. Preview expansion is temporary and does not overwrite saved drawer-open
+preferences. Library, graveyard and exile piles remain browsable; public zone
+navigation and admitted-card inspection are allowed while native actions stay gated.
+Closing the editor closes its public-zone/card previews and restores input/focus.
+
+Custom drawer viewports, content and scroll views now receive explicit expanded
+heights. A max-height alone could leave an absolutely positioned viewport's scroll
+area collapsed. Resetting to legacy geometry restores the borrowed styles, including
+scroll height and flex behavior. View hierarchy, bindings and artwork ownership stay
+with their existing owners.
+
+Hosted `VisualHudEditorTests` exercises live zones, pointer dragging, resizing,
+public browsing, preview toggles, Apply/Save/Cancel, restored expansion preferences
+and zero native command bytes. Its screenshots are collected under
+`Artifacts/VisualHudEditor`. Local Windows rebuild and hosted tests are separate
+checks; screenshots and manual acceptance must not be inferred from compilation.
+
+Resize gestures begin at the currently visible body height, including when the saved
+height was clamped by the screen edge. This avoids a dead drag range caused by an
+off-screen stored height. Preview scrollbars and wheel scrolling remain available.
