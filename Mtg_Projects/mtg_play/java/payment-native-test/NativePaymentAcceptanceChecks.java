@@ -265,7 +265,7 @@ public final class NativePaymentAcceptanceChecks {
         scenario("commander-tax","{R}",new String[]{mountain,mountain,mountain},false,false,false,false);
         scenario("counters","{R}",new String[]{mountain},false,false,true,false);
         scenario("hybrid","{R/G}",new String[]{forest},false,false,false,false);
-        scenario("snow","{S}",new String[]{"mage.cards.basiclands.SnowCoveredMountain"},false,false,false,false);
+        scenario("snow","{S}",new String[]{"mage.cards.s.SnowCoveredMountain"},false,false,false,false);
         scenario("wrong-snow-source","{S}",new String[]{mountain},true,false,false,false);
         scenario("rock-colorless","{C}",new String[]{"mage.cards.s.SolRing"},false,false,false,false);
         scenario("sick-mana-creature","{G}",new String[]{"mage.cards.l.LlanowarElves"},true,false,false,false);

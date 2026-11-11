@@ -118,7 +118,11 @@ Inherited evidence on base commit 1abe52d73a7670c44809e6d1fcc0e9afa314eb8d:
   Phyrexian-plus-two-casts regression (three automatic completions, zero manual
   mana windows), then exposed fixture source-card names containing Java class
   paths. The factory now supplies card names, including Snow-Covered Mountain;
-  the remaining native scenarios still require a candidate pass.
+  CI on 0086a53 then passed through hybrid payment and found the snow fixture
+  referenced SnowCoveredMountain in the wrong Java package. Its source now uses
+  the pinned engine class mage.cards.s.SnowCoveredMountain. A static inventory
+  verified every reflective card/game class in this fixture exists in the pinned
+  engine; the remaining native scenarios still require a candidate pass.
 - No Unity run exists for that base SHA. Earlier hosted Unity setup was blocked by
   license configuration; its current availability has not been established.
 
