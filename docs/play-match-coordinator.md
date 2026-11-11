@@ -87,3 +87,17 @@ CT-10/11 acceptance is not claimed. Interactive admission, authenticated launch
 handoff, replay/deduplication, reconnect policy, and Unity composition remain later
 work. No Unity source changes or new local player rebuild are needed in this slice;
 unrelated existing Unity rollout edits were preserved outside these commits.
+
+### Non-priority observer projection boundary
+
+Final integration review found that the existing projectReadOnlyPriority port still
+requires its viewer to own priority. The coordinator therefore uses a new explicit
+projectObserverPriority port. It accepts only a real, known priority observation
+and preserves that actual public priority player. After projecting the authorized
+viewer's cards/players it returns before constructing any choice, action, native
+submission mapping, or private prompt text. It invalidates previous authority and
+marks unsupported observation/stack details explicitly. Ordinary gameplay and the
+older read-only port retain their original priority-owner guard unchanged. Focused
+protocol checks require the old port to reject foreign priority, the observer port
+to produce a valid decision-free snapshot, and previously offered commands to fail.
+This narrow follow-up is a separate versioned commit; no pushed history is rewritten.

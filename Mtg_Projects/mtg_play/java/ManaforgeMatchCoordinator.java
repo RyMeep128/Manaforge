@@ -123,7 +123,7 @@ public final class ManaforgeMatchCoordinator implements AutoCloseable {
             for(Channel channel:channels.values()){
                 Observation observation=copy.get(channel.viewer.seat);require(observation!=null && nativeGame.equals(observation.state.get("game_id").getAsString()) && channel.viewer.nativePlayer.equals(observation.state.get("viewer").getAsString()),"COORDINATOR_NATIVE_CONTEXT");
                 long next=observation.state.get("cycle").getAsLong();require(cycle==null || cycle==next,"COORDINATOR_NATIVE_BASIS");cycle=next;
-                JsonObject snapshot=channel.projection.projectReadOnlyPriority(observation.state,observation.prompt),envelope=new JsonObject(),body=new JsonObject();
+                JsonObject snapshot=channel.projection.projectObserverPriority(observation.state,observation.prompt),envelope=new JsonObject(),body=new JsonObject();
                 envelope.addProperty("wire_version",1);envelope.addProperty("message_type","snapshot");envelope.addProperty("message_id","match-view-"+snapshot.get("revision").getAsLong());body.addProperty("fixture_only",fixtureMode);body.add("snapshot",snapshot);envelope.add("body",body);snapshots.put(channel.viewer.seat,envelope);
             }
             publishOwned(snapshots);return null;

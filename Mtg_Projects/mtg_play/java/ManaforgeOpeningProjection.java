@@ -146,6 +146,12 @@ public final class ManaforgeOpeningProjection {
         JsonObject snapshot=project(raw,prompt,true,false,raw.getAsJsonArray("stack").size()>0);
         snapshot.add("decision",JsonNull.INSTANCE);snapshot.add("actions",new JsonArray());invalidateDecision();return snapshot;
     }
+    /** Observer-only priority publication. Never constructs or retains command authority. */
+    public synchronized JsonObject projectObserverPriority(JsonObject raw,JsonObject prompt) throws IOException {
+        require(!coreCombat && "GAME_SELECT".equals(text(prompt,"kind")) && Boolean.TRUE.equals(flag(prompt,"is_priority")));
+        require(raw.has("stack") && raw.get("stack").isJsonArray());
+        return project(raw,prompt,false,false,raw.getAsJsonArray("stack").size()>0,false,false,false,false,false,true);
+    }
     /** Explicit native finish-selection response only; attacker/defender selection is not exposed. */
     public synchronized JsonObject projectAttackFinish(JsonObject raw,JsonObject prompt) throws IOException {
         return project(raw,prompt,false,false,false,true);
@@ -233,6 +239,9 @@ public final class ManaforgeOpeningProjection {
         return project(raw,prompt,includePriorityPass,includeSpells,omitStack,attackFinish,includeAttackers,combatObservation,includeBlockers,false);
     }
     private JsonObject project(JsonObject raw,JsonObject prompt,boolean includePriorityPass,boolean includeSpells,boolean omitStack,boolean attackFinish,boolean includeAttackers,boolean combatObservation,boolean includeBlockers,boolean turnMode) throws IOException {
+        return project(raw,prompt,includePriorityPass,includeSpells,omitStack,attackFinish,includeAttackers,combatObservation,includeBlockers,turnMode,false);
+    }
+    private JsonObject project(JsonObject raw,JsonObject prompt,boolean includePriorityPass,boolean includeSpells,boolean omitStack,boolean attackFinish,boolean includeAttackers,boolean combatObservation,boolean includeBlockers,boolean turnMode,boolean observer) throws IOException {
         invalidateDecision();
         String diagnosticStage="CONTEXT";
         try {
@@ -280,7 +289,7 @@ public final class ManaforgeOpeningProjection {
             require(found && seats.size()>=2);
             result.players=seats.toArray(new PlayerView[0]);
             result.active_player_id=names.get(text(raw,"active_player"));result.priority_player_id=names.get(text(raw,"priority_player"));
-            require(!(priority || ability) || viewer.equals(result.priority_player_id));
+            require(!(priority || ability) || viewer.equals(result.priority_player_id) || observer && priority && result.priority_player_id!=null);
             require(!(attackFinish || discard) || (blocking?!viewer.equals(result.active_player_id):viewer.equals(result.active_player_id)));
             List<GameObject> cards=new ArrayList<>();Set<String> cardIds=new HashSet<>();
             List<JsonObject> displayed=new ArrayList<>();Set<JsonObject> stackRows=Collections.newSetFromMap(new IdentityHashMap<>());if(coreCombat)for(JsonElement item:raw.getAsJsonArray("stack")){displayed.add(item.getAsJsonObject());stackRows.add(item.getAsJsonObject());}Set<JsonObject> handRows=Collections.newSetFromMap(new IdentityHashMap<>());
@@ -342,6 +351,13 @@ public final class ManaforgeOpeningProjection {
                 }
             }
             diagnosticStage="ACTIONS";
+            if(observer){
+                require(priority && !turnMode && !coreCombat);result.objects=cards.toArray(new GameObject[0]);result.actions=new LegalAction[0];result.decision=null;result.combat=new CombatAssignment[0];result.observations=new CardObservation[0];result.stack_targets=new StackTargets[0];result.actions_complete=false;
+                result.unsupported_fields=new String[]{"object_incarnations","commander_metadata","live_abilities","actions","mana","counters","eliminated","attachments","copy_metadata","physical_printing","observations","stack_targets"};
+                if(omitStack){List<String> unsupported=new ArrayList<>(Arrays.asList(result.unsupported_fields));unsupported.add("stack");result.unsupported_fields=unsupported.toArray(new String[0]);}
+                JsonObject output=JSON.toJsonTree(result).getAsJsonObject();for(String key:new String[]{"decision_error","session_notice"})output.remove(key);
+                presentationReferences.clear();presentationReferences.putAll(nextPresentationReferences);invalidateDecision();revision++;return output;
+            }
             result.objects=cards.toArray(new GameObject[0]);List<LegalAction> actions=new ArrayList<>();Map<String,String> offeredNative=new HashMap<>();
             if(discard) {
                 JsonArray targets=prompt.getAsJsonArray("targets");require(targets.size()>0 && targets.size()<=256);Set<String> unique=new HashSet<>();

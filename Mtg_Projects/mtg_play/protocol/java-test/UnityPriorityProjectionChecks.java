@@ -44,6 +44,14 @@ public final class UnityPriorityProjectionChecks {
         raw.add("stack",new JsonArray());projection.projectCoreCombat(raw,prompt,true);raw.getAsJsonArray("stack").add(card);
         require(!stackIds(projection.projectCoreCombat(raw,prompt,true)).get(0).equals(first.get(0)));
         require(!projection.projectCoreCombat(raw,prompt,true).toString().contains("native-stack-a"));
+        JsonObject observerRaw=OpeningProjectionChecks.landState(),observerPrompt=OpeningProjectionChecks.priorityPrompt();ManaforgeOpeningProjection observer=OpeningProjectionChecks.projection();
+        String oldAction=OpeningProjectionChecks.perform(observer.project(observerRaw,observerPrompt,true));
+        observerRaw.addProperty("priority_player","raw-opponent-name");
+        try{OpeningProjectionChecks.projection().projectReadOnlyPriority(observerRaw,observerPrompt);throw new AssertionError("RELAXED_PRIORITY_OWNER");}catch(java.io.IOException expected){}
+        JsonObject observation=observer.projectObserverPriority(observerRaw,observerPrompt);OpeningProjectionChecks.shape(observation);
+        require(observation.get("decision").isJsonNull() && observation.getAsJsonArray("actions").size()==0 && !observation.get("actions_complete").getAsBoolean());
+        require(!observation.get("priority_player_id").getAsString().equals("human") && !observation.toString().contains("OPPONENT_SECRET"));
+        try{observer.claimAction(oldAction,"session","human","raw-game","raw-human",41,8);throw new AssertionError("OBSERVER_RETAINED_AUTHORITY");}catch(java.io.IOException expected){}
         System.out.println("Unity priority projection: "+checks+" focused checks passed");
     }
     public static void main(String[] args) throws Exception {run();}
