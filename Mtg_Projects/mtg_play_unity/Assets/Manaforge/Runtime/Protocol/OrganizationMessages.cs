@@ -68,6 +68,10 @@ namespace Manaforge.Play.Protocol
         {
             Require(raw!=null && raw.Length<=MaxBytes,"ORGANIZATION_SIZE");try{Require(new UTF8Encoding(false,true).GetByteCount(raw)<=MaxBytes,"ORGANIZATION_SIZE");}catch(EncoderFallbackException){throw new WireEnvelope.EnvelopeException("JSON_INVALID");}var message=WireEnvelope.ParseObject(raw);var schema=JObject.Parse(OrganizationV2ContractSchema.Json);Require(Valid(message,schema,schema),"ORGANIZATION_INVALID");return message;
         }
+        internal static JObject ParseV3Contract(string raw)
+        {
+            Require(raw!=null && raw.Length<=MaxBytes,"ORGANIZATION_SIZE");try{Require(new UTF8Encoding(false,true).GetByteCount(raw)<=MaxBytes,"ORGANIZATION_SIZE");}catch(EncoderFallbackException){throw new WireEnvelope.EnvelopeException("JSON_INVALID");}var message=WireEnvelope.ParseObject(raw);var schema=JObject.Parse(OrganizationV3ContractSchema.Json);Require(Valid(message,schema,schema),"ORGANIZATION_INVALID");return message;
+        }
         public static JObject ParseReceipt(string raw,string trustedMatchEpoch,IEnumerable<string> pendingCommandIds)
         {
             var message=ParseContract(raw);Require((string)message["message_type"]=="organization_receipt","ORGANIZATION_INVALID");var body=(JObject)message["body"];

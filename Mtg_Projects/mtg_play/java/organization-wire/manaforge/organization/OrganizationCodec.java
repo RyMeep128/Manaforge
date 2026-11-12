@@ -4,6 +4,7 @@ import com.google.gson.*;
 import java.io.IOException;
 import java.util.*;
 import manaforge.protocol.OrganizationMessages;
+import manaforge.protocol.OrganizationV3Messages;
 import static manaforge.organization.BattlefieldOrganizationService.*;
 
 /** Explicit host-to-viewer translation. Host State is never a serialized DTO. */
@@ -36,9 +37,13 @@ public final class OrganizationCodec {
     private static void require(boolean value) throws IOException {if(!value)throw new IOException("ORGANIZATION_CONTEXT");}
     private static String nullable(JsonObject object,String name){return object.get(name).isJsonNull()?null:object.get(name).getAsString();}
     public static DecodedCommand command(String raw,HostContext context,String trustedActorSeat) throws IOException {
-        JsonObject message=OrganizationMessages.parse(raw,context.viewer);require(message.get("message_type").getAsString().equals("organization_command") && trustedActorSeat!=null && context.seatReferences.containsKey(trustedActorSeat));
+        return command(raw,context,trustedActorSeat,1);
+    }
+    public static DecodedCommand command(String raw,HostContext context,String trustedActorSeat,int version) throws IOException {
+        JsonObject message=version==3?OrganizationV3Messages.parse(raw,context.viewer):OrganizationMessages.parse(raw,context.viewer);require(message.get("message_type").getAsString().equals("organization_command") && trustedActorSeat!=null && context.seatReferences.containsKey(trustedActorSeat));
         JsonObject body=message.getAsJsonObject("body"),op=body.getAsJsonObject("operation");String group=nullable(op,"group_id");Operation operation;
         switch(op.get("kind").getAsString()){
+            case "set_mode":operation=Operation.setMode(group,PresentationMode.valueOf(op.get("presentation_mode").getAsString().toUpperCase(Locale.ROOT)));break;
             case "create":operation=Operation.create(group,nullable(op,"name"),op.get("x").getAsLong()/1000000.0,op.get("y").getAsLong()/1000000.0);break;
             case "rename":operation=Operation.rename(group,nullable(op,"name"));break;
             case "delete":operation=Operation.delete(group);break;
@@ -65,6 +70,9 @@ public final class OrganizationCodec {
     }
     /** Preflight a pure reducer candidate before committing session state. */
     public static String snapshotState(String messageId,State state,long organizationRevision,long basisRevision,HostContext context) throws IOException {
+        return snapshotState(messageId,state,organizationRevision,basisRevision,context,1,0);
+    }
+    public static String snapshotState(String messageId,State state,long organizationRevision,long basisRevision,HostContext context,int version,long gameplay) throws IOException {
         require(state.basis.matchEpoch.equals(context.viewer.matchEpoch) && basisRevision==context.viewer.basisRevision);state.validate();Map<String,String> handles=new HashMap<>();
         require(Collections.disjoint(state.basis.members.keySet(),context.viewer.objects.keySet()) && Collections.disjoint(state.basis.members.keySet(),context.viewer.objects.values()) && Collections.disjoint(state.basis.members.keySet(),context.seatReferences.values()));
         for(Map.Entry<String,Binding> entry:context.bindings.entrySet()){
@@ -75,11 +83,11 @@ public final class OrganizationCodec {
         for(Map.Entry<String,String> seatRef:context.seatReferences.entrySet()){
             Seat seatState=state.seats.get(seatRef.getKey());require(seatState!=null);JsonObject seat=new JsonObject();seat.addProperty("seat_id",seatRef.getValue());
             seat.add("root",members(seatState.root,handles,context,seatRef.getValue(),mappings));JsonArray groups=new JsonArray();
-            for(Group group:seatState.groups){JsonObject entry=new JsonObject();entry.addProperty("group_id",group.id);entry.addProperty("name",group.name);entry.addProperty("x",Math.round(group.x*1000000));entry.addProperty("y",Math.round(group.y*1000000));entry.add("members",members(group.members,handles,context,seatRef.getValue(),mappings));groups.add(entry);}
+            for(Group group:seatState.groups){JsonObject entry=new JsonObject();entry.addProperty("group_id",group.id);if(version==3)entry.addProperty("presentation_mode",group.presentationMode.name().toLowerCase(Locale.ROOT));entry.addProperty("name",group.name);entry.addProperty("x",Math.round(group.x*1000000));entry.addProperty("y",Math.round(group.y*1000000));entry.add("members",members(group.members,handles,context,seatRef.getValue(),mappings));groups.add(entry);}
             seat.add("groups",groups);seats.add(seat);
         }
         JsonObject body=new JsonObject();body.addProperty("match_epoch",state.basis.matchEpoch);body.addProperty("organization_revision",organizationRevision);body.addProperty("basis_revision",basisRevision);body.addProperty("viewer_id",context.viewer.viewerId);body.add("seats",seats);body.add("mappings",mappings);
-        return OrganizationMessages.serialize(envelope("snapshot",messageId,body),context.viewer);
+        JsonObject wire=envelope("snapshot",messageId,body);if(version==3){wire.addProperty("organization_version",3);body.addProperty("gameplay_revision",gameplay);OrganizationV3Messages.parse(wire.toString(),context.viewer);return wire.toString();}return OrganizationMessages.serialize(wire,context.viewer);
     }
     private static JsonArray members(List<String> members,Map<String,String> handles,HostContext context,String seat,JsonArray mappings){
         JsonArray result=new JsonArray();for(String incarnation:members){String handle=handles.get(incarnation);if(handle==null)continue;result.add(handle);JsonObject mapping=new JsonObject();mapping.addProperty("handle",handle);mapping.addProperty("object_reference",context.viewer.objects.get(handle));mapping.addProperty("seat_id",seat);mappings.add(mapping);}return result;

@@ -254,14 +254,14 @@ def organization_outputs(version=1):
         PROTOCOL / "java/manaforge/protocol/OrganizationContractSchema.java": java,
     }
 
-    if version == 2:
+    if version > 1:
         result = {
             Path(
                 str(path)
-                .replace("OrganizationContracts", "OrganizationV2Contracts")
-                .replace("OrganizationContractSchema", "OrganizationV2ContractSchema")
-            ): text.replace("OrganizationContracts", "OrganizationV2Contracts").replace(
-                "OrganizationContractSchema", "OrganizationV2ContractSchema"
+                .replace("OrganizationContracts", f"OrganizationV{version}Contracts")
+                .replace("OrganizationContractSchema", f"OrganizationV{version}ContractSchema")
+            ): text.replace("OrganizationContracts", f"OrganizationV{version}Contracts").replace(
+                "OrganizationContractSchema", f"OrganizationV{version}ContractSchema"
             )
             for path, text in result.items()
         }
@@ -273,6 +273,7 @@ def outputs():
         **receive_outputs(),
         **organization_outputs(),
         **organization_outputs(2),
+        **organization_outputs(3),
         **_schema_outputs(
             "python-contracts-v1.schema.json", "PlayContracts", include_cs=True
         ),

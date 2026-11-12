@@ -10,8 +10,9 @@ final class NormalOrganizationEndpoint implements OrganizationEndpoint {
     interface Metadata {JsonObject read(JsonObject state,String... ids) throws Exception;}
     interface Writer {void write(String packet) throws Exception;}
     private final ManaforgeOpeningProjection projection;private final String actor,viewer;private final Metadata metadata;private final Writer writer;
-    private final BattlefieldIdentityRegistry identities;private OrganizationV2Channel channel;private long revision,gameplay=-1;private boolean negotiated,available;
-    NormalOrganizationEndpoint(ManaforgeOpeningProjection projection,String game,String actor,String viewer,Metadata metadata,Writer writer){this.projection=projection;this.actor=actor;this.viewer=viewer;this.metadata=metadata;this.writer=writer;identities=new BattlefieldIdentityRegistry(UUID.fromString(game));}
+    private final BattlefieldIdentityRegistry identities;private CorrelatedOrganizationChannel channel;private final int version;private long revision,gameplay=-1;private boolean negotiated,available;
+    NormalOrganizationEndpoint(ManaforgeOpeningProjection projection,String game,String actor,String viewer,Metadata metadata,Writer writer){this(projection,game,actor,viewer,metadata,writer,2);}
+    NormalOrganizationEndpoint(ManaforgeOpeningProjection projection,String game,String actor,String viewer,Metadata metadata,Writer writer,int version){if(version!=2 && version!=3)throw new IllegalArgumentException("ORGANIZATION_VERSION");this.version=version;this.projection=projection;this.actor=actor;this.viewer=viewer;this.metadata=metadata;this.writer=writer;identities=new BattlefieldIdentityRegistry(UUID.fromString(game));}
     public void observe(String packet) throws Exception {
         JsonObject envelope=WireEnvelope.parseObject(packet);String type=envelope.get("message_type").getAsString();if(!type.equals("snapshot") && !type.equals("result"))return;
         JsonObject snapshot=envelope.getAsJsonObject("body").getAsJsonObject("snapshot");long next=snapshot.get("revision").getAsLong();if(next<=gameplay)return;available=false;
@@ -30,12 +31,12 @@ final class NormalOrganizationEndpoint implements OrganizationEndpoint {
         for(BattlefieldIdentityRegistry.Member member:members){String id=nativeByReference.get(member.objectReference);BattlefieldIdentityRegistry.Observation object=observations.stream().filter(o->o.nativeId.toString().equals(id)).findFirst().get();String owner=object.controller.toString();handles.put(member.handle,member.objectReference);owners.put(member.handle,refs.get(owner));resolved.put(member.handle,new OrganizationCodec.Binding(prepared.candidate.incarnation(object.nativeId),owner));}
         OrganizationMessages.Context context=new OrganizationMessages.Context(identities.matchEpoch,viewer,revision+1,handles,owners,handles.values(),refs.values());Map<String,OrganizationCodec.HostContext> contexts=Collections.singletonMap(actor,new OrganizationCodec.HostContext(context,resolved,refs));
         boolean first=channel==null;
-        if(channel==null)channel=new OrganizationV2Channel((seat,kind,wire)->{if(negotiated || kind==ViewerChannelExtension.Kind.CONTROL)writer.write(wire);return true;},basis,revision+1,next,contexts);else channel.update(basis,revision+1,next,contexts);
+        if(channel==null){ViewerChannelExtension.Sender sender=(seat,kind,wire)->{if(negotiated || kind==ViewerChannelExtension.Kind.CONTROL)writer.write(wire);return true;};channel=version==3?new OrganizationV3Channel(sender,basis,revision+1,next,contexts):new OrganizationV2Channel(sender,basis,revision+1,next,contexts);}else channel.update(basis,revision+1,next,contexts);
         prepared.commit();revision++;gameplay=next;available=true;if(first)channel.connected(actor);
     }
     public boolean receive(String raw) throws Exception {
         JsonObject packet=WireEnvelope.parseObject(raw);String type=packet.has("message_type")?packet.get("message_type").getAsString():"";if(!type.startsWith("organization_"))return false;
-        OrganizationV2Messages.parseContract(raw);if(channel==null || !available){if(type.equals("organization_command") && channel!=null && negotiated)channel.rejectUnready(actor,raw);return true;}
+        if(version==3)OrganizationV3Messages.parseContract(raw);else OrganizationV2Messages.parseContract(raw);if(channel==null || !available){if(type.equals("organization_command") && channel!=null && negotiated)channel.rejectUnready(actor,raw);return true;}
         if(!negotiated){if(!type.equals("organization_capabilities"))throw new IOException("ORGANIZATION_NOT_NEGOTIATED");negotiated=true;}channel.receive(actor,raw);return true;
     }
     public void close(){try{if(channel!=null)channel.close();}finally{identities.close();}}

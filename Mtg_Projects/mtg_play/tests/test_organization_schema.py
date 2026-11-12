@@ -8,7 +8,7 @@ import pytest
 
 PROTOCOL = Path(__file__).resolve().parents[1] / "protocol"
 CASES = []
-for version in (1, 2):
+for version in (1, 2, 3):
     schema = json.loads(
         (PROTOCOL / f"organization-v{version}.schema.json").read_text(encoding="utf-8")
     )

@@ -1,0 +1,163 @@
+{
+  "context": {
+    "match_epoch": "match",
+    "viewer_id": "viewer-a",
+    "basis_revision": 7,
+    "seats": {
+      "host-a": "seat-a",
+      "host-b": "seat-b"
+    },
+    "bindings": [
+      {
+        "incarnation": "SECRET-INCARNATION-1",
+        "handle": "h1",
+        "object_reference": "object-1",
+        "host_seat": "host-a"
+      },
+      {
+        "incarnation": "SECRET-INCARNATION-2",
+        "handle": "h2",
+        "object_reference": "object-2",
+        "host_seat": "host-b"
+      }
+    ],
+    "admitted": [
+      "object-1",
+      "object-2"
+    ]
+  },
+  "cases": [
+    {
+      "name": "capabilities",
+      "text": "{\"wire_version\":1,\"organization_version\":3,\"message_type\":\"organization_capabilities\",\"message_id\":\"message-1\",\"body\":{\"versions\":[1]}}",
+      "schema_valid": true,
+      "valid": true
+    },
+    {
+      "name": "unsupported-capabilities",
+      "text": "{\"wire_version\":1,\"organization_version\":3,\"message_type\":\"organization_capabilities\",\"message_id\":\"message-1\",\"body\":{\"versions\":[2]}}",
+      "schema_valid": true,
+      "valid": true
+    },
+    {
+      "name": "empty-capabilities",
+      "text": "{\"wire_version\":1,\"organization_version\":3,\"message_type\":\"organization_capabilities\",\"message_id\":\"message-1\",\"body\":{\"versions\":[]}}",
+      "schema_valid": true,
+      "valid": true
+    },
+    {
+      "name": "command-create",
+      "text": "{\"wire_version\":1,\"organization_version\":3,\"message_type\":\"organization_command\",\"message_id\":\"message-1\",\"body\":{\"match_epoch\":\"match\",\"command_id\":\"cmd-1\",\"expected_organization_revision\":0,\"basis_revision\":7,\"operation\":{\"kind\":\"create\",\"group_id\":\"g-new\",\"name\":\"Mana Rocks\",\"x\":250000,\"y\":750000,\"index\":null,\"members\":[],\"presentation_mode\":null}}}",
+      "schema_valid": true,
+      "valid": true
+    },
+    {
+      "name": "command-rename",
+      "text": "{\"wire_version\":1,\"organization_version\":3,\"message_type\":\"organization_command\",\"message_id\":\"message-1\",\"body\":{\"match_epoch\":\"match\",\"command_id\":\"cmd-1\",\"expected_organization_revision\":0,\"basis_revision\":7,\"operation\":{\"kind\":\"rename\",\"group_id\":\"g1\",\"name\":\"Protection\",\"x\":null,\"y\":null,\"index\":null,\"members\":[],\"presentation_mode\":null}}}",
+      "schema_valid": true,
+      "valid": true
+    },
+    {
+      "name": "command-delete",
+      "text": "{\"wire_version\":1,\"organization_version\":3,\"message_type\":\"organization_command\",\"message_id\":\"message-1\",\"body\":{\"match_epoch\":\"match\",\"command_id\":\"cmd-1\",\"expected_organization_revision\":0,\"basis_revision\":7,\"operation\":{\"kind\":\"delete\",\"group_id\":\"g1\",\"name\":null,\"x\":null,\"y\":null,\"index\":null,\"members\":[],\"presentation_mode\":null}}}",
+      "schema_valid": true,
+      "valid": true
+    },
+    {
+      "name": "command-position",
+      "text": "{\"wire_version\":1,\"organization_version\":3,\"message_type\":\"organization_command\",\"message_id\":\"message-1\",\"body\":{\"match_epoch\":\"match\",\"command_id\":\"cmd-1\",\"expected_organization_revision\":0,\"basis_revision\":7,\"operation\":{\"kind\":\"position\",\"group_id\":\"g1\",\"name\":null,\"x\":0,\"y\":1000000,\"index\":null,\"members\":[],\"presentation_mode\":null}}}",
+      "schema_valid": true,
+      "valid": true
+    },
+    {
+      "name": "command-reorder",
+      "text": "{\"wire_version\":1,\"organization_version\":3,\"message_type\":\"organization_command\",\"message_id\":\"message-1\",\"body\":{\"match_epoch\":\"match\",\"command_id\":\"cmd-1\",\"expected_organization_revision\":0,\"basis_revision\":7,\"operation\":{\"kind\":\"reorder\",\"group_id\":\"g1\",\"name\":null,\"x\":null,\"y\":null,\"index\":0,\"members\":[],\"presentation_mode\":null}}}",
+      "schema_valid": true,
+      "valid": true
+    },
+    {
+      "name": "command-move",
+      "text": "{\"wire_version\":1,\"organization_version\":3,\"message_type\":\"organization_command\",\"message_id\":\"message-1\",\"body\":{\"match_epoch\":\"match\",\"command_id\":\"cmd-1\",\"expected_organization_revision\":0,\"basis_revision\":7,\"operation\":{\"kind\":\"move\",\"group_id\":\"g1\",\"name\":null,\"x\":null,\"y\":null,\"index\":0,\"members\":[\"h1\"],\"presentation_mode\":null}}}",
+      "schema_valid": true,
+      "valid": true
+    },
+    {
+      "name": "move-to-root",
+      "text": "{\"wire_version\":1,\"organization_version\":3,\"message_type\":\"organization_command\",\"message_id\":\"message-1\",\"body\":{\"match_epoch\":\"match\",\"command_id\":\"cmd-1\",\"expected_organization_revision\":0,\"basis_revision\":7,\"operation\":{\"kind\":\"move\",\"group_id\":null,\"name\":null,\"x\":null,\"y\":null,\"index\":0,\"members\":[\"h1\"],\"presentation_mode\":null}}}",
+      "schema_valid": true,
+      "valid": true
+    },
+    {
+      "name": "receipt-applied",
+      "text": "{\"wire_version\":1,\"organization_version\":3,\"message_type\":\"organization_receipt\",\"message_id\":\"message-1\",\"body\":{\"match_epoch\":\"match\",\"command_id\":\"cmd-1\",\"outcome\":\"applied\",\"organization_revision\":3,\"basis_revision\":7,\"reason_code\":null}}",
+      "schema_valid": true,
+      "valid": true
+    },
+    {
+      "name": "receipt-rejected",
+      "text": "{\"wire_version\":1,\"organization_version\":3,\"message_type\":\"organization_receipt\",\"message_id\":\"message-1\",\"body\":{\"match_epoch\":\"match\",\"command_id\":\"cmd-1\",\"outcome\":\"rejected\",\"organization_revision\":3,\"basis_revision\":7,\"reason_code\":\"STALE_BASIS_REVISION\"}}",
+      "schema_valid": true,
+      "valid": true
+    },
+    {
+      "name": "snapshot",
+      "text": "{\"wire_version\":1,\"organization_version\":3,\"message_type\":\"organization_snapshot\",\"message_id\":\"message-1\",\"body\":{\"gameplay_revision\":7,\"match_epoch\":\"match\",\"organization_revision\":3,\"basis_revision\":7,\"viewer_id\":\"viewer-a\",\"seats\":[{\"seat_id\":\"seat-a\",\"root\":[],\"groups\":[{\"group_id\":\"g1\",\"name\":\"Mana Rocks\",\"x\":250000,\"y\":750000,\"members\":[\"h1\"],\"presentation_mode\":\"panel\"}]},{\"seat_id\":\"seat-b\",\"root\":[\"h2\"],\"groups\":[]}],\"mappings\":[{\"handle\":\"h1\",\"object_reference\":\"object-1\",\"seat_id\":\"seat-a\"},{\"handle\":\"h2\",\"object_reference\":\"object-2\",\"seat_id\":\"seat-b\"}]}}",
+      "schema_valid": true,
+      "valid": true
+    },
+    {
+      "name": "unicode-64-scalars",
+      "text": "{\"wire_version\":1,\"organization_version\":3,\"message_type\":\"organization_command\",\"message_id\":\"message-1\",\"body\":{\"match_epoch\":\"match\",\"command_id\":\"cmd-1\",\"expected_organization_revision\":0,\"basis_revision\":7,\"operation\":{\"kind\":\"rename\",\"group_id\":\"g1\",\"name\":\"\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\\ud83d\\udd25\",\"x\":null,\"y\":null,\"index\":null,\"members\":[],\"presentation_mode\":null}}}",
+      "schema_valid": true,
+      "valid": true
+    },
+    {
+      "name": "receipt-command_limit_reached",
+      "text": "{\"wire_version\":1,\"organization_version\":3,\"message_type\":\"organization_receipt\",\"message_id\":\"message-1\",\"body\":{\"match_epoch\":\"match\",\"command_id\":\"cmd-1\",\"outcome\":\"rejected\",\"organization_revision\":0,\"basis_revision\":7,\"reason_code\":\"COMMAND_LIMIT_REACHED\"}}",
+      "schema_valid": true,
+      "valid": true
+    },
+    {
+      "name": "receipt-organization_limit_reached",
+      "text": "{\"wire_version\":1,\"organization_version\":3,\"message_type\":\"organization_receipt\",\"message_id\":\"message-1\",\"body\":{\"match_epoch\":\"match\",\"command_id\":\"cmd-1\",\"outcome\":\"rejected\",\"organization_revision\":0,\"basis_revision\":7,\"reason_code\":\"ORGANIZATION_LIMIT_REACHED\"}}",
+      "schema_valid": true,
+      "valid": true
+    },
+    {
+      "name": "receipt-foreign_match",
+      "text": "{\"wire_version\":1,\"organization_version\":3,\"message_type\":\"organization_receipt\",\"message_id\":\"message-1\",\"body\":{\"match_epoch\":\"match\",\"command_id\":\"cmd-1\",\"outcome\":\"rejected\",\"organization_revision\":0,\"basis_revision\":7,\"reason_code\":\"FOREIGN_MATCH\"}}",
+      "schema_valid": true,
+      "valid": true
+    },
+    {
+      "name": "exact-byte-limit",
+      "text": "{\"wire_version\":1,\"organization_version\":3,\"message_type\":\"organization_capabilities\",\"message_id\":\"message-1\",\"body\":{\"versions\":[1]}}",
+      "schema_valid": true,
+      "valid": true
+    },
+    {
+      "name": "set-mode",
+      "text": "{\"wire_version\": 1, \"organization_version\": 3, \"message_type\": \"organization_command\", \"message_id\": \"message-1\", \"body\": {\"match_epoch\": \"match\", \"command_id\": \"cmd-1\", \"expected_organization_revision\": 0, \"basis_revision\": 7, \"operation\": {\"kind\": \"set_mode\", \"group_id\": \"drawer-group\", \"name\": null, \"x\": null, \"y\": null, \"index\": null, \"members\": [], \"presentation_mode\": \"drawer\"}}}",
+      "valid": true,
+      "schema_valid": true
+    },
+    {
+      "name": "invalid-mode",
+      "text": "{\"wire_version\": 1, \"organization_version\": 3, \"message_type\": \"organization_command\", \"message_id\": \"message-1\", \"body\": {\"match_epoch\": \"match\", \"command_id\": \"cmd-1\", \"expected_organization_revision\": 0, \"basis_revision\": 7, \"operation\": {\"kind\": \"set_mode\", \"group_id\": \"drawer-group\", \"name\": null, \"x\": null, \"y\": null, \"index\": null, \"members\": [], \"presentation_mode\": \"stack\"}}}",
+      "valid": false,
+      "schema_valid": false
+    },
+    {
+      "name": "missing-mode",
+      "text": "{\"wire_version\": 1, \"organization_version\": 3, \"message_type\": \"organization_command\", \"message_id\": \"message-1\", \"body\": {\"match_epoch\": \"match\", \"command_id\": \"cmd-1\", \"expected_organization_revision\": 0, \"basis_revision\": 7, \"operation\": {\"kind\": \"set_mode\", \"group_id\": \"drawer-group\", \"name\": null, \"x\": null, \"y\": null, \"index\": null, \"members\": []}}}",
+      "valid": false,
+      "schema_valid": false
+    },
+    {
+      "name": "mode-with-members",
+      "text": "{\"wire_version\": 1, \"organization_version\": 3, \"message_type\": \"organization_command\", \"message_id\": \"message-1\", \"body\": {\"match_epoch\": \"match\", \"command_id\": \"cmd-1\", \"expected_organization_revision\": 0, \"basis_revision\": 7, \"operation\": {\"kind\": \"set_mode\", \"group_id\": \"drawer-group\", \"name\": null, \"x\": null, \"y\": null, \"index\": null, \"members\": [\"foreign\"], \"presentation_mode\": \"drawer\"}}}",
+      "valid": false,
+      "schema_valid": false
+    }
+  ]
+}

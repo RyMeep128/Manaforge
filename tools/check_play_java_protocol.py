@@ -18,6 +18,7 @@ PROTOCOL = PLAY / "protocol"
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--gson", type=Path)
+    parser.add_argument("--compile-only", action="store_true", help="Compile without executing any checks")
     parser.add_argument(
         "--download-gson",
         action="store_true",
@@ -138,6 +139,9 @@ def main():
         sources += [
             PROTOCOL / "java/manaforge/protocol/OrganizationMessages.java",
             PROTOCOL / "java/manaforge/protocol/OrganizationV2Messages.java",
+            PROTOCOL / "java/manaforge/protocol/OrganizationV3Messages.java",
+            PROTOCOL / "java/manaforge/protocol/OrganizationV3Contracts.java",
+            PROTOCOL / "java/manaforge/protocol/OrganizationV3ContractSchema.java",
             PROTOCOL / "java/manaforge/protocol/OrganizationV2Contracts.java",
             PROTOCOL / "java/manaforge/protocol/OrganizationV2ContractSchema.java",
             PROTOCOL / "java/manaforge/protocol/OrganizationContracts.java",
@@ -145,6 +149,7 @@ def main():
             PROTOCOL / "java-test/OrganizationFixtureConsumer.java",
             PROTOCOL / "java-test/OrganizationChannelUnitChecks.java",
             PROTOCOL / "java-test/OrganizationV2Checks.java",
+            PROTOCOL / "java-test/OrganizationV3Checks.java",
             PROTOCOL / "java-test/OrganizationChannelChecks.java",
             *sorted((PLAY / "java/organization").rglob("*.java")),
             *sorted((PLAY / "java/organization-wire").rglob("*.java")),
@@ -165,6 +170,9 @@ def main():
             check=True,
             timeout=120,
         )
+        if args.compile_only:
+            print("Protocol compile-only succeeded; no test suites executed")
+            return
         subprocess.run(
             [
                 runtime,
@@ -429,6 +437,12 @@ def main():
             ],
             check=True,
             timeout=60,
+        )
+
+        subprocess.run(
+            [runtime, "-cp", str(workspace) + os.pathsep + str(jar),
+             "OrganizationV3Checks", str(PROTOCOL / "fixtures/organization-v3.json")],
+            check=True, timeout=60,
         )
 
         if args.dummy_output:

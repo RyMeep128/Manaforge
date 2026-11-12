@@ -73,6 +73,9 @@ public final class OrganizationMessages {
     static JsonObject parseV2Contract(String raw) throws IOException {
         require(raw!=null && raw.length()<=MAX_BYTES && raw.getBytes(StandardCharsets.UTF_8).length<=MAX_BYTES,"ORGANIZATION_SIZE");JsonObject message=WireEnvelope.parseObject(raw);JsonObject v2=JsonParser.parseString(OrganizationV2ContractSchema.JSON).getAsJsonObject();require(valid(message,v2,v2),"ORGANIZATION_INVALID");return message;
     }
+    static JsonObject parseV3Contract(String raw) throws IOException {
+        require(raw!=null && raw.length()<=MAX_BYTES && raw.getBytes(StandardCharsets.UTF_8).length<=MAX_BYTES,"ORGANIZATION_SIZE");JsonObject message=WireEnvelope.parseObject(raw);JsonObject v2=JsonParser.parseString(OrganizationV3ContractSchema.JSON).getAsJsonObject();require(valid(message,v2,v2),"ORGANIZATION_INVALID");return message;
+    }
     /** Receipts carry no object mappings; only a known pending command can admit historical basis. */
     public static JsonObject parseReceipt(String raw,String trustedMatchEpoch,Collection<String> pendingCommandIds) throws IOException {
         JsonObject message=parseContract(raw);require(text(message,"message_type").equals("organization_receipt"),"ORGANIZATION_INVALID");JsonObject body=message.getAsJsonObject("body");

@@ -24,7 +24,7 @@ namespace Manaforge.Play.Protocol
                     connecting.GetAwaiter().GetResult();
                     var transport=new LoopbackFrameReader(socket);
                     channel=ViewerChallengeHandshake.Open(transport,expected,Remaining(timer,milliseconds,cancellation),cancellation,fixtureMode);
-                    if(expected.OrganizationVersion==2)channel.EnableOrganization();
+                    if(expected.OrganizationVersion>=2)channel.EnableOrganization(expected.OrganizationVersion);
                     Remaining(timer,milliseconds,cancellation);socket=null;return channel;
                 }
                 catch(Exception error) {

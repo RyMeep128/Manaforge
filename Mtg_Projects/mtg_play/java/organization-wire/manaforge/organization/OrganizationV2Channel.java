@@ -4,7 +4,7 @@ import java.util.*;
 import manaforge.protocol.*;
 import static manaforge.organization.BattlefieldOrganizationService.*;
 /** Wire adapter; ledger, admission and ownership stay in the existing channel. */
-public final class OrganizationV2Channel implements ViewerChannelExtension {
+public final class OrganizationV2Channel implements CorrelatedOrganizationChannel {
     private final OrganizationChannel inner;private long gameplayRevision;
     public OrganizationV2Channel(Sender sender,Basis basis,long revision,long gameplay,Map<String,OrganizationCodec.HostContext> contexts) throws Exception {
         for(OrganizationCodec.HostContext context:contexts.values())OrganizationV2Messages.upgrade(OrganizationCodec.snapshotState("initial",BattlefieldOrganizationService.create(basis),0,revision,context),gameplay);

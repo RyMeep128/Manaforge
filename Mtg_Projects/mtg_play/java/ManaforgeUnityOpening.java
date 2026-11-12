@@ -8,7 +8,8 @@ import java.util.function.BooleanSupplier;
 
 /** Opt-in public-fixture live opening endpoint; no product launch or broad gameplay support. */
 public final class ManaforgeUnityOpening {
-    private static boolean organizationAllowed;
+    private static boolean organizationAllowed;private static int organizationVersion;
+    public static int organizationVersion(){return organizationVersion;}
     public static boolean organizationAllowed(){return organizationAllowed;}
     public interface OrganizationFactory {OrganizationEndpoint open(LoopbackFrameReader frames) throws Exception;}
     private static final ThreadLocal<OrganizationEndpoint> organization=new ThreadLocal<>();
@@ -105,10 +106,10 @@ public final class ManaforgeUnityOpening {
         public PriorityOffer(JsonObject snapshot,long decision,long cycle,ManaforgeOpeningLoopback.NativeSubmit submit,Observation observation){this.snapshot=snapshot.deepCopy();this.decision=decision;this.cycle=cycle;this.submit=submit;this.observation=observation;}
     }
     public static byte[] readBootstrap(InputStream input) throws IOException {
-        organizationAllowed=false;
+        organizationAllowed=false;organizationVersion=0;
         try {
             JsonObject boot=WireEnvelope.parseObject(TextFrame.read(input));
-            organizationAllowed=boot.has("organization_version") && boot.get("organization_version").toString().equals("2");
+            organizationAllowed=boot.has("organization_version") && (boot.get("organization_version").toString().equals("2") || boot.get("organization_version").toString().equals("3"));if(organizationAllowed)organizationVersion=boot.get("organization_version").getAsInt();
             if(boot.has("organization_version") && !organizationAllowed)throw new IOException();
             if(boot.size()!=(organizationAllowed?3:2) || !boot.has("live_opening_bootstrap_version") || !boot.get("live_opening_bootstrap_version").toString().equals("1")
                 || !boot.has("viewer_key_hex") || !boot.get("viewer_key_hex").isJsonPrimitive() || !boot.getAsJsonPrimitive("viewer_key_hex").isString()

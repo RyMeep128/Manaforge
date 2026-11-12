@@ -67,7 +67,7 @@ def export_viewer_bootstrap(
     ):
         raise ViewerBootstrapError("VIEWER_BOOTSTRAP_INVALID")
     if organization_version is not None and (
-        type(organization_version) is not int or organization_version != 2
+        type(organization_version) is not int or organization_version not in (2, 3)
     ):
         raise ViewerBootstrapError("VIEWER_BOOTSTRAP_INVALID")
     artwork = None

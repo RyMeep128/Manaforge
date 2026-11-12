@@ -59,7 +59,8 @@ namespace Manaforge.Play.Tests
         {
             using(var legacy=ViewerBootstrap.Parse(Bytes(Example())))Assert.That(legacy.OrganizationVersion,Is.Zero);
             var value=Example();value["organization_version"]=2;using(var current=ViewerBootstrap.Parse(Bytes(value)))Assert.That(current.OrganizationVersion,Is.EqualTo(2));
-            foreach(JToken version in new JToken[]{new JValue(1),new JValue(3),new JValue(true),new JValue("2")}){value["organization_version"]=version;Invalid(Bytes(value));}
+            value["organization_version"]=3;using(var drawers=ViewerBootstrap.Parse(Bytes(value)))Assert.That(drawers.OrganizationVersion,Is.EqualTo(3));
+            foreach(JToken version in new JToken[]{new JValue(1),new JValue(4),new JValue(true),new JValue("2")}){value["organization_version"]=version;Invalid(Bytes(value));}
         }
         [Test] public void DisposeRevokesUnclaimedKeyAndConcurrentTransfersHaveOneWinner()
         {

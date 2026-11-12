@@ -328,9 +328,33 @@ def main():
         if case["name"] == "exact-byte-limit":
             raw = raw.rstrip() + " " * (262144 - len(raw.rstrip().encode()))
         case["text"] = raw
+    v3 = {"context": v2["context"], "cases": []}
+    for case in v2["cases"]:
+        if not case["valid"]:
+            continue
+        message = json.loads(case["text"])
+        message["organization_version"] = 3
+        body = message["body"]
+        if "operation" in body:
+            body["operation"]["presentation_mode"] = None
+        for seat in body.get("seats", []):
+            for group in seat["groups"]:
+                group["presentation_mode"] = "panel"
+        text = json.dumps(message, separators=(",", ":"))
+        v3["cases"].append({**case, "text": text})
+    command = next(json.loads(c["text"]) for c in v3["cases"] if json.loads(c["text"])["message_type"] == "organization_command")
+    op = command["body"]["operation"]
+    op.update(kind="set_mode", presentation_mode="drawer", name=None, x=None, y=None, index=None, members=[])
+    op["group_id"] = "drawer-group"
+    v3["cases"].append({"name": "set-mode", "text": json.dumps(command), "valid": True, "schema_valid": True})
+    for name, change in [("invalid-mode", lambda o: o.update(presentation_mode="stack")), ("missing-mode", lambda o: o.pop("presentation_mode")), ("mode-with-members", lambda o: o.update(members=["foreign"]))]:
+        invalid = json.loads(json.dumps(command))
+        change(invalid["body"]["operation"])
+        v3["cases"].append({"name": name, "text": json.dumps(invalid), "valid": False, "schema_valid": False})
     for output, data in [
         (OUTPUT, original),
         (OUTPUT.with_name("organization-v2.json"), v2),
+        (OUTPUT.with_name("organization-v3.json"), v3),
     ]:
         text = json.dumps(data, indent=2, ensure_ascii=True) + "\n"
         if args.check:

@@ -35,14 +35,17 @@ public final class BattlefieldOrganizationService {
         @Override public boolean equals(Object other){if(!(other instanceof Basis))return false;Basis b=(Basis)other;return matchEpoch.equals(b.matchEpoch) && seats.equals(b.seats) && members.equals(b.members);}
         @Override public int hashCode(){return Objects.hash(matchEpoch,seats,members);}
     }
+    public enum PresentationMode { PANEL, DRAWER }
     public static final class Group {
         public final String id,name;
+        public final PresentationMode presentationMode;
         public final double x,y;
         public final List<String> members;
-        private Group(String id,String name,double x,double y,Collection<String> members){this.id=id(id);this.name=name(name);position(x,y);this.x=x;this.y=y;this.members=frozen(members);}
-        private Group withMembers(Collection<String> members){return new Group(id,name,x,y,members);}
-        @Override public boolean equals(Object other){if(!(other instanceof Group))return false;Group g=(Group)other;return id.equals(g.id) && name.equals(g.name) && Double.compare(x,g.x)==0 && Double.compare(y,g.y)==0 && members.equals(g.members);}
-        @Override public int hashCode(){return Objects.hash(id,name,x,y,members);}
+        private Group(String id,String name,double x,double y,Collection<String> members){this(id,name,x,y,members,PresentationMode.PANEL);}
+        private Group(String id,String name,double x,double y,Collection<String> members,PresentationMode mode){this.presentationMode=Objects.requireNonNull(mode);this.id=id(id);this.name=name(name);position(x,y);this.x=x;this.y=y;this.members=frozen(members);}
+        private Group withMembers(Collection<String> members){return new Group(id,name,x,y,members,presentationMode);}
+        @Override public boolean equals(Object other){if(!(other instanceof Group))return false;Group g=(Group)other;return presentationMode==g.presentationMode && id.equals(g.id) && name.equals(g.name) && Double.compare(x,g.x)==0 && Double.compare(y,g.y)==0 && members.equals(g.members);}
+        @Override public int hashCode(){return Objects.hash(id,name,x,y,members,presentationMode);}
     }
     public static final class Seat {
         public final List<String> root;
@@ -68,14 +71,17 @@ public final class BattlefieldOrganizationService {
         @Override public boolean equals(Object other){if(!(other instanceof State))return false;State s=(State)other;return basis.equals(s.basis) && seats.equals(s.seats);}
         @Override public int hashCode(){return Objects.hash(basis,seats);}
     }
-    public enum Kind { CREATE, RENAME, DELETE, POSITION, REORDER, MOVE }
+    public enum Kind { CREATE, RENAME, DELETE, POSITION, REORDER, MOVE, SET_MODE }
     public static final class Operation {
         public final Kind kind;
+        public final PresentationMode presentationMode;
         public final String groupId,name;
         public final double x,y;
         public final int index;
         public final List<String> members;
-        private Operation(Kind kind,String group,String name,double x,double y,int index,Collection<String> members){this.kind=kind;groupId=group;this.name=name;this.x=x;this.y=y;this.index=index;this.members=frozen(members);}
+        private Operation(Kind kind,String group,String name,double x,double y,int index,Collection<String> members){this(kind,group,name,x,y,index,members,null);}
+        private Operation(Kind kind,String group,String name,double x,double y,int index,Collection<String> members,PresentationMode mode){this.presentationMode=mode;this.kind=kind;groupId=group;this.name=name;this.x=x;this.y=y;this.index=index;this.members=frozen(members);}
+        public static Operation setMode(String group,PresentationMode mode){return new Operation(Kind.SET_MODE,group,null,0,0,0,Collections.emptyList(),Objects.requireNonNull(mode));}
         public static Operation create(String group,String name,double x,double y){return new Operation(Kind.CREATE,group,name,x,y,0,Collections.emptyList());}
         public static Operation rename(String group,String name){return new Operation(Kind.RENAME,group,name,0,0,0,Collections.emptyList());}
         public static Operation delete(String group){return new Operation(Kind.DELETE,group,null,0,0,0,Collections.emptyList());}
@@ -97,8 +103,9 @@ public final class BattlefieldOrganizationService {
             case CREATE:
                 String groupId=id(operation.groupId);for(Seat seat:state.seats.values())for(Group existing:seat.groups)require(!existing.id.equals(groupId),"DUPLICATE_GROUP");
                 groups.add(new Group(groupId,operation.name,operation.x,operation.y,Collections.emptyList()));break;
-            case RENAME:groups.set(selected,new Group(group.id,operation.name,group.x,group.y,group.members));break;
-            case POSITION:groups.set(selected,new Group(group.id,group.name,operation.x,operation.y,group.members));break;
+            case RENAME:groups.set(selected,new Group(group.id,operation.name,group.x,group.y,group.members,group.presentationMode));break;
+            case POSITION:groups.set(selected,new Group(group.id,group.name,operation.x,operation.y,group.members,group.presentationMode));break;
+            case SET_MODE:groups.set(selected,new Group(group.id,group.name,group.x,group.y,group.members,operation.presentationMode));break;
             case DELETE:root.addAll(group.members);groups.remove(selected);break;
             case REORDER:require(operation.index>=0 && operation.index<groups.size(),"INVALID_INDEX");groups.remove(selected);groups.add(operation.index,group);break;
             case MOVE:

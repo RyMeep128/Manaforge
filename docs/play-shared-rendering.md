@@ -141,3 +141,17 @@ saved-deck full-game evidence, dynamic drawers/local collapse (CT-15), reconnect
 reconstruction and join/leave policy (CT-16–17), and measured accessibility/performance
 release gates. Four-player composition remains CT-24. No rollout flag is enabled
 by this commit.
+
+
+## CT-15 contract foundation
+
+Organization v3 adds shared `presentation_mode` (`panel` or `drawer`) and owner-only
+`set_mode`, through the same reducer and retry ledger. Creation defaults to panel;
+rename, movement, reconciliation and empty-group retention preserve mode. V1/v2
+contracts remain unchanged. Each correlated channel chooses exactly one version;
+v3 sessions reject v2 envelopes rather than mixing recipient capabilities.
+`run_live_game(..., organization_drawers=True)` explicitly selects v3 for both
+private bootstraps; normal shared-organization rollout remains disabled. Open/closed
+state never appears in the protocol. Hosted v3 corpus, two-recipient channel checks
+and normal native metadata checks cover conversion without native submissions.
+This commit supplies the contract foundation; drawer presentation follows separately.

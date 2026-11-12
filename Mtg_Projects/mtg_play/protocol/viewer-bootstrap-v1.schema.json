@@ -84,7 +84,10 @@
     },
     "organization_version": {
       "type": "integer",
-      "const": 2
+      "enum": [
+        2,
+        3
+      ]
     }
   },
   "required": [

@@ -28,7 +28,7 @@ namespace Manaforge.Play.Protocol
         private readonly object gate=new object();private readonly object writeGate=new object();
         public ClientOrganizationSession Organization {get;}
         private bool organizationEnabled;
-        internal void EnableOrganization(){lock(gate){Open();organizationEnabled=true;}}
+        internal void EnableOrganization(int version=2){lock(gate){Open();Organization.ConfigureVersion(version);organizationEnabled=true;}}
         private readonly LoopbackFrameReader transport;
         private readonly ReceiveInbox inbox;
         private readonly CommandTracker commands;

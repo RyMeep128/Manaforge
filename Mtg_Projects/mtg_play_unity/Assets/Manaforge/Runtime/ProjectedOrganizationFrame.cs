@@ -5,11 +5,13 @@ using System.Linq;
 using Newtonsoft.Json.Linq;
 namespace Manaforge.Play
 {
+    public enum BattlefieldGroupPresentationMode { Panel, Drawer }
     public sealed class ProjectedOrganizationGroup
     {
+        public BattlefieldGroupPresentationMode PresentationMode {get;}
         public string Id {get;} public string Name {get;} public string Seat {get;}
         public float X {get;} public float Y {get;} public IReadOnlyList<string> Objects {get;}
-        internal ProjectedOrganizationGroup(JObject group,string seat,IDictionary<string,string> objects){Id=(string)group["group_id"];Name=(string)group["name"];Seat=seat;X=(long)group["x"]/1000000f;Y=(long)group["y"]/1000000f;Objects=Array.AsReadOnly(group["members"].Select(h=>objects[(string)h]).ToArray());}
+        internal ProjectedOrganizationGroup(JObject group,string seat,IDictionary<string,string> objects){PresentationMode=(string)group["presentation_mode"]=="drawer"?BattlefieldGroupPresentationMode.Drawer:BattlefieldGroupPresentationMode.Panel;Id=(string)group["group_id"];Name=(string)group["name"];Seat=seat;X=(long)group["x"]/1000000f;Y=(long)group["y"]/1000000f;Objects=Array.AsReadOnly(group["members"].Select(h=>objects[(string)h]).ToArray());}
     }
     public sealed class ProjectedOrganizationFrame
     {
