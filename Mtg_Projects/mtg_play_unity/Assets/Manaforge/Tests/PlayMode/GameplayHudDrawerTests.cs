@@ -36,7 +36,7 @@ namespace Manaforge.Play.Tests
             for(int i=0;i<30;i++){drawer.SetOpen(true);Assert.That(button.enabledSelf,Is.False);drawer.SetOpen(false);}
             var replacement=new Button();button.RemoveFromHierarchy();drawer.Content.Add(replacement);drawer.RefreshInput();drawer.SetOpen(true);
             Assert.That(replacement.focusable,Is.True);Assert.That(replacement.pickingMode,Is.EqualTo(PickingMode.Position));
-            drawer.SetAttention(true,"Choice required");drawer.Reset();Assert.That(drawer.NeedsAttention,Is.False);Assert.That(drawer.Tab.enabledInHierarchy,Is.True);
+            drawer.SetAttention(true,"Choice required");drawer.SetTitle("Renamed");Assert.That(drawer.Tab.text,Does.StartWith("Renamed").And.Contain("Choice required"));Assert.That(drawer.NeedsAttention,Is.True);drawer.Reset();Assert.That(drawer.NeedsAttention,Is.False);Assert.That(drawer.Tab.enabledInHierarchy,Is.True);
             drawer.Dispose();drawer.SetOpen(true);Assert.That(drawer.IsOpen,Is.False);
         }
         [UnityTest] public IEnumerator HudUsesFormatAndExplicitSeatIdentityUnderAlternativeRoot()

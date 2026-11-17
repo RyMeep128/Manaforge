@@ -155,3 +155,23 @@ private bootstraps; normal shared-organization rollout remains disabled. Open/cl
 state never appears in the protocol. Hosted v3 corpus, two-recipient channel checks
 and normal native metadata checks cover conversion without native submissions.
 This commit supplies the contract foundation; drawer presentation follows separately.
+
+
+### Persistent drawer presentation
+
+Group chrome now has one binding per group ID/seat in the current epoch and viewer.
+Bindings own shell elements only; cards remain surface-owned siblings. Conversion
+uses the v3 owner operation; expansion is local and new drawers start expanded.
+Names, counts, reduced motion and attention-safe drawer titles update in place.
+Temporary organization gaps hide chrome without losing expansion. Deleted groups,
+changed viewer/epoch and surface retirement dispose chrome and clear local state.
+Hosted two-viewer tests cover independent collapse, rename/mode transitions, gaps,
+delete/recreate and cleanup. Collapsed-member chooser/anchor integration follows
+in the final CT-15 step; default activation remains disabled.
+
+
+Local verification on 2026-11-17: runtime, EditMode and PlayMode assemblies compile
+using the installed Unity compiler and cached reference configuration, without
+executing tests. The required Windows player rebuild was attempted and failed
+before compilation with exit 198: no valid Unity Editor license. This is an
+infrastructure block, not a passing rebuild or visual/gameplay acceptance.

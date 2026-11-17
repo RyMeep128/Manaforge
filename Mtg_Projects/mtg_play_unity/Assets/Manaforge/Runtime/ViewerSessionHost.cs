@@ -23,6 +23,7 @@ namespace Manaforge.Play
         private bool stopped,disposed;private string stopCode;
         public Task<ViewerHostStop> Completion=>completion.Task;
         public ProjectedOrganizationFrame OrganizationFor(long revision){lock(gate)return stopped?null:channel?.Organization.ForRevision(revision);}
+        public int OrganizationVersion {get{lock(gate)return channel?.Organization.Version??0;}}
         public bool OrganizationPending {get{lock(gate)return !stopped && channel?.Organization.Pending==true;}}
         public string OrganizationError {get{lock(gate)return channel?.Organization.LastError;}}
         public Task<bool> OrganizeAsync(ProjectedOrganizationFrame frame,Newtonsoft.Json.Linq.JObject operation){ThreadOnly();if(frame==null || !surface.HasPresentedFrame(ticket,frame.GameplayRevision))return Task.FromResult(false);lock(gate)return stopped || channel==null?Task.FromResult(false):channel.Organization.Submit(frame,operation);}

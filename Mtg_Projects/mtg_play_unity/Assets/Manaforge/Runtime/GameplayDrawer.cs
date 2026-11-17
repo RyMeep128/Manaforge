@@ -17,7 +17,7 @@ namespace Manaforge.Play
         public bool ReducedMotion {get;private set;}
         public bool NeedsAttention {get;private set;}
         public event Action<bool> OpenChanged;
-        private readonly string title;
+        private string title,attentionSummary;
         private readonly DrawerGlyph glyph=new DrawerGlyph();
         private readonly Dictionary<VisualElement,(PickingMode picking,bool focusable)> suppressed=new Dictionary<VisualElement,(PickingMode,bool)>();
         private IVisualElementScheduledItem closing;
@@ -81,7 +81,8 @@ namespace Manaforge.Play
             }
         }
         public void SetReducedMotion(bool value){if(disposed || ReducedMotion==value)return;ReducedMotion=value;EnableInClassList("drawer-reduced-motion",value);ApplyState(value);}
-        public void SetAttention(bool value,string summary=null){NeedsAttention=value;EnableInClassList("drawer-attention",value);Tab.text=title+(value?" • "+(summary??"Attention"):"");Tab.tooltip=title+(IsOpen?" — collapse":" — expand")+(value?" — "+(summary??"Attention required"):"");}
+        public void SetTitle(string value){if(disposed || title==value)return;title=value??throw new ArgumentNullException(nameof(value));SetAttention(NeedsAttention,attentionSummary);}
+        public void SetAttention(bool value,string summary=null){attentionSummary=summary;NeedsAttention=value;EnableInClassList("drawer-attention",value);Tab.text=title+(value?" • "+(summary??"Attention"):"");Tab.tooltip=title+(IsOpen?" — collapse":" — expand")+(value?" — "+(summary??"Attention required"):"");}
         public void Reset(bool open=false){if(disposed)return;if(!open && Contains(Content,panel?.focusController?.focusedElement as VisualElement))Tab.Focus();returnFocus=null;NeedsAttention=false;SetAttention(false);bool changed=IsOpen!=open;IsOpen=open;ApplyState(true);if(changed)OpenChanged?.Invoke(open);}
         private void Key(KeyDownEvent ev)
         {
