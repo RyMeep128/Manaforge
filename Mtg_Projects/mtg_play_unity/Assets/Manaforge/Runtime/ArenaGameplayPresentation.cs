@@ -150,6 +150,7 @@ namespace Manaforge.Play
                 || current?.CanSubmit==false || Decisions?.Root.ClassListContains("command-uncertain")==true || Decisions?.Presentation?.Mode==YieldPresentationMode.Failed;
         }
         public Vector2? ResolveCardAnchor(string objectId)=>organizationRenderer?.CardAnchor(objectId);
+        public bool OpenBattlefieldGroups()=>organizationRenderer?.OpenTools()==true;
         public bool OpenBattlefieldMembers(string groupId)=>organizationRenderer?.OpenMembers(groupId)==true;
         public void CloseBattlefieldMembers()=>organizationRenderer?.CloseMembers();
         public void BeforeDecisionTick()

@@ -65,6 +65,7 @@ namespace Manaforge.Play
         private void NavigationCancel(NavigationCancelEvent ev){if(IsOpen){if(!held && lastCancelFrame!=Time.frameCount){lastCancelFrame=Time.frameCount;Back();}ev.StopImmediatePropagation();}}
         private void Focus(FocusInEvent ev){if(IsOpen && !Inside(ev.target)){ev.StopImmediatePropagation();DefaultFocus();}}
         private void DefaultFocus(){if(page==0)resume.Focus();else if(page==2)cancel.Focus();else if(page==3)cancelReset.Focus();else options.Q<Button>()?.Focus();}
+        public void SetOrganizationTools(Func<bool> open){main.Add(MakeButton("game-menu-groups","Organize battlefield | G",()=>{Close();open();}));}
         public void SetLayoutEditor(HudLayoutEditor editor)
         {
             if(editor==null || customize!=null)return;layoutEditor=editor;

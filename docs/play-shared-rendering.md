@@ -305,3 +305,19 @@ Escape, lost capture, viewport changes and session retirement cancel the gesture
 Moves become in-memory game layout overrides; use Customize Layout to save a named
 preset between games. Hosted coverage checks normal-play movement without edit
 mode, unchanged expansion, committed geometry and zero native command bytes.
+
+
+### Discoverable grouping and direct drawer creation
+
+Use the compact **Groups · G** launcher above the battlefield, the **G** key outside
+text fields, Escape → Organize battlefield, or right-click empty battlefield.
+**New drawer** names a drawer directly: the host confirms creation first, then
+conversion, using the existing v3 ledger; no optimistic mode or membership is sent.
+After creation, or when opening an owned group's … tools, left-click your battlefield
+permanents to append them to that group. **Done adding cards**, Close or Escape
+exits this explicit mode. Clicking an existing member is a no-op. While membership
+is pending, additional assignment clicks are consumed without becoming game actions.
+Mandatory targeting/mana choices retain their original input paths; opponents and
+non-battlefield cards are never assigned through this mode. Controls display which
+group is receiving clicks. Hosted tests cover exact membership packets, pending
+click isolation and the two-phase New drawer flow.
