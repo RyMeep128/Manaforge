@@ -27,7 +27,7 @@ namespace Manaforge.Play
         private readonly Dictionary<CardView,CardGestureBinding> cardGestures=new Dictionary<CardView,CardGestureBinding>();
         private readonly Dictionary<CardView,Vector2> dragOrigins=new Dictionary<CardView,Vector2>();
         private string[] draggingMembers=Array.Empty<string>();private CardView grabbed;private Vector2 cardGrabOffset;
-        private bool pressed,dragging,captured,disposed,legacy;private string moving,focused,notice,created;private bool createDrawer;private long createBasis;private string[] createMembers;
+        private bool pressed,dragging,captured,disposed,legacy;private string moving,focused,notice,created;private bool createDrawer;private long createAfterRevision;private string[] createMembers;
         private readonly Button groupLauncher;private string addingToGroup;
         private bool menuOpen;private Vector2 menuPoint;private Rect battlefieldViewport;
         private string presentationEpoch,presentationViewer;
@@ -52,7 +52,7 @@ namespace Manaforge.Play
         public void Observe(ProjectedOrganizationFrame value)
         {
             if(disposed || ReferenceEquals(value,organization))return;CancelDrag();if(value==null || chooserGroup!=null && !value.Groups.Any(g=>g.Id==chooserGroup))CloseMembers(false,false);if(value!=null && presentationEpoch!=null && (value.Epoch!=presentationEpoch || value.Viewer!=presentationViewer))Clear();organization=value;if(value!=null){presentationEpoch=value.Epoch;presentationViewer=value.Viewer;}
-            if(value!=null){if(addingToGroup!=null && !value.Groups.Any(g=>g.Id==addingToGroup && g.Seat==value.Viewer))addingToGroup=null;foreach(string id in groups.Keys.Where(id=>!value.Groups.Any(g=>g.Id==id && g.Seat==groups[id].Seat)).ToArray()){groups[id].Dispose();groups.Remove(id);pages.Remove(id);pages.Remove("$chooser-"+id);}selected.RemoveWhere(h=>!value.Handles.Values.Contains(h));if(created!=null && value.Groups.Any(g=>g.Id==created) && !host.OrganizationPending){string id=created;if(createDrawer && value.Groups.First(g=>g.Id==id).PresentationMode!=BattlefieldGroupPresentationMode.Drawer){var conversion=Operation("set_mode",id);conversion["presentation_mode"]="drawer";Send(conversion);relayout();return;}createDrawer=false;created=null;focused=id;addingToGroup=null;menuOpen=false;if(createMembers.Length>0 && value.Basis==createBasis && createMembers.All(h=>value.Handles.Values.Contains(h)))Send(Operation("move",id,members:createMembers));else if(createMembers.Length>0)notice="Group created; selection changed. Move cards again.";}}relayout();
+            if(value!=null){if(addingToGroup!=null && !value.Groups.Any(g=>g.Id==addingToGroup && g.Seat==value.Viewer))addingToGroup=null;foreach(string id in groups.Keys.Where(id=>!value.Groups.Any(g=>g.Id==id && g.Seat==groups[id].Seat)).ToArray()){groups[id].Dispose();groups.Remove(id);pages.Remove(id);pages.Remove("$chooser-"+id);}selected.RemoveWhere(h=>!value.Handles.Values.Contains(h));}relayout();
         }
         private bool CanEdit=>chooserGroup==null && !disposed && !legacy && organization!=null && game!=null && game.Turn!=0 && game.Result==null && organization.GameplayRevision==game.Context.Revision && host.HasPresentedRevision(game.Context.Revision) && !host.OrganizationPending && !suppressed() && (game.Decision==null || game.Decision.IsPriority);
         private Button Button(string text,Action click){var button=new Button(click){text=text,name="organization-"+text.ToLowerInvariant().Replace(" ","-")};GameplayTheme.Button(button);return button;}
@@ -111,7 +111,25 @@ namespace Manaforge.Play
                     foreach(var item in items)if(chosen.Objects.Contains(item.card.ObjectId) && item.view.style.display.value!=DisplayStyle.None)item.view.BringToFront();
                 }
             }
-            ApplyDragPreview();chrome.PlaceBehind(root.Q<VisualElement>("viewer-cards"));return true;
+            ApplyDragPreview();chrome.PlaceBehind(root.Q<VisualElement>("viewer-cards"));CompleteCreation();return true;
+        }
+        // Continue only after Layout has admitted the matching gameplay frame. Organization
+        // snapshots can arrive before Arena presents that frame; never drop membership then.
+        private void CompleteCreation()
+        {
+            if(created==null || !CanEdit || organization.Revision<=createAfterRevision)return;
+            var group=organization.Groups.FirstOrDefault(g=>g.Id==created && g.Seat==organization.Viewer);
+            if(group==null)return;
+            if(createDrawer && group.PresentationMode!=BattlefieldGroupPresentationMode.Drawer){
+                createAfterRevision=organization.Revision;var conversion=Operation("set_mode",group.Id);conversion["presentation_mode"]="drawer";Send(conversion);return;
+            }
+            createDrawer=false;created=null;focused=group.Id;addingToGroup=null;menuOpen=false;
+            // Handles identify permanent incarnations. A newer basis is safe only while every
+            // original member remains eligible and controlled by this viewer. Never add a subset.
+            var owned=organization.Roots[organization.Viewer].Concat(organization.Groups.Where(g=>g.Seat==organization.Viewer).SelectMany(g=>g.Objects))
+                .Where(organization.Handles.ContainsKey).Select(id=>organization.Handles[id]).ToHashSet();
+            if(createMembers.Length>0 && createMembers.All(owned.Contains))Send(Operation("move",group.Id,members:createMembers));
+            else if(createMembers.Length>0){notice="Group created; selection changed. Move cards again.";relayout();}
         }
         private void Place(string id,IReadOnlyList<string> ids,Rect rect,float size,List<(ProjectedCard card,CardView view)> items,bool revealSelected=true)
         {
@@ -240,7 +258,7 @@ namespace Manaforge.Play
             .Select(id=>organization.Handles[id]).ToArray();
         private void CancelDrag(){foreach(var pair in dragOrigins){pair.Key.style.left=pair.Value.x;pair.Key.style.top=pair.Value.y;}dragOrigins.Clear();dragDelta=Vector2.zero;grabbed=null;draggingMembers=Array.Empty<string>();pressed=dragging=false;moving=null;ghost.style.display=DisplayStyle.None;if(captured){captured=false;root.ReleasePointer(pointer);}}
         private void Prompt(string value,Action<string> callback){if(!CanEdit)return;menuOpen=true;if(menuPoint==Vector2.zero)menuPoint=new Vector2(battlefieldViewport.x+20,battlefieldViewport.y+40);naming=new TextField{value=value,maxLength=64,name="organization-name"};confirm=callback;relayout();naming.Focus();}
-        private void Create(string value,float x,float y,bool drawer=false,string[] members=null){createDrawer=drawer;created=Guid.NewGuid().ToString("N");createBasis=organization.Basis;createMembers=members??SelectedMembers();Send(Operation("create",created,value,x,y));}
+        private void Create(string value,float x,float y,bool drawer=false,string[] members=null){createDrawer=drawer;created=Guid.NewGuid().ToString("N");createAfterRevision=organization.Revision;createMembers=members??SelectedMembers();Send(Operation("create",created,value,x,y));}
         private void Send(JObject operation){if(!CanEdit)return;if((string)operation["kind"]=="move" && ((JArray)operation["members"]).Count==0){notice="Select permanents first.";return;}notice=null;try{submission=host.OrganizeAsync(organization,operation);}catch{notice="Organization changed. Try again.";created=null;}relayout();}
         internal static JObject Operation(string kind,string group,string name=null,float x=0,float y=0,string[] members=null,int index=0)=>new JObject{["kind"]=kind,["group_id"]=group==null?JValue.CreateNull():new JValue(group),["name"]=name==null?JValue.CreateNull():new JValue(name),["x"]=kind=="create" || kind=="position" || kind=="place"?new JValue((long)Math.Round(Mathf.Clamp01(x)*1000000)):JValue.CreateNull(),["y"]=kind=="create" || kind=="position" || kind=="place"?new JValue((long)Math.Round(Mathf.Clamp01(y)*1000000)):JValue.CreateNull(),["index"]=kind=="move" || kind=="reorder"?new JValue(index):JValue.CreateNull(),["members"]=new JArray(members??Array.Empty<string>())};
         public void Dispose(){if(disposed)return;disposed=true;polling.Pause();Clear();chooser.Dispose();root.UnregisterCallback(down,TrickleDown.TrickleDown);root.UnregisterCallback(move,TrickleDown.TrickleDown);root.UnregisterCallback(up,TrickleDown.TrickleDown);root.UnregisterCallback(key,TrickleDown.TrickleDown);root.UnregisterCallback(lost);root.UnregisterCallback(leave);selected.Clear();cards.Clear();chrome.RemoveFromHierarchy();controls.RemoveFromHierarchy();groupLauncher.clickable=null;groupLauncher.RemoveFromHierarchy();ghost.RemoveFromHierarchy();}

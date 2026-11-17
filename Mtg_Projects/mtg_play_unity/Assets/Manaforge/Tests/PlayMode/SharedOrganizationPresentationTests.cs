@@ -194,7 +194,7 @@ namespace Manaforge.Play.Tests
             using(var up=PointerUpEvent.GetPooled(new Event{type=EventType.MouseUp,button=0,mousePosition=end})){up.target=table;table.SendEvent(up);}
         }
         private static Task Apply(View a,JObject request,JObject snapshot){
-            var receipt=Envelope("receipt",new JObject{["match_epoch"]="match",["command_id"]=request["body"]["command_id"],["outcome"]="applied",["organization_revision"]=snapshot["body"]["organization_revision"],["basis_revision"]=1,["reason_code"]=null},4);
+            var receipt=Envelope("receipt",new JObject{["match_epoch"]="match",["command_id"]=request["body"]["command_id"],["outcome"]="applied",["organization_revision"]=snapshot["body"]["organization_revision"],["basis_revision"]=snapshot["body"]["basis_revision"].DeepClone(),["reason_code"]=null},4);
             return Task.Run(()=>{a.Peer.ReplyForFixture(receipt);a.Peer.ReplyForFixture(snapshot);});
         }
         private static CardView Card(View a,string id){CardView result=null;a.Arena.Surface.VisitPresented((c,v)=>{if(c.ObjectId==id)result=v;});return result;}
@@ -210,12 +210,27 @@ namespace Manaforge.Play.Tests
             yield return Drag(a,card,drawer.Tab.worldBound.center);read=Task.Run(()=>a.Peer.ReadCommandForFixture());yield return Until(()=>read.IsCompleted,a.Tick);request=JObject.Parse(read.Result);Assert.That((string)request["body"]["operation"]["kind"],Is.EqualTo("move"));Assert.That((string)request["body"]["operation"]["group_id"],Is.EqualTo("g"));Assert.That(drawer.IsOpen,Is.False);
             state["message_id"]="member";state["body"]["organization_revision"]=3;state["body"]["seats"][0]["placements"]=new JArray();state["body"]["seats"][0]["root"]=new JArray("attachment-one");state["body"]["seats"][0]["groups"][0]["members"]=new JArray("handle-one");sent=Apply(a,request,state);yield return Until(()=>a.Host.OrganizationFor(1)?.Revision==3,a.Tick);a.Tick();Assert.That(card.style.display.value,Is.EqualTo(DisplayStyle.None));Submit(drawer.Tab);a.Tick();Assert.That(card.style.display.value,Is.EqualTo(DisplayStyle.Flex));Assert.That(card.parent,Is.SameAs(parent));Assert.That(a.Peer.PendingCommandBytes,Is.Zero);
         }
-        [UnityTest] public IEnumerator CardOnCardCreatesNamedDrawerAtStationaryCardAndMovesBothMembers(){
+        [UnityTest] public IEnumerator CardOnCardCreatesNamedDrawerAtStationaryCardAndMovesBothMembers()=>CreatePair(false);
+        [UnityTest] public IEnumerator CardOnCardKeepsBothMembersWhenGameplayAdvancesDuringCreation()=>CreatePair(true);
+        private IEnumerator CreatePair(bool advanceGameplay){
             using var a=new View("one","a-object",1280,720,4,true);yield return Until(()=>a.Host.PresentedDecision!=null,a.Tick);var sent=Reply(a,Envelope("capabilities",new JObject{["versions"]=new JArray(4)},4));yield return Until(()=>sent.IsCompleted,a.Tick);var read=Task.Run(()=>a.Peer.ReadCommandForFixture());yield return Until(()=>read.IsCompleted,a.Tick);
             var state=Snapshot("one","a-object",grouped:false,version:4);sent=Reply(a,state);yield return Until(()=>a.Host.OrganizationFor(1)!=null,a.Tick);a.Tick();yield return null;var first=Card(a,a.Reference);var other=Card(a,a.Reference+"-attachment");var anchor=new Vector2(other.resolvedStyle.left,other.resolvedStyle.top);
             yield return Drag(a,first,other.worldBound.center);Assert.That(a.Root.Q<TextField>("organization-name"),Is.Not.Null);Assert.That(a.Peer.PendingCommandBytes,Is.Zero);a.Root.Q<TextField>("organization-name").value="Named pair";Submit(a.Root.Q<Button>("organization-confirm"));read=Task.Run(()=>a.Peer.ReadCommandForFixture());yield return Until(()=>read.IsCompleted,a.Tick);var create=JObject.Parse(read.Result);string id=(string)create["body"]["operation"]["group_id"];Assert.That((long)create["body"]["operation"]["x"],Is.EqualTo((long)Math.Round(anchor.x/(a.Root.Q("arena-table").resolvedStyle.width-320)*1000000)).Within(2));
             state["message_id"]="created-pair";state["body"]["organization_revision"]=1;((JArray)state["body"]["seats"][0]["groups"]).Add(new JObject{["group_id"]=id,["name"]="Named pair",["x"]=create["body"]["operation"]["x"],["y"]=create["body"]["operation"]["y"],["presentation_mode"]="panel",["members"]=new JArray()});sent=Apply(a,create,state);read=Task.Run(()=>a.Peer.ReadCommandForFixture());yield return Until(()=>read.IsCompleted,a.Tick);var convert=JObject.Parse(read.Result);Assert.That((string)convert["body"]["operation"]["presentation_mode"],Is.EqualTo("drawer"));
+            if(advanceGameplay){
+                a.Source["body"]["snapshot"]["revision"]=2;a.Source["message_id"]="pair-priority-progress";sent=Reply(a,a.Source);yield return Until(()=>a.Host.HasPresentedRevision(2),a.Tick);a.Tick();
+                state["body"]["gameplay_revision"]=2;state["body"]["basis_revision"]=2;
+            }
             state["message_id"]="pair-drawer";state["body"]["organization_revision"]=2;state["body"]["seats"][0]["groups"][0]["presentation_mode"]="drawer";sent=Apply(a,convert,state);read=Task.Run(()=>a.Peer.ReadCommandForFixture());yield return Until(()=>read.IsCompleted,a.Tick);var membership=JObject.Parse(read.Result);Assert.That((string)membership["body"]["operation"]["kind"],Is.EqualTo("move"));Assert.That(membership["body"]["operation"]["members"].Values<string>(),Is.EquivalentTo(new[]{"handle-one","attachment-one"}));
+            long gameplay=advanceGameplay?2:1;Assert.That((long)membership["body"]["basis_revision"],Is.EqualTo(gameplay));
+            state["message_id"]="pair-members";state["body"]["organization_revision"]=3;state["body"]["seats"][0]["root"]=new JArray();state["body"]["seats"][0]["groups"][0]["members"]=membership["body"]["operation"]["members"].DeepClone();
+            sent=Apply(a,membership,state);yield return Until(()=>a.Host.OrganizationFor(gameplay)?.Revision==3,a.Tick);a.Tick();yield return null;
+            var drawer=a.Root.Q<GameplayDrawer>("organization-drawer-"+id);Assert.That(drawer,Is.Not.Null);Assert.That(drawer.IsOpen,Is.True);
+            Assert.That(a.Host.OrganizationFor(gameplay).Groups.Single().Objects,Is.EquivalentTo(new[]{a.Reference,a.Reference+"-attachment"}));
+            var firstParent=first.parent;var otherParent=other.parent;
+            drawer.SetOpen(false);a.Tick();Assert.That(first.style.display.value,Is.EqualTo(DisplayStyle.None));Assert.That(other.style.display.value,Is.EqualTo(DisplayStyle.None));
+            drawer.SetOpen(true);a.Tick();Assert.That(first.style.display.value,Is.EqualTo(DisplayStyle.Flex));Assert.That(other.style.display.value,Is.EqualTo(DisplayStyle.Flex));
+            Assert.That(first.parent,Is.SameAs(firstParent));Assert.That(other.parent,Is.SameAs(otherParent));Assert.That(a.Peer.PendingCommandBytes,Is.Zero,"Creating a pair must not dispatch native rules actions");
         }
     }
 }

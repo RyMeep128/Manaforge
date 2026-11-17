@@ -409,3 +409,23 @@ collapsed it and a second click reopened it. The local Windows build succeeded.
 This is opening/UI evidence, not a completed-game or multiplayer acceptance run.
 Nonzero commander-damage updates, partner fixtures, format changes and cleanup
 remain subject to exact-SHA hosted checks; no local test suite was run.
+
+### Card-on-card drawer membership continuation
+
+Dropping a controlled permanent onto another controlled permanent captures both
+incarnation handles (plus any dragged selection) for the named drawer. Creation
+now continues from layout only after the matching gameplay frame is presented.
+It waits for a newer authoritative organization snapshot after each command,
+then sends one membership operation containing the complete captured set. An
+unrelated gameplay/basis advance no longer discards the membership step while
+the same handles remain eligible and controlled by the viewer. A departed or
+transferred member stops automatic assignment of the set; no subset is moved.
+
+Hosted PlayMode coverage exercises the normal pair and a gameplay revision
+advance between conversion and membership. Both apply the membership snapshot,
+assert both original object IDs are members, collapse/reopen both card views,
+and check that their parent ownership is preserved without native game actions.
+Manual reproduction: play two permanents, left-drag one onto the other, name the
+drawer, confirm, then collapse and reopen it. Both permanents should be inside
+and the drawer should originate at the stationary card. Repeat while priority
+updates. These new regression cases await hosted execution; no local suites run.
