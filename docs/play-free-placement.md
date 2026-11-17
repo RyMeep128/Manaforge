@@ -23,8 +23,10 @@ No gameplay command, rules zone, canonical card owner, or artwork owner is added
   acknowledges create, drawer conversion and both memberships in sequence. The
   drawer header is anchored at the stationary permanent's previous top-left.
   No membership is committed before naming; Close/Escape cancels that prompt.
-- Menu-created groups/drawers use the selected cards' top-left extent, or the
-  context/menu anchor if nothing is selected. Position clamps keep containers
+- Card-on-card dragging is the only group creation entry point. Right-click, G,
+  menu creation buttons and empty-space selection drops do not create groups.
+  The naming popover has a card count, Name, Create drawer and Cancel; Enter
+  confirms and Escape/outside click cancels. Position clamps keep containers
   inside the viewport. Creating a group does not leave assignment mode active.
 - Headers contain only the name and an adjacent ellipsis menu. Name click toggles
   locally; name drag moves shared geometry. The menu exposes member inspection
@@ -90,9 +92,9 @@ and a horizontal ellipsis next to it; dragging that name moved the drawer.
 Manual regression scenarios:
 1. Repeat with a tapped permanent; confirm a quick click still uses the existing
    tap/action path and dragging never changes tapped state.
-2. Shift-click a selection, create a group from its tools and confirm its origin
-   matches the selected cards. Cancel card-on-card naming and confirm membership
-   and original positions remain unchanged.
+2. Shift-click a selection and drag it onto another owned card to create a drawer
+   at that stationary card. Confirm empty-space drops, right-click and G do not
+   create groups. Cancel naming and confirm membership/positions remain unchanged.
 3. Drag near each viewport edge and resize through 1280x720, 1366x768, 1920x1080
    and 2560x1440. Verify positions remain accessible and drawers still toggle.
 4. Exercise targeting/mana and attacker/blocker declarations with collapsed

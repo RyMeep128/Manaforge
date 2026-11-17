@@ -191,3 +191,10 @@
 .organization-context .mf-action { color: rgb(250, 247, 235); background-color: rgb(47, 66, 85); }
 .organization-context .mf-action:hover { background-color: rgb(66, 94, 119); }
 .organization-context .mf-action:disabled { color: rgb(175, 184, 193); background-color: rgb(38, 44, 52); }
+
+#organization-prompt-title { font-size: 18px; -unity-font-style: bold; margin-bottom: 6px; }
+#organization-prompt-summary { margin-bottom: 12px; color: rgb(203, 216, 228); }
+#organization-name { margin-bottom: 12px; min-width: 0; }
+#organization-name > .unity-base-field__label { min-width: 42px; }
+#organization-prompt-actions .mf-action { min-width: 90px; margin-left: 6px; }
+#organization-status { margin-top: 8px; }

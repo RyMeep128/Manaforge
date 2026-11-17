@@ -28,17 +28,16 @@ namespace Manaforge.Play
         private readonly Dictionary<CardView,Vector2> dragOrigins=new Dictionary<CardView,Vector2>();
         private string[] draggingMembers=Array.Empty<string>();private CardView grabbed;private Vector2 cardGrabOffset;
         private bool pressed,dragging,captured,disposed,legacy;private string moving,focused,notice,created;private bool createDrawer;private long createAfterRevision;private string[] createMembers;
-        private readonly Button groupLauncher;private string addingToGroup;
+        private string addingToGroup;
         private bool menuOpen;private Vector2 menuPoint;private Rect battlefieldViewport;
         private string presentationEpoch,presentationViewer;
-        private TextField naming;private Action<string> confirm;private Task<bool> submission;
+        private TextField naming;private bool namingNewDrawer;private int namingCount;private Action<string> confirm;private Task<bool> submission;
         public BattlefieldOrganizationRenderer(VisualElement root,ViewerSessionHost host,Action relayout,Action interruptBoard,Func<bool> suppressed,Func<string,bool> hasChoice=null,Func<bool> memberAccessBlocked=null)
         {
             this.root=root;this.host=host;this.relayout=relayout;this.interruptBoard=interruptBoard;this.suppressed=suppressed;this.hasChoice=hasChoice??(_=>false);this.memberAccessBlocked=memberAccessBlocked??suppressed;
             chrome=new VisualElement{name="battlefield-organization",pickingMode=PickingMode.Ignore};chrome.style.position=Position.Absolute;chrome.style.left=chrome.style.top=0;chrome.style.right=chrome.style.bottom=0;root.Add(chrome);
             chooser=new BattlefieldMemberChooser(chrome,()=>CloseMembers());
-            controls=new VisualElement{name="organization-controls"};controls.style.position=Position.Absolute;controls.style.flexDirection=FlexDirection.Row;controls.style.flexWrap=Wrap.Wrap;controls.style.backgroundColor=new Color(.035f,.055f,.065f,.96f);controls.AddToClassList("organization-context");GameplayTheme.Attach(controls);root.Add(controls);
-            groupLauncher=Button("Groups · G",()=>OpenTools());groupLauncher.name="battlefield-groups";groupLauncher.tooltip="Create and organize groups (G)";groupLauncher.style.position=Position.Absolute;groupLauncher.style.left=280;groupLauncher.style.top=94;groupLauncher.style.width=112;groupLauncher.style.height=30;root.Add(groupLauncher);
+            controls=new ScrollView(ScrollViewMode.Vertical){name="organization-controls",horizontalScrollerVisibility=ScrollerVisibility.Hidden};controls.style.position=Position.Absolute;controls.style.flexDirection=FlexDirection.Column;controls.style.backgroundColor=new Color(.035f,.055f,.065f,.96f);controls.AddToClassList("organization-context");GameplayTheme.Attach(controls);root.Add(controls);
             ghost=new Label{name="organization-drag-ghost",pickingMode=PickingMode.Ignore};ghost.style.position=Position.Absolute;ghost.style.display=DisplayStyle.None;ghost.style.color=Color.white;ghost.style.backgroundColor=new Color(.035f,.055f,.075f,.98f);root.Add(ghost);
             down=Down;move=Move;up=Up;key=Key;lost=ev=>{if(ev.target==root)CancelDrag();};leave=ev=>{if(ev.target==root && !captured)CancelDrag();};
             root.RegisterCallback(down,TrickleDown.TrickleDown);root.RegisterCallback(move,TrickleDown.TrickleDown);root.RegisterCallback(up,TrickleDown.TrickleDown);root.RegisterCallback(key,TrickleDown.TrickleDown);root.RegisterCallback(lost);root.RegisterCallback(leave);
@@ -46,7 +45,7 @@ namespace Manaforge.Play
         }
         public void Clear()
         {
-            addingToGroup=null;groupLauncher.style.display=DisplayStyle.None;menuOpen=false;CancelDrag();chooserGroup=null;chooser.Hide();observedOffer=null;presentationEpoch=presentationViewer=null;organization=null;game=null;selected.Clear();pages.Clear();focused=created=notice=null;naming=null;confirm=null;
+            addingToGroup=null;menuOpen=false;CancelDrag();chooserGroup=null;chooser.Hide();observedOffer=null;presentationEpoch=presentationViewer=null;organization=null;game=null;selected.Clear();pages.Clear();focused=created=notice=null;naming=null;confirm=null;
             foreach(var binding in cardGestures.Values)binding.Dispose();cardGestures.Clear();foreach(var view in cards.Keys)view.RemoveFromClassList("organization-selected");cards.Clear();cardViews.Clear();memberAnchors.Clear();bounds.Clear();foreach(var binding in groups.Values)binding.Dispose();groups.Clear();foreach(var pager in chrome.Query<VisualElement>(className:"organization-pager").ToList())pager.RemoveFromHierarchy();controls.Clear();controls.style.display=DisplayStyle.None;
         }
         public void Observe(ProjectedOrganizationFrame value)
@@ -62,17 +61,43 @@ namespace Manaforge.Play
             battlefieldViewport=viewport;game=frame;if(chooserGroup==null)chooser.Hide();if(memberAccessBlocked() || frame.Result!=null)CloseMembers(false,false);foreach(var pager in chrome.Query<VisualElement>(className:"organization-pager").ToList())pager.RemoveFromHierarchy();bool keepDraft=naming!=null && controls.Contains(naming);if(!keepDraft)controls.Clear();cards.Clear();cardViews.Clear();memberAnchors.Clear();bounds.Clear();foreach(var item in items){cards[item.view]=item.card;cardViews[item.card.ObjectId]=(item.card,item.view);item.view.EnableInClassList("organization-selected",!legacy && organization!=null && organization.GameplayRevision==frame.Context.Revision && organization.Handles.TryGetValue(item.card.ObjectId,out var h) && selected.Contains(h));}
             foreach(var stale in cardGestures.Keys.Where(view=>!cards.ContainsKey(view)).ToArray()){cardGestures[stale].Dispose();cardGestures.Remove(stale);}
             foreach(var item in items)if(!cardGestures.ContainsKey(item.view))cardGestures.Add(item.view,new CardGestureBinding(item.view,move,up));
-            groupLauncher.style.display=frame.Turn!=0 && frame.Result==null?DisplayStyle.Flex:DisplayStyle.None;groupLauncher.SetEnabled(CanEdit || legacy);
-            bool valid=organization!=null && organization.GameplayRevision==frame.Context.Revision && organization.Viewer==frame.Context.ViewerId;controls.style.display=(valid || naming!=null) && (menuOpen || naming!=null || notice!=null)?DisplayStyle.Flex:DisplayStyle.None;if(!valid){foreach(var button in controls.Children().OfType<Button>())button.SetEnabled(button.name=="organization-close");foreach(var binding in groups.Values)binding.Root.style.display=DisplayStyle.None;return false;}
+            bool valid=organization!=null && organization.GameplayRevision==frame.Context.Revision && organization.Viewer==frame.Context.ViewerId;controls.style.display=(valid || naming!=null) && (menuOpen || naming!=null || notice!=null)?DisplayStyle.Flex:DisplayStyle.None;if(!valid){RefreshControlAvailability();foreach(var binding in groups.Values)binding.Root.style.display=DisplayStyle.None;return false;}
             if(!keepDraft){
-            controls.style.left=Mathf.Clamp(menuPoint.x,0,Mathf.Max(0,root.resolvedStyle.width-440));controls.style.top=Mathf.Clamp(menuPoint.y,70,Mathf.Max(70,root.resolvedStyle.height-300));controls.style.bottom=StyleKeyword.Auto;controls.style.width=Mathf.Min(440,viewport.width);controls.BringToFront();var fallback=new Toggle("Default arrangement"){value=legacy,name="organization-default"};fallback.RegisterValueChangedCallback(ev=>{legacy=ev.newValue;addingToGroup=null;CloseMembers(false,false);CancelDrag();relayout();});controls.Add(fallback);controls.Add(Button("Close",()=>{addingToGroup=null;menuOpen=false;notice=null;naming=null;confirm=null;relayout();}));if(legacy){foreach(var binding in groups.Values)binding.Root.style.display=DisplayStyle.None;return false;}
-            controls.Add(Button("New group",()=>Prompt("Group "+(organization.Groups.Count(g=>g.Seat==organization.Viewer)+1),value=>CreateAtSelection(value,false))));if(host.OrganizationVersion>=3)controls.Add(Button("New drawer",()=>Prompt("Drawer "+(organization.Groups.Count(g=>g.Seat==organization.Viewer)+1),value=>CreateAtSelection(value,true))));var remove=Button("Remove selected",()=>Send(Operation("move",null,members:SelectedMembers())));controls.Add(remove);controls.Add(new Label(host.OrganizationPending?"Organization pending...":notice??host.OrganizationError??$"{selected.Count} selected"){enableRichText=false});
-            if(naming!=null){controls.Add(naming);controls.Add(Button("Confirm",()=>{if(!CanEdit)return;string value=naming.value.Trim();if(value.Length==0)return;var callback=confirm;naming=null;confirm=null;menuOpen=false;callback?.Invoke(value);}));}remove.SetEnabled(CanEdit && selected.Count>0);
-            var inspectable=organization.Groups.FirstOrDefault(g=>g.Id==focused);if(inspectable!=null)controls.Add(Button("Inspect members",()=>OpenMembers(inspectable.Id)));
-            var active=organization.Groups.FirstOrDefault(g=>g.Id==focused && g.Seat==organization.Viewer);if(active!=null){controls.Add(Button(addingToGroup==active.Id?"Done adding cards":"Add cards",()=>{addingToGroup=addingToGroup==active.Id?null:active.Id;relayout();}));if(addingToGroup==active.Id)controls.Add(new Label("Left-click your permanents to add them to "+active.Name){enableRichText=false});controls.Add(Button("Rename",()=>Prompt(active.Name,value=>Send(Operation("rename",active.Id,value)))));controls.Add(Button("Delete group",()=>Send(Operation("delete",active.Id))));int index=organization.Groups.Where(g=>g.Seat==organization.Viewer).ToList().FindIndex(g=>g.Id==active.Id);controls.Add(Button("Earlier",()=>Send(Operation("reorder",active.Id,index:Math.Max(0,index-1)))));controls.Add(Button("Later",()=>Send(Operation("reorder",active.Id,index:Math.Min(organization.Groups.Count(g=>g.Seat==organization.Viewer)-1,index+1)))));var assign=Button("Move here",()=>Send(Operation("move",active.Id,members:SelectedMembers())));assign.SetEnabled(CanEdit && selected.Count>0);controls.Add(assign);}
-            if(active!=null && host.OrganizationVersion>=3)controls.Add(Button(active.PresentationMode==BattlefieldGroupPresentationMode.Drawer?"Convert to Panel":"Convert to Drawer",()=>{var operation=Operation("set_mode",active.Id);operation["presentation_mode"]=active.PresentationMode==BattlefieldGroupPresentationMode.Drawer?"panel":"drawer";Send(operation);}));
+            controls.style.left=Mathf.Clamp(menuPoint.x,12,Mathf.Max(12,root.resolvedStyle.width-352));controls.style.top=Mathf.Clamp(menuPoint.y,70,Mathf.Max(70,root.resolvedStyle.height-360));controls.style.bottom=StyleKeyword.Auto;controls.style.width=Mathf.Min(340,viewport.width);controls.style.maxHeight=Mathf.Max(120,root.resolvedStyle.height-controls.style.top.value.value-12);controls.BringToFront();
+            if(naming!=null){
+                controls.Add(new Label(namingNewDrawer?"New drawer":"Rename drawer"){name="organization-prompt-title",enableRichText=false});
+                if(namingNewDrawer)controls.Add(new Label(namingCount+" cards will be added. Drag more cards onto the drawer later."){name="organization-prompt-summary",enableRichText=false});
+                naming.label="Name";controls.Add(naming);
+                var actions=new VisualElement{name="organization-prompt-actions"};actions.style.flexDirection=FlexDirection.Row;actions.style.justifyContent=Justify.FlexEnd;controls.Add(actions);
+                var cancel=Button("Cancel",CancelPrompt);cancel.name="organization-cancel";actions.Add(cancel);
+                var accept=Button(namingNewDrawer?"Create drawer":"Save name",ConfirmName);accept.name="organization-confirm";actions.Add(accept);
+            }else{
+                var inspectable=organization.Groups.FirstOrDefault(g=>g.Id==focused);
+                var heading=new VisualElement();heading.style.flexDirection=FlexDirection.Row;controls.Add(heading);var caption=new Label(inspectable?.Name??"Battlefield arrangement"){enableRichText=false};caption.style.flexGrow=1;caption.style.unityFontStyleAndWeight=FontStyle.Bold;heading.Add(caption);
+                heading.Add(Button("Close",()=>{addingToGroup=null;menuOpen=false;notice=null;relayout();}));
+                if(inspectable!=null)controls.Add(Button("Inspect members",()=>OpenMembers(inspectable.Id)));
+                var active=organization.Groups.FirstOrDefault(g=>g.Id==focused && g.Seat==organization.Viewer);
+                Foldout advanced=null;
+                if(active!=null && !legacy){
+                    controls.Add(Button(addingToGroup==active.Id?"Done adding cards":"Add cards",()=>{addingToGroup=addingToGroup==active.Id?null:active.Id;relayout();}));
+                    if(addingToGroup==active.Id)controls.Add(new Label("Click your permanents to add them, or drag cards onto this drawer."){enableRichText=false});
+                    controls.Add(Button("Rename",()=>Prompt(active.Name,value=>Send(Operation("rename",active.Id,value)))));
+                    advanced=new Foldout{text="More options",value=false};controls.Add(advanced);
+                    if(host.OrganizationVersion>=3)advanced.Add(Button(active.PresentationMode==BattlefieldGroupPresentationMode.Drawer?"Convert to Panel":"Convert to Drawer",()=>{var operation=Operation("set_mode",active.Id);operation["presentation_mode"]=active.PresentationMode==BattlefieldGroupPresentationMode.Drawer?"panel":"drawer";Send(operation);}));
+                    advanced.Add(Button("Delete group",()=>Send(Operation("delete",active.Id))));
+                    var remove=Button("Remove selected",()=>Send(Operation("move",null,members:SelectedMembers())));advanced.Add(remove);
+                    advanced.Add(Button("Move here",()=>Send(Operation("move",active.Id,members:SelectedMembers()))));
+                    int index=organization.Groups.Where(g=>g.Seat==organization.Viewer).ToList().FindIndex(g=>g.Id==active.Id);
+                    advanced.Add(Button("Earlier",()=>Send(Operation("reorder",active.Id,index:Math.Max(0,index-1)))));
+                    advanced.Add(Button("Later",()=>Send(Operation("reorder",active.Id,index:Math.Min(organization.Groups.Count(g=>g.Seat==organization.Viewer)-1,index+1)))));
+                }
+                var fallback=new Toggle("Default arrangement"){value=legacy,name="organization-default"};fallback.RegisterValueChangedCallback(ev=>{legacy=ev.newValue;addingToGroup=null;CloseMembers(false,false);CancelDrag();relayout();});if(advanced!=null)advanced.Add(fallback);else controls.Add(fallback);
+                if(inspectable==null)controls.Add(new Label("Drag a permanent onto another to create a drawer."){enableRichText=false});
             }
-            foreach(var button in controls.Children().OfType<Button>())button.SetEnabled(button.name=="organization-close" || button.name=="organization-done-adding-cards" || button.name=="organization-inspect-members" && !memberAccessBlocked() || CanEdit && (button.name!="organization-remove-selected" && button.name!="organization-move-here" || selected.Count>0));
+            if(host.OrganizationPending || notice!=null || host.OrganizationError!=null)controls.Add(new Label(host.OrganizationPending?"Saving drawer...":notice??host.OrganizationError){name="organization-status",enableRichText=false});
+            }
+            RefreshControlAvailability();
+            if(legacy){foreach(var binding in groups.Values)binding.Root.style.display=DisplayStyle.None;return false;}
             var seats=frame.PlayerLifeTotals.Keys.OrderBy(id=>id==frame.Context.ViewerId?1:0).ThenBy(id=>id,StringComparer.Ordinal).ToArray();float height=(viewport.height-12)/Math.Max(1,seats.Length);float size=Mathf.Clamp(Mathf.Min(maximumSize,(height-70)/BattlefieldFrame.Aspect),62,110);
             foreach(string seat in seats){
                 int ordinal=Array.IndexOf(seats,seat);
@@ -92,7 +117,7 @@ namespace Manaforge.Play
                     placed.view.style.left=position.x*Mathf.Max(0,groupArea.width-placed.view.style.width.value.value);placed.view.style.top=position.y*Mathf.Max(0,groupArea.height-placed.view.style.height.value.value);
                 }
                 foreach(var group in organization.Groups.Where(g=>g.Seat==seat)){Rect rect=new Rect(groupArea.x+group.X*Mathf.Max(0,groupArea.width-dimensions.x),groupArea.y+group.Y*Mathf.Max(0,groupArea.height-dimensions.y),dimensions.x,dimensions.y);bounds[group.Id]=rect;
-                    if(!groups.TryGetValue(group.Id,out var binding)){string id=group.Id;binding=new BattlefieldGroupBinding(id,seat,chrome,relayout,()=>{if(focused!=id){focused=id;relayout();}},()=>{focused=id;addingToGroup=seat==organization.Viewer?id:null;menuOpen=true;menuPoint=bounds.TryGetValue(id,out var box)?box.position:new Vector2(300,100);relayout();},()=>OpenMembers(id),move,up);groups.Add(id,binding);}
+                    if(!groups.TryGetValue(group.Id,out var binding)){string id=group.Id;binding=new BattlefieldGroupBinding(id,seat,chrome,relayout,()=>{if(focused!=id){focused=id;relayout();}},()=>{focused=id;addingToGroup=null;menuOpen=true;menuPoint=bounds.TryGetValue(id,out var box)?box.position:new Vector2(300,100);relayout();},()=>OpenMembers(id),move,up);groups.Add(id,binding);}
                     int untapped=items.Count(i=>group.Objects.Contains(i.card.ObjectId) && i.card.Tapped==false);
                     binding.Update(group,rect,untapped,seat==frame.Context.ViewerId,CanEdit,root.ClassListContains("reduced-motion"),group.Objects.Count(hasChoice),!memberAccessBlocked() && frame.Result==null,items.Count(i=>group.Objects.Contains(i.card.ObjectId) && i.card.Tapped==true));
                     foreach(string member in group.Objects)memberAnchors[member]=binding.IsDrawer?(VisualElement)binding.Drawer.Tab:binding.PanelHeader;
@@ -140,8 +165,9 @@ namespace Manaforge.Play
         public bool OpenTools()
         {
             if(disposed || organization==null || game==null || game.Turn==0 || suppressed())return false;
-            CloseMembers(false,false);menuOpen=true;focused=addingToGroup;menuPoint=new Vector2(battlefieldViewport.x,battlefieldViewport.y+20);relayout();return true;
+            CloseMembers(false,false);menuOpen=true;focused=null;menuPoint=new Vector2(battlefieldViewport.x,battlefieldViewport.y+20);relayout();return true;
         }
+        public void BringToolsToFront(){if(controls.style.display.value==DisplayStyle.Flex)controls.BringToFront();}
         public bool MembersOpen=>chooserGroup!=null;
         public void ObserveOffer(ViewerDecisionOffer offer)
         {
@@ -169,11 +195,11 @@ namespace Manaforge.Play
             if(objectId==null || disposed || organization==null || game==null || !host.HasPresentedRevision(game.Context.Revision) || !cardViews.TryGetValue(objectId,out var item) || item.card.Hidden)return null;
             return BattlefieldCardAnchorResolver.TryResolve(root,item.view,HiddenMemberAnchor(objectId),out var position)?position:(Vector2?)null;
         }
-        private static bool Typing(VisualElement target){for(var e=target;e!=null;e=e.parent)if(e is TextField)return true;return false;}
         private static bool Embedded(VisualElement target){for(var e=target;e!=null;e=e.parent)if(e is Button || e is TextField || e is Toggle)return true;return false;}
         private void Down(PointerDownEvent ev)
         {
             if(ev.button==0)CancelDrag();
+            if(ev.button==0 && naming!=null && !controls.Contains(ev.target as VisualElement)){CancelPrompt();ev.StopImmediatePropagation();return;}
             if(ev.button==0 && addingToGroup!=null && !suppressed() && (game?.Decision==null || game.Decision.IsPriority) && !Embedded(ev.target as VisualElement)){
                 CardView clicked=null;for(var e=ev.target as VisualElement;e!=null;e=e.parent)if(e is CardView clickedView)clicked=clickedView;
                 if(clicked!=null && cards.TryGetValue(clicked,out var permanent) && permanent.Zone=="battlefield" && permanent.ControllerId==game.Context.ViewerId){
@@ -184,10 +210,6 @@ namespace Manaforge.Play
                     }
                     return;
                 }
-            }
-            if(ev.button==1 && (CanEdit || legacy && organization!=null && !suppressed()) && !Embedded(ev.target as VisualElement)){
-                bool cardTarget=false;for(var e=ev.target as VisualElement;e!=null;e=e.parent)if(e is CardView)cardTarget=true;
-                var point=root.WorldToLocal(ev.position);if(!cardTarget && battlefieldViewport.Contains(point)){addingToGroup=null;focused=null;menuPoint=point;menuOpen=true;relayout();ev.StopImmediatePropagation();return;}
             }
             if(ev.button==0 && CanEdit){
                 var targetElement=ev.target as VisualElement;var tabGroup=groups.Values.FirstOrDefault(g=>g.Seat==organization.Viewer && g.IsDrawer && (targetElement==g.Drawer.Tab || g.Drawer.Tab.Contains(targetElement)));
@@ -221,29 +243,22 @@ namespace Manaforge.Play
             // Restore the dragged views before hit testing stationary permanents.
             var other=cards.Where(pair=>pair.Value.Zone=="battlefield" && pair.Value.ControllerId==organization.Viewer && organization.Handles.TryGetValue(pair.Value.ObjectId,out var handle) && !members.Contains(handle) && pair.Key.style.display.value!=DisplayStyle.None && pair.Key.worldBound.Contains(ev.position)).LastOrDefault();
             if(other.Key!=null){
-                string handle=organization.Handles[other.Value.ObjectId];var participants=new[]{handle}.Concat(members).Distinct().ToArray();var anchor=new Vector2(other.Key.resolvedStyle.left,other.Key.resolvedStyle.top);PromptAt(anchor,participants,true);return;
+                string handle=organization.Handles[other.Value.ObjectId];var participants=new[]{handle}.Concat(members).Distinct().ToArray();var anchor=new Vector2(other.Key.resolvedStyle.left,other.Key.resolvedStyle.top);PromptAt(anchor,participants,host.OrganizationVersion>=3);return;
             }
             if(host.OrganizationVersion>=4 && members.Length==1 && source!=null){
                 var origin=point-grabOffset;Send(Operation("place",null,members:members,x:origin.x/Mathf.Max(1,area.width-source.resolvedStyle.width),y:origin.y/Mathf.Max(1,area.height-source.resolvedStyle.height)));return;
             }
-            PromptAt(point-grabOffset,members,host.OrganizationVersion>=3);
+            relayout();
         }
         private Vector2 dragDelta;
         private void ApplyDragPreview(){if(!dragging)return;foreach(var pair in dragOrigins){pair.Key.style.left=pair.Value.x+dragDelta.x;pair.Key.style.top=pair.Value.y+dragDelta.y;pair.Key.BringToFront();}}
         private void PromptAt(Vector2 anchor,string[] members,bool drawer){
-            menuPoint=anchor;Prompt("Group "+(organization.Groups.Count(g=>g.Seat==organization.Viewer)+1),value=>Create(value,anchor.x/Mathf.Max(1,area.width-panelSize.x),anchor.y/Mathf.Max(1,area.height-panelSize.y),drawer,members));
+            menuPoint=anchor;Prompt("Drawer "+(organization.Groups.Count(g=>g.Seat==organization.Viewer)+1),value=>Create(value,anchor.x/Mathf.Max(1,area.width-panelSize.x),anchor.y/Mathf.Max(1,area.height-panelSize.y),drawer,members),true,members.Length);
         }
-        private void CreateAtSelection(string value,bool drawer){
-            var members=SelectedMembers();var views=cards.Where(pair=>organization.Handles.TryGetValue(pair.Value.ObjectId,out var handle) && members.Contains(handle) && pair.Key.style.display.value!=DisplayStyle.None).Select(pair=>pair.Key).ToArray();
-            var anchor=views.Length==0?menuPoint:new Vector2(views.Min(view=>view.resolvedStyle.left),views.Min(view=>view.resolvedStyle.top));
-            Create(value,anchor.x/Mathf.Max(1,area.width-panelSize.x),anchor.y/Mathf.Max(1,area.height-panelSize.y),drawer,members);
-        }
-
         private void Key(KeyDownEvent ev)
         {
-            if(ev.keyCode==KeyCode.G && !ev.ctrlKey && !ev.altKey && !Typing(ev.target as VisualElement)){if(OpenTools())ev.StopImmediatePropagation();return;}
             if(ev.keyCode==KeyCode.Escape && addingToGroup!=null){addingToGroup=null;relayout();ev.StopImmediatePropagation();return;}
-            if(ev.keyCode==KeyCode.Escape && MembersOpen){CloseMembers();ev.StopImmediatePropagation();return;}if(suppressed() || game?.Decision!=null && !game.Decision.IsPriority)return;if(ev.keyCode==KeyCode.Escape && naming!=null){Interrupt();ev.StopImmediatePropagation();return;}if(Embedded(ev.target as VisualElement))return;if(ev.keyCode==KeyCode.Escape && (pressed || selected.Count>0 || naming!=null)){Interrupt();ev.StopImmediatePropagation();return;}if(!CanEdit)return;
+            if(ev.keyCode==KeyCode.Escape && MembersOpen){CloseMembers();ev.StopImmediatePropagation();return;}if(ev.keyCode==KeyCode.Escape && naming!=null){CancelPrompt();ev.StopImmediatePropagation();return;}if(suppressed() || game?.Decision!=null && !game.Decision.IsPriority)return;if(naming!=null && (ev.keyCode==KeyCode.Return || ev.keyCode==KeyCode.KeypadEnter)){ConfirmName();ev.StopImmediatePropagation();return;}if(Embedded(ev.target as VisualElement))return;if(ev.keyCode==KeyCode.Escape && (pressed || selected.Count>0 || naming!=null)){Interrupt();ev.StopImmediatePropagation();return;}if(!CanEdit)return;
             for(var element=ev.target as VisualElement;element!=null && element!=root;element=element.parent)if(element is CardView view && ev.shiftKey && ev.keyCode==KeyCode.Space && cards.TryGetValue(view,out var card) && card.ControllerId==organization.Viewer && organization.Handles.TryGetValue(card.ObjectId,out var handle)){if(!selected.Add(handle))selected.Remove(handle);view.EnableInClassList("organization-selected",selected.Contains(handle));ev.StopImmediatePropagation();return;}
             var focus=root.panel?.focusController?.focusedElement as VisualElement;while(focus!=null && !focus.ClassListContains("organization-header"))focus=focus.parent;if(focus==null)return;
             var group=organization.Groups.FirstOrDefault(g=>g.Id==(string)focus.userData && g.Seat==organization.Viewer);if(group==null)return;
@@ -257,10 +272,16 @@ namespace Manaforge.Play
             .Where(id=>organization.Handles.TryGetValue(id,out var handle) && selected.Contains(handle))
             .Select(id=>organization.Handles[id]).ToArray();
         private void CancelDrag(){foreach(var pair in dragOrigins){pair.Key.style.left=pair.Value.x;pair.Key.style.top=pair.Value.y;}dragOrigins.Clear();dragDelta=Vector2.zero;grabbed=null;draggingMembers=Array.Empty<string>();pressed=dragging=false;moving=null;ghost.style.display=DisplayStyle.None;if(captured){captured=false;root.ReleasePointer(pointer);}}
-        private void Prompt(string value,Action<string> callback){if(!CanEdit)return;menuOpen=true;if(menuPoint==Vector2.zero)menuPoint=new Vector2(battlefieldViewport.x+20,battlefieldViewport.y+40);naming=new TextField{value=value,maxLength=64,name="organization-name"};confirm=callback;relayout();naming.Focus();}
+        private void Prompt(string value,Action<string> callback,bool newDrawer=false,int count=0){if(!CanEdit)return;menuOpen=true;if(menuPoint==Vector2.zero)menuPoint=new Vector2(battlefieldViewport.x+20,battlefieldViewport.y+40);namingNewDrawer=newDrawer;namingCount=count;naming=new TextField{value=value,maxLength=64,name="organization-name"};naming.RegisterValueChangedCallback(_=>RefreshControlAvailability());confirm=callback;relayout();naming.Focus();naming.SelectAll();}
+        private void RefreshControlAvailability(){
+            foreach(var button in controls.Query<Button>().ToList())button.SetEnabled(button.name=="organization-close" || button.name=="organization-cancel" || button.name=="organization-done-adding-cards" || button.name=="organization-inspect-members" && !memberAccessBlocked() || CanEdit && (button.name!="organization-confirm" || !string.IsNullOrWhiteSpace(naming?.value)) && (button.name!="organization-remove-selected" && button.name!="organization-move-here" || selected.Count>0));
+        }
+        private void ConfirmName(){if(!CanEdit || naming==null || string.IsNullOrWhiteSpace(naming.value))return;string value=naming.value.Trim();var callback=confirm;naming=null;confirm=null;menuOpen=false;callback?.Invoke(value);}
+        public bool DismissPrompt(){if(naming==null)return false;CancelPrompt();return true;}
+        private void CancelPrompt(){naming=null;confirm=null;addingToGroup=null;menuOpen=false;notice=null;selected.Clear();relayout();root.Focus();}
         private void Create(string value,float x,float y,bool drawer=false,string[] members=null){createDrawer=drawer;created=Guid.NewGuid().ToString("N");createAfterRevision=organization.Revision;createMembers=members??SelectedMembers();Send(Operation("create",created,value,x,y));}
         private void Send(JObject operation){if(!CanEdit)return;if((string)operation["kind"]=="move" && ((JArray)operation["members"]).Count==0){notice="Select permanents first.";return;}notice=null;try{submission=host.OrganizeAsync(organization,operation);}catch{notice="Organization changed. Try again.";created=null;}relayout();}
         internal static JObject Operation(string kind,string group,string name=null,float x=0,float y=0,string[] members=null,int index=0)=>new JObject{["kind"]=kind,["group_id"]=group==null?JValue.CreateNull():new JValue(group),["name"]=name==null?JValue.CreateNull():new JValue(name),["x"]=kind=="create" || kind=="position" || kind=="place"?new JValue((long)Math.Round(Mathf.Clamp01(x)*1000000)):JValue.CreateNull(),["y"]=kind=="create" || kind=="position" || kind=="place"?new JValue((long)Math.Round(Mathf.Clamp01(y)*1000000)):JValue.CreateNull(),["index"]=kind=="move" || kind=="reorder"?new JValue(index):JValue.CreateNull(),["members"]=new JArray(members??Array.Empty<string>())};
-        public void Dispose(){if(disposed)return;disposed=true;polling.Pause();Clear();chooser.Dispose();root.UnregisterCallback(down,TrickleDown.TrickleDown);root.UnregisterCallback(move,TrickleDown.TrickleDown);root.UnregisterCallback(up,TrickleDown.TrickleDown);root.UnregisterCallback(key,TrickleDown.TrickleDown);root.UnregisterCallback(lost);root.UnregisterCallback(leave);selected.Clear();cards.Clear();chrome.RemoveFromHierarchy();controls.RemoveFromHierarchy();groupLauncher.clickable=null;groupLauncher.RemoveFromHierarchy();ghost.RemoveFromHierarchy();}
+        public void Dispose(){if(disposed)return;disposed=true;polling.Pause();Clear();chooser.Dispose();root.UnregisterCallback(down,TrickleDown.TrickleDown);root.UnregisterCallback(move,TrickleDown.TrickleDown);root.UnregisterCallback(up,TrickleDown.TrickleDown);root.UnregisterCallback(key,TrickleDown.TrickleDown);root.UnregisterCallback(lost);root.UnregisterCallback(leave);selected.Clear();cards.Clear();chrome.RemoveFromHierarchy();controls.RemoveFromHierarchy();ghost.RemoveFromHierarchy();}
     }
 }

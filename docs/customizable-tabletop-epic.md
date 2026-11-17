@@ -17,10 +17,14 @@ Status: implementation in progress; private HUD customization and shared battlef
 | CT-18–22 | Automatic rules, visual stacks, land organization, and nested groups remain unimplemented. |
 | CT-23–24 | Release acceptance and four-player shared-table gates remain incomplete. |
 
-Normal games expose Customize Layout for the four existing drawer families.
+Normal games expose Customize Layout for Priority, Actions, Zones, Commander and
+Players drawers. Players includes life totals and per-commander damage received.
 Normal Start Game also enables the shared flat-group/drawer candidate as of 2026-11-17.
 Hand and battlefield viewport HUD customization remain separate work. Remaining acceptance is tracked in
 [recovery and release evidence](play-layout-recovery.md#evidence-and-release-gate).
+The wider epic is paused by owner request while other dependencies are built.
+Current MVP refinements continue: creation is card-on-card dragging only, with a
+focused naming prompt; existing drawers retain their three-dot management menu.
 The story specifications below describe the full target, not completed acceptance.
 See [CT-07A identity foundation](play-battlefield-identity.md) for its internal contracts and remaining gates.
 

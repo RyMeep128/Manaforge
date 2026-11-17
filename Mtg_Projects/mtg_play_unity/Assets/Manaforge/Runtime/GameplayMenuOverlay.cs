@@ -13,7 +13,7 @@ namespace Manaforge.Play
         private readonly VisualElement root,shade,card,main,options,confirm,resetConfirm;
         private readonly Button resume,concede,confirmConcede,cancel;
         private readonly Label title,message;
-        private Button customize,resetLayout,confirmReset,cancelReset;private HudLayoutEditor layoutEditor;
+        private Button customize,resetLayout,confirmReset,cancelReset;private HudLayoutEditor layoutEditor;private Func<bool> dismissOrganization;
         private readonly Func<bool> canConcede;
         private readonly Func<Task<TrackedCommand>> send;
         private readonly Func<string,TrackedCommand> receipt;
@@ -50,7 +50,7 @@ namespace Manaforge.Play
             confirmReset=MakeButton("game-menu-confirm-reset-layout","Reset Layout for This Game",()=>{Close();layoutEditor?.ResetForGame();});resetConfirm.Add(confirmReset);
             message=new Label{name="game-menu-status",enableRichText=false};message.style.whiteSpace=WhiteSpace.Normal;card.Add(message);
             var note=new Label("The game continues while this menu is open.");note.AddToClassList("mf-game-menu-note");card.Add(note);
-            var layoutHelp=new Label("Right-click empty battlefield for group tools. Customize Layout lets you drag Zones and Spells & Abilities headers: Shift locks an axis; Ctrl snaps to grid."){enableRichText=false};layoutHelp.style.whiteSpace=WhiteSpace.Normal;card.Add(layoutHelp);
+            var layoutHelp=new Label("Drag a battlefield card onto another to create a drawer. Use its three-dot menu to manage it. Customize Layout: drag headers, Shift locks an axis, Ctrl snaps to grid."){enableRichText=false};layoutHelp.style.whiteSpace=WhiteSpace.Normal;card.Add(layoutHelp);
             shade.style.display=DisplayStyle.None;
             root.RegisterCallback<KeyDownEvent>(Down,TrickleDown.TrickleDown);root.RegisterCallback<KeyUpEvent>(Up,TrickleDown.TrickleDown);
             root.RegisterCallback<PointerDownEvent>(Block,TrickleDown.TrickleDown);root.RegisterCallback<PointerUpEvent>(Block,TrickleDown.TrickleDown);root.RegisterCallback<PointerMoveEvent>(Block,TrickleDown.TrickleDown);
@@ -65,7 +65,7 @@ namespace Manaforge.Play
         private void NavigationCancel(NavigationCancelEvent ev){if(IsOpen){if(!held && lastCancelFrame!=Time.frameCount){lastCancelFrame=Time.frameCount;Back();}ev.StopImmediatePropagation();}}
         private void Focus(FocusInEvent ev){if(IsOpen && !Inside(ev.target)){ev.StopImmediatePropagation();DefaultFocus();}}
         private void DefaultFocus(){if(page==0)resume.Focus();else if(page==2)cancel.Focus();else if(page==3)cancelReset.Focus();else options.Q<Button>()?.Focus();}
-        public void SetOrganizationTools(Func<bool> open){main.Add(MakeButton("game-menu-groups","Organize battlefield | G",()=>{Close();open();}));}
+        public void SetOrganizationTools(Func<bool> open,Func<bool> dismiss=null){dismissOrganization=dismiss;main.Add(MakeButton("game-menu-groups","Battlefield arrangement",()=>{Close();open();}));}
         public void SetLayoutEditor(HudLayoutEditor editor)
         {
             if(editor==null || customize!=null)return;layoutEditor=editor;
@@ -91,7 +91,7 @@ namespace Manaforge.Play
         private void Down(KeyDownEvent ev)
         {
             if(ev.keyCode==KeyCode.F11)return;
-            if(ev.keyCode==KeyCode.Escape){if(!held){held=true;if(lastCancelFrame!=Time.frameCount){lastCancelFrame=Time.frameCount;if(IsOpen)Back();else Open();}}ev.StopImmediatePropagation();return;}
+            if(ev.keyCode==KeyCode.Escape){if(!held){held=true;if(lastCancelFrame!=Time.frameCount){lastCancelFrame=Time.frameCount;if(IsOpen)Back();else if(dismissOrganization?.Invoke()!=true)Open();}}ev.StopImmediatePropagation();return;}
             if(!IsOpen)return;
             if(ev.keyCode==KeyCode.Tab){var buttons=card.Query<Button>().ToList().Where(b=>b.enabledInHierarchy && Visible(b)).ToArray();if(buttons.Length>0){int index=Array.IndexOf(buttons,root.panel?.focusController.focusedElement as Button);var next=buttons[(index+(ev.shiftKey?-1:1)+buttons.Length)%buttons.Length];next.Focus();((ScrollView)card).ScrollTo(next);}ev.StopImmediatePropagation();return;}
             if(!Inside(ev.target))ev.StopImmediatePropagation();

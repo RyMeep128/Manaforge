@@ -12,6 +12,14 @@ cards even when collapsed. Counts are in the tooltip. **Default arrangement**
 provides local legacy placement. See [free placement](play-free-placement.md) for
 state ownership, lifecycle, verification and current acceptance limits.
 
+Group creation is exclusively card-on-card dragging. Empty-space right-click,
+G, the Groups launcher and New group/New drawer buttons no longer open creation.
+The naming popover shows the card count, a preselected name, Create drawer and
+Cancel. Enter confirms; Escape or clicking outside cancels without changing cards.
+The three-dot menu manages existing drawers; advanced ordering/selection actions
+are under More options. Escape > Battlefield arrangement retains the legacy
+arrangement fallback and a brief drag hint, with no creation action.
+
 The desktop launcher and saved-deck acceptance driver explicitly pass
 `organization_free_placement=True`. Low-level API defaults and legacy v1/v2/v3
 contracts remain available. A local rebuild and focused live check do not
@@ -429,3 +437,33 @@ Manual reproduction: play two permanents, left-drag one onto the other, name the
 drawer, confirm, then collapse and reopen it. Both permanents should be inside
 and the drawer should originate at the stationary card. Repeat while priority
 updates. These new regression cases await hosted execution; no local suites run.
+
+
+### Drag-only creation and focused naming
+
+Removed empty-battlefield context creation, the G shortcut, the on-table launcher,
+and all menu/empty-space-selection creation paths. Existing drawer management,
+member access and default-arrangement recovery remain available. Creation presents
+only a title, affected-card count, Name, Cancel and Create drawer; renaming uses
+the same focused form with Save name. Whitespace disables confirmation. The draft
+still survives priority updates, and no native gameplay action is dispatched.
+
+Hosted coverage checks removed right-click/G/launcher entry points, absence of
+creation buttons in arrangement options, cancellation by button/Escape, blank-name
+validation, empty-space multiselection drops, Enter confirmation, and both-member
+membership/collapse behavior. The required Windows player rebuild is separate
+from hosted regression/full-game acceptance; no local test suite is executed.
+
+
+Live check on 2026-11-17 at 1920 x 1080 with saved Mono Green Stompy versus
+Attack Triggers in Commander: right-click and G did not open group creation,
+and no Groups launcher was present. Card-on-card dragging opened the focused
+New drawer form with two cards and the default name selected. Escape cancelled
+without opening Game Menu. Repeating the drop, typing Mana lands and pressing
+Enter created the named drawer with both Forests visible inside. The check also
+caught card-hover layering and Escape-menu interception; both were corrected
+and rechecked in a restarted player. The final menu-only refinement moves
+conversion/deletion/ordering into More options, requires explicit Add cards,
+and bounds the scrollable popover to the remaining screen height. That final
+scrolling refinement is rebuilt and awaits hosted visual/manual acceptance.
+This focused live check does not establish complete-game or multiplayer acceptance.
