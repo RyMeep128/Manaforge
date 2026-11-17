@@ -7,6 +7,7 @@ namespace Manaforge.Play
 {
     public sealed class ArenaGameplayPresentation : IGameplayPresentation,IOrganizationPresentation
     {
+        private readonly VisualElement inspectionInputRoot;
         private readonly VisualElement root,choices,navigation,opponentHand,zoneChoices;
         private readonly ZoneBrowser zoneDrawer;
         private readonly Label stackTitle;
@@ -66,7 +67,7 @@ namespace Manaforge.Play
             var motion=new Toggle("Reduced motion"){name="table-motion",value=false};motion.RegisterValueChangedCallback(ev=>{root.EnableInClassList("reduced-motion",ev.newValue);animations?.Advance();foreach(var drawer in new[]{actionDrawer,priorityDrawer,zonePanelDrawer,hud.CommanderDrawer})drawer.SetReducedMotion(ev.newValue);if(frame!=null)hud.Present(frame,Surface,host?.GameplayFormat,ev.newValue,InspectCard);Layout();});root.Add(motion);
             animations=new GameplayAnimationCoordinator(root,Surface,MotionZoneAnchor,MotionPlayerAnchor,()=>motion.value,objectAnchor:ResolveCardAnchor);
             result=Label("table-result","");CardTypography.Apply(result,CardTextRole.Title);result.style.display=DisplayStyle.None;
-            var close=new Button(()=>CloseInspection()){text="Close inspection | Esc",name="close-inspection"};root.Add(close);close.style.display=DisplayStyle.None;inspector=new GameplayOverlay(Surface.InspectionView,close);
+            var close=new Button(()=>CloseInspection()){text="Close inspection | Esc",name="close-inspection"};root.Add(close);close.style.display=DisplayStyle.None;inspector=new GameplayOverlay(Surface.InspectionView,close);inspectionInputRoot=parent;inspectionInputRoot.RegisterCallback<PointerDownEvent>(DismissInspection,TrickleDown.TrickleDown);
             root.RegisterCallback<KeyDownEvent>(ev=>{if(ev.keyCode==KeyCode.Escape){CloseInspection();ClosePublicZone();}});
             root.RegisterCallback<GeometryChangedEvent>(ev=>Layout());
             HudRegistry.Register(new GameplayHudDescriptor(GameplayHudIds.Hand,"Hand","hand"),adapter:new GameplayHudLayoutAdapter(GameplayLayoutSlot.Hand));
@@ -113,7 +114,15 @@ namespace Manaforge.Play
         private Label Label(string name,string text){var label=new Label(text){name=name,enableRichText=false};root.Add(label);return label;}
         public void InterruptGestures(){boardInput?.InterruptGesture();targeting?.InterruptGesture();organizationRenderer?.Interrupt();}
         public void PresentOrganization(ProjectedOrganizationFrame value){if(!disposed)organizationRenderer?.Observe(value);}
-        public void CloseInspection(){bool restore=inspecting;inspecting=false;previewing=false;previewId=null;restoringFocus=true;try{inspector?.Hide(restore);}finally{restoringFocus=false;}}
+        private void DismissInspection(PointerDownEvent ev)
+        {
+            if(disposed || !inspecting && !previewing || !(ev.target is VisualElement target))return;
+            var content=Surface.InspectionView;var close=root.Q<Button>("close-inspection");
+            if(target==content || content.Contains(target) || target==close || close!=null && close.Contains(target))return;
+            CloseInspection(false);
+        }
+        public void CloseInspection()=>CloseInspection(true);
+        private void CloseInspection(bool restoreFocus){bool restore=inspecting && restoreFocus;inspecting=false;previewing=false;previewId=null;restoringFocus=true;try{inspector?.Hide(restore);}finally{restoringFocus=false;}}
         public void Bind(ViewerSessionHost value)
         {if(Decisions!=null)throw new InvalidOperationException("PRESENTATION_ALREADY_BOUND");host=value;Decisions=new ViewerDecisionPanel(choices,host);Decisions.PresentationHold=()=>animations.HoldAutomaticPassing || Time.unscaledTime<stackAttentionUntil;Decisions.SetSpatialPresentation(true);Decisions.SetChoicePreview(Surface.ChoicePreview);actionBinding=new GameplayActionDrawer(actionDrawer,Decisions);priorityBinding=new GameplayPriorityDrawer(priorityDrawer,Decisions);targeting=new ViewerTargetingController(root,Surface,Decisions,()=>hud.Players,ResolveCardAnchor);boardInput=new ViewerBoardInput(root,Surface,host,Decisions,GameplayTheme.Menu);
             if(Capabilities.SharedOrganization)organizationRenderer=new BattlefieldOrganizationRenderer(root,host,Layout,()=>{boardInput.InterruptGesture();targeting.InterruptGesture();},()=>LayoutEditor?.IsEditing==true || Decisions.SuppressSpatialInput || host.PendingReveal!=null || inspecting || openZone!=null,
@@ -393,7 +402,7 @@ namespace Manaforge.Play
             opponentHand.BringToFront();zonePanelDrawer.BringToFront();actionDrawer.BringToFront();result.BringToFront();if(inspecting || previewing)Surface.InspectionView.BringToFront();root.Q<Button>("close-inspection").BringToFront();
             boardInput?.Refresh();RefreshPlayers();targeting?.Observe(frame);links.schedule.Execute(UpdateLinks);LayoutEditor?.AfterLegacyLayout();
         }
-        public void Dispose(){if(disposed)return;organizationRenderer?.Dispose();organizationRenderer=null;LayoutEditor?.Dispose();LayoutEditor=null;ClearZoneResources();disposed=true;targeting?.Dispose();boardInput?.Dispose();animations.Dispose();inspector.Dispose();priorityBinding?.Dispose();actionBinding?.Dispose();Decisions?.Dispose();Surface.Clearing-=ClearZoneResources;Surface.Rebinding-=ClearPileArt;Surface.Dispose();
+        public void Dispose(){if(disposed)return;inspectionInputRoot.UnregisterCallback<PointerDownEvent>(DismissInspection,TrickleDown.TrickleDown);organizationRenderer?.Dispose();organizationRenderer=null;LayoutEditor?.Dispose();LayoutEditor=null;ClearZoneResources();disposed=true;targeting?.Dispose();boardInput?.Dispose();animations.Dispose();inspector.Dispose();priorityBinding?.Dispose();actionBinding?.Dispose();Decisions?.Dispose();Surface.Clearing-=ClearZoneResources;Surface.Rebinding-=ClearPileArt;Surface.Dispose();
             hud.PlayerActivated-=ActivatePlayer;hud.Dispose();zonePanel.BrowseRequested-=BrowseZone;zonePanel.Dispose();zonePanelDrawer.Dispose();if(actionBinding==null)actionDrawer.Dispose();if(priorityBinding==null)priorityDrawer.Dispose();zoneDrawer.Dispose();HudRegistry.Dispose();wired.Clear();root.RemoveFromHierarchy();}
     }
 }
