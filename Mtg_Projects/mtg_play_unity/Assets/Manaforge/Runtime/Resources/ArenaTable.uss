@@ -1,7 +1,7 @@
 /* Default 1v1 composition geometry. Component appearance lives in GameplayTheme.uss. */
 .table-cards, #board-navigation, #battlefield-links { position: absolute; left: 0; right: 0; top: 0; bottom: 0; }
 #table-phase { position: absolute; top: 16px; left: 205px; width: 300px; white-space: normal; padding: 3px 10px; }
-#opponent-hand { position: absolute; top: -68px; left: 50%; margin-left: -235px; width: 470px; height: 115px; }
+#opponent-hand { position: absolute; top: 8px; left: 50%; margin-left: -235px; width: 470px; height: 115px; }
 .opponent-hand-back { position: absolute; width: 70px; height: 100px; }
 #table-choices { position: absolute; right: 20px; bottom: 35px; width: 275px; max-height: 285px; }
 #table-choices #decision-controls { flex-direction: column; }

@@ -61,6 +61,9 @@ namespace Manaforge.Play.Tests
             yield return new WaitForEndOfFrame();Capture(a.Target,"owner");Capture(b.Target,"opponent");
             Assert.That(b.Root.Q<Button>("organization-edit-g").style.display.value,Is.EqualTo(DisplayStyle.None),"Opponent has no edit menu");
             using(var down=PointerDownEvent.GetPooled(new Event{type=EventType.MouseDown,button=0,modifiers=EventModifiers.Shift,mousePosition=card.worldBound.center})){down.target=card;card.SendEvent(down);}using(var up=PointerUpEvent.GetPooled(new Event{type=EventType.MouseUp,button=0,modifiers=EventModifiers.Shift,mousePosition=card.worldBound.center})){up.target=card;card.SendEvent(up);}Assert.That(card.ClassListContains("organization-selected"),Is.True);Assert.That(a.Peer.PendingCommandBytes,Is.Zero,"Selection cannot submit a native action");
+            Assert.That(a.Root.Q("organization-controls").style.display.value,Is.EqualTo(DisplayStyle.None),"No permanent organization toolbar");
+            var table=a.Root.Q("arena-table");using(var context=PointerDownEvent.GetPooled(new Event{type=EventType.MouseDown,button=1,mousePosition=table.LocalToWorld(new Vector2(500,180))})){context.target=table;table.SendEvent(context);}Assert.That(a.Root.Q("organization-controls").style.display.value,Is.EqualTo(DisplayStyle.Flex));Submit(a.Root.Q<Button>("organization-close"));Assert.That(a.Root.Q("organization-controls").style.display.value,Is.EqualTo(DisplayStyle.None));Assert.That(a.Peer.PendingCommandBytes,Is.Zero);
+            Assert.That(a.Root.Q<GameplayDrawer>("zones-drawer").IsOpen,Is.True,"Decks and zones are visible by default");
             // Editing uses the independent organization channel and broadcasts authoritative geometry.
             Submit(a.Root.Q("organization-group-g").Q<Button>());
             Submit(a.Root.Q<Button>("organization-rename"));a.Root.Q<TextField>("organization-name").value="Renamed";

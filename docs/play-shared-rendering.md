@@ -254,3 +254,18 @@ set. Keep v1/v2 sessions on their existing versions.
 These manual/packaged gates remain pending. CT-16 reconnect implementation, CT-17
 join/leave policies, measured performance/accessibility gates and CT-24 four-player
 composition remain separate work. No normal shared-organization flag is enabled.
+
+
+### Visual interaction cleanup (owner feedback)
+
+Group commands now live in a dismissible contextual panel: right-click empty
+battlefield or use a group's … button. There is no idle permanent organization
+command bar. Naming fields, labels and buttons have explicit light-on-dark colors.
+The opponent hand is onscreen with a reserved band above organized permanents;
+Zones starts expanded so library/deck piles remain discoverable. The HUD editor
+can open during observer/opponent priority, while mandatory local choices and
+unconfirmed submissions still interrupt it. Use Escape → Customize Layout to drag
+HUD drawer headers and resize corners. Shift-drag locks movement to its initial
+dominant axis; Ctrl-drag snaps movement or dimensions to a 16-unit grid. Existing
+arrow/Shift-arrow/Ctrl-arrow keyboard controls remain available. These changes do
+not add hand/HUD viewport editing or alter game actions.

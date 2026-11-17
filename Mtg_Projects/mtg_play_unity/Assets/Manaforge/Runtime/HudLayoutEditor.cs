@@ -70,7 +70,7 @@ namespace Manaforge.Play
             binding=new LayoutPresetApplicator(Controller,registry,gestures.Cancel);storage=new HudLayoutPresetSession(store);
             toolbar=new ScrollView(ScrollViewMode.Vertical){name="layout-editor-controls",focusable=true};toolbar.style.position=Position.Absolute;toolbar.style.left=Length.Percent(28);toolbar.style.top=8;toolbar.style.width=Length.Percent(44);toolbar.style.maxHeight=Length.Percent(46);toolbar.style.backgroundColor=new Color(.035f,.045f,.06f,.98f);toolbar.style.paddingLeft=toolbar.style.paddingRight=12;toolbar.style.paddingTop=toolbar.style.paddingBottom=10;layer.Add(toolbar);
             toolbar.Add(new Label("Customize Layout | drag headers and resize corners"));
-            toolbar.Add(new Label("Drop near a screen edge to dock. Open a drawer preview to see its contents."));
+            toolbar.Add(new Label("Shift-drag locks an axis. Ctrl-drag snaps to a 16-unit grid. Drop near an edge to dock."));
             controls=new VisualElement();toolbar.Add(controls);
             component=new PopupField<string>("Drawer",adapters.Keys.ToList(),0){name="layout-editor-component"};
             var row=new VisualElement();row.style.flexDirection=FlexDirection.Row;row.style.flexWrap=Wrap.Wrap;controls.Add(row);
@@ -137,7 +137,7 @@ namespace Manaforge.Play
                 }
                 suppress=false;committed=Snapshot();draftOverrides.Clear();draftOverrides.UnionWith(committedOverrides);working=committedWorking;selectedId=committedSelected;
             }
-            toolbar.style.display=DisplayStyle.Flex;layer.BringToFront();status.text="Drag a header to move it. Open previews to inspect the live layout. Apply before saving.";Render(Controller.Resolved);RefreshControls();toolbar.Focus();return true;
+            toolbar.style.display=DisplayStyle.Flex;layer.BringToFront();status.text="Drag headers to move; corners resize. Shift locks an axis; Ctrl snaps to grid. Preview drawers, then Apply.";Render(Controller.Resolved);RefreshControls();toolbar.Focus();return true;
         }
         public bool Apply()
         {

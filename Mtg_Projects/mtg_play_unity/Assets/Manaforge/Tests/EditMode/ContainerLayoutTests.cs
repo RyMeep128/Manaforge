@@ -16,6 +16,14 @@ namespace Manaforge.Play.Tests
             c.Register(new ContainerLayoutState("a",new Rect(.1f,.1f,.2f,.3f)),Limits());
             c.Register(new ContainerLayoutState("b",new Rect(.5f,.4f,.2f,.3f)),Limits());return c;
         }
+        [Test] public void PointerModifiersConstrainMovementAndSnapWithoutCommittingEarly()
+        {
+            var c=Model();using var gestures=new ContainerGestureController(c,new UnityEngine.UIElements.VisualElement(),_=>{});
+            Assert.That(gestures.Begin("a",new Vector2(100,60)),Is.True);gestures.Move(new Vector2(157,79),true,true);
+            Assert.That(c.Resolved["a"].position,Is.EqualTo(new Vector2(100,60)),"Preview must not commit");gestures.Commit();
+            Assert.That(c.Resolved["a"].x,Is.EqualTo(160).Within(.01));Assert.That(c.Resolved["a"].y,Is.EqualTo(60).Within(.01));
+            Assert.That(gestures.Begin("a",new Vector2(160,60)),Is.True);gestures.Move(new Vector2(200,130),true);gestures.Commit();Assert.That(c.Resolved["a"].x,Is.EqualTo(160).Within(.01));
+        }
         [Test] public void FloatingGeometryScalesAndConstraintsPreserveScrollableMinimums()
         {
             var c=Model();Assert.That(c.Resolved["a"],Is.EqualTo(new Rect(100,60,200,180)));

@@ -50,6 +50,7 @@ namespace Manaforge.Play
             confirmReset=MakeButton("game-menu-confirm-reset-layout","Reset Layout for This Game",()=>{Close();layoutEditor?.ResetForGame();});resetConfirm.Add(confirmReset);
             message=new Label{name="game-menu-status",enableRichText=false};message.style.whiteSpace=WhiteSpace.Normal;card.Add(message);
             var note=new Label("The game continues while this menu is open.");note.AddToClassList("mf-game-menu-note");card.Add(note);
+            var layoutHelp=new Label("Right-click empty battlefield for group tools. Customize Layout lets you drag Zones and Spells & Abilities headers: Shift locks an axis; Ctrl snaps to grid."){enableRichText=false};layoutHelp.style.whiteSpace=WhiteSpace.Normal;card.Add(layoutHelp);
             shade.style.display=DisplayStyle.None;
             root.RegisterCallback<KeyDownEvent>(Down,TrickleDown.TrickleDown);root.RegisterCallback<KeyUpEvent>(Up,TrickleDown.TrickleDown);
             root.RegisterCallback<PointerDownEvent>(Block,TrickleDown.TrickleDown);root.RegisterCallback<PointerUpEvent>(Block,TrickleDown.TrickleDown);root.RegisterCallback<PointerMoveEvent>(Block,TrickleDown.TrickleDown);

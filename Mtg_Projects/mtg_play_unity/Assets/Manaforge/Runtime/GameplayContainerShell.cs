@@ -92,7 +92,7 @@ namespace Manaforge.Play
         private readonly EventCallback<KeyDownEvent> key;
         private readonly Action changed;
         private string active;
-        private Vector2 start,axes;
+        private Vector2 start,axes;private int constrainedAxis;
         private Rect initial;
         private ContainerLayoutState original,candidate;
         private bool resize,deliberate,committing,disposed;
@@ -130,8 +130,8 @@ namespace Manaforge.Play
                 if(!Begin(id,canvas.WorldToLocal(ev.position),sizing,currentDirection?.Invoke()??direction,drawerHeight?.Invoke()))return;
                 captured=handle;pointer=ev.pointerId;handle.CapturePointer(pointer);handle.Focus();ev.StopPropagation();
             };
-            EventCallback<PointerMoveEvent> move=ev=>{if(captured!=handle || ev.pointerId!=pointer)return;Move(canvas.WorldToLocal(ev.position));ev.StopPropagation();};
-            EventCallback<PointerUpEvent> up=ev=>{if(captured!=handle || ev.pointerId!=pointer)return;Move(canvas.WorldToLocal(ev.position));Commit();ev.StopPropagation();};
+            EventCallback<PointerMoveEvent> move=ev=>{if(captured!=handle || ev.pointerId!=pointer)return;Move(canvas.WorldToLocal(ev.position),ev.shiftKey,ev.ctrlKey);ev.StopPropagation();};
+            EventCallback<PointerUpEvent> up=ev=>{if(captured!=handle || ev.pointerId!=pointer)return;Move(canvas.WorldToLocal(ev.position),ev.shiftKey,ev.ctrlKey);Commit();ev.StopPropagation();};
             EventCallback<PointerCaptureOutEvent> lost=ev=>{if(captured==handle)Cancel();};
             handle.RegisterCallback(down);handle.RegisterCallback(move);handle.RegisterCallback(up);handle.RegisterCallback(lost);
             unbind.Add(()=>{handle.UnregisterCallback(down);handle.UnregisterCallback(move);handle.UnregisterCallback(up);handle.UnregisterCallback(lost);});
@@ -142,21 +142,24 @@ namespace Manaforge.Play
             var limits=controller.Constraints(id);
             if(!limits.Supports(sizing?GameplayHudCapabilities.Resize:GameplayHudCapabilities.Move))return false;
             if(sizing && controller.State(id).Mode==ContainerMode.Drawer && !limits.ResizeDrawer)return false;
-            active=id;start=position;resize=sizing;axes=direction;original=controller.State(id);initial=controller.Resolved[id];if(sizing && original.Mode==ContainerMode.Drawer)initial.height=Mathf.Clamp(presentedHeight??original.FloatingRect.height*controller.Viewport.y,limits.Minimum.y,limits.Maximum.y);candidate=null;
+            constrainedAxis=0;active=id;start=position;resize=sizing;axes=direction;original=controller.State(id);initial=controller.Resolved[id];if(sizing && original.Mode==ContainerMode.Drawer)initial.height=Mathf.Clamp(presentedHeight??original.FloatingRect.height*controller.Viewport.y,limits.Minimum.y,limits.Maximum.y);candidate=null;
             return true;
         }
-        public void Move(Vector2 position)
+        public void Move(Vector2 position,bool constrainAxis=false,bool snapToGrid=false)
         {
             if(active==null)return;Vector2 delta=position-start;
             if(!deliberate && delta.magnitude<10)return;deliberate=true;
+            if(constrainAxis && !resize){if(constrainedAxis==0)constrainedAxis=Mathf.Abs(delta.x)>=Mathf.Abs(delta.y)?1:2;if(constrainedAxis==1)delta.y=0;else delta.x=0;}else constrainedAxis=0;
             var limits=controller.Constraints(active);var rect=initial;
             if(resize){rect.width=Mathf.Clamp(rect.width+delta.x*axes.x,limits.Minimum.x,limits.Maximum.x);rect.height=Mathf.Clamp(rect.height+delta.y*axes.y,limits.Minimum.y,limits.Maximum.y);}
             else{rect.position+=delta;rect.x=Mathf.Max(0,rect.x);rect.y=Mathf.Max(0,rect.y);}
+            if(snapToGrid){if(resize){rect.width=Mathf.Clamp(Mathf.Round(rect.width/16)*16,limits.Minimum.x,limits.Maximum.x);rect.height=Mathf.Clamp(Mathf.Round(rect.height/16)*16,limits.Minimum.y,limits.Maximum.y);}else{rect.x=Mathf.Round(rect.x/16)*16;rect.y=Mathf.Round(rect.y/16)*16;}}
+            if(constrainAxis && !resize){if(constrainedAxis==1)rect.y=initial.y;else if(constrainedAxis==2)rect.x=initial.x;}
             var normalized=ContainerLayoutResolver.Normalize(rect,controller.Viewport);
             if(!resize)normalized.size=original.FloatingRect.size;
             else if(original.Edge!=ContainerDockEdge.None)normalized.position=original.FloatingRect.position;
             DockPreviewTarget=null;DockPreviewEdge=ContainerDockEdge.None;
-            if(!resize && limits.Supports(GameplayHudCapabilities.Dock))FindDock(position,limits);
+            if(!resize && limits.Supports(GameplayHudCapabilities.Dock))FindDock(start+delta,limits);
             candidate=new ContainerLayoutState(active,normalized,original.Mode,resize?original.DockTarget:DockPreviewTarget,
                 resize?original.Edge:DockPreviewEdge,original.Order);
             var preview=controller.Preview(candidate);if(preview!=null)render(preview);
