@@ -30,6 +30,11 @@ namespace Manaforge.Play.Tests
             try{
                 yield return Until(()=>host.PresentedDecision!=null,()=>host.Tick());arena.Decisions.Tick();arena.Present(host.PresentedDecision.Frame);yield return null;
                 var editor=arena.LayoutEditor;yield return Until(()=>editor.Initialization.IsCompleted);var zones=root.Q<GameplayDrawer>("zones-drawer");bool originalOpen=zones.IsOpen;var originalParent=zones.parent;var originalContent=zones.Content;
+                yield return null;var beforeDrag=zones.Tab.worldBound;bool openBeforeDrag=zones.IsOpen;var tabStart=beforeDrag.center;var tabEnd=tabStart+new Vector2(90,-60);
+                using(var down=PointerDownEvent.GetPooled(new Event{type=EventType.MouseDown,button=0,mousePosition=tabStart})){down.target=zones.Tab;zones.Tab.SendEvent(down);}
+                using(var move=PointerMoveEvent.GetPooled(new Event{type=EventType.MouseDrag,button=0,mousePosition=tabEnd})){move.target=zones.Tab;zones.Tab.SendEvent(move);}
+                var table=root.Q("arena-table");using(var up=PointerUpEvent.GetPooled(new Event{type=EventType.MouseUp,button=0,mousePosition=tabEnd})){up.target=table;table.SendEvent(up);}yield return null;
+                Assert.That(editor.IsEditing,Is.False);Assert.That(editor.OwnsGeometry(GameplayHudIds.Zones),Is.True);Assert.That(zones.Tab.worldBound.x,Is.GreaterThan(beforeDrag.x+50));Assert.That(zones.IsOpen,Is.EqualTo(openBeforeDrag),"Dragging must not toggle the drawer");Assert.That(peer.PendingCommandBytes,Is.Zero);
                 Assert.That(editor.Open(),Is.True);for(int i=0;i<3;i++)yield return null;
                 Assert.That(zones.IsOpen,Is.True,"Zones open as a temporary visual preview");Assert.That(root.Q("layout-editor-move-left"),Is.Null,"Mouse placement must not be a button grid");Assert.That(root.Q<Foldout>("layout-editor-presets").value,Is.False);
                 yield return new WaitForEndOfFrame();Capture(target,"zones-preview-open");

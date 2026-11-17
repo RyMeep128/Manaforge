@@ -291,3 +291,17 @@ it deliberately. Hosted coverage adds four-direction geometry/preset round trips
 and a naming draft surviving revision/basis replacement before a fresh command.
 The local Windows player rebuild passed for this change; hosted suites remain the
 source of test execution evidence.
+
+
+### Direct HUD header dragging
+
+During normal play, left-drag the actual HUD drawer tab/header to move Priority,
+Zones, Spells & Abilities or available Commanders without entering Customize Layout.
+A sub-threshold click keeps the existing open/close action. A deliberate drag
+releases the button capture before taking layout capture, so releasing after a
+move does not toggle the drawer or submit a game command. Shift axis lock, Ctrl
+grid snapping and Alt edge docking use the same geometry controller as the editor.
+Escape, lost capture, viewport changes and session retirement cancel the gesture.
+Moves become in-memory game layout overrides; use Customize Layout to save a named
+preset between games. Hosted coverage checks normal-play movement without edit
+mode, unchanged expansion, committed geometry and zero native command bytes.

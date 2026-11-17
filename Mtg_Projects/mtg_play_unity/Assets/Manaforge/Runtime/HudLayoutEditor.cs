@@ -35,6 +35,7 @@ namespace Manaforge.Play
         private string context;
         private int generation;
         private VisualElement returnFocus;
+        private string normalPressed;private Vector2 normalStart;private int normalPointer;private bool normalDragging;
         private bool suppress,disposed,temporary,hasFrame,heldEscape,confirmDelete,updatingViewport;
         public GameplayViewportContext Viewport {get;private set;}=new GameplayViewportContext(new Rect(0,0,1280,720));
         public bool ViewportSupported=>Viewport.SupportsCustomization;
@@ -67,6 +68,12 @@ namespace Manaforge.Play
                 EventCallback<KeyDownEvent> key=ev=>HandleArrow(ev,adapter.ComponentId);adapter.MoveHandle.RegisterCallback(key);cleanup.Add(()=>adapter.MoveHandle.UnregisterCallback(key));
                 foreach(var grip in adapter.ResizeHandles){grip.handle.RegisterCallback(key);cleanup.Add(()=>grip.handle.UnregisterCallback(key));}
             }
+            foreach(var pair in adapters){string id=pair.Key;var tab=pair.Value.PreviewTab;
+                EventCallback<PointerDownEvent> down=ev=>{if(ev.button!=0 || IsEditing || disposed || !hasFrame || temporary || !ViewportSupported || storage.Busy || registry.Find(id)?.Available!=true)return;normalPressed=id;normalStart=canvas.WorldToLocal(ev.position);normalPointer=ev.pointerId;};
+                tab.RegisterCallback(down,TrickleDown.TrickleDown);cleanup.Add(()=>tab.UnregisterCallback(down,TrickleDown.TrickleDown));
+            }
+            canvas.RegisterCallback<PointerMoveEvent>(NormalMove,TrickleDown.TrickleDown);canvas.RegisterCallback<PointerUpEvent>(NormalUp,TrickleDown.TrickleDown);canvas.RegisterCallback<PointerCaptureOutEvent>(NormalLost);
+            cleanup.Add(()=>{canvas.UnregisterCallback<PointerMoveEvent>(NormalMove,TrickleDown.TrickleDown);canvas.UnregisterCallback<PointerUpEvent>(NormalUp,TrickleDown.TrickleDown);canvas.UnregisterCallback<PointerCaptureOutEvent>(NormalLost);});
             binding=new LayoutPresetApplicator(Controller,registry,gestures.Cancel);storage=new HudLayoutPresetSession(store);
             toolbar=new ScrollView(ScrollViewMode.Vertical){name="layout-editor-controls",focusable=true};toolbar.style.position=Position.Absolute;toolbar.style.left=Length.Percent(28);toolbar.style.top=8;toolbar.style.width=Length.Percent(44);toolbar.style.maxHeight=Length.Percent(46);toolbar.style.backgroundColor=new Color(.035f,.045f,.06f,.98f);toolbar.style.paddingLeft=toolbar.style.paddingRight=12;toolbar.style.paddingTop=toolbar.style.paddingBottom=10;layer.Add(toolbar);
             toolbar.Add(new Label("Customize Layout | drag headers and resize corners"));
@@ -98,6 +105,27 @@ namespace Manaforge.Play
             root.RegisterCallback<PointerOutEvent>(Block,TrickleDown.TrickleDown);
             Initialization=InitializeAsync();
         }
+        private void NormalMove(PointerMoveEvent ev)
+        {
+            if(normalPressed==null || IsEditing || ev.pointerId!=normalPointer)return;
+            var point=canvas.WorldToLocal(ev.position);if(!normalDragging && Vector2.Distance(point,normalStart)<10)return;
+            if(!normalDragging){
+                string id=normalPressed;var state=Controller.State(id);var header=adapters[id].HeaderBounds;
+                if(!committedOverrides.Contains(id)){var n=ContainerLayoutResolver.Normalize(header,Controller.Viewport);suppress=true;try{Controller.TrySet(new ContainerLayoutState(id,new Rect(n.x,n.y,n.width,state.FloatingRect.height),state.Mode,expansionDirection:state.ExpansionDirection));}finally{suppress=false;}}
+                if(!gestures.Begin(id,normalStart)){CancelNormalDrag();return;}
+                normalDragging=true;adapters[id].PreviewTab.ReleasePointer(normalPointer);canvas.CapturePointer(normalPointer);
+            }
+            gestures.Move(point,ev.shiftKey,ev.ctrlKey,ev.altKey);ev.StopImmediatePropagation();
+        }
+        private void NormalUp(PointerUpEvent ev)
+        {
+            if(normalPressed==null || ev.pointerId!=normalPointer)return;
+            if(normalDragging){gestures.Move(canvas.WorldToLocal(ev.position),ev.shiftKey,ev.ctrlKey,ev.altKey);gestures.Commit();ev.StopImmediatePropagation();}
+            ReleaseNormalDrag();
+        }
+        private void NormalLost(PointerCaptureOutEvent ev){if(ev.target==canvas && normalDragging)CancelNormalDrag();else if(!normalDragging && normalPressed!=null && ev.target==adapters[normalPressed].PreviewTab)ReleaseNormalDrag();}
+        private void ReleaseNormalDrag(){bool capturedByDrag=normalDragging;normalPressed=null;normalDragging=false;if(capturedByDrag && canvas.HasPointerCapture(normalPointer))canvas.ReleasePointer(normalPointer);}
+        private void CancelNormalDrag(){ReleaseNormalDrag();gestures?.Cancel();}
         public static ContainerLayoutState DefaultState(string id,Vector2 viewport)
         {
             Rect rect;
@@ -119,12 +147,14 @@ namespace Manaforge.Play
         private void Changed()
         {
             if(!suppress && IsEditing){foreach(string id in Controller.Ids)if(!ReferenceEquals(lastStates[id],Controller.State(id)))draftOverrides.Add(id);}
+            if(!suppress && !IsEditing && normalDragging && normalPressed!=null){committedOverrides.Add(normalPressed);committed=Snapshot();}
             RememberStates();Render(Controller.Resolved);RefreshControls();
         }
         public void BringToFront(){if(IsEditing){layer.BringToFront();toolbar.BringToFront();}}
         public bool CanOpen=>!disposed && ViewportSupported && hasFrame && !temporary && !storage.Busy && !(blocked?.Invoke()??false);
         public bool Open(VisualElement origin=null)
         {
+            CancelNormalDrag();
             if(IsEditing || !CanOpen)return false;interrupt?.Invoke();returnFocus=origin??root.panel?.focusController.focusedElement as VisualElement;
             IsEditing=true;gate?.Invoke(true);confirmDelete=false;
             if(retained!=null){suppress=true;binding.Apply(retained);suppress=false;retained=null;}
@@ -164,10 +194,10 @@ namespace Manaforge.Play
             RefreshControls();
         }
         public void EndSession()
-        {generation++;Cancel();retained=null;hasFrame=false;context=null;committedOverrides.Clear();draftOverrides.Clear();pendingAvailability.Clear();working=committedWorking=null;selectedId=committedSelected=null;gate?.Invoke(false);BeforeLegacyLayout();relayout?.Invoke();}
+        {CancelNormalDrag();generation++;Cancel();retained=null;hasFrame=false;context=null;committedOverrides.Clear();draftOverrides.Clear();pendingAvailability.Clear();working=committedWorking=null;selectedId=committedSelected=null;gate?.Invoke(false);BeforeLegacyLayout();relayout?.Invoke();}
         public void BeforeDecisionTick(bool attentionRequired)
         {if(attentionRequired)Suspend();}
-        public bool OwnsGeometry(string id)=>ViewportSupported && !temporary && ((IsEditing?draftOverrides:committedOverrides).Contains(id) || IsEditing && gestures?.PreviewState?.Id==id);
+        public bool OwnsGeometry(string id)=>ViewportSupported && !temporary && ((IsEditing?draftOverrides:committedOverrides).Contains(id) || (IsEditing || normalDragging) && gestures?.PreviewState?.Id==id);
         public void BeforeLegacyLayout()
         {RefreshViewport();foreach(var pair in adapters)if(!OwnsGeometry(pair.Key))pair.Value.RestoreLegacy();}
         public void AfterLegacyLayout()
@@ -187,7 +217,7 @@ namespace Manaforge.Play
             if(viewport.Size.x<1 || viewport.Size.y<1)throw new ArgumentException("GAMEPLAY_VIEWPORT");
             if(disposed || updatingViewport || Viewport.Equals(viewport))return;updatingViewport=true;
             try{
-                Viewport=viewport;gestures.Cancel();bool wasEditing=IsEditing;
+                Viewport=viewport;CancelNormalDrag();gestures.Cancel();bool wasEditing=IsEditing;
                 if(!ViewportSupported)Suspend();
                 suppress=true;try{
                     Controller.SetViewport(viewport.Size);RebaseControllerDefaults();
@@ -208,7 +238,7 @@ namespace Manaforge.Play
         }
         public void ResetForGame()
         {
-            if(disposed)return;generation++;gestures.Cancel();
+            if(disposed)return;CancelNormalDrag();generation++;gestures.Cancel();
             // Do not restore snapshot expansion: attention and current game choices own it.
             IsEditing=false;retained=null;returnFocus=null;heldEscape=false;gate?.Invoke(false);
             toolbar.style.display=DisplayStyle.None;foreach(var adapter in adapters.Values)adapter.SetEditing(false);
@@ -278,6 +308,7 @@ namespace Manaforge.Play
         private void NavigationCancel(NavigationCancelEvent ev){if(IsEditing){if(gestures.IsActive)gestures.Cancel();else Cancel();ev.StopImmediatePropagation();}}
         private void Key(KeyDownEvent ev)
         {
+            if(!IsEditing && normalPressed!=null && ev.keyCode==KeyCode.Escape){CancelNormalDrag();ev.StopImmediatePropagation();return;}
             if(!IsEditing || ev.keyCode==KeyCode.F11)return;
             if(ev.keyCode==KeyCode.Escape){if(!heldEscape){heldEscape=true;if(gestures.IsActive)gestures.Cancel();else Cancel();}ev.StopImmediatePropagation();return;}
             if(ev.keyCode==KeyCode.Tab){var focusables=layer.Query<VisualElement>().ToList().Concat(previewRoots.SelectMany(preview=>preview.Query<VisualElement>().ToList())).Distinct().Where(e=>e.focusable && e.enabledInHierarchy && Visible(e)).ToArray();if(focusables.Length>0){int index=Array.IndexOf(focusables,root.panel?.focusController.focusedElement as VisualElement);focusables[(index+(ev.shiftKey?-1:1)+focusables.Length)%focusables.Length].Focus();}ev.StopImmediatePropagation();return;}
@@ -330,7 +361,7 @@ namespace Manaforge.Play
         }
         public void Dispose()
         {
-            if(disposed)return;Cancel();retained=null;disposed=true;gate?.Invoke(false);storage.Dispose();Controller.Changed-=Changed;gestures.Dispose();
+            if(disposed)return;CancelNormalDrag();Cancel();retained=null;disposed=true;gate?.Invoke(false);storage.Dispose();Controller.Changed-=Changed;gestures.Dispose();
             foreach(var action in cleanup)action();foreach(var adapter in adapters.Values){registry.Find(adapter.ComponentId)?.SetContainerBinding(null);adapter.Dispose();}
             root.UnregisterCallback<PointerEnterEvent>(Block,TrickleDown.TrickleDown);
             root.UnregisterCallback<PointerLeaveEvent>(Block,TrickleDown.TrickleDown);
