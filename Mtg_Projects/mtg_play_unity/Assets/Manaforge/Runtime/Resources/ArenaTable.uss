@@ -83,3 +83,10 @@
 .table-card.organization-selected { border-left-color: rgb(62, 205, 215); border-right-color: rgb(62, 205, 215); border-top-color: rgb(62, 205, 215); border-bottom-color: rgb(62, 205, 215); border-left-width: 3px; border-right-width: 3px; border-top-width: 3px; border-bottom-width: 3px; }
 #organization-controls { background-color: rgba(20, 28, 31, 0.96); color: rgb(235, 230, 216); }
 #organization-drag-ghost { background-color: rgb(20, 48, 53); color: white; padding-left: 10px; padding-right: 10px; }
+
+/* Life and incoming commander damage have their own movable HUD participant. */
+#player-life-drawer { position: absolute; right: 16px; top: 60px; width: 285px; }
+#player-life-drawer .mf-drawer-viewport { max-height: 340px; }
+#player-life-drawer .mf-drawer-content { max-height: 332px; }
+#player-life-drawer .mf-hud-player { width: 124px; }
+#player-life-drawer #hud-players { flex-shrink: 0; min-height: 88px; }

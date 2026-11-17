@@ -28,6 +28,19 @@ namespace Manaforge.Play.Tests
             node=new GameObject("Reusable HUD/drawers");settings=ScriptableObject.CreateInstance<PanelSettings>();settings.themeStyleSheet=Resources.Load<ThemeStyleSheet>("CardTheme");
             var doc=node.AddComponent<UIDocument>();doc.panelSettings=settings;return doc;
         }
+        [UnityTest] public IEnumerator LifePanelShowsEverySeatAndIndependentCommanderDamage(){
+            var doc=Document(out var node,out var settings);doc.rootVisualElement.style.width=1280;doc.rootVisualElement.style.height=720;
+            using var surface=new ViewerCardSurface(doc.rootVisualElement);using var registry=new GameplayHudRegistry();using var hud=new GameplayPlayerHud(registry:registry,lifePanel:true);doc.rootVisualElement.Add(hud);doc.rootVisualElement.Add(hud.LifeDrawer);hud.LifeDrawer.style.width=285;hud.LifeDrawer.style.left=16;hud.LifeDrawer.style.top=60;
+            try{
+                var envelope=Fixture();var snapshot=envelope["body"]["snapshot"];foreach(var player in snapshot["players"])player["life"]=40;
+                var extra=snapshot["players"][1].DeepClone();extra["player_id"]="third-seat";extra["name"]="Third";((JArray)snapshot["players"]).Add(extra);
+                snapshot["commanders"]=new JArray(Enumerable.Range(0,2).Select(i=>new JObject{["commander_id"]="partner-"+i,["owner_id"]="one",["name"]="Partner "+i,["card_identity"]=null,["command_zone_plays"]=i,["additional_cast_cost"]="{2}",["damage_dealt"]=new JArray(new JArray("one",0),new JArray("two",i==0?21:7),new JArray("third-seat",3))}));
+                hud.Present(Frame(envelope),surface,"commander");yield return null;Assert.That(hud.Player("two").Q<Label>("seat-life").worldBound.height,Is.GreaterThan(0));Assert.That(doc.rootVisualElement.worldBound.Contains(hud.Player("two").Q<Label>("seat-life").worldBound.center),Is.True);Assert.That(hud.LifeDrawer.IsOpen,Is.True);Assert.That(hud.Players.Count(),Is.EqualTo(3));Assert.That(hud.Player("two").Q<Label>("seat-life").text,Is.EqualTo("40"));Assert.That(hud.Player("two").Q<Label>("life-commander-partner-0").text,Does.StartWith("21 / 21"));Assert.That(hud.Player("two").Q<Label>("life-commander-partner-1").text,Does.StartWith("7 / 21"));Assert.That(hud.Player("third-seat").Q<Label>("life-commander-partner-0").text,Does.StartWith("3 / 21"));
+                Assert.That(registry.Find(GameplayHudIds.Players).Element,Is.SameAs(hud.LifeDrawer));var original=hud.Player("two");hud.LifeDrawer.SetOpen(false);snapshot["revision"]=2;snapshot["players"][1]["life"]=33;snapshot["commanders"][0]["damage_dealt"]=null;hud.Present(Frame(envelope),surface,"unrestricted_commander");Assert.That(hud.LifeDrawer.IsOpen,Is.False);Assert.That(hud.Player("two"),Is.SameAs(original));Assert.That(original.Q<Label>("seat-life").text,Is.EqualTo("33"));Assert.That(original.Q<Label>("life-commander-partner-0").text,Does.StartWith("? / 21"));
+                string selected=null;hud.PlayerActivated+=id=>selected=id;hud.SetTargetable(id=>id=="two");hud.LifeDrawer.SetOpen(true);hud.Player("two").Activate();Assert.That(selected,Is.EqualTo("two"));
+                hud.Present(Frame(envelope),surface,"freeform");Assert.That(original.Q("player-commander-damage").style.display.value,Is.EqualTo(DisplayStyle.None));Assert.That(original.Q<Label>("seat-life").text,Is.EqualTo("33"));hud.ClearPresentation();Assert.That(hud.Players,Is.Empty);Assert.That(hud.LifeDrawer.style.display.value,Is.EqualTo(DisplayStyle.None));
+            }finally{UnityEngine.Object.Destroy(node);UnityEngine.Object.Destroy(settings);}
+        }
         [Test] public void DrawerCyclesKeepChildrenAndNeverEnableDisabledCommands()
         {
             using var drawer=new GameplayDrawer("Independent",GameplayDrawerDirection.Left);

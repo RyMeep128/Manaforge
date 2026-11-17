@@ -53,7 +53,7 @@ namespace Manaforge.Play
         {
             this.previewRoots=(previewRoots??Array.Empty<VisualElement>()).Where(e=>e!=null).ToArray();this.closePreviews=closePreviews;
             this.focusGameplay=focusGameplay;this.root=root;this.canvas=canvas;this.registry=registry;this.interrupt=interrupt;this.relayout=relayout;this.gate=gate;this.blocked=blocked;
-            layer=new VisualElement{name="hud-layout-editor",pickingMode=PickingMode.Ignore};layer.style.position=Position.Absolute;layer.style.left=layer.style.top=layer.style.right=layer.style.bottom=0;canvas.Add(layer);GameplayTheme.Attach(layer);
+            layer=new VisualElement{name="hud-layout-editor",pickingMode=PickingMode.Ignore};layer.style.position=Position.Absolute;layer.style.left=layer.style.top=layer.style.right=layer.style.bottom=0;canvas.Add(layer);GameplayTheme.Attach(layer);layer.style.backgroundColor=Color.clear;
             viewportWarning=new Label("Layout customization needs 1024 x 768 UI units, or 1280 x 720 widescreen. Default placement is temporarily active. Enlarge the window, or use Esc > Reset Layout for This Game."){name="layout-viewport-warning",enableRichText=false,focusable=true,pickingMode=PickingMode.Ignore};
             viewportWarning.style.position=Position.Absolute;viewportWarning.style.left=12;viewportWarning.style.bottom=12;viewportWarning.style.right=12;viewportWarning.style.maxWidth=620;viewportWarning.style.whiteSpace=WhiteSpace.Normal;viewportWarning.style.backgroundColor=new Color(.08f,.06f,.02f,.96f);viewportWarning.style.color=new Color(1,.85f,.6f);viewportWarning.style.display=DisplayStyle.None;layer.Add(viewportWarning);
             dockHint=new VisualElement{name="layout-dock-preview",pickingMode=PickingMode.Ignore};dockHint.style.position=Position.Absolute;dockHint.style.backgroundColor=new Color(.2f,.8f,.85f,.55f);dockHint.style.display=DisplayStyle.None;layer.Add(dockHint);
@@ -70,7 +70,8 @@ namespace Manaforge.Play
             }
             foreach(var pair in adapters){string id=pair.Key;var tab=pair.Value.PreviewTab;
                 EventCallback<PointerDownEvent> down=ev=>{if(ev.button!=0 || IsEditing || disposed || !hasFrame || temporary || !ViewportSupported || storage.Busy || registry.Find(id)?.Available!=true)return;normalPressed=id;normalStart=canvas.WorldToLocal(ev.position);normalPointer=ev.pointerId;};
-                tab.RegisterCallback(down,TrickleDown.TrickleDown);cleanup.Add(()=>tab.UnregisterCallback(down,TrickleDown.TrickleDown));
+                tab.RegisterCallback(down,TrickleDown.TrickleDown);tab.RegisterCallback<PointerMoveEvent>(NormalMove,TrickleDown.TrickleDown);tab.RegisterCallback<PointerUpEvent>(NormalUp,TrickleDown.TrickleDown);
+                cleanup.Add(()=>{tab.UnregisterCallback(down,TrickleDown.TrickleDown);tab.UnregisterCallback<PointerMoveEvent>(NormalMove,TrickleDown.TrickleDown);tab.UnregisterCallback<PointerUpEvent>(NormalUp,TrickleDown.TrickleDown);});
             }
             canvas.RegisterCallback<PointerMoveEvent>(NormalMove,TrickleDown.TrickleDown);canvas.RegisterCallback<PointerUpEvent>(NormalUp,TrickleDown.TrickleDown);canvas.RegisterCallback<PointerCaptureOutEvent>(NormalLost);
             cleanup.Add(()=>{canvas.UnregisterCallback<PointerMoveEvent>(NormalMove,TrickleDown.TrickleDown);canvas.UnregisterCallback<PointerUpEvent>(NormalUp,TrickleDown.TrickleDown);canvas.UnregisterCallback<PointerCaptureOutEvent>(NormalLost);});
@@ -130,6 +131,7 @@ namespace Manaforge.Play
         {
             Rect rect;
             switch(id){
+                case GameplayHudIds.Players:rect=new Rect(viewport.x-301,60,285,320);break;
                 case GameplayHudIds.Priority:rect=new Rect(viewport.x-301,16,285,Mathf.Max(100,viewport.y*.7f-32));break;
                 case GameplayHudIds.Actions:rect=new Rect(viewport.x-295,viewport.y-65,275,285);break;
                 case GameplayHudIds.Zones:rect=new Rect(16,viewport.y-122,252,Mathf.Max(100,viewport.y-182));break;

@@ -29,9 +29,9 @@ namespace Manaforge.Play.Tests
             using var peer=new ViewerSessionHostTests.Peer(envelope.ToString());var owner=new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);using var host=new ViewerSessionHost(arena.Surface,peer.Bootstrap(),owner.Task,true);arena.Bind(host);
             try{
                 yield return Until(()=>host.PresentedDecision!=null,()=>host.Tick());arena.Decisions.Tick();arena.Present(host.PresentedDecision.Frame);yield return null;
-                var editor=arena.LayoutEditor;yield return Until(()=>editor.Initialization.IsCompleted);var zones=root.Q<GameplayDrawer>("zones-drawer");bool originalOpen=zones.IsOpen;var originalParent=zones.parent;var originalContent=zones.Content;
+                var editor=arena.LayoutEditor;Assert.That(root.Q("hud-layout-editor").resolvedStyle.backgroundColor.a,Is.EqualTo(0));yield return Until(()=>editor.Initialization.IsCompleted);var zones=root.Q<GameplayDrawer>("zones-drawer");bool originalOpen=zones.IsOpen;var originalParent=zones.parent;var originalContent=zones.Content;
                 yield return null;var beforeDrag=zones.Tab.worldBound;bool openBeforeDrag=zones.IsOpen;var tabStart=beforeDrag.center;var tabEnd=tabStart+new Vector2(90,-60);
-                using(var down=PointerDownEvent.GetPooled(new Event{type=EventType.MouseDown,button=0,mousePosition=tabStart})){down.target=zones.Tab;zones.Tab.SendEvent(down);}
+                using(var down=PointerDownEvent.GetPooled(new Event{type=EventType.MouseDown,button=0,mousePosition=tabStart})){down.target=zones.Tab;zones.Tab.SendEvent(down);}yield return null;
                 using(var move=PointerMoveEvent.GetPooled(new Event{type=EventType.MouseDrag,button=0,mousePosition=tabEnd})){move.target=zones.Tab;zones.Tab.SendEvent(move);}
                 var table=root.Q("arena-table");using(var up=PointerUpEvent.GetPooled(new Event{type=EventType.MouseUp,button=0,mousePosition=tabEnd})){up.target=table;table.SendEvent(up);}yield return null;
                 Assert.That(editor.IsEditing,Is.False);Assert.That(editor.OwnsGeometry(GameplayHudIds.Zones),Is.True);Assert.That(zones.Tab.worldBound.x,Is.GreaterThan(beforeDrag.x+50));Assert.That(zones.IsOpen,Is.EqualTo(openBeforeDrag),"Dragging must not toggle the drawer");Assert.That(peer.PendingCommandBytes,Is.Zero);

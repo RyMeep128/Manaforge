@@ -367,3 +367,45 @@ changed its glyph to collapsed and back to expanded. The drawer was empty, so th
 check establishes creation, position updates and local toggling only. It does not
 establish live member hiding/interaction, full-game acceptance or multiplayer
 acceptance. The running match was left open with the drawer visible.
+
+
+### Player life and Commander damage drawer
+
+Arena exposes **Players** as an initially open HUD drawer below Priority. The
+existing PlayerPanels live in its scrollable content rather than the old split
+seat rail. It is a root-level presentation element and a `players` registry/layout
+participant with the `hud.players` preset key. Drag its header during normal play,
+or move/resize it in Customize Layout. Older presets omit this optional component
+and retain its default placement. No game or multiplayer state model changed.
+
+Life totals and names come from the current projected frame. Commander and
+Unrestricted Commander also show damage **received** from every individual
+commander under each player, including separate partner commanders and a 21-point
+reference. Missing data displays `?`/Unavailable rather than an invented zero.
+Freeform hides commander damage regardless of life total or stray commander data.
+The existing separate Commanders drawer still owns artwork, tax and cast details.
+
+Hosted checks cover three seats, life updates while collapsed, partner damage
+21 and 7 kept separate, unknown damage, format switching, targeting through the
+same PlayerPanel event and session cleanup. Local player visibility is checked
+separately from those hosted suites; a rebuild alone is not visual acceptance.
+
+
+The layout editor's full-screen theme layer explicitly uses a transparent
+background while its toolbar retains its own fill. The inherited theme floor had
+covered underlying HUD elements that were not repeatedly promoted, including the
+old player rail. Hosted visual coverage checks the layer alpha and exercises
+captured drawer-tab movement across rendered frames. HUD tabs forward captured
+move/up events directly, matching battlefield drawers' working input path.
+
+Observed on 2026-11-17 in the rebuilt Windows player at 1920 x 1080 with
+saved Mono Green Stompy versus Attack Triggers AI decks in Commander: both
+players showed 40 life and separate 0 / 21 rows for Goreclaw and Wulfgar,
+including the complete lower row. Clicking the local life total selected the
+starting player through the native player-target path. After keeping the opening
+hand, the panel remained visible at main-phase priority. Normal left-drag moved
+its title and contents from the upper right into the battlefield; a title click
+collapsed it and a second click reopened it. The local Windows build succeeded.
+This is opening/UI evidence, not a completed-game or multiplayer acceptance run.
+Nonzero commander-damage updates, partner fixtures, format changes and cleanup
+remain subject to exact-SHA hosted checks; no local test suite was run.

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using UnityEngine;
 using UnityEngine.UIElements;
 
 namespace Manaforge.Play
@@ -12,6 +13,7 @@ namespace Manaforge.Play
         private readonly VisualElement localSeat=new VisualElement{name="hud-local-player",pickingMode=PickingMode.Ignore};
         private readonly bool localSeatAtBottom;
         public GameplayDrawer CommanderDrawer {get;}
+        public GameplayDrawer LifeDrawer {get;}
         private readonly ScrollView commanders=new ScrollView(ScrollViewMode.Vertical){name="hud-commanders"};
         private readonly Dictionary<string,PlayerPanel> seats=new Dictionary<string,PlayerPanel>(StringComparer.Ordinal);
         private readonly Dictionary<string,CommanderDashboard> commanderViews=new Dictionary<string,CommanderDashboard>(StringComparer.Ordinal);
@@ -24,9 +26,9 @@ namespace Manaforge.Play
         public IEnumerable<PlayerPanel> Players=>seats.Values;
         public PlayerPanel Player(string id)=>id!=null && seats.TryGetValue(id,out var panel)?panel:null;
         public static bool HasCommanderContent(string format)=>format=="commander" || format=="unrestricted_commander";
-        public GameplayPlayerHud(bool localSeatAtBottom=false,GameplayHudRegistry registry=null){this.registry=registry;this.localSeatAtBottom=localSeatAtBottom;name="gameplay-player-hud";AddToClassList("mf-player-hud");pickingMode=PickingMode.Ignore;GameplayTheme.Attach(this);players.AddToClassList("mf-hud-players");players.contentContainer.style.flexDirection=FlexDirection.Row;players.contentContainer.style.flexWrap=Wrap.Wrap;commanders.AddToClassList("mf-hud-commanders");CommanderDrawer=new GameplayDrawer("Commanders",GameplayDrawerDirection.Left){name="commander-drawer"};CommanderDrawer.Content.Add(commanders);Add(players);Add(CommanderDrawer);if(localSeatAtBottom)Add(localSeat);
+        public GameplayPlayerHud(bool localSeatAtBottom=false,GameplayHudRegistry registry=null,bool lifePanel=false){this.registry=registry;this.localSeatAtBottom=localSeatAtBottom;name="gameplay-player-hud";AddToClassList("mf-player-hud");pickingMode=PickingMode.Ignore;GameplayTheme.Attach(this);players.AddToClassList("mf-hud-players");players.contentContainer.style.flexDirection=FlexDirection.Row;players.contentContainer.style.flexWrap=Wrap.Wrap;commanders.AddToClassList("mf-hud-commanders");CommanderDrawer=new GameplayDrawer("Commanders",GameplayDrawerDirection.Left){name="commander-drawer"};CommanderDrawer.Content.Add(commanders);if(lifePanel){LifeDrawer=new GameplayDrawer("Players",GameplayDrawerDirection.Down,true){name="player-life-drawer"};LifeDrawer.AddToClassList("life-panel");LifeDrawer.Content.Add(players);Add(LifeDrawer);}else Add(players);Add(CommanderDrawer);if(localSeatAtBottom && !lifePanel)Add(localSeat);
             if(registry!=null){
-                playersRegistration=registry.Register(new GameplayHudDescriptor(GameplayHudIds.Players,"Player information","player-rail"),this);
+                playersRegistration=registry.Register(new GameplayHudDescriptor(GameplayHudIds.Players,"Players and life totals","player-rail",lifePanel?GameplayHudCapabilities.Drawer:GameplayHudCapabilities.None,presetKey:lifePanel?"hud.players":null),(VisualElement)LifeDrawer??this);
                 commandersRegistration=registry.Register(new GameplayHudDescriptor(GameplayHudIds.Commanders,"Commander information","commander-rail",GameplayHudCapabilities.Drawer,presetKey:"hud.commanders"),CommanderDrawer,available:false);
             }
         }
@@ -45,7 +47,7 @@ namespace Manaforge.Play
             foreach(string id in seats.Keys.Where(id=>!frame.PlayerLifeTotals.ContainsKey(id)).ToArray()){UnregisterSeat(id);seats[id].Activated-=Activate;seats[id].Dispose();seats[id].RemoveFromHierarchy();seats.Remove(id);commanderViews[id].Dispose();commanderViews.Remove(id);}
             foreach(string id in frame.PlayerLifeTotals.Keys.OrderBy(id=>id==viewer?1:0)) {
                 if(!seats.TryGetValue(id,out var panel)) {
-                    panel=new PlayerPanel();panel.AddToClassList("mf-hud-player");panel.Activated+=Activate;seats.Add(id,panel);if(localSeatAtBottom && id==viewer)localSeat.Add(panel);else players.Add(panel);
+                    panel=new PlayerPanel();panel.AddToClassList("mf-hud-player");panel.Activated+=Activate;seats.Add(id,panel);if(localSeatAtBottom && LifeDrawer==null && id==viewer)localSeat.Add(panel);else players.Add(panel);
                     var commander=new CommanderDashboard(false);commander.name="commander-info-"+id;commander.AddToClassList("mf-hud-commander-info");commanderViews.Add(id,commander);commanders.Add(commander);rebuild=true;
                     if(registry!=null)seatRegistrations.Add(id,new[]{
                         registry.Register(new GameplayHudDescriptor(GameplayHudIds.Seat(GameplayHudIds.Players,session,viewer,id),"Player information","player-rail",parentId:GameplayHudIds.Players),panel),
@@ -54,15 +56,17 @@ namespace Manaforge.Play
                 }
                 panel.name=id==viewer?"local-seat":frame.PlayerLifeTotals.Count==2?"opponent-seat":"player-seat-"+id;
                 panel.Bind(id,frame.PlayerNames.TryGetValue(id,out var name)?name:"Player");panel.Present(frame.PlayerLifeTotals[id],frame.PriorityPlayerId==id,false,reducedMotion,frame.ActivePlayerId==id);
+                if(rebuild && LifeDrawer!=null)panel.PresentCommanderDamage(frame,HasCommanderContent(activeFormat));
                 if(rebuild){if(HasCommanderContent(activeFormat))commanderViews[id].Present(frame,surface,inspect,id);else commanderViews[id].ClearPresentation();}
             }
+            if(LifeDrawer!=null){LifeDrawer.style.display=DisplayStyle.Flex;LifeDrawer.SetReducedMotion(reducedMotion);if(rebuild)players.style.height=Mathf.Min(320,Mathf.Ceil(seats.Count/2f)*(seats.Count==0?78:seats.Values.Max(p=>p.SummaryHeight)+4)+8);LifeDrawer.RefreshInput();}
             bool showCommanders=HasCommanderContent(activeFormat);
             if(commandersRegistration!=null)commandersRegistration.Available=showCommanders;
             foreach(var entries in seatRegistrations.Values)entries[1].Available=showCommanders;
             CommanderDrawer.style.display=showCommanders?DisplayStyle.Flex:DisplayStyle.None;if(!showCommanders)CommanderDrawer.Reset();CommanderDrawer.RefreshInput();
         }
         public void SetTargetable(Func<string,bool> available){foreach(var pair in seats)pair.Value.SetTargetable(available?.Invoke(pair.Key)==true);}
-        public void ClearPresentation(){foreach(var id in seatRegistrations.Keys.ToArray())UnregisterSeat(id);if(commandersRegistration!=null)commandersRegistration.Available=false;foreach(var seat in seats.Values){seat.Activated-=Activate;seat.Dispose();}seats.Clear();foreach(var view in commanderViews.Values)view.Dispose();commanderViews.Clear();players.Clear();localSeat.Clear();commanders.Clear();CommanderDrawer.Reset();CommanderDrawer.style.display=DisplayStyle.None;session=viewer=format=null;revision=-1;artwork=-1;}
-        public void Dispose(){if(disposed)return;ClearPresentation();playersRegistration?.Dispose();commandersRegistration?.Dispose();CommanderDrawer.Dispose();disposed=true;PlayerActivated=null;RemoveFromHierarchy();}
+        public void ClearPresentation(){if(LifeDrawer!=null){LifeDrawer.Reset(true);LifeDrawer.style.display=DisplayStyle.None;}foreach(var id in seatRegistrations.Keys.ToArray())UnregisterSeat(id);if(commandersRegistration!=null)commandersRegistration.Available=false;foreach(var seat in seats.Values){seat.Activated-=Activate;seat.Dispose();}seats.Clear();foreach(var view in commanderViews.Values)view.Dispose();commanderViews.Clear();players.Clear();localSeat.Clear();commanders.Clear();CommanderDrawer.Reset();CommanderDrawer.style.display=DisplayStyle.None;session=viewer=format=null;revision=-1;artwork=-1;}
+        public void Dispose(){if(disposed)return;ClearPresentation();playersRegistration?.Dispose();commandersRegistration?.Dispose();CommanderDrawer.Dispose();LifeDrawer?.Dispose();disposed=true;PlayerActivated=null;RemoveFromHierarchy();}
     }
 }
