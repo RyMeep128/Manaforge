@@ -71,6 +71,7 @@ namespace Manaforge.Play
     public sealed class ViewerTargetingController : IDisposable
     {
         private readonly VisualElement root;private readonly ViewerCardSurface surface;private readonly ViewerDecisionPanel decisions;private readonly Func<IEnumerable<PlayerPanel>> players;
+        private readonly Func<string,Vector2?> objectAnchor;
         private readonly TargetingOverlay overlay;private readonly IVisualElementScheduledItem ticker;
         private readonly Dictionary<string,VisualElement> anchors=new Dictionary<string,VisualElement>();private readonly HashSet<VisualElement> decorated=new HashSet<VisualElement>();
         private ProjectedDecisionFrame frame;private TargetingState state=new TargetingState(null);private ViewerDecisionOffer observed,dragOffer;
@@ -78,9 +79,9 @@ namespace Manaforge.Play
         private Vector2 cursor,start;private bool hasCursor,pressed,dragging,disposed;private int pointer;
         public ViewerTargetingController(VisualElement root,ViewerCardSurface surface,ViewerDecisionPanel decisions,IEnumerable<PlayerPanel> players)
             :this(root,surface,decisions,()=>players) {}
-        public ViewerTargetingController(VisualElement root,ViewerCardSurface surface,ViewerDecisionPanel decisions,Func<IEnumerable<PlayerPanel>> players)
+        public ViewerTargetingController(VisualElement root,ViewerCardSurface surface,ViewerDecisionPanel decisions,Func<IEnumerable<PlayerPanel>> players,Func<string,Vector2?> objectAnchor=null)
         {
-            this.root=root;this.surface=surface;this.decisions=decisions;this.players=players;overlay=new TargetingOverlay(decisions.Root);root.Add(overlay);
+            this.root=root;this.surface=surface;this.decisions=decisions;this.players=players;this.objectAnchor=objectAnchor;overlay=new TargetingOverlay(decisions.Root);root.Add(overlay);
             root.RegisterCallback<PointerMoveEvent>(Move,TrickleDown.TrickleDown);root.RegisterCallback<PointerDownEvent>(Down,TrickleDown.TrickleDown);root.RegisterCallback<PointerUpEvent>(Up,TrickleDown.TrickleDown);
             root.RegisterCallback<PointerLeaveEvent>(Leave);root.RegisterCallback<PointerCaptureOutEvent>(Lost);root.RegisterCallback<FocusInEvent>(Focus);root.RegisterCallback<KeyDownEvent>(Key,TrickleDown.TrickleDown);
             surface.Clearing+=Clear;ticker=root.schedule.Execute(Tick).Every(16);
@@ -89,7 +90,7 @@ namespace Manaforge.Play
         private static bool Displayed(VisualElement element){for(var e=element;e!=null;e=e.parent){if(e.resolvedStyle.display==DisplayStyle.None || e.resolvedStyle.visibility==Visibility.Hidden)return false;if(e!=element && e.ClassListContains("unity-scroll-view__content-viewport") && !e.worldBound.Contains(element.worldBound.center))return false;}return element.panel!=null && element.worldBound.width>0 && element.worldBound.height>0;}
         private static bool Within(VisualElement child,VisualElement parent){for(var e=child;e!=null;e=e.parent)if(e==parent)return true;return false;}
         private string Hit(Vector2 point,IEnumerable<string> candidates){var hit=root.panel?.Pick(point);return candidates.FirstOrDefault(key=>anchors.TryGetValue(key,out var element) && Displayed(element) && Within(hit,element));}
-        private Vector2? Center(string key)=>key!=null && anchors.TryGetValue(key,out var element) && Displayed(element) && root.worldBound.Contains(element.worldBound.center)?root.WorldToLocal(element.worldBound.center):(Vector2?)null;
+        private Vector2? Center(string key)=>key!=null && anchors.TryGetValue(key,out var element) && Displayed(element) && root.worldBound.Contains(element.worldBound.center)?root.WorldToLocal(element.worldBound.center):key!=null && key.StartsWith("object:",StringComparison.Ordinal)?objectAnchor?.Invoke(key.Substring(7)):(Vector2?)null;
         private string SourceKey=>state.SourceId==null?null:"object:"+state.SourceId;
         private void Move(PointerMoveEvent ev){cursor=ev.position;hasCursor=true;if(pressed && Vector2.Distance(start,cursor)>=10)dragging=true;}
         private void Focus(FocusInEvent ev){if(ev.target is VisualElement element){cursor=element.worldBound.center;hasCursor=true;}}

@@ -6,4 +6,5 @@ public interface CorrelatedOrganizationChannel extends ViewerChannelExtension {
     void update(Basis basis,long revision,long gameplay,Map<String,OrganizationCodec.HostContext> contexts) throws Exception;
     void rejectUnready(String seat,String raw) throws Exception;
     BattlefieldOrganizationSession.Snapshot snapshot();
+    void close();
 }

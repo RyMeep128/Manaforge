@@ -63,8 +63,8 @@ namespace Manaforge.Play
             actionDrawer=new GameplayDrawer("Spells & Abilities",GameplayDrawerDirection.Right){name="action-drawer"};root.Add(actionDrawer);
             choices=new ScrollView(ScrollViewMode.Vertical){name="table-choices"};actionDrawer.Content.Add(choices);
             priorityDrawer=new GameplayDrawer("Priority",GameplayDrawerDirection.Right){name="priority-drawer"};root.Add(priorityDrawer);
-            var motion=new Toggle("Reduced motion"){name="table-motion",value=false};motion.RegisterValueChangedCallback(ev=>{root.EnableInClassList("reduced-motion",ev.newValue);animations?.Advance();foreach(var drawer in new[]{actionDrawer,priorityDrawer,zonePanelDrawer,hud.CommanderDrawer})drawer.SetReducedMotion(ev.newValue);if(frame!=null)hud.Present(frame,Surface,host?.GameplayFormat,ev.newValue,InspectCard);});root.Add(motion);
-            animations=new GameplayAnimationCoordinator(root,Surface,MotionZoneAnchor,MotionPlayerAnchor,()=>motion.value);
+            var motion=new Toggle("Reduced motion"){name="table-motion",value=false};motion.RegisterValueChangedCallback(ev=>{root.EnableInClassList("reduced-motion",ev.newValue);animations?.Advance();foreach(var drawer in new[]{actionDrawer,priorityDrawer,zonePanelDrawer,hud.CommanderDrawer})drawer.SetReducedMotion(ev.newValue);if(frame!=null)hud.Present(frame,Surface,host?.GameplayFormat,ev.newValue,InspectCard);Layout();});root.Add(motion);
+            animations=new GameplayAnimationCoordinator(root,Surface,MotionZoneAnchor,MotionPlayerAnchor,()=>motion.value,objectAnchor:ResolveCardAnchor);
             result=Label("table-result","");CardTypography.Apply(result,CardTextRole.Title);result.style.display=DisplayStyle.None;
             var close=new Button(()=>CloseInspection()){text="Close inspection | Esc",name="close-inspection"};root.Add(close);close.style.display=DisplayStyle.None;inspector=new GameplayOverlay(Surface.InspectionView,close);
             root.RegisterCallback<KeyDownEvent>(ev=>{if(ev.keyCode==KeyCode.Escape){CloseInspection();ClosePublicZone();}});
@@ -115,8 +115,10 @@ namespace Manaforge.Play
         public void PresentOrganization(ProjectedOrganizationFrame value){if(!disposed)organizationRenderer?.Observe(value);}
         public void CloseInspection(){bool restore=inspecting;inspecting=false;previewing=false;previewId=null;restoringFocus=true;try{inspector?.Hide(restore);}finally{restoringFocus=false;}}
         public void Bind(ViewerSessionHost value)
-        {if(Decisions!=null)throw new InvalidOperationException("PRESENTATION_ALREADY_BOUND");host=value;Decisions=new ViewerDecisionPanel(choices,host);Decisions.PresentationHold=()=>animations.HoldAutomaticPassing || Time.unscaledTime<stackAttentionUntil;Decisions.SetSpatialPresentation(true);Decisions.SetChoicePreview(Surface.ChoicePreview);actionBinding=new GameplayActionDrawer(actionDrawer,Decisions);priorityBinding=new GameplayPriorityDrawer(priorityDrawer,Decisions);targeting=new ViewerTargetingController(root,Surface,Decisions,()=>hud.Players);boardInput=new ViewerBoardInput(root,Surface,host,Decisions,GameplayTheme.Menu);
-            if(Capabilities.SharedOrganization)organizationRenderer=new BattlefieldOrganizationRenderer(root,host,Layout,()=>boardInput.InterruptGesture(),()=>LayoutEditor?.IsEditing==true || Decisions.SuppressSpatialInput || host.PendingReveal!=null || inspecting || openZone!=null);
+        {if(Decisions!=null)throw new InvalidOperationException("PRESENTATION_ALREADY_BOUND");host=value;Decisions=new ViewerDecisionPanel(choices,host);Decisions.PresentationHold=()=>animations.HoldAutomaticPassing || Time.unscaledTime<stackAttentionUntil;Decisions.SetSpatialPresentation(true);Decisions.SetChoicePreview(Surface.ChoicePreview);actionBinding=new GameplayActionDrawer(actionDrawer,Decisions);priorityBinding=new GameplayPriorityDrawer(priorityDrawer,Decisions);targeting=new ViewerTargetingController(root,Surface,Decisions,()=>hud.Players,ResolveCardAnchor);boardInput=new ViewerBoardInput(root,Surface,host,Decisions,GameplayTheme.Menu);
+            if(Capabilities.SharedOrganization)organizationRenderer=new BattlefieldOrganizationRenderer(root,host,Layout,()=>{boardInput.InterruptGesture();targeting.InterruptGesture();},()=>LayoutEditor?.IsEditing==true || Decisions.SuppressSpatialInput || host.PendingReveal!=null || inspecting || openZone!=null,
+                id=>{var offered=host.PresentedDecision;var current=offered?.Frame;return offered?.CanSubmit==true && current?.Decision!=null && (current.Decision.Family=="mana"?current.ManaSourceReferences.Any(source=>source.ObjectId==id):Decisions.ObjectChoiceCount(offered,id)>0);},
+                ()=>LayoutEditor?.IsEditing==true || Decisions.SuppressSpatialInput || Decisions.IsLibraryOrdering || host.PendingReveal!=null || openZone!=null);
             if(Capabilities.PrivateLayout)LayoutEditor=new HudLayoutEditor(root.parent,root,HudRegistry,
                 new[]{(GameplayHudIds.Priority,"Priority",priorityDrawer),(GameplayHudIds.Actions,"Spells & Abilities",actionDrawer),(GameplayHudIds.Zones,"Zones",zonePanelDrawer),(GameplayHudIds.Commanders,"Commanders",hud.CommanderDrawer)},
                 layoutPresetStore??new JsonLayoutPresetStore(System.IO.Path.Combine(Application.persistentDataPath,"profiles","default","layouts","arena")),
@@ -138,8 +140,11 @@ namespace Manaforge.Play
                 || value.Decision!=null && !value.Decision.IsPriority && value.Decision.PlayerId==value.Context.ViewerId
                 || current?.CanSubmit==false || Decisions?.Root.ClassListContains("command-uncertain")==true || Decisions?.Presentation?.Mode==YieldPresentationMode.Failed;
         }
+        public Vector2? ResolveCardAnchor(string objectId)=>organizationRenderer?.CardAnchor(objectId);
+        public bool OpenBattlefieldMembers(string groupId)=>organizationRenderer?.OpenMembers(groupId)==true;
+        public void CloseBattlefieldMembers()=>organizationRenderer?.CloseMembers();
         public void BeforeDecisionTick()
-        {bool editing=LayoutEditor?.IsEditing==true;LayoutEditor?.BeforeDecisionTick(LayoutAttentionRequired());if(editing && LayoutEditor?.IsEditing==false){layoutAttentionFocus=true;if(host?.PendingReveal!=null)root.parent?.Q<Button>("reveal-acknowledge")?.Focus();}}
+        {organizationRenderer?.ObserveOffer(host?.PresentedDecision);bool editing=LayoutEditor?.IsEditing==true;LayoutEditor?.BeforeDecisionTick(LayoutAttentionRequired());if(editing && LayoutEditor?.IsEditing==false){layoutAttentionFocus=true;if(host?.PendingReveal!=null)root.parent?.Q<Button>("reveal-acknowledge")?.Focus();}}
         public void Present(ProjectedDecisionFrame value)
         {
             if(disposed)return;
@@ -191,7 +196,7 @@ namespace Manaforge.Play
         private void UpdateLinks()
         {
             if(disposed || frame==null)return;var centers=new System.Collections.Generic.Dictionary<string,Vector2>();
-            Surface.VisitPresented((card,view)=>{if(!card.Hidden && BattlefieldCardAnchorResolver.TryCenter(links,view,out var center))centers[card.ObjectId]=center;});
+            Surface.VisitPresented((card,view)=>{if(!card.Hidden && BattlefieldCardAnchorResolver.TryResolve(links,view,organizationRenderer?.HiddenMemberAnchor(card.ObjectId),out var center))centers[card.ObjectId]=center;});
             foreach(var seat in hud.Players)centers[seat.PlayerId]=links.WorldToLocal(seat.worldBound.center);
             var paths=new System.Collections.Generic.List<BattlefieldLinks.Link>();
             foreach(var group in frame.Combat){
@@ -261,11 +266,11 @@ namespace Manaforge.Play
         public bool BrowsePublicZone(string zone,string owner)
         {
             if(disposed || unsupportedTopology || frame==null || (zone!="library" && zone!="graveyard" && zone!="exile") || owner==null || !frame.PlayerLifeTotals.ContainsKey(owner))return false;
-            ClearCardFocus();CloseInspection();zoneDrawer.SetReturnFocus(zonePanelDrawer.IsOpen?(VisualElement)zonePanel.Pile(owner,zone):zonePanelDrawer.Tab);openZone=zone;openZoneOwner=owner;rowPages["public-zone"]=0;Layout();return true;
+            organizationRenderer?.CloseMembers(false);ClearCardFocus();CloseInspection();zoneDrawer.SetReturnFocus(zonePanelDrawer.IsOpen?(VisualElement)zonePanel.Pile(owner,zone):zonePanelDrawer.Tab);openZone=zone;openZoneOwner=owner;rowPages["public-zone"]=0;Layout();return true;
         }
         private void BrowseAttachments(string target)
         {
-            if(disposed || frame==null)return;ClearCardFocus();CloseInspection();zoneDrawer.SetReturnFocus(null);openZone="attachments";openZoneOwner=target;rowPages["public-zone"]=0;Layout();
+            if(disposed || frame==null)return;organizationRenderer?.CloseMembers(false);ClearCardFocus();CloseInspection();zoneDrawer.SetReturnFocus(null);openZone="attachments";openZoneOwner=target;rowPages["public-zone"]=0;Layout();
         }
         public void ClosePublicZone(){if(disposed || openZone==null)return;ClearCardFocus();CloseInspection();openZone=null;zoneDrawer.ClearBinding(true);Layout();}
         private void Layout()

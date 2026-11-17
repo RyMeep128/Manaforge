@@ -137,7 +137,7 @@ Manual acceptance before enabling normal games:
    chrome, capture, card bindings or artwork survive retirement.
 
 Still required: packaged native organization rendering/edit acceptance, normal
-saved-deck full-game evidence, dynamic drawers/local collapse (CT-15), reconnect
+saved-deck full-game evidence, CT-15 drawer acceptance, reconnect
 reconstruction and join/leave policy (CT-16–17), and measured accessibility/performance
 release gates. Four-player composition remains CT-24. No rollout flag is enabled
 by this commit.
@@ -154,7 +154,7 @@ v3 sessions reject v2 envelopes rather than mixing recipient capabilities.
 private bootstraps; normal shared-organization rollout remains disabled. Open/closed
 state never appears in the protocol. Hosted v3 corpus, two-recipient channel checks
 and normal native metadata checks cover conversion without native submissions.
-This commit supplies the contract foundation; drawer presentation follows separately.
+The foundation commit supplies the contract; the implementation below adds its presentation.
 
 
 ### Persistent drawer presentation
@@ -166,8 +166,8 @@ Names, counts, reduced motion and attention-safe drawer titles update in place.
 Temporary organization gaps hide chrome without losing expansion. Deleted groups,
 changed viewer/epoch and surface retirement dispose chrome and clear local state.
 Hosted two-viewer tests cover independent collapse, rename/mode transitions, gaps,
-delete/recreate and cleanup. Collapsed-member chooser/anchor integration follows
-in the final CT-15 step; default activation remains disabled.
+delete/recreate and cleanup. The member chooser and anchor integration below complete
+the implementation candidate; default activation remains disabled.
 
 
 Local verification on 2026-11-17: runtime, EditMode and PlayMode assemblies compile
@@ -175,3 +175,70 @@ using the installed Unity compiler and cached reference configuration, without
 executing tests. The required Windows player rebuild was attempted and failed
 before compilation with exit 198: no valid Unity Editor license. This is an
 infrastructure block, not a passing rebuild or visual/gameplay acceptance.
+
+
+### Collapsed members, actions and anchors
+
+Every drawer has a Members button. Offered native object choices and addressable
+manual-mana members add attention without expanding the drawer. Addressability is
+not a claim that a mana source is legally usable; the existing native command
+path still validates each choice. Summaries show total, untapped and tapped counts.
+
+The temporary chooser places the existing admitted CardViews over its own chrome,
+without reparenting them. Other battlefield views are temporarily hidden. Local
+paging exposes each member; no merged card object or summary click submits a game
+action. The drawer's expansion preference stays unchanged. Inspection uses the
+existing inspector; targeting, activation and manual mana use their existing
+current-offer bindings. Close returns focus to the drawer tab. Escape menu, private
+layout editing, public-zone browsing, required reveals, offer retirement, missing
+organization and surface cleanup close the chooser and cancel captured gestures.
+Opening-hand/library-ordering flows cannot open it.
+
+`BattlefieldCardAnchorResolver.TryResolve` prefers visible card geometry, then an
+admitted group header. Targeting and motion accept optional anchor callbacks;
+combat links use the same resolution. Header fallback is visual only: target hit
+admission still uses the actual visible canonical card. No header chooses an
+arbitrary member. Anchor lookup caches contain only the current surface bindings
+and group chrome and are cleared on layout/session changes. Legacy placement and
+animation behavior remain available when organization is absent or locally disabled.
+
+The native two-viewer bridge also has an explicit v3 constructor. It preflights
+candidate snapshots before committing identity/organization, then correlates each
+recipient's emitted snapshot with that recipient's rules revision. Hosted native
+v3 coverage repeats lifecycle/reference-rotation/privacy tests and adds shared
+conversion, opponent rejection and mode preservation on reattachment. This is
+separate from packaged Unity interaction and full-game acceptance.
+
+Hosted Unity coverage additionally exercises collapsed inspection and focus return,
+normal perform commands, exact target options, manual-mana object references,
+pending/stale admission, menu/zone interruption, eleven-member paging, and four
+viewport sizes. Screenshots remain under `SharedOrganization/`. Compilation passed
+for runtime, EditMode and PlayMode assemblies using cached Unity references, and
+for Java native/contract sources using cached engine classpaths. No local test
+suite was executed. The final Windows player rebuild is still license-blocked.
+
+### Remaining CT-15 release acceptance
+
+Use explicit `organization_drawers=True` in the normal owner acceptance API; this
+is not a new menu option or a normal-game rollout change. For two-viewer native
+acceptance, install the v3 native extension for the entire authenticated recipient
+set. Keep v1/v2 sessions on their existing versions.
+
+1. Create Mana Rocks, add several permanents, convert to drawer and verify its name,
+   mode, order and position on both viewers. Collapse A only; verify B stays open.
+2. While collapsed, use Members to inspect, target, activate, pay manual mana with,
+   and assign combat choices to individual permanents. Verify mixed tap states,
+   counters, damage and cross-group attachments remain independent.
+3. Page a dense drawer, advance the offer while dragging, and remove/control-transfer
+   a member. Verify stale choices cannot submit, and only currently admitted cards
+   remain accessible. Close the chooser and check focus returns without expansion.
+4. Open the Escape menu, private layout editor, public zones and a required reveal.
+   Verify no chooser gesture steals input. Repeat with reduced motion and all four
+   supported viewport sizes. Delete a populated drawer and verify cards return to root.
+5. Run packaged normal saved-deck human-versus-AI completion with organization off
+   and the explicit drawer candidate on. Record exact source SHA, native/player
+   artifacts and outcome separately. A build or fixture pass is insufficient.
+
+These manual/packaged gates remain pending. CT-16 reconnect implementation, CT-17
+join/leave policies, measured performance/accessibility gates and CT-24 four-player
+composition remain separate work. No normal shared-organization flag is enabled.

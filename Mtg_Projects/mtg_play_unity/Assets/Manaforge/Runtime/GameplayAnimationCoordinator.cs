@@ -13,7 +13,7 @@ namespace Manaforge.Play
         private readonly VisualElement root,layer;
         private readonly ViewerCardSurface surface;
         private readonly Func<string,string,Vector2?> zoneAnchor;
-        private readonly Func<string,Vector2?> playerAnchor;
+        private readonly Func<string,Vector2?> playerAnchor,objectAnchor;
         private readonly Func<bool> reduced;
         private readonly Func<float> clock;
         private readonly IVisualElementScheduledItem ticker;
@@ -43,11 +43,11 @@ namespace Manaforge.Play
         }
         private bool HasMajor=>active.Any(run=>run.Work.Cue.Major) || pending.Any(group=>group.Any(work=>work.Cue.Major));
         public GameplayAnimationCoordinator(VisualElement root,ViewerCardSurface surface,Func<string,string,Vector2?> zoneAnchor,
-            Func<string,Vector2?> playerAnchor,Func<bool> reduced,Func<float> clock=null)
+            Func<string,Vector2?> playerAnchor,Func<bool> reduced,Func<float> clock=null,Func<string,Vector2?> objectAnchor=null)
         {
             this.root=root??throw new ArgumentNullException(nameof(root));this.surface=surface??throw new ArgumentNullException(nameof(surface));
             this.zoneAnchor=zoneAnchor??throw new ArgumentNullException(nameof(zoneAnchor));this.playerAnchor=playerAnchor??throw new ArgumentNullException(nameof(playerAnchor));
-            this.reduced=reduced??throw new ArgumentNullException(nameof(reduced));this.clock=clock??(()=>Time.unscaledTime);
+            this.objectAnchor=objectAnchor;this.reduced=reduced??throw new ArgumentNullException(nameof(reduced));this.clock=clock??(()=>Time.unscaledTime);
             layer=new VisualElement{name="gameplay-animation-layer",pickingMode=PickingMode.Ignore};
             layer.style.position=Position.Absolute;layer.style.left=layer.style.right=layer.style.top=layer.style.bottom=0;layer.style.overflow=Overflow.Hidden;
             root.Add(layer);root.RegisterCallback<DetachFromPanelEvent>(Detached);surface.Clearing+=Clear;
@@ -82,7 +82,7 @@ namespace Manaforge.Play
                 if(group.Count>0)pending.Enqueue(group);
             }
             // Capture screen positions only, never old textures or card characteristics.
-            points.Clear();foreach(var pair in bindings)if(Displayed(pair.Value.view))points[pair.Key]=Center(pair.Value.view);
+            points.Clear();foreach(var pair in bindings){if(Displayed(pair.Value.view))points[pair.Key]=Center(pair.Value.view);else if(pair.Value.card.Zone=="battlefield" && !pair.Value.card.Hidden && pair.Value.card.FaceDown==false){var anchor=objectAnchor?.Invoke(pair.Value.card.ObjectId);if(anchor.HasValue)points[pair.Key]=anchor.Value;}}
             if(HasMajor && !holdStarted.HasValue)holdStarted=clock();
         }
         private void RefreshBindings()
@@ -102,7 +102,7 @@ namespace Manaforge.Play
             if(id==null)return null;
             if(bindings.TryGetValue(id,out var binding) && !binding.card.Hidden && binding.card.FaceDown==false){
                 if(Displayed(binding.view))return Center(binding.view);
-                return zoneAnchor(binding.card.OwnerId,binding.card.Zone);
+                return objectAnchor?.Invoke(binding.card.ObjectId)??zoneAnchor(binding.card.OwnerId,binding.card.Zone);
             }
             return playerAnchor(id);
         }
@@ -137,7 +137,7 @@ namespace Manaforge.Play
                 if(group.Count==0)pending.Dequeue();else if(!started)break;
             }
             if(!HasMajor && !surface.HasPendingMajorAnimations)holdStarted=null;
-            foreach(var pair in bindings)if(Displayed(pair.Value.view))points[pair.Key]=Center(pair.Value.view);
+            foreach(var pair in bindings){if(Displayed(pair.Value.view))points[pair.Key]=Center(pair.Value.view);else if(pair.Value.card.Zone=="battlefield" && !pair.Value.card.Hidden && pair.Value.card.FaceDown==false){var anchor=objectAnchor?.Invoke(pair.Value.card.ObjectId);if(anchor.HasValue)points[pair.Key]=anchor.Value;}}
             if(active.Count>0)layer.BringToFront();
         }
         private void Start(Work work,float now,bool minimal)
