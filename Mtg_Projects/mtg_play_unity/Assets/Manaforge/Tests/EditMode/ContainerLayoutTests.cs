@@ -24,6 +24,19 @@ namespace Manaforge.Play.Tests
             Assert.That(c.Resolved["a"].x,Is.EqualTo(160).Within(.01));Assert.That(c.Resolved["a"].y,Is.EqualTo(60).Within(.01));
             Assert.That(gestures.Begin("a",new Vector2(160,60)),Is.True);gestures.Move(new Vector2(200,130),true);gestures.Commit();Assert.That(c.Resolved["a"].x,Is.EqualTo(160).Within(.01));
         }
+        [TestCase(GameplayDrawerDirection.Left)] [TestCase(GameplayDrawerDirection.Right)]
+        [TestCase(GameplayDrawerDirection.Up)] [TestCase(GameplayDrawerDirection.Down)]
+        public void DrawerBodyResolvesAllDirectionsAndPresetRetainsChoice(GameplayDrawerDirection direction)
+        {
+            var header=new Rect(500,300,250,30);var geometry=GameplayDrawerGeometry.Resolve(header,180,new GameplayViewportContext(new Rect(0,0,1280,720)),direction);
+            Assert.That(geometry.Body.width,Is.GreaterThan(0));Assert.That(geometry.Body.height,Is.GreaterThan(0));
+            if(direction==GameplayDrawerDirection.Left)Assert.That(geometry.Body.xMax,Is.LessThan(header.x));
+            if(direction==GameplayDrawerDirection.Right)Assert.That(geometry.Body.xMin,Is.GreaterThan(header.xMax));
+            if(direction==GameplayDrawerDirection.Up)Assert.That(geometry.Body.yMax,Is.LessThan(header.y));
+            if(direction==GameplayDrawerDirection.Down)Assert.That(geometry.Body.yMin,Is.GreaterThan(header.yMax));
+            var saved=new HudComponentSnapshot(new Rect(.4f,.4f,.2f,.3f),ContainerMode.Drawer,null,ContainerDockEdge.None,0,true,expansionDirection:direction);
+            Assert.That(HudComponentSnapshot.Parse(saved.ToJson()).ExpansionDirection,Is.EqualTo(direction));
+        }
         [Test] public void FloatingGeometryScalesAndConstraintsPreserveScrollableMinimums()
         {
             var c=Model();Assert.That(c.Resolved["a"],Is.EqualTo(new Rect(100,60,200,180)));

@@ -16,8 +16,10 @@ namespace Manaforge.Play
         public ContainerDockEdge Edge { get; }
         public int Order { get; }
         public bool DrawerExpanded { get; }
-        public HudComponentSnapshot(Rect rect,ContainerMode mode,string target,ContainerDockEdge edge,int order,bool expanded,JObject extensions=null)
+        public GameplayDrawerDirection? ExpansionDirection {get;}
+        public HudComponentSnapshot(Rect rect,ContainerMode mode,string target,ContainerDockEdge edge,int order,bool expanded,JObject extensions=null,GameplayDrawerDirection? expansionDirection=null)
         {
+            ExpansionDirection=expansionDirection;
             if(!ContainerLayoutResolver.Finite(rect.x) || !ContainerLayoutResolver.Finite(rect.y) ||
                 !ContainerLayoutResolver.Finite(rect.width) || !ContainerLayoutResolver.Finite(rect.height) || rect.width<=0 || rect.height<=0 ||
                 Mathf.Abs(rect.x)>10000 || Mathf.Abs(rect.y)>10000 || rect.width>10000 || rect.height>10000 ||
@@ -33,7 +35,7 @@ namespace Manaforge.Play
             rect=rect==null?new JObject():(JObject)rect.DeepClone();
             rect["x"]=FloatingRect.x;rect["y"]=FloatingRect.y;rect["width"]=FloatingRect.width;rect["height"]=FloatingRect.height;
             value["rect"]=rect;value["mode"]=Mode.ToString();value["dockTarget"]=DockTarget;value["edge"]=Edge.ToString();
-            value["order"]=Order;value["drawerExpanded"]=DrawerExpanded;return value;
+            if(ExpansionDirection.HasValue)value["expansionDirection"]=ExpansionDirection.Value.ToString();else value.Remove("expansionDirection");value["order"]=Order;value["drawerExpanded"]=DrawerExpanded;return value;
         }
         public static HudComponentSnapshot Parse(JObject value)
         {
@@ -47,8 +49,9 @@ namespace Manaforge.Play
             if(!Enum.TryParse((string)value["mode"],false,out ContainerMode mode) ||
                 !Enum.TryParse((string)value["edge"],false,out ContainerDockEdge edge))throw new ArgumentException("PRESET_COMPONENT_MODE");
             string target=(string)value["dockTarget"];if(target!=null && string.IsNullOrWhiteSpace(target))throw new ArgumentException("PRESET_DOCK_TARGET");
+            GameplayDrawerDirection? direction=null;if(value["expansionDirection"]!=null){if(value["expansionDirection"].Type!=JTokenType.String || !Enum.TryParse((string)value["expansionDirection"],out GameplayDrawerDirection d) || !Enum.IsDefined(typeof(GameplayDrawerDirection),d))throw new ArgumentException("PRESET_EXPANSION_DIRECTION");direction=d;}
             var parsed=new HudComponentSnapshot(new Rect((float)rect["x"],(float)rect["y"],(float)rect["width"],(float)rect["height"]),
-                mode,target,edge,checked((int)(long)value["order"]),(bool)value["drawerExpanded"],value);
+                mode,target,edge,checked((int)(long)value["order"]),(bool)value["drawerExpanded"],value,direction);
             parsed.preserveOriginal=true;return parsed;
         }
     }

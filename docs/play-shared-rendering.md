@@ -269,3 +269,25 @@ HUD drawer headers and resize corners. Shift-drag locks movement to its initial
 dominant axis; Ctrl-drag snaps movement or dimensions to a 16-unit grid. Existing
 arrow/Shift-arrow/Ctrl-arrow keyboard controls remain available. These changes do
 not add hand/HUD viewport editing or alter game actions.
+
+
+### Free placement, directional expansion and stable drafts
+
+In Customize Layout, plain header dragging floats anywhere within the viewport;
+edge docking requires Alt-drag (keyboard Ctrl-arrow docking is unchanged). Expanded
+previews expose directional resize grips. Dragging a grip across the header changes
+the expansion side dynamically; the resolved preview/body rectangle is shared by
+content and handles and clipped to available viewport space. Up/down/left/right
+choices are optional preset fields; existing presets retain automatic up/down
+behavior. Movement and docking preserve the chosen expansion direction. Shift axis
+lock and Ctrl grid snapping remain available.
+
+Gameplay/organization revision changes cancel captured organization gestures but
+preserve an open group naming draft, its TextField instance and typed value.
+During a missing basis or a blocking mandatory choice, Confirm is disabled while
+the draft remains editable. Confirmation uses the current authoritative basis;
+Escape/Close, session retirement and changed match/viewer identity still discard
+it deliberately. Hosted coverage adds four-direction geometry/preset round trips
+and a naming draft surviving revision/basis replacement before a fresh command.
+The local Windows player rebuild passed for this change; hosted suites remain the
+source of test execution evidence.

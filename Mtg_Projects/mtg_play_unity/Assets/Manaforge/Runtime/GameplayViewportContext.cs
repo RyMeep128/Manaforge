@@ -41,15 +41,28 @@ namespace Manaforge.Play
     public readonly struct GameplayDrawerGeometry
     {
         public readonly Rect Header;
+        public readonly Rect Body;
         public readonly float BodyHeight;
         public readonly bool BodyBelow;
         public readonly Vector2 GripPosition;
         private GameplayDrawerGeometry(Rect header,float height,bool below,Vector2 grip)
-        {Header=header;BodyHeight=height;BodyBelow=below;GripPosition=grip;}
-        public static GameplayDrawerGeometry Resolve(Rect header,float requestedHeight,GameplayViewportContext viewport)
+        {Header=header;Body=new Rect(header.x,below?header.y+32:header.y-32-height,header.width,height);BodyHeight=height;BodyBelow=below;GripPosition=grip;}
+        private GameplayDrawerGeometry(Rect header,Rect body,GameplayDrawerDirection direction)
+        {Header=header;Body=body;BodyHeight=body.height;BodyBelow=direction==GameplayDrawerDirection.Down;GripPosition=new Vector2(body.xMax-header.x-48,body.yMax-header.y-28);}
+        public static GameplayDrawerGeometry Resolve(Rect header,float requestedHeight,GameplayViewportContext viewport,GameplayDrawerDirection? direction=null)
         {
             if(!ContainerLayoutResolver.Finite(requestedHeight))throw new ArgumentException("DRAWER_BODY_HEIGHT");
             header=ClampHeader(header,viewport.Bounds);
+            if(direction.HasValue){
+                var bounds=viewport.Bounds;float width=Mathf.Min(header.width,bounds.width),bodyHeight=Mathf.Min(requestedHeight,bounds.height);Rect body;
+                switch(direction.Value){
+                    case GameplayDrawerDirection.Left:width=Mathf.Min(width,Mathf.Max(0,header.x-bounds.xMin-2));body=new Rect(header.x-width-2,Mathf.Clamp(header.y,bounds.yMin,bounds.yMax-bodyHeight),width,bodyHeight);break;
+                    case GameplayDrawerDirection.Right:width=Mathf.Min(width,Mathf.Max(0,bounds.xMax-header.xMax-2));body=new Rect(header.xMax+2,Mathf.Clamp(header.y,bounds.yMin,bounds.yMax-bodyHeight),width,bodyHeight);break;
+                    case GameplayDrawerDirection.Up:bodyHeight=Mathf.Min(bodyHeight,Mathf.Max(0,header.y-bounds.yMin-2));body=new Rect(header.x,header.y-bodyHeight-2,width,bodyHeight);break;
+                    default:bodyHeight=Mathf.Min(bodyHeight,Mathf.Max(0,bounds.yMax-header.yMax-2));body=new Rect(header.x,header.yMax+2,width,bodyHeight);break;
+                }
+                return new GameplayDrawerGeometry(header,body,direction.Value);
+            }
             float above=Mathf.Max(0,header.y-viewport.Bounds.yMin-32),below=Mathf.Max(0,viewport.Bounds.yMax-header.y-32);
             bool down=below>=Mathf.Min(requestedHeight,above);
             float height=Mathf.Max(0,Mathf.Min(requestedHeight,down?below:above));

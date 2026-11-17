@@ -63,14 +63,14 @@ namespace Manaforge.Play
                 Controller.Register(DefaultState(entry.id,Controller.Viewport),new ContainerConstraints(new Vector2(entry.id==GameplayHudIds.Priority?285:entry.id==GameplayHudIds.Actions?275:252,100),new Vector2(720,900),DrawerCapabilities,permittedTargets:new[]{"$viewport"},resizeDrawer:true,headerHeight:30,wrapViewportRails:true));
             }
             gestures=new ContainerGestureController(Controller,canvas,Render);
-            foreach(var adapter in adapters.Values){cleanup.Add(gestures.Attach(adapter,()=>adapter.PresentedBodyHeight).Dispose);
+            foreach(var adapter in adapters.Values){cleanup.Add(gestures.Attach(adapter,()=>adapter.PresentedBodyHeight,dockOnDrag:false).Dispose);
                 EventCallback<KeyDownEvent> key=ev=>HandleArrow(ev,adapter.ComponentId);adapter.MoveHandle.RegisterCallback(key);cleanup.Add(()=>adapter.MoveHandle.UnregisterCallback(key));
                 foreach(var grip in adapter.ResizeHandles){grip.handle.RegisterCallback(key);cleanup.Add(()=>grip.handle.UnregisterCallback(key));}
             }
             binding=new LayoutPresetApplicator(Controller,registry,gestures.Cancel);storage=new HudLayoutPresetSession(store);
             toolbar=new ScrollView(ScrollViewMode.Vertical){name="layout-editor-controls",focusable=true};toolbar.style.position=Position.Absolute;toolbar.style.left=Length.Percent(28);toolbar.style.top=8;toolbar.style.width=Length.Percent(44);toolbar.style.maxHeight=Length.Percent(46);toolbar.style.backgroundColor=new Color(.035f,.045f,.06f,.98f);toolbar.style.paddingLeft=toolbar.style.paddingRight=12;toolbar.style.paddingTop=toolbar.style.paddingBottom=10;layer.Add(toolbar);
             toolbar.Add(new Label("Customize Layout | drag headers and resize corners"));
-            toolbar.Add(new Label("Shift-drag locks an axis. Ctrl-drag snaps to a 16-unit grid. Drop near an edge to dock."));
+            toolbar.Add(new Label("Shift-drag locks an axis. Ctrl-drag snaps to a 16-unit grid. Alt-drag near an edge to dock; plain drag floats anywhere."));
             controls=new VisualElement();toolbar.Add(controls);
             component=new PopupField<string>("Drawer",adapters.Keys.ToList(),0){name="layout-editor-component"};
             var row=new VisualElement();row.style.flexDirection=FlexDirection.Row;row.style.flexWrap=Wrap.Wrap;controls.Add(row);
@@ -112,7 +112,7 @@ namespace Manaforge.Play
         private bool SameStates(LayoutPresetApplication a,LayoutPresetApplication b)
         {
             if(a==null || b==null)return false;
-            return a.States.Where(s=>committedOverrides.Contains(s.Id) || draftOverrides.Contains(s.Id)).All(s=>b.States.Any(t=>t.Id==s.Id && t.FloatingRect==s.FloatingRect && t.Edge==s.Edge && t.Order==s.Order && t.DockTarget==s.DockTarget)) && a.DrawerExpansion.All(p=>b.DrawerExpansion.TryGetValue(p.Key,out bool open) && open==p.Value);
+            return a.States.Where(s=>committedOverrides.Contains(s.Id) || draftOverrides.Contains(s.Id)).All(s=>b.States.Any(t=>t.Id==s.Id && t.FloatingRect==s.FloatingRect && t.ExpansionDirection==s.ExpansionDirection && t.Edge==s.Edge && t.Order==s.Order && t.DockTarget==s.DockTarget)) && a.DrawerExpansion.All(p=>b.DrawerExpansion.TryGetValue(p.Key,out bool open) && open==p.Value);
         }
         private LayoutPresetApplication Snapshot()=>new LayoutPresetApplication(Controller.Ids.Select(Controller.State),adapters.ToDictionary(p=>p.Key,p=>p.Value.DrawerExpandedPreference),new List<string>());
         private void RememberStates(){foreach(string id in Controller.Ids)lastStates[id]=Controller.State(id);}
@@ -223,7 +223,7 @@ namespace Manaforge.Play
             foreach(var pair in adapters){bool available=registry.Find(pair.Key)?.Available==true;pair.Value.SetEditing(IsEditing && available);
                 var state=gestures?.PreviewState?.Id==pair.Key?gestures.PreviewState:Controller.State(pair.Key);
                 float requested=Mathf.Clamp(state.FloatingRect.height*Controller.Viewport.y,Controller.Constraints(pair.Key).Minimum.y,Controller.Constraints(pair.Key).Maximum.y);
-                if(OwnsGeometry(pair.Key) && available)pair.Value.Apply(GameplayDrawerGeometry.Resolve(result[pair.Key],requested,Viewport));
+                if(OwnsGeometry(pair.Key) && available)pair.Value.Apply(GameplayDrawerGeometry.Resolve(result[pair.Key],requested,Viewport,state.ExpansionDirection));
                 else{restored|=pair.Value.RestoreLegacy();pair.Value.PositionHandles(GameplayDrawerGeometry.Resolve(pair.Value.HeaderBounds,requested,Viewport));}
             }
             if(restored)relayout?.Invoke();
@@ -248,13 +248,13 @@ namespace Manaforge.Play
         private void EditSelected(Action<string> edit)
         {if(IsEditing && !storage.Busy && registry.Find(component.value)?.Available==true)edit(component.value);}
         public void Dock(string id,ContainerDockEdge edge)
-        {if(!IsEditing || registry.Find(id)?.Available!=true)return;var s=Controller.State(id);Controller.TrySet(new ContainerLayoutState(id,s.FloatingRect,s.Mode,edge:edge,order:s.Order));}
+        {if(!IsEditing || registry.Find(id)?.Available!=true)return;var s=Controller.State(id);Controller.TrySet(new ContainerLayoutState(id,s.FloatingRect,s.Mode,edge:edge,order:s.Order,expansionDirection:s.ExpansionDirection));}
         public void Adjust(string id,float x,float y,bool resize)
         {
             if(!IsEditing || registry.Find(id)?.Available!=true || storage.Busy)return;var s=Controller.State(id);var rect=s.FloatingRect;
             if(resize){var limits=Controller.Constraints(id);rect.width=Mathf.Clamp(rect.width*Controller.Viewport.x+x,limits.Minimum.x,limits.Maximum.x)/Controller.Viewport.x;rect.height=Mathf.Clamp(rect.height*Controller.Viewport.y+y,limits.Minimum.y,limits.Maximum.y)/Controller.Viewport.y;}
             else{var current=Controller.Resolved[id];current.position+=new Vector2(x,y);var clamped=LiveDrawerLayoutAdapter.ClampHeader(current,Controller.Viewport);rect.position=ContainerLayoutResolver.Normalize(clamped,Controller.Viewport).position;}
-            Controller.TrySet(new ContainerLayoutState(id,rect,s.Mode,resize?s.DockTarget:null,resize?s.Edge:ContainerDockEdge.None,s.Order));
+            Controller.TrySet(new ContainerLayoutState(id,rect,s.Mode,resize?s.DockTarget:null,resize?s.Edge:ContainerDockEdge.None,s.Order,s.ExpansionDirection));
         }
         private void HandleArrow(KeyDownEvent ev,string id)
         {

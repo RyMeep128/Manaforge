@@ -16,10 +16,11 @@ namespace Manaforge.Play
         public string DockTarget { get; }
         public ContainerDockEdge Edge { get; }
         public int Order { get; }
+        public GameplayDrawerDirection? ExpansionDirection {get;}
         // A null target with an edge means viewport docking, not an absent parent.
         public ContainerLayoutState(string id,Rect floatingRect,ContainerMode mode=ContainerMode.Panel,
-            string dockTarget=null,ContainerDockEdge edge=ContainerDockEdge.None,int order=0)
-        { Id=id;FloatingRect=floatingRect;Mode=mode;DockTarget=dockTarget;Edge=edge;Order=order; }
+            string dockTarget=null,ContainerDockEdge edge=ContainerDockEdge.None,int order=0,GameplayDrawerDirection? expansionDirection=null)
+        { ExpansionDirection=expansionDirection;Id=id;FloatingRect=floatingRect;Mode=mode;DockTarget=dockTarget;Edge=edge;Order=order; }
     }
 
     public sealed class ContainerConstraints
@@ -147,12 +148,14 @@ namespace Manaforge.Play
         {
             if(state==null || string.IsNullOrWhiteSpace(state.Id) || !states.ContainsKey(state.Id) || !Enum.IsDefined(typeof(ContainerMode),state.Mode) ||
                 !Enum.IsDefined(typeof(ContainerDockEdge),state.Edge))return false;
+            if(state.ExpansionDirection.HasValue && !Enum.IsDefined(typeof(GameplayDrawerDirection),state.ExpansionDirection.Value))return false;
             var r=state.FloatingRect;
             if(!ContainerLayoutResolver.Finite(r.x) || !ContainerLayoutResolver.Finite(r.y) || !ContainerLayoutResolver.Finite(r.width) ||
                 !ContainerLayoutResolver.Finite(r.height) || r.width<=0 || r.height<=0 || !ContainerLayoutResolver.Finite(r.x*Viewport.x) ||
                 !ContainerLayoutResolver.Finite(r.y*Viewport.y) || !ContainerLayoutResolver.Finite(r.width*Viewport.x) ||
                 !ContainerLayoutResolver.Finite(r.height*Viewport.y))return false;
             var c=constraints[state.Id];var old=states[state.Id];
+            if(state.ExpansionDirection!=old.ExpansionDirection && !c.Supports(GameplayHudCapabilities.Resize))return false;
             if(state.Mode!=old.Mode && !c.Supports(GameplayHudCapabilities.ConvertDrawer))return false;
             if((r.width!=old.FloatingRect.width || r.height!=old.FloatingRect.height) && !c.Supports(GameplayHudCapabilities.Resize))return false;
             if((r.x!=old.FloatingRect.x || r.y!=old.FloatingRect.y) && !c.Supports(GameplayHudCapabilities.Move))return false;
@@ -203,7 +206,7 @@ namespace Manaforge.Play
         }
         public bool Undock(string id)
         {
-            var s=states[id];return TrySet(new ContainerLayoutState(id,s.FloatingRect,s.Mode));
+            var s=states[id];return TrySet(new ContainerLayoutState(id,s.FloatingRect,s.Mode,expansionDirection:s.ExpansionDirection));
         }
         public bool Reorder(string id,int direction)
         {
@@ -214,7 +217,7 @@ namespace Manaforge.Play
             var moving=siblings[index];siblings.RemoveAt(index);siblings.Insert(next,moving);
             var copy=new Dictionary<string,ContainerLayoutState>(states);
             for(int i=0;i<siblings.Count;i++){
-                var old=siblings[i];var updated=new ContainerLayoutState(old.Id,old.FloatingRect,old.Mode,old.DockTarget,old.Edge,i);
+                var old=siblings[i];var updated=new ContainerLayoutState(old.Id,old.FloatingRect,old.Mode,old.DockTarget,old.Edge,i,old.ExpansionDirection);
                 if(!Valid(updated))return false;copy[old.Id]=updated;
             }
             var resolved=resolver.Resolve(copy,constraints,Viewport);
@@ -227,7 +230,7 @@ namespace Manaforge.Play
             foreach(var child in states.Values.Where(s=>s.DockTarget==id).ToArray()){
                 var floating=ContainerLayoutResolver.Normalize(Resolved[child.Id],Viewport);
                 if(child.Mode==ContainerMode.Drawer)floating.height=child.FloatingRect.height;
-                states[child.Id]=new ContainerLayoutState(child.Id,floating,child.Mode);
+                states[child.Id]=new ContainerLayoutState(child.Id,floating,child.Mode,expansionDirection:child.ExpansionDirection);
             }
             states.Remove(id);constraints.Remove(id);Refresh();
         }

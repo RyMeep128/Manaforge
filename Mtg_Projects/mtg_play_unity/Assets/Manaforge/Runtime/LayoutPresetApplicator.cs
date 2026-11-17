@@ -35,7 +35,7 @@ namespace Manaforge.Play
                 if(state.DockTarget!=null)ids.TryGetValue(state.DockTarget,out target);
                 var edge=state.DockTarget!=null && target==null?ContainerDockEdge.None:state.Edge;
                 entries.TryGetValue(pair.Key,out var previous);
-                entries[pair.Key]=new HudComponentSnapshot(state.FloatingRect,state.Mode,target,edge,state.Order,shell.DrawerExpandedPreference,previous?.ToJson());
+                entries[pair.Key]=new HudComponentSnapshot(state.FloatingRect,state.Mode,target,edge,state.Order,shell.DrawerExpandedPreference,previous?.ToJson(),state.ExpansionDirection);
             }
             return new HudLayoutPreset(id,name,entries,prior?.ToJson());
         }
@@ -76,7 +76,7 @@ namespace Manaforge.Play
                             target!=null && !controller.Constraints(target).AcceptsDockedContainers)){
                             target=null;edge=ContainerDockEdge.None;adjustments.Add(registration.Descriptor.DisplayName+": dock target unavailable; floated");
                         }
-                        candidate=new ContainerLayoutState(id,rect,saved.Mode,target,edge,saved.Order);expanded=saved.DrawerExpanded;
+                        candidate=new ContainerLayoutState(id,rect,saved.Mode,target,edge,saved.Order,saved.ExpansionDirection);expanded=saved.DrawerExpanded;
                     }
                 }
                 proposed[id]=candidate;expansion[id]=expanded;

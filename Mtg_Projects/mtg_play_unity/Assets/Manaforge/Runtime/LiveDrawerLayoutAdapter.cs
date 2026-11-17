@@ -33,7 +33,7 @@ namespace Manaforge.Play
         public event Action Disposing;
         private readonly GameplayDrawer drawer;
         private readonly VisualElement canvas,handles;
-        private readonly VisualElement grip,outline;
+        private readonly VisualElement grip,outline;private readonly List<VisualElement> directionGrips=new List<VisualElement>();
         private readonly List<ScrollView> scrollViews=new List<ScrollView>();
         private bool editing,originalOpen,originalMotion;
         private readonly List<Action> restore=new List<Action>();
@@ -49,7 +49,8 @@ namespace Manaforge.Play
             PreviewToggle=new Button(()=>drawer.SetOpen(!drawer.IsOpen)){name="layout-preview-"+id,text="Preview",tooltip="Open or close the live drawer preview. Preview expansion is not saved."};PreviewToggle.style.position=Position.Absolute;PreviewToggle.style.right=0;PreviewToggle.style.width=84;PreviewToggle.style.height=30;GameplayTheme.Button(PreviewToggle);handles.Add(PreviewToggle);
             outline=new VisualElement{name="layout-preview-outline-"+id,pickingMode=PickingMode.Ignore};outline.AddToClassList("layout-preview-outline");outline.style.position=Position.Absolute;handles.Add(outline);outline.SendToBack();drawer.OpenChanged+=Opened;
             grip=new Label("Resize"){name="layout-resize-"+id,focusable=true,tooltip="Drag to resize expanded drawer"};grip.style.position=Position.Absolute;grip.style.right=0;grip.style.width=48;grip.style.height=28;grip.style.backgroundColor=new Color(.3f,.2f,.08f,1);grip.style.color=Color.white;handles.Add(grip);
-            resizeHandles.Add((grip,Vector2.one));editorLayer.Add(handles);SetEditing(false);
+            resizeHandles.Add((grip,Vector2.one));
+            foreach(var direction in new[]{Vector2.left,Vector2.right,Vector2.up,Vector2.down}){var handle=new Label("↔"){focusable=true,name="layout-expand-"+id+"-"+direction.ToString(),tooltip="Drag outward to choose expansion direction"};handle.style.position=Position.Absolute;handle.style.width=handle.style.height=24;handle.style.backgroundColor=new Color(.1f,.28f,.36f,1);handle.style.color=Color.white;handles.Add(handle);directionGrips.Add(handle);resizeHandles.Add((handle,direction));}editorLayer.Add(handles);SetEditing(false);
         }
         private void Opened(bool open){PreviewToggle.text=open?"Close preview":"Preview";if(editing)PreviewChanged?.Invoke();}
         private void Remember(VisualElement element)
@@ -66,9 +67,10 @@ namespace Manaforge.Play
         public void PositionHandles(GameplayDrawerGeometry geometry)
         {
             PresentedBodyHeight=geometry.BodyHeight;var header=geometry.Header;handles.style.left=header.x;handles.style.top=header.y;handles.style.width=header.width;handles.style.height=30;
-            outline.style.left=0;outline.style.top=geometry.BodyBelow?32:-32-geometry.BodyHeight;outline.style.width=header.width;outline.style.height=geometry.BodyHeight;outline.style.display=editing && drawer.IsOpen?DisplayStyle.Flex:DisplayStyle.None;
+            outline.style.left=geometry.Body.x-header.x;outline.style.top=geometry.Body.y-header.y;outline.style.width=geometry.Body.width;outline.style.height=geometry.BodyHeight;outline.style.display=editing && drawer.IsOpen?DisplayStyle.Flex:DisplayStyle.None;
             grip.style.display=drawer.IsOpen?DisplayStyle.Flex:DisplayStyle.None;
             grip.style.right=StyleKeyword.Auto;grip.style.left=geometry.GripPosition.x;grip.style.top=geometry.GripPosition.y;
+            for(int i=0;i<directionGrips.Count;i++){var h=directionGrips[i];h.style.display=drawer.IsOpen?DisplayStyle.Flex:DisplayStyle.None;h.style.left=i==0?-24:i==1?header.width:header.width*.5f-12;h.style.top=i<2?3:i==2?-24:30;}
             resizeHandles[0]=(grip,new Vector2(1,geometry.BodyBelow?1:-1));
         }
         public static Rect ClampHeader(Rect rect,Vector2 viewport)=>GameplayDrawerGeometry.ClampHeader(rect,new Rect(Vector2.zero,viewport));
@@ -79,9 +81,9 @@ namespace Manaforge.Play
             drawer.style.position=Position.Absolute;drawer.style.left=point.x;drawer.style.top=point.y;drawer.style.right=StyleKeyword.Auto;drawer.style.bottom=StyleKeyword.Auto;
             drawer.style.width=header.width;drawer.style.height=30;drawer.style.maxHeight=30;
             var body=drawer.Viewport;body.style.position=Position.Absolute;body.style.left=0;body.style.right=StyleKeyword.Auto;body.style.width=header.width;body.style.paddingTop=0;
-            body.style.top=geometry.BodyBelow?new StyleLength(32):new StyleLength(StyleKeyword.Auto);body.style.bottom=geometry.BodyBelow?new StyleLength(StyleKeyword.Auto):new StyleLength(32);
+            body.style.top=geometry.Body.y-header.y;body.style.left=geometry.Body.x-header.x;body.style.bottom=StyleKeyword.Auto;body.style.width=geometry.Body.width;
             body.style.height=geometry.BodyHeight;body.style.maxHeight=geometry.BodyHeight;drawer.Content.style.height=geometry.BodyHeight;drawer.Content.style.maxHeight=geometry.BodyHeight;drawer.Content.style.flexShrink=0;
-            foreach(var scroll in scrollViews){scroll.style.width=header.width;scroll.style.maxWidth=header.width;scroll.style.height=geometry.BodyHeight;scroll.style.maxHeight=geometry.BodyHeight;scroll.style.flexShrink=0;}
+            foreach(var scroll in scrollViews){scroll.style.width=geometry.Body.width;scroll.style.maxWidth=geometry.Body.width;scroll.style.height=geometry.BodyHeight;scroll.style.maxHeight=geometry.BodyHeight;scroll.style.flexShrink=0;}
             PositionHandles(geometry);
         }
         public bool RestoreLegacy(){if(!custom)return false;foreach(var action in restore)action();custom=false;return true;}

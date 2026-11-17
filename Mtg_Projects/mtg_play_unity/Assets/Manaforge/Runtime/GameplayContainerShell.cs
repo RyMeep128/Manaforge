@@ -110,12 +110,12 @@ namespace Manaforge.Play
             canvas.RegisterCallback(key,TrickleDown.TrickleDown);
             changed=()=>{if(!committing && IsActive)Cancel();};controller.Changed+=changed;
         }
-        public IDisposable Attach(IGameplayContainerBinding shell,Func<float?> drawerHeight=null)
+        public IDisposable Attach(IGameplayContainerBinding shell,Func<float?> drawerHeight=null,bool dockOnDrag=true)
         {
             if(disposed)throw new ObjectDisposedException(nameof(ContainerGestureController));
             var unbind=new List<Action>();
-            Bind(shell.MoveHandle,shell.ComponentId,false,Vector2.zero,unbind);
-            foreach(var grip in shell.ResizeHandles)Bind(grip.handle,shell.ComponentId,true,grip.axes,unbind,()=>shell.ResizeHandles.First(g=>g.handle==grip.handle).axes,drawerHeight);
+            Bind(shell.MoveHandle,shell.ComponentId,false,Vector2.zero,unbind,dockOnDrag:dockOnDrag);
+            foreach(var grip in shell.ResizeHandles)Bind(grip.handle,shell.ComponentId,true,grip.axes,unbind,()=>shell.ResizeHandles.First(g=>g.handle==grip.handle).axes,drawerHeight,dockOnDrag);
             EventCallback<DetachFromPanelEvent> detached=ev=>{if(ev.target==shell.Element && active==shell.ComponentId)Cancel();};
             shell.Element.RegisterCallback(detached);unbind.Add(()=>shell.Element.UnregisterCallback(detached));
             Attachment attachment=null;
@@ -123,15 +123,15 @@ namespace Manaforge.Play
             attachment=new Attachment(()=>{if(active==shell.ComponentId)Cancel();foreach(var action in unbind)action();attachments.Remove(attachment);});
             attachments.Add(attachment);return attachment;
         }
-        private void Bind(VisualElement handle,string id,bool sizing,Vector2 direction,List<Action> unbind,Func<Vector2> currentDirection=null,Func<float?> drawerHeight=null)
+        private void Bind(VisualElement handle,string id,bool sizing,Vector2 direction,List<Action> unbind,Func<Vector2> currentDirection=null,Func<float?> drawerHeight=null,bool dockOnDrag=true)
         {
             EventCallback<PointerDownEvent> down=ev=>{
                 if(ev.button!=0 || !handle.enabledInHierarchy)return;
                 if(!Begin(id,canvas.WorldToLocal(ev.position),sizing,currentDirection?.Invoke()??direction,drawerHeight?.Invoke()))return;
                 captured=handle;pointer=ev.pointerId;handle.CapturePointer(pointer);handle.Focus();ev.StopPropagation();
             };
-            EventCallback<PointerMoveEvent> move=ev=>{if(captured!=handle || ev.pointerId!=pointer)return;Move(canvas.WorldToLocal(ev.position),ev.shiftKey,ev.ctrlKey);ev.StopPropagation();};
-            EventCallback<PointerUpEvent> up=ev=>{if(captured!=handle || ev.pointerId!=pointer)return;Move(canvas.WorldToLocal(ev.position),ev.shiftKey,ev.ctrlKey);Commit();ev.StopPropagation();};
+            EventCallback<PointerMoveEvent> move=ev=>{if(captured!=handle || ev.pointerId!=pointer)return;Move(canvas.WorldToLocal(ev.position),ev.shiftKey,ev.ctrlKey,dockOnDrag || ev.altKey);ev.StopPropagation();};
+            EventCallback<PointerUpEvent> up=ev=>{if(captured!=handle || ev.pointerId!=pointer)return;Move(canvas.WorldToLocal(ev.position),ev.shiftKey,ev.ctrlKey,dockOnDrag || ev.altKey);Commit();ev.StopPropagation();};
             EventCallback<PointerCaptureOutEvent> lost=ev=>{if(captured==handle)Cancel();};
             handle.RegisterCallback(down);handle.RegisterCallback(move);handle.RegisterCallback(up);handle.RegisterCallback(lost);
             unbind.Add(()=>{handle.UnregisterCallback(down);handle.UnregisterCallback(move);handle.UnregisterCallback(up);handle.UnregisterCallback(lost);});
@@ -145,12 +145,19 @@ namespace Manaforge.Play
             constrainedAxis=0;active=id;start=position;resize=sizing;axes=direction;original=controller.State(id);initial=controller.Resolved[id];if(sizing && original.Mode==ContainerMode.Drawer)initial.height=Mathf.Clamp(presentedHeight??original.FloatingRect.height*controller.Viewport.y,limits.Minimum.y,limits.Maximum.y);candidate=null;
             return true;
         }
-        public void Move(Vector2 position,bool constrainAxis=false,bool snapToGrid=false)
+        public void Move(Vector2 position,bool constrainAxis=false,bool snapToGrid=false,bool allowDock=true)
         {
             if(active==null)return;Vector2 delta=position-start;
             if(!deliberate && delta.magnitude<10)return;deliberate=true;
             if(constrainAxis && !resize){if(constrainedAxis==0)constrainedAxis=Mathf.Abs(delta.x)>=Mathf.Abs(delta.y)?1:2;if(constrainedAxis==1)delta.y=0;else delta.x=0;}else constrainedAxis=0;
             var limits=controller.Constraints(active);var rect=initial;
+            var expansion=original.ExpansionDirection;
+            if(resize && original.Mode==ContainerMode.Drawer){
+                var center=new Vector2(initial.center.x,initial.y+15);var offset=position-center;var initialOffset=start-center;bool horizontal=Mathf.Abs(axes.x)>Mathf.Abs(axes.y);
+                expansion=horizontal?(offset.x<0?GameplayDrawerDirection.Left:GameplayDrawerDirection.Right):(offset.y<0?GameplayDrawerDirection.Up:GameplayDrawerDirection.Down);
+                if(horizontal)delta.x=(Mathf.Abs(offset.x)-Mathf.Abs(initialOffset.x))*Mathf.Sign(axes.x);
+                else delta.y=(Mathf.Abs(offset.y)-Mathf.Abs(initialOffset.y))*Mathf.Sign(axes.y);
+            }
             if(resize){rect.width=Mathf.Clamp(rect.width+delta.x*axes.x,limits.Minimum.x,limits.Maximum.x);rect.height=Mathf.Clamp(rect.height+delta.y*axes.y,limits.Minimum.y,limits.Maximum.y);}
             else{rect.position+=delta;rect.x=Mathf.Max(0,rect.x);rect.y=Mathf.Max(0,rect.y);}
             if(snapToGrid){if(resize){rect.width=Mathf.Clamp(Mathf.Round(rect.width/16)*16,limits.Minimum.x,limits.Maximum.x);rect.height=Mathf.Clamp(Mathf.Round(rect.height/16)*16,limits.Minimum.y,limits.Maximum.y);}else{rect.x=Mathf.Round(rect.x/16)*16;rect.y=Mathf.Round(rect.y/16)*16;}}
@@ -159,9 +166,9 @@ namespace Manaforge.Play
             if(!resize)normalized.size=original.FloatingRect.size;
             else if(original.Edge!=ContainerDockEdge.None)normalized.position=original.FloatingRect.position;
             DockPreviewTarget=null;DockPreviewEdge=ContainerDockEdge.None;
-            if(!resize && limits.Supports(GameplayHudCapabilities.Dock))FindDock(start+delta,limits);
+            if(!resize && allowDock && limits.Supports(GameplayHudCapabilities.Dock))FindDock(start+delta,limits);
             candidate=new ContainerLayoutState(active,normalized,original.Mode,resize?original.DockTarget:DockPreviewTarget,
-                resize?original.Edge:DockPreviewEdge,original.Order);
+                resize?original.Edge:DockPreviewEdge,original.Order,expansion);
             var preview=controller.Preview(candidate);if(preview!=null)render(preview);
         }
         private void FindDock(Vector2 point,ContainerConstraints limits)
