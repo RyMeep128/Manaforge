@@ -1,16 +1,21 @@
 # Shared battlefield rendering and editing (CT-12–15)
 
-Current visibility (2026-11-17): normal desktop **Play → Start Game** enables the v3
-drawer candidate by owner request. Restart Manaforge after updating. After keeping
-your opening hand, use **New group**, Shift-select permanents and drag them into
-the group, then select its **…** button and **Convert to Drawer**. Each drawer has
-a **Members** button for individual cards. **Default arrangement** provides local
-legacy placement. This owner-requested preview does not establish full-game or
-multiplayer acceptance; the historical gates below remain validation requirements.
-The local Windows player rebuild succeeded with the restored license on 2026-11-17.
-The desktop launcher passes `organization_drawers=True` explicitly; the low-level
-API defaults and legacy v1/v2 paths remain unchanged. The packaged saved-deck
-acceptance driver now selects the same v3 path as normal Play.
+Current visibility (2026-11-17): normal desktop **Play > Start Game** enables the v4
+free-placement/drawer candidate by owner request. Restart Manaforge after updating.
+During priority, left-drag your battlefield permanents to place them freely, onto
+an existing drawer to add them, or onto another owned permanent to name a new
+drawer at that permanent's location. A short click keeps the existing gameplay
+action. Hand play, combat, targeting and mana choices keep their existing paths.
+Drawer headers show only their name and adjacent **...** menu: click the name to
+expand/collapse, or drag it to move. **... > Inspect members** accesses individual
+cards even when collapsed. Counts are in the tooltip. **Default arrangement**
+provides local legacy placement. See [free placement](play-free-placement.md) for
+state ownership, lifecycle, verification and current acceptance limits.
+
+The desktop launcher and saved-deck acceptance driver explicitly pass
+`organization_free_placement=True`. Low-level API defaults and legacy v1/v2/v3
+contracts remain available. A local rebuild and focused live check do not
+establish full-game or multiplayer acceptance.
 
 This slice adds organization protocol v2 and a coherent Unity receive mailbox,
 then integrates the normal owner and flat group rendering/gestures. Default normal

@@ -215,6 +215,7 @@ class PlayWorkspace(W.QWidget):
                 payment_mode=payment_mode,
                 deck_owners=deck_owners,
                 organization_drawers=True,
+                organization_free_placement=True,
             )
 
         self.native_jobs.submit(work, quiet=True)

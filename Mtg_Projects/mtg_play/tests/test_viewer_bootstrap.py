@@ -141,7 +141,7 @@ def test_unknown_formats_are_rejected_without_inference(format):
         export_viewer_bootstrap(**arguments(), format=format)
 
 
-@pytest.mark.parametrize("version", [2, 3])
+@pytest.mark.parametrize("version", [2, 3, 4])
 def test_organization_opt_in_is_private_explicit_and_versioned(version):
     assert "organization_version" not in json.loads(
         export_viewer_bootstrap(**arguments())
@@ -153,7 +153,7 @@ def test_organization_opt_in_is_private_explicit_and_versioned(version):
     ).validate(payload)
 
 
-@pytest.mark.parametrize("version", [True, False, 0, 1, 4, "2", 2.0])
+@pytest.mark.parametrize("version", [True, False, 0, 1, 5, "2", 2.0])
 def test_invalid_organization_versions_fail_before_export(version):
     with pytest.raises(ViewerBootstrapError):
         export_viewer_bootstrap(**arguments(), organization_version=version)

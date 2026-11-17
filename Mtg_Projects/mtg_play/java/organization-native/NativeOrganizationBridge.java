@@ -18,7 +18,7 @@ final class NativeOrganizationBridge implements ViewerChannelExtension {
         this(game,registrations,sender,version2?2:1);
     }
     NativeOrganizationBridge(UUID game,Map<String,ManaforgeMatchCoordinator.Viewer> registrations,Sender sender,int version) throws Exception {
-        if(version<1 || version>3)throw new IllegalArgumentException("ORGANIZATION_VERSION");this.version=version;this.version2=version==2;this.game=Objects.requireNonNull(game);this.registrations=Collections.unmodifiableMap(new TreeMap<>(registrations));
+        if(version<1 || version>4)throw new IllegalArgumentException("ORGANIZATION_VERSION");this.version=version;this.version2=version==2;this.game=Objects.requireNonNull(game);this.registrations=Collections.unmodifiableMap(new TreeMap<>(registrations));
         for(Map.Entry<String,ManaforgeMatchCoordinator.Viewer> entry:this.registrations.entrySet()){
             ManaforgeMatchCoordinator.Viewer viewer=entry.getValue();if(!entry.getKey().equals(viewer.seat) || actors.put(UUID.fromString(viewer.nativePlayer),viewer.seat)!=null)throw new IllegalArgumentException("NATIVE_ORGANIZATION_REGISTRATION");
         }
@@ -28,10 +28,10 @@ final class NativeOrganizationBridge implements ViewerChannelExtension {
             OrganizationMessages.Context context=new OrganizationMessages.Context(identities.matchEpoch,viewer.viewer,0,Collections.emptyMap(),Collections.emptyMap(),Collections.emptyList(),refs.values());
             contexts.put(viewer.seat,new OrganizationCodec.HostContext(context,Collections.emptyMap(),refs));
         }
-        try{channel=new OrganizationChannel((seat,kind,wire)->sender.send(seat,kind,version==3?correlate(wire,gameplay.getOrDefault(seat,0L)):version2?OrganizationV2Messages.upgrade(wire,gameplay.getOrDefault(seat,0L)):wire),new Basis(identities.matchEpoch,this.registrations.keySet(),Collections.emptyList()),0,contexts,version==3?3:1,()->0);}catch(Exception failure){identities.close();throw failure;}
+        try{channel=new OrganizationChannel((seat,kind,wire)->sender.send(seat,kind,version>=3?correlate(wire,gameplay.getOrDefault(seat,0L)):version2?OrganizationV2Messages.upgrade(wire,gameplay.getOrDefault(seat,0L)):wire),new Basis(identities.matchEpoch,this.registrations.keySet(),Collections.emptyList()),0,contexts,version>=3?version:1,()->0);}catch(Exception failure){identities.close();throw failure;}
     }
-    private static String correlate(String raw,long gameplay) throws IOException {
-        com.google.gson.JsonObject wire=OrganizationV3Messages.parseContract(raw);if(wire.get("message_type").getAsString().equals("organization_snapshot"))wire.getAsJsonObject("body").addProperty("gameplay_revision",gameplay);return wire.toString();
+    private String correlate(String raw,long gameplay) throws IOException {
+        com.google.gson.JsonObject wire=version==4?OrganizationV4Messages.parseContract(raw):OrganizationV3Messages.parseContract(raw);if(wire.get("message_type").getAsString().equals("organization_snapshot"))wire.getAsJsonObject("body").addProperty("gameplay_revision",gameplay);return wire.toString();
     }
     private void owned(){if(Thread.currentThread()!=owner || closed)throw new IllegalStateException("NATIVE_ORGANIZATION_OWNER");}
     private static void require(boolean value) throws IOException {if(!value)throw new IOException("NATIVE_ORGANIZATION_BASIS");}
@@ -64,7 +64,7 @@ final class NativeOrganizationBridge implements ViewerChannelExtension {
             OrganizationMessages.Context wire=new OrganizationMessages.Context(identities.matchEpoch,view.viewer.viewer,nextRevision,objects,seats,objects.values(),refs.values());contexts.put(seat,new OrganizationCodec.HostContext(wire,bindings,refs));
         }
         Map<String,Long> nextGameplay=new HashMap<>();for(String seat:registrations.keySet())nextGameplay.put(seat,projected.get(seat).snapshot().get("revision").getAsLong());
-        if(version>=2){BattlefieldOrganizationSession.Snapshot before=channel.snapshot();State candidate=BattlefieldOrganizationService.reconcile(before.state,basis);long next=before.organizationRevision+(candidate.seats.equals(before.state.seats)?0:1);for(String seat:registrations.keySet()){if(version==3)OrganizationCodec.snapshotState("preflight",candidate,next,nextRevision,contexts.get(seat),3,nextGameplay.get(seat));else OrganizationV2Messages.upgrade(OrganizationCodec.snapshotState("preflight",candidate,next,nextRevision,contexts.get(seat)),nextGameplay.get(seat));}}
+        if(version>=2){BattlefieldOrganizationSession.Snapshot before=channel.snapshot();State candidate=BattlefieldOrganizationService.reconcile(before.state,basis);long next=before.organizationRevision+(candidate.seats.equals(before.state.seats)?0:1);for(String seat:registrations.keySet()){if(version>=3)OrganizationCodec.snapshotState("preflight",candidate,next,nextRevision,contexts.get(seat),version,nextGameplay.get(seat));else OrganizationV2Messages.upgrade(OrganizationCodec.snapshotState("preflight",candidate,next,nextRevision,contexts.get(seat)),nextGameplay.get(seat));}}
         OrganizationChannel.PreparedBasis organization=channel.prepareBasis(basis,nextRevision,contexts);
         return ()->{owned();require(revision+1==nextRevision);identity.commit();gameplay.clear();gameplay.putAll(nextGameplay);organization.commit();revision=nextRevision;};
     }

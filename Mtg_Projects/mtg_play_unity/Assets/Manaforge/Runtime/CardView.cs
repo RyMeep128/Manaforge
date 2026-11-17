@@ -145,10 +145,12 @@ namespace Manaforge.Play
             missing.text="Artwork unavailable";Layout();
         }
 
+        private static bool SameValues(CardDisplayValues a,CardDisplayValues b)=>a!=null && a.Name==b.Name && a.ManaCost==b.ManaCost && a.TypeLine==b.TypeLine && a.RulesText==b.RulesText && a.PowerToughness==b.PowerToughness && a.BasePower==b.BasePower && a.BaseToughness==b.BaseToughness && a.Status==b.Status && ReferenceEquals(a.CompactProfile,b.CompactProfile) && a.Loyalty==b.Loyalty && a.Defense==b.Defense && a.RulesStyle==b.RulesStyle && a.CollectorText==b.CollectorText && a.IsAbility==b.IsAbility && a.HidePrintedStats==b.HidePrintedStats && ReferenceEquals(a.RoomDoors,b.RoomDoors);
         public void UpdateValues(CardDisplayValues values)
         {
             if (concealed) return;
             if (values == null) throw new ArgumentNullException(nameof(values));
+            if(SameValues(displayValues,values))return;
             ViewRevision++;
             var previous=displayValues;
             bool sameDoors=ReferenceEquals(previous?.RoomDoors,values.RoomDoors);
@@ -164,7 +166,7 @@ namespace Manaforge.Play
             authenticOnly=Identity?.LayoutProfileId=="authentic-image-v1" || !string.IsNullOrEmpty(compactProfile?.Kind);
             Set(rules, values.RulesText); rulesSymbols.SetText(values.RulesText);
             stats.enableRichText=values.PowerToughness!=null && System.Text.RegularExpressions.Regex.IsMatch(values.PowerToughness,@"^[0-9+*−\-/]+$",System.Text.RegularExpressions.RegexOptions.CultureInvariant);
-            Set(stats,stats.enableRichText?ColoredStats(values.PowerToughness,values.BasePower,values.BaseToughness):values.PowerToughness??values.Defense);loyaltyCounter.SetValue(Array.IndexOf((values.TypeLine??"").Split('�')[0].Split(' '),"Planeswalker")>=0?values.Loyalty:null);
+            Set(stats,stats.enableRichText?ColoredStats(values.PowerToughness,values.BasePower,values.BaseToughness):values.PowerToughness??values.Defense);loyaltyCounter.SetValue(Array.IndexOf((values.TypeLine??"").Split('—')[0].Split(' '),"Planeswalker")>=0?values.Loyalty:null);
             Set(status, values.Status);Set(miniKind,compactProfile?.Kind);Set(collector,values.CollectorText);rulesEmphasis=values.RulesStyle; Layout();
         }
 
@@ -201,6 +203,7 @@ namespace Manaforge.Play
                 throw new ArgumentOutOfRangeException(nameof(presentation));
             if (float.IsNaN(newWidth) || float.IsInfinity(newWidth) || newWidth <= 0)
                 throw new ArgumentOutOfRangeException(nameof(newWidth));
+            if(mode==presentation && width==newWidth)return;
             mode = presentation; width = newWidth; Layout();
         }
 
@@ -210,7 +213,7 @@ namespace Manaforge.Play
             if(liveMarkers.parent==null)Add(liveMarkers);
             liveMarkers.text=concealed?"":text??"";liveMarkers.style.display=string.IsNullOrEmpty(liveMarkers.text)?DisplayStyle.None:DisplayStyle.Flex;
         }
-        public void SetSelected(bool value){selected=!concealed && value;Layout();}
+        public void SetSelected(bool value){bool next=!concealed && value;if(selected==next)return;selected=next;Layout();}
 
         private void Layout()
         {

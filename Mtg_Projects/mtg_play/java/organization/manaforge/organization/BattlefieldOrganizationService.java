@@ -47,12 +47,20 @@ public final class BattlefieldOrganizationService {
         @Override public boolean equals(Object other){if(!(other instanceof Group))return false;Group g=(Group)other;return presentationMode==g.presentationMode && id.equals(g.id) && name.equals(g.name) && Double.compare(x,g.x)==0 && Double.compare(y,g.y)==0 && members.equals(g.members);}
         @Override public int hashCode(){return Objects.hash(id,name,x,y,members,presentationMode);}
     }
+    public static final class Placement {
+        public final double x,y;
+        public Placement(double x,double y){position(x,y);this.x=x;this.y=y;}
+        @Override public boolean equals(Object other){if(!(other instanceof Placement))return false;Placement p=(Placement)other;return Double.compare(x,p.x)==0 && Double.compare(y,p.y)==0;}
+        @Override public int hashCode(){return Objects.hash(x,y);}
+    }
     public static final class Seat {
         public final List<String> root;
         public final List<Group> groups;
-        private Seat(Collection<String> root,Collection<Group> groups){this.root=frozen(root);this.groups=frozen(groups);}
-        @Override public boolean equals(Object other){if(!(other instanceof Seat))return false;Seat s=(Seat)other;return root.equals(s.root) && groups.equals(s.groups);}
-        @Override public int hashCode(){return Objects.hash(root,groups);}
+        public final Map<String,Placement> placements;
+        private Seat(Collection<String> root,Collection<Group> groups){this(root,groups,Collections.emptyMap());}
+        private Seat(Collection<String> root,Collection<Group> groups,Map<String,Placement> placements){this.root=frozen(root);this.groups=frozen(groups);this.placements=Collections.unmodifiableMap(new TreeMap<>(placements));}
+        @Override public boolean equals(Object other){if(!(other instanceof Seat))return false;Seat s=(Seat)other;return root.equals(s.root) && groups.equals(s.groups) && placements.equals(s.placements);}
+        @Override public int hashCode(){return Objects.hash(root,groups,placements);}
     }
     public static final class State {
         public final Basis basis;
@@ -62,6 +70,7 @@ public final class BattlefieldOrganizationService {
         public void validate(){
             require(seats.keySet().equals(basis.seats),"ROSTER_MISMATCH");Set<String> seen=new HashSet<>(),groups=new HashSet<>();
             for(Map.Entry<String,Seat> entry:seats.entrySet()){
+                for(String placed:entry.getValue().placements.keySet())require(entry.getValue().root.contains(placed) && basis.members.get(placed)!=null && basis.members.get(placed).eligible,"INVALID_PLACEMENT");
                 for(String member:entry.getValue().root)validateMember(member,entry.getKey(),false,seen);
                 for(Group group:entry.getValue().groups){require(groups.add(group.id),"DUPLICATE_GROUP");for(String member:group.members)validateMember(member,entry.getKey(),true,seen);}
             }
@@ -71,7 +80,7 @@ public final class BattlefieldOrganizationService {
         @Override public boolean equals(Object other){if(!(other instanceof State))return false;State s=(State)other;return basis.equals(s.basis) && seats.equals(s.seats);}
         @Override public int hashCode(){return Objects.hash(basis,seats);}
     }
-    public enum Kind { CREATE, RENAME, DELETE, POSITION, REORDER, MOVE, SET_MODE }
+    public enum Kind { CREATE, RENAME, DELETE, POSITION, REORDER, MOVE, SET_MODE, PLACE }
     public static final class Operation {
         public final Kind kind;
         public final PresentationMode presentationMode;
@@ -85,6 +94,7 @@ public final class BattlefieldOrganizationService {
         public static Operation create(String group,String name,double x,double y){return new Operation(Kind.CREATE,group,name,x,y,0,Collections.emptyList());}
         public static Operation rename(String group,String name){return new Operation(Kind.RENAME,group,name,0,0,0,Collections.emptyList());}
         public static Operation delete(String group){return new Operation(Kind.DELETE,group,null,0,0,0,Collections.emptyList());}
+        public static Operation place(String member,double x,double y){return new Operation(Kind.PLACE,null,null,x,y,0,Collections.singletonList(member));}
         public static Operation position(String group,double x,double y){return new Operation(Kind.POSITION,group,null,x,y,0,Collections.emptyList());}
         public static Operation reorder(String group,int index){return new Operation(Kind.REORDER,group,null,0,0,index,Collections.emptyList());}
         /** Null group means default root. Index is measured after selected objects are removed. */
@@ -95,9 +105,9 @@ public final class BattlefieldOrganizationService {
     }
     public static State apply(State state,String trustedActorSeat,Operation operation,Basis battlefieldBasis){
         require(state!=null && operation!=null && state.basis.equals(battlefieldBasis),"STALE_BASIS");require(trustedActorSeat!=null && state.seats.containsKey(trustedActorSeat),"UNKNOWN_ACTOR");
-        Seat original=state.seats.get(trustedActorSeat);List<String> root=new ArrayList<>(original.root);List<Group> groups=new ArrayList<>(original.groups);
+        Seat original=state.seats.get(trustedActorSeat);List<String> root=new ArrayList<>(original.root);List<Group> groups=new ArrayList<>(original.groups);Map<String,Placement> placements=new TreeMap<>(original.placements);
         int selected=-1;for(int i=0;i<groups.size();i++)if(groups.get(i).id.equals(operation.groupId))selected=i;
-        if(operation.kind!=Kind.CREATE && !(operation.kind==Kind.MOVE && operation.groupId==null))require(selected>=0,"GROUP_NOT_OWNED");
+        if(operation.kind!=Kind.CREATE && operation.kind!=Kind.PLACE && !(operation.kind==Kind.MOVE && operation.groupId==null))require(selected>=0,"GROUP_NOT_OWNED");
         Group group=selected<0?null:groups.get(selected);
         switch(operation.kind){
             case CREATE:
@@ -108,16 +118,21 @@ public final class BattlefieldOrganizationService {
             case SET_MODE:groups.set(selected,new Group(group.id,group.name,group.x,group.y,group.members,operation.presentationMode));break;
             case DELETE:root.addAll(group.members);groups.remove(selected);break;
             case REORDER:require(operation.index>=0 && operation.index<groups.size(),"INVALID_INDEX");groups.remove(selected);groups.add(operation.index,group);break;
+            case PLACE:
+                require(operation.members.size()==1,"INVALID_PLACEMENT");String placed=operation.members.get(0);Member own=state.basis.members.get(placed);
+                require(own!=null && own.controller.equals(trustedActorSeat) && own.eligible,"MEMBER_NOT_OWNED_OR_ELIGIBLE");
+                for(int i=0;i<groups.size();i++){Group current=groups.get(i);List<String> members=new ArrayList<>(current.members);members.remove(placed);groups.set(i,current.withMembers(members));}
+                if(!root.contains(placed))root.add(placed);placements.put(placed,new Placement(operation.x,operation.y));break;
             case MOVE:
                 Set<String> moving=new HashSet<>();require(!operation.members.isEmpty(),"EMPTY_SELECTION");
                 for(String memberId:operation.members){require(memberId!=null,"INVALID_ID");Member member=state.basis.members.get(memberId);require(member!=null && member.controller.equals(trustedActorSeat) && member.eligible,"MEMBER_NOT_OWNED_OR_ELIGIBLE");require(moving.add(memberId),"DUPLICATE_SELECTION");}
-                root.removeIf(moving::contains);for(int i=0;i<groups.size();i++){Group current=groups.get(i);List<String> members=new ArrayList<>(current.members);members.removeIf(moving::contains);groups.set(i,current.withMembers(members));}
+                placements.keySet().removeIf(moving::contains);root.removeIf(moving::contains);for(int i=0;i<groups.size();i++){Group current=groups.get(i);List<String> members=new ArrayList<>(current.members);members.removeIf(moving::contains);groups.set(i,current.withMembers(members));}
                 List<String> destination=selected<0?root:new ArrayList<>(groups.get(selected).members);
                 require(operation.index>=0 && operation.index<=destination.size(),"INVALID_INDEX");destination.addAll(operation.index,operation.members);
                 if(selected>=0)groups.set(selected,groups.get(selected).withMembers(destination));break;
             default:throw new Rejected("UNKNOWN_OPERATION");
         }
-        Map<String,Seat> next=new TreeMap<>(state.seats);next.put(trustedActorSeat,new Seat(root,groups));return new State(state.basis,next);
+        Map<String,Seat> next=new TreeMap<>(state.seats);next.put(trustedActorSeat,new Seat(root,groups,placements));return new State(state.basis,next);
     }
     /** No generation inference here: a new incarnation is always a new member. */
     public static State reconcile(State state,Basis battlefieldBasis){
@@ -134,7 +149,8 @@ public final class BattlefieldOrganizationService {
             for(Group group:previous.groups){List<String> members=new ArrayList<>();for(String incarnation:group.members){Member now=battlefieldBasis.members.get(incarnation);if(now!=null && now.controller.equals(seat) && now.eligible){members.add(incarnation);assigned.add(incarnation);}}groups.add(group.withMembers(members));}
             // Basis is sorted by incarnation ID. Survivors retain order; additions are deterministic.
             for(Member member:battlefieldBasis.members.values())if(member.controller.equals(seat) && assigned.add(member.incarnation))root.add(member.incarnation);
-            next.put(seat,new Seat(root,groups));
+            Map<String,Placement> placements=new TreeMap<>();for(String incarnation:root){Member now=battlefieldBasis.members.get(incarnation),old=state.basis.members.get(incarnation);if(now.eligible && old!=null && old.eligible && old.controller.equals(now.controller) && previous.placements.containsKey(incarnation))placements.put(incarnation,previous.placements.get(incarnation));}
+            next.put(seat,new Seat(root,groups,placements));
         }
         return new State(battlefieldBasis,next);
     }

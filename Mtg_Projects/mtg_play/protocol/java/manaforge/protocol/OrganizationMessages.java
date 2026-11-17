@@ -10,6 +10,7 @@ import java.util.regex.Pattern;
 public final class OrganizationMessages {
     public static final int MAX_BYTES=262144;
     private static final JsonObject schema=JsonParser.parseString(OrganizationContractSchema.JSON).getAsJsonObject();
+    private static final JsonObject schemaV2=JsonParser.parseString(OrganizationV2ContractSchema.JSON).getAsJsonObject(),schemaV3=JsonParser.parseString(OrganizationV3ContractSchema.JSON).getAsJsonObject(),schemaV4=JsonParser.parseString(OrganizationV4ContractSchema.JSON).getAsJsonObject();
     private static final Pattern ID=Pattern.compile("[A-Za-z0-9_.:-]{1,128}");
     private static final String WHITE="[ \\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000]";
     private OrganizationMessages(){}
@@ -71,10 +72,13 @@ public final class OrganizationMessages {
         JsonObject message=WireEnvelope.parseObject(raw);require(valid(message,schema,schema),"ORGANIZATION_INVALID");return message;
     }
     static JsonObject parseV2Contract(String raw) throws IOException {
-        require(raw!=null && raw.length()<=MAX_BYTES && raw.getBytes(StandardCharsets.UTF_8).length<=MAX_BYTES,"ORGANIZATION_SIZE");JsonObject message=WireEnvelope.parseObject(raw);JsonObject v2=JsonParser.parseString(OrganizationV2ContractSchema.JSON).getAsJsonObject();require(valid(message,v2,v2),"ORGANIZATION_INVALID");return message;
+        require(raw!=null && raw.length()<=MAX_BYTES && raw.getBytes(StandardCharsets.UTF_8).length<=MAX_BYTES,"ORGANIZATION_SIZE");JsonObject message=WireEnvelope.parseObject(raw);JsonObject v2=schemaV2;require(valid(message,v2,v2),"ORGANIZATION_INVALID");return message;
     }
     static JsonObject parseV3Contract(String raw) throws IOException {
-        require(raw!=null && raw.length()<=MAX_BYTES && raw.getBytes(StandardCharsets.UTF_8).length<=MAX_BYTES,"ORGANIZATION_SIZE");JsonObject message=WireEnvelope.parseObject(raw);JsonObject v2=JsonParser.parseString(OrganizationV3ContractSchema.JSON).getAsJsonObject();require(valid(message,v2,v2),"ORGANIZATION_INVALID");return message;
+        require(raw!=null && raw.length()<=MAX_BYTES && raw.getBytes(StandardCharsets.UTF_8).length<=MAX_BYTES,"ORGANIZATION_SIZE");JsonObject message=WireEnvelope.parseObject(raw);JsonObject v2=schemaV3;require(valid(message,v2,v2),"ORGANIZATION_INVALID");return message;
+    }
+    static JsonObject parseV4Contract(String raw) throws IOException {
+        require(raw!=null && raw.length()<=MAX_BYTES && raw.getBytes(StandardCharsets.UTF_8).length<=MAX_BYTES,"ORGANIZATION_SIZE");JsonObject message=WireEnvelope.parseObject(raw);JsonObject v2=schemaV4;require(valid(message,v2,v2),"ORGANIZATION_INVALID");return message;
     }
     /** Receipts carry no object mappings; only a known pending command can admit historical basis. */
     public static JsonObject parseReceipt(String raw,String trustedMatchEpoch,Collection<String> pendingCommandIds) throws IOException {

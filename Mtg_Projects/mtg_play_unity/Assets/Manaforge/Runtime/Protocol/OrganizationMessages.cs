@@ -14,6 +14,7 @@ namespace Manaforge.Play.Protocol
     {
         public const int MaxBytes=262144;
         private static readonly JObject Schema=JObject.Parse(OrganizationContractSchema.Json);
+        private static readonly JObject SchemaV2=JObject.Parse(OrganizationV2ContractSchema.Json),SchemaV3=JObject.Parse(OrganizationV3ContractSchema.Json),SchemaV4=JObject.Parse(OrganizationV4ContractSchema.Json);
         private const string White=@"[ \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]";
         private static bool Id(string value)=>value!=null && Regex.IsMatch(value,@"\A[A-Za-z0-9_.:-]{1,128}\z");
         public sealed class Context
@@ -66,11 +67,15 @@ namespace Manaforge.Play.Protocol
         }
         internal static JObject ParseV2Contract(string raw)
         {
-            Require(raw!=null && raw.Length<=MaxBytes,"ORGANIZATION_SIZE");try{Require(new UTF8Encoding(false,true).GetByteCount(raw)<=MaxBytes,"ORGANIZATION_SIZE");}catch(EncoderFallbackException){throw new WireEnvelope.EnvelopeException("JSON_INVALID");}var message=WireEnvelope.ParseObject(raw);var schema=JObject.Parse(OrganizationV2ContractSchema.Json);Require(Valid(message,schema,schema),"ORGANIZATION_INVALID");return message;
+            Require(raw!=null && raw.Length<=MaxBytes,"ORGANIZATION_SIZE");try{Require(new UTF8Encoding(false,true).GetByteCount(raw)<=MaxBytes,"ORGANIZATION_SIZE");}catch(EncoderFallbackException){throw new WireEnvelope.EnvelopeException("JSON_INVALID");}var message=WireEnvelope.ParseObject(raw);var schema=SchemaV2;Require(Valid(message,schema,schema),"ORGANIZATION_INVALID");return message;
         }
         internal static JObject ParseV3Contract(string raw)
         {
-            Require(raw!=null && raw.Length<=MaxBytes,"ORGANIZATION_SIZE");try{Require(new UTF8Encoding(false,true).GetByteCount(raw)<=MaxBytes,"ORGANIZATION_SIZE");}catch(EncoderFallbackException){throw new WireEnvelope.EnvelopeException("JSON_INVALID");}var message=WireEnvelope.ParseObject(raw);var schema=JObject.Parse(OrganizationV3ContractSchema.Json);Require(Valid(message,schema,schema),"ORGANIZATION_INVALID");return message;
+            Require(raw!=null && raw.Length<=MaxBytes,"ORGANIZATION_SIZE");try{Require(new UTF8Encoding(false,true).GetByteCount(raw)<=MaxBytes,"ORGANIZATION_SIZE");}catch(EncoderFallbackException){throw new WireEnvelope.EnvelopeException("JSON_INVALID");}var message=WireEnvelope.ParseObject(raw);var schema=SchemaV3;Require(Valid(message,schema,schema),"ORGANIZATION_INVALID");return message;
+        }
+        internal static JObject ParseV4Contract(string raw)
+        {
+            Require(raw!=null && raw.Length<=MaxBytes,"ORGANIZATION_SIZE");try{Require(new UTF8Encoding(false,true).GetByteCount(raw)<=MaxBytes,"ORGANIZATION_SIZE");}catch(EncoderFallbackException){throw new WireEnvelope.EnvelopeException("JSON_INVALID");}var message=WireEnvelope.ParseObject(raw);var schema=SchemaV4;Require(Valid(message,schema,schema),"ORGANIZATION_INVALID");return message;
         }
         public static JObject ParseReceipt(string raw,string trustedMatchEpoch,IEnumerable<string> pendingCommandIds)
         {

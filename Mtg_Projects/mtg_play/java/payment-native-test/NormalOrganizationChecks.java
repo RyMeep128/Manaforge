@@ -12,8 +12,8 @@ import static manaforge.organization.BattlefieldOrganizationService.*;
 /** Real owner metadata path, one human recipient and a two-seat native roster. */
 public final class NormalOrganizationChecks {
     static int version=2;
-    static JsonObject parse(String raw) throws Exception {return version==3?OrganizationV3Messages.parseContract(raw):OrganizationV2Messages.parseContract(raw);}
-    static String upgrade(String raw,long revision) throws Exception {return version==3?OrganizationV3Messages.upgrade(raw,revision):OrganizationV2Messages.upgrade(raw,revision);}
+    static JsonObject parse(String raw) throws Exception {return version==4?OrganizationV4Messages.parseContract(raw):version==3?OrganizationV3Messages.parseContract(raw):OrganizationV2Messages.parseContract(raw);}
+    static String upgrade(String raw,long revision) throws Exception {return version==4?OrganizationV4Messages.upgrade(raw,revision):version==3?OrganizationV3Messages.upgrade(raw,revision):OrganizationV2Messages.upgrade(raw,revision);}
     static void check(boolean value,String code){if(!value)throw new AssertionError(code);}
     static JsonObject project(NativePaymentAcceptanceChecks.Engine e,PlayerQueryEvent query,ManaforgeOpeningProjection projection,AtomicInteger submissions) throws Exception {
         synchronized(e.response.get(e.payer)){
@@ -25,7 +25,7 @@ public final class NormalOrganizationChecks {
     static String command(String epoch,String id,long organization,long basis,Operation operation) throws Exception {
         JsonObject message=JsonParser.parseString(upgrade(OrganizationChannelUnitChecks.command(id,organization,basis,operation),1)).getAsJsonObject();message.getAsJsonObject("body").addProperty("match_epoch",epoch);return message.toString();
     }
-    public static void main(String[] args) throws Exception {for(int value:new int[]{2,3}){version=value;run();}}
+    public static void main(String[] args) throws Exception {for(int value:new int[]{2,3,4}){version=value;run();}}
     static void run() throws Exception {
         AtomicInteger submissions=new AtomicInteger();AtomicBoolean unavailable=new AtomicBoolean();
         try(NativeBattlefieldIdentityChecks.Fixture f=new NativeBattlefieldIdentityChecks.Fixture()){
@@ -41,8 +41,11 @@ public final class NormalOrganizationChecks {
                 packets.clear();endpoint.observe(project(e,query,projection,submissions).toString());snapshot=parse(packets.get(0)).getAsJsonObject("body");check(snapshot.get("gameplay_revision").getAsLong()==2 && snapshot.get("organization_revision").getAsLong()==2 && snapshot.getAsJsonArray("mappings").get(0).getAsJsonObject().get("handle").getAsString().equals(handle),"NORMAL_REFERENCE_REFRESH");packets.clear();
                 endpoint.receive(create);check(packets.size()==1 && packets.get(0).equals(original),"NORMAL_RETRY_LEDGER");check(!endpoint.receive("{\"wire_version\":1,\"message_type\":\"command\",\"message_id\":\"native\",\"body\":{}}"),"NORMAL_NATIVE_ROUTE_INTERCEPTED");
                 unavailable.set(true);packets.clear();endpoint.observe(project(e,query,projection,submissions).toString());check(packets.isEmpty(),"UNREADY_PUBLISHED_STATE");endpoint.receive(create);check(packets.size()==1 && packets.get(0).equals(original),"UNREADY_RETRY_LOST");packets.clear();String newCommand=command(epoch,"unready",2,2,Operation.rename("g","Changed"));endpoint.receive(newCommand);String rejection=packets.get(0);check(parse(rejection).getAsJsonObject("body").get("reason_code").getAsString().equals("STALE_BASIS_REVISION"),"UNREADY_COMMAND_APPLIED");unavailable.set(false);packets.clear();endpoint.observe(project(e,query,projection,submissions).toString());packets.clear();endpoint.receive(newCommand);check(packets.size()==1 && packets.get(0).equals(rejection),"UNREADY_REJECTION_NOT_HISTORICAL");
-                if(version==3){
+                if(version>=3){
                     JsonObject conversion=JsonParser.parseString(command(epoch,"drawer",2,3,Operation.rename("g","Unused"))).getAsJsonObject(),op=conversion.getAsJsonObject("body").getAsJsonObject("operation");op.addProperty("kind","set_mode");op.add("name",JsonNull.INSTANCE);op.addProperty("presentation_mode","drawer");packets.clear();endpoint.receive(conversion.toString());JsonObject converted=parse(packets.get(1)).getAsJsonObject("body");boolean found=false;for(JsonElement seat:converted.getAsJsonArray("seats"))for(JsonElement group:seat.getAsJsonObject().getAsJsonArray("groups")){found=true;check(group.getAsJsonObject().get("presentation_mode").getAsString().equals("drawer") && group.getAsJsonObject().getAsJsonArray("members").size()==1,"NORMAL_DRAWER_MEMBERSHIP");}check(found,"NORMAL_DRAWER_MISSING");
+                }
+                if(version==4){
+                    JsonObject placed=JsonParser.parseString(command(epoch,"place",3,3,Operation.move(Collections.singletonList(handle),null,0))).getAsJsonObject(),op=placed.getAsJsonObject("body").getAsJsonObject("operation");op.addProperty("kind","place");op.add("index",JsonNull.INSTANCE);op.addProperty("x",700000);op.addProperty("y",200000);packets.clear();endpoint.receive(placed.toString());JsonObject state=parse(packets.get(1)).getAsJsonObject("body");boolean found=false;for(JsonElement seat:state.getAsJsonArray("seats")){JsonArray positions=seat.getAsJsonObject().getAsJsonArray("placements");if(positions.size()>0){found=true;check(positions.get(0).getAsJsonObject().get("x").getAsLong()==700000,"NORMAL_FREE_POSITION");}}check(found,"NORMAL_PLACEMENT_MISSING");
                 }
                 check(submissions.get()==0 && e.nativeSourceResponses==0 && !e.running.isDone() && e.game.getState().getApplyEffectsCounter()==cycle && !e.game.getPermanent(forest.getId()).isTapped(),"NORMAL_ORGANIZATION_MUTATED_NATIVE_GAME");
             }

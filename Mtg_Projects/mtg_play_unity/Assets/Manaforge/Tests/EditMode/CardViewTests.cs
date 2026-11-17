@@ -14,6 +14,12 @@ namespace Manaforge.Play.Tests
                 Array.Empty<VisualPrintingCandidate>());
         private static CardDisplayValues Values(string pt = "2/2", string rules = "Explicit mock text") =>
             new CardDisplayValues("Mock creature", "{X}{G}", "Creature â€” Example", rules, pt, "1 counter");
+        [Test] public void UnchangedDisplayValuesDoNotRebuildOnPriorityOnlyUpdates(){
+            view.BindUnavailable();view.UpdateValues(Values());var revision=view.ViewRevision;var title=view.Q("name");
+            for(int i=0;i<20;i++){view.UpdateValues(Values());view.SetPresentation(CardPresentationMode.Compact,160);}
+            Assert.That(view.ViewRevision,Is.EqualTo(revision));Assert.That(view.Q("name"),Is.SameAs(title));
+            view.UpdateValues(new CardDisplayValues("Changed","{G}","Creature","Changed rules","3/3",""));Assert.That(view.ViewRevision,Is.GreaterThan(revision));
+        }
         [Test] public void RebindingUnchangedArtworkPreservesViewState()
         {
             view.UpdateValues(Values());view.tooltip="Keep inspection";
@@ -188,9 +194,9 @@ namespace Manaforge.Play.Tests
         {
             var view=new CardView();
             try{
-                view.UpdateValues(new CardDisplayValues("Walker",null,"Legendary Planeswalker — Test",null,null,null,loyalty:"5"));
+                view.UpdateValues(new CardDisplayValues("Walker",null,"Legendary Planeswalker â€” Test",null,null,null,loyalty:"5"));
                 Assert.That(view.Q<LoyaltyCounterView>().Value,Is.EqualTo("5"));
-                foreach(string type in new[]{"Creature — Elf","Artifact","Enchantment",null}){
+                foreach(string type in new[]{"Creature â€” Elf","Artifact","Enchantment",null}){
                     view.UpdateValues(new CardDisplayValues("Counter bearer",null,type,null,"3/3",null,loyalty:"2"));
                     Assert.That(view.Q<LoyaltyCounterView>().Value,Is.Empty);
                     Assert.That(view.Q<LoyaltyCounterView>().style.display.value,Is.EqualTo(DisplayStyle.None));

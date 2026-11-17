@@ -109,7 +109,7 @@ public final class ManaforgeUnityOpening {
         organizationAllowed=false;organizationVersion=0;
         try {
             JsonObject boot=WireEnvelope.parseObject(TextFrame.read(input));
-            organizationAllowed=boot.has("organization_version") && (boot.get("organization_version").toString().equals("2") || boot.get("organization_version").toString().equals("3"));if(organizationAllowed)organizationVersion=boot.get("organization_version").getAsInt();
+            organizationAllowed=boot.has("organization_version") && (boot.get("organization_version").toString().equals("2") || boot.get("organization_version").toString().equals("3") || boot.get("organization_version").toString().equals("4"));if(organizationAllowed)organizationVersion=boot.get("organization_version").getAsInt();
             if(boot.has("organization_version") && !organizationAllowed)throw new IOException();
             if(boot.size()!=(organizationAllowed?3:2) || !boot.has("live_opening_bootstrap_version") || !boot.get("live_opening_bootstrap_version").toString().equals("1")
                 || !boot.has("viewer_key_hex") || !boot.get("viewer_key_hex").isJsonPrimitive() || !boot.getAsJsonPrimitive("viewer_key_hex").isString()

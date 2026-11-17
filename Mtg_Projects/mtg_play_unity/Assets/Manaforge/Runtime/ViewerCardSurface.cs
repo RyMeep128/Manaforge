@@ -145,9 +145,11 @@ namespace Manaforge.Play
             transitioning=true;
             try {
                 var retainedViews=new Dictionary<string,CardView>(StringComparer.Ordinal);
+                var retainedZones=new Dictionary<string,string>(StringComparer.Ordinal);
                 var retainedArt=new Dictionary<string,ArtworkBinding>(StringComparer.Ordinal);
                 string inspectedKey=inspectedObject!=null && cards.TryGetValue(inspectedObject,out var priorInspection)?priorInspection.RenderId:null;
                 foreach(var prior in cards.Values){
+                    retainedZones[prior.RenderId]=prior.Zone;
                     if(views.TryGetValue(prior.ObjectId,out var oldView))retainedViews.Add(prior.RenderId,oldView);
                     if(artwork.TryGetValue(prior.ObjectId,out var oldArt))retainedArt.Add(prior.RenderId,oldArt);
                 }
@@ -155,14 +157,16 @@ namespace Manaforge.Play
                 foreach(var card in frame.Cards) {
                     cards.Add(card.ObjectId,card);
                     if(!retainedViews.TryGetValue(card.RenderId,out var view)) {
-                        view=new CardView(CardBacks);view.SetPresentation(CardPresentationMode.Compact,160);
+                        view=new CardView(CardBacks);view.SetPresentation(card.Zone=="battlefield"?CardPresentationMode.Compact:CardPresentationMode.Full,card.Zone=="battlefield"?160:220);
                         CardsRoot.Add(view);
                     }
                     retainedViews.Remove(card.RenderId);views.Add(card.ObjectId,view);
                     if(inspectedKey==card.RenderId)inspectedObject=card.ObjectId;
                     if(retainedArt.TryGetValue(card.RenderId,out var binding) && ArtworkPermitted(card)
                         && binding.Oracle==card.Printing.OracleId && binding.Printing==card.Printing.PrintingId)artwork.Add(card.ObjectId,binding);
-                    view.SetPresentation(card.Zone=="battlefield"?CardPresentationMode.Compact:CardPresentationMode.Full,card.Zone=="battlefield"?160:220);
+                    if(retainedZones.TryGetValue(card.RenderId,out var previousZone) && previousZone!=card.Zone)view.SetPresentation(card.Zone=="battlefield"?CardPresentationMode.Compact:CardPresentationMode.Full,card.Zone=="battlefield"?160:220);
+                    // Retained views keep their resolved geometry. The presentation owner lays
+                    // out new/changed zones; resetting every card here caused two expensive resizes per publication.
                     Bind(view,card);
                     if(ArtworkPermitted(card) && !artwork.ContainsKey(card.ObjectId))pendingArtwork.Enqueue(card.ObjectId);
                 }

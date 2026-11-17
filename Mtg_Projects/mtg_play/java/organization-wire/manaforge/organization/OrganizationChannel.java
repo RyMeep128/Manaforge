@@ -7,6 +7,7 @@ import java.security.MessageDigest;
 import java.util.*;
 import manaforge.protocol.OrganizationMessages;
 import manaforge.protocol.OrganizationV3Messages;
+import manaforge.protocol.OrganizationV4Messages;
 import manaforge.protocol.ViewerChannelExtension;
 import static manaforge.organization.BattlefieldOrganizationService.*;
 
@@ -28,7 +29,7 @@ public final class OrganizationChannel implements ViewerChannelExtension {
         this(sender,basis,basisRevision,contexts,1,()->0);
     }
     public OrganizationChannel(Sender sender,Basis basis,long basisRevision,Map<String,OrganizationCodec.HostContext> contexts,int version,java.util.function.LongSupplier gameplay) throws Exception {
-        if(version!=1 && version!=3)throw new IllegalArgumentException("ORGANIZATION_VERSION");this.version=version;this.gameplay=gameplay;
+        if(version!=1 && version!=3 && version!=4)throw new IllegalArgumentException("ORGANIZATION_VERSION");this.version=version;this.gameplay=gameplay;
         this.sender=Objects.requireNonNull(sender);session=new BattlefieldOrganizationSession(basis,basisRevision);
         try{this.contexts=checkedContexts(contexts,basis,basisRevision);render(session.snapshot().state,0,basisRevision,this.contexts);for(String seat:this.contexts.keySet())ledger.put(seat,new LinkedHashMap<>());}
         catch(Exception failure){session.close();throw failure;}
@@ -53,8 +54,8 @@ public final class OrganizationChannel implements ViewerChannelExtension {
         JsonObject message=new JsonObject(),body=new JsonObject();JsonArray versions=new JsonArray();versions.add(1);body.add("versions",versions);message.addProperty("wire_version",1);message.addProperty("organization_version",1);message.addProperty("message_type","organization_capabilities");message.addProperty("message_id",messageId());message.add("body",body);
         sender.send(seat,Kind.CONTROL,wire(OrganizationMessages.serialize(message,null)));
     }
-    private String wire(String raw) throws IOException {return version==3?OrganizationV3Messages.upgrade(raw,gameplay.getAsLong()):raw;}
-    private JsonObject parse(String raw) throws IOException {return version==3?OrganizationV3Messages.parseContract(raw):OrganizationMessages.parseContract(raw);}
+    private String wire(String raw) throws IOException {return version==4?OrganizationV4Messages.upgrade(raw,gameplay.getAsLong()):version==3?OrganizationV3Messages.upgrade(raw,gameplay.getAsLong()):raw;}
+    private JsonObject parse(String raw) throws IOException {return version==4?OrganizationV4Messages.parseContract(raw):version==3?OrganizationV3Messages.parseContract(raw):OrganizationMessages.parseContract(raw);}
     public void disconnected(String seat){owned();connected.remove(seat);negotiated.remove(seat);}
     private static JsonElement canonical(JsonElement element){
         if(element.isJsonObject()){JsonObject result=new JsonObject();for(String key:new TreeSet<>(element.getAsJsonObject().keySet()))result.add(key,canonical(element.getAsJsonObject().get(key)));return result;}

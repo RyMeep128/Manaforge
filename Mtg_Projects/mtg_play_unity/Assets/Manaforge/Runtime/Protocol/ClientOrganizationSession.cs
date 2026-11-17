@@ -12,9 +12,9 @@ namespace Manaforge.Play.Protocol
         private readonly object gate=new object();private readonly string viewer;private readonly Action<string> write;
         private JObject game,currentBody,future;private ProjectedOrganizationFrame current;private string epoch,pending;
         private TaskCompletionSource<bool> receipt;private bool negotiated,stopped;private int version=2;
-        public void ConfigureVersion(int value){lock(gate){if(negotiated || value!=2 && value!=3)throw new System.InvalidOperationException("ORGANIZATION_VERSION");version=value;}}
+        public void ConfigureVersion(int value){lock(gate){if(negotiated || value!=2 && value!=3 && value!=4)throw new System.InvalidOperationException("ORGANIZATION_VERSION");version=value;}}
         public int Version=>version;
-        private JObject ParseContract(string raw)=>version==3?OrganizationV3Messages.ParseContract(raw):OrganizationV2Messages.ParseContract(raw);
+        private JObject ParseContract(string raw)=>version==4?OrganizationV4Messages.ParseContract(raw):version==3?OrganizationV3Messages.ParseContract(raw):OrganizationV2Messages.ParseContract(raw);
         public ClientOrganizationSession(string viewer,Action<string> write){this.viewer=viewer;this.write=write;}
         public bool Pending {get{lock(gate)return pending!=null;}}
         public string LastError {get;private set;}
@@ -36,7 +36,7 @@ namespace Manaforge.Play.Protocol
                 }
                 if(!negotiated)throw new WireEnvelope.EnvelopeException("ORGANIZATION_NOT_NEGOTIATED");
                 if(type=="organization_receipt"){
-                    if(version==3)OrganizationV3Messages.ParseReceipt(raw,epoch,pending==null?Array.Empty<string>():new[]{pending});else OrganizationV2Messages.ParseReceipt(raw,epoch,pending==null?Array.Empty<string>():new[]{pending});LastError=(string)body["reason_code"];pending=null;receipt?.TrySetResult((string)body["outcome"]=="applied");receipt=null;return null;
+                    if(version==4)OrganizationV4Messages.ParseReceipt(raw,epoch,pending==null?Array.Empty<string>():new[]{pending});else if(version==3)OrganizationV3Messages.ParseReceipt(raw,epoch,pending==null?Array.Empty<string>():new[]{pending});else OrganizationV2Messages.ParseReceipt(raw,epoch,pending==null?Array.Empty<string>():new[]{pending});LastError=(string)body["reason_code"];pending=null;receipt?.TrySetResult((string)body["outcome"]=="applied");receipt=null;return null;
                 }
                 if(type!="organization_snapshot" || (string)body["viewer_id"]!=viewer)throw new WireEnvelope.EnvelopeException("ORGANIZATION_CONTEXT");
                 string match=(string)body["match_epoch"];if(epoch!=null && epoch!=match)throw new WireEnvelope.EnvelopeException("ORGANIZATION_EPOCH");epoch=match;
@@ -53,14 +53,14 @@ namespace Manaforge.Play.Protocol
             var admitted=game["objects"].Where(o=>(string)o["zone"]=="battlefield" && (bool?)o["hidden"]==false && (bool?)o["face_down"]==false).ToDictionary(o=>(string)o["object_id"],o=>(string)o["controller_id"],StringComparer.Ordinal);
             var objects=new Dictionary<string,string>();var seats=new Dictionary<string,string>();foreach(var mapping in body["mappings"]){string handle=(string)mapping["handle"],reference=(string)mapping["object_reference"],seat=(string)mapping["seat_id"];if(!admitted.TryGetValue(reference,out var owner) || owner!=seat)throw new WireEnvelope.EnvelopeException("ORGANIZATION_CONTEXT");objects.Add(handle,reference);seats.Add(handle,seat);}
             var context=new OrganizationMessages.Context(epoch,viewer,(long)body["basis_revision"],objects,seats,admitted.Keys,game["players"].Select(p=>(string)p["player_id"]));
-            var envelope=new JObject{["wire_version"]=1,["organization_version"]=version,["message_type"]="organization_snapshot",["message_id"]="validate",["body"]=body};if(version==3)OrganizationV3Messages.Parse(envelope.ToString(Formatting.None),context);else OrganizationV2Messages.Parse(envelope.ToString(Formatting.None),context);
+            var envelope=new JObject{["wire_version"]=1,["organization_version"]=version,["message_type"]="organization_snapshot",["message_id"]="validate",["body"]=body};if(version==4)OrganizationV4Messages.Parse(envelope.ToString(Formatting.None),context);else if(version==3)OrganizationV3Messages.Parse(envelope.ToString(Formatting.None),context);else OrganizationV2Messages.Parse(envelope.ToString(Formatting.None),context);
             currentBody=(JObject)body.DeepClone();current=new ProjectedOrganizationFrame(currentBody);
         }
         public Task<bool> Submit(ProjectedOrganizationFrame frame,JObject operation)
         {
             string wire;Task<bool> result;
             lock(gate){if(stopped || !negotiated || !ReferenceEquals(frame,current) || pending!=null)return Task.FromResult(false);
-                if(version==3 && operation["presentation_mode"]==null){operation=(JObject)operation.DeepClone();operation["presentation_mode"]=JValue.CreateNull();}
+                if(version>=3 && operation["presentation_mode"]==null){operation=(JObject)operation.DeepClone();operation["presentation_mode"]=JValue.CreateNull();}
                 pending=Guid.NewGuid().ToString("N");receipt=new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);result=receipt.Task;LastError=null;
                 wire=new JObject{["wire_version"]=1,["organization_version"]=version,["message_type"]="organization_command",["message_id"]=Guid.NewGuid().ToString("N"),["body"]=new JObject{["match_epoch"]=frame.Epoch,["command_id"]=pending,["expected_organization_revision"]=frame.Revision,["basis_revision"]=frame.Basis,["operation"]=operation.DeepClone()}}.ToString(Formatting.None);
                 try{ParseContract(wire);}catch{pending=null;receipt=null;throw;}

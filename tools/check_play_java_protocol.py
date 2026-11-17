@@ -140,6 +140,9 @@ def main():
             PROTOCOL / "java/manaforge/protocol/OrganizationMessages.java",
             PROTOCOL / "java/manaforge/protocol/OrganizationV2Messages.java",
             PROTOCOL / "java/manaforge/protocol/OrganizationV3Messages.java",
+            PROTOCOL / "java/manaforge/protocol/OrganizationV4Messages.java",
+            PROTOCOL / "java/manaforge/protocol/OrganizationV4Contracts.java",
+            PROTOCOL / "java/manaforge/protocol/OrganizationV4ContractSchema.java",
             PROTOCOL / "java/manaforge/protocol/OrganizationV3Contracts.java",
             PROTOCOL / "java/manaforge/protocol/OrganizationV3ContractSchema.java",
             PROTOCOL / "java/manaforge/protocol/OrganizationV2Contracts.java",
@@ -150,6 +153,7 @@ def main():
             PROTOCOL / "java-test/OrganizationChannelUnitChecks.java",
             PROTOCOL / "java-test/OrganizationV2Checks.java",
             PROTOCOL / "java-test/OrganizationV3Checks.java",
+            PROTOCOL / "java-test/OrganizationV4Checks.java",
             PROTOCOL / "java-test/OrganizationChannelChecks.java",
             *sorted((PLAY / "java/organization").rglob("*.java")),
             *sorted((PLAY / "java/organization-wire").rglob("*.java")),
@@ -444,6 +448,8 @@ def main():
              "OrganizationV3Checks", str(PROTOCOL / "fixtures/organization-v3.json")],
             check=True, timeout=60,
         )
+
+        subprocess.run([runtime, "-cp", str(workspace) + os.pathsep + str(jar), "OrganizationV4Checks"], check=True, timeout=60)
 
         if args.dummy_output:
             output = args.dummy_output.resolve()

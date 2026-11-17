@@ -28,9 +28,9 @@ public final class NativeOrganizationChecks {
             this.version=version;
             this.seat=seat;client=new MatchCoordinatorChecks.Client(viewer,key,false);
             JsonObject cap=parse(raw());check(cap.get("message_type").getAsString().equals("organization_capabilities"),"NATIVE_CAPABILITIES_FIRST");
-            String capabilities="{\"wire_version\":1,\"organization_version\":1,\"message_type\":\"organization_capabilities\",\"message_id\":\"cap\",\"body\":{\"versions\":[1]}}";client.send(version==3?OrganizationV3Messages.upgrade(capabilities,0):version==2?OrganizationV2Messages.upgrade(capabilities,0):capabilities);
+            String capabilities="{\"wire_version\":1,\"organization_version\":1,\"message_type\":\"organization_capabilities\",\"message_id\":\"cap\",\"body\":{\"versions\":[1]}}";client.send(version==4?OrganizationV4Messages.upgrade(capabilities,0):version==3?OrganizationV3Messages.upgrade(capabilities,0):version==2?OrganizationV2Messages.upgrade(capabilities,0):capabilities);
         }
-        JsonObject parse(String raw) throws IOException {return version==3?OrganizationV3Messages.parseContract(raw):version==2?OrganizationV2Messages.parseContract(raw):OrganizationMessages.parseContract(raw);}
+        JsonObject parse(String raw) throws IOException {return version==4?OrganizationV4Messages.parseContract(raw):version==3?OrganizationV3Messages.parseContract(raw):version==2?OrganizationV2Messages.parseContract(raw):OrganizationMessages.parseContract(raw);}
         String raw() throws IOException {String raw=TextFrame.read(client.socket.getInputStream());check(raw!=null,"NATIVE_ORGANIZATION_EOF");return raw;}
         void game() throws Exception {game=NativeMultiViewerChecks.snapshot(client.read());}
         void organization() throws Exception {
@@ -44,7 +44,7 @@ public final class NativeOrganizationChecks {
             check(new HashSet<>(objects.values()).equals(admitted.keySet()),"ADMITTED_PUBLIC_OBJECT_MISSING");
             epoch=body.get("match_epoch").getAsString();basis=body.get("basis_revision").getAsLong();revision=body.get("organization_revision").getAsLong();
             OrganizationMessages.Context context=new OrganizationMessages.Context(epoch,client.viewer.viewer,basis,objects,seats,admitted.keySet(),visibleSeats);
-            if(version>=2){if(version==3)OrganizationV3Messages.parse(raw,context);else OrganizationV2Messages.parse(raw,context);check(game==null || body.get("gameplay_revision").getAsLong()==game.get("revision").getAsLong(),"NATIVE_V2_EXACT_GAMEPLAY");}else OrganizationMessages.parse(raw,context);
+            if(version>=2){if(version==4)OrganizationV4Messages.parse(raw,context);else if(version==3)OrganizationV3Messages.parse(raw,context);else OrganizationV2Messages.parse(raw,context);check(game==null || body.get("gameplay_revision").getAsLong()==game.get("revision").getAsLong(),"NATIVE_V2_EXACT_GAMEPLAY");}else OrganizationMessages.parse(raw,context);
             check(!raw.contains("incarnation") && !raw.contains("host_seat") && !raw.contains("Goblin Guide") && !raw.contains("Llanowar Elves"),"NATIVE_METADATA_PRIVACY");state=body;
         }
         String handle(String reference){for(JsonElement item:state.getAsJsonArray("mappings")){JsonObject mapping=item.getAsJsonObject();if(mapping.get("object_reference").getAsString().equals(reference))return mapping.get("handle").getAsString();}return null;}
@@ -56,14 +56,14 @@ public final class NativeOrganizationChecks {
             JsonObject message=new JsonObject(),body=new JsonObject(),op=new JsonObject();message.addProperty("wire_version",1);message.addProperty("organization_version",version);message.addProperty("message_type","organization_command");message.addProperty("message_id","packet-"+id);message.add("body",body);
             body.addProperty("match_epoch",epoch);body.addProperty("command_id",id);body.addProperty("expected_organization_revision",revision);body.addProperty("basis_revision",basis);body.add("operation",op);
             op.addProperty("kind",operation.kind.name().toLowerCase(Locale.ROOT));for(String field:new String[]{"group_id","name","x","y","index"})op.add(field,JsonNull.INSTANCE);JsonArray members=new JsonArray();op.add("members",members);
-            if(version==3)op.add("presentation_mode",operation.presentationMode==null?JsonNull.INSTANCE:new JsonPrimitive(operation.presentationMode.name().toLowerCase(Locale.ROOT)));
+            if(version>=3)op.add("presentation_mode",operation.presentationMode==null?JsonNull.INSTANCE:new JsonPrimitive(operation.presentationMode.name().toLowerCase(Locale.ROOT)));
             if(operation.groupId!=null)op.addProperty("group_id",operation.groupId);
             switch(operation.kind){case CREATE:case POSITION:op.addProperty("x",Math.round(operation.x*1000000));op.addProperty("y",Math.round(operation.y*1000000));break;default:break;}
             if(operation.kind==Kind.CREATE || operation.kind==Kind.RENAME)op.addProperty("name",operation.name);if(operation.kind==Kind.MOVE || operation.kind==Kind.REORDER)op.addProperty("index",operation.index);for(String handle:operation.members)members.add(handle);return message.toString();
         }
         void send(String id,String raw) throws Exception {pending.add(id);client.send(raw);}
         String receipt(String id,String reason) throws Exception {
-            String raw=raw();JsonObject body=(version==3?OrganizationV3Messages.parseReceipt(raw,epoch,pending):version==2?OrganizationV2Messages.parseReceipt(raw,epoch,pending):OrganizationMessages.parseReceipt(raw,epoch,pending)).getAsJsonObject("body");check(body.get("command_id").getAsString().equals(id),"NATIVE_RECEIPT_ID");
+            String raw=raw();JsonObject body=(version==4?OrganizationV4Messages.parseReceipt(raw,epoch,pending):version==3?OrganizationV3Messages.parseReceipt(raw,epoch,pending):version==2?OrganizationV2Messages.parseReceipt(raw,epoch,pending):OrganizationMessages.parseReceipt(raw,epoch,pending)).getAsJsonObject("body");check(body.get("command_id").getAsString().equals(id),"NATIVE_RECEIPT_ID");
             check(reason==null?body.get("reason_code").isJsonNull():reason.equals(body.get("reason_code").getAsString()),"NATIVE_RECEIPT_REASON_"+reason);pending.remove(id);return raw;
         }
         public void close() throws IOException {client.close();}
@@ -82,7 +82,7 @@ public final class NativeOrganizationChecks {
         check(host.snapshot()==before,"INVALID_NATIVE_BATCH_PARTIALLY_COMMITTED");
     }
     public static void main(String[] args) throws Exception {
-        int version=Arrays.asList(args).contains("--v3")?3:Arrays.asList(args).contains("--v2")?2:1;
+        int version=Arrays.asList(args).contains("--v4")?4:Arrays.asList(args).contains("--v3")?3:Arrays.asList(args).contains("--v2")?2:1;
         NativeBattlefieldIdentityChecks.Fixture fixture=new NativeBattlefieldIdentityChecks.Fixture();NativePaymentAcceptanceChecks.Engine e=fixture.e;
         AtomicInteger disposed=new AtomicInteger(),submissions=new AtomicInteger();AtomicBoolean cancel=new AtomicBoolean();AtomicReference<NativeOrganizationBridge> bridge=new AtomicReference<>();byte[] keyA=MatchCoordinatorChecks.key(51),keyB=MatchCoordinatorChecks.key(52);
         try(ManaforgeMatchCoordinator coordinator=new ManaforgeMatchCoordinator(e.game.getId().toString(),MatchCoordinatorChecks.ENGINE,MatchCoordinatorChecks.HASH,()->{disposed.incrementAndGet();fixture.close();},cancel::get,10000,300,false)){
@@ -98,7 +98,7 @@ public final class NativeOrganizationChecks {
                 String original=clientA.command("create",Operation.create("g","Mana Rocks",.2,.3));String originalReceipt=apply(clientA,clientB,"create",Operation.create("g","Mana Rocks",.2,.3));
                 List<String> all=new ArrayList<>();for(JsonElement member:clientA.state.getAsJsonArray("mappings"))all.add(member.getAsJsonObject().get("handle").getAsString());apply(clientA,clientB,"members",Operation.move(all,"g",0));
                 apply(clientA,clientB,"rename",Operation.rename("g","Engine"));apply(clientA,clientB,"position",Operation.position("g",.7,.1));apply(clientA,clientB,"second",Operation.create("g2","Empty",0,0));apply(clientA,clientB,"order",Operation.reorder("g2",0));check(clientB.group("g").get("name").getAsString().equals("Engine") && clientB.group("g").get("x").getAsLong()==700000,"NATIVE_SHARED_PROPERTIES");apply(clientA,clientB,"delete",Operation.delete("g2"));
-                if(version==3){apply(clientA,clientB,"drawer",Operation.setMode("g",PresentationMode.DRAWER));check(clientA.group("g").get("presentation_mode").getAsString().equals("drawer") && clientB.group("g").get("presentation_mode").getAsString().equals("drawer"),"NATIVE_DRAWER_FANOUT");reject(clientB,"foreign-mode",clientB.command("foreign-mode",Operation.setMode("g",PresentationMode.PANEL)),"GROUP_NOT_OWNED");}
+                if(version>=3){apply(clientA,clientB,"drawer",Operation.setMode("g",PresentationMode.DRAWER));check(clientA.group("g").get("presentation_mode").getAsString().equals("drawer") && clientB.group("g").get("presentation_mode").getAsString().equals("drawer"),"NATIVE_DRAWER_FANOUT");reject(clientB,"foreign-mode",clientB.command("foreign-mode",Operation.setMode("g",PresentationMode.PANEL)),"GROUP_NOT_OWNED");}
                 String landHandle=clientA.handles("Forest").get(0),bearHandle=clientA.handles("Grizzly Bears").get(0),delverHandle=clientA.handles("Delver of Secrets").get(0);String oldReference=clientA.reference(landHandle);
                 apply(clientA,clientB,"remove-one",Operation.move(Collections.singletonList(landHandle),null,0));apply(clientA,clientB,"return-one",Operation.move(Collections.singletonList(landHandle),"g",0));
                 reject(clientB,"foreign-group",clientB.command("foreign-group",Operation.rename("g","Stolen")),"GROUP_NOT_OWNED");reject(clientB,"foreign-owner",clientB.command("foreign-owner",Operation.move(Collections.singletonList(clientB.handles("Forest").get(0)),null,0)),"MEMBER_NOT_OWNED_OR_ELIGIBLE");reject(clientB,"foreign-handle",clientB.command("foreign-handle",Operation.move(Collections.singletonList(landHandle),null,0)),"UNKNOWN_MEMBER_HANDLE");
@@ -124,7 +124,7 @@ public final class NativeOrganizationChecks {
                 clientA.close();MatchCoordinatorChecks.await(()->coordinator.status("a").status==ManaforgeMatchCoordinator.Status.DISCONNECTED,"NATIVE_ORGANIZATION_DISCONNECT");apply(clientB,null,"independent",Operation.rename("bg","Still active"));
                 NativeMultiViewerChecks.resume(e);query=NativeMultiViewerChecks.priority(e,()->check(e.game.getPermanent(forest2.getId()).tap(equipment.getSpellAbility(),e.game),"NATIVE_AFTER_DISCONNECT_TAP"));publish(coordinator,bridge.get(),new Capture(e,query,submissions),null,clientB);check(disposed.get()==0 && submissions.get()==0 && !e.running.isDone(),"DISCONNECT_STOPPED_NATIVE_MATCH");
                 try(Peer reattached=new Peer("a",a,keyA,version)){
-                    reattached.game();reattached.organization();if(version==3)check(reattached.group("g").get("presentation_mode").getAsString().equals("drawer"),"NATIVE_DRAWER_RECONSTRUCTION");check(reattached.revision==clientB.revision && reattached.group("bg").get("name").getAsString().equals("Still active"),"NATIVE_REATTACH_RECONSTRUCTION");reattached.send("create",original);check(reattached.receipt("create",null).equals(originalReceipt),"NATIVE_REATTACH_RETRY_HISTORY");
+                    reattached.game();reattached.organization();if(version>=3)check(reattached.group("g").get("presentation_mode").getAsString().equals("drawer"),"NATIVE_DRAWER_RECONSTRUCTION");check(reattached.revision==clientB.revision && reattached.group("bg").get("name").getAsString().equals("Still active"),"NATIVE_REATTACH_RECONSTRUCTION");reattached.send("create",original);check(reattached.receipt("create",null).equals(originalReceipt),"NATIVE_REATTACH_RETRY_HISTORY");
                 }
                 cancel.set(true);MatchCoordinatorChecks.await(coordinator::isClosed,"NATIVE_ORGANIZATION_PARENT_CLEANUP");coordinator.close();check(disposed.get()==1 && submissions.get()==0,"NATIVE_ORGANIZATION_OWNERSHIP");try{bridge.get().snapshot();throw new AssertionError("NATIVE_ORGANIZATION_LEAK");}catch(IllegalStateException expected){}
             }

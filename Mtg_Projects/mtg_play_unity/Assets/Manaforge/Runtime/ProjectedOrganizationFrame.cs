@@ -17,6 +17,7 @@ namespace Manaforge.Play
     {
         public string Epoch {get;} public string Viewer {get;} public long GameplayRevision {get;} public long Revision {get;} public long Basis {get;}
         public IReadOnlyList<ProjectedOrganizationGroup> Groups {get;}
+        public IReadOnlyDictionary<string,UnityEngine.Vector2> Placements {get;}
         public IReadOnlyDictionary<string,string> Handles {get;}
         public IReadOnlyDictionary<string,IReadOnlyList<string>> Roots {get;}
         internal ProjectedOrganizationFrame(JObject body)
@@ -24,9 +25,10 @@ namespace Manaforge.Play
             Epoch=(string)body["match_epoch"];Viewer=(string)body["viewer_id"];GameplayRevision=(long)body["gameplay_revision"];Revision=(long)body["organization_revision"];Basis=(long)body["basis_revision"];
             var objects=body["mappings"].ToDictionary(m=>(string)m["handle"],m=>(string)m["object_reference"],StringComparer.Ordinal);
             Handles=new ReadOnlyDictionary<string,string>(objects.ToDictionary(p=>p.Value,p=>p.Key,StringComparer.Ordinal));
+            var placements=new Dictionary<string,UnityEngine.Vector2>(StringComparer.Ordinal);
             var roots=new Dictionary<string,IReadOnlyList<string>>(StringComparer.Ordinal);var groups=new List<ProjectedOrganizationGroup>();
-            foreach(JObject seat in body["seats"]){string id=(string)seat["seat_id"];roots.Add(id,Array.AsReadOnly(seat["root"].Select(h=>objects[(string)h]).ToArray()));foreach(JObject group in seat["groups"])groups.Add(new ProjectedOrganizationGroup(group,id,objects));}
-            Roots=new ReadOnlyDictionary<string,IReadOnlyList<string>>(roots);Groups=groups.AsReadOnly();
+            foreach(JObject seat in body["seats"]){string id=(string)seat["seat_id"];roots.Add(id,Array.AsReadOnly(seat["root"].Select(h=>objects[(string)h]).ToArray()));if(seat["placements"] is JArray positions)foreach(var placement in positions)placements.Add(objects[(string)placement["handle"]],new UnityEngine.Vector2((long)placement["x"]/1000000f,(long)placement["y"]/1000000f));foreach(JObject group in seat["groups"])groups.Add(new ProjectedOrganizationGroup(group,id,objects));}
+            Placements=new ReadOnlyDictionary<string,UnityEngine.Vector2>(placements);Roots=new ReadOnlyDictionary<string,IReadOnlyList<string>>(roots);Groups=groups.AsReadOnly();
         }
     }
     public interface IOrganizationPresentation

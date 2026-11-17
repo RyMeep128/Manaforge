@@ -416,6 +416,10 @@ def main():
                     timeout=180,
                 )
                 subprocess.run(
+                    [runtime, "-Djava.awt.headless=true", "-cp", output + os.pathsep + native_classpath, "NativeOrganizationChecks", "--v4"],
+                    cwd=output, check=True, timeout=180,
+                )
+                subprocess.run(
                     [
                         runtime,
                         "-Djava.awt.headless=true",

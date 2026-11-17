@@ -274,6 +274,7 @@ def outputs():
         **organization_outputs(),
         **organization_outputs(2),
         **organization_outputs(3),
+        **organization_outputs(4),
         **_schema_outputs(
             "python-contracts-v1.schema.json", "PlayContracts", include_cs=True
         ),

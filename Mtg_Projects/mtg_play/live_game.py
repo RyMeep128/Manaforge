@@ -369,14 +369,15 @@ def run_live_game(
     presentation="current",
     organization=False,
     organization_drawers=False,
+    organization_free_placement=False,
     xmage_root=transport.DEFAULT_BUNDLE,
     jdk_path=transport.DEFAULT_JDK,
 ):
     """Blocking worker with one private manifest and one viewer bootstrap; no per-action Python."""
     if type(organization) is not bool:
         raise LiveGameError("UNITY_GAME_ORGANIZATION_INVALID")
-    organization_enabled = organization or organization_drawers or SHARED_ORGANIZATION_ENABLED
-    organization_version = 3 if organization_drawers else 2
+    organization_enabled = organization or organization_drawers or organization_free_placement or SHARED_ORGANIZATION_ENABLED
+    organization_version = 4 if organization_free_placement else 3 if organization_drawers else 2
     if (
         commander_scenario
         not in (
