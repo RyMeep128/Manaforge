@@ -257,6 +257,7 @@ def main():
             commander_scenario=args.commander_scenario,
             no_capture=args.no_capture,
             presentation=args.presentation,
+            organization_drawers=True,
             require_auto_payment=args.public_decks and args.payment_mode == "auto" and args.format == "freeform" and not args.startup_only and not args.concede,
             **({"jdk_path": args.jdk_path} if args.jdk_path else {}),
             **({"xmage_root": args.xmage_root} if args.xmage_root else {}),

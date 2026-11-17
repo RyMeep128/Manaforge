@@ -1,8 +1,8 @@
 # Customizable Tabletop, Modular HUD, and Shared Battlefield Organization
 
-Status: implementation in progress; private drawer customization is enabled in the normal game menu by owner request. Hosted/full-game and owner acceptance remain incomplete.
+Status: implementation in progress; private HUD customization and shared battlefield drawer previews are enabled in normal Play by owner request. Hosted/full-game and owner acceptance remain incomplete.
 
-## Implementation status (2026-11-11)
+## Implementation status (2026-11-17)
 
 | Stories | Current state |
 | --- | --- |
@@ -11,14 +11,15 @@ Status: implementation in progress; private drawer customization is enabled in t
 | CT-04 | Versioned named preset storage implemented. |
 | CT-05A / CT-06 | Live editor for Priority, Actions, Zones, and Commander drawers, plus resolution recovery and session reset implemented; hosted Unity/full-game and owner acceptance incomplete. |
 | CT-07–11 | Identity/session reducer, authenticated shared organization transport, native bridge, and opt-in normal owner integration implemented; exact-SHA native/full-game acceptance remains a release gate. |
-| CT-12–14 | Flat-group rendering, selection and editing candidate implemented behind v2 opt-in; hosted/manual/native acceptance incomplete. See [shared rendering](play-shared-rendering.md). |
-| CT-15 | Shared drawer mode, persistent shells, independent collapse, member chooser and anchor integration implemented as an opt-in candidate; hosted/native/player and manual acceptance incomplete. |
+| CT-12–14 | Flat-group rendering, selection and editing candidate enabled by normal Play with v3; hosted/manual/native acceptance incomplete. See [shared rendering](play-shared-rendering.md). |
+| CT-15 | Shared drawer mode, persistent shells, independent collapse, member chooser and anchor integration enabled as a normal Play preview by owner request; hosted/native/player and manual acceptance incomplete. |
 | CT-16–17 | Reconnect reconstruction and join/leave policies remain unimplemented. |
 | CT-18–22 | Automatic rules, visual stacks, land organization, and nested groups remain unimplemented. |
 | CT-23–24 | Release acceptance and four-player shared-table gates remain incomplete. |
 
 Normal games expose Customize Layout for the four existing drawer families.
-This does not enable hand/battlefield repositioning or shared organization. Remaining acceptance is tracked in
+Normal Start Game also enables the shared flat-group/drawer candidate as of 2026-11-17.
+Hand and battlefield viewport HUD customization remain separate work. Remaining acceptance is tracked in
 [recovery and release evidence](play-layout-recovery.md#evidence-and-release-gate).
 The story specifications below describe the full target, not completed acceptance.
 See [CT-07A identity foundation](play-battlefield-identity.md) for its internal contracts and remaining gates.

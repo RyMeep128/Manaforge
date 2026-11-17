@@ -50,6 +50,7 @@ def test_only_start_button_launches_unity_with_selected_decks(launcher, monkeypa
     assert setup.format == "freeform"
     assert set(documents) == {"one", "two"}
     assert run.call_args.kwargs["launch"] is launch
+    assert run.call_args.kwargs["organization_drawers"] is True
 
 
 def test_blocked_deck_disables_start_and_explains_reason(launcher):
@@ -108,3 +109,4 @@ def test_unrestricted_commander_is_selectable_and_reaches_the_launch(
     assert len(queued) == 1
     queued[0](None, None)
     assert run.call_args.args[0].format == "unrestricted_commander"
+    assert run.call_args.kwargs["organization_drawers"] is True

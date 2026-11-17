@@ -1,4 +1,16 @@
-# Shared battlefield rendering and editing (CT-12–13)
+# Shared battlefield rendering and editing (CT-12–15)
+
+Current visibility (2026-11-17): normal desktop **Play → Start Game** enables the v3
+drawer candidate by owner request. Restart Manaforge after updating. After keeping
+your opening hand, use **New group**, Shift-select permanents and drag them into
+the group, then select its **…** button and **Convert to Drawer**. Each drawer has
+a **Members** button for individual cards. **Default arrangement** provides local
+legacy placement. This owner-requested preview does not establish full-game or
+multiplayer acceptance; the historical gates below remain validation requirements.
+The local Windows player rebuild succeeded with the restored license on 2026-11-17.
+The desktop launcher passes `organization_drawers=True` explicitly; the low-level
+API defaults and legacy v1/v2 paths remain unchanged. The packaged saved-deck
+acceptance driver now selects the same v3 path as normal Play.
 
 This slice adds organization protocol v2 and a coherent Unity receive mailbox,
 then integrates the normal owner and flat group rendering/gestures. Default normal
