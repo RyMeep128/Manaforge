@@ -321,3 +321,44 @@ Mandatory targeting/mana choices retain their original input paths; opponents an
 non-battlefield cards are never assigned through this mode. Controls display which
 group is receiving clicks. Hosted tests cover exact membership packets, pending
 click isolation and the two-phase New drawer flow.
+
+
+### Live drawer visibility defect and correction
+
+A live screen inspection on 2026-11-17 showed "Organization changed. Try again."
+after creation, with no drawer present. Outgoing ClientOrganizationSession commands
+were still validated with the v2 validator even when the private bootstrap selected
+v3. They threw before the transport write. Submission now uses the configured
+version's validator. Added submission regression coverage for both v2 and v3;
+existing schema-only and Java tests had not exercised this outgoing C# path.
+Previous build success was not visual evidence of working drawer creation.
+
+Battlefield group/drawer positions now resolve against the full presentation
+viewport rather than an owner seat lane. Header dragging is accepted outside the
+old lane; a short title click still expands/collapses locally. Card membership and
+authority stay unchanged. Full-screen positions remain normalized shared metadata.
+The running player must be restarted after rebuilding to load the correction.
+A subsequent live check confirmed creation of a visible drawer. That check also
+exposed a separate drag defect: captured UI Toolkit button events bypass ancestor
+trickle listeners. Drawer tabs now forward their captured move/up events to the
+organization gesture handler; short clicks still reach the normal toggle. The
+move label explicitly participates in picking, and targeting releases only its
+own capture. Bindings unregister the forwarded callbacks during disposal.
+Hosted regression coverage routes movement through the captured tab across frames.
+
+Manual reproduction (normal saved-deck human-versus-AI session):
+1. Start Play with existing saved decks and keep the opening hand.
+2. At priority, right-click empty battlefield, choose New drawer and confirm a name.
+3. Confirm a visible named drawer appears, then close the organization tools.
+4. Left-drag the drawer title across the screen and release outside its old seat lane.
+5. Confirm its new position persists, click the title to collapse, then click to expand.
+6. Repeat movement using the small move handle. No native rules action should occur.
+
+Observed on 2026-11-17 in the rebuilt Windows player with saved Grixis Affinity
+versus Goblin decks: New drawer produced a visible Drawer 1; title drag moved it
+from the upper-left battlefield into the center-right; the move handle moved it
+to the upper screen (outside the owner lane) and back to center; two title clicks
+changed its glyph to collapsed and back to expanded. The drawer was empty, so this
+check establishes creation, position updates and local toggling only. It does not
+establish live member hiding/interaction, full-game acceptance or multiplayer
+acceptance. The running match was left open with the drawer visible.

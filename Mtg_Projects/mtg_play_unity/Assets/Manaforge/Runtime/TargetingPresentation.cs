@@ -76,7 +76,7 @@ namespace Manaforge.Play
         private readonly Dictionary<string,VisualElement> anchors=new Dictionary<string,VisualElement>();private readonly HashSet<VisualElement> decorated=new HashSet<VisualElement>();
         private ProjectedDecisionFrame frame;private TargetingState state=new TargetingState(null);private ViewerDecisionOffer observed,dragOffer;
         private string pressedTarget;private bool sourceDrag;
-        private Vector2 cursor,start;private bool hasCursor,pressed,dragging,disposed;private int pointer;
+        private Vector2 cursor,start;private bool hasCursor,pressed,dragging,captured,disposed;private int pointer;
         public ViewerTargetingController(VisualElement root,ViewerCardSurface surface,ViewerDecisionPanel decisions,IEnumerable<PlayerPanel> players)
             :this(root,surface,decisions,()=>players) {}
         public ViewerTargetingController(VisualElement root,ViewerCardSurface surface,ViewerDecisionPanel decisions,Func<IEnumerable<PlayerPanel>> players,Func<string,Vector2?> objectAnchor=null)
@@ -102,7 +102,7 @@ namespace Manaforge.Play
             sourceDrag=Within(element,source);
             if(!sourceDrag && (legal==null || !anchors.TryGetValue(legal,out var target) || !Within(element,target) || state.Legal.Count(value=>value.Key==legal)!=1))return;
             for(var child=element;child!=null && child!=source && child!=root;child=child.parent)if(child is Button || child is TextField || child is Toggle)return;
-            pressedTarget=legal;pressed=true;dragging=false;dragOffer=observed;pointer=ev.pointerId;start=ev.position;root.CapturePointer(pointer);ev.StopImmediatePropagation();
+            pressedTarget=legal;pressed=true;dragging=false;dragOffer=observed;pointer=ev.pointerId;start=ev.position;captured=true;root.CapturePointer(pointer);ev.StopImmediatePropagation();
         }
         private void Up(PointerUpEvent ev)
         {
@@ -122,7 +122,8 @@ namespace Manaforge.Play
             if(target!=null && (target.ObjectId!=null?decisions.TryActivateObject(observed,target.ObjectId):decisions.TryActivatePlayer(observed,target.PlayerId))){ev.StopImmediatePropagation();}
         }
         public void InterruptGesture(){CancelDrag();hasCursor=false;}
-        private void CancelDrag(){pressed=dragging=false;dragOffer=null;pressedTarget=null;sourceDrag=false;if(root.HasPointerCapture(pointer))root.ReleasePointer(pointer);}
+        // The root is shared with presentation gestures. Release only capture this controller owns.
+        private void CancelDrag(){pressed=dragging=false;dragOffer=null;pressedTarget=null;sourceDrag=false;bool owned=captured;captured=false;if(owned && root.HasPointerCapture(pointer))root.ReleasePointer(pointer);}
         public void Tick()
         {
             if(disposed)return;var current=decisions.PriorityFrame;

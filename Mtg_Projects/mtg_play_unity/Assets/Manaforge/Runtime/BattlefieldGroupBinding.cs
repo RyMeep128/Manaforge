@@ -19,20 +19,23 @@ namespace Manaforge.Play
         private readonly Label title;
         private readonly Action<bool> openChanged;
         private readonly EventCallback<FocusInEvent> focused;
+        private readonly EventCallback<PointerMoveEvent> drawerMove;private readonly EventCallback<PointerUpEvent> drawerUp;
         public bool IsDrawer {get;private set;}
         public bool MembersVisible=>!IsDrawer || Drawer.IsOpen;
-        public BattlefieldGroupBinding(string id,string seat,VisualElement parent,Action relayout,Action focus,Action edit,Action inspectMembers)
+        public BattlefieldGroupBinding(string id,string seat,VisualElement parent,Action relayout,Action focus,Action edit,Action inspectMembers,EventCallback<PointerMoveEvent> drawerMove=null,EventCallback<PointerUpEvent> drawerUp=null)
         {
-            Id=id;Seat=seat;
+            Id=id;Seat=seat;this.drawerMove=drawerMove;this.drawerUp=drawerUp;
             Root=new VisualElement{name="organization-group-"+id,userData=id,focusable=true,pickingMode=PickingMode.Ignore};Root.AddToClassList("organization-header");Root.style.position=Position.Absolute;parent.Add(Root);
             PanelHeader=new VisualElement{name="organization-header-"+id,userData=id,focusable=true};PanelHeader.AddToClassList("organization-header");PanelHeader.style.height=30;PanelHeader.style.flexDirection=FlexDirection.Row;PanelHeader.style.backgroundColor=new Color(.12f,.17f,.19f,.95f);Root.Add(PanelHeader);
             title=new Label{enableRichText=false,pickingMode=PickingMode.Ignore};title.style.flexGrow=1;title.style.overflow=Overflow.Hidden;PanelHeader.Add(title);
             Edit=new Button(edit){text="...",name="organization-edit-"+id,tooltip="Group actions"};GameplayTheme.Button(Edit);PanelHeader.Add(Edit);
             Drawer=new GameplayDrawer("Group",GameplayDrawerDirection.Down,true){name="organization-drawer-"+id};Drawer.Tab.enableRichText=false;Drawer.style.position=Position.Absolute;Drawer.style.left=Drawer.style.top=0;Drawer.style.height=30;Root.Add(Drawer);
+            // Captured UI Toolkit button events dispatch directly to the tab.
+            if(drawerMove!=null)Drawer.Tab.RegisterCallback(drawerMove,TrickleDown.TrickleDown);if(drawerUp!=null)Drawer.Tab.RegisterCallback(drawerUp,TrickleDown.TrickleDown);
             Drawer.Tab.style.position=Position.Absolute;Drawer.Tab.style.left=30;Drawer.Tab.style.top=0;Drawer.Tab.style.right=0;Drawer.Tab.style.width=StyleKeyword.Auto;Drawer.Tab.style.height=30;
             Drawer.Viewport.style.position=Position.Absolute;Drawer.Viewport.style.left=0;Drawer.Viewport.style.top=32;Drawer.Viewport.style.paddingTop=0;
             DrawerEdit=new Button(edit){name="organization-drawer-edit-"+id,text="...",tooltip="Group actions"};GameplayTheme.Button(DrawerEdit);DrawerEdit.style.position=Position.Absolute;DrawerEdit.style.right=DrawerEdit.style.top=0;DrawerEdit.style.width=28;DrawerEdit.style.height=30;Root.Add(DrawerEdit);
-            DragHandle=new Label("↕"){name="organization-drag-"+id,userData=id,focusable=true,tooltip="Drag group; arrows move; F2 renames"};DragHandle.AddToClassList("organization-header");DragHandle.style.position=Position.Absolute;DragHandle.style.left=DragHandle.style.top=0;DragHandle.style.width=28;DragHandle.style.height=30;Root.Add(DragHandle);
+            DragHandle=new Label("↕"){name="organization-drag-"+id,userData=id,focusable=true,pickingMode=PickingMode.Position,tooltip="Drag group; arrows move; F2 renames"};DragHandle.AddToClassList("organization-header");DragHandle.style.position=Position.Absolute;DragHandle.style.left=DragHandle.style.top=0;DragHandle.style.width=28;DragHandle.style.height=30;Root.Add(DragHandle);
             memberBar=new VisualElement();memberBar.style.position=Position.Absolute;memberBar.style.left=0;memberBar.style.top=32;Root.Add(memberBar);
             Members=new Button(inspectMembers){text="Inspect members",name="organization-members-"+id};GameplayTheme.Button(Members);memberBar.Add(Members);
             focused=ev=>focus();PanelHeader.RegisterCallback(focused);DragHandle.RegisterCallback(focused);Drawer.Tab.RegisterCallback(focused);Root.RegisterCallback(focused);
@@ -50,6 +53,6 @@ namespace Manaforge.Play
             Edit.style.display=owner?DisplayStyle.Flex:DisplayStyle.None;Edit.SetEnabled(canEdit);
             Drawer.style.width=bounds.width;Drawer.Viewport.style.width=bounds.width;Drawer.Viewport.style.height=Mathf.Max(0,bounds.height-32);Drawer.Content.style.height=Mathf.Max(0,bounds.height-32);Drawer.Content.style.width=bounds.width;
         }
-        public void Dispose(){Drawer.OpenChanged-=openChanged;PanelHeader.UnregisterCallback(focused);DragHandle.UnregisterCallback(focused);Drawer.Tab.UnregisterCallback(focused);Root.UnregisterCallback(focused);Edit.clickable=null;DrawerEdit.clickable=null;Members.clickable=null;Drawer.Dispose();Root.RemoveFromHierarchy();}
+        public void Dispose(){if(drawerMove!=null)Drawer.Tab.UnregisterCallback(drawerMove,TrickleDown.TrickleDown);if(drawerUp!=null)Drawer.Tab.UnregisterCallback(drawerUp,TrickleDown.TrickleDown);Drawer.OpenChanged-=openChanged;PanelHeader.UnregisterCallback(focused);DragHandle.UnregisterCallback(focused);Drawer.Tab.UnregisterCallback(focused);Root.UnregisterCallback(focused);Edit.clickable=null;DrawerEdit.clickable=null;Members.clickable=null;Drawer.Dispose();Root.RemoveFromHierarchy();}
     }
 }

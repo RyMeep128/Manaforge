@@ -24,6 +24,12 @@ namespace Manaforge.Play.Tests
             foreach(var test in corpus["cases"]){bool accepted=true;try{if(version==3)OrganizationV3Messages.Parse((string)test["text"],context);else OrganizationV2Messages.Parse((string)test["text"],context);}catch(IOException){accepted=false;}Assert.That(accepted,Is.EqualTo((bool)test["valid"]),(string)test["name"]);}
             Assert.Throws<WireEnvelope.EnvelopeException>(()=>OrganizationMessages.ParseContract(Snapshot(7).ToString()));var missing=Snapshot(7);((JObject)missing["body"]).Remove("gameplay_revision");Assert.Throws<WireEnvelope.EnvelopeException>(()=>OrganizationV2Messages.ParseContract(missing.ToString()));
         }
+        [TestCase(2),TestCase(3)] public async Task SubmissionValidatesTheNegotiatedVersion(int version)
+        {
+            var written=new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);using var session=new ClientOrganizationSession("viewer-a",raw=>written.TrySetResult(raw));session.ConfigureVersion(version);
+            var caps=JObject.Parse(Caps());caps["organization_version"]=version;caps["body"]["versions"]=new JArray(version);session.Receive(caps.ToString());session.ObserveGameplay(Game(7));var snapshot=Snapshot(7);snapshot["organization_version"]=version;if(version==3)snapshot["body"]["seats"][0]["groups"][0]["presentation_mode"]="panel";session.Receive(snapshot.ToString());
+            var operation=BattlefieldOrganizationRenderer.Operation("create","new-group","Visible drawer");var pending=session.Submit(session.ForRevision(7),operation);Assert.That(pending.IsCompleted,Is.False);Assert.That(await Task.WhenAny(written.Task,Task.Delay(3000)),Is.SameAs(written.Task));var packet=JObject.Parse(await written.Task);Assert.That((int)packet["organization_version"],Is.EqualTo(version));if(version==3)OrganizationV3Messages.ParseContract(packet.ToString());else OrganizationV2Messages.ParseContract(packet.ToString());
+        }
         [Test] public void FutureFramesWaitAndNewGameplayImmediatelyRevokesOldGeometry()
         {
             using var session=new ClientOrganizationSession("viewer-a",_=>{});Assert.That(session.Receive(Caps()),Is.Not.Null);session.Receive(Snapshot(7).ToString());Assert.That(session.ForRevision(7),Is.Null);

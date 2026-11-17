@@ -63,7 +63,7 @@ namespace Manaforge.Play.Protocol
                 if(version==3 && operation["presentation_mode"]==null){operation=(JObject)operation.DeepClone();operation["presentation_mode"]=JValue.CreateNull();}
                 pending=Guid.NewGuid().ToString("N");receipt=new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);result=receipt.Task;LastError=null;
                 wire=new JObject{["wire_version"]=1,["organization_version"]=version,["message_type"]="organization_command",["message_id"]=Guid.NewGuid().ToString("N"),["body"]=new JObject{["match_epoch"]=frame.Epoch,["command_id"]=pending,["expected_organization_revision"]=frame.Revision,["basis_revision"]=frame.Basis,["operation"]=operation.DeepClone()}}.ToString(Formatting.None);
-                try{OrganizationV2Messages.ParseContract(wire);}catch{pending=null;receipt=null;throw;}
+                try{ParseContract(wire);}catch{pending=null;receipt=null;throw;}
             }
             Task.Run(()=>{try{write(wire);}catch{Dispose();}});return result;
         }
