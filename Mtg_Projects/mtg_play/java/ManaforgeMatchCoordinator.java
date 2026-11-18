@@ -10,6 +10,23 @@ import manaforge.protocol.*;
 
 /** Local match transport owner. Gameplay routing is installed by the trusted host. */
 public final class ManaforgeMatchCoordinator implements AutoCloseable {
+    /** Generation check prevents a producer notification being lost between queue poll and wait. */
+    static final class Wakeup {
+        private long generation;
+        synchronized long version(){return generation;}
+        synchronized void signal(){generation++;notifyAll();}
+        synchronized void await(long observed,BooleanSupplier cancelled) throws InterruptedException {
+            while(generation==observed && !cancelled.getAsBoolean())wait(100);
+        }
+    }
+    static final boolean NETWORK_TIMING="1".equals(System.getenv("MANAFORGE_NETWORK_TIMING"));
+    static void timing(String stage,String command,long started,long revision){
+        if(!NETWORK_TIMING)return;
+        JsonObject value=new JsonObject();value.addProperty("stage",stage);value.addProperty("command_id",command);value.addProperty("elapsed_ms",(System.nanoTime()-started)/1000000.0);value.addProperty("revision",revision);value.addProperty("timestamp_ms",System.currentTimeMillis());
+        // Stdout is a bootstrap control pipe and stderr is deliberately discarded.
+        // Store only these explicit fields in the owned, disposable session directory.
+        try{synchronized(ManaforgeMatchCoordinator.class){java.nio.file.Files.write(java.nio.file.Paths.get("network-timing.jsonl"),(value.toString()+"\n").getBytes(StandardCharsets.UTF_8),java.nio.file.StandardOpenOption.CREATE,java.nio.file.StandardOpenOption.APPEND);}}catch(IOException ignored){/* Diagnostics must not interrupt gameplay. */}
+    }
     public interface Gameplay {
         void connected(String seat,GatewayHandshake.ViewerContext context) throws Exception;
         void receive(String seat,String wire) throws Exception;
@@ -29,6 +46,7 @@ public final class ManaforgeMatchCoordinator implements AutoCloseable {
                 if(kind.equals("ack")){require(channel.receipts.size()<32,"GAMEPLAY_OUTPUT_OVERFLOW");channel.receipts.addLast(raw);}
                 else {require(kind.equals("snapshot") || kind.equals("result"),"GAMEPLAY_MESSAGE");long revision=validated.getAsJsonObject("body").getAsJsonObject("snapshot").get("revision").getAsLong();require(revision>channel.revision,"GAMEPLAY_REVISION");channel.revision=revision;channel.latest=channel.pending=raw;}
                 channel.notifyAll();
+                if(NETWORK_TIMING)timing("gateway_publish_"+kind,channel.timingCommand,channel.timingReceived,channel.revision);
             }return null;
         });
     }
@@ -64,6 +82,7 @@ public final class ManaforgeMatchCoordinator implements AutoCloseable {
         ManaforgeOpeningProjection projection;
         final boolean extensionAllowed;final ArrayDeque<String> receipts=new ArrayDeque<>();final AtomicInteger incoming=new AtomicInteger();String control,organization;boolean extensionReady;
         Connection connection;Status status=Status.REGISTERED;String reason,pending,latest;long revision=-1,sent=-1;
+        String timingCommand;long timingReceived=System.nanoTime();
         Channel(Viewer viewer,ServerSocket listener,byte[] key,boolean extensionAllowed){this.extensionAllowed=extensionAllowed;this.viewer=viewer;this.listener=listener;this.key=key.clone();client=hello(viewer,"client");gateway=hello(viewer,"gateway");projection=new ManaforgeOpeningProjection(viewer.session,viewer.viewer,viewer.nativePlayer,Collections.emptyMap());}
     }
     private final String nativeGame,engine,hash;private final AutoCloseable ownedMatch;private final BooleanSupplier parentCancelled;
@@ -154,9 +173,11 @@ public final class ManaforgeMatchCoordinator implements AutoCloseable {
             int maximum=gameplay==null?ViewerChannelExtension.MAX_BYTES:TextFrame.MAX_BYTES;
             if(incoming.length()>maximum || incoming.getBytes(StandardCharsets.UTF_8).length>maximum){disconnect(channel,connection,"EXTENSION_SIZE");return;}
             if(channel.incoming.incrementAndGet()>32){channel.incoming.decrementAndGet();disconnect(channel,connection,"EXTENSION_INPUT_OVERFLOW");return;}
+            final long receivedAt=System.nanoTime();
             try{owner.execute(()->{try{
                 if(stopping.get())return;synchronized(channel){if(channel.connection!=connection || !connection.active)return;}
                 boolean organization=channel.extensionAllowed && WireEnvelope.parseObject(incoming).get("message_type").getAsString().startsWith("organization_");
+                if(NETWORK_TIMING && !organization && gameplay!=null){JsonObject command=WireEnvelope.parse(incoming);String id=command.get("message_id").getAsString();if(id(id)){channel.timingCommand=id;channel.timingReceived=receivedAt;timing("gateway_received",id,receivedAt,channel.revision);}}
                 if(organization)extension.receive(channel.viewer.seat,incoming);else if(gameplay!=null)gameplay.receive(channel.viewer.seat,incoming);else extension.receive(channel.viewer.seat,incoming);
             }catch(Exception failure){disconnect(channel,connection,"EXTENSION_REJECTED");}finally{channel.incoming.decrementAndGet();}});}
             catch(RejectedExecutionException failure){channel.incoming.decrementAndGet();disconnect(channel,connection,"OWNER_CLOSED");return;}

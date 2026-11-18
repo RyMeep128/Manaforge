@@ -33,7 +33,24 @@ public final class MultiplayerOrganizationChecks {
         JsonObject wire=JsonParser.parseString(OrganizationV4Checks.command(id,state.get("organization_revision").getAsLong(),state.get("basis_revision").getAsLong(),member,.7,.2)).getAsJsonObject();wire.getAsJsonObject("body").add("match_epoch",state.get("match_epoch"));return wire.toString();
     }
     static boolean placed(JsonObject state,String member){for(JsonElement item:state.getAsJsonArray("seats"))for(JsonElement place:item.getAsJsonObject().getAsJsonArray("placements")){JsonObject p=place.getAsJsonObject();if(p.get("handle").getAsString().equals(member) && p.get("x").getAsLong()==700000 && p.get("y").getAsLong()==200000)return true;}return false;}
+    static void metadataReuseChecks() throws Exception {
+        JsonObject view=JsonParser.parseString("{\"game_id\":\"game-a\",\"viewer\":\"viewer-a\",\"cycle\":7,\"players\":[{\"battlefield\":[{\"id\":\"card-a\"}]}]}").getAsJsonObject();
+        String[] ids=NativeOrganizationBridge.MetadataCache.includeBattlefield(view,"hand-a");
+        check(new HashSet<>(Arrays.asList(ids)).equals(new HashSet<>(Arrays.asList("hand-a","card-a"))),"RULES_READ_LOST_REQUIRED_IDS");
+        NativeOrganizationBridge.MetadataCache cache=new NativeOrganizationBridge.MetadataCache();
+        JsonObject metadata=JsonParser.parseString("{\"status\":\"ok\",\"cycle\":7,\"objects\":{\"card-a\":{\"incarnation\":1}}}").getAsJsonObject();cache.observe(view,metadata);
+        metadata.getAsJsonObject("objects").remove("card-a");cache.observe(view,metadata);check(cache.objects(view).has("card-a"),"COMPLETE_CACHE_LOST_TO_PARTIAL_READ");
+        for(String key:new String[]{"game_id","viewer","cycle"}){
+            JsonObject other=view.deepCopy();if(key.equals("cycle"))other.addProperty(key,8);else other.addProperty(key,"different");
+            boolean rejected=false;try{cache.objects(other);}catch(java.io.IOException expected){rejected=true;}check(rejected,"CROSS_CONTEXT_METADATA_REUSED");
+        }
+        JsonObject changed=view.deepCopy();changed.getAsJsonArray("players").get(0).getAsJsonObject().getAsJsonArray("battlefield").get(0).getAsJsonObject().addProperty("id","new-card");
+        boolean rejected=false;try{cache.objects(changed);}catch(java.io.IOException expected){rejected=true;}check(rejected,"PARTIAL_METADATA_REUSED");
+        String[] full=new String[256];Arrays.fill(full,"required");for(int i=0;i<full.length;i++)full[i]="required-"+i;
+        check(Arrays.equals(full,NativeOrganizationBridge.MetadataCache.includeBattlefield(view,full)),"OPTIONAL_IDS_EXCEEDED_RULES_LIMIT");
+    }
     public static void main(String[] args) throws Exception {
+        metadataReuseChecks();
         List<Packet> packets=new ArrayList<>();byte[] ka=new byte[32],kb=new byte[32];Arrays.fill(kb,(byte)1);
         try(ManaforgeMatchCoordinator transport=new ManaforgeMatchCoordinator("organization-fixture",MatchCoordinatorChecks.ENGINE,MatchCoordinatorChecks.HASH,()->{},()->false)){
             ManaforgeMatchCoordinator.Viewer a=transport.register("a",A.toString(),"session-a","viewer-a",ka),b=transport.register("b",B.toString(),"session-b","viewer-b",kb);

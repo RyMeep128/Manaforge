@@ -97,6 +97,56 @@ def test_log_storage_failure_does_not_prevent_private_workspace_cleanup(monkeypa
     assert launch.log_directory is None
 
 
+def test_multiplayer_timings_survive_cleanup_without_decks_or_authentication(tmp_path):
+    launch = LiveGameLaunch()
+    launch.allocate()
+    root = launch.root
+    (root / "seat-0").mkdir()
+    (root / "seat-0/player.log").write_text(
+        'MANAFORGE_NETWORK_TIMING {"stage":"unity_action_presented","command_id":"opaque","elapsed_ms":125}\n'
+    )
+    (root / "network-timing.jsonl").write_text(
+        '{"stage":"engine_complete","command_id":"opaque","elapsed_ms":20}\n'
+    )
+    (root / "seat-0/viewer-bootstrap.json").write_text("PRIVATE_AUTHENTICATION")
+    (root / "launch.json").write_text("PRIVATE_DECK")
+    launch.close()
+    assert not root.exists()
+    report = json.loads((launch.log_directory / "diagnostic.json").read_text())
+    assert report["network_timing"]["unity_action_presented"] == {
+        "count": 1,
+        "p50_ms": 125,
+        "p95_ms": 125,
+    }
+    assert report["network_timing"]["engine_complete"]["p50_ms"] == 20
+    assert "opaque" not in json.dumps(report)
+    assert {p.name for p in launch.log_directory.iterdir()} == {
+        "player.log",
+        "network-timing.jsonl",
+        "diagnostic.json",
+    }
+
+
+def test_timing_aggregates_ignore_invalid_or_unrelated_log_contents(tmp_path):
+    from mtg_play.session_logs import network_timing_summary
+
+    lines = [
+        "not json",
+        '{"private_deck":"PRIVATE"}',
+        '{"stage":[],"elapsed_ms":5}',
+        '{"stage":"engine_complete","elapsed_ms":-1}',
+        '{"stage":"engine_complete","elapsed_ms":NaN}',
+        '{"stage":"engine_complete","elapsed_ms":true}',
+    ]
+    lines += [
+        json.dumps({"stage": "engine_complete", "elapsed_ms": i}) for i in range(1, 21)
+    ]
+    (tmp_path / "network-timing.jsonl").write_text("\n".join(lines))
+    assert network_timing_summary(tmp_path) == {
+        "engine_complete": {"count": 20, "p50_ms": 10, "p95_ms": 19},
+    }
+
+
 def test_owned_cleanup_preserves_only_bounded_result_and_safe_code():
     launch = LiveGameLaunch()
     launch.allocate()

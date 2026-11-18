@@ -165,6 +165,7 @@ class LoopbackTunnel:
                 self.socket = socket.create_connection(
                     ("127.0.0.1", self.target), timeout=5
                 )
+            self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             self.socket.settimeout(30)
             writer = threading.Thread(
                 target=self._write, daemon=True, name="manaforge-relay-writer"

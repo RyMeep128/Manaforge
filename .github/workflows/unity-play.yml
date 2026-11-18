@@ -120,6 +120,8 @@ jobs:
         working-directory: multiplayer-relay
         run: npm ci --omit=dev --ignore-scripts
       - name: Two Unity human seats through standalone relay
+        env:
+          MANAFORGE_NETWORK_TIMING: '1'
         shell: pwsh
         timeout-minutes: 40
         run: |

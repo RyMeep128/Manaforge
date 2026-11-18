@@ -23,6 +23,7 @@ namespace Manaforge.Play.Protocol
                 || !(ownedSocket.RemoteEndPoint is IPEndPoint remote) || !IPAddress.IsLoopback(remote.Address))
                 throw new ArgumentException("FRAME_SOCKET_CONTEXT");
             // Defensive fallback after readiness; cancellation/deadline checks also poll every <=25 ms.
+            ownedSocket.NoDelay = true;
             ownedSocket.LingerState = new LingerOption(false, 0);
             ownedSocket.ReceiveTimeout = 25;
             ownedSocket.SendTimeout = 25;

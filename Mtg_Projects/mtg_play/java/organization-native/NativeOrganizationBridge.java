@@ -7,6 +7,32 @@ import static manaforge.organization.BattlefieldOrganizationService.*;
 
 /** Host-owned layout bridge. Organization commands never enter the native rules transport. */
 final class NativeOrganizationBridge implements ViewerChannelExtension {
+    /** Reuses trusted reads only. Never performs IO or accepts client-supplied metadata. */
+    static final class MetadataCache {
+        private JsonObject view,metadata;
+        static String[] includeBattlefield(JsonObject view,String... sources){
+            Set<String> ids=new LinkedHashSet<>(Arrays.asList(sources));
+            for(JsonElement seat:view.getAsJsonArray("players"))for(JsonElement card:seat.getAsJsonObject().getAsJsonArray("battlefield"))ids.add(card.getAsJsonObject().get("id").getAsString());
+            return ids.size()<=256?ids.toArray(new String[0]):sources;
+        }
+        void observe(JsonObject view,JsonObject metadata){
+            if(!new JsonPrimitive("ok").equals(metadata.get("status")) || !view.get("cycle").equals(metadata.get("cycle")))return;
+            if(!complete(view,metadata.getAsJsonObject("objects")))return;
+            this.view=new JsonObject();for(String key:new String[]{"game_id","viewer","cycle"})this.view.add(key,view.get(key).deepCopy());this.metadata=metadata.deepCopy();
+        }
+        private static boolean complete(JsonObject requested,JsonObject objects){
+            for(JsonElement seat:requested.getAsJsonArray("players"))for(JsonElement card:seat.getAsJsonObject().getAsJsonArray("battlefield"))if(!objects.has(card.getAsJsonObject().get("id").getAsString()))return false;
+            return true;
+        }
+        boolean matches(JsonObject requested){
+            for(String key:new String[]{"game_id","viewer","cycle"})if(view==null || !Objects.equals(view.get(key),requested.get(key)))return false;
+            return complete(requested,metadata.getAsJsonObject("objects"));
+        }
+        JsonObject objects(JsonObject requested) throws IOException {
+            if(!matches(requested))throw new IOException("ORGANIZATION_BASIS_UNAVAILABLE");
+            return metadata.getAsJsonObject("objects").deepCopy();
+        }
+    }
     private final Thread owner=Thread.currentThread();
     private final UUID game;private final Map<String,ManaforgeMatchCoordinator.Viewer> registrations;
     private final Map<UUID,String> actors=new HashMap<>();

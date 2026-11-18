@@ -114,3 +114,74 @@ def test_invalid_replacement_deck_cannot_leave_seat_ready():
     with pytest.raises(ValueError):
         lobby.select(0, object())
     assert lobby.seats[0].deck is None and not lobby.seats[0].ready
+
+
+def test_tunnel_preserves_action_and_receipt_order_with_unbuffered_local_sockets():
+    import socket
+    import struct
+    from mtg_play.relay_client import LoopbackTunnel
+
+    def exact(peer, count):
+        result = bytearray()
+        while len(result) < count:
+            data = peer.recv(count - len(result))
+            assert data, "Tunnel closed in a frame"
+            result.extend(data)
+        return bytes(result)
+
+    def read(peer):
+        return exact(peer, struct.unpack(">I", exact(peer, 4))[0])
+
+    def frame(data):
+        return struct.pack(">I", len(data)) + data
+
+    errors = []
+    tunnels = {}
+
+    def route(side, payload):
+        if payload.get("type") == "frame":
+            tunnels[side].feed(payload)
+
+    with socket.socket() as native_listener:
+        native_listener.bind(("127.0.0.1", 0))
+        native_listener.listen(1)
+        native_listener.settimeout(3)
+        tunnels["guest"] = LoopbackTunnel(
+            lambda value: route("host", value), errors.append
+        )
+        tunnels["host"] = LoopbackTunnel(
+            lambda value: route("guest", value),
+            errors.append,
+            target_port=native_listener.getsockname()[1],
+        )
+        try:
+            with (
+                native_listener.accept()[0] as native,
+                socket.create_connection(
+                    ("127.0.0.1", tunnels["guest"].port),
+                    timeout=3,
+                ) as unity,
+            ):
+                native.settimeout(3)
+                unity.sendall(frame(b"action-one") + frame(b"action-two"))
+                assert [read(native), read(native)] == [b"action-one", b"action-two"]
+                for message in (b"submitted", b"confirmed", b"snapshot"):
+                    native.sendall(frame(message))
+                assert [read(unity) for _ in range(3)] == [
+                    b"submitted",
+                    b"confirmed",
+                    b"snapshot",
+                ]
+                for tunnel in tunnels.values():
+                    assert (
+                        tunnel.socket.getsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY)
+                        == 1
+                    )
+                assert errors == []
+                for tunnel in tunnels.values():
+                    tunnel.close()
+        finally:
+            for tunnel in tunnels.values():
+                tunnel.close()
+                tunnel.thread.join(3)
+                assert not tunnel.thread.is_alive()

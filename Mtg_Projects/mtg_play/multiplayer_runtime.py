@@ -15,6 +15,7 @@ from .live_game import LiveGameError, resolve_rules_manifest, validate_close_rep
 from .native_metadata import provision_metadata
 from .public_artwork import PublicArtworkServer
 from .runtime_distribution import owned
+from .session_logs import network_timing_summary
 from .viewer_bootstrap import export_viewer_bootstrap
 
 
@@ -284,6 +285,8 @@ def run_host_game(
                 ),
             )
             result = watch_player(owner, local_root, cancel, report)
+            if os.environ.get("MANAFORGE_NETWORK_TIMING") == "1":
+                result["network_timing"] = network_timing_summary(root)
             if (
                 result.get("outcome") in ("win", "loss", "draw")
                 and remote_finished is not None
@@ -350,7 +353,10 @@ def run_guest_game(
             cwd=str(player.parent),
             viewer_bootstrap=bootstrap,
         )
-        return watch_player(owner, root, cancel, report)
+        result = watch_player(owner, root, cancel, report)
+        if os.environ.get("MANAFORGE_NETWORK_TIMING") == "1":
+            result["network_timing"] = network_timing_summary(root)
+        return result
     finally:
         if artwork:
             artwork.close()

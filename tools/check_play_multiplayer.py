@@ -126,7 +126,7 @@ def main():
     outcomes = sorted(r.get("outcome", "") for r in proof.results.values())
     passed = proof.error is None and outcomes == ["loss", "win"] and all(r.get("viewer_cleared") is True and r.get("cleanup_confirmed") is True and r.get("uncertain") == 0 for r in proof.results.values()) and not any(t.is_alive() for t in proof.threads)
     options.output.parent.mkdir(parents=True, exist_ok=True)
-    options.output.write_text(json.dumps({"passed": passed, "format": options.format, "outcomes": outcomes, "error": proof.error, "two_physical_computers": False, "normal_gameplay_result": passed, "transport_bytes_by_endpoint": {side: {"sent": tunnel.sent_bytes, "received": tunnel.received_bytes} for side, tunnel in proof.tunnels.items()}}, indent=2))
+    options.output.write_text(json.dumps({"passed": passed, "format": options.format, "outcomes": outcomes, "error": proof.error, "two_physical_computers": False, "normal_gameplay_result": passed, "network_timing_by_endpoint": {side: result.get("network_timing", {}) for side, result in proof.results.items()}, "transport_bytes_by_endpoint": {side: {"sent": tunnel.sent_bytes, "received": tunnel.received_bytes} for side, tunnel in proof.tunnels.items()}}, indent=2))
     return 0 if passed else 1
 
 

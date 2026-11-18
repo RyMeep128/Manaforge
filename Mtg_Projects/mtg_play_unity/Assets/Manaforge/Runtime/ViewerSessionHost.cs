@@ -139,7 +139,9 @@ namespace Manaforge.Play
             if(ticket.Mailbox.IsStopped)Stop("VIEWER_EPOCH_REVOKED");
             try{lock(gate){if(!stopped && artwork!=null && artworkJobs==null)artworkJobs=surface.CreateArtworkJobs(ticket,artwork.LoadAsync);}}
             catch{Stop("VIEWER_ARTWORK_MOUNT_FAILED");}
-            return surface.Pump(ticket,maximumArtworkUploads,maximumArtworkRequests);
+            int processed=surface.Pump(ticket,maximumArtworkUploads,maximumArtworkRequests);
+            if(ClientSessionChannel.NetworkTiming){ClientSessionChannel connected;lock(gate)connected=channel;long revision=connected?.TimingRevision??-1;if(revision>=0 && surface.HasPresentedFrame(ticket,revision))connected.RecordPresented(revision);}
+            return processed;
         }
         // Inspection is presentation-only; no action/decision token is fabricated or submitted.
         public bool Inspect(string objectId)

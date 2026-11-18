@@ -56,6 +56,35 @@ The network path is experimental until exact-revision CI and two-computer game
 acceptance are recorded. A successful relay handshake does not establish a
 complete Freeform or Commander game.
 
+### Measuring online responsiveness
+
+The guest uses the selected internet relay even when both instances run on one
+PC. Local framed sockets disable small-packet buffering; engine events and player
+actions wake the host immediately. Layout updates reuse metadata from rules
+checks at the same engine cycle and never issue their own metadata requests.
+If matching identity metadata is unavailable, arrangement commands are rejected
+until a fresh basis is available; gameplay continues.
+The existing 256-reference rules-read limit is preserved. Boards whose identities
+do not fit alongside required rules references can lose arrangement controls
+while gameplay continues.
+
+For an opt-in measurement session, set `$env:MANAFORGE_NETWORK_TIMING = '1'` in
+PowerShell before launching each instance. Close the games normally to retain
+logs under the instance's data directory at `mtg_core/logs/unity-sessions`.
+`diagnostic.json` includes sample counts and p50/p95 milliseconds by stage;
+`player.log` contains Unity timings and the host's `network-timing.jsonl` contains
+gateway and engine timings. Timing records contain opaque command IDs, revisions,
+timestamps and durations, without card contents or authentication data.
+
+Compare `unity_action_presented` for submit-to-visible response time and
+`engine_complete` for engine processing time. The former includes relay travel,
+engine processing and client presentation; use host and guest distributions to
+help distinguish relay delay from local work. Per-process durations use monotonic
+clocks; wall-clock timestamps are only useful for cross-process comparisons when
+the clocks agree. Remove the environment variable to disable instrumentation.
+Hosted two-Unity acceptance also records timing summaries when it can run; it
+uses a local standalone relay and does not measure Cloudflare or two-computer latency.
+
 ## Reusable visual elements and views
 
 The current Arena-style table is the **default 1v1 view**, not the universal

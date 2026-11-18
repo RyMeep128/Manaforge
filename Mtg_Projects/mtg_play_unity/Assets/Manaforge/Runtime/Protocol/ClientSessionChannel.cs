@@ -25,6 +25,17 @@ namespace Manaforge.Play.Protocol
     // Owns a connected transport, packet inbox and command tracking; never starts processes.
     public sealed class ClientSessionChannel : IDisposable
     {
+        internal static readonly bool NetworkTiming=Environment.GetEnvironmentVariable("MANAFORGE_NETWORK_TIMING")=="1";
+        private string timingCommand;private long timingStarted,timingRevision=-1,timingPresented=-1,timingRequestRevision=-1,timingResponseRevision=-1;private bool timingConfirmed;
+        private void Timing(string stage,long atRevision,bool action=true){
+            if(!NetworkTiming)return;
+            var value=new JObject{["stage"]=stage,["command_id"]=action?timingCommand:null,["revision"]=atRevision,
+                ["elapsed_ms"]=!action || timingStarted==0?0:(System.Diagnostics.Stopwatch.GetTimestamp()-timingStarted)*1000.0/System.Diagnostics.Stopwatch.Frequency,
+                ["timestamp_ms"]=DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()};
+            UnityEngine.Debug.Log("MANAFORGE_NETWORK_TIMING "+value.ToString(Formatting.None));
+        }
+        internal long TimingRevision {get{lock(gate)return timingRevision;}}
+        internal void RecordPresented(long atRevision){lock(gate){if(!NetworkTiming || atRevision<=timingPresented)return;timingPresented=atRevision;Timing("unity_presented",atRevision,false);if(timingResponseRevision>=0 && atRevision>=timingResponseRevision){Timing("unity_action_presented",atRevision);timingResponseRevision=-1;}}}
         private readonly object gate=new object();private readonly object writeGate=new object();
         public ClientOrganizationSession Organization {get;}
         private bool organizationEnabled;
@@ -133,7 +144,7 @@ namespace Manaforge.Play.Protocol
         internal TrackedCommand WriteSubmission(PreparedSubmission prepared,int milliseconds,CancellationToken cancellation)
         {
             string text=prepared.Claim(this);
-            try{WriteSerialized(text,milliseconds,cancellation);return prepared.Receipt;}
+            try{if(NetworkTiming)lock(gate){timingCommand=prepared.Receipt.CommandId;timingStarted=System.Diagnostics.Stopwatch.GetTimestamp();timingRequestRevision=prepared.Receipt.RequestRevision;timingConfirmed=false;timingResponseRevision=-1;Timing("unity_submit",timingRequestRevision);}WriteSerialized(text,milliseconds,cancellation);return prepared.Receipt;}
             catch(TextFrame.FrameException error){Failed(error.Code);throw;}
             catch{Failed("SESSION_WRITE_FAILED");throw new WireEnvelope.EnvelopeException("SESSION_WRITE_FAILED");}
             finally{prepared.Dispose();}
@@ -162,6 +173,7 @@ namespace Manaforge.Play.Protocol
                                 if(incoming>revision){Organization.AdvanceMinimum(incoming);revision=incoming;ClearDecision();}
                             } else {
                                 var snapshot=body["snapshot"];Organization.ObserveGameplay((JObject)snapshot);matchActive=(string)snapshot["status"]=="active";revision=(long)snapshot["revision"];
+                                if(NetworkTiming){timingRevision=revision;Timing("unity_received",revision,false);if(timingConfirmed && revision>timingRequestRevision){timingConfirmed=false;timingResponseRevision=revision;Timing("unity_action_received",revision);}}
                                 ClearDecision();var request=snapshot["decision"];
                                 if(request.Type!=JTokenType.Null) {
                                     numeric=new NumericDecisionBounds(request);mana=(string)request["family"]=="mana";
@@ -176,7 +188,7 @@ namespace Manaforge.Play.Protocol
                         }
                         return new ClientReceive(type,applied);
                     }
-                    if(type=="ack")return new ClientReceive(type,true,commands.Accept(text));
+                    if(type=="ack"){var receipt=commands.Accept(text);if(NetworkTiming && receipt.CommandId==timingCommand){timingConfirmed=receipt.State==CommandState.Confirmed;Timing("unity_ack_"+receipt.State,receipt.RequestRevision);}return new ClientReceive(type,true,receipt);}
                     if(type=="error"){string code=commands.AcceptSessionError(text);Stop(code);return new ClientReceive(type);}
                     if(type=="shutdown") {
                         var body=WireMessages.Parse(text)["body"];

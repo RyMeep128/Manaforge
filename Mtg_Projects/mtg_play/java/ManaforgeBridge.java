@@ -76,6 +76,8 @@ public final class ManaforgeBridge implements MageClient {
     }
     private final java.util.LinkedHashMap<String,PendingRequest> requests=new java.util.LinkedHashMap<>();
     private JsonObject latestState,latestDecision;private String sessionNotice;private int lastRequestMessageId=-1;
+    private volatile Runnable sessionWakeup=()->{};
+    void setSessionWakeup(Runnable wakeup){sessionWakeup=java.util.Objects.requireNonNull(wakeup);}
     synchronized String sessionNotice(){return sessionNotice;}
     private void expireRequests(){requests.values().removeIf(value->!value.game.equals(gameId) || System.nanoTime()-value.created>java.util.concurrent.TimeUnit.MINUTES.toNanos(2));}
     synchronized JsonObject pollSessionRequest(){expireRequests();return requests.isEmpty()?null:requests.values().iterator().next().prompt.deepCopy();}
@@ -95,7 +97,7 @@ public final class ManaforgeBridge implements MageClient {
         if(requests.size()>=16){message("unsupported_request",null,"SESSION_REQUEST_QUEUE_LIMIT");return;}
         JsonObject prompt=new JsonObject();prompt.addProperty("kind","USER_REQUEST_DIALOG");prompt.addProperty("decision_id",decision);prompt.addProperty("request_kind",kind);prompt.addProperty("message",message.getMessage());
         JsonObject choices=new JsonObject();for(int i=0;i<2;i++){if(labels[i]==null || labels[i].length()>4096){message("unsupported_request",null,"SESSION_REQUEST_OPTIONS_UNSUPPORTED");return;}choices.addProperty(Integer.toString(i),labels[i]);}prompt.add("key_choices",choices);
-        sessionNotice=null;PendingRequest request=new PendingRequest(gameId,message.getRelatedUserId(),decision,kind,prompt,actions);prompt.addProperty("session_request_id",request.id.toString());requests.put(request.id.toString(),request);
+        sessionNotice=null;PendingRequest request=new PendingRequest(gameId,message.getRelatedUserId(),decision,kind,prompt,actions);prompt.addProperty("session_request_id",request.id.toString());requests.put(request.id.toString(),request);sessionWakeup.run();
     }
     private int lastDecisionMessageId = -1;
     private int lastStateMessageId = -1;

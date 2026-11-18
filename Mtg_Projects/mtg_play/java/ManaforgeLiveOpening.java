@@ -25,7 +25,9 @@ public final class ManaforgeLiveOpening {
     private final boolean artworkOpening=Boolean.getBoolean("manaforge.artworkOpening");
     private final BlockingQueue<JsonObject> events = new ArrayBlockingQueue<>(512);
     private final AtomicBoolean overflow = new AtomicBoolean(), cancelled = new AtomicBoolean();
-    private final ManaforgeBridge bridge = new ManaforgeBridge(event -> { if(!events.offer(event))overflow.set(true); });
+    private final ManaforgeMatchCoordinator.Wakeup multiplayerWake=new ManaforgeMatchCoordinator.Wakeup();
+    private final ManaforgeBridge bridge = new ManaforgeBridge(event -> { if(!events.offer(event))overflow.set(true);multiplayerWake.signal(); });
+    private final NativeOrganizationBridge.MetadataCache multiplayerOrganizationMetadata=new NativeOrganizationBridge.MetadataCache();
     private final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(Boolean.getBoolean("manaforge.liveGame")?21600:Boolean.getBoolean("manaforge.loopTurn")?420:Boolean.getBoolean("manaforge.finishAttacks")?240:Boolean.getBoolean("manaforge.postResolutionPass")?240:Boolean.getBoolean("manaforge.continuePriority")?180:90);
     private JsonObject state, pending;
     private String engineViewer, artifactHash;
@@ -57,10 +59,14 @@ public final class ManaforgeLiveOpening {
     private final boolean combatPriority=Boolean.getBoolean("manaforge.combatPriority");private boolean unityCombatPrioritySubmitted,unityCombatPriorityConfirmed;
     private NativeCastCorrelation.AbilityEvidence unityCastEvidence;private String unityCastSource;private boolean unityBattlefieldObserved,unityFollowupConfirmed;
     private JsonObject sourceMetadata(JsonObject view,String... sources) throws Exception {
+        // Piggyback public battlefield identity on rules reads, never issue optional
+        // layout RPCs from the gameplay loop. The cache is admitted only at its exact cycle.
+        String[] identifiedSources=sources;
+        if(Boolean.getBoolean("manaforge.multiplayer") && !multiplayerOrganizationMetadata.matches(view))sources=NativeOrganizationBridge.MetadataCache.includeBattlefield(view,sources);
         for(int attempt=0;attempt<40 && System.nanoTime()<deadline;attempt++) {
             JsonObject query=new JsonObject();query.addProperty("command","metadata");query.addProperty("game",game);query.addProperty("player",engineViewer);query.add("cycle",view.get("cycle").deepCopy());
-            JsonArray ids=new JsonArray();for(String source:sources)ids.add(source);query.add("object_ids",ids);query.add("identified_ids",ids.deepCopy());JsonObject result=metadataClient.read(query);
-            if(new JsonPrimitive("ok").equals(result.get("status")))return result;
+            JsonArray ids=new JsonArray(),identified=new JsonArray();for(String source:sources)ids.add(source);for(String source:identifiedSources)identified.add(source);query.add("object_ids",ids);query.add("identified_ids",identified);JsonObject result=metadataClient.read(query);
+            if(new JsonPrimitive("ok").equals(result.get("status"))){if(Boolean.getBoolean("manaforge.multiplayer"))multiplayerOrganizationMetadata.observe(view,result);return result;}
             if(!new JsonPrimitive("retry").equals(result.get("status")))throw new IOException("NATIVE_SOURCE_METADATA_UNAVAILABLE");
             Thread.sleep(25);
         }
@@ -816,12 +822,12 @@ public final class ManaforgeLiveOpening {
             final ManaforgeMatchCoordinator host=new ManaforgeMatchCoordinator(peers[0].game,"1.4.62-V1",args[1],()->{},()->peers[0].cancelled.get() || peers[1].cancelled.get());coordinator=host;
             Map<String,ArrayBlockingQueue<String>> inputs=new HashMap<>();Map<String,ArrayBlockingQueue<manaforge.protocol.GatewayHandshake.ViewerContext>> contexts=new HashMap<>();
             JsonArray addresses=new JsonArray();Map<String,ManaforgeMatchCoordinator.Viewer> registrations=new TreeMap<>();
-            for(ManaforgeLiveOpening p:peers){String id=p.liveLaunch.viewer();inputs.put(id,new ArrayBlockingQueue<>(32));contexts.put(id,new ArrayBlockingQueue<>(1));ManaforgeMatchCoordinator.Viewer v=host.register(id,p.engineViewer,p.liveLaunch.session(),id,p.unityKey,true);registrations.put(id,v);JsonObject address=new JsonObject();address.addProperty("port",v.port);address.addProperty("session_id",v.session);address.addProperty("viewer_id",v.viewer);addresses.add(address);}
+            for(ManaforgeLiveOpening p:peers){p.bridge.setSessionWakeup(p.multiplayerWake::signal);String id=p.liveLaunch.viewer();inputs.put(id,new ArrayBlockingQueue<>(32));contexts.put(id,new ArrayBlockingQueue<>(1));ManaforgeMatchCoordinator.Viewer v=host.register(id,p.engineViewer,p.liveLaunch.session(),id,p.unityKey,true);registrations.put(id,v);JsonObject address=new JsonObject();address.addProperty("port",v.port);address.addProperty("session_id",v.session);address.addProperty("viewer_id",v.viewer);addresses.add(address);}
             host.installExtension(sender->new NativeOrganizationBridge(UUID.fromString(peers[0].game),registrations,sender,4));
             host.installGameplay(new ManaforgeMatchCoordinator.Gameplay(){
                 public void connected(String id,manaforge.protocol.GatewayHandshake.ViewerContext context) throws Exception {if(!contexts.get(id).offer(context))throw new IOException("RECONNECT_UNAVAILABLE");}
-                public void receive(String id,String wire) throws Exception {if(!inputs.get(id).offer(wire))throw new IOException("GAMEPLAY_INPUT_OVERFLOW");}
-                public void disconnected(String id){for(ManaforgeLiveOpening p:peers)p.cancelled.set(true);}
+                public void receive(String id,String wire) throws Exception {if(!inputs.get(id).offer(wire))throw new IOException("GAMEPLAY_INPUT_OVERFLOW");for(ManaforgeLiveOpening p:peers)if(p.liveLaunch.viewer().equals(id))p.multiplayerWake.signal();}
+                public void disconnected(String id){for(ManaforgeLiveOpening p:peers){p.cancelled.set(true);p.multiplayerWake.signal();}}
             });host.start();
             for(int i=0;i<2;i++){
                 final int index=i;ManaforgeLiveOpening p=peers[i];
@@ -851,9 +857,10 @@ public final class ManaforgeLiveOpening {
         try(ManaforgeOpeningSession owner=new ManaforgeOpeningSession(context,projection,envelope.toString())){
             sendMultiplayer(host,projection,envelope);CoreCombatCycle gameplay=new CoreCombatCycle(projection);ManaforgeUnityOpening.TurnOffer turn=null;
             while(!cancelled.get()){
+                long wakeVersion=multiplayerWake.version();
                 if(turn==null){
                     if(pending==null && events.isEmpty()){
-                        String idle=inputs.poll(50,TimeUnit.MILLISECONDS);if(idle==null)continue;
+                        String idle=inputs.poll();if(idle==null){multiplayerWake.await(wakeVersion,cancelled::get);continue;}
                         manaforge.protocol.SubmissionLedger.Prepared admitted=owner.dispatch(idle,game,engineViewer,0,state.get("cycle").getAsLong());sendMultiplayer(host,projection,admitted.receipt());if(!admitted.shouldSubmit)continue;
                         JsonObject command=owner.pollNative();if(command==null || !"concede".equals(command.get("command").getAsString()))throw new IOException("MULTIPLAYER_WAITING_INPUT");
                         JsonObject before=state.deepCopy(),accepted=request(command,"concede_sent");while(terminalCallback==null)next();
@@ -865,15 +872,17 @@ public final class ManaforgeLiveOpening {
                     if(!"decision".equals(event.get("event").getAsString()))continue;
                     pending=null;turn=gameplay.offer(event);owner.observe(turn.snapshot().toString());sendMultiplayer(host,projection,turn.snapshot());
                 }
-                String wire=inputs.poll(50,TimeUnit.MILLISECONDS);
+                String wire=inputs.poll();
                 if(wire==null){
                     ManaforgeUnityOpening.TurnOffer replacement=turn.poll();if(replacement!=null){turn=replacement;owner.observe(turn.snapshot().toString());sendMultiplayer(host,projection,turn.snapshot());}
-                    if(!events.isEmpty()){JsonObject event=next();if(terminalCallback!=null){publishMultiplayerResult(host,owner,projection);break;}if("decision".equals(event.get("event").getAsString())){pending=null;turn=gameplay.offer(event);owner.observe(turn.snapshot().toString());sendMultiplayer(host,projection,turn.snapshot());}}
+                    if(!events.isEmpty()){JsonObject event=next();if(terminalCallback!=null){publishMultiplayerResult(host,owner,projection);break;}if("decision".equals(event.get("event").getAsString())){pending=null;turn=gameplay.offer(event);owner.observe(turn.snapshot().toString());sendMultiplayer(host,projection,turn.snapshot());}continue;}
+                    multiplayerWake.await(wakeVersion,cancelled::get);
                     continue;
                 }
                 manaforge.protocol.SubmissionLedger.Prepared admitted=owner.dispatch(wire,game,engineViewer,turn.decision,turn.cycle);sendMultiplayer(host,projection,admitted.receipt());if(!admitted.shouldSubmit)continue;
                 JsonObject command=owner.pollNative();if(command==null)throw new IOException("MULTIPLAYER_QUEUE_FAILED");
-                ManaforgeUnityOpening.TurnResult result="concede".equals(command.get("command").getAsString())?turn.concession.submit(command):turn.submit.submit(command);
+                long engineStarted=System.nanoTime();ManaforgeUnityOpening.TurnResult result="concede".equals(command.get("command").getAsString())?turn.concession.submit(command):turn.submit.submit(command);
+                ManaforgeMatchCoordinator.timing("engine_complete",command.get("request_id").getAsString(),engineStarted,result.snapshot.getAsJsonObject("body").getAsJsonObject("snapshot").get("revision").getAsLong());
                 sendMultiplayer(host,projection,owner.confirmTurnDecision(command.get("request_id").getAsString(),result.evidence));owner.observe(result.snapshot.toString());sendMultiplayer(host,projection,result.snapshot);turn=result.next;
                 if("result".equals(result.snapshot.get("message_type").getAsString()))break;
             }
@@ -884,17 +893,19 @@ public final class ManaforgeLiveOpening {
     private void sendMultiplayer(ManaforgeMatchCoordinator host,ManaforgeOpeningProjection projection,JsonObject packet) throws Exception {
         host.sendGameplay(liveLaunch.viewer(),packet);
         String type=packet.get("message_type").getAsString();if(!type.equals("snapshot"))return;
+        long layoutStarted=System.nanoTime();
         try{
             ManaforgeOpeningProjection.ObserverResult projected=projection.organizationBindings();JsonObject raw=projection.organizationRaw();
             if(projected==null || raw==null || !projected.snapshot().get("revision").equals(packet.getAsJsonObject("body").getAsJsonObject("snapshot").get("revision")))throw new IOException("ORGANIZATION_PROJECTION_UNAVAILABLE");
             Set<UUID> roster=new HashSet<>();List<String> ids=new ArrayList<>();
             for(JsonElement seat:raw.getAsJsonArray("players")){JsonObject player=seat.getAsJsonObject();roster.add(UUID.fromString(player.get("id").getAsString()));for(JsonElement card:player.getAsJsonArray("battlefield"))ids.add(card.getAsJsonObject().get("id").getAsString());}
             if(ids.size()>1024)throw new IOException("ORGANIZATION_BASIS_LIMIT");JsonObject metadata=new JsonObject();
-            for(int offset=0;offset<Math.max(1,ids.size());offset+=256){JsonObject guard=sourceMetadata(raw,ids.subList(offset,Math.min(offset+256,ids.size())).toArray(new String[0]));if(!new JsonPrimitive("ok").equals(guard.get("status")) || !raw.get("cycle").equals(guard.get("cycle")))throw new IOException("ORGANIZATION_BASIS_UNAVAILABLE");for(Map.Entry<String,JsonElement> entry:guard.getAsJsonObject("objects").entrySet())metadata.add(entry.getKey(),entry.getValue());}
+            if(!ids.isEmpty())metadata=multiplayerOrganizationMetadata.objects(raw);
             List<BattlefieldIdentityRegistry.Observation> observations=new ArrayList<>();Map<UUID,String> admitted=new HashMap<>();
             for(String id:ids){JsonObject object=metadata.getAsJsonObject(id);if(object==null || !object.has("controller") || object.get("controller").isJsonNull())throw new IOException("ORGANIZATION_BASIS_UNAVAILABLE");UUID nativeId=UUID.fromString(id);boolean eligible=projected.objects.containsKey(id);observations.add(new BattlefieldIdentityRegistry.Observation(nativeId,object.get("incarnation").getAsInt(),UUID.fromString(object.get("controller").getAsString()),eligible));if(eligible)admitted.put(nativeId,projected.objects.get(id));}
             BattlefieldIdentityRegistry.Snapshot captured=new BattlefieldIdentityRegistry.Snapshot(UUID.fromString(game),UUID.fromString(engineViewer),raw.get("cycle").getAsInt(),roster,observations,admitted);
             host.updateExtension(extension->((NativeOrganizationBridge)extension).observeInteractive(liveLaunch.viewer(),captured,projected));
+            ManaforgeMatchCoordinator.timing("layout_refresh",null,layoutStarted,projected.snapshot().get("revision").getAsLong());
         }catch(Exception unavailable){
             host.updateExtension(extension->((NativeOrganizationBridge)extension).unavailable(liveLaunch.viewer()));
             System.err.println("MULTIPLAYER_ORGANIZATION_UNAVAILABLE");

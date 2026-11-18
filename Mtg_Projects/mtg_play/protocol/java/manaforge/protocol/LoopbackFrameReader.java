@@ -16,7 +16,7 @@ public final class LoopbackFrameReader implements AutoCloseable {
         if(ownedSocket==null || !ownedSocket.isConnected() || ownedSocket.isClosed()
             || !ownedSocket.getLocalAddress().isLoopbackAddress() || !ownedSocket.getInetAddress().isLoopbackAddress())
             throw new IllegalArgumentException("FRAME_SOCKET_CONTEXT");
-        ownedSocket.setSoLinger(false,0);ownedSocket.setSoTimeout(25);socket=ownedSocket;
+        ownedSocket.setTcpNoDelay(true);ownedSocket.setSoLinger(false,0);ownedSocket.setSoTimeout(25);socket=ownedSocket;
         watchdog=new ScheduledThreadPoolExecutor(1,task->{Thread thread=new Thread(task,"manaforge-frame-write-watch");thread.setDaemon(true);return thread;});
         watchdog.setRemoveOnCancelPolicy(true);watchdog.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
     }

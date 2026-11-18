@@ -6,6 +6,7 @@ import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.atomic.*;
 import java.util.function.BooleanSupplier;
+import java.util.concurrent.*;
 import manaforge.protocol.*;
 
 /** Real loopback/authentication checks. Synthetic snapshots are explicitly fixture-only. */
@@ -47,7 +48,24 @@ public final class MatchCoordinatorChecks {
         if(large){JsonArray padding=new JsonArray();char[] chars=new char[800000];Arrays.fill(chars,'x');padding.add(new String(chars));snapshot.add("unsupported_fields",padding);}return message;
     }
     static Map<String,JsonObject> batch(JsonObject template,ManaforgeMatchCoordinator.Viewer a,ManaforgeMatchCoordinator.Viewer b,long revision,boolean large){Map<String,JsonObject> batch=new HashMap<>();batch.put(a.seat,snapshot(template,a,revision,large));batch.put(b.seat,snapshot(template,b,revision,false));return batch;}
+    static void wakeChecks() throws Exception {
+        ManaforgeMatchCoordinator.Wakeup wake=new ManaforgeMatchCoordinator.Wakeup();
+        ExecutorService worker=Executors.newSingleThreadExecutor();
+        try{
+            // An engine event arriving after the empty-queue check must not be lost.
+            long observed=wake.version();wake.signal();
+            worker.submit(()->{wake.await(observed,()->false);return null;}).get(2,TimeUnit.SECONDS);
+            CountDownLatch entering=new CountDownLatch(1);long next=wake.version();
+            Future<?> waiter=worker.submit(()->{wake.await(next,()->{entering.countDown();return false;});return null;});
+            check(entering.await(2,TimeUnit.SECONDS),"WAKE_WORKER_START");wake.signal();waiter.get(2,TimeUnit.SECONDS);
+            worker.submit(()->{wake.await(wake.version(),()->true);return null;}).get(2,TimeUnit.SECONDS);
+            AtomicBoolean interrupted=new AtomicBoolean();CountDownLatch waiting=new CountDownLatch(1);
+            Future<?> cancelled=worker.submit(()->{try{wake.await(wake.version(),()->{waiting.countDown();return false;});}catch(InterruptedException expected){interrupted.set(true);}});
+            check(waiting.await(2,TimeUnit.SECONDS),"WAKE_CANCEL_START");cancelled.cancel(true);await(interrupted::get,"WAKE_CANCEL_INTERRUPTED");
+        }finally{worker.shutdownNow();check(worker.awaitTermination(2,TimeUnit.SECONDS),"WAKE_WORKER_LEAK");}
+    }
     public static void main(String[] args) throws Exception {
+        wakeChecks();
         JsonObject corpus=JsonParser.parseString(new String(Files.readAllBytes(Paths.get(args[0])),StandardCharsets.UTF_8)).getAsJsonObject();JsonObject template=corpus.getAsJsonArray("cases").get(0).getAsJsonObject().getAsJsonArray("steps").get(0).getAsJsonObject().getAsJsonObject("envelope");
         AtomicInteger disposed=new AtomicInteger();AtomicBoolean cancel=new AtomicBoolean();byte[] keyA=key(1),keyB=key(2);
         try(ManaforgeMatchCoordinator coordinator=new ManaforgeMatchCoordinator("native-game",ENGINE,HASH,disposed::incrementAndGet,cancel::get,10000,300,true)){
