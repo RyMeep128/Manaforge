@@ -41,7 +41,7 @@ class PlayWorkspace(W.QWidget):
         title.setProperty("role", "title")
         layout.addWidget(title)
         intro = W.QLabel(
-            "Choose your decks and start a Unity game against an offline AI opponent."
+            "Choose a format, player count, and Offline or Online. Configure each seat before starting Unity."
         )
         intro.setWordWrap(True)
         layout.addWidget(intro)
@@ -58,6 +58,18 @@ class PlayWorkspace(W.QWidget):
         self.format.setCurrentIndex(self.format.findData(self.lobby.format))
         self.format.currentIndexChanged.connect(self._selection_changed)
         form.addRow("Format", self.format)
+        self.player_count = W.QComboBox()
+        self.player_count.setAccessibleName("Player count")
+        self.player_count.addItem("2 players", 2)
+        for count in range(3, 6):
+            self.player_count.addItem(f"{count} players — coming after 1v1 validation", count)
+            self.player_count.model().item(count - 2).setEnabled(False)
+        form.addRow("Players", self.player_count)
+        self.mode = W.QComboBox()
+        self.mode.setAccessibleName("Offline or Online")
+        self.mode.addItem("Offline — other seats use AI", "offline")
+        self.mode.addItem("Online — invite friends or assign AI", "online")
+        form.addRow("Lobby", self.mode)
         self.selectors = []
         for label in ("Your deck", "AI opponent deck"):
             selector = W.QComboBox()
@@ -84,8 +96,31 @@ class PlayWorkspace(W.QWidget):
         self.status.setWordWrap(True)
         self.status.setTextFormat(C.Qt.TextFormat.PlainText)
         layout.addWidget(self.status)
+        from .multiplayer_widget import MultiplayerPanel
+
+        self.multiplayer = MultiplayerPanel(self)
+        self.multiplayer.hide()
+        self._setup_form = form
+        self._multiplayer_format = self.format.currentData()
+        layout.addWidget(self.multiplayer)
+        self.mode.currentIndexChanged.connect(self._mode_changed)
+        self.unity_payment_mode.currentIndexChanged.connect(self._payment_changed)
         layout.addStretch()
         self.load_decks()
+
+    def _mode_changed(self):
+        online = self.mode.currentData() == "online"
+        self.multiplayer.reset()
+        self.multiplayer.setVisible(online)
+        for selector in self.selectors:
+            self._setup_form.setRowVisible(selector, not online)
+        self.start_button.setVisible(not online)
+        self.status.setVisible(not online)
+        self._selection_changed()
+
+    def _payment_changed(self):
+        if self.mode.currentData() == "online" and self.multiplayer.relay:
+            self.multiplayer.select_deck(0 if self.multiplayer.hosting else 1)
 
     def load_decks(self):
         if self.busy:
@@ -133,6 +168,7 @@ class PlayWorkspace(W.QWidget):
             self.status.setText(
                 "Could not load saved decks. Review them in Deck Editor, then return to Play."
             )
+        self.multiplayer.refresh_decks()
         self._selection_changed()
 
     def _selection_changed(self):
@@ -140,7 +176,12 @@ class PlayWorkspace(W.QWidget):
             return
         busy = self.busy
         self.format.setEnabled(not busy)
+        self.player_count.setEnabled(not busy)
+        self.mode.setEnabled(not busy)
         self.unity_payment_mode.setEnabled(not busy)
+        if hasattr(self, "multiplayer") and self._multiplayer_format != self.format.currentData():
+            self.multiplayer.reset()
+            self._multiplayer_format = self.format.currentData()
         lobby = replace(self.lobby, format=self.format.currentData())
         ready = True
         reasons = []
@@ -173,7 +214,7 @@ class PlayWorkspace(W.QWidget):
 
     def showEvent(self, event):
         super().showEvent(event)
-        if not self.busy:
+        if not self.busy and not self.multiplayer.relay:
             self.load_decks()
 
     def start_game(self):
@@ -258,6 +299,7 @@ class PlayWorkspace(W.QWidget):
             )
 
     def prepare_to_close(self):
+        multiplayer_ready = self.multiplayer.prepare_to_close()
         if self.native_jobs.busy or (
             self._native_launch is not None and self._native_launch.root is not None
         ):
@@ -266,12 +308,13 @@ class PlayWorkspace(W.QWidget):
         if self.catalog_jobs.busy:
             self.catalog_jobs.cancel_all()
             return False
-        return True
+        return multiplayer_ready
 
     @property
     def busy(self):
         return (
             self.native_jobs.busy
+            or (hasattr(self, "multiplayer") and self.multiplayer.busy)
             or self.catalog_jobs.busy
             or (
                 self._native_launch is not None and self._native_launch.root is not None

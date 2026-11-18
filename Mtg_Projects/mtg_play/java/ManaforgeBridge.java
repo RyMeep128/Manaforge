@@ -314,6 +314,7 @@ public final class ManaforgeBridge implements MageClient {
         item.addProperty("face_down", card.isFaceDown());
         if (!hidden) {
             item.addProperty("name", card.getName());
+            item.addProperty("mana_cost", card.isAbility()?null:card.getManaCostStr());
             item.addProperty("set", card.getExpansionSetCode());
             item.addProperty("number", card.getCardNumber());
             item.addProperty("token", card.isToken());

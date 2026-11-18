@@ -33,10 +33,10 @@ namespace Manaforge.Play.Tests
             internal readonly HudLayoutEditor Editor;
             internal bool Gated,Blocked;
             internal int Inputs;
-            internal Harness(ObservedStore store=null,ILayoutPresetStore persistentStore=null)
+            internal Harness(ObservedStore store=null,ILayoutPresetStore persistentStore=null,bool includeTurns=false)
             {
                 Store=store??new ObservedStore();Root.Add(Canvas);Canvas.style.width=1280;Canvas.style.height=720;
-                foreach(var id in new[]{GameplayHudIds.Priority,GameplayHudIds.Actions,GameplayHudIds.Zones,GameplayHudIds.Commanders}){
+                foreach(var id in new[]{GameplayHudIds.Priority,GameplayHudIds.Actions,GameplayHudIds.Zones,GameplayHudIds.Commanders}.Concat(includeTurns?new[]{GameplayHudIds.Turns}:Array.Empty<string>())){
                     var drawer=new GameplayDrawer(id,open:true){name=id};drawer.style.position=Position.Absolute;drawer.style.left=30;drawer.style.top=80;drawer.style.width=260;drawer.style.height=30;
                     drawer.Content.Add(new Button(()=>Inputs++){text="Existing command"});Canvas.Add(drawer);Drawers.Add(id,drawer);
                     Registry.Register(new GameplayHudDescriptor(id,id,id,GameplayHudCapabilities.Drawer,presetKey:"hud."+id),drawer,available:id!=GameplayHudIds.Commanders);
@@ -52,6 +52,22 @@ namespace Manaforge.Play.Tests
             var previous=RenderTexture.active;var pixels=new Texture2D(target.width,target.height,TextureFormat.RGBA32,false);
             try{RenderTexture.active=target;pixels.ReadPixels(new Rect(0,0,target.width,target.height),0,0);pixels.Apply();File.WriteAllBytes(Path.Combine(folder,name+".png"),pixels.EncodeToPNG());}
             finally{RenderTexture.active=previous;UnityEngine.Object.Destroy(pixels);}
+        }
+        [UnityTest] public IEnumerator TurnsHeaderMovesDuringGameplayAndKeepsItsExpansionState()
+        {
+            var node=new GameObject("Turns movement");var settings=ScriptableObject.CreateInstance<PanelSettings>();settings.themeStyleSheet=Resources.Load<ThemeStyleSheet>("CardTheme");var doc=node.AddComponent<UIDocument>();doc.panelSettings=settings;
+            using var h=new Harness(includeTurns:true);doc.rootVisualElement.Add(h.Root);
+            try{
+                for(int i=0;i<4;i++)yield return null;h.Editor.AfterLegacyLayout();var turns=h.Drawers[GameplayHudIds.Turns];var before=turns.Tab.worldBound.center;var destination=before+new Vector2(160,100);
+                using(var down=PointerDownEvent.GetPooled(new Event{type=EventType.MouseDown,button=0,mousePosition=before})){down.target=turns.Tab;turns.Tab.SendEvent(down);}
+                using(var move=PointerMoveEvent.GetPooled(new Event{type=EventType.MouseDrag,button=0,mousePosition=destination})){move.target=h.Canvas;h.Canvas.SendEvent(move);}
+                for(int revision=0;revision<3;revision++){h.Editor.BeforeDecisionTick(false);h.Editor.Observe("session","viewer",false,false);h.Editor.BeforeLegacyLayout();h.Editor.AfterLegacyLayout();yield return null;}
+                destination+=new Vector2(24,16);
+                using(var move=PointerMoveEvent.GetPooled(new Event{type=EventType.MouseDrag,button=0,mousePosition=destination})){move.target=h.Canvas;h.Canvas.SendEvent(move);}
+                using(var up=PointerUpEvent.GetPooled(new Event{type=EventType.MouseUp,button=0,mousePosition=destination})){up.target=h.Canvas;h.Canvas.SendEvent(up);}yield return null;
+                Assert.That(h.Editor.IsEditing,Is.False);Assert.That(h.Editor.OwnsGeometry(GameplayHudIds.Turns),Is.True);Assert.That(turns.Tab.worldBound.center.x,Is.GreaterThan(before.x+100));Assert.That(turns.IsOpen,Is.True);Assert.That(h.Store.Writes,Is.Zero);
+                var moved=turns.Tab.worldBound;turns.SetOpen(false);h.Editor.AfterLegacyLayout();yield return null;Assert.That(turns.IsOpen,Is.False);Assert.That(turns.Tab.worldBound.position,Is.EqualTo(moved.position));turns.SetOpen(true);Assert.That(turns.IsOpen,Is.True);
+            }finally{UnityEngine.Object.Destroy(node);UnityEngine.Object.Destroy(settings);}yield return null;
         }
         [Test] public void DraftApplyCancelAndInterruptionAreSeparateFromPersistence()
         {

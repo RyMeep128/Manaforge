@@ -53,7 +53,7 @@ def _standard(payload):
         and payload.get("full_art") is False
         and payload.get("textless") is False
         and payload.get("promo") is False
-        and payload.get("frame_effects", []) == []
+        and payload.get("frame_effects") in (None, [])
         and not payload.get("card_faces")
     )
 

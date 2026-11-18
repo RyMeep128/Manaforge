@@ -34,9 +34,9 @@ namespace Manaforge.Play.Tests
         {
             internal readonly RenderTexture Target;internal readonly GameObject Node;internal readonly PanelSettings Settings;internal readonly ArenaGameplayPresentation Arena;internal readonly ViewerSessionHost Host;internal readonly ViewerSessionHostTests.Peer Peer;internal readonly VisualElement Root;internal readonly JObject Source;internal readonly string Viewer,Reference;
             private readonly TaskCompletionSource<bool> owner=new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            internal View(string viewer,string reference,int width,int height,int version=2,bool actionable=false,int extra=0,string family="priority")
+            internal View(string viewer,string reference,int width,int height,int version=2,bool actionable=false,int extra=0,string family="priority",bool privateLayout=false)
             {
-                Viewer=viewer;Reference=reference;Source=Game(viewer,reference);if(actionable){var priority=JObject.Parse(File.ReadAllText(Path.Combine(Application.dataPath,"../../mtg_play/protocol/fixtures/receive-history-v1.json")))["cases"][0]["steps"][0]["envelope"]["body"]["snapshot"];Source["body"]["snapshot"]["decision"]=priority["decision"].DeepClone();Source["body"]["snapshot"]["actions"]=priority["actions"].DeepClone();Source["body"]["snapshot"]["actions"][0]["object_id"]=reference;if(family!="priority"){var snapshot=Source["body"]["snapshot"];snapshot["decision"]["family"]=family;snapshot["decision"]["is_priority"]=false;snapshot["actions"]=new JArray();if(family=="selection"){snapshot["decision"]["targeting"]=new JObject{["source_id"]=reference+"-attachment",["minimum"]=1,["maximum"]=1,["selected"]=new JArray(),["complete"]=true};snapshot["decision"]["options"]=new JArray(new JObject{["option_id"]="member-target",["object_id"]=reference,["player_id"]=null,["label"]="Choose permanent",["selected"]=false});}}}for(int i=0;i<extra;i++){var copy=(JObject)Source["body"]["snapshot"]["objects"][0].DeepClone();copy["object_id"]=reference+"-extra-"+i;copy["attachments"]=new JArray();copy["tapped"]=i%2==0;((JArray)Source["body"]["snapshot"]["objects"]).Add(copy);}Peer=new ViewerSessionHostTests.Peer(Source.ToString(),viewer:viewer);Node=new GameObject("Shared organization "+viewer);Settings=ScriptableObject.CreateInstance<PanelSettings>();Settings.themeStyleSheet=Resources.Load<ThemeStyleSheet>("CardTheme");var doc=Node.AddComponent<UIDocument>();doc.panelSettings=Settings;Root=doc.rootVisualElement;Root.style.width=width;Root.style.height=height;Target=new RenderTexture(width,height,24);Target.Create();Settings.targetTexture=Target;Arena=new ArenaGameplayPresentation(Root,capabilities:new GameplayPresentationCapabilities(sharedOrganization:true));Host=new ViewerSessionHost(Arena.Surface,Peer.Bootstrap(organizationVersion:version),owner.Task,true);Arena.Bind(Host);
+                Viewer=viewer;Reference=reference;Source=Game(viewer,reference);if(actionable){var priority=JObject.Parse(File.ReadAllText(Path.Combine(Application.dataPath,"../../mtg_play/protocol/fixtures/receive-history-v1.json")))["cases"][0]["steps"][0]["envelope"]["body"]["snapshot"];Source["body"]["snapshot"]["decision"]=priority["decision"].DeepClone();Source["body"]["snapshot"]["actions"]=priority["actions"].DeepClone();Source["body"]["snapshot"]["actions"][0]["object_id"]=reference;if(family!="priority"){var snapshot=Source["body"]["snapshot"];snapshot["decision"]["family"]=family;snapshot["decision"]["is_priority"]=false;snapshot["actions"]=new JArray();if(family=="selection"){snapshot["decision"]["targeting"]=new JObject{["source_id"]=reference+"-attachment",["minimum"]=1,["maximum"]=1,["selected"]=new JArray(),["complete"]=true};snapshot["decision"]["options"]=new JArray(new JObject{["option_id"]="member-target",["object_id"]=reference,["player_id"]=null,["label"]="Choose permanent",["selected"]=false});}}}for(int i=0;i<extra;i++){var copy=(JObject)Source["body"]["snapshot"]["objects"][0].DeepClone();copy["object_id"]=reference+"-extra-"+i;copy["attachments"]=new JArray();copy["tapped"]=i%2==0;((JArray)Source["body"]["snapshot"]["objects"]).Add(copy);}Peer=new ViewerSessionHostTests.Peer(Source.ToString(),viewer:viewer);Node=new GameObject("Shared organization "+viewer);Settings=ScriptableObject.CreateInstance<PanelSettings>();Settings.themeStyleSheet=Resources.Load<ThemeStyleSheet>("CardTheme");var doc=Node.AddComponent<UIDocument>();doc.panelSettings=Settings;Root=doc.rootVisualElement;Root.style.width=width;Root.style.height=height;Target=new RenderTexture(width,height,24);Target.Create();Settings.targetTexture=Target;Arena=new ArenaGameplayPresentation(Root,capabilities:new GameplayPresentationCapabilities(privateLayout:privateLayout,sharedOrganization:true),layoutPresetStore:new MemoryLayoutPresetStore());Host=new ViewerSessionHost(Arena.Surface,Peer.Bootstrap(organizationVersion:version),owner.Task,true);Arena.Bind(Host);
             }
             internal void Tick(){Host.Tick();Arena.BeforeDecisionTick();Arena.Decisions.Tick();var frame=Host.PresentedDecision?.Frame??ViewerDecisionProjection.Project((JObject)Source["body"]["snapshot"]);if(Host.HasPresentedRevision(frame.Context.Revision)){Arena.PresentOrganization(Host.OrganizationFor(frame.Context.Revision));Arena.Present(frame);}}
             public void Dispose(){owner.TrySetResult(true);Host.Dispose();Arena.Dispose();Peer.Dispose();UnityEngine.Object.Destroy(Node);UnityEngine.Object.Destroy(Settings);Target.Release();UnityEngine.Object.Destroy(Target);}
@@ -85,9 +85,109 @@ namespace Manaforge.Play.Tests
             using(var up=PointerUpEvent.GetPooled(new Event{type=EventType.MouseUp,button=0,mousePosition=end})){up.target=a.Root;a.Root.SendEvent(up);}
             read=Task.Run(()=>a.Peer.ReadCommandForFixture());yield return Until(()=>read.IsCompleted,tick);request=JObject.Parse(read.Result);Assert.That((string)request["body"]["operation"]["kind"],Is.EqualTo("position"));Assert.That((long)request["body"]["operation"]["x"],Is.InRange(0L,1000000L));
             rejected["message_id"]=Guid.NewGuid().ToString("N");rejected["body"]["command_id"]=request["body"]["command_id"];sent=Reply(a,rejected);yield return Until(()=>sent.IsCompleted && !a.Host.OrganizationPending,tick);yield return new WaitForSecondsRealtime(.1f);
-            // Missing/coherence-revoked organization restores legacy placement immediately.
-            a.Arena.PresentOrganization(null);Assert.That(a.Root.Q("organization-group-g").style.display.value,Is.EqualTo(DisplayStyle.None));Assert.That(card.style.display.value,Is.EqualTo(DisplayStyle.Flex));Assert.That(BattlefieldCardAnchorResolver.TryCenter(a.Root,card,out _),Is.True);tick();
-            Assert.That(a.Arena.OpenBattlefieldGroups(),Is.True);var fallback=a.Root.Q<Toggle>("organization-default");Assert.That(fallback,Is.Not.Null);fallback.value=true;yield return null;tick();Assert.That(a.Root.Q("organization-group-g").style.display.value,Is.EqualTo(DisplayStyle.None));Assert.That(card.parent,Is.SameAs(parent));Assert.That(card.ClassListContains("organization-selected"),Is.False);a.Host.Cancel();a.Host.Tick();Assert.That(a.Root.Q("organization-group-g"),Is.Null);Assert.That(a.Root.Q("organization-controls").contentContainer.childCount,Is.Zero);
+            // A temporary correlation gap keeps the admitted arrangement visible.
+            a.Arena.PresentOrganization(null);Assert.That(a.Root.Q("organization-group-g").style.display.value,Is.EqualTo(DisplayStyle.Flex));Assert.That(card.style.display.value,Is.EqualTo(DisplayStyle.Flex));Assert.That(BattlefieldCardAnchorResolver.TryCenter(a.Root,card,out _),Is.True);tick();
+            Assert.That(a.Arena.OpenBattlefieldGroups(),Is.True);Assert.That(a.Root.Q<Toggle>("organization-default"),Is.Null,"Groups coexist with the default arrangement");Assert.That(card.parent,Is.SameAs(parent));
+            a.Host.Cancel();a.Host.Tick();Assert.That(a.Root.Q("organization-group-g"),Is.Null);Assert.That(a.Root.Q("organization-controls").contentContainer.childCount,Is.Zero);
+        }
+        [Test] public void DisplayRemapDropsDepartedCardsAndRetainsOriginalCommandRevision()
+        {
+            var original=new ProjectedOrganizationFrame((JObject)Snapshot("one","a-object",version:3)["body"]);
+            var display=new ProjectedOrganizationFrame(original,id=>id=="a-object"?"new-reference":null);
+            Assert.That(display.GameplayRevision,Is.EqualTo(original.GameplayRevision));Assert.That(display.Revision,Is.EqualTo(original.Revision));
+            Assert.That(display.Groups.Single().Objects,Is.EqualTo(new[]{"new-reference"}));Assert.That(display.Handles.ContainsKey("a-object"),Is.False);Assert.That(display.Handles.ContainsKey("a-object-attachment"),Is.False);
+            Assert.That(display.Handles["new-reference"],Is.EqualTo("handle-one"));
+        }
+        [UnityTest] public IEnumerator PhaseRevisionGapKeepsCollapsedGroupInsteadOfFlashingDefaultRows()
+        {
+            using var a=new View("one","a-object",1280,720,3);yield return Until(()=>a.Host.HasPresentedRevision(1),a.Tick);
+            var sent=Reply(a,Envelope("capabilities",new JObject{["versions"]=new JArray(3)},3));yield return Until(()=>sent.IsCompleted,a.Tick);
+            var read=Task.Run(()=>a.Peer.ReadCommandForFixture());yield return Until(()=>read.IsCompleted,a.Tick);
+            sent=Reply(a,Snapshot("one","a-object",version:3,mode:"drawer"));yield return Until(()=>a.Root.Q<GameplayDrawer>("organization-drawer-g")!=null,a.Tick);
+            var drawer=a.Root.Q<GameplayDrawer>("organization-drawer-g");drawer.SetOpen(false);a.Tick();
+            CardView card=null;a.Arena.Surface.VisitPresented((c,v)=>{if(c.ObjectId=="a-object")card=v;});Assert.That(card.style.display.value,Is.EqualTo(DisplayStyle.None));
+            var group=a.Root.Q("organization-group-g");var position=group.worldBound.position;
+            a.Source["body"]["snapshot"]["revision"]=2;a.Source["body"]["snapshot"]["phase"]="COMBAT";a.Source["body"]["snapshot"]["step"]="BEGIN_COMBAT";a.Source["message_id"]="phase-gap";
+            sent=Reply(a,a.Source);yield return Until(()=>a.Host.HasPresentedRevision(2),a.Tick);
+            for(int i=0;i<3;i++){a.Tick();yield return null;Assert.That(a.Root.Q<GameplayDrawer>("organization-drawer-g"),Is.SameAs(drawer));Assert.That(group.style.display.value,Is.EqualTo(DisplayStyle.Flex));Assert.That(drawer.IsOpen,Is.False);Assert.That(card.style.display.value,Is.EqualTo(DisplayStyle.None));Assert.That(group.worldBound.position,Is.EqualTo(position));}
+            var aligned=Snapshot("one","a-object",revision:1,version:3,mode:"drawer");aligned["body"]["gameplay_revision"]=2;aligned["body"]["basis_revision"]=2;
+            sent=Reply(a,aligned);yield return Until(()=>a.Host.OrganizationFor(2)!=null,a.Tick);a.Tick();Assert.That(a.Root.Q<GameplayDrawer>("organization-drawer-g"),Is.SameAs(drawer));Assert.That(drawer.IsOpen,Is.False);Assert.That(a.Peer.PendingCommandBytes,Is.Zero);
+        }
+        private static void Pointer(VisualElement target,EventType type,Vector2 point,EventModifiers modifiers=EventModifiers.None)
+        {
+            var input=new Event{type=type,button=0,modifiers=modifiers,mousePosition=point};
+            if(type==EventType.MouseDown){using var ev=PointerDownEvent.GetPooled(input);ev.target=target;target.SendEvent(ev);}
+            else if(type==EventType.MouseUp){using var ev=PointerUpEvent.GetPooled(input);ev.target=target;target.SendEvent(ev);}
+            else{using var ev=PointerMoveEvent.GetPooled(input);ev.target=target;target.SendEvent(ev);}
+        }
+        [UnityTest] public IEnumerator PermanentDragSurvivesPriorityGapAndDropUsesFreshBasisOnce()
+        {
+            using var a=new View("one","a-object",1280,720,4,true,family:"selection");yield return Until(()=>a.Host.HasPresentedRevision(1),a.Tick);
+            var sent=Reply(a,Envelope("capabilities",new JObject{["versions"]=new JArray(4)},4));yield return Until(()=>sent.IsCompleted,a.Tick);
+            var read=Task.Run(()=>a.Peer.ReadCommandForFixture());yield return Until(()=>read.IsCompleted,a.Tick);
+            sent=Reply(a,Snapshot("one","a-object",version:4,grouped:false));yield return Until(()=>a.Host.OrganizationFor(1)!=null,a.Tick);a.Tick();yield return null;
+            CardView card=null;a.Arena.Surface.VisitPresented((c,v)=>{if(c.ObjectId=="a-object")card=v;});
+            var table=a.Root.Q("arena-table");var start=card.worldBound.center;var end=table.LocalToWorld(new Vector2(700,330));
+            Pointer(card,EventType.MouseDown,start,EventModifiers.Alt);Pointer(table,EventType.MouseDrag,end,EventModifiers.Alt);yield return null;
+            var layer=a.Root.Q("organization-drag-layer");Assert.That(card.parent,Is.SameAs(layer));var position=new Vector2(card.style.left.value.value,card.style.top.value.value);
+            a.Source["message_id"]="drag-priority-change";var snapshot=a.Source["body"]["snapshot"];snapshot["revision"]=2;snapshot["priority_player_id"]="two";snapshot["decision"]=JValue.CreateNull();snapshot["actions"]=new JArray();
+            sent=Reply(a,a.Source);yield return Until(()=>a.Host.HasPresentedRevision(2),a.Tick);
+            for(int i=0;i<3;i++){a.Tick();yield return null;Assert.That(card.parent,Is.SameAs(layer));Assert.That(card.style.display.value,Is.EqualTo(DisplayStyle.Flex));Assert.That(new Vector2(card.style.left.value.value,card.style.top.value.value),Is.EqualTo(position));}
+            Pointer(table,EventType.MouseUp,end);yield return null;Assert.That(a.Peer.PendingCommandBytes,Is.Zero,"A presentation remap cannot authorize a stale command");Assert.That(card.parent,Is.SameAs(layer),"Keep the dropped preview while waiting for the current basis");
+            var aligned=Snapshot("one","a-object",revision:1,version:4,grouped:false);aligned["body"]["gameplay_revision"]=2;aligned["body"]["basis_revision"]=2;
+            sent=Reply(a,aligned);yield return Until(()=>a.Host.OrganizationFor(2)!=null,a.Tick);
+            read=Task.Run(()=>a.Peer.ReadCommandForFixture());yield return Until(()=>read.IsCompleted,a.Tick);var command=JObject.Parse(read.Result);
+            Assert.That((string)command["message_type"],Is.EqualTo("organization_command"));Assert.That((long)command["body"]["basis_revision"],Is.EqualTo(2));Assert.That((string)command["body"]["operation"]["kind"],Is.EqualTo("place"));
+            Assert.That(command["body"]["operation"]["members"].Values<string>(),Is.EqualTo(new[]{"handle-one"}));
+            var placed=Snapshot("one","a-object",revision:2,version:4,grouped:false);placed["body"]["gameplay_revision"]=2;placed["body"]["basis_revision"]=2;
+            placed["body"]["seats"][0]["placements"]=new JArray(new JObject{["handle"]="handle-one",["x"]=command["body"]["operation"]["x"],["y"]=command["body"]["operation"]["y"]});
+            var receipt=Envelope("receipt",new JObject{["match_epoch"]="match",["command_id"]=command["body"]["command_id"],["outcome"]="applied",["organization_revision"]=2,["basis_revision"]=2,["reason_code"]=JValue.CreateNull()},4);
+            sent=Task.Run(()=>{a.Peer.ReplyForFixture(receipt);a.Peer.ReplyForFixture(placed);});yield return Until(()=>a.Host.OrganizationFor(2)?.Revision==2 && !a.Host.OrganizationPending,a.Tick);
+            yield return Until(()=>card.parent!=layer,a.Tick);yield return null;
+            Assert.That(card.style.display.value,Is.EqualTo(DisplayStyle.Flex));Assert.That(Vector2.Distance(position,new Vector2(card.style.left.value.value,card.style.top.value.value)),Is.LessThan(2));Assert.That(a.Peer.PendingCommandBytes,Is.Zero,"Priority updates must never replay the drop or invoke a native action");
+        }
+        [UnityTest] public IEnumerator LiveTurnsDragContinuesWhilePriorityChanges()
+        {
+            using var a=new View("one","a-object",1280,720,privateLayout:true);yield return Until(()=>a.Host.HasPresentedRevision(1),a.Tick);
+            yield return Until(()=>a.Arena.LayoutEditor.Initialization.IsCompleted,a.Tick);a.Tick();yield return null;
+            var turns=a.Root.Q<GameplayDrawer>("turns-panel");var table=a.Root.Q("arena-table");var start=turns.Tab.worldBound.center;var end=start+new Vector2(140,120);
+            Pointer(turns.Tab,EventType.MouseDown,start);Pointer(table,EventType.MouseDrag,end);yield return null;
+            Assert.That(a.Arena.LayoutEditor.OwnsGeometry(GameplayHudIds.Turns),Is.True);
+            var before=turns.Tab.worldBound.position;
+            a.Source["message_id"]="turns-drag-priority-change";a.Source["body"]["snapshot"]["revision"]=2;a.Source["body"]["snapshot"]["priority_player_id"]="two";
+            var sent=Reply(a,a.Source);
+            yield return Until(()=>a.Host.HasPresentedRevision(2),a.Tick);a.Tick();yield return null;
+            Assert.That(a.Arena.LayoutEditor.OwnsGeometry(GameplayHudIds.Turns),Is.True);Assert.That(turns.Tab.worldBound.position,Is.EqualTo(before));
+            end+=new Vector2(50,20);Pointer(table,EventType.MouseDrag,end);Pointer(table,EventType.MouseUp,end);yield return null;
+            Assert.That(turns.Tab.worldBound.position.x,Is.GreaterThan(before.x+30));Assert.That(a.Arena.LayoutEditor.OwnsGeometry(GameplayHudIds.Turns),Is.True);Assert.That(a.Peer.PendingCommandBytes,Is.Zero);
+        }
+        [UnityTest] public IEnumerator DepartedPermanentCancelsDragWithoutResurrectingViewOrSendingCommand()
+        {
+            using var a=new View("one","a-object",1280,720,4);yield return Until(()=>a.Host.HasPresentedRevision(1),a.Tick);
+            var sent=Reply(a,Envelope("capabilities",new JObject{["versions"]=new JArray(4)},4));yield return Until(()=>sent.IsCompleted,a.Tick);
+            var read=Task.Run(()=>a.Peer.ReadCommandForFixture());yield return Until(()=>read.IsCompleted,a.Tick);
+            sent=Reply(a,Snapshot("one","a-object",version:4,grouped:false));yield return Until(()=>a.Host.OrganizationFor(1)!=null,a.Tick);a.Tick();yield return null;
+            CardView card=null;a.Arena.Surface.VisitPresented((c,v)=>{if(c.ObjectId=="a-object")card=v;});var table=a.Root.Q("arena-table");
+            var end=card.worldBound.center+new Vector2(90,-40);Pointer(card,EventType.MouseDown,card.worldBound.center);Pointer(table,EventType.MouseDrag,end);yield return null;
+            a.Source["message_id"]="drag-permanent-left";a.Source["body"]["snapshot"]["revision"]=2;a.Source["body"]["snapshot"]["objects"]=new JArray();
+            sent=Reply(a,a.Source);yield return Until(()=>a.Host.HasPresentedRevision(2),a.Tick);a.Tick();Pointer(table,EventType.MouseUp,end);yield return null;
+            Assert.That(card.parent,Is.Null);Assert.That(a.Root.Q("organization-drag-layer").childCount,Is.Zero);Assert.That(a.Peer.PendingCommandBytes,Is.Zero);
+        }
+        [UnityTest] public IEnumerator DrawerHeaderDragSurvivesPriorityAndOrganizationRefresh()
+        {
+            using var a=new View("one","a-object",1280,720,3);yield return Until(()=>a.Host.HasPresentedRevision(1),a.Tick);
+            var sent=Reply(a,Envelope("capabilities",new JObject{["versions"]=new JArray(3)},3));yield return Until(()=>sent.IsCompleted,a.Tick);
+            var read=Task.Run(()=>a.Peer.ReadCommandForFixture());yield return Until(()=>read.IsCompleted,a.Tick);
+            sent=Reply(a,Snapshot("one","a-object",version:3,mode:"drawer"));yield return Until(()=>a.Root.Q<GameplayDrawer>("organization-drawer-g")!=null,a.Tick);a.Tick();yield return null;
+            var drawer=a.Root.Q<GameplayDrawer>("organization-drawer-g");var table=a.Root.Q("arena-table");var end=drawer.Tab.worldBound.center+new Vector2(150,90);
+            Pointer(drawer.Tab,EventType.MouseDown,drawer.Tab.worldBound.center);Pointer(table,EventType.MouseDrag,end);
+            a.Source["message_id"]="drawer-priority-change";a.Source["body"]["snapshot"]["revision"]=2;a.Source["body"]["snapshot"]["priority_player_id"]="two";
+            sent=Reply(a,a.Source);yield return Until(()=>a.Host.HasPresentedRevision(2),a.Tick);
+            var aligned=Snapshot("one","a-object",revision:1,version:3,mode:"drawer");aligned["body"]["gameplay_revision"]=2;aligned["body"]["basis_revision"]=2;
+            sent=Reply(a,aligned);yield return Until(()=>a.Host.OrganizationFor(2)!=null,a.Tick);a.Tick();
+            Assert.That(a.Root.Q("organization-drag-ghost").style.display.value,Is.EqualTo(DisplayStyle.Flex));Assert.That(a.Root.Q<GameplayDrawer>("organization-drawer-g"),Is.SameAs(drawer));
+            Pointer(table,EventType.MouseUp,end);read=Task.Run(()=>a.Peer.ReadCommandForFixture());yield return Until(()=>read.IsCompleted,a.Tick);var command=JObject.Parse(read.Result);
+            Assert.That((string)command["body"]["operation"]["kind"],Is.EqualTo("position"));Assert.That((long)command["body"]["basis_revision"],Is.EqualTo(2));
         }
         [UnityTest] public IEnumerator DrawerExpansionIsLocalAndBindingsSurviveUpdatesAndTemporaryGaps()
         {
@@ -96,9 +196,15 @@ namespace Manaforge.Play.Tests
             var readA=Task.Run(()=>a.Peer.ReadCommandForFixture());var readB=Task.Run(()=>b.Peer.ReadCommandForFixture());yield return Until(()=>readA.IsCompleted && readB.IsCompleted,tick);
             sent=Task.WhenAll(Reply(a,Snapshot("one","a-object",version:3,mode:"drawer")),Reply(b,Snapshot("two","b-object",version:3,mode:"drawer")));yield return Until(()=>sent.IsCompleted && a.Root.Q<GameplayDrawer>("organization-drawer-g")!=null && b.Root.Q<GameplayDrawer>("organization-drawer-g")!=null,tick);
             var drawer=a.Root.Q<GameplayDrawer>("organization-drawer-g");var other=b.Root.Q<GameplayDrawer>("organization-drawer-g");Assert.That(drawer.IsOpen && other.IsOpen,Is.True);CardView card=null;a.Arena.Surface.VisitPresented((c,v)=>{if(c.ObjectId==a.Reference)card=v;});var parent=card.parent;
+            var layer=a.Root.Q("organization-layer-g");Assert.That(layer.Contains(card),Is.True);Assert.That(layer.Contains(drawer),Is.True);
+            drawer.SetOpen(true);tick();yield return null;
+            var table=a.Root.Q("arena-table");var zones=a.Root.Q<GameplayDrawer>("zones-drawer");
+            Assert.That(table.IndexOf(layer),Is.GreaterThan(table.IndexOf(a.Arena.Surface.CardsRoot)));
+            zones.SetOpen(true);Assert.That(table.IndexOf(zones),Is.GreaterThan(table.IndexOf(layer)));
+            drawer.SetOpen(true);tick();yield return null;Assert.That(table.IndexOf(layer),Is.GreaterThan(table.IndexOf(zones)),"Layout updates must retain the last active drawer in front");Assert.That(card.parent,Is.SameAs(parent));
             drawer.SetOpen(false);tick();yield return null;Assert.That(card.style.display.value,Is.EqualTo(DisplayStyle.None));Assert.That(other.IsOpen,Is.True);Assert.That(a.Peer.PendingCommandBytes,Is.Zero);
             sent=Reply(a,Snapshot("one","a-object",1,"Mana Rocks",version:3,mode:"drawer"));yield return Until(()=>sent.IsCompleted && a.Host.OrganizationFor(1)?.Revision==1,tick);tick();Assert.That(a.Root.Q<GameplayDrawer>("organization-drawer-g"),Is.SameAs(drawer));Assert.That(drawer.IsOpen,Is.False);Assert.That(drawer.Tab.text,Does.StartWith("Mana Rocks"));
-            a.Arena.PresentOrganization(null);Assert.That(a.Root.Q("organization-group-g").style.display.value,Is.EqualTo(DisplayStyle.None));tick();Assert.That(drawer.IsOpen,Is.False);
+            a.Arena.PresentOrganization(null);Assert.That(a.Root.Q("organization-group-g").style.display.value,Is.EqualTo(DisplayStyle.Flex));tick();Assert.That(drawer.IsOpen,Is.False);
             sent=Reply(a,Snapshot("one","a-object",2,version:3,mode:"panel"));yield return Until(()=>a.Host.OrganizationFor(1)?.Revision==2,tick);tick();Assert.That(card.style.display.value,Is.EqualTo(DisplayStyle.Flex));
             sent=Reply(a,Snapshot("one","a-object",3,version:3,mode:"drawer"));yield return Until(()=>a.Host.OrganizationFor(1)?.Revision==3,tick);tick();Assert.That(drawer.IsOpen,Is.False);Assert.That(card.parent,Is.SameAs(parent));
             sent=Reply(a,Snapshot("one","a-object",4,grouped:false,version:3));yield return Until(()=>a.Host.OrganizationFor(1)?.Revision==4,tick);tick();Assert.That(a.Root.Q("organization-group-g"),Is.Null);
@@ -112,7 +218,7 @@ namespace Manaforge.Play.Tests
             sent=Reply(a,Snapshot("one","a-object",version:3,mode:"drawer"));yield return Until(()=>a.Root.Q<GameplayDrawer>("organization-drawer-g")!=null,a.Tick);
             var drawer=a.Root.Q<GameplayDrawer>("organization-drawer-g");a.Root.Q<Toggle>("table-motion").value=true;drawer.SetOpen(false);a.Tick();yield return null;
             CardView card=null;a.Arena.Surface.VisitPresented((c,v)=>{if(c.ObjectId==a.Reference)card=v;});var parent=card.parent;Assert.That(card.style.display.value,Is.EqualTo(DisplayStyle.None));Assert.That(drawer.NeedsAttention,Is.True);Assert.That(a.Arena.ResolveCardAnchor(a.Reference).HasValue,Is.True);Assert.That(Vector2.Distance(a.Arena.ResolveCardAnchor(a.Reference).Value,a.Arena.Surface.CardsRoot.parent.WorldToLocal(drawer.Tab.worldBound.center)),Is.LessThan(1));Assert.That(drawer.ReducedMotion,Is.True);Assert.That(a.Arena.ResolveCardAnchor("not-admitted"),Is.Null);
-            Submit(a.Root.Q<Button>("organization-members-g"));yield return null;a.Tick();Assert.That(drawer.IsOpen,Is.False);Assert.That(card.style.display.value,Is.EqualTo(DisplayStyle.Flex));Assert.That(card.parent,Is.SameAs(parent));Assert.That(a.Root.Q("organization-member-chooser").style.display.value,Is.EqualTo(DisplayStyle.Flex));Assert.That(a.Peer.PendingCommandBytes,Is.Zero);
+            Submit(a.Root.Q<Button>("organization-members-g"));yield return null;a.Tick();Assert.That(drawer.IsOpen,Is.False);Assert.That(card.style.display.value,Is.EqualTo(DisplayStyle.Flex));Assert.That(Card(a,a.Reference),Is.SameAs(card));Assert.That(a.Root.Q("organization-member-chooser").style.display.value,Is.EqualTo(DisplayStyle.Flex));Assert.That(a.Peer.PendingCommandBytes,Is.Zero);
             using(var inspect=PointerDownEvent.GetPooled(new Event{type=EventType.MouseDown,button=1,mousePosition=card.worldBound.center})){inspect.target=card;card.SendEvent(inspect);}Assert.That(a.Arena.Surface.InspectionView.style.display.value,Is.EqualTo(DisplayStyle.Flex));
             using(var inside=PointerDownEvent.GetPooled(new Event{type=EventType.MouseDown,button=0})){inside.target=a.Arena.Surface.InspectionView;a.Arena.Surface.InspectionView.SendEvent(inside);}Assert.That(a.Arena.Surface.InspectionView.style.display.value,Is.EqualTo(DisplayStyle.Flex),"Inspection controls must remain usable");
             using(var outside=PointerDownEvent.GetPooled(new Event{type=EventType.MouseDown,button=0})){outside.target=a.Root;a.Root.SendEvent(outside);}Assert.That(a.Arena.Surface.InspectionView.style.display.value,Is.EqualTo(DisplayStyle.None));Assert.That(a.Peer.PendingCommandBytes,Is.Zero);
@@ -131,14 +237,20 @@ namespace Manaforge.Play.Tests
             Assert.That(a.Arena.OpenBattlefieldMembers("g"),Is.True);var captured=a.Host.PresentedDecision;var next=a.Source["body"]["snapshot"];next["revision"]=2;next["decision"]=null;next["actions"]=new JArray();next["objects"][0]["zone"]="graveyard";next["objects"][0]["attachments"]=new JArray();next["objects"][1]["attached_to"]=JValue.CreateNull();a.Source["message_id"]="retired-member";sent=Reply(a,a.Source);yield return Until(()=>a.Host.HasPresentedRevision(2),a.Tick);a.Tick();
             Assert.That(a.Root.Q("organization-member-chooser").style.display.value,Is.EqualTo(DisplayStyle.None));Assert.That(a.Arena.OpenBattlefieldMembers("g"),Is.False);Assert.That(a.Arena.Decisions.TryActivateObject(captured,a.Reference),Is.False);Assert.That(drawer.IsOpen,Is.False);Assert.That(a.Peer.PendingCommandBytes,Is.Zero);
         }
-        [UnityTest] public IEnumerator DenseCollapsedGroupsExposeEveryMemberThroughLocalPaging()
+        [UnityTest] public IEnumerator DenseCollapsedGroupsExposeEveryMemberWithoutPagesOrScrollbars()
         {
-            using var a=new View("one","a-object",1280,720,3,false,9);yield return Until(()=>a.Host.HasPresentedRevision(1),a.Tick);
+            using var a=new View("one","a-object",1280,720,3,false,39);yield return Until(()=>a.Host.HasPresentedRevision(1),a.Tick);
             var sent=Reply(a,Envelope("capabilities",new JObject{["versions"]=new JArray(3)},3));yield return Until(()=>sent.IsCompleted,a.Tick);var read=Task.Run(()=>a.Peer.ReadCommandForFixture());yield return Until(()=>read.IsCompleted,a.Tick);
-            var snapshot=Snapshot("one","a-object",version:3,mode:"drawer");for(int i=0;i<9;i++){((JArray)snapshot["body"]["seats"][0]["groups"][0]["members"]).Add("extra-"+i);((JArray)snapshot["body"]["mappings"]).Add(new JObject{["handle"]="extra-"+i,["object_reference"]="a-object-extra-"+i,["seat_id"]="one"});}
+            var snapshot=Snapshot("one","a-object",version:3,mode:"drawer");for(int i=0;i<39;i++){((JArray)snapshot["body"]["seats"][0]["groups"][0]["members"]).Add("extra-"+i);((JArray)snapshot["body"]["mappings"]).Add(new JObject{["handle"]="extra-"+i,["object_reference"]="a-object-extra-"+i,["seat_id"]="one"});}
             sent=Reply(a,snapshot);yield return Until(()=>a.Root.Q<GameplayDrawer>("organization-drawer-g")!=null,a.Tick);var drawer=a.Root.Q<GameplayDrawer>("organization-drawer-g");drawer.SetOpen(false);Assert.That(a.Arena.OpenBattlefieldMembers("g"),Is.True);yield return null;
-            var seen=new System.Collections.Generic.HashSet<string>();for(int page=0;page<2;page++){a.Arena.Surface.VisitPresented((c,v)=>{if(v.style.display.value!=DisplayStyle.None)seen.Add(c.ObjectId);});var pager=a.Root.Q("organization-page-$chooser-g");Assert.That(pager,Is.Not.Null);Submit(pager.Query<Button>().ToList().Last());yield return null;}
-            Assert.That(seen.Count,Is.EqualTo(11));Assert.That(drawer.IsOpen,Is.False);Assert.That(a.Peer.PendingCommandBytes,Is.Zero);
+            var seen=new System.Collections.Generic.HashSet<string>();a.Arena.Surface.VisitPresented((c,v)=>{if(v.style.display.value!=DisplayStyle.None)seen.Add(c.ObjectId);});
+            var memberScroll=a.Root.Q<ScrollView>("card-scroll-group-$chooser-g");Assert.That(memberScroll,Is.Not.Null);Assert.That(a.Root.Q("organization-page-$chooser-g"),Is.Null);Assert.That(memberScroll.horizontalScrollerVisibility,Is.EqualTo(ScrollerVisibility.Hidden));Assert.That(memberScroll.verticalScrollerVisibility,Is.EqualTo(ScrollerVisibility.Hidden));using(var wheel=WheelEvent.GetPooled(new Event{type=EventType.ScrollWheel,delta=new Vector2(0,3)})){wheel.target=memberScroll;memberScroll.SendEvent(wheel);}yield return null;
+            Assert.That(memberScroll.scrollOffset.x,Is.GreaterThan(0));float priorOffset=memberScroll.scrollOffset.x;
+            using(var down=PointerDownEvent.GetPooled(new Event{type=EventType.MouseDown,button=2,mousePosition=new Vector2(500,300)})){down.target=memberScroll;memberScroll.SendEvent(down);}
+            using(var move=PointerMoveEvent.GetPooled(new Event{type=EventType.MouseDrag,button=2,mousePosition=new Vector2(400,300)})){move.target=memberScroll;memberScroll.SendEvent(move);}
+            using(var up=PointerUpEvent.GetPooled(new Event{type=EventType.MouseUp,button=2,mousePosition=new Vector2(400,300)})){up.target=memberScroll;memberScroll.SendEvent(up);}yield return null;
+            Assert.That(memberScroll.scrollOffset.x,Is.GreaterThan(priorOffset));a.Tick();yield return null;Assert.That(memberScroll.scrollOffset.x,Is.GreaterThanOrEqualTo(priorOffset));
+            Assert.That(seen.Count,Is.EqualTo(41));Assert.That(drawer.IsOpen,Is.False);Assert.That(a.Peer.PendingCommandBytes,Is.Zero);
             foreach(var size in new[]{new Vector2(1280,720),new Vector2(1366,768),new Vector2(1920,1080),new Vector2(2560,1440)}){a.Root.style.width=size.x;a.Root.style.height=size.y;yield return null;a.Tick();Assert.That(a.Root.Q("organization-member-chooser").style.display.value,Is.EqualTo(DisplayStyle.Flex));Assert.That(drawer.IsOpen,Is.False);}
             a.Arena.CloseBattlefieldMembers();a.Arena.Surface.VisitPresented((c,v)=>Assert.That(v.style.display.value,Is.EqualTo(DisplayStyle.None)));
         }
@@ -181,7 +293,7 @@ namespace Manaforge.Play.Tests
             yield return Drag(a,first,a.Root.Q("arena-table").LocalToWorld(new Vector2(900,230)));a.Tick();Assert.That(a.Root.Q<TextField>("organization-name"),Is.Null,"Empty-space selection drops cannot create groups");Assert.That(a.Peer.PendingCommandBytes,Is.Zero);
             using(var escape=KeyDownEvent.GetPooled('\0',KeyCode.Escape,EventModifiers.None)){escape.target=first;first.SendEvent(escape);}a.Tick();yield return null;
             yield return Drag(a,first,other.worldBound.center);var input=a.Root.Q<TextField>("organization-name");Assert.That(input,Is.Not.Null);Assert.That(a.Root.Q<Label>("organization-prompt-summary").text,Does.StartWith("2 cards"));
-            using(var hover=PointerEnterEvent.GetPooled()){hover.target=other;other.SendEvent(hover);}var tools=a.Root.Q("organization-controls");Assert.That(tools.parent.IndexOf(tools),Is.GreaterThan(tools.parent.IndexOf(a.Arena.Surface.CardsRoot)),"Card hover cannot cover the naming form");
+            using(var hover=PointerEnterEvent.GetPooled()){hover.target=other;other.SendEvent(hover);}yield return null;var tools=a.Root.Q("organization-controls");Assert.That(tools.parent.IndexOf(tools),Is.GreaterThan(tools.parent.IndexOf(a.Arena.Surface.CardsRoot)),"Card hover cannot cover the naming form");
             Assert.That(a.Root.Q<Button>("organization-confirm").text,Is.EqualTo("Create drawer"));Assert.That(a.Root.Q<Button>("organization-delete-group"),Is.Null);Assert.That(a.Root.Q<Toggle>("organization-default"),Is.Null);
             input.value="   ";Assert.That(a.Root.Q<Button>("organization-confirm").enabledSelf,Is.False);input.value="Pair";Assert.That(a.Root.Q<Button>("organization-confirm").enabledSelf,Is.True);
             Submit(a.Root.Q<Button>("organization-cancel"));a.Tick();yield return null;Assert.That(a.Root.Q("organization-controls").style.display.value,Is.EqualTo(DisplayStyle.None));Assert.That(first.resolvedStyle.left,Is.EqualTo(origin.x).Within(1));Assert.That(first.resolvedStyle.top,Is.EqualTo(origin.y).Within(1));Assert.That(first.parent,Is.SameAs(firstParent));Assert.That(other.parent,Is.SameAs(otherParent));Assert.That(a.Peer.PendingCommandBytes,Is.Zero);
@@ -221,7 +333,7 @@ namespace Manaforge.Play.Tests
             state["message_id"]="drawer";state["body"]["organization_revision"]=2;((JArray)state["body"]["seats"][0]["groups"]).Add(new JObject{["group_id"]="g",["name"]="Only name",["x"]=200000,["y"]=200000,["presentation_mode"]="drawer",["members"]=new JArray()});sent=Reply(a,state);yield return Until(()=>a.Root.Q<GameplayDrawer>("organization-drawer-g")!=null,a.Tick);a.Tick();yield return null;
             var drawer=a.Root.Q<GameplayDrawer>("organization-drawer-g");drawer.SetOpen(false);a.Tick();yield return null;Assert.That(drawer.Tab.text,Is.EqualTo("Only name"));Assert.That(a.Root.Q("organization-members-g").parent.style.display.value,Is.EqualTo(DisplayStyle.None));Assert.That(a.Root.Q("organization-drawer-edit-g").resolvedStyle.left,Is.GreaterThan(drawer.Tab.resolvedStyle.width));
             yield return Drag(a,card,drawer.Tab.worldBound.center);read=Task.Run(()=>a.Peer.ReadCommandForFixture());yield return Until(()=>read.IsCompleted,a.Tick);request=JObject.Parse(read.Result);Assert.That((string)request["body"]["operation"]["kind"],Is.EqualTo("move"));Assert.That((string)request["body"]["operation"]["group_id"],Is.EqualTo("g"));Assert.That(drawer.IsOpen,Is.False);
-            state["message_id"]="member";state["body"]["organization_revision"]=3;state["body"]["seats"][0]["placements"]=new JArray();state["body"]["seats"][0]["root"]=new JArray("attachment-one");state["body"]["seats"][0]["groups"][0]["members"]=new JArray("handle-one");sent=Apply(a,request,state);yield return Until(()=>a.Host.OrganizationFor(1)?.Revision==3,a.Tick);a.Tick();Assert.That(card.style.display.value,Is.EqualTo(DisplayStyle.None));Submit(drawer.Tab);a.Tick();Assert.That(card.style.display.value,Is.EqualTo(DisplayStyle.Flex));Assert.That(card.parent,Is.SameAs(parent));Assert.That(a.Peer.PendingCommandBytes,Is.Zero);
+            state["message_id"]="member";state["body"]["organization_revision"]=3;state["body"]["seats"][0]["placements"]=new JArray();state["body"]["seats"][0]["root"]=new JArray("attachment-one");state["body"]["seats"][0]["groups"][0]["members"]=new JArray("handle-one");sent=Apply(a,request,state);yield return Until(()=>a.Host.OrganizationFor(1)?.Revision==3,a.Tick);a.Tick();Assert.That(card.style.display.value,Is.EqualTo(DisplayStyle.None));Submit(drawer.Tab);a.Tick();Assert.That(card.style.display.value,Is.EqualTo(DisplayStyle.Flex));Assert.That(Card(a,a.Reference),Is.SameAs(card));Assert.That(a.Peer.PendingCommandBytes,Is.Zero);
         }
         [UnityTest] public IEnumerator CardOnCardCreatesNamedDrawerAtStationaryCardAndMovesBothMembers()=>CreatePair(false);
         [UnityTest] public IEnumerator CardOnCardKeepsBothMembersWhenGameplayAdvancesDuringCreation()=>CreatePair(true);

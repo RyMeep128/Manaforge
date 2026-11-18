@@ -51,6 +51,8 @@ def contract_schema():
             "required": list(properties),
             "additionalProperties": False,
         }
+        if name == "AmountConstraint":
+            definition["required"].remove("object_id")
         if name == "TargetReference":
             definition["anyOf"] = [
                 {

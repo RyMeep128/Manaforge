@@ -344,6 +344,15 @@ class LaunchOwner:
             self.check_health()
             self._state = LaunchState.GATEWAY_READY
 
+    def use_remote_gateway(self):
+        """Relay adapter ready; Unity must still authenticate the remote Java seat."""
+        with self._lock:
+            self._require(LaunchState.NEW)
+            if self._children:
+                raise LaunchLifecycleError("INVALID_LAUNCH_TRANSITION")
+            self._state = LaunchState.GATEWAY_READY
+            self._deadline = self._clock() + self._startup_timeout
+
     def start_client(
         self, command, *, cwd=None, viewer_bootstrap=None, bootstrap_timeout=5.0
     ):

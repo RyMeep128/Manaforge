@@ -1,0 +1,24 @@
+name: Play multiplayer relay
+on:
+  push:
+    paths: ['multiplayer-relay/**', 'Mtg_Projects/mtg_play/multiplayer*.py', 'Mtg_Projects/mtg_play/relay_client.py', '.github/workflows/play-multiplayer.yml']
+  pull_request:
+    paths: ['multiplayer-relay/**', 'Mtg_Projects/mtg_play/multiplayer*.py', 'Mtg_Projects/mtg_play/relay_client.py', '.github/workflows/play-multiplayer.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  relay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: multiplayer-relay/package-lock.json
+      - run: npm ci --ignore-scripts
+        working-directory: multiplayer-relay
+      - run: npm test
+        working-directory: multiplayer-relay

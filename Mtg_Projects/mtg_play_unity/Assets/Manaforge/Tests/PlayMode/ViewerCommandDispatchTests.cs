@@ -83,6 +83,49 @@ namespace Manaforge.Play.Tests
         {Assert.That(button,Is.Not.Null);using(var submit=NavigationSubmitEvent.GetPooled()){submit.target=button;button.SendEvent(submit);}}
         private IEnumerator Show(ViewerSessionHost host,ViewerDecisionPanel panel)
         {yield return Until(()=>{host.Tick();panel.Tick();return host.PresentedDecision!=null;});}
+        private JObject PrioritySnapshot(int revision=7,bool stack=false)
+        {
+            var wire=Snapshot("priority-"+revision);var snapshot=wire["body"]["snapshot"];
+            snapshot["revision"]=revision;snapshot["turn"]=1;snapshot["phase"]="PRECOMBAT_MAIN";snapshot["step"]="PRECOMBAT_MAIN";snapshot["active_player_id"]="one";snapshot["priority_player_id"]="one";
+            snapshot["decision"]["decision_id"]="priority-"+revision;snapshot["decision"]["is_priority"]=true;snapshot["decision"]["family"]="selection";snapshot["decision"]["options"]=new JArray();
+            snapshot["objects"][0]["zone"]=stack?"stack":"hand";
+            snapshot["actions"]=new JArray(new JObject{["action_id"]="pass-"+revision,["kind"]="pass",["object_id"]=null,["label"]="Pass priority",["priority_class"]="unknown"});return wire;
+        }
+        [UnityTest] public IEnumerator CombinedPriorityKeepsButtonsAndGeometryAcrossPassingAndBindsOnlyCurrentOffer()
+        {
+            var host=Start(PrioritySnapshot(),out var peer,out var owner);var panel=Panel(host);panel.UseUnifiedPriorityActions(()=>{});panel.Priority.Current.Automatic=false;panel.PresentationHold=()=>true;GameplayTheme.Attach(panel.Root);
+            var root=node.GetComponent<UIDocument>().rootVisualElement;root.style.width=1280;root.style.height=720;panel.Root.style.width=275;
+            yield return Show(host,panel);yield return null;
+            var area=panel.Root.Q("priority-actions");var primary=panel.Root.Q<Button>("priority-actions-primary");var secondary=panel.Root.Q<Button>("priority-actions-secondary");
+            var original=area.worldBound;var primaryBounds=primary.worldBound;var secondaryBounds=secondary.worldBound;
+            Assert.That(primary.text,Is.EqualTo("Next"));Assert.That(secondary.text,Is.EqualTo("End turn"));var more=panel.Root.Q<Button>("priority-actions-more");Assert.That(more.resolvedStyle.width,Is.EqualTo(36));Assert.That(secondary.worldBound.xMax,Is.LessThanOrEqualTo(more.worldBound.xMin-8));
+            Click(secondary);panel.Tick();yield return null;Assert.That(panel.Priority.Current.Yield,Is.EqualTo("end-turn"));Assert.That(primary.text,Is.EqualTo("Cancel"));
+            Assert.That(panel.Root.Q("yield-status").style.display.value,Is.EqualTo(DisplayStyle.None));Assert.That(panel.Root.Q("decision-body").style.display.value,Is.EqualTo(DisplayStyle.None));
+            foreach(int revision in new[]{8,9,10}){
+                var next=PrioritySnapshot(revision);next["body"]["snapshot"]["decision"]["prompt"]=revision%2==0?"Play instants and activated abilities":"Play spells and abilities";
+                var send=Task.Run(()=>peer.ReplyForFixture(next));yield return Until(()=>send.IsCompleted);yield return Until(()=>{host.Tick();panel.Tick();return host.HasPresentedRevision(revision);});yield return null;
+                Assert.That(panel.Root.Q("priority-actions"),Is.SameAs(area));Assert.That(panel.Root.Q<Button>("priority-actions-primary"),Is.SameAs(primary));Assert.That(panel.Root.Q<Button>("priority-actions-secondary"),Is.SameAs(secondary));
+                Assert.That(area.worldBound,Is.EqualTo(original));Assert.That(primary.worldBound,Is.EqualTo(primaryBounds));Assert.That(secondary.worldBound,Is.EqualTo(secondaryBounds));Assert.That(primary.text,Is.EqualTo("Cancel"));
+            }
+            Click(primary);panel.Tick();yield return null;Assert.That(panel.Priority.Current.Yield,Is.Null);Assert.That(peer.PendingCommandBytes,Is.Zero);Assert.That(primary.text,Is.EqualTo("Next"));
+            Click(primary);Click(primary);var read=Task.Run(()=>WireMessages.Parse(peer.ReadCommandForFixture()));yield return Until(()=>read.IsCompleted);
+            Assert.That((string)read.Result["body"]["action_id"],Is.EqualTo("pass-10"));Assert.That((string)read.Result["body"]["decision_id"],Is.EqualTo("priority-10"));Assert.That(peer.PendingCommandBytes,Is.Zero);Assert.That(primary.enabledSelf,Is.False);
+            owner.TrySetResult(true);yield return Until(()=>{host.Tick();panel.Tick();return host.Completion.IsCompleted;});Click(primary);Assert.That(peer.PendingCommandBytes,Is.Zero);
+        }
+        [UnityTest] public IEnumerator CombinedResolveAllHonorsStopsRequiredChoicesFailureAndResolutionBoundary()
+        {
+            var host=Start(PrioritySnapshot(stack:true),out var peer,out var owner);var panel=Panel(host);panel.UseUnifiedPriorityActions(()=>{});panel.Priority.Current.Automatic=false;panel.PresentationHold=()=>true;GameplayTheme.Attach(panel.Root);panel.Root.style.width=275;
+            yield return Show(host,panel);yield return null;var primary=panel.Root.Q<Button>("priority-actions-primary");var secondary=panel.Root.Q<Button>("priority-actions-secondary");var bounds=primary.worldBound;
+            Assert.That(primary.text,Is.EqualTo("Resolve"));Assert.That(secondary.text,Is.EqualTo("Resolve All"));Click(secondary);panel.Tick();Assert.That(panel.Priority.Current.Yield,Is.EqualTo("resolve-stack"));Assert.That(primary.text,Is.EqualTo("Cancel"));
+            panel.Priority.SetStop("phase","PRECOMBAT_MAIN",true);panel.PrioritySettingsChanged();panel.Tick();Assert.That(panel.Presentation.Mode,Is.EqualTo(YieldPresentationMode.Stopped));Assert.That(primary.text,Is.EqualTo("Resolve"));Assert.That(secondary.text,Is.EqualTo("Cancel passing"));Assert.That(peer.PendingCommandBytes,Is.Zero);
+            panel.Priority.SetStop("phase","PRECOMBAT_MAIN",false);panel.PrioritySettingsChanged();panel.Tick();Assert.That(primary.text,Is.EqualTo("Cancel"));
+            var required=PrioritySnapshot(8,true);required["body"]["snapshot"]["decision"]["is_priority"]=false;required["body"]["snapshot"]["actions"]=new JArray();required["body"]["snapshot"]["decision"]["options"]=new JArray(new JObject{["option_id"]="required",["label"]="Choose this card",["object_id"]=null,["player_id"]=null,["selected"]=false});
+            var send=Task.Run(()=>peer.ReplyForFixture(required));yield return Until(()=>send.IsCompleted);yield return Until(()=>{host.Tick();panel.Tick();return host.HasPresentedRevision(8);});yield return null;
+            Assert.That(panel.Root.Q("priority-actions").style.display.value,Is.EqualTo(DisplayStyle.None));Assert.That(panel.Root.Q("decision-body").style.display.value,Is.EqualTo(DisplayStyle.Flex));Assert.That(panel.Root.Q<Button>("decision-option-0"),Is.Not.Null);Assert.That(panel.SuppressSpatialInput,Is.False);Click(primary);Assert.That(peer.PendingCommandBytes,Is.Zero);
+            var resolved=PrioritySnapshot(9);send=Task.Run(()=>peer.ReplyForFixture(resolved));yield return Until(()=>send.IsCompleted);yield return Until(()=>{host.Tick();panel.Tick();return host.HasPresentedRevision(9);});yield return null;
+            Assert.That(panel.Priority.Current.Yield,Is.Null);Assert.That(panel.Priority.Current.ResolveBoundary,Is.EqualTo("priority-9"));Assert.That(primary.text,Is.EqualTo("Next"));Assert.That(primary.worldBound,Is.EqualTo(bounds));Assert.That(panel.Priority.Evaluate(panel.PriorityFrame),Is.Null);
+            panel.Priority.Failed();panel.PrioritySettingsChanged();panel.Tick();Assert.That(primary.text,Is.EqualTo("Resume"));Click(primary);panel.Tick();Assert.That(panel.Priority.Current.Paused,Is.False);Assert.That(peer.PendingCommandBytes,Is.Zero);
+        }
         [UnityTest] public IEnumerator YieldPanelRetainsCancelAndRestoresRequiredInput()
         {
             var envelope=Snapshot();var snapshot=envelope["body"]["snapshot"];
@@ -130,8 +173,8 @@ namespace Manaforge.Play.Tests
         }
         [UnityTest] public IEnumerator DecisionPanelWaitsForPresentedSnapshotAndClearsOnOwnerLoss()
         {
-            var host=Start(Snapshot(selection:true),out var peer,out var owner);var panel=Panel(host);yield return Until(()=>host.CurrentDecision!=null);panel.Tick();Assert.That(panel.Root.style.display.value,Is.EqualTo(DisplayStyle.None));Assert.That(panel.Root.Q<Label>("decision-prompt").text,Is.Empty);
-            yield return Show(host,panel);var cached=panel.Root.Q<Button>("decision-option-0");Assert.That(cached,Is.Not.Null);owner.TrySetResult(true);panel.Tick();Assert.That(panel.Root.style.display.value,Is.EqualTo(DisplayStyle.None));Assert.That(panel.Root.Q<Label>("decision-prompt").text,Is.Empty);Click(cached);Assert.That(peer.PendingCommandBytes,Is.Zero);
+            var host=Start(Snapshot(selection:true),out var peer,out var owner);var panel=Panel(host);yield return Until(()=>host.CurrentDecision!=null);panel.Tick();Assert.That(panel.Root.Q("decision-controls").childCount,Is.Zero);Assert.That(panel.Root.Q<Label>("decision-prompt").text,Is.Empty);
+            yield return Show(host,panel);var cached=panel.Root.Q<Button>("decision-option-0");Assert.That(cached,Is.Not.Null);owner.TrySetResult(true);panel.Tick();Assert.That(panel.Root.Q("decision-controls").childCount,Is.Zero);Assert.That(panel.Root.Q<Label>("decision-prompt").text,Is.Empty);Click(cached);Assert.That(peer.PendingCommandBytes,Is.Zero);
         }
         [UnityTest] public IEnumerator DecisionPanelSubmitsExactOptionAndNeverCallsAWriteConfirmation()
         {
@@ -147,18 +190,18 @@ namespace Manaforge.Play.Tests
         {
             foreach(string operation in new[]{"perform","finish_selection","cancel"}) {
                 var frame=Snapshot(selection:operation!="perform");frame["body"]["snapshot"]["decision"]["prompt"]="<b>Literal engine prompt</b>";var host=Start(frame,out var peer,out var owner);var panel=Panel(host);yield return Show(host,panel);Assert.That(panel.Root.Q<Label>("decision-prompt").enableRichText,Is.False);Assert.That(panel.Root.Q<Label>("decision-prompt").text,Is.EqualTo("<b>Literal engine prompt</b>"));
-                string button=operation=="perform"?"decision-action-0":operation=="cancel"?"decision-cancel":"decision-finish";Click(panel.Root.Q<Button>(button));var read=Task.Run(()=>WireMessages.Parse(peer.ReadCommandForFixture()));yield return Until(()=>read.IsCompleted);Assert.That((string)read.Result["body"]["operation"],Is.EqualTo(operation));host.Cancel();yield return Until(()=>host.Completion.IsCompleted);panel.Tick();Assert.That(panel.Root.style.display.value,Is.EqualTo(DisplayStyle.None));
+                string button=operation=="perform"?"decision-action-0":operation=="cancel"?"decision-cancel":"decision-finish";Click(panel.Root.Q<Button>(button));var read=Task.Run(()=>WireMessages.Parse(peer.ReadCommandForFixture()));yield return Until(()=>read.IsCompleted);Assert.That((string)read.Result["body"]["operation"],Is.EqualTo(operation));host.Cancel();yield return Until(()=>host.Completion.IsCompleted);panel.Tick();Assert.That(panel.Root.Q("decision-controls").childCount,Is.Zero);
             }
         }
-        [UnityTest] public IEnumerator PilePagingAndSelectionSendNothingUntilExplicitConfirmation()
+        [UnityTest] public IEnumerator PileScrollingAndSelectionSendNothingUntilExplicitConfirmation()
         {
             var frame=Snapshot(selection:true);var decision=frame["body"]["snapshot"]["decision"];decision["is_priority"]=false;decision["can_finish"]=false;decision["cancellable"]=false;
             decision["options"]=new JArray(new JObject{["option_id"]="first-option",["label"]="First pile",["object_id"]=null,["player_id"]=null,["selected"]=false},new JObject{["option_id"]="second-option",["label"]="Second pile",["object_id"]=null,["player_id"]=null,["selected"]=false});
             var cards=new JArray();for(int i=0;i<33;i++)cards.Add(new JObject{["hidden"]=false,["name"]="Public card "+i,["type_line"]="Instant",["rules"]=new JArray("Engine text")});
             decision["groups"]=new JArray(new JObject{["group_id"]="first",["label"]="Pile 1",["option_id"]="first-option",["cards"]=cards},new JObject{["group_id"]="second",["label"]="Pile 2",["option_id"]="second-option",["cards"]=new JArray()});
             var host=Start(frame,out var peer,out var owner);var panel=Panel(host);yield return Show(host,panel);
-            Assert.That(panel.Root.Query<CardView>().ToList().Count,Is.EqualTo(ViewerDecisionPanel.PageSize));Assert.That(panel.Root.Q<Button>("decision-group-confirm").enabledSelf,Is.False);
-            Click(panel.Root.Q<Button>("decision-group-next-first"));Click(panel.Root.Q<Button>("decision-group-next-first"));Assert.That(panel.Root.Query<CardView>().ToList().Count,Is.EqualTo(1));Assert.That(peer.PendingCommandBytes,Is.Zero);
+            Assert.That(panel.Root.Query<CardView>().ToList().Count,Is.EqualTo(33));Assert.That(panel.Root.Q<Button>("decision-group-confirm").enabledSelf,Is.False);
+            Assert.That(panel.Root.Q<Button>("decision-group-next-first"),Is.Null);Assert.That(panel.Root.Query<CardView>().ToList().Count,Is.EqualTo(33));Assert.That(peer.PendingCommandBytes,Is.Zero);
             Click(panel.Root.Q<Button>("decision-group-second"));Assert.That(peer.PendingCommandBytes,Is.Zero);var confirm=panel.Root.Q<Button>("decision-group-confirm");Assert.That(confirm.enabledInHierarchy,Is.True);Assert.That(confirm.text,Does.Contain("Second pile"));Click(confirm);
             var read=Task.Run(()=>WireMessages.Parse(peer.ReadCommandForFixture()));yield return Until(()=>read.IsCompleted);Assert.That((string)read.Result["body"]["operation"],Is.EqualTo("choose"));Assert.That((string)read.Result["body"]["option_id"],Is.EqualTo("second-option"));Assert.That(read.Result["body"]["cards"],Is.Null);
             host.Cancel();yield return Until(()=>host.Completion.IsCompleted);panel.Tick();Assert.That(panel.Root.Query<CardView>().ToList(),Is.Empty);
@@ -199,13 +242,13 @@ namespace Manaforge.Play.Tests
         [UnityTest] public IEnumerator DecisionPanelPagesEveryEngineOptionWithoutAutomaticallyChoosing()
         {
             var frame=Snapshot(selection:true);var options=(JArray)frame["body"]["snapshot"]["decision"]["options"];options.Clear();for(int i=0;i<ViewerDecisionPanel.PageSize+1;i++)options.Add(new JObject{["option_id"]="option-"+i,["label"]="Public option "+i,["object_id"]=JValue.CreateNull(),["player_id"]=JValue.CreateNull(),["selected"]=false});
-            var host=Start(frame,out var peer,out var owner);var panel=Panel(host);yield return Show(host,panel);Assert.That(panel.Root.Q<Button>("decision-option-16"),Is.Null);Assert.That(peer.PendingCommandBytes,Is.Zero);Click(panel.Root.Q<Button>("decision-next"));Assert.That(panel.Root.Q<Button>("decision-option-16"),Is.Not.Null);Assert.That(panel.Root.Q<Button>("decision-option-0"),Is.Null);Assert.That(peer.PendingCommandBytes,Is.Zero);
+            var host=Start(frame,out var peer,out var owner);var panel=Panel(host);yield return Show(host,panel);Assert.That(panel.Root.Q<Button>("decision-next"),Is.Null);Assert.That(peer.PendingCommandBytes,Is.Zero);Assert.That(panel.Root.Q<Button>("decision-option-16"),Is.Not.Null);Assert.That(panel.Root.Q<Button>("decision-option-0"),Is.Not.Null);Assert.That(peer.PendingCommandBytes,Is.Zero);
             Click(panel.Root.Q<Button>("decision-option-16"));var read=Task.Run(()=>WireMessages.Parse(peer.ReadCommandForFixture()));yield return Until(()=>read.IsCompleted);Assert.That((string)read.Result["body"]["option_id"],Is.EqualTo("option-16"));
         }
         [UnityTest] public IEnumerator RetainedButtonsCannotSubmitAfterNewSnapshotOrViewerReplacement()
         {
-            var host=Start(Snapshot(),out var peer,out var owner);var panel=Panel(host);yield return Show(host,panel);var button=panel.Root.Q<Button>("decision-action-0");var old=host.CurrentDecision;var next=Snapshot("new-panel");next["body"]["snapshot"]["revision"]=8;var send=Task.Run(()=>peer.ReplyForFixture(next));yield return Until(()=>send.IsCompleted);send.GetAwaiter().GetResult();yield return Until(()=>host.CurrentDecision!=null && !ReferenceEquals(host.CurrentDecision,old));Click(button);Assert.That(peer.PendingCommandBytes,Is.Zero);panel.Tick();Assert.That(panel.Root.style.display.value,Is.EqualTo(DisplayStyle.None));
-            yield return Show(host,panel);var cached=panel.Root.Q<Button>("decision-action-0");var replacement=Start(next,out var nextPeer,out var nextOwner);panel.Tick();Assert.That(panel.Root.style.display.value,Is.EqualTo(DisplayStyle.None));Click(cached);Assert.That(peer.PendingCommandBytes,Is.Zero);Assert.That(nextPeer.PendingCommandBytes,Is.Zero);yield return Until(()=>replacement.CurrentDecision!=null);
+            var host=Start(Snapshot(),out var peer,out var owner);var panel=Panel(host);yield return Show(host,panel);var button=panel.Root.Q<Button>("decision-action-0");var old=host.CurrentDecision;var next=Snapshot("new-panel");next["body"]["snapshot"]["revision"]=8;var send=Task.Run(()=>peer.ReplyForFixture(next));yield return Until(()=>send.IsCompleted);send.GetAwaiter().GetResult();yield return Until(()=>host.CurrentDecision!=null && !ReferenceEquals(host.CurrentDecision,old));Click(button);Assert.That(peer.PendingCommandBytes,Is.Zero);panel.Tick();Assert.That(panel.Root.Q("decision-controls").childCount,Is.Zero);
+            yield return Show(host,panel);var cached=panel.Root.Q<Button>("decision-action-0");var replacement=Start(next,out var nextPeer,out var nextOwner);panel.Tick();Assert.That(panel.Root.Q("decision-controls").childCount,Is.Zero);Click(cached);Assert.That(peer.PendingCommandBytes,Is.Zero);Assert.That(nextPeer.PendingCommandBytes,Is.Zero);yield return Until(()=>replacement.CurrentDecision!=null);
         }
         private JObject BoardSnapshot(bool multiple=false)
         {
@@ -442,6 +485,52 @@ namespace Manaforge.Play.Tests
             var frame=Snapshot(selection:true);var decision=frame["body"]["snapshot"]["decision"];decision["family"]=family;decision["minimum"]=minimum;decision["maximum"]=maximum;decision["options"]=new JArray();decision["can_finish"]=false;decision["cancellable"]=false;
             var amounts=new JArray();for(int i=0;i<ranges.Length;i+=2)amounts.Add(new JObject{["label"]="Engine constraint",["minimum"]=ranges[i],["maximum"]=ranges[i+1],["default"]=JValue.CreateNull()});decision["amounts"]=amounts;return frame;
         }
+        [UnityTest] public IEnumerator AmountRecipientTilesStayReadableAndReorderingPreservesExactRecipientAmounts()
+        {
+            var wire=NumericSnapshot("amounts",5,5,0,5,0,5,0,5);var amounts=wire["body"]["snapshot"]["decision"]["amounts"];amounts[0]["label"]="Soldier Token, P/T: 2/2";amounts[1]["label"]="Krenko, Tin Street Kingpin, P/T: 3/3";amounts[2]["label"]="Defending player";
+            var host=Start(wire,out var peer,out var owner);var panel=Panel(host);GameplayTheme.Attach(panel.Root);panel.Root.style.width=760;yield return Show(host,panel);yield return null;
+            var first=panel.Root.Q<TextField>("decision-number-0");Assert.That(first.value,Is.Empty);Assert.That(first.resolvedStyle.width,Is.GreaterThanOrEqualTo(80));Assert.That(first.resolvedStyle.height,Is.GreaterThanOrEqualTo(38));
+            Assert.That(panel.Root.Q<Label>("decision-amount-name-1").text,Is.EqualTo("Krenko, Tin Street Kingpin, P/T: 3/3"));Assert.That(panel.Root.Q<Label>("decision-amount-name-1").resolvedStyle.whiteSpace,Is.EqualTo(WhiteSpace.Normal));
+            Click(panel.Root.Q<Button>("decision-amount-plus-0"));Click(panel.Root.Q<Button>("decision-amount-plus-0"));panel.Root.Q<TextField>("decision-number-1").value="3";panel.Root.Q<TextField>("decision-number-2").value="0";yield return null;
+            var recipients=panel.Root.Q("decision-amount-recipients");var handle=panel.Root.Q("decision-amount-handle-0");var destination=panel.Root.Q("decision-amount-recipient-2").worldBound.center;
+            using(var down=PointerDownEvent.GetPooled(new Event{type=EventType.MouseDown,button=0,mousePosition=handle.worldBound.center})){down.target=handle;handle.SendEvent(down);}
+            using(var move=PointerMoveEvent.GetPooled(new Event{type=EventType.MouseDrag,button=0,mousePosition=destination})){move.target=handle;handle.SendEvent(move);}
+            using(var up=PointerUpEvent.GetPooled(new Event{type=EventType.MouseUp,button=0,mousePosition=destination})){up.target=handle;handle.SendEvent(up);}yield return null;
+            Assert.That(recipients[2].userData,Is.EqualTo(0));Assert.That(first.value,Is.EqualTo("2"));Assert.That(peer.PendingCommandBytes,Is.Zero,"Rearranging tiles is not a game command");
+            Assert.That(panel.Root.Q<Label>("decision-assigned-total").text,Is.EqualTo("Assigned: 5 / 5"));Click(panel.Root.Q<Button>("decision-number-submit"));
+            var read=Task.Run(()=>WireMessages.Parse(peer.ReadCommandForFixture()));yield return Until(()=>read.IsCompleted);CollectionAssert.AreEqual(new long[]{2,3,0},read.Result["body"]["values"].Select(value=>(long)value));
+        }
+        [UnityTest] public IEnumerator DamageArtworkUsesExactRecipientsRefreshesLateArtAndClearsOnRevision()
+        {
+            var wire=NumericSnapshot("amounts",5,5,0,5,0,5,0,5);var amounts=wire["body"]["snapshot"]["decision"]["amounts"];
+            amounts[0]["label"]="Same creature";amounts[0]["object_id"]="recipient-one";
+            amounts[1]["label"]="Same creature";amounts[1]["object_id"]="recipient-two";
+            amounts[2]["label"]="Defending player";
+            var host=Start(wire,out var peer,out var owner);var panel=Panel(host);
+            var firstTexture=new Texture2D(2,2);var secondTexture=new Texture2D(2,2);int state=0;
+            var previews=new List<CardView>();
+            panel.SetChoiceArtworkState(()=>state);
+            panel.SetChoicePreview(id=>{var view=new CardView();if(state==0)view.BindUnavailable();else view.Bind(VisualPrintingPolicy.Resolve(false,new VisualPrintingCandidate("oracle",id,"front",true,true),Array.Empty<VisualPrintingCandidate>()),id=="recipient-one"?firstTexture:secondTexture,new Rect(0,0,1,1));previews.Add(view);return view;});
+            try{
+                yield return Show(host,panel);yield return null;
+                Assert.That(panel.Root.Q("decision-amount-artwork-0").Q<CardView>().Artwork,Is.Null);
+                Assert.That(panel.Root.Q("decision-amount-artwork-1").Q<CardView>().Artwork,Is.Null);
+                Assert.That(panel.Root.Q("decision-amount-artwork-2"),Is.Null,"A player row cannot borrow a card image");
+                panel.Root.Q<TextField>("decision-number-0").value="2";panel.Root.Q<TextField>("decision-number-1").value="3";panel.Root.Q<TextField>("decision-number-2").value="0";
+                var handle=panel.Root.Q("decision-amount-handle-0");using(var key=KeyDownEvent.GetPooled('\0',KeyCode.RightArrow,EventModifiers.None)){key.target=handle;handle.SendEvent(key);}
+                state=1;panel.Tick();yield return null;
+                Assert.That(panel.Root.Q("decision-amount-artwork-0").Q<CardView>().Artwork,Is.SameAs(firstTexture));
+                Assert.That(panel.Root.Q("decision-amount-artwork-1").Q<CardView>().Artwork,Is.SameAs(secondTexture));
+                Assert.That(panel.Root.Q<TextField>("decision-number-0").value,Is.EqualTo("2"));Assert.That(panel.Root.Q("decision-amount-recipients")[1].userData,Is.EqualTo(0));
+                Assert.That(previews.Take(2).All(view=>view.parent==null && view.Artwork==null),Is.True,"Late artwork must retire the old borrowed previews");
+                panel.InvalidateAmountArtwork();Assert.That(panel.Root.Q("decision-amount-artwork-0").Q<CardView>(),Is.Null);
+                panel.Tick();Click(panel.Root.Q<Button>("decision-number-submit"));var read=Task.Run(()=>WireMessages.Parse(peer.ReadCommandForFixture()));yield return Until(()=>read.IsCompleted);
+                CollectionAssert.AreEqual(new long[]{2,3,0},read.Result["body"]["values"].Select(value=>(long)value));
+                var next=NumericSnapshot("number",0,10);next["message_id"]="damage-artwork-retired";next["body"]["snapshot"]["revision"]=8;
+                var sent=Task.Run(()=>peer.ReplyForFixture(next));yield return Until(()=>sent.IsCompleted);yield return Until(()=>{host.Tick();panel.Tick();return host.PresentedDecision?.Frame.Context.Revision==8;});
+                Assert.That(panel.Root.Q("decision-amount-artwork-0"),Is.Null);Assert.That(previews.All(view=>view.parent==null && view.Artwork==null),Is.True);
+            }finally{UnityEngine.Object.Destroy(firstTexture);UnityEngine.Object.Destroy(secondTexture);}
+        }
         [UnityTest] public IEnumerator NumericPanelRequiresExplicitWholeNumberAndPreservesZeroAndSignedLimits()
         {
             foreach(string input in new[]{"0",long.MinValue.ToString(System.Globalization.CultureInfo.InvariantCulture),long.MaxValue.ToString(System.Globalization.CultureInfo.InvariantCulture)}) {
@@ -454,7 +543,7 @@ namespace Manaforge.Play.Tests
         {
             var ranges=Enumerable.Range(0,ViewerDecisionPanel.PageSize+1).SelectMany(_=>new long[]{0,5}).ToArray();var frame=NumericSnapshot("amounts",5,5,ranges);foreach(var amount in frame["body"]["snapshot"]["decision"]["amounts"])amount["default"]=5;
             var host=Start(frame,out var peer,out var owner);var panel=Panel(host);yield return Show(host,panel);for(int i=0;i<ViewerDecisionPanel.PageSize;i++){var field=panel.Root.Q<TextField>("decision-number-"+i);Assert.That(field.value,Is.Empty);field.value="0";}
-            Assert.That(panel.Root.Q<Button>("decision-number-submit").enabledSelf,Is.False);Click(panel.Root.Q<Button>("decision-numeric-next"));Assert.That(panel.Root.Q<TextField>("decision-number-16").value,Is.Empty);panel.Root.Q<TextField>("decision-number-16").value="5";Click(panel.Root.Q<Button>("decision-numeric-previous"));Assert.That(panel.Root.Q<TextField>("decision-number-0").value,Is.EqualTo("0"));Assert.That(peer.PendingCommandBytes,Is.Zero);
+            Assert.That(panel.Root.Q<Button>("decision-number-submit").enabledSelf,Is.False);Assert.That(panel.Root.Q<Button>("decision-numeric-next"),Is.Null);Assert.That(panel.Root.Q<TextField>("decision-number-16").value,Is.Empty);panel.Root.Q<TextField>("decision-number-16").value="5";Assert.That(panel.Root.Q<Button>("decision-numeric-previous"),Is.Null);Assert.That(panel.Root.Q<TextField>("decision-number-0").value,Is.EqualTo("0"));Assert.That(peer.PendingCommandBytes,Is.Zero);
             Assert.That(panel.Root.Q<Button>("decision-number-submit").enabledSelf,Is.True);Click(panel.Root.Q<Button>("decision-number-submit"));var read=Task.Run(()=>WireMessages.Parse(peer.ReadCommandForFixture()));yield return Until(()=>read.IsCompleted);CollectionAssert.AreEqual(Enumerable.Repeat(0L,16).Concat(new[]{5L}),read.Result["body"]["values"].Select(value=>(long)value));
         }
         [UnityTest] public IEnumerator AmountPanelKeepsInvalidRangeInputEditableUntilExplicitCorrection()

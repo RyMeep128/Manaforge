@@ -131,13 +131,14 @@ namespace Manaforge.Play
         {
             Rect rect;
             switch(id){
+                case GameplayHudIds.Turns:rect=new Rect(16,12,252,100);break;
                 case GameplayHudIds.Players:rect=new Rect(viewport.x-301,60,285,320);break;
                 case GameplayHudIds.Priority:rect=new Rect(viewport.x-301,16,285,Mathf.Max(100,viewport.y*.7f-32));break;
                 case GameplayHudIds.Actions:rect=new Rect(viewport.x-295,viewport.y-65,275,285);break;
                 case GameplayHudIds.Zones:rect=new Rect(16,viewport.y-122,252,Mathf.Max(100,viewport.y-182));break;
                 default:rect=new Rect(16,54+Mathf.Max(170,viewport.y-70)-162,252,400);break;
             }
-            return new ContainerLayoutState(id,ContainerLayoutResolver.Normalize(rect,viewport),ContainerMode.Drawer);
+            return new ContainerLayoutState(id,ContainerLayoutResolver.Normalize(rect,viewport),ContainerMode.Drawer,expansionDirection:id==GameplayHudIds.Turns?(GameplayDrawerDirection?)GameplayDrawerDirection.Down:null);
         }
         private bool SameStates(LayoutPresetApplication a,LayoutPresetApplication b)
         {

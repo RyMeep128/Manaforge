@@ -1,14 +1,17 @@
 using System;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.UIElements;
 namespace Manaforge.Play
 {
-    // Owns chrome only. Canonical cards remain siblings owned by ViewerCardSurface.
+    // Owns group chrome and a foreground layer; card instances remain surface-owned.
     public sealed class BattlefieldGroupBinding : IDisposable
     {
         public string Id {get;}
         public string Seat {get;}
         public VisualElement Root {get;}
+        internal VisualElement Layer {get;}
+        private readonly VisualElement cardOwner;private readonly Action foreground;
         public GameplayDrawer Drawer {get;}
         public VisualElement PanelHeader {get;}
         public VisualElement DragHandle {get;}
@@ -22,10 +25,11 @@ namespace Manaforge.Play
         private readonly EventCallback<PointerMoveEvent> drawerMove;private readonly EventCallback<PointerUpEvent> drawerUp;
         public bool IsDrawer {get;private set;}
         public bool MembersVisible=>!IsDrawer || Drawer.IsOpen;
-        public BattlefieldGroupBinding(string id,string seat,VisualElement parent,Action relayout,Action focus,Action edit,Action inspectMembers,EventCallback<PointerMoveEvent> drawerMove=null,EventCallback<PointerUpEvent> drawerUp=null)
+        public BattlefieldGroupBinding(string id,string seat,VisualElement parent,Action relayout,Action focus,Action edit,Action inspectMembers,EventCallback<PointerMoveEvent> drawerMove=null,EventCallback<PointerUpEvent> drawerUp=null,VisualElement foregroundParent=null,VisualElement cardOwner=null,Action foregroundChanged=null)
         {
-            Id=id;Seat=seat;this.drawerMove=drawerMove;this.drawerUp=drawerUp;
-            Root=new VisualElement{name="organization-group-"+id,userData=id,focusable=true,pickingMode=PickingMode.Ignore};Root.AddToClassList("organization-header");Root.style.position=Position.Absolute;parent.Add(Root);
+            Id=id;Seat=seat;this.drawerMove=drawerMove;this.drawerUp=drawerUp;this.cardOwner=cardOwner;
+            Layer=new VisualElement{name="organization-layer-"+id,pickingMode=PickingMode.Ignore};Layer.style.position=Position.Absolute;Layer.style.left=Layer.style.top=0;Layer.style.right=Layer.style.bottom=0;(foregroundParent??parent).Add(Layer);
+            Root=new VisualElement{name="organization-group-"+id,userData=id,focusable=true,pickingMode=PickingMode.Ignore};Root.AddToClassList("organization-header");Root.style.position=Position.Absolute;Layer.Add(Root);
             PanelHeader=new VisualElement{name="organization-header-"+id,userData=id,focusable=true};PanelHeader.AddToClassList("organization-header");PanelHeader.style.height=30;PanelHeader.style.flexDirection=FlexDirection.Row;PanelHeader.style.backgroundColor=new Color(.12f,.17f,.19f,.95f);Root.Add(PanelHeader);
             title=new Label{enableRichText=false,pickingMode=PickingMode.Ignore};title.style.flexGrow=1;title.style.overflow=Overflow.Hidden;PanelHeader.Add(title);
             Edit=new Button(edit){text="...",name="organization-edit-"+id,tooltip="Group actions"};GameplayTheme.Button(Edit);PanelHeader.Add(Edit);
@@ -38,13 +42,14 @@ namespace Manaforge.Play
             DragHandle=new Label("↕"){name="organization-drag-"+id,userData=id,focusable=true,pickingMode=PickingMode.Position,tooltip="Drag group; arrows move; F2 renames"};DragHandle.AddToClassList("organization-header");DragHandle.style.position=Position.Absolute;DragHandle.style.left=DragHandle.style.top=0;DragHandle.style.width=28;DragHandle.style.height=30;Root.Add(DragHandle);
             memberBar=new VisualElement();memberBar.style.position=Position.Absolute;memberBar.style.left=0;memberBar.style.top=32;Root.Add(memberBar);
             Members=new Button(inspectMembers){text="Inspect members",name="organization-members-"+id};GameplayTheme.Button(Members);memberBar.Add(Members);
-            focused=ev=>focus();PanelHeader.RegisterCallback(focused);DragHandle.RegisterCallback(focused);Drawer.Tab.RegisterCallback(focused);Root.RegisterCallback(focused);
+            foreground=()=>{Layer.BringToFront();foregroundChanged?.Invoke();};Drawer.ForegroundChanged+=foreground;
+            focused=ev=>{Drawer.PromoteForeground();focus();};PanelHeader.RegisterCallback(focused);DragHandle.RegisterCallback(focused);Drawer.Tab.RegisterCallback(focused);Root.RegisterCallback(focused);
             openChanged=_=>relayout();Drawer.OpenChanged+=openChanged;
         }
         public void Update(ProjectedOrganizationGroup group,Rect bounds,int untapped,bool owner,bool canEdit,bool reducedMotion,int offeredCount=0,bool canBrowse=true,int tapped=0)
         {
             IsDrawer=group.PresentationMode==BattlefieldGroupPresentationMode.Drawer;
-            Root.style.display=DisplayStyle.Flex;Root.style.left=bounds.x;Root.style.top=bounds.y;Root.style.width=bounds.width;Root.style.height=bounds.height;
+            Layer.style.display=DisplayStyle.Flex;Root.style.display=DisplayStyle.Flex;Root.style.backgroundColor=IsDrawer?Color.clear:new Color(.035f,.055f,.075f,1);Root.pickingMode=IsDrawer?PickingMode.Ignore:PickingMode.Position;Root.style.left=bounds.x;Root.style.top=bounds.y;Root.style.width=bounds.width;Root.style.height=bounds.height;
             memberBar.style.display=DisplayStyle.None;Members.SetEnabled(canBrowse);Members.text=offeredCount>0?"Choose ("+offeredCount+")":"Members";Members.tooltip="Inspect individual permanents";memberBar.style.top=0;memberBar.style.left=StyleKeyword.Auto;memberBar.style.right=owner?30:0;memberBar.style.width=98;Drawer.SetAttention(IsDrawer && !Drawer.IsOpen && offeredCount>0,offeredCount+" addressable members");
             string summary=group.Name+$" ({group.Objects.Count}, {untapped} untapped, {tapped} tapped)";title.text=summary;title.tooltip=summary;Drawer.SetTitle(group.Name);Drawer.Tab.text=group.Name;Drawer.Tab.tooltip=summary+(Drawer.IsOpen?" — click to collapse; drag to move":" — click to expand; drag to move");Drawer.SetReducedMotion(reducedMotion);
             PanelHeader.style.display=IsDrawer?DisplayStyle.None:DisplayStyle.Flex;Drawer.style.display=IsDrawer?DisplayStyle.Flex:DisplayStyle.None;DragHandle.style.display=DisplayStyle.None;DragHandle.SetEnabled(canEdit);
@@ -54,6 +59,6 @@ namespace Manaforge.Play
             Edit.style.display=owner?DisplayStyle.Flex:DisplayStyle.None;Edit.SetEnabled(canEdit);
             Drawer.style.width=bounds.width;Drawer.Viewport.style.width=bounds.width;Drawer.Viewport.style.height=Mathf.Max(0,bounds.height-32);Drawer.Content.style.height=Mathf.Max(0,bounds.height-32);Drawer.Content.style.width=bounds.width;
         }
-        public void Dispose(){if(drawerMove!=null)Drawer.Tab.UnregisterCallback(drawerMove,TrickleDown.TrickleDown);if(drawerUp!=null)Drawer.Tab.UnregisterCallback(drawerUp,TrickleDown.TrickleDown);Drawer.OpenChanged-=openChanged;PanelHeader.UnregisterCallback(focused);DragHandle.UnregisterCallback(focused);Drawer.Tab.UnregisterCallback(focused);Root.UnregisterCallback(focused);Edit.clickable=null;DrawerEdit.clickable=null;Members.clickable=null;Drawer.Dispose();Root.RemoveFromHierarchy();}
+        public void Dispose(){Drawer.ForegroundChanged-=foreground;if(cardOwner!=null)foreach(var element in Layer.Children().ToArray())if(element!=Root)cardOwner.Add(element);if(drawerMove!=null)Drawer.Tab.UnregisterCallback(drawerMove,TrickleDown.TrickleDown);if(drawerUp!=null)Drawer.Tab.UnregisterCallback(drawerUp,TrickleDown.TrickleDown);Drawer.OpenChanged-=openChanged;PanelHeader.UnregisterCallback(focused);DragHandle.UnregisterCallback(focused);Drawer.Tab.UnregisterCallback(focused);Root.UnregisterCallback(focused);Edit.clickable=null;DrawerEdit.clickable=null;Members.clickable=null;Drawer.Dispose();Root.RemoveFromHierarchy();Layer.RemoveFromHierarchy();}
     }
 }

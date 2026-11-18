@@ -111,7 +111,7 @@ def _schema_outputs(
             nullable = any(
                 part.get("type") == "null" for part in shape.get("anyOf", [])
             )
-            required = "AllowNull" if nullable else "Always"
+            required = "Default" if field not in definition.get("required", []) else "AllowNull" if nullable else "Always"
             cs.append(
                 f'        [JsonProperty("{field}", Required = Required.{required})]\n        public {field_type(shape, "cs")} {cs_name};\n'
             )

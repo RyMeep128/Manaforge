@@ -15,10 +15,11 @@ namespace Manaforge.Play.Tests
         private GameObject node;private PanelSettings settings;private VisualElement root;
         private ViewerCardSurface surface;private ViewerSurfaceTicket ticket;private GameplayAnimationCoordinator animation;
         private float now;private bool reduced;private string id;
-        private static ProjectedDecisionFrame Decision(long revision=1,string result=null)
+        private static ProjectedDecisionFrame Decision(long revision=1,string result=null,string phase=null,string step=null)
         {
             var wire=(JObject)JObject.Parse(File.ReadAllText(Path.Combine(Application.dataPath,"../../mtg_play/protocol/fixtures/wire-receive-v1.json")))["positive"][0]["envelope"].DeepClone();
             wire["body"]["snapshot"]["revision"]=revision;
+            if(phase!=null)wire["body"]["snapshot"]["phase"]=phase;if(step!=null)wire["body"]["snapshot"]["step"]=step;
             if(result!=null){wire["body"]["snapshot"]["result"]=result;wire["body"]["snapshot"]["status"]="finished";}
             return ViewerDecisionProjection.ParseSnapshot(wire.ToString(),"fixture-0001","one",0,true);
         }
@@ -49,6 +50,28 @@ namespace Manaforge.Play.Tests
             Assert.That(animation.ActiveCount,Is.EqualTo(1));Assert.That(surface.HasInspection,Is.True);Assert.That(surface.InspectionView.Artwork,Is.SameAs(texture));
             Assert.That(button.enabledInHierarchy,Is.True);Assert.That(root.Q("gameplay-animation-layer").pickingMode,Is.EqualTo(PickingMode.Ignore));
             now=1.01f;animation.Advance();Assert.That(animation.ActiveCount,Is.Zero);Assert.That(animation.HoldAutomaticPassing,Is.False);yield return null;
+        }
+        [UnityTest] public IEnumerator PhaseUpdatesKeepTheSameEffectAndOriginalCompletionTime()
+        {
+            var first=Decision();var batch=new GameplayMotionBatch(first.Context,new[]{new GameplayMotionCue(GameplayMotionKind.Cast,id,owner:"one",from:"hand",to:"stack")});
+            animation.Observe(first,new[]{batch});animation.Advance();var effect=root.Q("motion-cast");var texture=root.Q<Image>("motion-card").image;
+            for(int revision=2;revision<=4;revision++){
+                now=(revision-1)*.2f;
+                Assert.That(surface.TryPresent(ticket,ViewerCardSurfaceTests.Frame(revision:revision,artwork:true)),Is.True);
+                animation.Observe(Decision(revision,phase:"BEGINNING",step:revision==2?"UNTAP":revision==3?"UPKEEP":"DRAW"),new[]{batch});animation.Advance();
+                Assert.That(root.Q("motion-cast"),Is.SameAs(effect));Assert.That(root.Q<Image>("motion-card").image,Is.SameAs(texture));
+                Assert.That(animation.ActiveCount,Is.EqualTo(1));Assert.That(animation.PendingCount,Is.Zero);
+            }
+            now=1.01f;animation.Advance();Assert.That(animation.ActiveCount,Is.Zero);yield return null;
+        }
+        [UnityTest] public IEnumerator NewEffectsWaitForLayoutWithoutRestartingActiveEffects()
+        {
+            Enqueue(new GameplayMotionCue(GameplayMotionKind.Cast,id));var original=root.Q("motion-cast");
+            animation.AfterLayout();var next=Decision(2);now=.4f;
+            animation.Observe(next,new[]{new GameplayMotionBatch(next.Context,new[]{new GameplayMotionCue(GameplayMotionKind.Draw,owner:"one",from:"library",to:"hand")})});
+            animation.Advance();Assert.That(root.Q("motion-cast"),Is.SameAs(original));Assert.That(root.Q("motion-draw"),Is.Null);
+            yield return null;animation.Advance();Assert.That(root.Q("motion-draw"),Is.Not.Null);
+            now=1.01f;animation.Advance();Assert.That(root.Q("motion-cast"),Is.Null);
         }
         [UnityTest] public IEnumerator ConsumedBatchCannotReplayAndNewSameTypeEventDoesNotReviveOldEffect()
         {

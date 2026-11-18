@@ -25,6 +25,7 @@ namespace Manaforge.Play
     {
         public string Name {get;} public string Power {get;} public string Toughness {get;}
         public string BasePower {get;} public string BaseToughness {get;}
+        public string ManaCost {get;} public string CastingCost {get;}
         public string TypeLine {get;} public string Color {get;} public string Loyalty {get;} public string Defense {get;}
         public bool? Transformed {get;} public bool? Flipped {get;} public bool? IsCopy {get;}
         public IReadOnlyList<string> EngineViewText {get;}
@@ -33,6 +34,7 @@ namespace Manaforge.Play
         public IReadOnlyList<ProjectedCounter> Counters {get;}
         internal ProjectedCharacteristics(JToken value)
         {
+            ManaCost=(string)value["mana_cost"];CastingCost=(string)value["casting_cost"];
             BasePower=(string)value["base_power"];BaseToughness=(string)value["base_toughness"];
             Name=(string)value["name"];Power=(string)value["power"];Toughness=(string)value["toughness"];
             TypeLine=(string)value["type_line"];Color=(string)value["color"];Loyalty=(string)value["loyalty"];Defense=(string)value["defense"];

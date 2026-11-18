@@ -53,9 +53,10 @@ namespace Manaforge.Play
             button??=controls.Find(value=>value.text.StartsWith("Memnite",StringComparison.Ordinal) || value.text.StartsWith("Centaur Courser",StringComparison.Ordinal));
             button??=controls.Find(value=>value.text.StartsWith("Player ",StringComparison.Ordinal));
             button??=controls.Find(value=>value.text=="You");
-            button??=controls.Find(value=>value.text=="No");
+            button??=controls.Find(value=>value.text=="No" || value.text=="Keep 7");
             button??=controls.Find(value=>value.text.StartsWith("Finish",StringComparison.Ordinal) || value.text=="Pass priority" || value.text.StartsWith("Discard",StringComparison.Ordinal));
             button??=controls.Find(value=>value.name!=null && value.name.StartsWith("decision-option-",StringComparison.Ordinal));
+            button??=controls.Find(value=>value.name=="priority-actions-primary" && value.enabledInHierarchy);
             if(button==null){var next=controls.Find(value=>value.name=="decision-next" && value.enabledInHierarchy);if(next!=null)using(var navigation=NavigationSubmitEvent.GetPooled()){navigation.target=next;next.SendEvent(navigation);}return false;}if(!button.enabledInHierarchy)return false;if(button.name=="decision-next" || button.name=="decision-previous"){using(var navigation=NavigationSubmitEvent.GetPooled()){navigation.target=button;button.SendEvent(navigation);}return false;}submitted=frame.Context.Revision;using(var input=NavigationSubmitEvent.GetPooled()){input.target=button;button.SendEvent(input);}return false;
         }
         private int availableLands,availableCreatures;

@@ -378,6 +378,26 @@
             }
           ]
         },
+        "mana_cost": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "casting_cost": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "unsupported_fields": {
           "type": "array",
           "items": {
@@ -401,6 +421,8 @@
         "current_abilities",
         "base_power",
         "base_toughness",
+        "mana_cost",
+        "casting_cost",
         "unsupported_fields"
       ],
       "additionalProperties": false
@@ -808,6 +830,16 @@
           "anyOf": [
             {
               "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "object_id": {
+          "anyOf": [
+            {
+              "type": "string"
             },
             {
               "type": "null"

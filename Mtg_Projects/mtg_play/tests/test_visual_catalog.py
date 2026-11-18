@@ -216,3 +216,10 @@ def test_special_layouts_never_receive_an_ordinary_reconstructed_frame(
     candidates = collect_visual_candidates(Service(selected), "special")
     assert len(candidates) == 1
     assert candidates[0].standard_compatible is False
+
+
+@pytest.mark.parametrize("effects", [None, []])
+def test_normal_printing_with_no_frame_effects_keeps_standard_profile(effects):
+    from mtg_play.visual_catalog import _standard
+
+    assert _standard(card("selected", type_line="Sorcery", frame_effects=effects))

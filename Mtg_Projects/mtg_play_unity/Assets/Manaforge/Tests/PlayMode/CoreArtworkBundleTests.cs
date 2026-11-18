@@ -62,7 +62,7 @@ namespace Manaforge.Play.Tests
             var serving=Task.Run(()=>{
                 using(var client=listener.AcceptTcpClient())using(var stream=client.GetStream()){
                     var query=JObject.Parse(Manaforge.Play.Protocol.TextFrame.Read(stream));
-                    Assert.That((string)query["key"],Is.EqualTo(secret));Assert.That((string)query["viewer_id"],Is.EqualTo("one"));
+                    Assert.That((string)query["key"],Is.EqualTo(secret));Assert.That((string)query["viewer_id"],Is.EqualTo("one"));Assert.That((string)query["face_name"],Is.EqualTo("Viewer text"));Assert.That(query.Property("transformed"),Is.Not.Null);
                     var pixels=new byte[16];var response=new JObject{["oracle_id"]="oracle",["printing_id"]="exact-printing",["face_key"]="front",["layout"]="token",["standard_compatible"]=false,["printed_type_line"]="Token Creature — Goblin",["printed_name"]="Goblin",["printed_rules"]="",["printed_mana_cost"]=JValue.CreateNull(),["width"]=2,["height"]=2,["byte_length"]=16,["sha256"]=Digest(pixels)};
                     Manaforge.Play.Protocol.TextFrame.Write(stream,response.ToString(Newtonsoft.Json.Formatting.None));stream.Write(pixels,0,pixels.Length);
                 }

@@ -9,10 +9,19 @@ namespace Manaforge.Play
         internal ViewerSurfaceTicket Ticket {get;}
         public string ObjectId {get;} public long Revision {get;}
         public string OracleId {get;} public string PrintingId {get;}
+        public string FaceName {get;} public bool? Transformed {get;}
         internal ViewerArtworkRequest(ViewerSurfaceTicket ticket,ProjectedObservation card)
-        {Ticket=ticket;ObjectId=card.Id;Revision=card.Context.Revision;OracleId=card.OracleId;PrintingId=card.PrintingId;}
+        {Ticket=ticket;ObjectId=card.Id;Revision=card.Context.Revision;OracleId=card.OracleId;PrintingId=card.PrintingId;FaceName=card.Name;}
         internal ViewerArtworkRequest(ViewerSurfaceTicket ticket,ProjectedCard card)
-        {Ticket=ticket;ObjectId=card.ObjectId;Revision=card.Context.Revision;OracleId=card.Printing.OracleId;PrintingId=card.Printing.PrintingId;}
+        {Ticket=ticket;ObjectId=card.ObjectId;Revision=card.Context.Revision;OracleId=card.Printing.OracleId;PrintingId=card.Printing.PrintingId;FaceName=card.Characteristics?.Name;Transformed=card.Characteristics?.Transformed;}
+        internal static bool FaceSensitive(string layout)
+        {
+            switch(layout){
+                case "normal":case "token":case "prototype":case "saga":case "class":case "leveler":case "mutate":case "case":case "planar":case "scheme":case "vanguard":case "emblem":case "augment":case "host":return false;
+                default:return true;
+            }
+        }
+        internal bool MatchesFace(ProjectedCard card,string layout)=>!FaceSensitive(layout) || FaceName==card.Characteristics?.Name && Transformed==card.Characteristics?.Transformed;
     }
     // Ephemeral metadata from the trusted existing Core catalog, not a second card database.
     public sealed class CatalogArtworkFace
@@ -40,7 +49,7 @@ namespace Manaforge.Play
             Request=request;Catalog=catalog;Width=width;Height=height;pixels=(byte[])bytes.Clone();
             using(var hash=SHA256.Create())Digest=BitConverter.ToString(hash.ComputeHash(pixels)).Replace("-","");
             Identity=VisualPrintingPolicy.Resolve(false,new VisualPrintingCandidate(catalog.OracleId,catalog.PrintingId,catalog.FaceKey,catalog.StandardCompatible,true),Array.Empty<VisualPrintingCandidate>());
-            Profile=CardCompactProfile.FromMetadata("normal",catalog.PrintedTypeLine);
+            Profile=CardCompactProfile.FromMetadata(catalog.Layout,catalog.PrintedTypeLine);
         }
         // Worker-side: caller already used Core's decoder. RGBA8 rows must be bottom-left origin.
         // This method never reads files, downloads images, decodes PNGs or touches Unity graphics.
@@ -49,7 +58,7 @@ namespace Manaforge.Play
             if(request==null || catalog==null)throw new ArgumentException("ARTWORK_CONTEXT");
             if(catalog.OracleId!=request.OracleId || catalog.PrintingId!=request.PrintingId)
                 throw new ArgumentException("ARTWORK_IDENTITY");
-            if((catalog.Layout!="normal" && catalog.Layout!="token") || catalog.FaceCount!=1 || string.IsNullOrWhiteSpace(catalog.FaceKey)
+            if(string.IsNullOrWhiteSpace(catalog.Layout) || catalog.Layout.Length>128 || catalog.StandardCompatible && catalog.Layout!="normal" || catalog.FaceCount!=1 || string.IsNullOrWhiteSpace(catalog.FaceKey)
                 || catalog.FaceKey.Length>1024 || string.IsNullOrWhiteSpace(catalog.PrintedTypeLine))
                 throw new ArgumentException("ARTWORK_FACE_UNSUPPORTED");
             if(width<1 || height<1 || width>1024 || height>1024 || rgba==null || rgba.Length!=(long)width*height*4)

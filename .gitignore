@@ -252,3 +252,5 @@ Mtg_Projects/mtg_proxy/projects/tmp_images/
 
 # Generated read-only coverage inventories.
 /Artifacts/
+/multiplayer-relay/node_modules/
+/multiplayer-relay/.wrangler/

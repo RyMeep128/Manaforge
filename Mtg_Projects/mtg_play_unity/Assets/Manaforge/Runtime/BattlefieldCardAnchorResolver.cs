@@ -16,7 +16,12 @@ namespace Manaforge.Play
         {
             center=default;if(destination==null || view?.parent==null || view.style.display.value==DisplayStyle.None || view.worldBound.width<=1 || view.worldBound.height<=1)return false;
             for(var element=(VisualElement)view;element!=null;element=element.parent)if(element.resolvedStyle.display==DisplayStyle.None || element.resolvedStyle.visibility==Visibility.Hidden)return false;
-            center=destination.WorldToLocal(view.worldBound.center);return !float.IsNaN(center.x) && !float.IsNaN(center.y) && !float.IsInfinity(center.x) && !float.IsInfinity(center.y);
+            var point=view.worldBound.center;
+            for(var element=view.parent;element!=null;element=element.parent)if(element is ScrollView scroll){
+                var clip=scroll.contentViewport.worldBound;if(!clip.Overlaps(view.worldBound))return false;
+                point=new Vector2(Mathf.Clamp(point.x,clip.xMin,clip.xMax),Mathf.Clamp(point.y,clip.yMin,clip.yMax));
+            }
+            center=destination.WorldToLocal(point);return !float.IsNaN(center.x) && !float.IsNaN(center.y) && !float.IsInfinity(center.x) && !float.IsInfinity(center.y);
         }
     }
 }

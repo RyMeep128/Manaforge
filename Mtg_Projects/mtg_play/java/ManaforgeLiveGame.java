@@ -7,6 +7,7 @@ public final class ManaforgeLiveGame {
         System.setProperty("manaforge.coreFromOpening","true");System.setProperty("manaforge.completeGame","true");
         System.setProperty("manaforge.metadataContext",args[3]);
         System.setProperty("manaforge.paymentMode",System.getProperty("manaforge.paymentMode","AUTO"));
+        if(Boolean.getBoolean("manaforge.multiplayer")){ManaforgeLiveOpening.multiplayer(args);return;}
         ManaforgeLiveOpening.main(new String[]{args[0],args[1],args[2]});
     }
 }

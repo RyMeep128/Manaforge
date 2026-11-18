@@ -31,8 +31,8 @@ namespace Manaforge.Play
     }
     public sealed class ProjectedAmountConstraint
     {
-        public string Label {get;} public long Minimum {get;} public long Maximum {get;} public long? Default {get;}
-        internal ProjectedAmountConstraint(JToken source){Label=(string)source["label"];Minimum=(long)source["minimum"];Maximum=(long)source["maximum"];Default=(long?)source["default"];}
+        public string Label {get;} public string ObjectId {get;} public long Minimum {get;} public long Maximum {get;} public long? Default {get;}
+        internal ProjectedAmountConstraint(JToken source){ObjectId=(string)source["object_id"];Label=(string)source["label"];Minimum=(long)source["minimum"];Maximum=(long)source["maximum"];Default=(long?)source["default"];}
     }
     public sealed class ProjectedChoicePreview
     {

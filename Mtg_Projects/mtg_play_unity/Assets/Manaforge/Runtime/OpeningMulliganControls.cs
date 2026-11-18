@@ -12,7 +12,7 @@ namespace Manaforge.Play
             if(root==null || handCount!=7)return false;
             var prompt=root.Q<Label>("decision-prompt");
             var yes=root.Q<Button>("decision-option-0");var no=root.Q<Button>("decision-option-1");
-            if(prompt==null || OpeningHandFan.PlainPrompt(prompt.text)!="Mulligan down to 6 cards?" || yes==null || no==null || yes.text!="Yes" || no.text!="No" || root.Query<Button>().ToList().Count!=2)return false;
+            if(prompt==null || OpeningHandFan.PlainPrompt(prompt.text)!="Mulligan down to 6 cards?" || yes==null || no==null || yes.text!="Yes" || no.text!="No" || (root.Q("decision-controls")??root).Query<Button>().ToList().Count!=2)return false;
             Style(yes,"Mulligan",new Color(.22f,.25f,.85f),new Color(.65f,.65f,1));
             Style(no,"Keep 7",new Color(.95f,.36f,.08f),new Color(1,.75f,.35f));
             return true;

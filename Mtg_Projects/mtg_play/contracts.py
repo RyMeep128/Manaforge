@@ -76,6 +76,8 @@ class CardCharacteristics(Serializable):
     current_abilities: tuple[str, ...] | None = None
     base_power: str | None = None
     base_toughness: str | None = None
+    mana_cost: str | None = None
+    casting_cost: str | None = None
     unsupported_fields: tuple[str, ...] = (
         "current_rules_text",
         "ability_identities",
@@ -143,6 +145,7 @@ class AmountConstraint(Serializable):
     minimum: int
     maximum: int
     default: int | None = None
+    object_id: str | None = None
 
 
 @dataclass(frozen=True)

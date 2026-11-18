@@ -7,15 +7,49 @@ startup/cleanup. The Python gameplay adapter and Qt game table are retired.
 ## Start a game
 
 1. Build the Windows Unity player using the [Unity project guide](../Mtg_Projects/mtg_play_unity/README.md).
-2. Open Manaforge from source and select Play. Choose Freeform or Commander,
-   your saved deck, the AI opponent's deck, and a mana-payment preference.
-3. Click **Start Game**. Close the Unity window to end the session. Closing
+2. Open Manaforge from source and select Play. Choose the format, player count,
+   and Offline or Online. Two players are enabled first; larger Commander games
+   remain unavailable until 1v1 acceptance is complete.
+3. Offline fills the other seat with AI. Select your saved deck, the AI's deck,
+   and a mana-payment preference.
+4. Click **Start Game**. Close the Unity window to end the session. Closing
    Manaforge also requests cleanup of its owned game processes.
 
 Returning to Play reloads saved decks. The desktop has no separate Python game
 or Unity preview launch buttons. Diagnostic preview tooling remains available to
 developers. Installed builds retain the release gate; the source override is
 `MANAFORGE_ENABLE_LOCAL_PLAY` (enabled by default).
+
+## Online lobbies
+
+Select **Online**, then **Host Game** to generate a join code. Share **Copy Code**
+or **Copy Invite** with a friend, who selects **Join Game**. Invitations include
+the relay endpoint; short codes use the currently selected relay. The shared
+Cloudflare relay is the default, with custom WSS endpoints under **Relay settings**.
+
+Each seat appears in the lobby. Hosts can change an unoccupied seat between Open
+and AI, choose AI decks, and remove a guest. Humans choose their own saved decks
+and ready up. Deck or seat changes clear human readiness. Start requires every
+seat to be occupied, every deck selected, and every human ready. Returning to
+change format or mode closes the room. An online room can also use AI opponents.
+
+The host runs XMage and the Java gateway; guests run their own Unity clients and
+need no engine process or port forwarding. XMage remains the rules authority.
+Guests receive only their own projected private information. The host and relay
+operator are trusted with engine and transported data, respectively.
+
+A lost game connection interrupts the session rather than assigning a winner.
+Reconnect and host migration are not implemented. Closing Unity after a normal
+result retains that result; use Leave Lobby to set up the next game.
+
+The shared relay uses Workers Free and hibernating SQLite-backed Durable Objects.
+Free quotas are account-wide limits, not unlimited capacity. See the
+[relay deployment and protocol guide](../multiplayer-relay/README.md) for custom
+Cloudflare or standalone Node hosting. Standalone hosting providers may charge.
+
+The network path is experimental until exact-revision CI and two-computer game
+acceptance are recorded. A successful relay handshake does not establish a
+complete Freeform or Commander game.
 
 ## Reusable visual elements and views
 

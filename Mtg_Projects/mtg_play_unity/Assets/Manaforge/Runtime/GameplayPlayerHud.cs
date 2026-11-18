@@ -25,6 +25,18 @@ namespace Manaforge.Play
         public event Action<string> PlayerActivated;
         public IEnumerable<PlayerPanel> Players=>seats.Values;
         public PlayerPanel Player(string id)=>id!=null && seats.TryGetValue(id,out var panel)?panel:null;
+        internal bool TryPlayerBounds(string id,VisualElement destination,out Rect bounds)
+        {
+            bounds=default;var seat=Player(id);if(destination?.panel==null || seat==null)return false;
+            VisualElement anchor=LifeDrawer?.IsOpen==false?(VisualElement)LifeDrawer.Tab:seat;
+            var world=anchor.worldBound;
+            for(var element=anchor;element!=null;element=element.parent){
+                if(element.resolvedStyle.display==DisplayStyle.None || element.resolvedStyle.visibility==Visibility.Hidden)return false;
+                if(element is ScrollView scroll){var clip=scroll.contentViewport.worldBound;world=Rect.MinMaxRect(Mathf.Max(world.xMin,clip.xMin),Mathf.Max(world.yMin,clip.yMin),Mathf.Min(world.xMax,clip.xMax),Mathf.Min(world.yMax,clip.yMax));}
+            }
+            if(world.width<=1 || world.height<=1){if(LifeDrawer==null)return false;world=LifeDrawer.Tab.worldBound;}
+            if(world.width<=1 || world.height<=1)return false;bounds=destination.WorldToLocal(world);return true;
+        }
         public static bool HasCommanderContent(string format)=>format=="commander" || format=="unrestricted_commander";
         public GameplayPlayerHud(bool localSeatAtBottom=false,GameplayHudRegistry registry=null,bool lifePanel=false){this.registry=registry;this.localSeatAtBottom=localSeatAtBottom;name="gameplay-player-hud";AddToClassList("mf-player-hud");pickingMode=PickingMode.Ignore;GameplayTheme.Attach(this);players.AddToClassList("mf-hud-players");players.contentContainer.style.flexDirection=FlexDirection.Row;players.contentContainer.style.flexWrap=Wrap.Wrap;commanders.AddToClassList("mf-hud-commanders");CommanderDrawer=new GameplayDrawer("Commanders",GameplayDrawerDirection.Left){name="commander-drawer"};CommanderDrawer.Content.Add(commanders);if(lifePanel){LifeDrawer=new GameplayDrawer("Players",GameplayDrawerDirection.Down,true){name="player-life-drawer"};LifeDrawer.AddToClassList("life-panel");LifeDrawer.Content.Add(players);Add(LifeDrawer);}else Add(players);Add(CommanderDrawer);if(localSeatAtBottom && !lifePanel)Add(localSeat);
             if(registry!=null){

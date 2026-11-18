@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.UIElements;
 namespace Manaforge.Play
@@ -10,6 +12,13 @@ namespace Manaforge.Play
         private readonly Button close;
         private VisualElement returnFocus;
         private bool disposed;
+        private readonly Dictionary<VisualElement,(PickingMode picking,bool focusable)> passive=new Dictionary<VisualElement,(PickingMode,bool)>();
+        private void Input(bool interactive)
+        {
+            foreach(var item in passive){item.Key.pickingMode=item.Value.picking;item.Key.focusable=item.Value.focusable;}passive.Clear();
+            if(interactive)return;
+            foreach(var item in content.Query<VisualElement>().ToList().Prepend(content)){passive[item]=(item.pickingMode,item.focusable);item.pickingMode=PickingMode.Ignore;item.focusable=false;}
+        }
         public GameplayOverlay(VisualElement content,Button close)
         {this.content=content;this.close=close;GameplayTheme.Button(close);content.RegisterCallback<DetachFromPanelEvent>(Detached);}
         private void Detached(DetachFromPanelEvent e){if(e.target==content)Hide(false);}
@@ -17,7 +26,7 @@ namespace Manaforge.Play
         {
             if(disposed)return;
             if(interactive && origin!=null)returnFocus=origin;
-            content.pickingMode=interactive?PickingMode.Position:PickingMode.Ignore;
+            Input(interactive);content.pickingMode=interactive?PickingMode.Position:PickingMode.Ignore;
             content.style.display=DisplayStyle.Flex;close.style.display=interactive?DisplayStyle.Flex:DisplayStyle.None;
             content.BringToFront();if(interactive)close.BringToFront();
         }
@@ -30,7 +39,7 @@ namespace Manaforge.Play
         }
         public void Hide(bool restoreFocus)
         {
-            content.style.display=DisplayStyle.None;close.style.display=DisplayStyle.None;content.pickingMode=PickingMode.Position;
+            content.style.display=DisplayStyle.None;close.style.display=DisplayStyle.None;content.pickingMode=PickingMode.Position;Input(true);
             var origin=returnFocus;returnFocus=null;
             if(restoreFocus && origin?.panel!=null && origin.style.display.value!=DisplayStyle.None)origin.Focus();
         }

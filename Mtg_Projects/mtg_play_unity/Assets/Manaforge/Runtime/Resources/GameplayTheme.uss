@@ -110,7 +110,7 @@
 .mf-gameplay-drawer { position: absolute; }
 .mf-drawer-tab { position: absolute; top: 0; left: 0; right: 0; height: 30px; min-height: 30px; margin: 0; }
 .mf-drawer-viewport { overflow: hidden; padding-top: 32px; }
-.mf-drawer-content { transition-property: translate, opacity; transition-duration: 230ms; transition-timing-function: ease-out; }
+.mf-drawer-content { background-color: rgb(9, 14, 19); transition-property: translate, opacity; transition-duration: 230ms; transition-timing-function: ease-out; }
 .drawer-left .mf-drawer-content { translate: -100% 0; opacity: 0; }
 .drawer-right .mf-drawer-content { translate: 100% 0; opacity: 0; }
 .drawer-up .mf-drawer-content { translate: 0 -100%; opacity: 0; }
@@ -198,3 +198,45 @@
 #organization-name > .unity-base-field__label { min-width: 42px; }
 #organization-prompt-actions .mf-action { min-width: 90px; margin-left: 6px; }
 #organization-status { margin-top: 8px; }
+
+#table-phase-strip { position: absolute; top: 58px; left: 215px; flex-direction: row; height: 28px; }
+.phase-strip-button { min-width: 54px; height: 26px; margin-right: 3px; font-size: 12px; color: rgb(157, 168, 179); background-color: rgb(31, 39, 47); border-width: 1px; border-color: rgb(65, 76, 87); transition-property: background-color, border-color, color; transition-duration: 120ms; }
+.phase-strip-button.phase-active { color: rgb(255, 225, 175); background-color: rgb(84, 59, 36); border-color: rgb(231, 161, 82); }
+.phase-strip-button.phase-stopped { border-bottom-width: 3px; border-bottom-color: rgb(109, 183, 235); }
+.reduced-motion .phase-strip-button { transition-duration: 0ms; }
+
+#mana.mana-cost-adjusted { border-bottom-width: 2px; border-bottom-color: rgb(111, 180, 220); }
+
+/* Gameplay uses direct panning and focus navigation, without scrollbar chrome. */
+#arena-table .unity-scroller { display: none; }
+
+/* Arena-style priority: stable slots shared by next, resolve and explicit passing. */
+.mf-priority-actions { height: 230px; min-height: 230px; flex-shrink: 0; position: relative; }
+.priority-actions-header { flex-direction: row; height: 26px; align-items: center; }
+#priority-actions-heading { flex-grow: 1; font-size: 16px; color: var(--mf-muted); }
+#priority-actions-settings { font-size: 11px; height: 26px; min-height: 26px; min-width: 0; padding: 2px 6px; }
+#priority-actions-detail { position: absolute; top: 34px; left: 0; right: 0; height: 44px; font-size: 15px; white-space: normal; color: var(--mf-ink); }
+#priority-actions-mana { position: absolute; top: 79px; left: 0; right: 0; height: 20px; font-size: 12px; color: var(--mf-muted); }
+#priority-actions-alternatives { position: absolute; top: 101px; left: 0; right: 0; font-size: 12px; }
+#priority-actions-alternatives > .unity-foldout__content { background-color: rgb(19,26,34); border-width: 1px; border-color: var(--mf-metal); }
+#priority-actions-primary { position: absolute; top: 134px; left: 0; right: 0; height: 44px; min-height: 44px; margin: 0; font-size: 22px; }
+#priority-actions-secondary { position: absolute; top: 190px; left: 0; right: 0; height: 32px; min-height: 32px; margin: 0; font-size: 14px; }
+
+#priority-actions-secondary { right: 36px; }
+#priority-actions-more { position: absolute; top: 190px; right: 0; width: 30px; min-width: 30px; height: 32px; min-height: 32px; margin: 0; padding: 0; }
+#priority-actions-yield-menu { position: absolute; bottom: 36px; left: 0; right: 0; background-color: rgb(19,26,34); border-width: 1px; border-color: var(--mf-metal); padding: 6px; }
+#priority-actions-yield-menu Button { height: 32px; min-height: 32px; margin: 2px 0; font-size: 13px; }
+
+/* Amount assignment uses recipient tiles instead of squeezed form labels. */
+.amount-recipients { flex-direction: row; flex-wrap: wrap; align-items: flex-start; }
+.amount-recipient { width: 206px; min-width: 206px; flex-shrink: 0; padding: 10px; margin: 6px; background-color: rgb(31,43,55); border-width: 1px; border-color: rgb(88,109,125); border-radius: 6px; }
+.amount-recipient-handle { height: 25px; color: rgb(165,187,205); font-size: 12px; }
+.amount-recipient-name { min-height: 56px; white-space: normal; font-size: 17px; color: rgb(245,242,230); flex-shrink: 0; }
+.amount-recipient-limits { font-size: 12px; color: rgb(175,190,204); margin-bottom: 8px; }
+.amount-stepper { flex-direction: row; align-items: center; justify-content: space-between; height: 42px; }
+.amount-value .unity-text-field__input { font-size: 20px; -unity-text-align: middle-center; color: rgb(250,247,235); background-color: rgb(17,25,34); }
+.amount-recipient-dragging { border-color: rgb(239,167,80); background-color: rgb(51,63,75); }
+.numeric-total { margin-top: 8px; margin-bottom: 8px; font-size: 17px; color: rgb(239,207,151); white-space: normal; }
+#amount-assignment-popup { border-width: 1px; border-top-width: 3px; border-color: rgb(109,126,139); border-top-color: rgb(239,150,75); border-radius: 8px; }
+
+.amount-recipient-artwork { height: 210px; min-height: 210px; align-items: center; justify-content: center; margin-bottom: 8px; flex-shrink: 0; }

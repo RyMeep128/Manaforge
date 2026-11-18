@@ -69,7 +69,7 @@ def test_available_alternative_never_substitutes_for_missing_selected_art(
     ]
 
 
-def test_unsupported_printing_is_explicit_and_no_deck_or_source_path_is_exported(
+def test_missing_nonstandard_printing_is_explicit_without_exporting_deck_or_path(
     tmp_path,
 ):
     payload = card("selected", type_line="Creature")
@@ -80,7 +80,7 @@ def test_unsupported_printing_is_explicit_and_no_deck_or_source_path_is_exported
     )
     assert (
         manifest["entries"] == []
-        and manifest["unavailable"][0]["code"] == "ARTWORK_FACE_UNSUPPORTED"
+        and manifest["unavailable"][0]["code"] == "ARTWORK_MISSING"
     )
     assert "deck" not in json.dumps(manifest) and "local_path" not in json.dumps(
         manifest

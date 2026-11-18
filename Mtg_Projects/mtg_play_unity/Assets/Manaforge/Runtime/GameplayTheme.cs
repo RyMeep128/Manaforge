@@ -42,7 +42,7 @@ namespace Manaforge.Play
             panel.Root.AddToClassList("mf-decision");panel.Root.style.backgroundColor=StyleKeyword.Null;
             foreach(string name in new[]{"decision-prompt","decision-status","decision-mana-pool"}){var label=panel.Root.Q<Label>(name);if(label!=null)label.style.color=StyleKeyword.Null;}
             foreach (var button in panel.Root.Query<Button>().ToList()) {
-                bool primary = button.name == "decision-finish" || button.name == "decision-number-submit";
+                bool primary = button.name == "priority-actions-primary" || button.name == "decision-finish" || button.name == "decision-number-submit";
                 if (button.name != null && button.name.StartsWith("decision-action-", StringComparison.Ordinal)
                     && int.TryParse(button.name.Substring(16), out int i) && i >= 0 && i < frame.Actions.Count)
                     primary = frame.Actions[i].Kind == "pass" && !(frame.Actions[i].Label ?? "").StartsWith("Cancel", StringComparison.OrdinalIgnoreCase);

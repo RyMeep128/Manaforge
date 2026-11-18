@@ -21,6 +21,16 @@ namespace Manaforge.Play.Tests
         private static ProjectedCardFrame Cards(JObject wire)=>ViewerCardProjection.ParseSnapshot(wire.ToString(),"fixture-0001","one",0,true);
         private static ProjectedDecisionFrame Decision(JObject wire)=>ViewerDecisionProjection.ParseSnapshot(wire.ToString(),"fixture-0001","one",0,true);
         private static void Observe(ViewerAnimationJournal journal,JObject wire)=>journal.Observe(Cards(wire),Decision(wire));
+        [Test] public void PhaseOnlyRevisionsDoNotReplayTapOrMovement()
+        {
+            var wire=Source();var snapshot=wire["body"]["snapshot"];var journal=new ViewerAnimationJournal();Observe(journal,wire);
+            snapshot["revision"]=2;snapshot["objects"][0]["tapped"]=true;Observe(journal,wire);
+            Assert.That(journal.TakeThrough(2).SelectMany(batch=>batch.Cues).Count(cue=>cue.Kind==GameplayMotionKind.Tap),Is.EqualTo(1));
+            foreach(string step in new[]{"BEGIN_COMBAT","DECLARE_ATTACKERS","END_COMBAT","POSTCOMBAT_MAIN"}){
+                snapshot["revision"]=(long)snapshot["revision"]+1;snapshot["step"]=step;snapshot["phase"]=step=="POSTCOMBAT_MAIN"?step:"COMBAT";Observe(journal,wire);
+                Assert.That(journal.TakeThrough((long)snapshot["revision"]),Is.Empty);
+            }
+        }
         [Test] public void RevealGroupsSurviveSnapshotsAndRequireOrderedAcknowledgement()
         {
             var wire=Source();var snapshot=wire["body"]["snapshot"];

@@ -22,6 +22,7 @@ namespace Manaforge.Play
         private readonly Dictionary<string,Vector2> points=new Dictionary<string,Vector2>();
         private readonly Dictionary<string,(ProjectedCard card,CardView view)> bindings=new Dictionary<string,(ProjectedCard,CardView)>();
         private string session,viewer;private long revision=-1,lastBatchRevision=-1;private float? holdStarted;
+        private int anchorsReadyFrame;
         private bool disposed,lastReduced,showingResult;private string lastResult;
         private sealed class Work
         {public GameplayMotionCue Cue;public Vector2? Prior;public float Ready,Queued;}
@@ -57,7 +58,7 @@ namespace Manaforge.Play
         public void Observe(ProjectedDecisionFrame frame,IEnumerable<GameplayMotionBatch> batches)
         {
             if(disposed || frame==null)return;
-            if(session!=frame.Context.SessionId || viewer!=frame.Context.ViewerId){Clear();session=frame.Context.SessionId;viewer=frame.Context.ViewerId;}
+            if(session!=frame.Context.SessionId || viewer!=frame.Context.ViewerId){int ready=anchorsReadyFrame;Clear();anchorsReadyFrame=ready;session=frame.Context.SessionId;viewer=frame.Context.ViewerId;}
             if(frame.Context.Revision<revision)return;revision=frame.Context.Revision;
             RefreshBindings();
             var incoming=batches.ToList();
@@ -81,10 +82,11 @@ namespace Manaforge.Play
                 }
                 if(group.Count>0)pending.Enqueue(group);
             }
-            // Capture screen positions only, never old textures or card characteristics.
-            points.Clear();foreach(var pair in bindings){if(Displayed(pair.Value.view))points[pair.Key]=Center(pair.Value.view);else if(pair.Value.card.Zone=="battlefield" && !pair.Value.card.Hidden && pair.Value.card.FaceDown==false){var anchor=objectAnchor?.Invoke(pair.Value.card.ObjectId);if(anchor.HasValue)points[pair.Key]=anchor.Value;}}
             if(HasMajor && !holdStarted.HasValue)holdStarted=clock();
         }
+        // UI Toolkit resolves geometry after presentation. Existing effects keep
+        // their clocks; only new effects wait for the final destination anchors.
+        internal void AfterLayout(){anchorsReadyFrame=Time.frameCount+1;}
         private void RefreshBindings()
         {
             bindings.Clear();surface.VisitAnimationBindings((card,view)=>bindings[card.RenderId]=(card,view));
@@ -94,7 +96,7 @@ namespace Manaforge.Play
             foreach(var id in new[]{cue.SubjectId,cue.RelatedId})if(id!=null){var card=surface.AnimationCard(id);if(card==null){if(!playerAnchor(id).HasValue)return true;}else if(card.Hidden || card.FaceDown!=false)return true;}
             return false;
         }
-        private static bool Displayed(CardView view)=>view.parent!=null && view.style.display.value!=DisplayStyle.None && view.worldBound.width>1 && view.worldBound.height>1;
+        private static bool Displayed(CardView view)=>view.parent!=null && BattlefieldCardAnchorResolver.TryCenter(view.parent,view,out _);
         private Vector2 Center(VisualElement element)=>root.WorldToLocal(element.worldBound.center);
         private Vector2 Middle=>new Vector2(Mathf.Max(1,root.resolvedStyle.width)*.5f,Mathf.Max(1,root.resolvedStyle.height)*.42f);
         private Vector2? Anchor(string id)
@@ -125,7 +127,7 @@ namespace Manaforge.Play
                 if(lost || t>=1){run.Root.RemoveFromHierarchy();active.RemoveAt(i);continue;}
                 Render(run,t);
             }
-            while(active.Count<MaximumActive && pending.Count>0){
+            while(Time.frameCount>=anchorsReadyFrame && active.Count<MaximumActive && pending.Count>0){
                 var group=pending.Peek();bool started=false;
                 for(int i=0;i<group.Count && active.Count<MaximumActive;){
                     var work=group[i];
@@ -137,7 +139,8 @@ namespace Manaforge.Play
                 if(group.Count==0)pending.Dequeue();else if(!started)break;
             }
             if(!HasMajor && !surface.HasPendingMajorAnimations)holdStarted=null;
-            foreach(var pair in bindings){if(Displayed(pair.Value.view))points[pair.Key]=Center(pair.Value.view);else if(pair.Value.card.Zone=="battlefield" && !pair.Value.card.Hidden && pair.Value.card.FaceDown==false){var anchor=objectAnchor?.Invoke(pair.Value.card.ObjectId);if(anchor.HasValue)points[pair.Key]=anchor.Value;}}
+            if(Time.frameCount>=anchorsReadyFrame){points.Clear();foreach(var pair in bindings){if(Displayed(pair.Value.view))points[pair.Key]=Center(pair.Value.view);else if(pair.Value.card.Zone=="battlefield" && !pair.Value.card.Hidden && pair.Value.card.FaceDown==false){var anchor=objectAnchor?.Invoke(pair.Value.card.ObjectId);if(anchor.HasValue)points[pair.Key]=anchor.Value;}}
+            }
             if(active.Count>0)layer.BringToFront();
         }
         private void Start(Work work,float now,bool minimal)
@@ -209,7 +212,7 @@ namespace Manaforge.Play
             }
         }
         private void ClearEffects(){foreach(var run in active)run.Root.RemoveFromHierarchy();active.Clear();pending.Clear();holdStarted=null;}
-        public void Clear(){ClearEffects();bindings.Clear();points.Clear();session=viewer=null;revision=-1;lastBatchRevision=-1;lastReduced=false;showingResult=false;lastResult=null;}
+        public void Clear(){ClearEffects();bindings.Clear();points.Clear();session=viewer=null;revision=-1;lastBatchRevision=-1;lastReduced=false;showingResult=false;lastResult=null;anchorsReadyFrame=0;}
         public void Dispose(){if(disposed)return;Clear();disposed=true;ticker.Pause();surface.Clearing-=Clear;root.UnregisterCallback<DetachFromPanelEvent>(Detached);layer.RemoveFromHierarchy();}
     }
 }

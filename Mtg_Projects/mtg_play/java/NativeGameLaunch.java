@@ -6,11 +6,18 @@ import manaforge.protocol.PlayContracts.CardIdentity;
 
 /** Gateway-private projection of a validated saved-deck manifest. No card resolution or rules. */
 public final class NativeGameLaunch {
-    private final LaunchManifest manifest;private final LaunchSeat human,ai;
+    private final LaunchManifest manifest;private final LaunchSeat human,ai;private final boolean multiplayer;
     public NativeGameLaunch(LaunchManifest manifest) throws IOException {
+        this(manifest,0,false);
+    }
+    public NativeGameLaunch(LaunchManifest manifest,int perspective,boolean multiplayer) throws IOException {
         if(manifest==null || !Arrays.asList("freeform","commander","unrestricted_commander").contains(manifest.format) || manifest.seats.length!=2)throw new IOException("UNITY_GAME_SETUP_UNSUPPORTED");
-        this.manifest=manifest;LaunchSeat h=null,a=null;
+        this.manifest=manifest;this.multiplayer=multiplayer;LaunchSeat h=null,a=null;
+        for(LaunchSeat seat:manifest.seats)if(!seat.seat_id.matches("[A-Za-z0-9_.:-]{1,128}") || seat.document.deck.companion_entry_id!=null || "freeform".equals(manifest.format) && seat.document.deck.commander_entry_ids.length!=0)throw new IOException("UNITY_GAME_SETUP_UNSUPPORTED");
+        if(multiplayer){if(perspective<0 || perspective>1 || !manifest.seats[0].controller.equals("local_human") || !manifest.seats[1].controller.equals("local_human"))throw new IOException("MULTIPLAYER_SETUP_UNSUPPORTED");h=manifest.seats[perspective];a=manifest.seats[1-perspective];}
+        else {
         for(LaunchSeat seat:manifest.seats){if(("freeform".equals(manifest.format) && seat.document.deck.commander_entry_ids.length!=0) || seat.document.deck.companion_entry_id!=null)throw new IOException("UNITY_GAME_SETUP_UNSUPPORTED");if(!seat.seat_id.matches("[A-Za-z0-9_.:-]{1,128}"))throw new IOException("UNITY_GAME_SEAT_INVALID");if(seat.controller.equals("local_human")){if(h!=null)throw new IOException("UNITY_GAME_SETUP_UNSUPPORTED");h=seat;}else if(seat.controller.equals("engine_ai")){if(a!=null)throw new IOException("UNITY_GAME_SETUP_UNSUPPORTED");a=seat;}else throw new IOException("UNITY_GAME_SETUP_UNSUPPORTED");}
+        }
         if(h==null || a==null || !manifest.manifest_id.matches("[A-Za-z0-9_.:-]{1,128}"))throw new IOException("UNITY_GAME_SETUP_UNSUPPORTED");human=h;ai=a;
         cards(false,false);cards(true,false);cards(false,true);cards(true,true);if(format().equals("commander") && (designations(human).isEmpty() || designations(ai).isEmpty()))throw new IOException("UNITY_GAME_SETUP_UNSUPPORTED");
     }
@@ -24,7 +31,7 @@ public final class NativeGameLaunch {
         if(!expected.equals(actual))throw new IOException("UNITY_GAME_COMMANDERS_MISMATCH");
     }
     public String format(){return manifest.format;}
-    public String session(){return manifest.manifest_id;}
+    public String session(){return manifest.manifest_id+(multiplayer?"-"+human.seat_id:"");}
     public String viewer(){return human.seat_id;}
     public JsonArray controllers(){JsonArray result=new JsonArray();for(LaunchSeat seat:manifest.seats)result.add(seat.controller);return result;}
     public JsonArray cards(boolean opponent,boolean sideboard) throws IOException {

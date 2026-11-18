@@ -31,7 +31,9 @@ def select_decks(widget):
 
 
 def test_only_start_button_launches_unity_with_selected_decks(launcher, monkeypatch):
-    assert [b.text() for b in launcher.findChildren(W.QPushButton)] == ["Start Game"]
+    assert launcher.start_button.text() == "Start Game"
+    assert launcher.mode.currentData() == "offline"
+    assert launcher.multiplayer.isHidden()
     assert not launcher.start_button.isEnabled()
     select_decks(launcher)
     launch = Mock()

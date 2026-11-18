@@ -243,9 +243,28 @@ public final class NativePaymentAcceptanceChecks {
             System.out.println("Payment production path: phyrexian-life-then-two-ordinary-casts "+payment.report());
         }
     }
+    static void displayCostQuotes() throws Exception {
+        try(Engine engine=new Engine()){
+            List<UUID> ids=new ArrayList<>();
+            for(int i=0;i<4;i++)engine.load(new mage.cards.o.Ornithopter(engine.payer.getId(),info("Ornithopter")),Zone.BATTLEFIELD);
+            Card enforcer=engine.load(new mage.cards.m.MyrEnforcer(engine.payer.getId(),info("Myr Enforcer")),Zone.HAND);
+            Card thoughtcast=engine.load(new mage.cards.t.Thoughtcast(engine.payer.getId(),info("Thoughtcast")),Zone.HAND);
+            Card frog=engine.load(new mage.cards.f.Frogmite(engine.payer.getId(),info("Frogmite")),Zone.HAND);
+            Card red=engine.load(new Probe(engine.payer.getId(),"{3}{R}"),Zone.HAND);
+            for(Card card:new Card[]{enforcer,thoughtcast,frog,red})ids.add(card.getId());engine.game.applyEffects();
+            int cycle=engine.game.getState().getApplyEffectsCounter();String original=enforcer.getSpellAbility().getManaCostsToPay().getText();
+            Map<UUID,String> quoted=manaforge.payment.xmage.NativePaymentSearch.displayCosts(engine.game,engine.payer.getId(),ids);
+            check("{3}".equals(quoted.get(enforcer.getId())),"DISPLAY_AFFINITY_ENFORCER");check("{U}".equals(quoted.get(thoughtcast.getId())),"DISPLAY_AFFINITY_THOUGHTCAST");check("{0}".equals(quoted.get(frog.getId())),"DISPLAY_AFFINITY_FREE");
+            check(cycle==engine.game.getState().getApplyEffectsCounter() && original.equals(enforcer.getSpellAbility().getManaCostsToPay().getText()),"DISPLAY_QUOTE_MUTATED_LIVE_GAME");
+            check(manaforge.payment.xmage.NativePaymentSearch.displayCosts(engine.game,engine.opponent.getId(),ids).isEmpty(),"DISPLAY_QUOTE_WRONG_VIEWER");
+            engine.load(new mage.cards.r.RubyMedallion(engine.payer.getId(),info("Ruby Medallion")),Zone.BATTLEFIELD);engine.game.applyEffects();
+            quoted=manaforge.payment.xmage.NativePaymentSearch.displayCosts(engine.game,engine.payer.getId(),ids);
+            check("{2}{R}".equals(quoted.get(red.getId())),"DISPLAY_RUBY_MEDALLION");
+        }
+    }
     public static void main(String[] args) throws Exception {
         Thread.currentThread().setName("GAME-payment-acceptance-owner");String mountain="mage.cards.basiclands.Mountain",forest="mage.cards.basiclands.Forest",island="mage.cards.basiclands.Island";
-        phyrexianThenOrdinary();
+        displayCostQuotes();phyrexianThenOrdinary();
         String[] artifacts={"mage.cards.s.SeatOfTheSynod","mage.cards.g.GreatFurnace","mage.cards.v.VaultOfWhispers",mountain};
         scenario("artifact-flying","{U}",new String[]{island,island},false,false,false,false);
         scenario("affinity-enforcer","{7}",artifacts,false,false,false,false);

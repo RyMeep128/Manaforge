@@ -28,6 +28,43 @@ namespace Manaforge.Play.Tests
             node=new GameObject("Reusable HUD/drawers");settings=ScriptableObject.CreateInstance<PanelSettings>();settings.themeStyleSheet=Resources.Load<ThemeStyleSheet>("CardTheme");
             var doc=node.AddComponent<UIDocument>();doc.panelSettings=settings;return doc;
         }
+        [UnityTest] public IEnumerator AmountAssignmentUsesWidePopupAndMinimizesWithoutLosingInput()
+        {
+            var wire=Fixture("receive-history-v1.json");var snapshot=wire["body"]["snapshot"];snapshot["turn"]=2;snapshot["actions"]=new JArray();var decision=snapshot["decision"];decision["family"]="amounts";decision["is_priority"]=false;decision["options"]=new JArray();decision["minimum"]=5;decision["maximum"]=5;decision["can_finish"]=false;decision["cancellable"]=false;decision["amounts"]=new JArray(new JObject{["label"]="Soldier Token, P/T: 2/2",["minimum"]=0,["maximum"]=5,["default"]=2},new JObject{["label"]="Krenko, Tin Street Kingpin, P/T: 3/3",["minimum"]=0,["maximum"]=5,["default"]=3});
+            var doc=Document(out var node,out var settings);doc.rootVisualElement.style.width=1280;doc.rootVisualElement.style.height=720;using var arena=new ArenaGameplayPresentation(doc.rootVisualElement);using var peer=new ViewerSessionHostTests.Peer(wire.ToString());var owner=new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);using var host=new ViewerSessionHost(arena.Surface,peer.Bootstrap(),owner.Task,true);arena.Bind(host);
+            try{
+                float deadline=Time.realtimeSinceStartup+10;while(host.PresentedDecision==null && Time.realtimeSinceStartup<deadline){host.Tick();yield return null;}Assert.That(host.PresentedDecision,Is.Not.Null);arena.Decisions.Tick();arena.Present(host.PresentedDecision.Frame);yield return null;yield return null;
+                var root=doc.rootVisualElement;var overlay=root.Q("amount-assignment-overlay");var popup=root.Q("amount-assignment-popup");Assert.That(overlay.style.display.value,Is.EqualTo(DisplayStyle.Flex));Assert.That(popup.resolvedStyle.width,Is.GreaterThan(700));Assert.That(popup.Contains(arena.Decisions.Root),Is.True);
+                var field=arena.Decisions.Root.Q<TextField>("decision-number-0");field.value="2";var minimize=root.Q<Button>("minimize-amount-assignment");using(var submit=NavigationSubmitEvent.GetPooled()){submit.target=minimize;minimize.SendEvent(submit);}yield return null;
+                Assert.That(overlay.style.display.value,Is.EqualTo(DisplayStyle.None));var reopen=root.Q<Button>("reopen-amount-assignment");Assert.That(reopen.style.display.value,Is.EqualTo(DisplayStyle.Flex));Assert.That(field.value,Is.EqualTo("2"));Assert.That(peer.PendingCommandBytes,Is.Zero);
+                Assert.That(arena.BrowsePublicZone("graveyard","one"),Is.True);yield return null;using(var submit=NavigationSubmitEvent.GetPooled()){submit.target=reopen;reopen.SendEvent(submit);}yield return null;Assert.That(root.Q<ZoneBrowser>().style.display.value,Is.EqualTo(DisplayStyle.None));Assert.That(overlay.style.display.value,Is.EqualTo(DisplayStyle.Flex));Assert.That(arena.Decisions.Root.Q<TextField>("decision-number-0"),Is.SameAs(field));Assert.That(field.value,Is.EqualTo("2"));
+                foreach(var size in new[]{new Vector2(1280,720),new Vector2(1920,1080)}){doc.rootVisualElement.style.width=size.x;doc.rootVisualElement.style.height=size.y;yield return null;yield return null;Assert.That(popup.worldBound.width,Is.LessThan(size.x));Assert.That(field.resolvedStyle.width,Is.GreaterThanOrEqualTo(80));}
+                host.Cancel();host.Tick();yield return null;Assert.That(overlay.style.display.value,Is.EqualTo(DisplayStyle.None));
+            }finally{host.Cancel();UnityEngine.Object.Destroy(node);UnityEngine.Object.Destroy(settings);}yield return null;
+        }
+        [UnityTest] public IEnumerator PassivePriorityTextSettlesWithoutBlankingOrReplayingOldUpdates()
+        {
+            var doc=Document(out var node,out var settings);var label=new Label();doc.rootVisualElement.Add(label);yield return null;
+            try{
+                StableStatusText.Set(label,"Your priority");StableStatusText.Set(label,"Waiting");StableStatusText.Set(label,"Opponent priority");
+                Assert.That(label.text,Is.EqualTo("Your priority"));yield return new WaitForSeconds(.14f);Assert.That(label.text,Is.EqualTo("Opponent priority"));
+                StableStatusText.Set(label,"Your priority");StableStatusText.Set(label,"Paused",immediate:true);yield return new WaitForSeconds(.14f);Assert.That(label.text,Is.EqualTo("Paused"));
+            }finally{UnityEngine.Object.Destroy(node);UnityEngine.Object.Destroy(settings);}
+        }
+        [UnityTest] public IEnumerator PhaseStripKeepsItsButtonsAndStopsAcrossPhaseUpdates()
+        {
+            var doc=Document(out var node,out var settings);var policy=new UnityPriorityPolicy();var strip=new GameplayPhaseStrip(doc.rootVisualElement,()=>policy,()=>{});
+            try{
+                var wire=Fixture("receive-history-v1.json");var snapshot=wire["body"]["snapshot"];snapshot["phase"]="PRECOMBAT_MAIN";snapshot["step"]="PRECOMBAT_MAIN";
+                string session=(string)snapshot["session_id"],viewer=(string)snapshot["viewer_id"];
+                strip.Present(ViewerDecisionProjection.ParseSnapshot(wire.ToString(),session,viewer,0,true),policy);
+                var main=strip.Root.Q<Button>("phase-stop-PRECOMBAT_MAIN");Assert.That(main.ClassListContains("phase-active"),Is.True);
+                using(var submit=NavigationSubmitEvent.GetPooled()){submit.target=main;main.SendEvent(submit);}Assert.That(policy.Current.Stops,Does.Contain("phase:PRECOMBAT_MAIN"));
+                snapshot["revision"]=(long)snapshot["revision"]+1;snapshot["phase"]="COMBAT";snapshot["step"]="BEGIN_COMBAT";
+                strip.Present(ViewerDecisionProjection.ParseSnapshot(wire.ToString(),session,viewer,0,true),policy);
+                Assert.That(strip.Root.Q<Button>("phase-stop-PRECOMBAT_MAIN"),Is.SameAs(main));Assert.That(main.ClassListContains("phase-stopped"),Is.True);Assert.That(strip.Root.Q<Button>("phase-stop-COMBAT").ClassListContains("phase-active"),Is.True);
+            }finally{UnityEngine.Object.Destroy(node);UnityEngine.Object.Destroy(settings);}yield return null;
+        }
         [UnityTest] public IEnumerator LifePanelShowsEverySeatAndIndependentCommanderDamage(){
             var doc=Document(out var node,out var settings);doc.rootVisualElement.style.width=1280;doc.rootVisualElement.style.height=720;
             using var surface=new ViewerCardSurface(doc.rootVisualElement);using var registry=new GameplayHudRegistry();using var hud=new GameplayPlayerHud(registry:registry,lifePanel:true);doc.rootVisualElement.Add(hud);doc.rootVisualElement.Add(hud.LifeDrawer);hud.LifeDrawer.style.width=285;hud.LifeDrawer.style.left=16;hud.LifeDrawer.style.top=60;
@@ -40,6 +77,21 @@ namespace Manaforge.Play.Tests
                 string selected=null;hud.PlayerActivated+=id=>selected=id;hud.SetTargetable(id=>id=="two");hud.LifeDrawer.SetOpen(true);hud.Player("two").Activate();Assert.That(selected,Is.EqualTo("two"));
                 hud.Present(Frame(envelope),surface,"freeform");Assert.That(original.Q("player-commander-damage").style.display.value,Is.EqualTo(DisplayStyle.None));Assert.That(original.Q<Label>("seat-life").text,Is.EqualTo("33"));hud.ClearPresentation();Assert.That(hud.Players,Is.Empty);Assert.That(hud.LifeDrawer.style.display.value,Is.EqualTo(DisplayStyle.None));
             }finally{UnityEngine.Object.Destroy(node);UnityEngine.Object.Destroy(settings);}
+        }
+        [UnityTest] public IEnumerator ExpandedDrawersCoverUnderlyingContentAndLatestInteractionWins()
+        {
+            var doc=Document(out var node,out var settings);var root=doc.rootVisualElement;
+            var behind=new Button(){name="behind-drawers"};behind.style.position=Position.Absolute;behind.style.left=20;behind.style.top=60;behind.style.width=240;behind.style.height=160;root.Add(behind);
+            using var first=new GameplayDrawer("First",GameplayDrawerDirection.Down);using var second=new GameplayDrawer("Second",GameplayDrawerDirection.Down);
+            foreach(var drawer in new[]{first,second}){root.Add(drawer);drawer.style.position=Position.Absolute;drawer.style.left=20;drawer.style.top=20;drawer.style.width=240;drawer.Viewport.style.width=240;drawer.Viewport.style.height=180;drawer.Content.style.width=240;drawer.Content.style.height=180;drawer.SetReducedMotion(true);}
+            try{
+                first.SetOpen(true);second.SetOpen(true);yield return null;yield return null;
+                var point=second.Content.worldBound.center;
+                Assert.That(root.panel.Pick(point),Is.SameAs(second.Content),"The solid drawer body must receive clicks instead of the content behind it");
+                first.SetOpen(true);yield return null;Assert.That(root.panel.Pick(point),Is.SameAs(first.Content));
+                first.SetOpen(false);yield return null;Assert.That(root.panel.Pick(point),Is.SameAs(second.Content));
+                second.SetOpen(false);yield return null;Assert.That(root.panel.Pick(point),Is.SameAs(behind));
+            }finally{UnityEngine.Object.Destroy(node);UnityEngine.Object.Destroy(settings);}yield return null;
         }
         [Test] public void DrawerCyclesKeepChildrenAndNeverEnableDisabledCommands()
         {

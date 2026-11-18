@@ -188,8 +188,15 @@ namespace Manaforge.Play.Tests
         public void FixtureGridContainsPermanentExamplesAndKeepsOtherCardsForInspection(string typeLine,bool expected)
         {Assert.That(CardCompactProfile.IsFixturePermanent(typeLine),Is.EqualTo(expected));}
         [TestCase("Instant")] [TestCase("Sorcery")]
-        public void NonPermanentSpellsDoNotReceiveBattlefieldProfiles(string typeLine)
-        {Assert.That(CardCompactProfile.FromMetadata("normal",typeLine),Is.Null);}
+        public void NonPermanentSpellsKeepLiveRenderingWithoutInventingStats(string typeLine)
+        {
+            var profile=CardCompactProfile.FromMetadata("normal",typeLine);Assert.That(profile,Is.Not.Null);Assert.That(profile.MayHavePrintedStats,Is.False);
+            view.Bind(Identity(false),texture,profile.Crop);view.SetPresentation(CardPresentationMode.Full,300);
+            view.UpdateValues(new CardDisplayValues(typeLine=="Instant"?"Krosan Grip":"Rampant Growth",typeLine=="Instant"?"{2}{G}":"{1}{G}",typeLine,"Engine-provided spell text",null,null,profile));
+            Assert.That(view.Q<Label>("name").style.display.value,Is.EqualTo(DisplayStyle.Flex));Assert.That(view.Q<ScrollView>("rules-scroll").style.display.value,Is.EqualTo(DisplayStyle.Flex));
+            Assert.That(view.Q<ManaCostView>().SymbolCount,Is.EqualTo(2));Assert.That(view.Q<Image>("artwork").uv,Is.EqualTo(profile.Crop));
+            view.SetOriginalPrinting(true);Assert.That(view.Q<Image>("artwork").uv,Is.EqualTo(new Rect(0,0,1,1)));view.SetOriginalPrinting(false);Assert.That(view.Q<Image>("artwork").uv,Is.EqualTo(profile.Crop));
+        }
         [Test] public void OrdinaryCounterValuesNeverUseThePlaneswalkerBadge()
         {
             var view=new CardView();
@@ -254,6 +261,15 @@ namespace Manaforge.Play.Tests
                 Assert.That(view.Q<VisualElement>("printed-stats-mask").style.display.value,Is.EqualTo(expected));
                 Assert.That(view.Artwork,Is.SameAs(texture));
             }
+        }
+        [Test] public void OriginalPrintingUsesTheWholeImageAndRestoresLiveValues()
+        {
+            view.SetPresentation(CardPresentationMode.Full,300);view.UpdateValues(Values());
+            Assert.That(view.CanShowOriginalPrinting,Is.True);view.SetOriginalPrinting(true);
+            Assert.That(view.ShowingOriginalPrinting,Is.True);Assert.That(view.Q<Image>("artwork").uv,Is.EqualTo(new Rect(0,0,1,1)));
+            Assert.That(view.Q<ManaCostView>().style.display.value,Is.EqualTo(DisplayStyle.None));Assert.That(view.Q<Label>("name").style.display.value,Is.EqualTo(DisplayStyle.None));
+            view.SetOriginalPrinting(false);Assert.That(view.Q<Label>("name").text,Is.EqualTo("Mock creature"));Assert.That(view.Q<ManaCostView>().Cost,Is.EqualTo("{X}{G}"));
+            Assert.That(view.Artwork,Is.SameAs(texture));view.Conceal();Assert.That(view.CanShowOriginalPrinting,Is.False);Assert.That(view.ShowingOriginalPrinting,Is.False);
         }
         [Test] public void InvalidLayoutInputIsRejected()
         {

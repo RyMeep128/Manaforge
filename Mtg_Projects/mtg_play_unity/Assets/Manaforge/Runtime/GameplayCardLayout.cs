@@ -5,9 +5,60 @@ using UnityEngine;
 using UnityEngine.UIElements;
 namespace Manaforge.Play
 {
-    // Geometry and paging of admitted views. Caller supplies space and identity-keyed page state.
+    // Continuous card strips, panned directly without scrollbar chrome or pages.
+    // Card instances stay surface-owned; only overflowing regions acquire a clipped parent.
+    internal sealed class GameplayScrollRegions : IDisposable
+    {
+        private readonly VisualElement owner;private readonly Dictionary<string,ScrollView> regions=new Dictionary<string,ScrollView>();
+        private readonly HashSet<string> used=new HashSet<string>();
+        internal GameplayScrollRegions(VisualElement owner){this.owner=owner;}
+        private Action<CardView> handLayout;
+        internal VisualElement Owner=>owner;
+        internal void SetHandLayout(Action<CardView> layout){handLayout=layout;}
+        internal void ClearHandLayout(){handLayout=null;}
+        internal void FocusHand(CardView view){handLayout?.Invoke(view);}
+        internal static void HideBars(ScrollView scroll){scroll.horizontalScrollerVisibility=scroll.verticalScrollerVisibility=ScrollerVisibility.Hidden;}
+        private static void DirectPan(ScrollView scroll,bool horizontal)
+        {
+            int pointer=-1;Vector2 origin=default,offset=default;
+            scroll.tooltip="Mouse wheel or middle-drag to pan; Tab to focus individual cards";
+            scroll.RegisterCallback<PointerDownEvent>(ev=>{if(ev.button!=2)return;pointer=ev.pointerId;origin=ev.position;offset=scroll.scrollOffset;scroll.CapturePointer(pointer);ev.StopImmediatePropagation();},TrickleDown.TrickleDown);
+            scroll.RegisterCallback<PointerMoveEvent>(ev=>{if(pointer!=ev.pointerId || !scroll.HasPointerCapture(pointer))return;var delta=(Vector2)ev.position-origin;scroll.scrollOffset=offset-(horizontal?new Vector2(delta.x,0):new Vector2(0,delta.y));ev.StopImmediatePropagation();},TrickleDown.TrickleDown);
+            scroll.RegisterCallback<PointerUpEvent>(ev=>{if(pointer!=ev.pointerId || ev.button!=2)return;scroll.ReleasePointer(pointer);pointer=-1;ev.StopImmediatePropagation();},TrickleDown.TrickleDown);
+            scroll.RegisterCallback<PointerCaptureOutEvent>(ev=>{if(ev.pointerId==pointer)pointer=-1;});
+            if(horizontal)scroll.RegisterCallback<WheelEvent>(ev=>{float delta=Mathf.Abs(ev.delta.x)>Mathf.Abs(ev.delta.y)?ev.delta.x:ev.delta.y;float limit=Mathf.Max(0,scroll.contentContainer.resolvedStyle.width-scroll.contentViewport.resolvedStyle.width);scroll.scrollOffset=new Vector2(Mathf.Clamp(scroll.scrollOffset.x+delta*45,0,limit),0);ev.StopImmediatePropagation();},TrickleDown.TrickleDown);
+        }
+        internal void Begin(){used.Clear();}
+        internal VisualElement Configure(string key,Rect bounds,Vector2 content,bool horizontal=false,VisualElement foreground=null)
+        {
+            var destination=foreground??owner;
+            if(horizontal?content.x<=bounds.width+.5f:content.y<=bounds.height+.5f)return destination;
+            used.Add(key);
+            if(!regions.TryGetValue(key,out var scroll)){
+                scroll=new ScrollView(horizontal?ScrollViewMode.Horizontal:ScrollViewMode.Vertical){name="card-scroll-"+key,pickingMode=PickingMode.Ignore};
+                scroll.contentViewport.pickingMode=scroll.contentContainer.pickingMode=PickingMode.Ignore;
+                scroll.style.position=Position.Absolute;scroll.style.backgroundColor=Color.clear;scroll.contentViewport.style.overflow=Overflow.Hidden;
+                HideBars(scroll);DirectPan(scroll,horizontal);scroll.mouseWheelScrollSize=45;
+                regions.Add(key,scroll);owner.Add(scroll);
+            }
+            if(scroll.parent!=destination)destination.Add(scroll);
+            scroll.style.display=DisplayStyle.Flex;scroll.style.left=bounds.x;scroll.style.top=bounds.y;scroll.style.width=bounds.width;scroll.style.height=bounds.height;
+            scroll.contentContainer.style.width=content.x;scroll.contentContainer.style.height=content.y;return scroll.contentContainer;
+        }
+        internal static void Place(CardView view,VisualElement parent,float x,float y,Rect bounds,VisualElement owner)
+        {
+            if(parent!=null && view.parent!=parent)parent.Add(view);
+            view.style.left=x-(parent!=null && parent!=owner?bounds.x:0);view.style.top=y-(parent!=null && parent!=owner?bounds.y:0);
+        }
+        internal void End(){foreach(var pair in regions)if(!used.Contains(pair.Key))pair.Value.style.display=DisplayStyle.None;}
+        public void Dispose(){handLayout=null;foreach(var scroll in regions.Values){foreach(var card in scroll.contentContainer.Children().ToArray())owner.Add(card);scroll.RemoveFromHierarchy();}regions.Clear();used.Clear();}
+    }
+    // Geometry of admitted views. Crowded rows overlap before becoming directly pannable strips.
     public static class GameplayCardLayout
     {
+        private static void Show(CardView view,ISet<CardView> visible)
+        {if(visible==null)view.style.display=DisplayStyle.Flex;else visible.Add(view);}
+
         // Persistent chrome only. Drawer state deliberately is not an input.
         // Opponents share rows until a dedicated multiplayer composition is introduced.
         public readonly struct BattlefieldGeometry
@@ -39,24 +90,21 @@ namespace Manaforge.Play
             order.RemoveAll(id=>!ids.Contains(id));
             foreach(var id in present)if(!order.Contains(id))order.Add(id);
         }
-        public static void Row(System.Collections.Generic.List<(ProjectedCard card,CardView view)> row,VisualElement navigation,System.Collections.Generic.Dictionary<string,int> rowPages,Action relayout,float width,float top,float left,float span,float size,bool full=false,string key=null,Vector2? reservedInterval=null){
+        public static void Row(System.Collections.Generic.List<(ProjectedCard card,CardView view)> row,VisualElement navigation,System.Collections.Generic.Dictionary<string,int> rowPages,Action relayout,float width,float top,float left,float span,float size,bool full=false,string key=null,Vector2? reservedInterval=null)
+            =>Row(row,navigation,rowPages,relayout,width,top,left,span,size,full,key,reservedInterval,null);
+        internal static void Row(System.Collections.Generic.List<(ProjectedCard card,CardView view)> row,VisualElement navigation,System.Collections.Generic.Dictionary<string,int> rowPages,Action relayout,float width,float top,float left,float span,float size,bool full,string key,Vector2? reservedInterval,ISet<CardView> visible,GameplayScrollRegions scrolling=null,float viewportHeight=0) {
                 if(row.Count==0)return;
-                bool reserveSeat=reservedInterval.HasValue;float gapStart=reservedInterval?.x??left,gapEnd=reservedInterval?.y??left;
-                int leftSlots=Mathf.Max(1,Mathf.FloorToInt((gapStart-left)/(size+18))),rightSlots=Mathf.Max(1,Mathf.FloorToInt((left+span-gapEnd)/(size+18)));
-                if(key!=null){
-                    int capacity=reserveSeat?leftSlots+rightSlots:Mathf.Max(1,Mathf.FloorToInt(span/(size+18))),last=(row.Count-1)/capacity;
-                    int page=rowPages.TryGetValue(key,out var requested)?Mathf.Clamp(requested,0,last):0;rowPages[key]=page;
-                    if(last>0){
-                        var nav=new VisualElement();nav.AddToClassList("row-navigation");nav.style.left=Mathf.Min(width-120,left+span+8);nav.style.top=top;navigation.Add(nav);
-                        var previous=new Button(()=>{rowPages[key]=Mathf.Max(0,page-1);relayout();}){text="‹",name=key+"-previous"};previous.SetEnabled(page>0);nav.Add(previous);
-                        nav.Add(new Label((page+1)+" / "+(last+1)){enableRichText=false});
-                        var next=new Button(()=>{rowPages[key]=Mathf.Min(last,page+1);relayout();}){text="›",name=key+"-next"};next.SetEnabled(page<last);nav.Add(next);
-                    }
-                    row=row.Skip(page*capacity).Take(capacity).ToList();
+                size=Mathf.Min(size,Mathf.Max(24,span));
+                float extent=size*(full?1:Mathf.Max(1,BattlefieldFrame.Aspect));
+                float step=Mathf.Min(size+18,Mathf.Max(size*.56f,(span-extent)/Mathf.Max(1,row.Count-1)));
+                float contentSpan=Mathf.Max(span,extent+step*(row.Count-1));
+                var bounds=new Rect(left,top,span,viewportHeight>0?viewportHeight:size*(full?1.4f:BattlefieldFrame.Aspect)+24);
+                var parent=scrolling?.Configure(key??"row",bounds,new Vector2(contentSpan,bounds.height),true);
+                float start=left+Mathf.Max(0,(span-extent-step*(row.Count-1))*.5f);
+                for(int i=0;i<row.Count;i++){
+                    var v=row[i].view;Show(v,visible);v.SetPresentation(full?CardPresentationMode.Full:CardPresentationMode.Compact,size);
+                    GameplayScrollRegions.Place(v,parent,start+i*step,top,bounds,scrolling?.Owner);v.style.rotate=new Rotate(new Angle(row[i].card.Tapped==true?90:0));
                 }
-                float step=Mathf.Min(size+18,(span-size)/Mathf.Max(1,row.Count-1));
-                float start=left+(span-size-step*(row.Count-1))*.5f;
-                for(int i=0;i<row.Count;i++){var v=row[i].view;v.style.display=DisplayStyle.Flex;v.SetPresentation(full?CardPresentationMode.Full:CardPresentationMode.Compact,size);v.style.left=reserveSeat?(i<leftSlots?gapStart-Mathf.Min(leftSlots,row.Count)*(size+18)+9+i*(size+18):gapEnd+9+(i-leftSlots)*(size+18)):start+i*step;v.style.top=top;v.style.rotate=new Rotate(new Angle(row[i].card.Tapped==true?90:0));}
             }
 
         public static IReadOnlyDictionary<string,IReadOnlyList<ProjectedCard>> AttachmentGroups(IEnumerable<ProjectedCard> cards,IEnumerable<string> players)
@@ -99,60 +147,58 @@ namespace Manaforge.Play
         }
         public static void LandRow(List<(ProjectedCard card,CardView view)> cards,VisualElement navigation,Dictionary<string,int> pages,Action relayout,
             float width,float top,float left,float span,float maximum,string key,Vector2 reserved)
-        {
+            =>LandRow(cards,navigation,pages,relayout,width,top,left,span,maximum,key,reserved,null);
+        internal static void LandRow(List<(ProjectedCard card,CardView view)> cards,VisualElement navigation,Dictionary<string,int> pages,Action relayout,
+            float width,float top,float left,float span,float maximum,string key,Vector2 reserved,ISet<CardView> visible,GameplayScrollRegions scrolling=null,float viewportHeight=0) {
             if(cards.Count==0){pages.Remove(key);return;}
-            foreach(var item in cards)item.view.style.display=DisplayStyle.None;
+            if(visible==null)foreach(var item in cards)item.view.style.display=DisplayStyle.None;
             var stacks=LandStacks(cards.Select(item=>item.card));var views=cards.ToDictionary(item=>item.card,item=>item.view);
             float size=LandSize(cards.Count,maximum);
-            float leftSpan=Mathf.Max(0,reserved.x-left),rightStart=Mathf.Max(left,reserved.y),rightSpan=Mathf.Max(0,left+span-rightStart);
-            float Pitch(float value)=>value*1.15f+Mathf.Max(12,value*.14f)+18;
-            while(size>62 && Mathf.FloorToInt(leftSpan/Pitch(size))+Mathf.FloorToInt(rightSpan/Pitch(size))<stacks.Count)size=Mathf.Max(62,size-2);
-            float offset=Mathf.Max(12,size*.14f),pitch=Pitch(size);
-            int leftSlots=Mathf.Max(0,Mathf.FloorToInt(leftSpan/pitch)),rightSlots=Mathf.Max(0,Mathf.FloorToInt(rightSpan/pitch));
-            if(leftSlots+rightSlots==0){if(leftSpan>=rightSpan)leftSlots=1;else rightSlots=1;}
-            int capacity=leftSlots+rightSlots,last=(stacks.Count-1)/capacity,page=pages.TryGetValue(key,out var requested)?Mathf.Clamp(requested,0,last):0;pages[key]=page;
-            if(last>0){
-                var nav=new VisualElement();nav.AddToClassList("row-navigation");nav.style.left=Mathf.Min(width-120,left+span+8);nav.style.top=top;navigation.Add(nav);
-                var previous=new Button(()=>{pages[key]=Mathf.Max(0,page-1);relayout();}){text="‹",name=key+"-previous"};previous.SetEnabled(page>0);nav.Add(previous);
-                nav.Add(new Label((page+1)+" / "+(last+1)){enableRichText=false});
-                var next=new Button(()=>{pages[key]=Mathf.Min(last,page+1);relayout();}){text="›",name=key+"-next"};next.SetEnabled(page<last);nav.Add(next);
-            }
-            var shown=stacks.Skip(page*capacity).Take(capacity).ToArray();int onLeft=Mathf.Min(leftSlots,shown.Length),onRight=shown.Length-onLeft;
+            float offset=Mathf.Max(12,size*.14f),extent=size*1.15f+offset+18;
+            var shown=stacks.ToArray();float step=Mathf.Min(extent,Mathf.Max(size*.65f,(span-extent)/Mathf.Max(1,shown.Length-1)));
+            float contentSpan=Mathf.Max(span,extent+step*(shown.Length-1));
+            var bounds=new Rect(left,top-24,span,viewportHeight>0?viewportHeight+24:size+offset+48);
+            var parent=scrolling?.Configure(key,bounds,new Vector2(contentSpan,bounds.height),true);
             for(int i=0;i<shown.Length;i++){
-                bool first=i<onLeft;int slot=first?i:i-onLeft,slots=first?onLeft:onRight;float start=first?left:rightStart,available=first?leftSpan:rightSpan;
-                float step=Mathf.Min(pitch,available/Mathf.Max(1,slots)),x=start+(available-step*slots)*.5f+slot*step+8;
+                float x=left+i*step+8;
                 var stack=shown[i];for(int depth=0;depth<stack.Count;depth++){
                     var card=stack[depth];var view=views[card];int behind=stack.Count-depth-1;
-                    view.SetPresentation(CardPresentationMode.Compact,size);view.style.left=x+behind*offset;view.style.top=top-behind*Mathf.Max(20,size*.22f);
-                    view.style.rotate=new Rotate(new Angle(card.Tapped==true?90:0));view.style.display=DisplayStyle.Flex;view.BringToFront();
+                    view.SetPresentation(CardPresentationMode.Compact,size);
+                    GameplayScrollRegions.Place(view,parent,x+behind*offset,top-behind*Mathf.Max(20,size*.22f),bounds,scrolling?.Owner);
+                    view.style.rotate=new Rotate(new Angle(card.Tapped==true?90:0));Show(view,visible);view.BringToFront();
                 }
             }
         }
 
         public static void Hand(List<(ProjectedCard card,CardView view)> hand,VisualElement navigation,Dictionary<string,int> rowPages,Action relayout,Action closeInspection,Rect bounds,float navigationY,bool opening,float handWidth)
-        {
-            float handSpan=Mathf.Max(handWidth,bounds.width);
-            // Bound overlap and retain access to every card instead of shrinking large hands to slivers.
-            int handCapacity=Mathf.Max(1,Mathf.FloorToInt((handSpan-handWidth)/45)+1);
-            int handLast=Mathf.Max(0,(hand.Count-1)/handCapacity),handPage=rowPages.TryGetValue("hand",out var hp)?Mathf.Clamp(hp,0,handLast):0;
-            rowPages["hand"]=handPage;
-            if(handLast>0){
-                var nav=new VisualElement{name="hand-navigation"};nav.AddToClassList("row-navigation");nav.style.left=bounds.center.x-75;nav.style.top=navigationY;navigation.Add(nav);
-                var previous=new Button(()=>{closeInspection();rowPages["hand"]=handPage-1;relayout();}){text="‹",name="hand-previous"};previous.SetEnabled(handPage>0);nav.Add(previous);
-                nav.Add(new Label("Hand "+(handPage+1)+" / "+(handLast+1)));
-                var next=new Button(()=>{closeInspection();rowPages["hand"]=handPage+1;relayout();}){text="›",name="hand-next"};next.SetEnabled(handPage<handLast);nav.Add(next);
+            =>Hand(hand,navigation,rowPages,relayout,closeInspection,bounds,navigationY,opening,handWidth,null);
+        internal static void Hand(List<(ProjectedCard card,CardView view)> hand,VisualElement navigation,Dictionary<string,int> rowPages,Action relayout,Action closeInspection,Rect bounds,float navigationY,bool opening,float handWidth,ISet<CardView> visible,GameplayScrollRegions scrolling=null,CardView focusedCard=null) {
+            void Arrange(CardView focused)
+            {
+                float span=Mathf.Max(handWidth,bounds.width),edge=handWidth*.12f;
+                float available=Mathf.Max(0,span-handWidth-2*edge);
+                float step=Mathf.Min(handWidth*.72f,available/Mathf.Max(1,hand.Count-1));
+                float start=bounds.x+(span-handWidth-step*(hand.Count-1))*.5f;
+                int focus=hand.FindIndex(item=>item.view==focused);
+                var openingFan=opening?OpeningHandFan.Arrange(hand.Count,span):null;
+                for(int i=0;i<hand.Count;i++){
+                    var v=hand[i].view;v.AddToClassList("in-hand");Show(v,visible);v.SetPresentation(CardPresentationMode.Full,handWidth);
+                    float x=opening?bounds.x+openingFan[i].Left+(openingFan[i].Width-handWidth)*.5f:start+i*step;
+                    // Preserve both outer endpoints; distribute a larger gap beside the focused card.
+                    if(!opening && focus>=0 && step<handWidth*.55f && hand.Count>2){
+                        float anchor=start+focus*step,space=Mathf.Min(handWidth*.65f,available*.22f);
+                        if(i<focus)x=Mathf.Lerp(start,Mathf.Max(start,anchor-space),(float)i/Mathf.Max(1,focus-1));
+                        else if(i>focus)x=Mathf.Lerp(Mathf.Min(start+available,anchor+space),start+available,(float)(i-focus-1)/Mathf.Max(1,hand.Count-focus-2));
+                    }
+                    float ratio=hand.Count<=1?0:(x-(bounds.x+span*.5f-handWidth*.5f))/Mathf.Max(1,available*.5f);
+                    float angle=opening?openingFan[i].Angle:ratio*Mathf.Min(14,(hand.Count-1)*2);
+                    float y=bounds.y+(opening?openingFan[i].Top:Mathf.Abs(ratio)*Mathf.Min(18,(hand.Count-1)*1.5f));
+                    GameplayScrollRegions.Place(v,scrolling?.Owner,x,y,bounds,scrolling?.Owner);
+                    v.style.rotate=new Rotate(new Angle(angle));v.BringToFront();
+                }
+                focused?.BringToFront();
             }
-            hand=hand.Skip(handPage*handCapacity).Take(handCapacity).ToList();
-            var placements=OpeningHandFan.Arrange(hand.Count,handSpan);
-            float handStep=Mathf.Min(handWidth*.72f,(handSpan-handWidth)/Mathf.Max(1,hand.Count-1));
-            for(int i=0;i<hand.Count;i++){
-                hand[i].view.AddToClassList("in-hand");
-                float offset=i-(hand.Count-1)*.5f,angle=offset*Mathf.Min(4,28f/Mathf.Max(1,hand.Count));var v=hand[i].view;
-                v.style.display=DisplayStyle.Flex;v.SetPresentation(CardPresentationMode.Full,handWidth);
-                v.style.left=opening?bounds.x+placements[i].Left+(placements[i].Width-handWidth)*.5f:bounds.center.x-handWidth*.5f+offset*handStep;
-                v.style.top=opening?bounds.y+placements[i].Top:bounds.y+Mathf.Abs(offset)*3;
-                v.style.rotate=new Rotate(new Angle(opening?placements[i].Angle:angle));v.BringToFront();
-            }
+            scrolling?.SetHandLayout(Arrange);Arrange(focusedCard);
 
         }
         public static void HiddenHand(VisualElement root,long? count,float span,float rotation,string owner=null,ICardBackProvider cardBacks=null)

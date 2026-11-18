@@ -171,6 +171,7 @@ public final class ManaforgeGameMetadata {
                 if (!visible.containsAll(requested)) return status("retry");
                 Set<UUID> publicArtworkSources=new HashSet<>(identified);
                 Set<UUID> permittedTargets=new HashSet<>(visible);for(PlayerView seat:permitted.getPlayers())permittedTargets.add(seat.getPlayerId());visible.retainAll(requested); identified.retainAll(requestedIdentified);
+                Map<UUID,String> castingCosts=manaforge.payment.xmage.NativePaymentSearch.displayCosts(game,playerId,identified);
                 JsonObject objects = new JsonObject();
                 for (UUID id : visible) {
                     JsonObject metadata = new JsonObject();
@@ -185,6 +186,7 @@ public final class ManaforgeGameMetadata {
                     UUID control = permanent != null ? permanent.getControllerId() : stacked == null ? null : stacked.getControllerId();
                     if (stacked != null && stacked.getSourceId() != null) metadata.addProperty("source", stacked.getSourceId().toString());
                     if (identified.contains(id)) {
+                        if(castingCosts.containsKey(id))metadata.addProperty("casting_cost",castingCosts.get(id));
                         // An ability borrows artwork only from a source whose identity
                         // is independently visible to this viewer in the same context.
                         if(stacked instanceof mage.game.stack.StackAbility && source!=null

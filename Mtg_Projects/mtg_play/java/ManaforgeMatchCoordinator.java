@@ -8,8 +8,30 @@ import java.util.concurrent.atomic.*;
 import java.util.function.BooleanSupplier;
 import manaforge.protocol.*;
 
-/** Opt-in read-only local match owner. No production launch or command routing. */
+/** Local match transport owner. Gameplay routing is installed by the trusted host. */
 public final class ManaforgeMatchCoordinator implements AutoCloseable {
+    public interface Gameplay {
+        void connected(String seat,GatewayHandshake.ViewerContext context) throws Exception;
+        void receive(String seat,String wire) throws Exception;
+        void disconnected(String seat);
+    }
+    private Gameplay gameplay;
+    public void installGameplay(Gameplay handler) throws Exception {invoke(()->{require(!started && gameplay==null,"COORDINATOR_GAMEPLAY");gameplay=Objects.requireNonNull(handler);return null;});}
+    public void sendGameplay(String seat,JsonObject message) throws Exception {
+        String raw=message.toString();invoke(()->{
+            Channel channel=channels.get(seat);require(gameplay!=null && channel!=null,"COORDINATOR_GAMEPLAY");
+            JsonObject validated=WireEnvelope.parse(raw);
+            if("ack".equals(validated.get("message_type").getAsString())){
+                validated=WireMessages.parse(raw);JsonObject body=validated.getAsJsonObject("body");require(channel.viewer.session.equals(body.get("session_id").getAsString()) && channel.viewer.viewer.equals(body.get("viewer_id").getAsString()),"GAMEPLAY_RECEIPT_CONTEXT");
+            }else validated=ReceiveMessages.parse(raw,channel.viewer.session,channel.viewer.viewer,0,fixtureMode);
+            synchronized(channel){
+                String kind=validated.get("message_type").getAsString();
+                if(kind.equals("ack")){require(channel.receipts.size()<32,"GAMEPLAY_OUTPUT_OVERFLOW");channel.receipts.addLast(raw);}
+                else {require(kind.equals("snapshot") || kind.equals("result"),"GAMEPLAY_MESSAGE");long revision=validated.getAsJsonObject("body").getAsJsonObject("snapshot").get("revision").getAsLong();require(revision>channel.revision,"GAMEPLAY_REVISION");channel.revision=revision;channel.latest=channel.pending=raw;}
+                channel.notifyAll();
+            }return null;
+        });
+    }
     public enum Status { REGISTERED, WAITING, AUTHENTICATING, CONNECTED, DISCONNECTED, CLOSED }
     public static final class Viewer {
         public final String seat,nativePlayer,session,viewer;public final int port;
@@ -119,6 +141,7 @@ public final class ManaforgeMatchCoordinator implements AutoCloseable {
                 require(verified.sessionId.equals(channel.viewer.session) && verified.viewerId.equals(channel.viewer.viewer),"COORDINATOR_AUTH_CONTEXT");
                 synchronized(channel){require(!stopping.get() && channel.connection==current,"COORDINATOR_CLOSED");current.active=true;channel.status=Status.CONNECTED;channel.pending=channel.latest;channel.notifyAll();}
                 if(channel.extensionAllowed)extensionConnected(channel,current);
+                if(gameplay!=null)owner.execute(()->{try{gameplay.connected(channel.viewer.seat,verified);}catch(Exception failure){disconnect(channel,current,"GAMEPLAY_FAILED");}});
                 workers.execute(()->read(channel,current));workers.execute(()->write(channel,current));
             }catch(IOException | RuntimeException failure){if(connection!=null)disconnect(channel,connection,connection.active?"CHANNEL_FAILED":"AUTH_FAILED");if(stopping.get())return;}
         }
@@ -127,12 +150,13 @@ public final class ManaforgeMatchCoordinator implements AutoCloseable {
         try{while(!stopping.get() && connection.active){
             String incoming=connection.frames.readWhenAvailable(5000,()->stopping.get() || !connection.active);
             if(incoming==null){disconnect(channel,connection,"PEER_CLOSED");return;}
-            if(!channel.extensionAllowed){disconnect(channel,connection,"READ_ONLY_TRAFFIC");return;}
-            if(incoming.length()>ViewerChannelExtension.MAX_BYTES || incoming.getBytes(StandardCharsets.UTF_8).length>ViewerChannelExtension.MAX_BYTES){disconnect(channel,connection,"EXTENSION_SIZE");return;}
+            if(!channel.extensionAllowed && gameplay==null){disconnect(channel,connection,"READ_ONLY_TRAFFIC");return;}
+            int maximum=gameplay==null?ViewerChannelExtension.MAX_BYTES:TextFrame.MAX_BYTES;
+            if(incoming.length()>maximum || incoming.getBytes(StandardCharsets.UTF_8).length>maximum){disconnect(channel,connection,"EXTENSION_SIZE");return;}
             if(channel.incoming.incrementAndGet()>32){channel.incoming.decrementAndGet();disconnect(channel,connection,"EXTENSION_INPUT_OVERFLOW");return;}
             try{owner.execute(()->{try{
                 if(stopping.get())return;synchronized(channel){if(channel.connection!=connection || !connection.active)return;}
-                extension.receive(channel.viewer.seat,incoming);
+                if(gameplay!=null)gameplay.receive(channel.viewer.seat,incoming);else extension.receive(channel.viewer.seat,incoming);
             }catch(Exception failure){disconnect(channel,connection,"EXTENSION_REJECTED");}finally{channel.incoming.decrementAndGet();}});}
             catch(RejectedExecutionException failure){channel.incoming.decrementAndGet();disconnect(channel,connection,"OWNER_CLOSED");return;}
         }}catch(IOException failure){disconnect(channel,connection,"PEER_CLOSED");}
@@ -144,8 +168,8 @@ public final class ManaforgeMatchCoordinator implements AutoCloseable {
                 if(channel.connection!=connection || !connection.active || stopping.get())return;
                 revision=channel.revision;gameplay=false;
                 if(channel.control!=null){pending=channel.control;channel.control=null;}
-                else if(channel.pending!=null){pending=channel.pending;channel.pending=null;gameplay=true;}
                 else if(!channel.receipts.isEmpty())pending=channel.receipts.removeFirst();
+                else if(channel.pending!=null){pending=channel.pending;channel.pending=null;gameplay=true;}
                 else{pending=channel.organization;channel.organization=null;}
             }
             connection.frames.write(pending,writeMilliseconds,()->stopping.get() || !connection.active);
@@ -155,9 +179,9 @@ public final class ManaforgeMatchCoordinator implements AutoCloseable {
     private void disconnect(Channel channel,Connection connection,String reason){
         boolean notify=false;
         // Record the first disconnect cause before closing the socket wakes its reader.
-        synchronized(channel){boolean wasActive=connection.active;connection.active=false;if(channel.connection==connection){channel.connection=null;channel.status=stopping.get()?Status.CLOSED:Status.DISCONNECTED;channel.reason=reason;channel.pending=null;channel.control=channel.organization=null;channel.extensionReady=false;channel.receipts.clear();notify=wasActive && channel.extensionAllowed && !stopping.get();channel.notifyAll();}}
+        synchronized(channel){boolean wasActive=connection.active;connection.active=false;if(channel.connection==connection){channel.connection=null;channel.status=stopping.get()?Status.CLOSED:Status.DISCONNECTED;channel.reason=reason;channel.pending=null;channel.control=channel.organization=null;channel.extensionReady=false;channel.receipts.clear();notify=wasActive && (channel.extensionAllowed || gameplay!=null) && !stopping.get();channel.notifyAll();}}
         try{connection.frames.close();}catch(IOException ignored){}
-        if(notify)try{owner.execute(()->{if(stopping.get())return;synchronized(channel){if(channel.connection!=null)return;}extension.disconnected(channel.viewer.seat);});}catch(RejectedExecutionException ignored){}
+        if(notify)try{owner.execute(()->{if(stopping.get())return;synchronized(channel){if(channel.connection!=null)return;}if(gameplay!=null)gameplay.disconnected(channel.viewer.seat);if(channel.extensionAllowed)extension.disconnected(channel.viewer.seat);});}catch(RejectedExecutionException ignored){}
     }
     /** Trusted preprojected fixture port, not a client-facing publication endpoint. */
     void publishSnapshots(Map<String,JsonObject> snapshots) throws Exception {

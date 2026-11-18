@@ -87,7 +87,7 @@ namespace Manaforge.Play
                     int width=Number(record["width"],1024),height=Number(record["height"],1024),length=Number(record["byte_length"],4*1024*1024);
                     if(!seen.Add(printing) || !Hash.IsMatch(digest) || file!=digest+".rgba" || length!=width*height*4
                         || record["standard_compatible"]?.Type!=JTokenType.Boolean
-                        || (!previewOnly && (Text(record["layout"])!="normal" || Number(record["face_count"],1)!=1))
+                        || (!previewOnly && (Text(record["layout"]).Length>128 || Number(record["face_count"],1)!=1))
                         || Text(record["pixel_format"])!="RGBA8" || Text(record["row_origin"])!="bottom_left")throw Invalid();
                     if(files.TryGetValue(file,out var previous)){if(previous!=length)throw Invalid();}
                     else{files.Add(file,length);if((total+=length)>256*1024*1024)throw Invalid();}
@@ -118,6 +118,11 @@ namespace Manaforge.Play
                         entry=null;
                     }
                     if(entry!=null && entry.Catalog.OracleId!=request.OracleId)throw Invalid();
+                    // Legacy static bundles contain one explicitly selected face.
+                    // Never present that front as a different requested back.
+                    if(entry!=null && ViewerArtworkRequest.FaceSensitive(entry.Catalog.Layout)
+                        && (request.Transformed==true || !string.IsNullOrEmpty(request.FaceName) && (entry.Catalog.PrintedName==null
+                            || request.FaceName!=entry.Catalog.PrintedName && !request.FaceName.StartsWith(entry.Catalog.PrintedName+" //",StringComparison.Ordinal))))return null;
                 }
                 if(entry==null)return LoadPublic(request,cancellation);
                 bytes=Read(root,entry.File,entry.Bytes,cancellation);
@@ -141,7 +146,7 @@ namespace Manaforge.Play
                     client.ReceiveTimeout=30000;client.SendTimeout=5000;
                     client.Connect("127.0.0.1",port);cancellation.ThrowIfCancellationRequested();
                     using(var stream=client.GetStream()) {
-                        var query=new JObject{["action"]="artwork",["session_id"]=session,["viewer_id"]=viewer,["key"]=key,["oracle_id"]=request.OracleId,["printing_id"]=request.PrintingId};
+                        var query=new JObject{["action"]="artwork",["session_id"]=session,["viewer_id"]=viewer,["key"]=key,["oracle_id"]=request.OracleId,["printing_id"]=request.PrintingId,["face_name"]=request.FaceName,["transformed"]=request.Transformed.HasValue?new JValue(request.Transformed.Value):JValue.CreateNull()};
                         TextFrame.Write(stream,query.ToString(Newtonsoft.Json.Formatting.None));
                         var record=WireEnvelope.ParseObject(TextFrame.Read(stream));
                         if((bool?)record["unavailable"]==true)return null;

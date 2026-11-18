@@ -75,14 +75,6 @@ def export_artwork_bundle(
             not selected
             or selected.printing_id != printing
             or selected.oracle_id != payload["oracle_id"]
-            or (
-                not preview_only
-                and (
-                    (not selected.standard_compatible and not allow_single_face)
-                    or payload.get("layout") != "normal"
-                    or payload.get("card_faces")
-                )
-            )
             or not payload.get("type_line")
         ):
             unavailable.append(
@@ -107,12 +99,12 @@ def export_artwork_bundle(
                 printing_id=printing,
                 face_key=selected.face_key,
                 layout=payload.get("layout") or "unknown",
-                face_count=len(payload.get("card_faces") or [payload]),
+                face_count=len(payload.get("card_faces") or [payload]) if preview_only else 1,
                 standard_compatible=selected.standard_compatible,
-                printed_type_line=payload["type_line"],
-                printed_name=payload.get("name"),
-                printed_rules=payload.get("oracle_text"),
-                printed_mana_cost=payload.get("mana_cost"),
+                printed_type_line=(payload.get("card_faces") or [payload])[0].get("type_line") or payload["type_line"],
+                printed_name=(payload.get("card_faces") or [payload])[0].get("name"),
+                printed_rules=(payload.get("card_faces") or [payload])[0].get("oracle_text"),
+                printed_mana_cost=(payload.get("card_faces") or [payload])[0].get("mana_cost"),
                 file=digest + ".rgba",
                 width=width,
                 height=height,

@@ -16,7 +16,7 @@ namespace Manaforge.Play
         }
         public void Bind(YieldPresentation state)
         {
-            text.text=state.Text;cancel.text=state.CancelLabel;
+            StableStatusText.Set(text,state.Text,state.Mode==YieldPresentationMode.Failed);cancel.text=state.CancelLabel;
             if(visible==state.Compact)return;visible=state.Compact;
             Root.style.display=visible?DisplayStyle.Flex:DisplayStyle.None;
             Root.RemoveFromClassList("mf-yield-visible");

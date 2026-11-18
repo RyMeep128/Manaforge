@@ -23,7 +23,7 @@ namespace Manaforge.Play
     public static class GameplayHudIds
     {
         public const string Hand="hand", Players="players", Commanders="commanders", Priority="priority",
-            Actions="actions", Zones="zones", Library="zones/library", Graveyard="zones/graveyard",
+            Actions="actions", Turns="turns", Zones="zones", Library="zones/library", Graveyard="zones/graveyard",
             Exile="zones/exile", Battlefield="battlefield", GameStack="game-stack";
         // These keys are deliberately session/viewer scoped, never profile preset keys.
         public static string Seat(string family, string session, string viewer, string seat)

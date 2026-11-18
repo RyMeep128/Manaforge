@@ -29,7 +29,6 @@ namespace Manaforge.Play
         {
             var types=(typeLine??"").Split('—')[0].Split(' ');
             bool Has(string type)=>System.Array.IndexOf(types,type)>=0;
-            if((Has("Instant") || Has("Sorcery")) && !IsFixturePermanent(typeLine))return null;
             var normal=StandardArtCrop;
             if(Has("Battle"))return new CardCompactProfile("Battle",new Rect(.14f,.12f,.42f,.75f),90,90);
             if(Has("Planeswalker"))return new CardCompactProfile("Planeswalker",new Rect(.08f,.52f,.84f,.35f));
@@ -52,7 +51,7 @@ namespace Manaforge.Play
                 case "meld":return new CardCompactProfile("Meld",normal);
                 case "scheme":return new CardCompactProfile("Scheme",normal);
                 case "vanguard":return new CardCompactProfile("Vanguard",normal);
-                case "normal":return new CardCompactProfile("",normal,mayHavePrintedStats:Has("Creature") || Has("Planeswalker") || Has("Battle") || !(Has("Land") || Has("Artifact") || Has("Enchantment")));
+                case "normal":return new CardCompactProfile("",normal,mayHavePrintedStats:Has("Creature") || Has("Planeswalker") || Has("Battle") || !(Has("Land") || Has("Artifact") || Has("Enchantment") || Has("Instant") || Has("Sorcery")));
                 default:return null;
             }
         }

@@ -79,7 +79,7 @@ public final class ManaforgeLiveOpening {
         if(address.size()!=3 || !new JsonPrimitive("127.0.0.1").equals(address.get("host")) || !address.get("port").toString().matches("[0-9]+")
             || !address.get("session").isJsonPrimitive() || !address.getAsJsonPrimitive("session").isString())throw new IOException("METADATA_BOOTSTRAP_INVALID");
         metadataClient=ManaforgeMetadataChannel.connect(Integer.parseInt(address.get("port").getAsString()),address.get("session").getAsString(),metadataKey,game,engineViewer,"1.4.62-V1",artifactHash);
-        Arrays.fill(metadataKey,(byte)0);startLifeline();
+        Arrays.fill(metadataKey,(byte)0);if(!Boolean.getBoolean("manaforge.multiplayer"))startLifeline();
     }
     private JsonObject verifyStackSource(NativeCastCorrelation correlation,String selectedAbility) throws Exception {
         if(metadataClient==null)return null;
@@ -587,7 +587,7 @@ public final class ManaforgeLiveOpening {
                 }
                 public ManaforgeGameplaySession.Advance advance(long previous) throws Exception {
                     JsonObject nextPrompt=null;
-                    for(int count=0;count<160;count++){if(terminalCallback!=null)break;JsonObject event=pending==null?next():pending;if("decision".equals(event.get("event").getAsString())){pending=null;if(event.get("decision_id").getAsLong()>previous){nextPrompt=event.deepCopy();break;}}}
+                    for(int count=0;count<(Boolean.getBoolean("manaforge.multiplayer")?4096:160);count++){if(terminalCallback!=null)break;JsonObject event=pending==null?next():pending;if("decision".equals(event.get("event").getAsString())){pending=null;if(event.get("decision_id").getAsLong()>previous){nextPrompt=event.deepCopy();break;}}}
                     return new ManaforgeGameplaySession.Advance(state,nextPrompt,terminalCallback);
                 }
                 public JsonObject terminalMetadata(JsonObject before) throws Exception {
@@ -781,6 +781,112 @@ public final class ManaforgeLiveOpening {
         }
     }
     private String withCombatCase(String source){if(combatCase==null && automaticPayment==null)return source;JsonObject report=JsonParser.parseString(source).getAsJsonObject();if(automaticPayment!=null)for(Map.Entry<String,JsonElement> entry:automaticPayment.report().entrySet())report.add(entry.getKey(),entry.getValue());if(combatCase!=null)for(Map.Entry<String,JsonElement> entry:combatCase.report().entrySet())report.add(entry.getKey(),entry.getValue());return report.toString();}
+    /** Two independent native human clients share one authoritative XMage match.
+     * Each continuation keeps its existing typed evidence and receipt semantics. */
+    public static void multiplayer(String[] args) {
+        PrintStream report=System.out;System.setOut(System.err);
+        ManaforgeLiveOpening[] peers={new ManaforgeLiveOpening(),new ManaforgeLiveOpening()};
+        ManaforgeMatchCoordinator coordinator=null;ExecutorService seats=Executors.newFixedThreadPool(2);
+        try {
+            String raw=manaforge.protocol.TextFrame.read(System.in);
+            manaforge.protocol.LaunchContracts.LaunchManifest manifest=manaforge.protocol.LaunchManifestReader.parse(raw,"1.4.62-V1",System.getProperty("manaforge.adapterVersion"),args[1]);
+            StringBuilder digest=new StringBuilder();for(byte b:java.security.MessageDigest.getInstance("SHA-256").digest(raw.getBytes(java.nio.charset.StandardCharsets.UTF_8)))digest.append(String.format("%02x",b&255));
+            manaforge.protocol.TextFrame.write(report,"MANAFORGE_MANIFEST_VALIDATED_V1:"+digest);report.flush();
+            JsonObject boot=manaforge.protocol.WireEnvelope.parseObject(manaforge.protocol.TextFrame.read(System.in));
+            JsonArray keys=boot.getAsJsonArray("viewer_keys"),modes=boot.getAsJsonArray("payment_modes");
+            if(keys.size()!=2 || modes.size()!=2)throw new IOException("MULTIPLAYER_BOOTSTRAP_INVALID");
+            java.nio.file.Path root=java.nio.file.Paths.get(args[2]).getParent();
+            for(int i=0;i<2;i++){
+                ManaforgeLiveOpening p=peers[i];p.liveLaunch=new NativeGameLaunch(manifest,i,true);p.artifactHash=args[1];
+                String hex=keys.get(i).getAsString();if(!hex.matches("[0-9a-f]{64}"))throw new IOException("MULTIPLAYER_BOOTSTRAP_INVALID");
+                p.unityKey=new byte[32];for(int j=0;j<32;j++)p.unityKey[j]=(byte)Integer.parseInt(hex.substring(j*2,j*2+2),16);
+                java.nio.file.Path seatRoot=root.resolve("seat-"+i);java.nio.file.Files.createDirectories(seatRoot);p.unityReady=seatRoot.resolve("gateway-ready.json");p.metadataContext=root.resolve("metadata-context-"+i+".json");
+                JsonObject connect=p.command("connect");connect.addProperty("port",Integer.parseInt(args[0]));connect.addProperty("username","mf_"+UUID.randomUUID().toString().substring(0,8));p.request(connect,"connected");
+            }
+            JsonObject create=peers[0].command("create_game");create.addProperty("format",manifest.format);create.addProperty("seats",2);create.add("controllers",peers[0].liveLaunch.controllers());
+            String table=peers[0].request(create,"table_created").get("table_id").getAsString();
+            for(int i:new int[]{1,0}){ManaforgeLiveOpening p=peers[i];JsonObject join=p.command("join_table");join.addProperty("table_id",table);join.addProperty("controller","local_human");join.add("cards",p.liveLaunch.cards(false,false));join.add("sideboard",p.liveLaunch.cards(false,true));p.request(join,"joined");}
+            JsonObject start=peers[0].command("start_game");start.addProperty("table_id",table);peers[0].request(start,"started");
+            for(ManaforgeLiveOpening p:peers){
+                while(p.game==null || p.state==null)p.next();
+                JsonObject metadataBoot=manaforge.protocol.WireEnvelope.parseObject(manaforge.protocol.TextFrame.read(System.in));
+                String hex=metadataBoot.get("owner_key_hex").getAsString();if(!hex.matches("[0-9a-f]{64}"))throw new IOException("METADATA_BOOTSTRAP_INVALID");
+                p.metadataKey=new byte[32];for(int j=0;j<32;j++)p.metadataKey[j]=(byte)Integer.parseInt(hex.substring(j*2,j*2+2),16);p.initializeMetadata();
+            }
+            final ManaforgeMatchCoordinator host=new ManaforgeMatchCoordinator(peers[0].game,"1.4.62-V1",args[1],()->{},()->peers[0].cancelled.get() || peers[1].cancelled.get());coordinator=host;
+            Map<String,ArrayBlockingQueue<String>> inputs=new HashMap<>();Map<String,ArrayBlockingQueue<manaforge.protocol.GatewayHandshake.ViewerContext>> contexts=new HashMap<>();
+            JsonArray addresses=new JsonArray();
+            for(ManaforgeLiveOpening p:peers){String id=p.liveLaunch.viewer();inputs.put(id,new ArrayBlockingQueue<>(32));contexts.put(id,new ArrayBlockingQueue<>(1));ManaforgeMatchCoordinator.Viewer v=host.register(id,p.engineViewer,p.liveLaunch.session(),id,p.unityKey);JsonObject address=new JsonObject();address.addProperty("port",v.port);address.addProperty("session_id",v.session);address.addProperty("viewer_id",v.viewer);addresses.add(address);}
+            host.installGameplay(new ManaforgeMatchCoordinator.Gameplay(){
+                public void connected(String id,manaforge.protocol.GatewayHandshake.ViewerContext context) throws Exception {if(!contexts.get(id).offer(context))throw new IOException("RECONNECT_UNAVAILABLE");}
+                public void receive(String id,String wire) throws Exception {if(!inputs.get(id).offer(wire))throw new IOException("GAMEPLAY_INPUT_OVERFLOW");}
+                public void disconnected(String id){for(ManaforgeLiveOpening p:peers)p.cancelled.set(true);}
+            });host.start();
+            for(int i=0;i<2;i++){
+                final int index=i;ManaforgeLiveOpening p=peers[i];
+                seats.submit(()->{try{
+                    String mode=modes.get(index).getAsString();p.automaticPayment=new NativeAutomaticPayment(p.liveLaunch.session(),p.engineViewer,manaforge.payment.PaymentCoordinator.Mode.valueOf(mode));
+                    p.multiplayerSeat(host,contexts.get(p.liveLaunch.viewer()),inputs.get(p.liveLaunch.viewer()));
+                }catch(Exception failure){try{JsonObject error=new JsonObject();String code=failure.getMessage();error.addProperty("code",code!=null && code.matches("[A-Z_0-9]{1,100}")?code:"MULTIPLAYER_ENGINE_FAILED");p.writeGameReport("game-error",error);}catch(IOException ignored){}for(ManaforgeLiveOpening other:peers)other.cancelled.set(true);}});
+            }
+            JsonObject ready=new JsonObject();ready.add("seats",addresses);java.nio.file.Files.write(java.nio.file.Paths.get(args[2]),ready.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8),java.nio.file.StandardOpenOption.CREATE_NEW);
+            Thread lifeline=new Thread(()->{try{while(System.in.read()!=-1){}}catch(IOException ignored){}for(ManaforgeLiveOpening p:peers)p.cancelled.set(true);},"multiplayer-owner");lifeline.setDaemon(true);lifeline.start();
+            while(!peers[0].cancelled.get() && !peers[1].cancelled.get())Thread.sleep(50);
+        }catch(Exception failure){System.err.println("MULTIPLAYER_STARTUP_FAILED");}
+        finally{
+            for(ManaforgeLiveOpening p:peers)p.cancelled.set(true);seats.shutdownNow();
+            if(coordinator!=null)try{coordinator.close();}catch(Exception ignored){}
+            try{seats.awaitTermination(5,TimeUnit.SECONDS);}catch(InterruptedException interrupted){Thread.currentThread().interrupt();}
+            for(ManaforgeLiveOpening p:peers){if(p.automaticPayment!=null)p.automaticPayment.close();p.bridge.execute(p.command("shutdown"));if(p.unityKey!=null)Arrays.fill(p.unityKey,(byte)0);if(p.metadataClient!=null)try{p.metadataClient.close();}catch(IOException ignored){}}
+        }
+        System.exit(0);
+    }
+    private void multiplayerSeat(ManaforgeMatchCoordinator host,ArrayBlockingQueue<manaforge.protocol.GatewayHandshake.ViewerContext> contexts,ArrayBlockingQueue<String> inputs) throws Exception {
+        manaforge.protocol.GatewayHandshake.ViewerContext context=contexts.poll(120,TimeUnit.SECONDS);if(context==null)throw new IOException("MULTIPLAYER_CLIENT_TIMEOUT");
+        ManaforgeOpeningProjection projection=new ManaforgeOpeningProjection(liveLaunch.session(),liveLaunch.viewer(),engineViewer,liveLaunch.bindings());
+        JsonObject waiting=new JsonObject();waiting.addProperty("kind","GAME_ASK");waiting.addProperty("is_priority",false);waiting.addProperty("decision_id",0);waiting.addProperty("message","Waiting for the other player");
+        waiting.add("cycle",state.get("cycle"));JsonObject initial=projection.projectCoreCombat(state,waiting,true);initial.add("decision",JsonNull.INSTANCE);initial.add("actions",new JsonArray());projection.invalidateDecision();
+        JsonObject envelope=multiplayerEnvelope(initial,false);
+        try(ManaforgeOpeningSession owner=new ManaforgeOpeningSession(context,projection,envelope.toString())){
+            host.sendGameplay(liveLaunch.viewer(),envelope);CoreCombatCycle gameplay=new CoreCombatCycle(projection);ManaforgeUnityOpening.TurnOffer turn=null;
+            while(!cancelled.get()){
+                if(turn==null){
+                    if(pending==null && events.isEmpty()){
+                        String idle=inputs.poll(50,TimeUnit.MILLISECONDS);if(idle==null)continue;
+                        manaforge.protocol.SubmissionLedger.Prepared admitted=owner.dispatch(idle,game,engineViewer,0,state.get("cycle").getAsLong());host.sendGameplay(liveLaunch.viewer(),admitted.receipt());if(!admitted.shouldSubmit)continue;
+                        JsonObject command=owner.pollNative();if(command==null || !"concede".equals(command.get("command").getAsString()))throw new IOException("MULTIPLAYER_WAITING_INPUT");
+                        JsonObject before=state.deepCopy(),accepted=request(command,"concede_sent");while(terminalCallback==null)next();
+                        JsonObject terminal=multiplayerTerminal();NativeCastCorrelation.TurnDecisionEvidence evidence=NativeCastCorrelation.concessionEvidence(before,command,accepted,terminal,terminalCallback);if(evidence==null)throw new IOException("CONCESSION_TERMINAL_UNPROVEN");
+                        host.sendGameplay(liveLaunch.viewer(),owner.confirmTurnDecision(command.get("request_id").getAsString(),evidence));publishMultiplayerResult(host,owner,projection);break;
+                    }
+                    JsonObject event=pending==null?next():pending;
+                    if(terminalCallback!=null){publishMultiplayerResult(host,owner,projection);break;}
+                    if(!"decision".equals(event.get("event").getAsString()))continue;
+                    pending=null;turn=gameplay.offer(event);owner.observe(turn.snapshot().toString());host.sendGameplay(liveLaunch.viewer(),turn.snapshot());
+                }
+                String wire=inputs.poll(50,TimeUnit.MILLISECONDS);
+                if(wire==null){
+                    ManaforgeUnityOpening.TurnOffer replacement=turn.poll();if(replacement!=null){turn=replacement;owner.observe(turn.snapshot().toString());host.sendGameplay(liveLaunch.viewer(),turn.snapshot());}
+                    if(!events.isEmpty()){JsonObject event=next();if(terminalCallback!=null){publishMultiplayerResult(host,owner,projection);break;}if("decision".equals(event.get("event").getAsString())){pending=null;turn=gameplay.offer(event);owner.observe(turn.snapshot().toString());host.sendGameplay(liveLaunch.viewer(),turn.snapshot());}}
+                    continue;
+                }
+                manaforge.protocol.SubmissionLedger.Prepared admitted=owner.dispatch(wire,game,engineViewer,turn.decision,turn.cycle);host.sendGameplay(liveLaunch.viewer(),admitted.receipt());if(!admitted.shouldSubmit)continue;
+                JsonObject command=owner.pollNative();if(command==null)throw new IOException("MULTIPLAYER_QUEUE_FAILED");
+                ManaforgeUnityOpening.TurnResult result="concede".equals(command.get("command").getAsString())?turn.concession.submit(command):turn.submit.submit(command);
+                host.sendGameplay(liveLaunch.viewer(),owner.confirmTurnDecision(command.get("request_id").getAsString(),result.evidence));owner.observe(result.snapshot.toString());host.sendGameplay(liveLaunch.viewer(),result.snapshot);turn=result.next;
+                if("result".equals(result.snapshot.get("message_type").getAsString()))break;
+            }
+            while(!cancelled.get())Thread.sleep(50);
+        }
+    }
+    private JsonObject multiplayerEnvelope(JsonObject snapshot,boolean terminal){JsonObject envelope=new JsonObject(),body=new JsonObject();envelope.addProperty("wire_version",1);envelope.addProperty("message_type",terminal?"result":"snapshot");envelope.addProperty("message_id","multi-"+snapshot.get("revision").getAsLong());body.addProperty("fixture_only",false);body.add("snapshot",snapshot);envelope.add("body",body);return envelope;}
+    private void publishMultiplayerResult(ManaforgeMatchCoordinator host,ManaforgeOpeningSession owner,ManaforgeOpeningProjection projection) throws Exception {
+        JsonObject terminal=multiplayerTerminal();
+        if(!new JsonPrimitive("finished").equals(terminal.get("status")))throw new IOException("MULTIPLAYER_RESULT_UNPROVEN");
+        String outcome=terminal.get("outcome").getAsString();if(!Arrays.asList("win","loss","draw").contains(outcome))throw new IOException("MULTIPLAYER_RESULT_UNPROVEN");
+        JsonObject envelope=multiplayerEnvelope(projection.projectCombatResult(state,outcome),true);owner.observe(envelope.toString());host.sendGameplay(liveLaunch.viewer(),envelope);JsonObject report=new JsonObject();report.addProperty("outcome",outcome);writeGameReport("game-result",report);
+    }
+    private JsonObject multiplayerTerminal() throws Exception {JsonObject query=new JsonObject();query.addProperty("command","metadata");query.addProperty("game",game);query.addProperty("player",engineViewer);query.add("cycle",state.get("cycle"));query.add("object_ids",new JsonArray());query.add("identified_ids",new JsonArray());return metadataClient.read(query);}
     public static void main(String[] args) {
         PrintStream report=System.out;System.setOut(System.err);
         ManaforgeLiveOpening probe=new ManaforgeLiveOpening();

@@ -66,7 +66,7 @@ public final class ManaforgeGameplaySession implements AutoCloseable {
         current();if(serial>=4095)throw new IOException("GAMEPLAY_LIMIT");
         JsonObject request=engine.pollRequest();if(request!=null)return offerRequest(state,nativePrompt,request);
         final long offered=++generation;
-        final JsonObject before=state.deepCopy(),prompt=nativePrompt.deepCopy();java.util.List<String> stackedIds=new java.util.ArrayList<>();for(JsonElement card:before.getAsJsonArray("stack"))stackedIds.add(card.getAsJsonObject().get("id").getAsString());for(JsonElement card:before.getAsJsonArray("exile")){JsonObject row=card.getAsJsonObject();if(new JsonPrimitive(false).equals(row.get("hidden")) && new JsonPrimitive(false).equals(row.get("face_down")))stackedIds.add(row.get("id").getAsString());}final JsonObject guard=engine.metadata(before,stackedIds.toArray(new String[0]));
+        final JsonObject before=state.deepCopy(),prompt=nativePrompt.deepCopy();java.util.List<String> stackedIds=new java.util.ArrayList<>();for(JsonElement card:before.getAsJsonArray("stack"))stackedIds.add(card.getAsJsonObject().get("id").getAsString());for(JsonElement card:before.getAsJsonArray("exile")){JsonObject row=card.getAsJsonObject();if(new JsonPrimitive(false).equals(row.get("hidden")) && new JsonPrimitive(false).equals(row.get("face_down")))stackedIds.add(row.get("id").getAsString());}appendHandReferences(before,stackedIds);final JsonObject guard=engine.metadata(before,stackedIds.toArray(new String[0]));
         if(!new JsonPrimitive("ok").equals(guard.get("status")) || !before.get("cycle").equals(guard.get("cycle")))throw new IOException("GAMEPLAY_CONTEXT_UNPROVEN");
         JsonObject publicView=decorate(before,guard);
         if(guard.has("combat_reselect_kind") && "GAME_SELECT".equals(prompt.get("kind").getAsString()) && new JsonPrimitive(false).equals(prompt.get("is_priority"))) {
@@ -117,7 +117,14 @@ public final class ManaforgeGameplaySession implements AutoCloseable {
             JsonElement previous=before.get("session_notice");String notice=previous==null || previous.isJsonNull()?null:previous.getAsString();
             if(!Objects.equals(notice,engine.sessionNotice())){Advance fresh=refreshed(before,prompt);return offer(fresh.state,fresh.prompt);}return null;});
     }
-    private JsonObject decorate(JsonObject before,JsonObject guard) {
+    private static void appendHandReferences(JsonObject state,List<String> ids) {
+        if(!state.has("hand"))return;
+        for(JsonElement item:state.getAsJsonArray("hand")){
+            JsonObject card=item.getAsJsonObject();String id=card.get("id").getAsString();
+            if(ids.size()<256 && new JsonPrimitive(false).equals(card.get("hidden")) && new JsonPrimitive(false).equals(card.get("face_down")) && !ids.contains(id))ids.add(id);
+        }
+    }
+    static JsonObject decorate(JsonObject before,JsonObject guard) {
         JsonObject publicView=before.deepCopy();
         // Cached GameViews can precede the final life change of a resolving effect.
         // Use public totals read under the same native response monitor/cycle as the offer.
@@ -127,6 +134,10 @@ public final class ManaforgeGameplaySession implements AutoCloseable {
                 JsonObject seat=player.getAsJsonObject();if(seat.get("id").equals(current.get("id")))seat.add("life",current.get("life").deepCopy());
             }
         }
+        for(JsonElement card:publicView.getAsJsonArray("hand")){
+            JsonObject row=card.getAsJsonObject(),entry=guard.getAsJsonObject("objects").getAsJsonObject(row.get("id").getAsString());
+            if(entry!=null && entry.has("casting_cost"))row.add("casting_cost",entry.get("casting_cost"));
+        }
         for(JsonElement card:publicView.getAsJsonArray("stack")){JsonObject row=card.getAsJsonObject(),entry=guard.getAsJsonObject("objects").getAsJsonObject(row.get("id").getAsString());if(entry!=null){if(entry.has("ability_art_set") && entry.has("ability_art_number")){row.add("set",entry.get("ability_art_set"));row.add("number",entry.get("ability_art_number"));}if(entry.has("source"))row.add("target_source",entry.get("source"));if(entry.has("stack_targets")){row.add("stack_targets",entry.get("stack_targets"));row.add("stack_targets_complete",entry.get("stack_targets_complete"));}if(entry.has("controller"))row.add("stack_controller",entry.get("controller"));if(entry.has("owner"))row.add("stack_owner",entry.get("owner"));if(entry.has("source") && entry.has("spell_ability_ids"))row.add("commander_source",entry.get("source"));}}
         for(JsonElement card:publicView.getAsJsonArray("exile")){JsonObject row=card.getAsJsonObject(),entry=guard.getAsJsonObject("objects").getAsJsonObject(row.get("id").getAsString());if(entry!=null && entry.has("owner"))row.add("exile_owner",entry.get("owner"));}
         if(guard.has("commanders")){publicView.add("commander_metadata",guard.get("commanders").deepCopy());publicView.add("commander_metadata_complete",guard.get("commander_metadata_complete"));}
@@ -135,7 +146,7 @@ public final class ManaforgeGameplaySession implements AutoCloseable {
     private JsonObject requestGuard(JsonObject before) throws Exception {
         List<String> sources=new ArrayList<>();for(JsonElement card:before.getAsJsonArray("stack"))sources.add(card.getAsJsonObject().get("id").getAsString());
         for(JsonElement item:before.getAsJsonArray("exile")){JsonObject card=item.getAsJsonObject();if(new JsonPrimitive(false).equals(card.get("hidden")) && new JsonPrimitive(false).equals(card.get("face_down")))sources.add(card.get("id").getAsString());}
-        return engine.metadata(before,sources.toArray(new String[0]));
+        appendHandReferences(before,sources);return engine.metadata(before,sources.toArray(new String[0]));
     }
     private Advance refreshed(JsonObject state,JsonObject prompt) throws Exception {
         Advance fresh=engine.refresh();if(fresh==null)fresh=new Advance(state,prompt,null);

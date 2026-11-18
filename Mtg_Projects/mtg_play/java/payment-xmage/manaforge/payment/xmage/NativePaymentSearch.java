@@ -40,6 +40,35 @@ public final class NativePaymentSearch {
             copy.getState().getPlayers().put(player.getId(),new PaymentSimulationPlayer(player));
         return copy;
     }
+    private static final Map<String,Map<UUID,String>> displayQuoteCache=new LinkedHashMap<String,Map<UUID,String>>() {
+        protected boolean removeEldestEntry(Map.Entry<String,Map<UUID,String>> entry){return size()>64;}
+    };
+    /** Passive default-cast quotes for already viewer-authorized references.
+     * Native cost hooks run only on a private simulation; this does not activate,
+     * pay, choose targets, or authorize any game action. */
+    public static Map<UUID,String> displayCosts(Game live,UUID viewer,Collection<UUID> authorized) {
+        Map<UUID,String> result=new HashMap<>();Game simulation=null;
+        String context=live.getId()+":"+viewer+":"+System.identityHashCode(live.getState())+":"+live.getState().getApplyEffectsCounter();
+        Map<UUID,String> cached;
+        synchronized(displayQuoteCache){cached=new HashMap<>(displayQuoteCache.getOrDefault(context,Collections.emptyMap()));}
+        for(UUID id:authorized) {
+            mage.cards.Card original=live.getCard(id);
+            if(original==null || !viewer.equals(original.getOwnerId()) || live.getState().getZone(id)!=Zone.HAND
+                    || original.getSpellAbility()==null || original.getSpellAbility().getManaCosts().isEmpty()
+                    || original.getSpellAbility().getManaCosts().containsX())continue;
+            if(cached.containsKey(id)){if(cached.get(id)!=null)result.put(id,cached.get(id));continue;}
+            try {
+                if(simulation==null)simulation=isolated(live);
+                mage.cards.Card card=simulation.getCard(id);if(card==null)continue;
+                mage.abilities.SpellAbility quote=card.getSpellAbility().copy();quote.setControllerId(viewer);
+                quote.clearManaCostsToPay();quote.addManaCostsToPay(quote.getManaCosts().copy());
+                quote.adjustX(simulation);simulation.getContinuousEffects().costModification(quote,simulation);
+                String cost=quote.getManaCostsToPay().getText();cost=cost.isEmpty()?"{0}":cost;result.put(id,cost);cached.put(id,cost);
+            }catch(RuntimeException unavailable){simulation=null;cached.put(id,null);}
+        }
+        synchronized(displayQuoteCache){displayQuoteCache.put(context,cached);}
+        return result;
+    }
     static boolean safeCosts(ActivatedManaAbilityImpl ability) {
         if(ability.isUsesStack() || !ability.getTargets().isEmpty() || !ability.getSubAbilities().isEmpty()
             || ability.getModes().size()!=1 || ability.getModes().isMayChooseNone())return false;

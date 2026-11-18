@@ -71,15 +71,15 @@ namespace Manaforge.Play.Tests
             Assert.That(stacks.Single(p=>p.Any(c=>c.ObjectId=="land-0")).Count,Is.EqualTo(1));
             Assert.That(stacks.Sum(p=>p.Count),Is.EqualTo(6));
         }
-        [Test] public void CrowdedLandRowsShrinkAndPageWholePairs()
+        [Test] public void CrowdedLandRowsKeepEverySeparateCardWithoutPagination()
         {
             Assert.That(GameplayCardLayout.LandSize(8),Is.LessThan(GameplayCardLayout.LandSize(4)));Assert.That(GameplayCardLayout.LandSize(20),Is.LessThan(GameplayCardLayout.LandSize(8)));Assert.That(GameplayCardLayout.LandSize(10000),Is.GreaterThanOrEqualTo(62));
             var cards=Lands(40).Select(card=>(card:card,view:new CardView())).ToList();var pages=new Dictionary<string,int>();var navigation=new VisualElement();
             try{
                 GameplayCardLayout.LandRow(cards,navigation,pages,()=>{},1280,500,260,855,110,"lands",new Vector2(550,730));
-                var first=cards.Where(c=>c.view.style.display.value==DisplayStyle.Flex).Select(c=>c.card.ObjectId).ToArray();Assert.That(first.Length,Is.GreaterThan(0).And.LessThan(40));Assert.That(first.Length%2,Is.Zero);
+                var first=cards.Where(c=>c.view.style.display.value==DisplayStyle.Flex).Select(c=>c.card.ObjectId).ToArray();Assert.That(first.Length,Is.EqualTo(40));Assert.That(navigation.childCount,Is.Zero);Assert.That(first.Length%2,Is.Zero);
                 pages["lands"]=1;navigation.Clear();GameplayCardLayout.LandRow(cards,navigation,pages,()=>{},1280,500,260,855,110,"lands",new Vector2(550,730));
-                var next=cards.Where(c=>c.view.style.display.value==DisplayStyle.Flex).Select(c=>c.card.ObjectId).ToArray();Assert.That(next.Intersect(first),Is.Empty);Assert.That(next.Length%2,Is.Zero);
+                var next=cards.Where(c=>c.view.style.display.value==DisplayStyle.Flex).Select(c=>c.card.ObjectId).ToArray();Assert.That(next,Is.EquivalentTo(first));Assert.That(navigation.childCount,Is.Zero);Assert.That(next.Length%2,Is.Zero);
             }finally{foreach(var item in cards)item.view.Dispose();}
         }
         [Test] public void AttachmentsFollowTheirHostAcrossControllersAndDetachCleanly()

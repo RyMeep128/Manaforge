@@ -991,8 +991,32 @@ public final class OpeningProjectionChecks {
         JsonObject stack=raw.getAsJsonArray("players").get(0).getAsJsonObject().getAsJsonArray("battlefield").get(0).getAsJsonObject().deepCopy();stack.addProperty("id","raw-stack");stack.addProperty("stack_controller","raw-human");stack.addProperty("stack_owner","raw-human");stack.add("stack_targets",JsonParser.parseString("[\"raw-human\",\"PRIVATE_REMOVED_TARGET\",\"raw-human\"]"));stack.addProperty("stack_targets_complete",false);raw.getAsJsonArray("stack").add(stack);
         snapshot=projection().projectCoreCombat(raw,prompt);shape(snapshot);JsonObject relationship=snapshot.getAsJsonArray("stack_targets").get(0).getAsJsonObject();check(relationship.getAsJsonArray("targets").size()==2 && !relationship.get("complete").getAsBoolean());check(!snapshot.toString().contains("PRIVATE_REMOVED_TARGET"));
     }
+    static void amountArtworkChecks() throws Exception {
+        String first="abc00000-0000-0000-0000-000000000001",second="abc00000-0000-0000-0000-000000000002";
+        Map<String,String> references=new HashMap<>();references.put(first,"public-first");references.put(second,"public-second");
+        List<manaforge.protocol.PlayContracts.GameObject> cards=new ArrayList<>();
+        for(String id:new String[]{"public-first","public-second"}){
+            manaforge.protocol.PlayContracts.GameObject card=new manaforge.protocol.PlayContracts.GameObject();card.object_id=id;card.zone="battlefield";card.hidden=false;card.face_down=false;cards.add(card);
+        }
+        String markup="<font color='green' object_id='"+second+"'>Same creature [abc]</font>, P/T: 2/2";
+        check("public-second".equals(ManaforgeOpeningProjection.amountRecipient(markup,references,cards)));
+        check("public-second".equals(ManaforgeOpeningProjection.amountRecipient(markup.replace("'","\\\\'"),references,cards)));
+        check(ManaforgeOpeningProjection.amountRecipient("Same creature [abc], P/T: 2/2",references,cards)==null);
+        check(ManaforgeOpeningProjection.amountRecipient(markup+"<font object_id='"+first+"'>Other</font>",references,cards)==null);
+        cards.get(1).hidden=true;check(ManaforgeOpeningProjection.amountRecipient(markup,references,cards)==null);
+        cards.get(1).hidden=false;cards.get(1).face_down=true;check(ManaforgeOpeningProjection.amountRecipient(markup,references,cards)==null);
+        cards.get(1).face_down=false;cards.get(1).zone="graveyard";check(ManaforgeOpeningProjection.amountRecipient(markup,references,cards)==null);
+        JsonObject raw=attackState(),request=priorityPrompt();JsonObject card=raw.getAsJsonArray("players").get(0).getAsJsonObject().getAsJsonArray("battlefield").get(0).getAsJsonObject();card.addProperty("id",second);
+        request.addProperty("kind","GAME_GET_MULTI_AMOUNT");request.addProperty("is_priority",false);request.addProperty("min",3);request.addProperty("max",3);
+        JsonArray ranges=new JsonArray();for(String label:new String[]{markup,"Defending player"}){JsonObject range=new JsonObject();range.addProperty("message",label);range.addProperty("min",0);range.addProperty("max",3);range.addProperty("default",0);ranges.add(range);}request.add("amounts",ranges);
+        JsonObject snapshot=projection().projectCoreCombat(raw,request);shape(snapshot);
+        JsonObject amount=snapshot.getAsJsonObject("decision").getAsJsonArray("amounts").get(0).getAsJsonObject();
+        check(!amount.get("object_id").isJsonNull());check(amount.get("label").getAsString().equals("Same creature, P/T: 2/2"));check(!snapshot.toString().contains(second));
+        boolean found=false;for(JsonElement object:snapshot.getAsJsonArray("objects"))if(object.getAsJsonObject().get("object_id").equals(amount.get("object_id")))found=true;check(found);
+        check(snapshot.getAsJsonObject("decision").getAsJsonArray("amounts").get(1).getAsJsonObject().get("object_id").isJsonNull());
+    }
     public static void main(String[] args) throws Exception {
-        presentationIdentityChecks();
+        amountArtworkChecks();presentationIdentityChecks();
         UnityPriorityProjectionChecks.run();
         targetingPresentationChecks();revealObservationChecks();nativeLaunchChecks();triggerOrderingProjectionChecks();publicStackAndOfferedCardChecks();playableExileChecks();automaticPaymentChecks();manualManaChecks();gameplaySessionChecks();combatCaseEvidenceChecks();coreCombatChecks();coreResponseChecks();terminalCombatChecks();coreChoiceChecks();combatCounterChecks();
         ManaforgeOpeningProjection projection=projection();JsonObject raw=state(),request=prompt();JsonObject snapshot=projection.project(raw,request);shape(snapshot);

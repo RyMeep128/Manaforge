@@ -39,6 +39,15 @@ namespace Manaforge.Play
     // Textures are borrowed from the asset owner; this view never decodes/destroys them.
     public sealed class CardView : VisualElement, IDisposable
     {
+        private bool originalPrinting;
+        public bool ShowingOriginalPrinting=>originalPrinting;
+        public bool CanShowOriginalPrinting=>!concealed && !showingBack && artwork.image!=null;
+        public void SetOriginalPrinting(bool value){bool next=value && CanShowOriginalPrinting;if(originalPrinting==next)return;originalPrinting=next;Layout();}
+        internal void SetCostContext(string printed,string current)
+        {
+            mana.tooltip=current==null?"Mana cost: "+(printed??"unavailable"):"Casting cost: "+current+"\nMana cost: "+(printed??"unavailable");
+            mana.EnableInClassList("mana-cost-adjusted",current!=null && printed!=null && current!=printed);
+        }
         private readonly CardBackView cardBack;private bool showingBack;
         private readonly Image artwork = new Image { name = "artwork", pickingMode = PickingMode.Ignore };
         private readonly VisualElement artWindow=new VisualElement {name="art-window",pickingMode=PickingMode.Ignore};
@@ -218,9 +227,9 @@ namespace Manaforge.Play
         private void Layout()
         {
             bool full = mode == CardPresentationMode.Full;
-            bool ability=full && displayValues?.IsAbility==true;
+            bool ability=full && !originalPrinting && displayValues?.IsAbility==true;
             bool landscape=full && !ability && compactProfile?.LandscapeInspection==true;
-            bool original=compactProfile?.OriginalInspection==true;
+            bool original=full && originalPrinting || compactProfile?.OriginalInspection==true;
             bool customInspection=full && compactProfile!=null && !original;
             bool imageFallback=!ability && (original || authenticOnly && compactProfile==null);
             int inspectionRotation=imageFallback && full?(compactProfile?.InspectionRotation??0):0;
@@ -328,7 +337,8 @@ namespace Manaforge.Play
             nameplate.style.display=reconstructed?DisplayStyle.Flex:DisplayStyle.None;
             typeplate.style.display=reconstructed && full?DisplayStyle.Flex:DisplayStyle.None;
             statplate.style.display=reconstructed && hasStats && !ability?DisplayStyle.Flex:DisplayStyle.None;
-            mana.style.display=reconstructed && full && !ability?DisplayStyle.Flex:DisplayStyle.None;
+            mana.style.display=!concealed && !originalPrinting && full && !ability && mana.SymbolCount>0?DisplayStyle.Flex:DisplayStyle.None;
+            if(imageFallback && !originalPrinting && mana.SymbolCount>0){mana.style.backgroundColor=new Color(.94f,.93f,.86f,.98f);mana.style.borderTopLeftRadius=mana.style.borderBottomLeftRadius=3;}else mana.style.backgroundColor=Color.clear;
             foreach(var label in new[]{title,type,rules,stats,status}) {
                 bool show=reconstructed && (full || (label!=type && label!=rules));
                 if(label==rules && (structured || rulesSymbols.SymbolCount>0))show=false;
@@ -360,7 +370,7 @@ namespace Manaforge.Play
         // The shared asset owner must separately revoke/destroy private cached textures.
         public void Conceal()
         {
-            showingBack=false;cardBack.ClearBinding();
+            originalPrinting=false;showingBack=false;cardBack.ClearBinding();
             ViewRevision++;concealed = true;
             selected = false;liveMarkers.text="";liveMarkers.style.display=DisplayStyle.None;RemoveFromClassList("selected");RemoveFromClassList("attacking");RemoveFromClassList("blocking");
             Identity = null;

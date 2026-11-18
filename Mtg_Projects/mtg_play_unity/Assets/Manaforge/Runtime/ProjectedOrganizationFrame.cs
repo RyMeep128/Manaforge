@@ -11,6 +11,10 @@ namespace Manaforge.Play
         public BattlefieldGroupPresentationMode PresentationMode {get;}
         public string Id {get;} public string Name {get;} public string Seat {get;}
         public float X {get;} public float Y {get;} public IReadOnlyList<string> Objects {get;}
+        private ProjectedOrganizationGroup(ProjectedOrganizationGroup source,IReadOnlyList<string> objects)
+        {PresentationMode=source.PresentationMode;Id=source.Id;Name=source.Name;Seat=source.Seat;X=source.X;Y=source.Y;Objects=objects;}
+        internal ProjectedOrganizationGroup Remap(Func<string,string> reference)
+            =>new ProjectedOrganizationGroup(this,Array.AsReadOnly(Objects.Select(reference).Where(id=>id!=null).ToArray()));
         internal ProjectedOrganizationGroup(JObject group,string seat,IDictionary<string,string> objects){PresentationMode=(string)group["presentation_mode"]=="drawer"?BattlefieldGroupPresentationMode.Drawer:BattlefieldGroupPresentationMode.Panel;Id=(string)group["group_id"];Name=(string)group["name"];Seat=seat;X=(long)group["x"]/1000000f;Y=(long)group["y"]/1000000f;Objects=Array.AsReadOnly(group["members"].Select(h=>objects[(string)h]).ToArray());}
     }
     public sealed class ProjectedOrganizationFrame
@@ -20,6 +24,16 @@ namespace Manaforge.Play
         public IReadOnlyDictionary<string,UnityEngine.Vector2> Placements {get;}
         public IReadOnlyDictionary<string,string> Handles {get;}
         public IReadOnlyDictionary<string,IReadOnlyList<string>> Roots {get;}
+        // Presentation continuity only. The original gameplay revision is retained,
+        // so these remapped references can never authorize an organization command.
+        internal ProjectedOrganizationFrame(ProjectedOrganizationFrame source,Func<string,string> reference)
+        {
+            Epoch=source.Epoch;Viewer=source.Viewer;GameplayRevision=source.GameplayRevision;Revision=source.Revision;Basis=source.Basis;
+            Groups=Array.AsReadOnly(source.Groups.Select(group=>group.Remap(reference)).ToArray());
+            Roots=new ReadOnlyDictionary<string,IReadOnlyList<string>>(source.Roots.ToDictionary(pair=>pair.Key,pair=>(IReadOnlyList<string>)Array.AsReadOnly(pair.Value.Select(reference).Where(id=>id!=null).ToArray())));
+            Handles=new ReadOnlyDictionary<string,string>(source.Handles.Where(pair=>reference(pair.Key)!=null).ToDictionary(pair=>reference(pair.Key),pair=>pair.Value));
+            Placements=new ReadOnlyDictionary<string,UnityEngine.Vector2>(source.Placements.Where(pair=>reference(pair.Key)!=null).ToDictionary(pair=>reference(pair.Key),pair=>pair.Value));
+        }
         internal ProjectedOrganizationFrame(JObject body)
         {
             Epoch=(string)body["match_epoch"];Viewer=(string)body["viewer_id"];GameplayRevision=(long)body["gameplay_revision"];Revision=(long)body["organization_revision"];Basis=(long)body["basis_revision"];

@@ -87,7 +87,7 @@ public final class ManaforgeUnityOpening {
     public interface TurnSubmit {TurnResult submit(JsonObject command) throws Exception;}
     public interface TurnPoll {TurnOffer poll() throws Exception;}
     public static final class TurnOffer {
-        private final JsonObject snapshot;private final long decision,cycle;private final TurnSubmit submit;private final TurnPoll poll;
+        private final JsonObject snapshot;final long decision,cycle;final TurnSubmit submit;private final TurnPoll poll;
         public TurnOffer(JsonObject snapshot,long decision,long cycle,TurnSubmit submit){this(snapshot,decision,cycle,submit,null);}
         public TurnOffer(JsonObject snapshot,long decision,long cycle,TurnSubmit submit,TurnPoll poll){this.snapshot=snapshot.deepCopy();this.decision=decision;this.cycle=cycle;this.submit=submit;this.poll=poll;}
         TurnSubmit concession;
@@ -96,7 +96,7 @@ public final class ManaforgeUnityOpening {
         public JsonObject snapshot(){return snapshot.deepCopy();}
     }
     public static final class TurnResult {
-        private final JsonObject snapshot;private final NativeCastCorrelation.TurnDecisionEvidence evidence;private final TurnOffer next;
+        final JsonObject snapshot;final NativeCastCorrelation.TurnDecisionEvidence evidence;final TurnOffer next;
         public TurnResult(JsonObject snapshot,NativeCastCorrelation.TurnDecisionEvidence evidence,TurnOffer next){if(evidence==null || snapshot==null)throw new IllegalArgumentException("TURN_RESULT_UNPROVEN");JsonObject view=snapshot.getAsJsonObject("body").getAsJsonObject("snapshot");if(next==null?(!view.get("decision").isJsonNull() || view.getAsJsonArray("actions").size()!=0):!snapshot.equals(next.snapshot))throw new IllegalArgumentException("TURN_RESULT_AUTHORITY");this.snapshot=snapshot.deepCopy();this.evidence=evidence;this.next=next;}
     }
     public static ObservedSnapshot withTurn(ObservedSnapshot observed,TurnOffer turn){if(turn==null || observed==null || observed.evidence==null || !observed.snapshot.equals(turn.snapshot))throw new IllegalArgumentException("TURN_OFFER_MISMATCH");observed.turn=turn;return observed;}

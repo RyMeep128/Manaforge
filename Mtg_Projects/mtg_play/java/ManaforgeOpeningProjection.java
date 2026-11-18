@@ -117,6 +117,19 @@ public final class ManaforgeOpeningProjection {
     private static JsonElement[][] counters(JsonObject row) throws IOException {
         require(row.get("counters").isJsonArray() && row.getAsJsonArray("counters").size()<=256);Set<String> names=new HashSet<>();for(JsonElement value:row.getAsJsonArray("counters")){require(value.isJsonArray() && value.getAsJsonArray().size()==2);JsonObject pair=new JsonObject();pair.add("name",value.getAsJsonArray().get(0));pair.add("count",value.getAsJsonArray().get(1));String name=text(pair,"name");Long count=integer(pair,"count");require(name!=null && names.add(name) && count!=null && count>=0 && count<=Integer.MAX_VALUE);}return JSON.fromJson(row.get("counters"),JsonElement[][].class);
     }
+    // XMage log markup carries the full recipient UUID even when its visible label
+    // only shows a three-character suffix. Never infer identity from names or short IDs.
+    static String amountRecipient(String message,Map<String,String> references,List<GameObject> cards) {
+        if(message==null)return null;
+        java.util.regex.Matcher ids=java.util.regex.Pattern.compile("object_id\\s*=\\s*[\\\\'\\\"]+([0-9a-fA-F-]{36})[\\\\'\\\"]+").matcher(message);
+        String nativeId=null;
+        while(ids.find()){
+            String next;try{next=UUID.fromString(ids.group(1)).toString();}catch(IllegalArgumentException invalid){return null;}
+            if(nativeId!=null && !nativeId.equals(next))return null;nativeId=next;
+        }
+        String reference=references.get(nativeId);
+        return reference!=null && visibleCard(cards,reference)!=null?reference:null;
+    }
     private static GameObject visibleCard(List<GameObject> cards,String reference) {
         for(GameObject card:cards)if(card.object_id.equals(reference) && "battlefield".equals(card.zone) && Boolean.FALSE.equals(card.hidden) && Boolean.FALSE.equals(card.face_down))return card;return null;
     }
@@ -333,16 +346,17 @@ public final class ManaforgeOpeningProjection {
                 if(!hidden && !Boolean.TRUE.equals(card.face_down)) {
                     String commanderSource=stackRows.contains(row) && row.has("commander_source")?row.get("commander_source").getAsString():row.get("id").getAsString();if(commanderNativeIds.contains(commanderSource))card.commander_id=commanderReferences.get(commanderSource);
                     CardCharacteristics c=new CardCharacteristics();c.name=text(row,"name");c.power=text(row,"power");c.toughness=text(row,"toughness");c.base_power=text(row,"base_power");c.base_toughness=text(row,"base_toughness");
-                    c.type_line=text(row,"type");c.color=text(row,"color");
+                    c.type_line=text(row,"type");c.color=text(row,"color");c.mana_cost=text(row,"mana_cost");c.casting_cost=text(row,"casting_cost");c.transformed=flag(row,"transformed");
                     if(coreCombat){c.loyalty=text(row,"loyalty");c.defense=text(row,"defense");if(row.has("counters"))c.counters=counters(row);}
                     if(row.has("view_rules") && row.get("view_rules").isJsonArray()) {
                         List<String> lines=new ArrayList<>();for(JsonElement line:row.getAsJsonArray("view_rules")) {
                             JsonObject value=new JsonObject();value.add("text",line);lines.add(text(value,"text"));
                         }c.engine_view_text=lines.toArray(new String[0]);
                     }
-                    c.unsupported_fields=coreCombat && row.has("loyalty") && row.has("defense")?row.has("counters")?new String[]{"current_abilities","transformed","is_copy","flipped"}:new String[]{"current_abilities","counters","transformed","is_copy","flipped"}:new String[]{"current_abilities","counters","loyalty","defense","transformed","is_copy","flipped"};card.characteristics=c;
+                    c.unsupported_fields=coreCombat && row.has("loyalty") && row.has("defense")?row.has("counters")?new String[]{"current_abilities","transformed","is_copy","flipped"}:new String[]{"current_abilities","counters","transformed","is_copy","flipped"}:new String[]{"current_abilities","counters","loyalty","defense","transformed","is_copy","flipped"};if(c.transformed!=null)c.unsupported_fields=Arrays.stream(c.unsupported_fields).filter(field->!field.equals("transformed")).toArray(String[]::new);card.characteristics=c;
                     // Only this already-visible row may acquire a public artwork identity.
                     CardIdentity binding=printings.get((viewer.equals(card.owner_id)?"":"opponent/")+text(row,"set")+"/"+text(row,"number"));
+                    if(binding==null && !Boolean.TRUE.equals(flag(row,"token")))binding=NativeGameLaunch.observationArtwork(row);
                     if(Boolean.TRUE.equals(flag(row,"token")))binding=NativeGameLaunch.tokenArtwork(row);
                     if(binding!=null){card.card_identity=JSON.fromJson(JSON.toJson(binding),CardIdentity.class);if(!viewer.equals(card.owner_id))card.card_identity.deck_entry_id=null;}
                 } else card.hidden=true;
@@ -440,7 +454,7 @@ public final class ManaforgeOpeningProjection {
             Map<String,String> offeredOptions=new HashMap<>();
             if(numeric) {
                 choice.family="GAME_GET_AMOUNT".equals(text(prompt,"kind"))?"number":"amounts";choice.minimum=integer(prompt,"min");choice.maximum=integer(prompt,"max");require(choice.minimum!=null && choice.maximum!=null && choice.minimum>=Integer.MIN_VALUE && choice.maximum<=Integer.MAX_VALUE && choice.minimum<=choice.maximum);choice.options=new ChoiceOption[0];List<AmountConstraint> ranges=new ArrayList<>();
-                if("amounts".equals(choice.family)){JsonArray amounts=prompt.getAsJsonArray("amounts");require(amounts.size()>0 && amounts.size()<=256);for(JsonElement item:amounts){JsonObject row=item.getAsJsonObject();AmountConstraint range=new AmountConstraint();range.label=text(row,"message");if(range.label!=null)range.label=range.label.replaceAll("<[^>]*>","").replaceAll("\\s*\\[[0-9a-fA-F]{3}\\]","");range.minimum=integer(row,"min");range.maximum=integer(row,"max");range.defaultValue=integer(row,"default");require(range.label!=null && range.minimum!=null && range.maximum!=null && range.defaultValue!=null && range.minimum>=Integer.MIN_VALUE && range.maximum<=Integer.MAX_VALUE && range.minimum<=range.maximum && range.defaultValue>=range.minimum && range.defaultValue<=range.maximum);ranges.add(range);}}choice.amounts=ranges.toArray(new AmountConstraint[0]);
+                if("amounts".equals(choice.family)){JsonArray amounts=prompt.getAsJsonArray("amounts");require(amounts.size()>0 && amounts.size()<=256);for(JsonElement item:amounts){JsonObject row=item.getAsJsonObject();AmountConstraint range=new AmountConstraint();range.label=text(row,"message");range.object_id=range.label==null?null:amountRecipient(row.get("message").getAsString(),visibleReferences,cards);if(range.label!=null)range.label=range.label.replaceAll("<[^>]*>","").replaceAll("\\s*\\[[0-9a-fA-F]{3}\\]","");range.minimum=integer(row,"min");range.maximum=integer(row,"max");range.defaultValue=integer(row,"default");require(range.label!=null && range.minimum!=null && range.maximum!=null && range.defaultValue!=null && range.minimum>=Integer.MIN_VALUE && range.maximum<=Integer.MAX_VALUE && range.minimum<=range.maximum && range.defaultValue>=range.minimum && range.defaultValue<=range.maximum);ranges.add(range);}}choice.amounts=ranges.toArray(new AmountConstraint[0]);
             } else if(pile) {
                 choice.options=new ChoiceOption[2];choice.groups=new ChoiceGroup[2];
                 for(int i=0;i<2;i++){

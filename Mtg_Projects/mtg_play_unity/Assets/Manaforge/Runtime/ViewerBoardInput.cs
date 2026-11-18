@@ -59,7 +59,7 @@ namespace Manaforge.Play
         private void Down(Binding binding,PointerDownEvent ev)
         {
             var captured=offer;var frame=captured?.Frame;
-            if(ev.button!=0 || Embedded(ev.target as VisualElement,binding.View) || frame==null || !Current(captured) || frame.Decision?.Family=="mana" || panel.ObjectChoiceCount(captured,binding.Id)==0)return;
+            if(ev.button!=0 || ev.altKey || Embedded(ev.target as VisualElement,binding.View) || frame==null || !Current(captured) || frame.Decision?.Family=="mana" || panel.ObjectChoiceCount(captured,binding.Id)==0)return;
             CancelGesture();CloseMenu();binding.View.Focus();gestureClickCount=ev.clickCount;pressed=binding;gestureOffer=captured;start=ev.position;pointer=ev.pointerId;binding.View.CapturePointer(pointer);ev.StopPropagation();
         }
         private void Move(Binding binding,PointerMoveEvent ev)

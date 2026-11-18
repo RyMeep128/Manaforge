@@ -25,11 +25,12 @@ namespace Manaforge.Play
         private string inspectedObject;
         private sealed class ArtworkBinding
         {
+            public readonly ViewerArtworkRequest Request;
             public readonly Texture2D Texture;public readonly CardVisualIdentity Identity;public readonly CardCompactProfile Profile;
             public readonly string Oracle,Printing;
             public readonly CatalogArtworkFace Catalog;
             public ArtworkBinding(PreparedCardArtwork prepared,Texture2D texture)
-            {Texture=texture;Identity=prepared.Identity;Profile=prepared.Profile;Catalog=prepared.Catalog;Oracle=prepared.Request.OracleId;Printing=prepared.Request.PrintingId;}
+            {Request=prepared.Request;Texture=texture;Identity=prepared.Identity;Profile=prepared.Profile;Catalog=prepared.Catalog;Oracle=prepared.Request.OracleId;Printing=prepared.Request.PrintingId;}
         }
         private ViewerSurfaceTicket ticket;
         private IDisposable privateAssets;
@@ -87,7 +88,7 @@ namespace Manaforge.Play
         {
             Clearing?.Invoke();
             ticket?.Mailbox.Dispose();artworkJobs?.Dispose();artworkJobs=null;ticket=null;revision=-1;cards.Clear();requests.Clear();pendingArtwork.Clear();artwork.Clear();inspectedObject=null;InspectionView.Conceal();
-            foreach(var element in new List<VisualElement>(CardsRoot.Children()))if(element is CardView view)view.Dispose();views.Clear();CardsRoot.Clear();
+            foreach(var view in views.Values)view.Dispose();views.Clear();CardsRoot.Clear();
             var assets=privateAssets;privateAssets=null;
             try{assets?.Dispose();}catch{privateAssets=assets;throw;}
         }
@@ -163,7 +164,7 @@ namespace Manaforge.Play
                     retainedViews.Remove(card.RenderId);views.Add(card.ObjectId,view);
                     if(inspectedKey==card.RenderId)inspectedObject=card.ObjectId;
                     if(retainedArt.TryGetValue(card.RenderId,out var binding) && ArtworkPermitted(card)
-                        && binding.Oracle==card.Printing.OracleId && binding.Printing==card.Printing.PrintingId)artwork.Add(card.ObjectId,binding);
+                        && binding.Oracle==card.Printing.OracleId && binding.Printing==card.Printing.PrintingId && binding.Request.MatchesFace(card,binding.Catalog.Layout))artwork.Add(card.ObjectId,binding);
                     if(retainedZones.TryGetValue(card.RenderId,out var previousZone) && previousZone!=card.Zone)view.SetPresentation(card.Zone=="battlefield"?CardPresentationMode.Compact:CardPresentationMode.Full,card.Zone=="battlefield"?160:220);
                     // Retained views keep their resolved geometry. The presentation owner lays
                     // out new/changed zones; resetting every card here caused two expensive resizes per publication.
@@ -237,7 +238,9 @@ namespace Manaforge.Play
         }
         private void Bind(CardView view,ProjectedCard card)
         {
-            view.style.rotate=new Rotate(new Angle(0));
+            // The table owns hand/fan geometry. Do not transiently untap retained
+            // cards (or straighten the hand) while publishing a new revision.
+            if(card.Zone=="battlefield")view.style.rotate=new Rotate(new Angle(card.Tapped==true?90:0));
             if(card.Hidden || card.FaceDown==true){view.ShowBack(card.OwnerId);return;}
             artwork.TryGetValue(card.ObjectId,out var binding);
             if(binding==null)view.BindUnavailable();else view.Bind(binding.Identity,binding.Texture,binding.Profile?.Crop??CardCompactProfile.StandardArtCrop);
@@ -256,8 +259,8 @@ namespace Manaforge.Play
             }
             if(binding==null)unavailable="Artwork unavailable"+(string.IsNullOrEmpty(unavailable)?"":" / "+unavailable);
             if(card.Tapped==null)unavailable+=" / tap state unavailable";
-            view.UpdateValues(new CardDisplayValues(c?.Name,sameFace?printed.PrintedManaCost:null,c?.TypeLine,rules,pt,unavailable,binding?.Profile,loyalty:c?.Loyalty,defense:c?.Defense,hidePrintedStats:binding?.Profile?.MayHavePrintedStats??true,basePower:c?.BasePower,baseToughness:c?.BaseToughness,isAbility:card.Zone=="stack" && c?.TypeLine=="Ability"));
-            if(card.Tapped==true)view.style.rotate=new Rotate(new Angle(90));
+            view.UpdateValues(new CardDisplayValues(c?.Name,c?.CastingCost??c?.ManaCost??(sameFace?printed.PrintedManaCost:null),c?.TypeLine,rules,pt,unavailable,binding?.Profile,loyalty:c?.Loyalty,defense:c?.Defense,hidePrintedStats:binding?.Profile?.MayHavePrintedStats??true,basePower:c?.BasePower,baseToughness:c?.BaseToughness,isAbility:card.Zone=="stack" && c?.TypeLine=="Ability"));
+            view.SetCostContext(c?.ManaCost??(sameFace?printed.PrintedManaCost:null),c?.CastingCost);
         }
         public static string DisplayRules(IReadOnlyList<string> current,IReadOnlyList<string> engineView)
         {
