@@ -32,7 +32,7 @@ class Acceptance(C.QObject):
         self.cancel = threading.Event(); self.guest_finished = threading.Event()
         self.results = {}; self.error = None; self.threads = []; self.tunnels = {}; self.port = None
         code = new_code(); self.host = RelayClient(options.relay, code, True, self, development=True); self.guest = RelayClient(options.relay, code, False, self, development=True)
-        self.host.event.connect(lambda message: self.receive("host", message)); self.guest.event.connect(lambda message: self.receive("guest", message))
+        self.host.message_received.connect(lambda message: self.receive("host", message)); self.guest.message_received.connect(lambda message: self.receive("guest", message))
         self.host.failed.connect(self.fail); self.guest.failed.connect(self.fail); self.failed.connect(self.fail)
         self.prepare.connect(self.remote); self.finished.connect(self.complete)
         self.host.open()

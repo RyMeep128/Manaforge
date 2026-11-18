@@ -186,7 +186,7 @@ class MultiplayerPanel(W.QWidget):
             self.relay = RelayClient(
                 endpoint, code, hosting, self, development=development
             )
-            self.relay.event.connect(self.receive)
+            self.relay.message_received.connect(self.receive)
             self.relay.failed.connect(self.fail)
             self.endpoint.setText(endpoint)
             C.QSettings().setValue("play/relayUrl", endpoint)

@@ -16,7 +16,7 @@ MAX_RELAY = 1500000
 
 
 class RelayClient(C.QObject):
-    event = C.pyqtSignal(object)
+    message_received = C.pyqtSignal(object)
     failed = C.pyqtSignal(str)
     outgoing = C.pyqtSignal(object)
 
@@ -84,7 +84,7 @@ class RelayClient(C.QObject):
                     else "RELAY_FAILED"
                 )
                 return
-            self.event.emit(message)
+            self.message_received.emit(message)
         except (ValueError, TypeError):
             self.fail("RELAY_INVALID_MESSAGE")
 
