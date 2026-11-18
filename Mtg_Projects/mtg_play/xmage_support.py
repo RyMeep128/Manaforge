@@ -38,8 +38,13 @@ def find_server(play_root, bundle):
     if len(sets) != 1:
         raise ValueError("Cannot locate one installed mage-sets JAR; pass --server-dir")
     expected = sha256(sets[0])
+    from .runtime_distribution import component_root
+
     candidates = sorted(
-        (Path(play_root) / ".runtime").glob("*/result.json"),
+        [
+            *(Path(play_root) / ".runtime").glob("*/result.json"),
+            *(component_root() / "sessions").glob("*/result.json"),
+        ],
         key=lambda p: p.stat().st_mtime,
         reverse=True,
     )

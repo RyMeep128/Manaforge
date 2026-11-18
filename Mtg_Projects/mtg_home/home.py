@@ -138,6 +138,8 @@ class HomeWindow(W.QMainWindow):
         menu.addAction('Global printing defaults', lambda: self.settingsRequested.emit('printing'))
         menu.addAction('Artwork preferences', lambda: self.settingsRequested.emit('artwork'))
         menu.addAction('Card Database', lambda: self.settingsRequested.emit('data'))
+        from mtg_ui.xmage_updates import show_xmage_updates
+        menu.addAction('XMage Updates…', lambda: show_xmage_updates(self))
         menu.addAction('Diagnostics & Repair', lambda: self.settingsRequested.emit('diagnostics'))
         settings.setMenu(menu)
         footer.addWidget(settings)

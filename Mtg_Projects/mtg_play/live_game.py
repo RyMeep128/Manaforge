@@ -17,6 +17,7 @@ from .launch_lifecycle import LaunchOwner
 from .launch_manifest import export_launch_manifest
 from .native_metadata import provision_metadata
 from .session_logs import retain_session_logs
+from .runtime_distribution import owned
 from .viewer_bootstrap import export_viewer_bootstrap
 
 
@@ -348,6 +349,7 @@ class LiveGameLaunch:
             self.root = None
 
 
+@owned
 def run_live_game(
     setup,
     documents,
@@ -370,10 +372,13 @@ def run_live_game(
     organization=False,
     organization_drawers=False,
     organization_free_placement=False,
-    xmage_root=transport.DEFAULT_BUNDLE,
+    xmage_root=None,
     jdk_path=transport.DEFAULT_JDK,
 ):
     """Blocking worker with one private manifest and one viewer bootstrap; no per-action Python."""
+    if xmage_root is None:
+        from .engine_fork import selected_bundle
+        xmage_root = selected_bundle(transport.HERE / "mage-full_1.4.62-dev_2026-10-03_20-47")
     if type(organization) is not bool:
         raise LiveGameError("UNITY_GAME_ORGANIZATION_INVALID")
     organization_enabled = organization or organization_drawers or organization_free_placement or SHARED_ORGANIZATION_ENABLED

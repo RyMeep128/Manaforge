@@ -84,6 +84,19 @@ def test_check_for_update_uses_supplied_fetcher():
     assert result.latest_version == "0.1.1"
 
 
+def test_engine_only_release_is_never_an_application_update(monkeypatch):
+    monkeypatch.setattr(update_service.sys, 'platform', 'win32')
+    engine = dict(tag_name='xmage-v99.0.0-alpha.1', prerelease=True,
+                  assets=[dict(name='Manaforge-XMage-Windows.zip',
+                               browser_download_url='https://github.test/engine.zip')])
+    application = release_payload(tag_name='v0.2.0-alpha.1',
+        assets=[dict(name='Manaforge-Setup.exe', browser_download_url='https://github.test/setup.exe')])
+    application['prerelease'] = True
+    result = update_service.check_for_update('0.1.0-alpha.1', fetch_json_fn=lambda: [engine, application])
+    assert result.latest_version == '0.2.0-alpha.1'
+    assert result.asset_name == 'Manaforge-Setup.exe'
+
+
 @pytest.mark.parametrize('newer,older', [
     ('0.2.0-alpha.2', '0.2.0-alpha.1'),
     ('0.2.0-beta.1', '0.2.0-alpha.9'),

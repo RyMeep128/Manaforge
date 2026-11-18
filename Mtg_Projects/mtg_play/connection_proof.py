@@ -17,14 +17,15 @@ import time
 import uuid
 import xml.etree.ElementTree as ET
 
-HERE = Path(__file__).resolve().parent
 if __package__:
     from .engine_fork import selected_bundle
+    from .runtime_distribution import bridge_classes, component_root, owned
 else:
-    try:
-        from mtg_play.engine_fork import selected_bundle
-    except ModuleNotFoundError:
-        from engine_fork import selected_bundle
+    products = Path(__file__).resolve().parents[1]
+    sys.path[:0] = [str(products), str(products / "mtg_core")]
+    from mtg_play.engine_fork import selected_bundle
+    from mtg_play.runtime_distribution import bridge_classes, component_root, owned
+HERE = Path(__file__).resolve().parent
 DEFAULT_BUNDLE = selected_bundle(HERE / "mage-full_1.4.62-dev_2026-10-03_20-47")
 DEFAULT_JDK = Path(r"C:\Program Files\Java\jdk-23")
 START_TIMEOUT = 120
@@ -236,7 +237,7 @@ def reserve_port(port: int = 0) -> socket.socket:
 def validate_installation(bundle: Path, jdk: Path):
     java = bundle / "java/jre1.8.0_201/bin/java.exe"
     javac = jdk / "bin/javac.exe"
-    for tool in (java, javac):
+    for tool in (java,) if bridge_classes(bundle) is not None else (java, javac):
         if not tool.is_file():
             raise ProofError(f"Missing Java tool: {tool}; set --xmage-root/--jdk-path")
     if __package__:
@@ -335,6 +336,7 @@ def wait_for_server(
     )
 
 
+@owned
 def run_proof(
     bundle: Path,
     jdk: Path,
@@ -357,7 +359,9 @@ def run_proof(
     with diagnostics.stage("runtime_validation"):
         java, javac, manifest = validate_installation(bundle, jdk)
     workspace = (
-        HERE / ".runtime" / (time.strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:8])
+        component_root()
+        / "sessions"
+        / (time.strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:8])
     )
     workspace.mkdir(parents=True)
     result = {
@@ -390,86 +394,99 @@ def run_proof(
             classes = workspace / "classes"
             classes.mkdir()
             classpath = str(server / "lib/*")
-            context_sources = []
             if payment_context_probe:
                 classpath += os.pathsep + str(
                     server / "plugins/mage-player-human-1.4.62.jar"
                 )
-                context_sources.append(
-                    HERE
-                    / "java/payment-xmage/manaforge/payment/xmage/ContextHumanPlayer.java"
-                )
-                context_sources.append(
-                    HERE
-                    / "java/payment-xmage/manaforge/payment/xmage/OrdinaryManaShape.java"
-                )
-                context_sources.append(
-                    HERE
-                    / "java/payment-xmage/manaforge/payment/xmage/OrdinaryCostCoverage.java"
-                )
-                context_sources.append(
-                    HERE
-                    / "java/payment-xmage/manaforge/payment/xmage/NativePaymentHazards.java"
-                )
-            if payment_context_probe:
-                context_sources.extend(
-                    [
-                        HERE
-                        / "java/payment-xmage/manaforge/payment/xmage/NativePaymentSearch.java",
-                        HERE
-                        / "java/payment-xmage/manaforge/payment/xmage/PaymentSimulationPlayer.java",
-                    ]
-                )
-            compile_log = (workspace / "compile.log").open("w", encoding="utf-8")
-            logs.append(compile_log)
-            command = [
-                str(javac),
-                "--release",
-                "8",
-                "-encoding",
-                "UTF-8",
-                "-cp",
-                classpath,
-                "-d",
-                str(classes),
-                *map(str, sorted((HERE / "java").glob("*.java"))),
-                *map(str, sorted((HERE / "java/organization").rglob("*.java"))),
-                *map(str, sorted((HERE / "java/organization-wire").rglob("*.java"))),
-                *map(str, sorted((HERE / "java/organization-native").rglob("*.java"))),
-                *map(
-                    str,
-                    sorted((HERE / "protocol/java/manaforge/protocol").glob("*.java")),
-                ),
-                str(
-                    HERE
-                    / "java/payment-xmage/manaforge/payment/xmage/ManaResponseExecutor.java"
-                ),
-                str(HERE / "java/payment/manaforge/payment/PaymentCoordinator.java"),
-                *map(str, context_sources),
-            ]
-            if cancel is None:
-                compiled_returncode = subprocess.run(
-                    command,
-                    stdout=compile_log,
-                    stderr=subprocess.STDOUT,
-                    timeout=60,
-                    check=False,
-                ).returncode
+            packaged_classes = bridge_classes(bundle)
+            if packaged_classes is not None:
+                shutil.copytree(packaged_classes, classes, dirs_exist_ok=True)
             else:
-                compiler_process = subprocess.Popen(
-                    command,
-                    stdin=subprocess.PIPE,
-                    stdout=compile_log,
-                    stderr=subprocess.STDOUT,
-                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-                )
-                compiled_returncode = wait_for_compiler(
-                    compiler_process, time.monotonic() + 60, cancel=cancel
-                )
-            if compiled_returncode:
-                raise ProofError(
-                    f"Java bridge compilation failed; inspect {compile_log.name}"
-                )
+                context_sources = []
+                if payment_context_probe:
+                    context_sources.append(
+                        HERE
+                        / "java/payment-xmage/manaforge/payment/xmage/ContextHumanPlayer.java"
+                    )
+                    context_sources.append(
+                        HERE
+                        / "java/payment-xmage/manaforge/payment/xmage/OrdinaryManaShape.java"
+                    )
+                    context_sources.append(
+                        HERE
+                        / "java/payment-xmage/manaforge/payment/xmage/OrdinaryCostCoverage.java"
+                    )
+                    context_sources.append(
+                        HERE
+                        / "java/payment-xmage/manaforge/payment/xmage/NativePaymentHazards.java"
+                    )
+                if payment_context_probe:
+                    context_sources.extend(
+                        [
+                            HERE
+                            / "java/payment-xmage/manaforge/payment/xmage/NativePaymentSearch.java",
+                            HERE
+                            / "java/payment-xmage/manaforge/payment/xmage/PaymentSimulationPlayer.java",
+                        ]
+                    )
+                compile_log = (workspace / "compile.log").open("w", encoding="utf-8")
+                logs.append(compile_log)
+                command = [
+                    str(javac),
+                    "--release",
+                    "8",
+                    "-encoding",
+                    "UTF-8",
+                    "-cp",
+                    classpath,
+                    "-d",
+                    str(classes),
+                    *map(str, sorted((HERE / "java").glob("*.java"))),
+                    *map(str, sorted((HERE / "java/organization").rglob("*.java"))),
+                    *map(
+                        str, sorted((HERE / "java/organization-wire").rglob("*.java"))
+                    ),
+                    *map(
+                        str, sorted((HERE / "java/organization-native").rglob("*.java"))
+                    ),
+                    *map(
+                        str,
+                        sorted(
+                            (HERE / "protocol/java/manaforge/protocol").glob("*.java")
+                        ),
+                    ),
+                    str(
+                        HERE
+                        / "java/payment-xmage/manaforge/payment/xmage/ManaResponseExecutor.java"
+                    ),
+                    str(
+                        HERE / "java/payment/manaforge/payment/PaymentCoordinator.java"
+                    ),
+                    *map(str, context_sources),
+                ]
+                if cancel is None:
+                    compiled_returncode = subprocess.run(
+                        command,
+                        stdout=compile_log,
+                        stderr=subprocess.STDOUT,
+                        timeout=60,
+                        check=False,
+                    ).returncode
+                else:
+                    compiler_process = subprocess.Popen(
+                        command,
+                        stdin=subprocess.PIPE,
+                        stdout=compile_log,
+                        stderr=subprocess.STDOUT,
+                        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                    )
+                    compiled_returncode = wait_for_compiler(
+                        compiler_process, time.monotonic() + 60, cancel=cancel
+                    )
+                if compiled_returncode:
+                    raise ProofError(
+                        f"Java bridge compilation failed; inspect {compile_log.name}"
+                    )
         result.update({"primary_port": port, "secondary_port": secondary})
         classpath = os.pathsep.join((str(classes), classpath))
         server_log_path = workspace / "server.log"

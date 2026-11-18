@@ -132,6 +132,14 @@ job queue is idle. Partial file downloads and installed generations remain avail
 
 ## Application updates
 
+Windows packages also include the matching Unity player, approved XMage engine,
+Java runtime and precompiled bridge. Updating Manaforge updates this complete set.
+The full update panel offers optional, separately verified XMage updates and a
+previous-engine rollback action. Only engines explicitly compatible with the
+installed app are offered; Unity remains tied to the app version. See
+[gameplay distribution](gameplay-distribution.md) for packaging, compatibility
+and prerelease publication details.
+
 Home and Print Studio show the running bundle's embedded `APP_VERSION` as the
 installed version. This metadata is packaged from `mtg_proxy/constants.py`; it is
 never inferred from the newest release, Git checkout, or a saved settings value.

@@ -12,9 +12,25 @@ for directory in (products, products / 'mtg_core'):
 def main():
     from mtg_print.application_launcher import configure_windows_identity
     configure_windows_identity()
+    if '--verify-play-game' in sys.argv:
+        import runpy
+        import mtg_play
+        script = Path(mtg_play.__file__).parent / 'release-tools/check_play_unity_game.py'
+        sys.argv = [str(script), *sys.argv[sys.argv.index('--verify-play-game') + 1:]]
+        runpy.run_path(str(script), run_name='__main__')
+        return 0
+    if '--verify-play-runtime' in sys.argv:
+        import threading
+        from mtg_play.runtime_distribution import verify_bundled, selected_engine
+        from mtg_play.component_updates import health
+        verify_bundled()
+        health(selected_engine(), threading.Event())
+        return 0
     if '--verify-bundle' in sys.argv or '--activate-install' in sys.argv:
         # Packaged startup check; no provider requests or setup downloads.
         import ijson
+        from mtg_play.runtime_distribution import verify_bundled
+        verify_bundled()
         from mtg_core.discovery_starter import starter_data
         from mtg_home.home import HomeWindow
         from PyQt6 import QtWidgets as W
@@ -54,7 +70,7 @@ if __name__ == '__main__':
         from PyQt6 import QtWidgets as W
         from mtg_core.diagnostics import get_logger
         get_logger(__name__).exception('Manaforge startup failed')
-        if '--verify-bundle' not in sys.argv and '--activate-install' not in sys.argv:
+        if not any(arg in sys.argv for arg in ('--verify-bundle', '--activate-install', '--verify-play-runtime', '--verify-play-game')):
             app = W.QApplication.instance() or W.QApplication(sys.argv)
             W.QMessageBox.critical(None, 'Manaforge could not start', str(exc))
         result = 1

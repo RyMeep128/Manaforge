@@ -1,0 +1,23 @@
+name: XMage component prerelease
+on:
+  workflow_dispatch:
+    inputs:
+      component_version:
+        description: Independent engine version (for example 0.6.107-alpha.1)
+        type: string
+        required: true
+      publish:
+        description: Publish the verified engine as a prerelease
+        type: boolean
+        default: false
+permissions:
+  contents: write
+  actions: read
+jobs:
+  release:
+    uses: ./.github/workflows/tests.yml
+    with:
+      build_windows: true
+      publish_xmage_prerelease: ${{ inputs.publish }}
+      xmage_component_version: ${{ inputs.component_version }}
+    secrets: inherit

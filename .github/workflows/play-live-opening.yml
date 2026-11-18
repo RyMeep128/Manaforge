@@ -12,7 +12,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 25
     env:
-      PYTHONPATH: '${{ github.workspace }}/Mtg_Projects'
+      PYTHONPATH: '${{ github.workspace }}/Mtg_Projects;${{ github.workspace }}/Mtg_Projects/mtg_core'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -24,6 +24,8 @@ jobs:
         with:
           distribution: temurin
           java-version: '23.0.2+7'
+      - name: Install shared runtime transport dependency
+        run: python -m pip install certifi
       - name: Prepare hash-pinned engine
         run: python -m mtg_play.ci_prepare --destination "$env:RUNNER_TEMP/manaforge-live-engine" --jdk-path "$env:JAVA_HOME"
       - name: Real XMage connection survives four minutes without gameplay input

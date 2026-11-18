@@ -40,6 +40,15 @@ def installation_manifest(bundle, legacy_manifest=None):
         return Path(legacy_manifest or HERE / "artifacts.json")
     approved = HERE / "engine-lock.json"
     raw = marker.read_bytes()
+    from mtg_play.runtime_distribution import approved_record
+
+    record = approved_record(bundle)
+    if (
+        record
+        and hashlib.sha256(raw).hexdigest()
+        == record["files"]["manaforge-engine-lock.json"]
+    ):
+        return marker
     if approved.is_file() and raw == approved.read_bytes():
         return approved
     historical = HERE / ".engines/pins" / (hashlib.sha256(raw).hexdigest() + ".json")
@@ -89,6 +98,12 @@ def read_lock(path):
 
 def selected_bundle(legacy):
     """Use an installed approved fork; a source-only checkout keeps its stock path."""
+    from mtg_play.runtime_distribution import selected_engine
+
+    managed = selected_engine()
+    if managed is not None:
+        installation_manifest(managed)
+        return managed
     approved = HERE / "engine-lock.json"
     if not approved.is_file():
         return Path(legacy)

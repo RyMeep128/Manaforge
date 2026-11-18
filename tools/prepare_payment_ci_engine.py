@@ -6,13 +6,55 @@ import json
 import os
 from pathlib import Path
 import sys
+import threading
 import urllib.request
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "Mtg_Projects"))
+sys.path.insert(0, str(ROOT / "Mtg_Projects/mtg_core"))
 from mtg_play.ci_prepare import prepare  # noqa: E402
 from mtg_play.engine_fork import read_lock  # noqa: E402
+
+
+def released_bundle(destination, lock):
+    """Durable public release assets remain usable after Actions artifacts expire."""
+    from mtg_core.downloads import get_download_manager
+    from mtg_play.component_updates import extract, REPOSITORY
+    from mtg_play.runtime_distribution import read_manifest, verify
+    import uuid
+    manager = get_download_manager()
+    cache = destination.parent / "released-engine-cache"
+    for page in range(1, 11):
+        request = urllib.request.Request(
+            "https://api.github.com/repos/RyMeep128/Manaforge/releases?per_page=100&page=" + str(page),
+            headers={"User-Agent": "Manaforge-release-build"})
+        with urllib.request.urlopen(request, timeout=60) as response:
+            releases = json.load(response)
+        for release in releases:
+            tag = release.get("tag_name", "")
+            import re
+            if release.get("draft") or not re.fullmatch(r"xmage-v\d+\.\d+\.\d+-(alpha|beta)\.1", tag):
+                continue
+            metadata = cache / tag / "component.json"
+            manager.download(REPOSITORY + tag + "/xmage-component.json", metadata, max_bytes=2 * 1024**2)
+            manifest = read_manifest(metadata)
+            if manifest["bundle_id"] != lock.get("bundle_id", lock["fork_commit"]):
+                continue
+            url = REPOSITORY + tag + "/Manaforge-XMage-Windows.zip"
+            archive = cache / (manifest["payload_sha256"] + ".zip")
+            manager.download(url, archive, sha256=manifest["payload_sha256"], size=manifest["size"], max_bytes=4 * 1024**3)
+            temporary = destination.parent / ("released-engine-" + uuid.uuid4().hex)
+            temporary.mkdir()
+            extract(archive, temporary, manifest, threading.Event())
+            if (temporary / "manaforge-engine-lock.json").read_bytes() != (ROOT / "Mtg_Projects/mtg_play/engine-lock.json").read_bytes():
+                raise ValueError("Released engine does not match the app-owned lock")
+            verify(temporary, manifest)
+            temporary.rename(destination)
+            return True
+        if len(releases) < 100:
+            break
+    return False
 
 
 def main():
@@ -21,6 +63,11 @@ def main():
     parser.add_argument("--jdk-path", required=True, type=Path)
     args = parser.parse_args()
     lock = read_lock(ROOT / "Mtg_Projects/mtg_play/engine-lock.json")
+    if args.destination.exists():
+        raise SystemExit("Use a new engine destination")
+    if released_bundle(args.destination, lock):
+        print("Prepared exact pinned engine from a durable public prerelease")
+        return
     expected = lock["ci_artifact_sha256"]
     headers = {
         "Accept": "application/vnd.github+json",

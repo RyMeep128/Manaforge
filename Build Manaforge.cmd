@@ -13,12 +13,21 @@ if not exist "%MANAFORGE_PYTHON%" (
 )
 "%MANAFORGE_PYTHON%" -m pip install pyinstaller
 if errorlevel 1 exit /b 1
+if not exist "%MANAFORGE_PRODUCTS%\build\gameplay\distribution\xmage\component.json" (
+    echo Complete gameplay payload required. Run tools/package_play_runtime.py first.
+    exit /b 1
+)
 "%MANAFORGE_PYTHON%" -m PyInstaller --noconfirm --windowed --onedir --name Manaforge ^
     --distpath "%MANAFORGE_PRODUCTS%\dist" --workpath "%MANAFORGE_PRODUCTS%\build\manaforge" ^
     --specpath "%MANAFORGE_PRODUCTS%\build\manaforge" ^
     --paths "%MANAFORGE_PRODUCTS%" --paths "%MANAFORGE_PRODUCTS%\mtg_core" --paths "%MANAFORGE_PROXY%" ^
     --collect-submodules mtg_home --collect-submodules mtg_editor --collect-submodules mtg_ui ^
     --collect-submodules mtg_core --collect-submodules mtg_print --hidden-import mtg_proxy.main ^
+    --collect-submodules mtg_play ^
+    --add-data "%MANAFORGE_PRODUCTS%\build\gameplay\distribution;mtg_play/distribution" ^
+    --add-data "%MANAFORGE_PRODUCTS%\mtg_play\engine-lock.json;mtg_play" ^
+    --add-data "%MANAFORGE_PRODUCTS%\mtg_play\artifacts.json;mtg_play" ^
+    --add-data "%MANAFORGE_ROOT%tools\check_play_unity_game.py;mtg_play/release-tools" ^
     --add-data "%MANAFORGE_PRODUCTS%\mtg_core\mtg_core\data;mtg_core/data" --collect-all ijson ^
     --add-data "%MANAFORGE_PROXY%\vibrance.CUBE;." --add-data "%MANAFORGE_PROXY%\assets;assets" ^
     "%MANAFORGE_ROOT%run_manaforge.py"

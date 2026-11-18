@@ -275,6 +275,11 @@ class ApplicationUpdatePanel(W.QWidget):
         layout.addWidget(self.status)
         layout.addWidget(self.button)
         layout.addWidget(self.progress)
+        if not compact:
+            from mtg_ui.xmage_updates import show_xmage_updates
+            engine_button = W.QPushButton('XMage Updates…')
+            engine_button.clicked.connect(lambda: show_xmage_updates(self))
+            layout.addWidget(engine_button)
         self.updates.changed.connect(self.refresh)
         self.refresh()
 

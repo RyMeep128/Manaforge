@@ -9,6 +9,7 @@ import uuid
 from .artwork_bundle import export_artwork_bundle
 from .launch_lifecycle import LaunchOwner, LaunchLifecycleError
 from .visual_catalog import collect_visual_candidates
+from .runtime_distribution import player_path
 
 MAX_CARDS = 24
 MAX_MANIFEST = 1024 * 1024
@@ -16,6 +17,7 @@ DEFAULT_PLAYER = (
     Path(__file__).resolve().parents[1]
     / "mtg_play_unity/Builds/Windows/ManaforgePlay.exe"
 )
+DEFAULT_PLAYER = player_path(DEFAULT_PLAYER)
 
 
 class PreviewError(ValueError):
